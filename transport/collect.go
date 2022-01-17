@@ -150,7 +150,7 @@ func (gc *collector) Pop() interface{} {
 // collector's main method
 func (gc *collector) do() {
 	for lid, s := range gc.streams {
-		if s.Terminated() {
+		if s.IsTerminated() {
 			if s.time.inSend.Swap(false) {
 				s.streamer.drain()
 				s.time.ticks = 1

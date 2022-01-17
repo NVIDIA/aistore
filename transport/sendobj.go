@@ -53,10 +53,11 @@ var _ streamer = (*Stream)(nil)
 // object stream //
 ///////////////////
 
-func (s *Stream) terminate() {
+func (s *Stream) terminate(err error) {
 	s.term.mu.Lock()
-	debug.Assert(!s.term.terminated)
-	s.term.terminated = true
+	debug.Assert(!s.term.done)
+	s.term.err = err
+	s.term.done = true
 
 	s.Stop()
 

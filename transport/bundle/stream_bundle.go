@@ -297,7 +297,7 @@ func (sb *Streams) apply(action int) {
 		wg.Add(1)
 		go func(stsdest stsdest, wg *sync.WaitGroup) {
 			for _, s := range stsdest {
-				if !s.Terminated() {
+				if !s.IsTerminated() {
 					if action == closeFin {
 						s.Fin()
 					} else {
@@ -377,7 +377,7 @@ func (sb *Streams) Resync() {
 		orobin := nbundle[id]
 		for k := 0; k < sb.multiplier; k++ {
 			os := orobin.stsdest[k]
-			if !os.Terminated() {
+			if !os.IsTerminated() {
 				os.Stop() // the node is gone but the stream appears to be still active - stop it
 			}
 			if verbose {

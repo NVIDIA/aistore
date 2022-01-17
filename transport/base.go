@@ -57,7 +57,7 @@ type (
 	streamer interface {
 		compressed() bool
 		dryrun()
-		terminate()
+		terminate(err error)
 		doRequest() error
 		inSend() bool
 		abortPending(error, bool)
@@ -95,10 +95,10 @@ type (
 		maxheader []byte // max header buffer
 		header    []byte // object header - slice of the maxheader with bucket/objName, etc. fields
 		term      struct {
-			mu         sync.RWMutex
-			err        error
-			reason     *string
-			terminated bool
+			mu     sync.RWMutex
+			err    error
+			reason *string
+			done   bool
 		}
 	}
 )
@@ -162,8 +162,8 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 
 func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 	s.time.inSend.Store(true) // StreamCollector to postpone cleanups
-	if s.Terminated() {
-		err = fmt.Errorf("%s terminated(%s, %v), dropping %s", s, *s.term.reason, s.term.err, streamable)
+	if done, errT := s.Terminated(); done {
+		err = fmt.Errorf("%s terminated(%v), dropping %s", s, errT, streamable)
 		glog.Error(err)
 		return
 	}
@@ -183,21 +183,19 @@ func (s *streamBase) String() string      { return s.lid }
 
 func (s *streamBase) Abort() { s.Stop() } // (DM =>) SB => s.Abort() sequence (e.g. usage see otherXreb.Abort())
 
-func (s *streamBase) Terminated() (terminated bool) {
-	s.term.mu.Lock()
-	terminated = s.term.terminated
-	s.term.mu.Unlock()
+func (s *streamBase) IsTerminated() (yes bool) {
+	s.term.mu.RLock()
+	yes = s.term.done
+	s.term.mu.RUnlock()
 	return
 }
 
-func (s *streamBase) TermInfo() (string, error) {
-	if s.Terminated() && *s.term.reason == "" {
-		if s.term.err == nil {
-			s.term.err = fmt.Errorf(reasonUnknown)
-		}
-		*s.term.reason = reasonUnknown
-	}
-	return *s.term.reason, s.term.err
+func (s *streamBase) Terminated() (yes bool, err error) {
+	s.term.mu.RLock()
+	yes = s.term.done
+	err = s.term.err
+	s.term.mu.RUnlock()
+	return
 }
 
 func (s *streamBase) GetStats() (stats Stats) {
@@ -222,7 +220,9 @@ func (s *streamBase) isNextReq() (next bool) {
 			if verbose {
 				glog.Infof("stream %s stopped", s)
 			}
-			*s.term.reason = reasonStopped
+			if *s.term.reason == "" {
+				*s.term.reason = reasonStopped
+			}
 			return
 		case <-s.postCh:
 			s.sessST.Store(active)
@@ -267,7 +267,7 @@ func (s *streamBase) sendLoop(dryrun bool) {
 		}
 	}
 
-	s.streamer.terminate()
+	s.streamer.terminate(s.term.err)
 	s.wg.Done()
 
 	// handle termination caused by anything other than Fin()

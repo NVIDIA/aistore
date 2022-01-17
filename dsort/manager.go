@@ -595,8 +595,6 @@ func (m *Manager) waitForFinish() {
 //
 // PRECONDITION: `m.mu` must be locked.
 func (m *Manager) setInProgressTo(inProgress bool) {
-	debug.AssertMutexLocked(&m.mu)
-
 	// If marking as finished and job was aborted to need to free everyone
 	// who is waiting.
 	m.state.inProgress.Store(inProgress)
@@ -611,8 +609,6 @@ func (m *Manager) setInProgressTo(inProgress bool) {
 //
 // PRECONDITION: `m.mu` must be locked.
 func (m *Manager) setAbortedTo(aborted bool) {
-	debug.AssertMutexLocked(&m.mu)
-
 	if aborted {
 		// If not finished and not yet aborted we should mark that we will wait.
 		if m.inProgress() && !m.aborted() {
