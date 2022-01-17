@@ -10,6 +10,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -42,13 +43,25 @@ type (
 // sglPool //
 /////////////
 
+const numPools = 8
+
 var (
-	sglPool sync.Pool
-	sgl0    SGL
+	pgPools      [numPools]sync.Pool
+	smPools      [numPools]sync.Pool
+	sgl0         SGL
+	pgIdx, smIdx atomic.Uint32
 )
 
-func _allocSGL() (z *SGL) {
-	if v := sglPool.Get(); v != nil {
+func _allocSGL(isPage bool) (z *SGL) {
+	var pool *sync.Pool
+	if isPage {
+		idx := (pgIdx.Load() + 1) % numPools
+		pool = &pgPools[idx]
+	} else {
+		idx := (smIdx.Load() + 1) % numPools
+		pool = &smPools[idx]
+	}
+	if v := pool.Get(); v != nil {
 		z = v.(*SGL)
 	} else {
 		z = &SGL{}
@@ -56,11 +69,19 @@ func _allocSGL() (z *SGL) {
 	return
 }
 
-func _freeSGL(z *SGL) {
+func _freeSGL(z *SGL, isPage bool) {
+	var pool *sync.Pool
+	if isPage {
+		idx := pgIdx.Inc() % numPools
+		pool = &pgPools[idx]
+	} else {
+		idx := smIdx.Inc() % numPools
+		pool = &smPools[idx]
+	}
 	sgl := z.sgl[:0]
 	*z = sgl0
 	z.sgl = sgl
-	sglPool.Put(z)
+	pool.Put(z)
 }
 
 // SGL implements io.ReadWriteCloser  + Reset (see https://golang.org/pkg/io/#ReadWriteCloser)
@@ -230,7 +251,7 @@ func (z *SGL) Free() {
 		s.put = append(s.put, b)
 	}
 	s.muput.Unlock()
-	_freeSGL(z)
+	_freeSGL(z, z.slab.m.isPage())
 }
 
 func (z *SGL) Bytes() (b []byte) {

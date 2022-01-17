@@ -238,7 +238,7 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	debug.AssertNoErr(err)
 
 	// 2. sgl
-	z := _allocSGL()
+	z := _allocSGL(r.isPage())
 	z.slab = slab
 	n = cos.DivCeil(immediateSize, slab.Size())
 	if cap(z.sgl) < int(n) {
