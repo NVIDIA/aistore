@@ -2295,9 +2295,8 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatSmap:
 		const max = 16
 		var (
-			smap   = p.owner.smap.get()
-			config = cmn.GCO.Get()
-			sleep  = config.Timeout.CplaneOperation.D() / 2
+			smap  = p.owner.smap.get()
+			sleep = cmn.Timeout.CplaneOperation() / 2
 		)
 		for i := 0; smap.validate() != nil && i < max; i++ {
 			if !p.NodeStarted() {
@@ -2840,15 +2839,14 @@ func (p *proxy) detectDaemonDuplicate(osi, nsi *cluster.Snode) (bool, error) {
 // getDaemonInfo queries osi for its daemon info and returns it.
 func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error) {
 	var (
-		config = cmn.GCO.Get()
-		args   = callArgs{
+		args = callArgs{
 			si: osi,
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
 				Path:   cmn.URLPathDaemon.S,
 				Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
 			},
-			timeout: config.Timeout.CplaneOperation.D(),
+			timeout: cmn.Timeout.CplaneOperation(),
 			v:       &cluster.Snode{},
 		}
 		res = p.call(args)

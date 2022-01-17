@@ -215,7 +215,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 
 	// NOTE: ref-counted quiescence, fairly short (optimal) waiting
 	config := cmn.GCO.Get()
-	optTime, maxTime := config.Timeout.MaxKeepalive.D(), config.Timeout.SendFile.D()/2
+	optTime, maxTime := cmn.Timeout.MaxKeepalive(), config.Timeout.SendFile.D()/2
 	q := r.Quiesce(optTime, func(tot time.Duration) cluster.QuiRes { return xact.RefcntQuiCB(&r.refc, maxTime, tot) })
 	if err == nil {
 		err = r.err.Err()

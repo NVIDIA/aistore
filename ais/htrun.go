@@ -630,8 +630,7 @@ func (h *htrun) call(args callArgs) (res *callResult) {
 	default:
 		var cancel context.CancelFunc
 		if args.timeout == 0 {
-			config := cmn.GCO.Get()
-			args.timeout = config.Timeout.CplaneOperation.D()
+			args.timeout = cmn.Timeout.CplaneOperation()
 		}
 		req, _, cancel, res.err = args.req.ReqWithTimeout(args.timeout)
 		if res.err != nil {
@@ -759,11 +758,10 @@ func (h *htrun) callerNotify(n cluster.Notif, err error, kind string) {
 		glog.Errorf("%s: have no nodes to send notification %s", h.si, &msg)
 		return
 	}
-	config := cmn.GCO.Get()
 	path := cmn.URLPathNotifs.Join(kind)
 	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: cos.MustMarshal(&msg)}
 	args.network = cmn.NetworkIntraControl
-	args.timeout = config.Timeout.MaxKeepalive.D()
+	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.selected = nodes
 	args.nodeCount = len(nodes)
 	args.async = true
@@ -786,8 +784,7 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 	}
 	debug.Assert(cmn.NetworkIsKnown(args.network))
 	if args.timeout == 0 {
-		config := cmn.GCO.Get()
-		args.timeout = config.Timeout.CplaneOperation.D()
+		args.timeout = cmn.Timeout.CplaneOperation()
 		debug.Assert(args.timeout != 0)
 	}
 
@@ -865,14 +862,13 @@ func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 
 func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 	var (
-		wg     = &sync.WaitGroup{}
-		smap   = h.owner.smap.get()
-		args   = allocBcastArgs()
-		config = cmn.GCO.Get()
+		wg   = &sync.WaitGroup{}
+		smap = h.owner.smap.get()
+		args = allocBcastArgs()
 	)
 	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cos.MustMarshal(msg)}
 	args.network = cmn.NetworkIntraControl
-	args.timeout = config.Timeout.MaxKeepalive.D()
+	args.timeout = cmn.Timeout.MaxKeepalive()
 	for pid, psi := range smap.Pmap {
 		if pid == h.si.ID() || !smap.IsIC(psi) || smap.GetNodeNotMaint(pid) == nil {
 			continue
@@ -1207,8 +1203,7 @@ func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
 func (h *htrun) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
 	var (
 		query          = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
-		config         = cmn.GCO.Get()
-		timeout        = config.Timeout.CplaneOperation.D()
+		timeout        = cmn.Timeout.CplaneOperation()
 		mu             = &sync.RWMutex{}
 		nodemap        = smap.Pmap
 		maxConfVersion int64
@@ -1741,11 +1736,11 @@ func (h *htrun) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 func (h *htrun) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxCii *clusterInfo) {
 	var (
 		sleep, total, rediscover time.Duration
-		healthTimeout            = config.Timeout.CplaneOperation.D()
+		healthTimeout            = cmn.Timeout.CplaneOperation()
 		query                    = url.Values{cmn.URLParamAskPrimary: []string{"true"}}
 	)
 	for {
-		sleep = cos.MinDuration(config.Timeout.MaxKeepalive.D(), sleep+time.Second)
+		sleep = cos.MinDuration(cmn.Timeout.MaxKeepalive(), sleep+time.Second)
 		time.Sleep(sleep)
 		total += sleep
 		rediscover += sleep

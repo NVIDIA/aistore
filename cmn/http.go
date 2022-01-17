@@ -384,13 +384,12 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 		nonEmptyErr                  error
 		callerStr                    string
 		sleep                        = args.Sleep
-		config                       = GCO.Get()
 	)
 	if args.Sleep == 0 {
 		if args.IsClient {
 			args.Sleep = time.Second / 2
 		} else {
-			args.Sleep = config.Timeout.CplaneOperation.D() / 4
+			args.Sleep = Timeout.CplaneOperation() / 4
 		}
 	}
 	if args.Caller != "" {
@@ -424,7 +423,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 			if args.IsClient {
 				sleep = cos.MinDuration(sleep+(args.Sleep/2), 4*time.Second)
 			} else {
-				sleep = cos.MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive.D())
+				sleep = cos.MinDuration(sleep+(args.Sleep/2), Timeout.MaxKeepalive())
 			}
 		}
 		if hardErrCnt > args.HardErr || softErrCnt > args.SoftErr {

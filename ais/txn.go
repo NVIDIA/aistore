@@ -316,7 +316,7 @@ func (txns *transactions) housekeep() (d time.Duration) {
 			if elapsed > TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
 				errs = append(errs, fmt.Sprintf("GC %s: [begin - start-commit] timeout", txn))
 				orphans = append(orphans, txn)
-			} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxKeepalive.D() {
+			} else if elapsed >= TxnTimeoutMult*cmn.Timeout.MaxKeepalive() {
 				errs = append(errs, fmt.Sprintf("GC %s: commit message is taking too long...", txn))
 			}
 		}

@@ -143,6 +143,12 @@ type (
 		Replication ReplicationConf `json:"replication"`
 	}
 
+	// most often used timeouts: assign at startup and never change
+	timeout struct {
+		cplane    time.Duration // Config.Timeout.CplaneOperation
+		keepalive time.Duration // ditto MaxKeepalive
+	}
+
 	LocalConfig struct {
 		ConfigDir string         `json:"confdir"`
 		LogDir    string         `json:"log_dir"`
@@ -279,8 +285,8 @@ type (
 
 	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
-		CplaneOperation cos.Duration `json:"cplane_operation"`
-		MaxKeepalive    cos.Duration `json:"max_keepalive"`
+		CplaneOperation cos.Duration `json:"cplane_operation"` // NOTE: read-only via Timeout{cplane, ...}
+		MaxKeepalive    cos.Duration `json:"max_keepalive"`    // ditto
 		MaxHostBusy     cos.Duration `json:"max_host_busy"`
 		Startup         cos.Duration `json:"startup_time"`
 		SendFile        cos.Duration `json:"send_file_time"`
@@ -1458,11 +1464,38 @@ func (c *CompressionConf) Validate() (err error) {
 	return nil
 }
 
+/////////////////
+// TimeoutConf //
+/////////////////
+
+// most often used timeouts: assign at startup to reduce the number of GCO.Get() calls
+func (c *TimeoutConf) Validate() (err error) {
+	const fmtErr = "config %s (%v) is read-only: updating requires restart"
+	if c.CplaneOperation.D() != Timeout.cplane {
+		err = fmt.Errorf(fmtErr, "timeout.cplane_operation", Timeout.cplane)
+	} else if c.MaxKeepalive.D() != Timeout.keepalive {
+		err = fmt.Errorf(fmtErr, "timeout.max_keepalive", Timeout.keepalive)
+	}
+	return
+}
+
+var Timeout = &timeout{
+	cplane:    time.Second + time.Millisecond,
+	keepalive: 2 * time.Second,
+}
+
+func (d *timeout) setReadOnly(config *Config) {
+	d.cplane = config.Timeout.CplaneOperation.D()
+	d.keepalive = config.Timeout.MaxKeepalive.D()
+}
+
+func (d *timeout) CplaneOperation() time.Duration { return d.cplane }
+func (d *timeout) MaxKeepalive() time.Duration    { return d.keepalive }
+
 //
 // remaining no-op validators
 //
 
-func (*TimeoutConf) Validate() error    { return nil }
 func (*ClientConf) Validate() error     { return nil }
 func (*PeriodConf) Validate() error     { return nil }
 func (*DownloaderConf) Validate() error { return nil }
@@ -1670,6 +1703,8 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (
 		globalFpath = globalConfPath
 	}
 	debug.Assert(initial && config.Version == 0 || !initial && config.Version > 0)
+
+	Timeout.setReadOnly(config)
 
 	config.SetRole(daeRole)
 	overrideConfig, err = loadOverrideConfig(config.ConfigDir)

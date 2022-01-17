@@ -622,8 +622,7 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, e
 		err = errors.New("invalid number of slices")
 		return
 	}
-	config := cmn.GCO.Get()
-	if !nlp.TryLock(config.Timeout.CplaneOperation.D() / 2) {
+	if !nlp.TryLock(cmn.Timeout.CplaneOperation() / 2) {
 		err = cmn.NewErrBckIsBusy(bck.Bck)
 		return
 	}
@@ -871,10 +870,10 @@ func (p *proxy) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bo
 	}
 	config := cmn.GCO.Get()
 	c.timeout.netw = config.Timeout.MaxKeepalive.D()
+	c.timeout.host = config.Timeout.MaxHostBusy.D()
 	if !waitmsync { // when commit does not block behind metasync
 		query.Set(cmn.URLParamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
 	}
-	c.timeout.host = config.Timeout.MaxHostBusy.D()
 	query.Set(cmn.URLParamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
 
 	c.req = cmn.ReqArgs{Method: http.MethodPost, Query: query, Body: body}

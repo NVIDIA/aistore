@@ -369,13 +369,12 @@ func (n *notifs) done(nl nl.NotifListener) {
 	n.fin.add(nl, false /*locked*/)
 
 	if nl.Aborted() {
-		config := cmn.GCO.Get()
 		// NOTE: we accept finished notifications even after
 		// `nl` is aborted. Handle locks carefully.
 		args := allocBcastArgs()
 		args.req = nl.AbortArgs()
 		args.network = cmn.NetworkIntraControl
-		args.timeout = config.Timeout.MaxKeepalive.D()
+		args.timeout = cmn.Timeout.MaxKeepalive()
 		args.nodes = []cluster.NodeMap{nl.Notifiers()}
 		args.nodeCount = len(args.nodes[0])
 		args.async = true

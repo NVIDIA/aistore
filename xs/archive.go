@@ -407,7 +407,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 }
 
 func (wi *archwi) quiesce() cluster.QuiRes {
-	return wi.r.Quiesce(wi.r.config.Timeout.MaxKeepalive.D(), func(total time.Duration) cluster.QuiRes {
+	return wi.r.Quiesce(cmn.Timeout.MaxKeepalive(), func(total time.Duration) cluster.QuiRes {
 		return xact.RefcntQuiCB(&wi.refc, wi.r.config.Timeout.SendFile.D()/2, total)
 	})
 }

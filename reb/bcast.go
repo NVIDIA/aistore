@@ -134,11 +134,11 @@ func (reb *Reb) bcast(md *rebArgs, cb syncCallback) (errCnt int) {
 func (reb *Reb) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
 		ver    = md.smap.Version
-		sleep  = md.config.Timeout.CplaneOperation.D()
+		sleep  = cmn.Timeout.CplaneOperation()
 		logHdr = reb.logHdr(md)
 	)
 	for i := 0; i < 4; i++ {
-		_, code, err := reb.t.Health(tsi, md.config.Timeout.MaxKeepalive.D(), nil)
+		_, code, err := reb.t.Health(tsi, cmn.Timeout.MaxKeepalive(), nil)
 		if err == nil {
 			if i > 0 {
 				glog.Infof("%s: %s is online", logHdr, tsi.StringEx())
@@ -163,7 +163,7 @@ func (reb *Reb) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 // wait for target to get ready to receive objects (type syncCallback)
 func (reb *Reb) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
-		sleep  = md.config.Timeout.CplaneOperation.D() * 2
+		sleep  = cmn.Timeout.CplaneOperation() * 2
 		maxwt  = md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
 		curwt  time.Duration
 		logHdr = reb.logHdr(md)

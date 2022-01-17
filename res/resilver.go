@@ -316,8 +316,7 @@ redo:
 			copied = false
 			cluster.FreeLOM(hlom)
 			lom, hlom = orig, nil
-			config := cmn.GCO.Get()
-			time.Sleep(config.Timeout.CplaneOperation.D() / 2)
+			time.Sleep(cmn.Timeout.CplaneOperation() / 2)
 			goto redo
 		}
 		err := lom.Copy(mi, buf)

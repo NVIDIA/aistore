@@ -186,8 +186,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 	var (
 		err        error
 		curPrimary = vr.Smap.Primary
-		config     = cmn.GCO.Get()
-		timeout    = config.Timeout.CplaneOperation.D() / 2
+		timeout    = cmn.Timeout.CplaneOperation() / 2
 	)
 	// 1. ping current primary (not using cmn.URLParamAskPrimary as it might be transitioning)
 	for i := 0; i < 2; i++ {
@@ -203,7 +202,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 		if err == nil {
 			break
 		}
-		timeout = config.Timeout.CplaneOperation.D()
+		timeout = cmn.Timeout.CplaneOperation()
 	}
 	if err == nil {
 		// move back to idle

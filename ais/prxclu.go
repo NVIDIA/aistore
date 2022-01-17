@@ -158,7 +158,6 @@ func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what
 }
 
 func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
-	config := cmn.GCO.Get()
 	smap := p.owner.smap.get()
 	si, err := smap.GetRandTarget()
 	if err != nil {
@@ -172,7 +171,7 @@ func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 			Path:   cmn.URLPathDaemon.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}},
 		},
-		timeout: config.Timeout.CplaneOperation.D(),
+		timeout: cmn.Timeout.CplaneOperation(),
 		v:       remoteInfo,
 	}
 	res := p.call(args)
@@ -239,10 +238,9 @@ func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request) (cos.JSONR
 			return nil, true
 		}
 	}
-	config := cmn.GCO.Get()
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query(), Body: body}
-	args.timeout = config.Timeout.MaxKeepalive.D()
+	args.timeout = cmn.Timeout.MaxKeepalive()
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 	return p._queryResults(w, r, results)
@@ -445,11 +443,10 @@ func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (errCode in
 	if glog.FastV(3, glog.SmoduleAIS) {
 		glog.Infof("%s: %s %s => (%s)", p.si, apiOp, nsi.StringEx(), p.owner.smap.get().StringEx())
 	}
-	config := cmn.GCO.Get()
 	args := callArgs{
 		si:      nsi,
 		req:     cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathDaemonAdminJoin.S, Body: body},
-		timeout: config.Timeout.CplaneOperation.D(),
+		timeout: cmn.Timeout.CplaneOperation(),
 	}
 	res := p.call(args)
 	defer freeCR(res)
@@ -1414,10 +1411,9 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 // accordance with the specific `msg.Action` (that we also enumerate and assert below).
 func (p *proxy) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	var (
-		config  = cmn.GCO.Get()
 		smap    = p.owner.smap.get()
 		node    = smap.GetNode(si.ID())
-		timeout = config.Timeout.CplaneOperation.D()
+		timeout = cmn.Timeout.CplaneOperation()
 		args    = callArgs{si: node, timeout: timeout}
 	)
 	if node == nil {

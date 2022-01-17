@@ -277,8 +277,7 @@ func tryStart(t cluster.Target, msg InitSpecMsg, opts StartOpts) (errCtx *cmn.ET
 }
 
 func (b *etlBootstraper) checkETLConnection(socketAddr string) error {
-	config := cmn.GCO.Get()
-	probeInterval := config.Timeout.MaxKeepalive.D()
+	probeInterval := cmn.Timeout.MaxKeepalive()
 	err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call: func() (int, error) {
 			conn, err := net.DialTimeout("tcp", socketAddr, probeInterval)
