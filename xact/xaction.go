@@ -103,7 +103,7 @@ func (xctn *Base) Aborted() (err error) {
 }
 
 func (xctn *Base) AbortedAfter(d time.Duration) (err error) {
-	sleep := cos.CalcProbeFreq(d)
+	sleep := cos.ProbingFrequency(d)
 	err = xctn.Aborted()
 	for elapsed := time.Duration(0); elapsed < d && err == nil; elapsed += sleep {
 		time.Sleep(sleep)
@@ -141,7 +141,7 @@ func (xctn *Base) Abort(err error) (ok bool) {
 func (xctn *Base) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes {
 	var (
 		idle, total time.Duration
-		sleep       = cos.CalcProbeFreq(d)
+		sleep       = cos.ProbingFrequency(d)
 		dur         = d
 	)
 	if xctn.Aborted() != nil {

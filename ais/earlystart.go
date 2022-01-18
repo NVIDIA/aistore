@@ -433,7 +433,7 @@ func (p *proxy) resumeReb(smap *smapX, config *cmn.Config) {
 	var (
 		ver     = smap.version()
 		nojoins = config.Timeout.MaxHostBusy.D() // initial quiet time with no new joins
-		sleep   = cos.CalcProbeFreq(nojoins)
+		sleep   = cos.ProbingFrequency(nojoins)
 	)
 	debug.AssertNoErr(smap.validate())
 until:

@@ -76,7 +76,7 @@ func (p *streamingF) newDM(prefix string, recv transport.ReceiveObj, sizePDU int
 	if err = p.dm.RegRecv(); err != nil {
 		var total time.Duration // retry for upto waitRegRecv
 		glog.Error(err)
-		sleep := cos.CalcProbeFreq(waitRegRecv)
+		sleep := cos.ProbingFrequency(waitRegRecv)
 		for err != nil && transport.IsErrDuplicateTrname(err) && total < waitRegRecv {
 			time.Sleep(sleep)
 			total += sleep

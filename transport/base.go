@@ -49,7 +49,8 @@ const (
 	endOfStream   = "end-of-stream"
 	reasonStopped = "stopped"
 
-	retrySleep = time.Second // ECONNREFUSED | ECONNRESET | EPIPE
+	connErrWait = time.Second // ECONNREFUSED | ECONNRESET | EPIPE
+	termErrWait = time.Second
 )
 
 type (
@@ -185,9 +186,9 @@ func (s *streamBase) Abort() { s.Stop() } // (DM =>) SB => s.Abort() sequence (e
 func (s *streamBase) IsTerminated() bool { return s.term.done.Load() }
 
 func (s *streamBase) TermInfo() (reason string, err error) {
-	const sleep = retrySleep >> 2
 	// to account for an unlikely delay between done.CAS() and mu.Lock - see terminate()
-	for i := 0; i < 4; i++ {
+	sleep := cos.ProbingFrequency(termErrWait)
+	for elapsed := time.Duration(0); elapsed < termErrWait; elapsed += sleep {
 		s.term.mu.Lock()
 		reason, err = s.term.reason, s.term.err
 		s.term.mu.Unlock()
@@ -261,7 +262,7 @@ func (s *streamBase) sendLoop(dryrun bool) {
 				}
 				retried = true
 				glog.Errorf("%s: %v - retrying...", s, errR)
-				time.Sleep(retrySleep)
+				time.Sleep(connErrWait)
 			}
 		}
 		if reason = s.isNextReq(); reason != "" {

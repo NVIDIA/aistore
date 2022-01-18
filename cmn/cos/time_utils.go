@@ -36,10 +36,10 @@ func S2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
 func IsTimeZero(t time.Time) bool        { return t.IsZero() || t.UTC().Unix() == 0 } // https://github.com/golang/go/issues/33597
 
 // wait duration => probing frequency
-func CalcProbeFreq(dur time.Duration) time.Duration {
-	sleep := MinDuration(dur/20, time.Second)
-	sleep = MaxDuration(dur/100, sleep)
-	return MaxDuration(sleep, 10*time.Millisecond)
+func ProbingFrequency(dur time.Duration) time.Duration {
+	sleep := MinDuration(dur>>3, time.Second)
+	sleep = MaxDuration(dur>>6, sleep)
+	return MaxDuration(sleep, 100*time.Millisecond)
 }
 
 // FormatMilli returns a duration formatted as milliseconds. For values bigger
