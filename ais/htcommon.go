@@ -460,14 +460,14 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 	if config.Net.HTTP.UseHTTPS {
 		if err := server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.Key); err != nil {
 			if err != http.ErrServerClosed {
-				glog.Errorf("Terminated server with err: %v", err)
+				glog.Errorf("HTTPS terminated with error: %v", err)
 				return err
 			}
 		}
 	} else {
 		if err := server.s.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
-				glog.Errorf("Terminated server with err: %v", err)
+				glog.Errorf("HTTP terminated with error: %v", err)
 				return err
 			}
 		}

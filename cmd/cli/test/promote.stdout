@@ -1,9 +1,9 @@
-^.*promoted.*"/tmp/prm/obj".*bucket.*$
-^.*promoted.*"/tmp/prm/discard".*bucket.*$
-^.*promoted.*"/tmp/prm/".*bucket.*$
-^.*promoted.*"/tmp/prm".*bucket.*$
-^.*promoted.*"/tmp/prm".*bucket.*$
-^.*promoted.*"/tmp/prm/".*bucket.*$
+^.*promoted.*"/tmp/prm/obj".*=>.*$
+^.*promoted.*"/tmp/prm/discard".*=>.*$
+^.*promoted.*"/tmp/prm/".*=>.*$
+^.*promoted.*"/tmp/prm".*=>.*$
+^.*promoted.*"/tmp/prm".*=>.*$
+^.*promoted.*"/tmp/prm/".*=>.*$
 NAME             SIZE
 fifth/obj        7B
 fourth/obj       7B

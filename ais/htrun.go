@@ -172,7 +172,7 @@ func (h *htrun) registerNetworkHandlers(networkHandlers []networkHandler) {
 		} else {
 			path = cos.JoinWords(cmn.Version, nh.r)
 		}
-		cos.Assert(nh.net != 0)
+		debug.Assert(nh.net != 0)
 		if nh.net.isSet(accessNetPublic) {
 			h.registerPublicNetHandler(path, nh.h)
 			reg = true
@@ -196,7 +196,7 @@ func (h *htrun) registerNetworkHandlers(networkHandlers []networkHandler) {
 			// (not configured) data defaults to (configured) control
 			h.registerIntraControlNetHandler(path, nh.h)
 		} else {
-			cos.Assert(config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraControl))
+			debug.Assert(config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraControl))
 			// (not configured) control defaults to (configured) data
 			h.registerIntraDataNetHandler(path, nh.h)
 		}
@@ -603,7 +603,7 @@ func (h *htrun) call(args callArgs) (res *callResult) {
 		res.si = args.si
 	}
 
-	cos.Assert(args.si != nil || args.req.Base != "") // either we have si or base
+	debug.Assert(args.si != nil || args.req.Base != "") // either si or base
 	if args.req.Base == "" && args.si != nil {
 		args.req.Base = args.si.IntraControlNet.DirectURL // by default use intra-cluster control network
 	}
@@ -808,7 +808,7 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 			args.nodeCount--
 		}
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return h.bcastNodes(args)
 }

@@ -141,9 +141,10 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	}
 	if !silent && outFile != fileStdIO {
 		if archPath != "" {
-			fmt.Fprintf(c.App.Writer, "GET %q from archive \"%s/%s\" as %q [%s]\n", archPath, bck, objName, outFile, cos.B2S(objLen, 2))
+			fmt.Fprintf(c.App.Writer, "GET %q from archive \"%s/%s\" as %q [%s]\n",
+				archPath, bck, objName, outFile, cos.B2S(objLen, 2))
 		} else {
-			fmt.Fprintf(c.App.Writer, "GET %q from bucket %q as %q [%s]\n", objName, bck, outFile, cos.B2S(objLen, 2))
+			fmt.Fprintf(c.App.Writer, "GET %q from %s as %q [%s]\n", objName, bck, outFile, cos.B2S(objLen, 2))
 		}
 	}
 	return
@@ -152,22 +153,28 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 // Promote AIS-colocated files and directories to objects.
 
 func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err error) {
-	target := parseStrFlag(c, targetFlag)
-
+	var (
+		s      string
+		target = parseStrFlag(c, targetFlag)
+		recurs = flagIsSet(c, recursiveFlag)
+	)
 	promoteArgs := &api.PromoteArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
 		Object:     objName,
 		Target:     target,
 		FQN:        fqn,
-		Recursive:  flagIsSet(c, recursiveFlag),
+		Recursive:  recurs,
 		Overwrite:  c.Bool(overwriteFlag.GetName()),
 		KeepOrig:   c.Bool(keepOrigFlag.GetName()),
 	}
 	if err = api.PromoteFileOrDir(promoteArgs); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "promoted %q => bucket %q\n", fqn, bck)
+	if recurs {
+		s = "recursively "
+	}
+	fmt.Fprintf(c.App.Writer, "%spromoted %q => %s\n", s, fqn, bck)
 	return
 }
 
@@ -402,7 +409,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 
 	// ask a user for confirmation
 	if !flagIsSet(c, yesFlag) {
-		if ok := confirm(c, fmt.Sprintf("Proceed putting to bucket %q?", bck)); !ok {
+		if ok := confirm(c, fmt.Sprintf("Proceed putting to %s?", bck)); !ok {
 			return errors.New("operation canceled")
 		}
 	}
@@ -455,7 +462,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName, cksumType string)
 		if err := putSingleObjectChunked(c, bck, objName, os.Stdin, cksumType); err != nil {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
+		fmt.Fprintf(c.App.Writer, "PUT %q to %s\n", objName, bck)
 
 		return nil
 	}
@@ -490,7 +497,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName, cksumType string)
 			return err
 		}
 		if archPath == "" {
-			fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
+			fmt.Fprintf(c.App.Writer, "PUT %q to %s\n", objName, bck)
 		} else {
 			fmt.Fprintf(c.App.Writer, "APPEND %q to object \"%s/%s[%s]\"\n", path, bck, objName, archPath)
 		}
@@ -509,7 +516,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 	var (
 		bar        *mpb.Bar
 		p          *mpb.Progress
-		barText    = fmt.Sprintf("Composing %d files into object \"%s/%s\"", len(fileNames), bck.Name, objName)
+		barText    = fmt.Sprintf("COMPOSE %d files as \"%s/%s\"", len(fileNames), bck.Name, objName)
 		filesToObj = make([]FileToObjSlice, len(fileNames))
 		sizes      = make(map[string]int64, len(fileNames))
 		totalSize  = int64(0)
@@ -574,7 +581,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		return fmt.Errorf("%v. Object not created", err)
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %q [%s] into bucket %q\n", objName, cos.B2S(totalSize, 2), bck)
+	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %s/%s, size %s\n", bck, objName, cos.B2S(totalSize, 2))
 
 	return nil
 }
@@ -696,7 +703,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 			SkipVC:     flagIsSet(c, skipVerCksumFlag),
 		}
 		if err := api.PutObject(putArgs); err != nil {
-			str := fmt.Sprintf("Failed to put object %q: %v\n", f.name, err)
+			str := fmt.Sprintf("Failed to PUT object %q: %v\n", f.name, err)
 			if showProgress {
 				errSb.WriteString(str)
 			} else {
@@ -720,11 +727,10 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	}
 
 	if failed := errCount.Load(); failed != 0 {
-		return fmt.Errorf("failed to put %d object%s", failed, cos.Plural(int(failed)))
+		return fmt.Errorf("failed to PUT %d object%s", failed, cos.Plural(int(failed)))
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "put %d object%s into %q bucket\n",
-		len(p.files), cos.Plural(len(p.files)), p.bck)
+	_, _ = fmt.Fprintf(c.App.Writer, "PUT %d object%s to %q\n", len(p.files), cos.Plural(len(p.files)), p.bck)
 	return nil
 }
 
@@ -771,15 +777,14 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 // This function is needed to print a nice error message for the user
 func handleObjHeadError(err error, bck cmn.Bck, object string) error {
 	if cmn.IsStatusNotFound(err) {
-		return fmt.Errorf("no such object %q in bucket %q", object, bck)
+		return fmt.Errorf("%q not found in %s", object, bck)
 	}
-
 	return err
 }
 
 func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %q and %q cannot be both set", listFlag.Name, templateFlag.Name)
+		return incorrectUsageMsg(c, "flags %q and %q cannot be used together", listFlag.Name, templateFlag.Name)
 	}
 
 	if flagIsSet(c, listFlag) {
@@ -826,7 +831,7 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	if err != nil {
 		return
 	}
-	basemsg := fmt.Sprintf("%s %s from %q bucket", fileList, command, bck)
+	basemsg := fmt.Sprintf("%s %s from %s", fileList, command, bck)
 	if xactID != "" {
 		basemsg += ", " + xactProgressMsg(xactID)
 	}
@@ -905,7 +910,7 @@ func multiObjOp(c *cli.Context, command string) error {
 			if err := api.DeleteObject(defaultAPIParams, bck, objectName); err != nil {
 				return err
 			}
-			fmt.Fprintf(c.App.Writer, "%q deleted from %q bucket\n", objectName, bck)
+			fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", objectName, bck)
 		case commandEvict:
 			if bck.IsAIS() {
 				return fmt.Errorf("evicting objects from AIS bucket is not allowed")
@@ -917,7 +922,7 @@ func multiObjOp(c *cli.Context, command string) error {
 			if err := api.EvictObject(defaultAPIParams, bck, objectName); err != nil {
 				return err
 			}
-			fmt.Fprintf(c.App.Writer, "%q evicted from %q bucket\n", objectName, bck)
+			fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", objectName, bck)
 		}
 	}
 	return nil

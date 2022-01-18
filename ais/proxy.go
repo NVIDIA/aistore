@@ -1448,7 +1448,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if bck.Props.EC.Enabled {
-			p.writeErrActf(w, r, msg.Action, "not supported for erasure-coded  buckets (%s)", bck)
+			p.writeErrActf(w, r, msg.Action, "not supported for erasure-coded buckets (%s)", bck)
 			return
 		}
 		p.objMv(w, r, bck, request.items[1], &msg)
@@ -1458,7 +1458,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !filepath.IsAbs(msg.Name) {
-			p.writeErrMsg(w, r, "source must be an absolute path")
+			p.writeErrMsg(w, r, "promoted source must be an absolute path")
 			return
 		}
 		p.promoteFQN(w, r, bck, &msg)

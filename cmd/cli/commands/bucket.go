@@ -47,9 +47,9 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 				}
 				return fmt.Errorf(desc)
 			}
-			return fmt.Errorf("create bucket %q failed: %s", bck, herr.Message)
+			return fmt.Errorf("failed to create %q: %s", bck, herr.Message)
 		}
-		return fmt.Errorf("create bucket %q failed: %s", bck, err.Error())
+		return fmt.Errorf("failed to create %q: %v", bck, err)
 	}
 	if props == nil {
 		fmt.Fprintf(c.App.Writer,
@@ -457,7 +457,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	if xactID, err = api.ECEncodeBucket(defaultAPIParams, bck, data, parity); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %q, ", bck)
+	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %s, ", bck)
 	fmt.Fprintln(c.App.Writer, xactProgressMsg(xactID))
 	return
 }

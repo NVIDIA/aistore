@@ -2,7 +2,7 @@ echo "0123456789" > $OBJECT_1.txt
 ais bucket create ais://$BUCKET_1 // IGNORE
 ais object put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt // IGNORE
 
-ais show object ais://$BUCKET_1/object_2.txt // FAIL "No such object "object_2.txt" in bucket "ais://$BUCKET_1""
+ais show object ais://$BUCKET_1/object_2.txt // FAIL "object_2.txt" not found in ais://$BUCKET_1"
 ais show object ais://$BUCKET_2/object_1.txt // FAIL "Bucket "ais://$BUCKET_2" does not exist"
 
 ais show object ais://$BUCKET_1/object_1.txt

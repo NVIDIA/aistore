@@ -126,7 +126,7 @@ var (
 			},
 			{
 				Name:         commandPromote,
-				Usage:        "promote AIS-local files and directories to objects",
+				Usage:        "promote (ie., copy over and convert) files and directories as ais objects",
 				ArgsUsage:    putPromoteObjectArgument,
 				Flags:        objectCmdsFlags[commandPromote],
 				Action:       promoteHandler,

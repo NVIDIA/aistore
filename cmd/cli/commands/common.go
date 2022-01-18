@@ -415,7 +415,7 @@ var (
 	archpathFlag             = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}
 	includeSrcBucketNameFlag = cli.BoolFlag{
 		Name:  "include-src-bck",
-		Usage: "include source bucket name into the names of archived objects from this bucket",
+		Usage: "prefix names of archived objects with the source bucket name",
 	}
 	allowAppendToExistingFlag = cli.BoolFlag{
 		Name:  "append-to-arch",
