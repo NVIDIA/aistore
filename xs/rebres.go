@@ -77,17 +77,17 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	return
 }
 
-func NewRebalance(id, kind string) (xctn *Rebalance) {
-	xctn = &Rebalance{}
-	xctn.InitBase(id, kind, nil)
+func NewRebalance(id, kind string) (xreb *Rebalance) {
+	xreb = &Rebalance{}
+	xreb.InitBase(id, kind, nil)
 	return
 }
 
 func (*Rebalance) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-func (xctn *Rebalance) Snap() cluster.XactSnap {
+func (xreb *Rebalance) Snap() cluster.XactSnap {
 	rebSnap := &stats.RebalanceSnap{}
-	xctn.ToSnap(&rebSnap.Snap)
+	xreb.ToSnap(&rebSnap.Snap)
 	if marked := xreg.GetRebMarked(); marked.Xact != nil {
 		id, err := xact.S2RebID(marked.Xact.ID())
 		debug.AssertNoErr(err)
@@ -119,16 +119,23 @@ func (*resFactory) Kind() string                                       { return 
 func (p *resFactory) Get() cluster.Xact                                { return p.xctn }
 func (*resFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprAbort, nil }
 
-func NewResilver(id, kind string) (xctn *Resilver) {
-	xctn = &Resilver{}
-	xctn.InitBase(id, kind, nil)
+func NewResilver(id, kind string) (xres *Resilver) {
+	xres = &Resilver{}
+	xres.InitBase(id, kind, nil)
 	return
 }
 
 func (*Resilver) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-// TODO -- FIXME: check "resilver-marked" and unify with rebalance
-func (xctn *Resilver) Snap() cluster.XactSnap {
-	baseStats := xctn.Base.Snap().(*xact.Snap)
+func (xres *Resilver) String() string {
+	if xres == nil {
+		return "<xres-nil>"
+	}
+	return xres.Base.String()
+}
+
+// TODO: check "resilver-marked" and unify with rebalance
+func (xres *Resilver) Snap() cluster.XactSnap {
+	baseStats := xres.Base.Snap().(*xact.Snap)
 	return baseStats
 }

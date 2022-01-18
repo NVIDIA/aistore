@@ -35,7 +35,7 @@ type (
 		Finished() bool
 		Running() bool
 		IsAborted() bool
-		Aborted() error
+		AbortErr() error
 		AbortedAfter(time.Duration) error
 		ChanAbort() <-chan error
 		Quiesce(time.Duration, QuiCB) QuiRes

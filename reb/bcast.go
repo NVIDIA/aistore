@@ -213,7 +213,7 @@ func (reb *Reb) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		if status, ok = reb.checkGlobStatus(tsi, rebStageFin, md); ok {
 			return
 		}
-		if err := xreb.Aborted(); err != nil {
+		if err := xreb.AbortErr(); err != nil {
 			glog.Infof("%s: abort wack (%v)", logHdr, err)
 			return
 		}

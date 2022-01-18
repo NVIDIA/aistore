@@ -289,7 +289,7 @@ func (reb *Reb) renameLocalCT(req *pushReq, ct *cluster.CT, md *ec.Metadata) (
 
 func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 	xreb := reb.xctn()
-	if err := xreb.Aborted(); err != nil {
+	if err := xreb.AbortErr(); err != nil {
 		// notify `dir.Walk` to stop iterations
 		return cmn.NewErrAborted(xreb.Name(), "walk-ec", err)
 	}

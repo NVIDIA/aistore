@@ -139,7 +139,7 @@ func (r *streamingX) fin(err error) error {
 		err = r.err.Err()
 	}
 	if err == nil {
-		err = r.Aborted()
+		err = r.AbortErr()
 	}
 	if err != nil {
 		err = cmn.NewErrAborted(r.Name(), "streaming-fin", err)

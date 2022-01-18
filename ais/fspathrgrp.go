@@ -146,16 +146,14 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 
 func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resilver, err error) {
 	// 1. handle error
-	var detail string
 	if err == nil && xres != nil {
-		err = xres.Aborted()
-		detail = ", " + xres.String()
+		err = xres.AbortErr()
 	}
 	if err != nil {
 		if errCause := cmn.AsErrAborted(err); errCause != nil {
 			err = errCause
 		}
-		glog.Errorf("%s: %q %s: %v%s", g.t.si, action, rmi, err, detail)
+		glog.Errorf("%s: %q %s %s: %v", g.t.si, action, rmi, xres, err)
 		if err == cmn.ErrXactUserAbort {
 			rmi.ClearDD() // clear the state
 		}
@@ -174,7 +172,7 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resi
 		return
 	}
 	fspathsConfigAddDel(rmi.Path, false /*add*/)
-	glog.Infof("%s: %s %q done%s", g.t.si, rmi, action, detail)
+	glog.Infof("%s: %s %q %s done", g.t.si, rmi, action, xres)
 
 	// 3. the case of multiple overlapping detach _or_ disable operations
 	//    (ie., commit previously aborted xs.Resilver, if any)
@@ -195,7 +193,7 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resi
 			return
 		}
 		fspathsConfigAddDel(mi.Path, false /*add*/)
-		glog.Infof("%s: %s %q - was previously aborted and now done%s", g.t.si, mi, action, detail)
+		glog.Infof("%s: %s %s %s was previously aborted and now done", g.t.si, action, mi, xres)
 	}
 }
 

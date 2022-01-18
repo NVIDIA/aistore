@@ -172,8 +172,8 @@ func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
 func (dm *DataMover) Close(err error) {
 	debug.Assert(dm.stage.opened.Load()) // Open() must've been called
 	if err == nil && dm.xctn != nil {
-		if err = dm.xctn.Aborted(); err != nil {
-			err = cmn.NewErrAborted(dm.xctn.Name(), "dm-close", err)
+		if dm.xctn.IsAborted() {
+			err = cmn.NewErrAborted(dm.xctn.Name(), "dm-close", dm.xctn.AbortErr())
 		}
 	}
 	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin`, otherwise abort

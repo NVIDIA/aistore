@@ -186,7 +186,7 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, timeout time.Dur
 }
 
 func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	if err := pc.xctn.Aborted(); err != nil {
+	if err := pc.xctn.AbortErr(); err != nil {
 		return nil, cmn.NewErrAborted(pc.xctn.Name(), "try-push-comm", err)
 	}
 
@@ -276,7 +276,7 @@ func (pc *pushComm) OfflineTransform(bck *cluster.Bck, objName string, timeout t
 //////////////////
 
 func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	if err := rc.xctn.Aborted(); err != nil {
+	if err := rc.xctn.AbortErr(); err != nil {
 		return cmn.NewErrAborted(rc.xctn.Name(), "try-redirect-comm", err)
 	}
 
@@ -365,7 +365,7 @@ func transformerPath(bck *cluster.Bck, objName string) string {
 }
 
 func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
-	if err := c.xctn.Aborted(); err != nil {
+	if err := c.xctn.AbortErr(); err != nil {
 		return nil, cmn.NewErrAborted(c.xctn.Name(), "transform-get", err)
 	}
 

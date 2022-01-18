@@ -21,6 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 )
 
+const abortErrWait = time.Second
+
 type (
 	Base struct {
 		id      string
@@ -39,9 +41,10 @@ type (
 		}
 		notif *NotifXact
 		abort struct {
-			mu  sync.RWMutex
-			ch  chan error
-			err error
+			mu   sync.Mutex
+			ch   chan error
+			err  error
+			done atomic.Bool
 		}
 	}
 	Marked struct {
@@ -93,44 +96,52 @@ func (xctn *Base) Running() (yes bool) {
 //
 func (xctn *Base) ChanAbort() <-chan error { return xctn.abort.ch }
 
-func (xctn *Base) IsAborted() bool { return xctn.Aborted() != nil }
+func (xctn *Base) IsAborted() bool { return xctn.abort.done.Load() }
 
-func (xctn *Base) Aborted() (err error) {
-	xctn.abort.mu.RLock()
-	err = xctn.abort.err
-	xctn.abort.mu.RUnlock()
+func (xctn *Base) AbortErr() (err error) {
+	if !xctn.IsAborted() {
+		return
+	}
+	sleep := cos.ProbingFrequency(abortErrWait)
+	for elapsed := time.Duration(0); elapsed < abortErrWait; elapsed += sleep {
+		xctn.abort.mu.Lock()
+		err = xctn.abort.err
+		xctn.abort.mu.Unlock()
+		if err != nil {
+			break
+		}
+	}
 	return
 }
 
 func (xctn *Base) AbortedAfter(d time.Duration) (err error) {
 	sleep := cos.ProbingFrequency(d)
-	err = xctn.Aborted()
-	for elapsed := time.Duration(0); elapsed < d && err == nil; elapsed += sleep {
+	for elapsed := time.Duration(0); elapsed < d; elapsed += sleep {
+		if err = xctn.AbortErr(); err != nil {
+			break
+		}
 		time.Sleep(sleep)
-		err = xctn.Aborted()
 	}
 	return
 }
 
 func (xctn *Base) Abort(err error) (ok bool) {
-	if xctn.Finished() {
+	if xctn.Finished() || !xctn.abort.done.CAS(false, true) {
 		return
 	}
+
 	if err == nil {
 		err = cmn.ErrXactNoErrAbort
 	} else if errAborted := cmn.AsErrAborted(err); errAborted != nil {
 		err = errAborted.Unwrap()
 	}
 	xctn.abort.mu.Lock()
-	if err := xctn.abort.err; err != nil {
-		xctn.abort.mu.Unlock()
-		glog.Warningf("%s already aborted(%v)", xctn.Name(), err)
-		return
-	}
+	debug.AssertMsg(xctn.abort.err == nil, xctn.String())
 	xctn.abort.err = err
 	xctn.abort.ch <- err
 	close(xctn.abort.ch)
 	xctn.abort.mu.Unlock()
+
 	if xctn.Kind() != cmn.ActList {
 		glog.Infof("%s aborted(%v)", xctn.Name(), err)
 	}
@@ -144,12 +155,12 @@ func (xctn *Base) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes {
 		sleep       = cos.ProbingFrequency(d)
 		dur         = d
 	)
-	if xctn.Aborted() != nil {
+	if xctn.IsAborted() {
 		return cluster.QuiAborted
 	}
 	for idle < dur {
 		time.Sleep(sleep)
-		if xctn.Aborted() != nil {
+		if xctn.IsAborted() {
 			return cluster.QuiAborted
 		}
 		total += sleep
@@ -188,8 +199,8 @@ func (xctn *Base) String() string {
 		return s
 	}
 	etime := cos.FormatTimestamp(xctn.EndTime())
-	if err := xctn.Aborted(); err != nil {
-		s += "-[abrt: " + err.Error() + "]"
+	if xctn.IsAborted() {
+		s = fmt.Sprintf("%s-[abrt: %v]", s, xctn.AbortErr())
 	}
 	return s + "-" + etime
 }
@@ -299,7 +310,7 @@ func (xctn *Base) ToSnap(snap *Snap) {
 	snap.Bck = xctn.origBck
 	snap.StartTime = xctn.StartTime()
 	snap.EndTime = xctn.EndTime()
-	snap.AbortedX = xctn.Aborted() != nil
+	snap.AbortedX = xctn.IsAborted()
 
 	xctn.ToStats(&snap.Stats)
 }
