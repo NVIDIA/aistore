@@ -31,17 +31,23 @@ type (
 // interface guard
 var _ streamer = (*MsgStream)(nil)
 
-func (s *MsgStream) terminate(err error) {
+func (s *MsgStream) terminate(err error, reason string) (actReason string, actErr error) {
+	ok := s.term.done.CAS(false, true)
+	debug.AssertMsg(ok, s.String())
+
 	s.term.mu.Lock()
-	debug.Assert(!s.term.done)
-	s.term.err = err
-	s.term.done = true
-
+	if s.term.err == nil {
+		s.term.err = err
+	}
+	if s.term.reason == "" {
+		s.term.reason = reason
+	}
 	s.Stop()
-
+	actReason, actErr = s.term.reason, s.term.err
 	s.term.mu.Unlock()
 
 	gc.remove(&s.streamBase)
+	return
 }
 
 func (*MsgStream) abortPending(error, bool) {}
@@ -137,7 +143,7 @@ func (s *MsgStream) dryrun() {
 }
 
 // gc: drain terminated stream
-func (s *MsgStream) drain() {
+func (s *MsgStream) drain(error) {
 	for {
 		select {
 		case <-s.workCh:

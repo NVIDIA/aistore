@@ -132,18 +132,15 @@ func (ca *concAdjuster) start() {
 }
 
 func (ca *concAdjuster) run() {
-	ticker := time.NewTicker(cmn.GCO.Get().Disk.IostatTimeShort.D())
+	config := cmn.GCO.Get()
+	ticker := time.NewTicker(config.Disk.IostatTimeShort.D())
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			var (
-				config = cmn.GCO.Get()
-				utils  = fs.GetAllMpathUtils()
-			)
 			ca.mu.RLock()
 			for mpath, adjuster := range ca.adjusters {
-				util := utils.Get(mpath)
+				util := fs.GetMpathUtil(mpath)
 
 				adjuster.lastUtils = append(adjuster.lastUtils, util)
 				if len(adjuster.lastUtils) > lastInfoCnt {

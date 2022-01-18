@@ -45,7 +45,6 @@ const (
 
 // termination: reasons
 const (
-	reasonUnknown = "unknown"
 	reasonError   = "error"
 	endOfStream   = "end-of-stream"
 	reasonStopped = "stopped"
@@ -57,7 +56,7 @@ type (
 	streamer interface {
 		compressed() bool
 		dryrun()
-		terminate(err error)
+		terminate(error, string) (string, error)
 		doRequest() error
 		inSend() bool
 		abortPending(error, bool)
@@ -65,7 +64,7 @@ type (
 		resetCompression()
 		// gc
 		closeAndFree()
-		drain()
+		drain(err error)
 		idleTick()
 	}
 	streamBase struct {
@@ -95,10 +94,10 @@ type (
 		maxheader []byte // max header buffer
 		header    []byte // object header - slice of the maxheader with bucket/objName, etc. fields
 		term      struct {
-			mu     sync.RWMutex
+			mu     sync.Mutex
 			err    error
-			reason *string
-			done   bool
+			reason string
+			done   atomic.Bool
 		}
 	}
 )
@@ -155,15 +154,15 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 
 	s.maxheader, _ = s.mm.AllocSize(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
 	s.sessST.Store(inactive)                       // NOTE: initiate HTTP session upon the first arrival
-
-	s.term.reason = new(string)
 	return
 }
 
 func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 	s.time.inSend.Store(true) // StreamCollector to postpone cleanups
-	if done, errT := s.Terminated(); done {
-		err = fmt.Errorf("%s terminated(%v), dropping %s", s, errT, streamable)
+	if s.IsTerminated() {
+		// slow path
+		reason, errT := s.TermInfo()
+		err = fmt.Errorf("%s terminated(%q, %v), dropping %s", s, reason, errT, streamable)
 		glog.Error(err)
 		return
 	}
@@ -183,18 +182,20 @@ func (s *streamBase) String() string      { return s.lid }
 
 func (s *streamBase) Abort() { s.Stop() } // (DM =>) SB => s.Abort() sequence (e.g. usage see otherXreb.Abort())
 
-func (s *streamBase) IsTerminated() (yes bool) {
-	s.term.mu.RLock()
-	yes = s.term.done
-	s.term.mu.RUnlock()
-	return
-}
+func (s *streamBase) IsTerminated() bool { return s.term.done.Load() }
 
-func (s *streamBase) Terminated() (yes bool, err error) {
-	s.term.mu.RLock()
-	yes = s.term.done
-	err = s.term.err
-	s.term.mu.RUnlock()
+func (s *streamBase) TermInfo() (reason string, err error) {
+	const sleep = retrySleep >> 2
+	// to account for an unlikely delay between done.CAS() and mu.Lock - see terminate()
+	for i := 0; i < 4; i++ {
+		s.term.mu.Lock()
+		reason, err = s.term.reason, s.term.err
+		s.term.mu.Unlock()
+		if reason != "" {
+			break
+		}
+		time.Sleep(sleep)
+	}
 	return
 }
 
@@ -207,26 +208,23 @@ func (s *streamBase) GetStats() (stats Stats) {
 	return
 }
 
-func (s *streamBase) isNextReq() (next bool) {
+func (s *streamBase) isNextReq() (reason string) {
 	for {
 		select {
 		case <-s.lastCh.Listen():
 			if verbose {
 				glog.Infof("%s: end-of-stream", s)
 			}
-			*s.term.reason = endOfStream
+			reason = endOfStream
 			return
 		case <-s.stopCh.Listen():
 			if verbose {
-				glog.Infof("stream %s stopped", s)
+				glog.Infof("%s: stopped", s)
 			}
-			if *s.term.reason == "" {
-				*s.term.reason = reasonStopped
-			}
+			reason = reasonStopped
 			return
 		case <-s.postCh:
 			s.sessST.Store(active)
-			next = true // initiate new HTTP/TCP session
 			if verbose {
 				glog.Infof("%s: active <- posted", s)
 			}
@@ -245,54 +243,50 @@ func (s *streamBase) deactivate() (n int, err error) {
 }
 
 func (s *streamBase) sendLoop(dryrun bool) {
-	var retried bool
+	var (
+		err     error
+		reason  string
+		retried bool
+	)
 	for {
 		if s.sessST.Load() == active {
 			if dryrun {
 				s.streamer.dryrun()
-			} else if err := s.streamer.doRequest(); err != nil {
+			} else if errR := s.streamer.doRequest(); errR != nil {
 				if !cos.IsRetriableConnErr(err) || retried {
-					*s.term.reason = reasonError
-					s.term.err = err
+					reason = reasonError
+					err = errR
 					s.streamer.errCmpl(err)
 					break
 				}
 				retried = true
-				glog.Errorf("%s: %v - retrying...", s, err)
+				glog.Errorf("%s: %v - retrying...", s, errR)
 				time.Sleep(retrySleep)
 			}
 		}
-		if !s.isNextReq() {
+		if reason = s.isNextReq(); reason != "" {
 			break
 		}
 	}
 
-	s.streamer.terminate(s.term.err)
+	reason, err = s.streamer.terminate(err, reason)
 	s.wg.Done()
 
-	// handle termination caused by anything other than Fin()
-	if *s.term.reason != endOfStream {
-		var (
-			err    error
-			reason string
-		)
-		s.term.mu.RLock()
-		err = s.term.err
-		reason = *s.term.reason
-		s.term.mu.RUnlock()
-		if reason == reasonStopped {
-			if verbose {
-				glog.Infof("%s: stopped", s)
-			}
-		} else {
-			glog.Errorf("%s: terminating (%s, %v)", s, reason, err)
-		}
-		// wait for the SCQ/cmplCh to empty
-		s.wg.Wait()
-
-		// cleanup
-		s.streamer.abortPending(err, false /*completions*/)
+	if reason == endOfStream {
+		return
 	}
+
+	// termination is caused by anything other than Fin()
+	// (reasonStopped is, effectively, abort via Stop() - totally legit)
+	if reason != reasonStopped {
+		glog.Errorf("%s: terminating (%s, %v)", s, reason, err)
+	}
+
+	// wait for the SCQ/cmplCh to empty
+	s.wg.Wait()
+
+	// cleanup
+	s.streamer.abortPending(err, false /*completions*/)
 }
 
 //////////////////

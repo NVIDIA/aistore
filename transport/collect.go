@@ -7,7 +7,6 @@ package transport
 
 import (
 	"container/heap"
-	"errors"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -151,23 +150,17 @@ func (gc *collector) Pop() interface{} {
 func (gc *collector) do() {
 	for lid, s := range gc.streams {
 		if s.IsTerminated() {
+			_, err := s.TermInfo()
 			if s.time.inSend.Swap(false) {
-				s.streamer.drain()
+				s.streamer.drain(err)
 				s.time.ticks = 1
 				continue
 			}
 
 			s.time.ticks--
 			if s.time.ticks <= 0 {
-				var err error
 				delete(gc.streams, lid)
 				s.streamer.closeAndFree()
-				s.term.mu.Lock()
-				if s.term.err == nil {
-					s.term.err = errors.New(reasonUnknown)
-				}
-				err = s.term.err
-				s.term.mu.Unlock()
 				s.streamer.abortPending(err, true /*completions*/)
 			}
 		} else if s.sessST.Load() == active {

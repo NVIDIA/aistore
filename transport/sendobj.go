@@ -53,16 +53,21 @@ var _ streamer = (*Stream)(nil)
 // object stream //
 ///////////////////
 
-func (s *Stream) terminate(err error) {
+func (s *Stream) terminate(err error, reason string) (actReason string, actErr error) {
+	ok := s.term.done.CAS(false, true)
+	debug.AssertMsg(ok, s.String())
+
 	s.term.mu.Lock()
-	debug.Assert(!s.term.done)
-	s.term.err = err
-	s.term.done = true
-
+	if s.term.err == nil {
+		s.term.err = err
+	}
+	if s.term.reason == "" {
+		s.term.reason = reason
+	}
 	s.Stop()
-
-	obj := Obj{Hdr: ObjHdr{Opcode: opcFin}}
-	s.cmplCh <- cmpl{obj, s.term.err}
+	err = s.term.err
+	actReason, actErr = s.term.reason, s.term.err
+	s.cmplCh <- cmpl{Obj{Hdr: ObjHdr{Opcode: opcFin}}, err}
 	s.term.mu.Unlock()
 
 	// Remove stream after lock because we could deadlock between `do()`
@@ -76,6 +81,7 @@ func (s *Stream) terminate(err error) {
 			s.lz4s.zw.Reset(nil)
 		}
 	}
+	return
 }
 
 func (s *Stream) initCompression(extra *Extra) {
@@ -367,11 +373,11 @@ func (s *Stream) errCmpl(err error) {
 }
 
 // gc: drain terminated stream
-func (s *Stream) drain() {
+func (s *Stream) drain(err error) {
 	for {
 		select {
 		case obj := <-s.workCh:
-			s.doCmpl(obj, s.term.err)
+			s.doCmpl(obj, err)
 		default:
 			return
 		}

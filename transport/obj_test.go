@@ -689,10 +689,10 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	stream.Fin()
 	stats := stream.GetStats()
 	if netstats == nil {
-		done, termErr := stream.Terminated()
-		tassert.Errorf(t, done, "expecting termination")
-		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), term(%v)\n",
-			trname, sessID, stats.Offset.Load(), stats.Num.Load(), num, termErr)
+		reason, termErr := stream.TermInfo()
+		tassert.Errorf(t, reason != "", "expecting reason for termination")
+		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), term(%q, %v)\n",
+			trname, sessID, stats.Offset.Load(), stats.Num.Load(), num, reason, termErr)
 	} else {
 		lock.Lock()
 		eps := make(transport.EndpointStats)
