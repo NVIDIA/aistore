@@ -296,7 +296,8 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, propsToSet)
 
 	m.puts()
-	// TODO: must be able to wait for cmn.ActPutCopies
+
+	// NOTE: not waiting here for cmn.ActPutCopies
 
 	tlog.Logf("List %q\n", m.bck)
 	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsName}
@@ -318,7 +319,9 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 		})
 		tassert.CheckFatal(t, err)
 	}
-	// TODO: wait for cmn.ActPutCopies
+	// wait for pending writes (of the copies)
+	args := api.XactReqArgs{Kind: cmn.ActPutCopies, Bck: m.bck}
+	api.WaitForXactionIdle(baseParams, args)
 
 	tlog.Logf("List %s new versions\n", m.bck)
 	msg = &cmn.ListObjsMsg{}
