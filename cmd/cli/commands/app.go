@@ -217,18 +217,34 @@ func (aisCLI *AISCLI) enableSearch() {
 }
 
 func setupCommandHelp(commands []cli.Command) {
+	helps := strings.Split(cli.HelpFlag.GetName(), ",")
+	helpName := strings.TrimSpace(helps[0])
 	for i := range commands {
 		command := &commands[i]
 
 		// Get rid of 'h'/'help' subcommands
+		// and add the help flag manually
 		command.HideHelp = true
-		// Need to set up the help flag manually when setting HideHelp = true
-		command.Flags = append(command.Flags, cli.HelpFlag)
-
+		// (but only if there isn't one already)
+		if !hasHelpFlag(command.Flags, helpName) {
+			command.Flags = append(command.Flags, cli.HelpFlag)
+		}
 		command.OnUsageError = incorrectUsageHandler
 
 		setupCommandHelp(command.Subcommands)
 	}
+}
+
+func hasHelpFlag(commandFlags []cli.Flag, helpName string) bool {
+	for _, flag := range commandFlags {
+		for _, name := range strings.Split(flag.GetName(), ",") {
+			name = strings.TrimSpace(name)
+			if name == helpName {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // This is a copy-paste from urfave/cli/help.go. It is done to remove the 'h' alias of the 'help' command
