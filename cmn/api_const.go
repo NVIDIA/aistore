@@ -399,6 +399,7 @@ const (
 	ETL         = "etl"
 	ETLInitSpec = "init_spec"
 	ETLInitCode = "init_code"
+	ETLInfo     = "info"
 	ETLList     = List
 	ETLLogs     = "logs"
 	ETLObject   = "object"

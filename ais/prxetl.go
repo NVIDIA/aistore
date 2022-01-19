@@ -50,6 +50,8 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 			p.logsETL(w, r)
 		case cmn.ETLHealth:
 			p.healthETL(w, r)
+		case cmn.ETLInfo:
+			p.infoETL(w, r)
 		default:
 			p.writeErrURL(w, r)
 		}
@@ -178,6 +180,27 @@ func (p *proxy) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
 	if ctx.wait {
 		wg.Wait()
 	}
+}
+
+// GET /v1/etl
+func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETLInfo.L)
+	if err != nil {
+		return
+	}
+	etlID := apiItems[0]
+	if etlID == "" {
+		p.writeErr(w, r, cmn.ErrETLMissingUUID)
+		return
+	}
+
+	etlMD := p.owner.etl.get()
+	initMsg := etlMD.get(etlID)
+	if initMsg == nil {
+		p.writeErr(w, r, cmn.NewErrNotFound("%s: etl UUID %s", p.si, etlID))
+		return
+	}
+	p.writeJSON(w, r, initMsg, "info-etl")
 }
 
 // GET /v1/etl/list

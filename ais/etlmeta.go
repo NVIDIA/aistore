@@ -111,6 +111,8 @@ func (e *etlMD) add(spec etl.InitMsg) {
 	e.Version++
 }
 
+func (e *etlMD) get(id string) etl.InitMsg { return e.ETLs[id] }
+
 //////////////////
 // etlMDOwnerBase //
 //////////////////

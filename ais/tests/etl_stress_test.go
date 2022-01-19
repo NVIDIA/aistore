@@ -54,12 +54,11 @@ def transform(input_bytes):
 	m.initWithCleanup()
 	m.puts()
 
-	uuid, err := api.ETLInitCode(baseParams, etl.InitCodeMsg{
+	uuid := tetl.InitCode(t, baseParams, etl.InitCodeMsg{
 		Code:        []byte(timeoutFunc),
 		Runtime:     runtime.Python3,
 		WaitTimeout: cos.Duration(5 * time.Minute),
 	})
-	tassert.CheckFatal(t, err)
 	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
 }
 
@@ -189,13 +188,12 @@ def transform(input_bytes):
 			)
 			switch test.ty {
 			case cmn.ETLInitSpec:
-				uuid, err = tetl.Init(baseParams, test.initDesc, etl.RedirectCommType)
+				uuid = tetl.Init(t, baseParams, test.initDesc, etl.RedirectCommType)
 			case cmn.ETLInitCode:
-				uuid, err = api.ETLInitCode(baseParams, test.buildDesc)
+				uuid = tetl.InitCode(t, baseParams, test.buildDesc)
 			default:
 				panic(test.ty)
 			}
-			tassert.CheckFatal(t, err)
 			t.Cleanup(func() {
 				tetl.StopETL(t, baseParams, uuid)
 				tetl.WaitForContainersStopped(t, baseParams)
@@ -242,8 +240,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 
 	m.puts()
 
-	etlID, err := tetl.Init(baseParams, name, comm)
-	tassert.CheckFatal(t, err)
+	etlID := tetl.Init(t, baseParams, name, comm)
 	tlog.Logf("ETL init successful (%q)\n", etlID)
 	t.Cleanup(func() {
 		tetl.StopETL(t, baseParams, etlID)

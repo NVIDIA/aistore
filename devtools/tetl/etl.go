@@ -5,6 +5,7 @@
 package tetl
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -221,25 +222,50 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cos.S
 	}()
 }
 
-func Init(baseParams api.BaseParams, name, comm string) (string, error) {
+func Init(t *testing.T, baseParams api.BaseParams, name, comm string) string {
 	tlog.Logln("Reading template")
 
 	spec, err := GetTransformYaml(name)
-	if err != nil {
-		return "", err
-	}
+	tassert.CheckFatal(t, err)
 
 	pod, err := etl.ParsePodSpec(nil, spec)
-	if err != nil {
-		return "", err
-	}
+	tassert.CheckFatal(t, err)
+
 	if comm != "" {
 		pod.Annotations["communication_type"] = comm
 	}
 
 	spec, _ = jsoniter.Marshal(pod)
 	tlog.Logln("Init ETL")
-	return api.ETLInitSpec(baseParams, spec)
+	uuid, err := api.ETLInitSpec(baseParams, spec)
+	tassert.CheckFatal(t, err)
+
+	etlMsg, err := api.ETLGetInitMsg(baseParams, uuid)
+	tassert.CheckFatal(t, err)
+
+	initSpec := etlMsg.(*etl.InitSpecMsg)
+	tassert.Errorf(t, initSpec.ID() == uuid, "expected uuid %s != %s", uuid, initSpec.ID())
+	tassert.Errorf(t, initSpec.CommType() == comm, "expected communicator type %s != %s", comm, initSpec.CommType())
+	tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ")
+
+	return uuid
+}
+
+func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) string {
+	uuid, err := api.ETLInitCode(baseParams, msg)
+	tassert.CheckFatal(t, err)
+
+	etlMsg, err := api.ETLGetInitMsg(baseParams, uuid)
+	tassert.CheckFatal(t, err)
+
+	initCode := etlMsg.(*etl.InitCodeMsg)
+	tassert.Errorf(t, initCode.ID() == uuid, "expected uuid %s != %s", uuid, initCode.ID())
+	tassert.Errorf(t, msg.CommType() == "" || initCode.CommType() == msg.CommType(), "expected communicator type %s != %s", msg.CommType(), initCode.CommType())
+	tassert.Errorf(t, msg.Runtime == initCode.Runtime, "expected runtime %s != %s", msg.Runtime, initCode.Runtime)
+	tassert.Errorf(t, bytes.Equal(msg.Code, initCode.Code), "ETL codes differ")
+	tassert.Errorf(t, bytes.Equal(msg.Deps, initCode.Deps), "ETL dependencies differ")
+
+	return uuid
 }
 
 func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg) string {

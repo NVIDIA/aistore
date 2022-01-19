@@ -273,8 +273,7 @@ func TestETLObject(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
 
-			uuid, err := tetl.Init(baseParams, test.transformer, test.comm)
-			tassert.CheckFatal(t, err)
+			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
 			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 			testETLObject(t, uuid, test.inPath, test.outPath, test.transform, test.filesEqual)
@@ -304,8 +303,7 @@ func TestETLObjectCloud(t *testing.T) {
 
 	for comm, configs := range tcs {
 		t.Run(comm, func(t *testing.T) {
-			uuid, err := tetl.Init(baseParams, tetl.Echo, comm)
-			tassert.CheckFatal(t, err)
+			uuid := tetl.Init(t, baseParams, tetl.Echo, comm)
 			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 			for _, conf := range configs {
@@ -337,8 +335,7 @@ func TestETLInline(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
 
-			uuid, err := tetl.Init(baseParams, test.transformer, test.comm)
-			tassert.CheckFatal(t, err)
+			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
 			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 			tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
@@ -379,8 +376,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
-	uuid, err := tetl.Init(baseParams, transformer, comm)
-	tassert.CheckFatal(t, err)
+	uuid := tetl.Init(t, baseParams, transformer, comm)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
@@ -448,9 +444,7 @@ func TestETLBucket(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: test.onlyLong})
 
-			uuid, err := tetl.Init(baseParams, test.transformer, test.comm)
-			tassert.CheckFatal(t, err)
-
+			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
 			testETLBucket(t, uuid, bck, objCnt, m.fileSize, time.Minute)
 		})
 	}
@@ -531,7 +525,7 @@ def transform(input_bytes: bytes) -> bytes:
 			t.Run(testType+"__"+test.name, func(t *testing.T) {
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: test.onlyLong})
 
-				uuid, err := api.ETLInitCode(baseParams, etl.InitCodeMsg{
+				uuid := tetl.InitCode(t, baseParams, etl.InitCodeMsg{
 					InitMsgBase: etl.InitMsgBase{
 						CommTypeX: test.commType,
 					},
@@ -540,7 +534,6 @@ def transform(input_bytes: bytes) -> bytes:
 					Runtime:     test.runtime,
 					WaitTimeout: cos.Duration(5 * time.Minute),
 				})
-				tassert.CheckFatal(t, err)
 
 				switch testType {
 				case "etl_object":
@@ -588,8 +581,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tlog.Logf("PUT %d objects", m.num)
 	m.puts()
 
-	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
-	tassert.CheckFatal(t, err)
+	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	tlog.Logf("Start offline ETL %q\n", uuid)
@@ -622,12 +614,10 @@ func TestETLMultipleTransformersAtATime(t *testing.T) {
 		t.Skip("Requires a single-node single-target deployment")
 	}
 
-	uuid1, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
-	tassert.CheckFatal(t, err)
+	uuid1 := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid1) })
 
-	uuid2, err := tetl.Init(baseParams, tetl.MD5, etl.RevProxyCommType)
-	tassert.CheckFatal(t, err)
+	uuid2 := tetl.Init(t, baseParams, tetl.MD5, etl.RevProxyCommType)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid2) })
 }
 
@@ -641,14 +631,14 @@ func TestETLHealth(t *testing.T) {
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	tlog.Logln("Starting ETL")
-	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RedirectCommType)
-	tassert.CheckFatal(t, err)
+	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RedirectCommType)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	var (
 		start    = time.Now()
 		deadline = start.Add(2 * time.Minute)
 		healths  etl.PodsHealthMsg
+		err      error
 	)
 
 	// It might take some time for metrics to be available.
@@ -687,8 +677,7 @@ func TestETLList(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 
-	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
-	tassert.CheckFatal(t, err)
+	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	list, err := api.ETLList(baseParams)

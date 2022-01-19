@@ -5,6 +5,8 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -12,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/etl"
+	jsoniter "github.com/json-iterator/go"
 )
 
 func ETLInitSpec(baseParams BaseParams, podspec []byte /*yaml*/) (id string, err error) {
@@ -52,6 +55,39 @@ func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err err
 	path := cmn.URLPathETLHealth.Join(id)
 	err = DoHTTPReqResp(ReqParams{BaseParams: params, Path: path}, &healths)
 	return healths, err
+}
+
+func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error) {
+	params.Method = http.MethodGet
+	path := cmn.URLPathETLInfo.Join(id)
+	r, err := doReader(ReqParams{BaseParams: params, Path: path})
+	if err != nil {
+		return nil, err
+	}
+	defer cos.Close(r)
+
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response, err: %w", err)
+	}
+
+	var msgInf map[string]json.RawMessage
+	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
+		return
+	}
+	if _, ok := msgInf["code"]; ok {
+		initMsg = &etl.InitCodeMsg{}
+		err = jsoniter.Unmarshal(b, initMsg)
+		return
+	}
+
+	if _, ok := msgInf["spec"]; !ok {
+		err = fmt.Errorf("invalid response body: %s", b)
+		return
+	}
+	initMsg = &etl.InitSpecMsg{}
+	err = jsoniter.Unmarshal(b, initMsg)
+	return
 }
 
 func ETLStop(baseParams BaseParams, id string) (err error) {
