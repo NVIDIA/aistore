@@ -63,7 +63,7 @@ var (
 			startAfterFlag,
 			cachedFlag,
 			listArchFlag,
-			onlyNamesFlag,
+			nameOnlyFlag,
 		},
 		subcmdSummary: {
 			cachedFlag,

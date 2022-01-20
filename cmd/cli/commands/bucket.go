@@ -196,8 +196,8 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 		msg.SetFlag(cmn.LsMisplaced)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
-	if flagIsSet(c, onlyNamesFlag) {
-		msg.SetFlag(cmn.LsOnlyNames)
+	if flagIsSet(c, nameOnlyFlag) {
+		msg.SetFlag(cmn.LsNameOnly)
 		msg.Props = cmn.GetPropsName
 		if cos.StringInSlice("all", props) || cos.StringInSlice(cmn.GetPropsStatus, props) {
 			msg.AddProps(cmn.GetPropsStatus)

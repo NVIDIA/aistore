@@ -18,7 +18,7 @@ const (
 	LsMisplaced             // include misplaced obj-s
 	LsDeleted               // include obj-s marked for deletion (TODO)
 	LsArchDir               // expand archives as directories
-	LsOnlyNames             // return only object names and statuses (for faster listing)
+	LsNameOnly              // return only object names and statuses (for faster listing)
 
 	// cache list-objects results and use this cache to speed-up
 	UseListObjsCache

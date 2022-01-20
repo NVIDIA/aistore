@@ -133,7 +133,7 @@ func (wi *WalkInfo) matchObj(lom *cluster.LOM) bool {
 	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, lom.ObjName) {
 		return false
 	}
-	if wi.msg.IsFlagSet(cmn.LsOnlyNames) {
+	if wi.msg.IsFlagSet(cmn.LsNameOnly) {
 		return true
 	}
 	return wi.objectFilter == nil || wi.objectFilter(lom)
@@ -156,7 +156,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 		Name:  lom.ObjName,
 		Flags: objStatus | cmn.EntryIsCached,
 	}
-	if wi.msg.IsFlagSet(cmn.LsOnlyNames) {
+	if wi.msg.IsFlagSet(cmn.LsNameOnly) {
 		return fileInfo
 	}
 
@@ -184,11 +184,10 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 	return fileInfo
 }
 
-// By default, Callback does a few syscalls to load file attributes and xatrrs
-// to fill the object info. If a client needs only object names, the bucket
-// list can be sped up by setting the flag cmn.LsOnlyNames which skips
-// calling expensive filesystem requests. When cmn.LsOnlyNames is set, the
-// Callback fills only object name and status.
+// By default, Callback performs a number of syscalls to load object metadata.
+// A note in re cmn.LsNameOnly (usage below):
+//    the flag cmn.LsNameOnly optimizes-out loading object metadata. If defined,
+//    the function returns (only the) name and status.
 func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, error) {
 	if de.IsDir() {
 		return nil, nil
@@ -213,8 +212,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 	if isObjMoved(objStatus) && !wi.msg.IsFlagSet(cmn.LsMisplaced) {
 		return nil, nil
 	}
-	// LsOnlyNames skips loading object's metadata.
-	if wi.msg.IsFlagSet(cmn.LsOnlyNames) {
+	if wi.msg.IsFlagSet(cmn.LsNameOnly) {
 		return wi.lsObject(lom, objStatus), nil
 	}
 
