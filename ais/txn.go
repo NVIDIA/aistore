@@ -65,7 +65,7 @@ type (
 		action     string
 		smapVer    int64
 		bmdVer     int64
-		kind       string
+		tag        string
 		callerName string
 		callerID   string
 		err        *txnError
@@ -111,7 +111,7 @@ type (
 	txnECEncode struct {
 		txnBckBase
 	}
-	txnCreateArchMultiObj struct {
+	txnArchMultiObj struct {
 		txnBckBase
 		xarch *xs.XactCreateArchMultiObj
 		msg   *cmn.ArchiveMsg
@@ -392,8 +392,15 @@ func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 // txnBckBase //
 ////////////////
 
-func newTxnBckBase(kind string, bck cluster.Bck) *txnBckBase {
-	return &txnBckBase{txnBase: txnBase{kind: kind}, bck: bck}
+func newTxnBckBase(tag string, bck *cluster.Bck) (txn *txnBckBase) {
+	txn = &txnBckBase{}
+	txn.init(tag, bck)
+	return
+}
+
+func (txn *txnBckBase) init(tag string, bck *cluster.Bck) {
+	txn.tag = tag
+	txn.bck = *bck
 }
 
 func (txn *txnBckBase) cleanup() {
@@ -427,7 +434,7 @@ func (txn *txnBckBase) String() string {
 		}
 	}
 	return fmt.Sprintf("txn-%s[%s-(v%d, v%d)-%s-%s]-%s%s]",
-		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.bck.Bck.String(), tm, res)
+		txn.tag, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.bck.Bck.String(), tm, res)
 }
 
 func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (found bool, errDone error) {
@@ -453,7 +460,8 @@ func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args .
 /////////////////////
 
 func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
-	txn = &txnCreateBucket{*newTxnBckBase("crb", *c.bck)}
+	txn = &txnCreateBucket{}
+	txn.init("crb", c.bck)
 	txn.fillFromCtx(c)
 	return
 }
@@ -463,11 +471,8 @@ func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
 ////////////////////
 
 func newTxnMakeNCopies(c *txnServerCtx, curCopies, newCopies int64) (txn *txnMakeNCopies) {
-	txn = &txnMakeNCopies{
-		*newTxnBckBase("mnc", *c.bck),
-		curCopies,
-		newCopies,
-	}
+	txn = &txnMakeNCopies{curCopies: curCopies, newCopies: newCopies}
+	txn.init("mnc", c.bck)
 	txn.fillFromCtx(c)
 	return
 }
@@ -484,11 +489,8 @@ func (txn *txnMakeNCopies) String() string {
 func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSetBucketProps) {
 	cos.Assert(c.bck.Props != nil)
 	bprops := c.bck.Props.Clone()
-	txn = &txnSetBucketProps{
-		*newTxnBckBase("spb", *c.bck),
-		bprops,
-		nprops,
-	}
+	txn = &txnSetBucketProps{bprops: bprops, nprops: nprops}
+	txn.init("spb", c.bck)
 	txn.fillFromCtx(c)
 	return
 }
@@ -498,11 +500,8 @@ func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSet
 /////////////////////
 
 func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnRenameBucket) {
-	txn = &txnRenameBucket{
-		*newTxnBckBase("rnb", *bckFrom),
-		bckFrom,
-		bckTo,
-	}
+	txn = &txnRenameBucket{bckFrom: bckFrom, bckTo: bckTo}
+	txn.init("rnb", bckFrom)
 	txn.fillFromCtx(c)
 	return
 }
@@ -512,7 +511,8 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 ////////////
 
 func newTxnTCB(c *txnServerCtx, xtcb *mirror.XactTCB) (txn *txnTCB) {
-	txn = &txnTCB{*newTxnBckBase("tcb", *xtcb.Args().BckFrom), xtcb}
+	txn = &txnTCB{xtcb: xtcb}
+	txn.init("tcb", xtcb.Args().BckFrom)
 	txn.fillFromCtx(c)
 	return
 }
@@ -526,9 +526,9 @@ func (txn *txnTCB) abort() {
 // txnTCObjs //
 ///////////////
 
-func newTxnTCObjs(c *txnServerCtx, bckFrom *cluster.Bck, xtco *xs.XactTCObjs,
-	msg *cmn.TCObjsMsg) (txn *txnTCObjs) {
-	txn = &txnTCObjs{*newTxnBckBase("tco", *bckFrom), xtco, msg}
+func newTxnTCObjs(c *txnServerCtx, bckFrom *cluster.Bck, xtco *xs.XactTCObjs, msg *cmn.TCObjsMsg) (txn *txnTCObjs) {
+	txn = &txnTCObjs{xtco: xtco, msg: msg}
+	txn.init("tco", bckFrom)
 	txn.fillFromCtx(c)
 	return
 }
@@ -543,9 +543,8 @@ func (txn *txnTCObjs) abort() {
 /////////////////
 
 func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
-	txn = &txnECEncode{
-		*newTxnBckBase("enc", *bck),
-	}
+	txn = &txnECEncode{}
+	txn.init("enc", bck)
 	txn.fillFromCtx(c)
 	return
 }
@@ -554,13 +553,15 @@ func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 // txnCreateArchMultiObj //
 ///////////////////////////
 
-func newTxnPutArchive(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactCreateArchMultiObj, msg *cmn.ArchiveMsg) (txn *txnCreateArchMultiObj) {
-	txn = &txnCreateArchMultiObj{*newTxnBckBase("arc", *bckFrom), xarch, msg}
+func newTxnArchMultiObj(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactCreateArchMultiObj,
+	msg *cmn.ArchiveMsg) (txn *txnArchMultiObj) {
+	txn = &txnArchMultiObj{xarch: xarch, msg: msg}
+	txn.init("arc", bckFrom)
 	txn.fillFromCtx(c)
 	return
 }
 
-func (txn *txnCreateArchMultiObj) abort() {
+func (txn *txnArchMultiObj) abort() {
 	txn.txnBckBase.abort()
 	txn.xarch.TxnAbort()
 }

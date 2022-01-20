@@ -765,14 +765,14 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 		if err := xarch.Begin(archMsg); err != nil {
 			return xactID, err
 		}
-		txn := newTxnPutArchive(c, bckFrom, xarch, archMsg)
+		txn := newTxnArchMultiObj(c, bckFrom, xarch, archMsg)
 		if err := t.transactions.begin(txn); err != nil {
 			return xactID, err
 		}
 	case cmn.ActAbort:
 		txn, err := t.transactions.find(c.uuid, cmn.ActAbort)
 		if err == nil {
-			txnArch := txn.(*txnCreateArchMultiObj)
+			txnArch := txn.(*txnArchMultiObj)
 			// if _this_ transaction initiated _that_ on-demand
 			if xarch := txnArch.xarch; xarch != nil && xarch.ID() == c.uuid {
 				xactID = xarch.ID()
@@ -784,7 +784,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 		if err != nil {
 			return xactID, err
 		}
-		txnArch := txn.(*txnCreateArchMultiObj)
+		txnArch := txn.(*txnArchMultiObj)
 		txnArch.xarch.Do(txnArch.msg)
 		xactID = txnArch.xarch.ID()
 		t.transactions.find(c.uuid, cmn.ActCommit)
@@ -838,7 +838,7 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 		if !nlp.TryLock(c.timeout.netw / 2) {
 			return cmn.NewErrBckIsBusy(c.bck.Bck)
 		}
-		txn := newTxnBckBase("dlb", *c.bck)
+		txn := newTxnBckBase("dlb", c.bck)
 		txn.fillFromCtx(c)
 		if err := t.transactions.begin(txn); err != nil {
 			nlp.Unlock()
