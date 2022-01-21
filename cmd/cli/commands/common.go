@@ -27,6 +27,7 @@ const (
 	commandShow      = "show"
 	commandSearch    = "search"
 	commandETL       = cmn.ETL
+	commandSource    = "source"
 
 	commandCat       = "cat"
 	commandConcat    = "concat"

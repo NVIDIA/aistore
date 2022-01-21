@@ -49,8 +49,16 @@ var (
 	}
 	showCmdETL = cli.Command{
 		Name:   commandShow,
-		Usage:  "list all running ETLs",
+		Usage:  "show ETL(s)",
 		Action: etlListHandler,
+		Subcommands: []cli.Command{
+			{
+				Name:      commandSource,
+				Usage:     "show ETL code/spec",
+				ArgsUsage: "ETL_ID",
+				Action:    etlSourceHandler,
+			},
+		},
 	}
 	stopCmdETL = cli.Command{
 		Name:         subcmdStop,
@@ -231,6 +239,26 @@ func etlListHandler(c *cli.Context) (err error) {
 		return err
 	}
 	return templates.DisplayOutput(list, c.App.Writer, templates.TransformListTmpl)
+}
+
+func etlSourceHandler(c *cli.Context) (err error) {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "ETL_ID")
+	}
+	id := c.Args().Get(0)
+	msg, err := api.ETLGetInitMsg(defaultAPIParams, id)
+	if err != nil {
+		return err
+	}
+	if initMsg, ok := msg.(*etl.InitCodeMsg); ok {
+		fmt.Fprintf(c.App.Writer, "%s\n", string(initMsg.Code))
+		return
+	}
+	if initMsg, ok := msg.(*etl.InitSpecMsg); ok {
+		fmt.Fprintf(c.App.Writer, "%s\n", string(initMsg.Spec))
+		return
+	}
+	return
 }
 
 func etlLogsHandler(c *cli.Context) (err error) {
