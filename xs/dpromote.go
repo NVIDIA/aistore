@@ -8,7 +8,6 @@ package xs
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -79,13 +78,14 @@ func NewXactDirPromote(dir string, bck *cluster.Bck, t cluster.Target, params *c
 }
 
 func (r *XactDirPromote) Run(*sync.WaitGroup) {
+	var err error
 	glog.Infoln(r.Name(), r.dir, "=>", r.Bck())
-	opts := &fs.Options{
-		Dir:      r.dir,
-		Callback: r.walk,
-		Sorted:   false,
+	opts := &fs.Options{Dir: r.dir, Callback: r.walk, Sorted: false}
+	if r.params.Recursive {
+		err = fs.Walk(opts) // godirwalk
+	} else {
+		err = fs.WalkDir(r.dir, r._walk) // Go fs.WalkDir
 	}
-	err := fs.Walk(opts)
 	r.Finish(err)
 }
 
@@ -93,29 +93,34 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
 	}
-	if !r.params.Recursive {
-		fname, err := filepath.Rel(r.dir, fqn)
-		cos.AssertNoErr(err)
-		if strings.ContainsRune(fname, filepath.Separator) {
-			return nil
-		}
-	}
-	// NOTE: destination objName is:
-	// r.params.ObjName + filepath.Base(fqn) if promoting single file
-	// r.params.ObjName + strings.TrimPrefix(fileFqn, dirFqn) if promoting the whole directory
-	debug.Assert(filepath.IsAbs(fqn))
+	return r._walk(fqn)
+}
 
+func (r *XactDirPromote) _walk(fqn string) error {
+	debug.Assert(filepath.IsAbs(fqn))
 	bck := r.Bck()
 	if err := bck.Init(r.Target().Bowner()); err != nil {
 		return err
 	}
-	objName := r.params.ObjName
-	if objName != "" && objName[len(objName)-1] != os.PathSeparator {
-		objName += string(os.PathSeparator)
-	}
-	objName += strings.TrimPrefix(strings.TrimPrefix(fqn, r.dir), string(filepath.Separator))
-	objName = strings.Trim(objName, string(filepath.Separator))
 
+	// conventionally, destination obj name ~= objname/(fqn - dir)
+	objName := r.params.ObjName
+	baseName, err := filepath.Rel(r.dir, fqn)
+	debug.AssertNoErr(err)
+	if err != nil {
+		return err
+	}
+	if objName == "" {
+		objName = baseName
+	} else {
+		if objName[len(objName)-1] == filepath.Separator {
+			objName += baseName
+		} else {
+			objName = filepath.Join(r.params.ObjName, baseName)
+		}
+	}
+
+	// promote
 	params := cluster.PromoteFileParams{
 		SrcFQN:    fqn,
 		Bck:       bck,

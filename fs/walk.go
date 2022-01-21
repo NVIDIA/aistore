@@ -7,6 +7,7 @@ package fs
 import (
 	"container/heap"
 	"context"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -52,6 +53,12 @@ type (
 
 	errCallbackWrapper struct {
 		counter atomic.Int64
+	}
+
+	walkDirWrapper struct {
+		errCallbackWrapper
+		dir string             // root pathname
+		ucb func(string) error // user-provided callback
 	}
 
 	objInfo struct {
@@ -164,7 +171,7 @@ func Walk(opts *Options) error {
 			}
 		}
 	}
-	scratch, slab := memsys.PageMM().AllocSize(memsys.PageSize * 2)
+	scratch, slab := memsys.PageMM().AllocSize(memsys.DefaultBufSize)
 	gOpts := &godirwalk.Options{
 		ErrorCallback: ew.PathErrToAction, // "halts the walk" or "skips the node" (detailed comment above)
 		Callback:      opts.callback,
@@ -240,7 +247,7 @@ func AllMpathBcks(opts *Options) (bcks []cmn.Bck, err error) {
 func mpathChildren(opts *Options) (children []string, err error) {
 	var (
 		fqn           = opts.Mi.MakePathBck(opts.Bck)
-		scratch, slab = memsys.PageMM().AllocSize(memsys.PageSize * 2)
+		scratch, slab = memsys.PageMM().AllocSize(memsys.DefaultBufSize)
 	)
 	children, err = godirwalk.ReadDirnames(fqn, scratch)
 	slab.Free(scratch)
@@ -341,22 +348,31 @@ func (wcb *walkCb) walkBckMpath(fqn string, de DirEntry) error {
 	}
 }
 
-func Scanner(dir string, cb func(fqn string, entry DirEntry) error) error {
-	scanner, err := godirwalk.NewScanner(dir)
+////////////////////
+// WalkDir & walkDirWrapper - non-recursive walk
+////////////////////
+
+// pros: lexical deterministic order; cons: reads the entire directory
+func WalkDir(dir string, ucb func(string) error) error {
+	wd := &walkDirWrapper{dir: dir, ucb: ucb}
+	return filepath.WalkDir(dir, wd.wcb)
+}
+
+// wraps around user callback to implement default error handling and skipping
+func (wd *walkDirWrapper) wcb(path string, d iofs.DirEntry, err error) error {
 	if err != nil {
+		// Walk and WalkDir share the same error-processing logic (hence, godirwalk enum)
+		if path != wd.dir && wd.PathErrToAction(path, err) != godirwalk.Halt {
+			err = nil
+		}
 		return err
 	}
-	for scanner.Scan() {
-		dirent, err := scanner.Dirent()
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return err
-		}
-		if err := cb(filepath.Join(dir, dirent.Name()), dirent); err != nil {
-			return err
-		}
+	if d.IsDir() && path != wd.dir {
+		return filepath.SkipDir
 	}
-	return scanner.Err()
+	if !d.Type().IsRegular() {
+		return nil
+	}
+	// user callback
+	return wd.ucb(path)
 }
