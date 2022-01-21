@@ -30,29 +30,24 @@ const (
 )
 
 type (
-	errFunc  func(string, error) godirwalk.ErrorAction
-	WalkFunc func(fqn string, de DirEntry) error
-)
-
-type (
 	DirEntry interface {
 		IsDir() bool
 	}
 
+	walkFunc func(fqn string, de DirEntry) error
+
 	Options struct {
-		Dir         string
-		Mi          *MountpathInfo
-		Bck         cmn.Bck
-		CTs         []string
-		ErrCallback errFunc
-		Callback    WalkFunc
-		Slab        *memsys.Slab
-		Sorted      bool
+		Dir      string
+		Mi       *MountpathInfo
+		Bck      cmn.Bck
+		CTs      []string
+		Callback walkFunc
+		Sorted   bool
 	}
 
 	WalkBckOptions struct {
 		Options
-		ValidateCallback WalkFunc // should return filepath.SkipDir to skip directory without an error
+		ValidateCallback walkFunc // should return filepath.SkipDir to skip directory without an error
 	}
 
 	errCallbackWrapper struct {
@@ -73,7 +68,7 @@ type (
 	}
 	walkCb struct {
 		mi       *MountpathInfo
-		validate WalkFunc
+		validate walkFunc
 		ctx      context.Context
 		workCh   chan *walkEntry
 	}
@@ -94,7 +89,7 @@ func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.Err
 		return godirwalk.Halt
 	}
 	if cmn.IsErrObjLevel(err) {
-		ew.counter.Add(1)
+		ew.counter.Inc()
 		return godirwalk.SkipNode
 	}
 	return godirwalk.Halt
@@ -152,9 +147,6 @@ func Walk(opts *Options) error {
 		err  error
 		ew   = &errCallbackWrapper{}
 	)
-	debug.Assert(opts.ErrCallback == nil) // `ErrCallback` is not used yet - using the default one below
-	opts.ErrCallback = ew.PathErrToAction // Default error callback halts on bucket-level and lom `errThreshold` errors
-
 	if opts.Dir != "" {
 		fqns = append(fqns, opts.Dir)
 	} else {
@@ -172,17 +164,9 @@ func Walk(opts *Options) error {
 			}
 		}
 	}
-	var (
-		slab    = opts.Slab
-		scratch []byte
-	)
-	if slab == nil {
-		scratch, slab = memsys.PageMM().AllocSize(memsys.PageSize * 2)
-	} else {
-		scratch = slab.Alloc()
-	}
+	scratch, slab := memsys.PageMM().AllocSize(memsys.PageSize * 2)
 	gOpts := &godirwalk.Options{
-		ErrorCallback: opts.ErrCallback,
+		ErrorCallback: ew.PathErrToAction, // "halts the walk" or "skips the node" (detailed comment above)
 		Callback:      opts.callback,
 		Unsorted:      !opts.Sorted,
 		ScratchBuffer: scratch,
@@ -255,15 +239,9 @@ func AllMpathBcks(opts *Options) (bcks []cmn.Bck, err error) {
 
 func mpathChildren(opts *Options) (children []string, err error) {
 	var (
-		scratch []byte
-		fqn     = opts.Mi.MakePathBck(opts.Bck)
-		slab    = opts.Slab
-	)
-	if slab == nil {
+		fqn           = opts.Mi.MakePathBck(opts.Bck)
 		scratch, slab = memsys.PageMM().AllocSize(memsys.PageSize * 2)
-	} else {
-		scratch = slab.Alloc()
-	}
+	)
 	children, err = godirwalk.ReadDirnames(fqn, scratch)
 	slab.Free(scratch)
 	if err != nil {

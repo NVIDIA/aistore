@@ -150,11 +150,10 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 
 	fs.WalkBck(&fs.WalkBckOptions{
 		Options: fs.Options{
-			Bck:         bck,
-			CTs:         []string{fs.ECSliceType, fs.ECMetaType, fs.ObjectType},
-			ErrCallback: nil,
-			Callback:    cb,
-			Sorted:      true, // false is unsupported and asserts
+			Bck:      bck,
+			CTs:      []string{fs.ECSliceType, fs.ECMetaType, fs.ObjectType},
+			Callback: cb,
+			Sorted:   true, // false is unsupported and asserts
 		},
 	})
 

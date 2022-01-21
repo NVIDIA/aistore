@@ -99,6 +99,7 @@ type (
 		joggerBase
 		smap *cluster.Smap
 		ver  int64
+		opts fs.Options
 	}
 	rebArgs struct {
 		id     int64
@@ -635,26 +636,28 @@ func (rj *rebJogger) jog(mpathInfo *fs.MountpathInfo) {
 	// the jogger is running in separate goroutine, so use defer to be
 	// sure that `Done` is called even if the jogger crashes to avoid hang up
 	defer rj.wg.Done()
-
-	opts := &fs.Options{
-		Mi:       mpathInfo,
-		CTs:      []string{fs.ObjectType},
-		Callback: rj.walk,
-		Sorted:   false,
+	{
+		rj.opts.Mi = mpathInfo
+		rj.opts.CTs = []string{fs.ObjectType}
+		rj.opts.Callback = rj.visitObj
+		rj.opts.Sorted = false
 	}
-	rj.m.t.Bowner().Get().Range(nil, nil, func(bck *cluster.Bck) bool {
-		opts.ErrCallback = nil
-		opts.Bck = bck.Bck
-		if err := fs.Walk(opts); err != nil {
-			if rj.xreb.IsAborted() {
-				glog.Infof("aborting traversal")
-			} else {
-				glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode(), err)
-			}
-			return true
-		}
+	bmd := rj.m.t.Bowner().Get()
+	bmd.Range(nil, nil, rj.walkBck)
+}
+
+func (rj *rebJogger) walkBck(bck *cluster.Bck) bool {
+	rj.opts.Bck = bck.Bck
+	err := fs.Walk(&rj.opts)
+	if err == nil {
 		return rj.xreb.IsAborted()
-	})
+	}
+	if rj.xreb.IsAborted() {
+		glog.Infof("aborting traversal")
+	} else {
+		glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode(), err)
+	}
+	return true
 }
 
 // send completion
@@ -672,7 +675,7 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 	xreb.OutObjsAdd(1, hdr.ObjAttrs.Size)
 }
 
-func (rj *rebJogger) walk(fqn string, de fs.DirEntry) (err error) {
+func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) (err error) {
 	if err := rj.xreb.AbortErr(); err != nil {
 		return cmn.NewErrAborted(rj.xreb.Name(), "rj-walk", err)
 	}
