@@ -1,6 +1,7 @@
 // RUN local-deployment
 
 ais bucket create ais://$BUCKET // IGNORE
+rm -rf /tmp/prm // IGNORE
 mkdir -p /tmp/prm && echo 012345 > /tmp/prm/obj && echo 012345 > /tmp/prm/discard
 ais object promote /tmp/prm/obj ais://$BUCKET/one/one --keep=true --target $RANDOM_TARGET
 ais object promote /tmp/prm/discard ais://$BUCKET/two/ --keep=false  --target $RANDOM_TARGET
@@ -8,8 +9,23 @@ ais object promote /tmp/prm/ ais://$BUCKET/three --keep=true --target $RANDOM_TA
 ais object promote /tmp/prm ais://$BUCKET/fourth --keep=true --target $RANDOM_TARGET
 ais object promote /tmp/prm ais://$BUCKET/fifth/ --keep=true --target $RANDOM_TARGET
 ais object promote /tmp/prm/ ais://$BUCKET/sixth/ --keep=true --target $RANDOM_TARGET
-
 ais bucket ls ais://$BUCKET
+rm -rf /tmp/prm // IGNORE
+ais bucket rm ais://$BUCKET // IGNORE
+
+ais bucket create ais://$BUCKET // IGNORE
+mkdir -p /tmp/prm
+for f in {11..15}; do echo "$RANDOM -- $RANDOM" > /tmp/prm/$f.txt; done
+ais object promote /tmp/prm ais://$BUCKET
+ais ls ais://$BUCKET --name-only -H
+ais object rm ais://$BUCKET --template "{1..100}.txt" // IGNORE
+ais ls ais://$BUCKET
+
+rm -rf /tmp/prm // IGNORE
+mkdir -p /tmp/prm/subdir
+for f in {11..15}; do echo "$RANDOM -- $RANDOM" > /tmp/prm/subdir/$f.txt; done
+ais object promote -r /tmp/prm ais://$BUCKET
+ais ls ais://$BUCKET --name-only -H
 
 rm -rf /tmp/prm // IGNORE
 ais bucket rm ais://$BUCKET // IGNORE
