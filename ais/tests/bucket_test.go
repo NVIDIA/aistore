@@ -2339,9 +2339,8 @@ func TestCopyBucketSimple(t *testing.T) {
 			bck:       srcBck,
 		}
 	)
-
 	if testing.Short() {
-		m.num = 10
+		m.num /= 10
 	}
 
 	tlog.Logln("Preparing a source bucket")
@@ -2366,7 +2365,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.CheckError(t, err)
 	defer tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
-	time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
+	time.Sleep(time.Second)
 
 	err = api.AbortXaction(baseParams, api.XactReqArgs{ID: xactID})
 	tassert.CheckError(t, err)
