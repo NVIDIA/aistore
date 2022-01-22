@@ -85,16 +85,16 @@ func NewRebalance(id, kind string) (xreb *Rebalance) {
 
 func (*Rebalance) Run(*sync.WaitGroup) { debug.Assert(false) }
 
+func (xreb *Rebalance) RebID() int64 {
+	id, err := xact.S2RebID(xreb.ID())
+	debug.AssertNoErr(err)
+	return id
+}
+
 func (xreb *Rebalance) Snap() cluster.XactSnap {
 	rebSnap := &stats.RebalanceSnap{}
 	xreb.ToSnap(&rebSnap.Snap)
-	if marked := xreg.GetRebMarked(); marked.Xact != nil {
-		id, err := xact.S2RebID(marked.Xact.ID())
-		debug.AssertNoErr(err)
-		rebSnap.RebID = id
-	} else {
-		rebSnap.RebID = 0
-	}
+	rebSnap.RebID = xreb.RebID()
 	// NOTE: the number of rebalanced objects _is_ the number of transmitted objects
 	//       (definition)
 	rebSnap.Stats.Objs = rebSnap.Stats.OutObjs

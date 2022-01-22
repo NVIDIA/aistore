@@ -133,12 +133,12 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 		cos.ExitLogf("%v", err)
 	}
 	reb.dm = dm
-	reb.registerRecv()
+	reb._regRecv()
 	return reb
 }
 
 // NOTE: these receive handlers are statically present throughout: unreg never done
-func (reb *Reb) registerRecv() {
+func (reb *Reb) _regRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
 		cos.ExitLogf("%v", err)
 	}
@@ -310,8 +310,7 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 		return
 	}
 	otherXreb := entry.Get().(*xs.Rebalance) // running or previous
-	otherRebID, errID := xact.S2RebID(otherXreb.ID())
-	debug.AssertNoErr(errID)
+	otherRebID := otherXreb.RebID()
 	if otherRebID >= rargs.id {
 		return
 	}

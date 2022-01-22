@@ -163,31 +163,31 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 ///////////
 
 func (reb *Reb) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
+	tname := reb.t.Snode().Name()
 	if err != nil {
-		glog.Errorf("%s: failed to receive notification %s from %s: %v", reb.t.Snode(), hdr.ObjName, hdr.Bck, err)
+		glog.Errorf("%s: failed to receive push notification %s from %s: %v", tname, hdr.ObjName, hdr.Bck, err)
 		return
 	}
-
 	req, err := reb.decodePushReq(hdr.Opaque)
 	if err != nil {
 		glog.Error(err)
 		return
 	}
-
+	otherStage, xreb := stages[req.stage], reb.xctn()
+	err = fmt.Errorf("push notification from t[%s](%s)", req.daemonID, otherStage)
 	if req.stage == rebStageAbort && reb.RebID() <= req.rebID {
-		// a target aborted its xaction and sent the signal to others
-		glog.Warningf("%s: abort notification from %s", reb.t.Snode(), req.daemonID)
-		if reb.xctn() != nil {
-			reb.xctn().Abort(nil)
+		// (other target aborted its xaction and sent the signal to others)
+		if xreb == nil {
+			glog.Errorf("%s: nil rebalancing xaction vs %v", tname, err)
+			return
 		}
+		xreb.Abort(err)
 		return
 	}
-
 	if reb.RebID() != req.rebID {
-		glog.Warningf("%s: stage %v push notification %s", reb.t.Snode(), stages[req.stage], reb.rebIDMismatchMsg(req.rebID))
+		glog.Warningf("%s: %v: %s", tname, err, reb.rebIDMismatchMsg(req.rebID))
 		return
 	}
-
 	reb.stages.setStage(req.daemonID, req.stage)
 }
 

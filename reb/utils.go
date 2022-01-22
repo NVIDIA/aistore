@@ -20,6 +20,19 @@ import (
 func (reb *Reb) RebID() int64           { return reb.rebID.Load() }
 func (reb *Reb) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 
+// (limited usage; compare with `abortAndBroadcast` below)
+func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
+	if xreb := reb.xctn(); xreb != nil {
+		// double-check
+		smap := (*cluster.Smap)(reb.smap.Load())
+		if smap.Version == olderSmapV {
+			if xreb.Abort(err) {
+				glog.Warningf("%v - aborted", err)
+			}
+		}
+	}
+}
+
 func (reb *Reb) xctn() *xs.Rebalance        { return (*xs.Rebalance)(reb.xreb.Load()) }
 func (reb *Reb) setXact(xctn *xs.Rebalance) { reb.xreb.Store(unsafe.Pointer(xctn)) }
 
@@ -29,7 +42,7 @@ func (reb *Reb) logHdr(md *rebArgs) string {
 }
 
 func (reb *Reb) rebIDMismatchMsg(remoteID int64) string {
-	return fmt.Sprintf("rebalance IDs mismatch: local %d, remote %d", reb.RebID(), remoteID)
+	return fmt.Sprintf("rebalance IDs mismatch: local g[%d], remote g[%d]", reb.RebID(), remoteID)
 }
 
 func (reb *Reb) _waitForSmap() (smap *cluster.Smap, err error) {
@@ -77,7 +90,8 @@ func (reb *Reb) changeStage(newStage uint32) {
 }
 
 // Aborts global rebalance and notifies all other targets.
-func (reb *Reb) abortRebalance() {
+// (compare with `Abort` above)
+func (reb *Reb) abortAndBroadcast() {
 	xreb := reb.xctn()
 	if xreb == nil || !xreb.Abort(nil) {
 		return

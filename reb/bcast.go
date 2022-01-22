@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -50,22 +51,33 @@ func (reb *Reb) RebStatus(status *Status) {
 		tsmap      = reb.t.Sowner().Get()
 		marked     = xreg.GetRebMarked()
 	)
-	status.Aborted, status.Running = marked.Interrupted, marked.Xact != nil
+	status.Aborted = marked.Interrupted
+	status.Running = marked.Xact != nil
 	status.Stage = reb.stages.stage.Load()
 	status.RebID = reb.rebID.Load()
 	status.Quiescent = reb.isQuiescent()
+
+	xreb := reb.xctn()
+	if status.Running {
+		if marked.Xact.ID() != xreb.ID() {
+			id, _ := xact.S2RebID(marked.Xact.ID())
+			debug.AssertMsg(id > xreb.RebID(), marked.Xact.String()+" vs "+xreb.String())
+			glog.Warningf("%s: must be transitioning (renewing) from %s (stage %s) to %s",
+				reb.t.Snode(), xreb, stages[status.Stage], marked.Xact)
+			status.Running = false // not yet
+		} else {
+			debug.Assertf(reb.rebID.Load() == xreb.RebID(), "rebID[%d] vs %s", reb.rebID.Load(), xreb)
+		}
+	}
 
 	status.SmapVersion = tsmap.Version
 	if rsmap != nil {
 		status.RebVersion = rsmap.Version
 	}
 	reb.mu.RUnlock()
-	xreb := reb.xctn()
-	if xreb == nil {
-		return
+	if xreb != nil {
+		xreb.ToStats(&status.Stats)
 	}
-	xreb.ToStats(&status.Stats)
-
 	// wack info
 	if status.Stage != rebStageWaitAck {
 		return
@@ -258,20 +270,20 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 	}
 	if err != nil {
 		glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi.StringEx(), err, code)
-		reb.abortRebalance()
+		reb.abortAndBroadcast()
 		return
 	}
 	status = &Status{}
 	err = jsoniter.Unmarshal(body, status)
 	if err != nil {
 		glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", logHdr, tsi.StringEx(), err)
-		reb.abortRebalance()
+		reb.abortAndBroadcast()
 		return
 	}
-	// enforce same global transaction ID
+	// enforce global transaction ID
 	if status.RebID > reb.rebID.Load() {
 		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", logHdr, tsi.StringEx(), status.RebID)
-		reb.abortRebalance()
+		reb.abortAndBroadcast()
 		return
 	}
 	// let the target to catch-up
@@ -279,12 +291,13 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", logHdr, tsi.StringEx(), status.RebID)
 		return
 	}
-	// Remote target has aborted its running rebalance with the same ID as local,
-	// but resilver is still running. Abort local xaction with `Abort`,
-	// do not use `abortRebalance` - no need to broadcast.
+	// Remote target has aborted its running rebalance with the same ID.
+	// Do not call `reb.abortAndBroadcast()` - no need.
 	if status.RebID == reb.RebID() && status.Aborted {
-		glog.Warningf("%s aborted %s[g%d] - aborting as well...", tsi.StringEx(), cmn.ActRebalance, status.RebID)
-		reb.xctn().Abort(nil)
+		xreb := reb.xctn()
+		glog.Warningf("%s aborted %s[g%d] - aborting %s as well", tsi, cmn.ActRebalance, status.RebID, xreb)
+		debug.Assert(xreb.RebID() == status.RebID)
+		xreb.Abort(nil)
 		return
 	}
 

@@ -91,8 +91,6 @@ func TestETLBucketAbort(t *testing.T) {
 func TestETLTargetDown(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, MinTargets: 2})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
-	// Make sure at the very end that everything was cleaned up, after the cluster is restored.
-	t.Cleanup(func() { tetl.CheckNoRunningETLContainers(t, baseParams) })
 
 	m := &ioContext{
 		t:         t,
@@ -102,6 +100,9 @@ func TestETLTargetDown(t *testing.T) {
 	}
 	if testing.Short() {
 		m.num /= 100
+	} else {
+		// TODO: otherwise, error executing LSOF command
+		t.Skipf("skipping %s long test (kill-node vs maintenance vs ETL)", t.Name())
 	}
 	m.initWithCleanupAndSaveState()
 	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
@@ -111,7 +112,7 @@ func TestETLTargetDown(t *testing.T) {
 
 	targetNode, _ := m.smap.GetRandTarget()
 	tlog.Logf("Killing %s\n", targetNode.StringEx())
-	tcmd, err := tutils.KillNode(targetNode)
+	tcmd, err := tutils.KillNode(targetNode) // TODO: alternatively, m.startMaintenanceNoRebalance()
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
@@ -121,6 +122,8 @@ func TestETLTargetDown(t *testing.T) {
 
 		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 		_, _ = api.WaitForXaction(baseParams, args)
+
+		tetl.CheckNoRunningETLContainers(t, baseParams)
 	})
 
 	err = tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)

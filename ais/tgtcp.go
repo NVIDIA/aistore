@@ -936,12 +936,19 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// return ok plus optional reb info
-	callerID := r.Header.Get(cmn.HdrCallerID)
-	caller := r.Header.Get(cmn.HdrCallerName)
-	callerSmapVer, _ := strconv.ParseInt(r.Header.Get(cmn.HdrCallerSmapVersion), 10, 64)
+	var (
+		err              error
+		callerID         = r.Header.Get(cmn.HdrCallerID)
+		caller           = r.Header.Get(cmn.HdrCallerName)
+		callerSmapVer, _ = strconv.ParseInt(r.Header.Get(cmn.HdrCallerSmapVersion), 10, 64)
+	)
 	if smap.version() != callerSmapVer {
-		glog.Warningf("%s[%s]: health-ping from node (%s, %s) with different Smap v%d",
-			t.si, smap.StringEx(), callerID, caller, callerSmapVer)
+		s := "older"
+		if smap.version() < callerSmapVer {
+			s = "newer"
+		}
+		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d", callerID, caller, s, callerSmapVer)
+		glog.Warningf("%s[%s]: %v", t.si, smap.StringEx(), err)
 	}
 	getRebStatus := cos.IsParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
@@ -949,6 +956,10 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		t.reb.RebStatus(status)
 		if ok := t.writeJSON(w, r, status, "rebalance-status"); !ok {
 			return
+		}
+		if smap.version() < callerSmapVer && status.Running {
+			// NOTE: abort right away but don't broadcast
+			t.reb.AbortLocal(smap.version(), err)
 		}
 	}
 	if smap.GetProxy(callerID) != nil {
