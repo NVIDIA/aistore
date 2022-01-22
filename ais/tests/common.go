@@ -88,7 +88,7 @@ func (m *ioContext) saveCluState(proxyURL string) {
 func (m *ioContext) waitAndCheckCluState() {
 	smap, err := tutils.WaitForClusterState(
 		m.proxyURL,
-		"check cluster state",
+		"wait for cluster state",
 		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,

@@ -186,13 +186,11 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	tlog.Logf("Killing %s\n", proxy.StringEx())
 	cmd, err := tutils.KillNode(proxy)
 	tassert.CheckFatal(t, err)
-	time.Sleep(time.Second)
 	smap, err = tutils.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
 
 	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
 	tassert.CheckFatal(t, err)
-	time.Sleep(time.Second)
 	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
 
@@ -230,7 +228,6 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		})
 	})
 
-	time.Sleep(time.Second)
 	smap, err = tutils.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
 
@@ -243,7 +240,6 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	// 3. Restart proxy
 	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
 	tassert.CheckFatal(t, err)
-	time.Sleep(time.Second)
 	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
 

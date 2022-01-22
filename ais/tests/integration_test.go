@@ -610,7 +610,6 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	wg.Wait()
 
 	// make sure that the cluster has all targets enabled
-	time.Sleep(2 * time.Second)
 	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
 		"join target back",

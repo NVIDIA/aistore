@@ -89,7 +89,7 @@ func TestETLBucketAbort(t *testing.T) {
 }
 
 func TestETLTargetDown(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, MinTargets: 2, Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, MinTargets: 2})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 	// Make sure at the very end that everything was cleaned up, after the cluster is restored.
 	t.Cleanup(func() { tetl.CheckNoRunningETLContainers(t, baseParams) })
@@ -100,21 +100,30 @@ func TestETLTargetDown(t *testing.T) {
 		fileSize:  512,
 		fixedSize: true,
 	}
+	if testing.Short() {
+		m.num /= 100
+	}
 	m.initWithCleanupAndSaveState()
 	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
 
 	tlog.Logln("Waiting for ETL to process a few objects...")
 	time.Sleep(5 * time.Second)
 
-	tlog.Logln("Unregistering a target")
-	unregistered := m.startMaintenanceNoRebalance()
+	targetNode, _ := m.smap.GetRandTarget()
+	tlog.Logf("Killing %s\n", targetNode.StringEx())
+	tcmd, err := tutils.KillNode(targetNode)
+	tassert.CheckFatal(t, err)
+
 	t.Cleanup(func() {
-		rebID := m.stopMaintenance(unregistered)
-		// ETL xactions from subsequent tests won't be allowed to start if a rebalance is still running.
-		tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, 30*time.Second)
+		time.Sleep(4 * time.Second)
+		tutils.RestoreNode(tcmd, false, "target")
+		m.waitAndCheckCluState()
+
+		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+		_, _ = api.WaitForXaction(baseParams, args)
 	})
 
-	err := tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
+	err = tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
 	tassert.CheckFatal(t, err)
 	tetl.WaitForContainersStopped(t, baseParams)
 }
