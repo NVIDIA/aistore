@@ -61,7 +61,7 @@ func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 // Smap and canceling maintenance gets the node back.
 func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID string, newSmap *cluster.Smap) {
 	smap := GetClusterMap(t, proxyURL)
-	tlog.Logf("Reregistering target %s, current Smap: %s\n", target, smap.StringEx())
+	tlog.Logf("Joining target %s (current %s)\n", target.StringEx(), smap.StringEx())
 	val := &cmn.ActValRmNode{DaemonID: target.ID()}
 	rebID, err := api.StopMaintenance(BaseAPIParams(proxyURL), val)
 	tassert.CheckFatal(t, err)
