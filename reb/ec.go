@@ -74,7 +74,7 @@ func (reb *Reb) runECjoggers() {
 // mountpath walker - walks through files in /meta/ directory
 func (reb *Reb) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.WaitGroup) {
 	defer wg.Done()
-	opts := &fs.Options{
+	opts := &fs.WalkOpts{
 		Mi:       mpathInfo,
 		Bck:      bck,
 		CTs:      []string{fs.ECMetaType},

@@ -232,7 +232,7 @@ func (j *clnJ) jog(providers []string) (size int64, rerr error) {
 			sz   int64
 			bcks []cmn.Bck
 			err  error
-			opts = fs.Options{Mi: j.mi, Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}}
+			opts = fs.WalkOpts{Mi: j.mi, Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}}
 		)
 		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
 			glog.Error(err)
@@ -306,7 +306,7 @@ func (j *clnJ) removeDeleted() (err error) {
 }
 
 func (j *clnJ) jogBck() (size int64, err error) {
-	opts := &fs.Options{
+	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		Bck:      j.bck,
 		CTs:      []string{fs.WorkfileType, fs.ObjectType, fs.ECSliceType, fs.ECMetaType},

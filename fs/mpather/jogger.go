@@ -221,7 +221,7 @@ func (j *jogger) run() error {
 }
 
 func (j *jogger) runBck(bck cmn.Bck) (aborted bool, err error) {
-	opts := &fs.Options{
+	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		Bck:      bck,
 		CTs:      j.opts.CTs,

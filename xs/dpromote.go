@@ -80,7 +80,7 @@ func NewXactDirPromote(dir string, bck *cluster.Bck, t cluster.Target, params *c
 func (r *XactDirPromote) Run(*sync.WaitGroup) {
 	var err error
 	glog.Infoln(r.Name(), r.dir, "=>", r.Bck())
-	opts := &fs.Options{Dir: r.dir, Callback: r.walk, Sorted: false}
+	opts := &fs.WalkOpts{Dir: r.dir, Callback: r.walk, Sorted: false}
 	if r.params.Recursive {
 		err = fs.Walk(opts) // godirwalk
 	} else {

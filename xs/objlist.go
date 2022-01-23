@@ -418,8 +418,8 @@ func (r *ObjListXact) traverseBucket(msg *cmn.ListObjsMsg) {
 		}
 		return nil
 	}
-	opts := &fs.WalkBckOptions{
-		Options: fs.Options{
+	opts := &fs.WalkBckOpts{
+		WalkOpts: fs.WalkOpts{
 			Bck:      r.Bck().Bck,
 			CTs:      []string{fs.ObjectType},
 			Callback: cb,

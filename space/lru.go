@@ -225,7 +225,7 @@ func (j *lruJ) jog(providers []string) (err error) {
 	for _, provider := range providers { // for each provider (NOTE: ordering is random)
 		var (
 			bcks []cmn.Bck
-			opts = fs.Options{
+			opts = fs.WalkOpts{
 				Mi:  j.mi,
 				Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal},
 			}
@@ -280,7 +280,7 @@ func (j *lruJ) jogBck() (size int64, err error) {
 	heap.Init(j.heap)
 
 	// 2. collect
-	opts := &fs.Options{
+	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		Bck:      j.bck,
 		CTs:      []string{fs.ObjectType},

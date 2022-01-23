@@ -173,8 +173,8 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 		go func() {
 			defer diffResolver.CloseSrc()
 
-			err := fs.WalkBck(&fs.WalkBckOptions{
-				Options: fs.Options{
+			err := fs.WalkBck(&fs.WalkBckOpts{
+				WalkOpts: fs.WalkOpts{
 					Bck: job.Bck(),
 					CTs: []string{fs.ObjectType},
 					Callback: func(fqn string, de fs.DirEntry) error {

@@ -5,7 +5,6 @@
 package fs
 
 import (
-	"container/heap"
 	"context"
 	iofs "io/fs"
 	"os"
@@ -18,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/karrick/godirwalk"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -37,18 +35,13 @@ type (
 
 	walkFunc func(fqn string, de DirEntry) error
 
-	Options struct {
+	WalkOpts struct {
 		Dir      string
 		Mi       *MountpathInfo
 		Bck      cmn.Bck
 		CTs      []string
 		Callback walkFunc
 		Sorted   bool
-	}
-
-	WalkBckOptions struct {
-		Options
-		ValidateCallback walkFunc // should return filepath.SkipDir to skip directory without an error
 	}
 
 	errCallbackWrapper struct {
@@ -59,25 +52,6 @@ type (
 		errCallbackWrapper
 		dir string             // root pathname
 		ucb func(string) error // user-provided callback
-	}
-
-	objInfo struct {
-		mpathIdx int
-		fqn      string
-		objName  string
-		dirEntry DirEntry
-	}
-	objInfos []objInfo
-
-	walkEntry struct {
-		fqn      string
-		dirEntry DirEntry
-	}
-	walkCb struct {
-		mi       *MountpathInfo
-		validate walkFunc
-		ctx      context.Context
-		workCh   chan *walkEntry
 	}
 )
 
@@ -104,7 +78,7 @@ func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.Err
 
 // godirwalk is used by default. If you want to switch to standard filepath.Walk do:
 // 1. Rewrite `callback` to:
-//   func (opts *Options) callback(fqn string, de os.FileInfo, err error) error {
+//   func (opts *WalkOpts) callback(fqn string, de os.FileInfo, err error) error {
 //     if err != nil {
 //        if err := cmn.PathWalkErr(err); err != nil {
 //          return err
@@ -121,34 +95,11 @@ func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.Err
 // interface guard
 var _ DirEntry = (*godirwalk.Dirent)(nil)
 
-func (opts *Options) callback(fqn string, de *godirwalk.Dirent) error {
+func (opts *WalkOpts) callback(fqn string, de *godirwalk.Dirent) error {
 	return opts.Callback(fqn, de)
 }
 
-func (h objInfos) Len() int           { return len(h) }
-func (h objInfos) Less(i, j int) bool { return h[i].objName < h[j].objName }
-func (h objInfos) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-
-func (h *objInfos) Push(x interface{}) {
-	info := x.(objInfo)
-	debug.Assert(info.objName == "")
-	parsedFQN, err := ParseFQN(info.fqn)
-	if err != nil {
-		return
-	}
-	info.objName = parsedFQN.ObjName
-	*h = append(*h, info)
-}
-
-func (h *objInfos) Pop() interface{} {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[0 : n-1]
-	return x
-}
-
-func Walk(opts *Options) error {
+func Walk(opts *WalkOpts) error {
 	var (
 		fqns []string
 		err  error
@@ -205,7 +156,7 @@ func Walk(opts *Options) error {
 	return err
 }
 
-func allMpathCTpaths(opts *Options) (fqns []string, err error) {
+func allMpathCTpaths(opts *WalkOpts) (fqns []string, err error) {
 	children, erc := mpathChildren(opts)
 	if erc != nil {
 		return nil, erc
@@ -228,7 +179,7 @@ func allMpathCTpaths(opts *Options) (fqns []string, err error) {
 	return
 }
 
-func AllMpathBcks(opts *Options) (bcks []cmn.Bck, err error) {
+func AllMpathBcks(opts *WalkOpts) (bcks []cmn.Bck, err error) {
 	children, erc := mpathChildren(opts)
 	if erc != nil {
 		return nil, erc
@@ -244,7 +195,7 @@ func AllMpathBcks(opts *Options) (bcks []cmn.Bck, err error) {
 	return
 }
 
-func mpathChildren(opts *Options) (children []string, err error) {
+func mpathChildren(opts *WalkOpts) (children []string, err error) {
 	var (
 		fqn           = opts.Mi.MakePathBck(opts.Bck)
 		scratch, slab = memsys.PageMM().AllocSize(memsys.DefaultBufSize)
@@ -263,95 +214,11 @@ func mpathChildren(opts *Options) (children []string, err error) {
 	return
 }
 
-func WalkBck(opts *WalkBckOptions) error {
-	var (
-		availablePaths = GetAvail()
-		mpathChs       = make([]chan *walkEntry, len(availablePaths))
-		group, ctx     = errgroup.WithContext(context.Background())
-	)
-	for i := 0; i < len(availablePaths); i++ {
-		mpathChs[i] = make(chan *walkEntry, mpathQueueSize)
-	}
-	debug.Assert(opts.Mi == nil)
-	idx := 0
-	for _, mi := range availablePaths {
-		group.Go(func(idx int, mi *MountpathInfo) func() error {
-			return func() error {
-				var (
-					o      = opts.Options
-					workCh = mpathChs[idx]
-				)
-				defer close(workCh)
-				o.Mi = mi
-				wcb := &walkCb{mi: mi, validate: opts.ValidateCallback, ctx: ctx, workCh: workCh}
-				o.Callback = wcb.walkBckMpath
-				return Walk(&o)
-			}
-		}(idx, mi))
-		idx++
-	}
-
-	// TODO: handle case when `opts.Sorted == false`
-	debug.Assert(opts.Sorted)
-	group.Go(func() error {
-		h := &objInfos{}
-		heap.Init(h)
-
-		for i := 0; i < len(mpathChs); i++ {
-			if pair, ok := <-mpathChs[i]; ok {
-				heap.Push(h, objInfo{mpathIdx: i, fqn: pair.fqn, dirEntry: pair.dirEntry})
-			}
-		}
-
-		for h.Len() > 0 {
-			v := heap.Pop(h)
-			info := v.(objInfo)
-			if err := opts.Callback(info.fqn, info.dirEntry); err != nil {
-				return err
-			}
-			if pair, ok := <-mpathChs[info.mpathIdx]; ok {
-				heap.Push(h, objInfo{mpathIdx: info.mpathIdx, fqn: pair.fqn, dirEntry: pair.dirEntry})
-			}
-		}
-		return nil
-	})
-
-	return group.Wait()
-}
-
-func (wcb *walkCb) walkBckMpath(fqn string, de DirEntry) error {
-	select {
-	case <-wcb.ctx.Done():
-		return cmn.NewErrAborted(wcb.mi.String(), "walk-bck-mpath", nil)
-	default:
-		break
-	}
-
-	if wcb.validate != nil {
-		if err := wcb.validate(fqn, de); err != nil {
-			// If err != filepath.SkipDir, Walk will propagate the error
-			// to group.Go. Then context will be canceled, which terminates
-			// all other go routines running.
-			return err
-		}
-	}
-
-	if de.IsDir() {
-		return nil
-	}
-
-	select {
-	case <-wcb.ctx.Done():
-		return cmn.NewErrAborted(wcb.mi.String(), "walk-bck-mpath", nil)
-	case wcb.workCh <- &walkEntry{fqn, de}:
-		return nil
-	}
-}
-
 ////////////////////
 // WalkDir & walkDirWrapper - non-recursive walk
 ////////////////////
 
+// NOTE: using Go filepath.WalkDir
 // pros: lexical deterministic order; cons: reads the entire directory
 func WalkDir(dir string, ucb func(string) error) error {
 	wd := &walkDirWrapper{dir: dir, ucb: ucb}

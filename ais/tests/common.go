@@ -1010,8 +1010,8 @@ func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 		return nil
 	}
 
-	fs.WalkBck(&fs.WalkBckOptions{
-		Options: fs.Options{
+	fs.WalkBck(&fs.WalkBckOpts{
+		WalkOpts: fs.WalkOpts{
 			Bck:      bck,
 			CTs:      []string{fs.ObjectType},
 			Callback: fsWalkFunc,

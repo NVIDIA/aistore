@@ -99,7 +99,7 @@ type (
 		joggerBase
 		smap *cluster.Smap
 		ver  int64
-		opts fs.Options
+		opts fs.WalkOpts
 	}
 	rebArgs struct {
 		id     int64

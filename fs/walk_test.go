@@ -81,8 +81,8 @@ func TestWalkBck(t *testing.T) {
 				objs = make([]string, 0, 100)
 				fqns = make([]string, 0, 100)
 			)
-			err := fs.WalkBck(&fs.WalkBckOptions{
-				Options: fs.Options{
+			err := fs.WalkBck(&fs.WalkBckOpts{
+				WalkOpts: fs.WalkOpts{
 					Bck: bck,
 					CTs: []string{fs.ObjectType},
 					Callback: func(fqn string, de fs.DirEntry) error {
@@ -160,8 +160,8 @@ func TestWalkBckSkipDir(t *testing.T) {
 	}
 
 	fqns := make([]string, 0, 100)
-	err := fs.WalkBck(&fs.WalkBckOptions{
-		Options: fs.Options{
+	err := fs.WalkBck(&fs.WalkBckOpts{
+		WalkOpts: fs.WalkOpts{
 			Bck: bck,
 			CTs: []string{fs.ObjectType},
 			Callback: func(fqn string, de fs.DirEntry) error {

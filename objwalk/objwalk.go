@@ -47,8 +47,8 @@ func (w *Walk) DefaultLocalObjPage() (*cmn.BucketList, error) {
 		return nil
 	}
 
-	opts := &fs.WalkBckOptions{
-		Options: fs.Options{
+	opts := &fs.WalkBckOpts{
+		WalkOpts: fs.WalkOpts{
 			Bck:      w.bck.Bck,
 			CTs:      []string{fs.ObjectType},
 			Callback: cb,

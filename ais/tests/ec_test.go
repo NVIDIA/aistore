@@ -148,8 +148,8 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 		return nil
 	}
 
-	fs.WalkBck(&fs.WalkBckOptions{
-		Options: fs.Options{
+	fs.WalkBck(&fs.WalkBckOpts{
+		WalkOpts: fs.WalkOpts{
 			Bck:      bck,
 			CTs:      []string{fs.ECSliceType, fs.ECMetaType, fs.ObjectType},
 			Callback: cb,
