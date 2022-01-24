@@ -14,9 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/xact"
-	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -39,86 +37,6 @@ type (
 ////////////////////////////////////////////
 // rebalance manager: node <=> node comm. //
 ////////////////////////////////////////////
-
-// via GET /v1/health (cmn.Health)
-func (reb *Reb) RebStatus(status *Status) {
-	reb.mu.RLock()
-	var (
-		targets    cluster.Nodes
-		config     = cmn.GCO.Get()
-		sleepRetry = cmn.KeepaliveRetryDuration(config)
-		rsmap      = (*cluster.Smap)(reb.smap.Load())
-		tsmap      = reb.t.Sowner().Get()
-		marked     = xreg.GetRebMarked()
-	)
-	status.Aborted = marked.Interrupted
-	status.Running = marked.Xact != nil
-	status.Stage = reb.stages.stage.Load()
-	status.RebID = reb.rebID.Load()
-	status.Quiescent = reb.isQuiescent()
-
-	xreb := reb.xctn()
-	if status.Running {
-		if marked.Xact.ID() != xreb.ID() {
-			id, _ := xact.S2RebID(marked.Xact.ID())
-			debug.AssertMsg(id > xreb.RebID(), marked.Xact.String()+" vs "+xreb.String())
-			glog.Warningf("%s: must be transitioning (renewing) from %s (stage %s) to %s",
-				reb.t.Snode(), xreb, stages[status.Stage], marked.Xact)
-			status.Running = false // not yet
-		} else {
-			debug.Assertf(reb.rebID.Load() == xreb.RebID(), "rebID[%d] vs %s", reb.rebID.Load(), xreb)
-		}
-	}
-
-	status.SmapVersion = tsmap.Version
-	if rsmap != nil {
-		status.RebVersion = rsmap.Version
-	}
-	reb.mu.RUnlock()
-	if xreb != nil {
-		xreb.ToStats(&status.Stats)
-	}
-	// wack info
-	if status.Stage != rebStageWaitAck {
-		return
-	}
-	if status.SmapVersion != status.RebVersion {
-		glog.Warningf("%s: Smap version %d != %d", reb.t.Snode(), status.SmapVersion, status.RebVersion)
-		return
-	}
-
-	reb.awaiting.mu.Lock()
-	status.Targets, targets = reb.awaiting.targets, reb.awaiting.targets
-	now := mono.NanoTime()
-	if rsmap == nil || time.Duration(now-reb.awaiting.ts) < sleepRetry {
-		goto ret
-	}
-	reb.awaiting.ts = now
-	reb.awaiting.targets = reb.awaiting.targets[:0]
-	for _, lomAck := range reb.lomAcks() {
-		lomAck.mu.Lock()
-	nack:
-		for _, lom := range lomAck.q {
-			tsi, err := cluster.HrwTarget(lom.Uname(), rsmap)
-			if err != nil {
-				continue
-			}
-			for _, si := range targets {
-				if si.ID() == tsi.ID() {
-					continue nack
-				}
-			}
-			targets = append(targets, tsi)
-			if len(targets) >= maxWackTargets { // limit reporting
-				lomAck.mu.Unlock()
-				goto ret
-			}
-		}
-		lomAck.mu.Unlock()
-	}
-ret:
-	reb.awaiting.mu.Unlock()
-}
 
 // main method
 func (reb *Reb) bcast(md *rebArgs, cb syncCallback) (errCnt int) {
