@@ -44,6 +44,7 @@ import (
 	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/NVIDIA/aistore/xs"
 )
 
 const dbName = "ais.db"
@@ -540,64 +541,32 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var (
 		bckName   string
 		queryBcks cmn.QueryBcks
+		msg       = &aisMsg{}
+		q         = r.URL.Query()
 	)
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
-	msg := &aisMsg{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
 	if len(apiItems) > 0 {
 		bckName = apiItems[0]
 	}
-	if queryBcks, err = newQueryBcksFromQuery(bckName, r.URL.Query()); err != nil {
+	if queryBcks, err = newQueryBcksFromQuery(bckName, q); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
 	t.ensureLatestBMD(msg, r)
+
 	switch msg.Action {
 	case cmn.ActList:
 		if queryBcks.Name == "" {
 			t.listBuckets(w, r, queryBcks)
 			return
 		}
-		t.handleListObjects(w, r, queryBcks, msg)
-	case cmn.ActSummaryBck:
-		t.handleSummary(w, r, queryBcks, msg)
-	default:
-		t.writeErrAct(w, r, msg.Action)
-	}
-}
-
-func (t *target) handleListObjects(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
-	bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
-	if err := bck.Init(t.owner.bmd); err != nil {
-		if cmn.IsErrRemoteBckNotFound(err) {
-			t.BMDVersionFixup(r)
-			err = bck.Init(t.owner.bmd)
-		}
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-	}
-	begin := mono.NanoTime()
-	if ok := t.listObjects(w, r, bck, msg); !ok {
-		return
-	}
-	delta := mono.SinceNano(begin)
-	t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.ListCount, Value: 1},
-		cos.NamedVal64{Name: stats.ListLatency, Value: delta},
-	)
-}
-
-func (t *target) handleSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
-	bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
-	if bck.Name != "" {
-		// Ensure that the bucket exists.
+		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
 		if err := bck.Init(t.owner.bmd); err != nil {
 			if cmn.IsErrRemoteBckNotFound(err) {
 				t.BMDVersionFixup(r)
@@ -608,9 +577,155 @@ func (t *target) handleSummary(w http.ResponseWriter, r *http.Request, queryBcks
 				return
 			}
 		}
+		begin := mono.NanoTime()
+		if ok := t.listObjects(w, r, q, bck, msg); !ok {
+			return
+		}
+		delta := mono.SinceNano(begin)
+		t.statsT.AddMany(
+			cos.NamedVal64{Name: stats.ListCount, Value: 1},
+			cos.NamedVal64{Name: stats.ListLatency, Value: delta},
+		)
+	case cmn.ActSummaryBck:
+		var (
+			bsumMsg cmn.BucketSummaryMsg
+			bck     = cluster.NewBckEmbed(cmn.Bck(queryBcks))
+		)
+		if bck.Name != "" {
+			// Ensure that the bucket exists.
+			if err := bck.Init(t.owner.bmd); err != nil {
+				if cmn.IsErrRemoteBckNotFound(err) {
+					t.BMDVersionFixup(r)
+					err = bck.Init(t.owner.bmd)
+				}
+				if err != nil {
+					t.writeErr(w, r, err)
+					return
+				}
+			}
+		}
+		if glog.FastV(4, glog.SmoduleAIS) {
+			pid := q.Get(cmn.HdrCallerID)
+			glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
+		}
+		if err := cos.MorphMarshal(msg.Value, &bsumMsg); err != nil {
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+			return
+		}
+		t.bucketSummary(w, r, q, msg.Action, bck, &bsumMsg)
+	default:
+		t.writeErrAct(w, r, msg.Action)
+	}
+}
+
+// listObjects returns a list of objects in a bucket (with optional prefix).
+func (t *target) listObjects(w http.ResponseWriter, r *http.Request, q url.Values, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
+	var msg *cmn.ListObjsMsg
+	if glog.FastV(4, glog.SmoduleAIS) {
+		pid := q.Get(cmn.HdrCallerID)
+		glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
+	}
+	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
+		return
+	}
+	if !bck.IsAIS() && !msg.IsFlagSet(cmn.LsPresent) {
+		maxCloudPageSize := t.Backend(bck).MaxPageSize()
+		if msg.PageSize > maxCloudPageSize {
+			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxCloudPageSize)
+			return false
+		}
+		if msg.PageSize == 0 {
+			msg.PageSize = maxCloudPageSize
+		}
+	}
+	debug.Assert(msg.PageSize != 0)
+	debug.Assert(cos.IsValidUUID(msg.UUID))
+
+	rns := xreg.RenewObjList(t, bck, msg.UUID, msg)
+	xctn := rns.Entry.Get()
+	// Double check that xaction has not gone before starting page read.
+	// Restart xaction if needed.
+	if rns.Err == xs.ErrGone {
+		rns = xreg.RenewObjList(t, bck, msg.UUID, msg)
+		xctn = rns.Entry.Get()
+	}
+	if rns.Err != nil {
+		t.writeErr(w, r, rns.Err)
+		return
+	}
+	if !rns.IsRunning() {
+		go xctn.Run(nil)
 	}
 
-	t.bucketSummary(w, r, bck, msg)
+	resp := xctn.(*xs.ObjListXact).Do(msg)
+	if resp.Err != nil {
+		t.writeErr(w, r, resp.Err, resp.Status)
+		return false
+	}
+
+	debug.Assert(resp.Status == http.StatusOK)
+	debug.Assert(resp.BckList.UUID != "")
+
+	if fs.MarkerExists(cmn.RebalanceMarker) || reb.IsActiveGFN() {
+		resp.BckList.Flags |= cmn.BckListFlagRebalance
+	}
+
+	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
+}
+
+func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck,
+	msg *cmn.BucketSummaryMsg) {
+	var (
+		taskAction = q.Get(cmn.URLParamTaskAction)
+		silent     = cos.IsParseBool(q.Get(cmn.URLParamSilent))
+		ctx        = context.Background()
+	)
+	if taskAction == cmn.TaskStart {
+		if action != cmn.ActSummaryBck {
+			t.writeErrAct(w, r, action)
+			return
+		}
+		rns := xreg.RenewBckSummary(ctx, t, bck, msg)
+		if rns.Err != nil {
+			t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	xctn := xreg.GetXact(msg.UUID)
+
+	// task never started
+	if xctn == nil {
+		err := cmn.NewErrNotFound("%s: task %q", t.si, msg.UUID)
+		if silent {
+			t.writeErrSilent(w, r, err, http.StatusNotFound)
+		} else {
+			t.writeErr(w, r, err, http.StatusNotFound)
+		}
+		return
+	}
+
+	// task still running
+	if !xctn.Finished() {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	// task has finished
+	result, err := xctn.Result()
+	if err != nil {
+		if cmn.IsErrBucketNought(err) {
+			t.writeErr(w, r, err, http.StatusGone)
+		} else {
+			t.writeErr(w, r, err)
+		}
+		return
+	}
+	if taskAction == cmn.TaskResult {
+		// return the final result only if it is requested explicitly
+		t.writeJSON(w, r, result, "")
+	}
 }
 
 // DELETE { action } /v1/buckets/bucket-name
