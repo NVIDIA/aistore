@@ -173,11 +173,9 @@ func waitForXactDone(baseParams api.BaseParams, xactID string, timeout time.Dura
 		action = "aborted"
 	}
 
-	refreshInterval := time.Duration(timeout.Nanoseconds() / 20)
-
 	tlog.Logf("Waiting for ETL xaction to be %s...\n", action)
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: timeout /* total timeout */}
-	status, err := api.WaitForXaction(baseParams, args, refreshInterval)
+	status, err := api.WaitForXactionIC(baseParams, args)
 	if err == nil {
 		if waitForAbort && !status.Aborted() {
 			return fmt.Errorf("expected ETL xaction to be aborted")

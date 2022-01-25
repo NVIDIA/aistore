@@ -1195,7 +1195,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	})
 	tassert.CheckError(t, err)
 	reqArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: bck}
-	_, err = api.WaitForXaction(baseParams, reqArgs)
+	_, err = api.WaitForXactionIC(baseParams, reqArgs)
 	tassert.CheckError(t, err)
 
 	abortCh.Close()
@@ -1637,7 +1637,7 @@ func TestECDestroyBucket(t *testing.T) {
 	wg.Wait()
 	tlog.Logf("EC put files resulted in error in %d out of %d files\n", errCnt.Load(), o.objCount)
 	args := api.XactReqArgs{Kind: cmn.ActECPut}
-	api.WaitForXaction(baseParams, args)
+	api.WaitForXactionIC(baseParams, args)
 
 	// create bucket with the same name and check if puts are successful
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)
@@ -1991,7 +1991,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 
 	// Wait for resilvering
 	args := api.XactReqArgs{Node: removeTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXaction(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
@@ -2002,7 +2002,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 		// Wait for resilvering
 		time.Sleep(time.Second)
 		args := api.XactReqArgs{Node: removeTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-		_, _ = api.WaitForXaction(baseParams, args)
+		_, _ = api.WaitForXactionIC(baseParams, args)
 
 		ensureNumMountpaths(t, removeTarget, mpathList)
 	}()
@@ -2199,7 +2199,7 @@ func TestECBucketEncode(t *testing.T) {
 
 	tlog.Logf("EC encode must start automatically for bucket %s\n", m.bck)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXaction(baseParams, xactArgs)
+	_, err = api.WaitForXactionIC(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
 	objList, err = api.ListObjects(baseParams, m.bck, nil, 0)
@@ -2569,7 +2569,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 		}
 	}()
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: startTimeout}
-	err = tutils.WaitForRebalanceToStart(baseParams, xactArgs)
+	err = api.WaitForXactionNode(baseParams, xactArgs, xactSnapRunning)
 	tassert.CheckError(t, err)
 
 	err = api.AbortXaction(baseParams, xactArgs)

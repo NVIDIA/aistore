@@ -1694,7 +1694,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 				wg.Done()
 			}()
 			xargs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
-			_, err = api.WaitForXaction(baseParams, xargs)
+			_, err = api.WaitForXactionIC(baseParams, xargs)
 			tassert.CheckError(t, err)
 		}(i)
 	}

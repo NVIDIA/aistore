@@ -418,7 +418,7 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		return nil
 	}
 
-	if _, err := api.WaitForXaction(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
+	if _, err := api.WaitForXactionIC(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
 		return err
 	}
 	if !flagIsSet(c, cpBckDryRunFlag) {

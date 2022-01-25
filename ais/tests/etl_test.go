@@ -590,7 +590,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Timeout: time.Minute}
-	_, err = api.WaitForXaction(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(bckTo))

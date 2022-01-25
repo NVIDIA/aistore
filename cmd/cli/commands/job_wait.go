@@ -17,7 +17,7 @@ import (
 var (
 	waitCmdsFlags = map[string][]cli.Flag{
 		subcmdWaitXaction: {
-			refreshFlag,
+			timeoutFlag,
 		},
 		subcmdWaitDownload: {
 			refreshFlag,
@@ -71,9 +71,8 @@ func waitXactionHandler(c *cli.Context) error {
 		return err
 	}
 
-	refreshRate := calcRefreshRate(c)
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
-	status, err := api.WaitForXaction(defaultAPIParams, xactArgs, refreshRate)
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Timeout: parseDurationFlag(c, timeoutFlag)}
+	status, err := api.WaitForXactionIC(defaultAPIParams, xactArgs)
 	if err != nil {
 		return err
 	}

@@ -93,7 +93,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 		_, err = tutils.WaitForClusterState(proxyURL, "target is back",
 			m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountTargets())
 		args := api.XactReqArgs{ID: rebID, Timeout: rebalanceTimeout}
-		_, err = api.WaitForXaction(baseParams, args)
+		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -103,7 +103,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 	// Wait for reb to complete
 	args := api.XactReqArgs{ID: rebID, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXaction(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// 3. Check if we can list all the objects
@@ -137,7 +137,7 @@ func TestMaintenanceMD(t *testing.T) {
 
 	t.Cleanup(func() {
 		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-		api.WaitForXaction(baseParams, args)
+		api.WaitForXactionIC(baseParams, args)
 	})
 
 	cmd := tutils.GetRestoreCmd(dcmTarget)
@@ -240,7 +240,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tutils.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
 	} else {
 		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-		_, err = api.WaitForXaction(baseParams, args)
+		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckError(t, err)
 	}
 

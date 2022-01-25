@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
@@ -272,64 +271,18 @@ func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, 
 	return WaitForClusterState(proxyURL, "new smap version", prevVersion, 0, 0)
 }
 
-// WaitForRebalanceToStart waits for global rebalance to commence.
-func WaitForRebalanceToStart(baseParams api.BaseParams, args api.XactReqArgs) error {
-	debug.Assert(args.Kind == "" || args.Kind == cmn.ActRebalance)
-	args.Kind = cmn.ActRebalance
-	ctx := context.Background()
-	if args.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
-		defer cancel()
+func xactSnapDone(snaps api.NodesXactMultiSnap) bool {
+	tid, xsnap := snaps.Running()
+	if tid != "" {
+		tlog.Logf("Node %s, xact %s[%s] is running\n", tid, xsnap.Kind, xsnap.ID)
 	}
-	for {
-		snaps, err := api.QueryXactionSnaps(baseParams, args)
-		if err != nil {
-			return err
-		}
-		// TODO: check that all targets are running and (2) log some
-		if tid, _ := snaps.Running(); tid != "" {
-			break
-		}
-		time.Sleep(api.XactPollTime)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			break
-		}
-	}
-	return nil
+	return tid == ""
 }
 
 // checks resilvering on each node and waits for those that are running (to stop running)
 func WaitForAllResilvers(baseParams api.BaseParams, timeout time.Duration) error {
 	args := api.XactReqArgs{Kind: cmn.ActResilver, Timeout: timeout}
-	ctx := context.Background()
-	if args.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
-		defer cancel()
-	}
-	for {
-		snaps, err := api.QueryXactionSnaps(baseParams, args)
-		if err != nil {
-			return err
-		}
-		tid, xsnap := snaps.Running()
-		if tid == "" {
-			break
-		}
-		tlog.Logf("%s: %q %+v\n", tid, cmn.ActResilver, *xsnap)
-		time.Sleep(api.XactPollTime)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			break
-		}
-	}
-	return nil
+	return api.WaitForXactionNode(baseParams, args, xactSnapDone)
 }
 
 func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[*cluster.Snode][]string {

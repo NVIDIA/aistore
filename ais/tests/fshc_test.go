@@ -481,7 +481,7 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 	// Wait for resilvering
 	time.Sleep(time.Second)
 	args := api.XactReqArgs{ID: selectedTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, _ = api.WaitForXaction(baseParams, args)
+	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	ensureNumMountpaths(t, selectedTarget, origMpl)
 }
@@ -523,7 +523,7 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 	tlog.Logf("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)\n",
 		target.StringEx())
 	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	_, _ = api.WaitForXaction(baseParams, args)
+	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	tlog.Logf("Restoring target %s mountpaths\n", target.ID())
 	for _, mpath := range oldMpaths.Available {
@@ -536,7 +536,7 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 
 	tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	_, _ = api.WaitForXaction(baseParams, args)
+	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
 	tassert.CheckFatal(t, err)
@@ -572,7 +572,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 	err = api.AttachMountpath(baseParams, target, tmpMpath, true /*force*/)
 	tassert.CheckFatal(t, err)
 	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXaction(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
@@ -605,7 +605,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 	}
 	tlog.Logf("Wait for rebalance\n")
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	_, _ = api.WaitForXaction(baseParams, args)
+	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	// Check if the node has newly added mountpath
 	newMpaths, err = api.GetMountpaths(baseParams, target)
@@ -654,7 +654,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	// Wait for resilvering
 	time.Sleep(time.Second)
 	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXaction(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
@@ -669,7 +669,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 		// Wait for resilvering
 		time.Sleep(time.Second)
 		args = api.XactReqArgs{ID: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-		_, _ = api.WaitForXaction(baseParams, args)
+		_, _ = api.WaitForXactionIC(baseParams, args)
 
 		ensureNumMountpaths(t, target, oldMpaths)
 	})
@@ -689,7 +689,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	tassert.Fatalf(t, smap.GetTarget(target.ID()) != nil, "removed target didn't rejoin")
 
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	_, _ = api.WaitForXaction(baseParams, args)
+	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	// Check if the the mountpaths are disabled after restart.
 	newMpaths, err := api.GetMountpaths(baseParams, target)
@@ -712,7 +712,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	}
 	time.Sleep(2 * time.Second)
 	args = api.XactReqArgs{ID: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, _ = api.WaitForXaction(baseParams, args)
+	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	enabled = true
 

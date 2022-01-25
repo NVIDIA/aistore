@@ -130,7 +130,7 @@ func TestConfigSetGlobal(t *testing.T) {
 
 	// wait for ec
 	flt := api.XactReqArgs{Kind: cmn.ActECEncode}
-	_, _ = api.WaitForXaction(baseParams, flt)
+	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
 func TestConfigFailOverrideClusterOnly(t *testing.T) {
@@ -155,7 +155,7 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 
 	// wait for ec
 	flt := api.XactReqArgs{Kind: cmn.ActECEncode}
-	_, _ = api.WaitForXaction(baseParams, flt)
+	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
 func TestConfigOverrideAndRestart(t *testing.T) {
@@ -250,7 +250,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 
 	// wait for ec
 	flt := api.XactReqArgs{Kind: cmn.ActECEncode}
-	_, _ = api.WaitForXaction(baseParams, flt)
+	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
 func checkConfig(t *testing.T, smap *cluster.Smap, check func(*cluster.Snode, *cmn.Config)) {

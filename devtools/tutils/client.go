@@ -200,7 +200,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 	xactID, err := api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: time.Minute}
-	_, err = api.WaitForXaction(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 }
 
@@ -460,7 +460,7 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 	}
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: evictPrefetchTimeout}
-	if _, err := api.WaitForXaction(baseParams, args); err != nil {
+	if _, err := api.WaitForXactionIC(baseParams, args); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}
 }
@@ -492,7 +492,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 	go func() {
 		defer wg.Done()
 		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, OnlyRunning: true, Timeout: timeout}
-		if _, err := api.WaitForXaction(baseParams, xactArgs); err != nil {
+		if _, err := api.WaitForXactionIC(baseParams, xactArgs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
 			}
@@ -503,7 +503,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 	go func() {
 		defer wg.Done()
 		xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, OnlyRunning: true, Timeout: timeout}
-		if _, err := api.WaitForXaction(baseParams, xactArgs); err != nil {
+		if _, err := api.WaitForXactionIC(baseParams, xactArgs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
 			}
@@ -530,7 +530,7 @@ func WaitForResilver(t *testing.T, baseParams api.BaseParams, timeouts ...time.D
 
 	xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, OnlyRunning: true, Timeout: timeout}
 	for i := 0; i < 10; i++ {
-		_, err := api.WaitForXaction(baseParams, xactArgs)
+		_, err := api.WaitForXactionIC(baseParams, xactArgs)
 		if err == nil {
 			return
 		}
@@ -555,7 +555,7 @@ func WaitForRebalanceByID(t *testing.T, origTargetCnt int, baseParams api.BasePa
 		timeout = timeouts[0]
 	}
 	xactArgs := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, OnlyRunning: true, Timeout: timeout}
-	_, err := api.WaitForXaction(baseParams, xactArgs)
+	_, err := api.WaitForXactionIC(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 }
 

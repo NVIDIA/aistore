@@ -121,7 +121,7 @@ func TestETLTargetDown(t *testing.T) {
 		m.waitAndCheckCluState()
 
 		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-		_, _ = api.WaitForXaction(baseParams, args)
+		_, _ = api.WaitForXactionIC(baseParams, args)
 
 		tetl.CheckNoRunningETLContainers(t, baseParams)
 	})

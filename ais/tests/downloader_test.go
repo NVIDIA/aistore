@@ -508,7 +508,7 @@ func TestDownloadRemote(t *testing.T) {
 			xactID, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
 			args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
-			_, err = api.WaitForXaction(baseParams, args)
+			_, err = api.WaitForXactionIC(baseParams, args)
 			tassert.CheckFatal(t, err)
 
 			if test.dstBck.IsAIS() {
@@ -539,7 +539,7 @@ func TestDownloadRemote(t *testing.T) {
 			xactID, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
 			args = api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
-			_, err = api.WaitForXaction(baseParams, args)
+			_, err = api.WaitForXactionIC(baseParams, args)
 			tassert.CheckFatal(t, err)
 
 			tlog.Logln("starting remote download...")
@@ -852,7 +852,7 @@ func TestDownloadMountpath(t *testing.T) {
 
 		// Wait for resilvering
 		args := api.XactReqArgs{Node: selectedTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-		_, _ = api.WaitForXaction(baseParams, args)
+		_, _ = api.WaitForXactionIC(baseParams, args)
 
 		ensureNumMountpaths(t, selectedTarget, mpathList)
 	}()

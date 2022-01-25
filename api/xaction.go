@@ -13,18 +13,24 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 )
 
 const (
-	XactPollTime       = time.Second
-	numConsecutiveIdle = 3 // number of consecutive 'idle' states
+	XactDefWaitTimeShort = time.Minute
+	XactDefWaitTimeLong  = 7 * 24 * time.Hour // week
+	XactMaxStartPollTime = time.Minute
+	XactMaxPollTime      = time.Hour
+	XactPollTime         = time.Second
+	numConsecutiveIdle   = 3 // number of consecutive 'idle' states
 )
 
 type (
 	NodesXactSnap      map[string]*xact.SnapExt
 	NodesXactMultiSnap map[string][]*xact.SnapExt
+	XactSnapTestFunc   func(NodesXactMultiSnap) bool
 
 	XactStatsHelper interface {
 		Running() bool
@@ -145,29 +151,42 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 	return
 }
 
-// WaitForXaction waits for a given xaction to complete.
-func WaitForXaction(baseParams BaseParams, args XactReqArgs, sleeps ...time.Duration) (status *nl.NotifStatus, err error) {
-	var (
-		ctx = context.Background()
-		// TODO: remove `sleeps` arg and calculate `sleep` based on args.Timeout
-		sleep = XactPollTime
-	)
-	if len(sleeps) > 0 {
-		sleep = sleeps[0]
+func initPollingTimes(args XactReqArgs) (time.Duration, time.Duration) {
+	total := args.Timeout
+	switch {
+	case args.Timeout == 0:
+		total = XactDefWaitTimeShort
+	case args.Timeout < 0:
+		total = XactDefWaitTimeLong
 	}
-	if args.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
-		defer cancel()
-	}
+	return total, cos.MinDuration(XactMaxStartPollTime, cos.ProbingFrequency(total))
+}
+
+func backoffPoll(dur time.Duration) time.Duration {
+	dur += dur / 2
+	return cos.MinDuration(XactMaxPollTime, dur)
+}
+
+func _waitForXaction(baseParams BaseParams, args XactReqArgs, snapFn ...XactSnapTestFunc) (status *nl.NotifStatus, err error) {
+	total, sleep := initPollingTimes(args)
+	ctx, cancel := context.WithTimeout(context.Background(), total)
+	defer cancel()
 	for {
-		status, err = GetXactionStatus(baseParams, args)
+		finished := false
+		if len(snapFn) == 0 {
+			status, err = GetXactionStatus(baseParams, args)
+			finished = err == nil && status.Finished()
+		} else {
+			var snaps NodesXactMultiSnap
+			snaps, err = QueryXactionSnaps(baseParams, args)
+			finished = err == nil && snapFn[0](snaps)
+		}
 		canRetry := err == nil || cos.IsRetriableConnErr(err) || cmn.IsStatusServiceUnavailable(err)
-		finished := err == nil && status.Finished()
 		if !canRetry || finished {
 			return
 		}
 		time.Sleep(sleep)
+		sleep = backoffPoll(sleep)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -177,39 +196,34 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs, sleeps ...time.Dura
 	}
 }
 
+// WaitForXactionIC waits for a given xaction to complete.
+// Use it only for global xactions(e.g rebalance) that reports their statuses to IC.
+func WaitForXactionIC(baseParams BaseParams, args XactReqArgs) (status *nl.NotifStatus, err error) {
+	return _waitForXaction(baseParams, args)
+}
+
+// WaitForXactionNode waits for a given xaction to complete.
+// Use for xaction which can be launched on a single node and do not report their
+// statuses(e.g resilver) to IC or to check specific xaction states (e.g Idle).
+func WaitForXactionNode(baseParams BaseParams, args XactReqArgs, fn XactSnapTestFunc) error {
+	debug.Assert(args.Kind != "")
+	_, err := _waitForXaction(baseParams, args, fn)
+	return err
+}
+
 // WaitForXactionIdle waits for a given on-demand xaction to be idle.
 func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
-	var (
-		ctx   = context.Background()
-		idles int
-	)
-	if args.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
-		defer cancel()
-	}
+	idles := 0
 	args.OnlyRunning = true
-	for {
-		snaps, err := QueryXactionSnaps(baseParams, args)
-		if err != nil {
-			return err
-		}
+	check := func(snaps NodesXactMultiSnap) bool {
 		if snaps.Idle() {
-			if idles == numConsecutiveIdle {
-				return nil
-			}
 			idles++
-		} else {
-			idles = 0
+			return idles >= numConsecutiveIdle
 		}
-		time.Sleep(XactPollTime)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			break
-		}
+		idles = 0
+		return false
 	}
+	return WaitForXactionNode(baseParams, args, check)
 }
 
 ///////////////////

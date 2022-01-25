@@ -516,7 +516,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int, greaterOk bool) {
 	)
 	time.Sleep(time.Second)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
-	_, err := api.WaitForXaction(baseParams, xactArgs)
+	_, err := api.WaitForXactionIC(baseParams, xactArgs)
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
@@ -1035,4 +1035,9 @@ func detectNewBucket(oldList, newList cmn.Bcks) (cmn.Bck, error) {
 		}
 	}
 	return cmn.Bck{}, fmt.Errorf("new bucket is not found (old: %v, new: %v)", oldList, newList)
+}
+
+func xactSnapRunning(snaps api.NodesXactMultiSnap) bool {
+	tid, _ := snaps.Running()
+	return tid != ""
 }

@@ -950,7 +950,7 @@ func waitForXactionCompletion(defaultAPIParams api.BaseParams, args api.XactReqA
 	if args.Timeout == 0 {
 		args.Timeout = time.Minute // TODO: make it a flag and an argument with configurable default
 	}
-	status, err := api.WaitForXaction(defaultAPIParams, args)
+	status, err := api.WaitForXactionIC(defaultAPIParams, args)
 	if err != nil {
 		return err
 	}
