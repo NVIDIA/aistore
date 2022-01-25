@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -152,16 +153,26 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		err = t.startMaintenance(c)
 	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
 		err = t.destroyBucket(c)
+	case cmn.ActPromote:
+		var (
+			xactID string
+			hdr    = w.Header()
+		)
+		xactID, err = t.promote(c, hdr)
+		if xactID != "" {
+			w.Header().Set(cmn.HdrXactionID, xactID)
+		}
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
-	if err != nil {
-		if cmn.IsErrCapacityExceeded(err) {
-			cs := t.OOS(nil)
-			t.writeErrStatusf(w, r, http.StatusInsufficientStorage, "%s: %v", cs, err)
-		} else {
-			t.writeErr(w, r, err)
-		}
+	if err == nil {
+		return
+	}
+	if cmn.IsErrCapacityExceeded(err) {
+		cs := t.OOS(nil)
+		t.writeErrStatusf(w, r, http.StatusInsufficientStorage, "%s: %v", cs, err)
+	} else {
+		t.writeErr(w, r, err)
 	}
 }
 
@@ -851,6 +862,132 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 		t._commitCreateDestroy(c)
 	default:
 		debug.Assert(false)
+	}
+	return nil
+}
+
+// execute synchronously (ie, wo/ xaction) if the number of files is less or equal
+const promoteNumSync = 16
+
+func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
+	if err := c.bck.Init(t.owner.bmd); err != nil {
+		return "", err
+	}
+	switch c.phase {
+	case cmn.ActBegin:
+		prmMsg := &cmn.ActValPromote{}
+		if err := cos.MorphMarshal(c.msg.Value, prmMsg); err != nil {
+			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
+			return "", err
+		}
+		srcFQN := c.msg.Name
+		finfo, err := os.Stat(srcFQN)
+		if err != nil {
+			return "", err
+		}
+		if !finfo.IsDir() {
+			txn := newTxnPromote(c, prmMsg, []string{srcFQN}, "", 1)
+			if err := t.transactions.begin(txn); err != nil {
+				return "", err
+			}
+			hdr.Set(cmn.HdrPromoteNamesNum, "1")
+			return "", nil
+		}
+
+		// directory
+		fqns, totalN, cksumVal, err := _promoteScan(srcFQN, prmMsg.Recursive)
+		if totalN == 0 {
+			if err != nil {
+				return "", err
+			}
+			return "", fmt.Errorf("%s: directory %q is empty", t.si, srcFQN)
+		}
+		txn := newTxnPromote(c, prmMsg, fqns, srcFQN /*dir*/, totalN)
+		if err := t.transactions.begin(txn); err != nil {
+			return "", err
+		}
+		hdr.Set(cmn.HdrPromoteNamesHash, cksumVal)
+		hdr.Set(cmn.HdrPromoteNamesNum, strconv.Itoa(totalN))
+	case cmn.ActAbort:
+		t.transactions.find(c.uuid, cmn.ActAbort)
+	case cmn.ActCommit:
+		txn, err := t.transactions.find(c.uuid, "")
+		if err != nil {
+			return "", err
+		}
+		txnPrm := txn.(*txnPromote)
+		if txnPrm.totalN == 0 {
+			return "", nil
+		}
+		// promote synchronously wo/ xaction
+		if txnPrm.totalN == len(txnPrm.fqns) {
+			err := t._promoteNumSync(c, txnPrm)
+			return "", err
+		}
+		// with
+		rns := xreg.RenewDirPromote(t, c.bck, txnPrm.dirFQN, txnPrm.msg)
+		if rns.Err != nil {
+			return "", rns.Err
+		}
+		xctn := rns.Entry.Get()
+		txnPrm.xprm = xctn.(*xs.XactDirPromote)
+		go xctn.Run(nil)
+
+		t.transactions.find(c.uuid, cmn.ActCommit)
+		return xctn.ID(), nil
+	default:
+		debug.Assert(false)
+	}
+	return "", nil
+}
+
+func _promoteScan(dirFQN string, recurs bool) (fqns []string, totalN int, cksumVal string, err error) {
+	cksum := cos.NewCksumHash(cos.ChecksumXXHash)
+	cb := func(fqn string, de fs.DirEntry) (err error) {
+		if de.IsDir() {
+			return
+		}
+		if len(fqns) == 0 {
+			fqns = make([]string, 0, promoteNumSync)
+		}
+		if len(fqns) < promoteNumSync {
+			fqns = append(fqns, fqn)
+		}
+		totalN++
+		cksum.H.Write([]byte(fqn))
+		return
+	}
+	if recurs {
+		opts := &fs.WalkOpts{Dir: dirFQN, Callback: cb, Sorted: true}
+		err = fs.Walk(opts)
+	} else {
+		err = fs.WalkDir(dirFQN, cb)
+	}
+
+	if err != nil || totalN == 0 {
+		return
+	}
+	cksum.Finalize()
+	cksumVal = cksum.Value()
+	return
+}
+
+func (t *target) _promoteNumSync(c *txnServerCtx, txnPrm *txnPromote) error {
+	for _, fqn := range txnPrm.fqns {
+		objName, err := cmn.PromotedObjDstName(fqn, txnPrm.dirFQN, txnPrm.msg.ObjName)
+		if err != nil {
+			return err
+		}
+		params := cluster.PromoteFileParams{
+			SrcFQN:    fqn,
+			Bck:       c.bck,
+			ObjName:   objName,
+			Overwrite: txnPrm.msg.Overwrite,
+			KeepOrig:  txnPrm.msg.KeepOrig,
+		}
+		if _, err := t.PromoteFile(params); err != nil {
+			return err
+		}
 	}
 	return nil
 }

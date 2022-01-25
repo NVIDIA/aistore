@@ -84,7 +84,7 @@ func (r *XactDirPromote) Run(*sync.WaitGroup) {
 	if r.params.Recursive {
 		err = fs.Walk(opts) // godirwalk
 	} else {
-		err = fs.WalkDir(r.dir, r._walk) // Go fs.WalkDir
+		err = fs.WalkDir(r.dir, r.walk) // Go filepath.WalkDir
 	}
 	r.Finish(err)
 }
@@ -93,34 +93,17 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
 	}
-	return r._walk(fqn)
-}
-
-func (r *XactDirPromote) _walk(fqn string) error {
 	debug.Assert(filepath.IsAbs(fqn))
 	bck := r.Bck()
 	if err := bck.Init(r.Target().Bowner()); err != nil {
 		return err
 	}
 
-	// conventionally, destination obj name ~= objname/(fqn - dir)
-	objName := r.params.ObjName
-	baseName, err := filepath.Rel(r.dir, fqn)
-	debug.AssertNoErr(err)
+	// promote
+	objName, err := cmn.PromotedObjDstName(fqn, r.dir, r.params.ObjName)
 	if err != nil {
 		return err
 	}
-	if objName == "" {
-		objName = baseName
-	} else {
-		if objName[len(objName)-1] == filepath.Separator {
-			objName += baseName
-		} else {
-			objName = filepath.Join(r.params.ObjName, baseName)
-		}
-	}
-
-	// promote
 	params := cluster.PromoteFileParams{
 		SrcFQN:    fqn,
 		Bck:       bck,

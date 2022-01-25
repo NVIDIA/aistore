@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -51,13 +52,15 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 		id = cos.GenUUID()
 	}
 	rns := xreg.RenewLRU(id)
-	if rns.IsRunning() {
+	if rns.Err != nil || rns.IsRunning() {
+		// TODO -- FIXME: here and elsewhere
+		debug.Assert(rns.Err == nil || strings.Contains(rns.Err.Error(), "is already running"))
+
 		if wg != nil {
 			wg.Done()
 		}
 		return
 	}
-	debug.AssertNoErr(rns.Err) // see xlru.WhenPrevIsRunning() and xreg logic
 	xlru := rns.Entry.Get()
 	if regToIC && xlru.ID() == id {
 		// pre-existing UUID: notify IC members

@@ -1461,8 +1461,26 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.writeErrMsg(w, r, "promoted source must be an absolute path")
 			return
 		}
-		p.promoteFQN(w, r, bck, &msg)
-		return
+		args := &cmn.ActValPromote{}
+		if err := cos.MorphMarshal(msg.Value, args); err != nil {
+			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+			return
+		}
+		var tsi *cluster.Snode
+		if args.DaemonID != "" {
+			smap := p.owner.smap.get()
+			if tsi = smap.GetTarget(args.DaemonID); tsi == nil {
+				err := &errNodeNotFound{cmn.ActPromote + " failure", args.DaemonID, p.si, smap}
+				p.writeErr(w, r, err)
+				return
+			}
+		}
+		xactID, err := p.promote(bck, &msg, tsi)
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		w.Write([]byte(xactID))
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
@@ -2107,55 +2125,6 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, 
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsT.Add(stats.RenameCount, 1)
-}
-
-func (p *proxy) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
-	promoteArgs := cmn.ActValPromote{}
-	if err := cos.MorphMarshal(msg.Value, &promoteArgs); err != nil {
-		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
-		return
-	}
-	var (
-		started = time.Now()
-		smap    = p.owner.smap.get()
-	)
-	// designated target ID
-	if promoteArgs.Target != "" {
-		tsi := smap.GetTarget(promoteArgs.Target)
-		if tsi == nil {
-			err := &errNodeNotFound{cmn.ActPromote + " failure", promoteArgs.Target, p.si, smap}
-			p.writeErr(w, r, err)
-			return
-		}
-		// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
-		redirectURL := p.redirectURL(r, tsi, started, cmn.NetworkIntraControl)
-		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-		return
-	}
-
-	// all targets
-	//
-	// TODO: 2phase begin to check space, validate params, and check vs running xactions
-	//
-	query := cmn.AddBckToQuery(nil, bck.Bck)
-	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{
-		Method: http.MethodPost,
-		Path:   cmn.URLPathObjects.Join(bck.Name),
-		Body:   cos.MustMarshal(msg),
-		Query:  query,
-	}
-	args.to = cluster.Targets
-	results := p.bcastGroup(args)
-	freeBcastArgs(args)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		p.writeErr(w, r, res.toErr())
-		break
-	}
-	freeBcastRes(results)
 }
 
 func (p *proxy) doListRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) (xactID string, err error) {

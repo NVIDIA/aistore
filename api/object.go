@@ -481,7 +481,7 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 func PromoteFileOrDir(args *PromoteArgs) error {
 	actMsg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN}
 	actMsg.Value = &cmn.ActValPromote{
-		Target:    args.Target,
+		DaemonID:  args.Target,
 		ObjName:   args.Object,
 		Recursive: args.Recursive,
 		Overwrite: args.Overwrite,

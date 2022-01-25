@@ -1017,13 +1017,6 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.objMv(w, r, &msg)
-	case cmn.ActPromote:
-		if isRedirect(query) == "" && !t.isIntraCall(r.Header) {
-			t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected or intra-called",
-				t.si, r.Method, msg.Action)
-			return
-		}
-		t.promoteFQN(w, r, &msg)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -1585,85 +1578,6 @@ func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMs
 		glog.Warningf("%s: failed to delete renamed object %s (new name %s): %v", t.si, lom, msg.Name, err)
 	}
 	lom.Unlock(true)
-}
-
-///////////////////////////////////////
-// PROMOTE local file(s) => objects  //
-///////////////////////////////////////
-
-func (t *target) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	const fmtErr = "%s: %s failed: "
-	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects.L}
-	if err := t.parseReq(w, r, request); err != nil {
-		return
-	}
-	promoteArgs := cmn.ActValPromote{}
-	if err := cos.MorphMarshal(msg.Value, &promoteArgs); err != nil {
-		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-		return
-	}
-	if promoteArgs.Target != "" && promoteArgs.Target != t.si.ID() {
-		glog.Errorf("%s: unexpected target ID %s mismatch", t.si, promoteArgs.Target)
-	}
-
-	// 2. init & validate
-	srcFQN := msg.Name
-	if srcFQN == "" {
-		t.writeErrf(w, r, fmtErr+"missing source filename", t.si, msg.Action)
-		return
-	}
-
-	finfo, err := os.Stat(srcFQN)
-	if err != nil {
-		if os.IsNotExist(err) {
-			err := cmn.NewErrNotFound("%s: file %q", t.si, srcFQN)
-			t.writeErr(w, r, err, http.StatusNotFound)
-			return
-		}
-		t.writeErr(w, r, err)
-		return
-	}
-	if err = request.bck.Init(t.owner.bmd); err != nil {
-		if cmn.IsErrRemoteBckNotFound(err) {
-			t.BMDVersionFixup(r)
-			err = request.bck.Init(t.owner.bmd)
-		}
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-	}
-
-	// 3a. promote dir
-	if finfo.IsDir() {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: promote %+v", t.si, promoteArgs)
-		}
-		rns := xreg.RenewDirPromote(t, request.bck, srcFQN, &promoteArgs)
-		if rns.Err != nil {
-			t.writeErr(w, r, rns.Err)
-			return
-		}
-		xctn := rns.Entry.Get()
-		go xctn.Run(nil)
-		return
-	}
-	// 3b. promote file
-	objName := promoteArgs.ObjName
-	if objName == "" || objName[len(objName)-1] == os.PathSeparator {
-		objName += filepath.Base(srcFQN)
-	}
-	params := cluster.PromoteFileParams{
-		SrcFQN:    srcFQN,
-		Bck:       request.bck,
-		ObjName:   objName,
-		Overwrite: promoteArgs.Overwrite,
-		KeepOrig:  promoteArgs.KeepOrig,
-	}
-	if _, err = t.PromoteFile(params); err != nil {
-		t.writeErrf(w, r, fmtErr+" %v", t.si, msg.Action, err)
-	}
-	// TODO: inc stats
 }
 
 func (t *target) fsErr(err error, filepath string) {

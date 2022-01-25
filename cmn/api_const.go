@@ -159,6 +159,10 @@ const (
 	// Stream related headers.
 	HdrSessID   = headerPrefix + "session-id"
 	HdrCompress = headerPrefix + "compress" // LZ4Compression, etc.
+
+	// Promote(dir)
+	HdrPromoteNamesHash = headerPrefix + "promote-names-hash"
+	HdrPromoteNamesNum  = headerPrefix + "promote-names-num"
 )
 
 // Configuration and bucket properties

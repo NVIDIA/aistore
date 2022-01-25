@@ -15,7 +15,7 @@ type (
 		Value  interface{} `json:"value"`  // ditto
 	}
 	ActValPromote struct {
-		Target    string `json:"target"`
+		DaemonID  string `json:"tid"`
 		ObjName   string `json:"objname"`
 		Recursive bool   `json:"recursive"`
 		Overwrite bool   `json:"overwrite"`

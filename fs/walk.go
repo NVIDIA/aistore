@@ -50,8 +50,8 @@ type (
 
 	walkDirWrapper struct {
 		errCallbackWrapper
-		dir string             // root pathname
-		ucb func(string) error // user-provided callback
+		dir string                       // root pathname
+		ucb func(string, DirEntry) error // user-provided callback
 	}
 )
 
@@ -220,13 +220,13 @@ func mpathChildren(opts *WalkOpts) (children []string, err error) {
 
 // NOTE: using Go filepath.WalkDir
 // pros: lexical deterministic order; cons: reads the entire directory
-func WalkDir(dir string, ucb func(string) error) error {
+func WalkDir(dir string, ucb func(string, DirEntry) error) error {
 	wd := &walkDirWrapper{dir: dir, ucb: ucb}
 	return filepath.WalkDir(dir, wd.wcb)
 }
 
 // wraps around user callback to implement default error handling and skipping
-func (wd *walkDirWrapper) wcb(path string, d iofs.DirEntry, err error) error {
+func (wd *walkDirWrapper) wcb(path string, de iofs.DirEntry, err error) error {
 	if err != nil {
 		// Walk and WalkDir share the same error-processing logic (hence, godirwalk enum)
 		if path != wd.dir && wd.PathErrToAction(path, err) != godirwalk.Halt {
@@ -234,12 +234,12 @@ func (wd *walkDirWrapper) wcb(path string, d iofs.DirEntry, err error) error {
 		}
 		return err
 	}
-	if d.IsDir() && path != wd.dir {
+	if de.IsDir() && path != wd.dir {
 		return filepath.SkipDir
 	}
-	if !d.Type().IsRegular() {
+	if !de.Type().IsRegular() {
 		return nil
 	}
 	// user callback
-	return wd.ucb(path)
+	return wd.ucb(path, de)
 }

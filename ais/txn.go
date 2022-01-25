@@ -116,6 +116,14 @@ type (
 		xarch *xs.XactCreateArchMultiObj
 		msg   *cmn.ArchiveMsg
 	}
+	txnPromote struct {
+		txnBckBase
+		msg    *cmn.ActValPromote
+		fqns   []string
+		dirFQN string
+		xprm   *xs.XactDirPromote
+		totalN int
+	}
 )
 
 // interface guard
@@ -128,6 +136,7 @@ var (
 	_ txn = (*txnTCB)(nil)
 	_ txn = (*txnTCObjs)(nil)
 	_ txn = (*txnECEncode)(nil)
+	_ txn = (*txnPromote)(nil)
 )
 
 //////////////////
@@ -141,18 +150,20 @@ func (txns *transactions) init(t *target) {
 	hk.Reg("cp.transactions.gc", txns.housekeep, gcTxnsInterval)
 }
 
-func (txns *transactions) begin(txn txn) error {
+func (txns *transactions) begin(txn txn) (err error) {
 	txns.Lock()
 	defer txns.Unlock()
 	if x, ok := txns.m[txn.uuid()]; ok {
-		return fmt.Errorf("%s: %s already exists (duplicate uuid?)", txns.t.si, x)
+		err = fmt.Errorf("%s: %s already exists (duplicate uuid?)", txns.t.si, x)
+		debug.AssertNoErr(err)
+		return
 	}
 	txn.started(cmn.ActBegin, time.Now())
 	txns.m[txn.uuid()] = txn
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s begin: %s", txns.t.si, txn)
 	}
-	return nil
+	return
 }
 
 func (txns *transactions) find(uuid, act string) (txn txn, err error) {
@@ -564,4 +575,15 @@ func newTxnArchMultiObj(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactCre
 func (txn *txnArchMultiObj) abort() {
 	txn.txnBckBase.abort()
 	txn.xarch.TxnAbort()
+}
+
+////////////////
+// txnPromote //
+////////////////
+
+func newTxnPromote(c *txnServerCtx, msg *cmn.ActValPromote, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
+	txn = &txnPromote{msg: msg, fqns: fqns, dirFQN: dirFQN, totalN: totalN}
+	txn.init("prm", c.bck)
+	txn.fillFromCtx(c)
+	return
 }

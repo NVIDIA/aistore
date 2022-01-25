@@ -33,7 +33,8 @@ type txnClientCtx struct {
 		netw time.Duration
 		host time.Duration
 	}
-	req cmn.ReqArgs
+	req      cmn.ReqArgs
+	selected cluster.Nodes
 }
 
 //////////////////
@@ -77,7 +78,7 @@ func (c *txnClientCtx) cmtTout(waitmsync bool) time.Duration {
 	return c.timeout.netw
 }
 
-func (c *txnClientCtx) bcast(phase string, timeout time.Duration) sliceResults {
+func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results sliceResults) {
 	c.req.Path = cos.JoinWords(c.path, phase)
 	if phase != cmn.ActAbort {
 		now := time.Now()
@@ -90,7 +91,14 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) sliceResults {
 	args.req = c.req
 	args.smap = c.smap
 	args.timeout = timeout
-	return c.p.bcastGroup(args)
+	args.to = cluster.Targets // the (0) default
+	if args.selected = c.selected; args.selected == nil {
+		results = c.p.bcastGroup(args)
+	} else {
+		args.network = cmn.NetworkIntraControl
+		results = c.p.bcastSelected(args) // e.g. usage: promote => specific target
+	}
+	return
 }
 
 func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
@@ -850,6 +858,24 @@ func (p *proxy) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	}
 	freeBcastRes(results)
 	return nil
+}
+
+func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode) (xactID string, err error) {
+	var (
+		waitmsync = true
+		c         = p.prepTxnClient(msg, bck, waitmsync)
+	)
+	if tsi != nil {
+		c.selected = []*cluster.Snode{tsi}
+	}
+	if _, err = c.begin(bck); err != nil {
+		return
+	}
+	if err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
+		return
+	}
+	xactID = c.uuid
+	return
 }
 
 //
