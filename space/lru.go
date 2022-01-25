@@ -126,9 +126,8 @@ func (p *lruFactory) Start() error {
 func (*lruFactory) Kind() string        { return cmn.ActLRU }
 func (p *lruFactory) Get() cluster.Xact { return p.xctn }
 
-func (p *lruFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	err = fmt.Errorf("%s is already running - not starting %q", prevEntry.Get(), p.Str(p.Kind()))
-	return
+func (*lruFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+	return xreg.WprUse, cmn.NewErrUsePrevXaction(prevEntry.Get().String())
 }
 
 func RunLRU(ini *IniLRU) {

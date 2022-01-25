@@ -143,10 +143,13 @@ type (
 	}
 
 	ErrLimitedCoexistence struct {
-		node    string
+		node    string // this (local) node
 		xaction string
 		action  string
 		detail  string
+	}
+	ErrUsePrevXaction struct { // equivalent to xreg.WprUse
+		xaction string
 	}
 )
 
@@ -588,6 +591,22 @@ func NewErrLimitedCoexistence(node, xaction, action, detail string) *ErrLimitedC
 func (e *ErrLimitedCoexistence) Error() string {
 	return fmt.Sprintf("%s: %s is currently running, cannot run %q(%s) concurrently",
 		e.node, e.xaction, e.action, e.detail)
+}
+
+///////////////////////
+// ErrUsePrevXaction //
+///////////////////////
+func NewErrUsePrevXaction(xaction string) *ErrUsePrevXaction {
+	return &ErrUsePrevXaction{xaction}
+}
+
+func (e *ErrUsePrevXaction) Error() string {
+	return fmt.Sprintf("%s is already running - not starting", e.xaction)
+}
+
+func IsErrUsePrevXaction(err error) bool {
+	_, ok := err.(*ErrUsePrevXaction)
+	return ok
 }
 
 ////////////////////////////

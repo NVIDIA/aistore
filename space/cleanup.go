@@ -105,9 +105,8 @@ func (p *clnFactory) Start() error {
 func (*clnFactory) Kind() string        { return cmn.ActStoreCleanup }
 func (p *clnFactory) Get() cluster.Xact { return p.xctn }
 
-func (p *clnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	err = fmt.Errorf("%s is already running - not starting %q", prevEntry.Get(), p.Str(p.Kind()))
-	return
+func (*clnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+	return xreg.WprUse, cmn.NewErrUsePrevXaction(prevEntry.Get().String())
 }
 
 func RunCleanup(ini *IniCln) fs.CapStatus {

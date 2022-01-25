@@ -134,7 +134,7 @@ func (e *tcbFactory) Get() cluster.Xact { return e.xctn }
 func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*tcbFactory)
 	if e.UUID() != prev.UUID() {
-		err = fmt.Errorf("%s is currently running - not starting new %q", prevEntry.Get(), e.Str(e.Kind()))
+		err = cmn.NewErrUsePrevXaction(prevEntry.Get().String())
 		return
 	}
 	bckEq := prev.args.BckFrom.Equal(e.args.BckFrom, true /*same BID*/, true /* same backend */)

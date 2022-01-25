@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -452,6 +453,12 @@ func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {
 		}
 		if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
 			r.RUnlock()
+			if cmn.IsErrUsePrevXaction(err) {
+				if wpr != WprUse {
+					glog.Errorf("%v - not starting a new one of the same kind", err)
+				}
+				err = nil
+			}
 			xctn := prevEntry.Get()
 			return RenewRes{Entry: prevEntry, Err: err, UUID: xctn.ID()}
 		}

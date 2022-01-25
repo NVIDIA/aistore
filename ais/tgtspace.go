@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -53,9 +52,7 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 	}
 	rns := xreg.RenewLRU(id)
 	if rns.Err != nil || rns.IsRunning() {
-		// TODO -- FIXME: here and elsewhere
-		debug.Assert(rns.Err == nil || strings.Contains(rns.Err.Error(), "is already running"))
-
+		debug.Assert(rns.Err == nil || cmn.IsErrUsePrevXaction(rns.Err))
 		if wg != nil {
 			wg.Done()
 		}
@@ -91,13 +88,13 @@ func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck)
 		id = cos.GenUUID()
 	}
 	rns := xreg.RenewStoreCleanup(id)
-	if rns.IsRunning() {
+	if rns.Err != nil || rns.IsRunning() {
+		debug.Assert(rns.Err == nil || cmn.IsErrUsePrevXaction(rns.Err))
 		if wg != nil {
 			wg.Done()
 		}
 		return fs.CapStatus{}
 	}
-	debug.AssertNoErr(rns.Err) // see xcln.WhenPrevIsRunning() and xreg logic
 	xcln := rns.Entry.Get()
 	if regToIC && xcln.ID() == id {
 		// pre-existing UUID: notify IC members
