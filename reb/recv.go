@@ -20,12 +20,11 @@ import (
 )
 
 func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) error {
-	defer transport.FreeRecv(objReader)
+	defer transport.DrainAndFreeReader(objReader)
 	if err != nil {
 		glog.Error(err)
 		return err
 	}
-	defer cos.DrainReader(objReader)
 	smap, err := reb._waitForSmap()
 	if err != nil {
 		glog.Errorf("%v: dropping %s", err, hdr.FullName())
@@ -77,8 +76,6 @@ func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) error {
 ///////////////
 
 func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) {
-	defer cos.DrainReader(objReader)
-
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse acknowledgement: %v", err)
@@ -227,7 +224,6 @@ func (reb *Reb) receiveMD(req *pushReq, hdr transport.ObjHdr) error {
 }
 
 func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) error {
-	defer cos.DrainReader(reader)
 	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
@@ -303,8 +299,6 @@ func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) 
 
 // receiving EC CT
 func (reb *Reb) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) {
-	defer cos.DrainReader(reader)
-
 	req := &pushReq{}
 	err := unpacker.ReadAny(req)
 	if err != nil {

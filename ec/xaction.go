@@ -395,9 +395,6 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 func _writerReceive(writer *slice, exists bool, objAttrs cmn.ObjAttrs, reader io.Reader) (err error) {
 	if !exists {
 		writer.wg.Done()
-		// drain the body, to avoid panic:
-		// http: panic serving: assertion failed: "expecting an error or EOF as the reason for failing to read
-		cos.DrainReader(reader)
 		return ErrorNotFound
 	}
 

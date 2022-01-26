@@ -261,7 +261,7 @@ ret:
 
 // NOTE: strict(est) error handling: abort on any of the errors below
 func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
-	defer transport.FreeRecv(objReader)
+	defer transport.DrainAndFreeReader(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
 		return err
@@ -273,8 +273,6 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 		return nil
 	}
 	debug.Assert(hdr.Opcode == 0)
-
-	defer cos.DrainReader(objReader)
 
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)

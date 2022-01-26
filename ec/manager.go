@@ -236,12 +236,11 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
 func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err error) error {
-	defer transport.FreeRecv(object)
+	defer transport.DrainAndFreeReader(object)
 	if err != nil {
 		glog.Errorf("receive failed: %v", err)
 		return err
 	}
-	defer cos.DrainReader(object)
 	// check if the request is valid
 	if len(hdr.Opaque) == 0 {
 		err := fmt.Errorf("invalid header: [%+v]", hdr)

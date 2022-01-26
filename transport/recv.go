@@ -391,3 +391,20 @@ func UID2SessID(uid uint64) (xxh, sessID uint64) {
 	xxh, sessID = uid>>32, uid&math.MaxUint32
 	return
 }
+
+// DrainAndFreeReader:
+// 1) reads and discards all the data from `r` - the `objReader`;
+// 2) frees this objReader back to the `recvPool`.
+// As such, this function is intended for usage only and exclusively by
+// `transport.ReceiveObj` implementations.
+func DrainAndFreeReader(r io.Reader) {
+	if r == nil {
+		return
+	}
+	obj, ok := r.(*objReader)
+	debug.Assert(ok)
+	if obj.body != nil && !obj.hdr.IsHeaderOnly() {
+		cos.DrainReader(obj)
+	}
+	FreeRecv(obj)
+}

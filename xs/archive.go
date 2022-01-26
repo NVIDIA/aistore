@@ -286,7 +286,7 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 	r.IncPending()
 	defer func() {
 		r.DecPending()
-		transport.FreeRecv(objReader)
+		transport.DrainAndFreeReader(objReader)
 	}()
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
@@ -310,8 +310,6 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 		return nil
 	}
 	debug.Assert(hdr.Opcode == 0)
-	defer cos.DrainReader(objReader)
-
 	wi.writer.write(wi.nameInArch(hdr.ObjName), &hdr.ObjAttrs, objReader)
 	return nil
 }

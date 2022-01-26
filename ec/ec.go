@@ -428,7 +428,6 @@ func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs)
 	}()
 	if args.Generation != 0 {
 		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
-			cos.DrainReader(args.Reader)
 			return nil
 		}
 	}
@@ -454,7 +453,6 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 		ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
 		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
 			lom.Unlock(false)
-			cos.DrainReader(args.Reader)
 			return nil
 		}
 	}

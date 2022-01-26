@@ -551,7 +551,7 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()
 		defer func() {
-			transport.FreeRecv(object)
+			transport.DrainAndFreeReader(object)
 			ds.m.inFlightDec()
 		}()
 
@@ -559,7 +559,6 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 			ds.m.abort(err)
 			return err
 		}
-		defer cos.DrainReader(object)
 
 		unpacker := cos.NewUnpacker(hdr.Opaque)
 		req := buildingShardInfo{}
@@ -582,7 +581,7 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()
 		defer func() {
-			transport.FreeRecv(object)
+			transport.DrainAndFreeReader(object)
 			ds.m.inFlightDec()
 		}()
 
@@ -590,7 +589,6 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 			ds.m.abort(err)
 			return err
 		}
-		defer cos.DrainReader(object)
 
 		req := RemoteResponse{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {

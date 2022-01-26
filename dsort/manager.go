@@ -653,7 +653,7 @@ func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x interfa
 
 func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
-		defer transport.FreeRecv(object)
+		defer transport.DrainAndFreeReader(object)
 		if err != nil {
 			m.abort(err)
 			return err
@@ -673,7 +673,6 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		if err == nil {
 			if lom.EqCksum(hdr.ObjAttrs.Cksum) {
 				glog.V(4).Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping", m.ManagerUUID, lom)
-				cos.DrainReader(object)
 				return nil
 			}
 			glog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)

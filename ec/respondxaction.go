@@ -5,7 +5,6 @@
 package ec
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -198,7 +197,6 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			meta = iReq.meta
 		)
 		if meta == nil {
-			cos.DrainReader(object)
 			glog.Errorf("%s: no metadata for %s", r.t.Snode(), hdr.FullName())
 			return
 		}
@@ -227,9 +225,6 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			cluster.FreeLOM(lom)
 		}
 		if err != nil {
-			if !errors.Is(err, io.ErrUnexpectedEOF) {
-				cos.DrainReader(object)
-			}
 			glog.Error(err)
 			return
 		}

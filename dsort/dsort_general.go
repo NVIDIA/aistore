@@ -592,7 +592,7 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()
 		defer func() {
-			transport.FreeRecv(object)
+			transport.DrainAndFreeReader(object)
 			ds.m.inFlightDec()
 		}()
 
@@ -600,7 +600,6 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 			ds.m.abort(err)
 			return err
 		}
-		defer cos.DrainReader(object)
 
 		if ds.m.aborted() {
 			return newDSortAbortedError(ds.m.ManagerUUID)
