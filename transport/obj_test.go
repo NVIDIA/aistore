@@ -189,7 +189,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 }
 
 func Example_obj() {
-	receive := func(hdr transport.ObjHdr, objReader io.Reader, err error) {
+	receive := func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil)
 		object, err := io.ReadAll(objReader)
 		if err != nil {
@@ -199,6 +199,7 @@ func Example_obj() {
 			panic(fmt.Sprintf("size %d != %d", len(object), hdr.ObjAttrs.Size))
 		}
 		fmt.Printf("%s...\n", string(object[:16]))
+		return nil
 	}
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
@@ -391,7 +392,7 @@ func Test_ObjAttrs(t *testing.T) {
 	defer ts.Close()
 
 	var receivedCount atomic.Int64
-	recvFunc := func(hdr transport.ObjHdr, objReader io.Reader, err error) {
+	recvFunc := func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil)
 
 		idx := hdr.Opaque[0]
@@ -404,6 +405,7 @@ func Test_ObjAttrs(t *testing.T) {
 		cos.Assertf(written == hdr.ObjAttrs.Size, "written: %d, expected: %d", written, hdr.ObjAttrs.Size)
 
 		receivedCount.Inc()
+		return nil
 	}
 	trname := "objattrs"
 	err := transport.HandleObjStream(trname, recvFunc)
@@ -442,10 +444,11 @@ func Test_ObjAttrs(t *testing.T) {
 	}
 }
 
-func receive10G(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func receive10G(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	cos.Assert(err == nil || cos.IsEOF(err))
 	written, _ := io.Copy(io.Discard, objReader)
 	cos.Assert(written == hdr.ObjAttrs.Size)
+	return nil
 }
 
 func Test_CompressedOne(t *testing.T) {
@@ -565,11 +568,12 @@ func Test_CompletionCount(t *testing.T) {
 		numCompleted, numReceived atomic.Int64
 	)
 
-	receive := func(hdr transport.ObjHdr, objReader io.Reader, err error) {
+	receive := func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil)
 		written, _ := io.Copy(io.Discard, objReader)
 		cos.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
+		return nil
 	}
 	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		numCompleted.Inc()
@@ -709,7 +713,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 
 func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 	totalReceived := new(int64)
-	return totalReceived, func(hdr transport.ObjHdr, objReader io.Reader, err error) {
+	return totalReceived, func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil || cos.IsEOF(err))
 		written, err := io.Copy(io.Discard, objReader)
 		if err != nil && !cos.IsEOF(err) {
@@ -719,6 +723,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
 		*totalReceived += written
+		return nil
 	}
 }
 

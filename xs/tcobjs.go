@@ -150,13 +150,16 @@ fin:
 	}
 }
 
-func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
+// NOTE: strict(est) error handling: abort on any of the errors below
+func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	r.IncPending()
-	defer r.DecPending()
-	defer transport.FreeRecv(objReader)
+	defer func() {
+		r.DecPending()
+		transport.FreeRecv(objReader)
+	}()
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
-		return
+		return err
 	}
 	if hdr.Opcode == OpcTxnDone {
 		txnUUID := string(hdr.Opaque)
@@ -165,7 +168,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		r.pending.RUnlock()
 		if !ok {
 			debug.Assert(!r.err.IsNil()) // see cleanup
-			return
+			return r.err.Err()
 		}
 		refc := wi.refc.Dec()
 		if refc == 0 {
@@ -174,16 +177,17 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 			r.wiCnt.Dec()
 			r.pending.Unlock()
 		}
-		return
+		return nil
 	}
 	debug.Assert(hdr.Opcode == 0)
 
 	defer cos.DrainReader(objReader)
+
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
-		return
+		return err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
 	params := cluster.PutObjectParams{
@@ -201,9 +205,11 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
 	params.Atime = lom.Atime()
-	if err := r.p.T.PutObject(lom, params); err != nil {
+	err = r.p.T.PutObject(lom, params)
+	if err != nil {
 		glog.Error(err)
 	}
+	return err
 }
 
 ///////////

@@ -652,14 +652,14 @@ func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x interfa
 }
 
 func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
-	return func(hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		defer transport.FreeRecv(object)
 		if err != nil {
 			m.abort(err)
-			return
+			return err
 		}
 		if m.aborted() {
-			return
+			return newDSortAbortedError(m.ManagerUUID)
 		}
 		lom := cluster.AllocLOM(hdr.ObjName)
 		defer cluster.FreeLOM(lom)
@@ -668,13 +668,13 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		}
 		if err != nil && !os.IsNotExist(err) {
 			m.abort(err)
-			return
+			return err
 		}
 		if err == nil {
 			if lom.EqCksum(hdr.ObjAttrs.Cksum) {
 				glog.V(4).Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping", m.ManagerUUID, lom)
 				cos.DrainReader(object)
-				return
+				return nil
 			}
 			glog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)
 		}
@@ -690,8 +690,9 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		}
 		if err := m.ctx.t.PutObject(lom, params); err != nil {
 			m.abort(err)
-			return
+			return err
 		}
+		return nil
 	}
 }
 

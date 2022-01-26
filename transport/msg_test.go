@@ -23,10 +23,11 @@ import (
 )
 
 func Example_msg() {
-	receive := func(msg transport.Msg, err error) {
+	receive := func(msg transport.Msg, err error) error {
 		if !transport.ReservedOpcode(msg.Opcode) {
 			fmt.Printf("%s...\n", string(msg.Body[:16]))
 		}
+		return nil
 	}
 
 	ts := httptest.NewServer(msgmux)

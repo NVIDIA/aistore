@@ -195,23 +195,24 @@ func (mgr *Manager) getBckXactsUnlocked(bckName string) *BckXacts {
 }
 
 // A function to process command requests from other targets
-func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err error) {
+func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err error) error {
 	defer transport.FreeRecv(object)
 	if err != nil {
 		glog.Errorf("request failed: %v", err)
-		return
+		return err
 	}
 	// check if the header contains a valid request
 	if len(hdr.Opaque) == 0 {
-		glog.Error("empty request")
-		return
+		err := fmt.Errorf("invalid header: [%+v]", hdr)
+		glog.Error(err)
+		return err
 	}
 
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	iReq := intraReq{}
 	if err := unpacker.ReadAny(&iReq); err != nil {
 		glog.Errorf("failed to unmarshal request: %v", err)
-		return
+		return err
 	}
 
 	// command requests should not have a body, but if it has,
@@ -219,46 +220,46 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 	if hdr.ObjAttrs.Size != 0 {
 		if _, err := io.ReadAll(object); err != nil {
 			glog.Errorf("failed to read request body: %v", err)
-			return
+			return err
 		}
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			glog.Errorf("failed to init bucket %s: %v", bck, err)
-			return
+			return err
 		}
 	}
 	mgr.RestoreBckRespXact(bck).DispatchReq(iReq, &hdr, bck)
+	return nil
 }
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
-func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err error) {
+func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err error) error {
 	defer transport.FreeRecv(object)
 	if err != nil {
 		glog.Errorf("receive failed: %v", err)
-		return
+		return err
 	}
+	defer cos.DrainReader(object)
 	// check if the request is valid
 	if len(hdr.Opaque) == 0 {
-		glog.Error("empty request")
-		cos.DrainReader(object)
-		return
+		err := fmt.Errorf("invalid header: [%+v]", hdr)
+		glog.Error(err)
+		return err
 	}
 
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	iReq := intraReq{}
 	if err := unpacker.ReadAny(&iReq); err != nil {
 		glog.Errorf("Failed to unmarshal request: %v", err)
-		cos.DrainReader(object)
-		return
+		return err
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			glog.Error(err)
-			cos.DrainReader(object)
-			return
+			return err
 		}
 	}
 	switch hdr.Opcode {
@@ -269,9 +270,9 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 		// (might've started when we had enough)
 		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, &hdr, bck, object)
 	default:
-		glog.Errorf("unknown EC response action %d", hdr.Opcode)
-		cos.DrainReader(object)
+		debug.Assertf(false, "unknown EC response action %d", hdr.Opcode)
 	}
+	return nil
 }
 
 // EncodeObject generates slices using Reed-Solom algorithm:

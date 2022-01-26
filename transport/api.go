@@ -91,8 +91,8 @@ type (
 	StreamCollector struct{}
 
 	// Rx callbacks
-	ReceiveObj func(hdr ObjHdr, object io.Reader, err error)
-	ReceiveMsg func(msg Msg, err error)
+	ReceiveObj func(hdr ObjHdr, object io.Reader, err error) error
+	ReceiveMsg func(msg Msg, err error) error
 )
 
 // see also: lom.FullName()

@@ -282,15 +282,16 @@ func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.Rea
 	r.p.dm.Send(o, fh, wi.tsi)
 }
 
-func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	r.IncPending()
-	defer r.DecPending()
-	defer transport.FreeRecv(objReader)
+	defer func() {
+		r.DecPending()
+		transport.FreeRecv(objReader)
+	}()
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
-		return
+		return err
 	}
-	defer cos.DrainReader(objReader)
 
 	txnUUID := string(hdr.Opaque)
 	r.pending.RLock()
@@ -298,19 +299,21 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 	r.pending.RUnlock()
 	if !ok {
 		debug.Assert(!r.err.IsNil()) // see cleanup
-		return
+		return r.err.Err()
 	}
-	debug.Assert(wi.tsi.ID() == r.p.T.Snode().ID())
-	debug.Assert(wi.msg.TxnUUID == txnUUID)
+	debug.Assert(wi.tsi.ID() == r.p.T.Snode().ID() && wi.msg.TxnUUID == txnUUID)
 
 	// NOTE: best-effort via ref-counting
 	if hdr.Opcode == OpcTxnDone {
 		refc := wi.refc.Dec()
 		debug.Assert(refc >= 0)
-		return
+		return nil
 	}
 	debug.Assert(hdr.Opcode == 0)
+	defer cos.DrainReader(objReader)
+
 	wi.writer.write(wi.nameInArch(hdr.ObjName), &hdr.ObjAttrs, objReader)
+	return nil
 }
 
 func (r *XactCreateArchMultiObj) finalize(wi *archwi) {

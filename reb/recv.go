@@ -19,54 +19,57 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	defer transport.FreeRecv(objReader)
 	if err != nil {
 		glog.Error(err)
-		return
+		return err
 	}
+	defer cos.DrainReader(objReader)
 	smap, err := reb._waitForSmap()
 	if err != nil {
 		glog.Errorf("%v: dropping %s", err, hdr.FullName())
-		return
+		return err
 	}
 
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
 		glog.Errorf("Failed to read message type: %v", err)
-		return
+		return err
 	}
 	if act == rebMsgRegular {
 		reb.recvObjRegular(hdr, smap, unpacker, objReader)
-		return
+		return nil
 	}
 	if act != rebMsgEC {
 		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgEC)
 	}
 	reb.recvECData(hdr, unpacker, objReader)
+	return nil
 }
 
-func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) {
+func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) error {
 	if err != nil {
 		glog.Error(err)
-		return
+		return err
 	}
-
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
-		glog.Errorf("failed to read message type: %v", err)
-		return
+		err = fmt.Errorf("failed to read message type: %v", err)
+		glog.Error(err)
+		return err
 	}
 	if act == rebMsgEC {
 		reb.recvECAck(hdr, unpacker)
-		return
+		return nil
 	}
 	if act != rebMsgRegular {
 		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgRegular)
 	}
 	reb.recvRegularAck(hdr, unpacker)
+	return nil
 }
 
 ///////////////
@@ -162,16 +165,16 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 // Rx EC //
 ///////////
 
-func (reb *Reb) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
+func (reb *Reb) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) error {
 	tname := reb.t.Snode().Name()
 	if err != nil {
 		glog.Errorf("%s: failed to receive push notification %s from %s: %v", tname, hdr.ObjName, hdr.Bck, err)
-		return
+		return err
 	}
 	req, err := reb.decodePushReq(hdr.Opaque)
 	if err != nil {
 		glog.Error(err)
-		return
+		return err
 	}
 	otherStage, xreb := stages[req.stage], reb.xctn()
 	err = fmt.Errorf("push notification from t[%s](%s)", req.daemonID, otherStage)
@@ -179,16 +182,17 @@ func (reb *Reb) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
 		// (other target aborted its xaction and sent the signal to others)
 		if xreb == nil {
 			glog.Errorf("%s: nil rebalancing xaction vs %v", tname, err)
-			return
+			return err
 		}
 		xreb.Abort(err)
-		return
+		return err
 	}
 	if reb.RebID() != req.rebID {
 		glog.Warningf("%s: %v: %s", tname, err, reb.rebIDMismatchMsg(req.rebID))
-		return
+		return nil
 	}
 	reb.stages.setStage(req.daemonID, req.stage)
+	return nil
 }
 
 func (*Reb) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {

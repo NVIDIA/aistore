@@ -480,7 +480,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 		}
 	}
 
-	return func(hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()
 		defer ds.m.inFlightDec()
 
@@ -488,22 +488,23 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 		req := remoteRequest{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 			ds.m.abort(fmt.Errorf("received damaged request: %s", err))
-			return
+			return err
 		}
 
 		fromNode := ds.m.smap.GetTarget(hdr.SID)
 		if fromNode == nil {
-			glog.Errorf("received request from node %q which is not present in the smap", hdr.SID)
-			return
+			err := fmt.Errorf("received request from node %q which is not present in the smap", hdr.SID)
+			glog.Error(err)
+			return err
 		}
 
 		if err != nil {
 			errHandler(err, fromNode, &transport.Obj{Hdr: hdr})
-			return
+			return err
 		}
 
 		if ds.m.aborted() {
-			return
+			return newDSortAbortedError(ds.m.ManagerUUID)
 		}
 
 		var (
@@ -523,7 +524,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			r := cos.NopOpener(io.NopCloser(lr))
 			o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
 			ds.streams.response.Send(o, r, fromNode)
-			return
+			return nil
 		}
 
 		switch req.RecordObj.StoreType {
@@ -533,7 +534,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			r, err := cos.NewFileSectionHandle(fullContentPath, offset, o.Hdr.ObjAttrs.Size)
 			if err != nil {
 				errHandler(err, fromNode, o)
-				return
+				return err
 			}
 			ds.streams.response.Send(o, r, fromNode)
 		case extract.SGLStoreType:
@@ -547,19 +548,20 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			f, err := cos.NewFileHandle(fullContentPath)
 			if err != nil {
 				errHandler(err, fromNode, o)
-				return
+				return err
 			}
 			fi, err := f.Stat()
 			if err != nil {
 				cos.Close(f)
 				errHandler(err, fromNode, o)
-				return
+				return err
 			}
 			o.Hdr.ObjAttrs.Size = fi.Size()
 			ds.streams.response.Send(o, f, fromNode)
 		default:
-			cos.Assert(false)
+			debug.Assert(false)
 		}
+		return nil
 	}
 }
 
@@ -587,7 +589,7 @@ func (ds *dsorterGeneral) postExtraction() {
 
 func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 	metrics := ds.m.Metrics.Creation
-	return func(hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()
 		defer func() {
 			transport.FreeRecv(object)
@@ -596,23 +598,23 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 
 		if err != nil {
 			ds.m.abort(err)
-			return
+			return err
 		}
 		defer cos.DrainReader(object)
 
 		if ds.m.aborted() {
-			return
+			return newDSortAbortedError(ds.m.ManagerUUID)
 		}
 
 		writer := ds.pullStreamWriter(hdr.ObjName)
 		if writer == nil { // was removed after timing out
-			return
+			return nil
 		}
 
 		if len(hdr.Opaque) > 0 {
 			writer.n, writer.err = 0, errors.New(string(hdr.Opaque))
 			writer.wg.Done()
-			return
+			return nil
 		}
 
 		var beforeSend int64
@@ -632,6 +634,7 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 			metrics.LocalRecvStats.updateThroughput(writer.n, dur)
 			metrics.mu.Unlock()
 		}
+		return nil
 	}
 }
 

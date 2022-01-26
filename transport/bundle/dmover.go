@@ -237,13 +237,13 @@ func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes
 	return cluster.QuiInactiveCB
 }
 
-func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) {
+func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) error {
 	dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
 	dm.stage.laterx.Store(true)
-	dm.data.recv(hdr, object, err)
+	return dm.data.recv(hdr, object, err)
 }
 
-func (dm *DataMover) wrapRecvACK(hdr transport.ObjHdr, object io.Reader, err error) {
+func (dm *DataMover) wrapRecvACK(hdr transport.ObjHdr, object io.Reader, err error) error {
 	dm.stage.laterx.Store(true)
-	dm.ack.recv(hdr, object, err)
+	return dm.ack.recv(hdr, object, err)
 }

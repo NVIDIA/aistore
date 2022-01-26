@@ -207,7 +207,9 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 				}
 				err = eofOK(err)
 				size, off := obj.hdr.ObjAttrs.Size, obj.off
-				h.rxObj(obj.hdr, obj, err)
+				if errCb := h.rxObj(obj.hdr, obj, err); errCb != nil {
+					err = errCb
+				}
 				// stats
 				if err == nil {
 					it.stats.Num.Inc()              // this stream stats
@@ -220,14 +222,16 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 					}
 				}
 			} else if err != nil && err != io.EOF {
-				h.rxObj(ObjHdr{}, nil, err)
+				if errCb := h.rxObj(ObjHdr{}, nil, err); errCb != nil {
+					err = errCb
+				}
 			}
 		} else {
 			msg, err = it.nextMsg(loghdr, hlen)
 			if err == nil {
-				h.rxMsg(msg, nil)
+				err = h.rxMsg(msg, nil)
 			} else if err != io.EOF {
-				h.rxMsg(Msg{}, err)
+				err = h.rxMsg(Msg{}, err)
 			}
 		}
 	}

@@ -548,7 +548,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 func (*dsorterMem) postExtraction() {}
 
 func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
-	return func(hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()
 		defer func() {
 			transport.FreeRecv(object)
@@ -557,7 +557,7 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 
 		if err != nil {
 			ds.m.abort(err)
-			return
+			return err
 		}
 		defer cos.DrainReader(object)
 
@@ -565,20 +565,21 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 		req := buildingShardInfo{}
 		if err := unpacker.ReadAny(&req); err != nil {
 			ds.m.abort(err)
-			return
+			return err
 		}
 
 		if ds.m.aborted() {
-			return
+			return newDSortAbortedError(ds.m.ManagerUUID)
 		}
 
 		ds.creationPhase.requestedShards <- req.shardName
+		return nil
 	}
 }
 
 func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 	metrics := ds.m.Metrics.Creation
-	return func(hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()
 		defer func() {
 			transport.FreeRecv(object)
@@ -587,14 +588,14 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 
 		if err != nil {
 			ds.m.abort(err)
-			return
+			return err
 		}
 		defer cos.DrainReader(object)
 
 		req := RemoteResponse{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 			ds.m.abort(err)
-			return
+			return err
 		}
 
 		var beforeSend int64
@@ -603,13 +604,13 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 		}
 
 		if ds.m.aborted() {
-			return
+			return newDSortAbortedError(ds.m.ManagerUUID)
 		}
 
 		uname := req.Record.MakeUniqueName(req.RecordObj)
 		if err := ds.creationPhase.connector.connectReader(uname, object, hdr.ObjAttrs.Size); err != nil {
 			ds.m.abort(err)
-			return
+			return err
 		}
 
 		if ds.m.Metrics.extended {
@@ -619,6 +620,7 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 			metrics.LocalRecvStats.updateThroughput(hdr.ObjAttrs.Size, dur)
 			metrics.mu.Unlock()
 		}
+		return nil
 	}
 }
 
