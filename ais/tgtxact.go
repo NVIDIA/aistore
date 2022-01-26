@@ -185,7 +185,8 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 		})
 		go xctn.Run(nil)
 	case cmn.ActLoadLomCache:
-		return xreg.RenewBckLoadLomCache(t, xactMsg.ID, bck)
+		rns := xreg.RenewBckLoadLomCache(t, xactMsg.ID, bck)
+		return rns.Err
 	// 3. cannot start
 	case cmn.ActPutCopies:
 		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", xactMsg)

@@ -83,18 +83,18 @@ type (
 	}
 
 	entries struct {
-		mtx     sync.RWMutex
-		active  []Renewable // running entries - finished entries are gradually removed
-		entries []Renewable
+		mtx    sync.RWMutex
+		active []Renewable // running entries - finished entries are gradually removed
+		all    []Renewable
 	}
 	// All entries in the registry. The entries are periodically cleaned up
 	// to make sure that we don't keep old entries forever.
 	registry struct {
-		sync.RWMutex
-		finDelta    atomic.Int64
-		entries     *entries
+		renewMtx    sync.RWMutex // TODO: revisit to optimiz out
+		entries     entries
 		bckXacts    map[string]Renewable
 		nonbckXacts map[string]Renewable
+		finDelta    atomic.Int64
 	}
 )
 
@@ -143,18 +143,21 @@ func (rns *RenewRes) beingRenewed() {
 
 // default global registry that keeps track of all running xactions
 // In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`.
-var defaultReg *registry
+var dreg *registry
 
 func Init() {
-	defaultReg = newRegistry()
-	xact.IncFinished = defaultReg.incFinished
+	dreg = newRegistry()
+	xact.IncFinished = dreg.incFinished
 }
 
-func TestReset() { defaultReg = newRegistry() } // tests only
+func TestReset() { dreg = newRegistry() } // tests only
 
-func newRegistry() *registry {
+func newRegistry() (r *registry) {
 	return &registry{
-		entries:     newRegistryEntries(),
+		entries: entries{
+			all:    make([]Renewable, 0, initialCap),
+			active: make([]Renewable, 0, 32),
+		},
 		bckXacts:    make(map[string]Renewable, 32),
 		nonbckXacts: make(map[string]Renewable, 32),
 	}
@@ -162,17 +165,17 @@ func newRegistry() *registry {
 
 // register w/housekeeper periodic registry cleanups
 func RegWithHK() {
-	hk.Reg("x-old", defaultReg.hkDelOld, 0 /*time.Duration*/)
-	hk.Reg("x-prune-active", defaultReg.hkPruneActive, 0 /*time.Duration*/)
+	hk.Reg("x-old", dreg.hkDelOld, 0 /*time.Duration*/)
+	hk.Reg("x-prune-active", dreg.hkPruneActive, 0 /*time.Duration*/)
 }
 
-func GetXact(uuid string) (xctn cluster.Xact) { return defaultReg.getXact(uuid) }
+func GetXact(uuid string) (xctn cluster.Xact) { return dreg.getXact(uuid) }
 
 func (r *registry) getXact(uuid string) (xctn cluster.Xact) {
-	e := r.entries
+	e := &r.entries
 	e.mtx.RLock()
 outer:
-	for _, entries := range [][]Renewable{e.active, e.entries} { // tradeoff: fewer active, higher priority
+	for _, entries := range [][]Renewable{e.active, e.all} { // tradeoff: fewer active, higher priority
 		for _, entry := range entries {
 			x := entry.Get()
 			if x != nil && x.ID() == uuid {
@@ -185,7 +188,7 @@ outer:
 	return
 }
 
-func GetRunning(flt XactFilter) Renewable { return defaultReg.getRunning(flt) }
+func GetRunning(flt XactFilter) Renewable { return dreg.getRunning(flt) }
 
 func (r *registry) getRunning(flt XactFilter) Renewable {
 	onl := true
@@ -193,11 +196,9 @@ func (r *registry) getRunning(flt XactFilter) Renewable {
 	return r.entries.find(flt)
 }
 
-func GetLatest(flt XactFilter) Renewable { return defaultReg.getLatest(flt) }
-
-func (r *registry) getLatest(flt XactFilter) Renewable {
-	// NOTE: relies on the find() to walk in the newer --> older order
-	entry := r.entries.find(flt)
+// NOTE: relies on the find() to walk in the newer --> older order
+func GetLatest(flt XactFilter) Renewable {
+	entry := dreg.entries.find(flt)
 	return entry
 }
 
@@ -205,35 +206,25 @@ func (r *registry) getLatest(flt XactFilter) Renewable {
 // It not only stops the "bucket xactions" but possibly "task xactions" which
 // are running on given bucket.
 
-func AbortAllBuckets(err error, bcks ...*cluster.Bck) { defaultReg.abortAllBuckets(err, bcks...) }
-
-func (r *registry) abortAllBuckets(err error, bcks ...*cluster.Bck) {
-	r.abort(abortArgs{bcks: bcks, err: err})
+func AbortAllBuckets(err error, bcks ...*cluster.Bck) {
+	dreg.abort(abortArgs{bcks: bcks, err: err})
 }
 
 // AbortAll waits until abort of all xactions is finished
 // Every abort is done asynchronously
-func AbortAll(err error, tys ...string) { defaultReg.abortAll(err, tys...) }
-
-func (r *registry) abortAll(err error, tys ...string) {
+func AbortAll(err error, tys ...string) {
 	var ty string
 	if len(tys) > 0 {
 		ty = tys[0]
 	}
-	r.abort(abortArgs{ty: ty, err: err, all: true})
+	dreg.abort(abortArgs{ty: ty, err: err, all: true})
 }
 
-func AbortAllMountpathsXactions() { defaultReg.abortAllMountpathsXactions() }
-
-func (r *registry) abortAllMountpathsXactions() { r.abort(abortArgs{mountpaths: true}) }
+func AbortAllMountpathsXactions() { dreg.abort(abortArgs{mountpaths: true}) }
 
 func DoAbort(kind string, bck *cluster.Bck, err error) (aborted bool) {
-	return defaultReg.doAbort(kind, bck, err)
-}
-
-func (r *registry) doAbort(kind string, bck *cluster.Bck, err error) (aborted bool) {
 	if kind != "" {
-		entry := r.getRunning(XactFilter{Kind: kind, Bck: bck})
+		entry := dreg.getRunning(XactFilter{Kind: kind, Bck: bck})
 		if entry == nil {
 			return
 		}
@@ -241,34 +232,30 @@ func (r *registry) doAbort(kind string, bck *cluster.Bck, err error) (aborted bo
 	}
 	if bck == nil {
 		// No bucket and no kind - request for all available xactions.
-		r.abortAll(err)
+		AbortAll(err)
 	} else {
 		// Bucket present and no kind - request for all available bucket's xactions.
-		r.abortAllBuckets(err, bck)
+		AbortAllBuckets(err, bck)
 	}
 	aborted = true
 	return
 }
 
-func DoAbortByID(uuid string, err error) (aborted bool) { return defaultReg.doAbortByID(uuid, err) }
-
-func (r *registry) doAbortByID(uuid string, err error) (aborted bool) {
-	xctn := r.getXact(uuid)
+func DoAbortByID(uuid string, err error) (aborted bool) {
+	xctn := dreg.getXact(uuid)
 	if xctn == nil {
 		return
 	}
 	return xctn.Abort(err)
 }
 
-func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) { return defaultReg.getSnap(flt) }
-
-func (r *registry) getSnap(flt XactFilter) ([]cluster.XactSnap, error) {
+func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 	var onlyRunning bool
 	if flt.OnlyRunning != nil {
 		onlyRunning = *flt.OnlyRunning
 	}
 	if flt.ID != "" {
-		xctn := r.getXact(flt.ID)
+		xctn := dreg.getXact(flt.ID)
 		if xctn != nil {
 			if onlyRunning && xctn.Finished() {
 				return nil, cmn.NewErrXactNotFoundError("[only-running vs " + xctn.String() + "]")
@@ -283,7 +270,7 @@ func (r *registry) getSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 		}
 		// not running rebalance: include all finished (but not aborted) ones
 		// with ID at ot _after_ the specified
-		return r.matchingXactsStats(func(xctn cluster.Xact) bool {
+		return dreg.matchingXactsStats(func(xctn cluster.Xact) bool {
 			cmp := xact.CompareRebIDs(xctn.ID(), flt.ID)
 			return cmp >= 0 && xctn.Finished() && !xctn.IsAborted()
 		}), nil
@@ -301,22 +288,22 @@ func (r *registry) getSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 			matching := make([]cluster.XactSnap, 0, 10)
 			if flt.Kind == "" {
 				for kind := range xact.Table {
-					entry := r.getRunning(XactFilter{Kind: kind, Bck: flt.Bck})
+					entry := dreg.getRunning(XactFilter{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Snap())
 					}
 				}
 			} else {
-				entry := r.getRunning(XactFilter{Kind: flt.Kind, Bck: flt.Bck})
+				entry := dreg.getRunning(XactFilter{Kind: flt.Kind, Bck: flt.Bck})
 				if entry != nil {
 					matching = append(matching, entry.Get().Snap())
 				}
 			}
 			return matching, nil
 		}
-		return r.matchingXactsStats(flt.matches), nil
+		return dreg.matchingXactsStats(flt.matches), nil
 	}
-	return r.matchingXactsStats(flt.matches), nil
+	return dreg.matchingXactsStats(flt.matches), nil
 }
 
 func (r *registry) abort(args abortArgs) {
@@ -372,7 +359,7 @@ func (r *registry) hkPruneActive() time.Duration {
 	if r.finDelta.Swap(0) == 0 {
 		return pruneActiveIval
 	}
-	e := r.entries
+	e := &r.entries
 	e.mtx.Lock()
 	l := len(e.active)
 	for i := 0; i < l; i++ {
@@ -389,8 +376,6 @@ func (r *registry) hkPruneActive() time.Duration {
 	return pruneActiveIval
 }
 
-func (r *registry) add(entry Renewable) { r.entries.add(entry) }
-
 func (r *registry) hkDelOld() time.Duration {
 	var (
 		toRemove []string
@@ -398,9 +383,9 @@ func (r *registry) hkDelOld() time.Duration {
 		cnt      int
 	)
 	r.entries.mtx.RLock()
-	l := len(r.entries.entries)
+	l := len(r.entries.all)
 	for i := 0; i < l; i++ { // older (start-time wise) -> newer
-		xctn := r.entries.entries[i].Get()
+		xctn := r.entries.all[i].Get()
 		if !xctn.Finished() {
 			continue
 		}
@@ -444,15 +429,15 @@ func (r *registry) renew(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
 func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {
 	bck := flt.Bck
 	// first, try to reuse under rlock
-	r.RLock()
+	r.renewMtx.RLock()
 	if prevEntry := r.getRunning(flt); prevEntry != nil {
 		xprev := prevEntry.Get()
 		if usePrev(xprev, entry, bck) {
-			r.RUnlock()
+			r.renewMtx.RUnlock()
 			return RenewRes{Entry: prevEntry, UUID: xprev.ID()}
 		}
 		if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
-			r.RUnlock()
+			r.renewMtx.RUnlock()
 			if cmn.IsErrUsePrevXaction(err) {
 				if wpr != WprUse {
 					glog.Errorf("%v - not starting a new one of the same kind", err)
@@ -463,12 +448,12 @@ func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {
 			return RenewRes{Entry: prevEntry, Err: err, UUID: xctn.ID()}
 		}
 	}
-	r.RUnlock()
+	r.renewMtx.RUnlock()
 
 	// second
-	r.Lock()
+	r.renewMtx.Lock()
 	rns = r.renewLocked(entry, flt, bck)
-	r.Unlock()
+	r.renewMtx.Unlock()
 	return
 }
 
@@ -521,19 +506,13 @@ func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck
 	if err = entry.Start(); err != nil {
 		return RenewRes{Entry: nil, Err: err, UUID: ""}
 	}
-	r.add(entry)
+	r.entries.add(entry)
 	return RenewRes{Entry: entry, Err: nil, UUID: ""}
 }
 
 //////////////////////
 // registry entries //
 //////////////////////
-
-func newRegistryEntries() *entries {
-	return &entries{
-		entries: make([]Renewable, 0, initialCap),
-	}
-}
 
 func (e *entries) find(flt XactFilter) (entry Renewable) {
 	e.mtx.RLock()
@@ -551,8 +530,8 @@ func (e *entries) findUnlocked(flt XactFilter) Renewable {
 	if !onlyRunning {
 		// walk in reverse as there is a greater chance
 		// the one we are looking for is at the end
-		for idx := len(e.entries) - 1; idx >= 0; idx-- {
-			entry := e.entries[idx]
+		for idx := len(e.all) - 1; idx >= 0; idx-- {
+			entry := e.all[idx]
 			if flt.matches(entry.Get()) {
 				return entry
 			}
@@ -571,7 +550,7 @@ func (e *entries) findUnlocked(flt XactFilter) Renewable {
 func (e *entries) forEach(matcher func(entry Renewable) bool) {
 	e.mtx.RLock()
 	defer e.mtx.RUnlock()
-	for _, entry := range e.entries {
+	for _, entry := range e.all {
 		if !matcher(entry) {
 			return
 		}
@@ -580,13 +559,13 @@ func (e *entries) forEach(matcher func(entry Renewable) bool) {
 
 // NOTE: is called under lock
 func (e *entries) del(id string) {
-	for idx, entry := range e.entries {
+	for idx, entry := range e.all {
 		xctn := entry.Get()
 		if xctn.ID() == id {
 			debug.AssertMsg(xctn.Finished(), xctn.String())
-			nlen := len(e.entries) - 1
-			e.entries[idx] = e.entries[nlen]
-			e.entries = e.entries[:nlen]
+			nlen := len(e.all) - 1
+			e.all[idx] = e.all[nlen]
+			e.all = e.all[:nlen]
 			break
 		}
 	}
@@ -605,7 +584,7 @@ func (e *entries) del(id string) {
 func (e *entries) add(entry Renewable) {
 	e.mtx.Lock()
 	e.active = append(e.active, entry)
-	e.entries = append(e.entries, entry)
+	e.all = append(e.all, entry)
 	e.mtx.Unlock()
 }
 
@@ -618,7 +597,7 @@ func (e *entries) add(entry Renewable) {
 func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string, otherBck ...*cluster.Bck) (err error) {
 	const sleep = time.Second
 	for i := time.Duration(0); i < waitLimitedCoex; i += sleep {
-		if err = defaultReg.limco(tsi, bck, action, otherBck...); err == nil {
+		if err = dreg.limco(tsi, bck, action, otherBck...); err == nil {
 			break
 		}
 		if action == cmn.ActMoveBck {

@@ -11,7 +11,7 @@ import (
 )
 
 func GetRebMarked() (out xact.Marked) {
-	entry := defaultReg.getRunning(XactFilter{Kind: cmn.ActRebalance})
+	entry := dreg.getRunning(XactFilter{Kind: cmn.ActRebalance})
 	if entry != nil {
 		out.Xact = entry.Get()
 	}
@@ -20,7 +20,7 @@ func GetRebMarked() (out xact.Marked) {
 }
 
 func GetResilverMarked() (out xact.Marked) {
-	entry := defaultReg.getRunning(XactFilter{Kind: cmn.ActResilver})
+	entry := dreg.getRunning(XactFilter{Kind: cmn.ActResilver})
 	if entry != nil {
 		out.Xact = entry.Get()
 	}
