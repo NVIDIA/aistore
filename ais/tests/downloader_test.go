@@ -850,10 +850,7 @@ func TestDownloadMountpath(t *testing.T) {
 		err = api.EnableMountpath(baseParams, selectedTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 
-		// Wait for resilvering
-		args := api.XactReqArgs{Node: selectedTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-		_, _ = api.WaitForXactionIC(baseParams, args)
-
+		tutils.WaitForResilvering(t, baseParams, selectedTarget)
 		ensureNumMountpaths(t, selectedTarget, mpathList)
 	}()
 

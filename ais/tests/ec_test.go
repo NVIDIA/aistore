@@ -1989,21 +1989,14 @@ func TestECEmergencyMountpath(t *testing.T) {
 	err = api.DisableMountpath(baseParams, removeTarget, removeMpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
-	// Wait for resilvering
-	args := api.XactReqArgs{Node: removeTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, removeTarget)
 
 	defer func() {
 		tlog.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
 		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 
-		// Wait for resilvering
-		time.Sleep(time.Second)
-		args := api.XactReqArgs{Node: removeTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-		_, _ = api.WaitForXactionIC(baseParams, args)
-
+		tutils.WaitForResilvering(t, baseParams, removeTarget)
 		ensureNumMountpaths(t, removeTarget, mpathList)
 	}()
 
@@ -2416,10 +2409,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.FailNow()
 	}
 
-	tlog.Logf("Wait for resilvering to complete...\n")
-	time.Sleep(time.Second)
-	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, nil)
 
 	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
@@ -2659,9 +2649,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			err := api.AttachMountpath(baseParams, rmMpath.si, rmMpath.mpath, true /*force*/)
 			tassert.CheckError(t, err)
 		}
-		time.Sleep(3 * time.Second)
-		err := tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
-		tassert.CheckFatal(t, err)
+		tutils.WaitForResilvering(t, baseParams, nil)
 	}()
 	// Choose `parity` random mpaths and disable them
 	i := 0

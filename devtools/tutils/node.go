@@ -34,6 +34,8 @@ const (
 	maxNodeRetry      = 10              // max retries to get health
 )
 
+const resilverTimeout = time.Minute
+
 type (
 	nodesCnt int
 
@@ -271,18 +273,25 @@ func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, 
 	return WaitForClusterState(proxyURL, "new smap version", prevVersion, 0, 0)
 }
 
-func xactSnapDone(snaps api.NodesXactMultiSnap) bool {
-	tid, xsnap := snaps.Running()
-	if tid != "" {
-		tlog.Logf("Node %s, xact %s[%s] is running\n", tid, xsnap.Kind, xsnap.ID)
+func WaitForResilvering(t *testing.T, baseParams api.BaseParams, target *cluster.Snode) {
+	args := api.XactReqArgs{Kind: cmn.ActResilver, Timeout: resilverTimeout}
+	if target != nil {
+		args.Node = target.ID()
+		time.Sleep(2 * time.Second)
+	} else {
+		time.Sleep(4 * time.Second)
 	}
-	return tid == ""
+	err := api.WaitForXactionNode(baseParams, args, _xactSnapFinished)
+	tassert.CheckFatal(t, err)
 }
 
-// checks resilvering on each node and waits for those that are running (to stop running)
-func WaitForAllResilvers(baseParams api.BaseParams, timeout time.Duration) error {
-	args := api.XactReqArgs{Kind: cmn.ActResilver, Timeout: timeout}
-	return api.WaitForXactionNode(baseParams, args, xactSnapDone)
+func _xactSnapFinished(snaps api.NodesXactMultiSnap) bool {
+	tid, xsnap := snaps.Running()
+	if tid != "" {
+		tlog.Logf("t[%s]: x-%s[%s] is running\n", tid, xsnap.Kind, xsnap.ID)
+		return false
+	}
+	return true
 }
 
 func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[*cluster.Snode][]string {

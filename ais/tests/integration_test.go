@@ -622,8 +622,6 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	// wait for rebalance to complete
 	baseParams = tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout) // TODO -- FIXME: revise
-	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
-	tassert.CheckFatal(t, err)
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
@@ -691,8 +689,7 @@ func TestGetDuringResilver(t *testing.T) {
 	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
-	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, nil)
 
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, mpList)
@@ -796,6 +793,9 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 }
 
 func TestMountpathDetachAll(t *testing.T) {
+	if true {
+		t.Skipf("skipping %s", t.Name())
+	}
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 2})
 
 	var (
@@ -849,10 +849,7 @@ func TestMountpathDetachAll(t *testing.T) {
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
-	// Wait for resilvering
-	args = api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, target)
 
 	// random read/write
 	m.puts()
@@ -903,11 +900,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	err = api.AttachMountpath(baseParams, target, testMpath, true /*force*/)
 	tassert.CheckFatal(t, err)
 
-	// Wait for resilvering
-	time.Sleep(3 * time.Second)
-	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, target)
 
 	m.gets()
 
@@ -924,9 +917,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 
 	m.ensureNoGetErrors()
 
-	time.Sleep(3 * time.Second)
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, target)
 	m.ensureNumMountpaths(target, mpList)
 }
 
@@ -984,9 +975,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		}
 	}
 
-	time.Sleep(4 * time.Second)
-	err := tutils.WaitForAllResilvers(tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, nil)
 
 	// Read after rebalance
 	m.gets()
@@ -1010,9 +999,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		}
 	}
 
-	time.Sleep(4 * time.Second)
-	err = tutils.WaitForAllResilvers(tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, nil)
 
 	m.ensureNoGetErrors()
 	for _, target := range targets {
@@ -1065,8 +1052,7 @@ func TestMountpathDisableAll(t *testing.T) {
 			args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 			_, _ = api.WaitForXactionIC(baseParams, args)
 
-			err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
-			tassert.CheckFatal(t, err)
+			tutils.WaitForResilvering(t, baseParams, nil)
 		}
 	}()
 	for _, mpath := range origMountpaths.Available {
@@ -1108,10 +1094,7 @@ func TestMountpathDisableAll(t *testing.T) {
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
-	// Wait for resilvering
-	args = api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, target)
 
 	tlog.Logf("waiting for bucket %s to show up on all targets\n", m.bck)
 	err = tutils.WaitForBucket(m.proxyURL, cmn.QueryBcks(m.bck), true /*exists*/)
@@ -1612,14 +1595,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	err = api.DetachMountpath(baseParams, target, mpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
-	// Wait for resilvering
-	time.Sleep(time.Second)
-	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
-	if err != nil {
-		_ = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
-	}
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, target)
 
 	// Step 5: GET objects from the bucket
 	m.gets()
@@ -1631,10 +1607,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
 	tassert.CheckFatal(t, err)
 
-	// Wait for resilvering
-	time.Sleep(4 * time.Second)
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, target)
 
 	m.ensureNumCopies(copies, true)
 	m.ensureNoGetErrors()
@@ -1691,11 +1664,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	// Wait for resilvering
-	time.Sleep(2 * time.Second)
-	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, target)
 
 	// Wait for async mirroring to finish
 	flt := api.XactReqArgs{Kind: cmn.ActPutCopies, Bck: m.bck}
@@ -1713,10 +1682,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	// Wait for resilvering
-	time.Sleep(3 * time.Second) // pending writes
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, nil)
 
 	m.ensureNumCopies(mpathCount, true /*greaterOk*/)
 	m.ensureNoGetErrors()
@@ -1766,11 +1732,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 	}
 	tassert.CheckFatal(t, err)
 
-	// Wait for resilvering
-	time.Sleep(time.Second)
-	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, target)
 
 	// GET
 	m.gets()
@@ -1785,10 +1747,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 	}
 	tassert.CheckFatal(t, err)
 
-	// Wait for resilvering
-	time.Sleep(3 * time.Second)
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tutils.WaitForResilvering(t, baseParams, target)
 
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, mpList)
@@ -1939,7 +1898,7 @@ func TestSingleResilver(t *testing.T) {
 	id, err := api.StartXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	// Wait for resilvering
+	// Wait for specific resilvering x[id]
 	args = api.XactReqArgs{ID: id, Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)

@@ -153,9 +153,13 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resi
 		if errCause := cmn.AsErrAborted(err); errCause != nil {
 			err = errCause
 		}
-		glog.Errorf("%s: %q %s %s: %v", g.t.si, action, rmi, xres, err)
 		if err == cmn.ErrXactUserAbort {
-			rmi.ClearDD() // clear the state
+			glog.Errorf("[post-dd interrupted - clearing the state] %s: %q %s %s: %v",
+				g.t.si, action, rmi, xres, err)
+			rmi.ClearDD()
+		} else {
+			glog.Errorf("[post-dd interrupted - keeping the state] %s: %q %s %s: %v",
+				g.t.si, action, rmi, xres, err)
 		}
 		return
 	}

@@ -168,8 +168,10 @@ func backoffPoll(dur time.Duration) time.Duration {
 }
 
 func _waitForXaction(baseParams BaseParams, args XactReqArgs, snapFn ...XactSnapTestFunc) (status *nl.NotifStatus, err error) {
-	total, sleep := initPollingTimes(args)
-	ctx, cancel := context.WithTimeout(context.Background(), total)
+	var (
+		total, sleep = initPollingTimes(args)
+		ctx, cancel  = context.WithTimeout(context.Background(), total)
+	)
 	defer cancel()
 	for {
 		finished := false

@@ -1437,8 +1437,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 
 					t.Cleanup(func() {
 						// Wait for any resilver that might be still running.
-						err := tutils.WaitForAllResilvers(df.baseParams, rebalanceTimeout)
-						tassert.CheckFatal(t, err)
+						tutils.WaitForResilvering(t, df.baseParams, nil)
 
 						for target, mpath := range mountpaths {
 							if adding {
@@ -1454,8 +1453,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 							}
 						}
 
-						err = tutils.WaitForAllResilvers(df.baseParams, rebalanceTimeout)
-						tassert.CheckFatal(t, err)
+						tutils.WaitForResilvering(t, df.baseParams, nil)
 					})
 
 					tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
