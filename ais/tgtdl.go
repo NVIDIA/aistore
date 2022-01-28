@@ -113,8 +113,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if payload.ID != "" {
-			response, statusCode, respErr =
-				downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
+			response, statusCode, respErr = downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
 		} else {
 			var (
 				regex *regexp.Regexp

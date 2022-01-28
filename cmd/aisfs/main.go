@@ -142,7 +142,6 @@ func newApp() *cli.App {
 		},
 
 		Flags: []cli.Flag{
-
 			cli.VersionFlag,
 
 			// Add global -h,--help flag, otherwise it will remain hidden.

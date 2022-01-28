@@ -277,8 +277,10 @@ func TestParseFQN(t *testing.T) {
 			if err != nil {
 				return
 			}
-			gotMpath, gotBck, gotContentType, gotObjName :=
-				parsedFQN.MpathInfo.Path, parsedFQN.Bck, parsedFQN.ContentType, parsedFQN.ObjName
+			var (
+				gotMpath, gotBck           = parsedFQN.MpathInfo.Path, parsedFQN.Bck
+				gotContentType, gotObjName = parsedFQN.ContentType, parsedFQN.ObjName
+			)
 			if gotMpath != tt.wantMPath {
 				t.Errorf("gotMpath = %v, want %v", gotMpath, tt.wantMPath)
 			}
@@ -367,8 +369,10 @@ func TestMakeAndParseFQN(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to parse FQN: %v", err)
 			}
-			gotMpath, gotBck, gotContentType, gotObjName :=
-				parsedFQN.MpathInfo.Path, parsedFQN.Bck, parsedFQN.ContentType, parsedFQN.ObjName
+			var (
+				gotMpath, gotBck           = parsedFQN.MpathInfo.Path, parsedFQN.Bck
+				gotContentType, gotObjName = parsedFQN.ContentType, parsedFQN.ObjName
+			)
 			if gotMpath != tt.mpath {
 				t.Errorf("gotMpath = %v, want %v", gotMpath, tt.mpath)
 			}

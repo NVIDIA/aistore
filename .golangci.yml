@@ -127,7 +127,6 @@ linters-settings:
     enabled-tags:
       - performance
       - style
-      - experimental
     disabled-checks:
       - ifElseChain
       - hugeParam # produces a lot of false-positives (TODO: see if some errors are possible improvements)

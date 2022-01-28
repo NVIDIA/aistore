@@ -46,7 +46,6 @@ type (
 		Timeout() time.Duration
 		ActiveStats() (*DlStatusResp, error)
 		String() string
-
 		Notif() cluster.Notif // notifications
 		AddNotif(n cluster.Notif, job DlJob)
 
@@ -63,8 +62,10 @@ type (
 		//  `ok` is set to `true` if there is batch to process, `false` otherwise
 		genNext() (objs []dlObj, ok bool, err error)
 
+		// via tryAcquire and release
 		throttler() *throttler
 
+		// job cleanup
 		cleanup()
 	}
 

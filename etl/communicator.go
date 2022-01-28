@@ -46,7 +46,6 @@ type (
 		// with GET requests from users (such as training models and apps)
 		// to perform on-the-fly transformation.
 		OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error)
-
 		Stop()
 
 		CommStats

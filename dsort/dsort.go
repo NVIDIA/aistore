@@ -40,7 +40,6 @@ import (
 type (
 	dsorter interface {
 		name() string
-
 		init() error
 		start() error
 		postExtraction()
@@ -50,14 +49,10 @@ type (
 		postShardCreation(mpathInfo *fs.MountpathInfo)
 		cleanup()
 		finalCleanup() error
-
 		loadContent() extract.LoadContentFunc
-
 		makeRecvRequestFunc() transport.ReceiveObj
-
 		preShardExtraction(expectedUncompressedSize uint64) (toDisk bool)
 		postShardExtraction(expectedUncompressedSize uint64)
-
 		onAbort()
 	}
 )

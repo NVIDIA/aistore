@@ -34,17 +34,14 @@ type (
 		Create(v interface{}) error
 		Delete(entityType, entityName string) error
 		CheckExists(entityType, entityName string) (bool, error)
-
 		Pod(name string) (*corev1.Pod, error)
 		Pods() (*corev1.PodList, error)
 		Service(name string) (*corev1.Service, error)
 		Node(name string) (*corev1.Node, error)
-
 		Logs(podName string) ([]byte, error)
 		Health(podName string) (cpuCores float64, freeMem int64, err error)
 		CheckMetricsAvailability() error
-		ExecCmd(podName string, command []string,
-			stdin io.Reader, stdout, stderr io.Writer) error
+		ExecCmd(podName string, command []string, stdin io.Reader, stdout, stderr io.Writer) error
 	}
 
 	// defaultClient implements Client interface.

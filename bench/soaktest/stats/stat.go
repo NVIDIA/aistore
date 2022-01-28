@@ -20,7 +20,6 @@ var (
 type Stat interface {
 	getHeadingsText() map[string]string
 	getHeadingsOrder() []string
-
 	getContents() map[string]interface{}
 }
 

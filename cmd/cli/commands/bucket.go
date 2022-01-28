@@ -6,6 +6,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -45,7 +46,7 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 					fmt.Fprint(c.App.Writer, desc)
 					return nil
 				}
-				return fmt.Errorf(desc)
+				return errors.New(desc)
 			}
 			return fmt.Errorf("failed to create %q: %s", bck, herr.Message)
 		}
@@ -67,7 +68,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 			if cmn.IsStatusNotFound(err) {
 				desc := fmt.Sprintf("Bucket %q does not exist", bck)
 				if !flagIsSet(c, ignoreErrorFlag) {
-					return fmt.Errorf(desc)
+					return errors.New(desc)
 				}
 				fmt.Fprint(c.App.Writer, desc)
 				continue

@@ -11,7 +11,6 @@ type (
 		ReadBytes() int64
 		Writes() int64
 		WriteBytes() int64
-
 		IOMs() int64
 		WriteMs() int64
 		ReadMs() int64

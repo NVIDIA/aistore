@@ -27,7 +27,6 @@ type (
 	BackendProvider interface {
 		Provider() string
 		MaxPageSize() uint
-
 		CreateBucket(bck *Bck) (errCode int, err error)
 		ListObjects(bck *Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error)
 		ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
@@ -94,10 +93,8 @@ type Node interface {
 	Snode() *Snode
 	Bowner() Bowner
 	Sowner() Sowner
-
 	ClusterStarted() bool
 	NodeStarted() bool
-
 	DataClient() *http.Client
 }
 
