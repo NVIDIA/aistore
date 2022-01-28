@@ -26,14 +26,15 @@ import (
 type (
 	proFactory struct {
 		xreg.RenewBase
-		xctn   *XactDirPromote
-		dir    string
-		params *cmn.ActValPromote
+		xctn *XactDirPromote
+		args *xreg.DirPromoteArgs
 	}
 	XactDirPromote struct {
 		xact.BckJog
-		dir    string
-		params *cmn.ActValPromote
+		dir         string
+		params      *cmn.ActValPromote
+		smap        *cluster.Smap
+		isFileShare bool
 	}
 )
 
@@ -49,12 +50,13 @@ var (
 
 func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	c := args.Custom.(*xreg.DirPromoteArgs)
-	p := &proFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, dir: c.Dir, params: c.Params}
+	p := &proFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: c}
 	return p
 }
 
 func (p *proFactory) Start() error {
-	xctn := NewXactDirPromote(p.dir, p.Bck, p.T, p.params)
+	xctn := &XactDirPromote{dir: p.args.Dir, params: p.args.Params, isFileShare: p.args.IsFileShare}
+	xctn.BckJog.Init(cos.GenUUID(), cmn.ActPromote, p.Bck, &mpather.JoggerGroupOpts{T: p.T})
 	go xctn.Run(nil)
 	p.xctn = xctn
 	return nil
@@ -71,15 +73,10 @@ func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 // XactDirPromote //
 ////////////////////
 
-func NewXactDirPromote(dir string, bck *cluster.Bck, t cluster.Target, params *cmn.ActValPromote) (r *XactDirPromote) {
-	r = &XactDirPromote{dir: dir, params: params}
-	r.BckJog.Init(cos.GenUUID(), cmn.ActPromote, bck, &mpather.JoggerGroupOpts{T: t})
-	return
-}
-
 func (r *XactDirPromote) Run(*sync.WaitGroup) {
 	var err error
 	glog.Infoln(r.Name(), r.dir, "=>", r.Bck())
+	r.smap = r.Target().Sowner().Get()
 	opts := &fs.WalkOpts{Dir: r.dir, Callback: r.walk, Sorted: false}
 	if r.params.Recursive {
 		err = fs.Walk(opts) // godirwalk
@@ -95,14 +92,21 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	}
 	debug.Assert(filepath.IsAbs(fqn))
 	bck := r.Bck()
-	if err := bck.Init(r.Target().Bowner()); err != nil {
-		return err
-	}
 
 	// promote
 	objName, err := cmn.PromotedObjDstName(fqn, r.dir, r.params.ObjName)
 	if err != nil {
 		return err
+	}
+	// file share => promote only the part that lands locally
+	if r.isFileShare {
+		si, err := cluster.HrwTarget(bck.MakeUname(objName), r.smap)
+		if err != nil {
+			return err
+		}
+		if si.ID() != r.Target().SID() {
+			return nil
+		}
 	}
 	params := cluster.PromoteFileParams{
 		SrcFQN:    fqn,

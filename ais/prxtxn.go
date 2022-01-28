@@ -37,6 +37,9 @@ type txnClientCtx struct {
 	selected cluster.Nodes
 }
 
+// NOTE: not enforcing cluster-wide uniqueness - yet
+// TODO: all xaction-renewing transactions must return uuid
+
 //////////////////
 // txnClientCtx //
 //////////////////
@@ -48,9 +51,7 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (xactID string, err error) {
 			err = c.bcastAbort(what, res.toErr())
 			break
 		}
-		// NOTE: not enforcing cluster-wide uniqueness - yet
-		// TODO: all xaction-renewing transactions must return uuid
-		if xactID == "" {
+		if xactID == "" { // returning the first defined (comment above)
 			xactID = res.header.Get(cmn.HdrXactionID)
 		}
 	}
@@ -862,19 +863,60 @@ func (p *proxy) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 
 func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode) (xactID string, err error) {
 	var (
+		allAgree  bool
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
-	if tsi != nil {
+	if c.smap.CountActiveTargets() == 1 {
+		if xactID, err = c.begin(bck); err != nil {
+			return
+		}
+	} else if tsi != nil {
 		c.selected = []*cluster.Snode{tsi}
-	}
-	if _, err = c.begin(bck); err != nil {
+		if xactID, err = c.begin(bck); err != nil {
+			return
+		}
+	} else if xactID, allAgree, err = prmBegin(c, bck); err != nil {
 		return
+	}
+
+	// if targets "see" identical content let them all know
+	// (so that they go ahead to partition accordingly)
+	if allAgree {
+		c.req.Query.Set(cmn.URLParamPromoteFileShare, "true")
 	}
 	if err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
 		return
 	}
 	xactID = c.uuid
+	return
+}
+
+// begin phase customized to (specifically) detect file share
+func prmBegin(c *txnClientCtx, bck *cluster.Bck) (xactID string, allAgree bool, err error) {
+	var cksumVal, totalN string
+	allAgree = true
+
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
+	for i, res := range results {
+		if res.err != nil {
+			err = c.bcastAbort(bck, res.toErr())
+			break
+		}
+		if xactID == "" { // returning the first defined (comment at the top)
+			xactID = res.header.Get(cmn.HdrXactionID)
+		}
+		// all agree?
+		if i == 0 {
+			cksumVal = res.header.Get(cmn.HdrPromoteNamesHash)
+			totalN = res.header.Get(cmn.HdrPromoteNamesNum)
+		} else if val := res.header.Get(cmn.HdrPromoteNamesHash); val == "" || val != cksumVal {
+			allAgree = false
+		} else if allAgree {
+			debug.Assert(totalN == res.header.Get(cmn.HdrPromoteNamesNum))
+		}
+	}
+	freeBcastRes(results)
 	return
 }
 

@@ -393,10 +393,10 @@ func (txn *txnBase) rsvp(err error) {
 func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 	txn.uid = c.uuid
 	txn.action = c.msg.Action
-	txn.smapVer = c.smapVer
-	txn.bmdVer = c.bmdVer
 	txn.callerName = c.callerName
 	txn.callerID = c.callerID
+	txn.smapVer = c.t.owner.smap.get().version()
+	txn.bmdVer = c.t.owner.bmd.get().version()
 }
 
 ////////////////

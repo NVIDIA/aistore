@@ -13,8 +13,9 @@ import (
 
 type (
 	DirPromoteArgs struct {
-		Dir    string
-		Params *cmn.ActValPromote
+		Dir         string
+		Params      *cmn.ActValPromote
+		IsFileShare bool
 	}
 
 	TCBArgs struct {
@@ -108,8 +109,8 @@ func RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, c
 	return dreg.renew(e, bck)
 }
 
-func RenewDirPromote(t cluster.Target, bck *cluster.Bck, dir string, params *cmn.ActValPromote) RenewRes {
-	return RenewBucketXact(cmn.ActPromote, bck, Args{t, "" /*uuid*/, &DirPromoteArgs{Dir: dir, Params: params}})
+func RenewDirPromote(t cluster.Target, bck *cluster.Bck, dir string, params *cmn.ActValPromote, isShare bool) RenewRes {
+	return RenewBucketXact(cmn.ActPromote, bck, Args{t, "" /*uuid*/, &DirPromoteArgs{Dir: dir, Params: params, IsFileShare: isShare}})
 }
 
 func RenewBckLoadLomCache(t cluster.Target, uuid string, bck *cluster.Bck) RenewRes {

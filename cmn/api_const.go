@@ -262,6 +262,9 @@ const (
 	URLParamHostTimeout  = "xht" // [begin, txn-done] timeout
 	URLParamWaitMetasync = "xwm" // true: wait for metasync (used only when there's an alternative)
 
+	// promote(dir)
+	URLParamPromoteFileShare = "prmshr"
+
 	// Notification target's node ID (usually, the node that initiates the operation).
 	URLParamNotifyMe = "nft"
 )

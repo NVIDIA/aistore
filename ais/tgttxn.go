@@ -39,8 +39,6 @@ type txnServerCtx struct {
 		host time.Duration
 	}
 	phase      string
-	smapVer    int64
-	bmdVer     int64
 	msg        *aisMsg
 	callerName string
 	callerID   string
@@ -919,19 +917,20 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		if txnPrm.totalN == 0 {
 			return "", nil
 		}
+		isFileShare := c.query.Get(cmn.URLParamPromoteFileShare) != ""
+
 		// promote synchronously wo/ xaction
 		if txnPrm.totalN == len(txnPrm.fqns) {
-			err := t._promoteNumSync(c, txnPrm)
+			err := t._promoteNumSync(c, txnPrm, isFileShare)
 			return "", err
 		}
 		// with
-		rns := xreg.RenewDirPromote(t, c.bck, txnPrm.dirFQN, txnPrm.msg)
+		rns := xreg.RenewDirPromote(t, c.bck, txnPrm.dirFQN, txnPrm.msg, isFileShare)
 		if rns.Err != nil {
 			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()
 		txnPrm.xprm = xctn.(*xs.XactDirPromote)
-		go xctn.Run(nil)
 
 		t.transactions.find(c.uuid, cmn.ActCommit)
 		return xctn.ID(), nil
@@ -972,11 +971,22 @@ func _promoteScan(dirFQN string, recurs bool) (fqns []string, totalN int, cksumV
 	return
 }
 
-func (t *target) _promoteNumSync(c *txnServerCtx, txnPrm *txnPromote) error {
+func (t *target) _promoteNumSync(c *txnServerCtx, txnPrm *txnPromote, isFileShare bool) error {
+	smap := t.owner.smap.Get()
 	for _, fqn := range txnPrm.fqns {
 		objName, err := cmn.PromotedObjDstName(fqn, txnPrm.dirFQN, txnPrm.msg.ObjName)
 		if err != nil {
 			return err
+		}
+		// file share => promote only the part that lands locally
+		if isFileShare {
+			si, err := cluster.HrwTarget(c.bck.MakeUname(objName), smap)
+			if err != nil {
+				return err
+			}
+			if si.ID() != t.si.ID() {
+				continue
+			}
 		}
 		params := cluster.PromoteFileParams{
 			SrcFQN:    fqn,
@@ -1044,9 +1054,6 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 		debug.AssertNoErr(err)
 	}
 	c.query = query // operation-specific values, if any
-
-	c.smapVer = t.owner.smap.get().version()
-	c.bmdVer = t.owner.bmd.get().version()
 
 	c.t = t
 	return c, err
