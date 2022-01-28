@@ -18,70 +18,69 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
-// This file contains implementation for two concepts:
+//  Brief theory of operation ================================================
+//
 //  * BUFFER - container for a single request that keeps entries so they won't
-//    be re-requested. Thanks to buffering we eliminate the case when a given
+//    be re-requested. Thanks to buffering, we eliminate the case when a given
 //    object is requested more than once.
 //  * CACHE  - container shared by multiple requests which are identified with
-//    the same id. Thanks to caching we reuse previously calculated requests.
+//    the same id. Thanks to caching, we reuse previously calculated requests.
 //
-// Buffering was designed to work for single request and is identified by list
-// objects uuid. Each buffer consist of "main buffer", that contains entries
-// which are ready to be returned to the client (user), and "leftovers" which
-// are per target structures that consist of entries that couldn't be included to
-// "main buffer" yet. When buffer doesn't contain enough entries the new entries
-// are fetched and added to "leftovers". After this they are merged and put into
-// "main buffer" so they can be returned to the client.
+// Buffering is designed to work for a single request and is identified by
+// list-objects uuid. Each buffer consists of:
+// - a *main buffer* that in turn contains entries ready to be returned to the
+// client (user), and
+// - *leftovers* - per target structures consisting of entries that couldn't
+// be included into the *main buffer* yet.
+// When a buffer doesn't contain enough entries, the new entries
+// are loaded and added to *leftovers*. After this, they are merged and put
+// into the *main buffer* so they can be returned to the client.
 //
-// Caching was designed to be used by multiple requests (clients) so it is
-// thread safe. Each request is identified by id (`cacheReqID`). The requests
-// that share the same id will also share a common cache. Cache consist of
-// (contiguous) intervals which contain entries. Only when request can be fully
-// answered by a single interval is considered valid response. Otherwise cache
-// cannot be trusted (we don't know how many objects can be in the gap).
+// Caching is thread safe and is used across multiple requests (clients).
+// Each request is identified by its `cacheReqID`. List-objects requests
+// that share the same ID will also share a common cache.
+//
+// Cache consists of contiguous intervals of `cmn.BucketEntry`.
+// Cached response (to a request) is valid if and only if the request can be
+// fulfilled by a single cache interval (otherwise, cache cannot be trusted
+// as we don't know how many objects can fit in the requested interval).
 
+// internal timers (rough estimates)
 const (
-	// Determines how long "cache interval" is valid. If there was no access to
-	// given interval for this long it will be removed.
-	cacheLiveTimeout = 40 * time.Minute
-	// Determines how often cache housekeeping function is invoked.
-	cacheHkInterval = 10 * time.Minute
-
-	// Determines how long buffer is valid. If there was no access to
-	// a given buffer for this long it will be forgotten.
-	bufferLiveTimeout = 10 * time.Minute
-	// Determines how often buffer housekeeping function is invoked.
-	bufferHkInterval = 5 * time.Minute
+	cacheIntervalTTL = 10 * time.Minute // *cache interval's* time to live
+	lsobjBufferTTL   = 10 * time.Minute // *lsobj buffer* time to live
+	qmTimeHk         = 10 * time.Minute // housekeeping timer
+	qmTimeHkMax      = time.Hour        // max HK time (when no activity whatsoever)
 )
 
 type (
 	// Request buffer per target.
-	queryBufferTarget struct {
-		// Determines if the target is done with listing.
-		done bool
+	lsobjBufferTarget struct {
 		// Leftovers entries which we keep locally so they will not be requested
 		// again by the proxy. Out of these `currentBuff` is extended.
 		entries []*cmn.BucketEntry
+		// Determines if the target is done with listing.
+		done bool
 	}
 
-	// Request buffer that corresponds to single `uuid`.
-	queryBuffer struct {
+	// Request buffer that corresponds to a single `uuid`.
+	lsobjBuffer struct {
 		// Contains the last entry that was returned to the user.
 		nextToken string
-		// Currently maintained buffer that keeps the entries which are sorted
+		// Currently maintained buffer that keeps the entries sorted
 		// and ready to be dispatched to the client.
 		currentBuff []*cmn.BucketEntry
 		// Buffers for each target that are finally merged and the entries are
-		// appended to `currentBuff`.
-		leftovers map[string]*queryBufferTarget // targetID (string) -> target buffer
-		// Contains the timestamp of the last access to this buffer. If given
-		// predefined time passes the buffer will be forgotten.
+		// appended to the `currentBuff`.
+		leftovers map[string]*lsobjBufferTarget // targetID (string) -> target buffer
+		// Timestamp of the last access to this buffer. Idle buffers get removed
+		// after `lsobjBufferTTL`.
 		lastAccess atomic.Int64
 	}
 
-	// Contains all query buffers.
-	queryBuffers struct {
-		buffers sync.Map // request uuid (string) -> buffer (*queryBuffer)
+	// Contains all lsobj buffers.
+	lsobjBuffers struct {
+		buffers sync.Map // request uuid (string) -> buffer (*lsobjBuffer)
 	}
 
 	// Cache request ID. This identifies and splits requests into
@@ -91,7 +90,7 @@ type (
 		prefix string
 	}
 
-	// Single (contiguous) interval of entries.
+	// Single (contiguous) interval of `cmn.BucketEntry`.
 	cacheInterval struct {
 		// Contains the previous entry (`ContinuationToken`) that was requested
 		// to get this interval. Thanks to this we can match and merge two
@@ -100,12 +99,12 @@ type (
 		// Entries that are contained in this interval. They are sorted and ready
 		// to be dispatched to the client.
 		entries []*cmn.BucketEntry
-		// Determines if this is the last page/interval (this means there is no
-		// more objects after the last entry).
-		last bool
-		// Contains the timestamp of the last access to this interval. If given
-		// predefined time passes the interval will be removed.
+		// Contains the timestamp of the last access to this interval. Idle interval
+		// gets removed after `cacheIntervalTTL`.
 		lastAccess int64
+		// Determines if this is the last page/interval (no more objects after
+		// the last entry).
+		last bool
 	}
 
 	// Contains additional parameters to interval request.
@@ -114,30 +113,48 @@ type (
 	}
 
 	// Single cache that corresponds to single `cacheReqID`.
-	queryCache struct {
+	lsobjCache struct {
 		mtx       sync.RWMutex
 		intervals []*cacheInterval
 	}
 
-	// Contains all query caches.
-	queryCaches struct {
-		caches sync.Map // cache id (cacheReqID) -> cache (*queryCache)
+	// Contains all lsobj caches.
+	lsobjCaches struct {
+		caches sync.Map // cache id (cacheReqID) -> cache (*lsobjCache)
 	}
 
-	queryMem struct {
-		b *queryBuffers
-		c *queryCaches
+	lsobjMem struct {
+		b *lsobjBuffers
+		c *lsobjCaches
+		d time.Duration
 	}
 )
 
-func (qm *queryMem) init() {
-	qm.b = newQueryBuffers()
-	qm.c = newQueryCaches()
+func (qm *lsobjMem) init() {
+	qm.b = &lsobjBuffers{}
+	qm.c = &lsobjCaches{}
+	qm.d = qmTimeHk
+	hk.Reg("lsobj-buffer-cache", qm.housekeep, qmTimeHk)
 }
+
+func (qm *lsobjMem) housekeep() time.Duration {
+	num := qm.b.housekeep()
+	num += qm.c.housekeep()
+	if num == 0 {
+		qm.d = cos.MinDuration(qm.d+qmTimeHk, qmTimeHkMax)
+	} else {
+		qm.d = qmTimeHk
+	}
+	return qm.d
+}
+
+/////////////////
+// lsobjBuffer //
+/////////////////
 
 // mergeTargetBuffers merges `b.leftovers` buffers into `b.currentBuff`.
 // It returns `filled` equal to `true` if there was anything to merge, otherwise `false`.
-func (b *queryBuffer) mergeTargetBuffers() (filled bool) {
+func (b *lsobjBuffer) mergeTargetBuffers() (filled bool) {
 	var (
 		totalCnt int
 		allDone  = true
@@ -156,7 +173,7 @@ func (b *queryBuffer) mergeTargetBuffers() (filled bool) {
 	}
 
 	var (
-		minObj  = ""
+		minObj  string
 		entries = make([]*cmn.BucketEntry, 0, totalCnt)
 	)
 	for _, list := range b.leftovers {
@@ -185,7 +202,7 @@ func (b *queryBuffer) mergeTargetBuffers() (filled bool) {
 	return true
 }
 
-func (b *queryBuffer) get(token string, size uint) (entries []*cmn.BucketEntry, hasEnough bool) {
+func (b *lsobjBuffer) get(token string, size uint) (entries []*cmn.BucketEntry, hasEnough bool) {
 	b.lastAccess.Store(mono.NanoTime())
 
 	// If user requested something before what we have currently in the buffer
@@ -224,29 +241,23 @@ func (b *queryBuffer) get(token string, size uint) (entries []*cmn.BucketEntry, 
 	return entries, true
 }
 
-func (b *queryBuffer) set(id string, entries []*cmn.BucketEntry, size uint) {
+func (b *lsobjBuffer) set(id string, entries []*cmn.BucketEntry, size uint) {
 	if b.leftovers == nil {
-		b.leftovers = make(map[string]*queryBufferTarget, 5)
+		b.leftovers = make(map[string]*lsobjBufferTarget, 5)
 	}
-	b.leftovers[id] = &queryBufferTarget{
+	b.leftovers[id] = &lsobjBufferTarget{
 		entries: entries,
 		done:    uint(len(entries)) < size,
 	}
 	b.lastAccess.Store(mono.NanoTime())
 }
 
-func newQueryBuffers() *queryBuffers {
-	b := &queryBuffers{}
-	hk.Reg("query-buffer", b.housekeep, bufferHkInterval)
-	return b
-}
-
-func (b *queryBuffers) last(id, token string) string {
-	v, ok := b.buffers.LoadOrStore(id, &queryBuffer{})
+func (b *lsobjBuffers) last(id, token string) string {
+	v, ok := b.buffers.LoadOrStore(id, &lsobjBuffer{})
 	if !ok {
 		return token
 	}
-	buffer := v.(*queryBuffer)
+	buffer := v.(*lsobjBuffer)
 	if len(buffer.currentBuff) == 0 {
 		return token
 	}
@@ -258,26 +269,31 @@ func (b *queryBuffers) last(id, token string) string {
 	return last
 }
 
-func (b *queryBuffers) get(id, token string, size uint) (entries []*cmn.BucketEntry, hasEnough bool) {
-	v, _ := b.buffers.LoadOrStore(id, &queryBuffer{})
-	return v.(*queryBuffer).get(token, size)
+func (b *lsobjBuffers) get(id, token string, size uint) (entries []*cmn.BucketEntry, hasEnough bool) {
+	v, _ := b.buffers.LoadOrStore(id, &lsobjBuffer{})
+	return v.(*lsobjBuffer).get(token, size)
 }
 
-func (b *queryBuffers) set(id, targetID string, entries []*cmn.BucketEntry, size uint) {
-	v, _ := b.buffers.LoadOrStore(id, &queryBuffer{})
-	v.(*queryBuffer).set(targetID, entries, size)
+func (b *lsobjBuffers) set(id, targetID string, entries []*cmn.BucketEntry, size uint) {
+	v, _ := b.buffers.LoadOrStore(id, &lsobjBuffer{})
+	v.(*lsobjBuffer).set(targetID, entries, size)
 }
 
-func (b *queryBuffers) housekeep() time.Duration {
+func (b *lsobjBuffers) housekeep() (num int) {
 	b.buffers.Range(func(key, value interface{}) bool {
-		buffer := value.(*queryBuffer)
-		if mono.Since(buffer.lastAccess.Load()) > bufferLiveTimeout {
+		buffer := value.(*lsobjBuffer)
+		num++
+		if mono.Since(buffer.lastAccess.Load()) > lsobjBufferTTL {
 			b.buffers.Delete(key)
 		}
 		return true
 	})
-	return bufferHkInterval
+	return
 }
+
+///////////////////
+// cacheInterval //
+///////////////////
 
 func (ci *cacheInterval) contains(token string) bool {
 	if ci.token == token {
@@ -357,13 +373,17 @@ func (ci *cacheInterval) append(objs *cacheInterval) {
 }
 
 func (ci *cacheInterval) prepend(objs *cacheInterval) {
-	cos.Assert(!objs.last)
+	debug.Assert(!objs.last)
 	objs.append(ci)
 	*ci = *objs
 }
 
+////////////////
+// lsobjCache //
+////////////////
+
 // PRECONDITION: `c.mtx` must be at least rlocked.
-func (c *queryCache) findInterval(token string) *cacheInterval {
+func (c *lsobjCache) findInterval(token string) *cacheInterval {
 	// TODO: finding intervals should be faster than just walking.
 	for _, interval := range c.intervals {
 		if interval.contains(token) {
@@ -374,7 +394,7 @@ func (c *queryCache) findInterval(token string) *cacheInterval {
 }
 
 // PRECONDITION: `c.mtx` must be locked.
-func (c *queryCache) merge(start, end, cur *cacheInterval) {
+func (c *lsobjCache) merge(start, end, cur *cacheInterval) {
 	debug.AssertRWMutexLocked(&c.mtx)
 
 	if start == nil && end == nil {
@@ -393,12 +413,12 @@ func (c *queryCache) merge(start, end, cur *cacheInterval) {
 		start.append(end)
 		c.removeInterval(end)
 	} else {
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 }
 
 // PRECONDITION: `c.mtx` must be locked.
-func (c *queryCache) removeInterval(ci *cacheInterval) {
+func (c *lsobjCache) removeInterval(ci *cacheInterval) {
 	debug.AssertRWMutexLocked(&c.mtx)
 
 	// TODO: this should be faster
@@ -411,50 +431,47 @@ func (c *queryCache) removeInterval(ci *cacheInterval) {
 	}
 }
 
-func (c *queryCache) get(token string, objCnt uint, params reqParams) (entries []*cmn.BucketEntry, hasEnough bool) {
+func (c *lsobjCache) get(token string, objCnt uint, params reqParams) (entries []*cmn.BucketEntry, hasEnough bool) {
 	c.mtx.RLock()
-	defer c.mtx.RUnlock()
 	if interval := c.findInterval(token); interval != nil {
-		return interval.get(token, objCnt, params)
+		entries, hasEnough = interval.get(token, objCnt, params)
 	}
-	return nil, false
+	c.mtx.RUnlock()
+	return
 }
 
-func (c *queryCache) set(token string, entries []*cmn.BucketEntry, size uint) {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-
+func (c *lsobjCache) set(token string, entries []*cmn.BucketEntry, size uint) {
 	var (
-		start = c.findInterval(token)
-		end   *cacheInterval
-		cur   = &cacheInterval{
+		end *cacheInterval
+		cur = &cacheInterval{
 			token:      token,
 			entries:    entries,
 			last:       uint(len(entries)) < size,
 			lastAccess: mono.NanoTime(),
 		}
 	)
+	c.mtx.Lock()
+	start := c.findInterval(token)
 	if len(cur.entries) > 0 {
 		end = c.findInterval(entries[len(entries)-1].Name)
 	}
 	c.merge(start, end, cur)
+	c.mtx.Unlock()
 }
 
-func (c *queryCache) invalidate() {
+func (c *lsobjCache) invalidate() {
 	c.mtx.Lock()
 	c.intervals = nil
 	c.mtx.Unlock()
 }
 
-func newQueryCaches() *queryCaches {
-	c := &queryCaches{}
-	hk.Reg("query-cache", c.housekeep, cacheHkInterval)
-	return c
-}
+/////////////////
+// lsobjCaches //
+/////////////////
 
-func (c *queryCaches) get(reqID cacheReqID, token string, objCnt uint) (entries []*cmn.BucketEntry, hasEnough bool) {
+func (c *lsobjCaches) get(reqID cacheReqID, token string, objCnt uint) (entries []*cmn.BucketEntry, hasEnough bool) {
 	if v, ok := c.caches.Load(reqID); ok {
-		if entries, hasEnough = v.(*queryCache).get(token, objCnt, reqParams{}); hasEnough {
+		if entries, hasEnough = v.(*lsobjCache).get(token, objCnt, reqParams{}); hasEnough {
 			return
 		}
 	}
@@ -467,37 +484,36 @@ func (c *queryCaches) get(reqID cacheReqID, token string, objCnt uint) (entries 
 		reqID = cacheReqID{bck: reqID.bck}
 
 		if v, ok := c.caches.Load(reqID); ok {
-			return v.(*queryCache).get(token, objCnt, params)
+			return v.(*lsobjCache).get(token, objCnt, params)
 		}
 	}
 	return nil, false
 }
 
-func (c *queryCaches) set(reqID cacheReqID, token string, entries []*cmn.BucketEntry, size uint) {
-	v, _ := c.caches.LoadOrStore(reqID, &queryCache{})
-	v.(*queryCache).set(token, entries, size)
+func (c *lsobjCaches) set(reqID cacheReqID, token string, entries []*cmn.BucketEntry, size uint) {
+	v, _ := c.caches.LoadOrStore(reqID, &lsobjCache{})
+	v.(*lsobjCache).set(token, entries, size)
 }
 
-func (c *queryCaches) invalidate(bck cmn.Bck) {
+func (c *lsobjCaches) invalidate(bck cmn.Bck) {
 	c.caches.Range(func(key, value interface{}) bool {
 		id := key.(cacheReqID)
 		if id.bck.Equal(bck) {
-			value.(*queryCache).invalidate()
+			value.(*lsobjCache).invalidate()
 		}
 		return true
 	})
 }
 
-// TODO: Missing housekeep based on memory pressure.
-func (c *queryCaches) housekeep() time.Duration {
+// TODO: factor-in memory pressure.
+func (c *lsobjCaches) housekeep() (num int) {
+	var toRemove []*cacheInterval
 	c.caches.Range(func(key, value interface{}) bool {
-		cache := value.(*queryCache)
+		cache := value.(*lsobjCache)
 		cache.mtx.Lock()
-		defer cache.mtx.Unlock()
-
-		var toRemove []*cacheInterval
 		for _, interval := range cache.intervals {
-			if mono.Since(interval.lastAccess) > cacheLiveTimeout {
+			num++
+			if mono.Since(interval.lastAccess) > cacheIntervalTTL {
 				toRemove = append(toRemove, interval)
 			}
 		}
@@ -507,7 +523,9 @@ func (c *queryCaches) housekeep() time.Duration {
 		if len(cache.intervals) == 0 {
 			c.caches.Delete(key)
 		}
+		cache.mtx.Unlock()
+		toRemove = toRemove[:0]
 		return true
 	})
-	return cacheHkInterval
+	return
 }

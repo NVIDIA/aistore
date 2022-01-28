@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("QueryCache+QueryBuffer", func() {
+var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
 	makeEntries := func(xs ...string) (entries []*cmn.BucketEntry) {
 		for _, x := range xs {
 			entries = append(entries, &cmn.BucketEntry{
@@ -27,14 +27,14 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 		return
 	}
 
-	Describe("QueryCache", func() {
+	Describe("ListObjectsCache", func() {
 		var (
 			id    = cacheReqID{bck: cmn.Bck{Name: "some_bck"}}
-			cache *queryCaches
+			cache *lsobjCaches
 		)
 
 		BeforeEach(func() {
-			cache = &queryCaches{}
+			cache = &lsobjCaches{}
 		})
 
 		It("should correctly add entries to cache", func() {
@@ -329,14 +329,14 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 		})
 	})
 
-	Describe("QueryBuffer", func() {
+	Describe("ListObjectsBuffer", func() {
 		var (
 			id     = "some_id"
-			buffer *queryBuffers
+			buffer *lsobjBuffers
 		)
 
 		BeforeEach(func() {
-			buffer = &queryBuffers{}
+			buffer = &lsobjBuffers{}
 		})
 
 		It("should correctly create single buffer", func() {

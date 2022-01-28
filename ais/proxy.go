@@ -80,7 +80,7 @@ type (
 			mtx  sync.RWMutex
 			pool nodeRegPool
 		}
-		qm queryMem
+		qm lsobjMem
 	}
 )
 

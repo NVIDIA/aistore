@@ -167,7 +167,7 @@ func newTransportServer(primary *proxy, s *metaSyncServer, ch chan<- transportDa
 	return ts
 }
 
-func TestMetaSyncDeepCopy(t *testing.T) {
+func TestMetasyncDeepCopy(t *testing.T) {
 	bmd := newBucketMD()
 	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
@@ -200,10 +200,10 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 	}
 }
 
-// TestMetaSyncTransport is the driver for metasync transport tests.
+// TestMetasyncTransport is the driver for metasync transport tests.
 // for each test case, it creates a primary proxy, starts the metasync instance, run the test case,
 // verifies the result, and stop the syncer.
-func TestMetaSyncTransport(t *testing.T) {
+func TestMetasyncTransport(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	tcs := []struct {
 		name  string
@@ -525,8 +525,8 @@ func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData,
 	return exp, exp
 }
 
-// TestMetaSyncData is the driver for metasync data tests.
-func TestMetaSyncData(t *testing.T) {
+// TestMetasyncData is the driver for metasync data tests.
+func TestMetasyncData(t *testing.T) {
 	// data stores the data comes from the http sync call and an error
 	type data struct {
 		payload msPayload
@@ -668,8 +668,8 @@ func TestMetaSyncData(t *testing.T) {
 	syncer.sync(revsPair{bmd, msg})
 }
 
-// TestMetaSyncMembership tests metasync's logic when accessing proxy's smap directly
-func TestMetaSyncMembership(t *testing.T) {
+// TestMetasyncMembership tests metasync's logic when accessing proxy's smap directly
+func TestMetasyncMembership(t *testing.T) {
 	{
 		// pending server dropped without sync
 		primary := newPrimary()
@@ -783,8 +783,8 @@ func TestMetaSyncMembership(t *testing.T) {
 	}
 }
 
-// TestMetaSyncReceive tests extracting received sync data.
-func TestMetaSyncReceive(t *testing.T) {
+// TestMetasyncReceive tests extracting received sync data.
+func TestMetasyncReceive(t *testing.T) {
 	{
 		emptyAisMsg := func(a *aisMsg) {
 			if a.Action != "" || a.Name != "" || a.Value != nil {
