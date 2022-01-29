@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -162,11 +163,13 @@ type (
 		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 	}
 
+	httpMuxers map[string]*mux.ServeMux // by http.Method
+
 	// http server and http runner (common for proxy and target)
 	netServer struct {
 		sync.Mutex
 		s             *http.Server
-		muxers        cmn.HTTPMuxers
+		muxers        httpMuxers
 		sndRcvBufSize int
 	}
 
@@ -498,6 +501,31 @@ func (server *netServer) shutdown() {
 		glog.Infof("Stopped server, err: %v", err)
 	}
 	cancel()
+}
+
+////////////////
+// httpMuxers //
+////////////////
+
+// interface guard
+var _ http.Handler = httpMuxers{}
+
+func newMuxers() httpMuxers {
+	m := make(httpMuxers, len(allHTTPverbs))
+	for _, v := range allHTTPverbs {
+		m[v] = mux.NewServeMux()
+	}
+	return m
+}
+
+// ServeHTTP dispatches the request to the handler whose
+// pattern most closely matches the request URL.
+func (m httpMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if sm, ok := m[r.Method]; ok {
+		sm.ServeHTTP(w, r)
+		return
+	}
+	w.WriteHeader(http.StatusBadRequest)
 }
 
 /////////////////

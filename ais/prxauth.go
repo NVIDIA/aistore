@@ -84,7 +84,7 @@ func (*proxy) aclErrToCode(err error) int {
 }
 
 func (p *proxy) _checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.AccessAttrs) error {
-	if p.isIntraCall(hdr) {
+	if p.isIntraCall(hdr, false /*from primary*/) == nil {
 		return nil
 	}
 	var (

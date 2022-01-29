@@ -51,12 +51,12 @@ func isRedirect(q url.Values) (ptime string) {
 	return q.Get(cmn.URLParamUnixTime)
 }
 
-func ptLatency(started time.Time, ptime string) (delta int64) {
+func ptLatency(tts int64, ptime string) (delta int64) {
 	pts, err := cos.S2UnixNano(ptime)
 	if err != nil {
 		return
 	}
-	delta = started.UnixNano() - pts
+	delta = tts - pts
 	if delta < 0 && -delta < int64(clusterClockDrift) {
 		delta = 0
 	}

@@ -245,7 +245,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			}
 
 			goi := &getObjInfo{
-				started: time.Now(),
+				atime:   time.Now().UnixNano(),
 				t:       t,
 				lom:     lom,
 				w:       w,

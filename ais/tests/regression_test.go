@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -88,14 +89,15 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	bl, err := api.ListObjects(baseParams, m.bck, msg, uint(m.num))
 	tassert.CheckFatal(t, err)
 
-	tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
-	defer tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": "0"})
-
 	if len(bl.Entries) != m.num {
 		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(bl.Entries))
 	}
 
-	for _, e := range bl.Entries {
+	j := 10
+	if len(bl.Entries) >= 200 {
+		j = 100
+	}
+	for i, e := range bl.Entries {
 		if e.TargetURL == "" {
 			t.Error("Target URL in response is empty")
 		}
@@ -103,10 +105,21 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 			targets[e.TargetURL] = struct{}{}
 		}
 		baseParams := tutils.BaseAPIParams(e.TargetURL)
+
 		l, err := api.GetObject(baseParams, m.bck, e.Name)
 		tassert.CheckFatal(t, err)
 		if uint64(l) != m.fileSize {
 			t.Errorf("Expected filesize: %d, actual filesize: %d\n", m.fileSize, l)
+		}
+
+		if i%j == 0 {
+			if i == 0 {
+				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
+			}
+			tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": feat.EnforceIntraClusterAccess.Value()})
+			_, err = api.GetObject(baseParams, m.bck, e.Name)
+			tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
+			tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": "0"})
 		}
 	}
 
@@ -159,14 +172,14 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	bucketList, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
-	tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
-	defer tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": "0"})
-
 	if len(bucketList.Entries) != m.num {
 		t.Errorf("Number of entries in bucket list [%d] must be equal to [%d]", len(bucketList.Entries), m.num)
 	}
-
-	for _, object := range bucketList.Entries {
+	j := 10
+	if len(bucketList.Entries) >= 200 {
+		j = 100
+	}
+	for i, object := range bucketList.Entries {
 		if object.TargetURL == "" {
 			t.Errorf("Target URL in response is empty for object [%s]", object.Name)
 		}
@@ -178,6 +191,16 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		if uint64(objectSize) != m.fileSize {
 			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", m.fileSize, objectSize)
+		}
+
+		if i%j == 0 {
+			if i == 0 {
+				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
+			}
+			tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": feat.EnforceIntraClusterAccess.Value()})
+			_, err = api.GetObject(baseParams, m.bck, object.Name)
+			tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
+			tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": "0"})
 		}
 	}
 

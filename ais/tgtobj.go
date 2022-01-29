@@ -54,7 +54,7 @@ type (
 	}
 
 	getObjInfo struct {
-		started time.Time
+		atime   int64
 		nanotim int64
 		t       *target
 		lom     *cluster.LOM
@@ -456,7 +456,7 @@ do:
 			errCode, err = http.StatusInsufficientStorage, cs.Err
 			return
 		}
-		goi.lom.SetAtimeUnix(goi.started.UnixNano())
+		goi.lom.SetAtimeUnix(goi.atime)
 		// (will upgrade rlock => wlock)
 		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cmn.OwtGet); err != nil {
 			return
@@ -826,7 +826,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	// GFN: atime must be already set
 	if !coldGet && !goi.isGFN {
 		goi.lom.Load(false /*cache it*/, true /*locked*/)
-		goi.lom.SetAtimeUnix(goi.started.UnixNano())
+		goi.lom.SetAtimeUnix(goi.atime)
 		goi.lom.ReCache(true) // GFN and cold GETs already did this
 	}
 

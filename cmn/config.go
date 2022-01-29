@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -67,11 +68,6 @@ const (
 	httpsProto = "https"
 )
 
-// FeatureFlags
-const (
-	FeatureDirectAccess = 1 << iota
-)
-
 type (
 	ValidationArgs struct {
 		Provider  string // For ExtraProps.
@@ -83,7 +79,6 @@ type (
 	PropsValidator interface {
 		ValidateAsProps(args *ValidationArgs) error
 	}
-	FeatureFlags uint64
 )
 
 type (
@@ -245,7 +240,7 @@ type (
 		ObjSizeLimit int64  `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
 		Compression  string `json:"compression"`   // see CompressAlways, etc. enum
 		DataSlices   int    `json:"data_slices"`   // number of data slices
-		BatchSize    int    `json:"batch_size"`    // TODO: remove with the next BMD meta-version update
+		BatchSize    int    `json:"batch_size"`    // TODO: remove with the next Config meta-version update
 		ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
 		Enabled      bool   `json:"enabled"`       // EC is enabled
 		DiskOnly     bool   `json:"disk_only"`     // if true, EC does not use SGL - data goes directly to drives
@@ -254,7 +249,7 @@ type (
 		Enabled      *bool   `json:"enabled,omitempty"`
 		ObjSizeLimit *int64  `json:"objsize_limit,omitempty"`
 		DataSlices   *int    `json:"data_slices,omitempty"`
-		BatchSize    *int    `json:"batch_size,omitempty"` // TODO: remove with the next BMD version update
+		BatchSize    *int    `json:"batch_size,omitempty"` // TODO: remove with the next Config meta-version update
 		ParitySlices *int    `json:"parity_slices,omitempty"`
 		Compression  *string `json:"compression,omitempty"`
 		DiskOnly     *bool   `json:"disk_only,omitempty"`
@@ -310,13 +305,13 @@ type (
 		Timeout     cos.Duration `json:"client_timeout"`
 		TimeoutLong cos.Duration `json:"client_long_timeout"`
 		ListObjects cos.Duration `json:"list_timeout"`
-		Features    FeatureFlags `json:"features,string"`
+		Features    feat.Flags   `json:"features,string"` // TODO: move into cluster config with the next meta-version update
 	}
 	ClientConfToUpdate struct {
 		Timeout     *cos.Duration `json:"client_timeout,omitempty"`
 		TimeoutLong *cos.Duration `json:"client_long_timeout,omitempty"`
 		ListObjects *cos.Duration `json:"list_timeout,omitempty"`
-		Features    *FeatureFlags `json:"features,string,omitempty"`
+		Features    *feat.Flags   `json:"features,string,omitempty"` // TODO: ditto
 	}
 
 	ProxyConf struct {
@@ -611,13 +606,6 @@ func SetConfigInMem(toUpdate *ConfigToUpdate, config *Config, asType string) (er
 	}
 	err = config.UpdateClusterConfig(*toUpdate, asType)
 	return
-}
-
-var clientFeatureList = []struct {
-	name  string
-	value FeatureFlags
-}{
-	{name: "DirectAccess", value: FeatureDirectAccess},
 }
 
 func (gco *globalConfigOwner) Get() *Config {
@@ -1469,6 +1457,13 @@ func (c *CompressionConf) Validate() (err error) {
 /////////////////
 
 // most often used timeouts: assign at startup to reduce the number of GCO.Get() calls
+
+var Timeout = &timeout{
+	cplane:    time.Second + time.Millisecond,
+	keepalive: 2*time.Second + time.Millisecond,
+}
+
+// enforce read-only
 func (c *TimeoutConf) Validate() (err error) {
 	const fmtErr = "config %s (%v) is read-only: updating requires restart"
 	if c.CplaneOperation.D() != Timeout.cplane {
@@ -1477,11 +1472,6 @@ func (c *TimeoutConf) Validate() (err error) {
 		err = fmt.Errorf(fmtErr, "timeout.max_keepalive", Timeout.keepalive)
 	}
 	return
-}
-
-var Timeout = &timeout{
-	cplane:    time.Second + time.Millisecond,
-	keepalive: 2 * time.Second,
 }
 
 func (d *timeout) setReadOnly(config *Config) {
@@ -1516,32 +1506,6 @@ func (c *ResilverConf) String() string {
 		return "Enabled"
 	}
 	return "Disabled"
-}
-
-///////////////////
-// feature flags //
-///////////////////
-
-func (cflags FeatureFlags) IsSet(flag FeatureFlags) bool {
-	return cflags&flag == flag
-}
-
-func (cflags FeatureFlags) String() string {
-	return "0x" + strconv.FormatUint(uint64(cflags), 16)
-}
-
-func (cflags FeatureFlags) Describe() string {
-	s := ""
-	for _, flag := range clientFeatureList {
-		if cflags&flag.value != flag.value {
-			continue
-		}
-		if s != "" {
-			s += ","
-		}
-		s += flag.name
-	}
-	return s
 }
 
 ////////////////////

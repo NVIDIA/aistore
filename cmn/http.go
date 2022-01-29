@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -67,8 +66,6 @@ type (
 		// even on errors.
 		BodyR io.Reader
 	}
-
-	HTTPMuxers map[string]*mux.ServeMux // by http.Method
 
 	RetryArgs struct {
 		Call    func() (int, error)
@@ -213,59 +210,6 @@ func WriteJSON(w http.ResponseWriter, v interface{}) error {
 	return jsoniter.NewEncoder(w).Encode(v)
 }
 
-func (u *ReqArgs) URL() string {
-	url := cos.JoinPath(u.Base, u.Path)
-	query := u.Query.Encode()
-	if query != "" {
-		url += "?" + query
-	}
-	return url
-}
-
-func (u *ReqArgs) Req() (*http.Request, error) {
-	r := u.BodyR
-	if r == nil && u.Body != nil {
-		r = bytes.NewBuffer(u.Body)
-	}
-
-	req, err := http.NewRequest(u.Method, u.URL(), r)
-	if err != nil {
-		return nil, err
-	}
-
-	if u.Header != nil {
-		copyHeaders(u.Header, &req.Header)
-	}
-	return req, nil
-}
-
-// ReqWithCancel creates request with ability to cancel it.
-func (u *ReqArgs) ReqWithCancel() (*http.Request, context.Context, context.CancelFunc, error) {
-	req, err := u.Req()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set(HdrContentType, ContentJSON)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	req = req.WithContext(ctx)
-	return req, ctx, cancel, nil
-}
-
-func (u *ReqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context.Context, context.CancelFunc, error) {
-	req, err := u.Req()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set(HdrContentType, ContentJSON)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	req = req.WithContext(ctx)
-	return req, ctx, cancel, nil
-}
-
 // Copies headers from original request(from client) to
 // a new one(inter-cluster call)
 func copyHeaders(src http.Header, dst *http.Header) {
@@ -360,23 +304,6 @@ func RangeHdr(start, length int64) (hdr http.Header) {
 	return
 }
 
-////////////////
-// HTTPMuxers //
-////////////////
-
-// interface guard
-var _ http.Handler = HTTPMuxers{}
-
-// ServeHTTP dispatches the request to the handler whose
-// pattern most closely matches the request URL.
-func (m HTTPMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if sm, ok := m[r.Method]; ok {
-		sm.ServeHTTP(w, r)
-		return
-	}
-	w.WriteHeader(http.StatusBadRequest)
-}
-
 func NetworkCallWithRetry(args *RetryArgs) (err error) {
 	var (
 		hardErrCnt, softErrCnt, iter uint
@@ -437,4 +364,61 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 			callerStr, args.Action, softErrCnt, hardErrCnt, err)
 	}
 	return
+}
+
+/////////////
+// ReqArgs //
+/////////////
+
+func (u *ReqArgs) URL() string {
+	url := cos.JoinPath(u.Base, u.Path)
+	query := u.Query.Encode()
+	if query != "" {
+		url += "?" + query
+	}
+	return url
+}
+
+func (u *ReqArgs) Req() (*http.Request, error) {
+	r := u.BodyR
+	if r == nil && u.Body != nil {
+		r = bytes.NewBuffer(u.Body)
+	}
+
+	req, err := http.NewRequest(u.Method, u.URL(), r)
+	if err != nil {
+		return nil, err
+	}
+
+	if u.Header != nil {
+		copyHeaders(u.Header, &req.Header)
+	}
+	return req, nil
+}
+
+// ReqWithCancel creates request with ability to cancel it.
+func (u *ReqArgs) ReqWithCancel() (*http.Request, context.Context, context.CancelFunc, error) {
+	req, err := u.Req()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if u.Method == http.MethodPost || u.Method == http.MethodPut {
+		req.Header.Set(HdrContentType, ContentJSON)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	req = req.WithContext(ctx)
+	return req, ctx, cancel, nil
+}
+
+func (u *ReqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context.Context, context.CancelFunc, error) {
+	req, err := u.Req()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if u.Method == http.MethodPost || u.Method == http.MethodPut {
+		req.Header.Set(HdrContentType, ContentJSON)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	req = req.WithContext(ctx)
+	return req, ctx, cancel, nil
 }

@@ -24,7 +24,6 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -292,14 +291,6 @@ func (h *htrun) init(config *cmn.Config) {
 	h.gmm.RegWithHK()
 	h.smm = memsys.ByteMM()
 	h.smm.RegWithHK()
-}
-
-func newMuxers() cmn.HTTPMuxers {
-	m := make(cmn.HTTPMuxers, len(allHTTPverbs))
-	for _, v := range allHTTPverbs {
-		m[v] = mux.NewServeMux()
-	}
-	return m
 }
 
 func (h *htrun) initNetworks() {
@@ -1890,11 +1881,11 @@ func newBckFromQueryUname(query url.Values, required bool) (*cluster.Bck, error)
 	return cluster.NewBckEmbed(bck), nil
 }
 
-//////////////////////////////////////
-// intra-cluster request validation //
-//////////////////////////////////////
+//
+// intra-cluster request validation
+//
 
-func (h *htrun) _isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
+func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 	debug.Assert(hdr != nil)
 	var (
 		smap       = h.owner.smap.get()
@@ -1938,13 +1929,8 @@ func (h *htrun) _isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h.si, cmn.NetworkIntraControl, caller, smap)
 }
 
-func (h *htrun) isIntraCall(hdr http.Header) (isIntra bool) {
-	err := h._isIntraCall(hdr, false /*from primary*/)
-	return err == nil
-}
-
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
-	err := h._isIntraCall(r.Header, onlyPrimary)
+	err := h.isIntraCall(r.Header, onlyPrimary)
 	if err != nil {
 		h.writeErr(w, r, err)
 		return
@@ -1962,9 +1948,9 @@ func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyP
 	return
 }
 
-////////////////////
-// aisMsg helpers //
-////////////////////
+//
+// aisMsg helpers
+//
 
 func (h *htrun) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
 	return h.newAmsg(&cmn.ActionMsg{Value: msgStr}, bmd)

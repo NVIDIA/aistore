@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort"
@@ -930,13 +931,13 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if err := t.parseReq(w, r, request); err != nil {
 		return
 	}
-	ptime := isRedirect(request.query)
-	if !t.isIntraCall(r.Header) && ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
-		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
-			t.si, r.Method, r.RemoteAddr)
-		return
+	if features.IsSet(feat.EnforceIntraClusterAccess) {
+		if isRedirect(request.query) == "" && t.isIntraCall(r.Header, false /*from primary*/) != nil {
+			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
+				t.si, r.Method, r.RemoteAddr)
+			return
+		}
 	}
-
 	lom := cluster.AllocLOM(request.items[1])
 	t.getObject(w, r, request.query, request.bck, lom)
 	cluster.FreeLOM(lom)
@@ -945,17 +946,6 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 // getObject is main function to get the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
 func (t *target) getObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
-	var (
-		ptime   = isRedirect(query)
-		config  = cmn.GCO.Get()
-		started = time.Now()
-		nanotim = mono.NanoTime()
-	)
-	if nanotim&0x5 == 5 {
-		if redelta := ptLatency(time.Now(), ptime); redelta != 0 {
-			t.statsT.Add(stats.GetRedirLatency, redelta)
-		}
-	}
 	if err := lom.Init(bck.Bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -976,9 +966,17 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, query url.Val
 			filename = rel
 		}
 	}
+	nanotim := mono.NanoTime()
+	atime := time.Now().UnixNano()
+	if nanotim&0x5 == 5 {
+		ptime := isRedirect(query)
+		if redelta := ptLatency(atime, ptime); redelta != 0 {
+			t.statsT.Add(stats.GetRedirLatency, redelta)
+		}
+	}
 	goi := allocGetObjInfo()
 	{
-		goi.started = started
+		goi.atime = atime
 		goi.nanotim = nanotim
 		goi.t = t
 		goi.lom = lom
@@ -990,7 +988,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, query url.Val
 			mime:     query.Get(cmn.URLParamArchmime),
 		}
 		goi.isGFN = cos.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
-		goi.chunked = config.Net.HTTP.Chunked
+		goi.chunked = cmn.GCO.Get().Net.HTTP.Chunked
 	}
 	if bck.IsHTTP() {
 		originalURL := query.Get(cmn.URLParamOrigURL)
@@ -1016,7 +1014,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	objName := request.items[1]
 	started := time.Now()
 	if ptime != "" {
-		if redelta := ptLatency(started, ptime); redelta != 0 {
+		if redelta := ptLatency(started.UnixNano(), ptime); redelta != 0 {
 			t.statsT.Add(stats.PutRedirLatency, redelta)
 		}
 	}
@@ -1149,10 +1147,12 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if err := t.parseReq(w, r, request); err != nil {
 		return
 	}
-	if isRedirect(request.query) == "" && !t.isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
-		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
-			t.si, r.Method, r.RemoteAddr)
-		return
+	if features.IsSet(feat.EnforceIntraClusterAccess) {
+		if isRedirect(request.query) == "" && t.isIntraCall(r.Header, false) != nil {
+			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
+				t.si, r.Method, r.RemoteAddr)
+			return
+		}
 	}
 	lom := cluster.AllocLOM(request.items[1] /*objName*/)
 	t.headObject(w, r, request.query, request.bck, lom)
@@ -1273,10 +1273,12 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	if err := t.parseReq(w, r, request); err != nil {
 		return
 	}
-	if isRedirect(request.query) == "" && !t.isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
-		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
-			t.si, r.Method, r.RemoteAddr)
-		return
+	if features.IsSet(feat.EnforceIntraClusterAccess) {
+		if isRedirect(request.query) == "" && t.isIntraCall(r.Header, false) != nil {
+			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
+				t.si, r.Method, r.RemoteAddr)
+			return
+		}
 	}
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return

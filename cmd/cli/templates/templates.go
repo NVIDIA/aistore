@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -558,7 +559,7 @@ func fmtStringListGeneric(lst []string, sep string) string {
 	return s.String()
 }
 
-func fmtFeatureFlags(flags cmn.FeatureFlags) string {
+func fmtFeatureFlags(flags feat.Flags) string {
 	if flags == 0 {
 		return NotSetVal
 	}
