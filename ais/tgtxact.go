@@ -56,8 +56,8 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		t.queryMatchingXact(w, r, what, xactQuery)
 	case http.MethodPut:
-		var msg cmn.ActionMsg
-		if cmn.ReadJSON(w, r, &msg) != nil {
+		msg, err := t.readActionMsg(w, r)
+		if err != nil {
 			return
 		}
 		if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {

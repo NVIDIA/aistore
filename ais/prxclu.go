@@ -701,8 +701,8 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
-	msg := &cmn.ActionMsg{}
-	if cmn.ReadJSON(w, r, msg) != nil {
+	msg, err := p.readActionMsg(w, r)
+	if err != nil {
 		return
 	}
 	if msg.Action != cmn.ActSendOwnershipTbl {

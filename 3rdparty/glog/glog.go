@@ -996,8 +996,8 @@ func V(level Level) Verbose {
 }
 
 // FastV similarly to V checks if verbosity level is enough to print the log
-// message. It should only be used for datapath since it does not take vmodule
-// into account and was designed in need of very fast and inlined func.
+// message. It is a fast inline function that doesn't take vmodule into account.
+// As such, it is intended to be used for the datapath, primarily.
 func FastV(level Level, smodule uint8) Verbose {
 	return Verbose(logging.verbosity.get() >= level || smodules[smodule] >= level)
 }

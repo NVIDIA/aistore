@@ -45,35 +45,27 @@ func NewServer(mgr *UserManager) *Server {
 	return srv
 }
 
-// Starts two HTTP servers:
-// Public one: it can be HTTP or HTTPS (config dependent). Used to manage
-//	users and generate tokens
-// Internal one: it can be only HTTP and supports only one function - check
-//	if a token is valid. Can be called, e.g, from a targer. Now it is not used
-//  and can be removed
-func (a *Server) Run() error {
-	// Run public server to manage users and generate tokens
+// Run public server to manage users and generate tokens
+func (a *Server) Run() (err error) {
 	portstring := fmt.Sprintf(":%d", Conf.Net.HTTP.Port)
 	glog.Infof("Launching public server at %s", portstring)
-	a.registerPublicHandlers()
 
+	a.registerPublicHandlers()
 	a.h = &http.Server{Addr: portstring, Handler: a.mux}
 	if Conf.Net.HTTP.UseHTTPS {
-		if err := a.h.ListenAndServeTLS(Conf.Net.HTTP.Certificate, Conf.Net.HTTP.Key); err != nil {
-			if err != http.ErrServerClosed {
-				glog.Errorf("Terminated with err: %v", err)
-				return err
-			}
+		if err = a.h.ListenAndServeTLS(Conf.Net.HTTP.Certificate, Conf.Net.HTTP.Key); err == nil {
+			return nil
 		}
-	} else {
-		if err := a.h.ListenAndServe(); err != nil {
-			if err != http.ErrServerClosed {
-				glog.Errorf("Terminated with err: %v", err)
-				return err
-			}
-		}
+		goto rerr
 	}
-
+	if err = a.h.ListenAndServe(); err == nil {
+		return nil
+	}
+rerr:
+	if err != http.ErrServerClosed {
+		glog.Errorf("Terminated with err: %v", err)
+		return err
+	}
 	return nil
 }
 

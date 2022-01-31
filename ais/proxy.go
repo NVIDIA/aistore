@@ -489,7 +489,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength == 0 && r.Header.Get(cmn.HdrContentType) != cmn.ContentJSON {
 		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
 		msg = &cmn.ActionMsg{Action: cmn.ActList, Value: &cmn.ListObjsMsg{}}
-	} else if err := cmn.ReadJSON(w, r, &msg); err != nil {
+	} else if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
 	if queryBcks, err = newQueryBcksFromQuery(bckName, query); err != nil {
@@ -660,8 +660,8 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		err     error
-		msg     = cmn.ActionMsg{}
-		request = &apiRequest{msg: &msg, after: 1, prefix: cmn.URLPathBuckets.L}
+		msg     *cmn.ActionMsg
+		request = &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
 	)
 	if err = p.parseReq(w, r, request); err != nil {
 		return
@@ -671,10 +671,13 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		perms   = cmn.AceDestroyBucket
 		errCode int
 	)
+	if msg, err = p.readActionMsg(w, r); err != nil {
+		return
+	}
 	if msg.Action == cmn.ActDeleteObjects || msg.Action == cmn.ActEvictObjects {
 		perms = cmn.AceObjDELETE
 	}
-	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, bck: bck}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: perms, bck: bck}
 	bckArgs.createAIS = false
 	bckArgs.lookupRemote = true
 	if msg.Action == cmn.ActEvictRemoteBck {
@@ -699,33 +702,33 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		keepMD := cos.IsParseBool(request.query.Get(cmn.URLParamKeepBckMD))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if bck.IsHDFS() || keepMD {
-			if err := p.destroyBucketData(&msg, bck); err != nil {
+			if err := p.destroyBucketData(msg, bck); err != nil {
 				p.writeErr(w, r, err)
 			}
 			return
 		}
-		if p.forwardCP(w, r, &msg, bck.Name) {
+		if p.forwardCP(w, r, msg, bck.Name) {
 			return
 		}
-		if err := p.destroyBucket(&msg, bck); err != nil {
+		if err := p.destroyBucket(msg, bck); err != nil {
 			p.writeErr(w, r, err)
 		}
 	case cmn.ActDestroyBck:
-		if p.forwardCP(w, r, &msg, bck.Name) {
+		if p.forwardCP(w, r, msg, bck.Name) {
 			return
 		}
 		if bck.IsRemoteAIS() {
-			if err := p.destroyBucket(&msg, bck); err != nil {
+			if err := p.destroyBucket(msg, bck); err != nil {
 				if !cmn.IsErrBckNotFound(err) {
 					p.writeErr(w, r, err)
 					return
 				}
 			}
 			// After successful removal of local copy of a bucket, remove the bucket from remote.
-			p.reverseReqRemote(w, r, &msg, bck.Bck)
+			p.reverseReqRemote(w, r, msg, bck.Bck)
 			return
 		}
-		if err := p.destroyBucket(&msg, bck); err != nil {
+		if err := p.destroyBucket(msg, bck); err != nil {
 			if cmn.IsErrBckNotFound(err) {
 				glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
 			} else {
@@ -738,7 +741,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
-		if xactID, err = p.doListRange(r.Method, bck.Name, &msg, request.query); err != nil {
+		if xactID, err = p.doListRange(r.Method, bck.Name, msg, request.query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -892,7 +895,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 // PUT { action } /v1/buckets/bucket-name
 func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg           = &cmn.ActionMsg{}
+		msg           *cmn.ActionMsg
 		query         = r.URL.Query()
 		apiItems, err = p.checkRESTItems(w, r, 1, true, cmn.URLPathBuckets.L)
 	)
@@ -905,7 +908,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg}
@@ -953,16 +956,16 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	var msg cmn.ActionMsg
+	var msg *cmn.ActionMsg
 	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
 	bucket := apiItems[0]
-	p.hpostBucket(w, r, &msg, bucket)
+	p.hpostBucket(w, r, msg, bucket)
 }
 
 func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bucket string) {
@@ -1420,8 +1423,8 @@ func (p *proxy) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSummaryMsg
 
 // POST { action } /v1/objects/bucket-name[/object-name]
 func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
-	var msg cmn.ActionMsg
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	msg, err := p.readActionMsg(w, r)
+	if err != nil {
 		return
 	}
 	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects.L}
@@ -1451,7 +1454,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.writeErrActf(w, r, msg.Action, "not supported for erasure-coded buckets (%s)", bck)
 			return
 		}
-		p.objMv(w, r, bck, request.items[1], &msg)
+		p.objMv(w, r, bck, request.items[1], msg)
 		return
 	case cmn.ActPromote:
 		if err := p.checkACL(w, r, bck, cmn.AcePromote); err != nil {
@@ -1475,7 +1478,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		xactID, err := p.promote(bck, &msg, tsi)
+		xactID, err := p.promote(bck, msg, tsi)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1559,20 +1562,26 @@ func (p *proxy) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	var (
 		err           error
+		msg           *cmn.ActionMsg
 		propsToUpdate cmn.BucketPropsToUpdate
 		xactID        string
 		nprops        *cmn.BucketProps // complete instance of bucket props with propsToUpdate changes
-		msg           = &cmn.ActionMsg{Value: &propsToUpdate}
-		request       = &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L, msg: &msg}
+		request       = &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
 	)
 	if err = p.parseReq(w, r, request); err != nil {
+		return
+	}
+	if msg, err = p.readActionMsg(w, r); err != nil {
+		return
+	}
+	if err := cos.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
+		p.writeErrMsg(w, r, "invalid props-to-update value in request: "+msg.String())
 		return
 	}
 	if p.forwardCP(w, r, msg, "httpbckpatch") {
 		return
 	}
-	bck := request.bck
-	perms := cmn.AcePATCH
+	bck, perms := request.bck, cmn.AcePATCH
 	if propsToUpdate.Access != nil {
 		perms |= cmn.AceBckSetACL
 	}
@@ -2317,16 +2326,14 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// message-based actions
-	var (
-		msg   cmn.ActionMsg
-		query = r.URL.Query()
-	)
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	query := r.URL.Query()
+	msg, err := p.readActionMsg(w, r)
+	if err != nil {
 		return
 	}
 	switch msg.Action {
 	case cmn.ActSetConfig: // set-config #2 - via action message
-		p.setDaemonConfigMsg(w, r, &msg)
+		p.setDaemonConfigMsg(w, r, msg)
 	case cmn.ActResetConfig:
 		if err := p.owner.config.resetDaemonConfig(); err != nil {
 			p.writeErr(w, r, err)

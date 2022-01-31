@@ -135,13 +135,13 @@ func (t *target) httpdaeput(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
-	var msg cmn.ActionMsg
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	msg, err := t.readActionMsg(w, r)
+	if err != nil {
 		return
 	}
 	switch msg.Action {
 	case cmn.ActSetConfig: // set-config #2 - via action message
-		t.setDaemonConfigMsg(w, r, &msg)
+		t.setDaemonConfigMsg(w, r, msg)
 	case cmn.ActResetConfig:
 		if err := t.owner.config.resetDaemonConfig(); err != nil {
 			t.writeErr(w, r, err)
@@ -410,8 +410,8 @@ func (t *target) unreg(action string, rmUserData, noShutdown bool) {
 }
 
 func (t *target) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
-	msg := cmn.ActionMsg{}
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	msg, err := t.readActionMsg(w, r)
+	if err != nil {
 		return
 	}
 	mpath, ok := msg.Value.(string)

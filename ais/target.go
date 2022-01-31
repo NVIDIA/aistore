@@ -542,14 +542,14 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var (
 		bckName   string
 		queryBcks cmn.QueryBcks
-		msg       = &aisMsg{}
 		q         = r.URL.Query()
 	)
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
-	if err := cmn.ReadJSON(w, r, &msg); err != nil {
+	msg, err := t.readAisMsg(w, r)
+	if err != nil {
 		return
 	}
 	if len(apiItems) > 0 {
@@ -733,7 +733,7 @@ func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Val
 // (evict | delete) (list | range)
 func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	msg := aisMsg{}
-	if err := cmn.ReadJSON(w, r, &msg, true); err != nil {
+	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
 	request := &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
@@ -800,8 +800,8 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/buckets/bucket-name
 func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	msg := &aisMsg{}
-	if err := cmn.ReadJSON(w, r, msg); err != nil {
+	msg, err := t.readAisMsg(w, r)
+	if err != nil {
 		return
 	}
 	request := &apiRequest{prefix: cmn.URLPathBuckets.L, after: 1}
@@ -1081,7 +1081,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		msg     aisMsg
 		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
-	if err := cmn.ReadJSON(w, r, &msg, true); err != nil {
+	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
 	if err := t.parseReq(w, r, request); err != nil {
@@ -1116,20 +1116,18 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/objects/bucket-name/object-name
 func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
-	var (
-		msg   cmn.ActionMsg
-		query = r.URL.Query()
-	)
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	msg, err := t.readActionMsg(w, r)
+	if err != nil {
 		return
 	}
 	switch msg.Action {
 	case cmn.ActRenameObject:
+		query := r.URL.Query()
 		if isRedirect(query) == "" {
 			t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
 			return
 		}
-		t.objMv(w, r, &msg)
+		t.objMv(w, r, msg)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -1266,7 +1264,6 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 // replace them with the specified ones _iff_ `cmn.URLParamNewCustom` is set.
 func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg      cmn.ActionMsg
 		features = cmn.GCO.Get().Client.Features
 		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
@@ -1280,7 +1277,8 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	msg, err := t.readActionMsg(w, r)
+	if err != nil {
 		return
 	}
 	custom := cos.SimpleKVs{}
@@ -1303,9 +1301,6 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	delOldSetNew := cos.IsParseBool(request.query.Get(cmn.URLParamNewCustom))
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: %s, custom=%+v, del-old-set-new=%t", t.si, lom, msg.Value, delOldSetNew)
-	}
 	if delOldSetNew {
 		lom.SetCustomMD(custom)
 	} else {

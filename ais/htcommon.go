@@ -212,7 +212,6 @@ type (
 		prefix []string     // in: URL must start with these items
 		after  int          // in: the number of items after the prefix
 		bckIdx int          // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
-		msg    interface{}  // in/out: if not nil, Body is unmarshaled to the msg
 		items  []string     // out: URL items after the prefix
 		bck    *cluster.Bck // out: initialized bucket
 		query  url.Values   // r.URL.Query()

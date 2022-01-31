@@ -92,10 +92,6 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, args *apiReques
 	args.bck, err = newBckFromQuery(bckName, args.query)
 	if err != nil {
 		h.writeErr(w, r, err)
-		return
-	}
-	if args.msg != nil {
-		err = cmn.ReadJSON(w, r, args.msg)
 	}
 	return
 }
@@ -516,7 +512,7 @@ func (h *htrun) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*cmn.ActV
 		msg  cmn.ActionMsg
 		opts cmn.ActValRmNode
 	)
-	if err := cmn.ReadJSON(w, r, &msg, true /*optional*/); err != nil {
+	if err := readJSON(w, r, &msg); err != nil {
 		return nil, "", err
 	}
 	// NOTE: `cmn.ActValRmNode` options are currently supported only by ais targets
@@ -906,7 +902,6 @@ func (h *htrun) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfte
 		h.writeErr(w, r, err)
 		return nil, err
 	}
-
 	return items, nil
 }
 
@@ -1949,8 +1944,24 @@ func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyP
 }
 
 //
-// aisMsg helpers
+// aisMsg reader & constructors
 //
+func (h *htrun) readAisMsg(w http.ResponseWriter, r *http.Request) (msg *aisMsg, err error) {
+	msg = &aisMsg{}
+	err = cmn.ReadJSON(w, r, msg)
+	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
+		glog.InfoDepth(1, h.si.String()+": "+msg.String())
+	}
+	return
+}
+
+func (msg *aisMsg) String() string {
+	s := msg.ActionMsg.String()
+	if msg.UUID == "" {
+		return s
+	}
+	return s + ", uuid=" + msg.UUID
+}
 
 func (h *htrun) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
 	return h.newAmsg(&cmn.ActionMsg{Value: msgStr}, bmd)
@@ -1971,4 +1982,26 @@ func (h *htrun) newAmsg(actionMsg *cmn.ActionMsg, bmd *bucketMD, uuid ...string)
 		msg.UUID = uuid[0]
 	}
 	return msg
+}
+
+//
+// cmn.ActionMsg c-tor and reader
+//
+func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *cmn.ActionMsg, err error) {
+	msg = &cmn.ActionMsg{}
+	err = cmn.ReadJSON(w, r, msg)
+	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
+		glog.InfoDepth(1, h.si.String()+": "+msg.String())
+	}
+	return
+}
+
+// cmn.ReadJSON with the only difference: EOF is ok
+func readJSON(w http.ResponseWriter, r *http.Request, out interface{}) (err error) {
+	err = jsoniter.NewDecoder(r.Body).Decode(out)
+	cos.Close(r.Body)
+	if err == nil || err == io.EOF {
+		return nil
+	}
+	return cmn.WriteErrJSON(w, r, out, err)
 }

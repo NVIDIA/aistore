@@ -52,15 +52,13 @@ type txnServerCtx struct {
 
 // verb /v1/txn
 func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		bucket, phase string
-		msg           = &aisMsg{}
-	)
+	var bucket, phase string
 	if r.Method != http.MethodPost {
 		cmn.WriteErr405(w, r, http.MethodPost)
 		return
 	}
-	if cmn.ReadJSON(w, r, msg) != nil {
+	msg, err := t.readAisMsg(w, r)
+	if err != nil {
 		return
 	}
 

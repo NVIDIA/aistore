@@ -5,7 +5,13 @@
  */
 package cmn
 
-import "github.com/NVIDIA/aistore/cmn/cos"
+import (
+	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	jsoniter "github.com/json-iterator/go"
+)
 
 // ActionMsg is a JSON-formatted control structures used in a majority of API calls
 type (
@@ -69,3 +75,24 @@ type (
 		Target cos.JSONRawMsgs `json:"target"`
 	}
 )
+
+///////////////
+// ActionMsg //
+///////////////
+func (msg *ActionMsg) String() string {
+	s := "action=" + msg.Action
+	if msg.Name != "" {
+		s += ", " + "name=" + msg.Name
+	}
+	if msg.Value == nil {
+		return s
+	}
+	vs, err := jsoniter.Marshal(msg.Value)
+	if err != nil {
+		debug.AssertNoErr(err)
+		s += ", value=<json err: " + err.Error() + ">"
+		return s
+	}
+	s += ", value=" + strings.ReplaceAll(string(vs), ",", ", ")
+	return s
+}
