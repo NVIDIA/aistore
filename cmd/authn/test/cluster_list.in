@@ -4,7 +4,7 @@ ais show auth cluster // IGNORE
 ais auth add cluster srv1
 ais auth show cluster
 ais auth show cluster srv1
-ais auth rm cluster srv0 // FAIL "not found"
+ais auth rm cluster srv0 // FAIL "does not exist"
 ais auth add cluster srv1 http://1.1.1.3 // FAIL "connect"
 ais auth show cluster
 ais auth update cluster srv2 http://3.3.3.3 // FAIL "not found"
