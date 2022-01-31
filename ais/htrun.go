@@ -80,16 +80,27 @@ func (h *htrun) Snode() *cluster.Snode    { return h.si }
 func (h *htrun) Bowner() cluster.Bowner   { return h.owner.bmd }
 func (h *htrun) Sowner() cluster.Sowner   { return h.owner.smap }
 
-func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, args *apiRequest) (err error) {
-	debug.Assert(len(args.prefix) != 0)
-	args.items, err = h.checkRESTItems(w, r, args.after, false, args.prefix)
+func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequest) (err error) {
+	debug.Assert(len(apireq.prefix) != 0)
+	apireq.items, err = h.checkRESTItems(w, r, apireq.after, false, apireq.prefix)
 	if err != nil {
 		return
 	}
-	debug.Assert(len(args.items) > args.bckIdx)
-	bckName := args.items[args.bckIdx]
-	args.query = r.URL.Query()
-	args.bck, err = newBckFromQuery(bckName, args.query)
+	debug.Assert(len(apireq.items) > apireq.bckIdx)
+	bckName := apireq.items[apireq.bckIdx]
+	if apireq.dpq == nil {
+		apireq.query = r.URL.Query()
+		apireq.bck, err = newBckFromQuery(bckName, apireq.query)
+	} else {
+		err = urlQuery(r.URL.RawQuery, apireq.dpq)
+		if err == nil {
+			namespace := cmn.ParseNsUname(apireq.dpq.namespace)
+			bck := cmn.Bck{Name: bckName, Provider: apireq.dpq.provider, Ns: namespace}
+			if err = bck.Validate(); err == nil {
+				apireq.bck = cluster.NewBckEmbed(bck)
+			}
+		}
+	}
 	if err != nil {
 		h.writeErr(w, r, err)
 	}

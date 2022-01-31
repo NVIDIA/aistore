@@ -272,11 +272,6 @@ func withRetry(cond func() bool) (ok bool) {
 	return
 }
 
-// TODO: !4455 comment
-func isETLRequest(query url.Values) bool {
-	return query.Get(cmn.URLParamUUID) != ""
-}
-
 func deploymentType() string {
 	if k8s.Detect() == nil {
 		return "k8s"

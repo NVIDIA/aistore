@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 )
@@ -212,9 +213,14 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-
+	dpq := &dpq{}
+	if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
+		debug.AssertNoErr(err)
+		t.writeErr(w, r, err)
+		return
+	}
 	lom := cluster.AllocLOM(objName)
-	t.getObject(w, r, r.URL.Query(), bck, lom)
+	t.getObject(w, r, dpq, bck, lom)
 	cluster.FreeLOM(lom)
 }
 

@@ -176,13 +176,11 @@ type (
 	glogWriter struct{}
 
 	// error types
-	// BMD & its uuid
-	errTgtBmdUUIDDiffer struct{ detail string }
+	errTgtBmdUUIDDiffer struct{ detail string } // BMD & its uuid
 	errPrxBmdUUIDDiffer struct{ detail string }
 	errBmdUUIDSplit     struct{ detail string }
-	// ditto Smap
-	errSmapUUIDDiffer struct{ detail string }
-	errNodeNotFound   struct {
+	errSmapUUIDDiffer   struct{ detail string } // ditto Smap
+	errNodeNotFound     struct {
 		msg  string
 		id   string
 		si   *cluster.Snode
@@ -202,12 +200,11 @@ type (
 		smap   *smapX
 		detail string
 	}
-
 	errNoUnregister struct {
 		detail string
 	}
 
-	// apiRequest
+	// RESTful API parse context
 	apiRequest struct {
 		prefix []string     // in: URL must start with these items
 		after  int          // in: the number of items after the prefix
@@ -215,6 +212,7 @@ type (
 		items  []string     // out: URL items after the prefix
 		bck    *cluster.Bck // out: initialized bucket
 		query  url.Values   // r.URL.Query()
+		dpq    *dpq         // in/out; if non-nil use urlQuery() to parse URL.Query (fast and tailored for the datapath)
 	}
 )
 
@@ -562,4 +560,67 @@ func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
 		return false
 	}
 	return cii.Smap.Version == other.Smap.Version && cii.Smap.Primary.ID == other.Smap.Primary.ID
+}
+
+// Parse URL query for a selected few parameters employed in the datapath.
+// This is a faster alternative to the conventional RFC-compliant URL.Query()
+// to be used narrowly to handle those few (keys) and nothing else.
+// NOTE: no escaping/unescaping here!
+
+type dpq struct {
+	provider, namespace string // bucket
+	pid, ptime, uuid    string // proxy
+	skipVC              string // _disconnected backend_ // TODO -- FIXME: utilize for PUT
+	archpath, archmime  string // archive
+	isGFN               string // ditto
+	origURL             string // ht://
+}
+
+func urlQuery(rawQuery string, dpq *dpq) (err error) {
+	query := rawQuery
+	for query != "" {
+		key, value := query, ""
+		if i := strings.IndexAny(key, "&"); i >= 0 {
+			key, query = key[:i], key[i+1:]
+		} else {
+			query = ""
+		}
+		if i := strings.Index(key, "="); i >= 0 {
+			key, value = key[:i], key[i+1:]
+		}
+		switch key {
+		case cmn.URLParamProvider:
+			dpq.provider = value
+		case cmn.URLParamNamespace:
+			if dpq.namespace, err = url.QueryUnescape(value); err != nil {
+				return
+			}
+		case cmn.URLParamSkipVC:
+			dpq.skipVC = value
+		case cmn.URLParamProxyID:
+			dpq.pid = value
+		case cmn.URLParamUnixTime:
+			dpq.ptime = value
+		case cmn.URLParamUUID:
+			dpq.uuid = value
+		case cmn.URLParamArchpath:
+			if dpq.archpath, err = url.QueryUnescape(value); err != nil {
+				return
+			}
+		case cmn.URLParamArchmime:
+			if dpq.archmime, err = url.QueryUnescape(value); err != nil {
+				return
+			}
+		case cmn.URLParamIsGFNRequest:
+			dpq.isGFN = value
+		case cmn.URLParamOrigURL:
+			if dpq.origURL, err = url.QueryUnescape(value); err != nil {
+				return
+			}
+		default:
+			err = errors.New("failed to fast-parse [" + rawQuery + "]")
+			return
+		}
+	}
+	return
 }

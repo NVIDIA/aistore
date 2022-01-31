@@ -54,6 +54,19 @@ $ ais object get ais://imagenet/imagenet_train-000010.tgz ~/train-10.tgz
 GET "imagenet_train-000010.tgz" from bucket "imagenet" as "/home/user/train-10.tgz" [946.8MiB]
 ```
 
+For comparison, the same GET using `curl` and the two supported variants of RESTful API):
+
+```console
+# 1. curl GET using conventional RESTful API
+# (`aistore` in the URL is a host that runs any AIStore gateway that can be specified via `AIS_ENDPOINT` environment):
+
+$ curl -L -X GET 'http://aistore/v1/objects/imagenet/magenet_train-000010.tgz?provider=gs -o ~/train-10.tgz'
+
+# 2. and the same using "easy URL" (documented elsewhere):
+
+$ curl -L -X GET 'http://aistore/ais/imagenet/magenet_train-000010.tgz -o ~/train-10.tgz'
+```
+
 ## Save object to local file with implicit file name
 
 If `OUT_FILE` is omitted, the local file name is implied from the object name.

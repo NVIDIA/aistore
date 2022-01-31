@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -171,8 +172,14 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		t.writeErr(w, r, err)
 		return
 	}
+	dpq := &dpq{}
+	if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
+		debug.AssertNoErr(err)
+		t.writeErr(w, r, err)
+		return
+	}
 	lom := cluster.AllocLOM(path.Join(items[1:]...))
-	t.getObject(w, r, r.URL.Query(), bck, lom)
+	t.getObject(w, r, dpq, bck, lom)
 	s3compat.SetETag(w.Header(), lom) // add etag/md5
 	cluster.FreeLOM(lom)
 }
