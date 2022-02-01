@@ -40,7 +40,7 @@ const (
 )
 
 type (
-	rangesQuery struct {
+	byteRanges struct {
 		Range string // cmn.HdrRange, see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35
 		Size  int64  // size, in bytes
 	}

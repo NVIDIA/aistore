@@ -987,7 +987,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.lom = lom
 		goi.w = w
 		goi.ctx = context.Background()
-		goi.ranges = rangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: 0}
+		goi.ranges = byteRanges{Range: r.Header.Get(cmn.HdrRange), Size: 0}
 		goi.archive = archiveQuery{
 			filename: filename,
 			mime:     dpq.archmime, // query.Get(cmn.URLParamArchmime)

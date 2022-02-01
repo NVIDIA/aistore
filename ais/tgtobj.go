@@ -60,7 +60,7 @@ type (
 		lom     *cluster.LOM
 		w       io.Writer       // not necessarily http.ResponseWriter
 		ctx     context.Context // context used when getting object from remote backend (access creds)
-		ranges  rangesQuery     // range read query
+		ranges  byteRanges      // range read (see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)
 		archive archiveQuery    // archive query
 		isGFN   bool            // is GFN request
 		chunked bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
