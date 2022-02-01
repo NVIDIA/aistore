@@ -90,17 +90,10 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	bckName := apireq.items[apireq.bckIdx]
 	if apireq.dpq == nil {
 		apireq.query = r.URL.Query()
-		apireq.bck, err = newBckFromQuery(bckName, apireq.query)
-	} else {
-		err = urlQuery(r.URL.RawQuery, apireq.dpq)
-		if err == nil {
-			namespace := cmn.ParseNsUname(apireq.dpq.namespace)
-			bck := cmn.Bck{Name: bckName, Provider: apireq.dpq.provider, Ns: namespace}
-			if err = bck.Validate(); err == nil {
-				apireq.bck = cluster.NewBckEmbed(bck)
-			}
-		}
+	} else if err = urlQuery(r.URL.RawQuery, apireq.dpq); err != nil {
+		return
 	}
+	apireq.bck, err = newBckFromQuery(bckName, apireq.query, apireq.dpq)
 	if err != nil {
 		h.writeErr(w, r, err)
 	}
@@ -1845,12 +1838,20 @@ func selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.Bcks {
 	return names
 }
 
-func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
+func newBckFromQuery(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, error) {
 	var (
-		provider  = query.Get(cmn.URLParamProvider)
-		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
-		bck       = cmn.Bck{Name: bckName, Provider: provider, Ns: namespace}
+		provider  string
+		namespace cmn.Ns
 	)
+	if query != nil {
+		debug.Assert(dpq == nil)
+		provider = query.Get(cmn.URLParamProvider)
+		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
+	} else {
+		provider = dpq.provider
+		namespace = cmn.ParseNsUname(dpq.namespace)
+	}
+	bck := cmn.Bck{Name: bckName, Provider: provider, Ns: namespace}
 	if err := bck.Validate(); err != nil {
 		return nil, err
 	}

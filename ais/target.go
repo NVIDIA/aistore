@@ -966,7 +966,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		t.doETL(w, r, dpq.uuid, bck, lom.ObjName)
 		return
 	}
-	filename := dpq.archpath // query.Get(cmn.URLParamArchpath)
+	filename := dpq.archpath // cmn.URLParamArchpath
 	if strings.HasPrefix(filename, lom.ObjName) {
 		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {
 			filename = rel

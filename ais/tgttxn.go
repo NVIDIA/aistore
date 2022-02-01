@@ -1016,7 +1016,7 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 	c.phase = phase
 
 	if bucket != "" {
-		if c.bck, err = newBckFromQuery(bucket, query); err != nil {
+		if c.bck, err = newBckFromQuery(bucket, query, nil); err != nil {
 			return c, err
 		}
 	}

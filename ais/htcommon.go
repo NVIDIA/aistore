@@ -211,8 +211,11 @@ type (
 		bckIdx int          // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
 		items  []string     // out: URL items after the prefix
 		bck    *cluster.Bck // out: initialized bucket
-		query  url.Values   // r.URL.Query()
-		dpq    *dpq         // in/out; if non-nil use urlQuery() to parse URL.Query (fast and tailored for the datapath)
+
+		// URL query: the conventional/slow and
+		// the fast alternative tailored exclusively for the datapath
+		query url.Values
+		dpq   *dpq
 	}
 )
 
@@ -562,15 +565,15 @@ func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
 	return cii.Smap.Version == other.Smap.Version && cii.Smap.Primary.ID == other.Smap.Primary.ID
 }
 
-// Parse URL query for a selected few parameters employed in the datapath.
-// This is a faster alternative to the conventional RFC-compliant URL.Query()
-// to be used narrowly to handle those few (keys) and nothing else.
-// NOTE: no escaping/unescaping here!
+// Data Path Query structure (dpq):
+// Parse URL query for a selected few parameters used in the datapath.
+// (This is a faster alternative to the conventional and RFC-compliant URL.Query()
+// to be used narrowly to handle those few (keys) and nothing else.)
 
 type dpq struct {
 	provider, namespace string // bucket
 	pid, ptime, uuid    string // proxy
-	skipVC              string // _disconnected backend_ // TODO -- FIXME: utilize for PUT
+	skipVC              string // _disconnected backend_
 	archpath, archmime  string // archive
 	isGFN               string // ditto
 	origURL             string // ht://

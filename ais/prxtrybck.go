@@ -24,7 +24,11 @@ type bckInitArgs struct {
 	r       *http.Request
 	perms   cmn.AccessAttrs // cmn.AceGET, cmn.AcePATCH etc.
 	reqBody []byte          // request body of original request
-	query   url.Values      // r.URL.Query()
+
+	// URL query: the conventional/slow and
+	// the fast alternative tailored exclusively for the datapath
+	query url.Values
+	dpq   *dpq
 
 	origURLBck string
 	bck        *cluster.Bck
@@ -68,9 +72,9 @@ func dontLookupRemote(query url.Values) bool {
 }
 
 // args.init initializes bucket and checks access permissions.
-func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err error) {
+func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, err error) {
 	if args.bck == nil {
-		args.bck, err = newBckFromQuery(bucket, args.query)
+		args.bck, err = newBckFromQuery(bckName, args.query, args.dpq)
 		if err != nil {
 			errCode = http.StatusBadRequest
 			return
@@ -250,7 +254,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	if bck.IsHTTP() {
 		if args.origURLBck != "" {
 			remoteProps.Set(cmn.HdrOrigURLBck, args.origURLBck)
-		} else if origURL := args.query.Get(cmn.URLParamOrigURL); origURL != "" {
+		} else if origURL := args.getOrigURL(); origURL != "" {
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				errCode = http.StatusBadRequest
@@ -282,10 +286,20 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	return
 }
 
+func (args *bckInitArgs) getOrigURL() (ourl string) {
+	if args.query != nil {
+		debug.Assert(args.dpq == nil)
+		ourl = args.query.Get(cmn.URLParamOrigURL)
+	} else {
+		ourl = args.dpq.origURL
+	}
+	return
+}
+
 func (args *bckInitArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCode int, err error) {
 	q := url.Values{}
 	if bck.IsHTTP() {
-		origURL := args.query.Get(cmn.URLParamOrigURL)
+		origURL := args.getOrigURL()
 		q.Set(cmn.URLParamOrigURL, origURL)
 	}
 	return args.p.headRemoteBck(bck.Bck, q)
