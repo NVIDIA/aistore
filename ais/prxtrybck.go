@@ -67,8 +67,12 @@ func freeInitBckArgs(a *bckInitArgs) {
 // lookup and add bucket on the fly        //
 /////////////////////////////////////////////
 
-func dontLookupRemote(query url.Values) bool {
-	return query.Has(cmn.URLParamDontLookupRemoteBck) && cos.IsParseBool(query.Get(cmn.URLParamDontLookupRemoteBck))
+func lookupRemoteBck(query url.Values, dpq *dpq) bool {
+	if query != nil {
+		debug.Assert(dpq == nil)
+		return !cos.IsParseBool(query.Get(cmn.URLParamDontLookupRemoteBck))
+	}
+	return !cos.IsParseBool(dpq.dontLookupRemote)
 }
 
 // args.init initializes bucket and checks access permissions.

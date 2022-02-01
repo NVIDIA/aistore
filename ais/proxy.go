@@ -352,7 +352,7 @@ func (p *proxy) parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bck
 	}
 	bckArgs.bck, bckArgs.query = apireq.bck, apireq.query
 	// both ais package caller  _and_ remote user (via `cmn.URLParamDontLookupRemoteBck`)
-	bckArgs.lookupRemote = bckArgs.lookupRemote && !dontLookupRemote(apireq.query)
+	bckArgs.lookupRemote = bckArgs.lookupRemote && lookupRemoteBck(apireq.query, apireq.dpq)
 
 	bck, err = bckArgs.initAndTry(apireq.bck.Name)
 	return bck, apireq.items[1], err
@@ -508,7 +508,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		)
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AceObjLIST, bck: bck}
 		bckArgs.createAIS = false
-		bckArgs.lookupRemote = !dontLookupRemote(query)
+		bckArgs.lookupRemote = lookupRemoteBck(query, nil)
 		if bck, err = bckArgs.initAndTry(queryBcks.Name); err == nil {
 			begin := mono.NanoTime()
 			p.listObjects(w, r, bck, msg, begin)
@@ -522,7 +522,6 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/objects/bucket-name/object-name
 func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
-	started := time.Now()
 	bckArgs := allocInitBckArgs()
 	{
 		bckArgs.p = p
@@ -550,7 +549,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
+	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 	p.statsT.Add(stats.GetCount, 1)
 }
@@ -558,20 +557,19 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 // PUT /v1/objects/bucket-name/object-name
 func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 	var (
-		si               *cluster.Snode
-		nodeID           string
-		perms            cmn.AccessAttrs
-		err              error
-		smap             = p.owner.smap.get()
-		query            = r.URL.Query()
-		started          = time.Now()
-		appendTyProvided = query.Has(cmn.URLParamAppendType)
+		nodeID string
+		perms  cmn.AccessAttrs
+		apireq = apiRequest{after: 2, prefix: cmn.URLPathObjects.L, dpq: &dpq{}}
 	)
+	// 1. request
+	if err := p.parseReq(w, r, &apireq); err != nil {
+		return
+	}
+	appendTyProvided := apireq.dpq.appendTy != "" // cmn.URLParamAppendType
 	if !appendTyProvided {
 		perms = cmn.AcePUT
 	} else {
-		var hi handleInfo
-		hi, err = parseAppendHandle(query.Get(cmn.URLParamAppendHandle))
+		hi, err := parseAppendHandle(apireq.dpq.appendHdl) // cmn.URLParamAppendHandle
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -579,6 +577,8 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 		nodeID = hi.nodeID
 		perms = cmn.AceAPPEND
 	}
+
+	// 2. bucket
 	bckArgs := allocInitBckArgs()
 	{
 		bckArgs.p = p
@@ -588,13 +588,21 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 		bckArgs.createAIS = false
 		bckArgs.lookupRemote = true
 	}
-	bck, objName, err := p.parseReqTry(w, r, bckArgs)
+	bckArgs.lookupRemote = bckArgs.lookupRemote && lookupRemoteBck(nil, apireq.dpq)
+	bckArgs.bck, bckArgs.dpq = apireq.bck, apireq.dpq
+	bck, err := bckArgs.initAndTry(apireq.bck.Name)
 	freeInitBckArgs(bckArgs)
-
 	if err != nil {
 		return
 	}
 
+	// 3. redirect
+	var (
+		si      *cluster.Snode
+		smap    = p.owner.smap.get()
+		started = time.Now()
+		objName = apireq.items[1]
+	)
 	if nodeID == "" {
 		si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 		if err != nil {
@@ -609,13 +617,13 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s (append: %v)", r.Method, bck.Name, objName, si, appendTyProvided)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
+	// 4. stats
 	if !appendTyProvided {
 		p.statsT.Add(stats.PutCount, 1)
 	} else {
@@ -625,7 +633,6 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /v1/objects/bucket-name/object-name
 func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
-	started := time.Now()
 	bckArgs := allocInitBckArgs()
 	{
 		bckArgs.p = p
@@ -640,7 +647,6 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
@@ -650,7 +656,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
+	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsT.Add(stats.DeleteCount, 1)
@@ -913,7 +919,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg}
 	bckArgs.createAIS = false
-	bckArgs.lookupRemote = !dontLookupRemote(query)
+	bckArgs.lookupRemote = lookupRemoteBck(query, nil)
 	if bck, err = bckArgs.initAndTry(bck.Name); err != nil {
 		return
 	}
@@ -933,7 +939,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 		} else {
 			bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, msg: msg, perms: cmn.AcePUT}
 			bckToArgs.createAIS = false
-			bckToArgs.lookupRemote = !dontLookupRemote(query)
+			bckToArgs.lookupRemote = lookupRemoteBck(query, nil)
 			if bckTo, err = bckToArgs.initAndTry(bckTo.Name); err != nil {
 				p.writeErr(w, r, err)
 				return
@@ -1001,7 +1007,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.Act
 	// but only if it's a remote bucket (and user did not explicitly disallowed).
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg}
 	bckArgs.createAIS = false
-	bckArgs.lookupRemote = !dontLookupRemote(query)
+	bckArgs.lookupRemote = lookupRemoteBck(query, nil)
 	if bck, err = bckArgs.initAndTry(bck.Name); err != nil {
 		return
 	}
@@ -1080,7 +1086,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.Act
 		// NOTE: not calling `initAndTry` - delegating bucket props cloning to the `p.tcb` below
 		bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: cmn.AcePUT}
 		bckToArgs.createAIS = true
-		bckArgs.lookupRemote = !dontLookupRemote(query)
+		bckArgs.lookupRemote = lookupRemoteBck(query, nil)
 		if bckTo, errCode, err = bckToArgs.init(bckTo.Name); err != nil && errCode != http.StatusNotFound {
 			p.writeErr(w, r, err, errCode)
 			return
@@ -1342,7 +1348,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks 
 		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: cmn.AceBckHEAD, bck: bck}
 		bckArgs.createAIS = false
-		bckArgs.lookupRemote = !dontLookupRemote(query)
+		bckArgs.lookupRemote = lookupRemoteBck(query, nil)
 		if _, err = bckArgs.initAndTry(queryBcks.Name); err != nil {
 			return
 		}
@@ -1497,7 +1503,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: cmn.AceBckHEAD}
 	bckArgs.createAIS = false
-	bckArgs.lookupRemote = !dontLookupRemote(apireq.query)
+	bckArgs.lookupRemote = lookupRemoteBck(apireq.query, nil)
 	bck, err := bckArgs.initAndTry(apireq.bck.Name)
 	if err != nil {
 		return
@@ -1587,7 +1593,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, skipBackend: true, perms: perms}
 	bckArgs.createAIS = false
-	bckArgs.lookupRemote = !dontLookupRemote(apireq.query)
+	bckArgs.lookupRemote = lookupRemoteBck(apireq.query, nil)
 	if bck, err = bckArgs.initAndTry(bck.Name); err != nil {
 		return
 	}
@@ -1624,7 +1630,6 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/objects/bucket-name/object-name
 func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
-	started := time.Now()
 	bckArgs := allocInitBckArgs()
 	{
 		bckArgs.p = p
@@ -1651,7 +1656,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
+	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 

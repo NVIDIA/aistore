@@ -911,7 +911,10 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		txnPrm := txn.(*txnPromote)
+		txnPrm, ok := txn.(*txnPromote)
+		debug.Assert(ok)
+		defer t.transactions.find(c.uuid, cmn.ActCommit)
+
 		if txnPrm.totalN == 0 {
 			return "", nil
 		}
@@ -930,7 +933,6 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		xctn := rns.Entry.Get()
 		txnPrm.xprm = xctn.(*xs.XactDirPromote)
 
-		t.transactions.find(c.uuid, cmn.ActCommit)
 		return xctn.ID(), nil
 	default:
 		debug.Assert(false)

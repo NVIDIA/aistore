@@ -718,9 +718,14 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		p.setClusterConfig(w, r, toUpdate, msg)
+		query := r.URL.Query()
+		if transient := cos.IsParseBool(query.Get(cmn.ActTransient)); transient {
+			p.setCluCfgTransient(w, r, toUpdate, msg)
+		} else {
+			p.setCluCfgPersistent(w, r, toUpdate, msg)
+		}
 	case cmn.ActResetConfig:
-		p.resetClusterConfig(w, r, msg)
+		p.resetCluCfgPersistent(w, r, msg)
 	case cmn.ActShutdown, cmn.ActDecommission:
 		glog.Infoln("Proxy-controlled cluster decommission/shutdown...")
 		args := allocBcastArgs()
@@ -744,12 +749,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxy) setClusterConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
-	transient := cos.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
-	if transient {
-		p.setTransientClusterConfig(w, r, toUpdate, msg)
-		return
-	}
+func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
 	ctx := &configModifier{
 		pre:      _setConfPre,
 		final:    p._syncConfFinal,
@@ -762,7 +762,7 @@ func (p *proxy) setClusterConfig(w http.ResponseWriter, r *http.Request, toUpdat
 	}
 }
 
-func (p *proxy) resetClusterConfig(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	if err := p.owner.config.resetDaemonConfig(); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -772,7 +772,7 @@ func (p *proxy) resetClusterConfig(w http.ResponseWriter, r *http.Request, msg *
 	p.bcastReqGroup(w, r, req, cluster.AllNodes)
 }
 
-func (p *proxy) setTransientClusterConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
+func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
 	if err := p.owner.config.setDaemonConfig(toUpdate, true /* transient */); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1058,7 +1058,6 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *cmn
 }
 
 func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action string) {
-	query := r.URL.Query()
 	if p.forwardCP(w, r, &cmn.ActionMsg{Action: action}, "") {
 		return
 	}
@@ -1067,27 +1066,30 @@ func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action strin
 		// cluster-wide: designate a new primary proxy administratively
 		p.cluSetPrimary(w, r)
 	case cmn.ActSetConfig: // set-config via query parameters and "?n1=v1&n2=v2..."
-		toUpdate := &cmn.ConfigToUpdate{}
+		var (
+			query    = r.URL.Query()
+			toUpdate = &cmn.ConfigToUpdate{}
+			msg      = &cmn.ActionMsg{Action: action}
+		)
 		if err := toUpdate.FillFromQuery(query); err != nil {
 			p.writeErrf(w, r, err.Error())
 			return
 		}
-		p.setClusterConfig(w, r, toUpdate, &cmn.ActionMsg{Action: action})
-	case cmn.ActAttachRemote, cmn.ActDetachRemote:
-		if err := p.attachDetachRemote(w, r, action); err != nil {
-			return
+		if transient := cos.IsParseBool(query.Get(cmn.ActTransient)); transient {
+			p.setCluCfgTransient(w, r, toUpdate, msg)
+		} else {
+			p.setCluCfgPersistent(w, r, toUpdate, msg)
 		}
+	case cmn.ActAttachRemote, cmn.ActDetachRemote:
+		query := r.URL.Query()
+		p.attachDetachRemote(w, r, action, query)
 	}
 }
 
-func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, action string) (err error) {
-	var (
-		query = r.URL.Query()
-		what  = query.Get(cmn.URLParamWhat)
-	)
+func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, action string, query url.Values) {
+	what := query.Get(cmn.URLParamWhat)
 	if what != cmn.GetWhatRemoteAIS {
-		err = fmt.Errorf(fmtUnknownQue, what)
-		p.writeErr(w, r, err)
+		p.writeErr(w, r, fmt.Errorf(fmtUnknownQue, what))
 		return
 	}
 	ctx := &configModifier{
@@ -1097,11 +1099,9 @@ func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, actio
 		query: query,
 		wait:  true,
 	}
-	if _, err = p.owner.config.modify(ctx); err != nil {
+	if _, err := p.owner.config.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
-		return
 	}
-	return
 }
 
 func (p *proxy) attachDetachRemoteAIS(ctx *configModifier, config *globalConfig) (changed bool, err error) {

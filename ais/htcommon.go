@@ -579,6 +579,7 @@ type dpq struct {
 	origURL             string // ht://url->
 	appendTy, appendHdl string // APPEND { cmn.AppendOp, ... }
 	owt                 string // object write transaction { OwtPut, ..., OwtGet* }
+	dontLookupRemote    string // cmn.URLParamDontLookupRemoteBck: []string{"true"}}
 }
 
 func urlQuery(rawQuery string, dpq *dpq) (err error) {
@@ -632,6 +633,8 @@ func urlQuery(rawQuery string, dpq *dpq) (err error) {
 			}
 		case cmn.URLParamOWT:
 			dpq.owt = value
+		case cmn.URLParamDontLookupRemoteBck:
+			dpq.dontLookupRemote = value
 		default:
 			err = errors.New("failed to fast-parse [" + rawQuery + "]")
 			return
