@@ -72,7 +72,7 @@ func lookupRemoteBck(query url.Values, dpq *dpq) bool {
 		debug.Assert(dpq == nil)
 		return !cos.IsParseBool(query.Get(cmn.URLParamDontLookupRemoteBck))
 	}
-	return !cos.IsParseBool(dpq.dontLookupRemote)
+	return !cos.IsParseBool(dpq.dontLookupRemoteBck)
 }
 
 // args.init initializes bucket and checks access permissions.

@@ -205,6 +205,17 @@ type (
 	}
 
 	// RESTful API parse context
+	dpq struct {
+		provider, namespace string // bucket
+		pid, ptime, uuid    string // proxy
+		skipVC              string // (disconnected backend)
+		archpath, archmime  string // archive
+		isGFN               string // ditto
+		origURL             string // ht://url->
+		appendTy, appendHdl string // APPEND { cmn.AppendOp, ... }
+		owt                 string // object write transaction { OwtPut, ..., OwtGet* }
+		dontLookupRemoteBck string // (as the name implies)
+	}
 	apiRequest struct {
 		prefix []string     // in: URL must start with these items
 		after  int          // in: the number of items after the prefix
@@ -213,7 +224,7 @@ type (
 		bck    *cluster.Bck // out: initialized bucket
 
 		// URL query: the conventional/slow and
-		// the fast alternative tailored exclusively for the datapath
+		// the fast alternative tailored exclusively for the datapath (either/or)
 		query url.Values
 		dpq   *dpq
 	}
@@ -565,22 +576,21 @@ func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
 	return cii.Smap.Version == other.Smap.Version && cii.Smap.Primary.ID == other.Smap.Primary.ID
 }
 
+////////////////
+// apiRequest //
+////////////////
+func apiReq(after int, prefix []string, useDpq bool) (a *apiRequest) {
+	a = &apiRequest{after: after, prefix: prefix}
+	if useDpq {
+		a.dpq = &dpq{}
+	}
+	return a
+}
+
 // Data Path Query structure (dpq):
 // Parse URL query for a selected few parameters used in the datapath.
 // (This is a faster alternative to the conventional and RFC-compliant URL.Query()
 // to be used narrowly to handle those few (keys) and nothing else.)
-
-type dpq struct {
-	provider, namespace string // bucket
-	pid, ptime, uuid    string // proxy
-	skipVC              string // (disconnected backend)
-	archpath, archmime  string // archive
-	isGFN               string // ditto
-	origURL             string // ht://url->
-	appendTy, appendHdl string // APPEND { cmn.AppendOp, ... }
-	owt                 string // object write transaction { OwtPut, ..., OwtGet* }
-	dontLookupRemote    string // cmn.URLParamDontLookupRemoteBck: []string{"true"}}
-}
 
 func urlQuery(rawQuery string, dpq *dpq) (err error) {
 	query := rawQuery
@@ -634,7 +644,7 @@ func urlQuery(rawQuery string, dpq *dpq) (err error) {
 		case cmn.URLParamOWT:
 			dpq.owt = value
 		case cmn.URLParamDontLookupRemoteBck:
-			dpq.dontLookupRemote = value
+			dpq.dontLookupRemoteBck = value
 		default:
 			err = errors.New("failed to fast-parse [" + rawQuery + "]")
 			return

@@ -736,7 +736,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
-	apireq := &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
+	apireq := apiReq(1, cmn.URLPathBuckets.L, false)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -804,7 +804,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	apireq := &apiRequest{prefix: cmn.URLPathBuckets.L, after: 1}
+	apireq := apiReq(1, cmn.URLPathBuckets.L, false)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -853,7 +853,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		code        int
 		ctx         = context.Background()
 		hdr         = w.Header()
-		apireq      = &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
+		apireq      = apiReq(1, cmn.URLPathBuckets.L, false)
 	)
 	if err = t.parseReq(w, r, apireq); err != nil {
 		return
@@ -926,7 +926,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
 		features = cmn.GCO.Get().Client.Features
-		apireq   = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L, dpq: &dpq{}}
+		apireq   = apiReq(2, cmn.URLPathObjects.L, true /*dpq*/)
 	)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
@@ -1007,7 +1007,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 // PUT /v1/objects/bucket-name/object-name
 func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
-	apireq := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L, dpq: &dpq{}}
+	apireq := apiReq(2, cmn.URLPathObjects.L, true /*dpq*/)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -1082,7 +1082,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg    aisMsg
-		apireq = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
+		apireq = apiReq(2, cmn.URLPathObjects.L, false)
 	)
 	if err := readJSON(w, r, &msg); err != nil {
 		return
@@ -1143,7 +1143,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		features = cmn.GCO.Get().Client.Features
-		apireq   = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
+		apireq   = apiReq(2, cmn.URLPathObjects.L, false)
 	)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
@@ -1268,7 +1268,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	var (
 		features = cmn.GCO.Get().Client.Features
-		apireq   = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
+		apireq   = apiReq(2, cmn.URLPathObjects.L, false)
 	)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
@@ -1320,7 +1320,8 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 
 // Returns a slice. Does not use GFN.
 func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
-	apireq := &apiRequest{after: 3, prefix: cmn.URLPathEC.L, bckIdx: 1}
+	apireq := apiReq(3, cmn.URLPathEC.L, false)
+	apireq.bckIdx = 1
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -1648,7 +1649,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 
 // TODO: unify with PromoteFile (refactor)
 func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	apireq := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
+	apireq := apiReq(2, cmn.URLPathObjects.L, false)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
