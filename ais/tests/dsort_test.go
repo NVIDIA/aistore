@@ -549,7 +549,7 @@ func dispatchDSortJob(m *ioContext, dsorterType string, i int) {
 		dsorterType:      dsorterType,
 		inputTempl:       fmt.Sprintf("input%d-{0..999}", i),
 		outputTempl:      fmt.Sprintf("output%d-{00000..01000}", i),
-		tarballCnt:       1000,
+		tarballCnt:       500,
 		fileInTarballCnt: 50,
 		maxMemUsage:      "99%",
 	}
@@ -616,7 +616,7 @@ func TestDistributedSort(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 100,
 					maxMemUsage:      "99%",
 				}
@@ -660,7 +660,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 						Name:     cos.RandString(15),
 						Provider: cmn.ProviderAIS,
 					},
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 100,
 					maxMemUsage:      "99%",
 				}
@@ -748,7 +748,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 						Name:     cos.RandString(15),
 						Provider: cmn.ProviderAIS,
 					},
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 100,
 					maxMemUsage:      "99%",
 				}
@@ -846,7 +846,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 					m:                m,
 					dsorterType:      dsorterType,
 					algorithm:        &dsort.SortAlgorithm{Kind: dsort.SortKindShuffle},
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 10,
 					maxMemUsage:      "99%",
 				}
@@ -1087,7 +1087,7 @@ func TestDistributedSortZip(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 100,
 					extension:        ".zip",
 					maxMemUsage:      "99%",
@@ -1128,7 +1128,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 50,
 					extension:        cos.ExtTarTgz,
 					maxMemUsage:      "99%",
@@ -1194,7 +1194,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 								FormatType: entry.formatType,
 							},
 							missingKeys:      entry.missingKeys,
-							tarballCnt:       1000,
+							tarballCnt:       500,
 							fileInTarballCnt: 100,
 							maxMemUsage:      "90%",
 						}
@@ -1250,7 +1250,7 @@ func TestDistributedSortAbort(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 10,
 				}
 			)
@@ -1291,7 +1291,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 200,
 				}
 			)
@@ -1336,7 +1336,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					m:                m,
 					dsorterType:      dsorterType,
 					outputTempl:      "output-{0..100000}",
-					tarballCnt:       2000,
+					tarballCnt:       1000,
 					fileInTarballCnt: 500,
 				}
 				target *cluster.Snode
@@ -1402,7 +1402,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 							m:                m,
 							dsorterType:      dsorterType,
 							outputTempl:      "output-{0..100000}",
-							tarballCnt:       2000,
+							tarballCnt:       500,
 							fileInTarballCnt: 200,
 						}
 
@@ -1502,7 +1502,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 					m:                m,
 					dsorterType:      dsorterType,
 					outputTempl:      "output-{0..100000}",
-					tarballCnt:       4000,
+					tarballCnt:       1000,
 					fileInTarballCnt: 200,
 				}
 			)
@@ -1599,7 +1599,7 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 100,
 					missingShards:    cmn.AbortReaction,
 				}
@@ -1693,7 +1693,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 					m:                m,
 					dsorterType:      dsorterType,
 					outputTempl:      "output-{0..100000}",
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					tarballCntToSkip: 50,
 					fileInTarballCnt: 200,
 					extension:        cos.ExtTar,
@@ -1751,7 +1751,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 					m:                     m,
 					dsorterType:           dsorterType,
 					outputTempl:           "output-{0..100000}",
-					tarballCnt:            1000,
+					tarballCnt:            500,
 					fileInTarballCnt:      200,
 					recordDuplicationsCnt: 50,
 					extension:             cos.ExtTar,
@@ -1903,7 +1903,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 100,
 					dryRun:           true,
 				}
@@ -1942,7 +1942,7 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 				df = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					tarballCnt:       1000,
+					tarballCnt:       500,
 					fileInTarballCnt: 100,
 					dryRun:           true,
 				}
