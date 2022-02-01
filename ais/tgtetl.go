@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -16,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 )
 
-// [METHOD] /v1/etl
+// [METHOD] /v1/etls
 func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if err := k8s.Detect(); err != nil {
 		t.writeErrSilent(w, r, err)
@@ -38,29 +39,49 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErrURL(w, r)
 		}
 	case r.Method == http.MethodGet:
-		apiItems, err := t.checkRESTItems(w, r, 1, true, cmn.URLPathETL.L)
-		if err != nil {
-			return
-		}
-
-		switch apiItems[0] {
-		case cmn.ETLList:
-			t.listETL(w, r)
-		case cmn.ETLLogs:
-			t.logsETL(w, r)
-		case cmn.ETLObject:
-			t.getObjectETL(w, r)
-		case cmn.ETLHealth:
-			t.healthETL(w, r)
-		default:
-			t.writeErrURL(w, r)
-		}
+		t.handleETLGet(w, r)
 	case r.Method == http.MethodHead:
 		t.headObjectETL(w, r)
 	case r.Method == http.MethodDelete:
 		t.stopETL(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPost)
+	}
+}
+
+func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathETL.L)
+	if err != nil {
+		return
+	}
+
+	// /v1/etls
+	if len(apiItems) == 0 {
+		t.listETL(w, r)
+		return
+	}
+
+	// /v1/etls/_objects/<secret>/<uname>
+	if apiItems[0] == cmn.ETLObject {
+		t.getObjectETL(w, r)
+		return
+	}
+
+	// /v1/etls/<uuid>
+	if len(apiItems) == 1 {
+		// TODO: should return info for given UUID
+		t.writeErr(w, r, errors.New("not implemented yet"))
+		return
+	}
+
+	// /v1/etls/<uuid>/logs or /v1/etls/<uuid>/health
+	switch apiItems[1] {
+	case cmn.ETLLogs:
+		t.logsETL(w, r, apiItems[0])
+	case cmn.ETLHealth:
+		t.healthETL(w, r, apiItems[0])
+	default:
+		t.writeErrURL(w, r)
 	}
 }
 
@@ -121,7 +142,7 @@ func (t *target) doETL(w http.ResponseWriter, r *http.Request, uuid string, bck 
 			smap := t.owner.smap.Get()
 			t.writeErrStatusf(w, r,
 				http.StatusNotFound,
-				"%v - try starting new ETL with \"%s/v1/etl/init\" endpoint",
+				"%v - try starting new ETL with \"%s/v1/etls/init\" endpoint",
 				err.Error(), smap.Primary.URL(cmn.NetworkPublic))
 			return
 		}
@@ -137,21 +158,13 @@ func (t *target) doETL(w http.ResponseWriter, r *http.Request, uuid string, bck 
 	}
 }
 
+// GET /v1/etls
 func (t *target) listETL(w http.ResponseWriter, r *http.Request) {
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathETLList.L); err != nil {
-		return
-	}
 	t.writeJSON(w, r, etl.List(), "list-ETL")
 }
 
-func (t *target) logsETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathETLLogs.L)
-	if err != nil {
-		return
-	}
-
-	uuid := apiItems[0]
-	logs, err := etl.PodLogs(t, uuid)
+func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlID string) {
+	logs, err := etl.PodLogs(t, etlID)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -159,13 +172,8 @@ func (t *target) logsETL(w http.ResponseWriter, r *http.Request) {
 	t.writeJSON(w, r, logs, "logs-ETL")
 }
 
-func (t *target) healthETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathETLHealth.L)
-	if err != nil {
-		return
-	}
-
-	healthMsg, err := etl.PodHealth(t, apiItems[0])
+func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlID string) {
+	healthMsg, err := etl.PodHealth(t, etlID)
 	if err != nil {
 		if cmn.IsErrNotFound(err) {
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
@@ -199,7 +207,9 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 	return
 }
 
-// GET /v1/etl/objects/<secret>/<uname>
+// GET /v1/etls/_objects/<secret>/<uname>
+// NOTE: this is an internal URL, `_objects` in the path is chosen to avoid
+// conflicts with ETL UUID in URL paths of format `/v1/elts/<uuid>/...`
 //
 // getObjectETL handles GET requests from ETL containers (K8s Pods).
 // getObjectETL validates the secret that was injected into a Pod during its initialization.
@@ -224,7 +234,7 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 	cluster.FreeLOM(lom)
 }
 
-// HEAD /v1/etl/objects/<secret>/<uname>
+// HEAD /v1/etls/objects/<secret>/<uname>
 //
 // headObjectETL handles HEAD requests from ETL containers (K8s Pods).
 // headObjectETL validates the secret that was injected into a Pod during its initialization.

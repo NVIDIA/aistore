@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 )
 
-// [METHOD] /v1/etl
+// [METHOD] /v1/etls
 func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -38,23 +38,7 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 			p.writeErrURL(w, r)
 		}
 	case r.Method == http.MethodGet:
-		apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathETL.L)
-		if err != nil {
-			return
-		}
-
-		switch apiItems[0] {
-		case cmn.ETLList:
-			p.listETL(w, r)
-		case cmn.ETLLogs:
-			p.logsETL(w, r)
-		case cmn.ETLHealth:
-			p.healthETL(w, r)
-		case cmn.ETLInfo:
-			p.infoETL(w, r)
-		default:
-			p.writeErrURL(w, r)
-		}
+		p.handleETLGet(w, r)
 	case r.Method == http.MethodDelete:
 		p.stopETL(w, r)
 	default:
@@ -62,7 +46,36 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/etl/init_spec
+// GET /v1/etls
+func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathETL.L)
+	if err != nil {
+		return
+	}
+
+	if len(apiItems) == 0 {
+		p.listETL(w, r)
+		return
+	}
+
+	// /v1/etls/<uuid>
+	if len(apiItems) == 1 {
+		p.infoETL(w, r, apiItems[0])
+		return
+	}
+
+	// /v1/etls/<uuid>/logs[/<target-id>] or /v1/etls/<uuid>/health
+	switch apiItems[1] {
+	case cmn.ETLLogs:
+		p.logsETL(w, r, apiItems[0], apiItems[2:]...)
+	case cmn.ETLHealth:
+		p.healthETL(w, r)
+	default:
+		p.writeErrURL(w, r)
+	}
+}
+
+// POST /v1/etls/init_spec
 //
 // initSpecETL creates a new ETL (instance) as follows:
 //  1. Validate user-provided pod specification.
@@ -98,7 +111,7 @@ func (p *proxy) initSpecETL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/etl/init_code
+// POST /v1/etls/init_code
 func (p *proxy) initCodeETL(w http.ResponseWriter, r *http.Request) {
 	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitCode.L)
 	if err != nil {
@@ -182,15 +195,10 @@ func (p *proxy) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
 	}
 }
 
-// GET /v1/etl
-func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETLInfo.L)
-	if err != nil {
-		return
-	}
-	etlID := apiItems[0]
-	if etlID == "" {
-		p.writeErr(w, r, cmn.ErrETLMissingUUID)
+// GET /v1/etls/<uuid>
+func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlID string) {
+	if err := cos.ValidateEtlID(etlID); err != nil {
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -203,11 +211,8 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, initMsg, "info-etl")
 }
 
-// GET /v1/etl/list
+// GET /v1/etls
 func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLList.L); err != nil {
-		return
-	}
 	etls, err := p.listETLs()
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -221,7 +226,7 @@ func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 		args = allocBcastArgs()
 		etls *etl.InfoList
 	)
-	args.req = cmn.ReqArgs{Method: http.MethodGet, Path: cmn.URLPathETLList.S}
+	args.req = cmn.ReqArgs{Method: http.MethodGet, Path: cmn.URLPathETL.S}
 	args.timeout = cmn.DefaultTimeout
 	args.fv = func() interface{} { return &etl.InfoList{} }
 	results := p.bcastGroup(args)
@@ -255,25 +260,16 @@ func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 	return *etls, err
 }
 
-// GET /v1/etl/logs/<uuid>[/<target_id>]
-func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathETLLogs.L)
-	if err != nil {
-		return
-	}
-	uuid := apiItems[0]
-	if uuid == "" {
-		p.writeErr(w, r, cmn.ErrETLMissingUUID)
-		return
-	}
+// GET /v1/etls/<uuid>/logs[/<target_id>]
+func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, apiItems ...string) {
 	var (
 		results sliceResults
 		args    *bcastArgs
 	)
-	if len(apiItems) > 1 {
+	if len(apiItems) > 0 {
 		// specific target
 		var (
-			tid = apiItems[1]
+			tid = apiItems[0]
 			si  = p.owner.smap.get().GetTarget(tid)
 		)
 		if si == nil {
@@ -284,7 +280,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request) {
 		results[0] = p.call(callArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
-				Path:   cmn.URLPathETLLogs.Join(uuid),
+				Path:   cmn.URLPathETL.Join(etlID, cmn.ETLLogs),
 			},
 			si:      si,
 			timeout: cmn.DefaultTimeout,
@@ -313,17 +309,8 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, logs, "logs-ETL")
 }
 
-// GET /v1/etl/health/<uuid>
+// GET /v1/etls/<uuid>/health
 func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETLHealth.L)
-	if err != nil {
-		return
-	}
-	uuid := apiItems[0]
-	if uuid == "" {
-		p.writeErr(w, r, cmn.ErrETLMissingUUID)
-		return
-	}
 	var (
 		results sliceResults
 		args    *bcastArgs
@@ -349,7 +336,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, healths, "health-ETL")
 }
 
-// DELETE /v1/etl/stop/<uuid>
+// DELETE /v1/etls/stop/<uuid>
 func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETLStop.L)
 	if err != nil {

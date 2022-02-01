@@ -409,7 +409,7 @@ const (
 	ETLInfo     = "info"
 	ETLList     = List
 	ETLLogs     = "logs"
-	ETLObject   = "object"
+	ETLObject   = "_object"
 	ETLStop     = Stop
 	ETLHealth   = "health"
 )

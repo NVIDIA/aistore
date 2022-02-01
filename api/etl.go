@@ -36,15 +36,17 @@ func ETLInitCode(baseParams BaseParams, msg etl.InitCodeMsg) (id string, err err
 
 func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLList.S}, &list)
+	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETL.S}, &list)
 	return list, err
 }
 
 func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg, err error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPathETLLogs.Join(id)
+	var path string
 	if len(targetID) > 0 && targetID[0] != "" {
-		path = cos.JoinWords(path, targetID[0])
+		path = cmn.URLPathETL.Join(id, cmn.ETLLogs, targetID[0])
+	} else {
+		path = cmn.URLPathETL.Join(id, cmn.ETLLogs)
 	}
 	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: path}, &logs)
 	return logs, err
@@ -52,14 +54,14 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 
 func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err error) {
 	params.Method = http.MethodGet
-	path := cmn.URLPathETLHealth.Join(id)
+	path := cmn.URLPathETL.Join(id, cmn.ETLHealth)
 	err = DoHTTPReqResp(ReqParams{BaseParams: params, Path: path}, &healths)
 	return healths, err
 }
 
 func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error) {
 	params.Method = http.MethodGet
-	path := cmn.URLPathETLInfo.Join(id)
+	path := cmn.URLPathETL.Join(id)
 	r, err := doReader(ReqParams{BaseParams: params, Path: path})
 	if err != nil {
 		return nil, err

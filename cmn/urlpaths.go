@@ -72,11 +72,7 @@ var (
 	URLPathETL         = urlpath(Version, ETL)
 	URLPathETLInitSpec = urlpath(Version, ETL, ETLInitSpec)
 	URLPathETLInitCode = urlpath(Version, ETL, ETLInitCode)
-	URLPathETLInfo     = urlpath(Version, ETL, ETLInfo)
 	URLPathETLStop     = urlpath(Version, ETL, ETLStop)
-	URLPathETLList     = urlpath(Version, ETL, ETLList)
-	URLPathETLLogs     = urlpath(Version, ETL, ETLLogs)
-	URLPathETLHealth   = urlpath(Version, ETL, ETLHealth)
 	URLPathETLObject   = urlpath(Version, ETL, ETLObject)
 
 	URLPathTokens   = urlpath(Version, Tokens) // authn
