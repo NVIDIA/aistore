@@ -573,10 +573,12 @@ func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
 type dpq struct {
 	provider, namespace string // bucket
 	pid, ptime, uuid    string // proxy
-	skipVC              string // _disconnected backend_
+	skipVC              string // (disconnected backend)
 	archpath, archmime  string // archive
 	isGFN               string // ditto
-	origURL             string // ht://
+	origURL             string // ht://url->
+	appendTy, appendHdl string // APPEND { cmn.AppendOp, ... }
+	owt                 string // object write transaction { OwtPut, ..., OwtGet* }
 }
 
 func urlQuery(rawQuery string, dpq *dpq) (err error) {
@@ -591,6 +593,8 @@ func urlQuery(rawQuery string, dpq *dpq) (err error) {
 		if i := strings.Index(key, "="); i >= 0 {
 			key, value = key[:i], key[i+1:]
 		}
+		// supported URL query parameters explicitly named below; attempt to parse anything
+		// outside this list will fail
 		switch key {
 		case cmn.URLParamProvider:
 			dpq.provider = value
@@ -620,6 +624,14 @@ func urlQuery(rawQuery string, dpq *dpq) (err error) {
 			if dpq.origURL, err = url.QueryUnescape(value); err != nil {
 				return
 			}
+		case cmn.URLParamAppendType:
+			dpq.appendTy = value
+		case cmn.URLParamAppendHandle:
+			if dpq.appendHdl, err = url.QueryUnescape(value); err != nil {
+				return
+			}
+		case cmn.URLParamOWT:
+			dpq.owt = value
 		default:
 			err = errors.New("failed to fast-parse [" + rawQuery + "]")
 			return

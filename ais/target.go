@@ -1007,21 +1007,19 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 // PUT /v1/objects/bucket-name/object-name
 func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
-	apireq := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
+	apireq := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L, dpq: &dpq{}}
 	if err := t.parseReq(w, r, apireq); err != nil {
-		return
-	}
-	ptime := isRedirect(apireq.query)
-	if ptime == "" && !isIntraPut(r.Header) {
-		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
 	}
 	objName := apireq.items[1]
 	started := time.Now()
-	if ptime != "" {
-		if redelta := ptLatency(started.UnixNano(), ptime); redelta != 0 {
-			t.statsT.Add(stats.PutRedirLatency, redelta)
+	if apireq.dpq.ptime == "" {
+		if !isIntraPut(r.Header) {
+			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
+			return
 		}
+	} else if redelta := ptLatency(started.UnixNano(), apireq.dpq.ptime); redelta != 0 {
+		t.statsT.Add(stats.PutRedirLatency, redelta)
 	}
 	if cs := fs.GetCapStatus(); cs.Err != nil || cs.PctMax > cmn.StoreCleanupWM {
 		cs = t.OOS(nil)
@@ -1049,9 +1047,9 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 		handle           string
 		err, errdb       error
 		errCode          int
-		skipVC           = cos.IsParseBool(apireq.query.Get(cmn.URLParamSkipVC))
-		archPathProvided = apireq.query.Has(cmn.URLParamArchpath)
-		appendTyProvided = apireq.query.Has(cmn.URLParamAppendType)
+		skipVC           = cos.IsParseBool(apireq.dpq.skipVC) // cmn.URLParamSkipVC
+		archPathProvided = apireq.dpq.archpath != ""          // cmn.URLParamArchpath
+		appendTyProvided = apireq.dpq.appendTy != ""          // cmn.URLParamAppendType
 	)
 	if skipVC {
 		errdb = lom.AllowDisconnectedBackend(false)
@@ -1064,15 +1062,15 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if archPathProvided {
-		errCode, err = t.doAppendArch(r, lom, started, apireq.query)
+		errCode, err = t.doAppendArch(r, lom, started, apireq.dpq)
 	} else if appendTyProvided {
-		handle, errCode, err = t.doAppend(r, lom, started, apireq.query)
+		handle, errCode, err = t.doAppend(r, lom, started, apireq.dpq)
 		if err == nil {
 			w.Header().Set(cmn.HdrAppendHandle, handle)
 			return
 		}
 	} else {
-		errCode, err = t.doPut(r, lom, started, apireq.query, skipVC)
+		errCode, err = t.doPut(r, lom, started, apireq.dpq, skipVC)
 	}
 	if err != nil {
 		t.fsErr(err, lom.FQN)
@@ -1460,13 +1458,13 @@ func (t *target) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks
 	return
 }
 
-func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values) (newHandle string,
+func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (newHandle string,
 	errCode int, err error) {
 	var (
 		cksumValue    = r.Header.Get(cmn.HdrObjCksumVal)
 		cksumType     = r.Header.Get(cmn.HdrObjCksumType)
 		contentLength = r.Header.Get(cmn.HdrContentLength)
-		handle        = query.Get(cmn.URLParamAppendHandle)
+		handle        = dpq.appendHdl // cmn.URLParamAppendHandle
 	)
 
 	hi, err := parseAppendHandle(handle)
@@ -1479,7 +1477,7 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 		t:       t,
 		lom:     lom,
 		r:       r.Body,
-		op:      query.Get(cmn.URLParamAppendType),
+		op:      dpq.appendTy, // cmn.URLParamAppendType
 		hi:      hi,
 	}
 	if contentLength != "" {
@@ -1499,11 +1497,10 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 // Cloud bucket:
 //  - returned version ID is the version
 // In both cases, new checksum is also generated and stored along with the new version.
-func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values,
-	skipVC bool) (errCode int, err error) {
+func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq, skipVC bool) (errCode int, err error) {
 	var (
 		header = r.Header
-		owt    = query.Get(cmn.URLParamOWT)
+		owt    = dpq.owt // cmn.URLParamOWT
 	)
 	// TODO: oa.Size vs "Content-Length" vs actual, similar to checksum
 	cksumToUse := lom.ObjAttrs().FromHeader(header)
@@ -1533,11 +1530,11 @@ func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, que
 	return
 }
 
-func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values) (errCode int, err error) {
+func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (errCode int, err error) {
 	var (
 		sizeStr  = r.Header.Get(cmn.HdrContentLength)
-		mime     = query.Get(cmn.URLParamArchmime)
-		filename = query.Get(cmn.URLParamArchpath)
+		mime     = dpq.archmime // cmn.URLParamArchmime
+		filename = dpq.archpath // cmn.URLParamArchpath
 	)
 	if strings.HasPrefix(filename, lom.ObjName) {
 		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {

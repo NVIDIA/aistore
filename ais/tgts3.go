@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -144,7 +143,12 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 
 	// TODO: dual checksumming, e.g. lom.SetCustom(cmn.ProviderAmazon, ...)
 
-	if errCode, err := t.doPut(r, lom, started, r.URL.Query(), false /*skipVC*/); err != nil {
+	dpq := &dpq{}
+	if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	if errCode, err := t.doPut(r, lom, started, dpq, false /*skipVC*/); err != nil {
 		t.fsErr(err, lom.FQN)
 		t.writeErr(w, r, err, errCode)
 		return
@@ -174,7 +178,6 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 	dpq := &dpq{}
 	if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
-		debug.AssertNoErr(err)
 		t.writeErr(w, r, err)
 		return
 	}

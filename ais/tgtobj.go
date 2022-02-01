@@ -975,7 +975,7 @@ func parseAppendHandle(handle string) (hi handleInfo, err error) {
 	}
 	p := strings.SplitN(handle, "|", 4)
 	if len(p) != 4 {
-		return hi, fmt.Errorf("invalid handle provided: %q", handle)
+		return hi, fmt.Errorf("invalid APPEND handle: %q", handle)
 	}
 	hi.partialCksum = cos.NewCksumHash(p[2])
 	buf, err := base64.StdEncoding.DecodeString(p[3])
