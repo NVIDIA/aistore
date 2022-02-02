@@ -736,7 +736,8 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
-	apireq := apiReq(1, cmn.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, cmn.URLPathBuckets.L, false)
+	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -804,7 +805,8 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	apireq := apiReq(1, cmn.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, cmn.URLPathBuckets.L, false)
+	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -853,8 +855,9 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		code        int
 		ctx         = context.Background()
 		hdr         = w.Header()
-		apireq      = apiReq(1, cmn.URLPathBuckets.L, false)
 	)
+	apireq := apiReqAlloc(1, cmn.URLPathBuckets.L, false)
+	defer apiReqFree(apireq)
 	if err = t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -924,11 +927,9 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
-	var (
-		features = cmn.GCO.Get().Client.Features
-		apireq   = apiReq(2, cmn.URLPathObjects.L, true /*dpq*/)
-	)
+	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, true /*dpq*/)
 	if err := t.parseReq(w, r, apireq); err != nil {
+		apiReqFree(apireq)
 		return
 	}
 	if err := urlQuery(r.URL.RawQuery, apireq.dpq); err != nil {
@@ -936,6 +937,7 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
+	features := cmn.GCO.Get().Client.Features
 	if features.IsSet(feat.EnforceIntraClusterAccess) {
 		if apireq.dpq.ptime == "" /*isRedirect*/ && t.isIntraCall(r.Header, false /*from primary*/) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
@@ -945,7 +947,9 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	lom := cluster.AllocLOM(apireq.items[1])
 	t.getObject(w, r, apireq.dpq, apireq.bck, lom)
+
 	cluster.FreeLOM(lom)
+	apiReqFree(apireq)
 }
 
 // getObject is main function to get the object. It doesn't check request origin,
@@ -1007,7 +1011,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 // PUT /v1/objects/bucket-name/object-name
 func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReq(2, cmn.URLPathObjects.L, true /*dpq*/)
+	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, true /*dpq*/)
+	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -1080,10 +1085,9 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
 func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
-	var (
-		msg    aisMsg
-		apireq = apiReq(2, cmn.URLPathObjects.L, false)
-	)
+	var msg aisMsg
+	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
+	defer apiReqFree(apireq)
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
@@ -1141,13 +1145,12 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // Initially validates if the request is internal request (either from proxy
 // or target) and calls headObject.
 func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
-	var (
-		features = cmn.GCO.Get().Client.Features
-		apireq   = apiReq(2, cmn.URLPathObjects.L, false)
-	)
+	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
+	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
+	features := cmn.GCO.Get().Client.Features
 	if features.IsSet(feat.EnforceIntraClusterAccess) {
 		if isRedirect(apireq.query) == "" && t.isIntraCall(r.Header, false) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
@@ -1266,13 +1269,12 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 // By default, adds or updates existing custom keys. Will remove all existing keys and
 // replace them with the specified ones _iff_ `cmn.URLParamNewCustom` is set.
 func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
-	var (
-		features = cmn.GCO.Get().Client.Features
-		apireq   = apiReq(2, cmn.URLPathObjects.L, false)
-	)
+	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
+	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
+	features := cmn.GCO.Get().Client.Features
 	if features.IsSet(feat.EnforceIntraClusterAccess) {
 		if isRedirect(apireq.query) == "" && t.isIntraCall(r.Header, false) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
@@ -1320,9 +1322,10 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 
 // Returns a slice. Does not use GFN.
 func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReq(3, cmn.URLPathEC.L, false)
+	apireq := apiReqAlloc(3, cmn.URLPathEC.L, false)
 	apireq.bckIdx = 1
 	if err := t.parseReq(w, r, apireq); err != nil {
+		apiReqFree(apireq)
 		return
 	}
 	switch apireq.items[0] {
@@ -1333,6 +1336,7 @@ func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
 	default:
 		t.writeErrURL(w, r)
 	}
+	apiReqFree(apireq)
 }
 
 // Returns a CT's metadata.
@@ -1649,7 +1653,8 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 
 // TODO: unify with PromoteFile (refactor)
 func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	apireq := apiReq(2, cmn.URLPathObjects.L, false)
+	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
+	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}

@@ -579,12 +579,36 @@ func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
 ////////////////
 // apiRequest //
 ////////////////
-func apiReq(after int, prefix []string, useDpq bool) (a *apiRequest) {
-	a = &apiRequest{after: after, prefix: prefix}
+var (
+	apiReqPool, dpqPool sync.Pool
+	apireq0             apiRequest
+	dpq0                dpq
+)
+
+func apiReqAlloc(after int, prefix []string, useDpq bool) (a *apiRequest) {
+	if v := apiReqPool.Get(); v != nil {
+		a = v.(*apiRequest)
+	} else {
+		a = &apiRequest{}
+	}
+	a.after, a.prefix = after, prefix
 	if useDpq {
-		a.dpq = &dpq{}
+		if v := dpqPool.Get(); v != nil {
+			a.dpq = v.(*dpq)
+		} else {
+			a.dpq = &dpq{}
+		}
 	}
 	return a
+}
+
+func apiReqFree(a *apiRequest) {
+	if a.dpq != nil {
+		*a.dpq = dpq0
+		dpqPool.Put(a.dpq)
+	}
+	*a = apireq0
+	apiReqPool.Put(a)
 }
 
 // Data Path Query structure (dpq):

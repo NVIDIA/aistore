@@ -347,8 +347,9 @@ func (p *proxy) Stop(err error) {
 
 // parse request + init/lookup bucket (combo)
 func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs) (bck *cluster.Bck, objName string, err error) {
-	apireq := apiReq(2, cmn.URLPathObjects.L, false)
+	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
 	if err = p.parseReq(w, r, apireq); err != nil {
+		apiReqFree(apireq)
 		return
 	}
 	bckArgs.bck, bckArgs.query = apireq.bck, apireq.query
@@ -356,7 +357,11 @@ func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bc
 	bckArgs.lookupRemote = bckArgs.lookupRemote && lookupRemoteBck(apireq.query, apireq.dpq)
 
 	bck, err = bckArgs.initAndTry(apireq.bck.Name)
-	return bck, apireq.items[1], err
+	objName = apireq.items[1]
+
+	apiReqFree(apireq)
+	freeInitBckArgs(bckArgs) // caller does alloc
+	return
 }
 
 // verb /v1/buckets/
@@ -524,8 +529,9 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 // GET /v1/objects/bucket-name/object-name
 func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	// 1. request
-	apireq := apiReq(2, cmn.URLPathObjects.L, true /*dpq*/)
+	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, true /*dpq*/)
 	if err := p.parseReq(w, r, apireq); err != nil {
+		apiReqFree(apireq)
 		return
 	}
 
@@ -546,13 +552,15 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	}
 	bck, err := bckArgs.initAndTry(apireq.bck.Name)
 	freeInitBckArgs(bckArgs)
+
+	objName := apireq.items[1]
+	apiReqFree(apireq)
 	if err != nil {
 		return
 	}
 
 	// 3. redirect
 	smap := p.owner.smap.get()
-	objName := apireq.items[1]
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -575,8 +583,9 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 		perms  cmn.AccessAttrs
 	)
 	// 1. request
-	apireq := apiReq(2, cmn.URLPathObjects.L, true /*dpq*/)
+	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, true /*dpq*/)
 	if err := p.parseReq(w, r, apireq); err != nil {
+		apiReqFree(apireq)
 		return
 	}
 	appendTyProvided := apireq.dpq.appendTy != "" // cmn.URLParamAppendType
@@ -585,6 +594,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 	} else {
 		hi, err := parseAppendHandle(apireq.dpq.appendHdl) // cmn.URLParamAppendHandle
 		if err != nil {
+			apiReqFree(apireq)
 			p.writeErr(w, r, err)
 			return
 		}
@@ -606,6 +616,9 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 	bckArgs.bck, bckArgs.dpq = apireq.bck, apireq.dpq
 	bck, err := bckArgs.initAndTry(apireq.bck.Name)
 	freeInitBckArgs(bckArgs)
+
+	objName := apireq.items[1]
+	apiReqFree(apireq)
 	if err != nil {
 		return
 	}
@@ -615,7 +628,6 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 		si      *cluster.Snode
 		smap    = p.owner.smap.get()
 		started = time.Now()
-		objName = apireq.items[1]
 	)
 	if nodeID == "" {
 		si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
@@ -657,7 +669,6 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		bckArgs.lookupRemote = true
 	}
 	bck, objName, err := p._parseReqTry(w, r, bckArgs)
-	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return
 	}
@@ -679,7 +690,8 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // DELETE { action } /v1/buckets
 func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	// 1. request
-	apireq := apiReq(1, cmn.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, cmn.URLPathBuckets.L, false)
+	defer apiReqFree(apireq)
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -1446,7 +1458,8 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	apireq := apiReq(1, cmn.URLPathObjects.L, false)
+	apireq := apiReqAlloc(1, cmn.URLPathObjects.L, false)
+	defer apiReqFree(apireq)
 	if msg.Action == cmn.ActRenameObject {
 		apireq.after = 2
 	}
@@ -1510,7 +1523,8 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReq(1, cmn.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, cmn.URLPathBuckets.L, false)
+	defer apiReqFree(apireq)
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -1585,8 +1599,9 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		propsToUpdate cmn.BucketPropsToUpdate
 		xactID        string
 		nprops        *cmn.BucketProps // complete instance of bucket props with propsToUpdate changes
-		apireq        = apiReq(1, cmn.URLPathBuckets.L, false)
 	)
+	apireq := apiReqAlloc(1, cmn.URLPathBuckets.L, false)
+	defer apiReqFree(apireq)
 	if err = p.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -1656,7 +1671,6 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		bckArgs.origURLBck = origURLBck[0]
 	}
 	bck, objName, err := p._parseReqTry(w, r, bckArgs)
-	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return
 	}
@@ -1686,7 +1700,6 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		bckArgs.lookupRemote = true
 	}
 	bck, objName, err := p._parseReqTry(w, r, bckArgs)
-	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return
 	}
