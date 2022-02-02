@@ -295,9 +295,9 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 	return printObjectProps(c, objList.Entries, objectListFilter, msg.Props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.BucketsSummaries, err error) {
+func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.BckSummaries, err error) {
 	fDetails := func() (err error) {
-		msg := &cmn.BucketSummaryMsg{Cached: cached, Fast: fast}
+		msg := &cmn.BckSummMsg{Cached: cached, Fast: fast}
 		summaries, err = api.GetBucketsSummaries(defaultAPIParams, query, msg)
 		return
 	}

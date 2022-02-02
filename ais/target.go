@@ -539,11 +539,7 @@ func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets[/bucket-name]
 func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
-	var (
-		bckName   string
-		queryBcks cmn.QueryBcks
-		q         = r.URL.Query()
-	)
+	var bckName string
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
@@ -552,17 +548,25 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	t.ensureLatestBMD(msg, r)
+
 	if len(apiItems) > 0 {
 		bckName = apiItems[0]
 	}
-	if queryBcks, err = newQueryBcksFromQuery(bckName, q); err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	t.ensureLatestBMD(msg, r)
-
 	switch msg.Action {
 	case cmn.ActList:
+		dpq := dpqAlloc()
+		if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
+			dpqFree(dpq)
+			t.writeErr(w, r, err)
+			return
+		}
+		queryBcks, err := newQueryBcksFromQuery(bckName, nil, dpq)
+		dpqFree(dpq)
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
 		if queryBcks.Name == "" {
 			t.listBuckets(w, r, queryBcks)
 			return
@@ -579,7 +583,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		begin := mono.NanoTime()
-		if ok := t.listObjects(w, r, q, bck, msg); !ok {
+		if ok := t.listObjects(w, r, bck, msg); !ok {
 			return
 		}
 		delta := mono.SinceNano(begin)
@@ -588,10 +592,13 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			cos.NamedVal64{Name: stats.ListLatency, Value: delta},
 		)
 	case cmn.ActSummaryBck:
-		var (
-			bsumMsg cmn.BucketSummaryMsg
-			bck     = cluster.NewBckEmbed(cmn.Bck(queryBcks))
-		)
+		query := r.URL.Query()
+		queryBcks, err := newQueryBcksFromQuery(bckName, query, nil)
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
 		if bck.Name != "" {
 			// Ensure that the bucket exists.
 			if err := bck.Init(t.owner.bmd); err != nil {
@@ -605,27 +612,20 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if glog.FastV(4, glog.SmoduleAIS) {
-			pid := q.Get(cmn.HdrCallerID)
-			glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
-		}
+		var bsumMsg cmn.BckSummMsg
 		if err := cos.MorphMarshal(msg.Value, &bsumMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
-		t.bucketSummary(w, r, q, msg.Action, bck, &bsumMsg)
+		t.bucketSummary(w, r, query, msg.Action, bck, &bsumMsg)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
 }
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
-func (t *target) listObjects(w http.ResponseWriter, r *http.Request, q url.Values, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
+func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
 	var msg *cmn.ListObjsMsg
-	if glog.FastV(4, glog.SmoduleAIS) {
-		pid := q.Get(cmn.HdrCallerID)
-		glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
-	}
 	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
 		return
@@ -676,7 +676,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, q url.Value
 }
 
 func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck,
-	msg *cmn.BucketSummaryMsg) {
+	msg *cmn.BckSummMsg) {
 	var (
 		taskAction = q.Get(cmn.URLParamTaskAction)
 		silent     = cos.IsParseBool(q.Get(cmn.URLParamSilent))

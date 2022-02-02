@@ -3021,7 +3021,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			tlog.Logln("checking objects...")
 
 			if test.summary {
-				msg := &cmn.BucketSummaryMsg{Cached: test.cached, Fast: test.fast}
+				msg := &cmn.BckSummMsg{Cached: test.cached, Fast: test.fast}
 				summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks(m.bck), msg)
 				tassert.CheckFatal(t, err)
 

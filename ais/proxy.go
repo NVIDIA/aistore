@@ -479,7 +479,6 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		msg       *cmn.ActionMsg
 		bckName   string
 		queryBcks cmn.QueryBcks
-		query     = r.URL.Query()
 	)
 	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
@@ -494,7 +493,13 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	} else if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
-	if queryBcks, err = newQueryBcksFromQuery(bckName, query); err != nil {
+	dpq := dpqAlloc()
+	defer dpqFree(dpq)
+	if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	if queryBcks, err = newQueryBcksFromQuery(bckName, nil, dpq); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -514,13 +519,13 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		)
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AceObjLIST, bck: bck}
 		bckArgs.createAIS = false
-		bckArgs.lookupRemote = lookupRemoteBck(query, nil)
+		bckArgs.lookupRemote = lookupRemoteBck(nil, dpq)
 		if bck, err = bckArgs.initAndTry(queryBcks.Name); err == nil {
 			begin := mono.NanoTime()
 			p.listObjects(w, r, bck, msg, begin)
 		}
 	case cmn.ActSummaryBck:
-		p.bucketSummary(w, r, queryBcks, msg, query)
+		p.bucketSummary(w, r, queryBcks, msg, dpq)
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
@@ -1357,14 +1362,8 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 }
 
 // bucket == "": all buckets for a given provider
-func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks,
-	amsg *cmn.ActionMsg, query url.Values) {
-	var (
-		err       error
-		uuid      string
-		summaries cmn.BucketsSummaries
-		lsmsg     cmn.BucketSummaryMsg
-	)
+func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, amsg *cmn.ActionMsg, dpq *dpq) {
+	var lsmsg cmn.BckSummMsg
 	if err := cos.MorphMarshal(amsg.Value, &lsmsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
@@ -1373,22 +1372,22 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks 
 		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: cmn.AceBckHEAD, bck: bck}
 		bckArgs.createAIS = false
-		bckArgs.lookupRemote = lookupRemoteBck(query, nil)
-		if _, err = bckArgs.initAndTry(queryBcks.Name); err != nil {
+		bckArgs.lookupRemote = lookupRemoteBck(nil, dpq)
+		if _, err := bckArgs.initAndTry(queryBcks.Name); err != nil {
 			return
 		}
 	}
-	id := r.URL.Query().Get(cmn.URLParamUUID)
-	if id != "" {
-		lsmsg.UUID = id
+	if dpq.uuid != "" { // cmn.URLParamUUID
+		lsmsg.UUID = dpq.uuid
 	}
-	if summaries, uuid, err = p.gatherBucketSummary(queryBcks, &lsmsg); err != nil {
+	summaries, uuid, err := p.gatherBckSumm(queryBcks, &lsmsg)
+	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 
-	// uuid == "" means that async runner has completed and the result is available
-	// otherwise it is an ID of a still running task
+	// returned uuid == "" indicates that async runner has finished and the summary is done;
+	// otherwise it's an ID of the still running task
 	if uuid != "" {
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte(uuid))
@@ -1398,8 +1397,8 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks 
 	p.writeJSON(w, r, summaries, "bucket_summary")
 }
 
-func (p *proxy) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSummaryMsg) (
-	summaries cmn.BucketsSummaries, uuid string, err error) {
+func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *cmn.BckSummMsg) (
+	summaries cmn.BckSummaries, uuid string, err error) {
 	var (
 		isNew, q = initAsyncQuery(cmn.Bck(bck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
@@ -1433,8 +1432,8 @@ func (p *proxy) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSummaryMsg
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
 	args.req.Query = q
-	args.fv = func() interface{} { return &cmn.BucketsSummaries{} }
-	summaries = make(cmn.BucketsSummaries, 0)
+	args.fv = func() interface{} { return &cmn.BckSummaries{} }
+	summaries = make(cmn.BckSummaries, 0)
 	results = p.bcastGroup(args)
 	freeBcastArgs(args)
 	for _, res := range results {
@@ -1443,7 +1442,7 @@ func (p *proxy) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSummaryMsg
 			freeBcastRes(results)
 			return nil, "", err
 		}
-		targetSummary := res.v.(*cmn.BucketsSummaries)
+		targetSummary := res.v.(*cmn.BckSummaries)
 		for _, bckSummary := range *targetSummary {
 			summaries = summaries.Aggregate(bckSummary)
 		}
@@ -1925,7 +1924,7 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 	return
 }
 
-func initAsyncQuery(bck cmn.Bck, msg *cmn.BucketSummaryMsg, newTaskID string) (bool, url.Values) {
+func initAsyncQuery(bck cmn.Bck, msg *cmn.BckSummMsg, newTaskID string) (bool, url.Values) {
 	isNew := msg.UUID == ""
 	q := url.Values{}
 	if isNew {

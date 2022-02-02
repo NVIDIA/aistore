@@ -1838,7 +1838,7 @@ func selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.Bcks {
 	return names
 }
 
-func newBckFromQuery(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, error) {
+func bfromQ(bckName string, query url.Values, dpq *dpq) (bck cmn.Bck) {
 	var (
 		provider  string
 		namespace cmn.Ns
@@ -1851,23 +1851,17 @@ func newBckFromQuery(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, 
 		provider = dpq.provider
 		namespace = cmn.ParseNsUname(dpq.namespace)
 	}
-	bck := cmn.Bck{Name: bckName, Provider: provider, Ns: namespace}
-	if err := bck.Validate(); err != nil {
-		return nil, err
-	}
-	return cluster.NewBckEmbed(bck), nil
+	return cmn.Bck{Name: bckName, Provider: provider, Ns: namespace}
 }
 
-func newQueryBcksFromQuery(bckName string, query url.Values) (cmn.QueryBcks, error) {
-	var (
-		provider  = query.Get(cmn.URLParamProvider)
-		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
-		bck       = cmn.QueryBcks{Name: bckName, Provider: provider, Ns: namespace}
-	)
-	if err := bck.Validate(); err != nil {
-		return bck, err
-	}
-	return bck, nil
+func newBckFromQuery(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, error) {
+	bck := cluster.NewBckEmbed(bfromQ(bckName, query, dpq))
+	return bck, bck.Validate()
+}
+
+func newQueryBcksFromQuery(bckName string, query url.Values, dpq *dpq) (cmn.QueryBcks, error) {
+	bck := cmn.QueryBcks(bfromQ(bckName, query, dpq))
+	return bck, bck.Validate()
 }
 
 func newBckFromQueryUname(query url.Values, required bool) (*cluster.Bck, error) {

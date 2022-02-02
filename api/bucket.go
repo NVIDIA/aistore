@@ -136,9 +136,9 @@ func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.Bcks, erro
 // GetBucketsSummaries returns bucket summaries for the specified backend provider
 // (and all bucket summaries for unspecified ("") provider).
 func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
-	msg *cmn.BucketSummaryMsg) (cmn.BucketsSummaries, error) {
+	msg *cmn.BckSummMsg) (cmn.BckSummaries, error) {
 	if msg == nil {
-		msg = &cmn.BucketSummaryMsg{}
+		msg = &cmn.BckSummMsg{}
 	}
 	baseParams.Method = http.MethodGet
 	reqParams := ReqParams{
@@ -147,7 +147,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
-	var summaries cmn.BucketsSummaries
+	var summaries cmn.BckSummaries
 	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBck, msg, &summaries); err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 // 3. Breaks loop on error
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
-func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.BucketSummaryMsg, v interface{}) error {
+func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.BckSummMsg, v interface{}) error {
 	var (
 		uuid   string
 		sleep  = initialPollInterval

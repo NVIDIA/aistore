@@ -33,13 +33,13 @@ type (
 		xreg.RenewBase
 		xctn *bsummXact
 		ctx  context.Context
-		msg  *cmn.BucketSummaryMsg
+		msg  *cmn.BckSummMsg
 	}
 	bsummXact struct {
 		xact.Base
 		ctx context.Context
 		t   cluster.Target
-		msg *cmn.BucketSummaryMsg
+		msg *cmn.BckSummMsg
 		res atomic.Pointer
 	}
 )
@@ -110,7 +110,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 		mtx       sync.Mutex
 		wg        = &sync.WaitGroup{}
 		errCh     = make(chan error, len(buckets))
-		summaries = make(cmn.BucketsSummaries, 0, len(buckets))
+		summaries = make(cmn.BckSummaries, 0, len(buckets))
 	)
 	wg.Add(len(buckets))
 
@@ -140,8 +140,8 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 			}
 
 			var (
-				msg     = cmn.BucketSummaryMsg{}
-				summary = cmn.BucketSummary{
+				msg     = cmn.BckSummMsg{}
+				summary = cmn.BckSumm{
 					Bck:            bck.Bck,
 					TotalDisksSize: totalDisksSize,
 				}

@@ -33,20 +33,20 @@ type (
 
 // control message to generate bucket summary or summaries
 type (
-	BucketSummaryMsg struct {
+	BckSummMsg struct {
 		UUID   string `json:"uuid"`
 		Fast   bool   `json:"fast"`
 		Cached bool   `json:"cached"`
 	}
 	// bucket summary (result) for a given bucket
-	BucketSummary struct {
+	BckSumm struct {
 		Bck
 		ObjCount       uint64  `json:"count,string"`
 		Size           uint64  `json:"size,string"`
 		TotalDisksSize uint64  `json:"disks_size,string"`
 		UsedPct        float64 `json:"used_pct"`
 	}
-	BucketsSummaries []BucketSummary
+	BckSummaries []BckSumm
 )
 
 ////////////
@@ -80,18 +80,18 @@ func (msg *TCBMsg) ToName(name string) string {
 // BucketsSummary(ies)
 //////////////////////
 
-func (bs *BucketSummary) Aggregate(bckSummary BucketSummary) {
+func (bs *BckSumm) Aggregate(bckSummary BckSumm) {
 	bs.ObjCount += bckSummary.ObjCount
 	bs.Size += bckSummary.Size
 	bs.TotalDisksSize += bckSummary.TotalDisksSize
 	bs.UsedPct = float64(bs.Size) * 100 / float64(bs.TotalDisksSize)
 }
 
-func (s BucketsSummaries) Len() int           { return len(s) }
-func (s BucketsSummaries) Less(i, j int) bool { return s[i].Bck.Less(s[j].Bck) }
-func (s BucketsSummaries) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s BckSummaries) Len() int           { return len(s) }
+func (s BckSummaries) Less(i, j int) bool { return s[i].Bck.Less(s[j].Bck) }
+func (s BckSummaries) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-func (s BucketsSummaries) Aggregate(summary BucketSummary) BucketsSummaries {
+func (s BckSummaries) Aggregate(summary BckSumm) BckSummaries {
 	for idx, bckSummary := range s {
 		if bckSummary.Bck.Equal(summary.Bck) {
 			bckSummary.Aggregate(summary)
@@ -103,11 +103,11 @@ func (s BucketsSummaries) Aggregate(summary BucketSummary) BucketsSummaries {
 	return s
 }
 
-func (s BucketsSummaries) Get(bck Bck) (BucketSummary, bool) {
+func (s BckSummaries) Get(bck Bck) (BckSumm, bool) {
 	for _, bckSummary := range s {
 		if bckSummary.Bck.Equal(bck) {
 			return bckSummary, true
 		}
 	}
-	return BucketSummary{}, false
+	return BckSumm{}, false
 }

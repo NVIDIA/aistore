@@ -16,7 +16,7 @@ import (
 
 type BckSummaryArgs struct {
 	Ctx context.Context
-	Msg *cmn.BucketSummaryMsg
+	Msg *cmn.BckSummMsg
 }
 
 func RegNonBckXact(entry Renewable) {
@@ -65,7 +65,7 @@ func RenewETL(t cluster.Target, msg interface{}) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) RenewRes {
+func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BckSummMsg) RenewRes {
 	custom := &BckSummaryArgs{Ctx: ctx, Msg: msg}
 	e := dreg.nonbckXacts[cmn.ActSummaryBck].New(Args{T: t, UUID: msg.UUID, Custom: custom}, bck)
 	return dreg.renew(e, bck)

@@ -593,22 +593,29 @@ func apiReqAlloc(after int, prefix []string, useDpq bool) (a *apiRequest) {
 	}
 	a.after, a.prefix = after, prefix
 	if useDpq {
-		if v := dpqPool.Get(); v != nil {
-			a.dpq = v.(*dpq)
-		} else {
-			a.dpq = &dpq{}
-		}
+		a.dpq = dpqAlloc()
 	}
 	return a
 }
 
 func apiReqFree(a *apiRequest) {
 	if a.dpq != nil {
-		*a.dpq = dpq0
-		dpqPool.Put(a.dpq)
+		dpqFree(a.dpq)
 	}
 	*a = apireq0
 	apiReqPool.Put(a)
+}
+
+func dpqAlloc() *dpq {
+	if v := dpqPool.Get(); v != nil {
+		return v.(*dpq)
+	}
+	return &dpq{}
+}
+
+func dpqFree(dpq *dpq) {
+	*dpq = dpq0
+	dpqPool.Put(dpq)
 }
 
 // Data Path Query structure (dpq):

@@ -143,7 +143,8 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 
 	// TODO: dual checksumming, e.g. lom.SetCustom(cmn.ProviderAmazon, ...)
 
-	dpq := &dpq{}
+	dpq := dpqAlloc()
+	defer dpqFree(dpq)
 	if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -176,8 +177,9 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		t.writeErr(w, r, err)
 		return
 	}
-	dpq := &dpq{}
+	dpq := dpqAlloc()
 	if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
+		dpqFree(dpq)
 		t.writeErr(w, r, err)
 		return
 	}
@@ -185,6 +187,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	t.getObject(w, r, dpq, bck, lom)
 	s3compat.SetETag(w.Header(), lom) // add etag/md5
 	cluster.FreeLOM(lom)
+	dpqFree(dpq)
 }
 
 // HEAD s3/bckName/objName
