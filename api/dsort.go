@@ -16,50 +16,54 @@ import (
 func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
 	var id string
 	baseParams.Method = http.MethodPost
-	err := DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSort.S,
 		Body:       cos.MustMarshal(rs),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	}, &id)
+	}
+	err := reqParams.DoHTTPReqResp(&id)
 	return id, err
 }
 
 func AbortDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
-	return DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSortAbort.S,
 		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
-	})
+	}
+	return reqParams.DoHTTPRequest()
 }
 
 func MetricsDSort(baseParams BaseParams, managerUUID string) (metrics map[string]*dsort.Metrics, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSort.S,
 		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
-	}, &metrics)
+	}
+	err = reqParams.DoHTTPReqResp(&metrics)
 	return metrics, err
 }
 
 func RemoveDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
-	return DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSort.S,
 		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
-	})
+	}
+	return reqParams.DoHTTPRequest()
 }
 
 func ListDSort(baseParams BaseParams, regex string) (jobsInfos []*dsort.JobInfo, err error) {
 	baseParams.Method = http.MethodGet
-
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSort.S,
 		Query:      url.Values{cmn.URLParamRegex: []string{regex}},
-	}, &jobsInfos)
+	}
+	err = reqParams.DoHTTPReqResp(&jobsInfos)
 	return jobsInfos, err
 }

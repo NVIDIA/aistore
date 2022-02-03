@@ -49,12 +49,13 @@ func DownloadRange(baseParams BaseParams, description string, bck cmn.Bck, templ
 func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interface{}) (string, error) {
 	baseParams.Method = http.MethodPost
 	msg := cos.MustMarshal(body)
-	return doDlDownloadRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
 		Body:       cos.MustMarshal(downloader.DlBody{Type: dlt, RawMessage: msg}),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	})
+	}
+	return reqParams.doDlDownloadRequest()
 }
 
 func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, msg interface{}, intervals ...time.Duration) (string, error) {
@@ -70,7 +71,8 @@ func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, msg i
 	return DownloadWithParam(baseParams, downloader.DlTypeMulti, dlBody)
 }
 
-func DownloadBackend(baseParams BaseParams, description string, bck cmn.Bck, prefix, suffix string, intervals ...time.Duration) (string, error) {
+func DownloadBackend(baseParams BaseParams, description string, bck cmn.Bck, prefix, suffix string,
+	intervals ...time.Duration) (string, error) {
 	dlBody := downloader.DlBackendBody{
 		Prefix: prefix,
 		Suffix: suffix,
@@ -92,23 +94,25 @@ func DownloadStatus(baseParams BaseParams, id string, onlyActiveTasks ...bool) (
 		dlBody.OnlyActiveTasks = onlyActiveTasks[0]
 	}
 	baseParams.Method = http.MethodGet
-	return doDlStatusRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
 		Body:       cos.MustMarshal(dlBody),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	})
+	}
+	return reqParams.doDlStatusRequest()
 }
 
 func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJobInfos, err error) {
 	dlBody := downloader.DlAdminBody{Regex: regex}
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
 		Body:       cos.MustMarshal(dlBody),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	}, &dlList)
+	}
+	err = reqParams.DoHTTPReqResp(&dlList)
 	sort.Sort(dlList)
 	return dlList, err
 }
@@ -116,32 +120,34 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJ
 func AbortDownload(baseParams BaseParams, id string) error {
 	dlBody := downloader.DlAdminBody{ID: id}
 	baseParams.Method = http.MethodDelete
-	return DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownloadAbort.S,
 		Body:       cos.MustMarshal(dlBody),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	})
+	}
+	return reqParams.DoHTTPRequest()
 }
 
 func RemoveDownload(baseParams BaseParams, id string) error {
 	dlBody := downloader.DlAdminBody{ID: id}
 	baseParams.Method = http.MethodDelete
-	return DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownloadRemove.S,
 		Body:       cos.MustMarshal(dlBody),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	})
+	}
+	return reqParams.DoHTTPRequest()
 }
 
-func doDlDownloadRequest(reqParams ReqParams) (string, error) {
+func (reqParams *ReqParams) doDlDownloadRequest() (string, error) {
 	var resp downloader.DlPostResp
-	err := DoHTTPReqResp(reqParams, &resp)
+	err := reqParams.DoHTTPReqResp(&resp)
 	return resp.ID, err
 }
 
-func doDlStatusRequest(reqParams ReqParams) (resp downloader.DlStatusResp, err error) {
-	err = DoHTTPReqResp(reqParams, &resp)
+func (reqParams *ReqParams) doDlStatusRequest() (resp downloader.DlStatusResp, err error) {
+	err = reqParams.DoHTTPReqResp(&resp)
 	return resp, err
 }

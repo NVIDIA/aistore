@@ -74,19 +74,16 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 		xactMsg.Buckets = args.Buckets
 	}
 
-	msg := cmn.ActionMsg{
-		Action: cmn.ActXactStart,
-		Value:  xactMsg,
-	}
-
+	msg := cmn.ActionMsg{Action: cmn.ActXactStart, Value: xactMsg}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
-	}, &id)
+	}
+	err = reqParams.DoHTTPReqResp(&id)
 	return id, err
 }
 
@@ -97,13 +94,14 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 		Value:  xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
 	}
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
-	})
+	}
+	return reqParams.DoHTTPRequest()
 }
 
 // GetXactionSnapsByID gets all xaction snaps for a given xaction id.
@@ -123,13 +121,14 @@ func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMul
 		msg.OnlyRunning = Bool(true)
 	}
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
-	}, &xs)
+	}
+	err = reqParams.DoHTTPReqResp(&xs)
 	return xs, err
 }
 
@@ -141,13 +140,14 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 		msg.OnlyRunning = Bool(true)
 	}
 	status = &nl.NotifStatus{}
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStatus}},
-	}, status)
+	}
+	err = reqParams.DoHTTPReqResp(status)
 	return
 }
 

@@ -22,7 +22,8 @@ import (
 func GetProxyReadiness(params BaseParams) error {
 	params.Method = http.MethodGet
 	q := url.Values{cmn.URLParamHealthReadiness: []string{"true"}}
-	return DoHTTPRequest(ReqParams{BaseParams: params, Path: cmn.URLPathHealth.S, Query: q})
+	reqParams := &ReqParams{BaseParams: params, Path: cmn.URLPathHealth.S, Query: q}
+	return reqParams.DoHTTPRequest()
 }
 
 func Health(baseParams BaseParams, readyToRebalance ...bool) error {
@@ -31,40 +32,44 @@ func Health(baseParams BaseParams, readyToRebalance ...bool) error {
 	if len(readyToRebalance) > 0 && readyToRebalance[0] {
 		q = url.Values{cmn.URLParamPrimaryReadyReb: []string{"true"}}
 	}
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathHealth.S, Query: q})
+	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathHealth.S, Query: q}
+	return reqParams.DoHTTPRequest()
 }
 
 // GetClusterMap retrieves AIStore cluster map.
 func GetClusterMap(baseParams BaseParams) (smap *cluster.Smap, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
-	}, &smap)
+	}
+	err = reqParams.DoHTTPReqResp(&smap)
 	return
 }
 
 // GetNodeClusterMap retrieves AIStore cluster map from specific node.
 func GetNodeClusterMap(baseParams BaseParams, nodeID string) (smap *cluster.Smap, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
 		Header:     http.Header{cmn.HdrNodeID: []string{nodeID}},
-	}, &smap)
+	}
+	err = reqParams.DoHTTPReqResp(&smap)
 	return
 }
 
 // GetClusterSysInfo retrieves AIStore system info.
 func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSysInfo}},
-	}, &sysInfo)
+	}
+	err = reqParams.DoHTTPReqResp(&sysInfo)
 	return
 }
 
@@ -72,11 +77,12 @@ func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err e
 func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStats, err error) {
 	var rawStats stats.ClusterStatsRaw
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}},
-	}, &rawStats)
+	}
+	err = reqParams.DoHTTPReqResp(&rawStats)
 	if err != nil {
 		return
 	}
@@ -95,22 +101,24 @@ func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStats, er
 
 func GetTargetDiskStats(baseParams BaseParams, targetID string) (diskStats ios.AllDiskStats, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDiskStats}},
 		Header:     http.Header{cmn.HdrNodeID: []string{targetID}},
-	}, &diskStats)
+	}
+	err = reqParams.DoHTTPReqResp(&diskStats)
 	return
 }
 
 func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.BackendInfoAIS, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}},
-	}, &aisInfo)
+	}
+	err = reqParams.DoHTTPReqResp(&aisInfo)
 	return
 }
 
@@ -118,12 +126,13 @@ func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.BackendInfoAIS, err error)
 func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID, daemonID string, err error) {
 	var info cmn.JoinNodeResult
 	baseParams.Method = http.MethodPost
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathClusterUserReg.S,
 		Body:       cos.MustMarshal(nodeInfo),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	}, &info)
+	}
+	err = reqParams.DoHTTPReqResp(&info)
 	return info.RebalanceID, info.DaemonID, err
 }
 
@@ -131,11 +140,12 @@ func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID, daemonI
 // primary proxy of the cluster.
 func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string, force bool) error {
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathClusterProxy.Join(newPrimaryID),
 		Query:      url.Values{cmn.URLParamForce: []string{strconv.FormatBool(force)}},
-	})
+	}
+	return reqParams.DoHTTPRequest()
 }
 
 // SetClusterConfig given key-value pairs of cluster configuration parameters,
@@ -150,7 +160,8 @@ func SetClusterConfig(baseParams BaseParams, nvs cos.SimpleKVs, transient ...boo
 		q.Add(cmn.ActTransient, strconv.FormatBool(transient[0]))
 	}
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterSetConf.S, Query: q})
+	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterSetConf.S, Query: q}
+	return reqParams.DoHTTPRequest()
 }
 
 // SetClusterConfigUsingMsg sets the cluster-wide configuration
@@ -165,35 +176,38 @@ func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigT
 		q.Add(cmn.ActTransient, strconv.FormatBool(transient[0]))
 	}
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      q,
-	})
+	}
+	return reqParams.DoHTTPRequest()
 }
 
 // ResetClusterConfig resets the configuration of all nodes to the cluster configuration
 func ResetClusterConfig(baseParams BaseParams) error {
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetConfig}),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	})
+	}
+	return reqParams.DoHTTPRequest()
 }
 
 // GetClusterConfig returns cluster-wide configuration
 func GetClusterConfig(baseParams BaseParams) (*cmn.ClusterConfig, error) {
 	cluConfig := &cmn.ClusterConfig{}
 	baseParams.Method = http.MethodGet
-	err := DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatClusterConfig}},
-	}, cluConfig)
+	}
+	err := reqParams.DoHTTPReqResp(cluConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -204,11 +218,12 @@ func GetClusterConfig(baseParams BaseParams) (*cmn.ClusterConfig, error) {
 func GetBMD(baseParams BaseParams) (*cluster.BMD, error) {
 	bmd := &cluster.BMD{}
 	baseParams.Method = http.MethodGet
-	err := DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatBMD}},
-	}, bmd)
+	}
+	err := reqParams.DoHTTPReqResp(bmd)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +235,8 @@ func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
 	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)
 	q.Set(alias, u)
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterAttach.S, Query: q})
+	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterAttach.S, Query: q}
+	return reqParams.DoHTTPRequest()
 }
 
 func DetachRemoteAIS(baseParams BaseParams, alias string) error {
@@ -228,7 +244,8 @@ func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)
 	q.Set(alias, "")
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterDetach.S, Query: q})
+	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterDetach.S, Query: q}
+	return reqParams.DoHTTPRequest()
 }
 
 // Maintenance API
@@ -239,12 +256,13 @@ func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id str
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	}, &id)
+	}
+	err = reqParams.DoHTTPReqResp(&id)
 	return id, err
 }
 
@@ -254,12 +272,13 @@ func DecommissionNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id str
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	}, &id)
+	}
+	err = reqParams.DoHTTPReqResp(&id)
 	return id, err
 }
 
@@ -269,12 +288,13 @@ func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id stri
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	}, &id)
+	}
+	err = reqParams.DoHTTPReqResp(&id)
 	return id, err
 }
 
@@ -282,25 +302,26 @@ func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id stri
 func ShutdownCluster(baseParams BaseParams) error {
 	msg := cmn.ActionMsg{Action: cmn.ActShutdown}
 	baseParams.Method = http.MethodPut
-	err := DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	})
-	return err
+	}
+	return reqParams.DoHTTPRequest()
 }
 
 // DecommissionCluster decommissions whole cluster
 func DecommissionCluster(baseParams BaseParams) error {
 	msg := cmn.ActionMsg{Action: cmn.ActDecommission}
 	baseParams.Method = http.MethodPut
-	err := DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	})
+	}
+	err := reqParams.DoHTTPRequest()
 	if cos.IsEOF(err) {
 		err = nil
 	}
@@ -314,12 +335,13 @@ func ShutdownNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string,
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	}, &id)
+	}
+	err = reqParams.DoHTTPReqResp(&id)
 	return id, err
 }
 
@@ -327,8 +349,9 @@ func ShutdownNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string,
 // Immediately removes a node from Smap (advanced usage - potential data loss)
 func RemoveNodeFromSmap(baseParams BaseParams, sid string) error {
 	baseParams.Method = http.MethodDelete
-	return DoHTTPRequest(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathClusterDaemon.Join(sid),
-	})
+	}
+	return reqParams.DoHTTPRequest()
 }

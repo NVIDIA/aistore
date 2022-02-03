@@ -24,12 +24,13 @@ func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options 
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
-	resp, err := doResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathS3.Join(bck.Name, objectName),
 		Query:      q,
 		Header:     hdr,
-	}, w)
+	}
+	resp, err := reqParams.doResp(w)
 	if err != nil {
 		return 0, err
 	}

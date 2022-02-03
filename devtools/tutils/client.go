@@ -604,11 +604,12 @@ func GetNamedStatsVal(ds *stats.DaemonStats, name string) int64 {
 func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	baseParams := BaseAPIParams(u)
 	baseParams.Method = http.MethodGet
-	err := api.DoHTTPReqResp(api.ReqParams{
+	reqParams := &api.ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: {cmn.GetWhatStats}},
-	}, &stats)
+	}
+	err := reqParams.DoHTTPReqResp(&stats)
 	tassert.CheckFatal(t, err)
 	return
 }

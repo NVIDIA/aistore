@@ -635,12 +635,13 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		}
 		baseParams := tutils.BaseAPIParams(v.URL(cmn.NetworkPublic))
 		baseParams.Method = http.MethodPut
-		err = api.DoHTTPRequest(api.ReqParams{
+		reqParams := &api.ReqParams{
 			BaseParams: baseParams,
 			Path:       cmn.URLPathDaemon.Join(cmn.SyncSmap),
 			Body:       jsonMap,
 			Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		})
+		}
+		err = reqParams.DoHTTPRequest()
 		tassert.CheckFatal(t, err)
 		n--
 	}
@@ -1247,14 +1248,15 @@ func networkFailurePrimary(t *testing.T) {
 	// Forcefully set new primary for the original one
 	baseParams := tutils.BaseAPIParams(oldPrimaryURL)
 	baseParams.Method = http.MethodPut
-	err = api.DoHTTPRequest(api.ReqParams{
+	reqParams := &api.ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDaemonProxy.Join(newPrimaryID),
 		Query: url.Values{
 			cmn.URLParamForce:            {"true"},
 			cmn.URLParamPrimaryCandidate: {newPrimaryURL},
 		},
-	})
+	}
+	err = reqParams.DoHTTPRequest()
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForClusterState(

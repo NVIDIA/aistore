@@ -19,24 +19,27 @@ import (
 
 func ETLInitSpec(baseParams BaseParams, podspec []byte /*yaml*/) (id string, err error) {
 	baseParams.Method = http.MethodPost
-	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLInitSpec.S, Body: podspec}, &id)
+	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLInitSpec.S, Body: podspec}
+	err = reqParams.DoHTTPReqResp(&id)
 	return id, err
 }
 
 func ETLInitCode(baseParams BaseParams, msg etl.InitCodeMsg) (id string, err error) {
 	baseParams.Method = http.MethodPost
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathETLInitCode.S,
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-	}, &id)
+	}
+	err = reqParams.DoHTTPReqResp(&id)
 	return id, err
 }
 
 func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETL.S}, &list)
+	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathETL.S}
+	err = reqParams.DoHTTPReqResp(&list)
 	return list, err
 }
 
@@ -48,21 +51,24 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 	} else {
 		path = cmn.URLPathETL.Join(id, cmn.ETLLogs)
 	}
-	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: path}, &logs)
+	reqParams := &ReqParams{BaseParams: baseParams, Path: path}
+	err = reqParams.DoHTTPReqResp(&logs)
 	return logs, err
 }
 
 func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err error) {
 	params.Method = http.MethodGet
 	path := cmn.URLPathETL.Join(id, cmn.ETLHealth)
-	err = DoHTTPReqResp(ReqParams{BaseParams: params, Path: path}, &healths)
+	reqParams := &ReqParams{BaseParams: params, Path: path}
+	err = reqParams.DoHTTPReqResp(&healths)
 	return healths, err
 }
 
 func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error) {
 	params.Method = http.MethodGet
 	path := cmn.URLPathETL.Join(id)
-	r, err := doReader(ReqParams{BaseParams: params, Path: path})
+	reqParams := &ReqParams{BaseParams: params, Path: path}
+	r, err := reqParams.doReader()
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +100,8 @@ func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error
 
 func ETLStop(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLStop.Join(id)})
+	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLStop.Join(id)}
+	err = reqParams.DoHTTPRequest()
 	return err
 }
 
@@ -115,12 +122,13 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg
 	baseParams.Method = http.MethodPost
 	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
-	err = DoHTTPReqResp(ReqParams{
+	reqParams := &ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBck, Value: bckMsg}),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      q,
-	}, &xactID)
+	}
+	err = reqParams.DoHTTPReqResp(&xactID)
 	return
 }

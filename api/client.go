@@ -64,21 +64,58 @@ func HTTPStatus(err error) int {
 	return -1 // invalid
 }
 
+func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr http.Header) {
+	w = io.Discard
+	if options.Writer != nil {
+		w = options.Writer
+	}
+	if len(options.Query) != 0 {
+		q = options.Query
+	}
+	if len(options.Header) != 0 {
+		hdr = options.Header
+	}
+	return
+}
+
+func setAuthToken(r *http.Request, baseParams BaseParams) {
+	if baseParams.Token != "" {
+		r.Header.Set(cmn.HdrAuthorization, makeHeaderAuthnToken(baseParams.Token))
+	}
+}
+
+func makeHeaderAuthnToken(token string) string {
+	return cmn.AuthenticationTypeBearer + " " + token
+}
+
+func GetWhatRawQuery(getWhat, getProps string) string {
+	q := url.Values{}
+	q.Add(cmn.URLParamWhat, getWhat)
+	if getProps != "" {
+		q.Add(cmn.URLParamProps, getProps)
+	}
+	return q.Encode()
+}
+
+///////////////
+// ReqParams //
+///////////////
+
 // uses do() to make request; if successful, checks, drains, and closes the response body
-func DoHTTPRequest(reqParams ReqParams) error {
-	resp, err := do(reqParams)
+func (reqParams *ReqParams) DoHTTPRequest() error {
+	resp, err := reqParams.do()
 	if err != nil {
 		return err
 	}
-	err = checkResp(reqParams, resp)
+	err = reqParams.checkResp(resp)
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()
 	return err
 }
 
 // uses doResp() to make request and decode response into `v`
-func DoHTTPReqResp(reqParams ReqParams, v interface{}) error {
-	_, err := doResp(reqParams, v)
+func (reqParams *ReqParams) DoHTTPReqResp(v interface{}) error {
+	_, err := reqParams.doResp(v)
 	return err
 }
 
@@ -86,24 +123,24 @@ func DoHTTPReqResp(reqParams ReqParams, v interface{}) error {
 // and returns the entire wrapped response.
 //
 // The function returns an error if the response status code is >= 400.
-func doResp(reqParams ReqParams, v interface{}) (wrap *wrappedResp, err error) {
+func (reqParams *ReqParams) doResp(v interface{}) (wrap *wrappedResp, err error) {
 	var resp *http.Response
-	resp, err = do(reqParams)
+	resp, err = reqParams.do()
 	if err != nil {
 		return nil, err
 	}
-	wrap, err = readResp(reqParams, resp, v)
+	wrap, err = reqParams.readResp(resp, v)
 	resp.Body.Close()
 	return
 }
 
 // same as above except that it returns response body (as io.ReadCloser) for subsequent reading
-func doReader(reqParams ReqParams) (io.ReadCloser, error) {
-	resp, err := do(reqParams)
+func (reqParams *ReqParams) doReader() (io.ReadCloser, error) {
+	resp, err := reqParams.do()
 	if err != nil {
 		return nil, err
 	}
-	if err := checkResp(reqParams, resp); err != nil {
+	if err := reqParams.checkResp(resp); err != nil {
 		resp.Body.Close()
 		return nil, err
 	}
@@ -111,30 +148,26 @@ func doReader(reqParams ReqParams) (io.ReadCloser, error) {
 }
 
 // makes HTTP request, retries on connection-refused and reset errors, and returns the response
-func do(reqParams ReqParams) (resp *http.Response, err error) {
-	var (
-		reqBody io.Reader
-		req     *http.Request
-	)
+func (reqParams *ReqParams) do() (resp *http.Response, err error) {
+	var reqBody io.Reader
 	if reqParams.Body != nil {
 		reqBody = bytes.NewBuffer(reqParams.Body)
 	}
 	urlPath := reqParams.BaseParams.URL + reqParams.Path
-	req, err = http.NewRequest(reqParams.BaseParams.Method, urlPath, reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request, err: %v", err)
+	req, errR := http.NewRequest(reqParams.BaseParams.Method, urlPath, reqBody)
+	if errR != nil {
+		return nil, fmt.Errorf("failed to create http request: %w", errR)
 	}
-	setRequestOptParams(req, reqParams)
+	reqParams.setRequestOptParams(req)
 	setAuthToken(req, reqParams.BaseParams)
 
-	call := func() (int, error) {
+	call := func() (status int, err error) {
 		resp, err = reqParams.BaseParams.Client.Do(req) // nolint:bodyclose // closed by a caller
 		if resp != nil {
-			return resp.StatusCode, err
+			status = resp.StatusCode
 		}
-		return 0, err
+		return
 	}
-
 	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      call,
 		Verbosity: cmn.RetryLogOff,
@@ -143,16 +176,32 @@ func do(reqParams ReqParams) (resp *http.Response, err error) {
 		BackOff:   true,
 		IsClient:  true,
 	})
-	if err != nil {
-		err = fmt.Errorf("failed to %s, err: %w", reqParams.BaseParams.Method, err)
+	if err != nil && resp != nil {
+		httpErr := cmn.NewErrHTTP(req, err.Error(), resp.StatusCode)
+		httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
+		err = httpErr
 	}
-	return resp, err
+	return
 }
 
-func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrappedResp, error) {
+// setRequestOptParams given an existing HTTP Request and optional API parameters,
+// sets the optional fields of the request if provided.
+func (reqParams *ReqParams) setRequestOptParams(req *http.Request) {
+	if len(reqParams.Query) != 0 {
+		req.URL.RawQuery = reqParams.Query.Encode()
+	}
+	if reqParams.Header != nil {
+		req.Header = reqParams.Header
+	}
+	if reqParams.User != "" && reqParams.Password != "" {
+		req.SetBasicAuth(reqParams.User, reqParams.Password)
+	}
+}
+
+func (reqParams *ReqParams) readResp(resp *http.Response, v interface{}) (*wrappedResp, error) {
 	defer cos.DrainReader(resp.Body)
 
-	if err := checkResp(reqParams, resp); err != nil {
+	if err := reqParams.checkResp(resp); err != nil {
 		return nil, err
 	}
 	wresp := &wrappedResp{Response: resp}
@@ -203,7 +252,7 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 	return wresp, nil
 }
 
-func checkResp(reqParams ReqParams, resp *http.Response) error {
+func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 	if resp.StatusCode < http.StatusBadRequest {
 		return nil
 	}
@@ -233,51 +282,4 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 	httpErr = cmn.NewErrHTTP(nil, strMsg, resp.StatusCode)
 	httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 	return httpErr
-}
-
-// setRequestOptParams given an existing HTTP Request and optional API parameters,
-// sets the optional fields of the request if provided.
-func setRequestOptParams(req *http.Request, reqParams ReqParams) {
-	if len(reqParams.Query) != 0 {
-		req.URL.RawQuery = reqParams.Query.Encode()
-	}
-	if reqParams.Header != nil {
-		req.Header = reqParams.Header
-	}
-	if reqParams.User != "" && reqParams.Password != "" {
-		req.SetBasicAuth(reqParams.User, reqParams.Password)
-	}
-}
-
-func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr http.Header) {
-	w = io.Discard
-	if options.Writer != nil {
-		w = options.Writer
-	}
-	if len(options.Query) != 0 {
-		q = options.Query
-	}
-	if len(options.Header) != 0 {
-		hdr = options.Header
-	}
-	return
-}
-
-func setAuthToken(r *http.Request, baseParams BaseParams) {
-	if baseParams.Token != "" {
-		r.Header.Set(cmn.HdrAuthorization, makeHeaderAuthnToken(baseParams.Token))
-	}
-}
-
-func makeHeaderAuthnToken(token string) string {
-	return cmn.AuthenticationTypeBearer + " " + token
-}
-
-func GetWhatRawQuery(getWhat, getProps string) string {
-	q := url.Values{}
-	q.Add(cmn.URLParamWhat, getWhat)
-	if getProps != "" {
-		q.Add(cmn.URLParamProps, getProps)
-	}
-	return q.Encode()
 }
