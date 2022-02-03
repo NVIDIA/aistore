@@ -510,6 +510,7 @@ func (m *ioContext) stopGets() {
 }
 
 func (m *ioContext) ensureNumCopies(expectedCopies int, greaterOk bool) {
+	m.t.Helper()
 	var (
 		baseParams = tutils.BaseAPIParams()
 		total      int
@@ -555,6 +556,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int, greaterOk bool) {
 }
 
 func (m *ioContext) ensureNoGetErrors() {
+	m.t.Helper()
 	if m.numGetErrs.Load() > 0 {
 		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs.Load())
 	}
@@ -565,6 +567,7 @@ func (m *ioContext) ensureNumMountpaths(target *cluster.Snode, mpList *cmn.Mount
 }
 
 func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.MountpathList) {
+	t.Helper()
 	tname := target.StringEx()
 	baseParams := tutils.BaseAPIParams()
 	mpl, err := api.GetMountpaths(baseParams, target)
@@ -587,6 +590,7 @@ func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.Mountp
 }
 
 func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.MountpathList) {
+	t.Helper()
 	for i := 0; i < 6; i++ {
 		if len(mpList.WaitingDD) == 0 && len(mpList.Disabled) == 0 {
 			break

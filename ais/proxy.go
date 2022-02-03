@@ -517,7 +517,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 			err error
 			bck = cluster.NewBckEmbed(cmn.Bck(queryBcks))
 		)
-		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AceObjLIST, bck: bck}
+		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AceObjLIST, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
 		bckArgs.lookupRemote = lookupRemoteBck(nil, dpq)
 		if bck, err = bckArgs.initAndTry(queryBcks.Name); err == nil {
@@ -711,7 +711,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 	// 2. bucket
 	bck := apireq.bck
-	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: perms, bck: bck}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: perms, bck: bck, dpq: apireq.dpq, query: apireq.query}
 	bckArgs.createAIS = false
 	bckArgs.lookupRemote = true
 	if msg.Action == cmn.ActEvictRemoteBck {
@@ -947,7 +947,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
-	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, query: query}
 	bckArgs.createAIS = false
 	bckArgs.lookupRemote = lookupRemoteBck(query, nil)
 	if bck, err = bckArgs.initAndTry(bck.Name); err != nil {
@@ -967,7 +967,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 		if bckTo.IsEmpty() {
 			bckTo = bckFrom
 		} else {
-			bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, msg: msg, perms: cmn.AcePUT}
+			bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, msg: msg, perms: cmn.AcePUT, query: query}
 			bckToArgs.createAIS = false
 			bckToArgs.lookupRemote = lookupRemoteBck(query, nil)
 			if bckTo, err = bckToArgs.initAndTry(bckTo.Name); err != nil {
@@ -1021,7 +1021,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.Act
 		}
 	}
 	if msg.Action == cmn.ActCreateBck {
-		p.hpostCreateBucket(w, r, msg, bck)
+		p.hpostCreateBucket(w, r, query, msg, bck)
 		return
 	}
 
@@ -1035,7 +1035,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.Act
 
 	// Initialize bucket; if doesn't exist try creating it on the fly
 	// but only if it's a remote bucket (and user did not explicitly disallowed).
-	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, query: query}
 	bckArgs.createAIS = false
 	bckArgs.lookupRemote = lookupRemoteBck(query, nil)
 	if bck, err = bckArgs.initAndTry(bck.Name); err != nil {
@@ -1114,7 +1114,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.Act
 			return
 		}
 		// NOTE: not calling `initAndTry` - delegating bucket props cloning to the `p.tcb` below
-		bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: cmn.AcePUT}
+		bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: cmn.AcePUT, query: query}
 		bckToArgs.createAIS = true
 		bckArgs.lookupRemote = lookupRemoteBck(query, nil)
 		if bckTo, errCode, err = bckToArgs.init(bckTo.Name); err != nil && errCode != http.StatusNotFound {
@@ -1211,7 +1211,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.Act
 	}
 }
 
-func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck *cluster.Bck) {
+func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query url.Values, msg *cmn.ActionMsg, bck *cluster.Bck) {
 	bucket := bck.Name
 	err := p.checkACL(w, r, nil, cmn.AceCreateBucket)
 	if err != nil {
@@ -1256,7 +1256,7 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, msg *c
 						bck, backend, err)
 					return
 				}
-				args := bckInitArgs{p: p, w: w, r: r, bck: backend, msg: msg}
+				args := bckInitArgs{p: p, w: w, r: r, bck: backend, msg: msg, query: query}
 				args.createAIS = false
 				args.lookupRemote = true
 				if _, err = args.try(); err != nil {
@@ -1370,7 +1370,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks 
 	}
 	if queryBcks.Name != "" {
 		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
-		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: cmn.AceBckHEAD, bck: bck}
+		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: cmn.AceBckHEAD, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
 		bckArgs.lookupRemote = lookupRemoteBck(nil, dpq)
 		if _, err := bckArgs.initAndTry(queryBcks.Name); err != nil {
@@ -1527,7 +1527,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: cmn.AceBckHEAD}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: cmn.AceBckHEAD, dpq: apireq.dpq, query: apireq.query}
 	bckArgs.createAIS = false
 	bckArgs.lookupRemote = lookupRemoteBck(apireq.query, nil)
 	bck, err := bckArgs.initAndTry(apireq.bck.Name)
@@ -1618,7 +1618,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if propsToUpdate.Access != nil {
 		perms |= cmn.AceBckSetACL
 	}
-	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, skipBackend: true, perms: perms}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, skipBackend: true, perms: perms, dpq: apireq.dpq, query: apireq.query}
 	bckArgs.createAIS = false
 	bckArgs.lookupRemote = lookupRemoteBck(apireq.query, nil)
 	if bck, err = bckArgs.initAndTry(bck.Name); err != nil {
@@ -1636,7 +1636,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if !nprops.BackendBck.IsEmpty() {
 		// backend must exist
 		backendBck := cluster.NewBckEmbed(nprops.BackendBck)
-		args := bckInitArgs{p: p, w: w, r: r, bck: backendBck, msg: msg}
+		args := bckInitArgs{p: p, w: w, r: r, bck: backendBck, msg: msg, dpq: apireq.dpq, query: apireq.query}
 		args.createAIS = false
 		args.lookupRemote = true
 		if _, err = args.initAndTry(backendBck.Name); err != nil {
