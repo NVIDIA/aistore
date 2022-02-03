@@ -19,19 +19,19 @@ const MDVersionLast = 1 // current version of metadata
 
 // Metadata - EC information stored in metafiles for every encoded object
 type Metadata struct {
-	Size        int64            // obj size (after EC'ing sum size of slices differs from the original)
-	Generation  int64            // Timestamp when the object was EC'ed
-	ObjCksum    string           // checksum of the original object
-	ObjVersion  string           // object version
-	CksumType   string           // slice checksum type
-	CksumValue  string           // slice checksum of the slice if EC is used
-	FullReplica string           // daemon ID where full(main) replica is
-	Daemons     cos.MapStrUint16 // Locations of all slices: DaemonID <-> SliceID
-	Data        int              // the number of data slices
-	Parity      int              // the number of parity slices
-	SliceID     int              // 0 for full replica, 1 to N for slices
-	MDVersion   uint32           // Metadata format version
-	IsCopy      bool             // object is replicated(true) or encoded(false)
+	Size        int64            `json:"obj_size"`      // obj size (after EC'ing sum size of slices differs from the original)
+	Generation  int64            `json:"generation"`    // Timestamp when the object was EC'ed
+	ObjCksum    string           `json:"obj_cksum"`     // checksum of the original object
+	ObjVersion  string           `json:"obj_version"`   // object version
+	CksumType   string           `json:"cksum_type"`    // slice checksum type
+	CksumValue  string           `json:"slice_cksum"`   // slice checksum of the slice if EC is used
+	FullReplica string           `json:"replica_node"`  // daemon ID where full(main) replica is
+	Daemons     cos.MapStrUint16 `json:"nodes"`         // Locations of all slices: DaemonID <-> SliceID
+	Data        int              `json:"data_slices"`   // the number of data slices
+	Parity      int              `json:"parity_slices"` // the number of parity slices
+	SliceID     int              `json:"slice_id"`      // 0 for full replica, 1 to N for slices
+	MDVersion   uint32           `json:"md_version"`    // Metadata format version
+	IsCopy      bool             `json:"is_copy"`       // object is replicated(true) or encoded(false)
 }
 
 // interface guard
