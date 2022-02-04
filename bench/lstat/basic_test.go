@@ -9,36 +9,45 @@
 package lstat_test
 
 import (
-	"os"
 	"testing"
-
-	"github.com/NVIDIA/aistore/fs"
 )
 
 const (
-	filename = "lstat_test.go"
+	one = "basic_test.go"
+	two = "parallel_test.go"
 )
 
 func BenchmarkAccess(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		if err := fs.Access(filename); err != nil {
-			b.Fatal(err)
-		}
+		access(b, one)
+		access(b, two)
 	}
 }
 
 func BenchmarkStat(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		if _, err := os.Stat(filename); err != nil {
-			b.Fatal(err)
-		}
+		stat(b, one)
+		stat(b, two)
 	}
 }
 
 func BenchmarkLstat(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		if _, err := os.Lstat(filename); err != nil {
-			b.Fatal(err)
-		}
+		lstat(b, one)
+		lstat(b, two)
+	}
+}
+
+func BenchmarkOpen(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		open(b, one)
+		open(b, two)
+	}
+}
+
+func BenchmarkSyscallStat(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		syscallStat(b, one)
+		syscallStat(b, two)
 	}
 }
