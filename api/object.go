@@ -139,10 +139,12 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 		q = cmn.AddBckToQuery(nil, bck)
 	}
 
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Query:      q,
+	reqParams := allocRp()
+	defer freeRp(reqParams)
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = q
 	}
 	resp, err := reqParams.doResp(nil)
 	if err != nil {
@@ -189,39 +191,48 @@ func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, cus
 		q = cmn.AddBckToQuery(q, bck)
 	}
 	baseParams.Method = http.MethodPatch
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Body:       cos.MustMarshal(actMsg),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      q,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqParams.Body = cos.MustMarshal(actMsg)
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = q
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // DeleteObject deletes an object specified by bucket/object.
 func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	baseParams.Method = http.MethodDelete
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Query:      cmn.AddBckToQuery(nil, bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = cmn.AddBckToQuery(nil, bck)
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // EvictObject evicts an object specified by bucket/object.
 func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	baseParams.Method = http.MethodDelete
 	actMsg := cmn.ActionMsg{Action: cmn.ActEvictObjects, Name: cos.JoinWords(bck.Name, object)}
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Body:       cos.MustMarshal(actMsg),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqParams.Body = cos.MustMarshal(actMsg)
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, bck)
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // GetObject returns the length of the object. Does not validate checksum of the
@@ -241,13 +252,15 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 		w, q, hdr = getObjectOptParams(options[0])
 	}
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Query:      cmn.AddBckToQuery(q, bck),
-		Header:     hdr,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = cmn.AddBckToQuery(q, bck)
+		reqParams.Header = hdr
 	}
 	resp, err := reqParams.doResp(w)
+	freeRp(reqParams)
 	if err != nil {
 		return 0, err
 	}
@@ -256,8 +269,7 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 
 // GetObjectReader returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
-func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser,
-	err error) {
+func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser, err error) {
 	var (
 		q   url.Values
 		hdr http.Header
@@ -269,13 +281,16 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Query:      q,
-		Header:     hdr,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = q
+		reqParams.Header = hdr
 	}
-	return reqParams.doReader()
+	r, err = reqParams.doReader()
+	freeRp(reqParams)
+	return
 }
 
 // GetObjectWithValidation has same behavior as GetObject, but performs checksum
@@ -288,8 +303,7 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 //
 // Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
 // are different.
-func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string,
-	options ...GetObjectInput) (n int64, err error) {
+func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w   = io.Discard
 		q   url.Values
@@ -300,14 +314,16 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string,
 	}
 	baseParams.Method = http.MethodGet
 
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Query:      cmn.AddBckToQuery(q, bck),
-		Header:     hdr,
-		Validate:   true,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = cmn.AddBckToQuery(q, bck)
+		reqParams.Header = hdr
+		reqParams.Validate = true
 	}
 	resp, err := reqParams.doResp(w)
+	freeRp(reqParams)
 	if err != nil {
 		return 0, err
 	}
@@ -338,13 +354,15 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Query:      q,
-		Header:     hdr,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = q
+		reqParams.Header = hdr
 	}
 	resp, err := reqParams.doResp(w)
+	freeRp(reqParams)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -448,7 +466,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 // FlushObject must be called after all the appends (via `api.AppendObject`).
 // To "flush", it uses the handle returned by `api.AppendObject`.
 // This call will create a fully operational and accessible object.
-func FlushObject(args FlushArgs) (err error) {
+func FlushObject(args FlushArgs) error {
 	var (
 		header http.Header
 		q      = make(url.Values, 4)
@@ -463,27 +481,33 @@ func FlushObject(args FlushArgs) (err error) {
 		header.Set(cmn.HdrObjCksumVal, args.Cksum.Val())
 	}
 	args.BaseParams.Method = http.MethodPut
-	reqParams := &ReqParams{
-		BaseParams: args.BaseParams,
-		Path:       cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
-		Query:      q,
-		Header:     header,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = args.BaseParams
+		reqParams.Path = cmn.URLPathObjects.Join(args.Bck.Name, args.Object)
+		reqParams.Query = q
+		reqParams.Header = header
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // RenameObject renames object name from `oldName` to `newName`. Works only
 // across single, specified bucket.
 func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) error {
 	baseParams.Method = http.MethodPost
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathObjects.Join(bck.Name, oldName),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathObjects.Join(bck.Name, oldName)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, bck)
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // PromoteFileOrDir promotes AIS-colocated files and directories to objects.
@@ -499,14 +523,17 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 	}
 
 	args.BaseParams.Method = http.MethodPost
-	reqParams := &ReqParams{
-		BaseParams: args.BaseParams,
-		Path:       cmn.URLPathObjects.Join(args.Bck.Name),
-		Body:       cos.MustMarshal(actMsg),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, args.Bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = args.BaseParams
+		reqParams.Path = cmn.URLPathObjects.Join(args.Bck.Name)
+		reqParams.Body = cos.MustMarshal(actMsg)
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, args.Bck)
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // DoReqWithRetry makes `client.Do` request and retries it when got "Broken Pipe"
@@ -570,8 +597,9 @@ exit:
 	if err != nil {
 		return nil, fmt.Errorf("failed to %s, err: %v", reqArgs.Method, err)
 	}
-	reqParams := ReqParams{}
+	reqParams := allocRp()
 	_, err = reqParams.readResp(resp, nil)
+	freeRp(reqParams)
 	return
 }
 

@@ -76,14 +76,16 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 
 	msg := cmn.ActionMsg{Action: cmn.ActXactStart, Value: xactMsg}
 	baseParams.Method = http.MethodPut
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathCluster.S,
-		Body:       cos.MustMarshal(msg),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, args.Bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathCluster.S
+		reqParams.Body = cos.MustMarshal(msg)
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, args.Bck)
 	}
 	err = reqParams.DoHTTPReqResp(&id)
+	freeRp(reqParams)
 	return id, err
 }
 
@@ -94,14 +96,17 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 		Value:  xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
 	}
 	baseParams.Method = http.MethodPut
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathCluster.S,
-		Body:       cos.MustMarshal(msg),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, args.Bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathCluster.S
+		reqParams.Body = cos.MustMarshal(msg)
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, args.Bck)
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // GetXactionSnapsByID gets all xaction snaps for a given xaction id.
@@ -121,14 +126,16 @@ func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMul
 		msg.OnlyRunning = Bool(true)
 	}
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathCluster.S,
-		Body:       cos.MustMarshal(msg),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathCluster.S
+		reqParams.Body = cos.MustMarshal(msg)
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}}
 	}
 	err = reqParams.DoHTTPReqResp(&xs)
+	freeRp(reqParams)
 	return xs, err
 }
 
@@ -140,14 +147,16 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 		msg.OnlyRunning = Bool(true)
 	}
 	status = &nl.NotifStatus{}
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathCluster.S,
-		Body:       cos.MustMarshal(msg),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStatus}},
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathCluster.S
+		reqParams.Body = cos.MustMarshal(msg)
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStatus}}
 	}
 	err = reqParams.DoHTTPReqResp(status)
+	freeRp(reqParams)
 	return
 }
 

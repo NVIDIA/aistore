@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -100,6 +101,22 @@ func GetWhatRawQuery(getWhat, getProps string) string {
 ///////////////
 // ReqParams //
 ///////////////
+var (
+	reqParamPool sync.Pool
+	reqParams0   ReqParams
+)
+
+func allocRp() *ReqParams {
+	if v := reqParamPool.Get(); v != nil {
+		return v.(*ReqParams)
+	}
+	return &ReqParams{}
+}
+
+func freeRp(reqParams *ReqParams) {
+	*reqParams = reqParams0
+	reqParamPool.Put(reqParams)
+}
 
 // uses do() to make request; if successful, checks, drains, and closes the response body
 func (reqParams *ReqParams) DoHTTPRequest() error {

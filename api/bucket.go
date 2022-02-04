@@ -61,14 +61,16 @@ func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodPatch
 	path := cmn.URLPathBuckets.Join(bck.Name)
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       path,
-		Body:       body,
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      q,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = path
+		reqParams.Body = body
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = q
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
+	freeRp(reqParams)
 	return
 }
 
@@ -84,7 +86,13 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck) (p *cmn.BucketProps, err err
 	baseParams.Method = http.MethodHead
 	q = cmn.AddBckToQuery(q, bck)
 
-	reqParams := &ReqParams{BaseParams: baseParams, Path: path, Query: q}
+	reqParams := allocRp()
+	defer freeRp(reqParams)
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = path
+		reqParams.Query = q
+	}
 	resp, err = reqParams.doResp(nil)
 	if err == nil {
 		p = &cmn.BucketProps{}
@@ -122,14 +130,16 @@ func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.Bcks, erro
 		query = cmn.AddBckToQuery(nil, cmn.Bck(queryBcks))
 	)
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       path,
-		Body:       body,
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      query,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = path
+		reqParams.Body = body
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = query
 	}
 	err := reqParams.DoHTTPReqResp(&bcks)
+	freeRp(reqParams)
 	if err != nil {
 		return nil, err
 	}
@@ -144,15 +154,15 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 		msg = &cmn.BckSummMsg{}
 	}
 	baseParams.Method = http.MethodGet
-	var (
-		reqParams = &ReqParams{
-			BaseParams: baseParams,
-			Path:       cmn.URLPathBuckets.Join(query.Name),
-			Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-			Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
-		}
-		summaries cmn.BckSummaries
-	)
+	reqParams := allocRp()
+	defer freeRp(reqParams)
+	summaries := cmn.BckSummaries{}
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(query.Name)
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, cmn.Bck(query))
+	}
 	if err := reqParams.waitForAsyncReqComplete(cmn.ActSummaryBck, msg, &summaries); err != nil {
 		return nil, err
 	}
@@ -173,27 +183,33 @@ func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUp
 		return err
 	}
 	baseParams.Method = http.MethodPost
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateBck, Value: props}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(bck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateBck, Value: props})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, bck)
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // DestroyBucket sends request to remove an AIS bucket with the given name.
 func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	baseParams.Method = http.MethodDelete
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActDestroyBck}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(bck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActDestroyBck})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, bck)
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // DoesBucketExist queries a proxy or target to get a list of all AIS buckets,
@@ -226,14 +242,16 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, optionalMsg ...*c
 	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
 	baseParams.Method = http.MethodPost
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBck, Value: msg}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      q,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(fromBck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBck, Value: msg})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = q
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
+	freeRp(reqParams)
 	return
 }
 
@@ -245,14 +263,16 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 	baseParams.Method = http.MethodPost
 	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMoveBck}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      q,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(fromBck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMoveBck})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = q
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
+	freeRp(reqParams)
 	return
 }
 
@@ -264,14 +284,17 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 	if keepMD {
 		q = url.Values{cmn.URLParamKeepBckMD: []string{"true"}}
 	}
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActEvictRemoteBck}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(q, bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(bck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActEvictRemoteBck})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(q, bck)
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // Polling:
@@ -372,7 +395,14 @@ func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjs
 	// the entire bucket). Each iteration lists a page of objects and reduces the `rem`
 	// counter accordingly. When the latter gets below page size, we perform the final
 	// iteration for the reduced page.
-	reqParams := &ReqParams{BaseParams: baseParams, Path: path, Header: hdr, Query: q}
+	reqParams := allocRp()
+	defer freeRp(reqParams)
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = path
+		reqParams.Header = hdr
+		reqParams.Query = q
+	}
 	for pageNum := 1; listAll || toRead > 0; pageNum++ {
 		if !listAll {
 			lsmsg.PageSize = toRead
@@ -447,23 +477,24 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjsMsg)
 	if lsmsg == nil {
 		lsmsg = &cmn.ListObjsMsg{}
 	}
-	var (
-		actMsg    = cmn.ActionMsg{Action: cmn.ActList, Value: lsmsg}
-		reqParams = &ReqParams{
-			BaseParams: baseParams,
-			Path:       cmn.URLPathBuckets.Join(bck.Name),
-			Header: http.Header{
-				cmn.HdrAccept:      []string{cmn.ContentMsgPack},
-				cmn.HdrContentType: []string{cmn.ContentJSON},
-			},
-			Query: cmn.AddBckToQuery(url.Values{}, bck),
-			Body:  cos.MustMarshal(actMsg),
+	actMsg := cmn.ActionMsg{Action: cmn.ActList, Value: lsmsg}
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(bck.Name)
+		reqParams.Header = http.Header{
+			cmn.HdrAccept:      []string{cmn.ContentMsgPack},
+			cmn.HdrContentType: []string{cmn.ContentJSON},
 		}
-	)
+		reqParams.Query = cmn.AddBckToQuery(url.Values{}, bck)
+		reqParams.Body = cos.MustMarshal(actMsg)
+	}
 
 	// NOTE: No need to preallocate bucket entries slice, we use msgpack so it will do it for us!
 	page := &cmn.BucketList{}
-	if err := reqParams.DoHTTPReqResp(page); err != nil {
+	err := reqParams.DoHTTPReqResp(page)
+	freeRp(reqParams)
+	if err != nil {
 		return nil, err
 	}
 	lsmsg.UUID = page.UUID
@@ -478,28 +509,33 @@ func ListObjectsInvalidateCache(baseParams BaseParams, bck cmn.Bck) error {
 		q    = url.Values{}
 	)
 	baseParams.Method = http.MethodPost
-	reqParams := &ReqParams{
-		Query:      cmn.AddBckToQuery(q, bck),
-		BaseParams: baseParams,
-		Path:       path,
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActInvalListCache}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+	reqParams := allocRp()
+	{
+		reqParams.Query = cmn.AddBckToQuery(q, bck)
+		reqParams.BaseParams = baseParams
+		reqParams.Path = path
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActInvalListCache})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // MakeNCopies starts an extended action (xaction) to bring a given bucket to a
 // certain redundancy level (num copies).
 func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(bck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, bck)
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
+	freeRp(reqParams)
 	return
 }
 
@@ -511,14 +547,16 @@ func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactI
 		ParitySlices: &parity,
 		Enabled:      Bool(true),
 	}))
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActECEncode, Value: ecConf}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, bck),
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(bck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActECEncode, Value: ecConf})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = cmn.AddBckToQuery(nil, bck)
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
+	freeRp(reqParams)
 	return
 }
 
