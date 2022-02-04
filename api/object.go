@@ -327,7 +327,6 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 	if err != nil {
 		return 0, err
 	}
-
 	hdrCksumValue := resp.Header.Get(cmn.HdrObjCksumVal)
 	if resp.cksumValue != hdrCksumValue {
 		return 0, cmn.NewErrInvalidCksum(hdrCksumValue, resp.cksumValue)
@@ -335,8 +334,8 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 	return resp.n, nil
 }
 
-// GetObjectWithResp returns the response of the request and length of the object.
-// Does not validate the checksum of the object in the response.
+// GetObjectWithResp returns the response and the length of the object.
+// It does not validate the checksum of the object in the response.
 //
 // Writes the response body to a writer if one is specified in the optional
 // `GetObjectInput.Writer`. Otherwise, it discards the response body read.
@@ -345,9 +344,9 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (*http.Response,
 	int64, error) {
 	var (
-		w   = io.Discard
 		q   url.Values
 		hdr http.Header
+		w   = io.Discard
 	)
 	if len(options) != 0 {
 		w, q, hdr = getObjectOptParams(options[0])

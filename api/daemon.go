@@ -33,49 +33,57 @@ type GetLogInput struct {
 // GetMountpaths given the direct public URL of the target, returns the target's mountpaths or error.
 func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.MountpathList, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.S,
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}},
-		Header: http.Header{
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.S
+		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}}
+		reqParams.Header = http.Header{
 			cmn.HdrNodeID:  []string{node.ID()},
 			cmn.HdrNodeURL: []string{node.URL(cmn.NetworkPublic)},
-		},
+		}
 	}
 	err = reqParams.DoHTTPReqResp(&mpl)
+	freeRp(reqParams)
 	return mpl, err
 }
 
 // TODO: rewrite tests that come here with `force`
 func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, force bool) error {
 	baseParams.Method = http.MethodPut
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAttach, Value: mountpath}),
-		Header: http.Header{
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.Join(cmn.Mountpaths)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAttach, Value: mountpath})
+		reqParams.Header = http.Header{
 			cmn.HdrNodeID:      []string{node.ID()},
 			cmn.HdrNodeURL:     []string{node.URL(cmn.NetworkPublic)},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
-		},
-		Query: url.Values{cmn.URLParamForce: []string{strconv.FormatBool(force)}},
+		}
+		reqParams.Query = url.Values{cmn.URLParamForce: []string{strconv.FormatBool(force)}}
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
 	baseParams.Method = http.MethodPost
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountpath}),
-		Header: http.Header{
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.Join(cmn.Mountpaths)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountpath})
+		reqParams.Header = http.Header{
 			cmn.HdrNodeID:      []string{node.ID()},
 			cmn.HdrNodeURL:     []string{node.URL(cmn.NetworkPublic)},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
-		},
+		}
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
@@ -84,17 +92,20 @@ func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		q = url.Values{cmn.URLParamDontResilver: []string{"true"}}
 	}
 	baseParams.Method = http.MethodDelete
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDetach, Value: mountpath}),
-		Header: http.Header{
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.Join(cmn.Mountpaths)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDetach, Value: mountpath})
+		reqParams.Header = http.Header{
 			cmn.HdrNodeID:      []string{node.ID()},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
-		},
-		Query: q,
+		}
+		reqParams.Query = q
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
@@ -103,29 +114,34 @@ func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath stri
 		q = url.Values{cmn.URLParamDontResilver: []string{"true"}}
 	}
 	baseParams.Method = http.MethodPost
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mountpath}),
-		Header: http.Header{
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.Join(cmn.Mountpaths)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mountpath})
+		reqParams.Header = http.Header{
 			cmn.HdrNodeID:      []string{node.ID()},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
-		},
-		Query: q,
+		}
+		reqParams.Query = q
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // GetDaemonConfig returns the configuration of a specific daemon in a cluster.
 func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Config, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.S,
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatConfig}},
-		Header:     http.Header{cmn.HdrNodeID: []string{node.ID()}},
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.S
+		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatConfig}}
+		reqParams.Header = http.Header{cmn.HdrNodeID: []string{node.ID()}}
 	}
 	err = reqParams.DoHTTPReqResp(&config)
+	freeRp(reqParams)
 	if err != nil {
 		return nil, err
 	}
@@ -139,15 +155,15 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 
 func GetDaemonStats(baseParams BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.S,
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}},
-		Header: http.Header{
-			cmn.HdrNodeID: []string{node.ID()},
-		},
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.S
+		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}}
+		reqParams.Header = http.Header{cmn.HdrNodeID: []string{node.ID()}}
 	}
 	err = reqParams.DoHTTPReqResp(&ds)
+	freeRp(reqParams)
 	return ds, err
 }
 
@@ -160,25 +176,30 @@ func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) 
 		q.Set(cmn.URLParamSev, args.Severity)
 	}
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.S,
-		Query:      q,
-		Header:     http.Header{cmn.HdrNodeID: []string{node.ID()}},
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.S
+		reqParams.Query = q
+		reqParams.Header = http.Header{cmn.HdrNodeID: []string{node.ID()}}
 	}
-	return reqParams.DoHTTPReqResp(w)
+	err := reqParams.DoHTTPReqResp(w)
+	freeRp(reqParams)
+	return err
 }
 
 // GetDaemonStatus returns information about specific node in a cluster.
 func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonStatus, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.S,
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDaemonStatus}},
-		Header:     http.Header{cmn.HdrNodeID: []string{node.ID()}},
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.S
+		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDaemonStatus}}
+		reqParams.Header = http.Header{cmn.HdrNodeID: []string{node.ID()}}
 	}
 	err = reqParams.DoHTTPReqResp(&daeInfo)
+	freeRp(reqParams)
 	if err == nil {
 		daeInfo.Status = StatusOnline
 	} else {
@@ -202,26 +223,32 @@ func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs, tr
 	if len(transient) > 0 {
 		query.Add(cmn.ActTransient, strconv.FormatBool(transient[0]))
 	}
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.Join(cmn.ActSetConfig),
-		Query:      query,
-		Header:     http.Header{cmn.HdrNodeID: []string{nodeID}},
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.Join(cmn.ActSetConfig)
+		reqParams.Query = query
+		reqParams.Header = http.Header{cmn.HdrNodeID: []string{nodeID}}
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }
 
 // ResetDaemonConfig resets the configuration for a specific node to the cluster configuration.
 func ResetDaemonConfig(baseParams BaseParams, nodeID string) error {
 	baseParams.Method = http.MethodPut
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathReverseDaemon.S,
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetConfig}),
-		Header: http.Header{
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathReverseDaemon.S
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetConfig})
+		reqParams.Header = http.Header{
 			cmn.HdrNodeID:      []string{nodeID},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
-		},
+		}
 	}
-	return reqParams.DoHTTPRequest()
+	err := reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return err
 }

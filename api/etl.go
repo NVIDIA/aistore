@@ -19,27 +19,40 @@ import (
 
 func ETLInitSpec(baseParams BaseParams, podspec []byte /*yaml*/) (id string, err error) {
 	baseParams.Method = http.MethodPost
-	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLInitSpec.S, Body: podspec}
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathETLInitSpec.S
+		reqParams.Body = podspec
+	}
 	err = reqParams.DoHTTPReqResp(&id)
+	freeRp(reqParams)
 	return id, err
 }
 
 func ETLInitCode(baseParams BaseParams, msg etl.InitCodeMsg) (id string, err error) {
 	baseParams.Method = http.MethodPost
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathETLInitCode.S,
-		Body:       cos.MustMarshal(msg),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathETLInitCode.S
+		reqParams.Body = cos.MustMarshal(msg)
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&id)
+	freeRp(reqParams)
 	return id, err
 }
 
 func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathETL.S}
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathETL.S
+	}
 	err = reqParams.DoHTTPReqResp(&list)
+	freeRp(reqParams)
 	return list, err
 }
 
@@ -51,24 +64,39 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 	} else {
 		path = cmn.URLPathETL.Join(id, cmn.ETLLogs)
 	}
-	reqParams := &ReqParams{BaseParams: baseParams, Path: path}
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = path
+	}
 	err = reqParams.DoHTTPReqResp(&logs)
+	freeRp(reqParams)
 	return logs, err
 }
 
 func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err error) {
 	params.Method = http.MethodGet
 	path := cmn.URLPathETL.Join(id, cmn.ETLHealth)
-	reqParams := &ReqParams{BaseParams: params, Path: path}
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = params
+		reqParams.Path = path
+	}
 	err = reqParams.DoHTTPReqResp(&healths)
+	freeRp(reqParams)
 	return healths, err
 }
 
 func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error) {
 	params.Method = http.MethodGet
 	path := cmn.URLPathETL.Join(id)
-	reqParams := &ReqParams{BaseParams: params, Path: path}
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = params
+		reqParams.Path = path
+	}
 	r, err := reqParams.doReader()
+	freeRp(reqParams)
 	if err != nil {
 		return nil, err
 	}
@@ -100,8 +128,13 @@ func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error
 
 func ETLStop(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
-	reqParams := &ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLStop.Join(id)}
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathETLStop.Join(id)
+	}
 	err = reqParams.DoHTTPRequest()
+	freeRp(reqParams)
 	return err
 }
 
@@ -122,13 +155,15 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg
 	baseParams.Method = http.MethodPost
 	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBck, Value: bckMsg}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      q,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(fromBck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBck, Value: bckMsg})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = q
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
+	freeRp(reqParams)
 	return
 }

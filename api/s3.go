@@ -13,24 +13,26 @@ import (
 )
 
 // s3/<bucket-name>/<object-name>
-func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options ...GetObjectInput) (n int64, err error) {
+func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options ...GetObjectInput) (int64, error) {
 	var (
-		w   = io.Discard
 		q   url.Values
 		hdr http.Header
+		w   = io.Discard
 	)
 	if len(options) != 0 {
 		w, q, hdr = getObjectOptParams(options[0])
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathS3.Join(bck.Name, objectName),
-		Query:      q,
-		Header:     hdr,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathS3.Join(bck.Name, objectName)
+		reqParams.Query = q
+		reqParams.Header = hdr
 	}
 	resp, err := reqParams.doResp(w)
+	freeRp(reqParams)
 	if err != nil {
 		return 0, err
 	}

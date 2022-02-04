@@ -81,13 +81,15 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg i
 		err = fmt.Errorf("invalid action %q", action)
 		return
 	}
-	reqParams := &ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: action, Value: msg}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      q,
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = cmn.URLPathBuckets.Join(bck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: action, Value: msg})
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Query = q
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
+	freeRp(reqParams)
 	return
 }
