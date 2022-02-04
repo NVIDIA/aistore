@@ -797,7 +797,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	}
 	// slow path
 	bdir := lom.mpathInfo.MakePathBck(lom.Bucket())
-	if _, err = os.Stat(bdir); err != nil {
+	if err = cos.Stat(bdir); err != nil {
 		return nil, fmt.Errorf("%s: bucket directory %w", lom, err)
 	}
 	fdir := filepath.Dir(fqn)

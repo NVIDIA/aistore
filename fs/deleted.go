@@ -64,7 +64,7 @@ func (mi *MountpathInfo) RemoveDeleted(who string) (rerr error) {
 // 2. Synchronously renames old folder to temporary directory
 func (mi *MountpathInfo) MoveToDeleted(dir string) (err error) {
 	var base, tmpBase, tmpDst string
-	err = Access(dir)
+	err = cos.Stat(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = nil

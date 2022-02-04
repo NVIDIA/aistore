@@ -193,7 +193,7 @@ func testMountpath(filePath, mountpath string,
 	if glog.V(4) {
 		glog.Infof("Testing mountpath %q", mountpath)
 	}
-	if _, err := os.Stat(mountpath); err != nil {
+	if err := cos.Stat(mountpath); err != nil {
 		glog.Errorf("Mountpath %q is unavailable", mountpath)
 		return 0, 0, false
 	}

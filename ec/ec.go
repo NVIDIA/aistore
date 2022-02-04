@@ -381,7 +381,7 @@ func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 	}
 	readCloser := io.NopCloser(reader)
 	bdir := lom.MpathInfo().MakePathBck(lom.Bucket())
-	if err := fs.Access(bdir); err != nil {
+	if err := cos.Stat(bdir); err != nil {
 		return err
 	}
 	params := cluster.PutObjectParams{

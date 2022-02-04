@@ -484,7 +484,7 @@ func SaveReader(fqn string, reader io.Reader, buf []byte, cksumType string,
 	size int64, dirMustExist string) (cksum *CksumHash, err error) {
 	Assert(fqn != "")
 	if dirMustExist != "" {
-		if _, err := os.Stat(dirMustExist); err != nil {
+		if err := Stat(dirMustExist); err != nil {
 			return nil, fmt.Errorf("failed to save-safe %s: directory %s %w", fqn, dirMustExist, err)
 		}
 	}

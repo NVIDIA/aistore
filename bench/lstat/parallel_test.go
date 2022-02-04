@@ -17,8 +17,6 @@ import (
 	"strconv"
 	"syscall"
 	"testing"
-
-	"github.com/NVIDIA/aistore/fs"
 )
 
 const dir = "/tmp/w/"
@@ -32,27 +30,29 @@ $ mkdir /tmp/w; for f in {10000..99999}; do echo "$RANDOM -- $RANDOM" > /tmp/w/$
 	}
 }
 
+func syscallAccess(path string) error { return syscall.Access(path, syscall.F_OK) }
+
 func access(b *testing.B, path string) {
-	if err := fs.Access(path); err != nil {
-		b.Fatal(err)
+	if err := syscallAccess(path); err != nil {
+		b.Fatalf("%s: %v", path, err)
 	}
 }
 
 func stat(b *testing.B, path string) {
 	if _, err := os.Stat(path); err != nil {
-		b.Fatal(err)
+		b.Fatalf("%s: %v", path, err)
 	}
 }
 
 func lstat(b *testing.B, path string) {
 	if _, err := os.Lstat(path); err != nil {
-		b.Fatal(err)
+		b.Fatalf("%s: %v", path, err)
 	}
 }
 
 func open(b *testing.B, path string) {
 	if file, err := os.Open(path); err != nil {
-		b.Fatal(err)
+		b.Fatalf("%s: %v", path, err)
 	} else {
 		file.Close()
 	}
@@ -61,7 +61,7 @@ func open(b *testing.B, path string) {
 func syscallStat(b *testing.B, path string) {
 	var sys syscall.Stat_t
 	if err := syscall.Stat(path, &sys); err != nil {
-		b.Fatal(err)
+		b.Fatalf("%s: %v", path, err)
 	}
 }
 

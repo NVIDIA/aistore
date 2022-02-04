@@ -148,7 +148,7 @@ func (poi *putObjInfo) putObject() (int, error) {
 
 func (poi *putObjInfo) finalize() (errCode int, err error) {
 	if errCode, err = poi.tryFinalize(); err != nil {
-		if err1 := fs.Access(poi.workFQN); err1 == nil || !os.IsNotExist(err1) {
+		if err1 := cos.Stat(poi.workFQN); err1 == nil || !os.IsNotExist(err1) {
 			if err1 == nil {
 				err1 = err
 			}

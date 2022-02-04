@@ -331,7 +331,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 	} else {
 		fileFQN = ct.Make(fs.ECSliceType)
 	}
-	if err := fs.Access(fileFQN); err != nil {
+	if err := cos.Stat(fileFQN); err != nil {
 		glog.Warningf("%s no CT for metadata[%d]: %s", reb.t.Snode(), md.SliceID, fileFQN)
 		return nil
 	}

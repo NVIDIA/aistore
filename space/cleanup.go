@@ -348,7 +348,7 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 			return
 		}
 		metaFQN := fs.CSM.Gen(ct, fs.ECMetaType, "")
-		if fs.Access(metaFQN) != nil {
+		if cos.Stat(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, ct)
 		}
 	case fs.ECMetaType:
@@ -363,11 +363,11 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 		// Metafile is saved the last. If there is no corresponding replica or
 		// slice, it is safe to remove the stray metafile.
 		sliceCT := ct.Clone(fs.ECSliceType)
-		if fs.Access(sliceCT.FQN()) == nil {
+		if cos.Stat(sliceCT.FQN()) == nil {
 			return
 		}
 		objCT := ct.Clone(fs.ObjectType)
-		if fs.Access(objCT.FQN()) == nil {
+		if cos.Stat(objCT.FQN()) == nil {
 			return
 		}
 		j.oldWork = append(j.oldWork, fqn)
@@ -427,7 +427,7 @@ func (j *clnJ) visitObj(fqn string) {
 	}
 	if lom.Bprops().EC.Enabled {
 		metaFQN := fs.CSM.Gen(lom, fs.ECMetaType, "")
-		if fs.Access(metaFQN) != nil {
+		if cos.Stat(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, cluster.NewCTFromLOM(lom, fs.ObjectType))
 		}
 	} else {
@@ -531,7 +531,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 	// 3. rm EC slices and replicas that are still without correcponding metafile
 	for _, ct := range j.misplaced.ec {
 		metaFQN := fs.CSM.Gen(ct, fs.ECMetaType, "")
-		if fs.Access(metaFQN) == nil {
+		if cos.Stat(metaFQN) == nil {
 			continue
 		}
 		if os.Remove(ct.FQN()) == nil {

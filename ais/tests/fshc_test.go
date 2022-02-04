@@ -222,7 +222,7 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	)
 
 	// "broken" mpath does no exist, nothing to restore
-	if _, err := os.Stat(mpath + suffix); err != nil {
+	if err := cos.Stat(mpath + suffix); err != nil {
 		return
 	}
 	// cleanup

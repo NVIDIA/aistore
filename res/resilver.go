@@ -206,7 +206,7 @@ func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byt
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
 	// the metafile has gone
-	if err := fs.Access(src); os.IsNotExist(err) {
+	if err := cos.Stat(src); os.IsNotExist(err) {
 		return "", "", nil
 	}
 	dst := dstMpath.MakePathFQN(ct.Bucket(), fs.ECMetaType, ct.ObjectName())

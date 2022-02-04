@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
@@ -142,7 +143,7 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 		glog.Warningf("metadata FQN generation failed %q: %v", lom, err)
 		return nil
 	}
-	_, err = os.Stat(mdFQN)
+	err = cos.Stat(mdFQN)
 	// Metadata file exists - the object was already EC'ed before.
 	if err == nil {
 		return nil

@@ -48,7 +48,7 @@ func PersistMarker(marker string) (fatalErr, writeErr error) {
 	}
 	for _, mi := range availableMpaths {
 		fpath := filepath.Join(mi.Path, relname)
-		if err := Access(fpath); err == nil {
+		if err := cos.Stat(fpath); err == nil {
 			cnt++
 			if cnt > numMarkers {
 				if err := cos.RemoveFile(fpath); err != nil {
@@ -149,7 +149,7 @@ func CountPersisted(fname string) (cnt int) {
 	available := GetAvail()
 	for mpath := range available {
 		fpath := filepath.Join(mpath, fname)
-		if err := Access(fpath); err == nil {
+		if err := cos.Stat(fpath); err == nil {
 			cnt++
 		}
 	}

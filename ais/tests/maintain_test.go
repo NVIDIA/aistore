@@ -6,7 +6,6 @@ package integration
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -254,7 +253,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 func countVMDTargets(tsMpaths map[*cluster.Snode][]string) (total int) {
 	for _, mpaths := range tsMpaths {
 		for _, mpath := range mpaths {
-			if _, err := os.Stat(filepath.Join(mpath, cmn.VmdFname)); err == nil {
+			if err := cos.Stat(filepath.Join(mpath, cmn.VmdFname)); err == nil {
 				total++
 				break
 			}

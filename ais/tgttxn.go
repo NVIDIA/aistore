@@ -462,7 +462,7 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) err
 	availablePaths := fs.GetAvail()
 	for _, mi := range availablePaths {
 		path := mi.MakePathCT(bckTo.Bck, fs.ObjectType)
-		if err := fs.Access(path); err != nil {
+		if err := cos.Stat(path); err != nil {
 			if !os.IsNotExist(err) {
 				return err
 			}

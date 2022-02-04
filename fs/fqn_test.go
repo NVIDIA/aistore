@@ -257,7 +257,7 @@ func TestParseFQN(t *testing.T) {
 			fs.TestDisableValidation()
 
 			for _, mpath := range tt.mpaths {
-				if _, err := os.Stat(mpath); os.IsNotExist(err) {
+				if err := cos.Stat(mpath); os.IsNotExist(err) {
 					cos.CreateDir(mpath)
 					defer os.RemoveAll(mpath)
 				}
@@ -352,7 +352,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			fs.TestNew(mios)
 			fs.TestDisableValidation()
 
-			if _, err := os.Stat(tt.mpath); os.IsNotExist(err) {
+			if err := cos.Stat(tt.mpath); os.IsNotExist(err) {
 				cos.CreateDir(tt.mpath)
 				defer os.RemoveAll(tt.mpath)
 			}

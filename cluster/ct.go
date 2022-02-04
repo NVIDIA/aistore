@@ -163,7 +163,7 @@ func (ct *CT) Make(toType string, pref ...string /*optional prefix*/) string {
 // directly to ct.FQN
 func (ct *CT) Write(t Target, reader io.Reader, size int64, workFQN ...string) (err error) {
 	bdir := ct.mpathInfo.MakePathBck(ct.Bucket())
-	if err := fs.Access(bdir); err != nil {
+	if err := cos.Stat(bdir); err != nil {
 		return err
 	}
 	buf, slab := t.PageMM().Alloc()

@@ -148,7 +148,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 
 	// NOTE: creating archive at BEGIN time (see cleanup)
 	if r.p.T.Snode().ID() == wi.tsi.ID() {
-		if errExists := fs.Access(wi.lom.FQN); errExists != nil {
+		if errExists := cos.Stat(wi.lom.FQN); errExists != nil {
 			wi.fh, err = wi.lom.CreateFile(wi.fqn)
 		} else if wi.msg.AllowAppendToExisting {
 			switch msg.Mime {

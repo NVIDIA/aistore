@@ -160,7 +160,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 			break
 		}
 		lom.delCopyMd(copyFQN)
-		if err1 := fs.Access(copyFQN); err1 != nil && !os.IsNotExist(err1) {
+		if err1 := cos.Stat(copyFQN); err1 != nil && !os.IsNotExist(err1) {
 			T.FSHC(err, copyFQN) // TODO: notify scrubber
 		}
 	}
@@ -183,7 +183,7 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 			continue
 		}
 		fqn := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-		if _, err := os.Stat(fqn); err != nil {
+		if err := cos.Stat(fqn); err != nil {
 			continue
 		}
 		dst, err := lom._restore(fqn, buf)
@@ -224,7 +224,7 @@ func (lom *LOM) Copy(mi *fs.MountpathInfo, buf []byte) (err error) {
 		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkfileType, fs.WorkfileCopy+"."+lom.ObjName)
 	)
 	// check if the copy destination exists and then skip copying if it's also identical
-	if _, errExists := os.Stat(copyFQN); errExists == nil {
+	if errExists := cos.Stat(copyFQN); errExists == nil {
 		cplom := AllocLOMbyFQN(copyFQN)
 		defer FreeLOM(cplom)
 		if errExists = cplom.Init(lom.Bucket()); errExists == nil {

@@ -5,8 +5,6 @@
 package fs
 
 import (
-	"syscall"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"golang.org/x/sys/unix"
@@ -53,9 +51,3 @@ func removeXattr(fqn, attrName string) error {
 	}
 	return nil
 }
-
-//////////
-// misc //
-//////////
-
-func Access(path string) error { return syscall.Access(path, syscall.F_OK) }

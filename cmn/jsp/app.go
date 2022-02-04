@@ -7,8 +7,9 @@ package jsp
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 ////////////////
@@ -21,7 +22,7 @@ import (
 func LoadAppConfig(configDir, configFileName string, v interface{}) (err error) {
 	// Check if config file exists.
 	configFilePath := filepath.Join(configDir, configFileName)
-	if _, err = os.Stat(configFilePath); err != nil {
+	if err = cos.Stat(configFilePath); err != nil {
 		return err
 	}
 
