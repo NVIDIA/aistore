@@ -348,7 +348,7 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 	msg := ic.p.newAmsgActVal(cmn.ActMergeOwnershipTbl, &ic.p.notifs)
 	result := ic.p.call(callArgs{
 		si: si,
-		req: cmn.ReqArgs{
+		req: cmn.HreqArgs{
 			Method: http.MethodPost,
 			Path:   cmn.URLPathIC.S,
 			Body:   cos.MustMarshal(msg),
@@ -374,7 +374,7 @@ func (ic *ic) syncICBundle() error {
 	}
 	result := ic.p.call(callArgs{
 		si: si,
-		req: cmn.ReqArgs{
+		req: cmn.HreqArgs{
 			Method: http.MethodGet,
 			Path:   cmn.URLPathIC.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},

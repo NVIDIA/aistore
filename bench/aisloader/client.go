@@ -156,18 +156,17 @@ func newTraceCtx() *traceCtx {
 }
 
 // PUT with HTTP trace
-func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum,
-	reader cos.ReadOpenCloser) (httpLatencies, error) {
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   proxyURL,
-		Path:   cmn.URLPathObjects.Join(bck.Name, object),
-		Query:  cmn.AddBckToQuery(nil, bck),
-		BodyR:  reader,
+func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (httpLatencies, error) {
+	reqArgs := cmn.AllocHra()
+	{
+		reqArgs.Method = http.MethodPut
+		reqArgs.Base = proxyURL
+		reqArgs.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqArgs.Query = cmn.AddBckToQuery(nil, bck)
+		reqArgs.BodyR = reader
 	}
-
 	tctx := newTraceCtx()
-	newReq := func(reqArgs cmn.ReqArgs) (request *http.Request, err error) {
+	newRequest := func(reqArgs *cmn.HreqArgs) (request *http.Request, err error) {
 		req, err := reqArgs.Req()
 		if err != nil {
 			return nil, err
@@ -186,7 +185,8 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum,
 		return
 	}
 
-	_, err := api.DoReqWithRetry(tctx.tracedClient, newReq, reqArgs) // nolint:bodyclose // it's closed inside
+	_, err := api.DoReqWithRetry(tctx.tracedClient, newRequest, reqArgs) // nolint:bodyclose // it's closed inside
+	cmn.FreeHra(reqArgs)
 	if err != nil {
 		return httpLatencies{}, err
 	}
@@ -243,7 +243,7 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 	if length > 0 {
 		hdr = cmn.RangeHdr(offset, length)
 	}
-	reqArgs := cmn.ReqArgs{
+	reqArgs := cmn.HreqArgs{
 		Method: http.MethodGet,
 		Base:   proxyURL,
 		Path:   cmn.URLPathObjects.Join(bck.Name, objName),

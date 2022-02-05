@@ -712,7 +712,7 @@ func broadcastTargets(method, path string, urlParams url.Values, body []byte, sm
 	call := func(idx int, node *cluster.Snode) {
 		defer wg.Done()
 
-		reqArgs := cmn.ReqArgs{
+		reqArgs := cmn.HreqArgs{
 			Method: method,
 			Base:   node.URL(cmn.NetworkIntraControl),
 			Path:   path,

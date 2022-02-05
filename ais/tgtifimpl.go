@@ -320,7 +320,7 @@ func (t *target) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, er
 	query.Set(cmn.URLParamRebData, "true")
 	args := callArgs{
 		si: si,
-		req: cmn.ReqArgs{
+		req: cmn.HreqArgs{
 			Method: http.MethodGet,
 			Base:   si.URL(cmn.NetworkIntraData),
 			Path:   cmn.URLPathRebalance.S,

@@ -750,7 +750,7 @@ func (h *htrun) callerNotify(n cluster.Notif, err error, kind string) {
 		return
 	}
 	path := cmn.URLPathNotifs.Join(kind)
-	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: cos.MustMarshal(&msg)}
+	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: path, Body: cos.MustMarshal(&msg)}
 	args.network = cmn.NetworkIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.selected = nodes
@@ -857,7 +857,7 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 		smap = h.owner.smap.get()
 		args = allocBcastArgs()
 	)
-	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cos.MustMarshal(msg)}
+	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cos.MustMarshal(msg)}
 	args.network = cmn.NetworkIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	for pid, psi := range smap.Pmap {
@@ -876,8 +876,8 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 	freeBcastArgs(args)
 }
 
-// bcastReqGroup broadcasts a ReqArgs to a specific group of nodes
-func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, req cmn.ReqArgs, to int) {
+// bcastReqGroup broadcasts a HreqArgs to a specific group of nodes
+func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, req cmn.HreqArgs, to int) {
 	args := allocBcastArgs()
 	args.req = req
 	args.to = to
@@ -1170,7 +1170,7 @@ func (h *htrun) Health(si *cluster.Snode, timeout time.Duration, query url.Value
 		url  = si.URL(cmn.NetworkIntraControl)
 		args = callArgs{
 			si:      si,
-			req:     cmn.ReqArgs{Method: http.MethodGet, Base: url, Path: path, Query: query},
+			req:     cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: query},
 			timeout: timeout,
 		}
 	)
@@ -1687,7 +1687,7 @@ func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration
 	}
 	callArgs := callArgs{
 		si:      psi,
-		req:     cmn.ReqArgs{Method: http.MethodPost, Base: url, Path: path, Query: query, Body: info},
+		req:     cmn.HreqArgs{Method: http.MethodPost, Base: url, Path: path, Query: query, Body: info},
 		timeout: tout,
 	}
 	return h.call(callArgs)
@@ -1779,7 +1779,7 @@ func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 	}
 	args := callArgs{
 		si:      smap.Primary,
-		req:     cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathClusterDaemon.Join(h.si.ID())},
+		req:     cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathClusterDaemon.Join(h.si.ID())},
 		timeout: cmn.DefaultTimeout,
 	}
 	res := h.call(args)

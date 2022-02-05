@@ -545,7 +545,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 				query.Add(cmn.URLParamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
 				query.Add(cmn.URLParamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
 				query.Add(cmn.URLParamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
-				reqArgs := &cmn.ReqArgs{
+				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
 					Base:   sendTo.URL(cmn.NetworkIntraData),
 					Path:   cmn.URLPathdSortRecords.Join(m.ManagerUUID),
@@ -878,7 +878,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 
 			group.Go(func() error {
 				query := cmn.AddBckToQuery(nil, m.rs.Bck)
-				reqArgs := &cmn.ReqArgs{
+				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
 					Base:   si.URL(cmn.NetworkIntraData),
 					Path:   cmn.URLPathdSortShards.Join(m.ManagerUUID),

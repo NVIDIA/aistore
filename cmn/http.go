@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -52,8 +53,8 @@ type (
 		Start, Length int64
 	}
 
-	// ReqArgs specifies HTTP request that we want to send.
-	ReqArgs struct {
+	// HreqArgs specifies HTTP request that we want to send.
+	HreqArgs struct {
 		Method string      // GET, POST, ...
 		Header http.Header // request headers
 		Base   string      // base URL: http://xyz.abc
@@ -371,11 +372,29 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 	return
 }
 
-/////////////
-// ReqArgs //
-/////////////
+//////////////
+// HreqArgs //
+//////////////
 
-func (u *ReqArgs) URL() string {
+var (
+	hraPool sync.Pool
+	hra0    HreqArgs
+)
+
+func AllocHra() (a *HreqArgs) {
+	if v := hraPool.Get(); v != nil {
+		a = v.(*HreqArgs)
+		return
+	}
+	return &HreqArgs{}
+}
+
+func FreeHra(a *HreqArgs) {
+	*a = hra0
+	hraPool.Put(a)
+}
+
+func (u *HreqArgs) URL() string {
 	url := cos.JoinPath(u.Base, u.Path)
 	query := u.Query.Encode()
 	if query != "" {
@@ -384,17 +403,15 @@ func (u *ReqArgs) URL() string {
 	return url
 }
 
-func (u *ReqArgs) Req() (*http.Request, error) {
+func (u *HreqArgs) Req() (*http.Request, error) {
 	r := u.BodyR
 	if r == nil && u.Body != nil {
 		r = bytes.NewBuffer(u.Body)
 	}
-
 	req, err := http.NewRequest(u.Method, u.URL(), r)
 	if err != nil {
 		return nil, err
 	}
-
 	if u.Header != nil {
 		copyHeaders(u.Header, &req.Header)
 	}
@@ -402,7 +419,7 @@ func (u *ReqArgs) Req() (*http.Request, error) {
 }
 
 // ReqWithCancel creates request with ability to cancel it.
-func (u *ReqArgs) ReqWithCancel() (*http.Request, context.Context, context.CancelFunc, error) {
+func (u *HreqArgs) ReqWithCancel() (*http.Request, context.Context, context.CancelFunc, error) {
 	req, err := u.Req()
 	if err != nil {
 		return nil, nil, nil, err
@@ -415,7 +432,7 @@ func (u *ReqArgs) ReqWithCancel() (*http.Request, context.Context, context.Cance
 	return req, ctx, cancel, nil
 }
 
-func (u *ReqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context.Context, context.CancelFunc, error) {
+func (u *HreqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context.Context, context.CancelFunc, error) {
 	req, err := u.Req()
 	if err != nil {
 		return nil, nil, nil, err

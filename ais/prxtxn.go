@@ -33,7 +33,7 @@ type txnClientCtx struct {
 		netw time.Duration
 		host time.Duration
 	}
-	req      cmn.ReqArgs
+	req      cmn.HreqArgs
 	selected cluster.Nodes
 }
 
@@ -843,7 +843,7 @@ func (p *proxy) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 		url.Values{cmn.URLParamKeepBckMD: []string{"true"}},
 		bck.Bck)
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{
+	args.req = cmn.HreqArgs{
 		Method: http.MethodDelete,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
 		Body:   cos.MustMarshal(msg),
@@ -944,7 +944,7 @@ func (p *proxy) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bo
 	}
 	query.Set(cmn.URLParamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
 
-	c.req = cmn.ReqArgs{Method: http.MethodPost, Query: query, Body: body}
+	c.req = cmn.HreqArgs{Method: http.MethodPost, Query: query, Body: body}
 	return c
 }
 

@@ -1406,7 +1406,7 @@ func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *cmn.BckSummMsg) (
 		aisMsg   = p.newAmsgActVal(cmn.ActSummaryBck, msg)
 	)
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{
+	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
 		Query:  q,
@@ -2020,7 +2020,7 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntr
 
 	aisMsg = p.newAmsgActVal(cmn.ActList, &lsmsg)
 	args = allocBcastArgs()
-	args.req = cmn.ReqArgs{
+	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
 		Query:  cmn.AddBckToQuery(nil, bck.Bck),
@@ -2090,7 +2090,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allE
 		args       = allocBcastArgs()
 		results    sliceResults
 	)
-	args.req = cmn.ReqArgs{
+	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
 		Query:  cmn.AddBckToQuery(nil, bck.Bck),
@@ -2180,7 +2180,7 @@ func (p *proxy) doListRange(method, bucket string, msg *cmn.ActionMsg, query url
 	nlb.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: method, Path: path, Query: query, Body: body}
+	args.req = cmn.HreqArgs{Method: method, Path: path, Query: query, Body: body}
 	args.smap = smap
 	args.timeout = cmn.DefaultTimeout
 	results := p.bcastGroup(args)
@@ -2484,7 +2484,7 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 	var (
-		req = cmn.ReqArgs{
+		req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Base:   baseURL,
 			Path:   cmn.URLPathDaemon.S,
@@ -2850,7 +2850,7 @@ func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error)
 	var (
 		args = callArgs{
 			si: osi,
-			req: cmn.ReqArgs{
+			req: cmn.HreqArgs{
 				Method: http.MethodGet,
 				Path:   cmn.URLPathDaemon.S,
 				Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
@@ -2888,7 +2888,7 @@ func (p *proxy) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, st
 
 	q = cmn.AddBckToQuery(q, bck)
 
-	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
+	req := cmn.HreqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
 	res := p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
 	defer freeCR(res)
 	if res.status == http.StatusNotFound {

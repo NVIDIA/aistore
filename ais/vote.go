@@ -278,7 +278,7 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 	)
 	q.Set(cmn.URLParamPrimaryCandidate, p.si.ID())
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{
+	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   cmn.URLPathVoteProxy.S,
 		Body:   cos.MustMarshal(&msg),
@@ -322,7 +322,7 @@ func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StringSet {
 		}
 	)
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathVoteVoteres.S, Body: cos.MustMarshal(msg)}
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathVoteVoteres.S, Body: cos.MustMarshal(msg)}
 	args.to = cluster.AllNodes
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
@@ -543,7 +543,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluste
 	body := cos.MustMarshal(&msg)
 	args := callArgs{
 		si: nextPrimaryProxy,
-		req: cmn.ReqArgs{
+		req: cmn.HreqArgs{
 			Method: http.MethodPut,
 			Base:   nextPrimaryProxy.IntraControlNet.DirectURL,
 			Path:   cmn.URLPathVoteInit.S,

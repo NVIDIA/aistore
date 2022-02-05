@@ -50,8 +50,8 @@ func (*NotifDownloadListerner) UnmarshalStats(rawMsg []byte) (stats interface{},
 	return
 }
 
-func (nd *NotifDownloadListerner) QueryArgs() cmn.ReqArgs {
-	args := cmn.ReqArgs{Method: http.MethodGet}
+func (nd *NotifDownloadListerner) QueryArgs() cmn.HreqArgs {
+	args := cmn.HreqArgs{Method: http.MethodGet}
 	dlBody := DlAdminBody{
 		ID: nd.UUID(),
 	}
@@ -60,8 +60,8 @@ func (nd *NotifDownloadListerner) QueryArgs() cmn.ReqArgs {
 	return args
 }
 
-func (nd *NotifDownloadListerner) AbortArgs() cmn.ReqArgs {
-	args := cmn.ReqArgs{Method: http.MethodDelete}
+func (nd *NotifDownloadListerner) AbortArgs() cmn.HreqArgs {
+	args := cmn.HreqArgs{Method: http.MethodDelete}
 	dlBody := DlAdminBody{
 		ID: nd.UUID(),
 	}

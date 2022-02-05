@@ -145,7 +145,7 @@ func (p *proxy) initCodeETL(w http.ResponseWriter, r *http.Request) {
 // startETL broadcasts a build or init ETL request and ensures only one ETL is running
 func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) (err error) {
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cos.MustMarshal(msg)}
+	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cos.MustMarshal(msg)}
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
@@ -175,7 +175,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 	//  or fail otherwise - ignore the failures).
 	argsTerm := allocBcastArgs()
-	argsTerm.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msg.ID())}
+	argsTerm.req = cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msg.ID())}
 	argsTerm.timeout = cmn.LongTimeout
 	p.bcastGroup(argsTerm)
 	freeBcastArgs(argsTerm)
@@ -226,7 +226,7 @@ func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 		args = allocBcastArgs()
 		etls *etl.InfoList
 	)
-	args.req = cmn.ReqArgs{Method: http.MethodGet, Path: cmn.URLPathETL.S}
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: cmn.URLPathETL.S}
 	args.timeout = cmn.DefaultTimeout
 	args.fv = func() interface{} { return &etl.InfoList{} }
 	results := p.bcastGroup(args)
@@ -278,7 +278,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, ap
 		}
 		results = make(sliceResults, 1)
 		results[0] = p.call(callArgs{
-			req: cmn.ReqArgs{
+			req: cmn.HreqArgs{
 				Method: http.MethodGet,
 				Path:   cmn.URLPathETL.Join(etlID, cmn.ETLLogs),
 			},
@@ -289,7 +289,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, ap
 	} else {
 		// all targets
 		args = allocBcastArgs()
-		args.req = cmn.ReqArgs{Method: http.MethodGet, Path: r.URL.Path}
+		args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 		args.timeout = cmn.DefaultTimeout
 		args.fv = func() interface{} { return &etl.PodLogsMsg{} }
 		results = p.bcastGroup(args)
@@ -317,7 +317,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	)
 
 	args = allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodGet, Path: r.URL.Path}
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 	args.timeout = cmn.DefaultTimeout
 	args.fv = func() interface{} { return &etl.PodHealthMsg{} }
 	results = p.bcastGroup(args)
@@ -348,7 +348,7 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: r.URL.Path}
+	args.req = cmn.HreqArgs{Method: http.MethodDelete, Path: r.URL.Path}
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)

@@ -725,7 +725,7 @@ func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed stri
 	timeout := cmn.Timeout.CplaneOperation()
 	args := callArgs{
 		si:      psi,
-		req:     cmn.ReqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q},
+		req:     cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q},
 		timeout: timeout,
 	}
 	res := t.call(args)
@@ -1014,7 +1014,7 @@ func (t *target) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bo
 	query.Set(cmn.URLParamSilent, "true")
 	args := callArgs{
 		si: tsi,
-		req: cmn.ReqArgs{
+		req: cmn.HreqArgs{
 			Method: http.MethodHead,
 			Header: header,
 			Base:   tsi.URL(cmn.NetworkIntraControl),
@@ -1039,7 +1039,7 @@ func (t *target) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
 	bck := lom.Bck().Bck
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{
+	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,
 		Header: header,
 		Path:   cmn.URLPathObjects.Join(bck.Name, lom.ObjName),

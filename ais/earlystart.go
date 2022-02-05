@@ -707,7 +707,7 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 		borigin, sorigin string
 		args             = allocBcastArgs()
 	)
-	args.req = cmn.ReqArgs{
+	args.req = cmn.HreqArgs{
 		Path:  cmn.URLPathDaemon.S,
 		Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmapVote}},
 	}

@@ -697,7 +697,7 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 
 // doWithAbort sends requests through client. If manager aborts during the call
 // request is canceled.
-func (m *Manager) doWithAbort(reqArgs *cmn.ReqArgs) error {
+func (m *Manager) doWithAbort(reqArgs *cmn.HreqArgs) error {
 	req, _, cancel, err := reqArgs.ReqWithCancel()
 	if err != nil {
 		return err

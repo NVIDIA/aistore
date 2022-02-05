@@ -52,22 +52,22 @@ func (*NotifXactListener) UnmarshalStats(rawMsg []byte) (stats interface{}, fini
 	return
 }
 
-func (nxb *NotifXactListener) QueryArgs() cmn.ReqArgs {
-	args := cmn.ReqArgs{Method: http.MethodGet, Query: make(url.Values, 2)}
+func (nxb *NotifXactListener) QueryArgs() cmn.HreqArgs {
+	args := cmn.HreqArgs{Method: http.MethodGet, Query: make(url.Values, 2)}
 	args.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
 	args.Query.Set(cmn.URLParamUUID, nxb.UUID())
 	args.Path = cmn.URLPathXactions.S
 	return args
 }
 
-func (nxb *NotifXactListener) AbortArgs() cmn.ReqArgs {
+func (nxb *NotifXactListener) AbortArgs() cmn.HreqArgs {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
 		Value: QueryMsg{
 			ID: nxb.UUID(),
 		},
 	}
-	args := cmn.ReqArgs{Method: http.MethodPut}
+	args := cmn.HreqArgs{Method: http.MethodPut}
 	args.Body = cos.MustMarshal(msg)
 	args.Path = cmn.URLPathXactions.S
 	return args

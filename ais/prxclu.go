@@ -121,7 +121,7 @@ func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string
 		return
 	}
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodGet, Path: cmn.URLPathXactions.S, Body: body, Query: query}
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: cmn.URLPathXactions.S, Body: body, Query: query}
 	args.to = cluster.Targets
 	config := cmn.GCO.Get()
 	args.timeout = config.Client.Timeout.D() // NOTE: may poll for quiescence
@@ -166,7 +166,7 @@ func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 	remoteInfo := &cmn.BackendInfoAIS{}
 	args := callArgs{
 		si: si,
-		req: cmn.ReqArgs{
+		req: cmn.HreqArgs{
 			Method: http.MethodGet,
 			Path:   cmn.URLPathDaemon.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}},
@@ -185,7 +185,7 @@ func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 
 func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cos.JSONRawMsgs, error) {
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query()}
+	args.req = cmn.HreqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query()}
 	args.timeout = timeout
 	args.to = to
 	results := p.bcastGroup(args)
@@ -239,7 +239,7 @@ func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request) (cos.JSONR
 		}
 	}
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query(), Body: body}
+	args.req = cmn.HreqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query(), Body: body}
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
@@ -445,7 +445,7 @@ func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (errCode in
 	}
 	args := callArgs{
 		si:      nsi,
-		req:     cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathDaemonAdminJoin.S, Body: body},
+		req:     cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathDaemonAdminJoin.S, Body: body},
 		timeout: cmn.Timeout.CplaneOperation(),
 	}
 	res := p.call(args)
@@ -729,7 +729,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActShutdown, cmn.ActDecommission:
 		glog.Infoln("Proxy-controlled cluster decommission/shutdown...")
 		args := allocBcastArgs()
-		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: cos.MustMarshal(msg)}
+		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: cos.MustMarshal(msg)}
 		args.to = cluster.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcastArgs(args)
@@ -768,7 +768,7 @@ func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, ms
 		return
 	}
 	body := cos.MustMarshal(msg)
-	req := cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
+	req := cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
 	p.bcastReqGroup(w, r, req, cluster.AllNodes)
 }
 
@@ -782,7 +782,7 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 
 	msg.Value = toUpdate
 	body := cos.MustMarshal(msg)
-	req := cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body, Query: q}
+	req := cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body, Query: q}
 	p.bcastReqGroup(w, r, req, cluster.AllNodes)
 }
 
@@ -824,7 +824,7 @@ func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn.Actio
 	// all the rest `startable` (see xaction/api.go)
 	body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathXactions.S, Body: body}
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathXactions.S, Body: body}
 	args.to = cluster.Targets
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
@@ -851,7 +851,7 @@ func (p *proxy) xactStop(w http.ResponseWriter, r *http.Request, msg *cmn.Action
 	}
 	body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathXactions.S, Body: body}
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathXactions.S, Body: body}
 	args.to = cluster.Targets
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
@@ -904,7 +904,7 @@ func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request,
 	res := p.call(
 		callArgs{
 			si: si,
-			req: cmn.ReqArgs{
+			req: cmn.HreqArgs{
 				Method: http.MethodPut,
 				Path:   cmn.URLPathXactions.S,
 				Body:   body,
@@ -948,7 +948,7 @@ func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cmn.Acti
 	}
 	// forward
 	args := callArgs{
-		req:     cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)},
+		req:     cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)},
 		timeout: cmn.DefaultTimeout,
 	}
 	for pid, psi := range smap.Pmap {
@@ -1329,7 +1329,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
 	if cluMeta, err := p.cluMeta(cmetaFillOpt{skipSmap: true}); err == nil {
 		args.req.Body = cos.MustMarshal(cluMeta)
 	} else {
@@ -1364,7 +1364,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	// (II) Commit phase.
 	q.Set(cmn.URLParamPrepare, "false")
 	args = allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
 	args.to = cluster.AllNodes
 	results = p.bcastGroup(args)
 	freeBcastArgs(args)
@@ -1440,14 +1440,14 @@ func (p *proxy) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) 
 	switch msg.Action {
 	case cmn.ActShutdownNode:
 		body := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
-		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
+		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
 	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActCallbackRmFromSmap:
 		act := &cmn.ActionMsg{Action: msg.Action}
 		if msg.Action == cmn.ActDecommissionNode {
 			act.Value = msg.Value
 		}
 		body := cos.MustMarshal(act)
-		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonCallbackRmSelf.S, Body: body}
+		args.req = cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonCallbackRmSelf.S, Body: body}
 	default:
 		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
 			[]string{cmn.ActShutdownNode, cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActCallbackRmFromSmap})

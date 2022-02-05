@@ -87,7 +87,7 @@ type (
 // PutObjectArgs //
 ///////////////////
 
-func (args *PutObjectArgs) put(reqArgs cmn.ReqArgs) (*http.Request, error) {
+func (args *PutObjectArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	req, err := reqArgs.Req()
 	if err != nil {
 		return nil, newErrCreateHTTPRequest(err)
@@ -377,14 +377,16 @@ func PutObject(args PutObjectArgs) (err error) {
 	if args.SkipVC {
 		query.Set(cmn.URLParamSkipVC, "true")
 	}
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   args.BaseParams.URL,
-		Path:   cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
-		Query:  query,
-		BodyR:  args.Reader,
+	reqArgs := cmn.AllocHra()
+	{
+		reqArgs.Method = http.MethodPut
+		reqArgs.Base = args.BaseParams.URL
+		reqArgs.Path = cmn.URLPathObjects.Join(args.Bck.Name, args.Object)
+		reqArgs.Query = query
+		reqArgs.BodyR = args.Reader
 	}
 	_, err = DoReqWithRetry(args.BaseParams.Client, args.put, reqArgs) // nolint:bodyclose // is closed inside
+	cmn.FreeHra(reqArgs)
 	return
 }
 
@@ -404,15 +406,17 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 	q = cmn.AddBckToQuery(q, args.Bck)
 	q.Set(cmn.URLParamArchpath, args.ArchPath)
 	q.Set(cmn.URLParamArchmime, m)
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   args.BaseParams.URL,
-		Path:   cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
-		Query:  q,
-		BodyR:  args.Reader,
+	reqArgs := cmn.AllocHra()
+	{
+		reqArgs.Method = http.MethodPut
+		reqArgs.Base = args.BaseParams.URL
+		reqArgs.Path = cmn.URLPathObjects.Join(args.Bck.Name, args.Object)
+		reqArgs.Query = q
+		reqArgs.BodyR = args.Reader
 	}
 	putArgs := &args.PutObjectArgs
 	_, err = DoReqWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) // nolint:bodyclose // is closed inside
+	cmn.FreeHra(reqArgs)
 	return
 }
 
@@ -428,20 +432,19 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	q.Set(cmn.URLParamAppendHandle, args.Handle)
 	q = cmn.AddBckToQuery(q, args.Bck)
 
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   args.BaseParams.URL,
-		Path:   cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
-		Query:  q,
-		BodyR:  args.Reader,
+	reqArgs := cmn.AllocHra()
+	{
+		reqArgs.Method = http.MethodPut
+		reqArgs.Base = args.BaseParams.URL
+		reqArgs.Path = cmn.URLPathObjects.Join(args.Bck.Name, args.Object)
+		reqArgs.Query = q
+		reqArgs.BodyR = args.Reader
 	}
-
-	newRequest := func(reqArgs cmn.ReqArgs) (*http.Request, error) {
+	newRequest := func(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 		req, err := reqArgs.Req()
 		if err != nil {
 			return nil, newErrCreateHTTPRequest(err)
 		}
-
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
 		// If it wasn't set, we would need to deal with the redirect manually.
 		req.GetBody = func() (io.ReadCloser, error) {
@@ -450,12 +453,11 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 		if args.Size != 0 {
 			req.ContentLength = args.Size // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
 		}
-
 		setAuthToken(req, args.BaseParams)
 		return req, nil
 	}
-
 	resp, err := DoReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // it's closed inside
+	cmn.FreeHra(reqArgs)
 	if err != nil {
 		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
@@ -535,8 +537,8 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 	return err
 }
 
-// DoReqWithRetry makes `client.Do` request and retries it when got "Broken Pipe"
-// or "Connection Refused" error.
+// DoReqWithRetry executes `http-client.Do` and retries *retriable connection errors*,
+// such as "broken pipe" and "connection refused".
 //
 // This function always closes the `reqArgs.BodR`, even in case of error.
 //
@@ -544,8 +546,8 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 //
 // NOTE: always closes request body reader (reqArgs.BodyR) - explicitly or via Do()
 // TODO: this code must be totally revised
-func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.Request, error),
-	reqArgs cmn.ReqArgs) (resp *http.Response, err error) {
+func DoReqWithRetry(client *http.Client, newRequest func(_ *cmn.HreqArgs) (*http.Request, error),
+	reqArgs *cmn.HreqArgs) (resp *http.Response, err error) {
 	var (
 		req    *http.Request
 		doErr  error

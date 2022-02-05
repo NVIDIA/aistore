@@ -69,7 +69,7 @@ type (
 
 	// callArgs contains arguments for a peer-to-peer control plane call.
 	callArgs struct {
-		req     cmn.ReqArgs
+		req     cmn.HreqArgs
 		timeout time.Duration
 		si      *cluster.Snode
 		v       interface{} // Value that needs to be unmarshalled.
@@ -77,7 +77,7 @@ type (
 
 	// bcastArgs contains arguments for an intra-cluster broadcast call.
 	bcastArgs struct {
-		req               cmn.ReqArgs        // h.call args
+		req               cmn.HreqArgs       // h.call args
 		network           string             // one of the cmn.KnownNetworks
 		timeout           time.Duration      // call timeout
 		fv                func() interface{} // optional; returns marshaled msg (see `callArgs.v`)

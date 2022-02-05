@@ -652,7 +652,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	query := url.Values{}
 	query.Set(cmn.URLParamIsGFNRequest, "true")
 	query = cmn.AddBckToQuery(query, lom.Bucket())
-	reqArgs := cmn.ReqArgs{
+	reqArgs := cmn.HreqArgs{
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),
 		Header: header,
@@ -1383,7 +1383,7 @@ func (t *target) _sendPUT(params *cluster.SendToParams) error {
 	cmn.ToHeader(params.ObjAttrs, hdr)
 	hdr.Set(cmn.HdrPutterID, t.si.ID())
 	query.Set(cmn.URLParamOWT, strconv.Itoa(int(cmn.OwtMigrate)))
-	reqArgs := cmn.ReqArgs{
+	reqArgs := cmn.HreqArgs{
 		Method: http.MethodPut,
 		Base:   params.Tsi.URL(cmn.NetworkIntraData),
 		Path:   cmn.URLPathObjects.Join(params.BckTo.Name, params.ObjNameTo),

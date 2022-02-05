@@ -330,7 +330,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 		to = cluster.Targets
 	}
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body}
+	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.smap = smap
 	args.timeout = cmn.Timeout.MaxKeepalive() // making exception for this critical op
 	args.to = to
@@ -444,7 +444,7 @@ func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap, pairs []revsPair,
 	smap *smapX) (ok bool) {
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body}
+	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.network = cmn.NetworkIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.nodes = []cluster.NodeMap{refused}
@@ -550,7 +550,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		body    = payload.marshal(y.p.gmm)
 		args    = allocBcastArgs()
 	)
-	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
 	args.network = cmn.NetworkIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.nodes = []cluster.NodeMap{pending}
