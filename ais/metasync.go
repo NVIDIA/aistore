@@ -360,8 +360,12 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	}
 	freeBcastRes(results)
 	// step 5: handle connection-refused right away
+	lr := len(refused)
 	for i := 0; i < 4; i++ {
 		if len(refused) == 0 {
+			if lr > 0 {
+				glog.Infof("%s: %d node%s sync-ed", y.p.si, lr, cos.Plural(lr))
+			}
 			break
 		}
 		time.Sleep(cmn.Timeout.CplaneOperation())

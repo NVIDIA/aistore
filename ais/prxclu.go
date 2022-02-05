@@ -1092,6 +1092,23 @@ func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, actio
 		p.writeErr(w, r, fmt.Errorf(fmtUnknownQue, what))
 		return
 	}
+	if !p.ClusterStarted() {
+		const fmerr = "(config-backends modifying) remote cluster: (%t, %s)"
+		var timeout time.Duration
+		for {
+			time.Sleep(cmn.Timeout.MaxKeepalive())
+			timeout += cmn.Timeout.MaxKeepalive()
+			config := cmn.GCO.Get()
+			if p.ClusterStarted() {
+				break
+			}
+			if timeout > config.Timeout.Startup.D()/2 {
+				p.writeErr(w, r, fmt.Errorf("%s: failed to attach "+fmerr, p.si, p.ClusterStarted(), config))
+				return
+			}
+			glog.Errorf("%s: waiting to attach "+fmerr, p.si, p.ClusterStarted(), config)
+		}
+	}
 	ctx := &configModifier{
 		pre:   p.attachDetachRemoteAIS,
 		final: p._syncConfFinal,

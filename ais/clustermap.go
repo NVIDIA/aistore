@@ -302,9 +302,6 @@ func (m *smapX) putNode(nsi *cluster.Snode, flags cos.BitFlags) (exists bool) {
 		if flags.IsSet(cluster.SnodeNonElectable) {
 			glog.Warningf("%s won't be electable", nsi)
 		}
-		if glog.V(3) {
-			glog.Infof("joined %s (num proxies %d)", nsi, m.CountProxies())
-		}
 	} else {
 		cos.Assert(nsi.IsTarget())
 		if m.GetTarget(id) != nil { // ditto
@@ -312,10 +309,8 @@ func (m *smapX) putNode(nsi *cluster.Snode, flags cos.BitFlags) (exists bool) {
 			exists = true
 		}
 		m.addTarget(nsi)
-		if glog.V(3) {
-			glog.Infof("joined %s (num targets %d)", nsi, m.CountTargets())
-		}
 	}
+	glog.Infof("joined %s (p %d, t %d)", nsi, m.CountProxies(), m.CountTargets())
 	return
 }
 

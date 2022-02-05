@@ -260,12 +260,11 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		msg := p.newAmsgStr(metaction1, after.BMD)
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{after.BMD, msg})
 
-		glog.Infof("%s: loaded %s (merged %s, added %d), loaded %s, %s, %s, %s", p.si.StringEx(),
-			loadedSmap, before.Smap.StringEx(),
-			added, before.BMD.StringEx(), before.RMD, before.Config, before.EtlMD)
-		glog.Infof("%s: regpool %s, %s, %s, %s, %s", p.si.StringEx(), smap.StringEx(),
-			after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD)
-
+		// before and after
+		glog.Infof("%s: Smap(loaded %s, merged %s, added %d)", p.si.StringEx(), loadedSmap, before.Smap.StringEx(), added)
+		glog.Infof("%s: %s, %s, %s, %s", p.si.StringEx(), before.BMD.StringEx(), before.RMD, before.Config, before.EtlMD)
+		glog.Infof("%s after regpool: %s, %s, %s, %s, %s", p.si.StringEx(),
+			smap.StringEx(), after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD)
 		wg.Wait()
 	} else {
 		glog.Infof("%s: no registrations yet", p.si.StringEx())
