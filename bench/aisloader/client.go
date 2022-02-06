@@ -57,6 +57,11 @@ type (
 		trace        *httptrace.ClientTrace
 		tracedClient *http.Client
 	}
+	tracePutter struct {
+		tctx   *traceCtx
+		cksum  *cos.Cksum
+		reader cos.ReadOpenCloser
+	}
 
 	// httpLatencies stores latency of a http request
 	httpLatencies struct {
@@ -73,6 +78,10 @@ type (
 		TargetFirstResponse time.Duration // from TargetWroteRequest to first byte of response
 	}
 )
+
+////////////////////////
+// traceableTransport //
+////////////////////////
 
 // RoundTrip records the proxy redirect time and keeps track of requests.
 func (t *traceableTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -134,78 +143,27 @@ func (t *traceableTransport) GotFirstResponseByte() {
 	}
 }
 
-func newTraceCtx() *traceCtx {
-	tctx := &traceCtx{}
+//////////////////////////////////
+// detailed http trace _putter_ //
+//////////////////////////////////
 
-	tctx.tr = &traceableTransport{
-		transport: cmn.NewTransport(transportArgs),
-		tsBegin:   time.Now(),
-	}
-	tctx.trace = &httptrace.ClientTrace{
-		GotConn:              tctx.tr.GotConn,
-		WroteHeaders:         tctx.tr.WroteHeaders,
-		WroteRequest:         tctx.tr.WroteRequest,
-		GotFirstResponseByte: tctx.tr.GotFirstResponseByte,
-	}
-	tctx.tracedClient = &http.Client{
-		Transport: tctx.tr,
-		Timeout:   600 * time.Second,
-	}
-
-	return tctx
-}
-
-// PUT with HTTP trace
-func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (httpLatencies, error) {
-	reqArgs := cmn.AllocHra()
-	{
-		reqArgs.Method = http.MethodPut
-		reqArgs.Base = proxyURL
-		reqArgs.Path = cmn.URLPathObjects.Join(bck.Name, object)
-		reqArgs.Query = cmn.AddBckToQuery(nil, bck)
-		reqArgs.BodyR = reader
-	}
-	tctx := newTraceCtx()
-	newRequest := func(reqArgs *cmn.HreqArgs) (request *http.Request, err error) {
-		req, err := reqArgs.Req()
-		if err != nil {
-			return nil, err
-		}
-
-		// The HTTP package doesn't automatically set this for files, so it has to be done manually
-		// If it wasn't set, we would need to deal with the redirect manually.
-		req.GetBody = func() (io.ReadCloser, error) {
-			return reader.Open()
-		}
-		if cksum != nil {
-			req.Header.Set(cmn.HdrObjCksumType, cksum.Ty())
-			req.Header.Set(cmn.HdrObjCksumVal, cksum.Val())
-		}
-		request = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
-		return
-	}
-
-	_, err := api.DoReqWithRetry(tctx.tracedClient, newRequest, reqArgs) // nolint:bodyclose // it's closed inside
-	cmn.FreeHra(reqArgs)
+// implements callback of the type `api.NewRequestCB`
+func (putter *tracePutter) do(reqArgs *cmn.HreqArgs) (*http.Request, error) {
+	req, err := reqArgs.Req()
 	if err != nil {
-		return httpLatencies{}, err
+		return nil, err
 	}
 
-	tctx.tr.tsHTTPEnd = time.Now()
-	l := httpLatencies{
-		ProxyConn:           timeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
-		Proxy:               timeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
-		TargetConn:          timeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
-		Target:              timeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
-		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
-		ProxyWroteHeader:    timeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
-		ProxyWroteRequest:   timeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
-		ProxyFirstResponse:  timeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
-		TargetWroteHeader:   timeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
-		TargetWroteRequest:  timeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
-		TargetFirstResponse: timeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
+	// The HTTP package doesn't automatically set this for files, so it has to be done manually
+	// If it wasn't set, we would need to deal with the redirect manually.
+	req.GetBody = func() (io.ReadCloser, error) {
+		return putter.reader.Open()
 	}
-	return l, nil
+	if putter.cksum != nil {
+		req.Header.Set(cmn.HdrObjCksumType, putter.cksum.Ty())
+		req.Header.Set(cmn.HdrObjCksumVal, putter.cksum.Val())
+	}
+	return req.WithContext(httptrace.WithClientTrace(req.Context(), putter.tctx.trace)), nil
 }
 
 //
@@ -228,6 +186,63 @@ func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader c
 		}
 	)
 	return api.PutObject(args)
+}
+
+// PUT with HTTP trace
+func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (httpLatencies, error) {
+	reqArgs := cmn.AllocHra()
+	{
+		reqArgs.Method = http.MethodPut
+		reqArgs.Base = proxyURL
+		reqArgs.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqArgs.Query = cmn.AddBckToQuery(nil, bck)
+		reqArgs.BodyR = reader
+	}
+	putter := tracePutter{
+		tctx:   newTraceCtx(),
+		cksum:  cksum,
+		reader: reader,
+	}
+	_, err := api.DoWithRetry(putter.tctx.tracedClient, putter.do, reqArgs) // nolint:bodyclose // it's closed inside
+	cmn.FreeHra(reqArgs)
+	if err != nil {
+		return httpLatencies{}, err
+	}
+	tctx := putter.tctx
+	tctx.tr.tsHTTPEnd = time.Now()
+	l := httpLatencies{
+		ProxyConn:           timeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
+		Proxy:               timeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
+		TargetConn:          timeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
+		Target:              timeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
+		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
+		ProxyWroteHeader:    timeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
+		ProxyWroteRequest:   timeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
+		ProxyFirstResponse:  timeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
+		TargetWroteHeader:   timeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
+		TargetWroteRequest:  timeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
+		TargetFirstResponse: timeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
+	}
+	return l, nil
+}
+
+func newTraceCtx() *traceCtx {
+	tctx := &traceCtx{}
+	tctx.tr = &traceableTransport{
+		transport: cmn.NewTransport(transportArgs),
+		tsBegin:   time.Now(),
+	}
+	tctx.trace = &httptrace.ClientTrace{
+		GotConn:              tctx.tr.GotConn,
+		WroteHeaders:         tctx.tr.WroteHeaders,
+		WroteRequest:         tctx.tr.WroteRequest,
+		GotFirstResponseByte: tctx.tr.GotFirstResponseByte,
+	}
+	tctx.tracedClient = &http.Client{
+		Transport: tctx.tr,
+		Timeout:   600 * time.Second,
+	}
+	return tctx
 }
 
 func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, length int64) (*http.Request, error) {

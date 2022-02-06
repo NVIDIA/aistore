@@ -27,6 +27,8 @@ const (
 )
 
 type (
+	NewRequestCB func(args *cmn.HreqArgs) (*http.Request, error)
+
 	GetObjectInput struct {
 		// If not specified otherwise, the Writer field defaults to io.Discard
 		Writer io.Writer
@@ -78,14 +80,13 @@ type (
 		Handle     string
 		Cksum      *cos.Cksum
 	}
-	ReplicateObjectInput struct { // TODO: obsolete - remove
-		SourceURL string
-	}
 )
 
 ///////////////////
 // PutObjectArgs //
 ///////////////////
+
+func (args *PutObjectArgs) getBody() (io.ReadCloser, error) { return args.Reader.Open() }
 
 func (args *PutObjectArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	req, err := reqArgs.Req()
@@ -93,9 +94,7 @@ func (args *PutObjectArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 		return nil, newErrCreateHTTPRequest(err)
 	}
 	// Go http doesn't automatically set this for files, so to handle redirect we do it here.
-	req.GetBody = func() (io.ReadCloser, error) {
-		return args.Reader.Open()
-	}
+	req.GetBody = args.getBody
 	if args.Cksum != nil && args.Cksum.Ty() != cos.ChecksumNone {
 		req.Header.Set(cmn.HdrObjCksumType, args.Cksum.Ty())
 		ckVal := args.Cksum.Value()
@@ -110,6 +109,27 @@ func (args *PutObjectArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	}
 	if args.Size != 0 {
 		req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
+	}
+	setAuthToken(req, args.BaseParams)
+	return req, nil
+}
+
+////////////////
+// AppendArgs //
+////////////////
+
+func (args *AppendArgs) getBody() (io.ReadCloser, error) { return args.Reader.Open() }
+
+func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
+	req, err := reqArgs.Req()
+	if err != nil {
+		return nil, newErrCreateHTTPRequest(err)
+	}
+	// The HTTP package doesn't automatically set this for files, so it has to be done manually
+	// If it wasn't set, we would need to deal with the redirect manually.
+	req.GetBody = args.getBody
+	if args.Size != 0 {
+		req.ContentLength = args.Size // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
 	}
 	setAuthToken(req, args.BaseParams)
 	return req, nil
@@ -385,7 +405,7 @@ func PutObject(args PutObjectArgs) (err error) {
 		reqArgs.Query = query
 		reqArgs.BodyR = args.Reader
 	}
-	_, err = DoReqWithRetry(args.BaseParams.Client, args.put, reqArgs) // nolint:bodyclose // is closed inside
+	_, err = DoWithRetry(args.BaseParams.Client, args.put, reqArgs) // nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)
 	return
 }
@@ -415,7 +435,7 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 		reqArgs.BodyR = args.Reader
 	}
 	putArgs := &args.PutObjectArgs
-	_, err = DoReqWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) // nolint:bodyclose // is closed inside
+	_, err = DoWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) // nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)
 	return
 }
@@ -426,7 +446,7 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 // Once all the "appending" is done, the caller must call `api.FlushObject`
 // to finalize the object.
 // NOTE: object becomes visible and accessible only _after_ the call to `api.FlushObject`.
-func AppendObject(args AppendArgs) (handle string, err error) {
+func AppendObject(args AppendArgs) (string /*handle*/, error) {
 	q := make(url.Values, 4)
 	q.Set(cmn.URLParamAppendType, cmn.AppendOp)
 	q.Set(cmn.URLParamAppendHandle, args.Handle)
@@ -440,23 +460,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 		reqArgs.Query = q
 		reqArgs.BodyR = args.Reader
 	}
-	newRequest := func(reqArgs *cmn.HreqArgs) (*http.Request, error) {
-		req, err := reqArgs.Req()
-		if err != nil {
-			return nil, newErrCreateHTTPRequest(err)
-		}
-		// The HTTP package doesn't automatically set this for files, so it has to be done manually
-		// If it wasn't set, we would need to deal with the redirect manually.
-		req.GetBody = func() (io.ReadCloser, error) {
-			return args.Reader.Open()
-		}
-		if args.Size != 0 {
-			req.ContentLength = args.Size // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
-		}
-		setAuthToken(req, args.BaseParams)
-		return req, nil
-	}
-	resp, err := DoReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // it's closed inside
+	resp, err := DoWithRetry(args.BaseParams.Client, args._append, reqArgs) // nolint:bodyclose // it's closed inside
 	cmn.FreeHra(reqArgs)
 	if err != nil {
 		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
@@ -537,7 +541,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 	return err
 }
 
-// DoReqWithRetry executes `http-client.Do` and retries *retriable connection errors*,
+// DoWithRetry executes `http-client.Do` and retries *retriable connection errors*,
 // such as "broken pipe" and "connection refused".
 //
 // This function always closes the `reqArgs.BodR`, even in case of error.
@@ -546,8 +550,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 //
 // NOTE: always closes request body reader (reqArgs.BodyR) - explicitly or via Do()
 // TODO: this code must be totally revised
-func DoReqWithRetry(client *http.Client, newRequest func(_ *cmn.HreqArgs) (*http.Request, error),
-	reqArgs *cmn.HreqArgs) (resp *http.Response, err error) {
+func DoWithRetry(client *http.Client, cb NewRequestCB, reqArgs *cmn.HreqArgs) (resp *http.Response, err error) {
 	var (
 		req    *http.Request
 		doErr  error
@@ -560,7 +563,7 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ *cmn.HreqArgs) (*http
 		}
 	}
 	// first time
-	if req, err = newRequest(reqArgs); err != nil {
+	if req, err = cb(reqArgs); err != nil {
 		cos.Close(reader)
 		return
 	}
@@ -583,7 +586,7 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ *cmn.HreqArgs) (*http
 		}
 		reqArgs.BodyR = r
 
-		if req, err = newRequest(reqArgs); err != nil {
+		if req, err = cb(reqArgs); err != nil {
 			cos.Close(r)
 			return
 		}
