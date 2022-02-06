@@ -20,7 +20,9 @@ Viewership is equally supported via:
 
 > For general information on AIS metrics, see [Statistics, Collected Metrics, Visualization](/docs/metrics.md).
 
-> AIStore includes `aisloader` - a powerful tool that we use to simulate a variety of AI workloads. For numerous command-line options and usage examples, please see [Load Generator](/docs/aisloader.md) and [How To Benchmark AIStore](/docs/howto_benchmark.md). Or, just run the tool and see its online help. Note as well that `aisloader` is fully StatsD-enabled.
+> AIStore includes `aisloader` - a powerful tool that we use to simulate a variety of AI workloads. For numerous command-line options and usage examples, please see [`aisloader`](/docs/aisloader.md) and [How To Benchmark AIStore](/docs/howto_benchmark.md).
+
+> Or, just run `make aisloader; aisloader` and see its detailed online help. Note as well that `aisloader` is fully StatsD-enabled and supports detailed protocol-level tracing with runtime on and off switching.
 
 ## Table of Contents
 - [StatsD and Prometheus](#statsd-and-prometheus)

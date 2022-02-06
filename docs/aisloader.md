@@ -11,7 +11,15 @@ redirect_from:
 
 AIS Loader (`aisloader`) is a tool to measure storage performance. It is a load generator that we constantly use to benchmark and stress-test [AIStore](https://github.com/NVIDIA/aistore). The tool was written in such a way that it can be easily extended to benchmark any S3-compatible backend.
 
-In addition, there's a certain AI "angle": AIS Loader can generate (synthetic) workloads that mimic training and inference workloads - the capability that allows to run benchmarks in isolation (which is often preferable), and also avoid compute-side bottlenecks if there are any.
+In addition, `aisloader` generates synthetic workloads that mimic training and inference workloads - the capability that allows to run benchmarks in isolation (which is often preferable), and also avoid compute-side bottlenecks if there are any.
+
+There's a large set of command-line switches that allow to realize almost any conceivable workload, with basic permutations always including:
+
+* number of workers
+* read and write sizes
+* read and write ratios
+
+Detailed protocol-level tracing statistics are also available - see [HTTP tracing](#http-tracing) section below for brief introduction.
 
 ## Table of Contents
 
@@ -21,6 +29,8 @@ In addition, there's a certain AI "angle": AIS Loader can generate (synthetic) w
 - [Examples](#examples)
 - [Collecting stats](#collecting-stats)
     - [Grafana](#grafana)
+- [HTTP tracing](#http-tracing)
+- [References](#references)
 
 ## Setup
 
@@ -200,7 +210,7 @@ $ aisloader -bucket=abc -cleanup=false -pctput=0 -duration 1h
 
 ### Bytes Multiplicative Suffix
 
-Parameters in AISLoader that represent the number of bytes can be specified with a multiplicative suffix.
+Parameters in `aisLoader` that represent the number of bytes can be specified with a multiplicative suffix.
 For example: `8M` would specify 8 MiB.
 The following multiplicative suffixes are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB.
 Note that this is entirely optional, and therefore an input such as `300` will be interpreted as 300 Bytes.
@@ -229,9 +239,9 @@ For the most recently updated command-line options and examples, please run `ais
         "backed by": "sg",
         "cleanup": true
     }
-    
+
     Actual run duration: 10.313689487s
-    
+
     Time      OP    Count                 	Total Bytes           	Latency(min, avg, max)              	Throughput            	Error
     01:52:52  Put   26                    	11.19GB               	296.39ms   5.70s      14.91s        	639.73MB              	0
     01:52:52  Get   16                    	3.86GB                	58.89ms    220.20ms   616.72ms      	220.56MB              	0
@@ -283,13 +293,13 @@ For the most recently updated command-line options and examples, please run `ais
     ```
 
 9. PUT objects with random name generation being based on the specified loaderID and the total number of concurrent aisloaders:
-    
+
     ```console
     $ aisloader -loaderid=10 -loadernum=20
     ```
 
 10. Same as above except that loaderID is computed by the aisloader as `hash(loaderstring) & 0xff`:
-    
+
     ```console
     $ aisloader -loaderid=loaderstring -loaderidhashlen=8
     ```
@@ -309,7 +319,7 @@ For the most recently updated command-line options and examples, please run `ais
     ```
 
 13. Generate load on a cluster listening on custom IP address and port:
-    
+
     ```console
     $ aisloader -ip="example.com" -port=8080
     ```
@@ -327,7 +337,7 @@ For the most recently updated command-line options and examples, please run `ais
     ```
 
 16. PUT TAR files with random files inside into a cluster:
-    
+
     ```console
     $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar
     ```
@@ -340,7 +350,8 @@ For the most recently updated command-line options and examples, please run `ais
 
 ## Collecting stats
 
-Aisloader allows you to collect statistics with Graphite using StatsD. Aisloader will try to connect
+Collecting is easy - `aisloader` supports at-runtime monitoring via with Graphite using StatsD.
+When starting up, `aisloader` will try to connect
 to provided StatsD server (see: `statsdip` and `statsdport` options). Once the
 connection is established the statistics from aisloader are send in the following
 format:
@@ -366,3 +377,87 @@ new dashboards and panels, please follow: [grafana tutorial](http://docs.grafana
 When selecting a series in panel view, it should be in the format: `stats.aisloader.<loader>.*`.
 Remember that metrics will not be visible (and you will not be able to select
 them) until you start the loader.
+
+## HTTP tracing
+
+Following is a brief (example-illustrated) sequence to enable detailed tracing, capture statistics, and toggle tracing on/off at runtime.
+
+The reason for runtime switch must be clear - the amount of generated (and very detailed) metrics can sometimes put a strain on your StatsD backend server.
+
+> Note that other than `--trace-http`, all command-line options in this section are used for purely illustrative purposes.
+
+```console
+# Run aisloader for 90s (32 workes, 100% write, sizes between 1KB and 1MB) with detailed tracing enabled:
+
+$ aisloader -bucket=ais://abc -duration 90s -numworkers=32 -minsize=1K -maxsize=1M -pctput=50 --cleanup=false --trace-http=true
+```
+
+```console
+# Have `netcat` listening on the default StatsD port `8125`:
+
+$ nc 8125 -l -u -k
+
+# The result will look as follows - notice "*latency*" metrics (in milliseconds):
+
+...
+aisloader.u18044-0.put.latency.posthttp:0.0005412320409368235|ms|@0.000049
+aisloader.u18044-0.put.latency.proxyheader:0.06676835268647904|ms|@0.000049
+aisloader.u18044-0.put.latency.targetresponse:0.7371088368431411|ms|@0.000049aisproxy.DLEp8080.put.count:587262|caistarget.vuIt8081.kalive.ms:1|ms
+aistarget.vuIt8081.disk.sda.avg.rsize:58982|g
+aistarget.vuIt8081.disk.sda.avg.wsize:506227|g
+aistarget.vuIt8081.put.count:587893|c
+aistarget.vuIt8081.put.redir.ms:2|ms
+aistarget.vuIt8081.disk.sda.read.mbps:5.32|g
+aistarget.vuIt8081.disk.sda.util:3|gaisloader.u18044-0.get.count:0|caisloader.u18044-0.put.count:19339|caisloader.u18044-0.put.pending:7|g|@0.000052aisloader.u18044-0.put.latency:4.068928072806246|ms|@0.000052
+aisloader.u18044-0.put.minlatency:0|ms|@0.000052
+aisloader.u18044-0.put.maxlatency:60|ms|@0.000052aisloader.u18044-0.put.throughput:1980758|g|@0.000052aisloader.u18044-0.put.latency.posthttp:0.0005170898185014737|ms|@0.000052
+aisloader.u18044-0.put.latency.proxyheader:0.06742851233259217|ms|@0.000052
+aisloader.u18044-0.put.latency.proxyrequest:0.1034696726821449|ms|@0.000052
+aisloader.u18044-0.put.latency.targetheader:0.0699622524432494|ms|@0.000052
+aisloader.u18044-0.put.latency.targetrequest:0.09168002482031129|ms|@0.000052
+aisloader.u18044-0.put.latency.targetresponse:0.806660116862299|ms|@0.000052
+aisloader.u18044-0.put.latency.proxy:0.6616681317544858|ms|@0.000052
+aisloader.u18044-0.put.latency.targetconn:1.0948859816950205|ms|@0.000052
+aisloader.u18044-0.put.latency.proxyresponse:0.425616629608563|ms|@0.000052
+aisloader.u18044-0.put.latency.proxyconn:1.2669734732923108|ms|@0.000052
+aisloader.u18044-0.put.latency.target:1.0063602047675682|ms|@0.000052aisproxy.DLEp8080.put.count:605044|caistarget.vuIt8081.put.redir.ms:2|ms
+...
+```
+
+```console
+# Finally, let's toggle detailed tracing on and off by sending aisoader `SIGHUP`:
+
+$ pgrep -a aisloader
+3800 aisloader -bucket=ais://abc -duration 90s -numworkers=32 -minsize=1K -maxsize=1M -pctput=100 --cleanup=false --trace-http=true
+# kill -1 3800
+
+# The result will look like:
+
+Time      OP    Count                   Size (Total)            Latency (min, avg, max)                 Throughput (Avg)        Errors (Total)
+10:11:27  PUT   20,136 (20,136 8 0)     19.7MiB (19.7MiB)       755.308µs  3.929ms    42.493ms         1.97MiB/s (1.97MiB/s)   -
+...
+Detailed latency info is disabled
+...
+
+# As stated, `SIGHUP` is a binary toggle - next time used it'll enable detailed trace with `aisloader printing:
+
+Detailed latency info is enabled
+```
+
+## References
+
+For documented `aisloader` metrics, please refer to:
+
+* [aisloader metrics](/docs/metrics.md#ais-loader-metrics)
+
+The same readme (above) also describes:
+
+* [Statistics, Collected Metrics, Visualization](/docs/metrics.md)
+
+For [StatsD](https://github.com/etsy/statsd) compliant backends, see:
+
+* [StatsD backends](https://github.com/statsd/statsd/blob/master/docs/backend.md#supported-backends)
+
+Finally, for another supported - and alternative to StatsD - monitoring via Prometheus integration, see:
+
+* [Prometheus](/docs/prometheus.md)
