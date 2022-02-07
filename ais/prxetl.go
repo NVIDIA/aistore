@@ -144,11 +144,11 @@ func (p *proxy) initCodeETL(w http.ResponseWriter, r *http.Request) {
 
 // startETL broadcasts a build or init ETL request and ensures only one ETL is running
 func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) (err error) {
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cos.MustMarshal(msg)}
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			continue
@@ -174,11 +174,11 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 	// At least one `build` call has failed. Terminate all `build`s.
 	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 	//  or fail otherwise - ignore the failures).
-	argsTerm := allocBcastArgs()
+	argsTerm := allocBcArgs()
 	argsTerm.req = cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msg.ID())}
 	argsTerm.timeout = cmn.LongTimeout
 	p.bcastGroup(argsTerm)
-	freeBcastArgs(argsTerm)
+	freeBcArgs(argsTerm)
 	return err
 }
 
@@ -223,14 +223,14 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 	var (
-		args = allocBcastArgs()
+		args = allocBcArgs()
 		etls *etl.InfoList
 	)
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: cmn.URLPathETL.S}
 	args.timeout = cmn.DefaultTimeout
 	args.fv = func() interface{} { return &etl.InfoList{} }
 	results := p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 
 	for _, res := range results {
 		if res.err != nil {
@@ -277,23 +277,23 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, ap
 			return
 		}
 		results = make(sliceResults, 1)
-		results[0] = p.call(callArgs{
-			req: cmn.HreqArgs{
-				Method: http.MethodGet,
-				Path:   cmn.URLPathETL.Join(etlID, cmn.ETLLogs),
-			},
-			si:      si,
-			timeout: cmn.DefaultTimeout,
-			v:       &etl.PodLogsMsg{},
-		})
+		cargs := allocCargs()
+		{
+			cargs.req = cmn.HreqArgs{Method: http.MethodGet, Path: cmn.URLPathETL.Join(etlID, cmn.ETLLogs)}
+			cargs.si = si
+			cargs.timeout = cmn.DefaultTimeout
+			cargs.v = &etl.PodLogsMsg{}
+		}
+		results[0] = p.call(cargs)
+		freeCargs(cargs)
 	} else {
 		// all targets
-		args = allocBcastArgs()
+		args = allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 		args.timeout = cmn.DefaultTimeout
 		args.fv = func() interface{} { return &etl.PodLogsMsg{} }
 		results = p.bcastGroup(args)
-		freeBcastArgs(args)
+		freeBcArgs(args)
 	}
 	logs := make(etl.PodsLogsMsg, 0, len(results))
 	for _, res := range results {
@@ -316,13 +316,13 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 		args    *bcastArgs
 	)
 
-	args = allocBcastArgs()
+	args = allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 	args.timeout = cmn.DefaultTimeout
 	args.fv = func() interface{} { return &etl.PodHealthMsg{} }
 	results = p.bcastGroup(args)
 	defer freeBcastRes(results)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 
 	healths := make(etl.PodsHealthMsg, 0, len(results))
 	for _, res := range results {
@@ -347,11 +347,11 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, cmn.ErrETLMissingUUID)
 		return
 	}
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodDelete, Path: r.URL.Path}
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			continue

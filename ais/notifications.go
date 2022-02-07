@@ -371,7 +371,7 @@ func (n *notifs) done(nl nl.NotifListener) {
 	if nl.Aborted() {
 		// NOTE: we accept finished notifications even after
 		// `nl` is aborted. Handle locks carefully.
-		args := allocBcastArgs()
+		args := allocBcArgs()
 		args.req = nl.AbortArgs()
 		args.network = cmn.NetworkIntraControl
 		args.timeout = cmn.Timeout.MaxKeepalive()
@@ -379,7 +379,7 @@ func (n *notifs) done(nl nl.NotifListener) {
 		args.nodeCount = len(args.nodes[0])
 		args.async = true
 		_ = n.p.bcastNodes(args)
-		freeBcastArgs(args)
+		freeBcArgs(args)
 	}
 	nl.Callback(nl, time.Now().UnixNano())
 }
@@ -430,7 +430,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 	if !syncRequired {
 		return
 	}
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.network = cmn.NetworkIntraControl
 	args.timeout = config.Timeout.MaxHostBusy.D()
 	args.req = nl.QueryArgs() // nodes to fetch stats from
@@ -439,7 +439,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 	debug.Assert(args.nodeCount > 0) // Ensure that there is at least one node to fetch.
 
 	results := n.p.bcastNodes(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			stats, finished, aborted, err := nl.UnmarshalStats(res.bytes)

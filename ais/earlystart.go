@@ -705,7 +705,7 @@ func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMeta, done, slowp bool) {
 	var (
 		borigin, sorigin string
-		args             = allocBcastArgs()
+		args             = allocBcArgs()
 	)
 	args.req = cmn.HreqArgs{
 		Path:  cmn.URLPathDaemon.S,
@@ -715,7 +715,7 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 	args.to = cluster.AllNodes
 	args.fv = func() interface{} { return &cluMeta{} }
 	results := p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	done = true
 	for k := range bmds {
 		delete(bmds, k)

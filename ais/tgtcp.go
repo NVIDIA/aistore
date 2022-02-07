@@ -723,25 +723,28 @@ func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed stri
 	path := cmn.URLPathDaemon.S
 	url := psi.URL(cmn.NetworkIntraControl)
 	timeout := cmn.Timeout.CplaneOperation()
-	args := callArgs{
-		si:      psi,
-		req:     cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q},
-		timeout: timeout,
+	cargs := allocCargs()
+	{
+		cargs.si = psi
+		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q}
+		cargs.timeout = timeout
 	}
-	res := t.call(args)
-	defer freeCR(res)
+	res := t.call(cargs)
 	if res.err != nil {
 		time.Sleep(timeout / 2)
-		res = t.call(args)
+		res = t.call(cargs)
 		if res.err != nil {
 			err = res.errorf("%s: failed to GET(%q)", t.si, what)
-			return
 		}
 	}
-	err = jsoniter.Unmarshal(res.bytes, outStruct)
-	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, what, cmn.BytesHead(res.bytes), err)
+	if err == nil {
+		err = jsoniter.Unmarshal(res.bytes, outStruct)
+		if err != nil {
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, what, cmn.BytesHead(res.bytes), err)
+		}
 	}
+	freeCargs(cargs)
+	freeCR(res)
 	return
 }
 
@@ -1012,19 +1015,22 @@ func (t *target) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bo
 	header.Add(cmn.HdrCallerName, t.Sname())
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
-	args := callArgs{
-		si: tsi,
-		req: cmn.HreqArgs{
+	cargs := allocCargs()
+	{
+		cargs.si = tsi
+		cargs.req = cmn.HreqArgs{
 			Method: http.MethodHead,
 			Header: header,
 			Base:   tsi.URL(cmn.NetworkIntraControl),
 			Path:   cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
 			Query:  query,
-		},
-		timeout: cmn.Timeout.CplaneOperation(),
+		}
+		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}
-	res := t.call(args)
+	res := t.call(cargs)
 	ok = res.err == nil
+	freeCargs(cargs)
+	freeCR(res)
 	return
 }
 
@@ -1038,7 +1044,7 @@ func (t *target) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	query.Set(cmn.URLParamSilent, "true")
 	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
 	bck := lom.Bck().Bck
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,
 		Header: header,
@@ -1048,7 +1054,7 @@ func (t *target) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	args.ignoreMaintenance = true
 	args.smap = smap
 	results := t.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			si := res.si

@@ -563,7 +563,12 @@ func (h *htrun) stop(rmFromSmap bool) {
 // call another target or a proxy; optionally, include a json-encoded body
 //
 func (h *htrun) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastResults) {
-	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
+	cargs := allocCargs()
+	{
+		cargs.si = si
+		cargs.req = bargs.req
+		cargs.timeout = bargs.timeout
+	}
 	cargs.req.Base = si.URL(bargs.network)
 	if bargs.req.BodyR != nil {
 		cargs.req.BodyR, _ = bargs.req.BodyR.(cos.ReadOpenCloser).Open()
@@ -579,9 +584,10 @@ func (h *htrun) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastResults
 		results.s = append(results.s, res)
 		results.mu.Unlock()
 	}
+	freeCargs(cargs)
 }
 
-func (h *htrun) call(args callArgs) (res *callResult) {
+func (h *htrun) call(args *callArgs) (res *callResult) {
 	var (
 		req    *http.Request
 		resp   *http.Response
@@ -721,7 +727,7 @@ func (h *htrun) callerNotify(n cluster.Notif, err error, kind string) {
 		smap  = h.owner.smap.get()
 		dsts  = n.Subscribers()
 		msg   = n.ToNotifMsg()
-		args  = allocBcastArgs()
+		args  = allocBcArgs()
 		nodes = args.selected
 	)
 	debug.Assert(kind == cmn.Progress || kind == cmn.Finished)
@@ -757,7 +763,7 @@ func (h *htrun) callerNotify(n cluster.Notif, err error, kind string) {
 	args.nodeCount = len(nodes)
 	args.async = true
 	_ = h.bcastSelected(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 }
 
 ///////////////
@@ -855,7 +861,7 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 	var (
 		wg   = &sync.WaitGroup{}
 		smap = h.owner.smap.get()
-		args = allocBcastArgs()
+		args = allocBcArgs()
 	)
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cos.MustMarshal(msg)}
 	args.network = cmn.NetworkIntraControl
@@ -866,23 +872,29 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 		}
 		wg.Add(1)
 		go func(si *cluster.Snode) {
-			cargs := callArgs{si: si, req: args.req, timeout: args.timeout}
+			cargs := allocCargs()
+			{
+				cargs.si = si
+				cargs.req = args.req
+				cargs.timeout = args.timeout
+			}
 			res := h.call(cargs)
+			freeCargs(cargs)
 			freeCR(res) // discard right away
 			wg.Done()
 		}(psi)
 	}
 	wg.Wait()
-	freeBcastArgs(args)
+	freeBcArgs(args)
 }
 
 // bcastReqGroup broadcasts a HreqArgs to a specific group of nodes
 func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, req cmn.HreqArgs, to int) {
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = req
 	args.to = to
 	results := h.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			continue
@@ -1167,16 +1179,18 @@ func (res *callResult) errorf(format string, a ...interface{}) error {
 
 func (h *htrun) Health(si *cluster.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
 	var (
-		path = cmn.URLPathHealth.S
-		url  = si.URL(cmn.NetworkIntraControl)
-		args = callArgs{
-			si:      si,
-			req:     cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: query},
-			timeout: timeout,
-		}
+		path  = cmn.URLPathHealth.S
+		url   = si.URL(cmn.NetworkIntraControl)
+		cargs = allocCargs()
 	)
-	res := h.call(args)
+	{
+		cargs.si = si
+		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: query}
+		cargs.timeout = timeout
+	}
+	res := h.call(cargs)
 	b, status, err = res.bytes, res.status, res.err
+	freeCargs(cargs)
 	freeCR(res)
 	return
 }
@@ -1627,8 +1641,7 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 	return
 }
 
-func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values,
-	keepalive bool) *callResult {
+func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values, keepalive bool) *callResult {
 	var (
 		path          string
 		skipPrxKalive = h.si.IsProxy() || keepalive
@@ -1653,12 +1666,15 @@ func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration
 	} else {
 		path = cmn.URLPathClusterAutoReg.S
 	}
-	callArgs := callArgs{
-		si:      psi,
-		req:     cmn.HreqArgs{Method: http.MethodPost, Base: url, Path: path, Query: query, Body: info},
-		timeout: tout,
+	cargs := allocCargs()
+	{
+		cargs.si = psi
+		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: url, Path: path, Query: query, Body: info}
+		cargs.timeout = tout
 	}
-	return h.call(callArgs)
+	res := h.call(cargs)
+	freeCargs(cargs)
+	return res
 }
 
 func (h *htrun) sendKeepalive(timeout time.Duration) (status int, err error) {
@@ -1745,12 +1761,13 @@ func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 	if smap == nil || smap.validate() != nil {
 		return
 	}
-	args := callArgs{
-		si:      smap.Primary,
-		req:     cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathClusterDaemon.Join(h.si.ID())},
-		timeout: cmn.DefaultTimeout,
+	cargs := allocCargs()
+	{
+		cargs.si = smap.Primary
+		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathClusterDaemon.Join(h.si.ID())}
+		cargs.timeout = cmn.DefaultTimeout
 	}
-	res := h.call(args)
+	res := h.call(cargs)
 	status, err = res.status, res.err
 	if err != nil {
 		f := glog.Errorf
@@ -1759,6 +1776,7 @@ func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 		}
 		f("%s: failed to unreg self, err: %v(%d)", h.si, err, status)
 	}
+	freeCargs(cargs)
 	freeCR(res)
 	return
 }

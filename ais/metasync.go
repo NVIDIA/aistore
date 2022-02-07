@@ -329,14 +329,14 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	if revsReqType == revsReqNotify {
 		to = cluster.Targets
 	}
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.smap = smap
 	args.timeout = cmn.Timeout.MaxKeepalive() // making exception for this critical op
 	args.to = to
 	args.ignoreMaintenance = true
 	results := y.p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 
 	// step 4: count failures and fill-in refused
 	for _, res := range results {
@@ -443,14 +443,14 @@ func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 
 func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap, pairs []revsPair,
 	smap *smapX) (ok bool) {
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.network = cmn.NetworkIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.nodes = []cluster.NodeMap{refused}
 	args.nodeCount = len(refused)
 	results := y.p.bcastNodes(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			delete(refused, res.si.ID())
@@ -548,7 +548,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	var (
 		urlPath = cmn.URLPathMetasync.S
 		body    = payload.marshal(y.p.gmm)
-		args    = allocBcastArgs()
+		args    = allocBcArgs()
 	)
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
 	args.network = cmn.NetworkIntraControl
@@ -557,7 +557,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	args.nodeCount = len(pending)
 	defer body.Free()
 	results := y.p.bcastNodes(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			y.syncDone(res.si, pairs)

@@ -1405,7 +1405,7 @@ func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *cmn.BckSummMsg) (
 		smap     = p.owner.smap.get()
 		aisMsg   = p.newAmsgActVal(cmn.ActSummaryBck, msg)
 	)
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
@@ -1435,7 +1435,7 @@ func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *cmn.BckSummMsg) (
 	args.fv = func() interface{} { return &cmn.BckSummaries{} }
 	summaries = make(cmn.BckSummaries, 0)
 	results = p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
@@ -2019,7 +2019,7 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntr
 	lsmsg.ContinuationToken = p.qm.b.last(lsmsg.UUID, token)
 
 	aisMsg = p.newAmsgActVal(cmn.ActList, &lsmsg)
-	args = allocBcastArgs()
+	args = allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
@@ -2032,7 +2032,7 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntr
 
 	// Combine the results.
 	results = p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
@@ -2087,7 +2087,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allE
 		config     = cmn.GCO.Get()
 		reqTimeout = config.Client.ListObjects.D()
 		aisMsg     = p.newAmsgActVal(cmn.ActList, &lsmsg)
-		args       = allocBcastArgs()
+		args       = allocBcArgs()
 		results    sliceResults
 	)
 	args.req = cmn.HreqArgs{
@@ -2105,13 +2105,21 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allE
 		nl, exists := p.notifs.entry(lsmsg.UUID)
 		debug.Assert(exists) // NOTE: we register listobj xaction before starting to list
 		for _, si := range nl.Notifiers() {
-			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout, v: &cmn.BucketList{}})
+			cargs := allocCargs()
+			{
+				cargs.si = si
+				cargs.req = args.req
+				cargs.timeout = reqTimeout
+				cargs.v = &cmn.BucketList{}
+			}
+			res := p.call(cargs)
+			freeCargs(cargs)
 			results = make(sliceResults, 1)
 			results[0] = res
 			break
 		}
 	}
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	// Combine the results.
 	bckLists := make([]*cmn.BucketList, 0, len(results))
 	for _, res := range results {
@@ -2179,12 +2187,12 @@ func (p *proxy) doListRange(method, bucket string, msg *cmn.ActionMsg, query url
 	nlb := xact.NewXactNL(aisMsg.UUID, aisMsg.Action, &smap.Smap, nil)
 	nlb.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: method, Path: path, Query: query, Body: body}
 	args.smap = smap
 	args.timeout = cmn.DefaultTimeout
 	results := p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			continue
@@ -2490,19 +2498,25 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 			Path:   cmn.URLPathDaemon.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
 		}
-		args = callArgs{req: req, timeout: cmn.DefaultTimeout, v: &smapX{}}
+		cargs = allocCargs()
 	)
-	res := p.call(args)
-	defer freeCR(res)
+	{
+		cargs.req = req
+		cargs.timeout = cmn.DefaultTimeout
+		cargs.v = &smapX{}
+	}
+	res := p.call(cargs)
 	if res.err != nil {
 		err = res.errorf("failed to get Smap from %s", baseURL)
-		return
+	} else {
+		smap = res.v.(*smapX)
+		if err = smap.validate(); err != nil {
+			err = fmt.Errorf("%s: invalid %s from %s: %v", p.si, smap, baseURL, err)
+			smap = nil
+		}
 	}
-	smap = res.v.(*smapX)
-	if err := smap.validate(); err != nil {
-		err = fmt.Errorf("%s: invalid %s from %s: %v", p.si, smap, baseURL, err)
-		return nil, err
-	}
+	freeCargs(cargs)
+	freeCR(res)
 	return
 }
 
@@ -2847,24 +2861,26 @@ func (p *proxy) detectDaemonDuplicate(osi, nsi *cluster.Snode) (bool, error) {
 
 // getDaemonInfo queries osi for its daemon info and returns it.
 func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error) {
-	var (
-		args = callArgs{
-			si: osi,
-			req: cmn.HreqArgs{
-				Method: http.MethodGet,
-				Path:   cmn.URLPathDaemon.S,
-				Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
-			},
-			timeout: cmn.Timeout.CplaneOperation(),
-			v:       &cluster.Snode{},
+	cargs := allocCargs()
+	{
+		cargs.si = osi
+		cargs.req = cmn.HreqArgs{
+			Method: http.MethodGet,
+			Path:   cmn.URLPathDaemon.S,
+			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
 		}
-		res = p.call(args)
-	)
-	defer freeCR(res)
-	if res.err != nil {
-		return nil, res.err
+		cargs.timeout = cmn.Timeout.CplaneOperation()
+		cargs.v = &cluster.Snode{}
 	}
-	return res.v.(*cluster.Snode), nil
+	res := p.call(cargs)
+	if res.err != nil {
+		err = res.err
+	} else {
+		si = res.v.(*cluster.Snode)
+	}
+	freeCargs(cargs)
+	freeCR(res)
+	return
 }
 
 func (p *proxy) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
@@ -2875,7 +2891,6 @@ func (p *proxy) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, st
 	if tsi, err = p.owner.smap.get().GetRandTarget(); err != nil {
 		return
 	}
-
 	if bck.IsCloud() {
 		config := cmn.GCO.Get()
 		if _, ok := config.Backend.Providers[bck.Provider]; !ok {
@@ -2885,12 +2900,14 @@ func (p *proxy) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, st
 			return
 		}
 	}
-
 	q = cmn.AddBckToQuery(q, bck)
-
-	req := cmn.HreqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
-	res := p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
-	defer freeCR(res)
+	cargs := allocCargs()
+	{
+		cargs.si = tsi
+		cargs.req = cmn.HreqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
+		cargs.timeout = cmn.DefaultTimeout
+	}
+	res := p.call(cargs)
 	if res.status == http.StatusNotFound {
 		err = cmn.NewErrRemoteBckNotFound(bck)
 	} else if res.status == http.StatusGone {
@@ -2900,6 +2917,8 @@ func (p *proxy) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, st
 		header = res.header
 	}
 	statusCode = res.status
+	freeCargs(cargs)
+	freeCR(res)
 	return
 }
 

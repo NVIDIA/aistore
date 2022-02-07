@@ -52,13 +52,13 @@ func (p *proxy) broadcastDownloadAdminRequest(method, path string, msg *download
 	var (
 		config = cmn.GCO.Get()
 		body   = cos.MustMarshal(msg)
-		args   = allocBcastArgs()
+		args   = allocBcArgs()
 	)
 	args.req = cmn.HreqArgs{Method: method, Path: path, Body: body, Query: url.Values{}}
 	args.timeout = config.Timeout.MaxHostBusy.D()
 	results := p.bcastGroup(args)
 	defer freeBcastRes(results)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	respCnt := len(results)
 
 	if respCnt == 0 {
@@ -129,13 +129,13 @@ func (p *proxy) broadcastDownloadAdminRequest(method, path string, msg *download
 func (p *proxy) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (errCode int, err error) {
 	query := r.URL.Query()
 	query.Set(cmn.URLParamUUID, id)
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body, Query: query}
 	config := cmn.GCO.Get()
 	args.timeout = config.Timeout.MaxHostBusy.D()
 	results := p.bcastGroup(args)
 	defer freeBcastRes(results)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			continue

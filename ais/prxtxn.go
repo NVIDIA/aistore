@@ -86,8 +86,8 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results slice
 		c.req.Query.Set(cmn.URLParamUnixTime, cos.UnixNano2S(now.UnixNano()))
 	}
 
-	args := allocBcastArgs()
-	defer freeBcastArgs(args)
+	args := allocBcArgs()
+	defer freeBcArgs(args)
 
 	args.req = c.req
 	args.smap = c.smap
@@ -744,8 +744,15 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cm
 	// NOTE: Call only the target that's being decommissioned (commit is a no-op for the rest)
 	if msg.Action == cmn.ActDecommissionNode || msg.Action == cmn.ActShutdownNode {
 		c.req.Path = cos.JoinWords(c.path, cmn.ActCommit)
-		res := p.call(callArgs{si: si, req: c.req, timeout: c.cmtTout(waitmsync)})
+		cargs := allocCargs()
+		{
+			cargs.si = si
+			cargs.req = c.req
+			cargs.timeout = c.cmtTout(waitmsync)
+		}
+		res := p.call(cargs)
 		err = res.toErr()
+		freeCargs(cargs)
 		freeCR(res)
 		if err != nil {
 			glog.Error(err)
@@ -842,7 +849,7 @@ func (p *proxy) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	query := cmn.AddBckToQuery(
 		url.Values{cmn.URLParamKeepBckMD: []string{"true"}},
 		bck.Bck)
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodDelete,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
@@ -851,7 +858,7 @@ func (p *proxy) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	}
 	args.to = cluster.Targets
 	results := p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err != nil {
 			return res.err

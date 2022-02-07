@@ -330,14 +330,16 @@ func (e *errNotPrimary) Error() string {
 
 ///////////////
 // bargsPool //
+// callArgsPool //
 ///////////////
 
 var (
-	bargsPool sync.Pool
-	bargs0    bcastArgs
+	bargsPool, cargsPool sync.Pool
+	bargs0               bcastArgs
+	cargs0               callArgs
 )
 
-func allocBcastArgs() (a *bcastArgs) {
+func allocBcArgs() (a *bcastArgs) {
 	if v := bargsPool.Get(); v != nil {
 		a = v.(*bcastArgs)
 		return
@@ -345,13 +347,26 @@ func allocBcastArgs() (a *bcastArgs) {
 	return &bcastArgs{}
 }
 
-func freeBcastArgs(a *bcastArgs) {
+func freeBcArgs(a *bcastArgs) {
 	sel := a.selected
 	*a = bargs0
 	if sel != nil {
 		a.selected = sel[:0]
 	}
 	bargsPool.Put(a)
+}
+
+func allocCargs() (a *callArgs) {
+	if v := cargsPool.Get(); v != nil {
+		a = v.(*callArgs)
+		return
+	}
+	return &callArgs{}
+}
+
+func freeCargs(a *callArgs) {
+	*a = cargs0
+	cargsPool.Put(a)
 }
 
 ///////////////////////

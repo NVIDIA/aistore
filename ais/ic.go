@@ -346,16 +346,15 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 		return nil
 	}
 	msg := ic.p.newAmsgActVal(cmn.ActMergeOwnershipTbl, &ic.p.notifs)
-	result := ic.p.call(callArgs{
-		si: si,
-		req: cmn.HreqArgs{
-			Method: http.MethodPost,
-			Path:   cmn.URLPathIC.S,
-			Body:   cos.MustMarshal(msg),
-		}, timeout: cmn.Timeout.CplaneOperation(),
-	},
-	)
-	return result.err
+	cargs := allocCargs()
+	{
+		cargs.si = si
+		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cos.MustMarshal(msg)}
+		cargs.timeout = cmn.Timeout.CplaneOperation()
+	}
+	res := ic.p.call(cargs)
+	freeCargs(cargs)
+	return res.err
 }
 
 // sync ownership table
@@ -372,24 +371,27 @@ func (ic *ic) syncICBundle() error {
 	if si.Equals(ic.p.si) {
 		return nil
 	}
-	result := ic.p.call(callArgs{
-		si: si,
-		req: cmn.HreqArgs{
+	cargs := allocCargs()
+	{
+		cargs.si = si
+		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Path:   cmn.URLPathIC.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},
-		},
-		timeout: cmn.Timeout.CplaneOperation(),
-	})
-	if result.err != nil {
+		}
+		cargs.timeout = cmn.Timeout.CplaneOperation()
+	}
+	res := ic.p.call(cargs)
+	freeCargs(cargs)
+	if res.err != nil {
 		// TODO: Handle error. Should try calling another IC member maybe.
-		glog.Errorf("%s: failed to get ownership table from %s, err: %v", ic.p.si, si, result.err)
-		return result.err
+		glog.Errorf("%s: failed to get ownership table from %s, err: %v", ic.p.si, si, res.err)
+		return res.err
 	}
 
 	bundle := &icBundle{}
-	if err := jsoniter.Unmarshal(result.bytes, bundle); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p.si, "IC bundle", cmn.BytesHead(result.bytes), err)
+	if err := jsoniter.Unmarshal(res.bytes, bundle); err != nil {
+		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p.si, "IC bundle", cmn.BytesHead(res.bytes), err)
 	}
 
 	debug.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())

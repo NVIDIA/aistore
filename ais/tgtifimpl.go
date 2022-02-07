@@ -318,18 +318,20 @@ func (t *target) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, er
 	// pull the data
 	query := url.Values{}
 	query.Set(cmn.URLParamRebData, "true")
-	args := callArgs{
-		si: si,
-		req: cmn.HreqArgs{
+	cargs := allocCargs()
+	{
+		cargs.si = si
+		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Base:   si.URL(cmn.NetworkIntraData),
 			Path:   cmn.URLPathRebalance.S,
 			Query:  query,
-		},
-		timeout: cmn.DefaultTimeout,
+		}
+		cargs.timeout = cmn.DefaultTimeout
 	}
-	res := t.call(args)
+	res := t.call(cargs)
 	b, status, err = res.bytes, res.status, res.err
+	freeCargs(cargs)
 	freeCR(res)
 	return
 }

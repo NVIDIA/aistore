@@ -277,7 +277,7 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 		q   = url.Values{}
 	)
 	q.Set(cmn.URLParamPrimaryCandidate, p.si.ID())
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   cmn.URLPathVoteProxy.S,
@@ -286,7 +286,7 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 	}
 	args.to = cluster.AllNodes
 	results := p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	resCh := make(chan voteResult, len(results))
 	for _, res := range results {
 		if res.err != nil {
@@ -321,11 +321,11 @@ func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StringSet {
 			},
 		}
 	)
-	args := allocBcastArgs()
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathVoteVoteres.S, Body: cos.MustMarshal(msg)}
 	args.to = cluster.AllNodes
 	results := p.bcastGroup(args)
-	freeBcastArgs(args)
+	freeBcArgs(args)
 	for _, res := range results {
 		if res.err == nil {
 			continue
@@ -539,29 +539,33 @@ func (h *htrun) _votedPrimary(ctx *smapModifier, clone *smapX) error {
 }
 
 func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) (err error) {
-	msg := VoteInitiationMessage{Request: *vr}
-	body := cos.MustMarshal(&msg)
-	args := callArgs{
-		si: nextPrimaryProxy,
-		req: cmn.HreqArgs{
+	var (
+		msg   = VoteInitiationMessage{Request: *vr}
+		body  = cos.MustMarshal(&msg)
+		cargs = allocCargs()
+	)
+	{
+		cargs.si = nextPrimaryProxy
+		cargs.req = cmn.HreqArgs{
 			Method: http.MethodPut,
 			Base:   nextPrimaryProxy.IntraControlNet.DirectURL,
 			Path:   cmn.URLPathVoteInit.S,
 			Body:   body,
-		},
-		timeout: cmn.DefaultTimeout,
+		}
+		cargs.timeout = cmn.DefaultTimeout
 	}
-	res := h.call(args)
+	res := h.call(cargs)
 	err = res.err
+	freeCargs(cargs)
 	freeCR(res)
 	if err == nil || !cos.IsRetriableConnErr(err) {
 		return
 	}
 	// retry
-	sleepTime := cmn.GCO.Get().Timeout.CplaneOperation.D() / 2
+	sleep := cmn.Timeout.CplaneOperation() / 2
 	for i := 0; i < maxRetryElectReq; i++ {
-		time.Sleep(sleepTime)
-		res = h.call(args)
+		time.Sleep(sleep)
+		res = h.call(cargs)
 		err = res.err
 		freeCR(res)
 		if err == nil {
@@ -570,7 +574,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluste
 		if !cos.IsRetriableConnErr(err) {
 			break
 		}
-		sleepTime += sleepTime / 2
+		sleep += sleep / 2
 	}
 	if !daemon.stopping.Load() {
 		glog.Errorf("%s: failed to request election from the _next_ primary %s: %v",
