@@ -1162,6 +1162,7 @@ func (res *callResult) errorf(format string, a ...interface{}) error {
 
 ///////////////////
 // health client //
+// max-ver Cii   //
 ///////////////////
 
 func (h *htrun) Health(si *cluster.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
@@ -1180,96 +1181,63 @@ func (h *htrun) Health(si *cluster.Snode, timeout time.Duration, query url.Value
 	return
 }
 
-/////////////////
-// clusterInfo //
-/////////////////
+// - utilizes internal API: Health(clusterInfo) to discover a _better_ Smap, if exists
+// - checkAll: query all nodes
+// - consider adding max-ver BMD bit here as well (TODO)
+func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num confirmations*/) {
+	if !smap.isValid() {
+		glog.Errorf("%s: cannot execute with invalid %s", h.si, smap)
+		return nil, 0
+	}
+	c := getMaxCii{
+		h:        h,
+		maxCii:   &clusterInfo{},
+		query:    url.Values{cmn.URLParamClusterInfo: []string{"true"}},
+		timeout:  cmn.Timeout.CplaneOperation(),
+		checkAll: checkAll,
+	}
+	c.maxCii.fillSmap(smap)
 
-func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
+	h._bch(&c, smap, cmn.Proxy)
+	if checkAll || (c.cnt < maxVerConfirmations && smap.CountActiveTargets() > 0) {
+		h._bch(&c, smap, cmn.Target)
+	}
+	glog.Infof("%s: %s", h.si, c.maxCii.String())
+	return c.maxCii, c.cnt
+}
 
-// uses provided Smap and an extended version of the Health(clusterInfo) internal API
-// to discover a better Smap (ie., more current), if exists
-// TODO: for the targets, validate and return maxVerBMD
-// NOTE: if `checkAll` is set to false, we stop making further requests once minPidConfirmations is achieved
-func (h *htrun) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
+func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 	var (
-		query          = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
-		timeout        = cmn.Timeout.CplaneOperation()
-		mu             = &sync.RWMutex{}
-		nodemap        = smap.Pmap
-		maxConfVersion int64
-		retried        bool
+		wg       cos.WG
+		i, count int
+		nodemap  = smap.Pmap
 	)
-	maxCii = &clusterInfo{}
-	maxCii.fillSmap(smap)
-	debug.Assert(maxCii.Smap.Primary.ID != "" && maxCii.Smap.Version > 0 && smap.isValid())
-retry:
-	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(nodemap))
+	if nodeTy == cmn.Target {
+		nodemap = smap.Tmap
+	}
+	if c.checkAll {
+		wg = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(nodemap))
+	} else {
+		count = cos.Min(cluster.MaxBcastParallel(), maxVerConfirmations<<1)
+		wg = cos.NewLimitedWaitGroup(count, len(nodemap) /*have*/)
+	}
 	for sid, si := range nodemap {
 		if sid == h.si.ID() {
 			continue
 		}
-		// have enough confirmations?
-		if len(nodemap) > cluster.MaxBcastParallel() {
-			mu.RLock()
-			if len(checkAll) > 0 && !checkAll[1] && cnt >= minPidConfirmations {
-				mu.RUnlock()
+		if si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+			continue
+		}
+		if count > 0 && count < len(nodemap) && i > count {
+			if c.haveEnough() {
 				break
 			}
-			mu.RUnlock()
 		}
 		wg.Add(1)
-		go func(si *cluster.Snode) {
-			var cii *clusterInfo
-			defer wg.Done()
-			body, _, err := h.Health(si, timeout, query)
-			if err != nil {
-				return
-			}
-			if cii = ciiToSmap(smap, body, h.si, si); cii == nil {
-				return
-			}
-			mu.Lock()
-			if maxCii.Smap.Version < cii.Smap.Version {
-				// reset the confirmation count iff there's a disagreement on primary ID
-				if maxCii.Smap.Primary.ID != cii.Smap.Primary.ID || cii.Flags.VoteInProgress {
-					cnt = 1
-				} else {
-					cnt++
-				}
-				maxCii = cii
-			} else if maxCii.smapEqual(cii) {
-				cnt++
-			}
-			// TODO: Include confidence count for config
-			if maxConfVersion < cii.Config.Version {
-				maxConfVersion = cii.Config.Version
-			}
-			mu.Unlock()
-		}(si)
+		i++
+		go c.do(si, wg, smap)
 	}
 	wg.Wait()
-
-	// retry with Tmap when too few confirmations
-	if cnt < minPidConfirmations && !retried && smap.CountTargets() > 0 {
-		nodemap = smap.Tmap
-		retried = true
-		goto retry
-	}
-	glog.Infof("max config version %d", maxConfVersion)
-	return
-}
-
-func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) *clusterInfo {
-	var cii clusterInfo
-	if err := jsoniter.Unmarshal(body, &cii); err != nil {
-		glog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
-		return nil
-	}
-	if smap.UUID != cii.Smap.UUID {
-		glog.Errorf("%s: Smap have different UUIDs: %s and %s from %s", self, smap.UUID, cii.Smap.UUID, si)
-		return nil
-	}
-	return &cii
 }
 
 //////////////////////////
@@ -1643,7 +1611,7 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 
 	// Failed to join cluster using config, try getting primary URL using existing smap.
 	cii, _ := h.bcastHealth(smap, false /*checkAll*/)
-	if cii.Smap.Version < smap.version() {
+	if cii == nil || cii.Smap.Version < smap.version() {
 		return
 	}
 	primaryURL = cii.Smap.Primary.PubURL
@@ -1752,12 +1720,12 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxC
 		}
 		if rediscover >= config.Timeout.Startup.D()/2 {
 			rediscover = 0
-			if cii, cnt := h.bcastHealth(smap); cii.Smap.Version > smap.version() {
+			if cii, cnt := h.bcastHealth(smap, true /*checkAll*/); cii != nil && cii.Smap.Version > smap.version() {
 				var pid string
 				if psi != nil {
 					pid = psi.ID()
 				}
-				if cii.Smap.Primary.ID != pid && cnt >= minPidConfirmations {
+				if cii.Smap.Primary.ID != pid && cnt >= maxVerConfirmations {
 					glog.Warningf("%s: change of primary %s => %s - must rejoin",
 						h.si, pid, cii.Smap.Primary.ID)
 					maxCii = cii

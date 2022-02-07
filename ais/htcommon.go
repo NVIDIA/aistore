@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const unknownDaemonID = "unknown"
@@ -149,6 +150,16 @@ type (
 			ClusterStarted bool `json:"cluster_started"`
 			NodeStarted    bool `json:"node_started"`
 		} `json:"flags"`
+	}
+	getMaxCii struct {
+		h          *htrun
+		mu         sync.Mutex
+		maxCii     *clusterInfo
+		maxConfVer int64
+		timeout    time.Duration
+		query      url.Values
+		cnt        int
+		checkAll   bool
 	}
 
 	electable interface {
@@ -543,6 +554,8 @@ func (m httpMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // clusterInfo //
 /////////////////
 
+func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
+
 func (cii *clusterInfo) fill(h *htrun) {
 	var (
 		smap = h.owner.smap.get()
@@ -574,6 +587,60 @@ func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
 		return false
 	}
 	return cii.Smap.Version == other.Smap.Version && cii.Smap.Primary.ID == other.Smap.Primary.ID
+}
+
+///////////////
+// getMaxCii //
+///////////////
+
+func (c *getMaxCii) do(si *cluster.Snode, wg cos.WG, smap *smapX) {
+	var cii *clusterInfo
+	body, _, err := c.h.Health(si, c.timeout, c.query)
+	if err != nil {
+		goto ret
+	}
+	if cii = extractCii(body, smap, c.h.si, si); cii == nil {
+		goto ret
+	}
+	c.mu.Lock()
+	if c.maxCii.Smap.Version < cii.Smap.Version {
+		// reset confirmation count if there's any sign of disagreement
+		if c.maxCii.Smap.Primary.ID != cii.Smap.Primary.ID || cii.Flags.VoteInProgress {
+			c.cnt = 1
+		} else {
+			c.cnt++
+		}
+		c.maxCii = cii
+	} else if c.maxCii.smapEqual(cii) {
+		c.cnt++
+	}
+	if c.maxConfVer < cii.Config.Version {
+		c.maxConfVer = cii.Config.Version
+	}
+	c.mu.Unlock()
+ret:
+	wg.Done()
+}
+
+// have enough confirmations?
+func (c *getMaxCii) haveEnough() (yes bool) {
+	c.mu.Lock()
+	yes = c.cnt >= maxVerConfirmations
+	c.mu.Unlock()
+	return
+}
+
+func extractCii(body []byte, smap *smapX, self, si *cluster.Snode) *clusterInfo {
+	var cii clusterInfo
+	if err := jsoniter.Unmarshal(body, &cii); err != nil {
+		glog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
+		return nil
+	}
+	if smap.UUID != cii.Smap.UUID {
+		glog.Errorf("%s: Smap have different UUIDs: %s and %s from %s", self, smap.UUID, cii.Smap.UUID, si)
+		return nil
+	}
+	return &cii
 }
 
 ////////////////

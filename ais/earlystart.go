@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
-const minPidConfirmations = 3
+const maxVerConfirmations = 3 // NOTE: minimum number of max-ver confirmations required to make the decision
 
 const (
 	metaction1 = "early-start-have-registrations"
@@ -61,8 +61,8 @@ func (p *proxy) bootstrap() {
 		} else if reliable {
 			var cnt int // confirmation count
 			// double-check
-			if cii, cnt = p.bcastHealth(smap); cii.Smap.Version > smap.version() {
-				if cii.Smap.Primary.ID != p.si.ID() || cnt < minPidConfirmations {
+			if cii, cnt = p.bcastHealth(smap, true /*checkAll*/); cii != nil && cii.Smap.Version > smap.version() {
+				if cii.Smap.Primary.ID != p.si.ID() || cnt < maxVerConfirmations {
 					glog.Warningf("%s: cannot assume the primary role: local %s < v%d(%s, cnt=%d)",
 						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
 					primary = false

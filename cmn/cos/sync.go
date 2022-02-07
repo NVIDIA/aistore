@@ -176,9 +176,7 @@ func (s *Semaphore) Acquire()                    { <-s.TryAcquire() }
 func (s *Semaphore) Release()                    { s.s <- struct{}{} }
 
 func NewDynSemaphore(n int) *DynSemaphore {
-	sema := &DynSemaphore{
-		size: n,
-	}
+	sema := &DynSemaphore{size: n}
 	sema.c = sync.NewCond(&sema.mu)
 	return sema
 }
