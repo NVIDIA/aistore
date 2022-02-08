@@ -556,8 +556,8 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluste
 	}
 	res := h.call(cargs)
 	err = res.err
-	freeCargs(cargs)
 	freeCR(res)
+	defer freeCargs(cargs)
 	if err == nil || !cos.IsRetriableConnErr(err) {
 		return
 	}
