@@ -637,7 +637,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		baseParams.Method = http.MethodPut
 		reqParams := &api.ReqParams{
 			BaseParams: baseParams,
-			Path:       cmn.URLPathDaemon.Join(cmn.SyncSmap),
+			Path:       cmn.URLPathDae.Join(cmn.SyncSmap),
 			Body:       jsonMap,
 			Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		}
@@ -1250,7 +1250,7 @@ func networkFailurePrimary(t *testing.T) {
 	baseParams.Method = http.MethodPut
 	reqParams := &api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPathDaemonProxy.Join(newPrimaryID),
+		Path:       cmn.URLPathDaeProxy.Join(newPrimaryID),
 		Query: url.Values{
 			cmn.URLParamForce:            {"true"},
 			cmn.URLParamPrimaryCandidate: {newPrimaryURL},

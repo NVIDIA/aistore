@@ -2353,7 +2353,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -2433,8 +2433,8 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 }
 
 func (p *proxy) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	// the path includes cmn.CallbackRmFromSmap (compare with t.httpdaedelete)
-	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathDaemonCallbackRmSelf.L)
+	// the path includes cmn.CallbackRmSelf (compare with t.httpdaedelete)
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathDaeRmSelf.L)
 	if err != nil {
 		return
 	}
@@ -2467,7 +2467,7 @@ func (p *proxy) unreg(action string) {
 }
 
 func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -2495,7 +2495,7 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 		req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Base:   baseURL,
-			Path:   cmn.URLPathDaemon.S,
+			Path:   cmn.URLPathDae.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
 		}
 		cargs = allocCargs()
@@ -2568,7 +2568,7 @@ func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID str
 }
 
 func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathDaemon.L)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -2866,7 +2866,7 @@ func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error)
 		cargs.si = osi
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
-			Path:   cmn.URLPathDaemon.S,
+			Path:   cmn.URLPathDae.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()

@@ -169,7 +169,7 @@ func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 		cargs.si = si
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
-			Path:   cmn.URLPathDaemon.S,
+			Path:   cmn.URLPathDae.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
@@ -187,7 +187,7 @@ func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 
 func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cos.JSONRawMsgs, error) {
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query()}
+	args.req = cmn.HreqArgs{Method: r.Method, Path: cmn.URLPathDae.S, Query: r.URL.Query()}
 	args.timeout = timeout
 	args.to = to
 	results := p.bcastGroup(args)
@@ -241,7 +241,7 @@ func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request) (cos.JSONR
 		}
 	}
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query(), Body: body}
+	args.req = cmn.HreqArgs{Method: r.Method, Path: cmn.URLPathDae.S, Query: r.URL.Query(), Body: body}
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
@@ -274,7 +274,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		apiOp  string // one of: admin-join, self-join, keepalive
 		action string // msg.Action, one: cmn.ActSelfJoinProxy, ...
 	)
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathCluster.L)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClu.L)
 	if err != nil {
 		return
 	}
@@ -447,7 +447,7 @@ func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error
 	cargs := allocCargs()
 	{
 		cargs.si = nsi
-		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathDaemonAdminJoin.S, Body: body}
+		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathDaeAdminJoin.S, Body: body}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}
 	res := p.call(cargs)
@@ -689,7 +689,7 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 // - cluster-wide configuration
 // - cluster membership, xactions, rebalance, configuration
 func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathCluster.L)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathClu.L)
 	if err != nil {
 		return
 	}
@@ -732,7 +732,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActShutdown, cmn.ActDecommission:
 		glog.Infoln("Proxy-controlled cluster decommission/shutdown...")
 		args := allocBcArgs()
-		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: cos.MustMarshal(msg)}
+		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDae.S, Body: cos.MustMarshal(msg)}
 		args.to = cluster.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
@@ -771,7 +771,7 @@ func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, ms
 		return
 	}
 	body := cos.MustMarshal(msg)
-	req := cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
+	req := cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDae.S, Body: body}
 	p.bcastReqGroup(w, r, req, cluster.AllNodes)
 }
 
@@ -785,7 +785,7 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 
 	msg.Value = toUpdate
 	body := cos.MustMarshal(msg)
-	req := cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body, Query: q}
+	req := cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDae.S, Body: body, Query: q}
 	p.bcastReqGroup(w, r, req, cluster.AllNodes)
 }
 
@@ -951,7 +951,7 @@ func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cmn.Acti
 		cargs = allocCargs()
 	)
 	{
-		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}
+		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathClu.S, Body: cos.MustMarshal(msg)}
 		cargs.timeout = cmn.DefaultTimeout
 	}
 	for pid, psi := range smap.Pmap {
@@ -1299,7 +1299,7 @@ func (p *proxy) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
 }
 
 func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterProxy.L)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathCluProxy.L)
 	if err != nil {
 		return
 	}
@@ -1331,7 +1331,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// (I.1) Prepare phase - inform other nodes.
-	urlPath := cmn.URLPathDaemonProxy.Join(proxyid)
+	urlPath := cmn.URLPathDaeProxy.Join(proxyid)
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
 	args := allocBcArgs()
@@ -1393,7 +1393,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 /////////////////////////////////////////
 
 func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterDaemon.L)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathCluDaemon.L)
 	if err != nil {
 		return
 	}
@@ -1448,14 +1448,14 @@ func (p *proxy) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) 
 	switch msg.Action {
 	case cmn.ActShutdownNode:
 		body := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
-		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
+		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDae.S, Body: body}
 	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActCallbackRmFromSmap:
 		act := &cmn.ActionMsg{Action: msg.Action}
 		if msg.Action == cmn.ActDecommissionNode {
 			act.Value = msg.Value
 		}
 		body := cos.MustMarshal(act)
-		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonCallbackRmSelf.S, Body: body}
+		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaeRmSelf.S, Body: body}
 	default:
 		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
 			[]string{cmn.ActShutdownNode, cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActCallbackRmFromSmap})

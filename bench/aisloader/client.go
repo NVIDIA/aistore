@@ -353,7 +353,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 func getConfig(server string) (httpLatencies, error) {
 	tctx := newTraceCtx()
 
-	url := server + cmn.URLPathDaemon.S
+	url := server + cmn.URLPathDae.S
 	req, _ := http.NewRequest(http.MethodGet, url, http.NoBody)
 	req.URL.RawQuery = api.GetWhatRawQuery(cmn.GetWhatConfig, "")
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))

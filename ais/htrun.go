@@ -1662,9 +1662,9 @@ func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration
 	}
 	info := cos.MustMarshal(regReq)
 	if keepalive {
-		path = cmn.URLPathClusterKalive.S
+		path = cmn.URLPathCluKalive.S
 	} else {
-		path = cmn.URLPathClusterAutoReg.S
+		path = cmn.URLPathCluAutoReg.S
 	}
 	cargs := allocCargs()
 	{
@@ -1764,7 +1764,7 @@ func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 	cargs := allocCargs()
 	{
 		cargs.si = smap.Primary
-		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathClusterDaemon.Join(h.si.ID())}
+		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathCluDaemon.Join(h.si.ID())}
 		cargs.timeout = cmn.DefaultTimeout
 	}
 	res := h.call(cargs)

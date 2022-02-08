@@ -81,7 +81,7 @@ func (a *Server) registerPublicHandlers() {
 	a.registerHandler(cmn.URLPathTokens.S, a.tokenHandler)
 	a.registerHandler(cmn.URLPathClusters.S, a.clusterHandler)
 	a.registerHandler(cmn.URLPathRoles.S, a.roleHandler)
-	a.registerHandler(cmn.URLPathDaemon.S, configHandler)
+	a.registerHandler(cmn.URLPathDae.S, configHandler)
 }
 
 func (a *Server) userHandler(w http.ResponseWriter, r *http.Request) {

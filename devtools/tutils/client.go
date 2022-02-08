@@ -606,7 +606,7 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	baseParams.Method = http.MethodGet
 	reqParams := &api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPathDaemon.S,
+		Path:       cmn.URLPathDae.S,
 		Query:      url.Values{cmn.URLParamWhat: {cmn.GetWhatStats}},
 	}
 	err := reqParams.DoHTTPReqResp(&stats)

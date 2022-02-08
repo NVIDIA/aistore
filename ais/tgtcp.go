@@ -123,7 +123,7 @@ func (t *target) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -288,7 +288,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 // admin-join target | enable/disable mountpath
 func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -338,7 +338,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDaemon.L)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -346,7 +346,7 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	case cmn.Mountpaths:
 		t.handleMountpathReq(w, r)
 		return
-	case cmn.CallbackRmFromSmap:
+	case cmn.CallbackRmSelf:
 		var (
 			noShutdown, rmUserData bool
 			opts, action, err      = t.parseUnregMsg(w, r)
@@ -720,7 +720,7 @@ func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed stri
 	if renamed != "" {
 		q.Add(whatRenamedLB, renamed)
 	}
-	path := cmn.URLPathDaemon.S
+	path := cmn.URLPathDae.S
 	url := psi.URL(cmn.NetIntraControl)
 	timeout := cmn.Timeout.CplaneOperation()
 	cargs := allocCargs()

@@ -42,7 +42,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 
 	mux.HandleFunc(cmn.URLPathBuckets.S, mocktgt.filehdlr)
 	mux.HandleFunc(cmn.URLPathObjects.S, mocktgt.filehdlr)
-	mux.HandleFunc(cmn.URLPathDaemon.S, mocktgt.daemonhdlr)
+	mux.HandleFunc(cmn.URLPathDae.S, mocktgt.daemonhdlr)
 	mux.HandleFunc(cmn.URLPathVote.S, mocktgt.votehdlr)
 	mux.HandleFunc(cmn.URLPathHealth.S, mocktgt.healthdlr)
 
@@ -91,7 +91,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 	baseParams.Method = http.MethodPost
 	reqParams := &api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPathClusterAutoReg.S,
+		Path:       cmn.URLPathCluAutoReg.S,
 		Body:       jsonDaemonInfo,
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}

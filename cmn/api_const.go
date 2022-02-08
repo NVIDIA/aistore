@@ -376,10 +376,10 @@ const (
 	Mountpaths = "mountpaths"
 
 	// (see the corresponding action messages above)
-	Keepalive          = "keepalive"
-	AdminJoin          = "join-by-admin"   // when node is joined by admin ("manual join")
-	SelfJoin           = "autoreg"         // auto-join cluster at startup
-	CallbackRmFromSmap = "cb-rm-from-smap" // set by primary to request that node calls back to request removal (internal use only!)
+	Keepalive      = "keepalive"
+	AdminJoin      = "join-by-admin"   // when node is joined by admin ("manual join")
+	SelfJoin       = "autoreg"         // auto-join cluster at startup
+	CallbackRmSelf = "cb-rm-from-smap" // set by primary to request that node calls back to request removal (internal use only!)
 
 	// common
 	Init     = "init"

@@ -268,7 +268,7 @@ func GetAuthNConfig(baseParams BaseParams) (*authn.Config, error) {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathDaemon.S
+		reqParams.Path = cmn.URLPathDae.S
 	}
 	err := reqParams.DoHTTPReqResp(&conf)
 	return conf, err
@@ -281,7 +281,7 @@ func SetAuthNConfig(baseParams BaseParams, conf *authn.ConfigToUpdate) error {
 	{
 		reqParams.Body = cos.MustMarshal(conf)
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathDaemon.S
+		reqParams.Path = cmn.URLPathDae.S
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()

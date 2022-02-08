@@ -800,7 +800,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	var (
 		totalAvailMemory  uint64
 		err               error
-		path              = cmn.URLPathDaemon.S
+		path              = cmn.URLPathDae.S
 		moreThanThreshold = true
 	)
 
