@@ -142,7 +142,7 @@ func (t *target) doETL(w http.ResponseWriter, r *http.Request, uuid string, bck 
 			t.writeErrStatusf(w, r,
 				http.StatusNotFound,
 				"%v - try starting new ETL with \"%s/v1/etls/init\" endpoint",
-				err.Error(), smap.Primary.URL(cmn.NetworkPublic))
+				err.Error(), smap.Primary.URL(cmn.NetPublic))
 			return
 		}
 		t.writeErr(w, r, err)

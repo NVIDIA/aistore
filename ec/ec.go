@@ -355,7 +355,7 @@ func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 	path := cmn.URLPathEC.Join(URLMeta, bck.Name, objName)
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
-	url := si.URL(cmn.NetworkIntraData) + path
+	url := si.URL(cmn.NetIntraData) + path
 	rq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err

@@ -1246,16 +1246,16 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 
 	// Parse ports
 	if _, err := ValidatePort(c.Port); err != nil {
-		return fmt.Errorf("invalid %s port specified: %v", NetworkPublic, err)
+		return fmt.Errorf("invalid %s port specified: %v", NetPublic, err)
 	}
 	if c.PortIntraControl != 0 {
 		if _, err := ValidatePort(c.PortIntraControl); err != nil {
-			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraControl, err)
+			return fmt.Errorf("invalid %s port specified: %v", NetIntraControl, err)
 		}
 	}
 	if c.PortIntraData != 0 {
 		if _, err := ValidatePort(c.PortIntraData); err != nil {
-			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraData, err)
+			return fmt.Errorf("invalid %s port specified: %v", NetIntraData, err)
 		}
 	}
 

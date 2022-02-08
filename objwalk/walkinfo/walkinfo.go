@@ -173,7 +173,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 		fileInfo.Copies = int16(lom.NumCopies())
 	}
 	if wi.needTargetURL() {
-		fileInfo.TargetURL = wi.t.Snode().URL(cmn.NetworkPublic)
+		fileInfo.TargetURL = wi.t.Snode().URL(cmn.NetPublic)
 	}
 	if wi.needSize() {
 		fileInfo.Size = lom.SizeBytes()

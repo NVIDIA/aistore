@@ -230,7 +230,7 @@ func (t *target) initHostIP() {
 	t.si.PublicNet.NodeHostname = extAddr.String()
 	t.si.PublicNet.DaemonPort = strconv.Itoa(extPort)
 	t.si.PublicNet.DirectURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
-	glog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetworkPublic))
+	glog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetPublic))
 
 	// applies to intra-cluster networks unless separately defined
 	if !config.HostNet.UseIntraControl {

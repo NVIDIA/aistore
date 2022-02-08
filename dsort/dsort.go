@@ -547,7 +547,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 				query.Add(cmn.URLParamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
 				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
-					Base:   sendTo.URL(cmn.NetworkIntraData),
+					Base:   sendTo.URL(cmn.NetIntraData),
 					Path:   cmn.URLPathdSortRecords.Join(m.ManagerUUID),
 					Query:  query,
 					BodyR:  r,
@@ -803,7 +803,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	//
 	// if m.extractCreator.UsingCompression() {
 	// 	daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
-	// 	baseURL = m.smap.GetTarget(daemonID).URL(cmn.NetworkIntraData)
+	// 	baseURL = m.smap.GetTarget(daemonID).URL(cmn.NetIntraData)
 	// } else {
 	// 	// If output shards are not compressed, there will always be less
 	// 	// data sent over the network if the shard is constructed on the
@@ -880,7 +880,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				query := cmn.AddBckToQuery(nil, m.rs.Bck)
 				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
-					Base:   si.URL(cmn.NetworkIntraData),
+					Base:   si.URL(cmn.NetIntraData),
 					Path:   cmn.URLPathdSortShards.Join(m.ManagerUUID),
 					Query:  query,
 					BodyR:  r,

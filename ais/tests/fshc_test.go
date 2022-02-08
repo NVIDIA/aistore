@@ -590,7 +590,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 
 	tassert.CheckError(t, err)
 	tutils.RestoreNode(tcmd, false, "target")
-	smap, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetworkPublic), "target restored", smap.Version,
+	smap, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetPublic), "target restored", smap.Version,
 		proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 	if _, ok := smap.Tmap[target.ID()]; !ok {
@@ -622,7 +622,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 
 		smap       = tutils.GetClusterMap(t, tutils.RandomProxyURL())
 		baseParams = tutils.BaseAPIParams()
-		proxyURL   = smap.Primary.URL(cmn.NetworkPublic)
+		proxyURL   = smap.Primary.URL(cmn.NetPublic)
 		proxyCnt   = smap.CountProxies()
 		targetCnt  = smap.CountActiveTargets()
 		enabled    bool

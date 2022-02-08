@@ -47,7 +47,7 @@ var (
 
 func initManager(t cluster.Target) error {
 	var (
-		netReq, netResp = cmn.NetworkIntraControl, cmn.NetworkIntraData
+		netReq, netResp = cmn.NetIntraControl, cmn.NetIntraData
 		sowner          = t.Sowner()
 		smap            = sowner.Get()
 	)

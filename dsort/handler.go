@@ -714,7 +714,7 @@ func broadcastTargets(method, path string, urlParams url.Values, body []byte, sm
 
 		reqArgs := cmn.HreqArgs{
 			Method: method,
-			Base:   node.URL(cmn.NetworkIntraControl),
+			Base:   node.URL(cmn.NetIntraControl),
 			Path:   path,
 			Query:  urlParams,
 			Body:   body,
@@ -832,7 +832,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	//
 	// baseParams := &api.BaseParams{
 	// 	Client: http.DefaultClient,
-	// 	URL:    ctx.smap.Get().Primary.URL(cmn.NetworkIntraControl),
+	// 	URL:    ctx.smap.Get().Primary.URL(cmn.NetIntraControl),
 	// }
 	// msg := &cmn.ListObjsMsg{Props: "size,status"}
 	// objList, err := api.ListObjects(baseParams, parsedRS.Bucket, msg, 0)

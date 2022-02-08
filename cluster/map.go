@@ -60,9 +60,9 @@ type (
 	Snode struct {
 		DaemonID        string       `json:"daemon_id"`
 		DaemonType      string       `json:"daemon_type"`       // enum: "target" or "proxy"
-		PublicNet       NetInfo      `json:"public_net"`        // cmn.NetworkPublic
-		IntraControlNet NetInfo      `json:"intra_control_net"` // cmn.NetworkIntraControl
-		IntraDataNet    NetInfo      `json:"intra_data_net"`    // cmn.NetworkIntraData
+		PublicNet       NetInfo      `json:"public_net"`        // cmn.NetPublic
+		IntraControlNet NetInfo      `json:"intra_control_net"` // cmn.NetIntraControl
+		IntraDataNet    NetInfo      `json:"intra_data_net"`    // cmn.NetIntraData
 		Flags           cos.BitFlags `json:"flags"`             // enum { SnodeNonElectable, SnodeIC, ... } - see above
 		Ext             interface{}  `json:"ext,omitempty"`     // within meta-version extensions
 		// runtime
@@ -161,11 +161,11 @@ func (d *Snode) nameNets() string {
 
 func (d *Snode) URL(network string) string {
 	switch network {
-	case cmn.NetworkPublic:
+	case cmn.NetPublic:
 		return d.PublicNet.DirectURL
-	case cmn.NetworkIntraControl:
+	case cmn.NetIntraControl:
 		return d.IntraControlNet.DirectURL
-	case cmn.NetworkIntraData:
+	case cmn.NetIntraData:
 		return d.IntraDataNet.DirectURL
 	default:
 		cos.Assertf(false, "unknown network %q", network)

@@ -96,7 +96,7 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results slice
 	if args.selected = c.selected; args.selected == nil {
 		results = c.p.bcastGroup(args)
 	} else {
-		args.network = cmn.NetworkIntraControl
+		args.network = cmn.NetIntraControl
 		results = c.p.bcastSelected(args) // e.g. usage: promote => specific target
 	}
 	return

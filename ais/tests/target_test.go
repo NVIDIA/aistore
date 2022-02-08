@@ -33,7 +33,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	sid = si.ID()
 
-	url := smap.Tmap[sid].URL(cmn.NetworkPublic)
+	url := smap.Tmap[sid].URL(cmn.NetPublic)
 	baseParams := tutils.BaseAPIParams(url)
 	reader := readers.NewBytesReader(objDummyData)
 	putArgs := api.PutObjectArgs{

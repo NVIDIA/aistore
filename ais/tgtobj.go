@@ -654,7 +654,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	query = cmn.AddBckToQuery(query, lom.Bucket())
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodGet,
-		Base:   tsi.URL(cmn.NetworkIntraData),
+		Base:   tsi.URL(cmn.NetIntraData),
 		Header: header,
 		Path:   cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
 		Query:  query,
@@ -1385,7 +1385,7 @@ func (t *target) _sendPUT(params *cluster.SendToParams) error {
 	query.Set(cmn.URLParamOWT, strconv.Itoa(int(cmn.OwtMigrate)))
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodPut,
-		Base:   params.Tsi.URL(cmn.NetworkIntraData),
+		Base:   params.Tsi.URL(cmn.NetIntraData),
 		Path:   cmn.URLPathObjects.Join(params.BckTo.Name, params.ObjNameTo),
 		Query:  query,
 		Header: hdr,

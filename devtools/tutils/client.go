@@ -134,7 +134,7 @@ func GetPrimaryURL() string {
 	if err != nil {
 		return proxyURLReadOnly
 	}
-	return primary.URL(cmn.NetworkPublic)
+	return primary.URL(cmn.NetPublic)
 }
 
 // GetPrimaryProxy returns the primary proxy
@@ -435,7 +435,7 @@ func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
 	to := time.Now().Add(bucketTimeout)
 	for _, s := range smap.Tmap {
 		for {
-			baseParams := BaseAPIParams(s.URL(cmn.NetworkPublic))
+			baseParams := BaseAPIParams(s.URL(cmn.NetPublic))
 			bucketExists, err := api.DoesBucketExist(baseParams, query)
 			if err != nil {
 				return err

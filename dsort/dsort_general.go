@@ -129,10 +129,10 @@ func (ds *dsorterGeneral) start() error {
 	// Requests are usually small packets, no more 1KB that is why we want to
 	// utilize intraControl network.
 	config := cmn.GCO.Get()
-	reqNetwork := cmn.NetworkIntraControl
+	reqNetwork := cmn.NetIntraControl
 	// Responses to the other targets are objects that is why we want to use
 	// intraData network.
-	respNetwork := cmn.NetworkIntraData
+	respNetwork := cmn.NetIntraData
 
 	client := transport.NewIntraDataClient()
 

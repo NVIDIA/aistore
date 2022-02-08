@@ -256,7 +256,7 @@ func (m *Manager) initStreams() error {
 
 	// Responses to the other targets are objects that is why we want to use
 	// intraData network.
-	respNetwork := cmn.NetworkIntraData
+	respNetwork := cmn.NetIntraData
 	trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
 	shardsSbArgs := bundle.Args{
 		Multiplier: bundle.Multiplier,

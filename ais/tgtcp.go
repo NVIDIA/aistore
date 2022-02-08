@@ -721,7 +721,7 @@ func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed stri
 		q.Add(whatRenamedLB, renamed)
 	}
 	path := cmn.URLPathDaemon.S
-	url := psi.URL(cmn.NetworkIntraControl)
+	url := psi.URL(cmn.NetIntraControl)
 	timeout := cmn.Timeout.CplaneOperation()
 	cargs := allocCargs()
 	{
@@ -1021,7 +1021,7 @@ func (t *target) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bo
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodHead,
 			Header: header,
-			Base:   tsi.URL(cmn.NetworkIntraControl),
+			Base:   tsi.URL(cmn.NetIntraControl),
 			Path:   cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
 			Query:  query,
 		}

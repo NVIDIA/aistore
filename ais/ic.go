@@ -150,7 +150,7 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 				break
 			}
 		}
-		redirectURL := ic.p.redirectURL(r, node, time.Now(), cmn.NetworkIntraControl)
+		redirectURL := ic.p.redirectURL(r, node, time.Now(), cmn.NetIntraControl)
 		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 		return true
 	}

@@ -221,7 +221,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 			maxVerSmap.Pmap[p.si.ID()] = p.si
 			p.owner.smap.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
-				p.si, maxVerSmap.Primary.ID(), maxVerSmap.Primary.URL(cmn.NetworkIntraControl))
+				p.si, maxVerSmap.Primary.ID(), maxVerSmap.Primary.URL(cmn.NetIntraControl))
 			if err := p.secondaryStartup(maxVerSmap); err != nil {
 				cos.ExitLogf("FATAL: %v", err)
 			}
@@ -419,7 +419,7 @@ func (p *proxy) initClusterConfig(uuid string) (config *globalConfig, err error)
 	return p.owner.config.modify(&configModifier{
 		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
 			debug.Assert(clone.version() == 0)
-			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetworkPublic)
+			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetPublic)
 			clone.UUID = uuid
 			updated = true
 			return
@@ -901,7 +901,7 @@ ret:
 	clone.Version += 100
 	after.Config, err = p.owner.config.modify(&configModifier{
 		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
-			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetworkPublic)
+			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetPublic)
 			clone.Version++
 			updated = true
 			return

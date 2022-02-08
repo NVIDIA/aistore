@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	NetworkPublic       = "PUBLIC"
-	NetworkIntraControl = "INTRA-CONTROL"
-	NetworkIntraData    = "INTRA-DATA"
+	NetPublic       = "PUBLIC"
+	NetIntraControl = "INTRA-CONTROL"
+	NetIntraData    = "INTRA-DATA"
 )
 
 // NOTE: as of Go 1.16, http.DefaultTransport has the following defaults:
@@ -41,7 +41,7 @@ const (
 	DefaultSendRecvBufferSize  = 128 * cos.KiB
 )
 
-var KnownNetworks = []string{NetworkPublic, NetworkIntraControl, NetworkIntraData}
+var KnownNetworks = []string{NetPublic, NetIntraControl, NetIntraData}
 
 type (
 	// Options to create a transport for HTTP client
@@ -128,7 +128,7 @@ func NewClient(args TransportArgs) *http.Client {
 // misc helpers
 
 func NetworkIsKnown(net string) bool {
-	return net == NetworkPublic || net == NetworkIntraControl || net == NetworkIntraData
+	return net == NetPublic || net == NetIntraControl || net == NetIntraData
 }
 
 func ParsePort(p string) (int, error) {

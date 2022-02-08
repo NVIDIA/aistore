@@ -445,7 +445,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 	smap *smapX) (ok bool) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
-	args.network = cmn.NetworkIntraControl
+	args.network = cmn.NetIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.nodes = []cluster.NodeMap{refused}
 	args.nodeCount = len(refused)
@@ -551,7 +551,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		args    = allocBcArgs()
 	)
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
-	args.network = cmn.NetworkIntraControl
+	args.network = cmn.NetIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.nodes = []cluster.NodeMap{pending}
 	args.nodeCount = len(pending)

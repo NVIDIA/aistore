@@ -1772,7 +1772,7 @@ func TestICRebalance(t *testing.T) {
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
-	m.proxyURL = psi.URL(cmn.NetworkPublic)
+	m.proxyURL = psi.URL(cmn.NetPublic)
 	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
 
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -1834,7 +1834,7 @@ func TestICDecommission(t *testing.T) {
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
-	m.proxyURL = psi.URL(cmn.NetworkPublic)
+	m.proxyURL = psi.URL(cmn.NetPublic)
 	tlog.Logf("Monitoring node: %s\n", psi)
 	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
 

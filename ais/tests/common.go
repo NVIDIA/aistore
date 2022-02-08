@@ -631,7 +631,7 @@ func (m *ioContext) stopMaintenance(target *cluster.Snode) (rebID string) {
 	args := &cmn.ActValRmNode{DaemonID: target.ID()}
 	rebID, err = api.StopMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
-	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
+	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetPublic))
 	smap := tutils.GetClusterMap(m.t, m.proxyURL)
 	for i := 0; i < iterations; i++ {
 		time.Sleep(interval)
@@ -643,7 +643,7 @@ func (m *ioContext) stopMaintenance(target *cluster.Snode) (rebID string) {
 			proxyBcks, err := api.ListBuckets(baseParams, query)
 			tassert.CheckFatal(m.t, err)
 
-			baseParams.URL = target.URL(cmn.NetworkPublic)
+			baseParams.URL = target.URL(cmn.NetPublic)
 			targetBcks, err := api.ListBuckets(baseParams, query)
 			tassert.CheckFatal(m.t, err)
 			if proxyBcks.Equal(targetBcks) {

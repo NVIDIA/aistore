@@ -314,38 +314,38 @@ func (h *htrun) initNetworks() {
 		pubAddr, err = getNetInfo(addrList, proto, config.HostNet.Hostname, port)
 	}
 	if err != nil {
-		cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkPublic, err)
+		cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
 	}
 	if config.HostNet.Hostname != "" {
 		s = " (config: " + config.HostNet.Hostname + ")"
 	}
-	glog.Infof("%s (user) access: [%s]%s", cmn.NetworkPublic, pubAddr, s)
+	glog.Infof("%s (user) access: [%s]%s", cmn.NetPublic, pubAddr, s)
 
 	intraControlAddr = pubAddr
 	if config.HostNet.UseIntraControl {
 		icport := strconv.Itoa(config.HostNet.PortIntraControl)
 		intraControlAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraControl, icport)
 		if err != nil {
-			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraControl, err)
+			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetIntraControl, err)
 		}
 		s = ""
 		if config.HostNet.HostnameIntraControl != "" {
 			s = " (config: " + config.HostNet.HostnameIntraControl + ")"
 		}
-		glog.Infof("%s access: [%s]%s", cmn.NetworkIntraControl, intraControlAddr, s)
+		glog.Infof("%s access: [%s]%s", cmn.NetIntraControl, intraControlAddr, s)
 	}
 	intraDataAddr = pubAddr
 	if config.HostNet.UseIntraData {
 		idport := strconv.Itoa(config.HostNet.PortIntraData)
 		intraDataAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraData, idport)
 		if err != nil {
-			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraData, err)
+			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetIntraData, err)
 		}
 		s = ""
 		if config.HostNet.HostnameIntraData != "" {
 			s = " (config: " + config.HostNet.HostnameIntraData + ")"
 		}
-		glog.Infof("%s access: [%s]%s", cmn.NetworkIntraData, intraDataAddr, s)
+		glog.Infof("%s access: [%s]%s", cmn.NetIntraData, intraDataAddr, s)
 	}
 	mustDiffer(pubAddr,
 		config.HostNet.Port,
@@ -757,7 +757,7 @@ func (h *htrun) callerNotify(n cluster.Notif, err error, kind string) {
 	}
 	path := cmn.URLPathNotifs.Join(kind)
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: path, Body: cos.MustMarshal(&msg)}
-	args.network = cmn.NetworkIntraControl
+	args.network = cmn.NetIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.selected = nodes
 	args.nodeCount = len(nodes)
@@ -777,7 +777,7 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 	}
 	present := args.smap.isPresent(h.si)
 	if args.network == "" {
-		args.network = cmn.NetworkIntraControl
+		args.network = cmn.NetIntraControl
 	}
 	debug.Assert(cmn.NetworkIsKnown(args.network))
 	if args.timeout == 0 {
@@ -864,7 +864,7 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 		args = allocBcArgs()
 	)
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cos.MustMarshal(msg)}
-	args.network = cmn.NetworkIntraControl
+	args.network = cmn.NetIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	for pid, psi := range smap.Pmap {
 		if pid == h.si.ID() || !smap.IsIC(psi) || smap.GetNodeNotMaint(pid) == nil {
@@ -1180,7 +1180,7 @@ func (res *callResult) errorf(format string, a ...interface{}) error {
 func (h *htrun) Health(si *cluster.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
 	var (
 		path  = cmn.URLPathHealth.S
-		url   = si.URL(cmn.NetworkIntraControl)
+		url   = si.URL(cmn.NetIntraControl)
 		cargs = allocCargs()
 	)
 	{
@@ -1575,8 +1575,8 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 	var (
 		config                   = cmn.GCO.Get()
 		candidates               = make([]string, 0, 4+len(contactURLs))
-		selfPublicURL, pubValid  = cos.ParseURL(h.si.URL(cmn.NetworkPublic))
-		selfIntraURL, intraValid = cos.ParseURL(h.si.URL(cmn.NetworkIntraControl))
+		selfPublicURL, pubValid  = cos.ParseURL(h.si.URL(cmn.NetPublic))
+		selfIntraURL, intraValid = cos.ParseURL(h.si.URL(cmn.NetIntraControl))
 		addCandidate             = func(url string) {
 			if u, valid := cos.ParseURL(url); !valid ||
 				u.Host == selfPublicURL.Host ||
@@ -1595,7 +1595,7 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 	// NOTE: The url above is either config or the primary's IntraControlNet.DirectURL;
 	//  Add its public URL as "more static" in various virtualized environments.
 	if psi != nil {
-		addCandidate(psi.URL(cmn.NetworkPublic))
+		addCandidate(psi.URL(cmn.NetPublic))
 	}
 	addCandidate(config.Proxy.PrimaryURL)
 	addCandidate(config.Proxy.DiscoveryURL)
@@ -1703,7 +1703,7 @@ func (h *htrun) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 		url, psi = cmn.GCO.Get().Proxy.PrimaryURL, nil
 		return
 	}
-	url, psi = smap.Primary.URL(cmn.NetworkIntraControl), smap.Primary
+	url, psi = smap.Primary.URL(cmn.NetIntraControl), smap.Primary
 	return
 }
 
@@ -1883,7 +1883,7 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		erP        error
 	)
 	if ok := callerID != "" && callerName != ""; !ok {
-		return fmt.Errorf("%s: expected %s request", h.si, cmn.NetworkIntraControl)
+		return fmt.Errorf("%s: expected %s request", h.si, cmn.NetIntraControl)
 	}
 	if !smap.isValid() {
 		return
@@ -1911,9 +1911,9 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 			// assume request from a newly joined node and proceed
 			return nil
 		}
-		return fmt.Errorf("%s: expected %s from a valid node, %s", h.si, cmn.NetworkIntraControl, smap)
+		return fmt.Errorf("%s: expected %s from a valid node, %s", h.si, cmn.NetIntraControl, smap)
 	}
-	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h.si, cmn.NetworkIntraControl, caller, smap)
+	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h.si, cmn.NetIntraControl, caller, smap)
 }
 
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
@@ -1931,7 +1931,7 @@ func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyP
 	if srvAddr == intraAddr {
 		return true
 	}
-	h.writeErrf(w, r, "%s: expected %s request", h.si, cmn.NetworkIntraControl)
+	h.writeErrf(w, r, "%s: expected %s request", h.si, cmn.NetIntraControl)
 	return
 }
 

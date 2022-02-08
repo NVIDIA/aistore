@@ -93,7 +93,7 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 		return getRandomProxyURL(smap)
 	}
 	for _, node := range pmapReadOnly {
-		url := node.URL(cmn.NetworkPublic)
+		url := node.URL(cmn.NetPublic)
 		if url == proxyURLReadOnly {
 			continue
 		}
@@ -115,7 +115,7 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 
 func getRandomProxyURL(smap *cluster.Smap) string {
 	proxies := smap.Pmap.ActiveNodes()
-	return proxies[rand.Intn(len(proxies))].URL(cmn.NetworkPublic)
+	return proxies[rand.Intn(len(proxies))].URL(cmn.NetPublic)
 }
 
 // Return the first proxy from smap that is IC member. The primary
@@ -661,7 +661,7 @@ retry:
 	}
 	node := smap.GetNode(nodeID)
 	if node != nil {
-		return smap, WaitNodeReady(node.URL(cmn.NetworkPublic))
+		return smap, WaitNodeReady(node.URL(cmn.NetPublic))
 	}
 	time.Sleep(nodeRetryInterval)
 	i++

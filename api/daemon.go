@@ -40,7 +40,7 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.Mountpa
 		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}}
 		reqParams.Header = http.Header{
 			cmn.HdrNodeID:  []string{node.ID()},
-			cmn.HdrNodeURL: []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrNodeURL: []string{node.URL(cmn.NetPublic)},
 		}
 	}
 	err = reqParams.DoHTTPReqResp(&mpl)
@@ -58,7 +58,7 @@ func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAttach, Value: mountpath})
 		reqParams.Header = http.Header{
 			cmn.HdrNodeID:      []string{node.ID()},
-			cmn.HdrNodeURL:     []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
 		}
 		reqParams.Query = url.Values{cmn.URLParamForce: []string{strconv.FormatBool(force)}}
@@ -77,7 +77,7 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountpath})
 		reqParams.Header = http.Header{
 			cmn.HdrNodeID:      []string{node.ID()},
-			cmn.HdrNodeURL:     []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
 		}
 	}

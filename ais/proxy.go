@@ -222,12 +222,12 @@ func (p *proxy) Run() error {
 	}
 	p.registerNetworkHandlers(networkHandlers)
 
-	glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetworkPublic, p.si.PublicNet.DirectURL)
+	glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetPublic, p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {
-		glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetworkIntraControl, p.si.IntraControlNet.DirectURL)
+		glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetIntraControl, p.si.IntraControlNet.DirectURL)
 	}
 	if p.si.PublicNet.DirectURL != p.si.IntraDataNet.DirectURL {
-		glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetworkIntraData, p.si.IntraDataNet.DirectURL)
+		glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetIntraData, p.si.IntraDataNet.DirectURL)
 	}
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, p.statsT)
@@ -574,7 +574,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
-	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetworkIntraData)
+	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 
 	// 4. stats
@@ -651,7 +651,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s (append: %v)", r.Method, bck.Name, objName, si, appendTyProvided)
 	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	// 4. stats
@@ -686,7 +686,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
-	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetworkIntraControl)
+	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsT.Add(stats.DeleteCount, 1)
@@ -1682,7 +1682,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
-	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetworkIntraControl)
+	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
@@ -1711,7 +1711,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
@@ -1799,7 +1799,7 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 
 // reverse-proxy request
 func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *cluster.Snode) {
-	parsedURL, err := url.Parse(si.URL(cmn.NetworkPublic))
+	parsedURL, err := url.Parse(si.URL(cmn.NetPublic))
 	debug.AssertNoErr(err)
 	p.reverseRequest(w, r, si.ID(), parsedURL)
 }
@@ -1897,7 +1897,7 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 		query   = url.Values{}
 	)
 	if p.si.LocalNet == nil {
-		nodeURL = si.URL(cmn.NetworkPublic)
+		nodeURL = si.URL(cmn.NetPublic)
 	} else {
 		var local bool
 		remote := r.RemoteAddr
@@ -1910,7 +1910,7 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 		if local {
 			nodeURL = si.URL(netName)
 		} else {
-			nodeURL = si.URL(cmn.NetworkPublic)
+			nodeURL = si.URL(cmn.NetPublic)
 		}
 	}
 	redirect = nodeURL + r.URL.Path + "?"
@@ -2146,7 +2146,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allE
 		for _, e := range allEntries.Entries {
 			si, err := cluster.HrwTarget(bck.MakeUname(e.Name), &smap.Smap)
 			if err == nil {
-				e.TargetURL = si.URL(cmn.NetworkPublic)
+				e.TargetURL = si.URL(cmn.NetPublic)
 			}
 		}
 	}
@@ -2171,7 +2171,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, 
 	}
 
 	// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsT.Add(stats.RenameCount, 1)
@@ -2695,8 +2695,8 @@ func (p *proxy) ensureConfigPrimaryURL() (config *globalConfig, err error) {
 func (p *proxy) _primaryURLPre(_ *configModifier, clone *globalConfig) (updated bool, err error) {
 	smap := p.owner.smap.get()
 	debug.Assert(smap.isPrimary(p.si))
-	if newURL := smap.Primary.URL(cmn.NetworkPublic); clone.Proxy.PrimaryURL != newURL {
-		clone.Proxy.PrimaryURL = smap.Primary.URL(cmn.NetworkPublic)
+	if newURL := smap.Primary.URL(cmn.NetPublic); clone.Proxy.PrimaryURL != newURL {
+		clone.Proxy.PrimaryURL = smap.Primary.URL(cmn.NetPublic)
 		updated = true
 	}
 	return
@@ -2904,7 +2904,7 @@ func (p *proxy) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, st
 	cargs := allocCargs()
 	{
 		cargs.si = tsi
-		cargs.req = cmn.HreqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
+		cargs.req = cmn.HreqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetIntraData), Path: path, Query: q}
 		cargs.timeout = cmn.DefaultTimeout
 	}
 	res := p.call(cargs)

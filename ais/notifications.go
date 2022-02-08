@@ -373,7 +373,7 @@ func (n *notifs) done(nl nl.NotifListener) {
 		// `nl` is aborted. Handle locks carefully.
 		args := allocBcArgs()
 		args.req = nl.AbortArgs()
-		args.network = cmn.NetworkIntraControl
+		args.network = cmn.NetIntraControl
 		args.timeout = cmn.Timeout.MaxKeepalive()
 		args.nodes = []cluster.NodeMap{nl.Notifiers()}
 		args.nodeCount = len(args.nodes[0])
@@ -431,7 +431,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 		return
 	}
 	args := allocBcArgs()
-	args.network = cmn.NetworkIntraControl
+	args.network = cmn.NetIntraControl
 	args.timeout = config.Timeout.MaxHostBusy.D()
 	args.req = nl.QueryArgs() // nodes to fetch stats from
 	args.nodes = []cluster.NodeMap{nodesTardy}

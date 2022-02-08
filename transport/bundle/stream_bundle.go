@@ -56,7 +56,7 @@ type (
 	bundle map[string]*robin // stream "bundle" indexed by DaemonID
 
 	Args struct {
-		Net          string           // one of cmn.KnownNetworks, empty defaults to cmn.NetworkIntraData
+		Net          string           // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
 		Trname       string           // transport endpoint name
 		Extra        *transport.Extra // additional parameters
 		Ntype        int              // cluster.Target (0) by default
@@ -80,7 +80,7 @@ func init() {
 
 func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Client, sbArgs Args) (sb *Streams) {
 	if sbArgs.Net == "" {
-		sbArgs.Net = cmn.NetworkIntraData
+		sbArgs.Net = cmn.NetIntraData
 	} else {
 		debug.Assertf(cmn.NetworkIsKnown(sbArgs.Net), "Unknown network %s, expecting one of: %v",
 			sbArgs.Net, cmn.KnownNetworks)

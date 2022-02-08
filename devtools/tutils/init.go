@@ -190,7 +190,7 @@ func initProxyURL() (err error) {
 		err = fmt.Errorf("failed to get primary proxy info from %s; err %v", proxyURLReadOnly, err)
 		return err
 	}
-	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
+	proxyURLReadOnly = primary.URL(cmn.NetPublic)
 	return
 }
 

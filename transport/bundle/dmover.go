@@ -28,14 +28,14 @@ type (
 		data struct {
 			trname  string
 			recv    transport.ReceiveObj
-			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetworkIntraData
+			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
 			streams *Streams
 			client  transport.Client
 		}
 		ack struct {
 			trname  string
 			recv    transport.ReceiveObj
-			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetworkIntraControl
+			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraControl
 			streams *Streams
 			client  transport.Client
 		}
@@ -91,12 +91,12 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 	}
 	dm.data.trname, dm.data.recv = trname, recvCB
 	if dm.data.net == "" {
-		dm.data.net = cmn.NetworkIntraData
+		dm.data.net = cmn.NetIntraData
 	}
 	dm.data.client = transport.NewIntraDataClient()
 	// ack
 	if dm.ack.net == "" {
-		dm.ack.net = cmn.NetworkIntraControl
+		dm.ack.net = cmn.NetIntraControl
 	}
 	dm.ack.recv = extra.RecvAck
 	if !dm.useACKs() {
