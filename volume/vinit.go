@@ -338,20 +338,24 @@ func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, bool /*have ol
 	}
 	if v.Version > vmd.Version {
 		if !_mpathGreaterEq(v, vmd, mpath) {
-			glog.Warningf("mpath %s: VMD version mismatch: %s vs %s", mpath, v, vmd)
+			glog.Warningf("mpath %s stores newer VMD: %s > %s", mpath, v, vmd)
 		}
 		return v, false, nil
 	}
 	if v.Version < vmd.Version {
 		if !_mpathGreaterEq(vmd, v, mpath) {
-			glog.Warningf("mpath %s: VMD version mismatch: %s vs %s", mpath, vmd, v)
+			md := vmd.Mountpaths[mpath]
+			// warn of an older version only if this mpath is enabled in the newer one
+			if md != nil && md.Enabled {
+				glog.Warningf("mpath %s stores older VMD: %s < %s", mpath, v, vmd)
+			}
 		}
 		return nil, true, nil // true: outdated copy that must be updated
 	}
 	if !v.equal(vmd) { // same version must be identical
 		err = &fs.ErrStorageIntegrity{
 			Code: fs.SieNotEqVMD,
-			Msg:  fmt.Sprintf("VMD differs: %s vs %s (%q)", vmd, v, mpath),
+			Msg:  fmt.Sprintf("same VMD versions must be identical: %s(mpath %q) vs %s", v, mpath, vmd),
 		}
 	}
 	return nil, false, err
