@@ -54,13 +54,13 @@ func New(t cluster.Target) *Res {
 	return &Res{t: t}
 }
 
-func (res *Res) IsActive() (yes bool) {
+func (res *Res) IsActive(multiplier int64) (yes bool) {
 	begin := res.begin.Load()
 	if begin == 0 {
 		return
 	}
 	now := mono.NanoTime()
-	if time.Duration(now-begin) < timedDuration {
+	if now-begin < multiplier*int64(timedDuration) {
 		yes = true
 	} else {
 		end := res.end.Load()

@@ -124,7 +124,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 		return
 	}
 
-	prevActive := g.t.res.IsActive()
+	prevActive := g.t.res.IsActive(1 /*interval-of-inactivity multiplier*/)
 	if prevActive {
 		glog.Infof("%s: %q %s: starting to resilver when previous (resilvering) is active", g.t.si, action, rmi)
 	} else {

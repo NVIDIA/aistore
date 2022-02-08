@@ -559,19 +559,22 @@ validate:
 // 4) Cloud
 func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode int, err error) {
 	var (
-		tsi, gfnNode         *cluster.Snode
-		smap                 = goi.t.owner.smap.get()
-		tname                = goi.t.si.String()
-		marked               = xreg.GetResilverMarked()
-		interrupted, running = marked.Interrupted, marked.Xact != nil
-		gfnActive            = goi.t.res.IsActive()
-		ecEnabled            = goi.lom.Bprops().EC.Enabled
+		tsi   *cluster.Snode
+		smap  = goi.t.owner.smap.get()
+		tname = goi.t.si.String()
 	)
-	tsi, err = cluster.HrwTargetAll(goi.lom.Uname(), &smap.Smap) // include targets in maintenance
+	tsi, err = cluster.HrwTargetAll(goi.lom.Uname(), &smap.Smap) // including targets in maintenance
 	if err != nil {
 		return
 	}
 	if !skipLomRestore {
+		// when resilvering:
+		// (whether or not resilvering is active depends on the context: mountpath events vs GET)
+		var (
+			marked               = xreg.GetResilverMarked()
+			interrupted, running = marked.Interrupted, marked.Xact != nil
+			gfnActive            = goi.t.res.IsActive(3 /*interval-of-inactivity multiplier*/)
+		)
 		if interrupted || running || gfnActive {
 			if goi.lom.RestoreToLocation() { // from copies
 				if glog.FastV(4, glog.SmoduleAIS) {
@@ -583,19 +586,20 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 		}
 	}
 
-	// FIXME: if there're not enough EC targets to restore a "sliced" object,
-	// we might be able to restore it if it was replicated. In this case even
-	// just one additional target might be sufficient. This won't succeed if
-	// an object was sliced, neither will ecmanager.RestoreObject(lom)
-	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountActiveTargets()
-
-	// cluster-wide lookup ("get from neighbor")
-	marked = xreg.GetRebMarked()
-	interrupted, running = marked.Interrupted, marked.Xact != nil
+	// when rebalancing: cluster-wide lookup (aka "get from neighbor" or GFN)
+	var (
+		gfnNode              *cluster.Snode
+		marked               = xreg.GetRebMarked()
+		interrupted, running = marked.Interrupted, marked.Xact != nil
+		gfnActive            = reb.IsActiveGFN() // GFN(global rebalance)
+		ecEnabled            = goi.lom.Bprops().EC.Enabled
+		// TODO: if there're not enough EC targets to restore a sliced object,
+		//       we might still be able to restore it from its full replica
+		enoughECRestoreTargets = goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountActiveTargets()
+	)
 	if running {
 		doubleCheck = true
 	}
-	gfnActive = reb.IsActiveGFN()
 	if running && tsi.ID() != goi.t.si.ID() {
 		if goi.t.LookupRemoteSingle(goi.lom, tsi) {
 			gfnNode = tsi
@@ -605,7 +609,6 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 	if running || !enoughECRestoreTargets || ((interrupted || gfnActive) && !ecEnabled) {
 		gfnNode = goi.t.lookupRemoteAll(goi.lom, smap)
 	}
-
 gfn:
 	if gfnNode != nil {
 		if goi.getFromNeighbor(goi.lom, gfnNode) {
