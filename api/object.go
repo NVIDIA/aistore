@@ -60,7 +60,7 @@ type (
 		Bck        cmn.Bck
 		Object     string
 		Target     string
-		FQN        string
+		SrcFQN     string // promoted source
 		Recursive  bool
 		Overwrite  bool
 		KeepOrig   bool
@@ -518,7 +518,7 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 // PromoteFileOrDir promotes AIS-colocated files and directories to objects.
 // NOTE: advanced usage.
 func PromoteFileOrDir(args *PromoteArgs) error {
-	actMsg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN}
+	actMsg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.SrcFQN}
 	actMsg.Value = &cmn.ActValPromote{
 		DaemonID:  args.Target,
 		ObjName:   args.Object,

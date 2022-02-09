@@ -1492,7 +1492,11 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !filepath.IsAbs(msg.Name) {
-			p.writeErrMsg(w, r, "promoted source must be an absolute path")
+			if msg.Name == "" {
+				p.writeErrMsg(w, r, "promoted source pathname is empty")
+			} else {
+				p.writeErrf(w, r, "promoted source must be an absolute path (got %q)", msg.Name)
+			}
 			return
 		}
 		args := &cmn.ActValPromote{}

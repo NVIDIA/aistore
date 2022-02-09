@@ -926,12 +926,15 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 			return "", err
 		}
 		// with
-		rns := xreg.RenewDirPromote(t, c.bck, txnPrm.dirFQN, txnPrm.msg, isFileShare)
+		rns := xreg.RenewDirPromote(t, c.uuid, c.bck, txnPrm.dirFQN, txnPrm.msg, isFileShare)
 		if rns.Err != nil {
 			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()
 		txnPrm.xprm = xctn.(*xs.XactDirPromote)
+
+		c.addNotif(xctn) // notify upon completion
+		xact.GoRunW(xctn)
 
 		return xctn.ID(), nil
 	default:

@@ -57,7 +57,6 @@ func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 func (p *proFactory) Start() error {
 	xctn := &XactDirPromote{dir: p.args.Dir, params: p.args.Params, isFileShare: p.args.IsFileShare}
 	xctn.BckJog.Init(cos.GenUUID(), cmn.ActPromote, p.Bck, &mpather.JoggerGroupOpts{T: p.T})
-	go xctn.Run(nil)
 	p.xctn = xctn
 	return nil
 }
@@ -73,11 +72,14 @@ func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 // XactDirPromote //
 ////////////////////
 
-func (r *XactDirPromote) Run(*sync.WaitGroup) {
-	var err error
+func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
+	wg.Done()
 	glog.Infoln(r.Name(), r.dir, "=>", r.Bck())
 	r.smap = r.Target().Sowner().Get()
-	opts := &fs.WalkOpts{Dir: r.dir, Callback: r.walk, Sorted: false}
+	var (
+		err  error
+		opts = &fs.WalkOpts{Dir: r.dir, Callback: r.walk, Sorted: false}
+	)
 	if r.params.Recursive {
 		err = fs.Walk(opts) // godirwalk
 	} else {

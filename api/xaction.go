@@ -176,24 +176,27 @@ func backoffPoll(dur time.Duration) time.Duration {
 	return cos.MinDuration(XactMaxPollTime, dur)
 }
 
-func _waitForXaction(baseParams BaseParams, args XactReqArgs, snapFn ...XactSnapTestFunc) (status *nl.NotifStatus, err error) {
+func _waitForXaction(baseParams BaseParams, args XactReqArgs, condFn ...XactSnapTestFunc) (status *nl.NotifStatus, err error) {
 	var (
 		total, sleep = initPollingTimes(args)
 		ctx, cancel  = context.WithTimeout(context.Background(), total)
 	)
 	defer cancel()
 	for {
-		finished := false
-		if len(snapFn) == 0 {
+		var done bool
+		if len(condFn) == 0 {
 			status, err = GetXactionStatus(baseParams, args)
-			finished = err == nil && status.Finished()
+			done = err == nil && status.Finished()
 		} else {
-			var snaps NodesXactMultiSnap
+			var (
+				snaps NodesXactMultiSnap
+				fn    = condFn[0]
+			)
 			snaps, err = QueryXactionSnaps(baseParams, args)
-			finished = err == nil && snapFn[0](snaps)
+			done = err == nil && fn(snaps)
 		}
 		canRetry := err == nil || cos.IsRetriableConnErr(err) || cmn.IsStatusServiceUnavailable(err)
-		if !canRetry || finished {
+		if done || !canRetry /*fail*/ {
 			return
 		}
 		time.Sleep(sleep)

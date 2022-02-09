@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -870,6 +871,7 @@ func (p *proxy) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 
 func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode) (xactID string, err error) {
 	var (
+		totalN    int64
 		allAgree  bool
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bck, waitmsync)
@@ -883,7 +885,7 @@ func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode
 		if xactID, err = c.begin(bck); err != nil {
 			return
 		}
-	} else if xactID, allAgree, err = prmBegin(c, bck); err != nil {
+	} else if xactID, totalN, allAgree, err = prmBegin(c, bck); err != nil {
 		return
 	}
 
@@ -891,6 +893,12 @@ func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode
 	// (so that they go ahead to partition accordingly)
 	if allAgree {
 		c.req.Query.Set(cmn.URLParamPromoteFileShare, "true")
+	}
+	// 5. IC
+	if totalN > promoteNumSync<<1 { // TODO -- FIXME
+		nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
+		nl.SetOwner(equalIC)
+		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 	}
 	if err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
 		return
@@ -900,7 +908,7 @@ func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode
 }
 
 // begin phase customized to (specifically) detect file share
-func prmBegin(c *txnClientCtx, bck *cluster.Bck) (xactID string, allAgree bool, err error) {
+func prmBegin(c *txnClientCtx, bck *cluster.Bck) (xactID string, num int64, allAgree bool, err error) {
 	var cksumVal, totalN string
 	allAgree = true
 
@@ -922,6 +930,9 @@ func prmBegin(c *txnClientCtx, bck *cluster.Bck) (xactID string, allAgree bool, 
 		} else if allAgree {
 			debug.Assert(totalN == res.header.Get(cmn.HdrPromoteNamesNum))
 		}
+	}
+	if err == nil {
+		num, err = strconv.ParseInt(totalN, 10, 64)
 	}
 	freeBcastRes(results)
 	return
