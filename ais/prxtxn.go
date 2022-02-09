@@ -60,13 +60,21 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (xactID string, err error) {
 	return
 }
 
-func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (err error) {
+func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xactID string, err error) {
+	globalID := true // cluster-wide xaction ID
 	results := c.bcast(cmn.ActCommit, timeout)
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
 			glog.Errorf("Failed to commit %q %s: %v (msg=%s)", c.msg.Action, what, err, c.msg)
 			break
+		}
+		if globalID {
+			if xactID == "" {
+				xactID = res.header.Get(cmn.HdrXactionID)
+			} else if xactID != res.header.Get(cmn.HdrXactionID) {
+				xactID, globalID = "", false
+			}
 		}
 	}
 	freeBcastRes(results)
@@ -187,7 +195,7 @@ func (p *proxy) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteHeader 
 	}
 
 	// 4. commit
-	if err := c.commit(bck, c.cmtTout(waitmsync)); err != nil {
+	if _, err := c.commit(bck, c.cmtTout(waitmsync)); err != nil {
 		p.undoCreateBucket(msg, bck)
 		return err
 	}
@@ -266,11 +274,11 @@ func (p *proxy) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID string
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	if err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
+	if _, err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
 		p.undoUpdateCopies(msg, bck, ctx.revertProps)
 		return
 	}
-	xactID = c.uuid
+	xactID = c.uuid // TODO: global ID here and elsewhere
 	return
 }
 
@@ -365,7 +373,7 @@ func (p *proxy) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprops *cmn
 	}
 
 	// 5. commit
-	_ = c.commit(bck, c.cmtTout(waitmsync))
+	_, _ = c.commit(bck, c.cmtTout(waitmsync))
 	return
 }
 
@@ -455,7 +463,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 	// 5. commit
 	xactID = c.uuid
 	c.req.Body = cos.MustMarshal(c.msg)
-	_ = c.commit(bckFrom, c.cmtTout(waitmsync))
+	_, _ = c.commit(bckFrom, c.cmtTout(waitmsync))
 
 	// 6. start rebalance and resilver
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
@@ -551,7 +559,8 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	_ = c.commit(bckFrom, c.cmtTout(waitmsync))
+	xid, _ := c.commit(bckFrom, c.cmtTout(waitmsync))
+	glog.Infof("%s %q: c.uuid=%s, globalID=%s", p.si, msg.Action, c.uuid, xid) // TODO -- FIXME
 	xactID = c.uuid
 	return
 }
@@ -575,7 +584,8 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID 
 	}
 
 	// 3. commit
-	_ = c.commit(bckFrom, c.cmtTout(waitmsync))
+	xid, _ := c.commit(bckFrom, c.cmtTout(waitmsync))
+	glog.Infof("%s %q: c.uuid=%s, globalID=%s", p.si, msg.Action, c.uuid, xid) // TODO -- FIXME
 	return
 }
 
@@ -683,9 +693,11 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, e
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
-	if err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
+	var xid string
+	if xid, err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
 		return
 	}
+	glog.Infof("%s %q: c.uuid=%s, globalID=%s", p.si, msg.Action, c.uuid, xid) // TODO -- FIXME
 	xactID = c.uuid
 	return
 }
@@ -714,7 +726,10 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	}
 
 	// commit
-	err = c.commit(bckFrom, 2*c.timeout.netw) // channel capacity when massively archiving
+	var xid string
+	xid, err = c.commit(bckFrom, 2*c.timeout.netw) // channel capacity when massively archiving
+
+	glog.Infof("%s %q: c.uuid=%s, globalID=%s", p.si, msg.Action, c.uuid, xid) // TODO -- FIXME
 	return
 }
 
@@ -842,7 +857,8 @@ func (p *proxy) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	}
 
 	// 3. Commit
-	return c.commit(bck, c.cmtTout(waitmsync))
+	_, err := c.commit(bck, c.cmtTout(waitmsync))
+	return err
 }
 
 // erase bucket data from all targets (keep metadata)
@@ -877,15 +893,15 @@ func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
 	if c.smap.CountActiveTargets() == 1 {
-		if xactID, err = c.begin(bck); err != nil {
+		if _, err = c.begin(bck); err != nil {
 			return
 		}
 	} else if tsi != nil {
 		c.selected = []*cluster.Snode{tsi}
-		if xactID, err = c.begin(bck); err != nil {
+		if _, err = c.begin(bck); err != nil {
 			return
 		}
-	} else if xactID, totalN, allAgree, err = prmBegin(c, bck); err != nil {
+	} else if totalN, allAgree, err = prmBegin(c, bck); err != nil {
 		return
 	}
 
@@ -894,21 +910,22 @@ func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode
 	if allAgree {
 		c.req.Query.Set(cmn.URLParamPromoteFileShare, "true")
 	}
+
 	// 5. IC
 	if totalN > promoteNumSync<<1 { // TODO -- FIXME
 		nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
 		nl.SetOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 	}
-	if err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
-		return
-	}
+	var xid string
 	xactID = c.uuid
+	xid, err = c.commit(bck, c.cmtTout(waitmsync))
+	debug.Assertf(xid == xactID || xid == "", "%q vs %q", xid, xactID) // promote being the first to enforce
 	return
 }
 
 // begin phase customized to (specifically) detect file share
-func prmBegin(c *txnClientCtx, bck *cluster.Bck) (xactID string, num int64, allAgree bool, err error) {
+func prmBegin(c *txnClientCtx, bck *cluster.Bck) (num int64, allAgree bool, err error) {
 	var cksumVal, totalN string
 	allAgree = true
 
@@ -917,9 +934,6 @@ func prmBegin(c *txnClientCtx, bck *cluster.Bck) (xactID string, num int64, allA
 		if res.err != nil {
 			err = c.bcastAbort(bck, res.toErr())
 			break
-		}
-		if xactID == "" { // returning the first defined (comment at the top)
-			xactID = res.header.Get(cmn.HdrXactionID)
 		}
 		// all agree?
 		if i == 0 {

@@ -1491,6 +1491,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		if err := p.checkACL(w, r, bck, cmn.AcePromote); err != nil {
 			return
 		}
+		// ActionMsg.Name is the source
 		if !filepath.IsAbs(msg.Name) {
 			if msg.Name == "" {
 				p.writeErrMsg(w, r, "promoted source pathname is empty")

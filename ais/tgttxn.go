@@ -916,12 +916,14 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		defer t.transactions.find(c.uuid, cmn.ActCommit)
 
 		if txnPrm.totalN == 0 {
+			glog.Infof("%s: nothing to do (%s)", t.si, txnPrm)
 			return "", nil
 		}
 		isFileShare := c.query.Get(cmn.URLParamPromoteFileShare) != ""
 
 		// promote synchronously wo/ xaction
 		if txnPrm.totalN == len(txnPrm.fqns) {
+			glog.Infof("%s: promote synchronously %s", t.si, txnPrm)
 			err := t._promoteNumSync(c, txnPrm, isFileShare)
 			return "", err
 		}
@@ -933,7 +935,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		xctn := rns.Entry.Get()
 		txnPrm.xprm = xctn.(*xs.XactDirPromote)
 
-		c.addNotif(xctn) // notify upon completion
+		c.addNotif(xctn) // upon completion
 		xact.GoRunW(xctn)
 
 		return xctn.ID(), nil

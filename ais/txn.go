@@ -587,3 +587,9 @@ func newTxnPromote(c *txnServerCtx, msg *cmn.ActValPromote, fqns []string, dirFQ
 	txn.fillFromCtx(c)
 	return
 }
+
+func (txn *txnPromote) String() string {
+	s := txn.txnBckBase.String()
+	return fmt.Sprintf("%s, msg=%+v, fqns=%v, dirFQN=%s, xprm=%s, totalN=%d",
+		s, txn.msg, txn.fqns, txn.dirFQN, txn.xprm, txn.totalN)
+}

@@ -536,6 +536,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 		reqParams.Query = cmn.AddBckToQuery(nil, args.Bck)
 	}
+	// TODO -- FIXME: DoHTTPReqResp(&xactID) and return it; rename the API as well
 	err := reqParams.DoHTTPRequest()
 	freeRp(reqParams)
 	return err

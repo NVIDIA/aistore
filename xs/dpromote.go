@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
@@ -56,7 +55,7 @@ func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 
 func (p *proFactory) Start() error {
 	xctn := &XactDirPromote{dir: p.args.Dir, params: p.args.Params, isFileShare: p.args.IsFileShare}
-	xctn.BckJog.Init(cos.GenUUID(), cmn.ActPromote, p.Bck, &mpather.JoggerGroupOpts{T: p.T})
+	xctn.BckJog.Init(p.Args.UUID /*global xID*/, cmn.ActPromote, p.Bck, &mpather.JoggerGroupOpts{T: p.T})
 	p.xctn = xctn
 	return nil
 }

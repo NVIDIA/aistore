@@ -108,19 +108,18 @@ const (
 // Header Key conventions:
 //  - starts with a prefix "ais-",
 //  - all words separated with "-": no dots and underscores.
-
-// User/client header keys.
 const (
+	headerPrefix = "ais-"
+
 	// Bucket props headers.
-	headerPrefix        = "ais-"
 	HdrBucketProps      = headerPrefix + "bucket-props"
 	HdrOrigURLBck       = headerPrefix + "original-url"       // See: BucketProps.Extra.HTTP.OrigURLBck
 	HdrCloudRegion      = headerPrefix + "cloud-region"       // See: BucketProps.Extra.AWS.CloudRegion
 	HdrBucketVerEnabled = headerPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket.
+	HdrBucketCreated    = headerPrefix + "created"            // Bucket creation time.
+	HdrBackendProvider  = headerPrefix + "provider"           // ProviderAmazon et al. - see cmn/bucket.go.
 
-	HdrBucketCreated   = headerPrefix + "created"        // Bucket creation time.
-	HdrBackendProvider = headerPrefix + "provider"       // ProviderAmazon et al. - see cmn/bucket.go.
-	HdrRemoteOffline   = headerPrefix + "remote-offline" // When accessing cached remote bucket with no backend connectivity.
+	HdrRemoteOffline = headerPrefix + "remote-offline" // When accessing cached remote bucket with no backend connectivity.
 
 	// Object props headers.
 	HdrObjCksumType = headerPrefix + "checksum-type"  // Checksum type, one of SupportedChecksums().
