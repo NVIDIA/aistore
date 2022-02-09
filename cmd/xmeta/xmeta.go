@@ -13,13 +13,21 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/volume"
 	jsoniter "github.com/json-iterator/go"
 )
+
+// TODO: can LOM be used? LOM.Copies outside of a target has a lot of empty fields.
+type lomInfo struct {
+	Attrs  *cmn.ObjAttrs `json:"attrs"`
+	Copies []string      `json:"copies,omitempty"`
+}
 
 var flags struct {
 	in, out string
@@ -62,6 +70,9 @@ Examples:
 	# EC Metadata:
 	xmeta -x -in=/data/@ais/abc/%mt/readme            - extract Metadata to STDOUT with auto-detection (by directory name)
 	xmeta -x -in=./readme -f mt                       - extract Metadata to STDOUT with explicit source format
+	# LOM (readonly, no format auto-detection):
+	xmeta -x -in=/data/@ais/abc/%ob/img001.tar -f lom                   - extract LOM to STDOUT
+	xmeta -x -in=/data/@ais/abc/%ob/img001.tar -out=/tmp/lom.txt -f lom - extract LOM to /tmp/lom.txt
 `
 )
 
@@ -76,6 +87,7 @@ var m = map[string]struct {
 	"conf": {extractConfig, formatConfig, "Config"},
 	"vmd":  {extractVMD, formatVMD, "VMD"},
 	"mt":   {extractECMeta, formatECMeta, "EC Metadata"},
+	"lom":  {extractLOM, formatLOM, "LOM"},
 }
 
 // "extract*" routines expect AIS-formatted (smap, bmd, rmd, etc.)
@@ -93,6 +105,7 @@ func formatBMD() error    { return formatMeta(&cluster.BMD{}) }
 func formatRMD() error    { return formatMeta(&cluster.RMD{}) }
 func formatConfig() error { return formatMeta(&cmn.ClusterConfig{}) }
 func formatVMD() error    { return formatMeta(&volume.VMD{}) }
+func formatLOM() error    { return errors.New("saving LOM is unsupported") }
 
 func main() {
 	newFlag := flag.NewFlagSet(os.Args[0], flag.ExitOnError) // discard flags of imported packages
@@ -101,7 +114,7 @@ func main() {
 	newFlag.StringVar(&flags.in, "in", "", "fully-qualified input filename")
 	newFlag.StringVar(&flags.out, "out", "", "output filename (optional when extracting)")
 	newFlag.BoolVar(&flags.help, "h", false, "print usage and exit")
-	newFlag.StringVar(&flags.format, "f", "", "override automatic format detection (one of smap, bmd, rmd, conf, vmd, mt)")
+	newFlag.StringVar(&flags.format, "f", "", "override automatic format detection (one of smap, bmd, rmd, conf, vmd, mt, lom)")
 	newFlag.Parse(os.Args[1:])
 	if flags.help || len(os.Args[1:]) == 0 {
 		newFlag.Usage()
@@ -228,5 +241,35 @@ func formatECMeta() error {
 	if err != nil {
 		cos.RemoveFile(flags.out)
 	}
+	return err
+}
+
+func extractLOM() (err error) {
+	f := os.Stdout
+	if flags.out != "" {
+		f, err = cos.CreateFile(flags.out)
+		if err != nil {
+			return
+		}
+	}
+	os.Setenv(cluster.DumpLomEnvVar, "1")
+	fs.TestNew(nil)
+	bmdMock := cluster.NewBaseBownerMock()
+	t := &mock.TargetMock{BO: bmdMock}
+	cluster.Init(t)
+	lom := &cluster.LOM{FQN: flags.in}
+	err = lom.LoadMetaFromFS()
+	if err != nil {
+		return
+	}
+	lmi := lomInfo{Attrs: lom.ObjAttrs()}
+	if lom.HasCopies() {
+		lmi.Copies = make([]string, 0, lom.NumCopies())
+		for mp := range lom.GetCopies() {
+			lmi.Copies = append(lmi.Copies, mp)
+		}
+	}
+	s, _ := jsoniter.MarshalIndent(lmi, "", " ")
+	_, err = fmt.Fprintln(f, string(s))
 	return err
 }

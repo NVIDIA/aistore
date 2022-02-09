@@ -44,8 +44,9 @@ import (
 const mdCksumTyXXHash = 1
 
 const (
-	XattrLOM     = "user.ais.lom" // on-disk xattr name
-	xattrMaxSize = memsys.MaxSmallSlabSize
+	XattrLOM      = "user.ais.lom" // on-disk xattr name
+	xattrMaxSize  = memsys.MaxSmallSlabSize
+	DumpLomEnvVar = "AIS_DUMP_LOM"
 )
 
 // packing format internal attrs
@@ -340,6 +341,10 @@ func (md *lmeta) unmarshal(buf []byte) error {
 					// Mountpath with the copy is missing.
 					if glog.V(4) {
 						glog.Warning(err)
+					}
+					// For utilities and tests: fill the map with mpath names always
+					if os.Getenv(DumpLomEnvVar) != "" {
+						md.copies[copyFQN] = nil
 					}
 					continue
 				}

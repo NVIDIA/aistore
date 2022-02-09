@@ -171,7 +171,9 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 		r.sorted[i] = slab
 	}
 
-	cos.Infof("%s started", r.Str(&mem))
+	if gmm != nil {
+		cos.Infof("%s started", r.Str(&mem))
+	}
 	return
 }
 

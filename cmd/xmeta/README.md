@@ -39,4 +39,7 @@ Examples:
         # EC Metadata:
         xmeta -x -in=/data/@ais/abc/%mt/readme            - extract Metadata to STDOUT with auto-detection (by directory name)
         xmeta -x -in=./readme -f mt                       - extract Metadata to STDOUT with explicit source format
+        # LOM (readonly, no format auto-detection):
+        xmeta -x -in=/data/@ais/abc/%ob/img001.tar -f lom                   - extract LOM to STDOUT
+        xmeta -x -in=/data/@ais/abc/%ob/img001.tar -out=/tmp/lom.txt -f lom - extract LOM to /tmp/lom.txt
 ```

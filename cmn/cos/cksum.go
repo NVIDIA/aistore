@@ -16,6 +16,7 @@ import (
 	"sort"
 
 	"github.com/OneOfOne/xxhash"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // NOTE: not supporting SHA-3 family is its current golang.org/x/crypto/sha3 source
@@ -46,8 +47,8 @@ type (
 		context string
 	}
 	Cksum struct {
-		ty    string
-		value string
+		ty    string `json:"-"` // Without "json" tag, IterFields function panics
+		value string `json:"-"`
 	}
 	CksumHash struct {
 		Cksum
@@ -88,6 +89,16 @@ func NewCksumHash(ty string) (ck *CksumHash) {
 	ck = &CksumHash{}
 	ck.Init(ty)
 	return
+}
+
+func (ck *Cksum) MarshalJSON() ([]byte, error) {
+	if ck == nil {
+		return nil, nil
+	}
+	return jsoniter.Marshal(struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}{Type: ck.ty, Value: ck.value})
 }
 
 func (ck *CksumHash) Init(ty string) {

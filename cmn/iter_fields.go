@@ -160,7 +160,7 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 		var dirtyField bool
 		if srcValField.Kind() != reflect.Struct {
 			// We require that not-omitted fields have JSON tag.
-			cos.Assert(jsonTagPresent)
+			cos.AssertMsg(jsonTagPresent, prefix+"["+fieldName+"]")
 
 			// Set value for the field
 			name := prefix + fieldName
@@ -368,6 +368,8 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 			dst.Set(reflect.New(dst.Type().Elem())) // set pointer to default value
 			dst = dst.Elem()                        // dereference pointer
 			goto reflectDst
+		case reflect.Map:
+			// TODO: do nothing, just skip (ObjAttrs contains Map)
 		default:
 			cos.AssertMsg(false, fmt.Sprintf("field.name: %s, field.type: %s", f.listTag, dst.Kind()))
 		}

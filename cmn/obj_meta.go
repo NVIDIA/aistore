@@ -61,11 +61,11 @@ type (
 		String() string
 	}
 	ObjAttrs struct {
-		Atime    int64         `json:"-"` // access time (nanoseconds since UNIX epoch)
-		Size     int64         `json:"-"` // object size (bytes)
-		Ver      string        `json:"-"` // object version
-		Cksum    *cos.Cksum    `json:"-"` // object checksum (NOTE: m.b. cloned)
-		customMD cos.SimpleKVs `json:"-"` // custom metadata: ETag, MD5, CRC, user-defined ...
+		Atime    int64         `json:"access_time,omitempty"` // access time (nanoseconds since UNIX epoch)
+		Size     int64         `json:"size,omitempty"`        // object size (bytes)
+		Ver      string        `json:"version,omitempty"`     // object version
+		Cksum    *cos.Cksum    `json:"checksum,omitempty"`    // object checksum (NOTE: m.b. cloned)
+		CustomMD cos.SimpleKVs `json:"custom,omitempty"`      // custom metadata: ETag, MD5, CRC, user-defined ...
 	}
 )
 
@@ -73,7 +73,7 @@ type (
 var _ ObjAttrsHolder = (*ObjAttrs)(nil)
 
 func (oa *ObjAttrs) String() string {
-	return fmt.Sprintf("%dB, v%q, %s, %+v", oa.Size, oa.Ver, oa.Cksum, oa.customMD)
+	return fmt.Sprintf("%dB, v%q, %s, %+v", oa.Size, oa.Ver, oa.Cksum, oa.CustomMD)
 }
 
 func (oa *ObjAttrs) SizeBytes(_ ...bool) int64 { return oa.Size }
@@ -83,25 +83,25 @@ func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
 func (oa *ObjAttrs) SetCksum(ty, val string)   { oa.Cksum = cos.NewCksum(ty, val) }
 
 // custom metadata
-func (oa *ObjAttrs) GetCustomMD() cos.SimpleKVs   { return oa.customMD }
-func (oa *ObjAttrs) SetCustomMD(md cos.SimpleKVs) { oa.customMD = md }
+func (oa *ObjAttrs) GetCustomMD() cos.SimpleKVs   { return oa.CustomMD }
+func (oa *ObjAttrs) SetCustomMD(md cos.SimpleKVs) { oa.CustomMD = md }
 
 func (oa *ObjAttrs) GetCustomKey(key string) (val string, exists bool) {
-	val, exists = oa.customMD[key]
+	val, exists = oa.CustomMD[key]
 	return
 }
 
 func (oa *ObjAttrs) SetCustomKey(k, v string) {
 	debug.Assert(k != "")
-	if oa.customMD == nil {
-		oa.customMD = make(cos.SimpleKVs, 6)
+	if oa.CustomMD == nil {
+		oa.CustomMD = make(cos.SimpleKVs, 6)
 	}
-	oa.customMD[k] = v
+	oa.CustomMD[k] = v
 }
 
 func (oa *ObjAttrs) DelCustomKeys(keys ...string) {
 	for _, key := range keys {
-		delete(oa.customMD, key)
+		delete(oa.CustomMD, key)
 	}
 }
 
