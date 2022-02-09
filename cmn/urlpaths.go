@@ -69,11 +69,9 @@ var (
 	URLPathDownloadAbort  = urlpath(Version, Download, Abort)
 	URLPathDownloadRemove = urlpath(Version, Download, Remove)
 
-	URLPathETL         = urlpath(Version, ETL)
-	URLPathETLInitSpec = urlpath(Version, ETL, ETLInitSpec)
-	URLPathETLInitCode = urlpath(Version, ETL, ETLInitCode)
-	URLPathETLStop     = urlpath(Version, ETL, ETLStop)
-	URLPathETLObject   = urlpath(Version, ETL, ETLObject)
+	URLPathETL       = urlpath(Version, ETL)
+	URLPathETLStop   = urlpath(Version, ETL, ETLStop)
+	URLPathETLObject = urlpath(Version, ETL, ETLObject)
 
 	URLPathTokens   = urlpath(Version, Tokens) // authn
 	URLPathUsers    = urlpath(Version, Users)

@@ -527,6 +527,7 @@ def transform(input_bytes: bytes) -> bytes:
 
 				uuid := tetl.InitCode(t, baseParams, etl.InitCodeMsg{
 					InitMsgBase: etl.InitMsgBase{
+						IDX:       test.name,
 						CommTypeX: test.commType,
 					},
 					Code:        []byte(test.code),

@@ -21,21 +21,23 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
-	jsoniter "github.com/json-iterator/go"
 )
 
 func startTar2TfTransformer(t *testing.T) (uuid string) {
 	spec, err := tetl.GetTransformYaml(tetl.Tar2TF)
 	tassert.CheckError(t, err)
 
-	pod, err := etl.ParsePodSpec(nil, spec)
-	tassert.CheckError(t, err)
-	spec, _ = jsoniter.Marshal(pod)
+	msg := &etl.InitSpecMsg{}
+	msg.IDX = tetl.Tar2TF
+	msg.CommTypeX = etl.RedirectCommType
+	msg.Spec = spec
+
+	tassert.CheckError(t, msg.Validate())
 
 	// Starting transformer
-	uuid, err = api.ETLInitSpec(baseParams, spec)
+	uuid, err = api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
-	return uuid
+	return
 }
 
 func TestETLTar2TFS3(t *testing.T) {

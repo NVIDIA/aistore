@@ -17,27 +17,13 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func ETLInitSpec(baseParams BaseParams, podspec []byte /*yaml*/) (id string, err error) {
-	baseParams.Method = http.MethodPost
+func ETLInit(baseParams BaseParams, msg etl.InitMsg) (id string, err error) {
+	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathETLInitSpec.S
-		reqParams.Body = podspec
-	}
-	err = reqParams.DoHTTPReqResp(&id)
-	freeRp(reqParams)
-	return id, err
-}
-
-func ETLInitCode(baseParams BaseParams, msg etl.InitCodeMsg) (id string, err error) {
-	baseParams.Method = http.MethodPost
-	reqParams := allocRp()
-	{
-		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathETLInitCode.S
+		reqParams.Path = cmn.URLPathETL.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&id)
 	freeRp(reqParams)

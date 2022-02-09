@@ -55,6 +55,9 @@ def transform(input_bytes):
 	m.puts()
 
 	uuid := tetl.InitCode(t, baseParams, etl.InitCodeMsg{
+		InitMsgBase: etl.InitMsgBase{
+			IDX: "etl-build-conn-err",
+		},
 		Code:        []byte(timeoutFunc),
 		Runtime:     runtime.Python3,
 		WaitTimeout: cos.Duration(5 * time.Minute),
@@ -202,6 +205,7 @@ def transform(input_bytes):
 			case cmn.ETLInitSpec:
 				uuid = tetl.Init(t, baseParams, test.initDesc, etl.RedirectCommType)
 			case cmn.ETLInitCode:
+				test.buildDesc.IDX = test.name
 				uuid = tetl.InitCode(t, baseParams, test.buildDesc)
 			default:
 				panic(test.ty)

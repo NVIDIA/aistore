@@ -17,26 +17,15 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 )
 
-// [METHOD] /v1/etls
+// [METHOD] /v1/etl
 func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	switch {
-	case r.Method == http.MethodPost:
-		apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETL.L)
-		if err != nil {
-			return
-		}
-		switch apiItems[0] {
-		case cmn.ETLInitSpec:
-			p.initSpecETL(w, r)
-		case cmn.ETLInitCode:
-			p.initCodeETL(w, r)
-		default:
-			p.writeErrURL(w, r)
-		}
+	case r.Method == http.MethodPut:
+		p.handleETLPut(w, r)
 	case r.Method == http.MethodGet:
 		p.handleETLGet(w, r)
 	case r.Method == http.MethodDelete:
@@ -46,7 +35,7 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /v1/etls
+// GET /v1/etl
 func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathETL.L)
 	if err != nil {
@@ -58,13 +47,13 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// /v1/etls/<uuid>
+	// /v1/etl/<uuid>
 	if len(apiItems) == 1 {
 		p.infoETL(w, r, apiItems[0])
 		return
 	}
 
-	// /v1/etls/<uuid>/logs[/<target-id>] or /v1/etls/<uuid>/health
+	// /v1/etl/<uuid>/logs[/<target-id>] or /v1/etl/<uuid>/health
 	switch apiItems[1] {
 	case cmn.ETLLogs:
 		p.logsETL(w, r, apiItems[0], apiItems[2:]...)
@@ -75,69 +64,53 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/etls/init_spec
+// PUT /v1/etl
 //
-// initSpecETL creates a new ETL (instance) as follows:
-//  1. Validate user-provided pod specification.
-//  2. Generate UUID.
-//  3. Broadcast initSpecETL message to all targets.
-//  4. If any target fails to start ETL stop it on all (targets).
-//  5. In the event of success return ETL's UUID to the user.
-func (p *proxy) initSpecETL(w http.ResponseWriter, r *http.Request) {
-	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitSpec.L)
+// handleETLPut is responsible validation and adding new ETL spec/code
+// to etl metadata.
+func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETL.L)
 	if err != nil {
 		return
 	}
 
-	if p.forwardCP(w, r, nil, "initSpecETL") {
+	if p.forwardCP(w, r, nil, "init ETL") {
 		return
 	}
 
-	spec, err := io.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 	r.Body.Close()
 
-	msg, err := etl.ValidateSpec(spec)
+	initMsg, err := etl.UnmarshalInitMsg(b)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 
-	if err = p.startETL(w, r, &msg); err != nil {
-		p.writeErr(w, r, err)
-	}
-}
-
-// POST /v1/etls/init_code
-func (p *proxy) initCodeETL(w http.ResponseWriter, r *http.Request) {
-	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitCode.L)
+	err = initMsg.Validate()
 	if err != nil {
-		return
-	}
-
-	if p.forwardCP(w, r, nil, "initCodeETL") {
-		return
-	}
-
-	var msg etl.InitCodeMsg
-	if err := cmn.ReadJSON(w, r, &msg); err != nil {
-		return
-	}
-	// TODO: Make ID required
-	if msg.IDX == "" {
-		msg.IDX = cos.GenUUID()
-	} else if err = cos.ValidateEtlID(msg.IDX); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	if err := msg.Validate(); err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	if err = p.startETL(w, r, &msg); err != nil {
+
+	// TODO -- FIXME: tests fail if we enforce this check,
+	// to be uncommented after DELETE API is implemented.
+	// etlMD := p.owner.etl.get()
+	// if etlMD.get(initMsg.ID()) != nil {
+	// 	p.writeErrf(w, r, "ETL with ID %q exists", initMsg.ID())
+	// 	return
+	// }
+
+	// creates a new ETL (instance) as follows:
+	//  1. Validate user-provided code/pod specification.
+	//  2. Broadcast init ETL message to all targets.
+	//  3. If any target fails to start ETL stop it on all (targets).
+	//  4. In the event of success return ETL's UUID to the user.
+	if err = p.startETL(w, r, initMsg); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
@@ -145,7 +118,7 @@ func (p *proxy) initCodeETL(w http.ResponseWriter, r *http.Request) {
 // startETL broadcasts a build or init ETL request and ensures only one ETL is running
 func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) (err error) {
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cos.MustMarshal(msg)}
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: r.URL.Path, Body: cos.MustMarshal(msg)}
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
@@ -195,7 +168,7 @@ func (p *proxy) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
 	}
 }
 
-// GET /v1/etls/<uuid>
+// GET /v1/etl/<uuid>
 func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlID string) {
 	if err := cos.ValidateEtlID(etlID); err != nil {
 		p.writeErr(w, r, err)
@@ -211,7 +184,7 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlID string) {
 	p.writeJSON(w, r, initMsg, "info-etl")
 }
 
-// GET /v1/etls
+// GET /v1/etl
 func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 	etls, err := p.listETLs()
 	if err != nil {
@@ -260,7 +233,7 @@ func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 	return *etls, err
 }
 
-// GET /v1/etls/<uuid>/logs[/<target_id>]
+// GET /v1/etl/<uuid>/logs[/<target_id>]
 func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, apiItems ...string) {
 	var (
 		results sliceResults
@@ -309,7 +282,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, ap
 	p.writeJSON(w, r, logs, "logs-ETL")
 }
 
-// GET /v1/etls/<uuid>/health
+// GET /v1/etl/<uuid>/health
 func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	var (
 		results sliceResults
@@ -336,7 +309,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, healths, "health-ETL")
 }
 
-// DELETE /v1/etls/stop/<uuid>
+// DELETE /v1/etl/stop/<uuid>
 func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETLStop.L)
 	if err != nil {

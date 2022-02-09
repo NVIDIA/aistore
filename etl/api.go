@@ -5,11 +5,14 @@
 package etl
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl/runtime"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type (
@@ -77,6 +80,9 @@ func (m InitMsgBase) CommType() string { return m.CommTypeX }
 func (m InitMsgBase) ID() string       { return m.IDX }
 
 func (m *InitCodeMsg) Validate() error {
+	if err := cos.ValidateEtlID(m.IDX); err != nil {
+		return fmt.Errorf("invalid etl ID: %v", err)
+	}
 	if len(m.Code) == 0 {
 		return fmt.Errorf("source code is empty")
 	}
@@ -103,6 +109,59 @@ func (*InitSpecMsg) InitType() string {
 	return cmn.ETLInitSpec
 }
 
+func (m *InitSpecMsg) Validate() (err error) {
+	errCtx := &cmn.ETLErrorContext{}
+	pod, err := ParsePodSpec(errCtx, m.Spec)
+	if err != nil {
+		return err
+	}
+	errCtx.ETLName = m.ID()
+
+	if err := cos.ValidateEtlID(m.IDX); err != nil {
+		return fmt.Errorf("invalid pod name: %v", err)
+	}
+
+	if err := validateCommType(m.CommType()); err != nil {
+		return cmn.NewErrETL(errCtx, err.Error())
+	}
+	if m.CommType() == "" {
+		m.CommTypeX = PushCommType
+	}
+
+	// Check pod specification constraints.
+	if len(pod.Spec.Containers) != 1 {
+		err = cmn.NewErrETL(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
+		return
+	}
+	container := pod.Spec.Containers[0]
+	if len(container.Ports) != 1 {
+		return cmn.NewErrETL(errCtx, "unsupported number of container ports (%d), expected: 1", len(container.Ports))
+	}
+	if container.Ports[0].Name != k8s.Default {
+		return cmn.NewErrETL(errCtx, "expected port name: %q, got: %q", k8s.Default, container.Ports[0].Name)
+	}
+
+	// Validate that user container supports health check.
+	// Currently we need the `default` port (on which the application runs) to
+	// be same as the `readiness` probe port.
+	if container.ReadinessProbe == nil {
+		return cmn.NewErrETL(errCtx, "readinessProbe section is required in a container spec")
+	}
+	// TODO: Add support for other health checks.
+	if container.ReadinessProbe.HTTPGet == nil {
+		return cmn.NewErrETL(errCtx, "httpGet missing in the readinessProbe")
+	}
+	if container.ReadinessProbe.HTTPGet.Path == "" {
+		return cmn.NewErrETL(errCtx, "expected non-empty path for readinessProbe")
+	}
+	// Currently we need the `default` port (on which the application runs)
+	// to be same as the `readiness` probe port in the pod spec.
+	if container.ReadinessProbe.HTTPGet.Port.StrVal != k8s.Default {
+		return cmn.NewErrETL(errCtx, "readinessProbe port must be the %q port", k8s.Default)
+	}
+	return nil
+}
+
 func (p PodsLogsMsg) Len() int           { return len(p) }
 func (p PodsLogsMsg) Less(i, j int) bool { return p[i].TargetID < p[j].TargetID }
 func (p PodsLogsMsg) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
@@ -125,3 +184,22 @@ func (p *PodLogsMsg) String(maxLen ...int) string {
 func (il InfoList) Len() int           { return len(il) }
 func (il InfoList) Less(i, j int) bool { return il[i].ID < il[j].ID }
 func (il InfoList) Swap(i, j int)      { il[i], il[j] = il[j], il[i] }
+
+func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
+	var msgInf map[string]json.RawMessage
+	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
+		return
+	}
+	if _, ok := msgInf["code"]; ok {
+		msg = &InitCodeMsg{}
+		err = jsoniter.Unmarshal(b, msg)
+		return
+	}
+	if _, ok := msgInf["spec"]; ok {
+		msg = &InitSpecMsg{}
+		err = jsoniter.Unmarshal(b, msg)
+		return
+	}
+	err = fmt.Errorf("invalid response body: %s", b)
+	return
+}

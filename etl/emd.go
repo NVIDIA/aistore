@@ -19,6 +19,7 @@ type (
 		ID() string
 		CommType() string
 		InitType() string
+		Validate() error
 	}
 
 	ETLs map[string]InitMsg

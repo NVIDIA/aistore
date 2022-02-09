@@ -63,6 +63,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tetl"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/OneOfOne/xxhash"
@@ -192,8 +193,8 @@ var (
 	flagUsage   bool
 	flagVersion bool
 
-	etlSpec []byte
-	etlID   string
+	etlInitSpec *etl.InitSpecMsg
+	etlID       string
 
 	useRandomObjName bool
 	objNameCnt       atomic.Uint64
@@ -472,15 +473,23 @@ func parseCmdLine() (params, error) {
 		if err != nil {
 			return params{}, err
 		}
-		etlSpec, err = io.ReadAll(fh)
+		etlSpec, err := io.ReadAll(fh)
 		fh.Close()
+		if err != nil {
+			return params{}, err
+		}
+		etlInitSpec, err = tetl.SpecToInitMsg(etlSpec)
 		if err != nil {
 			return params{}, err
 		}
 	}
 
 	if p.etlName != "" {
-		etlSpec, err = tetl.GetTransformYaml(p.etlName)
+		etlSpec, err := tetl.GetTransformYaml(p.etlName)
+		if err != nil {
+			return params{}, err
+		}
+		etlInitSpec, err = tetl.SpecToInitMsg(etlSpec)
 		if err != nil {
 			return params{}, err
 		}
@@ -759,9 +768,9 @@ func Start(version, build, buildtime string) error {
 	}
 	defer statsdC.Close()
 
-	if etlSpec != nil {
+	if etlInitSpec != nil {
 		fmt.Println(prettyTimestamp() + " Waiting for an ETL to start...")
-		etlID, err = api.ETLInitSpec(runParams.bp, etlSpec)
+		etlID, err = api.ETLInit(runParams.bp, etlInitSpec)
 		if err != nil {
 			return fmt.Errorf("failed to initialize ETL: %v", err)
 		}

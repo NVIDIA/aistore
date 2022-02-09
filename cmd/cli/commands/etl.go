@@ -33,6 +33,12 @@ var (
 			waitTimeoutFlag,
 			etlUUID,
 		},
+		subcmdSpec: {
+			fromFileFlag,
+			commTypeFlag,
+			etlUUID,
+			waitTimeoutFlag,
+		},
 		subcmdStop: {
 			allETLStopFlag,
 		},
@@ -72,10 +78,10 @@ var (
 		Name: subcmdInit,
 		Subcommands: []cli.Command{
 			{
-				Name:      subcmdSpec,
-				Usage:     "start ETL job with YAML Pod specification",
-				ArgsUsage: "SPEC_FILE",
-				Action:    etlInitSpecHandler,
+				Name:   subcmdSpec,
+				Usage:  "start ETL job with YAML Pod specification",
+				Flags:  etlSubcmdsFlags[subcmdSpec],
+				Action: etlInitSpecHandler,
 			},
 			{
 				Name:   subcmdCode,
@@ -152,16 +158,21 @@ func etlExists(uuid string) (err error) {
 }
 
 func etlInitSpecHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, "SPEC_FILE")
+	fromFile := parseStrFlag(c, fromFileFlag)
+	if fromFile == "" {
+		return fmt.Errorf("%s flag cannot be empty", fromFileFlag.Name)
 	}
-	spec, err := os.ReadFile(c.Args()[0])
+	spec, err := os.ReadFile(fromFile)
 	if err != nil {
 		return err
 	}
 
-	var msg etl.InitSpecMsg
-	if msg, err = etl.ValidateSpec(spec); err != nil {
+	msg := &etl.InitSpecMsg{}
+	msg.IDX = parseStrFlag(c, etlUUID)
+	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
+	msg.Spec = spec
+
+	if err = msg.Validate(); err != nil {
 		return err
 	}
 
@@ -170,7 +181,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	id, err := api.ETLInitSpec(defaultAPIParams, spec)
+	id, err := api.ETLInit(defaultAPIParams, msg)
 	if err != nil {
 		return err
 	}
@@ -179,7 +190,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 }
 
 func etlInitCodeHandler(c *cli.Context) (err error) {
-	var msg etl.InitCodeMsg
+	msg := &etl.InitCodeMsg{}
 
 	fromFile := parseStrFlag(c, fromFileFlag)
 	if fromFile == "" {
@@ -225,7 +236,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	id, err := api.ETLInitCode(defaultAPIParams, msg)
+	id, err := api.ETLInit(defaultAPIParams, msg)
 	if err != nil {
 		return err
 	}

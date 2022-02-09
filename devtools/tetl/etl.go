@@ -21,14 +21,17 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
-	jsoniter "github.com/json-iterator/go"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
+	commTypeAnnotation    = "communication_type"
+	waitTimeoutAnnotation = "wait_timeout"
+
 	Tar2TF        = "tar2tf"
-	Echo          = "echo"
+	Echo          = "transformer-echo"
 	EchoGolang    = "echo-go"
-	MD5           = "md5"
+	MD5           = "transformer-md5"
 	Tar2tfFilters = "tar2tf-filters"
 	tar2tfFilter  = `
 {
@@ -223,19 +226,15 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cos.S
 func Init(t *testing.T, baseParams api.BaseParams, name, comm string) string {
 	tlog.Logln("Reading template")
 
+	msg := &etl.InitSpecMsg{}
+	msg.IDX = name
+	msg.CommTypeX = comm
 	spec, err := GetTransformYaml(name)
 	tassert.CheckFatal(t, err)
+	msg.Spec = spec
 
-	pod, err := etl.ParsePodSpec(nil, spec)
-	tassert.CheckFatal(t, err)
-
-	if comm != "" {
-		pod.Annotations["communication_type"] = comm
-	}
-
-	spec, _ = jsoniter.Marshal(pod)
 	tlog.Logln("Init ETL")
-	uuid, err := api.ETLInitSpec(baseParams, spec)
+	uuid, err := api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
 	etlMsg, err := api.ETLGetInitMsg(baseParams, uuid)
@@ -250,7 +249,7 @@ func Init(t *testing.T, baseParams api.BaseParams, name, comm string) string {
 }
 
 func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) string {
-	uuid, err := api.ETLInitCode(baseParams, msg)
+	uuid, err := api.ETLInit(baseParams, &msg)
 	tassert.CheckFatal(t, err)
 
 	etlMsg, err := api.ETLGetInitMsg(baseParams, uuid)
@@ -279,4 +278,47 @@ func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {
 	etls, err := api.ETLList(params)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(etls) == 0, "Expected no ETL running, got %+v", etls)
+}
+
+func SpecToInitMsg(spec []byte /*yaml*/) (msg *etl.InitSpecMsg, err error) {
+	errCtx := &cmn.ETLErrorContext{}
+	msg = &etl.InitSpecMsg{Spec: spec}
+	pod, err := etl.ParsePodSpec(errCtx, msg.Spec)
+	if err != nil {
+		return msg, err
+	}
+	errCtx.ETLName = pod.GetName()
+	msg.IDX = pod.GetName()
+
+	if err := cos.ValidateEtlID(msg.IDX); err != nil {
+		err = fmt.Errorf("invalid pod name: %v", err)
+		return msg, err
+	}
+	// Check annotations.
+	msg.CommTypeX = podTransformCommType(pod)
+	if msg.WaitTimeout, err = podTransformTimeout(errCtx, pod); err != nil {
+		return msg, err
+	}
+
+	return msg, msg.Validate()
+}
+
+func podTransformCommType(pod *corev1.Pod) string {
+	if pod.Annotations == nil || pod.Annotations[commTypeAnnotation] == "" {
+		// By default assume `PushCommType`.
+		return etl.PushCommType
+	}
+	return pod.Annotations[commTypeAnnotation]
+}
+
+func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cos.Duration, error) {
+	if pod.Annotations == nil || pod.Annotations[waitTimeoutAnnotation] == "" {
+		return 0, nil
+	}
+
+	v, err := time.ParseDuration(pod.Annotations[waitTimeoutAnnotation])
+	if err != nil {
+		return cos.Duration(v), cmn.NewErrETL(errCtx, err.Error()).WithPodName(pod.Name)
+	}
+	return cos.Duration(v), nil
 }
