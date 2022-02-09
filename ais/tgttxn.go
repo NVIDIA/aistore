@@ -52,7 +52,7 @@ type txnServerCtx struct {
 
 // verb /v1/txn
 func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
-	var bucket, phase string
+	var bucket, phase, xactID string
 	if r.Method != http.MethodPost {
 		cmn.WriteErr405(w, r, http.MethodPost)
 		return
@@ -90,16 +90,15 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActCreateBck, cmn.ActAddRemoteBck:
 		err = t.createBucket(c)
 	case cmn.ActMakeNCopies:
-		err = t.makeNCopies(c)
+		xactID, err = t.makeNCopies(c)
 	case cmn.ActSetBprops, cmn.ActResetBprops:
-		err = t.setBucketProps(c)
+		xactID, err = t.setBucketProps(c)
 	case cmn.ActMoveBck:
-		err = t.renameBucket(c)
+		xactID, err = t.renameBucket(c)
 	case cmn.ActCopyBck, cmn.ActETLBck:
 		var (
-			xactID string
-			dp     cluster.DP
-			tcmsg  = &cmn.TCBMsg{}
+			dp    cluster.DP
+			tcmsg = &cmn.TCBMsg{}
 		)
 		if err := cos.MorphMarshal(c.msg.Value, tcmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
@@ -113,12 +112,8 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		xactID, err = t.tcb(c, tcmsg, dp)
-		if xactID != "" {
-			w.Header().Set(cmn.HdrXactionID, xactID)
-		}
 	case cmn.ActCopyObjects, cmn.ActETLObjects:
 		var (
-			xactID string
 			dp     cluster.DP
 			tcoMsg = &cmn.TCObjsMsg{}
 		)
@@ -134,34 +129,24 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		xactID, err = t.tcobjs(c, tcoMsg, dp)
-		if xactID != "" {
-			w.Header().Set(cmn.HdrXactionID, xactID)
-		}
 	case cmn.ActECEncode:
-		err = t.ecEncode(c)
+		xactID, err = t.ecEncode(c)
 	case cmn.ActArchive:
-		var xactID string
 		xactID, err = t.createArchMultiObj(c)
-		if xactID != "" {
-			w.Header().Set(cmn.HdrXactionID, xactID)
-		}
 	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActShutdownNode:
 		err = t.startMaintenance(c)
 	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
 		err = t.destroyBucket(c)
 	case cmn.ActPromote:
-		var (
-			xactID string
-			hdr    = w.Header()
-		)
+		hdr := w.Header()
 		xactID, err = t.promote(c, hdr)
-		if xactID != "" {
-			w.Header().Set(cmn.HdrXactionID, xactID)
-		}
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
 	if err == nil {
+		if xactID != "" {
+			w.Header().Set(cmn.HdrXactionID, xactID)
+		}
 		return
 	}
 	if cmn.IsErrCapacityExceeded(err) {
@@ -219,24 +204,24 @@ func (t *target) _commitCreateDestroy(c *txnServerCtx) (err error) {
 // makeNCopies //
 /////////////////
 
-func (t *target) makeNCopies(c *txnServerCtx) error {
+func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return err
+		return "", err
 	}
 	switch c.phase {
 	case cmn.ActBegin:
 		curCopies, newCopies, err := t.validateMakeNCopies(c.bck, c.msg)
 		if err != nil {
-			return err
+			return "", err
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrBckIsBusy(c.bck.Bck)
+			return "", cmn.NewErrBckIsBusy(c.bck.Bck)
 		}
 		txn := newTxnMakeNCopies(c, curCopies, newCopies)
 		if err := t.transactions.begin(txn); err != nil {
 			nlp.Unlock()
-			return err
+			return "", err
 		}
 		txn.nlps = []cmn.NLP{nlp}
 	case cmn.ActAbort:
@@ -246,29 +231,31 @@ func (t *target) makeNCopies(c *txnServerCtx) error {
 		debug.AssertNoErr(err)
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return err
+			return "", err
 		}
 		txnMnc := txn.(*txnMakeNCopies)
 		debug.Assert(txnMnc.newCopies == copies)
 
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 
 		// do the work in xaction
 		rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, "mnc-actmnc", int(copies))
 		if rns.Err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
+			return "", fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 		}
 		xctn := rns.Entry.Get()
 		xreg.DoAbort(cmn.ActPutCopies, c.bck, errors.New("make-n-copies"))
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
+
+		return xctn.ID(), nil
 	default:
 		debug.Assert(false)
 	}
-	return nil
+	return "", nil
 }
 
 func (t *target) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, newCopies int64, err error) {
@@ -296,9 +283,9 @@ func (t *target) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, 
 // setBucketProps //
 ////////////////////
 
-func (t *target) setBucketProps(c *txnServerCtx) error {
+func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return err
+		return "", err
 	}
 	switch c.phase {
 	case cmn.ActBegin:
@@ -307,55 +294,64 @@ func (t *target) setBucketProps(c *txnServerCtx) error {
 			err    error
 		)
 		if nprops, err = t.validateNprops(c.bck, c.msg); err != nil {
-			return err
+			return "", err
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrBckIsBusy(c.bck.Bck)
+			return "", cmn.NewErrBckIsBusy(c.bck.Bck)
 		}
 		txn := newTxnSetBucketProps(c, nprops)
 		if err := t.transactions.begin(txn); err != nil {
 			nlp.Unlock()
-			return err
+			return "", err
 		}
 		txn.nlps = []cmn.NLP{nlp}
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
+		var xactID string
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return err
+			return "", err
 		}
 		txnSetBprops := txn.(*txnSetBucketProps)
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		if reMirror(txnSetBprops.bprops, txnSetBprops.nprops) {
 			n := int(txnSetBprops.nprops.Mirror.Copies)
 			rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, "mnc-setprops", n)
 			if rns.Err != nil {
-				return fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
+				return "", fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 			}
 			xctn := rns.Entry.Get()
 			xreg.DoAbort(cmn.ActPutCopies, c.bck, errors.New("re-mirror"))
 			c.addNotif(xctn) // notify upon completion
 			xact.GoRunW(xctn)
+			xactID = xctn.ID()
 		}
 		if reEC(txnSetBprops.bprops, txnSetBprops.nprops, c.bck) {
 			xreg.DoAbort(cmn.ActECEncode, c.bck, errors.New("re-ec"))
 			rns := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 			if rns.Err != nil {
-				return rns.Err
+				return "", rns.Err
 			}
 			xctn := rns.Entry.Get()
 			c.addNotif(xctn) // ditto
 			xact.GoRunW(xctn)
+
+			if xactID == "" {
+				xactID = xctn.ID()
+			} else {
+				xactID = "" // not supporting multiple..
+			}
 		}
+		return xactID, nil
 	default:
 		debug.Assert(false)
 	}
-	return nil
+	return "", nil
 }
 
 func (t *target) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.BucketProps, err error) {
@@ -388,30 +384,30 @@ func (t *target) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.Buck
 // renameBucket //
 //////////////////
 
-func (t *target) renameBucket(c *txnServerCtx) error {
+func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return err
+		return "", err
 	}
 	switch c.phase {
 	case cmn.ActBegin:
 		bckFrom, bckTo := c.bck, c.bckTo
 		if err := t.validateBckRenTxn(bckFrom, bckTo, c.msg); err != nil {
-			return err
+			return "", err
 		}
 		nlpFrom := bckFrom.GetNameLockPair()
 		nlpTo := bckTo.GetNameLockPair()
 		if !nlpFrom.TryLock(c.timeout.netw / 4) {
-			return cmn.NewErrBckIsBusy(bckFrom.Bck)
+			return "", cmn.NewErrBckIsBusy(bckFrom.Bck)
 		}
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpFrom.Unlock()
-			return cmn.NewErrBckIsBusy(bckTo.Bck)
+			return "", cmn.NewErrBckIsBusy(bckTo.Bck)
 		}
 		txn := newTxnRenameBucket(c, bckFrom, bckTo)
 		if err := t.transactions.begin(txn); err != nil {
 			nlpTo.Unlock()
 			nlpFrom.Unlock()
-			return err
+			return "", err
 		}
 		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
 	case cmn.ActAbort:
@@ -419,30 +415,32 @@ func (t *target) renameBucket(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return err
+			return "", err
 		}
 		txnRenB := txn.(*txnRenameBucket)
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		rns := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, cmn.ActCommit)
 		if rns.Err != nil {
-			return rns.Err // must not happen at commit time
+			return "", rns.Err // must not happen at commit time
 		}
 		xctn := rns.Entry.Get()
 		err = fs.RenameBucketDirs(txnRenB.bckFrom.Props.BID, txnRenB.bckFrom.Bck, txnRenB.bckTo.Bck)
 		if err != nil {
-			return err // ditto
+			return "", err // ditto
 		}
 		c.addNotif(xctn) // notify upon completion
 
 		reb.ActivateTimedGFN()
 		xact.GoRunW(xctn) // run and wait until it starts running
+
+		return xctn.ID(), nil
 	default:
 		debug.Assert(false)
 	}
-	return nil
+	return "", nil
 }
 
 func (t *target) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) error {
@@ -490,30 +488,29 @@ func (t *target) etlDP(msg *cmn.TCBMsg) (dp cluster.DP, err error) {
 
 // common for both bucket copy and bucket transform - does the heavy lifting
 func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, error) {
-	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return xactID, err
+		return "", err
 	}
 	switch c.phase {
 	case cmn.ActBegin:
 		bckTo, bckFrom := c.bckTo, c.bck
 		if err := bckTo.Validate(); err != nil {
-			return xactID, err
+			return "", err
 		}
 		if err := bckFrom.Validate(); err != nil {
-			return xactID, err
+			return "", err
 		}
 		if cs := fs.GetCapStatus(); cs.Err != nil {
-			return xactID, cs.Err
+			return "", cs.Err
 		}
 		if err := xreg.LimitedCoexistence(t.si, bckFrom, c.msg.Action); err != nil {
-			return xactID, err
+			return "", err
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {
-			return xactID, cmn.NewErrBckNotFound(bckFrom.Bck)
+			return "", cmn.NewErrBckNotFound(bckFrom.Bck)
 		}
-		nlpTo, nlpFrom, xid, err := t._tcbBegin(c, msg, dp)
+		nlpTo, nlpFrom, err := t._tcbBegin(c, msg, dp)
 		if err != nil {
 			if nlpFrom != nil {
 				nlpFrom.Unlock()
@@ -521,21 +518,20 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, e
 			if nlpTo != nil {
 				nlpTo.Unlock()
 			}
-			return xactID, err
+			return "", err
 		}
-		xactID = xid
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return xactID, err
+			return "", err
 		}
 		txnTcb := txn.(*txnTCB)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 				txnTcb.xtcb.TxnAbort()
-				return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
+				return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
@@ -546,21 +542,21 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, e
 		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
 			txnTcb.xtcb.TxnAbort()
-			return xactID, rns.Err
+			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()
-		xactID = xctn.ID()
+		xactID := xctn.ID()
 		debug.Assert(xactID == txnTcb.xtcb.ID())
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
+		return xactID, nil
 	default:
 		debug.Assert(false)
 	}
-	return xactID, nil
+	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair,
-	xactID string, err error) {
+func (t *target) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair, err error) {
 	bckTo, bckFrom := c.bckTo, c.bck
 	nlpFrom = bckFrom.GetNameLockPair()
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
@@ -583,7 +579,6 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlp
 	}
 	xctn := rns.Entry.Get()
 	xtcb := xctn.(*mirror.XactTCB)
-	xactID = xctn.ID()
 	txn := newTxnTCB(c, xtcb)
 	if err = t.transactions.begin(txn); err != nil {
 		return
@@ -669,24 +664,24 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 // ecEncode //
 //////////////
 
-func (t *target) ecEncode(c *txnServerCtx) error {
+func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return err
+		return "", err
 	}
 	switch c.phase {
 	case cmn.ActBegin:
 		if err := t.validateECEncode(c.bck, c.msg); err != nil {
-			return err
+			return "", err
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 4) {
-			return cmn.NewErrBckIsBusy(c.bck.Bck)
+			return "", cmn.NewErrBckIsBusy(c.bck.Bck)
 		}
 
 		txn := newTxnECEncode(c, c.bck)
 		if err := t.transactions.begin(txn); err != nil {
 			nlp.Unlock()
-			return err
+			return "", err
 		}
 		txn.nlps = []cmn.NLP{nlp}
 	case cmn.ActAbort:
@@ -694,23 +689,25 @@ func (t *target) ecEncode(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return err
+			return "", err
 		}
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		rns := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 		if rns.Err != nil {
-			return rns.Err
+			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
+
+		return xctn.ID(), rns.Err
 	default:
 		debug.Assert(false)
 	}
-	return nil
+	return "", nil
 }
 
 func (t *target) validateECEncode(bck *cluster.Bck, msg *aisMsg) error {
