@@ -86,7 +86,7 @@ if [[ "${TEST_ETL,,}" == y* ]]; then
 
   # Running kubernetes based tests
   echo "----- RUNNING K8S TESTS -----"
-  AIS_ENDPOINT="$(minikube ip):8080" BUCKET="aws://ais-jenkins" RE="TestETL|TestConfig|TestMountpath" make test-run
+  AIS_ENDPOINT="$(minikube ip):8080" BUCKET="aws://ais-blossom" RE="TestETL|TestConfig|TestMountpath" make test-run
   exit_code=$?
   result=$((result + exit_code))
   echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
