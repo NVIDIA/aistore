@@ -151,7 +151,7 @@ test:short:https:
     AIS_SERVER_CRT: "$CI_PROJECT_DIR/localhost.crt"
     AIS_SERVER_KEY: "$CI_PROJECT_DIR/localhost.key"
     AIS_ENDPOINT: "https://localhost:8080"
-    BUCKET: "ais://ais-ci"
+    BUCKET: "ais://ais-cicd"
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --https
