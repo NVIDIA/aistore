@@ -80,19 +80,19 @@ type (
 // ActionMsg //
 ///////////////
 func (msg *ActionMsg) String() string {
-	s := "action=" + msg.Action
+	s := "amsg[" + msg.Action
 	if msg.Name != "" {
-		s += ", " + "name=" + msg.Name
+		s += ", name=" + msg.Name
 	}
 	if msg.Value == nil {
-		return s
+		return s + "]"
 	}
 	vs, err := jsoniter.Marshal(msg.Value)
 	if err != nil {
 		debug.AssertNoErr(err)
-		s += ", value=<json err: " + err.Error() + ">"
-		return s
+		s += "-<json err: " + err.Error() + ">"
+		return s + "]"
 	}
-	s += ", value=" + strings.ReplaceAll(string(vs), ",", ", ")
+	s += ", val=" + strings.ReplaceAll(string(vs), ",", ", ") + "]"
 	return s
 }

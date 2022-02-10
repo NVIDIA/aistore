@@ -160,8 +160,10 @@ var (
 	ErrNotEnoughTargets = errors.New("not enough target nodes")
 	ErrETLMissingUUID   = errors.New("ETL UUID can't be empty")
 	ErrNoMountpaths     = errors.New("no mountpaths")
+	// aborts
 	ErrXactRenewAbort   = errors.New("renewal abort")
-	ErrXactUserAbort    = errors.New("user abort") // via cmn.ActXactStop
+	ErrXactUserAbort    = errors.New("user abort")              // via cmn.ActXactStop
+	ErrXactICNotifAbort = errors.New("IC(notifications) abort") // ditto
 	ErrXactNoErrAbort   = errors.New("no-error abort")
 )
 

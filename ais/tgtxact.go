@@ -78,12 +78,16 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case cmn.ActXactStop:
+			err := cmn.ErrXactUserAbort
+			if msg.Name == cmn.ErrXactICNotifAbort.Error() {
+				err = cmn.ErrXactICNotifAbort
+			}
+			// this `if` is optional/optimizational
 			if xactMsg.ID != "" {
-				xreg.DoAbortByID(xactMsg.ID, cmn.ErrXactUserAbort)
+				xreg.DoAbortByID(xactMsg.ID, err)
 				return
 			}
-			xreg.DoAbort(xactMsg.Kind, bck, cmn.ErrXactUserAbort)
-			return
+			xreg.DoAbort(xactMsg.Kind, bck, err)
 		default:
 			t.writeErrAct(w, r, msg.Action)
 		}

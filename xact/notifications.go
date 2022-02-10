@@ -60,12 +60,12 @@ func (nxb *NotifXactListener) QueryArgs() cmn.HreqArgs {
 	return args
 }
 
+// (see also downloader.AbortArgs)
 func (nxb *NotifXactListener) AbortArgs() cmn.HreqArgs {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
-		Value: QueryMsg{
-			ID: nxb.UUID(),
-		},
+		Name:   cmn.ErrXactICNotifAbort.Error(),
+		Value:  QueryMsg{ID: nxb.UUID(), Kind: nxb.Kind()},
 	}
 	args := cmn.HreqArgs{Method: http.MethodPut}
 	args.Body = cos.MustMarshal(msg)

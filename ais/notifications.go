@@ -369,17 +369,28 @@ func (n *notifs) done(nl nl.NotifListener) {
 	n.fin.add(nl, false /*locked*/)
 
 	if nl.Aborted() {
-		// NOTE: we accept finished notifications even after
-		// `nl` is aborted. Handle locks carefully.
-		args := allocBcArgs()
-		args.req = nl.AbortArgs()
-		args.network = cmn.NetIntraControl
-		args.timeout = cmn.Timeout.MaxKeepalive()
-		args.nodes = []cluster.NodeMap{nl.Notifiers()}
-		args.nodeCount = len(args.nodes[0])
-		args.async = true
-		_ = n.p.bcastNodes(args)
-		freeBcArgs(args)
+		smap := n.p.owner.smap.get()
+		// abort via primary to eliminate redundant intra-cluster messaging-and-handling
+		// TODO: confirm & load-balance
+		doSend := true
+		if smap.Primary != nil { // nil in unit tests
+			debug.Assert(n.p.si.ID() != smap.Primary.ID() || smap.IsPrimary(n.p.si))
+			doSend = smap.IsPrimary(n.p.si) ||
+				!smap.IsIC(smap.Primary) // never happens but ok
+		}
+		if doSend {
+			// NOTE: we accept finished notifications even after
+			// `nl` is aborted. Handle locks carefully.
+			args := allocBcArgs()
+			args.req = nl.AbortArgs()
+			args.network = cmn.NetIntraControl
+			args.timeout = cmn.Timeout.MaxKeepalive()
+			args.nodes = []cluster.NodeMap{nl.Notifiers()}
+			args.nodeCount = len(args.nodes[0])
+			args.async = true
+			_ = n.p.bcastNodes(args) // args.async: result is already discarded/freed
+			freeBcArgs(args)
+		}
 	}
 	nl.Callback(nl, time.Now().UnixNano())
 }

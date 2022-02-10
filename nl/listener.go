@@ -212,6 +212,13 @@ func (nlb *NotifListenerBase) String() string {
 		hdr      = fmt.Sprintf("nl-%s[%s]", nlb.Kind(), nlb.UUID())
 		finCount = nlb.FinCount()
 	)
+	if bcks := nlb.Bcks(); len(bcks) > 0 {
+		if len(bcks) == 1 {
+			hdr += "-" + bcks[0].String()
+		} else {
+			hdr += "-" + bcks[0].String() + "-" + bcks[1].String()
+		}
+	}
 	if tfin := nlb.FinTime.Load(); tfin > 0 {
 		if err := nlb.ErrValue.Err(); err != nil {
 			res = "-" + err.Error()
