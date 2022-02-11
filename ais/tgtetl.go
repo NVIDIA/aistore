@@ -26,14 +26,14 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPut:
 		t.handleETLPut(w, r)
+	case r.Method == http.MethodPost:
+		t.handleETLPost(w, r)
 	case r.Method == http.MethodGet:
 		t.handleETLGet(w, r)
 	case r.Method == http.MethodHead:
 		t.headObjectETL(w, r)
-	case r.Method == http.MethodDelete:
-		t.stopETL(w, r)
 	default:
-		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPost)
+		cmn.WriteErr405(w, r, http.MethodGet, http.MethodHead, http.MethodPost)
 	}
 }
 
@@ -80,7 +80,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 
 	// /v1/etl
 	if len(apiItems) == 0 {
-		t.listETL(w, r)
+		t.writeJSON(w, r, etl.List(), "list-ETL")
 		return
 	}
 
@@ -108,13 +108,24 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *target) stopETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathETLStop.L)
+// POST /v1/etl/<uuid>/stop (or) TODO: /v1/etl/<uuid>/start
+//
+// handleETLPost handles start/stop ETL pods
+func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 2, true, cmn.URLPathETL.L)
 	if err != nil {
 		return
 	}
-	uuid := apiItems[0]
-	if err := etl.Stop(t, uuid, cmn.ErrXactUserAbort); err != nil {
+	if apiItems[1] == cmn.ETLStop {
+		t.stopETL(w, r, apiItems[0])
+		return
+	}
+	// TODO: Implement ETLStart to start inactive ETLs
+	t.writeErrURL(w, r)
+}
+
+func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlID string) {
+	if err := etl.Stop(t, etlID, cmn.ErrXactUserAbort); err != nil {
 		statusCode := http.StatusBadRequest
 		if cmn.IsErrNotFound(err) {
 			statusCode = http.StatusNotFound
@@ -149,11 +160,6 @@ func (t *target) doETL(w http.ResponseWriter, r *http.Request, uuid string, bck 
 			SvcName: comm.SvcName(),
 		}, err.Error()))
 	}
-}
-
-// GET /v1/etl
-func (t *target) listETL(w http.ResponseWriter, r *http.Request) {
-	t.writeJSON(w, r, etl.List(), "list-ETL")
 }
 
 func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlID string) {

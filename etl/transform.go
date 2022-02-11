@@ -181,11 +181,11 @@ func InitCode(t cluster.Target, msg InitCodeMsg) error {
 	// Finally, start the ETL with declared Pod specification.
 	return InitSpec(t, InitSpecMsg{
 		InitMsgBase: InitMsgBase{
-			IDX:       msg.IDX,
-			CommTypeX: msg.CommTypeX,
+			IDX:         msg.IDX,
+			CommTypeX:   msg.CommTypeX,
+			WaitTimeout: msg.WaitTimeout,
 		},
-		Spec:        []byte(podSpec),
-		WaitTimeout: msg.WaitTimeout,
+		Spec: []byte(podSpec),
 	}, StartOpts{Env: map[string]string{
 		r.CodeEnvName(): string(msg.Code),
 		r.DepsEnvName(): string(msg.Deps),

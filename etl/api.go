@@ -17,21 +17,20 @@ import (
 
 type (
 	InitMsgBase struct {
-		IDX       string `json:"id"`
-		CommTypeX string `json:"communication_type"`
+		IDX         string       `json:"id"`
+		CommTypeX   string       `json:"communication"`
+		WaitTimeout cos.Duration `json:"timeout"`
 	}
 	InitSpecMsg struct {
 		InitMsgBase
-		Spec        []byte       `json:"spec"`
-		WaitTimeout cos.Duration `json:"wait_timeout"`
+		Spec []byte `json:"spec"`
 	}
 
 	InitCodeMsg struct {
 		InitMsgBase
-		Code        []byte       `json:"code"`
-		Deps        []byte       `json:"dependencies"`
-		Runtime     string       `json:"runtime"`
-		WaitTimeout cos.Duration `json:"wait_timeout"`
+		Code    []byte `json:"code"`
+		Deps    []byte `json:"dependencies"`
+		Runtime string `json:"runtime"`
 	}
 
 	InfoList []Info

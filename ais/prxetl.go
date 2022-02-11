@@ -26,10 +26,12 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPut:
 		p.handleETLPut(w, r)
+	case r.Method == http.MethodPost:
+		p.handleETLPost(w, r)
 	case r.Method == http.MethodGet:
 		p.handleETLGet(w, r)
 	case r.Method == http.MethodDelete:
-		p.stopETL(w, r)
+		p.handleETLDelete(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
 	}
@@ -97,13 +99,11 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO -- FIXME: tests fail if we enforce this check,
-	// to be uncommented after DELETE API is implemented.
-	// etlMD := p.owner.etl.get()
-	// if etlMD.get(initMsg.ID()) != nil {
-	// 	p.writeErrf(w, r, "ETL with ID %q exists", initMsg.ID())
-	// 	return
-	// }
+	etlMD := p.owner.etl.get()
+	if etlMD.get(initMsg.ID()) != nil {
+		p.writeErrf(w, r, "ETL with ID %q exists", initMsg.ID())
+		return
+	}
 
 	// creates a new ETL (instance) as follows:
 	//  1. Validate user-provided code/pod specification.
@@ -113,6 +113,62 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 	if err = p.startETL(w, r, initMsg); err != nil {
 		p.writeErr(w, r, err)
 	}
+}
+
+// POST /v1/etl/<uuid>/stop (or) TODO: /v1/etl/<uuid>/start
+//
+// handleETLPost handles start/stop ETL pods
+func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 2, true, cmn.URLPathETL.L)
+	if err != nil {
+		return
+	}
+	etlID := apiItems[0]
+	if err := cos.ValidateEtlID(etlID); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	etlMD := p.owner.etl.get()
+	if etlMD.get(etlID) == nil {
+		p.writeErr(w, r, cmn.NewErrNotFound("%s: etl UUID %s", p.si, etlID))
+		return
+	}
+	if apiItems[1] == cmn.ETLStop {
+		p.stopETL(w, r)
+		return
+	}
+	// TODO: Implement ETLStart to start inactive ETLs
+	p.writeErrURL(w, r)
+}
+
+// DELETE /v1/etl/<uuid>
+func (p *proxy) handleETLDelete(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathETL.L)
+	if err != nil {
+		return
+	}
+	etlID := apiItems[0]
+	if err := cos.ValidateEtlID(etlID); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	ctx := &etlMDModifier{
+		pre:   p._deleteETLPre,
+		final: p._syncEtlMDFinal,
+		etlID: etlID,
+	}
+	_, err = p.owner.etl.modify(ctx)
+	if err != nil {
+		p.writeErr(w, r, err)
+	}
+}
+
+func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
+	debug.AssertNoErr(cos.ValidateEtlID(ctx.etlID))
+	if exists := clone.delete(ctx.etlID); !exists {
+		err = cmn.NewErrNotFound("%s: etl UUID %s", p.si, ctx.etlID)
+	}
+	return
 }
 
 // startETL broadcasts a build or init ETL request and ensures only one ETL is running
@@ -148,7 +204,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 	//  or fail otherwise - ignore the failures).
 	argsTerm := allocBcArgs()
-	argsTerm.req = cmn.HreqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msg.ID())}
+	argsTerm.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathETL.Join(msg.ID(), cmn.ETLStop)}
 	argsTerm.timeout = cmn.LongTimeout
 	p.bcastGroup(argsTerm)
 	freeBcArgs(argsTerm)
@@ -186,15 +242,6 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlID string) {
 
 // GET /v1/etl
 func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
-	etls, err := p.listETLs()
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	p.writeJSON(w, r, etls, "list-etl")
-}
-
-func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 	var (
 		args = allocBcArgs()
 		etls *etl.InfoList
@@ -207,9 +254,9 @@ func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 
 	for _, res := range results {
 		if res.err != nil {
-			err = res.toErr()
+			p.writeErr(w, r, res.toErr())
 			freeBcastRes(results)
-			return nil, err
+			return
 		}
 
 		if etls == nil {
@@ -226,11 +273,10 @@ func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 		}
 	}
 	freeBcastRes(results)
-
 	if etls == nil {
 		etls = &etl.InfoList{}
 	}
-	return *etls, err
+	p.writeJSON(w, r, *etls, "list-etl")
 }
 
 // GET /v1/etl/<uuid>/logs[/<target_id>]
@@ -309,19 +355,10 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, healths, "health-ETL")
 }
 
-// DELETE /v1/etl/stop/<uuid>
+// POST /v1/etl/<uuid>/stop
 func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETLStop.L)
-	if err != nil {
-		return
-	}
-	uuid := apiItems[0]
-	if uuid == "" {
-		p.writeErr(w, r, cmn.ErrETLMissingUUID)
-		return
-	}
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodDelete, Path: r.URL.Path}
+	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path}
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
@@ -332,6 +369,5 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, res.toErr())
 		break
 	}
-	// TODO: implement using ETL modifier
 	freeBcastRes(results)
 }

@@ -119,7 +119,7 @@ func GetTransformYaml(name string) ([]byte, error) {
 	return []byte(specStr), nil
 }
 
-func StopETL(t *testing.T, baseParams api.BaseParams, etlID string) {
+func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlID string) {
 	if t.Failed() {
 		tlog.Logln("Fetching logs from ETL containers")
 		if logMsgs, err := api.ETLLogs(baseParams, etlID); err == nil {
@@ -137,6 +137,8 @@ func StopETL(t *testing.T, baseParams api.BaseParams, etlID string) {
 	} else {
 		tlog.Logf("ETL %q stopped\n", etlID)
 	}
+	err := api.ETLDelete(baseParams, etlID)
+	tassert.CheckFatal(t, err)
 }
 
 func WaitForContainersStopped(t *testing.T, baseParams api.BaseParams) {

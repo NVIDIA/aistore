@@ -56,11 +56,11 @@ def transform(input_bytes):
 
 	uuid := tetl.InitCode(t, baseParams, etl.InitCodeMsg{
 		InitMsgBase: etl.InitMsgBase{
-			IDX: "etl-build-conn-err",
+			IDX:         "etl-build-conn-err",
+			WaitTimeout: cos.Duration(5 * time.Minute),
 		},
-		Code:        []byte(timeoutFunc),
-		Runtime:     runtime.Python3,
-		WaitTimeout: cos.Duration(5 * time.Minute),
+		Code:    []byte(timeoutFunc),
+		Runtime: runtime.Python3,
 	})
 	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
 }
@@ -168,18 +168,16 @@ def transform(input_bytes):
 				name: "build-echo-python2",
 				ty:   cmn.ETLInitCode,
 				buildDesc: etl.InitCodeMsg{
-					Code:        []byte(echoPythonTransform),
-					Runtime:     runtime.Python2,
-					WaitTimeout: cos.Duration(10 * time.Minute),
+					Code:    []byte(echoPythonTransform),
+					Runtime: runtime.Python2,
 				},
 			},
 			{
 				name: "build-echo-python3",
 				ty:   cmn.ETLInitCode,
 				buildDesc: etl.InitCodeMsg{
-					Code:        []byte(echoPythonTransform),
-					Runtime:     runtime.Python3,
-					WaitTimeout: cos.Duration(10 * time.Minute),
+					Code:    []byte(echoPythonTransform),
+					Runtime: runtime.Python3,
 				},
 			},
 		}
@@ -206,12 +204,13 @@ def transform(input_bytes):
 				uuid = tetl.Init(t, baseParams, test.initDesc, etl.RedirectCommType)
 			case cmn.ETLInitCode:
 				test.buildDesc.IDX = test.name
+				test.buildDesc.WaitTimeout = cos.Duration(10 * time.Minute)
 				uuid = tetl.InitCode(t, baseParams, test.buildDesc)
 			default:
 				panic(test.ty)
 			}
 			t.Cleanup(func() {
-				tetl.StopETL(t, baseParams, uuid)
+				tetl.StopAndDeleteETL(t, baseParams, uuid)
 				tetl.WaitForContainersStopped(t, baseParams)
 			})
 
@@ -259,7 +258,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 	etlID := tetl.Init(t, baseParams, name, comm)
 	tlog.Logf("ETL init successful (%q)\n", etlID)
 	t.Cleanup(func() {
-		tetl.StopETL(t, baseParams, etlID)
+		tetl.StopAndDeleteETL(t, baseParams, etlID)
 	})
 
 	tlog.Logf("Start offline ETL %q => %q\n", etlID, bckTo.String())

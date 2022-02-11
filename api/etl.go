@@ -73,6 +73,19 @@ func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err err
 	return healths, err
 }
 
+func ETLDelete(baseParams BaseParams, id string) (err error) {
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPathETL.Join(id)
+	reqParams := allocRp()
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = path
+	}
+	err = reqParams.DoHTTPRequest()
+	freeRp(reqParams)
+	return
+}
+
 func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error) {
 	params.Method = http.MethodGet
 	path := cmn.URLPathETL.Join(id)
@@ -113,11 +126,11 @@ func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error
 }
 
 func ETLStop(baseParams BaseParams, id string) (err error) {
-	baseParams.Method = http.MethodDelete
+	baseParams.Method = http.MethodPost
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathETLStop.Join(id)
+		reqParams.Path = cmn.URLPathETL.Join(id, cmn.ETLStop)
 	}
 	err = reqParams.DoHTTPRequest()
 	freeRp(reqParams)

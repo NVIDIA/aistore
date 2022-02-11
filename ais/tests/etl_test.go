@@ -216,7 +216,7 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 		bckTo          = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
 		requestTimeout = 30 * time.Second
 	)
-	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	tlog.Logf("Start offline ETL %q\n", uuid)
 	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.TCBMsg{
@@ -274,7 +274,7 @@ func TestETLObject(t *testing.T) {
 			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
 
 			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
-			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 			testETLObject(t, uuid, test.inPath, test.outPath, test.transform, test.filesEqual)
 		})
@@ -304,7 +304,7 @@ func TestETLObjectCloud(t *testing.T) {
 	for comm, configs := range tcs {
 		t.Run(comm, func(t *testing.T) {
 			uuid := tetl.Init(t, baseParams, tetl.Echo, comm)
-			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 			for _, conf := range configs {
 				t.Run(fmt.Sprintf("cached=%t", conf.cached), func(t *testing.T) {
@@ -336,7 +336,7 @@ func TestETLInline(t *testing.T) {
 			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
 
 			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
-			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 			tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
@@ -377,7 +377,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	uuid := tetl.Init(t, baseParams, transformer, comm)
-	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
@@ -527,18 +527,18 @@ def transform(input_bytes: bytes) -> bytes:
 
 				uuid := tetl.InitCode(t, baseParams, etl.InitCodeMsg{
 					InitMsgBase: etl.InitMsgBase{
-						IDX:       test.name,
-						CommTypeX: test.commType,
+						IDX:         test.name,
+						CommTypeX:   test.commType,
+						WaitTimeout: cos.Duration(5 * time.Minute),
 					},
-					Code:        []byte(test.code),
-					Deps:        []byte(test.deps),
-					Runtime:     test.runtime,
-					WaitTimeout: cos.Duration(5 * time.Minute),
+					Code:    []byte(test.code),
+					Deps:    []byte(test.deps),
+					Runtime: test.runtime,
 				})
 
 				switch testType {
 				case "etl_object":
-					t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+					t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 					testETLObject(t, uuid, "", "", func(r io.Reader) io.Reader {
 						return r // TODO: Write function to transform input to md5.
@@ -583,7 +583,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	m.puts()
 
 	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
-	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	tlog.Logf("Start offline ETL %q\n", uuid)
 	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo,
@@ -616,10 +616,10 @@ func TestETLMultipleTransformersAtATime(t *testing.T) {
 	}
 
 	uuid1 := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
-	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid1) })
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid1) })
 
 	uuid2 := tetl.Init(t, baseParams, tetl.MD5, etl.RevProxyCommType)
-	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid2) })
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid2) })
 }
 
 func TestETLHealth(t *testing.T) {
@@ -633,7 +633,7 @@ func TestETLHealth(t *testing.T) {
 
 	tlog.Logln("Starting ETL")
 	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RedirectCommType)
-	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	var (
 		start    = time.Now()
@@ -679,7 +679,7 @@ func TestETLList(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 
 	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
-	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	list, err := api.ETLList(baseParams)
 	tassert.CheckFatal(t, err)

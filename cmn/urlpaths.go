@@ -70,7 +70,6 @@ var (
 	URLPathDownloadRemove = urlpath(Version, Download, Remove)
 
 	URLPathETL       = urlpath(Version, ETL)
-	URLPathETLStop   = urlpath(Version, ETL, ETLStop)
 	URLPathETLObject = urlpath(Version, ETL, ETLObject)
 
 	URLPathTokens   = urlpath(Version, Tokens) // authn

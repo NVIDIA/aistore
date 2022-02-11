@@ -49,8 +49,9 @@ type (
 		pre   func(ctx *etlMDModifier, clone *etlMD) (err error)
 		final func(ctx *etlMDModifier, clone *etlMD)
 
-		msg  etl.InitMsg
-		wait bool
+		msg   etl.InitMsg
+		etlID string
+		wait  bool
 	}
 
 	etlMDOwnerBase struct {
@@ -112,6 +113,12 @@ func (e *etlMD) add(spec etl.InitMsg) {
 }
 
 func (e *etlMD) get(id string) etl.InitMsg { return e.ETLs[id] }
+
+func (e *etlMD) delete(id string) (exists bool) {
+	_, exists = e.ETLs[id]
+	delete(e.ETLs, id)
+	return
+}
 
 //////////////////
 // etlMDOwnerBase //
