@@ -299,7 +299,7 @@ func cluConfig(c *cli.Context) error {
 		if strings.Contains(err.Error(), "key=value pair") && daemonID != "" {
 			// show what we can and still return err
 			if daemonID != c.Args().First() {
-				_ = showClusterOrDaemonConfigHandler(c) // nolint:errcheck // on purpose
+				_ = showClusterOrDaemonOrCLIConfigHandler(c) // nolint:errcheck // on purpose
 			} else {
 				_ = showClusterConfigHandler(c) // nolint:errcheck // on purpose
 			}

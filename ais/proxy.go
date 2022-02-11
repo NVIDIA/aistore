@@ -2759,7 +2759,7 @@ func (p *proxy) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Scheme == "" {
-		p.writeErrf(w, r, "invalid (empty) protocol scheme OR invalid URL path '%s'", r.URL.Path)
+		p.writeErrURL(w, r)
 		return
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host

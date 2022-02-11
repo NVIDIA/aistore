@@ -214,10 +214,10 @@ var (
 	}
 	showCmdConfig = cli.Command{
 		Name:         subcmdShowConfig,
-		Usage:        "show daemon or cluster configuration",
+		Usage:        "show cluster, node, or CLI configuration",
 		ArgsUsage:    showConfigArgument,
 		Flags:        showCmdsFlags[subcmdShowConfig],
-		Action:       showClusterOrDaemonConfigHandler,
+		Action:       showClusterOrDaemonOrCLIConfigHandler,
 		BashComplete: daemonConfigSectionCompletions,
 	}
 	showCmdRemoteAIS = cli.Command{
@@ -230,7 +230,7 @@ var (
 	}
 	showCmdLog = cli.Command{
 		Name:         subcmdShowLog,
-		Usage:        "show daemon log",
+		Usage:        "show log",
 		ArgsUsage:    daemonIDArgument,
 		Flags:        showCmdsFlags[subcmdShowLog],
 		Action:       showDaemonLogHandler,
@@ -509,15 +509,18 @@ func showClusterConfigHandler(c *cli.Context) (err error) {
 	return getClusterConfig(c, c.Args().First())
 }
 
-func showClusterOrDaemonConfigHandler(c *cli.Context) (err error) {
+func showClusterOrDaemonOrCLIConfigHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "'cluster' or <DAEMON_ID>")
 	}
 	filter := parseStrFlag(c, configTypeFlag)
-	if !cos.NewStringSet("all", "cluster", "local", "").Contains(filter) {
-		return fmt.Errorf("invalid value provided for --type, expected one of: 'all','cluster','local'")
+	if !cos.NewStringSet("all", subcmdCluster, subcmdCLI, "local", "").Contains(filter) {
+		return fmt.Errorf("invalid value provided for --type, expected one of: 'all','%s','%s','local'",
+			subcmdCluster, subcmdCLI)
 	}
-
+	if c.Args().First() == subcmdCLI {
+		return showCLIConfigHandler(c)
+	}
 	if _, err = fillMap(); err != nil {
 		return
 	}

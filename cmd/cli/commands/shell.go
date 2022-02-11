@@ -143,6 +143,7 @@ func daemonConfigSectionCompletions(c *cli.Context) {
 
 	// No arguments given
 	fmt.Println(subcmdCluster)
+	fmt.Println(subcmdCLI)
 	suggestDaemon(completeAllDaemons)
 }
 

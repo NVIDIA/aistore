@@ -1106,9 +1106,11 @@ func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string,
 }
 
 func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
-	err := cmn.NewErrHTTP(r, "invalid URL Path")
-	h.writeErr(w, r, err)
-	cmn.FreeHTTPErr(err)
+	if r.URL.Scheme == "" {
+		h.writeErrf(w, r, "%s: %s %q", h.si, cmn.EmptyProtoSchemeForURL, r.URL.Path)
+	} else {
+		h.writeErrf(w, r, "%s: invalid URL path %q", h.si, r.URL.Path)
+	}
 }
 
 func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {

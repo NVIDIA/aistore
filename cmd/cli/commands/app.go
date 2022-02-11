@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -103,15 +104,19 @@ func (aisCLI *AISCLI) runNTimes(input []string) error {
 	return nil
 }
 
-func isUnreachableError(err error) bool {
+func isUnreachableError(err error) (msg string, unreachable bool) {
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
-		return cos.IsUnreachable(err, err.Status)
+		errHTTP := cmn.Err2HTTPErr(err)
+		msg = errHTTP.Message
+		unreachable = cos.IsUnreachable(err, err.Status) || strings.Contains(msg, cmn.EmptyProtoSchemeForURL)
 	case *errUsage, *errAdditionalInfo:
-		return false
+		return "", false
 	default:
-		return unreachableRegex.MatchString(err.Error())
+		msg = err.Error()
+		unreachable = unreachableRegex.MatchString(msg)
 	}
+	return
 }
 
 // Formats the error message to a nice string
@@ -122,16 +127,23 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 	var (
 		red          = color.New(color.FgRed).SprintFunc()
 		prepareError = func(msg string) error {
-			msg = cos.CapitalizeString(msg)
+			if strings.HasPrefix(msg, cluster.TnamePrefix) || strings.HasPrefix(msg, cluster.PnamePrefix) {
+				// not capitalizing
+			} else {
+				msg = cos.CapitalizeString(msg)
+			}
 			msg = strings.TrimRight(msg, "\n") // Remove newlines if any.
 			return errors.New(red(msg))
 		}
 	)
 
-	if isUnreachableError(err) {
-		errmsg := red(fmt.Sprintf("AIStore cannot be reached at %s.", clusterURL))
-		return fmt.Errorf("%s Make sure to set environment variable %s=<gateway's hostname:port>",
-			errmsg, cmn.EnvVars.Endpoint)
+	detailedErr, unreachable := isUnreachableError(err)
+	if unreachable {
+		errmsg := red(fmt.Sprintf("AIStore cannot be reached at %s.\n", clusterURL))
+		return fmt.Errorf("%sDetailed Error: %s\n"+
+			"(Hint: make sure to set environment %s=<http/https address of any AIS gateway/proxy>;\n"+
+			"for default settings, see CLI config at %s or run 'show config cli')",
+			errmsg, detailedErr, cmn.EnvVars.Endpoint, config.Path())
 	}
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:

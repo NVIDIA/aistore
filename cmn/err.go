@@ -30,6 +30,8 @@ import (
 const (
 	stackTracePrefix = "stack: ["
 
+	fmtErrBckName = "bucket name %q is invalid: may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
+
 	FmtErrIntegrity      = "[%s%d, for troubleshooting see %s/blob/master/docs/troubleshooting.md]"
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
 	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %v"
@@ -37,7 +39,7 @@ const (
 	FmtErrUnknown        = "%s: unknown %s %q"
 	FmtErrFailed         = "%s: failed to %s %s, err: %v" // node: action object, error
 
-	fmtErrBckName = "bucket name %q is invalid: may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
+	EmptyProtoSchemeForURL = "empty protocol scheme for URL path"
 )
 
 type (

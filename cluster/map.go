@@ -133,11 +133,16 @@ func (d *Snode) SetName() {
 	d.name = name
 }
 
-func Pname(pid string) string { return "p[" + pid + "]" }
-func Tname(tid string) string { return "t[" + tid + "]" }
+const (
+	PnamePrefix = "p["
+	TnamePrefix = "t["
+)
+
+func Pname(pid string) string { return PnamePrefix + pid + "]" }
+func Tname(tid string) string { return TnamePrefix + tid + "]" }
 
 func N2ID(name string) string {
-	if len(name) > 2 && (name[:2] == "t[" || name[:2] == "p[") {
+	if len(name) > 2 && (name[:2] == TnamePrefix || name[:2] == PnamePrefix) {
 		return name[2 : len(name)-1]
 	}
 	return name

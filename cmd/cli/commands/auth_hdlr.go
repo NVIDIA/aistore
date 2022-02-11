@@ -214,8 +214,10 @@ func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 			return errors.New("AuthN URL is not set") // nolint:golint // name of the service
 		}
 		err := f(c)
-		if err != nil && isUnreachableError(err) {
-			err = fmt.Errorf(authnUnreachable, authParams.URL, authnServerURL)
+		if err != nil {
+			if msg, unreachable := isUnreachableError(err); unreachable {
+				err = fmt.Errorf(authnUnreachable, authParams.URL+" (detailed error: "+msg+")", authnServerURL)
+			}
 		}
 		return err
 	}
