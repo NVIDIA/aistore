@@ -247,7 +247,8 @@ func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 			return "", fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 		}
 		xctn := rns.Entry.Get()
-		xreg.DoAbort(cmn.ActPutCopies, c.bck, errors.New("make-n-copies"))
+		flt := xreg.XactFilter{Kind: cmn.ActPutCopies, Bck: c.bck}
+		xreg.DoAbort(flt, errors.New("make-n-copies"))
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
 
@@ -326,13 +327,15 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 				return "", fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 			}
 			xctn := rns.Entry.Get()
-			xreg.DoAbort(cmn.ActPutCopies, c.bck, errors.New("re-mirror"))
+			flt := xreg.XactFilter{Kind: cmn.ActPutCopies, Bck: c.bck}
+			xreg.DoAbort(flt, errors.New("re-mirror"))
 			c.addNotif(xctn) // notify upon completion
 			xact.GoRunW(xctn)
 			xactID = xctn.ID()
 		}
 		if reEC(txnSetBprops.bprops, txnSetBprops.nprops, c.bck) {
-			xreg.DoAbort(cmn.ActECEncode, c.bck, errors.New("re-ec"))
+			flt := xreg.XactFilter{Kind: cmn.ActECEncode, Bck: c.bck}
+			xreg.DoAbort(flt, errors.New("re-ec"))
 			rns := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 			if rns.Err != nil {
 				return "", rns.Err
@@ -537,7 +540,11 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, e
 			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
 		custom := txnTcb.xtcb.Args()
-		debug.Assert(custom.Phase == cmn.ActBegin)
+		if custom.Phase != cmn.ActBegin {
+			err = fmt.Errorf("%s: %s is already running", t.si, txnTcb) // never here
+			glog.Error(err)
+			return "", err
+		}
 		custom.Phase = cmn.ActCommit
 		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {

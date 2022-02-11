@@ -599,11 +599,13 @@ func (t *target) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload) (rm
 			}
 			present = true
 			if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
-				xreg.DoAbort(cmn.ActPutCopies, nbck, errors.New("apply-bmd"))
+				flt := xreg.XactFilter{Kind: cmn.ActPutCopies, Bck: nbck}
+				xreg.DoAbort(flt, errors.New("apply-bmd"))
 				// NOTE: cmn.ActMakeNCopies takes care of itself
 			}
 			if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
-				xreg.DoAbort(cmn.ActECEncode, nbck, errors.New("apply-bmd"))
+				flt := xreg.XactFilter{Kind: cmn.ActECEncode, Bck: nbck}
+				xreg.DoAbort(flt, errors.New("apply-bmd"))
 			}
 			return true
 		})

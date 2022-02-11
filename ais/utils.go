@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -252,8 +251,9 @@ func reMirror(bprops, nprops *cmn.BucketProps) bool {
 func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 	if !nprops.EC.Enabled {
 		if bprops.EC.Enabled {
-			// abort running ec-encode xctn if exists
-			xreg.DoAbort(cmn.ActECEncode, bck, errors.New("ec-disabled"))
+			// abort running ec-encode xaction, if exists
+			flt := xreg.XactFilter{Kind: cmn.ActECEncode, Bck: bck}
+			xreg.DoAbort(flt, errors.New("ec-disabled"))
 		}
 		return false
 	}
@@ -262,14 +262,6 @@ func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 	}
 	return bprops.EC.DataSlices != nprops.EC.DataSlices ||
 		bprops.EC.ParitySlices != nprops.EC.ParitySlices
-}
-
-func withRetry(cond func() bool) (ok bool) {
-	if ok = cond(); !ok {
-		time.Sleep(time.Second)
-		ok = cond()
-	}
-	return
 }
 
 func deploymentType() string {

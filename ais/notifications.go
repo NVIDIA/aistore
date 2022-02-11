@@ -268,7 +268,10 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	//       which is why we consider `not-found`, `already-finished`,
 	//       and `unknown-notifier` benign non-error conditions
 	uuid = notifMsg.UUID
-	if !withRetry(func() bool { nl, exists = n.entry(uuid); return exists }) {
+	if !withRetry(cmn.Timeout.CplaneOperation(), func() bool {
+		nl, exists = n.entry(uuid)
+		return exists
+	}) {
 		return
 	}
 
@@ -710,4 +713,15 @@ func (nf *nlFilter) match(nl nl.NotifListener) bool {
 		}
 	}
 	return false
+}
+
+func withRetry(timeout time.Duration, cond func() bool) (ok bool) {
+	sleep := cos.ProbingFrequency(timeout)
+	for elapsed := time.Duration(0); elapsed < timeout; elapsed += sleep {
+		if ok = cond(); ok {
+			break
+		}
+		time.Sleep(sleep)
+	}
+	return
 }

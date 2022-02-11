@@ -297,7 +297,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 			tassert.CheckError(t, err)
 			_, err = tutils.WaitForClusterState(
 				proxyURL,
-				"to target joined the cluster",
+				"target joined the cluster",
 				m.smap.Version, origProxyCnt, origTargetCount,
 			)
 			tassert.CheckFatal(t, err)
@@ -324,7 +324,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	restored = true
 	smap, err = tutils.WaitForClusterState(
 		proxyURL,
-		"to target joined the cluster",
+		"target joined the cluster",
 		m.smap.Version, origProxyCnt, origTargetCount,
 	)
 	tassert.CheckFatal(t, err)
@@ -374,7 +374,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			_, err = tutils.WaitForClusterState(
 				proxyURL,
-				"to target joined the cluster",
+				"target joined the cluster",
 				m.smap.Version, origProxyCnt, origTargetCount,
 			)
 			tassert.CheckFatal(t, err)

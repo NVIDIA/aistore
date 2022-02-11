@@ -38,8 +38,8 @@ type txnClientCtx struct {
 	selected cluster.Nodes
 }
 
-// NOTE: not enforcing cluster-wide uniqueness - yet
-// TODO: all xaction-renewing transactions must return uuid
+// TODO: IC(c.uuid) vs _committed_ xactID (currently asserted)
+// TODO: cleanup upon failures
 
 //////////////////
 // txnClientCtx //
@@ -57,6 +57,7 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (err error) {
 	return
 }
 
+// returns global unique (cluster-wide) xaction UUID, or empty
 func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xactID string, err error) {
 	globalID := true // cluster-wide xaction ID
 	results := c.bcast(cmn.ActCommit, timeout)
@@ -272,11 +273,10 @@ func (p *proxy) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID string
 
 	// 5. commit
 	xactID, err = c.commit(bck, c.cmtTout(waitmsync))
+	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
 	if err != nil {
 		p.undoUpdateCopies(msg, bck, ctx.revertProps)
-		return
 	}
-	debug.Assertf(xactID == c.uuid, "%s vs %s", xactID, c.uuid) // otherwise, IC (above) would listen for the wrong one
 	return
 }
 
@@ -373,9 +373,7 @@ func (p *proxy) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprops *cmn
 
 	// 5. commit
 	xactID, err = c.commit(bck, c.cmtTout(waitmsync))
-	if xactID != "" {
-		debug.Assertf(xactID == c.uuid, "%s vs %s", xactID, c.uuid)
-	}
+	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
 	return
 }
 
@@ -465,12 +463,11 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 	// 5. commit
 	c.req.Body = cos.MustMarshal(c.msg)
 	xactID, err = c.commit(bckFrom, c.cmtTout(waitmsync))
+	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
 	if err != nil {
 		glog.Errorf("%s: failed to commit %q, err: %v", p.si, msg.Action, err)
 		return
 	}
-
-	debug.Assertf(xactID == c.uuid, "%s vs %s", xactID, c.uuid) // otherwise, IC (above) would listen for the wrong one
 
 	// 6. start rebalance and resilver
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
@@ -553,12 +550,13 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 	// 4. IC
 	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
-	// setup notification listener callback to cleanup upon failure
+	// cleanup upon failure via notification listener callback
+	// (note synchronous cleanup below)
 	nl.F = func(nl notif.NotifListener) {
 		if errNl := nl.Err(); errNl != nil {
 			if !ctx.terminate { // undo bmd.modify() - see above
 				glog.Error(errNl)
-				p.destroyBucket(&cmn.ActionMsg{Action: cmn.ActDestroyBck}, bckTo)
+				_ = p.destroyBucket(&cmn.ActionMsg{Action: cmn.ActDestroyBck}, bckTo)
 			}
 		}
 	}
@@ -566,7 +564,11 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 
 	// 5. commit
 	xactID, err = c.commit(bckFrom, c.cmtTout(waitmsync))
-	debug.Assertf(err != nil || xactID == c.uuid, "%q vs %q", c.uuid, xactID)
+	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
+	if err != nil {
+		// cleanup
+		_ = p.destroyBucket(&cmn.ActionMsg{Action: cmn.ActDestroyBck}, bckTo)
+	}
 	return
 }
 
@@ -591,6 +593,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID 
 	// 3. commit
 	xactID, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	if xactID != "" {
+		// happens to grab cluster-wide ID
 		glog.Infof("%s: x-%s[%s]", p.si, msg.Action, xactID)
 	}
 	return
@@ -701,9 +704,7 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, e
 
 	// 6. commit
 	xactID, err = c.commit(bck, c.cmtTout(waitmsync))
-	if xactID != "" {
-		debug.Assertf(xactID == c.uuid, "%s vs %s", xactID, c.uuid)
-	}
+	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
 	return
 }
 
@@ -732,6 +733,7 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	// commit
 	xactID, err = c.commit(bckFrom, 2*c.timeout.netw) // channel capacity when massively archiving
 	if xactID != "" {
+		// happens to grab cluster-wide ID
 		glog.Infof("%s: x-%s[%s]", p.si, msg.Action, xactID)
 	}
 	return
@@ -922,9 +924,7 @@ func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 	}
 	xactID, err = c.commit(bck, c.cmtTout(waitmsync))
-	if xactID != "" {
-		debug.Assertf(xactID == c.uuid, "%s vs %s", xactID, c.uuid)
-	}
+	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
 	return
 }
 

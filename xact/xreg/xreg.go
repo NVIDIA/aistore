@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xact"
@@ -172,6 +173,7 @@ func RegWithHK() {
 func GetXact(uuid string) (xctn cluster.Xact) { return dreg.getXact(uuid) }
 
 func (r *registry) getXact(uuid string) (xctn cluster.Xact) {
+	debug.AssertMsg(cos.IsValidUUID(uuid) || xact.IsValidRebID(uuid), uuid)
 	e := &r.entries
 	e.mtx.RLock()
 outer:
@@ -222,31 +224,33 @@ func AbortAll(err error, tys ...string) {
 
 func AbortAllMountpathsXactions() { dreg.abort(abortArgs{mountpaths: true}) }
 
-func DoAbort(kind string, bck *cluster.Bck, err error) (aborted bool) {
-	if kind != "" {
-		entry := dreg.getRunning(XactFilter{Kind: kind, Bck: bck})
+func DoAbort(flt XactFilter, err error) (aborted bool) {
+	if flt.ID != "" {
+		xctn := dreg.getXact(flt.ID)
+		if xctn != nil {
+			debug.Assertf(flt.Kind == "" || xctn.Kind() == flt.Kind,
+				"UUID must uniquely identify kind: %s vs %+v", xctn, flt)
+			aborted = xctn.Abort(err)
+		}
+		return
+	}
+	if flt.Kind != "" {
+		debug.Assert(xact.IsValidKind(flt.Kind), flt.Kind)
+		entry := dreg.getRunning(flt)
 		if entry == nil {
 			return
 		}
 		return entry.Get().Abort(err)
 	}
-	if bck == nil {
+	if flt.Bck == nil {
 		// No bucket and no kind - request for all available xactions.
 		AbortAll(err)
 	} else {
 		// Bucket present and no kind - request for all available bucket's xactions.
-		AbortAllBuckets(err, bck)
+		AbortAllBuckets(err, flt.Bck)
 	}
 	aborted = true
 	return
-}
-
-func DoAbortByID(uuid string, err error) (aborted bool) {
-	xctn := dreg.getXact(uuid)
-	if xctn == nil {
-		return
-	}
-	return xctn.Abort(err)
 }
 
 func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) {
@@ -715,6 +719,7 @@ func (flt XactFilter) matches(xctn cluster.Xact) (yes bool) {
 	}
 	// same ID?
 	if flt.ID != "" {
+		debug.AssertMsg(cos.IsValidUUID(flt.ID) || xact.IsValidRebID(flt.ID), flt.ID)
 		if yes = xctn.ID() == flt.ID; yes {
 			debug.AssertMsg(xctn.Kind() == flt.Kind, xctn.String()+" vs same ID "+flt.String())
 		}

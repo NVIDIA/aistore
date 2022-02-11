@@ -66,7 +66,8 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if !xactMsg.Bck.IsEmpty() {
 			bck = cluster.NewBckEmbed(xactMsg.Bck)
-			if err := bck.Init(t.owner.bmd); err != nil {
+			if err := bck.Init(t.owner.bmd); err != nil && msg.Action != cmn.ActXactStop {
+				// cmn.ActXactStop: proceed anyway
 				t.writeErr(w, r, err)
 				return
 			}
@@ -82,12 +83,8 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 			if msg.Name == cmn.ErrXactICNotifAbort.Error() {
 				err = cmn.ErrXactICNotifAbort
 			}
-			// this `if` is optional/optimizational
-			if xactMsg.ID != "" {
-				xreg.DoAbortByID(xactMsg.ID, err)
-				return
-			}
-			xreg.DoAbort(xactMsg.Kind, bck, err)
+			flt := xreg.XactFilter{ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck}
+			xreg.DoAbort(flt, err)
 		default:
 			t.writeErrAct(w, r, msg.Action)
 		}
