@@ -749,6 +749,11 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 
 	tlog.LogfCond(!o.silent, "Restoring %s\n", objPath)
 	_, err = api.GetObject(baseParams, bck, objPath)
+	if err != nil {
+		tlog.Logf("... retrying %s\n", objPath)
+		time.Sleep(time.Second)
+		_, err = api.GetObject(baseParams, bck, objPath)
+	}
 	tassert.CheckFatal(t, err)
 
 	// For remote buckets, due to performance reason, GFN is not used and
@@ -1524,6 +1529,11 @@ func TestECXattrs(t *testing.T) {
 
 		tlog.Logf("Restoring %s\n", objPath)
 		_, err = api.GetObject(baseParams, bck, objPath)
+		if err != nil {
+			tlog.Logf("... retrying %s\n", objPath)
+			time.Sleep(time.Second)
+			_, err = api.GetObject(baseParams, bck, objPath)
+		}
 		tassert.CheckFatal(t, err)
 
 		if doEC {
