@@ -942,16 +942,16 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			errCode = http.StatusInternalServerError
 			return
 		}
-		params := cluster.PromoteFileParams{
+		params := cluster.PromoteParams{
 			SrcFQN:    filePath,
 			Bck:       aoi.lom.Bck(),
 			ObjName:   aoi.lom.ObjName,
 			Cksum:     partialCksum,
 			Overwrite: true,
-			KeepOrig:  false,
+			KeepSrc:   false,
 		}
 		var lom *cluster.LOM
-		if lom, err = aoi.t.PromoteFile(params); err != nil {
+		if lom, err = aoi.t.Promote(params); err != nil {
 			return
 		}
 		if lom != nil {

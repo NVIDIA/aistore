@@ -185,7 +185,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 	return
 }
 
-func (t *target) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LOM, err error) {
+func (t *target) Promote(params cluster.PromoteParams) (nlom *cluster.LOM, err error) {
 	var (
 		tsi   *cluster.Snode
 		smap  = t.owner.smap.get()
@@ -221,7 +221,7 @@ func (t *target) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LO
 		_, err = coi.putRemote(lom, sendParams)
 		freeSendParams(sendParams)
 		freeCopyObjInfo(coi)
-		if err == nil && !params.KeepOrig {
+		if err == nil && !params.KeepSrc {
 			if err := cos.RemoveFile(params.SrcFQN); err != nil {
 				glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
 			}
@@ -240,14 +240,15 @@ func (t *target) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LO
 		fileSize int64
 		workFQN  string
 	)
-	copyFile := params.KeepOrig
-	if !params.KeepOrig {
-		// To use `params.SrcFQN` as `workFQN` we must be sure that they are on
-		// the same device. Right now, we do it by ensuring that they are on the
-		// same mountpath but this is a stronger assumption.
-		//
-		// TODO: Try to determine if `params.SrcFQN` and `dstFQN` are on the device
-		//  without requiring it to be on the same mountpath.
+	copyFile := params.KeepSrc
+	if !params.KeepSrc {
+		// To use `params.SrcFQN` as `workFQN` we must be sure that they are
+		// located on the same device. We do it by ensuring that they are located
+		// on the same mountpath. Note that Mmuntpaths, by definition, cannot share
+		// the same disk or RAID (with _testing_ environmenti being the only exception
+		// from this rule). See also:
+		// * https://github.com/NVIDIA/aistore/blob/master/docs/overview.md#terminology
+		// * config.TestingEnv()
 		info, _, err := fs.FQN2Mpath(params.SrcFQN)
 		copyFile = err != nil || info.Path != lom.MpathInfo().Path
 	}
@@ -296,7 +297,7 @@ func (t *target) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LO
 		return
 	}
 	nlom = lom
-	if !params.KeepOrig {
+	if !params.KeepSrc {
 		if err := cos.RemoveFile(params.SrcFQN); err != nil {
 			glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
 		}

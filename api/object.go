@@ -63,7 +63,7 @@ type (
 		SrcFQN     string // promoted source
 		Recursive  bool
 		Overwrite  bool
-		KeepOrig   bool
+		KeepSrc    bool
 	}
 	AppendArgs struct {
 		BaseParams BaseParams
@@ -517,14 +517,14 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 
 // PromoteFileOrDir promotes AIS-colocated files and directories to objects.
 // NOTE: advanced usage.
-func PromoteFileOrDir(args *PromoteArgs) error {
+func Promote(args *PromoteArgs) error {
 	actMsg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.SrcFQN}
 	actMsg.Value = &cmn.ActValPromote{
 		DaemonID:  args.Target,
 		ObjName:   args.Object,
 		Recursive: args.Recursive,
 		Overwrite: args.Overwrite,
-		KeepOrig:  args.KeepOrig,
+		KeepSrc:   args.KeepSrc,
 	}
 
 	args.BaseParams.Method = http.MethodPost

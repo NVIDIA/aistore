@@ -109,14 +109,14 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 			return nil
 		}
 	}
-	params := cluster.PromoteFileParams{
+	params := cluster.PromoteParams{
 		SrcFQN:    fqn,
 		Bck:       bck,
 		ObjName:   objName,
 		Overwrite: r.params.Overwrite,
-		KeepOrig:  r.params.KeepOrig,
+		KeepSrc:   r.params.KeepSrc,
 	}
-	lom, err := r.Target().PromoteFile(params)
+	lom, err := r.Target().Promote(params)
 	if err != nil {
 		if finfo, ers := os.Stat(fqn); ers == nil {
 			if !finfo.Mode().IsRegular() {

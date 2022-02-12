@@ -396,7 +396,7 @@ var (
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 	overwriteFlag = cli.BoolTFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
-	keepOrigFlag  = cli.BoolTFlag{Name: "keep", Usage: "keep original file"}
+	keepSrcFlag   = cli.BoolTFlag{Name: "keep", Usage: "keep source file(s)"}
 	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 	chunkSizeFlag = cli.StringFlag{

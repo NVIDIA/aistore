@@ -6,8 +6,10 @@ package integration
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,10 +21,12 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
-// TODO -- FIXME: cover permutations (rand-target, recursive, keep, few vs many files)
-//                                   (wait-xact-by-id, wait-for-node)
+// TODO: permutations (wait-xact-by-id | wait-for-node)
 
-var genfiles = `for f in {%d..%d}; do b=$RANDOM; for i in {1..10}; do echo $b; done > %s/$f.txt; done`
+var genfiles = `for f in {%d..%d}; do b=$RANDOM;
+for i in {1..3}; do echo $b; done > %s/$f.test;
+for i in {1..5}; do echo $b --- $b; done > %s/%s/$f.test.test;
+done`
 
 type prmTestPermut struct {
 	num          int
@@ -33,10 +37,13 @@ type prmTestPermut struct {
 
 func TestPromoteBasic(t *testing.T) {
 	tests := []prmTestPermut{
-		{num: 90000, singleTarget: false, recurs: false, keep: false},
-		{num: 90000, singleTarget: true, recurs: false, keep: false},
+		{num: 10000, singleTarget: false, recurs: false, keep: false},
+		{num: 10000, singleTarget: true, recurs: false, keep: false},
 		{num: 10, singleTarget: false, recurs: false, keep: false},
 		{num: 10, singleTarget: true, recurs: false, keep: false},
+		{num: 10000, singleTarget: false, recurs: true, keep: true},
+		{num: 10000, singleTarget: true, recurs: true, keep: false},
+		{num: 10, singleTarget: false, recurs: true, keep: true},
 	}
 	for _, test := range tests {
 		var name string
@@ -48,20 +55,21 @@ func TestPromoteBasic(t *testing.T) {
 		}
 		if test.recurs {
 			name += "/recurs"
+		} else {
+			name += "/non-recurs"
 		}
 		if test.keep {
-			name += "/keep"
-		}
-		if name == "" {
-			name = "basic"
+			name += "/keep-src"
 		} else {
-			name = name[1:]
+			name += "/remove-src"
 		}
+		name = name[1:]
 		t.Run(name, test.do)
 	}
 }
 
 func (test *prmTestPermut) do(t *testing.T) {
+	const subdir = "subdir" // to promote recursively
 	var (
 		m          = ioContext{t: t, bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: cos.RandString(10)}}
 		from       = 10000
@@ -76,21 +84,27 @@ func (test *prmTestPermut) do(t *testing.T) {
 	}
 	tempDir, err := os.MkdirTemp("", "prm")
 	tassert.CheckFatal(t, err)
-	err = cos.CreateDir(tempDir)
+	subdirFQN := filepath.Join(tempDir, subdir)
+	err = cos.CreateDir(subdirFQN)
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
 
-	// generate
-	tlog.Logf("Generating %d files...\n", to-from+1)
-	cmd := fmt.Sprintf(genfiles, from, to, tempDir)
+	// generate ngen files in tempDir and tempDir/subdir, respectively
+	// (with total = 2 * ngen)
+	ngen := to - from + 1
+	tlog.Logf("Generating %d files...\n", ngen*2)
+	cmd := fmt.Sprintf(genfiles, from, to, tempDir, tempDir, subdir)
 	_, err = exec.Command("bash", "-c", cmd).CombinedOutput()
+
 	tassert.CheckFatal(t, err)
 
-	// prep request
+	// prepare request
 	args := api.PromoteArgs{
 		BaseParams: baseParams,
 		Bck:        m.bck,
 		SrcFQN:     tempDir,
+		Recursive:  test.recurs,
+		KeepSrc:    test.keep,
 	}
 	if test.singleTarget {
 		target, _ := m.smap.GetRandTarget()
@@ -99,7 +113,7 @@ func (test *prmTestPermut) do(t *testing.T) {
 	}
 
 	// promote
-	err = api.PromoteFileOrDir(&args)
+	err = api.Promote(&args)
 	tassert.CheckFatal(t, err)
 	time.Sleep(2 * time.Second)
 
@@ -126,6 +140,40 @@ func (test *prmTestPermut) do(t *testing.T) {
 	tlog.Logln("Listing and counting objects...")
 	list, err := api.ListObjects(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)
-	n := to - from + 1
-	tassert.Errorf(t, len(list.Entries) == n, "expected %d to be promoted, got %d", n, len(list.Entries))
+
+	// perform checks
+	cnt, cntsub := countFiles(t, tempDir)
+	if test.keep {
+		tassert.Errorf(t, cnt == ngen && cntsub == ngen, "keep == true: expected cnt %d == cntsub %d == num %d gererated",
+			cnt, cntsub, ngen)
+	}
+	if test.recurs {
+		tassert.Errorf(t, len(list.Entries) == ngen*2, "expected to recurs promote %d, got %d", ngen*2, len(list.Entries))
+		if !test.keep {
+			tassert.Errorf(t, cnt == 0 && cntsub == 0, "keep == false recurs: expected cnt %d == cntsub %d == 0",
+				cnt, cntsub)
+		}
+	} else {
+		tassert.Errorf(t, len(list.Entries) == ngen, "expected to promote %d, got %d", ngen, len(list.Entries))
+		if !test.keep {
+			tassert.Errorf(t, cnt == 0 && cntsub == ngen, "keep == false non-recurs: expected cnt %d == 0, cntsub %d == %d",
+				cnt, cntsub, ngen)
+		}
+	}
+}
+
+func countFiles(t *testing.T, dir string) (n, nsubdir int) {
+	f := func(path string, de iofs.DirEntry, err error) error {
+		if err == nil && de.Type().IsRegular() {
+			if filepath.Dir(path) == dir {
+				n++
+			} else {
+				nsubdir++
+			}
+		}
+		return nil
+	}
+	err := filepath.WalkDir(dir, f)
+	tassert.CheckFatal(t, err)
+	return
 }

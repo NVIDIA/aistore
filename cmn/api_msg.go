@@ -25,7 +25,7 @@ type (
 		ObjName   string `json:"objname"`
 		Recursive bool   `json:"recursive"`
 		Overwrite bool   `json:"overwrite"`
-		KeepOrig  bool   `json:"keep_original"`
+		KeepSrc   bool   `json:"keep_src"`
 	}
 	ActValRmNode struct {
 		DaemonID      string `json:"sid"`

@@ -79,13 +79,14 @@ type (
 		DM        DataMover
 		ObjAttrs  cmn.ObjAttrsHolder
 	}
-	PromoteFileParams struct {
-		SrcFQN    string
-		Bck       *Bck
-		ObjName   string
-		Cksum     *cos.Cksum
+	PromoteParams struct {
+		SrcFQN  string // file or directory
+		Bck     *Bck   // destination bucket
+		ObjName string // destination object name
+		Cksum   *cos.Cksum
+		//
 		Overwrite bool
-		KeepOrig  bool
+		KeepSrc   bool
 	}
 )
 
@@ -120,7 +121,7 @@ type Target interface {
 	DeleteObject(lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params *CopyObjectParams, localOnly bool) (int64, error)
 	GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
-	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
+	Promote(params PromoteParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 
 	// File-system related functions.

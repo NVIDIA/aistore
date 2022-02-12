@@ -997,14 +997,14 @@ func (t *target) _promoteNumSync(c *txnServerCtx, txnPrm *txnPromote, isFileShar
 				continue
 			}
 		}
-		params := cluster.PromoteFileParams{
+		params := cluster.PromoteParams{
 			SrcFQN:    fqn,
 			Bck:       c.bck,
 			ObjName:   objName,
 			Overwrite: txnPrm.msg.Overwrite,
-			KeepOrig:  txnPrm.msg.KeepOrig,
+			KeepSrc:   txnPrm.msg.KeepSrc,
 		}
-		if _, err := t.PromoteFile(params); err != nil {
+		if _, err := t.Promote(params); err != nil {
 			return err
 		}
 	}
