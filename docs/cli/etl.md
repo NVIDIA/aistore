@@ -29,11 +29,9 @@ For background on AIS-ETL, getting-started steps, working examples, and tutorial
 
 ## Init ETL with spec
 
-`ais etl init spec SPEC_FILE` or `ais job start etl init`
+`ais etl init spec --from-file=SPEC_FILE --name=UNIQUE_ID [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT]` or `ais job start etl init`
 
-Init ETL with Pod YAML specification file. The `metadata.name` attribute in the specification is used as unique ID for ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
-
-Note: Currently, only one ETL can be run at a time. To run new ETLs, [stop any existing ETL](#stop-etl).
+Init ETL with Pod YAML specification file. The `--name` CLI flag is used as a unique ID for ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
 ### Example
 
@@ -45,9 +43,6 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: transformer-md5
-  annotations:
-    communication_type: hpush://
-    wait_timeout: 1m
 spec:
   containers:
     - name: server
@@ -56,13 +51,13 @@ spec:
         - name: default
           containerPort: 80
       command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
-$ ais etl init spec spec.yaml
-JGHEoo89gg
+$ ais etl init spec --from-file=spec.yaml --name=transformer-md5 --comm-type=hpull:// --wait-timeout=1m
+transformer-md5
 ```
 
 ## Init ETL with code
 
-`ais etl init code --from-file=CODE_FILE --runtime=RUNTIME [--deps-file=DEPS_FILE] [--name=UNIQUE_ID] [--comm-type=COMMUNICATION_TYPE]`
+`ais etl init code --from-file=CODE_FILE --runtime=RUNTIME --name=UNIQUE_ID [--deps-file=DEPS_FILE] [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT]`
 
 Initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform`.
 The `--name` parameter is used to assign a user defined unique ID (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
@@ -87,8 +82,8 @@ def transform(input_bytes):
     md5 = hashlib.md5()
     md5.update(input_bytes)
     return md5.hexdigest().encode()
-$ ais etl init code --from-file=code.py --runtime=python3
-JGHEoo89gg
+$ ais etl init code --from-file=code.py --runtime=python3 --name=transformer-md5
+transformer-md5
 ```
 
 ## List ETLs
@@ -120,19 +115,19 @@ Get object with ETL defined by `ETL_ID`.
 
 #### Transform object to STDOUT
 
-Does ETL on `shards/shard-0.tar` object with `JGHEoo89gg` ETL (computes MD5 of the object) and print the output to the STDOUT.
+Does ETL on `shards/shard-0.tar` object with `transformer-md5` ETL (computes MD5 of the object) and print the output to the STDOUT.
 
 ```console
-$ ais etl object JGHEoo89gg ais://shards/shard-0.tar -
+$ ais etl object transformer-md5 ais://shards/shard-0.tar -
 393c6706efb128fbc442d3f7d084a426
 ```
 
 #### Transform object to output file
 
-Do ETL on the `shards/shard-0.tar` object with `JGHEoo89gg` ETL (computes MD5 of the object) and save the output to the `output.txt` file.
+Do ETL on the `shards/shard-0.tar` object with `transformer-md5` ETL (computes MD5 of the object) and save the output to the `output.txt` file.
 
 ```console
-$ ais etl object JGHEoo89gg ais://shards/shard-0.tar output.txt
+$ ais etl object transformer-md5 ais://shards/shard-0.tar output.txt
 $ cat output.txt
 393c6706efb128fbc442d3f7d084a426
 ```
@@ -162,7 +157,7 @@ Flags `--list` and `--template` are mutually exclusive. If neither of them is se
 Transform every object from `src_bucket` with ETL and put new objects to `dst_bucket`.
 
 ```console
-$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket
+$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket
 MMi9l8Z11
 $ ais job wait xaction MMi9l8Z11
 ```
@@ -172,7 +167,7 @@ $ ais job wait xaction MMi9l8Z11
 The same as above, but wait for the ETL bucket to finish.
 
 ```console
-$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --wait
+$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --wait
 ```
 
 #### Transform selected objects in bucket with ETL
@@ -180,7 +175,7 @@ $ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --wait
 Transform objects `shard-10.tar`, `shard-11.tar`, and `shard-12.tar` from `src_bucket` with ETL and put new objects to `dst_bucket`.
 
 ```console
-$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --template "shard-{10..12}.tar"
+$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --template "shard-{10..12}.tar"
 ```
 
 #### Transform bucket with ETL and additional parameters
@@ -193,7 +188,7 @@ NAME
 obj1.in1
 obj2.in2
 (...)
-$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --ext="{'in1':'out1', 'in2':'out2'}" --prefix="etl-" --wait
+$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --ext="{'in1':'out1', 'in2':'out2'}" --prefix="etl-" --wait
 $ ais bucket ls ais://dst_bucket --props=name
 NAME
 etl-obj1.out1
@@ -212,7 +207,7 @@ NAME        SIZE
 obj1.in1    10MiB
 obj2.in2    10MiB
 (...)
-$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --dry-run --wait
+$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --dry-run --wait
 [DRY RUN] No modifications on the cluster
 2 objects (20MiB) would have been put into bucket ais://dst_bucket
 ```

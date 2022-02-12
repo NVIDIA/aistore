@@ -105,9 +105,9 @@ torchvision==0.7.0
 
 Now we can build the ETL:
 ```console
-$ ais etl init code --from-file=code.py --deps-file=deps.txt --runtime=python3
-JGHEoo89gg
-$ ais etl object JGHEoo89gg imagenet/raw-train.tar preprocessed-train.tar
+$ ais etl init code --from-file=code.py --deps-file=deps.txt --runtime=python3 --name="pytorch-transformer"
+pytorch-transformer
+$ ais etl object pytorch-transformer imagenet/raw-train.tar preprocessed-train.tar
 $ tar -tvf preprocessed-train.tar | head -n 5
 -rw-r--r--  0 aditya86 users  150528 Jul  4  2012 n02085620_10074.JPEG
 -rw-r--r--  0 aditya86 users  150528 Jul  4  2012 n02085620_10131.JPEG

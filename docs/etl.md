@@ -43,11 +43,21 @@ Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
 
 The rest of this text is organized as follows:
 
+- [References](#references)
 - [Getting Started](#getting-started)
 - [Inline ETL example](#inline-etl-example)
 - [Offline ETL example](#offline-etl-example)
 - [Kubernetes Deployment](#kubernetes-deployment)
 - [Defining and initializing ETL](#defining-and-initializing-etl)
+  - [*init code* request](#init-code-request)
+    - [`transform` function](#transform-function)
+    - [Runtimes](#runtimes)
+  - [*init spec* request](#init-spec-request)
+    - [Requirements](#requirements)
+    - [Specification YAML](#specification-yaml)
+    - [Required or additional fields](#required-or-additional-fields)
+    - [Forbidden fields](#forbidden-fields)
+    - [Communication Mechanisms](#communication-mechanisms)
 - [Transforming objects](#transforming-objects)
 - [API Reference](#api-reference)
 - [ETL name specifications](#etl-name-specifications)
@@ -219,32 +229,6 @@ User can choose and specify (via YAML spec) any of the following:
 | **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
 | **input/output** | `io://` | A target remotely runs the binary or the code and sends the data to standard input and excepts the transformed bytes to be sent on standard output. |
 
-#### Annotations
-
-The target communicates with a Pod defined in the Pod specification under `communication_type` key:
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: transformer-name
-  annotations:
-    communication_type: value
-(...)
-```
-
-The specification can include `wait_timeout`.
-It states how long a target should wait for an ETL container to transition into the `Ready` state.
-If the timeout is exceeded, the initialization of the ETL container is considered failed.
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: etl-container-name
-  annotations:
-    wait_timeout: 2m
-(...)
-```
-
 > ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
 > To make a request for a given object it is required to add `<bucket-name>/<object-name>` to `AIS_TARGET_URL`, eg. `requests.get(env("AIS_TARGET_URL") + "/" + bucket_name + "/" + object_name)`.
 
@@ -265,20 +249,20 @@ This section describes how to interact with ETLs via RESTful API.
 
 | Operation | Description | HTTP action | Example |
 | --- | --- | --- | --- |
-| Init spec ETL | Initializes ETL based on `spec.yaml`. Returns `ETL_ID`. | POST /v1/etl/init_spec | `curl -X POST 'http://G/v1/etl/init_spec' -T spec.yaml` |
-| Init code ETL | Initializes ETL based on the provided source code. Returns `ETL_ID`. | POST /v1/etl/init_code | `curl -X POST 'http://G/v1/etl/init_code' '{"code": "...", "dependencies": "...", "runtime": "python3"}'` |
-| List ETLs | Lists all running ETLs. | GET /v1/etl/list | `curl -L -X GET 'http://G/v1/etl/list'` |
+| Init spec ETL | Initializes ETL based on POD `spec` template. Returns `ETL_ID`. | PUT /v1/etl | `curl -X PUT 'http://G/v1/etl' '{"spec": "...", "id": "..."}'` |
+| Init code ETL | Initializes ETL based on the provided source code. Returns `ETL_ID`. | PUT /v1/etl | `curl -X PUT 'http://G/v1/etl' '{"code": "...", "dependencies": "...", "runtime": "python3", "id": "..."}'` |
+| List ETLs | Lists all running ETLs. | GET /v1/etl | `curl -L -X GET 'http://G/v1/etl'` |
+| View ETLs Init spec/code | View code/spec of ETL by `ETL_ID` | GET /v1/etl/ETL_ID | `curl -L -X GET 'http://G/v1/etl/ETL_ID'` |
 | Transform object | Transforms an object based on ETL with `ETL_ID`. | GET /v1/objects/<bucket>/<objname>?uuid=ETL_ID | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?uuid=ETL_ID' -o transformed_shard01.tar` |
 | Transform bucket | Transforms all objects in a bucket and puts them to destination bucket. | POST {"action": "etl-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"ext":"destext", "prefix":"prefix", "suffix": "suffix"}}' 'http://G/v1/buckets/from-name'` |
 | Dry run transform bucket | Accumulates in xaction stats how many objects and bytes would be created, without actually doing it. | POST {"action": "etl-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"ext":"destext", "dry_run": true}}' 'http://G/v1/buckets/from-name'` |
-| Stop ETL | Stops ETL with given `ETL_ID`. | DELETE /v1/etl/stop/ETL_ID | `curl -X DELETE 'http://G/v1/etl/stop/ETL_ID'` |
+| Stop ETL | Stops ETL with given `ETL_ID`. | DELETE /v1/etl/ETL_ID/stop | `curl -X POST 'http://G/v1/etl/ETL_ID/stop'` |
+| Delete ETL | Delete ETL spec/code with given `ETL_ID` | DELETE /v1/etl/<ETL_ID> | `curl -X DELETE 'http://G/v1/etl/ETL_ID' |
 
 
 ## ETL name specifications
 
-Every initialized ETL has a unique `ETL_ID` associated with it, used for running transforms/computation on data or stopping the ETL.
-
-The `pod` name is used as the `ETL_ID` when an ETL is initialized using YAML specification. For instance, below YAML spec sets `ETL_ID` to `compute-md5`.
+Every initialized ETL has a unique user-defined `ETL_ID` associated with it, used for running transforms/computation on data or stopping the ETL.
 
 ```yaml
 apiVersion: v1
@@ -288,10 +272,12 @@ metadata:
 (...)
 ```
 
-When initializing ETL from code, a valid user-defined `ETL_ID` can be assigned using the `--name` CLI parameter as shown below. If the parameter is left empty, an auto-generated ID is assigned.
+When initializing ETL from spec/code, a valid and unique user-defined `ETL_ID` should be assigned using the `--name` CLI parameter as shown below.
 
 ```console
 $ ais etl init code --name=etl-md5 --from-file=code.py --runtime=python3 --deps-file=deps.txt
+or
+$ ais etl init spec --name=etl-md5 --from-file=spec.yaml
 ```
 
 Below are specifications for a valid `ETL_ID`:
