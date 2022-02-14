@@ -83,12 +83,12 @@ type (
 	// promote
 	PromoteArgs struct {
 		DaemonID  string `json:"tid,omitempty"` // target ID
-		SrcFQN    string `json:"src,omitempty"` // file or directory
+		SrcFQN    string `json:"src,omitempty"` // source file or directory (must be absolute pathname)
 		ObjName   string `json:"obj,omitempty"` // destination object name
 		Recursive bool   `json:"rcr,omitempty"` // recursively promote nested dirs
 		// once successfully promoted:
-		Overwrite bool `json:"ovw,omitempty"`
-		KeepSrc   bool `json:"kps,omitempty"`
+		OverwriteDst bool `json:"ovw,omitempty"` // overwrite destination
+		DeleteSrc    bool `json:"kps,omitempty"` // remove source
 	}
 	PromoteParams struct {
 		Bck   *Bck       // destination bucket

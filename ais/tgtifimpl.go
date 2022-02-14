@@ -185,27 +185,25 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 	return
 }
 
-func (t *target) Promote(params cluster.PromoteParams) (nlom *cluster.LOM, err error) {
+func (t *target) Promote(params cluster.PromoteParams) (*cluster.LOM, error) {
+	const fmterr = "%s: failed to remove promoted source %q: %v"
 	var (
-		tsi   *cluster.Snode
 		smap  = t.owner.smap.get()
 		lom   = cluster.AllocLOM(params.ObjName)
 		local bool
 	)
-	if err = lom.Init(params.Bck.Bck); err != nil {
+	if err := lom.Init(params.Bck.Bck); err != nil {
 		cluster.FreeLOM(lom)
-		return
+		return nil, err
 	}
-	if tsi, local, err = lom.HrwTarget(&smap.Smap); err != nil {
+	tsi, local, err := lom.HrwTarget(&smap.Smap)
+	if err != nil {
 		cluster.FreeLOM(lom)
-		return
+		return nil, err
 	}
-	// TODO: handle overwrite (lookup first)
-	// TODO: FreeLOM
 	if !local {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Attempt to promote %q => (lom: %q, target_id: %s)", params.SrcFQN, lom, tsi.ID())
-		}
+		// TODO: handle overwrite (lookup first)
+		// TODO: FreeLOM
 		lom.FQN = params.SrcFQN
 		coi := allocCopyObjInfo()
 		{
@@ -218,66 +216,63 @@ func (t *target) Promote(params cluster.PromoteParams) (nlom *cluster.LOM, err e
 			sendParams.ObjNameTo = lom.ObjName
 			sendParams.Tsi = tsi
 		}
-		_, err = coi.putRemote(lom, sendParams)
+		_, err := coi.putRemote(lom, sendParams)
 		freeSendParams(sendParams)
 		freeCopyObjInfo(coi)
-		if err == nil && !params.KeepSrc {
-			if err := cos.RemoveFile(params.SrcFQN); err != nil {
-				glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
+		if err == nil && params.DeleteSrc {
+			if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
+				glog.Errorf(fmterr, t.si, params.SrcFQN, errRm)
 			}
 		}
-		return
+		return nil, err
 	}
 
-	// local; NOTE: cluster.FreeLOM(lom) by the caller
-	err = lom.Load(false /*cache it*/, false /*locked*/)
-	if err == nil && !params.Overwrite {
-		glog.Warningf("[promote] %s already exists", lom) // TODO: NFS shares and such visible to all targets
-		return
+	// local
+	// NOTE: cluster.FreeLOM(lom) by the caller
+	if err = lom.Load(true /*cache it*/, false /*locked*/); err == nil && !params.OverwriteDst {
+		return nil, nil
 	}
 	var (
-		cksum    *cos.CksumHash
-		fileSize int64
-		workFQN  string
+		cksum     *cos.CksumHash
+		fileSize  int64
+		workFQN   string
+		extraCopy = true
 	)
-	copyFile := params.KeepSrc
-	if !params.KeepSrc {
-		// To use `params.SrcFQN` as `workFQN` we must be sure that they are
+	if params.DeleteSrc {
+		// To use `params.SrcFQN` as `workFQN`, we must be sure that they are
 		// located on the same device. We do it by ensuring that they are located
-		// on the same mountpath. Note that Mmuntpaths, by definition, cannot share
-		// the same disk or RAID (with _testing_ environmenti being the only exception
-		// from this rule). See also:
+		// on the same mountpath. Note that mountpaths, by definition (and excepting
+		// _testing_ environments) cannot share the same disk or RAID.
+		// See also:
 		// * https://github.com/NVIDIA/aistore/blob/master/docs/overview.md#terminology
 		// * config.TestingEnv()
-		info, _, err := fs.FQN2Mpath(params.SrcFQN)
-		copyFile = err != nil || info.Path != lom.MpathInfo().Path
+		mi, _, err := fs.FQN2Mpath(params.SrcFQN)
+		extraCopy = err != nil || mi.Path != lom.MpathInfo().Path
 	}
-	if copyFile {
+	if extraCopy {
+		var err error
 		workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
-
 		buf, slab := t.gmm.Alloc()
 		fileSize, cksum, err = cos.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumConf().Type)
 		slab.Free(buf)
 		if err != nil {
-			return
+			return nil, err
 		}
 		lom.SetCksum(cksum.Clone())
 	} else {
-		workFQN = params.SrcFQN // Use the file as it would be intermediate (work) file.
-
-		var fi os.FileInfo
-		if fi, err = os.Stat(params.SrcFQN); err != nil {
-			return
+		// avoid extra copy: use source as workFQN
+		fi, err := os.Stat(params.SrcFQN)
+		if err != nil {
+			return nil, err
 		}
 		fileSize = fi.Size()
-
+		workFQN = params.SrcFQN
 		if params.Cksum != nil {
-			// Checksum already computed somewhere else.
-			lom.SetCksum(params.Cksum)
+			lom.SetCksum(params.Cksum) // already computed somewhere else, use it
 		} else {
 			clone := lom.Clone(params.SrcFQN)
 			if cksum, err = clone.ComputeCksum(); err != nil {
-				return
+				return nil, err
 			}
 			lom.SetCksum(cksum.Clone())
 			cluster.FreeLOM(clone)
@@ -286,23 +281,22 @@ func (t *target) Promote(params cluster.PromoteParams) (nlom *cluster.LOM, err e
 	if params.Cksum != nil && cksum != nil {
 		if !cksum.Equal(params.Cksum) {
 			err = cos.NewBadDataCksumError(cksum.Clone(), params.Cksum, params.SrcFQN+" => "+lom.String())
-			return
+			return nil, err
 		}
 	}
 
 	poi := &putObjInfo{atime: time.Now(), t: t, lom: lom}
 	poi.workFQN = workFQN
 	lom.SetSize(fileSize)
-	if _, err = poi.finalize(); err != nil {
-		return
+	if _, err := poi.finalize(); err != nil {
+		return nil, err
 	}
-	nlom = lom
-	if !params.KeepSrc {
-		if err := cos.RemoveFile(params.SrcFQN); err != nil {
-			glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
+	if params.DeleteSrc {
+		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
+			glog.Errorf(fmterr, t.si, params.SrcFQN, errRm)
 		}
 	}
-	return
+	return lom /*newly promoted local*/, nil
 }
 
 //

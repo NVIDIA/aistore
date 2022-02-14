@@ -946,10 +946,10 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			Bck:   aoi.lom.Bck(),
 			Cksum: partialCksum,
 			PromoteArgs: cluster.PromoteArgs{
-				SrcFQN:    filePath,
-				ObjName:   aoi.lom.ObjName,
-				Overwrite: true,
-				KeepSrc:   false,
+				SrcFQN:       filePath,
+				ObjName:      aoi.lom.ObjName,
+				OverwriteDst: true,
+				DeleteSrc:    true,
 			},
 		}
 		var lom *cluster.LOM

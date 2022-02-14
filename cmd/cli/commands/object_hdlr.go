@@ -53,7 +53,7 @@ var (
 		commandPromote: {
 			recursiveFlag,
 			overwriteFlag,
-			keepSrcFlag,
+			deleteSrcFlag,
 			targetFlag,
 			verboseFlag,
 		},

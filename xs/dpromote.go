@@ -114,10 +114,10 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	params := cluster.PromoteParams{
 		Bck: bck,
 		PromoteArgs: cluster.PromoteArgs{
-			SrcFQN:    fqn,
-			ObjName:   objName,
-			Overwrite: r.args.Overwrite,
-			KeepSrc:   r.args.KeepSrc,
+			SrcFQN:       fqn,
+			ObjName:      objName,
+			OverwriteDst: r.args.OverwriteDst,
+			DeleteSrc:    r.args.DeleteSrc,
 		},
 	}
 	lom, err := r.Target().Promote(params)

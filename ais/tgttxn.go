@@ -1001,10 +1001,10 @@ func (t *target) _promoteNumSync(c *txnServerCtx, txnPrm *txnPromote, isFileShar
 		params := cluster.PromoteParams{
 			Bck: c.bck,
 			PromoteArgs: cluster.PromoteArgs{
-				SrcFQN:    fqn,
-				ObjName:   objName,
-				Overwrite: txnPrm.msg.Overwrite,
-				KeepSrc:   txnPrm.msg.KeepSrc,
+				SrcFQN:       fqn,
+				ObjName:      objName,
+				OverwriteDst: txnPrm.msg.OverwriteDst,
+				DeleteSrc:    txnPrm.msg.DeleteSrc,
 			},
 		}
 		if _, err := t.Promote(params); err != nil {

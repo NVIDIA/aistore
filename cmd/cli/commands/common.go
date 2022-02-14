@@ -395,9 +395,11 @@ var (
 	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
-	overwriteFlag = cli.BoolTFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
-	keepSrcFlag   = cli.BoolTFlag{Name: "keep", Usage: "keep source file(s)"}
-	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
+
+	overwriteFlag = cli.BoolTFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
+	deleteSrcFlag = cli.BoolTFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
+	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target (ID) designated to carry out the entire operation"}
+
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",

@@ -163,12 +163,12 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
 		PromoteArgs: cluster.PromoteArgs{
-			DaemonID:  target,
-			ObjName:   objName,
-			SrcFQN:    fqn,
-			Recursive: recurs,
-			Overwrite: c.Bool(overwriteFlag.GetName()),
-			KeepSrc:   c.Bool(keepSrcFlag.GetName()),
+			DaemonID:     target,
+			ObjName:      objName,
+			SrcFQN:       fqn,
+			Recursive:    recurs,
+			OverwriteDst: c.Bool(overwriteFlag.GetName()),
+			DeleteSrc:    c.Bool(deleteSrcFlag.GetName()),
 		},
 	}
 	if err = api.Promote(promoteArgs); err != nil {

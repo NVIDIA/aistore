@@ -33,18 +33,18 @@ type prmTestPermut struct {
 	num          int
 	singleTarget bool
 	recurs       bool
-	keep         bool
+	deleteSrc    bool
 }
 
 func TestPromoteBasic(t *testing.T) {
 	tests := []prmTestPermut{
-		{num: 10000, singleTarget: false, recurs: false, keep: false},
-		{num: 10000, singleTarget: true, recurs: false, keep: false},
-		{num: 10, singleTarget: false, recurs: false, keep: false},
-		{num: 10, singleTarget: true, recurs: false, keep: false},
-		{num: 10000, singleTarget: false, recurs: true, keep: true},
-		{num: 10000, singleTarget: true, recurs: true, keep: false},
-		{num: 10, singleTarget: false, recurs: true, keep: true},
+		{num: 10000, singleTarget: false, recurs: false, deleteSrc: true},
+		{num: 10000, singleTarget: true, recurs: false, deleteSrc: false},
+		{num: 10, singleTarget: false, recurs: false, deleteSrc: true},
+		{num: 10, singleTarget: true, recurs: false, deleteSrc: false},
+		{num: 10000, singleTarget: false, recurs: true, deleteSrc: true},
+		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false},
+		{num: 10, singleTarget: false, recurs: true, deleteSrc: false},
 	}
 	for _, test := range tests {
 		var name string
@@ -59,10 +59,10 @@ func TestPromoteBasic(t *testing.T) {
 		} else {
 			name += "/non-recurs"
 		}
-		if test.keep {
-			name += "/keep-src"
+		if test.deleteSrc {
+			name += "/delete-src"
 		} else {
-			name += "/remove-src"
+			name += "/keep-src"
 		}
 		name = name[1:]
 		t.Run(name, test.do)
@@ -106,7 +106,7 @@ func (test *prmTestPermut) do(t *testing.T) {
 		PromoteArgs: cluster.PromoteArgs{
 			SrcFQN:    tempDir,
 			Recursive: test.recurs,
-			KeepSrc:   test.keep,
+			DeleteSrc: test.deleteSrc,
 		},
 	}
 	if test.singleTarget {
@@ -146,20 +146,24 @@ func (test *prmTestPermut) do(t *testing.T) {
 
 	// perform checks
 	cnt, cntsub := countFiles(t, tempDir)
-	if test.keep {
-		tassert.Errorf(t, cnt == ngen && cntsub == ngen, "keep == true: expected cnt %d == cntsub %d == num %d gererated",
+	if !test.deleteSrc {
+		tassert.Errorf(t, cnt == ngen && cntsub == ngen,
+			"delete-src == false: expected cnt (%d) == cntsub (%d) == num (%d) gererated",
 			cnt, cntsub, ngen)
 	}
 	if test.recurs {
-		tassert.Errorf(t, len(list.Entries) == ngen*2, "expected to recurs promote %d, got %d", ngen*2, len(list.Entries))
-		if !test.keep {
-			tassert.Errorf(t, cnt == 0 && cntsub == 0, "keep == false recurs: expected cnt %d == cntsub %d == 0",
+		tassert.Errorf(t, len(list.Entries) == ngen*2,
+			"expected to recursively promote %d, got %d", ngen*2, len(list.Entries))
+		if test.deleteSrc {
+			tassert.Errorf(t, cnt == 0 && cntsub == 0,
+				"delete-src == true, recursive: expected cnt (%d) == cntsub (%d) == 0",
 				cnt, cntsub)
 		}
 	} else {
 		tassert.Errorf(t, len(list.Entries) == ngen, "expected to promote %d, got %d", ngen, len(list.Entries))
-		if !test.keep {
-			tassert.Errorf(t, cnt == 0 && cntsub == ngen, "keep == false non-recurs: expected cnt %d == 0, cntsub %d == %d",
+		if test.deleteSrc {
+			tassert.Errorf(t, cnt == 0 && cntsub == ngen,
+				"delete-src == true, non-recursive: expected cnt (%d) == 0 and cntsub (%d) == (%d)",
 				cnt, cntsub, ngen)
 		}
 	}

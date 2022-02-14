@@ -3,12 +3,12 @@
 ais bucket create ais://$BUCKET // IGNORE
 rm -rf /tmp/prm // IGNORE
 mkdir -p /tmp/prm && echo 012345 > /tmp/prm/obj && echo 012345 > /tmp/prm/discard
-ais object promote /tmp/prm/obj ais://$BUCKET/one/one --keep=true --target $RANDOM_TARGET
-ais object promote /tmp/prm/discard ais://$BUCKET/two/ --keep=false  --target $RANDOM_TARGET
-ais object promote /tmp/prm/ ais://$BUCKET/three --keep=true --target $RANDOM_TARGET
-ais object promote /tmp/prm ais://$BUCKET/fourth --keep=true --target $RANDOM_TARGET
-ais object promote /tmp/prm ais://$BUCKET/fifth/ --keep=true --target $RANDOM_TARGET
-ais object promote /tmp/prm/ ais://$BUCKET/sixth/ --keep=true --target $RANDOM_TARGET
+ais object promote /tmp/prm/obj ais://$BUCKET/one/one --delete-src=false --target $RANDOM_TARGET
+ais object promote /tmp/prm/discard ais://$BUCKET/two/ --delete-src=true  --target $RANDOM_TARGET
+ais object promote /tmp/prm/ ais://$BUCKET/three --delete-src=false --target $RANDOM_TARGET
+ais object promote /tmp/prm ais://$BUCKET/fourth --delete-src=false --target $RANDOM_TARGET
+ais object promote /tmp/prm ais://$BUCKET/fifth/ --delete-src=false --target $RANDOM_TARGET
+ais object promote /tmp/prm/ ais://$BUCKET/sixth/ --delete-src=false --target $RANDOM_TARGET
 ais bucket ls ais://$BUCKET
 rm -rf /tmp/prm // IGNORE
 ais bucket rm ais://$BUCKET // IGNORE
