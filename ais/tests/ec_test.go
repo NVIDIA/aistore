@@ -703,7 +703,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	tassert.CheckFatal(t, err)
 	metafile := ct.Make(fs.ECMetaType)
 	tlog.LogfCond(!o.silent, "Damaging %s [removing %s]\n", objPath, metafile)
-	tassert.CheckFatal(t, os.Remove(metafile))
+	tassert.CheckFatal(t, cos.RemoveFile(metafile))
 	if delSlice {
 		sliceToDel := ""
 		for k := range foundParts {
@@ -732,7 +732,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		} else {
 			tlog.LogfCond(!o.silent, "Removing replica meta %s\n", metafile)
 		}
-		tassert.CheckFatal(t, os.Remove(metafile))
+		tassert.CheckFatal(t, cos.RemoveFile(metafile))
 	}
 
 	partsAfterRemove, _ := ecGetAllSlices(t, bck, objPath)
@@ -1519,7 +1519,7 @@ func TestECXattrs(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		metafile := ct.Make(fs.ECMetaType)
 		tlog.Logf("Damaging %s [removing %s]\n", objPath, metafile)
-		tassert.CheckFatal(t, os.Remove(metafile))
+		tassert.CheckFatal(t, cos.RemoveFile(metafile))
 
 		partsAfterRemove, _ := ecGetAllSlices(t, bck, objPath)
 		_, ok := partsAfterRemove[mainObjPath]
