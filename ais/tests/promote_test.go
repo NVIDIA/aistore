@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -102,14 +103,16 @@ func (test *prmTestPermut) do(t *testing.T) {
 	args := api.PromoteArgs{
 		BaseParams: baseParams,
 		Bck:        m.bck,
-		SrcFQN:     tempDir,
-		Recursive:  test.recurs,
-		KeepSrc:    test.keep,
+		PromoteArgs: cluster.PromoteArgs{
+			SrcFQN:    tempDir,
+			Recursive: test.recurs,
+			KeepSrc:   test.keep,
+		},
 	}
 	if test.singleTarget {
 		target, _ := m.smap.GetRandTarget()
 		tlog.Logf("Promoting via %s\n", target.StringEx())
-		args.Target = target.ID()
+		args.DaemonID = target.ID()
 	}
 
 	// promote
@@ -119,7 +122,7 @@ func (test *prmTestPermut) do(t *testing.T) {
 
 	tlog.Logf("Waiting to %q %s => %s\n", cmn.ActPromote, tempDir, m.bck)
 	xargs := api.XactReqArgs{Kind: cmn.ActPromote, Timeout: rebalanceTimeout}
-	if m.smap.CountActiveProxies() > 4 /* TODO -- FIXME: can use IC */ && args.Target == "" {
+	if m.smap.CountActiveProxies() > 4 /* TODO -- FIXME: can use IC */ && args.DaemonID == "" {
 		// cluster
 		notifStatus, err := api.WaitForXactionIC(baseParams, xargs)
 		if notifStatus != nil && (notifStatus.AbortedX || notifStatus.ErrMsg != "") {

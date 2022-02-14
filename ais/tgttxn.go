@@ -875,7 +875,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 	}
 	switch c.phase {
 	case cmn.ActBegin:
-		prmMsg := &cmn.ActValPromote{}
+		prmMsg := &cluster.PromoteArgs{}
 		if err := cos.MorphMarshal(c.msg.Value, prmMsg); err != nil {
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 			return "", err
@@ -932,17 +932,18 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 			return "", err
 		}
 		// with
-		rns := xreg.RenewDirPromote(t, c.uuid, c.bck, txnPrm.dirFQN, txnPrm.msg, isFileShare)
+		rns := xreg.RenewPromote(t, c.uuid, c.bck, txnPrm.msg)
 		if rns.Err != nil {
 			return "", rns.Err
 		}
-		xctn := rns.Entry.Get()
-		txnPrm.xprm = xctn.(*xs.XactDirPromote)
+		xprm := rns.Entry.Get().(*xs.XactDirPromote)
+		xprm.SetFileShare(isFileShare)
+		txnPrm.xprm = xprm
 
-		c.addNotif(xctn) // upon completion
-		xact.GoRunW(xctn)
+		c.addNotif(xprm) // upon completion
+		xact.GoRunW(xprm)
 
-		return xctn.ID(), nil
+		return xprm.ID(), nil
 	default:
 		debug.Assert(false)
 	}
@@ -998,11 +999,13 @@ func (t *target) _promoteNumSync(c *txnServerCtx, txnPrm *txnPromote, isFileShar
 			}
 		}
 		params := cluster.PromoteParams{
-			SrcFQN:    fqn,
-			Bck:       c.bck,
-			ObjName:   objName,
-			Overwrite: txnPrm.msg.Overwrite,
-			KeepSrc:   txnPrm.msg.KeepSrc,
+			Bck: c.bck,
+			PromoteArgs: cluster.PromoteArgs{
+				SrcFQN:    fqn,
+				ObjName:   objName,
+				Overwrite: txnPrm.msg.Overwrite,
+				KeepSrc:   txnPrm.msg.KeepSrc,
+			},
 		}
 		if _, err := t.Promote(params); err != nil {
 			return err

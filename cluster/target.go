@@ -79,14 +79,21 @@ type (
 		DM        DataMover
 		ObjAttrs  cmn.ObjAttrsHolder
 	}
+
+	// promote
+	PromoteArgs struct {
+		DaemonID  string `json:"tid,omitempty"` // target ID
+		SrcFQN    string `json:"src,omitempty"` // file or directory
+		ObjName   string `json:"obj,omitempty"` // destination object name
+		Recursive bool   `json:"rcr,omitempty"` // recursively promote nested dirs
+		// once successfully promoted:
+		Overwrite bool `json:"ovw,omitempty"`
+		KeepSrc   bool `json:"kps,omitempty"`
+	}
 	PromoteParams struct {
-		SrcFQN  string // file or directory
-		Bck     *Bck   // destination bucket
-		ObjName string // destination object name
-		Cksum   *cos.Cksum
-		//
-		Overwrite bool
-		KeepSrc   bool
+		Bck   *Bck       // destination bucket
+		Cksum *cos.Cksum // checksum to validate
+		PromoteArgs
 	}
 )
 

@@ -943,12 +943,14 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			return
 		}
 		params := cluster.PromoteParams{
-			SrcFQN:    filePath,
-			Bck:       aoi.lom.Bck(),
-			ObjName:   aoi.lom.ObjName,
-			Cksum:     partialCksum,
-			Overwrite: true,
-			KeepSrc:   false,
+			Bck:   aoi.lom.Bck(),
+			Cksum: partialCksum,
+			PromoteArgs: cluster.PromoteArgs{
+				SrcFQN:    filePath,
+				ObjName:   aoi.lom.ObjName,
+				Overwrite: true,
+				KeepSrc:   false,
+			},
 		}
 		var lom *cluster.LOM
 		if lom, err = aoi.t.Promote(params); err != nil {

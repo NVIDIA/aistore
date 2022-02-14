@@ -21,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -161,12 +162,14 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 	promoteArgs := &api.PromoteArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
-		Object:     objName,
-		Target:     target,
-		SrcFQN:     fqn,
-		Recursive:  recurs,
-		Overwrite:  c.Bool(overwriteFlag.GetName()),
-		KeepSrc:    c.Bool(keepSrcFlag.GetName()),
+		PromoteArgs: cluster.PromoteArgs{
+			DaemonID:  target,
+			ObjName:   objName,
+			SrcFQN:    fqn,
+			Recursive: recurs,
+			Overwrite: c.Bool(overwriteFlag.GetName()),
+			KeepSrc:   c.Bool(keepSrcFlag.GetName()),
+		},
 	}
 	if err = api.Promote(promoteArgs); err != nil {
 		return

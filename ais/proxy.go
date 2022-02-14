@@ -1500,7 +1500,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		args := &cmn.ActValPromote{}
+		args := &cluster.PromoteArgs{}
 		if err := cos.MorphMarshal(msg.Value, args); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return

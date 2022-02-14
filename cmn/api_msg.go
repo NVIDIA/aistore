@@ -20,13 +20,6 @@ type (
 		Name   string      `json:"name"`   // action-specific (e.g., bucket name)
 		Value  interface{} `json:"value"`  // ditto
 	}
-	ActValPromote struct {
-		DaemonID  string `json:"tid"`
-		ObjName   string `json:"objname"`
-		Recursive bool   `json:"recursive"`
-		Overwrite bool   `json:"overwrite"`
-		KeepSrc   bool   `json:"keep_src"`
-	}
 	ActValRmNode struct {
 		DaemonID      string `json:"sid"`
 		SkipRebalance bool   `json:"skip_rebalance"`

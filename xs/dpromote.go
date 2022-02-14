@@ -1,7 +1,7 @@
 // Package xs contains eXtended actions (xactions) except storage services
 // (mirror, ec) and extensions (downloader, lru).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -26,12 +26,12 @@ type (
 	proFactory struct {
 		xreg.RenewBase
 		xctn *XactDirPromote
-		args *xreg.DirPromoteArgs
+		args *cluster.PromoteArgs
 	}
 	XactDirPromote struct {
 		xact.BckJog
 		dir         string
-		params      *cmn.ActValPromote
+		args        *cluster.PromoteArgs
 		smap        *cluster.Smap
 		isFileShare bool
 	}
@@ -48,13 +48,13 @@ var (
 ////////////////
 
 func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	c := args.Custom.(*xreg.DirPromoteArgs)
+	c := args.Custom.(*cluster.PromoteArgs)
 	p := &proFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: c}
 	return p
 }
 
 func (p *proFactory) Start() error {
-	xctn := &XactDirPromote{dir: p.args.Dir, params: p.args.Params, isFileShare: p.args.IsFileShare}
+	xctn := &XactDirPromote{dir: p.args.SrcFQN, args: p.args}
 	xctn.BckJog.Init(p.Args.UUID /*global xID*/, cmn.ActPromote, p.Bck, &mpather.JoggerGroupOpts{T: p.T})
 	p.xctn = xctn
 	return nil
@@ -71,6 +71,8 @@ func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 // XactDirPromote //
 ////////////////////
 
+func (r *XactDirPromote) SetFileShare(v bool) { r.isFileShare = v } // must be called before Run()
+
 func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	wg.Done()
 	glog.Infoln(r.Name(), r.dir, "=>", r.Bck())
@@ -79,7 +81,7 @@ func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 		err  error
 		opts = &fs.WalkOpts{Dir: r.dir, Callback: r.walk, Sorted: false}
 	)
-	if r.params.Recursive {
+	if r.args.Recursive {
 		err = fs.Walk(opts) // godirwalk
 	} else {
 		err = fs.WalkDir(r.dir, r.walk) // Go filepath.WalkDir
@@ -95,7 +97,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	bck := r.Bck()
 
 	// promote
-	objName, err := cmn.PromotedObjDstName(fqn, r.dir, r.params.ObjName)
+	objName, err := cmn.PromotedObjDstName(fqn, r.dir, r.args.ObjName)
 	if err != nil {
 		return err
 	}
@@ -110,11 +112,13 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		}
 	}
 	params := cluster.PromoteParams{
-		SrcFQN:    fqn,
-		Bck:       bck,
-		ObjName:   objName,
-		Overwrite: r.params.Overwrite,
-		KeepSrc:   r.params.KeepSrc,
+		Bck: bck,
+		PromoteArgs: cluster.PromoteArgs{
+			SrcFQN:    fqn,
+			ObjName:   objName,
+			Overwrite: r.args.Overwrite,
+			KeepSrc:   r.args.KeepSrc,
+		},
 	}
 	lom, err := r.Target().Promote(params)
 	if err != nil {

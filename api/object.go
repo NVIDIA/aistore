@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -58,12 +59,7 @@ type (
 	PromoteArgs struct {
 		BaseParams BaseParams
 		Bck        cmn.Bck
-		Object     string
-		Target     string
-		SrcFQN     string // promoted source
-		Recursive  bool
-		Overwrite  bool
-		KeepSrc    bool
+		cluster.PromoteArgs
 	}
 	AppendArgs struct {
 		BaseParams BaseParams
@@ -519,14 +515,7 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 // NOTE: advanced usage.
 func Promote(args *PromoteArgs) error {
 	actMsg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.SrcFQN}
-	actMsg.Value = &cmn.ActValPromote{
-		DaemonID:  args.Target,
-		ObjName:   args.Object,
-		Recursive: args.Recursive,
-		Overwrite: args.Overwrite,
-		KeepSrc:   args.KeepSrc,
-	}
-
+	actMsg.Value = &args.PromoteArgs
 	args.BaseParams.Method = http.MethodPost
 	reqParams := allocRp()
 	{

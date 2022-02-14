@@ -118,7 +118,7 @@ type (
 	}
 	txnPromote struct {
 		txnBckBase
-		msg    *cmn.ActValPromote
+		msg    *cluster.PromoteArgs
 		fqns   []string
 		dirFQN string
 		xprm   *xs.XactDirPromote
@@ -581,7 +581,7 @@ func (txn *txnArchMultiObj) abort() {
 // txnPromote //
 ////////////////
 
-func newTxnPromote(c *txnServerCtx, msg *cmn.ActValPromote, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
+func newTxnPromote(c *txnServerCtx, msg *cluster.PromoteArgs, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
 	txn = &txnPromote{msg: msg, fqns: fqns, dirFQN: dirFQN, totalN: totalN}
 	txn.init("prm", c.bck)
 	txn.fillFromCtx(c)
