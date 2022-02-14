@@ -16,6 +16,13 @@ type FilesystemInfo struct {
 	FsID   cos.FsID
 }
 
+func (fsi *FilesystemInfo) Equal(otherFsi FilesystemInfo) bool {
+	if fsi.Fs == "" || otherFsi.Fs == "" || fsi.FsType == "" || otherFsi.FsType == "" {
+		return false
+	}
+	return fsi.FsID == otherFsi.FsID
+}
+
 ////////////
 // xattrs //
 ////////////

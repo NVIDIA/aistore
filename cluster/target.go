@@ -128,7 +128,7 @@ type Target interface {
 	DeleteObject(lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params *CopyObjectParams, localOnly bool) (int64, error)
 	GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
-	Promote(params PromoteParams) (lom *LOM, err error)
+	Promote(params PromoteParams) (size int64, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 
 	// File-system related functions.

@@ -185,69 +185,45 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 	return
 }
 
-func (t *target) Promote(params cluster.PromoteParams) (*cluster.LOM, error) {
-	const fmterr = "%s: failed to remove promoted source %q: %v"
-	var (
-		smap  = t.owner.smap.get()
-		lom   = cluster.AllocLOM(params.ObjName)
-		local bool
-	)
-	if err := lom.Init(params.Bck.Bck); err != nil {
-		cluster.FreeLOM(lom)
-		return nil, err
+const fmtPrm = "%s: failed to remove promoted source %q: %v"
+
+func (t *target) Promote(params cluster.PromoteParams) (size int64, err error) {
+	lom := cluster.AllocLOM(params.ObjName)
+	defer cluster.FreeLOM(lom)
+	if err = lom.Init(params.Bck.Bck); err != nil {
+		return
 	}
-	tsi, local, err := lom.HrwTarget(&smap.Smap)
-	if err != nil {
-		cluster.FreeLOM(lom)
-		return nil, err
+	smap := t.owner.smap.get()
+	tsi, local, errHrw := lom.HrwTarget(&smap.Smap)
+	if errHrw != nil {
+		err = errHrw
+		return
 	}
 	if !local {
-		// TODO: handle overwrite (lookup first)
-		// TODO: FreeLOM
-		lom.FQN = params.SrcFQN
-		coi := allocCopyObjInfo()
-		{
-			coi.t = t
-			coi.promoteFile = true
-			coi.BckTo = lom.Bck()
-		}
-		sendParams := allocSendParams()
-		{
-			sendParams.ObjNameTo = lom.ObjName
-			sendParams.Tsi = tsi
-		}
-		_, err := coi.putRemote(lom, sendParams)
-		freeSendParams(sendParams)
-		freeCopyObjInfo(coi)
-		if err == nil && params.DeleteSrc {
-			if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
-				glog.Errorf(fmterr, t.si, params.SrcFQN, errRm)
-			}
-		}
-		return nil, err
+		err = t.promoteRemote(&params, lom, tsi)
+		return
 	}
+	size, err = t.promoteLocal(&params, lom)
+	return
+}
 
-	// local
-	// NOTE: cluster.FreeLOM(lom) by the caller
-	if err = lom.Load(true /*cache it*/, false /*locked*/); err == nil && !params.OverwriteDst {
-		return nil, nil
-	}
+func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (int64, error) {
 	var (
 		cksum     *cos.CksumHash
 		fileSize  int64
 		workFQN   string
 		extraCopy = true
 	)
+	if err := lom.Load(true /*cache it*/, false /*locked*/); err == nil && !params.OverwriteDst {
+		return 0, nil
+	}
 	if params.DeleteSrc {
-		// To use `params.SrcFQN` as `workFQN`, we must be sure that they are
-		// located on the same device. We do it by ensuring that they are located
-		// on the same mountpath. Note that mountpaths, by definition (and excepting
-		// _testing_ environments) cannot share the same disk or RAID.
+		// To use `params.SrcFQN` as `workFQN`, make sure they are located on the FS.
 		// See also:
 		// * https://github.com/NVIDIA/aistore/blob/master/docs/overview.md#terminology
 		// * config.TestingEnv()
 		mi, _, err := fs.FQN2Mpath(params.SrcFQN)
-		extraCopy = err != nil || mi.Path != lom.MpathInfo().Path
+		extraCopy = err != nil || !mi.FilesystemInfo.Equal(lom.MpathInfo().FilesystemInfo)
 	}
 	if extraCopy {
 		var err error
@@ -256,14 +232,14 @@ func (t *target) Promote(params cluster.PromoteParams) (*cluster.LOM, error) {
 		fileSize, cksum, err = cos.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumConf().Type)
 		slab.Free(buf)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 		lom.SetCksum(cksum.Clone())
 	} else {
 		// avoid extra copy: use source as workFQN
 		fi, err := os.Stat(params.SrcFQN)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 		fileSize = fi.Size()
 		workFQN = params.SrcFQN
@@ -272,7 +248,7 @@ func (t *target) Promote(params cluster.PromoteParams) (*cluster.LOM, error) {
 		} else {
 			clone := lom.Clone(params.SrcFQN)
 			if cksum, err = clone.ComputeCksum(); err != nil {
-				return nil, err
+				return 0, err
 			}
 			lom.SetCksum(cksum.Clone())
 			cluster.FreeLOM(clone)
@@ -280,23 +256,46 @@ func (t *target) Promote(params cluster.PromoteParams) (*cluster.LOM, error) {
 	}
 	if params.Cksum != nil && cksum != nil {
 		if !cksum.Equal(params.Cksum) {
-			err = cos.NewBadDataCksumError(cksum.Clone(), params.Cksum, params.SrcFQN+" => "+lom.String())
-			return nil, err
+			return 0, cos.NewBadDataCksumError(cksum.Clone(), params.Cksum, params.SrcFQN+" => "+lom.String())
 		}
 	}
-
 	poi := &putObjInfo{atime: time.Now(), t: t, lom: lom}
 	poi.workFQN = workFQN
 	lom.SetSize(fileSize)
 	if _, err := poi.finalize(); err != nil {
-		return nil, err
+		return 0, err
 	}
 	if params.DeleteSrc {
 		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
-			glog.Errorf(fmterr, t.si, params.SrcFQN, errRm)
+			glog.Errorf(fmtPrm, t.si, params.SrcFQN, errRm)
 		}
 	}
-	return lom /*newly promoted local*/, nil
+	return lom.SizeBytes(), nil
+}
+
+// TODO: handle overwrite (lookup first)
+func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *cluster.Snode) error {
+	lom.FQN = params.SrcFQN
+	coi := allocCopyObjInfo()
+	{
+		coi.t = t
+		coi.promoteFile = true
+		coi.BckTo = lom.Bck()
+	}
+	sendParams := allocSendParams()
+	{
+		sendParams.ObjNameTo = lom.ObjName
+		sendParams.Tsi = tsi
+	}
+	_, err := coi.putRemote(lom, sendParams)
+	freeSendParams(sendParams)
+	freeCopyObjInfo(coi)
+	if err == nil && params.DeleteSrc {
+		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
+			glog.Errorf(fmtPrm, t.si, params.SrcFQN, errRm)
+		}
+	}
+	return err
 }
 
 //

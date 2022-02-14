@@ -120,7 +120,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 			DeleteSrc:    r.args.DeleteSrc,
 		},
 	}
-	lom, err := r.Target().Promote(params)
+	size, err := r.Target().Promote(params)
 	if err != nil {
 		if finfo, ers := os.Stat(fqn); ers == nil {
 			if !finfo.Mode().IsRegular() {
@@ -129,9 +129,8 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		} else {
 			glog.Error(err)
 		}
-	} else if lom != nil { // locally placed (PromoteFile returns nil when sending remotely)
-		r.ObjsAdd(1, lom.SizeBytes())
-		cluster.FreeLOM(lom)
+	} else { // NOTE: returns size only when _locally_ placed (for remote placement we get zero here)
+		r.ObjsAdd(1, size)
 	}
 	return nil
 }

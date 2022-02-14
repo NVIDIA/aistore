@@ -949,15 +949,11 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 				SrcFQN:       filePath,
 				ObjName:      aoi.lom.ObjName,
 				OverwriteDst: true,
-				DeleteSrc:    true,
+				DeleteSrc:    true, // NOTE: always overwrite and remove
 			},
 		}
-		var lom *cluster.LOM
-		if lom, err = aoi.t.Promote(params); err != nil {
+		if _, err = aoi.t.Promote(params); err != nil {
 			return
-		}
-		if lom != nil {
-			cluster.FreeLOM(lom)
 		}
 	default:
 		debug.AssertMsg(false, aoi.op)
