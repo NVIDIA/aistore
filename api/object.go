@@ -513,9 +513,8 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 	return err
 }
 
-// PromoteFileOrDir promotes AIS-colocated files and directories to objects.
-// NOTE: advanced usage.
-func Promote(args *PromoteArgs) error {
+// promote files and directories to ais objects
+func Promote(args *PromoteArgs) (xactID string, err error) {
 	actMsg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.SrcFQN}
 	actMsg.Value = &args.PromoteArgs
 	args.BaseParams.Method = http.MethodPost
@@ -527,10 +526,9 @@ func Promote(args *PromoteArgs) error {
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 		reqParams.Query = cmn.AddBckToQuery(nil, args.Bck)
 	}
-	// TODO -- FIXME: DoHTTPReqResp(&xactID) and return it; rename the API as well
-	err := reqParams.DoHTTPRequest()
+	err = reqParams.DoHTTPReqResp(&xactID)
 	freeRp(reqParams)
-	return err
+	return
 }
 
 // DoWithRetry executes `http-client.Do` and retries *retriable connection errors*,

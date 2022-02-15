@@ -121,7 +121,7 @@ func (poi *putObjInfo) putObject() (int, error) {
 	if !poi.skipVC && !poi.cksumToUse.IsEmpty() {
 		if lom.EqCksum(poi.cksumToUse) {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToUse)
+				glog.Infof("destination %s has identical %s: PUT is a no-op", lom, poi.cksumToUse)
 			}
 			cos.DrainReader(poi.r)
 			return 0, nil
@@ -201,7 +201,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Warningf("%s(owt=%d) is busy", lom, poi.owt)
+				glog.Warningf("%s (%s) is busy", lom, poi.owt)
 			}
 			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
 		}
@@ -270,7 +270,6 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		written int64
 		buf     []byte
 		slab    *memsys.Slab
-		reader  = poi.r
 		lmfh    *os.File
 		writer  io.Writer
 		writers = make([]io.Writer, 0, 4)
@@ -279,7 +278,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 			given *cos.CksumHash // compute additionally
 			expct *cos.Cksum     // and validate against `expct` if required/available
 		}{}
-		conf = poi.lom.CksumConf()
+		ckconf = poi.lom.CksumConf()
 	)
 	if lmfh, err = poi.lom.CreateFile(poi.workFQN); err != nil {
 		return
@@ -290,53 +289,37 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	} else {
 		buf, slab = poi.t.gmm.AllocSize(poi.size)
 	}
-	// cleanup
 	defer func() {
-		slab.Free(buf)
-		if err == nil {
-			cos.Close(reader)
-			return // ok
-		}
-		// not ok
-		reader.Close()
-		if lmfh != nil {
-			if nestedErr := lmfh.Close(); nestedErr != nil {
-				glog.Errorf("Nested (%v): failed to close received object %s, err: %v",
-					err, poi.workFQN, nestedErr)
-			}
-		}
-		if nestedErr := cos.RemoveFile(poi.workFQN); nestedErr != nil {
-			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, poi.workFQN, nestedErr)
-		}
+		poi._cleanup(buf, slab, lmfh, err)
 	}()
 	// checksums
-	if conf.Type == cos.ChecksumNone {
+	if ckconf.Type == cos.ChecksumNone {
 		poi.lom.SetCksum(cos.NoneCksum)
 		goto write
 	}
-	if poi.owt == cmn.OwtMigrate && !conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
-		// if migration validation is not configured we can just take
-		// the checksum that has arrived with the object (and compute it if not present)
+	if !poi.cksumToUse.IsEmpty() && !poi.validateCksum(ckconf) {
+		// if the corresponding validation is not configured/enabled we just go ahead
+		// and use the checksum that has arrived with the object
 		poi.lom.SetCksum(poi.cksumToUse)
 		goto write
 	}
 
 	// compute checksum and save it as part of the object metadata
-	cksums.store = cos.NewCksumHash(conf.Type)
+	cksums.store = cos.NewCksumHash(ckconf.Type)
 	writers = append(writers, cksums.store.H)
-	if !poi.skipVC && conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
+	if !poi.skipVC && !poi.cksumToUse.IsEmpty() && poi.validateCksum(ckconf) {
 		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
-		// or if the object is migrated, and `conf.ValidateObjMove` we should check with existing checksum
+		// or if the object is migrated, and `ckconf.ValidateObjMove` we should check with existing checksum
 		cksums.expct = poi.cksumToUse
 		cksums.given = cos.NewCksumHash(poi.cksumToUse.Type())
 		writers = append(writers, cksums.given.H)
 	}
 write:
 	if len(writers) == 0 {
-		written, err = io.CopyBuffer(writer, reader, buf)
+		written, err = io.CopyBuffer(writer, poi.r /*reader*/, buf)
 	} else {
 		writers = append(writers, writer)
-		written, err = io.CopyBuffer(cos.NewWriterMulti(writers...), reader, buf)
+		written, err = io.CopyBuffer(cos.NewWriterMulti(writers...), poi.r /*reader*/, buf)
 	}
 	if err != nil {
 		return
@@ -360,6 +343,40 @@ write:
 	if cksums.store != nil {
 		cksums.store.Finalize()
 		poi.lom.SetCksum(&cksums.store.Cksum)
+	}
+	return
+}
+
+// post-write close & cleanup
+func (poi *putObjInfo) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err error) {
+	const fmterr = "%s: nested (%v): failed to %s %q: %v"
+	slab.Free(buf)
+	if err == nil {
+		debug.Assert(lmfh == nil)
+		cos.Close(poi.r)
+		return // ok
+	}
+
+	// not ok
+	poi.r.Close()
+	debug.Assert(lmfh != nil)
+	if nerr := lmfh.Close(); nerr != nil {
+		glog.Errorf(fmterr, poi.t.si, err, "close", poi.workFQN, nerr)
+	}
+	if nerr := cos.RemoveFile(poi.workFQN); nerr != nil {
+		glog.Errorf(fmterr, poi.t.si, err, "remove", poi.workFQN, nerr)
+	}
+}
+
+func (poi *putObjInfo) validateCksum(c *cmn.CksumConf) (v bool) {
+	switch poi.owt {
+	case cmn.OwtMigrate, cmn.OwtPromote, cmn.OwtFinalize:
+		v = c.ValidateObjMove
+	case cmn.OwtPut, cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet:
+		v = c.ValidateColdGet
+	case cmn.OwtGetPrefetchLock:
+	default:
+		debug.Assert(false)
 	}
 	return
 }
@@ -1034,6 +1051,11 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 			params.ObjNameTo = objNameTo
 			params.Tsi = si
 			params.DM = coi.DM
+			if coi.DM != nil {
+				params.OWT = coi.DM.OWT()
+			} else {
+				params.OWT = cmn.OwtMigrate
+			}
 		}
 		size, err = coi.putRemote(src, params)
 		freeSendParams(params)
@@ -1135,6 +1157,11 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 			params.ObjNameTo = objNameTo
 			params.Tsi = si
 			params.DM = coi.DM
+			if coi.DM != nil {
+				params.OWT = coi.DM.OWT()
+			} else {
+				params.OWT = cmn.OwtMigrate
+			}
 		}
 		size, err = coi.putRemote(lom, params)
 		freeSendParams(params)
@@ -1194,17 +1221,16 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 	return io.Copy(io.Discard, reader)
 }
 
-// PUT object onto designated target
+// PUT object => designated target
+// * source is a LOM or a reader (that may be reading from remote)
+// * one of the two equivalent transmission mechanisms: PUT or transport Send
 func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams) (size int64, err error) {
 	if coi.DM != nil {
 		// We need to clone the `lom` to use it in async operation.
 		// The `lom` is freed upon callback in `_sendObjDM`.
 		lom = lom.Clone(lom.FQN)
 	}
-	if coi.DP == nil {
-		// NOTE: not the best way to determine whether `lom` is an object or just
-		// a regular file. Ideally, the parameter shouldn't be `lom` at all,
-		// rather something more general like `cluster.CT`.
+	if coi.DP == nil { // read from local file
 		var reader cos.ReadOpenCloser
 		if !coi.promote {
 			lom.Lock(false)
@@ -1225,6 +1251,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			reader = cos.NewDeferROC(fh, func() { lom.Unlock(false) })
 		} else {
 			debug.Assert(!coi.DryRun)
+			debug.Assert(params.OWT == cmn.OwtPromote)
 			fh, err := cos.NewFileHandle(lom.FQN)
 			if err != nil {
 				return 0, fmt.Errorf(cmn.FmtErrFailed, coi.t.Snode(), "open", lom.FQN, err)
@@ -1251,21 +1278,23 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 		// NOTE: returns the cos.ContentLengthUnknown (-1) if post-transform size not known.
 		size = params.ObjAttrs.SizeBytes()
 	}
-	debug.Assert(params.ObjAttrs != nil)
+
+	// do
 	params.BckTo = coi.BckTo
-	// either stream or PUT
 	if params.DM != nil {
-		err = _sendObjDM(lom, params)
+		debug.Assert(params.DM.OWT() == params.OWT)
+		err = sendObjDM(lom, params)
 	} else {
-		// TODO: currently, these sends are not accounted for in xactions stats
-		//       (see data mover for `in` and `out` counters)
-		err = coi.t._sendPUT(params)
+		err = coi.t.putObjT2T(params)
 	}
+
+	// TODO: x.out-objs-add and pass copy-simple
 	return
 }
 
-// streaming send via bundle.DataMover
-func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
+// transmit object to another target in the cluster
+// (target-to-target via bundle.DataMover - compare with putObjT2T)
+func sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
 	o := transport.AllocSend()
 	hdr, oa := &o.Hdr, params.ObjAttrs
 	{
@@ -1375,15 +1404,16 @@ func (aaoi *appendArchObjInfo) appendObject() (errCode int, err error) {
 }
 
 // PUT(lom) => destination target
-// NOTE: always closes params.Reader, either explicitly or via Do()
-func (t *target) _sendPUT(params *cluster.SendToParams) error {
+// always closes params.Reader, either explicitly or via Do()
+// (compare with sendObjDM())
+func (t *target) putObjT2T(params *cluster.SendToParams) error {
 	var (
 		hdr   = make(http.Header, 8)
 		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
 	)
 	cmn.ToHeader(params.ObjAttrs, hdr)
 	hdr.Set(cmn.HdrPutterID, t.si.ID())
-	query.Set(cmn.URLParamOWT, strconv.Itoa(int(cmn.OwtMigrate)))
+	query.Set(cmn.URLParamOWT, strconv.Itoa(int(params.OWT)))
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodPut,
 		Base:   params.Tsi.URL(cmn.NetIntraData),

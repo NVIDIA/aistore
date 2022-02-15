@@ -5,6 +5,8 @@
  */
 package cmn
 
+import "github.com/NVIDIA/aistore/cmn/debug"
+
 // Object Write Transaction (OWT) is used to control some of the aspects of creating
 // new objects in the cluster.
 // In particular, OwtGet* group below simultaneously specifies cold-GET variations
@@ -14,10 +16,35 @@ type OWT int
 
 const (
 	OwtPut             OWT = iota // PUT
-	OwtMigrate                    // used when migrating objects during global rebalance
-	OwtFinalize                   // to finalize object archives
+	OwtMigrate                    // migrate or replicate objects within cluster (e.g. global rebalance)
+	OwtPromote                    // promote target-accessible files and directories
+	OwtFinalize                   // finalize object archives
 	OwtGetTryLock                 // if !try-lock(exclusive) { return error }; read from remote; ...
 	OwtGetLock                    // lock(exclusive); read from remote; ...
 	OwtGet                        // GET (with upgrading read-lock in the local-write path)
-	OwtGetPrefetchLock            // used for maximum parallelism when prefetching
+	OwtGetPrefetchLock            // (used for maximum parallelism when prefetching)
 )
+
+func (owt OWT) String() (s string) {
+	switch owt {
+	case OwtPut:
+		s = "owt-put"
+	case OwtMigrate:
+		s = "owt-migrate"
+	case OwtPromote:
+		s = "owt-promote"
+	case OwtFinalize:
+		s = "owt-finalize"
+	case OwtGetTryLock:
+		s = "owt-get-try-lock"
+	case OwtGetLock:
+		s = "owt-get-lock"
+	case OwtGet:
+		s = "owt-get"
+	case OwtGetPrefetchLock:
+		s = "owt-prefetch-lock"
+	default:
+		debug.Assert(false)
+	}
+	return
+}

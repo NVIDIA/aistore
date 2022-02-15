@@ -401,17 +401,19 @@ type (
 		// Object checksum; ChecksumNone ("none") disables checksumming.
 		Type string `json:"type"`
 
-		// ValidateColdGet determines whether or not the checksum of received object
-		// is checked after downloading it from remote (cloud) buckets.
+		// validate the checksum of the object that we cold-GET
+		// or download from remote location (e.g., cloud bucket)
 		ValidateColdGet bool `json:"validate_cold_get"`
 
-		// ValidateWarmGet: if enabled, the object's version (if exists) and checksum are checked.
-		// If either value fail to match, the object is removed from local storage.
+		// validate object's version (if exists and provided) and its checksum -
+		// if either value fail to match, the object is removed from ais.
+		//
 		// NOTE: object versioning is backend-specific and is may _not_ be supported by a given
-		//      (supported) backends - see docs for details.
+		// (supported) backends - see docs for details.
 		ValidateWarmGet bool `json:"validate_warm_get"`
 
-		// ValidateObjMove determines if migrated objects should have their checksum validated.
+		// determines whether to validate checksums of objects
+		// migrated or replicated within the cluster
 		ValidateObjMove bool `json:"validate_obj_move"`
 
 		// EnableReadRange: Return read range checksum otherwise return entire object checksum.
@@ -1015,10 +1017,6 @@ func (c *CksumConf) Validate() (err error) {
 
 func (c *CksumConf) ValidateAsProps(_ *ValidationArgs) (err error) {
 	return c.Validate()
-}
-
-func (c *CksumConf) ShouldValidate() bool {
-	return c.ValidateColdGet || c.ValidateObjMove || c.ValidateWarmGet
 }
 
 func (c *CksumConf) String() string {

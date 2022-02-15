@@ -394,7 +394,7 @@ func promoteHandler(c *cli.Context) (err error) {
 	if _, err = headBucket(bck); err != nil {
 		return
 	}
-	return promoteFileOrDir(c, bck, objName, fqn)
+	return promote(c, bck, objName, fqn)
 }
 
 func setCustomPropsHandler(c *cli.Context) (err error) {

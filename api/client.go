@@ -248,7 +248,7 @@ func (reqParams *ReqParams) readResp(resp *http.Response, v interface{}) (*wrapp
 		var err error
 		switch t := v.(type) {
 		case *string:
-			// In some places like dSort, the response is just a string (id).
+			// when the response is a string (e.g., UUID)
 			var b []byte
 			b, err = io.ReadAll(resp.Body)
 			*t = string(b)

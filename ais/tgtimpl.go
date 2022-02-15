@@ -132,7 +132,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		if owt == cmn.OwtGetTryLock {
 			if !lom.TryLock(true) {
 				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Warningf("%s: %s(owt=%d) is busy", t.si, lom, owt)
+					glog.Warningf("%s: %s(%s) is busy", t.si, lom, owt)
 				}
 				return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
 			}
@@ -159,7 +159,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
 		}
-		glog.Errorf("%s: failed to GET remote %s (owt=%d): %v(%d)", t.si, lom.FullName(), owt, err, errCode)
+		glog.Errorf("%s: failed to GET remote %s (%s): %v(%d)", t.si, lom.FullName(), owt, err, errCode)
 		return
 	}
 
@@ -179,7 +179,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		} else {
 			errCode = http.StatusInternalServerError
 			lom.Unlock(true)
-			glog.Errorf("%s: unexpected failure to load %s (owt=%d): %v", t.si, lom.FullName(), owt, err)
+			glog.Errorf("%s: unexpected failure to load %s (%s): %v", t.si, lom.FullName(), owt, err)
 		}
 	}
 	return
@@ -218,10 +218,9 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 		return 0, nil
 	}
 	if params.DeleteSrc {
-		// To use `params.SrcFQN` as `workFQN`, make sure they are located on the FS.
-		// See also:
+		// To use `params.SrcFQN` as `workFQN`, make sure both are
+		// located on the same filesystem. About "filesystem sharing" see also:
 		// * https://github.com/NVIDIA/aistore/blob/master/docs/overview.md#terminology
-		// * config.TestingEnv()
 		mi, _, err := fs.FQN2Mpath(params.SrcFQN)
 		extraCopy = err != nil || !mi.FilesystemInfo.Equal(lom.MpathInfo().FilesystemInfo)
 	}
@@ -236,7 +235,7 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 		}
 		lom.SetCksum(cksum.Clone())
 	} else {
-		// avoid extra copy: use source as workFQN
+		// avoid extra copy: use the source as `workFQN`
 		fi, err := os.Stat(params.SrcFQN)
 		if err != nil {
 			return 0, err
@@ -273,10 +272,10 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 	return lom.SizeBytes(), nil
 }
 
+// TODO: use DM streams
 func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *cluster.Snode) error {
 	lom.FQN = params.SrcFQN
 	// when not overwriting check w/ remote target first and separately
-	// (TODO: optimize)
 	if !params.OverwriteDst && t.HeadObjT2T(lom, tsi) {
 		return nil
 	}
@@ -290,6 +289,7 @@ func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, 
 	{
 		sendParams.ObjNameTo = lom.ObjName
 		sendParams.Tsi = tsi
+		sendParams.OWT = cmn.OwtPromote
 	}
 	_, err := coi.putRemote(lom, sendParams)
 	freeSendParams(sendParams)

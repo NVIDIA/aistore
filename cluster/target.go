@@ -78,9 +78,10 @@ type (
 		Tsi       *Snode
 		DM        DataMover
 		ObjAttrs  cmn.ObjAttrsHolder
+		OWT       cmn.OWT
 	}
 
-	// promote
+	// common part that's used in `api.PromoteArgs` and `PromoteParams`(server side), both
 	PromoteArgs struct {
 		DaemonID  string `json:"tid,omitempty"` // target ID
 		SrcFQN    string `json:"src,omitempty"` // source file or directory (must be absolute pathname)

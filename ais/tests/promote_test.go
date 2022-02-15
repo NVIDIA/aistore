@@ -122,14 +122,15 @@ func (test *prmTestPermut) do(t *testing.T) {
 	}
 
 	// promote
-	err = api.Promote(&args)
+	xactID, err := api.Promote(&args)
 	tassert.CheckFatal(t, err)
 	time.Sleep(2 * time.Second)
 
 	tlog.Logf("Waiting to %q %s => %s\n", cmn.ActPromote, tempDir, m.bck)
 	xargs := api.XactReqArgs{Kind: cmn.ActPromote, Timeout: rebalanceTimeout}
-	if m.smap.CountActiveProxies() > 4 /* TODO -- FIXME: can use IC */ && args.DaemonID == "" {
-		// cluster
+	if xactID != "" && args.DaemonID == "" {
+		// have global UUID, promoting via entire cluster
+		tassert.Errorf(t, cos.IsValidUUID(xactID), "expecting valid x-UUID %q", xactID)
 		notifStatus, err := api.WaitForXactionIC(baseParams, xargs)
 		if notifStatus != nil && (notifStatus.AbortedX || notifStatus.ErrMsg != "") {
 			tlog.Logf("notif-status: %+v\n", notifStatus)
@@ -140,7 +141,7 @@ func (test *prmTestPermut) do(t *testing.T) {
 			tassert.CheckFatal(t, err)
 		}
 	} else {
-		// singled target // TODO -- FIXME: permutate
+		// promote a) using selected target OR b) synchronously (limited ## files without xaction)
 		err := api.WaitForXactionNode(baseParams, xargs, xactSnapNotRunning)
 		tassert.CheckFatal(t, err)
 	}

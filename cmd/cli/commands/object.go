@@ -153,9 +153,8 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 
 // Promote AIS-colocated files and directories to objects.
 
-func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err error) {
+func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 	var (
-		s      string
 		target = parseStrFlag(c, targetFlag)
 		recurs = flagIsSet(c, recursiveFlag)
 	)
@@ -171,14 +170,20 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 			DeleteSrc:    c.Bool(deleteSrcFlag.GetName()),
 		},
 	}
-	if err = api.Promote(promoteArgs); err != nil {
-		return
+	xactID, err := api.Promote(promoteArgs)
+	if err != nil {
+		return err
 	}
+	var s1, s2 string
 	if recurs {
-		s = "recursively "
+		s1 = "recursively "
 	}
-	fmt.Fprintf(c.App.Writer, "%spromoted %q => %s\n", s, fqn, bck)
-	return
+	if xactID != "" {
+		s2 = fmt.Sprintf(", xaction ID %q", xactID)
+	}
+	// alternatively, print(fmtXactStatusCheck, cmn.ActPromote, ...)
+	fmt.Fprintf(c.App.Writer, "%spromoted %q => %s%s\n", s1, fqn, bck, s2)
+	return nil
 }
 
 func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
