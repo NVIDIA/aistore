@@ -34,17 +34,18 @@ type prmTestPermut struct {
 	singleTarget bool
 	recurs       bool
 	deleteSrc    bool
+	overwriteDst bool
 }
 
 func TestPromoteBasic(t *testing.T) {
 	tests := []prmTestPermut{
-		{num: 10000, singleTarget: false, recurs: false, deleteSrc: true},
-		{num: 10000, singleTarget: true, recurs: false, deleteSrc: false},
-		{num: 10, singleTarget: false, recurs: false, deleteSrc: true},
-		{num: 10, singleTarget: true, recurs: false, deleteSrc: false},
-		{num: 10000, singleTarget: false, recurs: true, deleteSrc: true},
-		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false},
-		{num: 10, singleTarget: false, recurs: true, deleteSrc: false},
+		{num: 10000, singleTarget: false, recurs: false, deleteSrc: true, overwriteDst: false},
+		{num: 10000, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false},
+		{num: 10, singleTarget: false, recurs: false, deleteSrc: true, overwriteDst: true},
+		{num: 10, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false},
+		{num: 10000, singleTarget: false, recurs: true, deleteSrc: true, overwriteDst: false},
+		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true},
+		{num: 10, singleTarget: false, recurs: true, deleteSrc: false, overwriteDst: false},
 	}
 	for _, test := range tests {
 		var name string
@@ -63,6 +64,11 @@ func TestPromoteBasic(t *testing.T) {
 			name += "/delete-src"
 		} else {
 			name += "/keep-src"
+		}
+		if test.overwriteDst {
+			name += "/overwrite-dst"
+		} else {
+			name += "/skip-existing-dst"
 		}
 		name = name[1:]
 		t.Run(name, test.do)

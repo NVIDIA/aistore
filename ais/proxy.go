@@ -346,7 +346,8 @@ func (p *proxy) Stop(err error) {
 ////////////////////////////////////////
 
 // parse request + init/lookup bucket (combo)
-func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs) (bck *cluster.Bck, objName string, err error) {
+func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs) (bck *cluster.Bck,
+	objName string, err error) {
 	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
 	if err = p.parseReq(w, r, apireq); err != nil {
 		apiReqFree(apireq)

@@ -1010,22 +1010,25 @@ func (t *target) enable() error {
 	return nil
 }
 
-// lookupRemoteSingle sends the message to the given target to see if it has the specific object.
-func (t *target) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
-	header := make(http.Header)
-	header.Add(cmn.HdrCallerID, t.SID())
-	header.Add(cmn.HdrCallerName, t.Sname())
-	query := make(url.Values)
-	query.Set(cmn.URLParamSilent, "true")
+//
+// HeadObj* where target acts as a client
+//
+
+// HeadObjT2T checks with a given target to see if it has the object.
+// (compare with api.HeadObject)
+func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
+	q := cmn.AddBckToQuery(nil, lom.Bucket())
+	q.Set(cmn.URLParamSilent, "true")
+	q.Set(cmn.URLParamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemote))
 	cargs := allocCargs()
 	{
 		cargs.si = tsi
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodHead,
-			Header: header,
+			Header: http.Header{cmn.HdrCallerID: []string{t.SID()}, cmn.HdrCallerName: []string{t.Sname()}},
 			Base:   tsi.URL(cmn.NetIntraControl),
 			Path:   cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
-			Query:  query,
+			Query:  q,
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}
@@ -1036,22 +1039,20 @@ func (t *target) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bo
 	return
 }
 
-// lookupRemoteAll sends the broadcast message to all targets to see if they
-// have the specific object.
-func (t *target) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.Snode {
-	header := make(http.Header)
-	header.Add(cmn.HdrCallerID, t.SID())
-	header.Add(cmn.HdrCallerName, t.Sname())
-	query := make(url.Values)
-	query.Set(cmn.URLParamSilent, "true")
-	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
-	bck := lom.Bck().Bck
+// headObjBcast broadcasts to all targets to find out if anyone has the specified object.
+// NOTE: 1) cmn.URLParamCheckExistsAny to make an extra effort
+//       2) `ignoreMaintenance`
+func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
+	q := cmn.AddBckToQuery(nil, lom.Bucket())
+	q.Set(cmn.URLParamSilent, "true")
+	// lookup across all mountpaths and copy (ie., restore) if misplaced
+	q.Set(cmn.URLParamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemoteCheckAllMps))
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,
-		Header: header,
-		Path:   cmn.URLPathObjects.Join(bck.Name, lom.ObjName),
-		Query:  cmn.AddBckToQuery(query, bck),
+		Header: http.Header{cmn.HdrCallerID: []string{t.SID()}, cmn.HdrCallerName: []string{t.Sname()}},
+		Path:   cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
+		Query:  q,
 	}
 	args.ignoreMaintenance = true
 	args.smap = smap

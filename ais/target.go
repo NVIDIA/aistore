@@ -1141,25 +1141,25 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 }
 
 // HEAD /v1/objects/<bucket-name>/<object-name>
-//
-// Initially validates if the request is internal request (either from proxy
-// or target) and calls headObject.
 func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
-	defer apiReqFree(apireq)
-	if err := t.parseReq(w, r, apireq); err != nil {
+	err := t.parseReq(w, r, apireq)
+	query, bck, objName := apireq.query, apireq.bck, apireq.items[1]
+	apiReqFree(apireq)
+	if err != nil {
 		return
 	}
 	features := cmn.GCO.Get().Client.Features
 	if features.IsSet(feat.EnforceIntraClusterAccess) {
-		if isRedirect(apireq.query) == "" && t.isIntraCall(r.Header, false) != nil {
+		// validates that the request is internal (by a node in the same cluster)
+		if isRedirect(query) == "" && t.isIntraCall(r.Header, false) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 				t.si, r.Method, r.RemoteAddr)
 			return
 		}
 	}
-	lom := cluster.AllocLOM(apireq.items[1] /*objName*/)
-	t.headObject(w, r, apireq.query, apireq.bck, lom)
+	lom := cluster.AllocLOM(objName)
+	t.headObject(w, r, query, bck, lom)
 	cluster.FreeLOM(lom)
 }
 
@@ -1167,10 +1167,9 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
 // so it must be done by the caller (if necessary).
 func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
 	var (
+		mustBeLocal    int
 		invalidHandler = t.writeErr
 		hdr            = w.Header()
-		checkExists    = cos.IsParseBool(query.Get(cmn.URLParamCheckExists))
-		checkExistsAny = cos.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
 		silent         = cos.IsParseBool(query.Get(cmn.URLParamSilent))
 		exists         = true
 		addedEC        bool
@@ -1178,50 +1177,38 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	if silent {
 		invalidHandler = t.writeErrSilent
 	}
+	if tmp := query.Get(cmn.URLParamHeadObj); tmp != "" {
+		mustBeLocal, _ = strconv.Atoi(tmp)
+	}
 	if err := lom.Init(bck.Bck); err != nil {
 		invalidHandler(w, r, err)
 		return
 	}
-	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
+	err := lom.Load(true /*cache it*/, false /*locked*/)
+	if err == nil {
+		if mustBeLocal > 0 {
+			return
+		}
+	} else {
 		if !cmn.IsObjNotExist(err) {
 			invalidHandler(w, r, err)
 			return
 		}
 		exists = false
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		pid := query.Get(cmn.URLParamProxyID)
-		glog.Infof("%s %s(exists=%t) <= %s", r.Method, lom, exists, pid)
-	}
-
-	// * `checkExists` and `checkExistsAny` can be used to:
-	//    a) establish local object's presence on any of the local mountpaths, and
-	//    b) if located, restore the object to its default location.
-	// * `checkExistsAny` tries to perform the b) even if the object does not have copies.
-	// * see also: GFN
-	if !exists {
-		// lookup and restore the object to its proper location
-		if (checkExists && lom.HasCopies()) || checkExistsAny {
+		if (mustBeLocal == cmn.HeadObjAvoidRemote && lom.HasCopies()) ||
+			mustBeLocal == cmn.HeadObjAvoidRemoteCheckAllMps {
 			exists = lom.RestoreToLocation()
 		}
 	}
-	if checkExists || checkExistsAny {
-		if !exists {
-			err := cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
-			invalidHandler(w, r, err, http.StatusNotFound)
-		}
+	if !exists && (mustBeLocal > 0 || lom.Bck().IsAIS()) {
+		err := cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
+		invalidHandler(w, r, err, http.StatusNotFound)
 		return
 	}
 
-	// NOTE: compare with `api.HeadObject()`
-	// fill-in
+	// props
 	op := cmn.ObjectProps{Name: lom.ObjName, Bck: lom.Bucket(), Present: exists}
 	if lom.Bck().IsAIS() {
-		if !exists {
-			err := cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
-			invalidHandler(w, r, err, http.StatusNotFound)
-			return
-		}
 		op.ObjAttrs = *lom.ObjAttrs()
 	} else if exists {
 		op.ObjAttrs = *lom.ObjAttrs()
@@ -1250,7 +1237,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 
 	// to header
 	op.ObjAttrs.ToHeader(hdr)
-	err := cmn.IterFields(op, func(tag string, field cmn.IterField) (err error, b bool) {
+	errIter := cmn.IterFields(op, func(tag string, field cmn.IterField) (err error, b bool) {
 		if !addedEC && strings.HasPrefix(tag, "ec-") {
 			return nil, false
 		}
@@ -1262,7 +1249,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		hdr.Set(headerName, v)
 		return nil, false
 	})
-	debug.AssertNoErr(err)
+	debug.AssertNoErr(errIter)
 }
 
 // PATCH /v1/objects/<bucket-name>/<object-name>

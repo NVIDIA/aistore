@@ -91,10 +91,10 @@ type (
 
 	copyObjInfo struct {
 		cluster.CopyObjectParams
-		t           *target
-		localOnly   bool // copy locally with no HRW=>target
-		finalize    bool // copies and EC (as in poi.finalize())
-		promoteFile bool // Determines if we are promoting a file.
+		t         *target
+		localOnly bool // copy locally with no HRW=>target
+		finalize  bool // copies and EC (as in poi.finalize())
+		promote   bool // true when promoting
 	}
 
 	appendArchObjInfo struct {
@@ -601,13 +601,13 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 		doubleCheck = true
 	}
 	if running && tsi.ID() != goi.t.si.ID() {
-		if goi.t.LookupRemoteSingle(goi.lom, tsi) {
+		if goi.t.HeadObjT2T(goi.lom, tsi) {
 			gfnNode = tsi
 			goto gfn
 		}
 	}
 	if running || !enoughECRestoreTargets || ((interrupted || gfnActive) && !ecEnabled) {
-		gfnNode = goi.t.lookupRemoteAll(goi.lom, smap)
+		gfnNode = goi.t.headObjBcast(goi.lom, smap)
 	}
 gfn:
 	if gfnNode != nil {
@@ -1206,7 +1206,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 		// a regular file. Ideally, the parameter shouldn't be `lom` at all,
 		// rather something more general like `cluster.CT`.
 		var reader cos.ReadOpenCloser
-		if !coi.promoteFile {
+		if !coi.promote {
 			lom.Lock(false)
 			if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 				lom.Unlock(false)

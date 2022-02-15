@@ -199,11 +199,11 @@ func (t *target) Promote(params cluster.PromoteParams) (size int64, err error) {
 		err = errHrw
 		return
 	}
-	if !local {
+	if local {
+		size, err = t.promoteLocal(&params, lom)
+	} else {
 		err = t.promoteRemote(&params, lom, tsi)
-		return
 	}
-	size, err = t.promoteLocal(&params, lom)
 	return
 }
 
@@ -273,13 +273,17 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 	return lom.SizeBytes(), nil
 }
 
-// TODO: handle overwrite (lookup first)
 func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *cluster.Snode) error {
 	lom.FQN = params.SrcFQN
+	// when not overwriting check w/ remote target first and separately
+	// (TODO: optimize)
+	if !params.OverwriteDst && t.HeadObjT2T(lom, tsi) {
+		return nil
+	}
 	coi := allocCopyObjInfo()
 	{
 		coi.t = t
-		coi.promoteFile = true
+		coi.promote = true
 		coi.BckTo = lom.Bck()
 	}
 	sendParams := allocSendParams()

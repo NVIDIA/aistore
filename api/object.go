@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -135,7 +136,8 @@ func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 // object-level API
 //
 
-// HeadObject returns the object properties; can be conventionally used to establish existence.
+// HeadObject returns the object properties; can be conventionally used to establish
+// local (in cluster) presence.
 func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
 	var (
 		q             url.Values
@@ -149,7 +151,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	if checkIsCached {
 		q = make(url.Values, 4)
 		q = cmn.AddBckToQuery(q, bck)
-		q.Set(cmn.URLParamCheckExists, "true")
+		q.Set(cmn.URLParamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemote)) // TODO: support the entire enum
 		q.Set(cmn.URLParamSilent, "true")
 	} else {
 		q = cmn.AddBckToQuery(nil, bck)

@@ -129,7 +129,7 @@ type Target interface {
 	CopyObject(lom *LOM, params *CopyObjectParams, localOnly bool) (int64, error)
 	GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
 	Promote(params PromoteParams) (size int64, err error)
-	LookupRemoteSingle(lom *LOM, si *Snode) bool
+	HeadObjT2T(lom *LOM, si *Snode) bool
 
 	// File-system related functions.
 	FSHC(err error, path string)

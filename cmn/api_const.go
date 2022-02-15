@@ -179,6 +179,15 @@ const (
 	LZ4Compression = "lz4"
 )
 
+// enum that may accompany HEAD(obj) to specify additional _nuances_:
+// - object's in-cluster existence (and whether to avoid executing remote HEAD when not found)
+// - thoroughness of local lookup (all mountpaths or just the designated one)
+// In either case, we are not asking for the object's props.
+const (
+	HeadObjAvoidRemote = 1 << (iota + 2)
+	HeadObjAvoidRemoteCheckAllMps
+)
+
 // URL Query "?name1=val1&name2=..."
 // Query parameter name conventions:
 //  - contains only alpha-numeric characters,
@@ -186,12 +195,13 @@ const (
 
 // User/client query params.
 const (
-	URLParamWhat        = "what"           // "smap" | "bmd" | "config" | "stats" | "xaction" ...
-	URLParamProps       = "props"          // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
-	URLParamNewCustom   = "set-new-custom" // remove existing custom keys (if any) and store new custom metadata
-	URLParamCheckExists = "check_cached"   // true: check if object exists (aka "cached", "present")
-	URLParamUUID        = "uuid"
-	URLParamRegex       = "regex" // dsort/downloader regex
+	URLParamWhat      = "what"           // "smap" | "bmd" | "config" | "stats" | "xaction" ...
+	URLParamProps     = "props"          // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
+	URLParamNewCustom = "set-new-custom" // remove existing custom keys (if any) and store new custom metadata
+	URLParamUUID      = "uuid"
+	URLParamRegex     = "regex" // dsort/downloader regex
+
+	URLParamHeadObj = "head_obj" // enum { HeadObjAvoidRemote, ... } above
 
 	// Bucket related query params.
 	URLParamProvider  = "provider" // backend provider
@@ -230,7 +240,6 @@ const (
 
 // Internal query params.
 const (
-	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
 	URLParamProxyID          = "pid" // ID of the redirecting proxy.
 	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy.
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election

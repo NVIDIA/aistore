@@ -567,7 +567,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 				continue
 			}
 			tsi, _ := cluster.HrwTarget(lom.Uname(), rargs.smap)
-			if reb.t.LookupRemoteSingle(lom, tsi) {
+			if reb.t.HeadObjT2T(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleReb) {
 					glog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi.StringEx())
 				}
