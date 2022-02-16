@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -578,27 +577,4 @@ func NodeMapDelta(oldNodeMap, newNodeMap []NodeMap) (added, removed NodeMap) {
 		}
 	}
 	return
-}
-
-///////////////
-// nodesPool //
-///////////////
-
-var nodesPool sync.Pool
-
-func AllocNodes(capacity int) (nodes Nodes) {
-	if v := nodesPool.Get(); v != nil {
-		pnodes := v.(*Nodes)
-		nodes = *pnodes
-		debug.Assert(nodes != nil && len(nodes) == 0)
-	} else {
-		debug.Assert(capacity > 0)
-		nodes = make(Nodes, 0, capacity)
-	}
-	return
-}
-
-func FreeNodes(nodes Nodes) {
-	nodes = nodes[:0]
-	nodesPool.Put(&nodes)
 }

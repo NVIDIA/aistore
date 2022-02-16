@@ -55,12 +55,13 @@ type (
 		OWT() cmn.OWT
 	}
 	PutObjectParams struct {
-		Tag        string // Used to distinguish between different PUT operation.
 		Reader     io.ReadCloser
-		OWT        cmn.OWT
-		Cksum      *cos.Cksum // Checksum to check.
+		Cksum      *cos.Cksum // checksum to check
 		Atime      time.Time
-		SkipEncode bool // Do not run erasure-code when finalizing.
+		Xact       Xact
+		WorkTag    string // (=> work fqn)
+		OWT        cmn.OWT
+		SkipEncode bool // don't run erasure-code when finalizing
 	}
 	CopyObjectParams struct {
 		BckTo     *Bck
@@ -124,7 +125,7 @@ type Target interface {
 	CompareObjects(ctx context.Context, lom *LOM) (equal bool, errCode int, err error)
 
 	// Object related functions.
-	PutObject(lom *LOM, params PutObjectParams) (err error)
+	PutObject(lom *LOM, params *PutObjectParams) (err error)
 	FinalizeObj(lom *LOM, workFQN string) (errCode int, err error)
 	EvictObject(lom *LOM) (errCode int, err error)
 	DeleteObject(lom *LOM, evict bool) (errCode int, err error)

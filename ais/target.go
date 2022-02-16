@@ -1504,13 +1504,11 @@ func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, dpq
 		poi.r = r.Body
 		poi.workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
 		poi.cksumToUse = cksumToUse
-		poi.owt = cmn.OwtPut
 		poi.skipVC = skipVC
 	}
+	poi.owt = cmn.OwtPut
 	if owt != "" {
-		n, err := strconv.Atoi(owt)
-		debug.AssertNoErr(err)
-		poi.owt = cmn.OWT(n)
+		poi.owt.FromS(owt)
 	}
 	if sizeStr := header.Get(cmn.HdrContentLength); sizeStr != "" {
 		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {

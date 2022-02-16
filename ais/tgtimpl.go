@@ -52,9 +52,9 @@ func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 }
 
 // essentially, t.doPut() for external use
-func (t *target) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
-	debug.Assert(params.Tag != "" && !params.Atime.IsZero())
-	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.Tag)
+func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) error {
+	debug.Assert(params.WorkTag != "" && !params.Atime.IsZero())
+	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.WorkTag)
 	poi := allocPutObjInfo()
 	{
 		poi.t = t
@@ -267,10 +267,19 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 			return 0, cos.NewBadDataCksumError(cksum.Clone(), params.Cksum, detail)
 		}
 	}
-	poi := &putObjInfo{atime: time.Now(), t: t, lom: lom}
-	poi.workFQN = workFQN
+	poi := allocPutObjInfo()
+	{
+		poi.atime = time.Now()
+		poi.t = t
+		poi.lom = lom
+		poi.workFQN = workFQN
+		poi.owt = cmn.OwtPromote
+		// poi.xact  params.Xact TODO -- FIXME
+	}
 	lom.SetSize(fileSize)
-	if errCode, err := poi.finalize(); err != nil {
+	errCode, err := poi.finalize()
+	freePutObjInfo(poi)
+	if err != nil {
 		return errCode, err
 	}
 	if params.Xact != nil {

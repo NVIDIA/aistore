@@ -353,12 +353,13 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	if err != nil {
 		return errCode, err
 	}
-	params := cluster.PutObjectParams{
-		Tag:    fs.WorkfileColdget,
-		Reader: reader,
-		OWT:    owt,
-		Cksum:  cksumToUse,
-		Atime:  time.Now(),
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = fs.WorkfileColdget
+		params.Reader = reader
+		params.OWT = owt
+		params.Cksum = cksumToUse
+		params.Atime = time.Now()
 	}
 	err = ap.t.PutObject(lom, params)
 	if err != nil {

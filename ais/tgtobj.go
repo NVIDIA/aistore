@@ -213,7 +213,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 
 	// ais versioning
 	if bck.IsAIS() && lom.VersionConf().Enabled {
-		if poi.owt == cmn.OwtPut {
+		if poi.owt == cmn.OwtPut || poi.owt == cmn.OwtPromote {
 			if poi.skipVC {
 				err = lom.IncVersion()
 				debug.Assert(err == nil)
@@ -1194,13 +1194,16 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	if coi.DM != nil {
 		owt = coi.DM.OWT()
 	}
-	params := cluster.PutObjectParams{
-		Tag:    "copy-dp",
-		Reader: reader,
-		OWT:    owt,
-		Atime:  lom.Atime(),
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = "copy-dp"
+		params.Reader = reader
+		params.OWT = owt
+		params.Atime = lom.Atime()
 	}
-	if err = coi.t.PutObject(dst, params); err != nil {
+	err = coi.t.PutObject(dst, params)
+	cluster.FreePutObjParams(params)
+	if err != nil {
 		return
 	}
 	// xaction stats: inc locally processed (and see data mover for in and out objs)
@@ -1413,7 +1416,7 @@ func (t *target) putObjT2T(params *cluster.SendToParams) error {
 	)
 	cmn.ToHeader(params.ObjAttrs, hdr)
 	hdr.Set(cmn.HdrPutterID, t.si.ID())
-	query.Set(cmn.URLParamOWT, strconv.Itoa(int(params.OWT)))
+	query.Set(cmn.URLParamOWT, params.OWT.ToS())
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodPut,
 		Base:   params.Tsi.URL(cmn.NetIntraData),

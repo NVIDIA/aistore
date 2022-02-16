@@ -672,7 +672,8 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		}
 		if err == nil {
 			if lom.EqCksum(hdr.ObjAttrs.Cksum) {
-				glog.V(4).Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping", m.ManagerUUID, lom)
+				glog.V(4).Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping",
+					m.ManagerUUID, lom)
 				return nil
 			}
 			glog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)
@@ -681,15 +682,18 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		lom.SetAtimeUnix(started.UnixNano())
 		rc := io.NopCloser(object)
 
-		params := cluster.PutObjectParams{
-			Tag:    filetype.WorkfileRecvShard,
-			Reader: rc,
-			Cksum:  nil,
-			Atime:  started,
+		params := cluster.AllocPutObjParams()
+		{
+			params.WorkTag = filetype.WorkfileRecvShard
+			params.Reader = rc
+			params.Cksum = nil
+			params.Atime = started
 		}
-		if err := m.ctx.t.PutObject(lom, params); err != nil {
+		erp := m.ctx.t.PutObject(lom, params)
+		cluster.FreePutObjParams(params)
+		if erp != nil {
 			m.abort(err)
-			return err
+			return erp
 		}
 		return nil
 	}

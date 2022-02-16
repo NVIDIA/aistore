@@ -384,14 +384,18 @@ func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 	if err := cos.Stat(bdir); err != nil {
 		return err
 	}
-	params := cluster.PutObjectParams{
-		Tag:        "ec",
-		Reader:     readCloser,
-		OWT:        cmn.OwtMigrate, // to avoid changing version
-		SkipEncode: true,
-		Atime:      time.Now(),
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = "ec"
+		params.Reader = readCloser
+		params.SkipEncode = true
+		params.Atime = time.Now()
+		// to avoid changing version; TODO: introduce cmn.OwtEC
+		params.OWT = cmn.OwtMigrate
 	}
-	return t.PutObject(lom, params)
+	err := t.PutObject(lom, params)
+	cluster.FreePutObjParams(params)
+	return err
 }
 
 func validateBckBID(t cluster.Target, bck cmn.Bck, bid uint64) error {

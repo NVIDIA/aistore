@@ -432,13 +432,15 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM, owt cmn.OWT) (errCo
 	if r, err = api.GetObjectReader(aisCluster.bp, bck, lom.ObjName); err != nil {
 		return extractErrCode(err)
 	}
-	params := cluster.PutObjectParams{
-		Tag:    fs.WorkfileColdget,
-		Reader: r,
-		OWT:    owt,
-		Atime:  time.Now(),
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = fs.WorkfileColdget
+		params.Reader = r
+		params.OWT = owt
+		params.Atime = time.Now()
 	}
 	err = m.t.PutObject(lom, params)
+	cluster.FreePutObjParams(params)
 	return extractErrCode(err)
 }
 

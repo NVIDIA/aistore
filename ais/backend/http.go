@@ -162,13 +162,15 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OW
 	if err != nil {
 		return errCode, err
 	}
-	params := cluster.PutObjectParams{
-		Tag:    fs.WorkfileColdget,
-		Reader: reader,
-		OWT:    owt,
-		Atime:  time.Now(),
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = fs.WorkfileColdget
+		params.Reader = reader
+		params.OWT = owt
+		params.Atime = time.Now()
 	}
 	err = hp.t.PutObject(lom, params)
+	cluster.FreePutObjParams(params)
 	if err != nil {
 		return
 	}

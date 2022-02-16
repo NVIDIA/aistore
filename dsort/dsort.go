@@ -353,15 +353,18 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	go func() {
 		var err error
 		if !m.rs.DryRun {
-			params := cluster.PutObjectParams{
-				Tag: "dsort",
-				// NOTE: We cannot allow `PutObject` to close original reader
+			params := cluster.AllocPutObjParams()
+			{
+				params.WorkTag = "dsort"
+				// NOTE: we cannot allow `PutObject` to close original reader
 				// on error as it can cause panic when `CreateShard` writes data.
-				Reader: io.NopCloser(r),
-				Cksum:  nil,
-				Atime:  beforeCreation,
+				params.Reader = io.NopCloser(r)
+				params.Cksum = nil
+				params.Atime = beforeCreation
 			}
-			if err = m.ctx.t.PutObject(lom, params); err == nil {
+			err = m.ctx.t.PutObject(lom, params)
+			cluster.FreePutObjParams(params)
+			if err == nil {
 				n = lom.SizeBytes()
 			}
 		} else {

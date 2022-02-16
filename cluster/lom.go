@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -91,43 +90,6 @@ func initLomLocker() {
 	lomLocker = make(nameLocker, cos.MultiSyncMapCount)
 	lomLocker.init()
 	maxLmeta.Store(xattrMaxSize)
-}
-
-/////////////
-// lomPool //
-/////////////
-
-var (
-	lomPool sync.Pool
-	lom0    LOM
-)
-
-func AllocLOM(objName string) (lom *LOM) {
-	lom = _allocLOM()
-	lom.ObjName = objName
-	return
-}
-
-func AllocLOMbyFQN(fqn string) (lom *LOM) {
-	debug.Assert(strings.Contains(fqn, "/"))
-	lom = _allocLOM()
-	lom.FQN = fqn
-	return
-}
-
-func _allocLOM() (lom *LOM) {
-	if v := lomPool.Get(); v != nil {
-		lom = v.(*LOM)
-	} else {
-		lom = &LOM{}
-	}
-	return
-}
-
-func FreeLOM(lom *LOM) {
-	debug.Assert(lom.ObjName != "" || lom.FQN != "")
-	*lom = lom0
-	lomPool.Put(lom)
 }
 
 /////////

@@ -188,22 +188,25 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		return err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
-	params := cluster.PutObjectParams{
-		Tag:    fs.WorkfilePut,
-		Reader: io.NopCloser(objReader),
-		// Transaction is used only by CopyBucket and ETL. In both cases new objects
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = fs.WorkfilePut
+		params.Reader = io.NopCloser(objReader)
+		params.Cksum = hdr.ObjAttrs.Cksum
+
+		// Transaction is used only by CopyBucket and ETL. In both cases, new objects
 		// are created at the destination. Setting `OwtPut` type informs `t.PutObject()`
 		// that it must PUT the object to the remote backend as well
 		// (but only after the local transaction is done and finalized).
-		OWT:   cmn.OwtPut,
-		Cksum: hdr.ObjAttrs.Cksum,
+		params.OWT = cmn.OwtPut
 	}
 	if lom.AtimeUnix() == 0 {
-		// TODO -- FIXME: sender must be setting it, remove this `if` when fixed
+		// TODO: sender must be setting it, remove this `if` when fixed
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
 	params.Atime = lom.Atime()
 	err = r.p.T.PutObject(lom, params)
+	cluster.FreePutObjParams(params)
 	if err != nil {
 		glog.Error(err)
 	}
@@ -217,7 +220,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	objNameTo := wi.msg.ToName(lom.ObjName)
 	buf, slab := lri.t.PageMM().Alloc()
-	params := &cluster.CopyObjectParams{}
+	params := cluster.AllocCpObjParams()
 	{
 		params.BckTo = wi.r.args.BckTo
 		params.ObjNameTo = objNameTo
@@ -229,6 +232,7 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	}
 	size, err := lri.t.CopyObject(lom, params, false /*localOnly*/)
 	slab.Free(buf)
+	cluster.FreeCpObjParams(params)
 	if err != nil {
 		if !cmn.IsObjNotExist(err) {
 			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)

@@ -38,14 +38,12 @@ func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) er
 		return err
 	}
 	if act == rebMsgRegular {
-		reb.recvObjRegular(hdr, smap, unpacker, objReader)
-		return nil
+		return reb.recvObjRegular(hdr, smap, unpacker, objReader)
 	}
 	if act != rebMsgEC {
 		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgEC)
 	}
-	reb.recvECData(hdr, unpacker, objReader)
-	return nil
+	return reb.recvECData(hdr, unpacker, objReader)
 }
 
 func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) error {
@@ -75,15 +73,16 @@ func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) error {
 // Rx non-EC //
 ///////////////
 
-func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) {
+func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cos.ByteUnpack,
+	objReader io.Reader) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse acknowledgement: %v", err)
-		return
+		return err
 	}
 	if ack.rebID != reb.RebID() {
 		glog.Warningf("received %s: %s", hdr.FullName(), reb.rebIDMismatchMsg(ack.rebID))
-		return
+		return nil
 	}
 	tsid := ack.daemonID // the sender
 	// Rx
@@ -91,7 +90,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
-		return
+		return nil
 	}
 	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
 		reb.laterx.Store(true)
@@ -104,33 +103,39 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	}
 
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
-	params := cluster.PutObjectParams{
-		Tag:    fs.WorkfilePut,
-		Reader: io.NopCloser(objReader),
-		OWT:    cmn.OwtMigrate,
-		Cksum:  hdr.ObjAttrs.Cksum,
-		Atime:  lom.Atime(),
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = fs.WorkfilePut
+		params.Reader = io.NopCloser(objReader)
+		params.OWT = cmn.OwtMigrate
+		params.Cksum = hdr.ObjAttrs.Cksum
+		params.Atime = lom.Atime()
 	}
-	if err := reb.t.PutObject(lom, params); err != nil {
-		glog.Error(err)
-		return
+	erp := reb.t.PutObject(lom, params)
+	cluster.FreePutObjParams(params)
+	if erp != nil {
+		glog.Error(erp)
+		return erp
 	}
 	xreb := reb.xctn()
 	xreb.InObjsAdd(1, hdr.ObjAttrs.Size)
 	// ACK
 	tsi := smap.GetTarget(tsid)
 	if tsi == nil {
-		glog.Errorf("%s target is not found in smap", tsid)
-		return
+		err := fmt.Errorf("%s is not in the %s", cluster.Tname(tsid), smap)
+		glog.Error(err)
+		return err
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
 		ack := &regularAck{rebID: reb.RebID(), daemonID: reb.t.SID()}
 		hdr.Opaque = ack.NewPack()
 		hdr.ObjAttrs.Size = 0
 		if err := reb.dm.ACK(hdr, nil, tsi); err != nil {
-			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
+			glog.Error(err)
+			return err
 		}
 	}
+	return nil
 }
 
 func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
@@ -298,25 +303,28 @@ func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) 
 }
 
 // receiving EC CT
-func (reb *Reb) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) {
+func (reb *Reb) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) error {
 	req := &pushReq{}
 	err := unpacker.ReadAny(req)
 	if err != nil {
 		glog.Errorf("invalid push notification %s: %v", hdr.ObjName, err)
-		return
+		return err
 	}
 	if req.rebID != reb.rebID.Load() {
 		glog.Warningf("%s: not yet started or already finished rebalancing (%d, %d)",
 			reb.t.Snode(), req.rebID, reb.rebID.Load())
-		return
+		return nil
 	}
 	if req.action == rebActUpdateMD {
-		if err := reb.receiveMD(req, hdr); err != nil {
+		err := reb.receiveMD(req, hdr)
+		if err != nil {
 			glog.Errorf("failed to receive MD for %s: %v", hdr.FullName(), err)
 		}
-		return
+		return err
 	}
 	if err := reb.receiveCT(req, hdr, reader); err != nil {
 		glog.Errorf("failed to receive CT for %s: %v", hdr.FullName(), err)
+		return err
 	}
+	return nil
 }

@@ -44,7 +44,7 @@ func (*TargetMock) Sowner() cluster.Sowner   { return nil }
 func (*TargetMock) PageMM() *memsys.MMSA { return memsys.PageMM() }
 func (*TargetMock) ByteMM() *memsys.MMSA { return memsys.ByteMM() }
 
-func (*TargetMock) PutObject(*cluster.LOM, cluster.PutObjectParams) error  { return nil }
+func (*TargetMock) PutObject(*cluster.LOM, *cluster.PutObjectParams) error { return nil }
 func (*TargetMock) FinalizeObj(*cluster.LOM, string) (int, error)          { return 0, nil }
 func (*TargetMock) EvictObject(*cluster.LOM) (int, error)                  { return 0, nil }
 func (*TargetMock) DeleteObject(*cluster.LOM, bool) (int, error)           { return 0, nil }

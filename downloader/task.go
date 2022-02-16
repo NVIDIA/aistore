@@ -104,7 +104,7 @@ func (t *singleObjectTask) download() {
 	t.parent.ObjsAdd(1, t.currentSize.Load())
 }
 
-func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration) (fatal bool, err error) {
+func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration) (bool /*err is fatal*/, error) {
 	ctx, cancel := context.WithTimeout(t.downloadCtx, timeout)
 	defer cancel()
 
@@ -133,16 +133,22 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	size := attrsFromLink(t.obj.link, resp, lom)
 	t.setTotalSize(size)
 
-	params := cluster.PutObjectParams{
-		Tag:    "dl",
-		Reader: r,
-		OWT:    cmn.OwtPut,
-		Atime:  t.started.Load(),
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = "dl"
+		params.Reader = r
+		params.OWT = cmn.OwtPut
+		params.Atime = t.started.Load()
 	}
-	if err := t.parent.t.PutObject(lom, params); err != nil {
+	erp := t.parent.t.PutObject(lom, params)
+	cluster.FreePutObjParams(params)
+	if erp != nil {
+		return true, erp
+	}
+	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		return true, err
 	}
-	return true, lom.Load(true /*cache it*/, false /*locked*/) // TODO: review
+	return false, nil
 }
 
 func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {

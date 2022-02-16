@@ -56,28 +56,6 @@ var (
 	_ xreg.Renewable = (*tcbFactory)(nil)
 )
 
-///////////////////////////////////
-// cluster.CopyObjectParams pool //
-///////////////////////////////////
-
-var (
-	cpObjPool sync.Pool
-	cpObj0    cluster.CopyObjectParams
-)
-
-func allocCpObjParams() (a *cluster.CopyObjectParams) {
-	if v := cpObjPool.Get(); v != nil {
-		a = v.(*cluster.CopyObjectParams)
-		return
-	}
-	return &cluster.CopyObjectParams{}
-}
-
-func freeCpObjParams(a *cluster.CopyObjectParams) {
-	*a = cpObj0
-	cpObjPool.Put(a)
-}
-
 ////////////////
 // tcbFactory //
 ////////////////
@@ -237,7 +215,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 
 func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	objNameTo := r.args.Msg.ToName(lom.ObjName)
-	params := allocCpObjParams()
+	params := cluster.AllocCpObjParams()
 	{
 		params.BckTo = r.args.BckTo
 		params.ObjNameTo = objNameTo
@@ -248,14 +226,10 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 		params.DryRun = r.args.Msg.DryRun
 	}
 	_, err = r.Target().CopyObject(lom, params, false /*localOnly*/)
-	if err != nil {
-		if cos.IsErrOOS(err) {
-			err = cmn.NewErrAborted(r.Name(), "copy-obj", err)
-		}
-		goto ret
+	if err != nil && cos.IsErrOOS(err) {
+		err = cmn.NewErrAborted(r.Name(), "copy-obj", err)
 	}
-ret:
-	freeCpObjParams(params)
+	cluster.FreeCpObjParams(params)
 	return
 }
 
@@ -283,26 +257,29 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 	}
 
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
-	params := cluster.PutObjectParams{
-		Tag:    fs.WorkfilePut,
-		Reader: io.NopCloser(objReader),
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = fs.WorkfilePut
+		params.Reader = io.NopCloser(objReader)
+		params.Cksum = hdr.ObjAttrs.Cksum
+
 		// Transaction is used only by CopyBucket and ETL. In both cases new objects
 		// are created at the destination. Setting `OwtPut` type informs `t.PutObject()`
 		// that it must PUT the object to the remote backend as well
 		// (but only after the local transaction is done and finalized).
-		OWT:   cmn.OwtPut,
-		Cksum: hdr.ObjAttrs.Cksum,
+		params.OWT = cmn.OwtPut
 	}
 	if lom.AtimeUnix() == 0 {
-		// TODO -- FIXME: sender must be setting it, remove this `if` when fixed
+		// TODO: sender must be setting it, remove this `if` when fixed
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
 	params.Atime = lom.Atime()
-	err = r.t.PutObject(lom, params)
-	if err != nil {
-		r.err.Store(err)
-		glog.Error(err)
-		return err
+
+	erp := r.t.PutObject(lom, params)
+	cluster.FreePutObjParams(params)
+	if erp != nil {
+		r.err.Store(erp)
+		glog.Error(erp)
 	}
-	return err
+	return erp // NOTE: non-nil signals transport to terminate
 }

@@ -5,7 +5,11 @@
  */
 package cmn
 
-import "github.com/NVIDIA/aistore/cmn/debug"
+import (
+	"strconv"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
+)
 
 // Object Write Transaction (OWT) is used to control some of the aspects of creating
 // new objects in the cluster.
@@ -24,6 +28,14 @@ const (
 	OwtGet                        // GET (with upgrading read-lock in the local-write path)
 	OwtGetPrefetchLock            // (used for maximum parallelism when prefetching)
 )
+
+func (owt *OWT) FromS(s string) {
+	n, err := strconv.Atoi(s)
+	debug.AssertNoErr(err)
+	*owt = OWT(n)
+}
+
+func (owt OWT) ToS() (s string) { return strconv.Itoa(int(owt)) }
 
 func (owt OWT) String() (s string) {
 	switch owt {
