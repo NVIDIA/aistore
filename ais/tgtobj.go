@@ -969,7 +969,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 				DeleteSrc:    true, // NOTE: always overwrite and remove
 			},
 		}
-		if _, err = aoi.t.Promote(params); err != nil {
+		if errCode, err = aoi.t.Promote(params); err != nil {
 			return
 		}
 	default:

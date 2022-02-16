@@ -185,29 +185,34 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 	return
 }
 
-const fmtPrm = "%s: failed to remove promoted source %q: %v"
-
-func (t *target) Promote(params cluster.PromoteParams) (size int64, err error) {
+func (t *target) Promote(params cluster.PromoteParams) (errCode int, err error) {
 	lom := cluster.AllocLOM(params.ObjName)
 	defer cluster.FreeLOM(lom)
-	if err = lom.Init(params.Bck.Bck); err != nil {
-		return
+	if eri := lom.Init(params.Bck.Bck); eri != nil {
+		return 0, eri
 	}
 	smap := t.owner.smap.get()
-	tsi, local, errHrw := lom.HrwTarget(&smap.Smap)
-	if errHrw != nil {
-		err = errHrw
-		return
+	tsi, local, erh := lom.HrwTarget(&smap.Smap)
+	if erh != nil {
+		return 0, erh
 	}
 	if local {
-		size, err = t.promoteLocal(&params, lom)
+		errCode, err = t.promoteLocal(&params, lom)
 	} else {
 		err = t.promoteRemote(&params, lom, tsi)
+	}
+	if err != nil {
+		return
+	}
+	if params.DeleteSrc {
+		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
+			glog.Errorf("%s: failed to remove promoted source %q: %v", t.si, params.SrcFQN, errRm)
+		}
 	}
 	return
 }
 
-func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (int64, error) {
+func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (int, error) {
 	var (
 		cksum     *cos.CksumHash
 		fileSize  int64
@@ -238,6 +243,9 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 		// avoid extra copy: use the source as `workFQN`
 		fi, err := os.Stat(params.SrcFQN)
 		if err != nil {
+			if os.IsNotExist(err) {
+				err = nil
+			}
 			return 0, err
 		}
 		fileSize = fi.Size()
@@ -255,21 +263,20 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 	}
 	if params.Cksum != nil && cksum != nil {
 		if !cksum.Equal(params.Cksum) {
-			return 0, cos.NewBadDataCksumError(cksum.Clone(), params.Cksum, params.SrcFQN+" => "+lom.String())
+			detail := params.SrcFQN + " => " + lom.String()
+			return 0, cos.NewBadDataCksumError(cksum.Clone(), params.Cksum, detail)
 		}
 	}
 	poi := &putObjInfo{atime: time.Now(), t: t, lom: lom}
 	poi.workFQN = workFQN
 	lom.SetSize(fileSize)
-	if _, err := poi.finalize(); err != nil {
-		return 0, err
+	if errCode, err := poi.finalize(); err != nil {
+		return errCode, err
 	}
-	if params.DeleteSrc {
-		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
-			glog.Errorf(fmtPrm, t.si, params.SrcFQN, errRm)
-		}
+	if params.Xact != nil {
+		params.Xact.ObjsAdd(1, fileSize)
 	}
-	return lom.SizeBytes(), nil
+	return 0, nil
 }
 
 // TODO: use DM streams
@@ -291,15 +298,16 @@ func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, 
 		sendParams.Tsi = tsi
 		sendParams.OWT = cmn.OwtPromote
 	}
-	_, err := coi.putRemote(lom, sendParams)
+	size, err := coi.putRemote(lom, sendParams)
 	freeSendParams(sendParams)
 	freeCopyObjInfo(coi)
-	if err == nil && params.DeleteSrc {
-		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
-			glog.Errorf(fmtPrm, t.si, params.SrcFQN, errRm)
-		}
+	if err != nil {
+		return err
 	}
-	return err
+	if params.Xact != nil {
+		params.Xact.OutObjsAdd(1, size)
+	}
+	return nil
 }
 
 //

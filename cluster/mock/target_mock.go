@@ -48,7 +48,7 @@ func (*TargetMock) PutObject(*cluster.LOM, cluster.PutObjectParams) error  { ret
 func (*TargetMock) FinalizeObj(*cluster.LOM, string) (int, error)          { return 0, nil }
 func (*TargetMock) EvictObject(*cluster.LOM) (int, error)                  { return 0, nil }
 func (*TargetMock) DeleteObject(*cluster.LOM, bool) (int, error)           { return 0, nil }
-func (*TargetMock) Promote(cluster.PromoteParams) (int64, error)           { return 0, nil }
+func (*TargetMock) Promote(cluster.PromoteParams) (int, error)             { return 0, nil }
 func (*TargetMock) DB() dbdriver.Driver                                    { return nil }
 func (*TargetMock) Backend(*cluster.Bck) cluster.BackendProvider           { return nil }
 func (*TargetMock) HeadObjT2T(*cluster.LOM, *cluster.Snode) bool           { return false }

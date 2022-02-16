@@ -131,9 +131,10 @@ func (test *prmTestPermut) do(t *testing.T) {
 	if xactID != "" && args.DaemonID == "" {
 		// have global UUID, promoting via entire cluster
 		tassert.Errorf(t, cos.IsValidUUID(xactID), "expecting valid x-UUID %q", xactID)
+		xargs.ID = xactID
 		notifStatus, err := api.WaitForXactionIC(baseParams, xargs)
 		if notifStatus != nil && (notifStatus.AbortedX || notifStatus.ErrMsg != "") {
-			tlog.Logf("notif-status: %+v\n", notifStatus)
+			tlog.Logf("Warning: notif-status: %+v\n", notifStatus)
 		}
 		if cmn.IsStatusNotFound(err) {
 			time.Sleep(time.Second)
@@ -144,6 +145,15 @@ func (test *prmTestPermut) do(t *testing.T) {
 		// promote a) using selected target OR b) synchronously (limited ## files without xaction)
 		err := api.WaitForXactionNode(baseParams, xargs, xactSnapNotRunning)
 		tassert.CheckFatal(t, err)
+	}
+
+	// stats
+	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
+	if err == nil {
+		locObjs, outObjs, inObjs := snaps.ObjCounts()
+		locBytes, outBytes, inBytes := snaps.ByteCounts()
+		tlog.Logf("x-%s[%s]: (locObjs=%d(%d), outObjs=%d(%d), inObjs=%d(%d))\n",
+			cmn.ActPromote, xactID, locObjs, locBytes, outObjs, outBytes, inObjs, inBytes)
 	}
 
 	// list

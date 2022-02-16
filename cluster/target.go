@@ -94,6 +94,7 @@ type (
 	PromoteParams struct {
 		Bck   *Bck       // destination bucket
 		Cksum *cos.Cksum // checksum to validate
+		Xact  Xact
 		PromoteArgs
 	}
 )
@@ -129,7 +130,7 @@ type Target interface {
 	DeleteObject(lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params *CopyObjectParams, localOnly bool) (int64, error)
 	GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
-	Promote(params PromoteParams) (size int64, err error)
+	Promote(params PromoteParams) (errCode int, err error)
 	HeadObjT2T(lom *LOM, si *Snode) bool
 
 	// File-system related functions.

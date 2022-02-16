@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"os"
 	"path/filepath"
 	"sync"
 
@@ -112,7 +111,8 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		}
 	}
 	params := cluster.PromoteParams{
-		Bck: bck,
+		Bck:  bck,
+		Xact: r,
 		PromoteArgs: cluster.PromoteArgs{
 			SrcFQN:       fqn,
 			ObjName:      objName,
@@ -120,17 +120,8 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 			DeleteSrc:    r.args.DeleteSrc,
 		},
 	}
-	size, err := r.Target().Promote(params)
-	if err != nil {
-		if finfo, ers := os.Stat(fqn); ers == nil {
-			if !finfo.Mode().IsRegular() {
-				glog.Warningf("%v (mode=%#x)", err, finfo.Mode()) // symbolic link, etc.
-			}
-		} else {
-			glog.Error(err)
-		}
-	} else { // NOTE: returns size only when _locally_ placed (for remote placement we get zero here)
-		r.ObjsAdd(1, size)
-	}
-	return nil
+	// TODO: options to ignore specific error types, limited number of errors,
+	// all errors... (archive)
+	_, err = r.Target().Promote(params)
+	return err
 }

@@ -748,11 +748,9 @@ func TestPrefetchList(t *testing.T) {
 	xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
 	snaps, err := api.QueryXactionSnaps(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	if snaps.ObjCount() != int64(m.num) {
-		t.Errorf(
-			"did not prefetch all files: missing %d of %d",
-			int64(m.num)-snaps.ObjCount(), m.num,
-		)
+	locObjs, _, _ := snaps.ObjCounts()
+	if locObjs != int64(m.num) {
+		t.Errorf("did not prefetch all files: missing %d of %d", int64(m.num)-locObjs, m.num)
 	}
 }
 
@@ -861,11 +859,9 @@ func TestPrefetchRange(t *testing.T) {
 	xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
 	snaps, err := api.QueryXactionSnaps(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	if snaps.ObjCount() != int64(len(files)) {
-		t.Errorf(
-			"did not prefetch all files: missing %d of %d",
-			int64(len(files))-snaps.ObjCount(), len(files),
-		)
+	locObjs, _, _ := snaps.ObjCounts()
+	if locObjs != int64(len(files)) {
+		t.Errorf("did not prefetch all files: missing %d of %d", int64(len(files))-locObjs, len(files))
 	}
 }
 

@@ -319,10 +319,23 @@ func (xs NodesXactMultiSnap) Running() (tid string, xsnap *xact.SnapExt) {
 	return "", nil
 }
 
-func (xs NodesXactMultiSnap) ObjCount() (count int64) {
+func (xs NodesXactMultiSnap) ObjCounts() (locObjs, outObjs, inObjs int64) {
 	for _, targetStats := range xs {
 		for _, snap := range targetStats {
-			count += snap.Stats.Objs
+			locObjs += snap.Stats.Objs
+			outObjs += snap.Stats.OutObjs
+			inObjs += snap.Stats.InObjs
+		}
+	}
+	return
+}
+
+func (xs NodesXactMultiSnap) ByteCounts() (locBytes, outBytes, inBytes int64) {
+	for _, targetStats := range xs {
+		for _, snap := range targetStats {
+			locBytes += snap.Stats.Bytes
+			outBytes += snap.Stats.OutBytes
+			inBytes += snap.Stats.InBytes
 		}
 	}
 	return
