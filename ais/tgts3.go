@@ -79,11 +79,16 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		t.writeErr(w, r, err)
 		return
 	}
-
-	coi := copyObjInfo{t: t}
-	coi.BckTo = bckDst
+	coi := allocCopyObjInfo()
+	{
+		coi.t = t
+		coi.BckTo = bckDst
+		coi.owt = cmn.OwtMigrate
+	}
 	objName := path.Join(items[1:]...)
-	if _, err := coi.copyObject(lom, objName); err != nil {
+	_, err := coi.copyObject(lom, objName)
+	freeCopyObjInfo(coi)
+	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

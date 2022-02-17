@@ -111,6 +111,7 @@ func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, 
 	{
 		coi.CopyObjectParams = *params
 		coi.t = t
+		coi.owt = cmn.OwtMigrate
 		coi.finalize = false
 		coi.localOnly = localOnly
 	}
@@ -294,24 +295,17 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 // TODO: Xact.InObjsAdd on the receive side
 func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *cluster.Snode) error {
 	lom.FQN = params.SrcFQN
-	// when not overwriting check w/ remote target first and separately
+	// when not overwriting check w/ remote target first (and separately)
 	if !params.OverwriteDst && t.HeadObjT2T(lom, tsi) {
 		return nil
 	}
 	coi := allocCopyObjInfo()
 	{
 		coi.t = t
-		coi.promote = true
 		coi.BckTo = lom.Bck()
+		coi.owt = cmn.OwtPromote
 	}
-	sendParams := allocSendParams()
-	{
-		sendParams.ObjNameTo = lom.ObjName
-		sendParams.Tsi = tsi
-		sendParams.OWT = cmn.OwtPromote
-	}
-	size, err := coi.putRemote(lom, sendParams)
-	freeSendParams(sendParams)
+	size, err := coi.sendRemote(lom, lom.ObjName, tsi)
 	freeCopyObjInfo(coi)
 	if err != nil {
 		return err

@@ -38,6 +38,8 @@ import (
 // PUT, GET, APPEND (to file | to archive), and COPY object
 //
 
+const fmtNested = "%s: nested (%v): failed to %s %q: %v"
+
 type (
 	putObjInfo struct {
 		atime      time.Time
@@ -92,9 +94,9 @@ type (
 	copyObjInfo struct {
 		cluster.CopyObjectParams
 		t         *target
+		owt       cmn.OWT
 		localOnly bool // copy locally with no HRW=>target
 		finalize  bool // copies and EC (as in poi.finalize())
-		promote   bool // true when promoting
 	}
 
 	appendArchObjInfo struct {
@@ -167,7 +169,7 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 			}
 			poi.t.fsErr(err1, poi.workFQN)
 			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil {
-				glog.Errorf("Nested error: %s => (remove %s => err: %v)", err1, poi.workFQN, err2)
+				glog.Errorf(fmtNested, poi.t.si, err1, "remove", poi.workFQN, err2)
 			}
 		}
 		poi.lom.Uncache(true /*delDirty*/)
@@ -197,12 +199,12 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	if bck.IsRemote() && (poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize || poi.owt == cmn.OwtPromote) {
 		errCode, err = poi.putRemote()
 		if err != nil {
-			glog.Errorf("PUT %s: %v", lom, err)
+			glog.Errorf("PUT (%s): %v", poi.loghdr(), err)
 			return
 		}
 	}
 	if _, present := bmd.Get(bck); !present {
-		err = fmt.Errorf("PUT %s: bucket %s does not exist", lom, bck)
+		err = fmt.Errorf("PUT (%s): %q does not exist", poi.loghdr(), bck)
 		errCode = http.StatusBadRequest
 		return
 	}
@@ -214,7 +216,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Warningf("%s (%s) is busy", lom, poi.owt)
+				glog.Warningf("(%s) is busy", poi.loghdr())
 			}
 			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
 		}
@@ -244,7 +246,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	if lom.HasCopies() {
 		// TODO: recover
 		if errdc := lom.DelAllCopies(); errdc != nil {
-			glog.Errorf("PUT %s: failed to delete old copies [%v], proceeding to PUT anyway...", lom, errdc)
+			glog.Errorf("PUT (%s): failed to delete old copies [%v], proceeding to PUT anyway...", poi.loghdr(), errdc)
 		}
 	}
 	if lom.AtimeUnix() == 0 {
@@ -362,7 +364,6 @@ write:
 
 // post-write close & cleanup
 func (poi *putObjInfo) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err error) {
-	const fmterr = "%s: nested (%v): failed to %s %q: %v"
 	slab.Free(buf)
 	if err == nil {
 		debug.Assert(lmfh == nil)
@@ -374,10 +375,10 @@ func (poi *putObjInfo) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, er
 	poi.r.Close()
 	debug.Assert(lmfh != nil)
 	if nerr := lmfh.Close(); nerr != nil {
-		glog.Errorf(fmterr, poi.t.si, err, "close", poi.workFQN, nerr)
+		glog.Errorf(fmtNested, poi.t.si, err, "close", poi.workFQN, nerr)
 	}
 	if nerr := cos.RemoveFile(poi.workFQN); nerr != nil {
-		glog.Errorf(fmterr, poi.t.si, err, "remove", poi.workFQN, nerr)
+		glog.Errorf(fmtNested, poi.t.si, err, "remove", poi.workFQN, nerr)
 	}
 }
 
@@ -1060,7 +1061,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 		}
 		// remote
 		if tsi.ID() != coi.t.si.ID() {
-			return coi._sendRemote(lom, objNameTo, tsi)
+			return coi.sendRemote(lom, objNameTo, tsi)
 		}
 	}
 
@@ -1153,7 +1154,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	}
 	if tsi.ID() != coi.t.si.ID() {
 		// remote
-		return coi._sendRemote(lom, objNameTo, tsi)
+		return coi.sendRemote(lom, objNameTo, tsi)
 	}
 
 	// local
@@ -1210,16 +1211,17 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 	return io.Copy(io.Discard, reader)
 }
 
-func (coi *copyObjInfo) _sendRemote(lom *cluster.LOM, objNameTo string, tsi *cluster.Snode) (size int64, err error) {
+func (coi *copyObjInfo) sendRemote(lom *cluster.LOM, objNameTo string, tsi *cluster.Snode) (size int64, err error) {
+	debug.Assert(coi.owt > 0)
 	params := allocSendParams()
 	{
 		params.ObjNameTo = objNameTo
 		params.Tsi = tsi
 		params.DM = coi.DM
 		if coi.DM != nil {
-			params.OWT = coi.DM.OWT()
+			params.OWT = coi.DM.OWT() // takes precedence
 		} else {
-			params.OWT = cmn.OwtMigrate
+			params.OWT = coi.owt
 		}
 	}
 	size, err = coi.putRemote(lom, params)
@@ -1238,7 +1240,8 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 	}
 	if coi.DP == nil { // read from local file
 		var reader cos.ReadOpenCloser
-		if !coi.promote {
+		if coi.owt != cmn.OwtPromote {
+			// migrate/replicate
 			lom.Lock(false)
 			if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 				lom.Unlock(false)
@@ -1256,6 +1259,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			size = lom.SizeBytes()
 			reader = cos.NewDeferROC(fh, func() { lom.Unlock(false) })
 		} else {
+			// promote
 			debug.Assert(!coi.DryRun)
 			debug.Assert(params.OWT == cmn.OwtPromote)
 			fh, err := cos.NewFileHandle(lom.FQN)

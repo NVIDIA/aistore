@@ -735,7 +735,7 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		return
 	}
 	// commit
-	xactID, err = c.commit(bckFrom, 2*c.timeout.netw) // channel capacity when massively archiving
+	xactID, err = c.commit(bckFrom, c.cmtTout(false /*waitmsync*/))
 	if xactID != "" {
 		// happens to grab cluster-wide ID
 		glog.Infof("%s: x-%s[%s]", p.si, msg.Action, xactID)
@@ -977,7 +977,7 @@ func (p *proxy) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bo
 		query = cmn.AddBckToQuery(query, bck.Bck)
 	}
 	config := cmn.GCO.Get()
-	c.timeout.netw = config.Timeout.MaxKeepalive.D()
+	c.timeout.netw = 2 * config.Timeout.MaxKeepalive.D()
 	c.timeout.host = config.Timeout.MaxHostBusy.D()
 	if !waitmsync { // when commit does not block behind metasync
 		query.Set(cmn.URLParamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))

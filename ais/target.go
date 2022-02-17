@@ -1668,6 +1668,7 @@ func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMs
 	{
 		coi.CopyObjectParams = cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}
 		coi.t = t
+		coi.owt = cmn.OwtMigrate
 		coi.localOnly = false
 		coi.finalize = true
 	}

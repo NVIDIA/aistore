@@ -93,10 +93,10 @@ type (
 		DeleteSrc    bool `json:"kps,omitempty"` // remove source
 	}
 	PromoteParams struct {
-		Bck   *Bck       // destination bucket
-		Cksum *cos.Cksum // checksum to validate
-		Xact  Xact
-		PromoteArgs
+		Bck         *Bck       // destination bucket
+		Cksum       *cos.Cksum // checksum to validate
+		Xact        Xact       // responsible xaction
+		PromoteArgs            // all of the above
 	}
 )
 
