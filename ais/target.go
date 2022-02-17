@@ -1506,6 +1506,7 @@ func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, dpq
 		poi.cksumToUse = cksumToUse
 		poi.skipVC = skipVC
 	}
+	// TODO: find out whether there is an xaction "behind" this PUT, and assign poi.Xact
 	poi.owt = cmn.OwtPut
 	if owt != "" {
 		poi.owt.FromS(owt)

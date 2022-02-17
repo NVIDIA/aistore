@@ -140,11 +140,12 @@ type (
 	}
 
 	WriteArgs struct {
-		MD         []byte     // CT's metafile content
-		Reader     io.Reader  // CT content
-		BID        uint64     // bucket ID
-		Cksum      *cos.Cksum // object checksum
-		Generation int64      // EC Generation
+		MD         []byte       // CT's metafile content
+		Reader     io.Reader    // CT content
+		BID        uint64       // bucket ID
+		Cksum      *cos.Cksum   // object checksum
+		Generation int64        // EC Generation
+		Xact       cluster.Xact // xaction that drives it
 	}
 
 	// keeps temporarily a slice of object data until it is sent to remote node
@@ -375,7 +376,7 @@ func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 }
 
 // Saves the main replica to local drives
-func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int64) error {
+func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int64, xctn cluster.Xact) error {
 	if size > 0 {
 		reader = io.LimitReader(reader, size)
 	}
@@ -390,6 +391,7 @@ func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 		params.Reader = readCloser
 		params.SkipEncode = true
 		params.Atime = time.Now()
+		params.Xact = xctn
 		// to avoid changing version; TODO: introduce cmn.OwtEC
 		params.OWT = cmn.OwtMigrate
 	}
@@ -461,7 +463,7 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 		}
 	}
 	lom.Unlock(false)
-	if err = writeObject(t, lom, args.Reader, lom.SizeBytes(true)); err != nil {
+	if err = writeObject(t, lom, args.Reader, lom.SizeBytes(true), args.Xact); err != nil {
 		return
 	}
 	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value

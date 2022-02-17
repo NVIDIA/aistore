@@ -349,7 +349,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	wi.lom.SetAtimeUnix(time.Now().UnixNano())
 	cos.Close(wi.fh)
 
-	errCode, err = r.p.T.FinalizeObj(wi.lom, wi.fqn)
+	errCode, err = r.p.T.FinalizeObj(wi.lom, wi.fqn, r)
 	cluster.FreeLOM(wi.lom)
 
 	r.ObjsAdd(1, size-wi.appendPos)

@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -48,6 +47,7 @@ type (
 		cksumToUse *cos.Cksum    // if available (not `none`), can be validated and will be stored
 		size       int64         // object size aka Content-Length
 		workFQN    string        // temp fqn to be renamed
+		xctn       cluster.Xact  // xaction that puts
 		owt        cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
 		skipEC     bool          // true: do not erasure-encode when finalizing
 		skipVC     bool          // true: do not try to load existing version and do not compare checksums
@@ -117,7 +117,7 @@ type (
 
 func (poi *putObjInfo) putObject() (int, error) {
 	lom := poi.lom
-	// optimize out if the checksums do match
+	// PUT is a no-op if the checksums do match
 	if !poi.skipVC && !poi.cksumToUse.IsEmpty() {
 		if lom.EqCksum(poi.cksumToUse) {
 			if glog.FastV(4, glog.SmoduleAIS) {
@@ -133,17 +133,30 @@ func (poi *putObjInfo) putObject() (int, error) {
 	if errCode, err := poi.finalize(); err != nil {
 		return errCode, err
 	}
+	// stats; FIXME: OwtPut includes but is not limited to user's PUT
 	if poi.owt == cmn.OwtPut {
 		delta := time.Since(poi.atime)
 		poi.t.statsT.AddMany(
 			cos.NamedVal64{Name: stats.PutCount, Value: 1},
 			cos.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
 		)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("PUT %s: %s", lom, delta)
-		}
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof(poi.loghdr())
 	}
 	return 0, nil
+}
+
+// TODO: use elsewhere in the `poi` methods; TODO: `goi.loghdr`, etc.
+func (poi *putObjInfo) loghdr() string {
+	s := poi.owt.String() + ", " + poi.lom.String()
+	if poi.xctn != nil {
+		s += ", " + poi.xctn.String()
+	}
+	if poi.skipVC {
+		s += ", skip-vc"
+	}
+	return s
 }
 
 func (poi *putObjInfo) finalize() (errCode int, err error) {
@@ -181,7 +194,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		bmd = poi.t.owner.bmd.Get()
 	)
 	// remote versioning
-	if bck.IsRemote() && (poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize) {
+	if bck.IsRemote() && (poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize || poi.owt == cmn.OwtPromote) {
 		errCode, err = poi.putRemote()
 		if err != nil {
 			glog.Errorf("PUT %s: %v", lom, err)
@@ -213,7 +226,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 
 	// ais versioning
 	if bck.IsAIS() && lom.VersionConf().Enabled {
-		if poi.owt == cmn.OwtPut || poi.owt == cmn.OwtPromote {
+		if poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize || poi.owt == cmn.OwtPromote {
 			if poi.skipVC {
 				err = lom.IncVersion()
 				debug.Assert(err == nil)
@@ -630,7 +643,7 @@ gfn:
 	if gfnNode != nil {
 		if goi.getFromNeighbor(goi.lom, gfnNode) {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s: GFN %s <= %s", tname, goi.lom, gfnNode)
+				glog.Infof("%s: gfn %s <= %s", tname, goi.lom, gfnNode)
 			}
 			return
 		}
@@ -665,49 +678,53 @@ gfn:
 	return
 }
 
-func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
-	header := make(http.Header)
-	header.Add(cmn.HdrCallerID, goi.t.SID())
-	header.Add(cmn.HdrCallerName, goi.t.Sname())
-	query := url.Values{}
+func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) bool {
+	query := cmn.AddBckToQuery(nil, lom.Bucket())
 	query.Set(cmn.URLParamIsGFNRequest, "true")
-	query = cmn.AddBckToQuery(query, lom.Bucket())
-	reqArgs := cmn.HreqArgs{
-		Method: http.MethodGet,
-		Base:   tsi.URL(cmn.NetIntraData),
-		Header: header,
-		Path:   cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
-		Query:  query,
+	reqArgs := cmn.AllocHra()
+	{
+		reqArgs.Method = http.MethodGet
+		reqArgs.Base = tsi.URL(cmn.NetIntraData)
+		reqArgs.Header = http.Header{
+			cmn.HdrCallerID:   []string{goi.t.SID()},
+			cmn.HdrCallerName: []string{goi.t.Sname()},
+		}
+		reqArgs.Path = cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName)
+		reqArgs.Query = query
 	}
 	config := cmn.GCO.Get()
 	req, _, cancel, err := reqArgs.ReqWithTimeout(config.Timeout.SendFile.D())
 	if err != nil {
-		glog.Errorf("failed to create request, err: %v", err)
-		return
+		debug.AssertNoErr(err)
+		return false
 	}
 	defer cancel()
 
 	resp, err := goi.t.client.data.Do(req) // nolint:bodyclose // closed by `poi.putObject`
+	cmn.FreeHra(reqArgs)
 	if err != nil {
-		glog.Errorf("GFN failure, URL %q, err: %v", reqArgs.URL(), err)
-		return
+		glog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t.si, tsi, lom, err)
+		return false
 	}
+
 	cksumToUse := lom.ObjAttrs().FromHeader(resp.Header)
 	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileRemote)
-	poi := &putObjInfo{
-		t:          goi.t,
-		lom:        lom,
-		r:          resp.Body,
-		owt:        cmn.OwtMigrate,
-		workFQN:    workFQN,
-		cksumToUse: cksumToUse,
+	poi := allocPutObjInfo()
+	{
+		poi.t = goi.t
+		poi.lom = lom
+		poi.r = resp.Body
+		poi.owt = cmn.OwtMigrate
+		poi.workFQN = workFQN
+		poi.cksumToUse = cksumToUse
 	}
-	if _, err := poi.putObject(); err != nil {
-		glog.Error(err)
-		return
+	errCode, erp := poi.putObject()
+	freePutObjInfo(poi)
+	if erp == nil {
+		return true
 	}
-	ok = true
-	return
+	glog.Errorf("%s: gfn-GET failed to PUT locally: %v(%d)", goi.t.si, erp, errCode)
+	return false
 }
 
 func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err error) {

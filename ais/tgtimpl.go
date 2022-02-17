@@ -62,6 +62,7 @@ func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) er
 		poi.r = params.Reader
 		poi.workFQN = workFQN
 		poi.atime = params.Atime
+		poi.xctn = params.Xact
 		poi.owt = params.OWT
 		poi.skipEC = params.SkipEncode
 	}
@@ -73,13 +74,14 @@ func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) er
 	return err
 }
 
-func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string) (errCode int, err error) {
+func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string, xctn cluster.Xact) (errCode int, err error) {
 	poi := allocPutObjInfo()
 	{
 		poi.t = t
 		poi.lom = lom
 		poi.workFQN = workFQN
 		poi.owt = cmn.OwtFinalize
+		poi.xctn = xctn
 	}
 	errCode, err = poi.finalize()
 	freePutObjInfo(poi)
@@ -274,7 +276,7 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 		poi.lom = lom
 		poi.workFQN = workFQN
 		poi.owt = cmn.OwtPromote
-		// poi.xact  params.Xact TODO -- FIXME
+		poi.xctn = params.Xact
 	}
 	lom.SetSize(fileSize)
 	errCode, err := poi.finalize()
@@ -289,6 +291,7 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 }
 
 // TODO: use DM streams
+// TODO: Xact.InObjsAdd on the receive side
 func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *cluster.Snode) error {
 	lom.FQN = params.SrcFQN
 	// when not overwriting check w/ remote target first and separately

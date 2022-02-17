@@ -2497,17 +2497,14 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
-	var (
-		req = cmn.HreqArgs{
+	cargs := allocCargs()
+	{
+		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Base:   baseURL,
 			Path:   cmn.URLPathDae.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
 		}
-		cargs = allocCargs()
-	)
-	{
-		cargs.req = req
 		cargs.timeout = cmn.DefaultTimeout
 		cargs.v = &smapX{}
 	}

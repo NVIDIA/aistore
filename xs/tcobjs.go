@@ -193,6 +193,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		params.WorkTag = fs.WorkfilePut
 		params.Reader = io.NopCloser(objReader)
 		params.Cksum = hdr.ObjAttrs.Cksum
+		params.Xact = r
 
 		// Transaction is used only by CopyBucket and ETL. In both cases, new objects
 		// are created at the destination. Setting `OwtPut` type informs `t.PutObject()`

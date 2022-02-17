@@ -139,6 +139,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 		params.Reader = r
 		params.OWT = cmn.OwtPut
 		params.Atime = t.started.Load()
+		params.Xact = t.parent
 	}
 	erp := t.parent.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)

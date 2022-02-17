@@ -771,8 +771,11 @@ func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, ms
 		return
 	}
 	body := cos.MustMarshal(msg)
-	req := cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDae.S, Body: body}
-	p.bcastReqGroup(w, r, req, cluster.AllNodes)
+
+	args := allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDae.S, Body: body}
+	p.bcastReqGroup(w, r, args, cluster.AllNodes)
+	freeBcArgs(args)
 }
 
 func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
@@ -785,8 +788,11 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 
 	msg.Value = toUpdate
 	body := cos.MustMarshal(msg)
-	req := cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDae.S, Body: body, Query: q}
-	p.bcastReqGroup(w, r, req, cluster.AllNodes)
+
+	args := allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathDae.S, Body: body, Query: q}
+	p.bcastReqGroup(w, r, args, cluster.AllNodes)
+	freeBcArgs(args)
 }
 
 func _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {

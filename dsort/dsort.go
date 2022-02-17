@@ -361,6 +361,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 				params.Reader = io.NopCloser(r)
 				params.Cksum = nil
 				params.Atime = beforeCreation
+
+				// TODO: params.Xact = ?
 			}
 			err = m.ctx.t.PutObject(lom, params)
 			cluster.FreePutObjParams(params)

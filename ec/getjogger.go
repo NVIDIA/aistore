@@ -240,6 +240,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 		MD:         ctx.meta.NewPack(),
 		Cksum:      cos.NewCksum(ctx.meta.CksumType, ctx.meta.CksumValue),
 		Generation: ctx.meta.Generation,
+		Xact:       c.parent,
 	}
 	if err := WriteReplicaAndMeta(c.parent.t, ctx.lom, args); err != nil {
 		writer.Free()
@@ -596,6 +597,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 		MD:         mainMeta.NewPack(),
 		Cksum:      cos.NewCksum(conf.Type, ""),
 		Generation: mainMeta.Generation,
+		Xact:       c.parent,
 	}
 	err = WriteReplicaAndMeta(c.parent.t, ctx.lom, args)
 	return restored, err

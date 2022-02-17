@@ -101,8 +101,8 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	} else if stage < rebStageTraverse {
 		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
 	}
-
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
+	xreb := reb.xctn()
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfilePut
@@ -110,6 +110,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		params.OWT = cmn.OwtMigrate
 		params.Cksum = hdr.ObjAttrs.Cksum
 		params.Atime = lom.Atime()
+		params.Xact = xreb
 	}
 	erp := reb.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
@@ -117,8 +118,9 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		glog.Error(erp)
 		return erp
 	}
-	xreb := reb.xctn()
+	// stats
 	xreb.InObjsAdd(1, hdr.ObjAttrs.Size)
+
 	// ACK
 	tsi := smap.GetTarget(tsid)
 	if tsi == nil {

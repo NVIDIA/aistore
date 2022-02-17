@@ -888,20 +888,14 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 	freeBcArgs(args)
 }
 
-// bcastReqGroup broadcasts a HreqArgs to a specific group of nodes
-func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, req cmn.HreqArgs, to int) {
-	args := allocBcArgs()
-	args.req = req
+func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, args *bcastArgs, to int) {
 	args.to = to
 	results := h.bcastGroup(args)
-	freeBcArgs(args)
 	for _, res := range results {
-		if res.err == nil {
-			continue
+		if res.err != nil {
+			h.writeErr(w, r, res.toErr())
+			break
 		}
-		h.writeErr(w, r, res.toErr())
-		freeBcastRes(results)
-		return
 	}
 	freeBcastRes(results)
 }
