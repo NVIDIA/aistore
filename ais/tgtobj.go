@@ -1038,13 +1038,12 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cos.CksumHash) s
 // COPY OBJECT //
 /////////////////
 
-func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int64, err error) {
+func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	debug.Assert(coi.DP == nil)
-	// remote to remote:
-	// since we don't need to create local copies we can simply use copyReader
-	if src.Bck().IsRemote() || coi.BckTo.IsRemote() {
+	// remote to remote: no need to create local copies - use copyReader
+	if lom.Bck().IsRemote() || coi.BckTo.IsRemote() {
 		coi.DP = &cluster.LDP{}
-		return coi.copyReader(src, objNameTo)
+		return coi.copyReader(lom, objNameTo)
 	}
 	if coi.DryRun {
 		defer func() {
@@ -1053,87 +1052,71 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 			}
 		}()
 	}
-	si := coi.t.si
 	if !coi.localOnly {
 		smap := coi.t.owner.smap.Get()
-		if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), smap); err != nil {
-			return
+		tsi, err := cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), smap)
+		if err != nil {
+			return 0, err
 		}
-	}
-
-	// to remote
-	if si.ID() != coi.t.si.ID() {
-		params := allocSendParams()
-		{
-			params.ObjNameTo = objNameTo
-			params.Tsi = si
-			params.DM = coi.DM
-			if coi.DM != nil {
-				params.OWT = coi.DM.OWT()
-			} else {
-				params.OWT = cmn.OwtMigrate
-			}
+		// remote
+		if tsi.ID() != coi.t.si.ID() {
+			return coi._sendRemote(lom, objNameTo, tsi)
 		}
-		size, err = coi.putRemote(src, params)
-		freeSendParams(params)
-		return
 	}
 
 	// dry-run
 	if coi.DryRun {
-		// TODO: replace with something similar to src.FQN == dst.FQN, but dstBck might not exist.
-		if src.Bucket().Equal(coi.BckTo.Bck) && src.ObjName == objNameTo {
+		// TODO: replace with something similar to lom.FQN == dst.FQN, but dstBck might not exist.
+		if lom.Bucket().Equal(coi.BckTo.Bck) && lom.ObjName == objNameTo {
 			return 0, nil
 		}
-		return src.SizeBytes(), nil
+		return lom.SizeBytes(), nil
 	}
 
-	// local copy
+	// local
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
-	err = dst.Init(coi.BckTo.Bck)
-	if err != nil {
+	if err = dst.Init(coi.BckTo.Bck); err != nil {
 		return
 	}
-	if src.FQN == dst.FQN { // resilvering with a single mountpath?
+	if lom.FQN == dst.FQN { // resilvering with a single mountpath?
 		return
 	}
-
-	exclusive := src.Uname() == dst.Uname()
-	src.Lock(exclusive)
-	defer src.Unlock(exclusive)
-	if err = src.Load(false /*cache it*/, true /*locked*/); err != nil {
+	exclusive := lom.Uname() == dst.Uname()
+	lom.Lock(exclusive)
+	defer lom.Unlock(exclusive)
+	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
-			err = fmt.Errorf("%s: err: %w", src, err)
+			err = fmt.Errorf("%s: err: %w", lom, err)
 		}
 		return
 	}
-
 	// unless overwriting the source w-lock the destination (see `exclusive`)
-	if src.Uname() != dst.Uname() {
+	if lom.Uname() != dst.Uname() {
 		dst.Lock(true)
 		defer dst.Unlock(true)
 		if err = dst.Load(false /*cache it*/, true /*locked*/); err == nil {
-			if src.EqCksum(dst.Checksum()) {
+			if lom.EqCksum(dst.Checksum()) {
 				return
 			}
 		} else if cmn.IsErrBucketNought(err) {
 			return
 		}
 	}
-	dst2, err2 := src.Copy2FQN(dst.FQN, coi.Buf)
+	dst2, err2 := lom.Copy2FQN(dst.FQN, coi.Buf)
 	if err2 == nil {
-		size = src.SizeBytes()
+		size = lom.SizeBytes()
 		if coi.finalize {
 			coi.t.putMirror(dst2)
 		}
 	}
 	err = err2
 	cluster.FreeLOM(dst2)
+
 	// xaction stats: inc locally processed (and see data mover for in and out objs)
 	if coi.Xact != nil {
 		debug.Assert(coi.DM == nil || coi.Xact == coi.DM.GetXact())
-		coi.Xact.ObjsAdd(1, src.SizeBytes())
+		coi.Xact.ObjsAdd(1, lom.SizeBytes())
 	}
 	return
 }
@@ -1155,10 +1138,10 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	var (
 		reader cos.ReadOpenCloser
-		si     *cluster.Snode
+		tsi    *cluster.Snode
 	)
 	debug.Assert(coi.DP != nil)
-	if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
+	if tsi, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
 	}
 	if coi.DryRun {
@@ -1168,28 +1151,17 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 			}
 		}()
 	}
-	if si.ID() != coi.t.si.ID() {
-		params := allocSendParams()
-		{
-			params.ObjNameTo = objNameTo
-			params.Tsi = si
-			params.DM = coi.DM
-			if coi.DM != nil {
-				params.OWT = coi.DM.OWT()
-			} else {
-				params.OWT = cmn.OwtMigrate
-			}
-		}
-		size, err = coi.putRemote(lom, params)
-		freeSendParams(params)
-		return
+	if tsi.ID() != coi.t.si.ID() {
+		// remote
+		return coi._sendRemote(lom, objNameTo, tsi)
 	}
 
+	// local
 	if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return
 	}
-	// DryRun: just get a reader and discard it. Init on dstLOM would cause and error as dstBck doesn't exist.
 	if coi.DryRun {
+		// discard the reader and be done
 		return coi.dryRunCopyReader(lom)
 	}
 	dst := cluster.AllocLOM(objNameTo)
@@ -1200,22 +1172,19 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	if lom.Bucket().Equal(coi.BckTo.Bck) {
 		dst.SetVersion(lom.Version())
 	}
-
 	if reader, _, err = coi.DP.Reader(lom); err != nil {
 		return 0, err
-	}
-
-	// Set the correct owt: some transactions must update the object
-	// in the Cloud(iff the destination is a Cloud bucket).
-	owt := cmn.OwtMigrate
-	if coi.DM != nil {
-		owt = coi.DM.OWT()
 	}
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = "copy-dp"
 		params.Reader = reader
-		params.OWT = owt
+		// owt: some transactions must update the object in the Cloud(iff the destination is a Cloud bucket)
+		if coi.DM != nil {
+			params.OWT = coi.DM.OWT()
+		} else {
+			params.OWT = cmn.OwtMigrate
+		}
 		params.Atime = lom.Atime()
 	}
 	err = coi.t.PutObject(dst, params)
@@ -1239,6 +1208,23 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 	}
 	defer reader.Close()
 	return io.Copy(io.Discard, reader)
+}
+
+func (coi *copyObjInfo) _sendRemote(lom *cluster.LOM, objNameTo string, tsi *cluster.Snode) (size int64, err error) {
+	params := allocSendParams()
+	{
+		params.ObjNameTo = objNameTo
+		params.Tsi = tsi
+		params.DM = coi.DM
+		if coi.DM != nil {
+			params.OWT = coi.DM.OWT()
+		} else {
+			params.OWT = cmn.OwtMigrate
+		}
+	}
+	size, err = coi.putRemote(lom, params)
+	freeSendParams(params)
+	return
 }
 
 // PUT object => designated target
