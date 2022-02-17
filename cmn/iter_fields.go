@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	tagOmitempty = "omitempty"          // the field must be omitted when empty (only for read-only walk)
-	tagOmit      = cos.JSONLocalTagOmit // the field must be omitted
-	tagReadonly  = "readonly"           // the field can be only read
-	tagInline    = "inline"             // the fields of a struct are embedded into parent field keys
+	tagOmitempty = "omitempty" // the field must be omitted when empty (only for read-only walk)
+	tagOmit      = "omit"      // the field must be omitted
+	tagReadonly  = "readonly"  // the field can be only read
+	tagInline    = "inline"    // the fields of a struct are embedded into parent field keys
 )
 
 type (

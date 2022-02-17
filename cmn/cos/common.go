@@ -37,15 +37,11 @@ const (
 	SizeofI32 = int(unsafe.Sizeof(uint32(0)))
 	SizeofI16 = int(unsafe.Sizeof(uint16(0)))
 
-	RFC822 = time.RFC822 // ListObjsMsg.TimeFormat enum
-
 	MLCG32 = 1103515245 // xxhash seed
 
 	PermRWR       os.FileMode = 0o640 // POSIX perms
 	PermRWXRX     os.FileMode = 0o750
 	configDirMode             = PermRWXRX | os.ModeDir
-
-	JSONLocalTagOmit = "omit"
 )
 
 type (

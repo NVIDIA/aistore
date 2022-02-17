@@ -17,7 +17,7 @@ const (
 func FormatUnixNano(unixnano int64, format string) string {
 	t := time.Unix(0, unixnano)
 	switch format {
-	case "", RFC822:
+	case "", time.RFC822:
 		return t.Format(time.RFC822)
 	default:
 		return t.Format(format)
