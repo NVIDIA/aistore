@@ -93,10 +93,9 @@ type (
 
 	copyObjInfo struct {
 		cluster.CopyObjectParams
-		t         *target
-		owt       cmn.OWT
-		localOnly bool // copy locally with no HRW=>target
-		finalize  bool // copies and EC (as in poi.finalize())
+		t        *target
+		owt      cmn.OWT
+		finalize bool // copies and EC (as in poi.finalize())
 	}
 
 	appendArchObjInfo struct {
@@ -1053,16 +1052,15 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 			}
 		}()
 	}
-	if !coi.localOnly {
-		smap := coi.t.owner.smap.Get()
-		tsi, err := cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), smap)
-		if err != nil {
-			return 0, err
-		}
-		// remote
-		if tsi.ID() != coi.t.si.ID() {
-			return coi.sendRemote(lom, objNameTo, tsi)
-		}
+
+	// remote
+	smap := coi.t.owner.smap.Get()
+	tsi, err := cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), smap)
+	if err != nil {
+		return 0, err
+	}
+	if tsi.ID() != coi.t.si.ID() {
+		return coi.sendRemote(lom, objNameTo, tsi)
 	}
 
 	// dry-run

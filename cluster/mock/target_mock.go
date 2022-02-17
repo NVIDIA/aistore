@@ -44,22 +44,19 @@ func (*TargetMock) Sowner() cluster.Sowner   { return nil }
 func (*TargetMock) PageMM() *memsys.MMSA { return memsys.PageMM() }
 func (*TargetMock) ByteMM() *memsys.MMSA { return memsys.ByteMM() }
 
-func (*TargetMock) PutObject(*cluster.LOM, *cluster.PutObjectParams) error      { return nil }
-func (*TargetMock) FinalizeObj(*cluster.LOM, string, cluster.Xact) (int, error) { return 0, nil }
-func (*TargetMock) EvictObject(*cluster.LOM) (int, error)                       { return 0, nil }
-func (*TargetMock) DeleteObject(*cluster.LOM, bool) (int, error)                { return 0, nil }
-func (*TargetMock) Promote(cluster.PromoteParams) (int, error)                  { return 0, nil }
-func (*TargetMock) DB() dbdriver.Driver                                         { return nil }
-func (*TargetMock) Backend(*cluster.Bck) cluster.BackendProvider                { return nil }
-func (*TargetMock) HeadObjT2T(*cluster.LOM, *cluster.Snode) bool                { return false }
-func (*TargetMock) RebalanceNamespace(*cluster.Snode) ([]byte, int, error)      { return nil, 0, nil }
-func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                   {}
-func (*TargetMock) FSHC(error, string)                                          {}
-func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus                              { return fs.CapStatus{} }
-
-func (*TargetMock) CopyObject(*cluster.LOM, *cluster.CopyObjectParams, bool) (int64, error) {
-	return 0, nil
-}
+func (*TargetMock) PutObject(*cluster.LOM, *cluster.PutObjectParams) error            { return nil }
+func (*TargetMock) FinalizeObj(*cluster.LOM, string, cluster.Xact) (int, error)       { return 0, nil }
+func (*TargetMock) EvictObject(*cluster.LOM) (int, error)                             { return 0, nil }
+func (*TargetMock) DeleteObject(*cluster.LOM, bool) (int, error)                      { return 0, nil }
+func (*TargetMock) CopyObject(*cluster.LOM, *cluster.CopyObjectParams) (int64, error) { return 0, nil }
+func (*TargetMock) Promote(cluster.PromoteParams) (int, error)                        { return 0, nil }
+func (*TargetMock) DB() dbdriver.Driver                                               { return nil }
+func (*TargetMock) Backend(*cluster.Bck) cluster.BackendProvider                      { return nil }
+func (*TargetMock) HeadObjT2T(*cluster.LOM, *cluster.Snode) bool                      { return false }
+func (*TargetMock) RebalanceNamespace(*cluster.Snode) ([]byte, int, error)            { return nil, 0, nil }
+func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                         {}
+func (*TargetMock) FSHC(error, string)                                                {}
+func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus                                    { return fs.CapStatus{} }
 
 func (*TargetMock) CompareObjects(context.Context, *cluster.LOM) (bool, int, error) {
 	return true, 0, nil

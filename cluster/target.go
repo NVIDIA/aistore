@@ -129,7 +129,7 @@ type Target interface {
 	FinalizeObj(lom *LOM, workFQN string, xctn Xact) (errCode int, err error)
 	EvictObject(lom *LOM) (errCode int, err error)
 	DeleteObject(lom *LOM, evict bool) (errCode int, err error)
-	CopyObject(lom *LOM, params *CopyObjectParams, localOnly bool) (int64, error)
+	CopyObject(lom *LOM, params *CopyObjectParams) (int64, error)
 	GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
 	Promote(params PromoteParams) (errCode int, err error)
 	HeadObjT2T(lom *LOM, si *Snode) bool
