@@ -142,7 +142,7 @@ func ETLStop(baseParams BaseParams, id string) (err error) {
 func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {
 	_, err = GetObject(baseParams, bck, objName, GetObjectInput{
 		Writer: w,
-		Query:  url.Values{cmn.URLParamUUID: []string{id}},
+		Query:  url.Values{cmn.QparamUUID: []string{id}},
 	})
 	return
 }
@@ -153,7 +153,7 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg
 	}
 	baseParams.Method = http.MethodPost
 	q := cmn.AddBckToQuery(nil, fromBck)
-	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
+	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.QparamBucketTo)
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams

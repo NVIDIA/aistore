@@ -138,7 +138,7 @@ func (*voteRetryMockTarget) votehdlr(w http.ResponseWriter, _ *http.Request) {
 
 func (p *voteRetryMockTarget) healthdlr(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	getRebStatus := cos.IsParseBool(query.Get(cmn.URLParamRebStatus))
+	getRebStatus := cos.IsParseBool(query.Get(cmn.QparamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
 		status.RebID = math.MaxInt64 // to abort t[MOCK] join triggered rebalance

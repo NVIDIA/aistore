@@ -195,102 +195,102 @@ const (
 
 // User/client query params.
 const (
-	URLParamWhat      = "what"           // "smap" | "bmd" | "config" | "stats" | "xaction" ...
-	URLParamProps     = "props"          // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
-	URLParamNewCustom = "set-new-custom" // remove existing custom keys (if any) and store new custom metadata
-	URLParamUUID      = "uuid"
-	URLParamRegex     = "regex" // dsort/downloader regex
+	QparamWhat      = "what"           // "smap" | "bmd" | "config" | "stats" | "xaction" ...
+	QparamProps     = "props"          // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
+	QparamNewCustom = "set-new-custom" // remove existing custom keys (if any) and store new custom metadata
+	QparamUUID      = "uuid"
+	QparamRegex     = "regex" // dsort/downloader regex
 
-	URLParamHeadObj = "head_obj" // enum { HeadObjAvoidRemote, ... } above
+	QparamHeadObj = "head_obj" // enum { HeadObjAvoidRemote, ... } above
 
 	// Bucket related query params.
-	URLParamProvider  = "provider" // backend provider
-	URLParamNamespace = "namespace"
-	URLParamBucketTo  = "bck_to"
-	URLParamKeepBckMD = "keep_md"
+	QparamProvider  = "provider" // backend provider
+	QparamNamespace = "namespace"
+	QparamBucketTo  = "bck_to"
+	QparamKeepBckMD = "keep_md"
 
 	// Object related query params.
-	URLParamAppendType   = "append_type"
-	URLParamAppendHandle = "append_handle"
+	QparamAppendType   = "append_type"
+	QparamAppendHandle = "append_handle"
 
 	// HTTP bucket support.
-	URLParamOrigURL = "original_url"
+	QparamOrigURL = "original_url"
 
 	// Log severity
-	URLParamSev = "severity" // see { LogInfo, ...} enum
+	QparamSev = "severity" // see { LogInfo, ...} enum
 
 	// Archive filename and format (mime type)
-	URLParamArchpath = "archpath"
-	URLParamArchmime = "archmime"
+	QparamArchpath = "archpath"
+	QparamArchmime = "archmime"
 
 	// Skip loading existing object's metadata in order to
 	// compare its Checksum and update its existing Version (if exists);
 	// can be used to reduce PUT latency when:
 	// - we massively write a new content into a bucket, and/or
 	// - we simply don't care.
-	URLParamSkipVC = "skip_vc"
+	QparamSkipVC = "skip_vc"
 )
 
 // health
 const (
-	URLParamHealthReadiness = "readiness" // to be used by external watchdogs (e.g. K8s)
-	URLParamAskPrimary      = "apr"       // true: the caller is directing health request to primary
-	URLParamPrimaryReadyReb = "prr"       // true: check whether primary is ready to start rebalancing cluster
+	QparamHealthReadiness = "readiness" // to be used by external watchdogs (e.g. K8s)
+	QparamAskPrimary      = "apr"       // true: the caller is directing health request to primary
+	QparamPrimaryReadyReb = "prr"       // true: check whether primary is ready to start rebalancing cluster
 )
 
 // Internal query params.
 const (
-	URLParamProxyID          = "pid" // ID of the redirecting proxy.
-	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy.
-	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
-	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role
-	URLParamUnixTime         = "utm" // Unix time since 01/01/70 UTC (nanoseconds)
-	URLParamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
-	URLParamSilent           = "sln" // true: destination should not log errors (HEAD request)
-	URLParamRebStatus        = "rbs" // true: get detailed rebalancing status
-	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
-	URLParamTaskAction       = "tac" // "start", "status", "result"
-	URLParamClusterInfo      = "cii" // true: /Health to return cluster info and status
-	URLParamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
+	QparamProxyID          = "pid" // ID of the redirecting proxy.
+	QparamPrimaryCandidate = "can" // ID of the candidate for the primary proxy.
+	QparamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
+	QparamNonElectable     = "nel" // true: proxy is non-electable for the primary role
+	QparamUnixTime         = "utm" // Unix time since 01/01/70 UTC (nanoseconds)
+	QparamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
+	QparamSilent           = "sln" // true: destination should not log errors (HEAD request)
+	QparamRebStatus        = "rbs" // true: get detailed rebalancing status
+	QparamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
+	QparamTaskAction       = "tac" // "start", "status", "result"
+	QparamClusterInfo      = "cii" // true: /Health to return cluster info and status
+	QparamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
 
 	// force the operation; allows to overcome certain restrictions (e.g., shutdown primary and the entire cluster)
 	// or errors (e.g., attach invalid mountpath)
-	URLParamForce = "frc"
+	QparamForce = "frc"
 
-	URLParamDontLookupRemoteBck = "dntlrb" // true: do not try to lookup remote buckets on the fly (overrides the default)
-	URLParamDontResilver        = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
+	QparamDontLookupRemoteBck = "dntlrb" // true: do not try to lookup remote buckets on the fly (overrides the default)
+	QparamDontResilver        = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
 
 	// dsort
-	URLParamTotalCompressedSize       = "tcs"
-	URLParamTotalInputShardsExtracted = "tise"
-	URLParamTotalUncompressedSize     = "tunc"
+	QparamTotalCompressedSize       = "tcs"
+	QparamTotalInputShardsExtracted = "tise"
+	QparamTotalUncompressedSize     = "tunc"
 
 	// 2PC transactions - control plane
-	URLParamNetwTimeout  = "xnt" // [begin, start-commit] timeout
-	URLParamHostTimeout  = "xht" // [begin, txn-done] timeout
-	URLParamWaitMetasync = "xwm" // true: wait for metasync (used only when there's an alternative)
+	QparamNetwTimeout  = "xnt" // [begin, start-commit] timeout
+	QparamHostTimeout  = "xht" // [begin, txn-done] timeout
+	QparamWaitMetasync = "xwm" // true: wait for metasync (used only when there's an alternative)
 
 	// promote(dir)
-	URLParamPromoteFileShare = "prmshr"
+	QparamPromoteFileShare = "prmshr"
 
 	// Notification target's node ID (usually, the node that initiates the operation).
-	URLParamNotifyMe = "nft"
+	QparamNotifyMe = "nft"
 )
 
-// URLParamAppendType enum
+// QparamAppendType enum
 const (
 	AppendOp = "append"
 	FlushOp  = "flush"
 )
 
-// URLParamTaskAction enum
+// QparamTaskAction enum
 const (
 	TaskStart  = Start
 	TaskStatus = "status"
 	TaskResult = "result"
 )
 
-// URLParamWhat enum
+// QparamWhat enum
 
 // User/client "what" values.
 const (
@@ -318,7 +318,7 @@ const (
 	GetWhatICBundle       = "ic_bundle"
 )
 
-// URLParamSev enum
+// QparamSev enum
 const (
 	LogInfo = "info"
 	LogWarn = "warning"

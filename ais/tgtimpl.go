@@ -328,7 +328,7 @@ func (t *target) DisableMpath(mpath, reason string) (err error) {
 func (t *target) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, err error) {
 	// pull the data
 	query := url.Values{}
-	query.Set(cmn.URLParamRebData, "true")
+	query.Set(cmn.QparamRebData, "true")
 	cargs := allocCargs()
 	{
 		cargs.si = si

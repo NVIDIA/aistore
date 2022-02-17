@@ -218,13 +218,14 @@ type (
 	// RESTful API parse context
 	dpq struct {
 		provider, namespace string // bucket
-		pid, ptime, uuid    string // proxy
+		pid, ptime          string // proxy ID, timestamp
+		uuid                string // xaction
 		skipVC              string // (disconnected backend)
 		archpath, archmime  string // archive
 		isGFN               string // ditto
 		origURL             string // ht://url->
 		appendTy, appendHdl string // APPEND { cmn.AppendOp, ... }
-		owt                 string // object write transaction { OwtPut, ..., OwtGet* }
+		owt                 string // object write transaction { OwtPut, ... }
 		dontLookupRemoteBck string // (as the name implies)
 	}
 	apiRequest struct {
@@ -720,43 +721,43 @@ func urlQuery(rawQuery string, dpq *dpq) (err error) {
 		// supported URL query parameters explicitly named below; attempt to parse anything
 		// outside this list will fail
 		switch key {
-		case cmn.URLParamProvider:
+		case cmn.QparamProvider:
 			dpq.provider = value
-		case cmn.URLParamNamespace:
+		case cmn.QparamNamespace:
 			if dpq.namespace, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.URLParamSkipVC:
+		case cmn.QparamSkipVC:
 			dpq.skipVC = value
-		case cmn.URLParamProxyID:
+		case cmn.QparamProxyID:
 			dpq.pid = value
-		case cmn.URLParamUnixTime:
+		case cmn.QparamUnixTime:
 			dpq.ptime = value
-		case cmn.URLParamUUID:
+		case cmn.QparamUUID:
 			dpq.uuid = value
-		case cmn.URLParamArchpath:
+		case cmn.QparamArchpath:
 			if dpq.archpath, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.URLParamArchmime:
+		case cmn.QparamArchmime:
 			if dpq.archmime, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.URLParamIsGFNRequest:
+		case cmn.QparamIsGFNRequest:
 			dpq.isGFN = value
-		case cmn.URLParamOrigURL:
+		case cmn.QparamOrigURL:
 			if dpq.origURL, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.URLParamAppendType:
+		case cmn.QparamAppendType:
 			dpq.appendTy = value
-		case cmn.URLParamAppendHandle:
+		case cmn.QparamAppendHandle:
 			if dpq.appendHdl, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.URLParamOWT:
+		case cmn.QparamOWT:
 			dpq.owt = value
-		case cmn.URLParamDontLookupRemoteBck:
+		case cmn.QparamDontLookupRemoteBck:
 			dpq.dontLookupRemoteBck = value
 		default:
 			err = errors.New("failed to fast-parse [" + rawQuery + "]")

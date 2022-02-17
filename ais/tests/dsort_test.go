@@ -1829,7 +1829,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			df.orderFileURL = fmt.Sprintf(
 				"%s/%s/%s/%s/%s?%s=%s",
 				proxyURL, cmn.Version, cmn.Objects, m.bck.Name, orderFileName,
-				cmn.URLParamProvider, cmn.ProviderAIS,
+				cmn.QparamProvider, cmn.ProviderAIS,
 			)
 
 			df.init()

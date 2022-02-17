@@ -39,7 +39,7 @@ func TestReparseQuery(t *testing.T) {
 	r := &http.Request{
 		Method: http.MethodGet,
 		URL: &url.URL{
-			Path: fmt.Sprintf("%s?%s=%s", basePath, cmn.URLParamUUID, uuid),
+			Path: fmt.Sprintf("%s?%s=%s", basePath, cmn.QparamUUID, uuid),
 		},
 	}
 	q := url.Values{}
@@ -47,8 +47,8 @@ func TestReparseQuery(t *testing.T) {
 	r.URL.RawQuery = q.Encode()
 
 	cos.ReparseQuery(r)
-	actualVersionID, actualUUID := r.URL.Query().Get("versionID"), r.URL.Query().Get(cmn.URLParamUUID)
+	actualVersionID, actualUUID := r.URL.Query().Get("versionID"), r.URL.Query().Get(cmn.QparamUUID)
 	tassert.Errorf(t, actualVersionID == versionID, "expected versionID to be %q, got %q", versionID, actualVersionID)
-	tassert.Errorf(t, actualUUID == uuid, "expected %s to be %q, got %q", cmn.URLParamUUID, uuid, actualUUID)
+	tassert.Errorf(t, actualUUID == uuid, "expected %s to be %q, got %q", cmn.QparamUUID, uuid, actualUUID)
 	tassert.Errorf(t, r.URL.Path == basePath, "expected path to be %q, got %q", basePath, r.URL.Path)
 }

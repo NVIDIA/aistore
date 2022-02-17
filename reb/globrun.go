@@ -553,7 +553,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 		query  = url.Values{}
 		loghdr = reb.logHdr(rargs)
 	)
-	query.Set(cmn.URLParamSilent, "true")
+	query.Set(cmn.QparamSilent, "true")
 	for _, lomAck := range reb.lomAcks() {
 		lomAck.mu.Lock()
 		for uname, lom := range lomAck.q {

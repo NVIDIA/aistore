@@ -123,7 +123,7 @@ func ProxyGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	managerUUID := query.Get(cmn.URLParamUUID)
+	managerUUID := query.Get(cmn.QparamUUID)
 
 	if managerUUID == "" {
 		proxyListSortHandler(w, r)
@@ -137,7 +137,7 @@ func ProxyGetHandler(w http.ResponseWriter, r *http.Request) {
 func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		query    = r.URL.Query()
-		regexStr = query.Get(cmn.URLParamRegex)
+		regexStr = query.Get(cmn.QparamRegex)
 	)
 	if _, err := regexp.CompilePOSIX(regexStr); err != nil {
 		cmn.WriteErr(w, r, err)
@@ -187,7 +187,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		smap        = ctx.smapOwner.Get()
 		query       = r.URL.Query()
-		managerUUID = query.Get(cmn.URLParamUUID)
+		managerUUID = query.Get(cmn.QparamUUID)
 		path        = cmn.URLPathdSortMetrics.Join(managerUUID)
 		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
 	)
@@ -238,7 +238,7 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		query       = r.URL.Query()
-		managerUUID = query.Get(cmn.URLParamUUID)
+		managerUUID = query.Get(cmn.QparamUUID)
 		path        = cmn.URLPathdSortAbort.Join(managerUUID)
 		responses   = broadcastTargets(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get())
 	)
@@ -274,7 +274,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		smap        = ctx.smapOwner.Get()
 		query       = r.URL.Query()
-		managerUUID = query.Get(cmn.URLParamUUID)
+		managerUUID = query.Get(cmn.QparamUUID)
 		path        = cmn.URLPathdSortMetrics.Join(managerUUID)
 		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
 	)
@@ -532,29 +532,29 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 		var (
 			query     = r.URL.Query()
-			compStr   = query.Get(cmn.URLParamTotalCompressedSize)
-			uncompStr = query.Get(cmn.URLParamTotalUncompressedSize)
-			dStr      = query.Get(cmn.URLParamTotalInputShardsExtracted)
+			compStr   = query.Get(cmn.QparamTotalCompressedSize)
+			uncompStr = query.Get(cmn.QparamTotalUncompressedSize)
+			dStr      = query.Get(cmn.QparamTotalInputShardsExtracted)
 		)
 
 		compressed, err := strconv.ParseInt(compStr, 10, 64)
 		if err != nil {
 			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
-				cmn.URLParamTotalCompressedSize, r.URL.String(), err)
+				cmn.QparamTotalCompressedSize, r.URL.String(), err)
 			cmn.WriteErrMsg(w, r, s)
 			return
 		}
 		uncompressed, err := strconv.ParseInt(uncompStr, 10, 64)
 		if err != nil {
 			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
-				cmn.URLParamTotalUncompressedSize, r.URL.String(), err)
+				cmn.QparamTotalUncompressedSize, r.URL.String(), err)
 			cmn.WriteErrMsg(w, r, s)
 			return
 		}
 		d, err := strconv.ParseUint(dStr, 10, 64)
 		if err != nil {
 			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
-				cmn.URLParamTotalInputShardsExtracted, r.URL.String(), err)
+				cmn.QparamTotalInputShardsExtracted, r.URL.String(), err)
 			cmn.WriteErrMsg(w, r, s)
 			return
 		}
@@ -633,7 +633,7 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch regex
-	regexStr := r.URL.Query().Get(cmn.URLParamRegex)
+	regexStr := r.URL.Query().Get(cmn.QparamRegex)
 	var regex *regexp.Regexp
 	if regexStr != "" {
 		var err error
@@ -808,7 +808,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	cos.AssertNoErr(err)
 
 	query := make(url.Values)
-	query.Add(cmn.URLParamWhat, cmn.GetWhatDaemonStatus)
+	query.Add(cmn.QparamWhat, cmn.GetWhatDaemonStatus)
 	responses := broadcastTargets(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
 	for _, response := range responses {
 		if response.err != nil {

@@ -680,7 +680,7 @@ gfn:
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) bool {
 	query := cmn.AddBckToQuery(nil, lom.Bucket())
-	query.Set(cmn.URLParamIsGFNRequest, "true")
+	query.Set(cmn.QparamIsGFNRequest, "true")
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodGet
@@ -1421,7 +1421,7 @@ func (t *target) putObjT2T(params *cluster.SendToParams) error {
 	)
 	cmn.ToHeader(params.ObjAttrs, hdr)
 	hdr.Set(cmn.HdrPutterID, t.si.ID())
-	query.Set(cmn.URLParamOWT, params.OWT.ToS())
+	query.Set(cmn.QparamOWT, params.OWT.ToS())
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodPut,
 		Base:   params.Tsi.URL(cmn.NetIntraData),

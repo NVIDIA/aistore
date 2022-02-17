@@ -607,7 +607,7 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	reqParams := &api.ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDae.S,
-		Query:      url.Values{cmn.URLParamWhat: {cmn.GetWhatStats}},
+		Query:      url.Values{cmn.QparamWhat: {cmn.GetWhatStats}},
 	}
 	err := reqParams.DoHTTPReqResp(&stats)
 	tassert.CheckFatal(t, err)

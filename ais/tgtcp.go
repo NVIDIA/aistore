@@ -199,9 +199,9 @@ func (t *target) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems 
 
 	proxyID := apiItems[1]
 	query := r.URL.Query()
-	preparestr := query.Get(cmn.URLParamPrepare)
+	preparestr := query.Get(cmn.QparamPrepare)
 	if prepare, err = cos.ParseBool(preparestr); err != nil {
-		t.writeErrf(w, r, "Failed to parse %s URL Parameter: %v", cmn.URLParamPrepare, err)
+		t.writeErrf(w, r, "Failed to parse %s URL Parameter: %v", cmn.QparamPrepare, err)
 		return
 	}
 
@@ -231,7 +231,7 @@ func (t *target) _setPrim(ctx *smapModifier, clone *smapX) (err error) {
 }
 
 func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
+	getWhat := r.URL.Query().Get(cmn.QparamWhat)
 	httpdaeWhat := "httpdaeget-" + getWhat
 	switch getWhat {
 	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode, cmn.GetWhatLog, cmn.GetWhatStats:
@@ -466,7 +466,7 @@ func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath strin
 }
 
 func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	force := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamForce))
+	force := cos.IsParseBool(r.URL.Query().Get(cmn.QparamForce))
 	addedMi, err := t.fsprg.attachMpath(mpath, force)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -488,7 +488,7 @@ func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 }
 
 func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	dontResilver := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamDontResilver))
+	dontResilver := cos.IsParseBool(r.URL.Query().Get(cmn.QparamDontResilver))
 	disabledMi, err := t.fsprg.disableMpath(mpath, dontResilver)
 	if err != nil {
 		if cmn.IsErrMountpathNotFound(err) {
@@ -506,7 +506,7 @@ func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath stri
 }
 
 func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	dontResilver := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamDontResilver))
+	dontResilver := cos.IsParseBool(r.URL.Query().Get(cmn.QparamDontResilver))
 	removedMi, err := t.fsprg.detachMpath(mpath, dontResilver)
 	if err != nil {
 		t.writeErrf(w, r, err.Error())
@@ -718,7 +718,7 @@ func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed stri
 	}
 	psi := smap.Primary
 	q := url.Values{}
-	q.Set(cmn.URLParamWhat, what)
+	q.Set(cmn.QparamWhat, what)
 	if renamed != "" {
 		q.Add(whatRenamedLB, renamed)
 	}
@@ -926,9 +926,9 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// cluster info piggy-back
 	query := r.URL.Query()
-	getCii := cos.IsParseBool(query.Get(cmn.URLParamClusterInfo))
+	getCii := cos.IsParseBool(query.Get(cmn.QparamClusterInfo))
 	if getCii {
-		debug.Assert(!query.Has(cmn.URLParamRebStatus))
+		debug.Assert(!query.Has(cmn.QparamRebStatus))
 		cii := &clusterInfo{}
 		cii.fill(&t.htrun)
 		_ = t.writeJSON(w, r, cii, "cluster-info")
@@ -955,7 +955,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d", callerID, caller, s, callerSmapVer)
 		glog.Warningf("%s[%s]: %v", t.si, smap.StringEx(), err)
 	}
-	getRebStatus := cos.IsParseBool(query.Get(cmn.URLParamRebStatus))
+	getRebStatus := cos.IsParseBool(query.Get(cmn.QparamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
 		t.reb.RebStatus(status)
@@ -1018,8 +1018,8 @@ func (t *target) enable() error {
 // (compare with api.HeadObject)
 func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	q := cmn.AddBckToQuery(nil, lom.Bucket())
-	q.Set(cmn.URLParamSilent, "true")
-	q.Set(cmn.URLParamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemote))
+	q.Set(cmn.QparamSilent, "true")
+	q.Set(cmn.QparamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemote))
 	cargs := allocCargs()
 	{
 		cargs.si = tsi
@@ -1040,13 +1040,13 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 }
 
 // headObjBcast broadcasts to all targets to find out if anyone has the specified object.
-// NOTE: 1) cmn.URLParamCheckExistsAny to make an extra effort
+// NOTE: 1) cmn.QparamCheckExistsAny to make an extra effort
 //       2) `ignoreMaintenance`
 func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	q := cmn.AddBckToQuery(nil, lom.Bucket())
-	q.Set(cmn.URLParamSilent, "true")
+	q.Set(cmn.QparamSilent, "true")
 	// lookup across all mountpaths and copy (ie., restore) if misplaced
-	q.Set(cmn.URLParamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemoteCheckAllMps))
+	q.Set(cmn.QparamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemoteCheckAllMps))
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,

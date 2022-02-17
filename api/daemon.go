@@ -37,7 +37,7 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.Mountpa
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathReverseDaemon.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatMountpaths}}
 		reqParams.Header = http.Header{
 			cmn.HdrNodeID:  []string{node.ID()},
 			cmn.HdrNodeURL: []string{node.URL(cmn.NetPublic)},
@@ -61,7 +61,7 @@ func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 			cmn.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
 		}
-		reqParams.Query = url.Values{cmn.URLParamForce: []string{strconv.FormatBool(force)}}
+		reqParams.Query = url.Values{cmn.QparamForce: []string{strconv.FormatBool(force)}}
 	}
 	err := reqParams.DoHTTPRequest()
 	freeRp(reqParams)
@@ -89,7 +89,7 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
 	var q url.Values
 	if dontResilver {
-		q = url.Values{cmn.URLParamDontResilver: []string{"true"}}
+		q = url.Values{cmn.QparamDontResilver: []string{"true"}}
 	}
 	baseParams.Method = http.MethodDelete
 	reqParams := allocRp()
@@ -111,7 +111,7 @@ func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
 	var q url.Values
 	if dontResilver {
-		q = url.Values{cmn.URLParamDontResilver: []string{"true"}}
+		q = url.Values{cmn.QparamDontResilver: []string{"true"}}
 	}
 	baseParams.Method = http.MethodPost
 	reqParams := allocRp()
@@ -137,7 +137,7 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathReverseDaemon.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatConfig}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatConfig}}
 		reqParams.Header = http.Header{cmn.HdrNodeID: []string{node.ID()}}
 	}
 	err = reqParams.DoHTTPReqResp(&config)
@@ -159,7 +159,7 @@ func GetDaemonStats(baseParams BaseParams, node *cluster.Snode) (ds *stats.Daemo
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathReverseDaemon.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatStats}}
 		reqParams.Header = http.Header{cmn.HdrNodeID: []string{node.ID()}}
 	}
 	err = reqParams.DoHTTPReqResp(&ds)
@@ -171,9 +171,9 @@ func GetDaemonStats(baseParams BaseParams, node *cluster.Snode) (ds *stats.Daemo
 func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) error {
 	w := args.Writer
 	q := url.Values{}
-	q.Set(cmn.URLParamWhat, cmn.GetWhatLog)
+	q.Set(cmn.QparamWhat, cmn.GetWhatLog)
 	if args.Severity != "" {
-		q.Set(cmn.URLParamSev, args.Severity)
+		q.Set(cmn.QparamSev, args.Severity)
 	}
 	baseParams.Method = http.MethodGet
 	reqParams := allocRp()
@@ -195,7 +195,7 @@ func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathReverseDaemon.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDaemonStatus}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatDaemonStatus}}
 		reqParams.Header = http.Header{cmn.HdrNodeID: []string{node.ID()}}
 	}
 	err = reqParams.DoHTTPReqResp(&daeInfo)

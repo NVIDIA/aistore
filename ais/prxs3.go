@@ -59,16 +59,16 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		q := r.URL.Query()
-		_, lifecycle := q[s3compat.URLParamLifecycle]
-		_, policy := q[s3compat.URLParamPolicy]
-		_, cors := q[s3compat.URLParamCORS]
-		_, acl := q[s3compat.URLParamACL]
+		_, lifecycle := q[s3compat.QparamLifecycle]
+		_, policy := q[s3compat.QparamPolicy]
+		_, cors := q[s3compat.QparamCORS]
+		_, acl := q[s3compat.QparamACL]
 		if lifecycle || policy || cors || acl {
 			p.unsupported(w, r, apiItems[0])
 			return
 		}
 		if len(apiItems) == 1 {
-			_, versioning := q[s3compat.URLParamVersioning]
+			_, versioning := q[s3compat.QparamVersioning]
 			if versioning {
 				p.getBckVersioningS3(w, r, apiItems[0])
 				return
@@ -86,7 +86,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(apiItems) == 1 {
 			q := r.URL.Query()
-			_, versioning := q[s3compat.URLParamVersioning]
+			_, versioning := q[s3compat.QparamVersioning]
 			if versioning {
 				p.putBckVersioningS3(w, r, apiItems[0])
 				return
@@ -101,7 +101,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		q := r.URL.Query()
-		if _, multiple := q[s3compat.URLParamMultiDelete]; !multiple {
+		if _, multiple := q[s3compat.QparamMultiDelete]; !multiple {
 			p.writeErr(w, r, errS3Req)
 			return
 		}
@@ -113,7 +113,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(apiItems) == 1 {
 			q := r.URL.Query()
-			_, multiple := q[s3compat.URLParamMultiDelete]
+			_, multiple := q[s3compat.QparamMultiDelete]
 			if multiple {
 				p.delMultipleObjs(w, r, apiItems[0])
 				return
@@ -219,7 +219,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	}
 	msg := cmn.ActionMsg{Action: cmn.ActDeleteObjects}
 	query := make(url.Values)
-	query.Set(cmn.URLParamProvider, cmn.ProviderAIS)
+	query.Set(cmn.QparamProvider, cmn.ProviderAIS)
 	lrMsg := &cmn.ListRangeMsg{ObjNames: make([]string, 0, len(objList.Object))}
 	for _, obj := range objList.Object {
 		lrMsg.ObjNames = append(lrMsg.ObjNames, obj.Key)

@@ -345,14 +345,14 @@ func (cw *cbWriter) Write(b []byte) (n int, err error) {
 ///////////
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
-// not removing cmn.URLParamUUID, for instance, would cause infinite loop.
+// not removing cmn.QparamUUID, for instance, would cause infinite loop.
 func pruneQuery(rawQuery string) string {
 	vals, err := url.ParseQuery(rawQuery)
 	if err != nil {
 		glog.Errorf("failed to parse raw query %q, err: %v", rawQuery, err)
 		return ""
 	}
-	for _, filtered := range []string{cmn.URLParamUUID, cmn.URLParamProxyID, cmn.URLParamUnixTime} {
+	for _, filtered := range []string{cmn.QparamUUID, cmn.QparamProxyID, cmn.QparamUnixTime} {
 		vals.Del(filtered)
 	}
 	return vals.Encode()

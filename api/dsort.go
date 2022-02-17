@@ -34,7 +34,7 @@ func AbortDSort(baseParams BaseParams, managerUUID string) error {
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathdSortAbort.S
-		reqParams.Query = url.Values{cmn.URLParamUUID: []string{managerUUID}}
+		reqParams.Query = url.Values{cmn.QparamUUID: []string{managerUUID}}
 	}
 	err := reqParams.DoHTTPRequest()
 	freeRp(reqParams)
@@ -47,7 +47,7 @@ func MetricsDSort(baseParams BaseParams, managerUUID string) (metrics map[string
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathdSort.S
-		reqParams.Query = url.Values{cmn.URLParamUUID: []string{managerUUID}}
+		reqParams.Query = url.Values{cmn.QparamUUID: []string{managerUUID}}
 	}
 	err = reqParams.DoHTTPReqResp(&metrics)
 	freeRp(reqParams)
@@ -60,7 +60,7 @@ func RemoveDSort(baseParams BaseParams, managerUUID string) error {
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathdSort.S
-		reqParams.Query = url.Values{cmn.URLParamUUID: []string{managerUUID}}
+		reqParams.Query = url.Values{cmn.QparamUUID: []string{managerUUID}}
 	}
 	err := reqParams.DoHTTPRequest()
 	freeRp(reqParams)
@@ -73,7 +73,7 @@ func ListDSort(baseParams BaseParams, regex string) (jobsInfos []*dsort.JobInfo,
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathdSort.S
-		reqParams.Query = url.Values{cmn.URLParamRegex: []string{regex}}
+		reqParams.Query = url.Values{cmn.QparamRegex: []string{regex}}
 	}
 	err = reqParams.DoHTTPReqResp(&jobsInfos)
 	freeRp(reqParams)

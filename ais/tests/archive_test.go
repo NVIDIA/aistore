@@ -130,12 +130,12 @@ func TestGetFromArchive(t *testing.T) {
 					}
 					getOptions := api.GetObjectInput{
 						Query: url.Values{
-							cmn.URLParamArchpath: []string{randomName},
-							cmn.URLParamArchmime: []string{mime},
+							cmn.QparamArchpath: []string{randomName},
+							cmn.QparamArchmime: []string{mime},
 						},
 					}
 					n, err := api.GetObject(baseParams, m.bck, objname, getOptions)
-					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, cmn.URLParamArchpath, randomName, n)
+					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, cmn.QparamArchpath, randomName, n)
 					tassert.CheckFatal(t, err)
 				}
 			})
@@ -313,13 +313,13 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 
 				getOptions := api.GetObjectInput{
 					Query: url.Values{
-						cmn.URLParamArchpath: []string{entry.Name},
-						cmn.URLParamArchmime: []string{mime},
+						cmn.QparamArchpath: []string{entry.Name},
+						cmn.QparamArchmime: []string{mime},
 					},
 				}
 				n, err := api.GetObject(baseParams, toBck, objName, getOptions)
 				if err != nil {
-					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, cmn.URLParamArchpath, entry.Name, n, err)
+					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, cmn.QparamArchpath, entry.Name, n, err)
 				}
 			}
 		})

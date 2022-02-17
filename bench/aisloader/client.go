@@ -253,7 +253,7 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 
 	query = cmn.AddBckToQuery(query, bck)
 	if etlID != "" {
-		query.Add(cmn.URLParamUUID, etlID)
+		query.Add(cmn.QparamUUID, etlID)
 	}
 	if length > 0 {
 		hdr = cmn.RangeHdr(offset, length)

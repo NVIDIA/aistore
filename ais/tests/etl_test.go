@@ -354,7 +354,7 @@ func TestETLInline(t *testing.T) {
 			outObject := bytes.NewBuffer(nil)
 			_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 				Writer: outObject,
-				Query:  map[string][]string{cmn.URLParamUUID: {uuid}},
+				Query:  map[string][]string{cmn.QparamUUID: {uuid}},
 			})
 			tassert.CheckFatal(t, err)
 
@@ -399,7 +399,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	defer outObject.Free()
 	_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 		Writer: outObject,
-		Query:  map[string][]string{cmn.URLParamUUID: {uuid}},
+		Query:  map[string][]string{cmn.QparamUUID: {uuid}},
 	})
 	tassert.CheckFatal(t, err)
 

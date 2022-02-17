@@ -188,7 +188,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 		curPrimary = vr.Smap.Primary
 		timeout    = cmn.Timeout.CplaneOperation() / 2
 	)
-	// 1. ping current primary (not using cmn.URLParamAskPrimary as it might be transitioning)
+	// 1. ping current primary (not using cmn.QparamAskPrimary as it might be transitioning)
 	for i := 0; i < 2; i++ {
 		if i > 0 {
 			runtime.Gosched()
@@ -206,7 +206,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 	}
 	if err == nil {
 		// move back to idle
-		query := url.Values{cmn.URLParamAskPrimary: []string{"true"}}
+		query := url.Values{cmn.QparamAskPrimary: []string{"true"}}
 		_, _, err = p.Health(curPrimary, timeout, query /*ask primary*/)
 		if err == nil {
 			glog.Infof("%s: current primary %s is up, moving back to idle", p.si, curPrimary)
@@ -276,7 +276,7 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 		msg = VoteMessage{Record: *vr}
 		q   = url.Values{}
 	)
-	q.Set(cmn.URLParamPrimaryCandidate, p.si.ID())
+	q.Set(cmn.QparamPrimaryCandidate, p.si.ID())
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,

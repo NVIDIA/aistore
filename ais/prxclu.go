@@ -49,7 +49,7 @@ func (p *proxy) clusterHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	var (
 		query = r.URL.Query()
-		what  = query.Get(cmn.URLParamWhat)
+		what  = query.Get(cmn.QparamWhat)
 	)
 	switch what {
 	case cmn.GetWhatStats:
@@ -170,7 +170,7 @@ func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Path:   cmn.URLPathDae.S,
-			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}},
+			Query:  url.Values{cmn.QparamWhat: []string{cmn.GetWhatRemoteAIS}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 		cargs.v = remoteInfo
@@ -354,7 +354,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	nonElectable := false
 	if nsi.IsProxy() {
-		s := r.URL.Query().Get(cmn.URLParamNonElectable)
+		s := r.URL.Query().Get(cmn.QparamNonElectable)
 		if nonElectable, err = cos.ParseBool(s); err != nil {
 			glog.Errorf("%s: failed to parse %s for non-electability: %v", p.si, s, err)
 		}
@@ -1099,7 +1099,7 @@ func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action strin
 }
 
 func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, action string, query url.Values) {
-	what := query.Get(cmn.URLParamWhat)
+	what := query.Get(cmn.QparamWhat)
 	if what != cmn.GetWhatRemoteAIS {
 		p.writeErr(w, r, fmt.Errorf(fmtUnknownQue, what))
 		return
@@ -1154,7 +1154,7 @@ func (p *proxy) attachDetachRemoteAIS(ctx *configModifier, config *globalConfig)
 	// detach
 	if action == cmn.ActDetachRemote {
 		for alias := range query {
-			if alias == cmn.URLParamWhat {
+			if alias == cmn.QparamWhat {
 				continue
 			}
 			if _, ok := aisConf[alias]; ok {
@@ -1169,7 +1169,7 @@ func (p *proxy) attachDetachRemoteAIS(ctx *configModifier, config *globalConfig)
 	}
 	// attach
 	for alias, urls := range query {
-		if alias == cmn.URLParamWhat {
+		if alias == cmn.QparamWhat {
 			continue
 		}
 		for _, u := range urls {
@@ -1339,7 +1339,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	// (I.1) Prepare phase - inform other nodes.
 	urlPath := cmn.URLPathDaeProxy.Join(proxyid)
 	q := url.Values{}
-	q.Set(cmn.URLParamPrepare, "true")
+	q.Set(cmn.QparamPrepare, "true")
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
 	if cluMeta, err := p.cluMeta(cmetaFillOpt{skipSmap: true}); err == nil {
@@ -1374,7 +1374,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	debug.AssertNoErr(err)
 
 	// (II) Commit phase.
-	q.Set(cmn.URLParamPrepare, "false")
+	q.Set(cmn.QparamPrepare, "false")
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
 	args.to = cluster.AllNodes

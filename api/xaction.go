@@ -132,7 +132,7 @@ func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMul
 		reqParams.Path = cmn.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatQueryXactStats}}
 	}
 	err = reqParams.DoHTTPReqResp(&xs)
 	freeRp(reqParams)
@@ -153,7 +153,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 		reqParams.Path = cmn.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStatus}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatStatus}}
 	}
 	err = reqParams.DoHTTPReqResp(status)
 	freeRp(reqParams)

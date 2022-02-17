@@ -35,9 +35,9 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		var (
 			query = r.URL.Query()
-			what  = query.Get(cmn.URLParamWhat)
+			what  = query.Get(cmn.QparamWhat)
 		)
-		if uuid := query.Get(cmn.URLParamUUID); uuid != "" {
+		if uuid := query.Get(cmn.QparamUUID); uuid != "" {
 			t.getXactByID(w, r, what, uuid)
 			return
 		}

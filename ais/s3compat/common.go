@@ -9,12 +9,12 @@ const (
 	AISSever  = "AIS"
 
 	// AWS URL params
-	URLParamVersioning  = "versioning"
-	URLParamLifecycle   = "lifecycle"
-	URLParamCORS        = "cors"
-	URLParamPolicy      = "policy"
-	URLParamACL         = "acl"
-	URLParamMultiDelete = "delete"
+	QparamVersioning  = "versioning"
+	QparamLifecycle   = "lifecycle"
+	QparamCORS        = "cors"
+	QparamPolicy      = "policy"
+	QparamACL         = "acl"
+	QparamMultiDelete = "delete"
 
 	versioningEnabled  = "Enabled"
 	versioningDisabled = "Suspended"

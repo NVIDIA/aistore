@@ -188,7 +188,7 @@ func TestHttpProviderObjectGet(t *testing.T) {
 
 	// get using the HTTP API
 	options.Query = make(url.Values, 1)
-	options.Query.Set(cmn.URLParamOrigURL, httpObjectURL)
+	options.Query.Set(cmn.QparamOrigURL, httpObjectURL)
 	_, err := api.GetObject(baseParams, hbo.Bck, httpObjectName, options)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpObjectOutput, "bad content (expected:%s got:%s)", httpObjectOutput, w.String())
@@ -196,7 +196,7 @@ func TestHttpProviderObjectGet(t *testing.T) {
 	// get another object using /v1/objects/bucket-name/object-name endpoint
 	w.Reset()
 	options.Query = make(url.Values, 1)
-	options.Query.Set(cmn.URLParamOrigURL, httpAnotherObjectURL)
+	options.Query.Set(cmn.QparamOrigURL, httpAnotherObjectURL)
 	_, err = api.GetObject(baseParams, hbo.Bck, httpAnotherObjectName, options)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpAnotherObjectOutput, "bad content (expected:%s got:%s)", httpAnotherObjectOutput, w.String())

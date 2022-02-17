@@ -492,13 +492,13 @@ func AddBckToQuery(query url.Values, bck Bck) url.Values {
 		if query == nil {
 			query = make(url.Values)
 		}
-		query.Set(URLParamProvider, bck.Provider)
+		query.Set(QparamProvider, bck.Provider)
 	}
 	if !bck.Ns.IsGlobal() {
 		if query == nil {
 			query = make(url.Values)
 		}
-		query.Set(URLParamNamespace, bck.Ns.Uname())
+		query.Set(QparamNamespace, bck.Ns.Uname())
 	}
 	return query
 }
@@ -513,8 +513,8 @@ func AddBckUnameToQuery(query url.Values, bck Bck, uparam string) url.Values {
 }
 
 func DelBckFromQuery(query url.Values) url.Values {
-	query.Del(URLParamProvider)
-	query.Del(URLParamNamespace)
+	query.Del(QparamProvider)
+	query.Del(QparamNamespace)
 	return query
 }
 

@@ -531,7 +531,7 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, e
 			return "", err
 		}
 		txnTcb := txn.(*txnTCB)
-		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
+		if c.query.Get(cmn.QparamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 				txnTcb.xtcb.TxnAbort()
 				return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
@@ -923,7 +923,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 			glog.Infof("%s: nothing to do (%s)", t.si, txnPrm)
 			return "", nil
 		}
-		isFileShare := c.query.Get(cmn.URLParamPromoteFileShare) != ""
+		isFileShare := c.query.Get(cmn.QparamPromoteFileShare) != ""
 
 		// promote synchronously wo/ xaction
 		if txnPrm.totalN == len(txnPrm.fqns) {
@@ -1041,7 +1041,7 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 
 	// latency = (network) +- (clock drift)
 	if phase == cmn.ActBegin || phase == cmn.ActCommit {
-		if ptime := query.Get(cmn.URLParamUnixTime); ptime != "" {
+		if ptime := query.Get(cmn.QparamUnixTime); ptime != "" {
 			if delta := ptLatency(time.Now().UnixNano(), ptime); delta != 0 {
 				bound := cmn.GCO.Get().Timeout.CplaneOperation / 2
 				if delta > int64(bound) || delta < -int64(bound) {
@@ -1057,11 +1057,11 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 	if c.uuid == "" {
 		return c, nil
 	}
-	if tout := query.Get(cmn.URLParamNetwTimeout); tout != "" {
+	if tout := query.Get(cmn.QparamNetwTimeout); tout != "" {
 		c.timeout.netw, err = cos.S2Duration(tout)
 		debug.AssertNoErr(err)
 	}
-	if tout := query.Get(cmn.URLParamHostTimeout); tout != "" {
+	if tout := query.Get(cmn.QparamHostTimeout); tout != "" {
 		c.timeout.host, err = cos.S2Duration(tout)
 		debug.AssertNoErr(err)
 	}
@@ -1076,7 +1076,7 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 //
 
 func (c *txnServerCtx) addNotif(xctn cluster.Xact) {
-	dsts, ok := c.query[cmn.URLParamNotifyMe]
+	dsts, ok := c.query[cmn.QparamNotifyMe]
 	if !ok {
 		return
 	}

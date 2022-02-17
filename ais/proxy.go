@@ -248,7 +248,7 @@ func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, e
 		return 0, fmt.Errorf("%s should not be joining: is primary, %s", p.si, smap.StringEx())
 	}
 	if cmn.GCO.Get().Proxy.NonElectable {
-		query = url.Values{cmn.URLParamNonElectable: []string{"true"}}
+		query = url.Values{cmn.QparamNonElectable: []string{"true"}}
 	}
 	res := p.join(query, primaryURLs...)
 	defer freeCR(res)
@@ -354,7 +354,7 @@ func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bc
 		return
 	}
 	bckArgs.bck, bckArgs.query = apireq.bck, apireq.query
-	// both ais package caller  _and_ remote user (via `cmn.URLParamDontLookupRemoteBck`)
+	// both ais package caller  _and_ remote user (via `cmn.QparamDontLookupRemoteBck`)
 	bckArgs.lookupRemote = bckArgs.lookupRemote && lookupRemoteBck(apireq.query, apireq.dpq)
 
 	bck, err = bckArgs.initAndTry(apireq.bck.Name)
@@ -463,8 +463,8 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.RawQuery == "" {
 		query := cmn.AddBckToQuery(nil, bck)
 		r.URL.RawQuery = query.Encode()
-	} else if !strings.Contains(r.URL.RawQuery, cmn.URLParamProvider) {
-		r.URL.RawQuery += "&" + cmn.URLParamProvider + "=" + bck.Provider
+	} else if !strings.Contains(r.URL.RawQuery, cmn.QparamProvider) {
+		r.URL.RawQuery += "&" + cmn.QparamProvider + "=" + bck.Provider
 	}
 	// and finally
 	if objName != "" {
@@ -594,11 +594,11 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 		apiReqFree(apireq)
 		return
 	}
-	appendTyProvided := apireq.dpq.appendTy != "" // cmn.URLParamAppendType
+	appendTyProvided := apireq.dpq.appendTy != "" // cmn.QparamAppendType
 	if !appendTyProvided {
 		perms = cmn.AcePUT
 	} else {
-		hi, err := parseAppendHandle(apireq.dpq.appendHdl) // cmn.URLParamAppendHandle
+		hi, err := parseAppendHandle(apireq.dpq.appendHdl) // cmn.QparamAppendHandle
 		if err != nil {
 			apiReqFree(apireq)
 			p.writeErr(w, r, err)
@@ -736,7 +736,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
-		keepMD := cos.IsParseBool(apireq.query.Get(cmn.URLParamKeepBckMD))
+		keepMD := cos.IsParseBool(apireq.query.Get(cmn.QparamKeepBckMD))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if bck.IsHDFS() || keepMD {
 			if err := p.destroyBucketData(msg, bck); err != nil {
@@ -878,14 +878,14 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := r.URL.Query()
-	prr := cos.IsParseBool(query.Get(cmn.URLParamPrimaryReadyReb))
+	prr := cos.IsParseBool(query.Get(cmn.QparamPrimaryReadyReb))
 	if !prr {
 		if responded := p.healthByExternalWD(w, r); responded {
 			return
 		}
 	}
 	// piggy-backing cluster info on health
-	getCii := cos.IsParseBool(query.Get(cmn.URLParamClusterInfo))
+	getCii := cos.IsParseBool(query.Get(cmn.QparamClusterInfo))
 	if getCii {
 		debug.Assert(!prr)
 		cii := &clusterInfo{}
@@ -920,7 +920,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if prr || cos.IsParseBool(query.Get(cmn.URLParamAskPrimary)) {
+	if prr || cos.IsParseBool(query.Get(cmn.QparamAskPrimary)) {
 		caller := r.Header.Get(cmn.HdrCallerName)
 		p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %s, %s",
 			p.si, caller, smap.StringEx())
@@ -1378,7 +1378,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks 
 			return
 		}
 	}
-	if dpq.uuid != "" { // cmn.URLParamUUID
+	if dpq.uuid != "" { // cmn.QparamUUID
 		lsmsg.UUID = dpq.uuid
 	}
 	summaries, uuid, err := p.gatherBckSumm(queryBcks, &lsmsg)
@@ -1430,8 +1430,8 @@ func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *cmn.BckSummMsg) (
 	// all targets are ready, prepare the final result
 	q = url.Values{}
 	q = cmn.AddBckToQuery(q, cmn.Bck(bck))
-	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
-	q.Set(cmn.URLParamSilent, "true")
+	q.Set(cmn.QparamTaskAction, cmn.TaskResult)
+	q.Set(cmn.QparamSilent, "true")
 	args.req.Query = q
 	args.fv = func() interface{} { return &cmn.BckSummaries{} }
 	summaries = make(cmn.BckSummaries, 0)
@@ -1924,8 +1924,8 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 		redirect += r.URL.RawQuery + "&"
 	}
 
-	query.Set(cmn.URLParamProxyID, p.si.ID())
-	query.Set(cmn.URLParamUnixTime, cos.UnixNano2S(ts.UnixNano()))
+	query.Set(cmn.QparamProxyID, p.si.ID())
+	query.Set(cmn.QparamUnixTime, cos.UnixNano2S(ts.UnixNano()))
 	redirect += query.Encode()
 	return
 }
@@ -1935,14 +1935,14 @@ func initAsyncQuery(bck cmn.Bck, msg *cmn.BckSummMsg, newTaskID string) (bool, u
 	q := url.Values{}
 	if isNew {
 		msg.UUID = newTaskID
-		q.Set(cmn.URLParamTaskAction, cmn.TaskStart)
+		q.Set(cmn.QparamTaskAction, cmn.TaskStart)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("proxy: starting new async task %s", msg.UUID)
 		}
 	} else {
 		// First request is always 'Status' to avoid wasting gigabytes of
 		// traffic in case when few targets have finished their tasks.
-		q.Set(cmn.URLParamTaskAction, cmn.TaskStatus)
+		q.Set(cmn.QparamTaskAction, cmn.TaskStatus)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("proxy: reading async task %s result", msg.UUID)
 		}
@@ -2305,7 +2305,7 @@ func (p *proxy) _pendingRnPre(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
 		query = r.URL.Query()
-		what  = query.Get(cmn.URLParamWhat)
+		what  = query.Get(cmn.QparamWhat)
 	)
 	switch what {
 	case cmn.GetWhatBMD:
@@ -2401,10 +2401,10 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.Stop(&errNoUnregister{msg.Action})
 			return
 		}
-		force := cos.IsParseBool(query.Get(cmn.URLParamForce))
+		force := cos.IsParseBool(query.Get(cmn.QparamForce))
 		if !force {
 			p.writeErrf(w, r, "cannot shutdown primary %s (consider %s=true option)",
-				p.si, cmn.URLParamForce)
+				p.si, cmn.QparamForce)
 			return
 		}
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
@@ -2503,7 +2503,7 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 			Method: http.MethodGet,
 			Base:   baseURL,
 			Path:   cmn.URLPathDae.S,
-			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
+			Query:  url.Values{cmn.QparamWhat: []string{cmn.GetWhatSmap}},
 		}
 		cargs.timeout = cmn.DefaultTimeout
 		cargs.v = &smapX{}
@@ -2529,7 +2529,7 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 // and the cluster gets into split-brain mode. This request makes original
 // primary connect to the new primary
 func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID string) {
-	newPrimaryURL := r.URL.Query().Get(cmn.URLParamPrimaryCandidate)
+	newPrimaryURL := r.URL.Query().Get(cmn.QparamPrimaryCandidate)
 	glog.Infof("%s: force new primary %s (URL: %s)", p.si, proxyID, newPrimaryURL)
 
 	if p.si.ID() == proxyID {
@@ -2577,7 +2577,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 	proxyID := apiItems[1]
 	query := r.URL.Query()
-	force := cos.IsParseBool(query.Get(cmn.URLParamForce))
+	force := cos.IsParseBool(query.Get(cmn.QparamForce))
 
 	// forceful primary change
 	if force && apiItems[0] == cmn.Proxy {
@@ -2587,9 +2587,9 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 		p.forcefulJoin(w, r, proxyID)
 		return
 	}
-	prepare, err := cos.ParseBool(query.Get(cmn.URLParamPrepare))
+	prepare, err := cos.ParseBool(query.Get(cmn.QparamPrepare))
 	if err != nil {
-		p.writeErrf(w, r, "failed to parse %s URL parameter: %v", cmn.URLParamPrepare, err)
+		p.writeErrf(w, r, "failed to parse %s URL parameter: %v", cmn.QparamPrepare, err)
 		return
 	}
 	if p.owner.smap.get().isPrimary(p.si) {
@@ -2768,8 +2768,8 @@ func (p *proxy) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		// bck.IsHTTP()
 		hbo := cmn.NewHTTPObj(r.URL)
 		q := r.URL.Query()
-		q.Set(cmn.URLParamOrigURL, r.URL.String())
-		q.Set(cmn.URLParamProvider, cmn.ProviderHTTP)
+		q.Set(cmn.QparamOrigURL, r.URL.String())
+		q.Set(cmn.QparamProvider, cmn.ProviderHTTP)
 		r.URL.Path = cmn.URLPathObjects.Join(hbo.Bck.Name, hbo.ObjName)
 		r.URL.RawQuery = q.Encode()
 		if r.Method == http.MethodGet {
@@ -2870,7 +2870,7 @@ func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error)
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Path:   cmn.URLPathDae.S,
-			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
+			Query:  url.Values{cmn.QparamWhat: []string{cmn.GetWhatSnode}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 		cargs.v = &cluster.Snode{}

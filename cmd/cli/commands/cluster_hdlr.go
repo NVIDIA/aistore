@@ -167,8 +167,8 @@ func attachRemoteAISHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
-	if alias == cmn.URLParamWhat {
-		return fmt.Errorf("cannot use %q as an alias", cmn.URLParamWhat)
+	if alias == cmn.QparamWhat {
+		return fmt.Errorf("cannot use %q as an alias", cmn.QparamWhat)
 	}
 	if err = api.AttachRemoteAIS(defaultAPIParams, alias, url); err != nil {
 		return

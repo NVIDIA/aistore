@@ -94,7 +94,7 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results slice
 	c.req.Path = cos.JoinWords(c.path, phase)
 	if phase != cmn.ActAbort {
 		now := time.Now()
-		c.req.Query.Set(cmn.URLParamUnixTime, cos.UnixNano2S(now.UnixNano()))
+		c.req.Query.Set(cmn.QparamUnixTime, cos.UnixNano2S(now.UnixNano()))
 	}
 
 	args := allocBcArgs()
@@ -422,7 +422,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -523,7 +523,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 		waitmsync = !dryRun
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -547,7 +547,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 		c.msg.BMDVersion = bmd.version()
 		if !ctx.terminate {
 			debug.Assert(!existsTo)
-			c.req.Query.Set(cmn.URLParamWaitMetasync, "true")
+			c.req.Query.Set(cmn.QparamWaitMetasync, "true")
 		}
 	}
 
@@ -589,7 +589,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID 
 		waitmsync = false
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -730,7 +730,7 @@ func _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	// begin
 	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -874,7 +874,7 @@ func (p *proxy) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 // erase bucket data from all targets (keep metadata)
 func (p *proxy) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	query := cmn.AddBckToQuery(
-		url.Values{cmn.URLParamKeepBckMD: []string{"true"}},
+		url.Values{cmn.QparamKeepBckMD: []string{"true"}},
 		bck.Bck)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
@@ -918,7 +918,7 @@ func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode
 	// if targets "see" identical content let them all know
 	// (so that they go ahead to partition accordingly)
 	if allAgree {
-		c.req.Query.Set(cmn.URLParamPromoteFileShare, "true")
+		c.req.Query.Set(cmn.QparamPromoteFileShare, "true")
 	}
 
 	// 5. IC
@@ -980,9 +980,9 @@ func (p *proxy) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bo
 	c.timeout.netw = 2 * config.Timeout.MaxKeepalive.D()
 	c.timeout.host = config.Timeout.MaxHostBusy.D()
 	if !waitmsync { // when commit does not block behind metasync
-		query.Set(cmn.URLParamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
+		query.Set(cmn.QparamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
 	}
-	query.Set(cmn.URLParamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
+	query.Set(cmn.QparamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
 
 	c.req = cmn.HreqArgs{Method: http.MethodPost, Query: query, Body: body}
 	return c

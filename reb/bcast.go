@@ -176,7 +176,7 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 	var (
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
 		logHdr     = reb.logHdr(md)
-		query      = url.Values{cmn.URLParamRebStatus: []string{"true"}}
+		query      = url.Values{cmn.QparamRebStatus: []string{"true"}}
 	)
 	body, code, err := reb.t.Health(tsi, cmn.DefaultTimeout, query)
 	if err != nil {

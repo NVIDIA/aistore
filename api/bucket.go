@@ -240,7 +240,7 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, optionalMsg ...*c
 		msg = optionalMsg[0]
 	}
 	q := cmn.AddBckToQuery(nil, fromBck)
-	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
+	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.QparamBucketTo)
 	baseParams.Method = http.MethodPost
 	reqParams := allocRp()
 	{
@@ -262,7 +262,7 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 	}
 	baseParams.Method = http.MethodPost
 	q := cmn.AddBckToQuery(nil, fromBck)
-	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
+	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.QparamBucketTo)
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
@@ -282,7 +282,7 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 	var q url.Values
 	baseParams.Method = http.MethodDelete
 	if keepMD {
-		q = url.Values{cmn.URLParamKeepBckMD: []string{"true"}}
+		q = url.Values{cmn.QparamKeepBckMD: []string{"true"}}
 	}
 	reqParams := allocRp()
 	{
@@ -384,7 +384,7 @@ func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjs
 		lsmsg = &cmn.ListObjsMsg{}
 	}
 	if dontLookupRemote {
-		q = url.Values{cmn.URLParamDontLookupRemoteBck: []string{"true"}}
+		q = url.Values{cmn.QparamDontLookupRemoteBck: []string{"true"}}
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	bckList = &cmn.BucketList{}

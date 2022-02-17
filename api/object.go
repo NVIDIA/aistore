@@ -151,8 +151,8 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	if checkIsCached {
 		q = make(url.Values, 4)
 		q = cmn.AddBckToQuery(q, bck)
-		q.Set(cmn.URLParamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemote)) // TODO: support the entire enum
-		q.Set(cmn.URLParamSilent, "true")
+		q.Set(cmn.QparamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemote)) // TODO: support the entire enum
+		q.Set(cmn.QparamSilent, "true")
 	} else {
 		q = cmn.AddBckToQuery(nil, bck)
 	}
@@ -204,7 +204,7 @@ func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, cus
 	if setNew {
 		q = make(url.Values, 4)
 		q = cmn.AddBckToQuery(q, bck)
-		q.Set(cmn.URLParamNewCustom, "true")
+		q.Set(cmn.QparamNewCustom, "true")
 	} else {
 		q = cmn.AddBckToQuery(q, bck)
 	}
@@ -393,7 +393,7 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 func PutObject(args PutObjectArgs) (err error) {
 	query := cmn.AddBckToQuery(nil, args.Bck)
 	if args.SkipVC {
-		query.Set(cmn.URLParamSkipVC, "true")
+		query.Set(cmn.QparamSkipVC, "true")
 	}
 	reqArgs := cmn.AllocHra()
 	{
@@ -422,8 +422,8 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 	}
 	q := make(url.Values, 4)
 	q = cmn.AddBckToQuery(q, args.Bck)
-	q.Set(cmn.URLParamArchpath, args.ArchPath)
-	q.Set(cmn.URLParamArchmime, m)
+	q.Set(cmn.QparamArchpath, args.ArchPath)
+	q.Set(cmn.QparamArchmime, m)
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodPut
@@ -446,8 +446,8 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 // NOTE: object becomes visible and accessible only _after_ the call to `api.FlushObject`.
 func AppendObject(args AppendArgs) (string /*handle*/, error) {
 	q := make(url.Values, 4)
-	q.Set(cmn.URLParamAppendType, cmn.AppendOp)
-	q.Set(cmn.URLParamAppendHandle, args.Handle)
+	q.Set(cmn.QparamAppendType, cmn.AppendOp)
+	q.Set(cmn.QparamAppendHandle, args.Handle)
 	q = cmn.AddBckToQuery(q, args.Bck)
 
 	reqArgs := cmn.AllocHra()
@@ -474,8 +474,8 @@ func FlushObject(args FlushArgs) error {
 		header http.Header
 		q      = make(url.Values, 4)
 	)
-	q.Set(cmn.URLParamAppendType, cmn.FlushOp)
-	q.Set(cmn.URLParamAppendHandle, args.Handle)
+	q.Set(cmn.QparamAppendType, cmn.FlushOp)
+	q.Set(cmn.QparamAppendHandle, args.Handle)
 	q = cmn.AddBckToQuery(q, args.Bck)
 
 	if args.Cksum != nil && args.Cksum.Ty() != cos.ChecksumNone {

@@ -678,8 +678,8 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck,
 	msg *cmn.BckSummMsg) {
 	var (
-		taskAction = q.Get(cmn.URLParamTaskAction)
-		silent     = cos.IsParseBool(q.Get(cmn.URLParamSilent))
+		taskAction = q.Get(cmn.QparamTaskAction)
+		silent     = cos.IsParseBool(q.Get(cmn.QparamSilent))
 		ctx        = context.Background()
 	)
 	if taskAction == cmn.TaskStart {
@@ -754,7 +754,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case cmn.ActEvictRemoteBck:
-		keepMD := cos.IsParseBool(apireq.query.Get(cmn.URLParamKeepBckMD))
+		keepMD := cos.IsParseBool(apireq.query.Get(cmn.QparamKeepBckMD))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if apireq.bck.IsHDFS() || keepMD {
 			nlp := apireq.bck.GetNameLockPair()
@@ -870,14 +870,14 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		inBMD = false
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		pid := apireq.query.Get(cmn.URLParamProxyID)
+		pid := apireq.query.Get(cmn.QparamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, apireq.bck, pid)
 	}
 
 	debug.Assert(!apireq.bck.IsAIS())
 
 	if apireq.bck.IsHTTP() {
-		originalURL := apireq.query.Get(cmn.URLParamOrigURL)
+		originalURL := apireq.query.Get(cmn.QparamOrigURL)
 		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
 			err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bck)
@@ -970,7 +970,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		t.doETL(w, r, dpq.uuid, bck, lom.ObjName)
 		return
 	}
-	filename := dpq.archpath // cmn.URLParamArchpath
+	filename := dpq.archpath // cmn.QparamArchpath
 	if strings.HasPrefix(filename, lom.ObjName) {
 		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {
 			filename = rel
@@ -994,13 +994,13 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.ranges = byteRanges{Range: r.Header.Get(cmn.HdrRange), Size: 0}
 		goi.archive = archiveQuery{
 			filename: filename,
-			mime:     dpq.archmime, // query.Get(cmn.URLParamArchmime)
+			mime:     dpq.archmime, // query.Get(cmn.QparamArchmime)
 		}
-		goi.isGFN = cos.IsParseBool(dpq.isGFN) // query.Get(cmn.URLParamIsGFNRequest)
+		goi.isGFN = cos.IsParseBool(dpq.isGFN) // query.Get(cmn.QparamIsGFNRequest)
 		goi.chunked = cmn.GCO.Get().Net.HTTP.Chunked
 	}
 	if bck.IsHTTP() {
-		originalURL := dpq.origURL // query.Get(cmn.URLParamOrigURL)
+		originalURL := dpq.origURL // query.Get(cmn.QparamOrigURL)
 		goi.ctx = context.WithValue(goi.ctx, cos.CtxOriginalURL, originalURL)
 	}
 	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
@@ -1052,9 +1052,9 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 		handle           string
 		err, errdb       error
 		errCode          int
-		skipVC           = cos.IsParseBool(apireq.dpq.skipVC) // cmn.URLParamSkipVC
-		archPathProvided = apireq.dpq.archpath != ""          // cmn.URLParamArchpath
-		appendTyProvided = apireq.dpq.appendTy != ""          // cmn.URLParamAppendType
+		skipVC           = cos.IsParseBool(apireq.dpq.skipVC) // cmn.QparamSkipVC
+		archPathProvided = apireq.dpq.archpath != ""          // cmn.QparamArchpath
+		appendTyProvided = apireq.dpq.appendTy != ""          // cmn.QparamAppendType
 	)
 	if skipVC {
 		errdb = lom.AllowDisconnectedBackend(false)
@@ -1170,14 +1170,14 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		mustBeLocal    int
 		invalidHandler = t.writeErr
 		hdr            = w.Header()
-		silent         = cos.IsParseBool(query.Get(cmn.URLParamSilent))
+		silent         = cos.IsParseBool(query.Get(cmn.QparamSilent))
 		exists         = true
 		addedEC        bool
 	)
 	if silent {
 		invalidHandler = t.writeErrSilent
 	}
-	if tmp := query.Get(cmn.URLParamHeadObj); tmp != "" {
+	if tmp := query.Get(cmn.QparamHeadObj); tmp != "" {
 		mustBeLocal, _ = strconv.Atoi(tmp)
 	}
 	if err := lom.Init(bck.Bck); err != nil {
@@ -1254,7 +1254,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 
 // PATCH /v1/objects/<bucket-name>/<object-name>
 // By default, adds or updates existing custom keys. Will remove all existing keys and
-// replace them with the specified ones _iff_ `cmn.URLParamNewCustom` is set.
+// replace them with the specified ones _iff_ `cmn.QparamNewCustom` is set.
 func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
 	defer apiReqFree(apireq)
@@ -1292,7 +1292,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	delOldSetNew := cos.IsParseBool(apireq.query.Get(cmn.URLParamNewCustom))
+	delOldSetNew := cos.IsParseBool(apireq.query.Get(cmn.QparamNewCustom))
 	if delOldSetNew {
 		lom.SetCustomMD(custom)
 	} else {
@@ -1456,7 +1456,7 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 		cksumValue    = r.Header.Get(cmn.HdrObjCksumVal)
 		cksumType     = r.Header.Get(cmn.HdrObjCksumType)
 		contentLength = r.Header.Get(cmn.HdrContentLength)
-		handle        = dpq.appendHdl // cmn.URLParamAppendHandle
+		handle        = dpq.appendHdl // cmn.QparamAppendHandle
 	)
 
 	hi, err := parseAppendHandle(handle)
@@ -1469,7 +1469,7 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 		t:       t,
 		lom:     lom,
 		r:       r.Body,
-		op:      dpq.appendTy, // cmn.URLParamAppendType
+		op:      dpq.appendTy, // cmn.QparamAppendType
 		hi:      hi,
 	}
 	if contentLength != "" {
@@ -1492,7 +1492,7 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq, skipVC bool) (errCode int, err error) {
 	var (
 		header = r.Header
-		owt    = dpq.owt // cmn.URLParamOWT
+		owt    = dpq.owt // cmn.QparamOWT
 	)
 	// TODO: oa.Size vs "Content-Length" vs actual, similar to checksum
 	cksumToUse := lom.ObjAttrs().FromHeader(header)
@@ -1524,8 +1524,8 @@ func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, dpq
 func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (errCode int, err error) {
 	var (
 		sizeStr  = r.Header.Get(cmn.HdrContentLength)
-		mime     = dpq.archmime // cmn.URLParamArchmime
-		filename = dpq.archpath // cmn.URLParamArchpath
+		mime     = dpq.archmime // cmn.QparamArchmime
+		filename = dpq.archpath // cmn.QparamArchpath
 	)
 	if strings.HasPrefix(filename, lom.ObjName) {
 		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {

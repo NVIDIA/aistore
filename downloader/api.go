@@ -258,7 +258,7 @@ type DlAdminBody struct {
 func (b *DlAdminBody) Validate(requireID bool) error {
 	if b.ID != "" && b.Regex != "" {
 		return fmt.Errorf("regex %q and UUID %q cannot be defined together (choose one or the other)",
-			cmn.URLParamRegex, cmn.URLParamUUID)
+			cmn.QparamRegex, cmn.QparamUUID)
 	} else if b.Regex != "" {
 		if _, err := regexp.CompilePOSIX(b.Regex); err != nil {
 			return err

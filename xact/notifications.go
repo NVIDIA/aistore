@@ -54,8 +54,8 @@ func (*NotifXactListener) UnmarshalStats(rawMsg []byte) (stats interface{}, fini
 
 func (nxb *NotifXactListener) QueryArgs() cmn.HreqArgs {
 	args := cmn.HreqArgs{Method: http.MethodGet, Query: make(url.Values, 2)}
-	args.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
-	args.Query.Set(cmn.URLParamUUID, nxb.UUID())
+	args.Query.Set(cmn.QparamWhat, cmn.GetWhatXactStats)
+	args.Query.Set(cmn.QparamUUID, nxb.UUID())
 	args.Path = cmn.URLPathXactions.S
 	return args
 }

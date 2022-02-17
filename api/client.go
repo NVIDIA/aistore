@@ -91,9 +91,9 @@ func makeHeaderAuthnToken(token string) string {
 
 func GetWhatRawQuery(getWhat, getProps string) string {
 	q := url.Values{}
-	q.Add(cmn.URLParamWhat, getWhat)
+	q.Add(cmn.QparamWhat, getWhat)
 	if getProps != "" {
-		q.Add(cmn.URLParamProps, getProps)
+		q.Add(cmn.QparamProps, getProps)
 	}
 	return q.Encode()
 }

@@ -128,7 +128,7 @@ func (p *proxy) broadcastDownloadAdminRequest(method, path string, msg *download
 
 func (p *proxy) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (errCode int, err error) {
 	query := r.URL.Query()
-	query.Set(cmn.URLParamUUID, id)
+	query.Set(cmn.QparamUUID, id)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body, Query: query}
 	config := cmn.GCO.Get()

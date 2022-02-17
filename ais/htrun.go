@@ -986,7 +986,7 @@ func _checkAction(msg *cmn.ActionMsg, expectedActions ...string) (err error) {
 func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
 		body interface{}
-		what = r.URL.Query().Get(cmn.URLParamWhat)
+		what = r.URL.Query().Get(cmn.QparamWhat)
 	)
 	switch what {
 	case cmn.GetWhatConfig:
@@ -1037,7 +1037,7 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 func _sev2logname(r *http.Request) (log string, err error) {
 	dir := cmn.GCO.Get().LogDir
-	sev := r.URL.Query().Get(cmn.URLParamSev)
+	sev := r.URL.Query().Get(cmn.QparamSev)
 	if sev == "" {
 		log = filepath.Join(dir, glog.InfoLogName()) // symlink
 		return
@@ -1202,7 +1202,7 @@ func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num
 	c := getMaxCii{
 		h:        h,
 		maxCii:   &clusterInfo{},
-		query:    url.Values{cmn.URLParamClusterInfo: []string{"true"}},
+		query:    url.Values{cmn.QparamClusterInfo: []string{"true"}},
 		timeout:  cmn.Timeout.CplaneOperation(),
 		checkAll: checkAll,
 	}
@@ -1707,7 +1707,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxC
 	var (
 		sleep, total, rediscover time.Duration
 		healthTimeout            = cmn.Timeout.CplaneOperation()
-		query                    = url.Values{cmn.URLParamAskPrimary: []string{"true"}}
+		query                    = url.Values{cmn.QparamAskPrimary: []string{"true"}}
 	)
 	for {
 		sleep = cos.MinDuration(cmn.Timeout.MaxKeepalive(), sleep+time.Second)
@@ -1782,7 +1782,7 @@ func (h *htrun) healthByExternalWD(w http.ResponseWriter, r *http.Request) (resp
 	caller := r.Header.Get(cmn.HdrCallerName)
 	// external call
 	if callerID == "" && caller == "" {
-		readiness := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamHealthReadiness))
+		readiness := cos.IsParseBool(r.URL.Query().Get(cmn.QparamHealthReadiness))
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: external health-ping from %s (readiness=%t)", h.si, r.RemoteAddr, readiness)
 		}
@@ -1827,8 +1827,8 @@ func bfromQ(bckName string, query url.Values, dpq *dpq) (bck cmn.Bck) {
 	)
 	if query != nil {
 		debug.Assert(dpq == nil)
-		provider = query.Get(cmn.URLParamProvider)
-		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
+		provider = query.Get(cmn.QparamProvider)
+		namespace = cmn.ParseNsUname(query.Get(cmn.QparamNamespace))
 	} else {
 		provider = dpq.provider
 		namespace = cmn.ParseNsUname(dpq.namespace)
@@ -1847,10 +1847,10 @@ func newQueryBcksFromQuery(bckName string, query url.Values, dpq *dpq) (cmn.Quer
 }
 
 func newBckFromQueryUname(query url.Values, required bool) (*cluster.Bck, error) {
-	uname := query.Get(cmn.URLParamBucketTo)
+	uname := query.Get(cmn.QparamBucketTo)
 	if uname == "" {
 		if required {
-			return nil, fmt.Errorf("missing %q query parameter", cmn.URLParamBucketTo)
+			return nil, fmt.Errorf("missing %q query parameter", cmn.QparamBucketTo)
 		}
 		return nil, nil
 	}

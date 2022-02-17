@@ -1252,8 +1252,8 @@ func networkFailurePrimary(t *testing.T) {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDaeProxy.Join(newPrimaryID),
 		Query: url.Values{
-			cmn.URLParamForce:            {"true"},
-			cmn.URLParamPrimaryCandidate: {newPrimaryURL},
+			cmn.QparamForce:            {"true"},
+			cmn.QparamPrimaryCandidate: {newPrimaryURL},
 		},
 	}
 	err = reqParams.DoHTTPRequest()

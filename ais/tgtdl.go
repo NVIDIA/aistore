@@ -45,7 +45,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var (
-			uuid             = r.URL.Query().Get(cmn.URLParamUUID)
+			uuid             = r.URL.Query().Get(cmn.QparamUUID)
 			dlb              = downloader.DlBody{}
 			progressInterval = downloader.DownloadProgressInterval
 		)

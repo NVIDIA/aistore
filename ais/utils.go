@@ -44,10 +44,10 @@ func (na netAccess) isSet(flag netAccess) bool {
 func isIntraPut(hdr http.Header) bool { return hdr != nil && hdr.Get(cmn.HdrPutterID) != "" }
 
 func isRedirect(q url.Values) (ptime string) {
-	if len(q) == 0 || q.Get(cmn.URLParamProxyID) == "" {
+	if len(q) == 0 || q.Get(cmn.QparamProxyID) == "" {
 		return
 	}
-	return q.Get(cmn.URLParamUnixTime)
+	return q.Get(cmn.QparamUnixTime)
 }
 
 func ptLatency(tts int64, ptime string) (delta int64) {

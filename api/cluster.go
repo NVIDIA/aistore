@@ -21,7 +21,7 @@ import (
 // (compare with api.Health below)
 func GetProxyReadiness(params BaseParams) error {
 	params.Method = http.MethodGet
-	q := url.Values{cmn.URLParamHealthReadiness: []string{"true"}}
+	q := url.Values{cmn.QparamHealthReadiness: []string{"true"}}
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = params
@@ -37,7 +37,7 @@ func Health(baseParams BaseParams, readyToRebalance ...bool) error {
 	var q url.Values
 	baseParams.Method = http.MethodGet
 	if len(readyToRebalance) > 0 && readyToRebalance[0] {
-		q = url.Values{cmn.URLParamPrimaryReadyReb: []string{"true"}}
+		q = url.Values{cmn.QparamPrimaryReadyReb: []string{"true"}}
 	}
 	reqParams := allocRp()
 	{
@@ -57,7 +57,7 @@ func GetClusterMap(baseParams BaseParams) (smap *cluster.Smap, err error) {
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathDae.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatSmap}}
 	}
 	err = reqParams.DoHTTPReqResp(&smap)
 	freeRp(reqParams)
@@ -71,7 +71,7 @@ func GetNodeClusterMap(baseParams BaseParams, nodeID string) (smap *cluster.Smap
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathReverseDaemon.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatSmap}}
 		reqParams.Header = http.Header{cmn.HdrNodeID: []string{nodeID}}
 	}
 	err = reqParams.DoHTTPReqResp(&smap)
@@ -86,7 +86,7 @@ func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err e
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathClu.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSysInfo}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatSysInfo}}
 	}
 	err = reqParams.DoHTTPReqResp(&sysInfo)
 	freeRp(reqParams)
@@ -101,7 +101,7 @@ func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStats, er
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathClu.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatStats}}
 	}
 	err = reqParams.DoHTTPReqResp(&rawStats)
 	freeRp(reqParams)
@@ -126,7 +126,7 @@ func GetTargetDiskStats(baseParams BaseParams, targetID string) (diskStats ios.A
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathReverseDaemon.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDiskStats}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatDiskStats}}
 		reqParams.Header = http.Header{cmn.HdrNodeID: []string{targetID}}
 	}
 	err = reqParams.DoHTTPReqResp(&diskStats)
@@ -140,7 +140,7 @@ func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.BackendInfoAIS, err error)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathClu.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatRemoteAIS}}
 	}
 	err = reqParams.DoHTTPReqResp(&aisInfo)
 	freeRp(reqParams)
@@ -171,7 +171,7 @@ func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string, force bool) err
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathCluProxy.Join(newPrimaryID)
-		reqParams.Query = url.Values{cmn.URLParamForce: []string{strconv.FormatBool(force)}}
+		reqParams.Query = url.Values{cmn.QparamForce: []string{strconv.FormatBool(force)}}
 	}
 	err := reqParams.DoHTTPRequest()
 	freeRp(reqParams)
@@ -249,7 +249,7 @@ func GetClusterConfig(baseParams BaseParams) (*cmn.ClusterConfig, error) {
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathClu.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatClusterConfig}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatClusterConfig}}
 	}
 	err := reqParams.DoHTTPReqResp(cluConfig)
 	freeRp(reqParams)
@@ -267,7 +267,7 @@ func GetBMD(baseParams BaseParams) (*cluster.BMD, error) {
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cmn.URLPathClu.S
-		reqParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatBMD}}
+		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatBMD}}
 	}
 	err := reqParams.DoHTTPReqResp(bmd)
 	freeRp(reqParams)
@@ -279,7 +279,7 @@ func GetBMD(baseParams BaseParams) (*cluster.BMD, error) {
 
 func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
 	q := make(url.Values)
-	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)
+	q.Set(cmn.QparamWhat, cmn.GetWhatRemoteAIS)
 	q.Set(alias, u)
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
@@ -293,7 +293,7 @@ func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
 
 func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 	q := make(url.Values)
-	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)
+	q.Set(cmn.QparamWhat, cmn.GetWhatRemoteAIS)
 	q.Set(alias, "")
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()

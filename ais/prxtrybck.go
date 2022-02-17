@@ -70,7 +70,7 @@ func freeInitBckArgs(a *bckInitArgs) {
 func lookupRemoteBck(query url.Values, dpq *dpq) bool {
 	if query != nil {
 		debug.Assert(dpq == nil)
-		return !cos.IsParseBool(query.Get(cmn.URLParamDontLookupRemoteBck))
+		return !cos.IsParseBool(query.Get(cmn.QparamDontLookupRemoteBck))
 	}
 	return !cos.IsParseBool(dpq.dontLookupRemoteBck)
 }
@@ -293,7 +293,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 func (args *bckInitArgs) getOrigURL() (ourl string) {
 	if args.query != nil {
 		debug.Assert(args.dpq == nil)
-		ourl = args.query.Get(cmn.URLParamOrigURL)
+		ourl = args.query.Get(cmn.QparamOrigURL)
 	} else {
 		ourl = args.dpq.origURL
 	}
@@ -304,7 +304,7 @@ func (args *bckInitArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCo
 	q := url.Values{}
 	if bck.IsHTTP() {
 		origURL := args.getOrigURL()
-		q.Set(cmn.URLParamOrigURL, origURL)
+		q.Set(cmn.QparamOrigURL, origURL)
 	}
 	return args.p.headRemoteBck(bck.Bck, q)
 }

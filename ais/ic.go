@@ -235,7 +235,7 @@ func (ic *ic) handler(w http.ResponseWriter, r *http.Request) {
 func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 	var (
 		smap = ic.p.owner.smap.get()
-		what = r.URL.Query().Get(cmn.URLParamWhat)
+		what = r.URL.Query().Get(cmn.QparamWhat)
 	)
 	if !smap.IsIC(ic.p.si) {
 		ic.p.writeErrf(w, r, "%s: not an IC member", ic.p.si)
@@ -319,7 +319,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 
 func (ic *ic) registerEqual(a regIC) {
 	if a.query != nil {
-		a.query.Set(cmn.URLParamNotifyMe, equalIC)
+		a.query.Set(cmn.QparamNotifyMe, equalIC)
 	}
 	if a.smap.IsIC(ic.p.si) {
 		err := ic.p.notifs.add(a.nl)
@@ -377,7 +377,7 @@ func (ic *ic) syncICBundle() error {
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Path:   cmn.URLPathIC.S,
-			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},
+			Query:  url.Values{cmn.QparamWhat: []string{cmn.GetWhatICBundle}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}

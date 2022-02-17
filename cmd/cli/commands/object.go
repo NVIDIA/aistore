@@ -114,14 +114,14 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 
 	if bck.IsHTTP() {
 		objArgs.Query = make(url.Values, 2)
-		objArgs.Query.Set(cmn.URLParamOrigURL, uri)
+		objArgs.Query.Set(cmn.QparamOrigURL, uri)
 	}
 	// TODO: validate
 	if archPath != "" {
 		if objArgs.Query == nil {
 			objArgs.Query = make(url.Values, 1)
 		}
-		objArgs.Query.Set(cmn.URLParamArchpath, archPath)
+		objArgs.Query.Set(cmn.QparamArchpath, archPath)
 	}
 
 	if flagIsSet(c, cksumFlag) {

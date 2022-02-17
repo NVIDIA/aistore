@@ -547,9 +547,9 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 					query  = url.Values{}
 					sendTo = targetOrder[i+1]
 				)
-				query.Add(cmn.URLParamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
-				query.Add(cmn.URLParamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
-				query.Add(cmn.URLParamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
+				query.Add(cmn.QparamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
+				query.Add(cmn.QparamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
+				query.Add(cmn.QparamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
 				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
 					Base:   sendTo.URL(cmn.NetIntraData),
