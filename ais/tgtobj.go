@@ -51,8 +51,9 @@ type (
 		workFQN    string        // temp fqn to be renamed
 		xctn       cluster.Xact  // xaction that puts
 		owt        cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
-		skipEC     bool          // true: do not erasure-encode when finalizing
-		skipVC     bool          // true: do not try to load existing version and do not compare checksums
+		restful    bool          // being invoked via RESTful API
+		skipEC     bool          // do not erasure-encode when finalizing
+		skipVC     bool          // skip loading existing Version and skip comparing Checksums (skip VC)
 	}
 
 	getObjInfo struct {
@@ -96,6 +97,16 @@ type (
 		t        *target
 		owt      cmn.OWT
 		finalize bool // copies and EC (as in poi.finalize())
+		dryRun   bool
+	}
+	sendArgs struct {
+		reader    cos.ReadOpenCloser
+		bckTo     *cluster.Bck
+		objNameTo string
+		tsi       *cluster.Snode
+		dm        cluster.DataMover
+		objAttrs  cmn.ObjAttrsHolder
+		owt       cmn.OWT
 	}
 
 	appendArchObjInfo struct {
@@ -128,13 +139,13 @@ func (poi *putObjInfo) putObject() (int, error) {
 			return 0, nil
 		}
 	}
-	if err := poi.writeToFile(); err != nil {
+	if err := poi.write(); err != nil {
 		return http.StatusInternalServerError, err
 	}
 	if errCode, err := poi.finalize(); err != nil {
 		return errCode, err
 	}
-	// stats; FIXME: OwtPut includes but is not limited to user's PUT
+	// stats; FIXME: OwtPut includes - but is not limited to - user's PUT
 	if poi.owt == cmn.OwtPut {
 		delta := time.Since(poi.atime)
 		poi.t.statsT.AddMany(
@@ -142,16 +153,19 @@ func (poi *putObjInfo) putObject() (int, error) {
 			cos.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
 		)
 	}
+	// xaction in-objs counters, promote first
+	if poi.xctn != nil && poi.restful && poi.owt == cmn.OwtPromote {
+		poi.xctn.InObjsAdd(1, poi.lom.SizeBytes())
+	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof(poi.loghdr())
 	}
 	return 0, nil
 }
 
-// TODO: use elsewhere in the `poi` methods; TODO: `goi.loghdr`, etc.
 func (poi *putObjInfo) loghdr() string {
 	s := poi.owt.String() + ", " + poi.lom.String()
-	if poi.xctn != nil {
+	if poi.xctn != nil { // may not be showing remote xaction (see doPut)
 		s += ", " + poi.xctn.String()
 	}
 	if poi.skipVC {
@@ -161,7 +175,7 @@ func (poi *putObjInfo) loghdr() string {
 }
 
 func (poi *putObjInfo) finalize() (errCode int, err error) {
-	if errCode, err = poi.tryFinalize(); err != nil {
+	if errCode, err = poi.fini(); err != nil {
 		if err1 := cos.Stat(poi.workFQN); err1 == nil || !os.IsNotExist(err1) {
 			if err1 == nil {
 				err1 = err
@@ -188,7 +202,7 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 }
 
 // poi.workFQN => LOM
-func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
+func (poi *putObjInfo) fini() (errCode int, err error) {
 	var (
 		lom = poi.lom
 		bck = lom.Bck()
@@ -256,6 +270,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	return
 }
 
+// via backend.PutObj()
 func (poi *putObjInfo) putRemote() (errCode int, err error) {
 	var (
 		lom     = poi.lom
@@ -277,9 +292,9 @@ func (poi *putObjInfo) putRemote() (errCode int, err error) {
 	return
 }
 
-// NOTE: LOM is updated at the end of this call with proper size and checksum.
-//       `poi.r` (reader) is closed upon exit.
-func (poi *putObjInfo) writeToFile() (err error) {
+// LOM is updated at the end of this call with size and checksum.
+// `poi.r` (reader) is also closed upon exit.
+func (poi *putObjInfo) write() (err error) {
 	var (
 		written int64
 		buf     []byte
@@ -1045,7 +1060,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 		coi.DP = &cluster.LDP{}
 		return coi.copyReader(lom, objNameTo)
 	}
-	if coi.DryRun {
+	if coi.dryRun {
 		defer func() {
 			if err == nil && coi.Xact != nil {
 				coi.Xact.ObjsAdd(1, size)
@@ -1064,7 +1079,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 	}
 
 	// dry-run
-	if coi.DryRun {
+	if coi.dryRun {
 		// TODO: replace with something similar to lom.FQN == dst.FQN, but dstBck might not exist.
 		if lom.Bucket().Equal(coi.BckTo.Bck) && lom.ObjName == objNameTo {
 			return 0, nil
@@ -1143,7 +1158,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	if tsi, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
 	}
-	if coi.DryRun {
+	if coi.dryRun {
 		defer func() {
 			if err == nil && coi.Xact != nil {
 				coi.Xact.ObjsAdd(1, size)
@@ -1159,7 +1174,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return
 	}
-	if coi.DryRun {
+	if coi.dryRun {
 		// discard the reader and be done
 		return coi.dryRunCopyReader(lom)
 	}
@@ -1211,26 +1226,26 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 
 func (coi *copyObjInfo) sendRemote(lom *cluster.LOM, objNameTo string, tsi *cluster.Snode) (size int64, err error) {
 	debug.Assert(coi.owt > 0)
-	params := allocSendParams()
+	sargs := allocSnda()
 	{
-		params.ObjNameTo = objNameTo
-		params.Tsi = tsi
-		params.DM = coi.DM
+		sargs.objNameTo = objNameTo
+		sargs.tsi = tsi
+		sargs.dm = coi.DM
 		if coi.DM != nil {
-			params.OWT = coi.DM.OWT() // takes precedence
+			sargs.owt = coi.DM.OWT() // takes precedence
 		} else {
-			params.OWT = coi.owt
+			sargs.owt = coi.owt
 		}
 	}
-	size, err = coi.putRemote(lom, params)
-	freeSendParams(params)
+	size, err = coi.doSend(lom, sargs)
+	freeSnda(sargs)
 	return
 }
 
-// PUT object => designated target
+// send object => designated target
 // * source is a LOM or a reader (that may be reading from remote)
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
-func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams) (size int64, err error) {
+func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, err error) {
 	if coi.DM != nil {
 		// We need to clone the `lom` to use it in async operation.
 		// The `lom` is freed upon callback in `_sendObjDM`.
@@ -1245,7 +1260,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 				lom.Unlock(false)
 				return 0, nil
 			}
-			if coi.DryRun {
+			if coi.dryRun {
 				lom.Unlock(false)
 				return lom.SizeBytes(), nil
 			}
@@ -1258,8 +1273,8 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			reader = cos.NewDeferROC(fh, func() { lom.Unlock(false) })
 		} else {
 			// promote
-			debug.Assert(!coi.DryRun)
-			debug.Assert(params.OWT == cmn.OwtPromote)
+			debug.Assert(!coi.dryRun)
+			debug.Assert(sargs.owt == cmn.OwtPromote)
 			fh, err := cos.NewFileHandle(lom.FQN)
 			if err != nil {
 				return 0, fmt.Errorf(cmn.FmtErrFailed, coi.t.Snode(), "open", lom.FQN, err)
@@ -1272,48 +1287,83 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			size = fi.Size()
 			reader = fh
 		}
-		params.Reader = reader
-		params.ObjAttrs = lom
+		sargs.reader = reader
+		sargs.objAttrs = lom
 	} else {
-		if params.Reader, params.ObjAttrs, err = coi.DP.Reader(lom); err != nil {
+		if sargs.reader, sargs.objAttrs, err = coi.DP.Reader(lom); err != nil {
 			return
 		}
-		if coi.DryRun {
-			size, err = io.Copy(io.Discard, params.Reader)
-			cos.Close(params.Reader)
+		if coi.dryRun {
+			size, err = io.Copy(io.Discard, sargs.reader)
+			cos.Close(sargs.reader)
 			return
 		}
 		// NOTE: returns the cos.ContentLengthUnknown (-1) if post-transform size not known.
-		size = params.ObjAttrs.SizeBytes()
+		size = sargs.objAttrs.SizeBytes()
 	}
 
 	// do
-	params.BckTo = coi.BckTo
-	if params.DM != nil {
-		debug.Assert(params.DM.OWT() == params.OWT)
-		err = sendObjDM(lom, params)
+	sargs.bckTo = coi.BckTo
+	if sargs.dm != nil {
+		err = coi.dm(lom /*for attrs*/, sargs)
 	} else {
-		err = coi.t.putObjT2T(params)
+		err = coi.put(sargs)
 	}
-
-	// TODO: x.out-objs-add and pass copy-simple
 	return
 }
 
-// transmit object to another target in the cluster
-// (target-to-target via bundle.DataMover - compare with putObjT2T)
-func sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
+// transmit object to another target via data mover (compare with coi.put())
+func (coi *copyObjInfo) dm(lom *cluster.LOM, sargs *sendArgs) error {
+	debug.Assert(sargs.dm.OWT() == sargs.owt)
+	debug.Assert(sargs.dm.GetXact() == coi.Xact || sargs.dm.GetXact().ID() == coi.Xact.ID())
 	o := transport.AllocSend()
-	hdr, oa := &o.Hdr, params.ObjAttrs
+	hdr, oa := &o.Hdr, sargs.objAttrs
 	{
-		hdr.Bck = params.BckTo.Bck
-		hdr.ObjName = params.ObjNameTo
+		hdr.Bck = sargs.bckTo.Bck
+		hdr.ObjName = sargs.objNameTo
 		hdr.ObjAttrs.CopyFrom(oa)
 	}
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		cluster.FreeLOM(lom)
 	}
-	return params.DM.Send(o, params.Reader, params.Tsi)
+	return sargs.dm.Send(o, sargs.reader, sargs.tsi)
+}
+
+// PUT(lom) => destination target (compare with coi.dm())
+// always closes params.Reader, either explicitly or via Do()
+func (coi *copyObjInfo) put(sargs *sendArgs) error {
+	var (
+		hdr   = make(http.Header, 8)
+		query = cmn.AddBckToQuery(nil, sargs.bckTo.Bck)
+	)
+	cmn.ToHeader(sargs.objAttrs, hdr)
+	hdr.Set(cmn.HdrPutterID, coi.t.si.ID())
+	query.Set(cmn.QparamOWT, sargs.owt.ToS())
+	if coi.Xact != nil {
+		query.Set(cmn.QparamUUID, coi.Xact.ID())
+	}
+	reqArgs := cmn.HreqArgs{
+		Method: http.MethodPut,
+		Base:   sargs.tsi.URL(cmn.NetIntraData),
+		Path:   cmn.URLPathObjects.Join(sargs.bckTo.Name, sargs.objNameTo),
+		Query:  query,
+		Header: hdr,
+		BodyR:  sargs.reader,
+	}
+	config := cmn.GCO.Get()
+	req, _, cancel, err := reqArgs.ReqWithTimeout(config.Timeout.SendFile.D())
+	if err != nil {
+		cos.Close(sargs.reader)
+		return fmt.Errorf("unexpected failure to create request, err: %w", err)
+	}
+	defer cancel()
+	resp, err := coi.t.client.data.Do(req)
+	if err != nil {
+		return fmt.Errorf(cmn.FmtErrFailed, coi.t.si, "PUT to", reqArgs.URL(), err)
+	}
+	cos.DrainReader(resp.Body)
+	resp.Body.Close()
+	return nil
 }
 
 /////////////////////////
@@ -1411,41 +1461,6 @@ func (aaoi *appendArchObjInfo) appendObject() (errCode int, err error) {
 	return
 }
 
-// PUT(lom) => destination target
-// always closes params.Reader, either explicitly or via Do()
-// (compare with sendObjDM())
-func (t *target) putObjT2T(params *cluster.SendToParams) error {
-	var (
-		hdr   = make(http.Header, 8)
-		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
-	)
-	cmn.ToHeader(params.ObjAttrs, hdr)
-	hdr.Set(cmn.HdrPutterID, t.si.ID())
-	query.Set(cmn.QparamOWT, params.OWT.ToS())
-	reqArgs := cmn.HreqArgs{
-		Method: http.MethodPut,
-		Base:   params.Tsi.URL(cmn.NetIntraData),
-		Path:   cmn.URLPathObjects.Join(params.BckTo.Name, params.ObjNameTo),
-		Query:  query,
-		Header: hdr,
-		BodyR:  params.Reader,
-	}
-	config := cmn.GCO.Get()
-	req, _, cancel, err := reqArgs.ReqWithTimeout(config.Timeout.SendFile.D())
-	if err != nil {
-		cos.Close(params.Reader)
-		return fmt.Errorf("unexpected failure to create request, err: %w", err)
-	}
-	defer cancel()
-	resp, err := t.client.data.Do(req)
-	if err != nil {
-		return fmt.Errorf(cmn.FmtErrFailed, t.si, "PUT to", reqArgs.URL(), err)
-	}
-	cos.DrainReader(resp.Body)
-	resp.Body.Close()
-	return nil
-}
-
 ///////////////
 // mem pools //
 ///////////////
@@ -1456,7 +1471,7 @@ var (
 	goi0 getObjInfo
 	poi0 putObjInfo
 	coi0 copyObjInfo
-	snd0 cluster.SendToParams
+	snd0 sendArgs
 )
 
 func allocGetObjInfo() (a *getObjInfo) {
@@ -1498,15 +1513,15 @@ func freeCopyObjInfo(a *copyObjInfo) {
 	coiPool.Put(a)
 }
 
-func allocSendParams() (a *cluster.SendToParams) {
+func allocSnda() (a *sendArgs) {
 	if v := sndPool.Get(); v != nil {
-		a = v.(*cluster.SendToParams)
+		a = v.(*sendArgs)
 		return
 	}
-	return &cluster.SendToParams{}
+	return &sendArgs{}
 }
 
-func freeSendParams(a *cluster.SendToParams) {
+func freeSnda(a *sendArgs) {
 	*a = snd0
 	sndPool.Put(a)
 }

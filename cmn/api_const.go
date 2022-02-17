@@ -198,8 +198,8 @@ const (
 	QparamWhat      = "what"           // "smap" | "bmd" | "config" | "stats" | "xaction" ...
 	QparamProps     = "props"          // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 	QparamNewCustom = "set-new-custom" // remove existing custom keys (if any) and store new custom metadata
-	QparamUUID      = "uuid"
-	QparamRegex     = "regex" // dsort/downloader regex
+	QparamUUID      = "uuid"           // xaction
+	QparamRegex     = "regex"          // dsort/downloader regex
 
 	QparamHeadObj = "head_obj" // enum { HeadObjAvoidRemote, ... } above
 

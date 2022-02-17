@@ -228,10 +228,9 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 		params.DM = wi.r.p.dm
 		params.Buf = buf
 		params.DP = wi.r.args.DP
-		params.DryRun = wi.msg.DryRun
 		params.Xact = wi.r
 	}
-	size, err := lri.t.CopyObject(lom, params)
+	size, err := lri.t.CopyObject(lom, params, wi.msg.DryRun)
 	slab.Free(buf)
 	cluster.FreeCpObjParams(params)
 	if err != nil {

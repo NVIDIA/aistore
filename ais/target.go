@@ -1067,8 +1067,10 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if archPathProvided {
+		// TODO: resolve non-empty dpq.uuid => xaction and pass it on
 		errCode, err = t.doAppendArch(r, lom, started, apireq.dpq)
 	} else if appendTyProvided {
+		// ditto
 		handle, errCode, err = t.doAppend(r, lom, started, apireq.dpq)
 		if err == nil {
 			w.Header().Set(cmn.HdrAppendHandle, handle)
@@ -1505,11 +1507,18 @@ func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, dpq
 		poi.workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
 		poi.cksumToUse = cksumToUse
 		poi.skipVC = skipVC
+		poi.restful = true
 	}
-	// TODO: find out whether there is an xaction "behind" this PUT, and assign poi.Xact
-	poi.owt = cmn.OwtPut
+	poi.owt = cmn.OwtPut // default
 	if owt != "" {
 		poi.owt.FromS(owt)
+	}
+	if dpq.uuid != "" {
+		// resolve cluster-wide xaction "behind" this PUT
+		// (e.g. promote via a single target won't show up, of course)
+		if xctn := xreg.GetXact(dpq.uuid); xctn != nil {
+			poi.xctn = xctn
+		}
 	}
 	if sizeStr := header.Get(cmn.HdrContentLength); sizeStr != "" {
 		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
@@ -1637,7 +1646,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 // RENAME OBJECT //
 ///////////////////
 
-// TODO: unify with PromoteFile (refactor)
+// TODO: consider unifying with Promote
 func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
 	defer apiReqFree(apireq)
@@ -1650,7 +1659,6 @@ func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMs
 		t.writeErr(w, r, err)
 		return
 	}
-
 	if lom.Bck().IsRemote() {
 		t.writeErrf(w, r, "%s: cannot rename object %s from a remote bucket", t.si, lom)
 		return

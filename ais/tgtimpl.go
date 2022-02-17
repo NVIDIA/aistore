@@ -105,7 +105,7 @@ func (t *target) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 //   the AIS cluster (by performing a cold GET if need be).
 // - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //   replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams) (size int64, err error) {
+func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, dryRun bool) (size int64, err error) {
 	objNameTo := lom.ObjName
 	coi := allocCopyObjInfo()
 	{
@@ -113,6 +113,7 @@ func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams) 
 		coi.t = t
 		coi.owt = cmn.OwtMigrate
 		coi.finalize = false
+		coi.dryRun = dryRun
 	}
 	if params.ObjNameTo != "" {
 		objNameTo = params.ObjNameTo
@@ -303,6 +304,7 @@ func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, 
 		coi.t = t
 		coi.BckTo = lom.Bck()
 		coi.owt = cmn.OwtPromote
+		coi.Xact = params.Xact
 	}
 	size, err := coi.sendRemote(lom, lom.ObjName, tsi)
 	freeCopyObjInfo(coi)

@@ -223,9 +223,8 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 		params.DM = r.dm
 		params.DP = r.args.DP
 		params.Xact = r
-		params.DryRun = r.args.Msg.DryRun
 	}
-	_, err = r.Target().CopyObject(lom, params)
+	_, err = r.Target().CopyObject(lom, params, r.args.Msg.DryRun)
 	if err != nil && cos.IsErrOOS(err) {
 		err = cmn.NewErrAborted(r.Name(), "copy-obj", err)
 	}

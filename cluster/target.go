@@ -70,18 +70,7 @@ type (
 		DM        DataMover
 		DP        DP // optional
 		Xact      Xact
-		DryRun    bool
 	}
-	SendToParams struct {
-		Reader    cos.ReadOpenCloser
-		BckTo     *Bck
-		ObjNameTo string
-		Tsi       *Snode
-		DM        DataMover
-		ObjAttrs  cmn.ObjAttrsHolder
-		OWT       cmn.OWT
-	}
-
 	// common part that's used in `api.PromoteArgs` and `PromoteParams`(server side), both
 	PromoteArgs struct {
 		DaemonID  string `json:"tid,omitempty"` // target ID
@@ -129,7 +118,7 @@ type Target interface {
 	FinalizeObj(lom *LOM, workFQN string, xctn Xact) (errCode int, err error)
 	EvictObject(lom *LOM) (errCode int, err error)
 	DeleteObject(lom *LOM, evict bool) (errCode int, err error)
-	CopyObject(lom *LOM, params *CopyObjectParams) (int64, error)
+	CopyObject(lom *LOM, params *CopyObjectParams, dryRun bool) (int64, error)
 	GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
 	Promote(params PromoteParams) (errCode int, err error)
 	HeadObjT2T(lom *LOM, si *Snode) bool
