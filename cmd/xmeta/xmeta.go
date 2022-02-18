@@ -68,11 +68,11 @@ Examples:
 	xmeta -x -in=./.ais.vmd -f conf                   - extract VMD to STDOUT with explicit source format
 	xmeta -in=/tmp/vmd.txt -out=/tmp/.ais.vmd         - format plain-text /tmp/vmd.txt
 	# EC Metadata:
-	xmeta -x -in=/data/@ais/abc/%s/readme            - extract Metadata to STDOUT with auto-detection (by directory name)
+	xmeta -x -in=/data/@ais/abc/%mt/readme            - extract Metadata to STDOUT with auto-detection (by directory name)
 	xmeta -x -in=./readme -f mt                       - extract Metadata to STDOUT with explicit source format
 	# LOM (readonly, no format auto-detection):
-	xmeta -x -in=/data/@ais/abc/%s/img001.tar -f lom                   - extract LOM to STDOUT
-	xmeta -x -in=/data/@ais/abc/%s/img001.tar -out=/tmp/lom.txt -f lom - extract LOM to /tmp/lom.txt
+	xmeta -x -in=/data/@ais/abc/%ob/img001.tar -f lom                   - extract LOM to STDOUT
+	xmeta -x -in=/data/@ais/abc/%ob/img001.tar -out=/tmp/lom.txt -f lom - extract LOM to /tmp/lom.txt
 `
 )
 
@@ -118,8 +118,7 @@ func main() {
 	newFlag.Parse(os.Args[1:])
 	if flags.help || len(os.Args[1:]) == 0 {
 		newFlag.Usage()
-		// NOTE: a workaround for `fmt.Print call has possible formatting directive %o (govet)`
-		hmsg := fmt.Sprintf(helpMsg, "%mt", "%"+"ob", "%"+"ob")
+		hmsg := helpMsg
 		fmt.Print(hmsg)
 		os.Exit(0)
 	}
