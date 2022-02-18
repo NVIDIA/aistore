@@ -125,12 +125,11 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 	}
 
 	var (
-		err     error
 		objName = path.Join(items[1:]...)
 		lom     = cluster.AllocLOM(objName)
 	)
 	defer cluster.FreeLOM(lom)
-	if err = lom.Init(bck.Bck); err != nil {
+	if err := lom.Init(bck.Bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
 			err = lom.Init(bck.Bck)
@@ -154,7 +153,17 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.writeErr(w, r, err)
 		return
 	}
-	if errCode, err := t.doPut(r, lom, started, dpq, false /*skipVC*/); err != nil {
+	poi := allocPutObjInfo()
+	{
+		poi.atime = started
+		poi.t = t
+		poi.lom = lom
+		poi.skipVC = false
+		poi.restful = true
+	}
+	errCode, err := poi.do(r, dpq)
+	freePutObjInfo(poi)
+	if err != nil {
 		t.fsErr(err, lom.FQN)
 		t.writeErr(w, r, err, errCode)
 		return

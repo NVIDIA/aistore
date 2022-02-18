@@ -52,6 +52,7 @@ type (
 		xctn       cluster.Xact  // xaction that puts
 		owt        cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
 		restful    bool          // being invoked via RESTful API
+		t2t        bool          // by another target
 		skipEC     bool          // do not erasure-encode when finalizing
 		skipVC     bool          // skip loading existing Version and skip comparing Checksums (skip VC)
 	}
@@ -127,6 +128,30 @@ type (
 // PUT OBJECT //
 ////////////////
 
+func (poi *putObjInfo) do(r *http.Request, dpq *dpq) (int, error) {
+	{
+		poi.r = r.Body
+		poi.workFQN = fs.CSM.Gen(poi.lom, fs.WorkfileType, fs.WorkfilePut)
+		poi.cksumToUse = poi.lom.ObjAttrs().FromHeader(r.Header)
+		poi.owt = cmn.OwtPut // default
+	}
+	if dpq.owt != "" {
+		poi.owt.FromS(dpq.owt)
+	}
+	if dpq.uuid != "" {
+		// resolve cluster-wide xact "behind" this PUT (promote via a single target won't show up)
+		if xctn := xreg.GetXact(dpq.uuid); xctn != nil {
+			poi.xctn = xctn
+		}
+	}
+	if sizeStr := r.Header.Get(cmn.HdrContentLength); sizeStr != "" {
+		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
+			poi.size = size
+		}
+	}
+	return poi.putObject()
+}
+
 func (poi *putObjInfo) putObject() (int, error) {
 	lom := poi.lom
 	// PUT is a no-op if the checksums do match
@@ -145,8 +170,8 @@ func (poi *putObjInfo) putObject() (int, error) {
 	if errCode, err := poi.finalize(); err != nil {
 		return errCode, err
 	}
-	// stats; FIXME: OwtPut includes - but is not limited to - user's PUT
-	if poi.owt == cmn.OwtPut {
+	// NOTE: counting only user PUTs
+	if poi.owt == cmn.OwtPut && !poi.t2t {
 		delta := time.Since(poi.atime)
 		poi.t.statsT.AddMany(
 			cos.NamedVal64{Name: stats.PutCount, Value: 1},
@@ -154,7 +179,7 @@ func (poi *putObjInfo) putObject() (int, error) {
 		)
 	}
 	// xaction in-objs counters, promote first
-	if poi.xctn != nil && poi.restful && poi.owt == cmn.OwtPromote {
+	if poi.t2t && poi.xctn != nil && poi.owt == cmn.OwtPromote {
 		poi.xctn.InObjsAdd(1, poi.lom.SizeBytes())
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -170,6 +195,9 @@ func (poi *putObjInfo) loghdr() string {
 	}
 	if poi.skipVC {
 		s += ", skip-vc"
+	}
+	if poi.t2t {
+		s += ", t2t"
 	}
 	return s
 }
@@ -1337,7 +1365,7 @@ func (coi *copyObjInfo) put(sargs *sendArgs) error {
 		query = cmn.AddBckToQuery(nil, sargs.bckTo.Bck)
 	)
 	cmn.ToHeader(sargs.objAttrs, hdr)
-	hdr.Set(cmn.HdrPutterID, coi.t.si.ID())
+	hdr.Set(cmn.HdrT2TPutterID, coi.t.si.ID())
 	query.Set(cmn.QparamOWT, sargs.owt.ToS())
 	if coi.Xact != nil {
 		query.Set(cmn.QparamUUID, coi.Xact.ID())

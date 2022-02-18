@@ -1016,10 +1016,15 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	objName := apireq.items[1]
-	started := time.Now()
+
+	// prep and check
+	var (
+		objName = apireq.items[1]
+		started = time.Now()
+		t2tput  = isT2TPut(r.Header)
+	)
 	if apireq.dpq.ptime == "" {
-		if !isIntraPut(r.Header) {
+		if !t2tput {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 			return
 		}
@@ -1034,9 +1039,10 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// init
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
-
 	if err := lom.Init(apireq.bck.Bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -1048,14 +1054,9 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var (
-		handle           string
-		err, errdb       error
-		errCode          int
-		skipVC           = cos.IsParseBool(apireq.dpq.skipVC) // cmn.QparamSkipVC
-		archPathProvided = apireq.dpq.archpath != ""          // cmn.QparamArchpath
-		appendTyProvided = apireq.dpq.appendTy != ""          // cmn.QparamAppendType
-	)
+	// load (maybe)
+	var errdb error
+	skipVC := cos.IsParseBool(apireq.dpq.skipVC) // cmn.QparamSkipVC
 	if skipVC {
 		errdb = lom.AllowDisconnectedBackend(false)
 	} else if lom.Load(true, false) == nil {
@@ -1066,6 +1067,14 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// do
+	var (
+		handle           string
+		err              error
+		errCode          int
+		archPathProvided = apireq.dpq.archpath != "" // cmn.QparamArchpath
+		appendTyProvided = apireq.dpq.appendTy != "" // cmn.QparamAppendType
+	)
 	if archPathProvided {
 		// TODO: resolve non-empty dpq.uuid => xaction and pass it on
 		errCode, err = t.doAppendArch(r, lom, started, apireq.dpq)
@@ -1077,7 +1086,17 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		errCode, err = t.doPut(r, lom, started, apireq.dpq, skipVC)
+		poi := allocPutObjInfo()
+		{
+			poi.atime = started
+			poi.t = t
+			poi.lom = lom
+			poi.skipVC = skipVC
+			poi.restful = true
+			poi.t2t = t2tput
+		}
+		errCode, err = poi.do(r, apireq.dpq)
+		freePutObjInfo(poi)
 	}
 	if err != nil {
 		t.fsErr(err, lom.FQN)
@@ -1483,51 +1502,6 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 		aoi.cksum = cos.NewCksum(cksumType, cksumValue)
 	}
 	return aoi.appendObject()
-}
-
-// PUT new version and update object metadata
-// ais bucket:
-//  - if ais bucket versioning is enabled, the version is auto-incremented
-// Cloud bucket:
-//  - returned version ID is the version
-// In both cases, new checksum is also generated and stored along with the new version.
-func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq, skipVC bool) (errCode int, err error) {
-	var (
-		header = r.Header
-		owt    = dpq.owt // cmn.QparamOWT
-	)
-	// TODO: oa.Size vs "Content-Length" vs actual, similar to checksum
-	cksumToUse := lom.ObjAttrs().FromHeader(header)
-	poi := allocPutObjInfo()
-	{
-		poi.atime = started
-		poi.t = t
-		poi.lom = lom
-		poi.r = r.Body
-		poi.workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
-		poi.cksumToUse = cksumToUse
-		poi.skipVC = skipVC
-		poi.restful = true
-	}
-	poi.owt = cmn.OwtPut // default
-	if owt != "" {
-		poi.owt.FromS(owt)
-	}
-	if dpq.uuid != "" {
-		// resolve cluster-wide xaction "behind" this PUT
-		// (e.g. promote via a single target won't show up, of course)
-		if xctn := xreg.GetXact(dpq.uuid); xctn != nil {
-			poi.xctn = xctn
-		}
-	}
-	if sizeStr := header.Get(cmn.HdrContentLength); sizeStr != "" {
-		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
-			poi.size = size
-		}
-	}
-	errCode, err = poi.putObject()
-	freePutObjInfo(poi)
-	return
 }
 
 func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (errCode int, err error) {

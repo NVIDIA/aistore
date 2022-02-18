@@ -258,7 +258,11 @@ func (xctn *Base) Finish(err error) {
 		xctn.eutime.Store(time.Now().UnixNano())
 		xctn.onFinished(err)
 		if xctn.Kind() != cmn.ActList {
-			glog.Infof("%s finished(%v)", xctn, err)
+			if err == nil {
+				glog.Infof("%s finished", xctn)
+			} else {
+				glog.Warningf("%s finished w/err: %v", xctn, err)
+			}
 		}
 	}
 }

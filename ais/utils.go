@@ -8,8 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -39,27 +37,6 @@ type netAccess int
 
 func (na netAccess) isSet(flag netAccess) bool {
 	return na&flag == flag
-}
-
-func isIntraPut(hdr http.Header) bool { return hdr != nil && hdr.Get(cmn.HdrPutterID) != "" }
-
-func isRedirect(q url.Values) (ptime string) {
-	if len(q) == 0 || q.Get(cmn.QparamProxyID) == "" {
-		return
-	}
-	return q.Get(cmn.QparamUnixTime)
-}
-
-func ptLatency(tts int64, ptime string) (delta int64) {
-	pts, err := cos.S2UnixNano(ptime)
-	if err != nil {
-		return
-	}
-	delta = tts - pts
-	if delta < 0 && -delta < int64(clusterClockDrift) {
-		delta = 0
-	}
-	return
 }
 
 //

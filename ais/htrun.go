@@ -1865,7 +1865,7 @@ func newBckFromQueryUname(query url.Values, required bool) (*cluster.Bck, error)
 }
 
 //
-// intra-cluster request validation
+// intra-cluster request validations and helpers
 //
 
 func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
@@ -1931,9 +1931,32 @@ func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyP
 	return
 }
 
+// NOTE: not checking vs Smap (yet)
+func isT2TPut(hdr http.Header) bool { return hdr != nil && hdr.Get(cmn.HdrT2TPutterID) != "" }
+
+func isRedirect(q url.Values) (ptime string) {
+	if len(q) == 0 || q.Get(cmn.QparamProxyID) == "" {
+		return
+	}
+	return q.Get(cmn.QparamUnixTime)
+}
+
+func ptLatency(tts int64, ptime string) (delta int64) {
+	pts, err := cos.S2UnixNano(ptime)
+	if err != nil {
+		return
+	}
+	delta = tts - pts
+	if delta < 0 && -delta < int64(clusterClockDrift) {
+		delta = 0
+	}
+	return
+}
+
 //
 // aisMsg reader & constructors
 //
+
 func (h *htrun) readAisMsg(w http.ResponseWriter, r *http.Request) (msg *aisMsg, err error) {
 	msg = &aisMsg{}
 	err = cmn.ReadJSON(w, r, msg)
