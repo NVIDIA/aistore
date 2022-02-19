@@ -217,7 +217,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) 
 		return nil, err
 	}
 	for _, tsi := range hrwList {
-		if tsi.ID() == sender || tsi.ID() == reb.t.Snode().ID() {
+		if tsi.ID() == sender || tsi.ID() == reb.t.SID() {
 			continue
 		}
 		remoteMD, err := ec.RequestECMeta(ct.Bucket(), ct.ObjectName(), tsi, reb.t.DataClient())
@@ -250,7 +250,7 @@ func (reb *Reb) detectLocalCT(req *pushReq, ct *cluster.CT) (*ec.Metadata, error
 		// internal CT move after slice conflict - save always
 		return nil, nil
 	}
-	if _, ok := req.md.Daemons[reb.t.Snode().ID()]; !ok {
+	if _, ok := req.md.Daemons[reb.t.SID()]; !ok {
 		return nil, nil
 	}
 	mdCT, err := cluster.NewCTFromBO(ct.Bck().Bck, ct.ObjectName(), reb.t.Bowner(), fs.ECMetaType)
@@ -314,12 +314,12 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 	}
 
 	// Skip a CT if this target is not the 'main' one
-	if md.FullReplica != reb.t.Snode().ID() {
+	if md.FullReplica != reb.t.SID() {
 		return nil
 	}
 
 	hrwTarget, err := cluster.HrwTarget(ct.Bck().MakeUname(ct.ObjectName()), reb.t.Sowner().Get())
-	if err != nil || hrwTarget.ID() == reb.t.Snode().ID() {
+	if err != nil || hrwTarget.ID() == reb.t.SID() {
 		return err
 	}
 
@@ -332,7 +332,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 		fileFQN = ct.Make(fs.ECSliceType)
 	}
 	if err := cos.Stat(fileFQN); err != nil {
-		glog.Warningf("%s no CT for metadata[%d]: %s", reb.t.Snode(), md.SliceID, fileFQN)
+		glog.Warningf("%s no CT for metadata[%d]: %s", reb.t, md.SliceID, fileFQN)
 		return nil
 	}
 

@@ -147,7 +147,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	}
 
 	// NOTE: creating archive at BEGIN time (see cleanup)
-	if r.p.T.Snode().ID() == wi.tsi.ID() {
+	if r.p.T.SID() == wi.tsi.ID() {
 		if errExists := cos.Stat(wi.lom.FQN); errExists != nil {
 			wi.fh, err = wi.lom.CreateFile(wi.fqn)
 		} else if wi.msg.AllowAppendToExisting {
@@ -158,7 +158,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 				err = fmt.Errorf("unsupported archive type %s, only %s is supported", msg.Mime, cos.ExtTar)
 			}
 		} else {
-			err = fmt.Errorf("%s: not allowed to append to an existing %s", r.p.T.Snode(), msg.FullName())
+			err = fmt.Errorf("%s: not allowed to append to an existing %s", r.p.T, msg.FullName())
 		}
 		if err != nil {
 			return
@@ -228,7 +228,7 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 				wi.abortAppend(err)
 				goto fin
 			}
-			if r.p.T.Snode().ID() == wi.tsi.ID() {
+			if r.p.T.SID() == wi.tsi.ID() {
 				wi.finalizing.Store(true)
 				go r.finalize(wi) // NOTE async
 			} else {
@@ -301,7 +301,7 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 		debug.Assert(!r.err.IsNil()) // see cleanup
 		return r.err.Err()
 	}
-	debug.Assert(wi.tsi.ID() == r.p.T.Snode().ID() && wi.msg.TxnUUID == txnUUID)
+	debug.Assert(wi.tsi.ID() == r.p.T.SID() && wi.msg.TxnUUID == txnUUID)
 
 	// NOTE: best-effort via ref-counting
 	if hdr.Opcode == OpcTxnDone {
@@ -394,7 +394,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 		wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
 		return
 	}
-	if t.Snode().ID() != wi.tsi.ID() {
+	if t.SID() != wi.tsi.ID() {
 		wi.r.doSend(lom, wi, fh)
 		return
 	}

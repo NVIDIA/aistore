@@ -356,7 +356,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if nsi.IsProxy() {
 		s := r.URL.Query().Get(cmn.QparamNonElectable)
 		if nonElectable, err = cos.ParseBool(s); err != nil {
-			glog.Errorf("%s: failed to parse %s for non-electability: %v", p.si, s, err)
+			glog.Errorf("%s: failed to parse %s for non-electability: %v", p, s, err)
 		}
 	}
 	if err := validateHostname(nsi.PublicNet.NodeHostname); err != nil {
@@ -387,7 +387,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi.StringEx(), nsi.StringEx())
 				return
 			}
-			glog.Warningf("%s: self-joining %s with duplicate node ID %q", p.si, nsi.StringEx(), nsi.ID())
+			glog.Warningf("%s: self-joining %s with duplicate node ID %q", p, nsi.StringEx(), nsi.ID())
 		}
 	}
 
@@ -395,7 +395,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	update, err := p.handleJoinKalive(nsi, regReq.Smap, apiOp, nsi.Flags)
 	if !nsi.IsProxy() && p.NodeStarted() {
 		if p.owner.rmd.rebalance.CAS(false, regReq.RebInterrupted) && regReq.RebInterrupted {
-			glog.Errorf("%s: target %s reports interrupted rebalance", p.si, nsi.StringEx())
+			glog.Errorf("%s: target %s reports interrupted rebalance", p, nsi.StringEx())
 		}
 	}
 	p.owner.smap.Unlock()
@@ -408,7 +408,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := &cmn.ActionMsg{Action: action, Name: nsi.ID()}
-	glog.Infof("%s: %s(%q) %s (%s)...", p.si, apiOp, action, nsi.StringEx(), regReq.Smap)
+	glog.Infof("%s: %s(%q) %s (%s)...", p, apiOp, action, nsi.StringEx(), regReq.Smap)
 
 	if apiOp == cmn.AdminJoin {
 		// return both node ID and rebalance ID
@@ -441,7 +441,7 @@ func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
-	glog.Infof("%s: %s %s => (%s)", p.si, apiOp, nsi.StringEx(), p.owner.smap.get().StringEx())
+	glog.Infof("%s: %s %s => (%s)", p, apiOp, nsi.StringEx(), p.owner.smap.get().StringEx())
 
 	body := cos.MustMarshal(meta)
 	cargs := allocCargs()
@@ -622,7 +622,7 @@ func (p *proxy) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) bool {
 					p.si, nsi.StringEx(), nsi.PublicNet.DirectURL)
 				return false
 			}
-			glog.Warningf("%s: renewing registration %s (info changed!)", p.si, nsi.StringEx())
+			glog.Warningf("%s: renewing registration %s (info changed!)", p, nsi.StringEx())
 			return true
 		}
 		p.keepalive.heardFrom(nsi.ID(), false /*reset*/)
@@ -633,10 +633,10 @@ func (p *proxy) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) bool {
 			return true
 		}
 		if osi.Equals(nsi) {
-			glog.Infof("%s: %s is already registered", p.si, nsi.StringEx())
+			glog.Infof("%s: %s is already registered", p, nsi.StringEx())
 			return false
 		}
-		glog.Warningf("%s: renewing %s registration %+v => %+v", p.si, nsi.StringEx(), osi, nsi)
+		glog.Warningf("%s: renewing %s registration %+v => %+v", p, nsi.StringEx(), osi, nsi)
 	}
 	return true
 }
@@ -883,7 +883,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 	}
 	if smap := p.owner.smap.get(); smap.CountActiveTargets() < 2 {
 		err := &errNotEnoughTargets{p.si, smap, 2}
-		glog.Warningf("%s: %v - nothing to do", p.si, err)
+		glog.Warningf("%s: %v - nothing to do", p, err)
 		return
 	}
 	rmdCtx := &rmdModifier{
@@ -1115,10 +1115,10 @@ func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, actio
 				break
 			}
 			if timeout > config.Timeout.Startup.D()/2 {
-				p.writeErr(w, r, fmt.Errorf("%s: failed to attach "+fmerr, p.si, p.ClusterStarted(), config))
+				p.writeErr(w, r, fmt.Errorf("%s: failed to attach "+fmerr, p, p.ClusterStarted(), config))
 				return
 			}
-			glog.Errorf("%s: waiting to attach "+fmerr, p.si, p.ClusterStarted(), config)
+			glog.Errorf("%s: waiting to attach "+fmerr, p, p.ClusterStarted(), config)
 		}
 	}
 	ctx := &configModifier{
@@ -1174,7 +1174,7 @@ func (p *proxy) attachDetachRemoteAIS(ctx *configModifier, config *globalConfig)
 		}
 		for _, u := range urls {
 			if _, err := url.ParseRequestURI(u); err != nil {
-				return false, fmt.Errorf("%s: cannot attach remote cluster: %v", p.si, err)
+				return false, fmt.Errorf("%s: cannot attach remote cluster: %v", p, err)
 			}
 			changed = true
 		}
@@ -1191,7 +1191,7 @@ func (p *proxy) attachDetachRemoteAIS(ctx *configModifier, config *globalConfig)
 	}
 rret:
 	if errMsg != "" {
-		return false, fmt.Errorf("%s: %s remote cluster: %s", p.si, action, errMsg)
+		return false, fmt.Errorf("%s: %s remote cluster: %s", p, action, errMsg)
 	}
 	config.Backend.ProviderConf(cmn.ProviderAIS, aisConf)
 	return
@@ -1331,7 +1331,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
-		err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
+		err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
@@ -1445,7 +1445,8 @@ func (p *proxy) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) 
 		timeout = cmn.Timeout.CplaneOperation()
 	)
 	if node == nil {
-		err = &errNodeNotFound{fmt.Sprintf("cannot %q", msg.Action), si.ID(), p.si, smap}
+		txt := fmt.Sprintf("cannot %q", msg.Action)
+		err = &errNodeNotFound{txt, si.ID(), p.si, smap}
 		return http.StatusNotFound, err
 	}
 
@@ -1469,14 +1470,14 @@ func (p *proxy) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) 
 		return
 	}
 
-	glog.Infof("%s: removing node %s via %q (skip-reb=%t)", p.si, node, msg.Action, skipReb)
+	glog.Infof("%s: removing node %s via %q (skip-reb=%t)", p, node, msg.Action, skipReb)
 	res := p.call(cargs)
 	er, d := res.err, res.details
 	freeCargs(cargs)
 	freeCR(res)
 
 	if er != nil {
-		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]", p.si, node, msg.Action, er, d)
+		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]", p, node, msg.Action, er, d)
 	}
 	if msg.Action == cmn.ActDecommissionNode || msg.Action == cmn.ActCallbackRmFromSmap {
 		errCode, err = p.unregNode(msg, si, skipReb) // NOTE: proceeding anyway even if all retries fail
@@ -1518,7 +1519,7 @@ func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	} else {
 		// see NOTE below
 		if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
-			return fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
+			return fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
 		}
 		clone.delTarget(sid)
 		glog.Infof("%s %s (num targets %d)", verb, node, clone.CountTargets())
@@ -1544,7 +1545,7 @@ func (p *proxy) canRunRebalance() (err error) {
 	// all rebalance-triggering events (shutdown, decommission, maintenance, etc.)
 	// are not permitted and will fail.
 	if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
-		return fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
+		return fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		err = errRebalanceDisabled

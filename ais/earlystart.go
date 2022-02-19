@@ -346,7 +346,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	etlMD := p.owner.etl.get().clone()
 	if etlMD.Version > 0 {
 		if err := p.owner.etl.putPersist(etlMD, nil); err != nil {
-			glog.Errorf("%s: failed to persist etl metadata, err %v - proceeding anyway...", p.si, err)
+			glog.Errorf("%s: failed to persist etl metadata, err %v - proceeding anyway...", p, err)
 		}
 	}
 

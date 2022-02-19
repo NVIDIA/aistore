@@ -171,7 +171,7 @@ func (t *target) createBucket(c *txnServerCtx) error {
 		if c.msg.Action == cmn.ActCreateBck && c.bck.IsRemote() {
 			if c.msg.Value != nil {
 				if err := cos.MorphMarshal(c.msg.Value, &c.bck.Props); err != nil {
-					return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
+					return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 				}
 			}
 			if _, err := t.Backend(c.bck).CreateBucket(c.bck); err != nil {
@@ -195,7 +195,7 @@ func (t *target) _commitCreateDestroy(c *txnServerCtx) (err error) {
 	}
 	// wait for newBMD w/timeout
 	if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-		return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		return fmt.Errorf("%s %s: %v", t, txn, err)
 	}
 	return
 }
@@ -238,13 +238,13 @@ func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return "", fmt.Errorf("%s %s: %v", t, txn, err)
 		}
 
 		// do the work in xaction
 		rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, "mnc-actmnc", int(copies))
 		if rns.Err != nil {
-			return "", fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
+			return "", fmt.Errorf("%s %s: %v", t, txn, rns.Err)
 		}
 		xctn := rns.Entry.Get()
 		flt := xreg.XactFilter{Kind: cmn.ActPutCopies, Bck: c.bck}
@@ -318,13 +318,13 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 		txnSetBprops := txn.(*txnSetBucketProps)
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return "", fmt.Errorf("%s %s: %v", t, txn, err)
 		}
 		if reMirror(txnSetBprops.bprops, txnSetBprops.nprops) {
 			n := int(txnSetBprops.nprops.Mirror.Copies)
 			rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, "mnc-setprops", n)
 			if rns.Err != nil {
-				return "", fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
+				return "", fmt.Errorf("%s %s: %v", t, txn, rns.Err)
 			}
 			xctn := rns.Entry.Get()
 			flt := xreg.XactFilter{Kind: cmn.ActPutCopies, Bck: c.bck}
@@ -364,13 +364,13 @@ func (t *target) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.Buck
 	)
 	nprops = &cmn.BucketProps{}
 	if err = jsoniter.Unmarshal(body, nprops); err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "new bucket props", cmn.BytesHead(body), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "new bucket props", cmn.BytesHead(body), err)
 		return
 	}
 	if nprops.Mirror.Enabled {
 		mpathCount := fs.NumAvail()
 		if int(nprops.Mirror.Copies) > mpathCount {
-			err = fmt.Errorf(fmtErrInsuffMpaths1, t.si, mpathCount, bck, nprops.Mirror.Copies)
+			err = fmt.Errorf(fmtErrInsuffMpaths1, t, mpathCount, bck, nprops.Mirror.Copies)
 			return
 		}
 		if nprops.Mirror.Copies > bck.Props.Mirror.Copies && cs.Err != nil {
@@ -423,7 +423,7 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 		txnRenB := txn.(*txnRenameBucket)
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return "", fmt.Errorf("%s %s: %v", t, txn, err)
 		}
 		rns := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, cmn.ActCommit)
 		if rns.Err != nil {
@@ -534,14 +534,14 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, e
 		if c.query.Get(cmn.QparamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 				txnTcb.xtcb.TxnAbort()
-				return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
+				return "", fmt.Errorf("%s %s: %v", t, txn, err)
 			}
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
 		custom := txnTcb.xtcb.Args()
 		if custom.Phase != cmn.ActBegin {
-			err = fmt.Errorf("%s: %s is already running", t.si, txnTcb) // never here
+			err = fmt.Errorf("%s: %s is already running", t, txnTcb) // never here
 			glog.Error(err)
 			return "", err
 		}
@@ -700,7 +700,7 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 		}
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return "", fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return "", fmt.Errorf("%s %s: %v", t, txn, err)
 		}
 		rns := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 		if rns.Err != nil {
@@ -749,7 +749,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 		}
 		archMsg := &cmn.ArchiveMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, archMsg); err != nil {
-			return xactID, fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
+			return xactID, fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}
 		mime, err := cos.Mime(archMsg.Mime, archMsg.ArchName)
 		if err != nil {
@@ -812,7 +812,7 @@ func (t *target) startMaintenance(c *txnServerCtx) error {
 	case cmn.ActBegin:
 		var opts cmn.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
-			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
+			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}
 		if err := xreg.LimitedCoexistence(t.si, nil, c.msg.Action); err != nil {
 			return err
@@ -823,11 +823,11 @@ func (t *target) startMaintenance(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		var opts cmn.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
-			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
+			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}
 		if c.msg.Action == cmn.ActDecommissionNode {
 			if opts.DaemonID != t.si.ID() {
-				err := fmt.Errorf("%s: invalid target ID %q", t.si, opts.DaemonID)
+				err := fmt.Errorf("%s: invalid target ID %q", t, opts.DaemonID)
 				debug.AssertNoErr(err)
 				return err
 			}
@@ -877,7 +877,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 	case cmn.ActBegin:
 		prmMsg := &cluster.PromoteArgs{}
 		if err := cos.MorphMarshal(c.msg.Value, prmMsg); err != nil {
-			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
+			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 			return "", err
 		}
 		srcFQN := c.msg.Name
@@ -900,7 +900,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			return "", fmt.Errorf("%s: directory %q is empty", t.si, srcFQN)
+			return "", fmt.Errorf("%s: directory %q is empty", t, srcFQN)
 		}
 		txn := newTxnPromote(c, prmMsg, fqns, srcFQN /*dir*/, totalN)
 		if err := t.transactions.begin(txn); err != nil {
@@ -920,14 +920,14 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		defer t.transactions.find(c.uuid, cmn.ActCommit)
 
 		if txnPrm.totalN == 0 {
-			glog.Infof("%s: nothing to do (%s)", t.si, txnPrm)
+			glog.Infof("%s: nothing to do (%s)", t, txnPrm)
 			return "", nil
 		}
 		isFileShare := c.query.Get(cmn.QparamPromoteFileShare) != ""
 
 		// promote synchronously wo/ xaction
 		if txnPrm.totalN == len(txnPrm.fqns) {
-			glog.Infof("%s: promote synchronously %s", t.si, txnPrm)
+			glog.Infof("%s: promote synchronously %s", t, txnPrm)
 			err := t._promoteNumSync(c, txnPrm, isFileShare)
 			return "", err
 		}

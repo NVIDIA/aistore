@@ -188,7 +188,7 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	if err := p.destroyBucket(&msg, bck); err != nil {
 		errCode := http.StatusInternalServerError
 		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
-			glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
+			glog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
 			return
 		}
 		p.writeErr(w, r, err, errCode)
@@ -232,7 +232,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		bt   = cos.MustMarshal(&msg)
 	)
 	if err := jsoniter.Unmarshal(bt, &msg2); err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "list-range action message", cmn.BytesHead(bt), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "list-range action message", cmn.BytesHead(bt), err)
 		p.writeErr(w, r, err)
 		return
 	}

@@ -76,9 +76,14 @@ type htrun struct {
 
 func (h *htrun) Name() string             { return h.name }
 func (h *htrun) DataClient() *http.Client { return h.client.data }
-func (h *htrun) Snode() *cluster.Snode    { return h.si }
-func (h *htrun) Bowner() cluster.Bowner   { return h.owner.bmd }
-func (h *htrun) Sowner() cluster.Sowner   { return h.owner.smap }
+
+func (h *htrun) Snode() *cluster.Snode { return h.si }
+func (h *htrun) callerName() string    { return h.si.String() }
+func (h *htrun) SID() string           { return h.si.ID() }
+func (h *htrun) String() string        { return h.si.String() }
+
+func (h *htrun) Bowner() cluster.Bowner { return h.owner.bmd }
+func (h *htrun) Sowner() cluster.Sowner { return h.owner.smap }
 
 func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequest) (err error) {
 	debug.Assert(len(apireq.prefix) != 0)

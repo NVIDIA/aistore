@@ -26,8 +26,6 @@ import (
 // interface guard
 var _ cluster.Target = (*target)(nil)
 
-func (t *target) Sname() string               { return t.si.String() }
-func (t *target) SID() string                 { return t.si.ID() }
 func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *target) PageMM() *memsys.MMSA        { return t.gmm }
 func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
@@ -135,7 +133,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		if owt == cmn.OwtGetTryLock {
 			if !lom.TryLock(true) {
 				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Warningf("%s: %s(%s) is busy", t.si, lom, owt)
+					glog.Warningf("%s: %s(%s) is busy", t, lom, owt)
 				}
 				return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
 			}
@@ -147,7 +145,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 			// The action was performed by some other goroutine and we don't need
 			// to do it again. But we need to check on the object.
 			if err := lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-				glog.Errorf("%s: %s load err: %v - retrying...", t.si, lom, err)
+				glog.Errorf("%s: %s load err: %v - retrying...", t, lom, err)
 				continue
 			}
 			return 0, nil
@@ -162,7 +160,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
 		}
-		glog.Errorf("%s: failed to GET remote %s (%s): %v(%d)", t.si, lom.FullName(), owt, err, errCode)
+		glog.Errorf("%s: failed to GET remote %s (%s): %v(%d)", t, lom.FullName(), owt, err, errCode)
 		return
 	}
 
@@ -182,7 +180,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		} else {
 			errCode = http.StatusInternalServerError
 			lom.Unlock(true)
-			glog.Errorf("%s: unexpected failure to load %s (%s): %v", t.si, lom.FullName(), owt, err)
+			glog.Errorf("%s: unexpected failure to load %s (%s): %v", t, lom.FullName(), owt, err)
 		}
 	}
 	return
@@ -209,7 +207,7 @@ func (t *target) Promote(params cluster.PromoteParams) (errCode int, err error) 
 	}
 	if params.DeleteSrc {
 		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
-			glog.Errorf("%s: failed to remove promoted source %q: %v", t.si, params.SrcFQN, errRm)
+			glog.Errorf("%s: failed to remove promoted source %q: %v", t, params.SrcFQN, errRm)
 		}
 	}
 	return

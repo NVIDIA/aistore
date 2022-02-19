@@ -38,7 +38,7 @@ func (reb *Reb) setXact(xctn *xs.Rebalance) { reb.xreb.Store(unsafe.Pointer(xctn
 
 func (reb *Reb) logHdr(md *rebArgs) string {
 	stage := stages[reb.stages.stage.Load()]
-	return fmt.Sprintf("%s[g%d,v%d,%s]", reb.t.Snode(), md.id, md.smap.Version, stage)
+	return fmt.Sprintf("%s[g%d,v%d,%s]", reb.t, md.id, md.smap.Version, stage)
 }
 
 func (reb *Reb) rebIDMismatchMsg(remoteID int64) string {
@@ -57,7 +57,7 @@ func (reb *Reb) _waitForSmap() (smap *cluster.Smap, err error) {
 		curwt  time.Duration
 	)
 	maxwt = cos.MinDuration(maxwt, config.Timeout.SendFile.D()/3)
-	glog.Warningf("%s: waiting to start...", reb.t.Snode())
+	glog.Warningf("%s: waiting to start...", reb.t)
 	time.Sleep(sleep)
 	for curwt < maxwt {
 		smap = (*cluster.Smap)(reb.smap.Load())
@@ -67,7 +67,7 @@ func (reb *Reb) _waitForSmap() (smap *cluster.Smap, err error) {
 		time.Sleep(sleep)
 		curwt += sleep
 	}
-	return nil, fmt.Errorf("%s: timed out waiting for usable Smap", reb.t.Snode())
+	return nil, fmt.Errorf("%s: timed out waiting for usable Smap", reb.t)
 }
 
 // Rebalance moves to the next stage:

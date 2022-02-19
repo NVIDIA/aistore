@@ -28,12 +28,12 @@ func (t *target) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 	} else {
 		cs, err = fs.RefreshCapStatus(nil, nil)
 		if err != nil {
-			glog.Errorf("%s: %v", t.si, err)
+			glog.Errorf("%s: %v", t, err)
 			return
 		}
 	}
 	if cs.Err != nil {
-		glog.Warningf("%s: %s", t.si, cs)
+		glog.Warningf("%s: %s", t, cs)
 	}
 	// run serially, cleanup first and LRU iff out-of-space persists
 	go func() {

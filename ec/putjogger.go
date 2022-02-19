@@ -237,7 +237,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		IsCopy:      req.IsCopy,
 		ObjCksum:    cksumValue,
 		CksumType:   cksumType,
-		FullReplica: c.parent.t.Snode().ID(),
+		FullReplica: c.parent.t.SID(),
 		Daemons:     make(cos.MapStrUint16, reqTargets),
 	}
 

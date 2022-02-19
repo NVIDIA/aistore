@@ -105,11 +105,11 @@ func (r *streamingX) Snap() cluster.XactSnap { return r.DemandBase.ExtSnap() }
 func (r *streamingX) raiseErr(err error, errCode int, contOnErr bool) {
 	if cmn.IsErrAborted(err) {
 		if verbose {
-			glog.Warningf("%s[%s] aborted", r.p.T.Snode(), r)
+			glog.Warningf("%s[%s] aborted", r.p.T, r)
 		}
 		return
 	}
-	err = fmt.Errorf("%s[%s]: %w (code=%d)", r.p.T.Snode(), r, err, errCode)
+	err = fmt.Errorf("%s[%s]: %w (code=%d)", r.p.T, r, err, errCode)
 	if contOnErr {
 		glog.Warningf("%v - ignoring...", err)
 		return

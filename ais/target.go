@@ -88,7 +88,7 @@ func (b backends) init(t *target, starting bool) {
 	config := cmn.GCO.Get()
 	if aisConf, ok := config.Backend.ProviderConf(cmn.ProviderAIS); ok {
 		if err := ais.Apply(aisConf, "init"); err != nil {
-			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
+			glog.Errorf("%s: %v - proceeding to start anyway...", t, err)
 		}
 	}
 
@@ -109,7 +109,7 @@ func (b backends) initExt(t *target, starting bool) (err error) {
 		}
 		if _, ok := config.Backend.Providers[provider]; !ok {
 			if !starting {
-				glog.Errorf("Warning: %s: delete %q backend", t.si, provider)
+				glog.Errorf("Warning: %s: delete %q backend", t, provider)
 			}
 			delete(b, provider)
 		}
@@ -138,7 +138,7 @@ func (b backends) initExt(t *target, starting bool) (err error) {
 				add = provider
 			}
 		default:
-			err = fmt.Errorf(cmn.FmtErrUnknown, t.si, "backend provider", provider)
+			err = fmt.Errorf(cmn.FmtErrUnknown, t, "backend provider", provider)
 		}
 		if err != nil {
 			err = _overback(err)
@@ -147,7 +147,7 @@ func (b backends) initExt(t *target, starting bool) (err error) {
 			return
 		}
 		if add != "" && !starting {
-			glog.Errorf("Warning: %s: add %q backend", t.si, add)
+			glog.Errorf("Warning: %s: add %q backend", t, add)
 		}
 	}
 	return
@@ -337,7 +337,7 @@ func (t *target) Run() error {
 	} else {
 		// discover primary and join cluster (compare with manual `cmn.AdminJoin`)
 		if status, err := t.joinCluster(cmn.ActSelfJoinTarget); err != nil {
-			glog.Errorf("%s failed to join cluster (status: %d, err: %v)", t.si, status, err)
+			glog.Errorf("%s failed to join cluster (status: %d, err: %v)", t, status, err)
 			glog.Errorf("%s is terminating", t.si)
 			return err
 		}
@@ -351,7 +351,7 @@ func (t *target) Run() error {
 			if cii != nil {
 				if status, err := t.joinCluster(cmn.ActSelfJoinTarget,
 					cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
-					glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t.si, status, err)
+					glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t, status, err)
 					return
 				}
 			}
@@ -423,7 +423,7 @@ func (t *target) endStartupStandby() (err error) {
 	t.regstate.disabled.Store(false)
 	tstats := t.statsT.(*stats.Trunner)
 	tstats.Standby(false)
-	glog.Infof("%s enabled and joined (%s)", t.si, smap.StringEx())
+	glog.Infof("%s enabled and joined (%s)", t, smap.StringEx())
 
 	config := cmn.GCO.Get()
 	if t.fsprg.newVol && !config.TestingEnv() {
@@ -898,7 +898,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, apireq.bck, err, code)
+		glog.Warningf("%s: bucket %s, err: %v(%d)", t, apireq.bck, err, code)
 		bucketProps = make(cos.SimpleKVs)
 		bucketProps[cmn.HdrBackendProvider] = apireq.bck.Provider
 		bucketProps[cmn.HdrRemoteOffline] = strconv.FormatBool(apireq.bck.IsRemote())
@@ -907,7 +907,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		if k == cmn.HdrBucketVerEnabled && apireq.bck.Props != nil {
 			if curr := strconv.FormatBool(apireq.bck.VersionConf().Enabled); curr != v {
 				// e.g., change via vendor-provided CLI and similar
-				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t.si, apireq.bck, v, curr)
+				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t, apireq.bck, v, curr)
 			}
 		}
 		hdr.Set(k, v)
@@ -1237,7 +1237,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		// cold HEAD
 		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
-			err = fmt.Errorf(cmn.FmtErrWrapFailed, t.si, "HEAD", lom, err)
+			err = fmt.Errorf(cmn.FmtErrWrapFailed, t, "HEAD", lom, err)
 			invalidHandler(w, r, err, errCode)
 			return
 		}
@@ -1412,7 +1412,7 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 	var objAttrs *cmn.ObjAttrs
 	objAttrs, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrWrapFailed, t.si, "head metadata of", lom, err)
+		err = fmt.Errorf(cmn.FmtErrWrapFailed, t, "head metadata of", lom, err)
 		return
 	}
 	if lom.Bck().IsHDFS() {
@@ -1552,9 +1552,9 @@ func (t *target) putMirror(lom *cluster.LOM) {
 		nanotim := mono.NanoTime()
 		if nanotim&0x7 == 7 {
 			if mpathCnt == 0 {
-				glog.Errorf("%s: %v", t.si, cmn.ErrNoMountpaths)
+				glog.Errorf("%s: %v", t, cmn.ErrNoMountpaths)
 			} else {
-				glog.Errorf(fmtErrInsuffMpaths2, t.si, mpathCnt, lom, mconfig.Copies)
+				glog.Errorf(fmtErrInsuffMpaths2, t, mpathCnt, lom, mconfig.Copies)
 			}
 		}
 		return
@@ -1663,7 +1663,7 @@ func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMs
 	// TODO: combine copy+delete under a single write lock
 	lom.Lock(true)
 	if err = lom.Remove(); err != nil {
-		glog.Warningf("%s: failed to delete renamed object %s (new name %s): %v", t.si, lom, msg.Name, err)
+		glog.Warningf("%s: failed to delete renamed object %s (new name %s): %v", t, lom, msg.Name, err)
 	}
 	lom.Unlock(true)
 }
@@ -1678,10 +1678,10 @@ func (t *target) fsErr(err error, filepath string) {
 	}
 	if cos.IsErrOOS(err) {
 		cs := t.OOS(nil)
-		glog.Errorf("%s: %s", t.si, cs)
+		glog.Errorf("%s: %s", t, cs)
 		return
 	}
-	glog.Errorf("%s: waking up FSHC to check %q for err %v", t.si, filepath, err)
+	glog.Errorf("%s: waking up FSHC to check %q for err %v", t, filepath, err)
 	keyName := mpathInfo.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsT.AddMany(cos.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})

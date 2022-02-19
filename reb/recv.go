@@ -99,7 +99,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 				reb.t.Snode(), tsid, lom, stages[stage])
 		}
 	} else if stage < rebStageTraverse {
-		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
+		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t, tsid, lom, stages[stage])
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 	xreb := reb.xctn()
@@ -158,7 +158,7 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 		return
 	}
 	if glog.FastV(5, glog.SmoduleReb) {
-		glog.Infof("%s: ack from %s on %s", reb.t.Snode(), string(hdr.Opaque), lom)
+		glog.Infof("%s: ack from %s on %s", reb.t, string(hdr.Opaque), lom)
 	}
 	// No immediate file deletion: let LRU cleanup the "misplaced" object
 	// TODO: mark the object "Deleted"
@@ -170,7 +170,7 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 ///////////
 
 func (reb *Reb) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) error {
-	tname := reb.t.Snode().Name()
+	tname := reb.t.String()
 	if err != nil {
 		glog.Errorf("%s: failed to receive push notification %s from %s: %v", tname, hdr.ObjName, hdr.Bck, err)
 		return err
@@ -251,8 +251,8 @@ func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) 
 	if err != nil {
 		return err
 	}
-	req.md.FullReplica = reb.t.Snode().ID()
-	req.md.Daemons[reb.t.Snode().ID()] = uint16(req.md.SliceID)
+	req.md.FullReplica = reb.t.SID()
+	req.md.Daemons[reb.t.SID()] = uint16(req.md.SliceID)
 	if moveTo != nil {
 		req.md.Daemons[moveTo.ID()] = uint16(md.SliceID)
 	}

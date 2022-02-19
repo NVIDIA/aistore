@@ -101,9 +101,8 @@ type Node interface {
 // For implementations, please refer to `ais/tgtifimpl.go` and `ais/httpcommon.go`.
 type Target interface {
 	Node
-	// convenience methods (shortcuts)
-	Sname() string
 	SID() string
+	String() string
 
 	// Memory allocators.
 	PageMM() *memsys.MMSA

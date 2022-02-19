@@ -35,7 +35,7 @@ const (
 
 	FmtErrIntegrity      = "[%s%d, for troubleshooting see %s/blob/master/docs/troubleshooting.md]"
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
-	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %v"
+	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %w"
 	FmtErrUnsupported    = "%s: %s is not supported"
 	FmtErrUnknown        = "%s: unknown %s %q"
 

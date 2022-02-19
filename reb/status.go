@@ -46,14 +46,14 @@ func (reb *Reb) RebStatus(status *Status) {
 				id, _ := xact.S2RebID(marked.Xact.ID())
 				debug.AssertMsg(id > xreb.RebID(), marked.Xact.String()+" vs "+xreb.String())
 				glog.Warningf("%s: must be transitioning (renewing) from %s (stage %s) to %s",
-					reb.t.Snode(), xreb, stages[status.Stage], marked.Xact)
+					reb.t, xreb, stages[status.Stage], marked.Xact)
 				status.Running = false // not yet
 			} else {
 				debug.Assertf(reb.rebID.Load() == xreb.RebID(), "rebID[%d] vs %s", reb.rebID.Load(), xreb)
 			}
 		}
 	} else if status.Running {
-		glog.Warningf("%s: transitioning (renewing) to %s", reb.t.Snode(), marked.Xact)
+		glog.Warningf("%s: transitioning (renewing) to %s", reb.t, marked.Xact)
 		status.Running = false
 	}
 
@@ -62,7 +62,7 @@ func (reb *Reb) RebStatus(status *Status) {
 		return
 	}
 	if status.SmapVersion != status.RebVersion {
-		glog.Warningf("%s: Smap version %d != %d", reb.t.Snode(), status.SmapVersion, status.RebVersion)
+		glog.Warningf("%s: Smap version %d != %d", reb.t, status.SmapVersion, status.RebVersion)
 		return
 	}
 	reb.awaiting.mu.Lock()

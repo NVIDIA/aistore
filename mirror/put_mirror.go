@@ -87,7 +87,8 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	if !mirror.Enabled {
 		return nil, errors.New("mirroring disabled, nothing to do")
 	}
-	if err = fs.ValidateNCopies(t.Sname(), int(mirror.Copies)); err != nil {
+	tname := t.String()
+	if err = fs.ValidateNCopies(tname, int(mirror.Copies)); err != nil {
 		return
 	}
 	bck := lom.Bck()

@@ -186,8 +186,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
 	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 		if err != nil {
-			glog.Errorf("%s failed to send %s to %v: %v",
-				c.parent.t.Snode(), ctx.lom, daemons, err)
+			glog.Errorf("%s failed to send %s to %v: %v", c.parent.t, ctx.lom, daemons, err)
 		}
 		freeObject(reader)
 	}
@@ -212,7 +211,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 
 		w := mm.NewSGL(cos.KiB)
 		if _, err := c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w); err != nil {
-			glog.Errorf("%s failed to read from %s", c.parent.t.Snode(), node)
+			glog.Errorf("%s failed to read from %s", c.parent.t, node)
 			w.Free()
 			mm.Free(iReqBuf)
 			w = nil
@@ -400,7 +399,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 	}
 	conf := cmn.GCO.Get()
 	if wgSlices.WaitTimeout(conf.Timeout.SendFile.D()) {
-		glog.Errorf("%s timed out waiting for %s slices", c.parent.t.Snode(), ctx.lom)
+		glog.Errorf("%s timed out waiting for %s slices", c.parent.t, ctx.lom)
 	}
 	mm.Free(request)
 	return nil
@@ -712,14 +711,14 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 		cb := func(daemonID string, s *slice) transport.ObjSentCB {
 			return func(hdr transport.ObjHdr, reader io.ReadCloser, _ interface{}, err error) {
 				if err != nil {
-					glog.Errorf("%s failed to send %s to %v: %v", c.parent.t.Snode(), ctx.lom, daemonID, err)
+					glog.Errorf("%s failed to send %s to %v: %v", c.parent.t, ctx.lom, daemonID, err)
 				}
 				s.free()
 			}
 		}(tid, sl)
 		if err := c.parent.writeRemote([]string{tid}, ctx.lom, dataSrc, cb); err != nil {
 			remoteErr = err
-			glog.Errorf("%s failed to send slice %s[%d] to %s", c.parent.t.Snode(), ctx.lom, sliceID, tid)
+			glog.Errorf("%s failed to send slice %s[%d] to %s", c.parent.t, ctx.lom, sliceID, tid)
 		}
 	}
 
@@ -757,8 +756,7 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 	// Restore and save locally the main replica
 	restored, err := c.restoreMainObj(ctx)
 	if err != nil {
-		glog.Errorf("%s failed to restore main object %s: %v",
-			c.parent.t.Snode(), ctx.lom, err)
+		glog.Errorf("%s failed to restore main object %s: %v", c.parent.t, ctx.lom, err)
 		c.freeDownloaded(ctx)
 		freeSlices(restored)
 		return err

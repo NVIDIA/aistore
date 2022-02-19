@@ -128,7 +128,7 @@ func (r *Trunner) InitCapacity() error {
 		return err
 	}
 	if cs.Err != nil {
-		glog.Errorf("%s: %s", r.T.Snode(), cs)
+		glog.Errorf("%s: %s", r.T, cs)
 	}
 	return nil
 }

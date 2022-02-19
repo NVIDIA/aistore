@@ -21,7 +21,7 @@ import (
 func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks, ignoreMissingMountpath bool) (created bool) {
 	var (
 		vmd *VMD
-		tid = t.Snode().ID()
+		tid = t.SID()
 	)
 	fs.New(allowSharedDisksAndNoDisks || config.TestingEnv()) // new and empty
 
@@ -29,7 +29,7 @@ func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks, igno
 	// a) local-config is kept in-sync with mountpath changes (see ais/fspathgrp)
 	// b) disk label for absolute referencing - can wait (TODO)
 	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
-		cos.ExitLogf("%s: %v", t.Snode(), err)
+		cos.ExitLogf("%s: %v", t, err)
 	} else {
 		vmd = v
 	}
@@ -39,15 +39,15 @@ func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks, igno
 		// b) when the config doesn't contain a single valid mountpath
 		//    (that in turn contains a copy of VMD, possibly outdated (but that's ok))
 		if err := configInitMPI(tid, config); err != nil {
-			cos.ExitLogf("%s: %v", t.Snode(), err)
+			cos.ExitLogf("%s: %v", t, err)
 		}
-		glog.Warningf("%s: creating new VMD from %v config", t.Snode(), config.FSP.Paths.ToSlice())
+		glog.Warningf("%s: creating new VMD from %v config", t, config.FSP.Paths.ToSlice())
 		if v, err := NewFromMPI(tid); err != nil {
-			cos.ExitLogf("%s: %v", t.Snode(), err)
+			cos.ExitLogf("%s: %v", t, err)
 		} else {
 			vmd = v
 		}
-		glog.Warningf("%s: %s created", t.Snode(), vmd)
+		glog.Warningf("%s: %s created", t, vmd)
 		created = true
 		return
 	}
@@ -56,7 +56,7 @@ func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks, igno
 	// initialize MPI
 	var persist bool
 	if v, haveOld, err := vmdInitMPI(tid, config, vmd, 1 /*pass #1*/, ignoreMissingMountpath); err != nil {
-		cos.ExitLogf("%s: %v", t.Snode(), err)
+		cos.ExitLogf("%s: %v", t, err)
 	} else {
 		if v != nil && v.Version > vmd.Version {
 			vmd = v
@@ -66,7 +66,7 @@ func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks, igno
 			persist = true
 		}
 		if v, _, err := vmdInitMPI(tid, config, vmd, 2 /*pass #2*/, ignoreMissingMountpath); err != nil {
-			cos.ExitLogf("%s: %v", t.Snode(), err)
+			cos.ExitLogf("%s: %v", t, err)
 		} else {
 			debug.Assert(v == nil || v.Version == vmd.Version)
 		}

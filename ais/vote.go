@@ -143,7 +143,7 @@ func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
 
 	// proceed with election iff:
 	if psi.ID() != p.si.ID() {
-		glog.Warningf("%s: not next in line %s", p.si, psi)
+		glog.Warningf("%s: not next in line %s", p, psi)
 		return
 	} else if !p.ClusterStarted() {
 		glog.Warningf("%s: not ready yet to be elected - starting up", p.si)
@@ -195,7 +195,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 		}
 		smap := p.owner.smap.get()
 		if smap.version() > vr.Smap.version() {
-			glog.Warningf("%s: %s updated from %s, moving back to idle", p.si, smap, vr.Smap)
+			glog.Warningf("%s: %s updated from %s, moving back to idle", p, smap, vr.Smap)
 			return
 		}
 		_, _, err = p.Health(curPrimary, timeout, nil /*ask primary*/)
@@ -209,14 +209,14 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 		query := url.Values{cmn.QparamAskPrimary: []string{"true"}}
 		_, _, err = p.Health(curPrimary, timeout, query /*ask primary*/)
 		if err == nil {
-			glog.Infof("%s: current primary %s is up, moving back to idle", p.si, curPrimary)
+			glog.Infof("%s: current primary %s is up, moving back to idle", p, curPrimary)
 		} else {
 			glog.Errorf("%s: current primary(?) %s responds but does not consider itself primary",
 				p.si, curPrimary)
 		}
 		return
 	}
-	glog.Infof("%s: primary %s is confirmed down: %v", p.si, curPrimary, err)
+	glog.Infof("%s: primary %s is confirmed down: %v", p, curPrimary, err)
 
 	// 2. election phase 1
 	glog.Info("Moving to election state phase 1 (prepare)")
@@ -330,7 +330,7 @@ func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StringSet {
 		if res.err == nil {
 			continue
 		}
-		glog.Warningf("%s: failed to confirm election with %s: %v", p.si, res.si, res.err)
+		glog.Warningf("%s: failed to confirm election with %s: %v", p, res.si, res.err)
 		errors.Add(res.si.ID())
 	}
 	freeBcastRes(results)

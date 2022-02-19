@@ -98,7 +98,8 @@ func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC)
 
 func (r *xactMNC) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	if err := fs.ValidateNCopies(r.Target().Sname(), r.copies); err != nil {
+	tname := r.Target().String()
+	if err := fs.ValidateNCopies(tname, r.copies); err != nil {
 		r.Finish(err)
 		return
 	}

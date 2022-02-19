@@ -118,7 +118,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	rmi.EvictLomCache()
 
 	if dontResilver || !cmn.GCO.Get().Resilver.Enabled {
-		glog.Infof("%s: %q %s but resilvering=(%t, %t)", g.t.si, action, rmi,
+		glog.Infof("%s: %q %s but resilvering=(%t, %t)", g.t, action, rmi,
 			!dontResilver, cmn.GCO.Get().Resilver.Enabled)
 		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // ditto (compare with the one below)
 		return
@@ -126,9 +126,9 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 
 	prevActive := g.t.res.IsActive(1 /*interval-of-inactivity multiplier*/)
 	if prevActive {
-		glog.Infof("%s: %q %s: starting to resilver when previous (resilvering) is active", g.t.si, action, rmi)
+		glog.Infof("%s: %q %s: starting to resilver when previous (resilvering) is active", g.t, action, rmi)
 	} else {
-		glog.Infof("%s: %q %s: starting to resilver", g.t.si, action, rmi)
+		glog.Infof("%s: %q %s: starting to resilver", g.t, action, rmi)
 	}
 	args := res.Args{
 		Rmi:             rmi,
@@ -176,7 +176,7 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resi
 		return
 	}
 	fspathsConfigAddDel(rmi.Path, false /*add*/)
-	glog.Infof("%s: %s %q %s done", g.t.si, rmi, action, xres)
+	glog.Infof("%s: %s %q %s done", g.t, rmi, action, xres)
 
 	// 3. the case of multiple overlapping detach _or_ disable operations
 	//    (ie., commit previously aborted xs.Resilver, if any)
@@ -197,7 +197,7 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resi
 			return
 		}
 		fspathsConfigAddDel(mi.Path, false /*add*/)
-		glog.Infof("%s: %s %s %s was previously aborted and now done", g.t.si, action, mi, xres)
+		glog.Infof("%s: %s %s %s was previously aborted and now done", g.t, action, mi, xres)
 	}
 }
 
@@ -268,7 +268,7 @@ func (g *fsprungroup) checkEnable(action, mpath string) {
 	} else {
 		glog.Infof("%s the first mountpath %s", action, mpath)
 		if err := g.t.enable(); err != nil {
-			glog.Errorf("Failed to re-join %s (self), err: %v", g.t.si, err)
+			glog.Errorf("Failed to re-join %s (self), err: %v", g.t, err)
 		}
 	}
 }

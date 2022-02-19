@@ -305,7 +305,7 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 		if err != nil {
 			return err
 		}
-		if tsi.ID() != j.opts.T.Snode().ID() {
+		if tsi.ID() != j.opts.T.SID() {
 			return nil
 		}
 	}

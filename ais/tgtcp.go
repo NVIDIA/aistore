@@ -59,7 +59,7 @@ func (t *target) applyRegMeta(action string, body []byte, caller string) (err er
 	var regMeta cluMeta
 	err = jsoniter.Unmarshal(body, &regMeta)
 	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "reg-meta", cmn.BytesHead(body), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "reg-meta", cmn.BytesHead(body), err)
 		return
 	}
 	msg := t.newAmsgStr(action, regMeta.BMD)
@@ -97,10 +97,10 @@ func (t *target) applyRegMeta(action string, body []byte, caller string) (err er
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
-			glog.Errorf(cmn.FmtErrLogFailed, t.si, "sync", regMeta.Smap, err)
+			glog.Errorf(cmn.FmtErrLogFailed, t, "sync", regMeta.Smap, err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", t.si, t.owner.smap.get())
+		glog.Infof("%s: synch %s", t, t.owner.smap.get())
 	}
 	return
 	// Do not receive RMD: `receiveRMD` runs extra jobs and checks specific for metasync.
@@ -179,7 +179,7 @@ func (t *target) daeputQuery(w http.ResponseWriter, r *http.Request, apiItems []
 		if err := t.owner.smap.synchronize(t.si, newsmap, nil /*ms payload*/); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrWrapFailed, t.si, "sync", newsmap, err)
 		}
-		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
+		glog.Infof("%s: %s %s done", t, cmn.SyncSmap, newsmap)
 	case cmn.Mountpaths:
 		t.handleMountpathReq(w, r)
 	case cmn.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
@@ -332,7 +332,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 	if daemon.cli.target.standby {
 		if err := t.endStartupStandby(); err != nil {
-			glog.Warningf("%s: err %v ending standby...", t.si, err)
+			glog.Warningf("%s: err %v ending standby...", t, err)
 		}
 	}
 }
@@ -355,7 +355,7 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if opts == nil {
-			glog.Warningf("%s: remove from Smap via (%q, action=%s)", t.si, apiItems[0], action)
+			glog.Warningf("%s: remove from Smap via (%q, action=%s)", t, apiItems[0], action)
 			noShutdown = true
 		} else {
 			noShutdown, rmUserData = opts.NoShutdown, opts.RmUserData
@@ -392,12 +392,12 @@ func (t *target) unreg(action string, rmUserData, noShutdown bool) {
 		return
 	}
 
-	glog.Infof("%s: decommissioning, (remove-user-data, no-shutdown) = (%t, %t)", t.si, rmUserData, noShutdown)
+	glog.Infof("%s: decommissioning, (remove-user-data, no-shutdown) = (%t, %t)", t, rmUserData, noShutdown)
 	fs.Decommission(!rmUserData /*ais metadata only*/)
 
 	err := cleanupConfigDir()
 	if err != nil {
-		glog.Errorf("%s: failed to cleanup config dir, err: %v", t.si, err)
+		glog.Errorf("%s: failed to cleanup config dir, err: %v", t, err)
 	}
 	// Delete DB file.
 	err = cos.RemoveFile(filepath.Join(cmn.GCO.Get().ConfigDir, dbName))
@@ -531,7 +531,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	}
 	// before -- do -- after
 	if errDone := t.transactions.commitBefore(caller, msg); errDone != nil {
-		err = fmt.Errorf("%s commit-before %s, errDone: %v", t.si, newBMD, errDone)
+		err = fmt.Errorf("%s commit-before %s, errDone: %v", t, newBMD, errDone)
 		if !silent {
 			glog.Error(err)
 		}
@@ -541,7 +541,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 		t._postBMD(tag, rmbcks)
 	}
 	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
-		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t.si, newBMD, err, errDone)
+		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t, newBMD, err, errDone)
 		if !silent {
 			glog.Error(err)
 		}
@@ -580,7 +580,7 @@ func (t *target) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload) (rm
 		return false
 	})
 	if len(createErrs) > 0 {
-		err = fmt.Errorf("%s: failed to receive %s: %v", t.si, newBMD, createErrs)
+		err = fmt.Errorf("%s: failed to receive %s: %v", t, newBMD, createErrs)
 		return
 	}
 
@@ -618,7 +618,7 @@ func (t *target) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload) (rm
 		return false
 	})
 	if len(destroyErrs) > 0 {
-		glog.Errorf("%s: failed to cleanup destroyed buckets: %v", t.si, destroyErrs)
+		glog.Errorf("%s: failed to cleanup destroyed buckets: %v", t, destroyErrs)
 	}
 	return
 }
@@ -664,7 +664,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err erro
 		return
 	}
 	if smap.GetNode(t.si.ID()) == nil {
-		err = fmt.Errorf("%s (self) not present in %s", t.si, smap.StringEx())
+		err = fmt.Errorf("%s (self) not present in %s", t, smap.StringEx())
 		return
 	}
 	for _, tsi := range rmd.TargetIDs {
@@ -691,7 +691,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err erro
 		t.owner.rmd.put(newRMD)
 		// TODO: move and refactor
 	} else if msg.Action == cmn.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.si.ID() {
-		glog.Warningf("%s: standby => join (msg=%s)", t.si, msg)
+		glog.Warningf("%s: standby => join (msg=%s)", t, msg)
 		if _, err = t.joinCluster(msg.Action); err == nil {
 			err = t.endStartupStandby()
 		}
@@ -703,18 +703,18 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err erro
 func (t *target) ensureLatestBMD(msg *aisMsg, r *http.Request) {
 	bmd, bmdVersion := t.owner.bmd.Get(), msg.BMDVersion
 	if bmd.Version < bmdVersion {
-		glog.Errorf("%s: local %s < v%d (msg=%s) - fetching latest...", t.si, bmd, bmdVersion, msg)
+		glog.Errorf("%s: local %s < v%d (msg=%s) - fetching latest...", t, bmd, bmdVersion, msg)
 		t.BMDVersionFixup(r)
 	} else if bmd.Version > bmdVersion {
 		// If metasync outraces the request, we end up here, just log it and continue.
-		glog.Warningf("%s: local %s > v%d (msg=%s)", t.si, bmd, bmdVersion, msg)
+		glog.Warningf("%s: local %s > v%d (msg=%s)", t, bmd, bmdVersion, msg)
 	}
 }
 
 func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed string) (err error) {
 	smap := t.owner.smap.get()
 	if err = smap.validate(); err != nil {
-		return fmt.Errorf("%s: %s is invalid: %v", t.si, smap, err)
+		return fmt.Errorf("%s: %s is invalid: %v", t, smap, err)
 	}
 	psi := smap.Primary
 	q := url.Values{}
@@ -742,7 +742,7 @@ func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed stri
 	if err == nil {
 		err = jsoniter.Unmarshal(res.bytes, outStruct)
 		if err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, what, cmn.BytesHead(res.bytes), err)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, t, what, cmn.BytesHead(res.bytes), err)
 		}
 	}
 	freeCargs(cargs)
@@ -877,7 +877,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 		aisCloud := t.backend[cmn.ProviderAIS].(*backend.AISBackendProvider)
 		err = aisCloud.Apply(aisConf, msg.Action)
 		if err != nil {
-			glog.Errorf("%s: %v - proceeding anyway...", t.si, err)
+			glog.Errorf("%s: %v - proceeding anyway...", t, err)
 		}
 		return
 	}
@@ -953,7 +953,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 			s = "newer"
 		}
 		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d", callerID, caller, s, callerSmapVer)
-		glog.Warningf("%s[%s]: %v", t.si, smap.StringEx(), err)
+		glog.Warningf("%s[%s]: %v", t, smap.StringEx(), err)
 	}
 	getRebStatus := cos.IsParseBool(query.Get(cmn.QparamRebStatus))
 	if getRebStatus {
@@ -969,11 +969,11 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if smap.GetProxy(callerID) != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: health-ping from %s", t.si, caller)
+			glog.Infof("%s: health-ping from %s", t, caller)
 		}
 		t.keepalive.heardFrom(callerID, false)
 	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: health-ping from %s", t.si, caller)
+		glog.Infof("%s: health-ping from %s", t, caller)
 	}
 }
 
@@ -1025,10 +1025,13 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 		cargs.si = tsi
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodHead,
-			Header: http.Header{cmn.HdrCallerID: []string{t.SID()}, cmn.HdrCallerName: []string{t.Sname()}},
-			Base:   tsi.URL(cmn.NetIntraControl),
-			Path:   cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
-			Query:  q,
+			Header: http.Header{
+				cmn.HdrCallerID:   []string{t.SID()},
+				cmn.HdrCallerName: []string{t.callerName()},
+			},
+			Base:  tsi.URL(cmn.NetIntraControl),
+			Path:  cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
+			Query: q,
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}
@@ -1050,9 +1053,12 @@ func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,
-		Header: http.Header{cmn.HdrCallerID: []string{t.SID()}, cmn.HdrCallerName: []string{t.Sname()}},
-		Path:   cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
-		Query:  q,
+		Header: http.Header{
+			cmn.HdrCallerID:   []string{t.SID()},
+			cmn.HdrCallerName: []string{t.callerName()},
+		},
+		Path:  cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
+		Query: q,
 	}
 	args.ignoreMaintenance = true
 	args.smap = smap

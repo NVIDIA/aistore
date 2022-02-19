@@ -90,6 +90,8 @@ var (
 	_ electable  = (*proxy)(nil)
 )
 
+func (p *proxy) String() string { return p.si.String() }
+
 func (p *proxy) initClusterCIDR() {
 	if nodeCIDR := os.Getenv("AIS_CLUSTER_CIDR"); nodeCIDR != "" {
 		_, network, err := net.ParseCIDR(nodeCIDR)
@@ -222,12 +224,12 @@ func (p *proxy) Run() error {
 	}
 	p.registerNetworkHandlers(networkHandlers)
 
-	glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetPublic, p.si.PublicNet.DirectURL)
+	glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetPublic, p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {
-		glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetIntraControl, p.si.IntraControlNet.DirectURL)
+		glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraControl, p.si.IntraControlNet.DirectURL)
 	}
 	if p.si.PublicNet.DirectURL != p.si.IntraDataNet.DirectURL {
-		glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetIntraData, p.si.IntraDataNet.DirectURL)
+		glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraData, p.si.IntraDataNet.DirectURL)
 	}
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, p.statsT)
@@ -245,7 +247,7 @@ func (p *proxy) sendKeepalive(timeout time.Duration) (status int, err error) {
 func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, err error) {
 	var query url.Values
 	if smap := p.owner.smap.get(); smap.isPrimary(p.si) {
-		return 0, fmt.Errorf("%s should not be joining: is primary, %s", p.si, smap.StringEx())
+		return 0, fmt.Errorf("%s should not be joining: is primary, %s", p, smap.StringEx())
 	}
 	if cmn.GCO.Get().Proxy.NonElectable {
 		query = url.Values{cmn.QparamNonElectable: []string{"true"}}
@@ -267,7 +269,7 @@ func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, e
 func (p *proxy) applyRegMeta(action string, body []byte, caller string) error {
 	var regMeta cluMeta
 	if err := jsoniter.Unmarshal(body, &regMeta); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "reg-meta", cmn.BytesHead(body), err)
+		return fmt.Errorf(cmn.FmtErrUnmarshal, p, "reg-meta", cmn.BytesHead(body), err)
 	}
 	return p.receiveCluMeta(&regMeta, action, caller)
 }
@@ -290,34 +292,34 @@ func (p *proxy) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err err
 	// Smap
 	if err = p.receiveSmap(cluMeta.Smap, msg, nil /*ms payload*/, caller, p.smapOnUpdate); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrLogFailed, p.si, "sync", cluMeta.Smap, err)
+			glog.Errorf(cmn.FmtErrLogFailed, p, "sync", cluMeta.Smap, err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p.si, cluMeta.Smap)
+		glog.Infof("%s: synch %s", p, cluMeta.Smap)
 	}
 	// BMD
 	if err = p.receiveBMD(cluMeta.BMD, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrLogFailed, p.si, "sync", cluMeta.BMD, err)
+			glog.Errorf(cmn.FmtErrLogFailed, p, "sync", cluMeta.BMD, err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p.si, cluMeta.BMD)
+		glog.Infof("%s: synch %s", p, cluMeta.BMD)
 	}
 	// RMD
 	if err = p.receiveRMD(cluMeta.RMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrLogFailed, p.si, "sync", cluMeta.RMD, err)
+			glog.Errorf(cmn.FmtErrLogFailed, p, "sync", cluMeta.RMD, err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p.si, cluMeta.RMD)
+		glog.Infof("%s: synch %s", p, cluMeta.RMD)
 	}
 	// EtlMD
 	if err = p.receiveEtlMD(cluMeta.EtlMD, msg, nil, caller, nil); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrLogFailed, p.si, "sync", cluMeta.EtlMD, err)
+			glog.Errorf(cmn.FmtErrLogFailed, p, "sync", cluMeta.EtlMD, err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p.si, cluMeta.EtlMD)
+		glog.Infof("%s: synch %s", p, cluMeta.EtlMD)
 	}
 	return
 }
@@ -767,7 +769,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := p.destroyBucket(msg, bck); err != nil {
 			if cmn.IsErrBckNotFound(err) {
-				glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
+				glog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
 			} else {
 				p.writeErr(w, r, err)
 			}
@@ -805,9 +807,9 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		const txt = "is primary, cannot be on the receiving side of metasync"
 		cii.fill(&p.htrun)
 		if xctn := voteInProgress(); xctn != nil {
-			err.Message = fmt.Sprintf("%s: %s [%s, %s]", p.si, txt, smap, xctn)
+			err.Message = fmt.Sprintf("%s: %s [%s, %s]", p, txt, smap, xctn)
 		} else {
-			err.Message = fmt.Sprintf("%s: %s, %s", p.si, txt, smap)
+			err.Message = fmt.Sprintf("%s: %s, %s", p, txt, smap)
 		}
 		p.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
 		return
@@ -864,7 +866,7 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 		if p.si.ID() != psi.ID() && newSmap.IsIC(psi) && !smap.IsIC(psi) {
 			go func(psi *cluster.Snode) {
 				if err := p.ic.sendOwnershipTbl(psi); err != nil {
-					glog.Errorf("%s: failed to send ownership table to %s, err:%v", p.si, psi, err)
+					glog.Errorf("%s: failed to send ownership table to %s, err:%v", p, psi, err)
 				}
 			}(psi)
 		}
@@ -902,7 +904,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if smap.isPrimary(p.si) {
 		if prr {
 			if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
-				err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
+				err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
 				if glog.FastV(4, glog.SmoduleAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
 				} else {
@@ -1588,7 +1590,7 @@ func (p *proxy) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
 	}
 	nprops := mergeRemoteBckProps(bprops, ctx.cloudProps)
 	if nprops.Equal(bprops) {
-		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, bck)
+		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p, bck)
 		ctx.terminate = true
 		return nil
 	}
@@ -1785,9 +1787,9 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.Actio
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
 	if msg != nil {
-		glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p.si, msg.Action, s, smap.Primary.StringEx())
+		glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, smap.Primary.StringEx())
 	} else {
-		glog.Infof("%s: forwarding %q to the primary %s", p.si, s, smap.Primary.StringEx())
+		glog.Infof("%s: forwarding %q to the primary %s", p, s, smap.Primary.StringEx())
 	}
 	primary.rp.ServeHTTP(w, r)
 	return true
@@ -1795,7 +1797,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.Actio
 
 // Based on default error handler `defaultErrorHandler` in `httputil/reverseproxy.go`.
 func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) {
-	msg := fmt.Sprintf("%s: rproxy err %v, req: %s %s", p.si, err, r.Method, r.URL.Path)
+	msg := fmt.Sprintf("%s: rproxy err %v, req: %s %s", p, err, r.Method, r.URL.Path)
 	if caller := r.Header.Get(cmn.HdrCallerName); caller != "" {
 		msg += " (from " + caller + ")"
 	}
@@ -2294,7 +2296,7 @@ func (p *proxy) _pendingRnPre(ctx *bmdModifier, clone *bucketMD) error {
 		return nil
 	}
 	if props.Renamed == "" {
-		glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, bck.Name, *bck.Props)
+		glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p, bck.Name, *bck.Props)
 		ctx.terminate = true
 		return nil
 	}
@@ -2328,7 +2330,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				time.Sleep(sleep)
 				smap = p.owner.smap.get()
 				if err := smap.validate(); err != nil {
-					glog.Errorf("%s is starting up, cannot return %s yet: %v", p.si, smap, err)
+					glog.Errorf("%s is starting up, cannot return %s yet: %v", p, smap, err)
 				}
 				break
 			}
@@ -2336,7 +2338,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(sleep)
 		}
 		if err := smap.validate(); err != nil {
-			glog.Errorf("%s: startup is taking unusually long time: %s (%v)", p.si, smap, err)
+			glog.Errorf("%s: startup is taking unusually long time: %s (%v)", p, smap, err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -2430,7 +2432,7 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 			p.writeErrf(w, r, cmn.FmtErrWrapFailed, p.si, "sync", newsmap, err)
 			return
 		}
-		glog.Infof("%s: %s %s done", p.si, cmn.SyncSmap, newsmap)
+		glog.Infof("%s: %s %s done", p, cmn.SyncSmap, newsmap)
 	case cmn.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		p.setDaemonConfigQuery(w, r)
 	default:
@@ -2465,7 +2467,7 @@ func (p *proxy) unreg(action string) {
 		// When decommissioning always cleanup all system meta-data.
 		err := cleanupConfigDir()
 		if err != nil {
-			glog.Errorf("%s: failed to cleanup config dir, err: %v", p.si, err)
+			glog.Errorf("%s: failed to cleanup config dir, err: %v", p, err)
 		}
 	}
 	writeShutdownMarker()
@@ -2514,7 +2516,7 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 	} else {
 		smap = res.v.(*smapX)
 		if err = smap.validate(); err != nil {
-			err = fmt.Errorf("%s: invalid %s from %s: %v", p.si, smap, baseURL, err)
+			err = fmt.Errorf("%s: invalid %s from %s: %v", p, smap, baseURL, err)
 			smap = nil
 		}
 	}
@@ -2530,7 +2532,7 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 // primary connect to the new primary
 func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID string) {
 	newPrimaryURL := r.URL.Query().Get(cmn.QparamPrimaryCandidate)
-	glog.Infof("%s: force new primary %s (URL: %s)", p.si, proxyID, newPrimaryURL)
+	glog.Infof("%s: force new primary %s (URL: %s)", p, proxyID, newPrimaryURL)
 
 	if p.si.ID() == proxyID {
 		glog.Warningf("%s is already the primary", p.si)
@@ -2648,7 +2650,7 @@ func (p *proxy) _becomePre(ctx *smapModifier, clone *smapX) error {
 
 	if ctx.sid != "" && clone.containsID(ctx.sid) {
 		// decision is made: going ahead to remove
-		glog.Infof("%s: removing failed primary %s", p.si, ctx.sid)
+		glog.Infof("%s: removing failed primary %s", p, ctx.sid)
 		clone.delProxy(ctx.sid)
 
 		// Remove reverse proxy entry for the node.
@@ -2668,19 +2670,19 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		msg   = p.newAmsgStr(cmn.ActNewPrimary, bmd)
 		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
-	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
+	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p, clone, bmd, rmd)
 	config, err := p.ensureConfigPrimaryURL()
 	if err != nil {
 		glog.Error(err)
 	}
 	if config != nil {
 		pairs = append(pairs, revsPair{config, msg})
-		glog.Infof("%s: plus %s", p.si, config)
+		glog.Infof("%s: plus %s", p, config)
 	}
 	etl := p.owner.etl.get()
 	if etl != nil && etl.version() > 0 {
 		pairs = append(pairs, revsPair{etl, msg})
-		glog.Infof("%s: plus %s", p.si, etl)
+		glog.Infof("%s: plus %s", p, etl)
 	}
 	debug.Assert(clone._sgl != nil)
 	_ = p.metasyncer.sync(pairs...)
@@ -2841,7 +2843,7 @@ func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, cal
 	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {
 		cos.Assert(!p.owner.smap.get().isPrimary(p.si))
 		// cluster integrity error: making exception for non-primary proxies
-		glog.Errorf("%s (non-primary): %v - proceeding to override BMD", p.si, err)
+		glog.Errorf("%s (non-primary): %v - proceeding to override BMD", p, err)
 	} else if newBMD.version() <= bmd.version() {
 		p.owner.bmd.Unlock()
 		return newErrDowngrade(p.si, bmd.String(), newBMD.String())

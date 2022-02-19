@@ -602,7 +602,7 @@ func (reb *Reb) rebFini(rargs *rebArgs, err error) {
 	// prior to closing the streams
 	if q := reb.quiesce(rargs, rargs.config.Rebalance.Quiesce.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
 		if errM := fs.RemoveMarker(cmn.RebalanceMarker); errM == nil {
-			glog.Infof("%s: %s removed marker ok", reb.t.Snode(), reb.xctn())
+			glog.Infof("%s: %s removed marker ok", reb.t, reb.xctn())
 		}
 	}
 	reb.endStreams(err)
@@ -654,7 +654,7 @@ func (rj *rebJogger) walkBck(bck *cluster.Bck) bool {
 	if rj.xreb.IsAborted() {
 		glog.Infof("aborting traversal")
 	} else {
-		glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode(), err)
+		glog.Errorf("%s: failed to traverse, err: %v", rj.m.t, err)
 	}
 	return true
 }

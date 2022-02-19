@@ -210,7 +210,7 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 			}
 			poi.t.fsErr(err1, poi.workFQN)
 			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil {
-				glog.Errorf(fmtNested, poi.t.si, err1, "remove", poi.workFQN, err2)
+				glog.Errorf(fmtNested, poi.t, err1, "remove", poi.workFQN, err2)
 			}
 		}
 		poi.lom.Uncache(true /*delDirty*/)
@@ -306,7 +306,7 @@ func (poi *putObjInfo) putRemote() (errCode int, err error) {
 	)
 	lmfh, err := cos.NewFileHandle(poi.workFQN)
 	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrWrapFailed, poi.t.Snode(), "open", poi.workFQN, err)
+		err = fmt.Errorf(cmn.FmtErrWrapFailed, poi.t, "open", poi.workFQN, err)
 		return
 	}
 	if poi.owt == cmn.OwtPut && !lom.Bck().IsRemoteAIS() {
@@ -417,10 +417,10 @@ func (poi *putObjInfo) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, er
 	poi.r.Close()
 	debug.Assert(lmfh != nil)
 	if nerr := lmfh.Close(); nerr != nil {
-		glog.Errorf(fmtNested, poi.t.si, err, "close", poi.workFQN, nerr)
+		glog.Errorf(fmtNested, poi.t, err, "close", poi.workFQN, nerr)
 	}
 	if nerr := cos.RemoveFile(poi.workFQN); nerr != nil {
-		glog.Errorf(fmtNested, poi.t.si, err, "remove", poi.workFQN, nerr)
+		glog.Errorf(fmtNested, poi.t, err, "remove", poi.workFQN, nerr)
 	}
 }
 
@@ -584,7 +584,7 @@ validate:
 		// TODO: mark `deleted` and postpone actual deletion
 		//
 		if erl := lom.Remove(); erl != nil {
-			glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t.si, lom, erl)
+			glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 		}
 		return
 	}
@@ -600,7 +600,7 @@ validate:
 		restored := lom.RestoreToLocation()
 		goi.lom.Lock(false)
 		if restored {
-			glog.Warningf("%s: recovered corrupted %s from local replica", goi.t.si, lom)
+			glog.Warningf("%s: recovered corrupted %s from local replica", goi.t, lom)
 			code = 0
 			goto validate
 		}
@@ -612,7 +612,7 @@ validate:
 		_, code, err = goi.restoreFromAny(true /*skipLomRestore*/)
 		goi.lom.Lock(false)
 		if err == nil {
-			glog.Warningf("%s: recovered corrupted %s from EC slices", goi.t.si, lom)
+			glog.Warningf("%s: recovered corrupted %s from EC slices", goi.t, lom)
 			code = 0
 			goto validate
 		}
@@ -620,7 +620,7 @@ validate:
 
 	// TODO: ditto
 	if erl := lom.Remove(); erl != nil {
-		glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t.si, lom, erl)
+		glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 	}
 	return
 }
@@ -730,7 +730,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) boo
 		reqArgs.Base = tsi.URL(cmn.NetIntraData)
 		reqArgs.Header = http.Header{
 			cmn.HdrCallerID:   []string{goi.t.SID()},
-			cmn.HdrCallerName: []string{goi.t.Sname()},
+			cmn.HdrCallerName: []string{goi.t.callerName()},
 		}
 		reqArgs.Path = cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName)
 		reqArgs.Query = query
@@ -746,7 +746,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) boo
 	resp, err := goi.t.client.data.Do(req) // nolint:bodyclose // closed by `poi.putObject`
 	cmn.FreeHra(reqArgs)
 	if err != nil {
-		glog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t.si, tsi, lom, err)
+		glog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t, tsi, lom, err)
 		return false
 	}
 
@@ -766,7 +766,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) boo
 	if erp == nil {
 		return true
 	}
-	glog.Errorf("%s: gfn-GET failed to PUT locally: %v(%d)", goi.t.si, erp, errCode)
+	glog.Errorf("%s: gfn-GET failed to PUT locally: %v(%d)", goi.t, erp, errCode)
 	return false
 }
 
@@ -896,7 +896,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			goi.t.fsErr(err, fqn)
 			goi.t.statsT.Add(stats.ErrGetCount, 1)
 		}
-		glog.Errorf(cmn.FmtErrLogFailed, goi.t.si, "GET", fqn, err)
+		glog.Errorf(cmn.FmtErrLogFailed, goi.t, "GET", fqn, err)
 		// at this point, error is already written into the response
 		// return special to indicate just that
 		err = errSendingResp
@@ -943,12 +943,12 @@ func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTP
 		return
 	}
 	if len(ranges) > 1 {
-		err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t.Snode(), "multi-range")
+		err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t, "multi-range")
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return
 	}
 	if goi.archive.filename != "" {
-		err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t.Snode(), "range-reading archived files")
+		err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t, "range-reading archived files")
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return
 	}
@@ -1295,7 +1295,7 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 			fh, err := cos.NewFileHandle(lom.FQN)
 			if err != nil {
 				lom.Unlock(false)
-				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t.Snode(), "open", lom.FQN, err)
+				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t, "open", lom.FQN, err)
 			}
 			size = lom.SizeBytes()
 			reader = cos.NewDeferROC(fh, func() { lom.Unlock(false) })
@@ -1308,12 +1308,12 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 				if os.IsNotExist(err) {
 					return 0, nil
 				}
-				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t.Snode(), "open", lom.FQN, err)
+				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t, "open", lom.FQN, err)
 			}
 			fi, err := fh.Stat()
 			if err != nil {
 				fh.Close()
-				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t.Snode(), "fstat", lom.FQN, err)
+				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t, "fstat", lom.FQN, err)
 			}
 			size = fi.Size()
 			reader = fh

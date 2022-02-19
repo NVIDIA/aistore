@@ -41,7 +41,7 @@ func (w *Walk) DefaultLocalObjPage() (*cmn.BucketList, error) {
 			return nil
 		}
 		if err != nil {
-			return cmn.NewErrAborted(w.t.Snode().String()+" ResultSetXact", "query", err)
+			return cmn.NewErrAborted(w.t.String()+" ResultSetXact", "query", err)
 		}
 		bckList.Entries = append(bckList.Entries, entry)
 		return nil

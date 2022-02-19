@@ -130,7 +130,7 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 	const erfmn = "xaction %q requires a bucket to start"
 
 	if !xact.IsValidKind(xactMsg.Kind) {
-		return fmt.Errorf(cmn.FmtErrUnknown, t.si, "xaction kind", xactMsg.Kind)
+		return fmt.Errorf(cmn.FmtErrUnknown, t, "xaction kind", xactMsg.Kind)
 	}
 
 	if dtor := xact.Table[xactMsg.Kind]; dtor.Scope == xact.ScopeBck && bck == nil {

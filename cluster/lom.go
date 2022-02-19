@@ -211,7 +211,7 @@ func (lom *LOM) HrwTarget(smap *Smap) (tsi *Snode, local bool, err error) {
 	if err != nil {
 		return
 	}
-	local = tsi.ID() == T.Snode().ID()
+	local = tsi.ID() == T.SID()
 	return
 }
 

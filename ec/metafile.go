@@ -80,7 +80,7 @@ func (md *Metadata) RemoteTargets(t cluster.Target) []*cluster.Snode {
 	nodes := make([]*cluster.Snode, 0, len(md.Daemons))
 	smap := t.Sowner().Get()
 	for tid := range md.Daemons {
-		if tid == t.Snode().ID() {
+		if tid == t.SID() {
 			continue
 		}
 		tsi := smap.GetTarget(tid)

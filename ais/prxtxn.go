@@ -403,7 +403,7 @@ func (p *proxy) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error) {
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	if err = p.canRunRebalance(); err != nil {
-		err = fmt.Errorf("%s: bucket %s cannot be renamed: %w", p.si, bckFrom, err)
+		err = fmt.Errorf("%s: bucket %s cannot be renamed: %w", p, bckFrom, err)
 		return
 	}
 	// 1. confirm existence & non-existence
@@ -469,7 +469,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 	xactID, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
 	if err != nil {
-		glog.Errorf("%s: failed to commit %q, err: %v", p.si, msg.Action, err)
+		glog.Errorf("%s: failed to commit %q, err: %v", p, msg.Action, err)
 		return
 	}
 
@@ -598,7 +598,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID 
 	xactID, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	if xactID != "" {
 		// happens to grab cluster-wide ID
-		glog.Infof("%s: x-%s[%s]", p.si, msg.Action, xactID)
+		glog.Infof("%s: x-%s[%s]", p, msg.Action, xactID)
 	}
 	return
 }
@@ -670,7 +670,7 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, e
 	}
 	if props.EC.Enabled {
 		// Changing data or parity slice count on the fly is unsupported yet
-		err = fmt.Errorf("%s: EC is already enabled for bucket %s", p.si, bck)
+		err = fmt.Errorf("%s: EC is already enabled for bucket %s", p, bck)
 		return
 	}
 
@@ -738,7 +738,7 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	xactID, err = c.commit(bckFrom, c.cmtTout(false /*waitmsync*/))
 	if xactID != "" {
 		// happens to grab cluster-wide ID
-		glog.Infof("%s: x-%s[%s]", p.si, msg.Action, xactID)
+		glog.Infof("%s: x-%s[%s]", p, msg.Action, xactID)
 	}
 	return
 }

@@ -33,8 +33,9 @@ func NewTarget(bo cluster.Bowner) *TargetMock {
 
 func (t *TargetMock) Bowner() cluster.Bowner { return t.BO }
 
-func (*TargetMock) Sname() string            { return "" }
-func (*TargetMock) SID() string              { return "" }
+func (*TargetMock) Sname() string            { return "tmock" }
+func (*TargetMock) SID() string              { return "mock-id" }
+func (*TargetMock) String() string           { return "tmock" }
 func (*TargetMock) Snode() *cluster.Snode    { return nil }
 func (*TargetMock) ClusterStarted() bool     { return true }
 func (*TargetMock) NodeStarted() bool        { return true }
