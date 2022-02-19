@@ -46,7 +46,7 @@ source ${AISTORE_DIR}/deploy/scripts/utils.sh
 case $1 in
 lint)
   echo "Running lint..." >&2
-  ${GOPATH}/bin/golangci-lint run $(list_all_go_dirs)
+  golangci-lint run $(list_all_go_dirs)
   exit $?
   ;;
 

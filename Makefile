@@ -237,10 +237,10 @@ ci: spell-check fmt-check lint test-short ## Run CI related checkers and linters
 
 lint-update: ## Update the linter version (removes previous one and downloads a new one)
 	@rm -f $(GOPATH)/bin/golangci-lint
-	@curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b $(GOPATH)/bin latest
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
 
 lint: ## Run linter on whole project
-	@([[ ! -f $(GOPATH)/bin/golangci-lint ]] && curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b $(GOPATH)/bin latest) || true
+	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
 
 fmt-check: ## Check code formatting
