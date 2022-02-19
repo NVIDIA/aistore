@@ -31,7 +31,7 @@ func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
 		var file *cos.FileHandle
 		if file, err = cos.NewFileHandle(lom.FQN); err != nil {
 			lom.Unlock(false)
-			return nil, nil, fmt.Errorf(cmn.FmtErrFailed, "LOMReader", "open", lom.FQN, err)
+			return nil, nil, fmt.Errorf(cmn.FmtErrWrapFailed, "LOMReader", "open", lom.FQN, err)
 		}
 		return cos.NewDeferROC(file, func() { lom.Unlock(false) }), lom, nil
 	}

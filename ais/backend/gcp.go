@@ -101,13 +101,13 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, err
 				err, projectIDEnvVar, credPathEnvVar, gcpp.projectID)
 			return nil, errors.New(details)
 		}
-		return nil, fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderGoogle, "create", "http transport", err)
+		return nil, fmt.Errorf(cmn.FmtErrWrapFailed, cmn.ProviderGoogle, "create", "http transport", err)
 	}
 	opts = append(opts, option.WithHTTPClient(&http.Client{Transport: transport}))
 	// create HTTP client
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
-		return nil, fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderGoogle, "create", "client", err)
+		return nil, fmt.Errorf(cmn.FmtErrWrapFailed, cmn.ProviderGoogle, "create", "client", err)
 	}
 	return client, nil
 }

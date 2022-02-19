@@ -281,7 +281,7 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 		}
 	}
 	if err = cos.Rename(poi.workFQN, lom.FQN); err != nil {
-		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.si, "rename", lom, err)
+		err = fmt.Errorf(cmn.FmtErrWrapFailed, poi.t.si, "rename", lom, err)
 		return
 	}
 	if lom.HasCopies() {
@@ -306,7 +306,7 @@ func (poi *putObjInfo) putRemote() (errCode int, err error) {
 	)
 	lmfh, err := cos.NewFileHandle(poi.workFQN)
 	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.Snode(), "open", poi.workFQN, err)
+		err = fmt.Errorf(cmn.FmtErrWrapFailed, poi.t.Snode(), "open", poi.workFQN, err)
 		return
 	}
 	if poi.owt == cmn.OwtPut && !lom.Bck().IsRemoteAIS() {
@@ -703,9 +703,9 @@ gfn:
 			}
 			return
 		}
-		err = fmt.Errorf(cmn.FmtErrFailed, tname, "load EC-recovered", goi.lom, ecErr)
+		err = fmt.Errorf(cmn.FmtErrWrapFailed, tname, "load EC-recovered", goi.lom, ecErr)
 	} else if ecErr != ec.ErrorECDisabled {
-		err = fmt.Errorf(cmn.FmtErrFailed, tname, "EC-recover", goi.lom, ecErr)
+		err = fmt.Errorf(cmn.FmtErrWrapFailed, tname, "EC-recover", goi.lom, ecErr)
 		if cmn.IsErrCapacityExceeded(ecErr) {
 			errCode = http.StatusInsufficientStorage
 		}
@@ -851,7 +851,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 				if cmn.IsErrNotFound(err) {
 					errCode = http.StatusNotFound
 				} else {
-					err = fmt.Errorf(cmn.FmtErrFailed, goi.t.si,
+					err = fmt.Errorf(cmn.FmtErrWrapFailed, goi.t.si,
 						"extract "+goi.archive.filename+" from", goi.lom, err)
 				}
 				return
@@ -896,7 +896,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			goi.t.fsErr(err, fqn)
 			goi.t.statsT.Add(stats.ErrGetCount, 1)
 		}
-		glog.Errorf(cmn.FmtErrFailed, goi.t.si, "GET", fqn, err)
+		glog.Errorf(cmn.FmtErrLogFailed, goi.t.si, "GET", fqn, err)
 		// at this point, error is already written into the response
 		// return special to indicate just that
 		err = errSendingResp
@@ -1295,7 +1295,7 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 			fh, err := cos.NewFileHandle(lom.FQN)
 			if err != nil {
 				lom.Unlock(false)
-				return 0, fmt.Errorf(cmn.FmtErrFailed, coi.t.Snode(), "open", lom.FQN, err)
+				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t.Snode(), "open", lom.FQN, err)
 			}
 			size = lom.SizeBytes()
 			reader = cos.NewDeferROC(fh, func() { lom.Unlock(false) })
@@ -1305,7 +1305,7 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 			debug.Assert(sargs.owt == cmn.OwtPromote)
 			fh, err := cos.NewFileHandle(lom.FQN)
 			if err != nil {
-				return 0, fmt.Errorf(cmn.FmtErrFailed, coi.t.Snode(), "open", lom.FQN, err)
+				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t.Snode(), "open", lom.FQN, err)
 			}
 			fi, err := fh.Stat()
 			if err != nil {
@@ -1387,7 +1387,7 @@ func (coi *copyObjInfo) put(sargs *sendArgs) error {
 	defer cancel()
 	resp, err := coi.t.client.data.Do(req)
 	if err != nil {
-		return fmt.Errorf(cmn.FmtErrFailed, coi.t.si, "PUT to", reqArgs.URL(), err)
+		return fmt.Errorf(cmn.FmtErrWrapFailed, coi.t.si, "PUT to", reqArgs.URL(), err)
 	}
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()

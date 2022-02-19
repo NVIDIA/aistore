@@ -97,7 +97,7 @@ func (t *target) applyRegMeta(action string, body []byte, caller string) (err er
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
-			glog.Errorf(cmn.FmtErrFailed, t.si, "sync", regMeta.Smap, err)
+			glog.Errorf(cmn.FmtErrLogFailed, t.si, "sync", regMeta.Smap, err)
 		}
 	} else {
 		glog.Infof("%s: synch %s", t.si, t.owner.smap.get())
@@ -177,7 +177,7 @@ func (t *target) daeputQuery(w http.ResponseWriter, r *http.Request, apiItems []
 			return
 		}
 		if err := t.owner.smap.synchronize(t.si, newsmap, nil /*ms payload*/); err != nil {
-			t.writeErrf(w, r, cmn.FmtErrFailed, t.si, "sync", newsmap, err)
+			t.writeErrf(w, r, cmn.FmtErrWrapFailed, t.si, "sync", newsmap, err)
 		}
 		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
 	case cmn.Mountpaths:

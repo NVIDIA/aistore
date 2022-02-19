@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	iofs "io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,7 +38,9 @@ const (
 	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %v"
 	FmtErrUnsupported    = "%s: %s is not supported"
 	FmtErrUnknown        = "%s: unknown %s %q"
-	FmtErrFailed         = "%s: failed to %s %s, err: %v" // node: action object, error
+
+	FmtErrLogFailed  = "%s: failed to %s %s, err: %v" // node: action, obj, err (glog)
+	FmtErrWrapFailed = "%s: failed to %s %s, err: %w" // ditto (wrapped error)
 
 	EmptyProtoSchemeForURL = "empty protocol scheme for URL path"
 )
@@ -626,8 +629,21 @@ func IsErrObjNought(err error) bool {
 	return IsObjNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
 }
 
+// usage: lom.Load() (compare w/ IsNotExist)
 func IsObjNotExist(err error) bool {
 	if os.IsNotExist(err) {
+		return true
+	}
+	return errors.Is(err, iofs.ErrNotExist) // when wrapped
+}
+
+// usage: everywhere where applicable (directories, xactions, nodes, ...)
+// excluding LOM (see above)
+func IsNotExist(err error) bool {
+	if os.IsNotExist(err) {
+		return true
+	}
+	if errors.Is(err, iofs.ErrNotExist) {
 		return true
 	}
 	return IsErrNotFound(err)

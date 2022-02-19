@@ -1087,7 +1087,8 @@ func (h *htrun) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode 
 
 func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int,
 	format string, a ...interface{}) {
-	h.writeErrMsg(w, r, fmt.Sprintf(format, a...), errCode)
+	err := fmt.Errorf(format, a...)
+	h.writeErrMsg(w, r, err.Error(), errCode)
 }
 
 func (h *htrun) writeErrStatusSilentf(w http.ResponseWriter, r *http.Request, errCode int,
@@ -1096,7 +1097,12 @@ func (h *htrun) writeErrStatusSilentf(w http.ResponseWriter, r *http.Request, er
 }
 
 func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...interface{}) {
-	h.writeErrMsg(w, r, fmt.Sprintf(format, a...))
+	err := fmt.Errorf(format, a...)
+	if cmn.IsNotExist(err) {
+		h.writeErrMsg(w, r, err.Error(), http.StatusNotFound)
+	} else {
+		h.writeErrMsg(w, r, err.Error())
+	}
 }
 
 func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {

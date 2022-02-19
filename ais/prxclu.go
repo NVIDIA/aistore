@@ -1008,13 +1008,13 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMs
 	// proxy
 	if si.IsProxy() {
 		if err := p.markMaintenance(msg, si); err != nil {
-			p.writeErrf(w, r, cmn.FmtErrFailed, p.si, msg.Action, si, err)
+			p.writeErrf(w, r, cmn.FmtErrWrapFailed, p.si, msg.Action, si, err)
 			return
 		}
 		if msg.Action == cmn.ActDecommissionNode || msg.Action == cmn.ActShutdownNode {
 			errCode, err := p.callRmSelf(msg, si, true /*skipReb*/)
 			if err != nil {
-				p.writeErrStatusf(w, r, errCode, cmn.FmtErrFailed, p.si, msg.Action, si, err)
+				p.writeErrStatusf(w, r, errCode, cmn.FmtErrWrapFailed, p.si, msg.Action, si, err)
 			}
 		}
 		return
@@ -1022,7 +1022,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMs
 	// target
 	rebID, err := p.startMaintenance(si, msg, &opts)
 	if err != nil {
-		p.writeErrf(w, r, cmn.FmtErrFailed, p.si, msg.Action, si, err)
+		p.writeErrf(w, r, cmn.FmtErrWrapFailed, p.si, msg.Action, si, err)
 		return
 	}
 	if rebID != "" {
