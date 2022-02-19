@@ -419,6 +419,7 @@ const (
 	ETLLogs     = "logs"
 	ETLObject   = "_object"
 	ETLStop     = Stop
+	ETLStart    = Start
 	ETLHealth   = "health"
 )
 

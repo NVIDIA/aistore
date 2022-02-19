@@ -276,6 +276,28 @@ func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, 
 	return xactID
 }
 
+func ETLShouldBeRunning(t *testing.T, params api.BaseParams, etlID string) {
+	etls, err := api.ETLList(params)
+	tassert.CheckFatal(t, err)
+	for _, etl := range etls {
+		if etlID == etl.ID {
+			return
+		}
+	}
+	t.Fatalf("etl with ID (%s) is not running, (etls: %v)", etlID, etls)
+}
+
+func ETLShouldNotBeRunning(t *testing.T, params api.BaseParams, etlID string) {
+	etls, err := api.ETLList(params)
+	tassert.CheckFatal(t, err)
+	for _, etl := range etls {
+		if etlID == etl.ID {
+			t.Fatalf("expected ETL with ID (%s) to be stopped, (etls: %v)", etlID, etls)
+			return
+		}
+	}
+}
+
 func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {
 	etls, err := api.ETLList(params)
 	tassert.CheckFatal(t, err)

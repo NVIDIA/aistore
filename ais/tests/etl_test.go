@@ -601,6 +601,34 @@ func TestETLBucketDryRun(t *testing.T) {
 	checkETLStats(t, xactID, m.num, uint64(m.num*int(m.fileSize)))
 }
 
+func TestETLStopAndRestartETL(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+
+	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
+
+	// 1. Check ETL is in running state
+	tetl.ETLShouldBeRunning(t, baseParams, uuid)
+
+	// 2. Stop ETL and verify it stopped successfully
+	tlog.Logf("stopping ETL %q", uuid)
+	err := api.ETLStop(baseParams, uuid)
+	tassert.CheckFatal(t, err)
+	tetl.ETLShouldNotBeRunning(t, baseParams, uuid)
+
+	// 3. Start ETL and verify it is in running state
+	tlog.Logf("restarting ETL %q", uuid)
+	err = api.ETLStart(baseParams, uuid)
+	tassert.CheckFatal(t, err)
+	tetl.ETLShouldBeRunning(t, baseParams, uuid)
+}
+
 func TestETLMultipleTransformersAtATime(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)

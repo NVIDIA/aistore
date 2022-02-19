@@ -110,12 +110,12 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 	//  2. Broadcast init ETL message to all targets.
 	//  3. If any target fails to start ETL stop it on all (targets).
 	//  4. In the event of success return ETL's UUID to the user.
-	if err = p.startETL(w, r, initMsg); err != nil {
+	if err = p.startETL(w, initMsg, true /*add to etlMD*/); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
 
-// POST /v1/etl/<uuid>/stop (or) TODO: /v1/etl/<uuid>/start
+// POST /v1/etl/<uuid>/stop (or) /v1/etl/<uuid>/start
 //
 // handleETLPost handles start/stop ETL pods
 func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +129,8 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etlMD := p.owner.etl.get()
-	if etlMD.get(etlID) == nil {
+	etlMsg := etlMD.get(etlID)
+	if etlMsg == nil {
 		p.writeErr(w, r, cmn.NewErrNotFound("%s: etl UUID %s", p.si, etlID))
 		return
 	}
@@ -137,7 +138,10 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 		p.stopETL(w, r)
 		return
 	}
-	// TODO: Implement ETLStart to start inactive ETLs
+	if apiItems[1] == cmn.ETLStart {
+		p.startETL(w, etlMsg, false /*add to etlMD*/)
+		return
+	}
 	p.writeErrURL(w, r)
 }
 
@@ -171,10 +175,12 @@ func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 	return
 }
 
-// startETL broadcasts a build or init ETL request and ensures only one ETL is running
-func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) (err error) {
+// startETL broadcasts a init or start ETL request
+// `addToMD` is set `true` for init requests to add a new ETL to etlMD
+// `addToMD` is `false` for start requests, where ETL already exists in `etlMD`
+func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) (err error) {
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: r.URL.Path, Body: cos.MustMarshal(msg)}
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathETL.S, Body: cos.MustMarshal(msg)}
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
@@ -186,29 +192,29 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 		glog.Error(err)
 	}
 	freeBcastRes(results)
-	if err == nil {
+	if err != nil {
+		// At least one `build` call has failed. Terminate all `build`s.
+		// (Termination calls may succeed for the targets that already succeeded in starting ETL,
+		//  or fail otherwise - ignore the failures).
+		argsTerm := allocBcArgs()
+		argsTerm.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathETL.Join(msg.ID(), cmn.ETLStop)}
+		argsTerm.timeout = cmn.LongTimeout
+		p.bcastGroup(argsTerm)
+		freeBcArgs(argsTerm)
+		return err
+	}
+
+	if addToMD {
 		ctx := &etlMDModifier{
 			pre:   _addETLPre,
 			final: p._syncEtlMDFinal,
 			msg:   msg,
 		}
-
 		p.owner.etl.modify(ctx)
-
-		// All init calls have succeeded, return UUID.
-		w.Write([]byte(msg.ID()))
-		return
 	}
-
-	// At least one `build` call has failed. Terminate all `build`s.
-	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
-	//  or fail otherwise - ignore the failures).
-	argsTerm := allocBcArgs()
-	argsTerm.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathETL.Join(msg.ID(), cmn.ETLStop)}
-	argsTerm.timeout = cmn.LongTimeout
-	p.bcastGroup(argsTerm)
-	freeBcArgs(argsTerm)
-	return err
+	// All init calls have succeeded, return UUID.
+	w.Write([]byte(msg.ID()))
+	return
 }
 
 func _addETLPre(ctx *etlMDModifier, clone *etlMD) (_ error) {

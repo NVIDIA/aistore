@@ -126,11 +126,19 @@ func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error
 }
 
 func ETLStop(baseParams BaseParams, id string) (err error) {
+	return etlPostAction(baseParams, id, cmn.ETLStop)
+}
+
+func ETLStart(baseParams BaseParams, id string) (err error) {
+	return etlPostAction(baseParams, id, cmn.ETLStart)
+}
+
+func etlPostAction(baseParams BaseParams, id, action string) (err error) {
 	baseParams.Method = http.MethodPost
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathETL.Join(id, cmn.ETLStop)
+		reqParams.Path = cmn.URLPathETL.Join(id, action)
 	}
 	err = reqParams.DoHTTPRequest()
 	freeRp(reqParams)
