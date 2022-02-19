@@ -189,10 +189,6 @@ type (
 		MDWrite     *MDWritePolicy           `json:"md_write,omitempty"`
 		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
 
-		// Logging
-		LogLevel *string `json:"log_level,omitempty" copy:"skip"` // TODO: review vs Log.Level
-		Vmodule  *string `json:"vmodule,omitempty" copy:"skip"`   // obsolete; TODO: remove with the next meta-version update
-
 		// LocalConfig
 		FSP *FSPConf `json:"fspaths,omitempty"`
 	}
@@ -601,9 +597,9 @@ func (*ConfigToUpdate) JspOpts() jsp.Options { return configJspOpts }
 var GCO *globalConfigOwner
 
 func SetConfigInMem(toUpdate *ConfigToUpdate, config *Config, asType string) (err error) {
-	if toUpdate.LogLevel != nil {
-		if err := SetLogLevel(config, *toUpdate.LogLevel); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.LogLevel, err)
+	if toUpdate.Log != nil && toUpdate.Log.Level != nil {
+		if err := SetLogLevel(*toUpdate.Log.Level); err != nil {
+			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.Log.Level, err)
 		}
 	}
 	err = config.UpdateClusterConfig(*toUpdate, asType)
@@ -1519,11 +1515,6 @@ func (ctu *ConfigToUpdate) FillFromQuery(query url.Values) error {
 		}
 		anyExists = true
 		name, value := strings.ToLower(key), query.Get(key)
-		if name == "log_level" {
-			ctu.LogLevel = &value
-			continue
-		}
-
 		if err := UpdateFieldValue(ctu, name, value); err != nil {
 			return err
 		}
@@ -1559,15 +1550,12 @@ func (ctu *ConfigToUpdate) FillFromKVS(kvs []string) (err error) {
 // misc config utils
 //
 
-func SetLogLevel(config *Config, loglevel string) (err error) {
+func SetLogLevel(loglevel string) (err error) {
 	v := flag.Lookup("v").Value
 	if v == nil {
 		return fmt.Errorf("nil -v Value")
 	}
 	err = v.Set(loglevel)
-	if err == nil {
-		config.Log.Level = loglevel
-	}
 	return
 }
 
@@ -1710,7 +1698,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (
 		glog.MaxSize = cos.MiB
 	}
 	// log level
-	if err = SetLogLevel(config, config.Log.Level); err != nil {
+	if err = SetLogLevel(config.Log.Level); err != nil {
 		return fmt.Errorf("failed to set log level %q: %s", config.Log.Level, err)
 	}
 	// log header
