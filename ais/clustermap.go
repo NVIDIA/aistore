@@ -97,6 +97,8 @@ type (
 	}
 )
 
+const clusterMap = "Smap"
+
 // interface guard
 var (
 	_ revs                  = (*smapX)(nil)
@@ -212,20 +214,20 @@ func (m *smapX) isValid() bool {
 // a stronger version of the above
 func (m *smapX) validate() error {
 	if m == nil {
-		return errors.New("Smap is <nil>")
+		return errors.New(clusterMap + " is <nil>")
 	}
 	if m.version() == 0 {
-		return errors.New("Smap v0")
+		return errors.New(clusterMap + " v0")
 	}
 	if m.Primary == nil {
-		return errors.New("Smap: primary <nil>")
+		return errors.New(clusterMap + ": primary <nil>")
 	}
 	if !m.isPresent(m.Primary) {
-		return errors.New("Smap: primary not present")
+		return errors.New(clusterMap + ": primary not present")
 	}
 	cos.Assert(m.Primary.ID() != "")
 	if !cos.IsValidUUID(m.UUID) {
-		return fmt.Errorf("Smap: invalid UUID %q", m.UUID)
+		return fmt.Errorf(clusterMap+": invalid UUID %q", m.UUID)
 	}
 	return nil
 }
@@ -455,7 +457,7 @@ func (r *smapOwner) load(smap *smapX) (loaded bool, err error) {
 		return false, err
 	}
 	if smap.version() == 0 || !smap.isValid() {
-		return false, fmt.Errorf("unexpected: persistent Smap %s is invalid", smap)
+		return false, fmt.Errorf("unexpected: persistent %s is invalid", smap)
 	}
 	return true, nil
 }
@@ -627,7 +629,7 @@ func (sls *smapLis) Reg(sl cluster.Slistener) {
 		sls.wg.Wait()
 	}
 	sls.Unlock()
-	glog.Infof("registered Smap listener %q", sl)
+	glog.Infof("registered %s listener %q", clusterMap, sl)
 }
 
 func (sls *smapLis) Unreg(sl cluster.Slistener) {

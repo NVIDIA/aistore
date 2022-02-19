@@ -211,7 +211,7 @@ var (
 func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		if authnHTTPClient == nil {
-			return errors.New("AuthN URL is not set") // nolint:golint // name of the service
+			return errors.New(authnServerURL + " is not set")
 		}
 		err := f(c)
 		if err != nil {
