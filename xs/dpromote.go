@@ -123,5 +123,8 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	// TODO: options to ignore specific error types, limited number of errors,
 	// all errors... (archive)
 	_, err = r.Target().Promote(params)
+	if cmn.IsNotExist(err) {
+		err = nil
+	}
 	return err
 }

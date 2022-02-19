@@ -171,7 +171,7 @@ func (poi *putObjInfo) putObject() (int, error) {
 		return errCode, err
 	}
 	// NOTE: counting only user PUTs
-	if poi.owt == cmn.OwtPut && !poi.t2t {
+	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
 		delta := time.Since(poi.atime)
 		poi.t.statsT.AddMany(
 			cos.NamedVal64{Name: stats.PutCount, Value: 1},
@@ -1305,12 +1305,15 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 			debug.Assert(sargs.owt == cmn.OwtPromote)
 			fh, err := cos.NewFileHandle(lom.FQN)
 			if err != nil {
+				if os.IsNotExist(err) {
+					return 0, nil
+				}
 				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t.Snode(), "open", lom.FQN, err)
 			}
 			fi, err := fh.Stat()
 			if err != nil {
 				fh.Close()
-				return 0, fmt.Errorf("failed to stat %s: %w", lom.FQN, err)
+				return 0, fmt.Errorf(cmn.FmtErrWrapFailed, coi.t.Snode(), "fstat", lom.FQN, err)
 			}
 			size = fi.Size()
 			reader = fh
