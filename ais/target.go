@@ -192,7 +192,7 @@ func (t *target) init(config *cmn.Config) {
 	daemon.rg.add(ts)
 	t.statsT = ts // stats tracker
 
-	k := newTargetKeepalive(t, ts, startedUp)
+	k := newTalive(t, ts, startedUp)
 	daemon.rg.add(k)
 	t.keepalive = k
 

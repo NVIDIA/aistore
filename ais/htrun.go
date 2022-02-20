@@ -1597,7 +1597,7 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 		}
 	)
 	debug.Assert(pubValid && intraValid)
-	primaryURL, psi := h.getPrimaryURLAndSI()
+	primaryURL, psi := h.getPrimaryURLAndSI(nil)
 	addCandidate(primaryURL)
 	// NOTE: The url above is either config or the primary's IntraControlNet.DirectURL;
 	//  Add its public URL as "more static" in various virtualized environments.
@@ -1684,12 +1684,13 @@ func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration
 	return res
 }
 
-func (h *htrun) sendKeepalive(timeout time.Duration) (status int, err error) {
+func (h *htrun) sendKalive(smap *smapX, timeout time.Duration) (pid string, status int, err error) {
 	if daemon.stopping.Load() {
 		err = fmt.Errorf("%s is stopping", h.si)
 		return
 	}
-	primaryURL, psi := h.getPrimaryURLAndSI()
+	primaryURL, psi := h.getPrimaryURLAndSI(smap)
+	pid = psi.ID()
 	res := h.registerToURL(primaryURL, psi, timeout, nil, true)
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
@@ -1704,8 +1705,10 @@ func (h *htrun) sendKeepalive(timeout time.Duration) (status int, err error) {
 	return
 }
 
-func (h *htrun) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
-	smap := h.owner.smap.get()
+func (h *htrun) getPrimaryURLAndSI(smap *smapX) (url string, psi *cluster.Snode) {
+	if smap == nil {
+		smap = h.owner.smap.get()
+	}
 	if smap.validate() != nil {
 		url, psi = cmn.GCO.Get().Proxy.PrimaryURL, nil
 		return

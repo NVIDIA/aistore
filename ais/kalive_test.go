@@ -19,7 +19,7 @@ func TestTimeoutStatsForDaemon(t *testing.T) {
 		tt:           &timeoutTracker{timeoutStats: make(map[string]*timeoutStats)},
 		maxKeepalive: int64(maxKeepalive),
 	}
-	ts := k.timeoutStatsForDaemon(daemonID)
+	ts := k.timeoutStats(daemonID)
 	if ts == nil {
 		t.Fatal("timeoutStats should not be nil")
 	}
@@ -43,9 +43,9 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 			tt:           &timeoutTracker{timeoutStats: make(map[string]*timeoutStats)},
 			maxKeepalive: int64(maxKeepalive),
 		}
-		initial := k.timeoutStatsForDaemon(daemonID)
+		initial := k.timeoutStats(daemonID)
 		nextRTT := time.Duration(initial.srtt * 3 / 4)
-		nextTimeout := k.updateTimeoutForDaemon(daemonID, nextRTT)
+		nextTimeout := k.updateTimeoutFor(daemonID, nextRTT)
 		if nextTimeout <= nextRTT {
 			t.Errorf("updated timeout: %v should be greater than most recent RTT: %v", nextTimeout, nextRTT)
 		} else if nextTimeout > maxKeepalive {
@@ -58,9 +58,9 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 			tt:           &timeoutTracker{timeoutStats: make(map[string]*timeoutStats)},
 			maxKeepalive: int64(maxKeepalive),
 		}
-		initial := k.timeoutStatsForDaemon(daemonID)
+		initial := k.timeoutStats(daemonID)
 		nextRTT := time.Duration(initial.srtt + initial.srtt/10)
-		nextTimeout := k.updateTimeoutForDaemon(daemonID, nextRTT)
+		nextTimeout := k.updateTimeoutFor(daemonID, nextRTT)
 		if nextTimeout != maxKeepalive {
 			t.Errorf("updated timeout: %v should be equal to the max keepalive timeout: %v",
 				nextTimeout, maxKeepalive)
@@ -72,9 +72,9 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 			maxKeepalive: int64(maxKeepalive),
 		}
 		for i := 0; i < 100; i++ {
-			initial := k.timeoutStatsForDaemon(daemonID)
+			initial := k.timeoutStats(daemonID)
 			nextRTT := time.Duration(initial.srtt / 4)
-			nextTimeout := k.updateTimeoutForDaemon(daemonID, nextRTT)
+			nextTimeout := k.updateTimeoutFor(daemonID, nextRTT)
 			// Eventually, the `nextTimeout` must converge and stop at `maxKeepalive/2`.
 			if i > 25 && nextTimeout != maxKeepalive/2 {
 				t.Errorf("updated timeout: %v should be equal to the min keepalive timeout: %v",

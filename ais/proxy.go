@@ -117,7 +117,7 @@ func (p *proxy) init(config *cmn.Config) {
 	daemon.rg.add(ps)
 	p.statsT = ps
 
-	k := newProxyKeepalive(p, ps, startedUp)
+	k := newPalive(p, ps, startedUp)
 	daemon.rg.add(k)
 	p.keepalive = k
 
@@ -234,14 +234,6 @@ func (p *proxy) Run() error {
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, p.statsT)
 	return p.htrun.run()
-}
-
-func (p *proxy) sendKeepalive(timeout time.Duration) (status int, err error) {
-	smap := p.owner.smap.get()
-	if smap != nil && smap.isPrimary(p.si) {
-		return
-	}
-	return p.htrun.sendKeepalive(timeout)
 }
 
 func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, err error) {
@@ -2455,7 +2447,7 @@ func (p *proxy) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) unreg(action string) {
 	// Stop keepaliving
-	p.keepalive.send(kaSuspendMsg)
+	p.keepalive.ctrl(kaSuspendMsg)
 
 	// In case of maintenance, we only stop the keepalive daemon,
 	// the HTTPServer is still active and accepts requests.
@@ -2486,7 +2478,7 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if !p.keepalive.paused() {
 		glog.Warningf("%s: keepalive is already active - proceeding to resume (and reset) anyway", p.si)
 	}
-	p.keepalive.send(kaResumeMsg)
+	p.keepalive.ctrl(kaResumeMsg)
 	body, err := cmn.ReadBytes(r)
 	if err != nil {
 		p.writeErr(w, r, err)

@@ -309,7 +309,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	// user request to join cluster (compare with `cmn.SelfJoin`)
 	if !t.regstate.disabled.Load() {
 		if t.keepalive.paused() {
-			t.keepalive.send(kaResumeMsg)
+			t.keepalive.ctrl(kaResumeMsg)
 		} else {
 			glog.Warningf("%s already joined (\"enabled\")- nothing to do", t.si)
 		}
@@ -318,7 +318,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if daemon.cli.target.standby {
 		glog.Infof("%s: transitioning standby => join", t.si)
 	}
-	t.keepalive.send(kaResumeMsg)
+	t.keepalive.ctrl(kaResumeMsg)
 	body, err := cmn.ReadBytes(r)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -370,7 +370,7 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 
 func (t *target) unreg(action string, rmUserData, noShutdown bool) {
 	// Stop keepalive-ing
-	t.keepalive.send(kaSuspendMsg)
+	t.keepalive.ctrl(kaSuspendMsg)
 
 	errCause := errors.New("target is being removed from the cluster via '" + action + "'")
 	dsort.Managers.AbortAll(errCause) // all dSort jobs
@@ -553,7 +553,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 func (t *target) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload) (rmbcks []*cluster.Bck, err error) {
 	var (
 		createErrs, destroyErrs []error
-		_, psi                  = t.getPrimaryURLAndSI()
+		_, psi                  = t.getPrimaryURLAndSI(nil)
 	)
 	t.owner.bmd.Lock()
 	defer t.owner.bmd.Unlock()
