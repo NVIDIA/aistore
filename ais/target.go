@@ -1237,8 +1237,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		// cold HEAD
 		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
-			err = fmt.Errorf(cmn.FmtErrWrapFailed, t, "HEAD", lom, err)
-			invalidHandler(w, r, err, errCode)
+			invalidHandler(w, r, cmn.NewErrFailedTo(t, "HEAD", lom, err), errCode)
 			return
 		}
 		op.ObjAttrs = *objAttrs
@@ -1412,7 +1411,7 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 	var objAttrs *cmn.ObjAttrs
 	objAttrs, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrWrapFailed, t, "head metadata of", lom, err)
+		err = cmn.NewErrFailedTo(t, "head metadata of", lom, err)
 		return
 	}
 	if lom.Bck().IsHDFS() {

@@ -304,7 +304,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			return err == nil && callerSver == smap.vstr
 		})
 		if err != nil {
-			ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p.si, msg.Action, err)
+			ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p, msg.Action, err)
 			return
 		}
 		nl := xact.NewXactNL(regMsg.UUID, regMsg.Kind, &smap.Smap, tmap)
@@ -341,7 +341,7 @@ func (ic *ic) bcastListenIC(nl nl.NotifListener) {
 func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 	if ic.p.notifs.size() == 0 {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: ownership table empty, skipping sending to %s", ic.p.si, si)
+			glog.Infof("%s: ownership table empty, skipping sending to %s", ic.p, si)
 		}
 		return nil
 	}
@@ -385,31 +385,31 @@ func (ic *ic) syncICBundle() error {
 	freeCargs(cargs)
 	if res.err != nil {
 		// TODO: Handle error. Should try calling another IC member maybe.
-		glog.Errorf("%s: failed to get ownership table from %s, err: %v", ic.p.si, si, res.err)
+		glog.Errorf("%s: failed to get ownership table from %s, err: %v", ic.p, si, res.err)
 		return res.err
 	}
 
 	bundle := &icBundle{}
 	if err := jsoniter.Unmarshal(res.bytes, bundle); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p.si, "IC bundle", cmn.BytesHead(res.bytes), err)
+		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p, "IC bundle", cmn.BytesHead(res.bytes), err)
 	}
 
 	debug.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
 
 	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, nil /*ms payload*/); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrLogFailed, ic.p.si, "sync", bundle.Smap, err)
+			glog.Error(cmn.NewErrFailedTo(ic.p, "sync", bundle.Smap, err))
 		}
 	} else {
 		smap = ic.p.owner.smap.get()
-		glog.Infof("%s: synch %s", ic.p.si, smap)
+		glog.Infof("%s: synch %s", ic.p, smap)
 	}
 
 	if !smap.IsIC(ic.p.si) {
 		return nil
 	}
 	if err := jsoniter.Unmarshal(bundle.OwnershipTbl, &ic.p.notifs); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p.si, "ownership table", cmn.BytesHead(bundle.OwnershipTbl), err)
+		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p, "ownership table", cmn.BytesHead(bundle.OwnershipTbl), err)
 	}
 	return nil
 }

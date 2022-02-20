@@ -39,8 +39,8 @@ const (
 	FmtErrUnsupported    = "%s: %s is not supported"
 	FmtErrUnknown        = "%s: unknown %s %q"
 
-	FmtErrLogFailed  = "%s: failed to %s %s, err: %v" // node: action, obj, err (glog)
-	FmtErrWrapFailed = "%s: failed to %s %s, err: %w" // ditto (wrapped error)
+	// (see ErrFailedTo)
+	fmtErrWrapFailed = "%s: failed to %s %s, err: %w"
 
 	EmptyProtoSchemeForURL = "empty protocol scheme for URL path"
 )
@@ -51,6 +51,13 @@ type (
 	ErrRemoteBucketOffline struct{ bck Bck }
 	ErrBckNotFound         struct{ bck Bck }
 	ErrBucketIsBusy        struct{ bck Bck }
+
+	ErrFailedTo struct {
+		node   interface{} // most of the time it is a (target|proxy) node but may also be some other "actor"
+		action string      // not necessarily msg.Action
+		what   interface{} // not necessarily LOM
+		err    error       // original error that can be Unwrap-ed
+	}
 
 	ErrInvalidBucketProvider struct {
 		bck Bck
@@ -171,6 +178,19 @@ var (
 	ErrXactICNotifAbort = errors.New("IC(notifications) abort") // ditto
 	ErrXactNoErrAbort   = errors.New("no-error abort")
 )
+
+// ErrFailedTo
+
+func NewErrFailedTo(node interface{}, action string, what interface{}, err error) *ErrFailedTo {
+	return &ErrFailedTo{node, action, what, err}
+}
+
+func (e *ErrFailedTo) Error() string {
+	err := fmt.Errorf(fmtErrWrapFailed, e.node, e.action, e.what, e.err)
+	return err.Error()
+}
+
+func (e *ErrFailedTo) Unwrap() (err error) { return e.err }
 
 // ais ErrBucketAlreadyExists
 
@@ -367,6 +387,8 @@ func NewErrInvalidaMountpath(mpath, cause string) *ErrInvalidMountpath {
 func NewErrInvalidFSPathsConf(err error) *ErrInvalidFSPathsConf {
 	return &ErrInvalidFSPathsConf{err}
 }
+
+func (e *ErrInvalidFSPathsConf) Unwrap() (err error) { return e.err }
 
 func (e *ErrInvalidFSPathsConf) Error() string {
 	return fmt.Sprintf("invalid \"fspaths\" configuration: %v", e.err)
@@ -574,6 +596,7 @@ func IsErrSoft(err error) bool {
 
 func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted { return &ErrLmetaCorrupted{err} }
 func (e *ErrLmetaCorrupted) Error() string              { return e.err.Error() }
+func (e *ErrLmetaCorrupted) Unwrap() (err error)        { return e.err }
 
 func IsErrLmetaCorrupted(err error) bool {
 	_, ok := err.(*ErrLmetaCorrupted)
@@ -582,6 +605,7 @@ func IsErrLmetaCorrupted(err error) bool {
 
 func NewErrLmetaNotFound(err error) *ErrLmetaNotFound { return &ErrLmetaNotFound{err} }
 func (e *ErrLmetaNotFound) Error() string             { return e.err.Error() }
+func (e *ErrLmetaNotFound) Unwrap() (err error)       { return e.err }
 
 func IsErrLmetaNotFound(err error) bool {
 	_, ok := err.(*ErrLmetaNotFound)

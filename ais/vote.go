@@ -129,7 +129,7 @@ func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if err != nil {
-			p.writeErrf(w, r, cmn.FmtErrWrapFailed, p.si, "sync", newSmap, err)
+			p.writeErr(w, r, cmn.NewErrFailedTo(p, "synchronize", newSmap, err))
 			return
 		}
 	}

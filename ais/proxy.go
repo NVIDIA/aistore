@@ -292,7 +292,7 @@ func (p *proxy) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err err
 	// Smap
 	if err = p.receiveSmap(cluMeta.Smap, msg, nil /*ms payload*/, caller, p.smapOnUpdate); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrLogFailed, p, "sync", cluMeta.Smap, err)
+			glog.Error(cmn.NewErrFailedTo(p, "sync", cluMeta.Smap, err))
 		}
 	} else {
 		glog.Infof("%s: synch %s", p, cluMeta.Smap)
@@ -300,7 +300,7 @@ func (p *proxy) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err err
 	// BMD
 	if err = p.receiveBMD(cluMeta.BMD, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrLogFailed, p, "sync", cluMeta.BMD, err)
+			glog.Error(cmn.NewErrFailedTo(p, "sync", cluMeta.BMD, err))
 		}
 	} else {
 		glog.Infof("%s: synch %s", p, cluMeta.BMD)
@@ -308,7 +308,7 @@ func (p *proxy) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err err
 	// RMD
 	if err = p.receiveRMD(cluMeta.RMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrLogFailed, p, "sync", cluMeta.RMD, err)
+			glog.Error(cmn.NewErrFailedTo(p, "sync", cluMeta.RMD, err))
 		}
 	} else {
 		glog.Infof("%s: synch %s", p, cluMeta.RMD)
@@ -316,7 +316,7 @@ func (p *proxy) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err err
 	// EtlMD
 	if err = p.receiveEtlMD(cluMeta.EtlMD, msg, nil, caller, nil); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrLogFailed, p, "sync", cluMeta.EtlMD, err)
+			glog.Error(cmn.NewErrFailedTo(p, "sync", cluMeta.EtlMD, err))
 		}
 	} else {
 		glog.Infof("%s: synch %s", p, cluMeta.EtlMD)
@@ -2429,7 +2429,7 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 			return
 		}
 		if err := p.owner.smap.synchronize(p.si, newsmap, nil /*ms payload*/); err != nil {
-			p.writeErrf(w, r, cmn.FmtErrWrapFailed, p.si, "sync", newsmap, err)
+			p.writeErr(w, r, cmn.NewErrFailedTo(p, "synchronize", newsmap, err))
 			return
 		}
 		glog.Infof("%s: %s %s done", p, cmn.SyncSmap, newsmap)
