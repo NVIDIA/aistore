@@ -1121,7 +1121,6 @@ func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
 func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
 	err := cmn.NewErrHTTP(r, fmt.Sprintf("invalid action %q", action))
 	h.writeErr(w, r, err)
-	cmn.FreeHTTPErr(err)
 }
 
 func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
@@ -1129,7 +1128,6 @@ func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action stri
 	detail := fmt.Sprintf(format, a...)
 	err := cmn.NewErrHTTP(r, fmt.Sprintf("invalid action %q: %s", action, detail))
 	h.writeErr(w, r, err)
-	cmn.FreeHTTPErr(err)
 }
 
 ////////////////
@@ -1143,7 +1141,7 @@ func (res *callResult) toErr() error {
 	}
 	// cmn.ErrHTTP
 	if httpErr := cmn.Err2HTTPErr(res.err); httpErr != nil {
-		// NOTE: optionally overwrite status, add details
+		// add status, details
 		if res.status >= http.StatusBadRequest {
 			httpErr.Status = res.status
 		}
@@ -1163,7 +1161,7 @@ func (res *callResult) toErr() error {
 	if res.details == "" {
 		return res.err
 	}
-	return fmt.Errorf("%v[%s]", res.err, res.details)
+	return cmn.NewErrFailedTo(nil, "call "+res.si.String(), res.details, res.err)
 }
 
 func (res *callResult) errorf(format string, a ...interface{}) error {
@@ -1365,7 +1363,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string) (newSmap *smapX, m
 		return
 	}
 	if !newSmap.isValid() {
-		err = fmt.Errorf("%s: %s is invalid: %v", h.si, newSmap, newSmap.validate())
+		err = cmn.NewErrFailedTo(h.si, "extract", newSmap, newSmap.validate())
 		return
 	}
 	if !newSmap.isPresent(h.si) {

@@ -6,7 +6,6 @@ package ais
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -133,8 +132,7 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err err
 	if err := co.persist(clone, nil); err != nil {
 		clone._sgl.Free()
 		clone._sgl = nil
-		err = fmt.Errorf("FATAL: failed to persist %s: %v", clone, err)
-		return nil, err
+		return nil, cmn.NewErrFailedTo(nil, "persist", clone, err)
 	}
 	return
 }

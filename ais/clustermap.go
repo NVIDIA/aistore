@@ -556,8 +556,7 @@ func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
 	r.immSize = cos.MaxI64(r.immSize, clone._sgl.Len())
 	if err := r.persist(clone); err != nil {
 		clone._free()
-		err = fmt.Errorf("failed to persist %s: %v", clone, err)
-		return nil, err
+		return nil, cmn.NewErrFailedTo(nil, "persist", clone, err)
 	}
 	if ctx.final == nil {
 		clone._free()

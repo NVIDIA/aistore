@@ -487,12 +487,14 @@ func (k *keepalive) do(smap *smapX, si *cluster.Snode) (stopped bool) {
 		now     = mono.NanoTime()
 	)
 	cpid, status, err := k.k.sendKalive(smap, timeout)
-	debug.AssertMsg(cpid == pid && cpid != si.ID(), pid+", cpid, "+si.ID())
-
 	k.statsT.Add(stats.KeepAliveLatency, mono.SinceNano(now))
 	if err == nil {
 		return
 	}
+	if daemon.stopping.Load() {
+		return
+	}
+	debug.AssertMsg(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
 	glog.Warningf("%s => %s keepalive failed: %v(%d)", si, cluster.Pname(pid), err, status)
 
 	var (

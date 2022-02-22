@@ -893,7 +893,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 				err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bck)
 				t.writeErrSilent(w, r, err, code)
 			} else {
-				err = fmt.Errorf("failed to locate bucket %q, err: %v", apireq.bck, err)
+				err = cmn.NewErrFailedTo(t, "locate remote", apireq.bck, err, code)
 				t.writeErr(w, r, err, code)
 			}
 			return

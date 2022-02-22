@@ -714,7 +714,7 @@ func (t *target) ensureLatestBMD(msg *aisMsg, r *http.Request) {
 func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed string) (err error) {
 	smap := t.owner.smap.get()
 	if err = smap.validate(); err != nil {
-		return fmt.Errorf("%s: %s is invalid: %v", t, smap, err)
+		return cmn.NewErrFailedTo(t, "fetch-primary", smap, err)
 	}
 	psi := smap.Primary
 	q := url.Values{}

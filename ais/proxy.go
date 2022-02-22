@@ -2684,7 +2684,7 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 func (p *proxy) ensureConfigPrimaryURL() (config *globalConfig, err error) {
 	config, err = p.owner.config.modify(&configModifier{pre: p._primaryURLPre})
 	if err != nil {
-		err = fmt.Errorf("failed to update primary URL, err: %v", err)
+		err = fmt.Errorf("%s: failed to update primary URL, err: %w", p, err)
 	}
 	return
 }
@@ -2892,8 +2892,8 @@ func (p *proxy) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, st
 		config := cmn.GCO.Get()
 		if _, ok := config.Backend.Providers[bck.Provider]; !ok {
 			err = &cmn.ErrMissingBackend{Provider: bck.Provider}
-			err = fmt.Errorf("cannot lookup cloud bucket %q: %v", bck, err)
 			statusCode = http.StatusNotFound
+			err = cmn.NewErrFailedTo(p, "lookup Cloud bucket", bck, err, statusCode)
 			return
 		}
 	}

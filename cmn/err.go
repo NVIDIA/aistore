@@ -40,7 +40,7 @@ const (
 	FmtErrUnknown        = "%s: unknown %s %q"
 
 	// (see ErrFailedTo)
-	fmtErrWrapFailed = "%s: failed to %s %s, err: %w"
+	fmtErrFailedTo = "%s: failed to %s %s, err: %w"
 
 	EmptyProtoSchemeForURL = "empty protocol scheme for URL path"
 )
@@ -53,10 +53,11 @@ type (
 	ErrBucketIsBusy        struct{ bck Bck }
 
 	ErrFailedTo struct {
-		node   interface{} // most of the time it is a (target|proxy) node but may also be some other "actor"
+		actor  interface{} // most of the time it's this (target|proxy) node but may also be some other "actor"
 		action string      // not necessarily msg.Action
 		what   interface{} // not necessarily LOM
 		err    error       // original error that can be Unwrap-ed
+		status int         // http status, if available
 	}
 
 	ErrInvalidBucketProvider struct {
@@ -181,12 +182,23 @@ var (
 
 // ErrFailedTo
 
-func NewErrFailedTo(node interface{}, action string, what interface{}, err error) *ErrFailedTo {
-	return &ErrFailedTo{node, action, what, err}
+func NewErrFailedTo(actor interface{}, action string, what interface{}, err error, errCode ...int) *ErrFailedTo {
+	if e, ok := err.(*ErrFailedTo); ok {
+		return e
+	}
+	e := &ErrFailedTo{actor, action, what, err, 0}
+	if actor == nil {
+		e.actor = thisNodeName
+	}
+	if len(errCode) > 0 {
+		e.status = errCode[0]
+	}
+	return e
 }
 
+// TODO: insert status, if available
 func (e *ErrFailedTo) Error() string {
-	err := fmt.Errorf(fmtErrWrapFailed, e.node, e.action, e.what, e.err)
+	err := fmt.Errorf(fmtErrFailedTo, e.actor, e.action, e.what, e.err)
 	return err.Error()
 }
 
@@ -436,6 +448,9 @@ func isErrObjDefunct(err error) bool {
 // ErrAborted
 
 func NewErrAborted(what, ctx string, err error) *ErrAborted {
+	if e, ok := err.(*ErrAborted); ok {
+		return e
+	}
 	return &ErrAborted{what: what, ctx: ctx, err: err, timestamp: time.Now()}
 }
 
@@ -475,10 +490,8 @@ func NewErrNotFound(format string, a ...interface{}) *ErrNotFound {
 func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
 
 func IsErrNotFound(err error) bool {
-	if _, ok := err.(*ErrNotFound); ok {
-		return true
-	}
-	return errors.Is(err, &ErrNotFound{})
+	_, ok := err.(*ErrNotFound)
+	return ok
 }
 
 // ErrInitBackend & ErrMissingBackend
@@ -680,74 +693,29 @@ func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
 // ErrHTTP //
 /////////////
 
-func NewErrHTTP(r *http.Request, msg string, errCode ...int) (e *ErrHTTP) {
-	status := http.StatusBadRequest
-	if len(errCode) > 0 && errCode[0] > status {
-		status = errCode[0]
+func NewErrHTTP(r *http.Request, msg string, opts ...int) (e *ErrHTTP) {
+	var errCode int
+	if len(opts) > 0 {
+		errCode = opts[0]
 	}
-	e = allocHTTPErr()
-	e.Status, e.Message = status, msg
+	e = &ErrHTTP{}
+	e.init(r, msg, errCode)
+	return e
+}
+
+func (e *ErrHTTP) init(r *http.Request, msg string, errCode int) {
+	e.Status = http.StatusBadRequest
+	if errCode != 0 {
+		debug.Assert(errCode >= http.StatusBadRequest)
+		e.Status = errCode
+	}
+	e.Message = msg
 	if r != nil {
 		e.Method, e.URLPath = r.Method, r.URL.Path
 		e.RemoteAddr = r.RemoteAddr
 		e.Caller = r.Header.Get(HdrCallerName)
 	}
 	e.Node = thisNodeName
-	return
-}
-
-func IsStatusServiceUnavailable(err error) (yes bool) {
-	hErr, ok := err.(*ErrHTTP)
-	if !ok {
-		return false
-	}
-	return hErr.Status == http.StatusServiceUnavailable
-}
-
-func IsStatusNotFound(err error) (yes bool) {
-	hErr, ok := err.(*ErrHTTP)
-	if !ok {
-		return false
-	}
-	return hErr.Status == http.StatusNotFound
-}
-
-func IsStatusBadGateway(err error) (yes bool) {
-	hErr, ok := err.(*ErrHTTP)
-	if !ok {
-		return false
-	}
-	return hErr.Status == http.StatusBadGateway
-}
-
-func IsStatusGone(err error) (yes bool) {
-	hErr, ok := err.(*ErrHTTP)
-	if !ok {
-		return false
-	}
-	return hErr.Status == http.StatusGone
-}
-
-func S2HTTPErr(r *http.Request, msg string, status int) *ErrHTTP {
-	if msg != "" {
-		var httpErr ErrHTTP
-		if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
-			return &httpErr
-		}
-	}
-	return NewErrHTTP(r, msg, status)
-}
-
-func Err2HTTPErr(err error) (httpErr *ErrHTTP) {
-	var ok bool
-	if httpErr, ok = err.(*ErrHTTP); ok {
-		return
-	}
-	httpErr = &ErrHTTP{}
-	if !errors.As(err, &httpErr) {
-		httpErr = nil
-	}
-	return
 }
 
 // Example:
@@ -849,38 +817,111 @@ func (e *ErrHTTP) populateStackTrace() {
 	e.trace = buffer.Bytes()
 }
 
+func IsStatusServiceUnavailable(err error) (yes bool) {
+	hErr, ok := err.(*ErrHTTP)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusServiceUnavailable
+}
+
+func IsStatusNotFound(err error) (yes bool) {
+	hErr, ok := err.(*ErrHTTP)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusNotFound
+}
+
+func IsStatusBadGateway(err error) (yes bool) {
+	hErr, ok := err.(*ErrHTTP)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusBadGateway
+}
+
+func IsStatusGone(err error) (yes bool) {
+	hErr, ok := err.(*ErrHTTP)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusGone
+}
+
+func S2HTTPErr(r *http.Request, msg string, status int) *ErrHTTP {
+	if msg != "" {
+		var httpErr ErrHTTP
+		if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
+			return &httpErr
+		}
+	}
+	return NewErrHTTP(r, msg, status)
+}
+
+func Err2HTTPErr(err error) *ErrHTTP {
+	if e, ok := err.(*ErrHTTP); ok {
+		return e
+	}
+	e := &ErrHTTP{}
+	if !errors.As(err, &e) {
+		e = nil
+	}
+	return e
+}
+
+// NOTE: internal use w/ duplication/simplicity traded off
+func err2HTTP(err error) (*ErrHTTP, bool) {
+	if e, ok := err.(*ErrHTTP); ok {
+		return e, false
+	}
+	e := allocHterr()
+	if !errors.As(err, &e) {
+		freeHterr(e)
+		return nil, false
+	}
+	return e, true
+}
+
 //////////////////////////////
 // invalid message handlers //
 //////////////////////////////
 
-// Write error into HTTP response.
-func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
-	if httpErr := Err2HTTPErr(err); httpErr != nil {
-		status := http.StatusBadRequest
-		if len(opts) > 0 && opts[0] > status {
-			status = opts[0]
+// sends HTTP response header with the provided status
+// (alloc/free via mem-pool)
+func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[status[, silent]]*/) {
+	if httpErr, allocated := err2HTTP(err); httpErr != nil {
+		httpErr.Status = http.StatusBadRequest
+		if len(opts) > 0 && opts[0] > http.StatusBadRequest {
+			httpErr.Status = opts[0]
 		}
-		httpErr.Status = status
 		httpErr.write(w, r, len(opts) > 1 /*silent*/)
-	} else if IsErrNotFound(err) {
-		if len(opts) > 0 {
-			// Override the status code.
-			opts[0] = http.StatusNotFound
-		} else {
-			// Add status code if not set.
-			opts = append(opts, http.StatusNotFound)
+		if allocated {
+			freeHterr(httpErr)
 		}
-		WriteErrMsg(w, r, err.Error(), opts...)
-	} else {
-		WriteErrMsg(w, r, err.Error(), opts...)
+		return
 	}
+	var (
+		httpErr = allocHterr()
+		l       = len(opts)
+		status  = http.StatusBadRequest
+	)
+	if IsErrNotFound(err) {
+		status = http.StatusNotFound
+	} else if l > 0 {
+		status = opts[0]
+	} else if errf, ok := err.(*ErrFailedTo); ok {
+		status = errf.status
+	}
+	httpErr.init(r, err.Error(), status)
+	httpErr.write(w, r, l > 1)
+	freeHterr(httpErr)
 }
 
 // Create ErrHTTP (based on `msg` and `opts`) and write it into HTTP response.
 func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int) {
 	httpErr := NewErrHTTP(r, msg, opts...)
 	httpErr.write(w, r, len(opts) > 1 /*silent*/)
-	FreeHTTPErr(httpErr)
 }
 
 // 405 Method Not Allowed, see: https://tools.ietf.org/html/rfc2616#section-10.4.6
@@ -902,7 +943,7 @@ var (
 	err0    ErrHTTP
 )
 
-func allocHTTPErr() (a *ErrHTTP) {
+func allocHterr() (a *ErrHTTP) {
 	if v := errPool.Get(); v != nil {
 		a = v.(*ErrHTTP)
 		return
@@ -910,7 +951,7 @@ func allocHTTPErr() (a *ErrHTTP) {
 	return &ErrHTTP{}
 }
 
-func FreeHTTPErr(a *ErrHTTP) {
+func freeHterr(a *ErrHTTP) {
 	trace := a.trace
 	*a = err0
 	if trace != nil {

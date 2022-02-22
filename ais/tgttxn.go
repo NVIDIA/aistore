@@ -195,7 +195,7 @@ func (t *target) _commitCreateDestroy(c *txnServerCtx) (err error) {
 	}
 	// wait for newBMD w/timeout
 	if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-		return fmt.Errorf("%s %s: %v", t, txn, err)
+		return cmn.NewErrFailedTo(t, "commit", txn, err)
 	}
 	return
 }
@@ -238,7 +238,7 @@ func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return "", fmt.Errorf("%s %s: %v", t, txn, err)
+			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
 
 		// do the work in xaction
@@ -318,7 +318,7 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 		txnSetBprops := txn.(*txnSetBucketProps)
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return "", fmt.Errorf("%s %s: %v", t, txn, err)
+			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
 		if reMirror(txnSetBprops.bprops, txnSetBprops.nprops) {
 			n := int(txnSetBprops.nprops.Mirror.Copies)
@@ -423,7 +423,7 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 		txnRenB := txn.(*txnRenameBucket)
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return "", fmt.Errorf("%s %s: %v", t, txn, err)
+			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
 		rns := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, cmn.ActCommit)
 		if rns.Err != nil {
@@ -534,7 +534,7 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, e
 		if c.query.Get(cmn.QparamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 				txnTcb.xtcb.TxnAbort()
-				return "", fmt.Errorf("%s %s: %v", t, txn, err)
+				return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 			}
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
@@ -700,7 +700,7 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 		}
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return "", fmt.Errorf("%s %s: %v", t, txn, err)
+			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
 		rns := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 		if rns.Err != nil {

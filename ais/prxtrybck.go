@@ -283,8 +283,8 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 
 	// Init the bucket after having successfully added it to the BMD.
 	if err = bck.Init(args.p.owner.bmd); err != nil {
-		err = fmt.Errorf("%s: unexpected failure to add remote %s, err: %v", args.p.si, bck, err)
 		errCode = http.StatusInternalServerError
+		err = cmn.NewErrFailedTo(args.p, "add-remote", bck, err, errCode)
 	}
 	bck = args.bck
 	return

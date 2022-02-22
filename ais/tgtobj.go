@@ -713,7 +713,7 @@ gfn:
 	}
 
 	if err != nil {
-		err = fmt.Errorf("%s not found: %v", goi.lom.FullName(), err)
+		err = cmn.NewErrFailedTo(goi.t, "goi-restore-any", goi.lom, err)
 	} else {
 		err = cmn.NewErrNotFound("%s: %s", goi.t.si, goi.lom.FullName())
 	}
@@ -810,8 +810,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			retry = true // (!lom.IsAIS() || lom.ECEnabled() || GFN...)
 		} else {
 			goi.t.fsErr(err, fqn)
-			err = fmt.Errorf("%s: %w", goi.lom, err)
 			errCode = http.StatusInternalServerError
+			err = cmn.NewErrFailedTo(goi.t, "goi-finalize", goi.lom, err, errCode)
 		}
 		return
 	}
@@ -1128,7 +1128,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 	defer lom.Unlock(exclusive)
 	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
-			err = fmt.Errorf("%s: err: %w", lom, err)
+			err = cmn.NewErrFailedTo(coi.t, "coi-load", lom, err)
 		}
 		return
 	}
