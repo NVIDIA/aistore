@@ -49,8 +49,8 @@ type (
 		compression string // enum { cmn.CompressNever, ... }
 		xctn        cluster.Xact
 		multiplier  int
-		sizePDU     int32
 		owt         cmn.OWT
+		sizePDU     int32
 	}
 	// additional (and optional) params for new data mover
 	Extra struct {
@@ -238,7 +238,12 @@ func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes
 }
 
 func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) error {
-	dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
+	if hdr.ObjAttrs.Size < 0 {
+		// see transport.UsePDU(); TODO: dm.data.recv() to return num-received-bytes
+		debug.Assert(dm.sizePDU > 0)
+	} else {
+		dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
+	}
 	dm.stage.laterx.Store(true)
 	return dm.data.recv(hdr, object, err)
 }

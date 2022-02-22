@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -130,8 +131,8 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 	if extra.MMSA != nil {
 		s.mm = extra.MMSA
 	}
-	// NOTE: PDU-based traffic - MUST-have for "unsized" transmissions
-	if extra.SizePDU > 0 {
+	// NOTE: PDU-based traffic - a MUST-have for "unsized" transmissions
+	if extra.UsePDU() {
 		if extra.SizePDU > MaxSizePDU {
 			debug.Assert(false)
 			extra.SizePDU = MaxSizePDU
@@ -288,6 +289,16 @@ func (s *streamBase) sendLoop(dryrun bool) {
 
 	// cleanup
 	s.streamer.abortPending(err, false /*completions*/)
+}
+
+///////////
+// Extra //
+///////////
+
+func (extra *Extra) UsePDU() bool { return extra.SizePDU > 0 }
+
+func (extra *Extra) Compressed() bool {
+	return extra.Compression != "" && extra.Compression != cmn.CompressNever
 }
 
 //////////////////

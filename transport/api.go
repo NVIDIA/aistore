@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"path/filepath"
 	"reflect"
 	"time"
 	"unsafe"
@@ -95,9 +94,6 @@ type (
 	ReceiveMsg func(msg Msg, err error) error
 )
 
-// see also: lom.FullName()
-func (hdr *ObjHdr) FullName() string { return filepath.Join(hdr.Bck.Name, hdr.ObjName) }
-
 ///////////////////
 // object stream //
 ///////////////////
@@ -114,6 +110,8 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	if extra.Compressed() {
 		s.initCompression(extra)
 	}
+	debug.Assert(s.usePDU() == extra.UsePDU())
+
 	burst := burst()                  // num objects the caller can post without blocking
 	s.workCh = make(chan *Obj, burst) // Send Qeueue (SQ)
 	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue (SCQ)

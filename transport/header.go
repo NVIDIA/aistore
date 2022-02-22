@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"path/filepath"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
@@ -242,6 +243,7 @@ func (obj *Obj) SetPrc(n int) {
 	obj.prc = atomic.NewInt64(int64(n))
 }
 
+func (hdr *ObjHdr) FullName() string   { return filepath.Join(hdr.Bck.Name, hdr.ObjName) } // see also: lom.FullName()
 func (hdr *ObjHdr) IsUnsized() bool    { return hdr.ObjAttrs.Size == SizeUnknown }
 func (hdr *ObjHdr) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 }
 func (hdr *ObjHdr) ObjSize() int64     { return hdr.ObjAttrs.Size }

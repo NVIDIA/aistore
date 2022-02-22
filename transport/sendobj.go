@@ -463,11 +463,3 @@ ex:
 	}
 	return
 }
-
-///////////
-// Extra //
-///////////
-
-func (extra *Extra) Compressed() bool {
-	return extra.Compression != "" && extra.Compression != cmn.CompressNever
-}

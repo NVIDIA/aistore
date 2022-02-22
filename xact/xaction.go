@@ -296,10 +296,9 @@ func (xctn *Base) InObjs() int64  { return xctn.stats.inobjs.Load() }
 func (xctn *Base) InBytes() int64 { return xctn.stats.inbytes.Load() }
 
 func (xctn *Base) InObjsAdd(cnt int, size int64) {
+	debug.AssertMsg(size >= 0, xctn.String()) // "unsized" is caller's responsibility
 	xctn.stats.inobjs.Add(int64(cnt))
-	if size > 0 { // not unsized
-		xctn.stats.inbytes.Add(size)
-	}
+	xctn.stats.inbytes.Add(size)
 }
 
 func (xctn *Base) Snap() cluster.XactSnap {

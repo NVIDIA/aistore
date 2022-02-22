@@ -78,6 +78,8 @@ func init() {
 // API
 //
 
+func (sb *Streams) UsePDU() bool { return sb.extra.UsePDU() }
+
 func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Client, sbArgs Args) (sb *Streams) {
 	if sbArgs.Net == "" {
 		sbArgs.Net = cmn.NetIntraData
