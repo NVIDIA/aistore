@@ -34,7 +34,7 @@ import (
 
 const (
 	trname    = "reb"
-	trnamePsh = "pshreb" // broadcast push notifications
+	trnamePsh = "pshreb" // broadcast stage notifications
 )
 
 // rebalance stage enum
@@ -142,7 +142,7 @@ func (reb *Reb) _regRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
 		cos.ExitLogf("%v", err)
 	}
-	if err := transport.HandleObjStream(trnamePsh, reb.recvPush); err != nil {
+	if err := transport.HandleObjStream(trnamePsh, reb.recvStageNtfn); err != nil {
 		cos.ExitLogf("%v", err)
 	}
 	// serialization: one at a time
@@ -161,9 +161,9 @@ func (reb *Reb) _regRecv() {
 //    `stage < rebStageWaitAck`. Since all EC stages are between
 //    `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
 func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact) {
-	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: reb.t.Bowner().Get().IsECUsed()}
-	logHdr := reb.logHdr(rargs)
+	logHdr := reb.logHdr(id, smap)
 	glog.Infof("%s: initializing...", logHdr)
+	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: reb.t.Bowner().Get().IsECUsed()}
 	if !reb.rebSerialize(rargs) {
 		return
 	}
@@ -268,7 +268,7 @@ func (reb *Reb) _serialize(rargs *rebArgs) (newerRMD, alreadyRunning bool) {
 		default:
 			runtime.Gosched()
 		}
-		logHdr := reb.logHdr(rargs)
+		logHdr := reb.logHdr(rargs.id, rargs.smap)
 		if reb.rebID.Load() > rargs.id {
 			glog.Warningf("%s: seeing newer rebalance[g%d] - not running", logHdr, reb.rebID.Load())
 			newerRMD = true
@@ -377,7 +377,7 @@ func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xact.NotifXact) bool {
 	reb.stages.cleanup()
 
 	reb.mu.Unlock()
-	glog.Infof("%s: running %s", reb.logHdr(rargs), reb.xctn())
+	glog.Infof("%s: running %s", reb.logHdr(rargs.id, rargs.smap), reb.xctn())
 	return true
 }
 
@@ -456,7 +456,7 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 	var (
 		cnt    int
-		logHdr = reb.logHdr(rargs)
+		logHdr = reb.logHdr(rargs.id, rargs.smap)
 		sleep  = rargs.config.Timeout.CplaneOperation.D()
 		maxwt  = rargs.config.Rebalance.DestRetryTime.D()
 		xreb   = reb.xctn()
@@ -551,7 +551,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 			wg: &sync.WaitGroup{},
 		}, smap: rargs.smap}
 		query  = url.Values{}
-		loghdr = reb.logHdr(rargs)
+		loghdr = reb.logHdr(rargs.id, rargs.smap)
 	)
 	query.Set(cmn.QparamSilent, "true")
 	for _, lomAck := range reb.lomAcks() {
@@ -597,7 +597,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 
 func (reb *Reb) rebFini(rargs *rebArgs, err error) {
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs))
+		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs.id, rargs.smap))
 	}
 	// prior to closing the streams
 	if q := reb.quiesce(rargs, rargs.config.Rebalance.Quiesce.D(), reb.nodesQuiescent); q != cluster.QuiAborted {

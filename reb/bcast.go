@@ -5,6 +5,7 @@
 package reb
 
 import (
+	"fmt"
 	"net/url"
 	"time"
 
@@ -65,7 +66,7 @@ func (reb *Reb) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
 		ver    = md.smap.Version
 		sleep  = cmn.Timeout.CplaneOperation()
-		logHdr = reb.logHdr(md)
+		logHdr = reb.logHdr(md.id, md.smap)
 	)
 	for i := 0; i < 4; i++ {
 		_, code, err := reb.t.Health(tsi, cmn.Timeout.MaxKeepalive(), nil)
@@ -96,12 +97,12 @@ func (reb *Reb) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		sleep  = cmn.Timeout.CplaneOperation() * 2
 		maxwt  = md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
 		curwt  time.Duration
-		logHdr = reb.logHdr(md)
+		logHdr = reb.logHdr(md.id, md.smap)
 		xreb   = reb.xctn()
 	)
 	for curwt < maxwt {
 		if reb.stages.isInStage(tsi, rebStageTraverse) {
-			// do not request the node stage if it has sent push notification
+			// do not request the node stage if it has sent stage notification
 			return true
 		}
 		if _, ok = reb.checkGlobStatus(tsi, rebStageTraverse, md); ok {
@@ -127,7 +128,7 @@ func (reb *Reb) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		sleep      = md.config.Timeout.CplaneOperation.D()
 		maxwt      = md.config.Rebalance.DestRetryTime.D()
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
-		logHdr     = reb.logHdr(md)
+		logHdr     = reb.logHdr(md.id, md.smap)
 		xreb       = reb.xctn()
 	)
 	for curwt < maxwt {
@@ -136,7 +137,7 @@ func (reb *Reb) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 			return
 		}
 		if reb.stages.isInStage(tsi, rebStageFin) {
-			// do not request the node stage if it has sent push notification
+			// do not request the node stage if it has sent stage notification
 			return true
 		}
 		curwt += sleep
@@ -175,7 +176,7 @@ func (reb *Reb) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *rebArgs) (status *Status, ok bool) {
 	var (
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
-		logHdr     = reb.logHdr(md)
+		logHdr     = reb.logHdr(md.id, md.smap)
 		query      = url.Values{cmn.QparamRebStatus: []string{"true"}}
 	)
 	body, code, err := reb.t.Health(tsi, cmn.DefaultTimeout, query)
@@ -187,26 +188,28 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 		body, code, err = reb.t.Health(tsi, cmn.DefaultTimeout, query) // retry once
 	}
 	if err != nil {
-		glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi.StringEx(), err, code)
-		reb.abortAndBroadcast()
+		detail := fmt.Sprintf("health(%s) returned err %v(%d)", tsi.StringEx(), err, code)
+		err = cmn.NewErrAborted(logHdr, detail, err)
+		reb.abortAndBroadcast(err)
 		return
 	}
 	status = &Status{}
 	err = jsoniter.Unmarshal(body, status)
 	if err != nil {
-		glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", logHdr, tsi.StringEx(), err)
-		reb.abortAndBroadcast()
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, logHdr, "reb status from "+tsi.StringEx(), cmn.BytesHead(body), err)
+		reb.abortAndBroadcast(err)
 		return
 	}
 	// enforce global transaction ID
 	if status.RebID > reb.rebID.Load() {
-		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", logHdr, tsi.StringEx(), status.RebID)
-		reb.abortAndBroadcast()
+		detail := fmt.Sprintf("%s runs newer (g%d) global rebalance", tsi.StringEx(), status.RebID)
+		err = cmn.NewErrAborted(logHdr, detail, nil)
+		reb.abortAndBroadcast(err)
 		return
 	}
 	// let the target to catch-up
 	if status.RebID < reb.RebID() {
-		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", logHdr, tsi.StringEx(), status.RebID)
+		glog.Warningf("%s: %s runs older (g%d) global rebalance - keep waiting...", logHdr, tsi.StringEx(), status.RebID)
 		return
 	}
 	// Remote target has aborted its running rebalance with the same ID.

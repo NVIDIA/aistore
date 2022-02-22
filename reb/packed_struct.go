@@ -15,7 +15,7 @@ import (
 const (
 	rebMsgRegular   = iota // regular rebalance: acknowledge/Object
 	rebMsgEC               // EC rebalance: acknowledge/CT/Namespace
-	rebMsgPushStage        // push notification of target moved to the next stage
+	rebMsgStageNtfn        // stage notification (of target transitioning to the next stage)
 )
 const rebMsgKindSize = 1
 const (
@@ -35,8 +35,8 @@ type (
 		sliceID  uint16
 	}
 
-	// push notification struct - a target sends it when it enters `stage`
-	pushReq struct {
+	// stage notification struct - a target sends it when it enters `stage`
+	stageNtfn struct {
 		md       *ec.Metadata
 		rebID    int64  // sender's rebalance ID
 		daemonID string // sender's ID
@@ -51,8 +51,8 @@ var (
 	_ cos.Unpacker = (*ecAck)(nil)
 	_ cos.Packer   = (*regularAck)(nil)
 	_ cos.Packer   = (*ecAck)(nil)
-	_ cos.Packer   = (*pushReq)(nil)
-	_ cos.Unpacker = (*pushReq)(nil)
+	_ cos.Packer   = (*stageNtfn)(nil)
+	_ cos.Unpacker = (*stageNtfn)(nil)
 )
 
 func (rack *regularAck) Unpack(unpacker *cos.ByteUnpack) (err error) {
@@ -110,51 +110,51 @@ func (eack *ecAck) PackedSize() int {
 	return cos.SizeofI64 + cos.SizeofI16 + cos.PackedStrLen(eack.daemonID)
 }
 
-func (req *pushReq) PackedSize() int {
+func (ntfn *stageNtfn) PackedSize() int {
 	total := cos.SizeofI64 + cos.SizeofI32*2 +
-		cos.PackedStrLen(req.daemonID) + 1
-	if req.md != nil {
-		total += req.md.PackedSize()
+		cos.PackedStrLen(ntfn.daemonID) + 1
+	if ntfn.md != nil {
+		total += ntfn.md.PackedSize()
 	}
 	return total
 }
 
-func (req *pushReq) Pack(packer *cos.BytePack) {
-	packer.WriteInt64(req.rebID)
-	packer.WriteUint32(req.action)
-	packer.WriteUint32(req.stage)
-	packer.WriteString(req.daemonID)
-	if req.md == nil {
+func (ntfn *stageNtfn) Pack(packer *cos.BytePack) {
+	packer.WriteInt64(ntfn.rebID)
+	packer.WriteUint32(ntfn.action)
+	packer.WriteUint32(ntfn.stage)
+	packer.WriteString(ntfn.daemonID)
+	if ntfn.md == nil {
 		packer.WriteByte(0)
 	} else {
 		packer.WriteByte(1)
-		packer.WriteAny(req.md)
+		packer.WriteAny(ntfn.md)
 	}
 }
 
-func (req *pushReq) NewPack(kind byte) []byte {
-	l := rebMsgKindSize + req.PackedSize()
+func (ntfn *stageNtfn) NewPack(kind byte) []byte {
+	l := rebMsgKindSize + ntfn.PackedSize()
 	packer := cos.NewPacker(nil, l)
 	packer.WriteByte(kind)
-	packer.WriteAny(req)
+	packer.WriteAny(ntfn)
 	return packer.Bytes()
 }
 
-func (req *pushReq) Unpack(unpacker *cos.ByteUnpack) error {
+func (ntfn *stageNtfn) Unpack(unpacker *cos.ByteUnpack) error {
 	var (
 		marker byte
 		err    error
 	)
-	if req.rebID, err = unpacker.ReadInt64(); err != nil {
+	if ntfn.rebID, err = unpacker.ReadInt64(); err != nil {
 		return err
 	}
-	if req.action, err = unpacker.ReadUint32(); err != nil {
+	if ntfn.action, err = unpacker.ReadUint32(); err != nil {
 		return err
 	}
-	if req.stage, err = unpacker.ReadUint32(); err != nil {
+	if ntfn.stage, err = unpacker.ReadUint32(); err != nil {
 		return err
 	}
-	if req.daemonID, err = unpacker.ReadString(); err != nil {
+	if ntfn.daemonID, err = unpacker.ReadString(); err != nil {
 		return err
 	}
 	marker, err = unpacker.ReadByte()
@@ -162,30 +162,30 @@ func (req *pushReq) Unpack(unpacker *cos.ByteUnpack) error {
 		return err
 	}
 	if marker == 0 {
-		req.md = nil
+		ntfn.md = nil
 		return nil
 	}
-	req.md = ec.NewMetadata()
-	return unpacker.ReadAny(req.md)
+	ntfn.md = ec.NewMetadata()
+	return unpacker.ReadAny(ntfn.md)
 }
 
-func (*Reb) encodePushReq(req *pushReq) []byte {
-	return req.NewPack(rebMsgPushStage)
+func (*Reb) encodeStageNtfn(ntfn *stageNtfn) []byte {
+	return ntfn.NewPack(rebMsgStageNtfn)
 }
 
-func (*Reb) decodePushReq(buf []byte) (*pushReq, error) {
+func (*Reb) decodeStageNtfn(buf []byte) (*stageNtfn, error) {
 	var (
-		req      = &pushReq{}
+		ntfn     = &stageNtfn{}
 		unpacker = cos.NewUnpacker(buf)
 		act, err = unpacker.ReadByte()
 	)
 	if err != nil {
 		return nil, err
 	}
-	// at the moment, there is only one kind of push notifications (see above)
-	if act != rebMsgPushStage {
-		return nil, fmt.Errorf("expected %d (push notification), got %d", rebMsgPushStage, act)
+	// at the moment, there is only one kind of stage notifications (see above)
+	if act != rebMsgStageNtfn {
+		return nil, fmt.Errorf("expected %d (stage notification), got %d", rebMsgStageNtfn, act)
 	}
-	err = unpacker.ReadAny(req)
-	return req, err
+	err = unpacker.ReadAny(ntfn)
+	return ntfn, err
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
@@ -81,7 +82,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		return err
 	}
 	if ack.rebID != reb.RebID() {
-		glog.Warningf("received %s: %s", hdr.FullName(), reb.rebIDMismatchMsg(ack.rebID))
+		glog.Warningf("received %s: %s", hdr.FullName(), reb.warnID(ack.rebID, ack.daemonID))
 		return nil
 	}
 	tsid := ack.daemonID // the sender
@@ -96,10 +97,10 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		reb.laterx.Store(true)
 		if stage > rebStageFin && glog.FastV(4, glog.SmoduleReb) {
 			glog.Errorf("%s: post stage-fin receive from %s %s (stage %s)",
-				reb.t.Snode(), tsid, lom, stages[stage])
+				reb.t.Snode(), cluster.Tname(tsid), lom, stages[stage])
 		}
 	} else if stage < rebStageTraverse {
-		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t, tsid, lom, stages[stage])
+		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t, cluster.Tname(tsid), lom, stages[stage])
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 	xreb := reb.xctn()
@@ -147,7 +148,7 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 		return
 	}
 	if ack.rebID != reb.rebID.Load() {
-		glog.Warningf("ACK from %s: %s", ack.daemonID, reb.rebIDMismatchMsg(ack.rebID))
+		glog.Warningf("ACK from %s: %s", ack.daemonID, reb.warnID(ack.rebID, ack.daemonID))
 		return
 	}
 
@@ -169,33 +170,54 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 // Rx EC //
 ///////////
 
-func (reb *Reb) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) error {
-	tname := reb.t.String()
+func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) error {
+	if errRx != nil {
+		glog.Errorf("%s: %v", reb.t, errRx)
+		return errRx
+	}
+	ntfn, err := reb.decodeStageNtfn(hdr.Opaque)
 	if err != nil {
-		glog.Errorf("%s: failed to receive push notification %s from %s: %v", tname, hdr.ObjName, hdr.Bck, err)
+		debug.AssertNoErr(err)
 		return err
 	}
-	req, err := reb.decodePushReq(hdr.Opaque)
-	if err != nil {
-		glog.Error(err)
-		return err
-	}
-	otherStage, xreb := stages[req.stage], reb.xctn()
-	err = fmt.Errorf("push notification from t[%s](%s)", req.daemonID, otherStage)
-	if req.stage == rebStageAbort && reb.RebID() <= req.rebID {
-		// (other target aborted its xaction and sent the signal to others)
-		if xreb == nil {
-			glog.Errorf("%s: nil rebalancing xaction vs %v", tname, err)
-			return err
+	var (
+		rebID      = reb.RebID()
+		rsmap      = reb.smap.Load()
+		otherStage = stages[ntfn.stage]
+		xreb       = reb.xctn()
+	)
+	if xreb == nil {
+		if reb.stages.stage.Load() != rebStageInactive {
+			glog.Errorf("%s: nil rebalancing xaction", reb.logHdr(rebID, (*cluster.Smap)(rsmap)))
 		}
-		xreb.Abort(err)
-		return err
-	}
-	if reb.RebID() != req.rebID {
-		glog.Warningf("%s: %v: %s", tname, err, reb.rebIDMismatchMsg(req.rebID))
 		return nil
 	}
-	reb.stages.setStage(req.daemonID, req.stage)
+	// eq
+	if rebID == ntfn.rebID {
+		reb.stages.setStage(ntfn.daemonID, ntfn.stage)
+		if ntfn.stage == rebStageAbort {
+			err := fmt.Errorf("abort stage notification from %s(%s)", cluster.Tname(ntfn.daemonID), otherStage)
+			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*cluster.Smap)(rsmap)), err))
+			return err
+		}
+		return nil
+	}
+	// other's old
+	if rebID > ntfn.rebID {
+		glog.Warningf("%s: stage notification from %s(%s): %s", reb.logHdr(rebID, (*cluster.Smap)(rsmap)),
+			cluster.Tname(ntfn.daemonID), otherStage, reb.warnID(ntfn.rebID, ntfn.daemonID))
+		return nil
+	}
+	// mine's old
+	smap := reb.t.Sowner().Get()
+	if tsi := smap.GetTarget(ntfn.daemonID); tsi != nil {
+		err := fmt.Errorf("newer rebalance via stage notification from %s(%s)", tsi.StringEx(), otherStage)
+		xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*cluster.Smap)(rsmap)), err))
+		return err
+	}
+	// TODO: revisit
+	glog.Errorf("%s: stage notification from %s(%s): %s", reb.logHdr(rebID, (*cluster.Smap)(rsmap)),
+		cluster.Tname(ntfn.daemonID), otherStage, reb.warnID(ntfn.rebID, ntfn.daemonID))
 	return nil
 }
 
@@ -209,7 +231,7 @@ func (*Reb) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 
 // A sender sent an MD update. This target must update local information partially:
 // only list of daemons and the "main" target.
-func (reb *Reb) receiveMD(req *pushReq, hdr transport.ObjHdr) error {
+func (reb *Reb) receiveMD(req *stageNtfn, hdr transport.ObjHdr) error {
 	ctMeta, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return err
@@ -230,7 +252,7 @@ func (reb *Reb) receiveMD(req *pushReq, hdr transport.ObjHdr) error {
 	return ctMeta.Write(reb.t, bytes.NewReader(mdBytes), -1)
 }
 
-func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) error {
+func (reb *Reb) receiveCT(req *stageNtfn, hdr transport.ObjHdr, reader io.Reader) error {
 	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
@@ -277,7 +299,7 @@ func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) 
 		}
 	}
 	// Broadcast updated MD
-	reqMD := pushReq{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: rebActUpdateMD}
+	ntfnMD := stageNtfn{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: rebActUpdateMD}
 	nodes := req.md.RemoteTargets(reb.t)
 	for _, tsi := range nodes {
 		if moveTo != nil && moveTo.ID() == tsi.ID() {
@@ -295,7 +317,7 @@ func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) 
 			ObjName:  ct.ObjectName(),
 			ObjAttrs: cmn.ObjAttrs{Size: 0},
 		}
-		o.Hdr.Opaque = reqMD.NewPack(rebMsgEC)
+		o.Hdr.Opaque = ntfnMD.NewPack(rebMsgEC)
 		o.Callback = reb.transportECCB
 		if errSend := reb.dm.Send(o, nil, tsi); errSend != nil && err == nil {
 			err = fmt.Errorf("failed to send updated metafile: %v", err)
@@ -306,10 +328,10 @@ func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) 
 
 // receiving EC CT
 func (reb *Reb) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) error {
-	req := &pushReq{}
+	req := &stageNtfn{}
 	err := unpacker.ReadAny(req)
 	if err != nil {
-		glog.Errorf("invalid push notification %s: %v", hdr.ObjName, err)
+		glog.Errorf("invalid stage notification %s: %v", hdr.ObjName, err)
 		return err
 	}
 	if req.rebID != reb.rebID.Load() {

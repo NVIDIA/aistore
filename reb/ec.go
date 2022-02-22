@@ -137,7 +137,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 		})
 	}
 	// transmit
-	req := pushReq{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: meta, action: action}
+	ntfn := stageNtfn{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: meta, action: action}
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{
 		Bck:      ct.Bck().Bck,
@@ -151,7 +151,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 		o.Hdr.ObjAttrs.Size = ec.SliceSize(meta.Size, meta.Data)
 	}
 	reb.onAir.Inc()
-	o.Hdr.Opaque = req.NewPack(rebMsgEC)
+	o.Hdr.Opaque = ntfn.NewPack(rebMsgEC)
 	o.Callback = reb.transportECCB
 	if err = reb.dm.Send(o, roc, target); err != nil {
 		err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
@@ -170,8 +170,8 @@ func (reb *Reb) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}
 //   1. Full object/replica is received
 //   2. A CT is received and this target is not the default target (it
 //      means that the CTs came from default target after EC had been rebuilt)
-func (reb *Reb) saveCTToDisk(req *pushReq, hdr *transport.ObjHdr, data io.Reader) error {
-	cos.Assert(req.md != nil)
+func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Reader) error {
+	cos.Assert(ntfn.md != nil)
 	var (
 		err error
 		bck = cluster.NewBckEmbed(hdr.Bck)
@@ -179,8 +179,8 @@ func (reb *Reb) saveCTToDisk(req *pushReq, hdr *transport.ObjHdr, data io.Reader
 	if err := bck.Init(reb.t.Bowner()); err != nil {
 		return err
 	}
-	md := req.md.NewPack()
-	if req.md.SliceID != 0 {
+	md := ntfn.md.NewPack()
+	if ntfn.md.SliceID != 0 {
 		args := &ec.WriteArgs{Reader: data, MD: md, Xact: reb.xctn()}
 		err = ec.WriteSliceAndMeta(reb.t, hdr, args)
 	} else {
@@ -206,10 +206,10 @@ func (*Reb) renameAsWorkFile(ct *cluster.CT) (string, error) {
 	return fqn, nil
 }
 
-// Find a target that has either obsolete slice or no slice of an object.
-// Used when in slice conflict: this target is a "main" one and receieves a full
-// replica but this target contains a slice of the object. So, the existing slice
-// send to any free target.
+// Find a target that has either an obsolete slice or no slice of the object.
+// Used to resolve the conflict: this target is the "main" one (has a full
+// replica) but it also stores a slice of the object. So, the existing slice
+// goes to any other _free_ target.
 func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) (*cluster.Snode, error) {
 	sliceCnt := md.Data + md.Parity + 2
 	hrwList, err := cluster.HrwTargetList(ct.Bck().MakeUname(ct.ObjectName()), reb.t.Sowner().Get(), sliceCnt)
@@ -234,18 +234,18 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) 
 				return tsi, nil
 			}
 		}
-		if err != nil && cmn.IsObjNotExist(err) {
+		if err != nil && cmn.IsNotExist(err) {
 			return tsi, nil
 		}
 		if err != nil {
 			glog.Errorf("Failed to read metadata from %s: %v", tsi.StringEx(), err)
 		}
 	}
-	return nil, errors.New("no free target")
+	return nil, errors.New("no _free_ targets")
 }
 
 // Check if this target has a metadata for the received CT
-func (reb *Reb) detectLocalCT(req *pushReq, ct *cluster.CT) (*ec.Metadata, error) {
+func (reb *Reb) detectLocalCT(req *stageNtfn, ct *cluster.CT) (*ec.Metadata, error) {
 	if req.action == rebActMoveCT {
 		// internal CT move after slice conflict - save always
 		return nil, nil
@@ -268,7 +268,7 @@ func (reb *Reb) detectLocalCT(req *pushReq, ct *cluster.CT) (*ec.Metadata, error
 // - move slice to a workfile directory
 // - return Snode that must receive the local slice, and workfile path
 // - the caller saves received CT to local drives, and then sends workfile
-func (reb *Reb) renameLocalCT(req *pushReq, ct *cluster.CT, md *ec.Metadata) (
+func (reb *Reb) renameLocalCT(req *stageNtfn, ct *cluster.CT, md *ec.Metadata) (
 	workFQN string, moveTo *cluster.Snode, err error) {
 	if md == nil || req.action == rebActMoveCT {
 		return
@@ -309,7 +309,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 
 	md, err := ec.LoadMetadata(fqn)
 	if err != nil {
-		glog.Warningf("failed to load metadata from %q: %v", fqn, err)
+		glog.Warningf("failed to load %q metadata: %v", fqn, err)
 		return nil
 	}
 

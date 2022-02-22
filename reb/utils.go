@@ -6,6 +6,7 @@ package reb
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 	"unsafe"
 
@@ -36,13 +37,23 @@ func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
 func (reb *Reb) xctn() *xs.Rebalance        { return (*xs.Rebalance)(reb.xreb.Load()) }
 func (reb *Reb) setXact(xctn *xs.Rebalance) { reb.xreb.Store(unsafe.Pointer(xctn)) }
 
-func (reb *Reb) logHdr(md *rebArgs) string {
+func (reb *Reb) logHdr(rebID int64, smap *cluster.Smap) string {
 	stage := stages[reb.stages.stage.Load()]
-	return fmt.Sprintf("%s[g%d,v%d,%s]", reb.t, md.id, md.smap.Version, stage)
+	smapv := "v<???>"
+	if smap != nil {
+		smapv = "v" + strconv.FormatInt(smap.Version, 10)
+	}
+	return fmt.Sprintf("%s[g%d,%s,%s]", reb.t, rebID, smapv, stage)
 }
 
-func (reb *Reb) rebIDMismatchMsg(remoteID int64) string {
-	return fmt.Sprintf("rebalance IDs mismatch: local g[%d], remote g[%d]", reb.RebID(), remoteID)
+func (reb *Reb) warnID(remoteID int64, tid string) (s string) {
+	const warn = "t[%s] runs %s g[%d] (local g[%d])"
+	if id := reb.RebID(); id < remoteID {
+		s = fmt.Sprintf(warn, tid, "newer", remoteID, id)
+	} else {
+		s = fmt.Sprintf(warn, tid, "older", remoteID, id)
+	}
+	return
 }
 
 func (reb *Reb) _waitForSmap() (smap *cluster.Smap, err error) {
@@ -77,12 +88,12 @@ func (reb *Reb) changeStage(newStage uint32) {
 	// first, set own stage
 	reb.stages.stage.Store(newStage)
 	var (
-		req = pushReq{
+		req = stageNtfn{
 			daemonID: reb.t.SID(), stage: newStage, rebID: reb.rebID.Load(),
 		}
 		hdr = transport.ObjHdr{}
 	)
-	hdr.Opaque = reb.encodePushReq(&req)
+	hdr.Opaque = reb.encodeStageNtfn(&req)
 	// second, notify all
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
 		glog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
@@ -91,20 +102,20 @@ func (reb *Reb) changeStage(newStage uint32) {
 
 // Aborts global rebalance and notifies all other targets.
 // (compare with `Abort` above)
-func (reb *Reb) abortAndBroadcast() {
+func (reb *Reb) abortAndBroadcast(err error) {
 	xreb := reb.xctn()
-	if xreb == nil || !xreb.Abort(nil) {
+	if xreb == nil || !xreb.Abort(err) {
 		return
 	}
 	var (
-		req = pushReq{
+		req = stageNtfn{
 			daemonID: reb.t.SID(),
 			rebID:    reb.RebID(),
 			stage:    rebStageAbort,
 		}
 		hdr = transport.ObjHdr{}
 	)
-	hdr.Opaque = reb.encodePushReq(&req)
+	hdr.Opaque = reb.encodeStageNtfn(&req)
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
 		glog.Errorf("Failed to broadcast abort notification: %v", err)
 	}

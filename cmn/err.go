@@ -675,7 +675,7 @@ func IsObjNotExist(err error) bool {
 }
 
 // usage: everywhere where applicable (directories, xactions, nodes, ...)
-// excluding LOM (see above)
+// excluding _local_ LOM (where the above applies)
 func IsNotExist(err error) bool {
 	if os.IsNotExist(err) {
 		return true
