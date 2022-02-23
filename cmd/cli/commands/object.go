@@ -166,8 +166,8 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 			ObjName:      objName,
 			SrcFQN:       fqn,
 			Recursive:    recurs,
-			OverwriteDst: c.Bool(overwriteFlag.GetName()),
-			DeleteSrc:    c.Bool(deleteSrcFlag.GetName()),
+			OverwriteDst: c.Bool(overwriteFlag.GetName()), // TODO -- FIXME: use flagIsSet here and elsewhere
+			DeleteSrc:    c.Bool(deleteSrcFlag.GetName()), // ditto
 		},
 	}
 	xactID, err := api.Promote(promoteArgs)

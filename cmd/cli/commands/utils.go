@@ -1166,10 +1166,17 @@ func cleanFlag(flag string) string {
 	return strings.Split(flag, ",")[0]
 }
 
-func flagIsSet(c *cli.Context, flag cli.Flag) bool {
-	// If the flag name has multiple values, take the first one
-	flagName := cleanFlag(flag.GetName())
-	return c.GlobalIsSet(flagName) || c.IsSet(flagName)
+func flagIsSet(c *cli.Context, flag cli.Flag) (v bool) {
+	name := cleanFlag(flag.GetName()) // take the first of multiple names
+	switch flag.(type) {
+	case cli.BoolFlag:
+		v = c.Bool(name)
+	case cli.BoolTFlag:
+		v = c.BoolT(name)
+	default:
+		v = c.GlobalIsSet(name) || c.IsSet(name)
+	}
+	return
 }
 
 // Returns the value of a string flag (either parent or local scope)

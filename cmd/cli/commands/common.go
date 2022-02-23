@@ -304,10 +304,10 @@ var (
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
 	rawFlag         = cli.BoolFlag{Name: "raw", Usage: "display exact values instead of human-readable ones"}
 
-	allXactionsFlag = cli.BoolTFlag{Name: "all", Usage: "show all xactions, including finished"}
-	allItemsFlag    = cli.BoolTFlag{Name: "all", Usage: "list all items"} // TODO: differentiate bucket names vs objects
-	allJobsFlag     = cli.BoolTFlag{Name: "all", Usage: "remove all finished jobs"}
-	allETLStopFlag  = cli.BoolTFlag{Name: "all", Usage: "stop all ETLs"}
+	allXactionsFlag = cli.BoolFlag{Name: "all", Usage: "show all xactions, including finished"}
+	allItemsFlag    = cli.BoolFlag{Name: "all", Usage: "list all items"} // TODO: differentiate bucket names vs objects
+	allJobsFlag     = cli.BoolFlag{Name: "all", Usage: "remove all finished jobs"}
+	allETLStopFlag  = cli.BoolFlag{Name: "all", Usage: "stop all ETLs"}
 
 	// Bucket
 	startAfterFlag = cli.StringFlag{
@@ -318,12 +318,12 @@ var (
 	pageSizeFlag = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}
 	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
-	fastFlag     = cli.BoolTFlag{
+	fastFlag     = cli.BoolFlag{
 		Name:  "fast",
 		Usage: "use fast algorithm to compute the result (beware: advanced usage only)",
 	}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
-	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
+	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}
 	keepMDFlag        = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
 	dataSlicesFlag    = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
@@ -396,8 +396,8 @@ var (
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 
-	overwriteFlag = cli.BoolTFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
-	deleteSrcFlag = cli.BoolTFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
+	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
+	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
 	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target (ID) designated to carry out the entire operation"}
 
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
