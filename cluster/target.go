@@ -79,7 +79,11 @@ type (
 		Recursive bool   `json:"rcr,omitempty"` // recursively promote nested dirs
 		// once successfully promoted:
 		OverwriteDst bool `json:"ovw,omitempty"` // overwrite destination
-		DeleteSrc    bool `json:"kps,omitempty"` // remove source
+		DeleteSrc    bool `json:"dls,omitempty"` // remove source when (and after) successfully promoting
+		// explicit request _not_ to treat the source as a potential file share
+		// and _not_ to try to auto-detect if it is;
+		// (auto-detection takes time, etc.)
+		SrcIsNotFileShare bool `json:"notshr,omitempty"` // the source is not a file share equally accessible by all targets
 	}
 	PromoteParams struct {
 		Bck         *Bck       // destination bucket

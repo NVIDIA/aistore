@@ -895,7 +895,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		}
 
 		// directory
-		fqns, totalN, cksumVal, err := _promoteScan(srcFQN, prmMsg.Recursive)
+		fqns, totalN, cksumVal, err := prmScan(srcFQN, prmMsg)
 		if totalN == 0 {
 			if err != nil {
 				return "", err
@@ -923,12 +923,14 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 			glog.Infof("%s: nothing to do (%s)", t, txnPrm)
 			return "", nil
 		}
-		isFileShare := c.query.Get(cmn.QparamPromoteFileShare) != ""
+		// if and only when the commanding proxy sets this param
+		// (which it does after collecting all the results from the begin phase)
+		confirmedFileShare := c.query.Get(cmn.QparamPromoteFileShare) != ""
 
 		// promote synchronously wo/ xaction
 		if txnPrm.totalN == len(txnPrm.fqns) {
 			glog.Infof("%s: promote synchronously %s", t, txnPrm)
-			err := t._promoteNumSync(c, txnPrm, isFileShare)
+			err := t.prmNumFiles(c, txnPrm, confirmedFileShare)
 			return "", err
 		}
 		// with
@@ -937,7 +939,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 			return "", rns.Err
 		}
 		xprm := rns.Entry.Get().(*xs.XactDirPromote)
-		xprm.SetFileShare(isFileShare)
+		xprm.SetFileShare(confirmedFileShare)
 		txnPrm.xprm = xprm
 
 		c.addNotif(xprm) // upon completion
@@ -950,8 +952,12 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 	return "", nil
 }
 
-func _promoteScan(dirFQN string, recurs bool) (fqns []string, totalN int, cksumVal string, err error) {
-	cksum := cos.NewCksumHash(cos.ChecksumXXHash)
+// scan and, optionally, auto-detect file-share
+func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
+	var (
+		cksum      *cos.CksumHash
+		autoDetect = !prmMsg.SrcIsNotFileShare
+	)
 	cb := func(fqn string, de fs.DirEntry) (err error) {
 		if de.IsDir() {
 			return
@@ -963,17 +969,22 @@ func _promoteScan(dirFQN string, recurs bool) (fqns []string, totalN int, cksumV
 			fqns = append(fqns, fqn)
 		}
 		totalN++
-		cksum.H.Write([]byte(fqn))
+		if autoDetect {
+			cksum.H.Write([]byte(fqn))
+		}
 		return
 	}
-	if recurs {
+	if autoDetect {
+		cksum = cos.NewCksumHash(cos.ChecksumXXHash)
+	}
+	if prmMsg.Recursive {
 		opts := &fs.WalkOpts{Dir: dirFQN, Callback: cb, Sorted: true}
 		err = fs.Walk(opts)
 	} else {
 		err = fs.WalkDir(dirFQN, cb)
 	}
 
-	if err != nil || totalN == 0 {
+	if err != nil || totalN == 0 || !autoDetect {
 		return
 	}
 	cksum.Finalize()
@@ -981,15 +992,16 @@ func _promoteScan(dirFQN string, recurs bool) (fqns []string, totalN int, cksumV
 	return
 }
 
-func (t *target) _promoteNumSync(c *txnServerCtx, txnPrm *txnPromote, isFileShare bool) error {
+// synchronously wo/ xaction
+func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFileShare bool) error {
 	smap := t.owner.smap.Get()
 	for _, fqn := range txnPrm.fqns {
 		objName, err := cmn.PromotedObjDstName(fqn, txnPrm.dirFQN, txnPrm.msg.ObjName)
 		if err != nil {
 			return err
 		}
-		// file share => promote only the part that lands locally
-		if isFileShare {
+		// file share == true: promote only the part of the txnPrm.fqns that "lands" locally
+		if confirmedFileShare {
 			si, err := cluster.HrwTarget(c.bck.MakeUname(objName), smap)
 			if err != nil {
 				return err
