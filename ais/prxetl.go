@@ -151,6 +151,11 @@ func (p *proxy) handleETLDelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+
+	if p.forwardCP(w, r, nil, "delete ETL") {
+		return
+	}
+
 	etlID := apiItems[0]
 	if err := cos.ValidateEtlID(etlID); err != nil {
 		p.writeErr(w, r, err)
@@ -209,6 +214,7 @@ func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) (
 			pre:   _addETLPre,
 			final: p._syncEtlMDFinal,
 			msg:   msg,
+			wait:  true,
 		}
 		p.owner.etl.modify(ctx)
 	}
