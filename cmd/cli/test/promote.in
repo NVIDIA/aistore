@@ -4,11 +4,13 @@ ais bucket create ais://$BUCKET // IGNORE
 rm -rf /tmp/prm // IGNORE
 mkdir -p /tmp/prm && echo 012345 > /tmp/prm/obj && echo 012345 > /tmp/prm/discard
 ais object promote /tmp/prm/obj ais://$BUCKET/one/one --delete-src=false --target-id $RANDOM_TARGET
+ls /tmp/prm/obj
 ais object promote /tmp/prm/discard ais://$BUCKET/two/ --delete-src=true  --target-id $RANDOM_TARGET
+ls /tmp/prm/discard // FAIL "such file or directory"
 ais object promote /tmp/prm/ ais://$BUCKET/three --delete-src=false --target-id $RANDOM_TARGET
-ais object promote /tmp/prm ais://$BUCKET/fourth --delete-src=false --target-id $RANDOM_TARGET
+ais object promote /tmp/prm ais://$BUCKET/fourth --target-id $RANDOM_TARGET
 ais object promote /tmp/prm ais://$BUCKET/fifth/ --delete-src=false --target-id $RANDOM_TARGET
-ais object promote /tmp/prm/ ais://$BUCKET/sixth/ --delete-src=false --target-id $RANDOM_TARGET
+ais object promote /tmp/prm/ ais://$BUCKET/sixth/ --target-id $RANDOM_TARGET
 ais bucket ls ais://$BUCKET
 rm -rf /tmp/prm // IGNORE
 ais bucket rm ais://$BUCKET // IGNORE
@@ -27,5 +29,19 @@ for f in {11..15}; do echo "$RANDOM -- $RANDOM" > /tmp/prm/subdir/$f.txt; done
 ais object promote -r /tmp/prm ais://$BUCKET
 ais ls ais://$BUCKET --name-only -H
 
-rm -rf /tmp/prm // IGNORE
-ais bucket rm ais://$BUCKET // IGNORE
+# --overwrite-dst
+
+echo "QQQQQQQQQQQQ" > /tmp/prm/qq; ais object promote /tmp/prm/qq ais://$BUCKET --overwrite-dst > /dev/null; ais ls ais://$BUCKET -H --regex=qq
+echo "" > /tmp/prm/qq; ais object promote /tmp/prm/qq ais://$BUCKET > /dev/null; ais ls ais://$BUCKET -H --regex=qq
+echo "" > /tmp/prm/qq; ais object promote /tmp/prm/qq ais://$BUCKET --overwrite-dst > /dev/null; ais ls ais://$BUCKET -H --regex=qq
+echo "QQQQQQQQQQQQ" > /tmp/prm/qq; ais object promote /tmp/prm/qq ais://$BUCKET --overwrite-dst=false > /dev/null; ais ls ais://$BUCKET -H --regex=qq
+echo "QQQQQQQQQQQQ" > /tmp/prm/qq; ais object promote /tmp/prm/qq ais://$BUCKET --overwrite-dst=true > /dev/null; ais ls ais://$BUCKET -H --regex=qq
+ls /tmp/prm/qq
+
+# delete-src when not overwring
+echo "" > /tmp/prm/qq; ais object promote /tmp/prm/qq ais://$BUCKET --delete-src > /dev/null
+ls /tmp/prm/qq // FAIL "such file or directory"
+ais ls ais://$BUCKET -H --regex=qq
+
+rm -rf /tmp/prm > /dev/null
+ais bucket rm ais://$BUCKET > /dev/null

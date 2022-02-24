@@ -1,4 +1,5 @@
 ^.*promoted.*"/tmp/prm/obj".*=>.*$
+/tmp/prm/obj
 ^.*promoted.*"/tmp/prm/discard".*=>.*$
 ^.*promoted.*"/tmp/prm/".*=>.*$
 ^.*promoted.*"/tmp/prm".*=>.*$
@@ -24,3 +25,10 @@ subdir/12.txt
 subdir/13.txt
 subdir/14.txt
 subdir/15.txt
+qq  13B
+qq  13B
+qq  1B
+qq  1B
+qq  13B
+/tmp/prm/qq
+qq  13B
