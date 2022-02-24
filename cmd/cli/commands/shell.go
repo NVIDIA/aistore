@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
@@ -136,8 +135,7 @@ func daemonConfigSectionCompletions(c *cli.Context) {
 	}
 
 	if c.NArg() == 1 {
-		// Daemon already given as argument; suggest only config
-		suggestConfigSection()
+		suggestConfigSection(c)
 		return
 	}
 
@@ -145,6 +143,30 @@ func daemonConfigSectionCompletions(c *cli.Context) {
 	fmt.Println(subcmdCluster)
 	fmt.Println(subcmdCLI)
 	suggestDaemon(completeAllDaemons)
+}
+
+func suggestConfigSection(c *cli.Context) {
+	// Daemon already given as argument; suggest only config
+	props := make([]string, 0, 32)
+	err := cmn.IterFields(cmn.ClusterConfig{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
+		section := strings.Split(uniqueTag, ".")[0]
+		props = append(props, section)
+		return nil, false
+	})
+	cos.AssertNoErr(err)
+
+	if c.Args().Get(c.NArg()-1) != "cluster" {
+		err := cmn.IterFields(cmn.LocalConfig{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
+			section := strings.Split(uniqueTag, ".")[0]
+			props = append(props, section)
+			return nil, false
+		})
+		cos.AssertNoErr(err)
+	}
+
+	for _, prop := range props {
+		fmt.Println(prop)
+	}
 }
 
 func cluConfigCompletions(c *cli.Context) {
@@ -169,12 +191,6 @@ func suggestDaemon(what daemonKindCompletion) {
 		for dae := range smap.Tmap {
 			fmt.Println(cluster.Tname(dae))
 		}
-	}
-}
-
-func suggestConfigSection() {
-	for _, k := range templates.ConfigSectionTmpl {
-		fmt.Println(k)
 	}
 }
 

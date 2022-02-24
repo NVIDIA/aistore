@@ -438,13 +438,6 @@ func fmtObjStatus(obj *cmn.BucketEntry) string {
 	}
 }
 
-var ConfigSectionTmpl = []string{
-	"global", "mirror", "log", "client", "periodic", "timeout", "proxy",
-	"lru", "disk", "rebalance", "checksum", "versioning", "fspath",
-	"testfs", "network", "fshc", "auth", "keepalive", "downloader",
-	cmn.DSortNameLowercase, "compression", "ec", "replication",
-}
-
 func fmtObjIsCached(obj *cmn.BucketEntry) string {
 	return FmtBool(obj.CheckExists())
 }
