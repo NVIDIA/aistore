@@ -333,6 +333,9 @@ func parseBckObjectURI(c *cli.Context, uri string, optObjName ...bool) (bck cmn.
 	}
 	bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
 	if err != nil {
+		if len(uri) > 1 && uri[:2] == "--" { // FIXME: needed smth like c.LooksLikeFlag
+			return bck, objName, incorrectUsageMsg(c, "misplaced flag %q", uri)
+		}
 		return bck, objName, cannotExecuteError(c, err)
 	}
 

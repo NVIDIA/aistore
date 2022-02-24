@@ -243,6 +243,7 @@ func setupCommandHelp(commands []cli.Command) {
 		}
 		command.OnUsageError = incorrectUsageHandler
 
+		// recursively
 		setupCommandHelp(command.Subcommands)
 	}
 }

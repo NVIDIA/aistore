@@ -24,7 +24,7 @@ var (
 			lengthFlag,
 			archpathFlag,
 			cksumFlag,
-			isCachedFlag,
+			checkCachedFlag,
 		},
 		commandPut: append(
 			supportedCksumFlags,
@@ -53,8 +53,9 @@ var (
 		commandPromote: {
 			recursiveFlag,
 			overwriteFlag,
+			notFileShareFlag,
 			deleteSrcFlag,
-			targetFlag,
+			targetIDFlag,
 			verboseFlag,
 		},
 		commandConcat: {
@@ -126,7 +127,7 @@ var (
 			},
 			{
 				Name:         commandPromote,
-				Usage:        "promote (ie., copy over and convert) files and directories as ais objects",
+				Usage:        "promote files and directories to ais (ie., replicate files and convert them to objects)",
 				ArgsUsage:    putPromoteObjectArgument,
 				Flags:        objectCmdsFlags[commandPromote],
 				Action:       promoteHandler,
@@ -372,22 +373,23 @@ func concatHandler(c *cli.Context) (err error) {
 }
 
 func promoteHandler(c *cli.Context) (err error) {
-	var (
-		bck         cmn.Bck
-		objName     string
-		fqn         = c.Args().Get(0)
-		fullObjName = c.Args().Get(1)
-	)
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "file|directory to promote")
+		return missingArgumentsError(c, "source file|directory to promote")
 	}
-	if c.NArg() < 2 {
-		return missingArgumentsError(c, "object name in the form bucket/[object]")
-	}
+	fqn := c.Args().Get(0)
 	if !filepath.IsAbs(fqn) {
 		return incorrectUsageMsg(c, "promoted source (file or directory) must have an absolute path")
 	}
 
+	if c.NArg() < 2 {
+		return missingArgumentsError(c, "destination in the form bucket/[object]")
+	}
+
+	var (
+		bck         cmn.Bck
+		objName     string
+		fullObjName = c.Args().Get(1)
+	)
 	if bck, objName, err = parseBckObjectURI(c, fullObjName, true /*optObjName*/); err != nil {
 		return
 	}

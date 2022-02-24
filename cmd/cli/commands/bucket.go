@@ -187,7 +187,7 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 	if err != nil {
 		return err
 	}
-	if flagIsSet(c, cachedFlag) {
+	if flagIsSet(c, listCachedFlag) {
 		msg.SetFlag(cmn.LsPresent)
 	}
 	if listArch {
@@ -287,7 +287,7 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 	ctx := api.NewProgressContext(cb, longCommandTime)
 
 	// retrieve the entire bucket list and print it
-	objList, err := api.ListObjectsWithOpts(defaultAPIParams, bck, msg, uint(limit), ctx, false)
+	objList, err := api.ListObjectsWithOpts(defaultAPIParams, bck, msg, uint(limit), ctx, false /*don't-lookup-remote*/)
 	if err != nil {
 		return err
 	}

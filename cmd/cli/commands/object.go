@@ -80,7 +80,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 
 	// just check if remote object is present (do not execute GET)
 	// TODO: archive
-	if flagIsSet(c, isCachedFlag) {
+	if flagIsSet(c, checkCachedFlag) {
 		return objectCheckExists(c, bck, objName)
 	}
 
@@ -155,19 +155,20 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 
 func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 	var (
-		target = parseStrFlag(c, targetFlag)
+		target = parseStrFlag(c, targetIDFlag)
 		recurs = flagIsSet(c, recursiveFlag)
 	)
 	promoteArgs := &api.PromoteArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
 		PromoteArgs: cluster.PromoteArgs{
-			DaemonID:     target,
-			ObjName:      objName,
-			SrcFQN:       fqn,
-			Recursive:    recurs,
-			OverwriteDst: c.Bool(overwriteFlag.GetName()), // TODO -- FIXME: use flagIsSet here and elsewhere
-			DeleteSrc:    c.Bool(deleteSrcFlag.GetName()), // ditto
+			DaemonID:          target,
+			ObjName:           objName,
+			SrcFQN:            fqn,
+			Recursive:         recurs,
+			SrcIsNotFileShare: flagIsSet(c, notFileShareFlag),
+			OverwriteDst:      flagIsSet(c, overwriteFlag),
+			DeleteSrc:         flagIsSet(c, deleteSrcFlag),
 		},
 	}
 	xactID, err := api.Promote(promoteArgs)

@@ -17,7 +17,7 @@ var (
 	storageCmdFlags = map[string][]cli.Flag{
 		subcmdStgSummary: append(
 			longRunFlags,
-			cachedFlag,
+			listCachedFlag,
 			fastFlag,
 			verboseFlag,
 		),

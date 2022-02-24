@@ -41,7 +41,7 @@ Get an object from a bucket.  If a local file of the same name exists, the local
 | `--offset` | `string` | Read offset, which can end with size suffix (k, MB, GiB, ...) | `""` |
 | `--length` | `string` | Read length, which can end with size suffix (k, MB, GiB, ...) |  `""` |
 | `--checksum` | `bool` | Validate the checksum of the object | `false` |
-| `--is-cached` | `bool` | Check if the object is cached locally, without downloading it. | `false` |
+| `--check-cached` | `bool` | Check if object from a remote bucket is present (ie., cached) in the cluster. | `false` |
 
 `OUT_FILE`: filename in an existing directory or `-` for `stdout`
 
@@ -90,7 +90,7 @@ $ ais object get aws://imagenet/imagenet_train-000010.tgz -
 
 We say that "an object is _cached_" to indicate two separate things:
 
-* The object was originally downloaded from a remote bucket, a bucket in a remote AIS cluster, or a HTTP(s) based dataset;
+* The object was originally downloaded from a remote (e.g., 3rd party Cloud) bucket, a bucket in a remote AIS cluster, or a HTTP(s) based dataset;
 * The object is stored in the AIS cluster.
 
 In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go to the object's original location.
@@ -99,7 +99,7 @@ Being "cached" does not have any implications on an object's persistence: "cache
 The following example checks whether `imagenet_train-000010.tgz` is "cached" in the bucket `imagenet`:
 
 ```console
-$ ais object get --is-cached ais://imagenet/imagenet_train-000010.tgz
+$ ais object get --check-cached ais://imagenet/imagenet_train-000010.tgz
 Cached: true
 ```
 

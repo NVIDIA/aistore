@@ -385,12 +385,12 @@ var (
 	templateFlag = cli.StringFlag{Name: "template", Usage: "template for matching object names, e.g.: 'shard-{900..999}.tar'"}
 
 	// Object
-	offsetFlag   = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
-	lengthFlag   = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
-	isCachedFlag = cli.BoolFlag{Name: "is-cached", Usage: "check if object from a remote bucket is present (cached)"}
-	cachedFlag   = cli.BoolFlag{
+	offsetFlag      = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
+	lengthFlag      = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
+	checkCachedFlag = cli.BoolFlag{Name: "check-cached", Usage: "check if object from a remote bucket is present (ie., cached) in the cluster"}
+	listCachedFlag  = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "list only those objects from a remote bucket that are present locally (ie., cached)",
+		Usage: "list only those objects from a remote bucket that are present (ie., cached) in the cluster",
 	}
 	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
@@ -398,7 +398,12 @@ var (
 
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
-	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target (ID) designated to carry out the entire operation"}
+	targetIDFlag  = cli.StringFlag{Name: "target-id", Usage: "ais target designated to carry out the entire operation"}
+
+	notFileShareFlag = cli.BoolFlag{
+		Name:  "not-file-share",
+		Usage: "each target must act autonomously skipping file-share auto-detection and promoting the entire source (as seen from _the_ target)",
+	}
 
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 	chunkSizeFlag = cli.StringFlag{

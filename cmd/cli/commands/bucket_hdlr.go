@@ -61,12 +61,12 @@ var (
 			pagedFlag,
 			maxPagesFlag,
 			startAfterFlag,
-			cachedFlag,
+			listCachedFlag,
 			listArchFlag,
 			nameOnlyFlag,
 		},
 		subcmdSummary: {
-			cachedFlag,
+			listCachedFlag,
 			fastFlag,
 			validateFlag,
 			verboseFlag,
@@ -301,7 +301,7 @@ func showBucketSizes(c *cli.Context) error {
 		return err
 	}
 
-	summaries, err := fetchSummaries(queryBcks, flagIsSet(c, fastFlag), flagIsSet(c, cachedFlag))
+	summaries, err := fetchSummaries(queryBcks, flagIsSet(c, fastFlag), flagIsSet(c, listCachedFlag))
 	if err != nil {
 		return err
 	}
@@ -455,7 +455,7 @@ func evictHandler(c *cli.Context) (err error) {
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			if objName != "" {
-				return incorrectUsageMsg(c, "object name (%q) not supported when list or template flag provided", objName)
+				return incorrectUsageMsg(c, "object name (%q) cannot be used together with --list and/or --template flags", objName)
 			}
 			// List or range operation on a given bucket.
 			return listOrRangeOp(c, commandEvict, bck)
