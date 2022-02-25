@@ -134,7 +134,9 @@ func daemonConfigSectionCompletions(c *cli.Context) {
 	if c.NArg() >= 2 {
 		return
 	}
-
+	if c.Args().First() == subcmdCLI {
+		return
+	}
 	if c.NArg() == 1 {
 		suggestConfigSection(c)
 		return
@@ -148,24 +150,24 @@ func daemonConfigSectionCompletions(c *cli.Context) {
 
 func suggestConfigSection(c *cli.Context) {
 	// Daemon already given as argument; suggest only config
-	props := make([]string, 0, 32)
+	props := cos.NewStringSet()
 	err := cmn.IterFields(cmn.ClusterConfig{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 		section := strings.Split(uniqueTag, ".")[0]
-		props = append(props, section)
+		props.Add(section)
 		return nil, false
 	})
 	cos.AssertNoErr(err)
 
-	if c.Args().Get(c.NArg()-1) != "cluster" {
+	if c.Args().Get(c.NArg()-1) != subcmdCluster {
+		// add node's local config: fspath, network, etc.
 		err := cmn.IterFields(cmn.LocalConfig{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 			section := strings.Split(uniqueTag, ".")[0]
-			props = append(props, section)
+			props.Add(section)
 			return nil, false
 		})
 		cos.AssertNoErr(err)
 	}
-
-	for _, prop := range props {
+	for prop := range props {
 		fmt.Println(prop)
 	}
 }
