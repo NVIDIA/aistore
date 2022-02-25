@@ -28,7 +28,8 @@ const (
 	commandSearch    = "search"
 	commandETL       = apc.ETL
 	commandSource    = "source"
-
+	commandLog       = "log"
+	commandRebalance = "rebalance"
 	commandCat       = "cat"
 	commandConcat    = "concat"
 	commandCopy      = "cp"

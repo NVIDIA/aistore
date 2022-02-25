@@ -229,6 +229,7 @@ var (
 		Action:       showRemoteAISHandler,
 		BashComplete: daemonCompletions(completeTargets),
 	}
+
 	showCmdLog = cli.Command{
 		Name:         subcmdShowLog,
 		Usage:        "show log",
@@ -237,6 +238,7 @@ var (
 		Action:       showDaemonLogHandler,
 		BashComplete: daemonCompletions(completeAllDaemons),
 	}
+
 	showCmdJob = cli.Command{
 		Name:  subcmdShowJob,
 		Usage: "show running and completed jobs (xactions)",

@@ -34,6 +34,7 @@ var (
 		Name:  commandStorage,
 		Usage: "monitor and manage clustered storage",
 		Subcommands: []cli.Command{
+			makeAlias(showCmdStorage, "", true, commandShow), // alias for `ais show`
 			showCmdStgSummary,
 			{
 				Name:         subcmdStgValidate,

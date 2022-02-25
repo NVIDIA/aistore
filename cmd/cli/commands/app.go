@@ -211,6 +211,9 @@ func (aisCLI *AISCLI) setupCommands() {
 		advancedCmd,
 		storageCmd,
 		archCmd,
+		logCmd,
+		rebalanceCmd,
+		remClusterCmd,
 		aisCLI.getAliasCmd(),
 	}
 
