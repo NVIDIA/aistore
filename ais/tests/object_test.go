@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -52,7 +53,7 @@ func TestObjectInvalidName(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		bck        = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -188,7 +189,7 @@ func TestHttpProviderObjectGet(t *testing.T) {
 
 	// get using the HTTP API
 	options.Query = make(url.Values, 1)
-	options.Query.Set(cmn.QparamOrigURL, httpObjectURL)
+	options.Query.Set(apc.QparamOrigURL, httpObjectURL)
 	_, err := api.GetObject(baseParams, hbo.Bck, httpObjectName, options)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpObjectOutput, "bad content (expected:%s got:%s)", httpObjectOutput, w.String())
@@ -196,7 +197,7 @@ func TestHttpProviderObjectGet(t *testing.T) {
 	// get another object using /v1/objects/bucket-name/object-name endpoint
 	w.Reset()
 	options.Query = make(url.Values, 1)
-	options.Query.Set(cmn.QparamOrigURL, httpAnotherObjectURL)
+	options.Query.Set(apc.QparamOrigURL, httpAnotherObjectURL)
 	_, err = api.GetObject(baseParams, hbo.Bck, httpAnotherObjectName, options)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpAnotherObjectOutput, "bad content (expected:%s got:%s)", httpAnotherObjectOutput, w.String())
@@ -223,7 +224,7 @@ func TestAppendObject(t *testing.T) {
 				baseParams = tutils.BaseAPIParams(proxyURL)
 				bck        = cmn.Bck{
 					Name:     testBucketName,
-					Provider: cmn.ProviderAIS,
+					Provider: apc.ProviderAIS,
 				}
 				objName = "test/obj1"
 
@@ -290,7 +291,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bckLocal   = cmn.Bck{
 			Name:     cliBck.Name,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		bckRemote  = cliBck
 		fileName1  = "mytestobj1.txt"
@@ -337,28 +338,28 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("PrefetchList %d\n", len(files))
 	prefetchListID, err := api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args := api.XactReqArgs{ID: prefetchListID, Kind: cmn.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("PrefetchRange\n")
 	prefetchRangeID, err := api.PrefetchRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: prefetchRangeID, Kind: cmn.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: prefetchRangeID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EvictList\n")
 	evictListID, err := api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: evictListID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EvictRange\n")
 	evictRangeID, err := api.EvictRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: evictRangeID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: evictRangeID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -388,13 +389,13 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	// Prefetch/Evict should work
 	prefetchListID, err = api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: prefetchListID, Kind: cmn.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	evictListID, err = api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: evictListID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -402,7 +403,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
 	deleteID, err := api.DeleteList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: deleteID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -410,7 +411,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
 	deleteID, err = api.DeleteList(baseParams, bckLocal, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: deleteID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -440,7 +441,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 		bckLocal = cmn.Bck{
 			Name:     cliBck.Name,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		bckRemote  = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -649,7 +650,7 @@ func TestHeadBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -710,7 +711,7 @@ func TestHeadNonexistentBucket(t *testing.T) {
 
 	bck := cmn.Bck{
 		Name:     bucket,
-		Provider: cmn.ProviderAIS,
+		Provider: apc.ProviderAIS,
 	}
 
 	_, err = api.HeadBucket(baseParams, bck)
@@ -845,7 +846,7 @@ func testEvictRemoteAISBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
 	bck := cmn.Bck{
 		Name:     cos.RandString(10),
-		Provider: cmn.ProviderAIS,
+		Provider: apc.ProviderAIS,
 		Ns: cmn.Ns{
 			UUID: tutils.RemoteCluster.UUID,
 		},
@@ -889,7 +890,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	tassert.Fatalf(t, bProps.Mirror.Enabled, "test property hasn't changed")
 
 	// Wait for async mirroring to finish
-	flt := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck}
+	flt := api.XactReqArgs{Kind: apc.ActMakeNCopies, Bck: m.bck}
 	api.WaitForXactionIdle(baseParams, flt)
 	time.Sleep(time.Second)
 
@@ -939,7 +940,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		m = ioContext{
 			t: t,
 			bck: cmn.Bck{
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Name:     cos.RandString(15),
 				Props:    &cmn.BucketProps{BID: 2},
 			},
@@ -951,7 +952,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		_          = mock.NewTarget(cluster.NewBaseBownerMock(
 			cluster.NewBck(
-				m.bck.Name, cmn.ProviderAIS, cmn.NsGlobal,
+				m.bck.Name, apc.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 1},
 			),
 			cluster.NewBckEmbed(m.bck),
@@ -1353,7 +1354,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bckLocal   = cmn.Bck{
 			Name:     cliBck.Name,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		basefileName = "mytestobj.txt"
 		objData      = []byte("I am object data")
@@ -1489,10 +1490,10 @@ func TestOperationsWithRanges(t *testing.T) {
 					if evict {
 						xactID, err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
 						msg.Flags = cmn.LsPresent
-						kind = cmn.ActEvictObjects
+						kind = apc.ActEvictObjects
 					} else {
 						xactID, err = api.DeleteRange(baseParams, bck.Bck, test.rangeStr)
-						kind = cmn.ActDeleteObjects
+						kind = apc.ActDeleteObjects
 					}
 					if err != nil {
 						t.Error(err)

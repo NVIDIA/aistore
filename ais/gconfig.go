@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -184,7 +185,7 @@ func (*configOwner) persistBytes(payload msPayload, globalFpath string) (done bo
 func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
 	co.Lock()
 	clone := cmn.GCO.Clone()
-	err = cmn.SetConfigInMem(toUpdate, clone, cmn.Daemon)
+	err = cmn.SetConfigInMem(toUpdate, clone, apc.Daemon)
 	if err != nil {
 		co.Unlock()
 		return

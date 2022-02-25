@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
@@ -37,13 +38,13 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:      commandGenShards,
-				Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", cmn.DSortName),
+				Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", apc.DSortName),
 				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
 				Flags:     advancedCmdsFlags[commandGenShards],
 				Action:    genShardsHandler,
 			},
 			{
-				Name:         cmn.ActResilver,
+				Name:         apc.ActResilver,
 				Usage:        "start resilvering objects across all drives on one or all targets",
 				ArgsUsage:    optionalTargetIDArgument,
 				Flags:        startCmdsFlags[subcmdStartXaction],
@@ -193,7 +194,7 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	return startXaction(c, cmn.ActLoadLomCache, bck, "")
+	return startXaction(c, apc.ActLoadLomCache, bck, "")
 }
 
 func removeNodeFromSmap(c *cli.Context) (err error) {

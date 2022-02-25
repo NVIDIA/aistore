@@ -6,6 +6,7 @@ package tests
 
 import (
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	. "github.com/onsi/ginkgo"
@@ -42,10 +43,10 @@ var _ = Describe("IterFields", func() {
 			},
 			Entry("list BucketProps fields",
 				cmn.BucketProps{
-					Provider: cmn.ProviderAIS,
+					Provider: apc.ProviderAIS,
 					BackendBck: cmn.Bck{
 						Name:     "name",
-						Provider: cmn.ProviderGoogle,
+						Provider: apc.ProviderGoogle,
 					},
 					EC: cmn.ECConf{
 						Enabled:      true,
@@ -60,10 +61,10 @@ var _ = Describe("IterFields", func() {
 					},
 				},
 				map[string]interface{}{
-					"provider": cmn.ProviderAIS,
+					"provider": apc.ProviderAIS,
 
 					"backend_bck.name":     "name",
-					"backend_bck.provider": cmn.ProviderGoogle,
+					"backend_bck.provider": apc.ProviderGoogle,
 
 					"mirror.enabled":      false,
 					"mirror.copies":       int64(0),
@@ -313,7 +314,7 @@ var _ = Describe("IterFields", func() {
 				"mirror.enabled": true,
 			}),
 			Entry("readonly field", &cmn.BucketProps{}, map[string]interface{}{
-				"provider": cmn.ProviderAIS,
+				"provider": apc.ProviderAIS,
 			}),
 			Entry("field not found", &Foo{}, map[string]interface{}{
 				"foo.bar": 2,

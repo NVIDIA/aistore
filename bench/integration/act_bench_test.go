@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -67,7 +68,7 @@ func BenchmarkECEncode(b *testing.B) {
 			objCount := int(bckSize/size) + 1
 			bck := cmn.Bck{
 				Name:     fmt.Sprintf("bench-ec-enc-%d", len(objSizes)*ecIdx+szIdx),
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 			}
 			tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 			fillBucket(b, proxyURL, bck, uint64(size), objCount)
@@ -84,7 +85,7 @@ func BenchmarkECEncode(b *testing.B) {
 				_, err := api.SetBucketProps(baseParams, bck, bckProps)
 				tassert.CheckFatal(b, err)
 
-				reqArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: bck, Timeout: ecTime}
+				reqArgs := api.XactReqArgs{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
 				_, err = api.WaitForXactionIC(baseParams, reqArgs)
 				tassert.CheckFatal(b, err)
 			})
@@ -109,7 +110,7 @@ func BenchmarkECRebalance(b *testing.B) {
 			objCount := int(bckSize/size) + 1
 			bck := cmn.Bck{
 				Name:     fmt.Sprintf("bench-reb-%d", len(objSizes)*ecIdx+szIdx),
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 			}
 			tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 
@@ -135,7 +136,7 @@ func BenchmarkECRebalance(b *testing.B) {
 				_, err := api.SetBucketProps(baseParams, bck, bckProps)
 				tassert.CheckFatal(b, err)
 
-				reqArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: bck, Timeout: ecTime}
+				reqArgs := api.XactReqArgs{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
 				_, err = api.WaitForXactionIC(baseParams, reqArgs)
 				tassert.CheckFatal(b, err)
 
@@ -157,7 +158,7 @@ func BenchmarkRebalance(b *testing.B) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     "bench-reb",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 

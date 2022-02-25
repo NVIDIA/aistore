@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -34,8 +35,8 @@ func TestCopyObjRange(t *testing.T) {
 	)
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
-		bckFrom    = cmn.Bck{Name: "cp-range-from", Provider: cmn.ProviderAIS}
-		bckTo      = cmn.Bck{Name: "cp-range-to", Provider: cmn.ProviderAIS}
+		bckFrom    = cmn.Bck{Name: "cp-range-from", Provider: apc.ProviderAIS}
+		bckTo      = cmn.Bck{Name: "cp-range-to", Provider: apc.ProviderAIS}
 		objList    = make([]string, 0, objCnt)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		xactID     string
@@ -68,7 +69,7 @@ func TestCopyObjRange(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	wargs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyObjects}
+	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyObjects}
 	api.WaitForXactionIdle(baseParams, wargs)
 
 	msg := &cmn.ListObjsMsg{Prefix: "test/"}
@@ -102,7 +103,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			prefix:  "copy-multiobj/",
 			ordered: true,
 		}
-		toBck     = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
+		toBck     = cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
 		numToCopy = cos.Min(m.num/2, 13)
 		fmtRange  = "%s{%d..%d}"
 		subtests  = []struct {
@@ -157,7 +158,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			if erv.Load() != nil {
 				tassert.CheckFatal(t, erv.Load().(error))
 			}
-			wargs := api.XactReqArgs{Kind: cmn.ActCopyObjects, Bck: m.bck}
+			wargs := api.XactReqArgs{Kind: apc.ActCopyObjects, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
 			msg := &cmn.ListObjsMsg{Prefix: m.prefix}
@@ -186,8 +187,8 @@ func TestETLMultiObj(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		bck   = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
-		toBck = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
+		bck   = cmn.Bck{Name: "etloffline", Provider: apc.ProviderAIS}
+		toBck = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: apc.ProviderAIS}
 	)
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
@@ -244,7 +245,7 @@ func testETLMultiObj(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRang
 	xactID, err := api.ETLMultiObj(baseParams, fromBck, tcoMsg)
 	tassert.CheckFatal(t, err)
 
-	wargs := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLObjects}
+	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActETLObjects}
 	err = api.WaitForXactionIdle(baseParams, wargs)
 	tassert.CheckFatal(t, err)
 

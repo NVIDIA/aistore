@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -59,7 +60,7 @@ func (p *mncFactory) Start() error {
 	return nil
 }
 
-func (*mncFactory) Kind() string        { return cmn.ActMakeNCopies }
+func (*mncFactory) Kind() string        { return apc.ActMakeNCopies }
 func (p *mncFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *mncFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
@@ -92,7 +93,7 @@ func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC)
 		DoLoad:   mpather.Load, // Required to fetch `NumCopies()` and skip copies.
 		Throttle: true,
 	}
-	r.BckJog.Init(p.UUID(), cmn.ActMakeNCopies, bck, mpopts)
+	r.BckJog.Init(p.UUID(), apc.ActMakeNCopies, bck, mpopts)
 	return
 }
 

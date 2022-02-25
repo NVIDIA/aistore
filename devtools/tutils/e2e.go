@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -36,7 +37,7 @@ func destroyMatchingBuckets(subName string) (err error) {
 	baseParams := BaseAPIParams(proxyURL)
 
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{
-		Provider: cmn.ProviderAIS,
+		Provider: apc.ProviderAIS,
 	})
 	if err != nil {
 		return err
@@ -77,7 +78,7 @@ func retrieveBackendProviders() []string {
 	for b := range config.Backend.Providers {
 		set.Add(b)
 	}
-	set.Add(cmn.ProviderAIS)
+	set.Add(apc.ProviderAIS)
 	backends := set.ToSlice()
 	sort.Strings(backends)
 	return backends

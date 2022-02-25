@@ -7,6 +7,7 @@ package cluster
 import (
 	"fmt"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/xoshiro256"
@@ -50,7 +51,7 @@ func _hrwTarget(uname string, smap *Smap, skipMaint bool) (si *Snode, err error)
 		}
 	}
 	if si == nil {
-		err = cmn.NewErrNoNodes(cmn.Target)
+		err = cmn.NewErrNoNodes(apc.Target)
 	}
 	return
 }
@@ -102,7 +103,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		}
 	}
 	if pi == nil {
-		err = cmn.NewErrNoNodes(cmn.Proxy)
+		err = cmn.NewErrNoNodes(apc.Proxy)
 	}
 	return
 }
@@ -147,7 +148,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		}
 	}
 	if si == nil {
-		err = cmn.NewErrNoNodes(cmn.Target)
+		err = cmn.NewErrNoNodes(apc.Target)
 	}
 	return
 }

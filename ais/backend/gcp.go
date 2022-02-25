@@ -19,6 +19,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -101,18 +102,18 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, err
 				err, projectIDEnvVar, credPathEnvVar, gcpp.projectID)
 			return nil, errors.New(details)
 		}
-		return nil, cmn.NewErrFailedTo(cmn.ProviderGoogle, "create", "http transport", err)
+		return nil, cmn.NewErrFailedTo(apc.ProviderGoogle, "create", "http transport", err)
 	}
 	opts = append(opts, option.WithHTTPClient(&http.Client{Transport: transport}))
 	// create HTTP client
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
-		return nil, cmn.NewErrFailedTo(cmn.ProviderGoogle, "create", "client", err)
+		return nil, cmn.NewErrFailedTo(apc.ProviderGoogle, "create", "client", err)
 	}
 	return client, nil
 }
 
-func (*gcpProvider) Provider() string { return cmn.ProviderGoogle }
+func (*gcpProvider) Provider() string { return apc.ProviderGoogle }
 
 // https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters
 func (*gcpProvider) MaxPageSize() uint { return 1000 }
@@ -140,10 +141,10 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 		return
 	}
 	bckProps = make(cos.SimpleKVs)
-	bckProps[cmn.HdrBackendProvider] = cmn.ProviderGoogle
+	bckProps[apc.HdrBackendProvider] = apc.ProviderGoogle
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
-	bckProps[cmn.HdrBucketVerEnabled] = "true"
+	bckProps[apc.HdrBucketVerEnabled] = "true"
 	return
 }
 
@@ -222,12 +223,12 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 			break
 		}
 		if err != nil {
-			errCode, err = gcpErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderGoogle})
+			errCode, err = gcpErrorToAISError(err, &cmn.Bck{Provider: apc.ProviderGoogle})
 			return
 		}
 		bcks = append(bcks, cmn.Bck{
 			Name:     battrs.Name,
-			Provider: cmn.ProviderGoogle,
+			Provider: apc.ProviderGoogle,
 		})
 		if verbose {
 			glog.Infof("[bucket_names] %s: created %v, versioning %t",
@@ -253,7 +254,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 		return
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderGoogle)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderGoogle)
 	oa.Size = attrs.Size
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
 		oa.SetCustomKey(cmn.VersionObjMD, v)
@@ -321,7 +322,7 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 	}
 
 	// custom metadata
-	lom.SetCustomKey(cmn.SourceObjMD, cmn.ProviderGoogle)
+	lom.SetCustomKey(cmn.SourceObjMD, apc.ProviderGoogle)
 	if cksumType, ok := attrs.Metadata[gcpChecksumType]; ok {
 		if cksumValue, ok := attrs.Metadata[gcpChecksumVal]; ok {
 			lom.SetCksum(cos.NewCksum(cksumType, cksumValue))

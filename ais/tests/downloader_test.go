@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -397,7 +398,7 @@ func TestDownloadTimeout(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		objName    = "object"
 		link       = "https://storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar"
@@ -468,7 +469,7 @@ func TestDownloadRemote(t *testing.T) {
 			srcBck: cliBck,
 			dstBck: cmn.Bck{
 				Name:     cos.RandString(5),
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 			},
 		},
 	}
@@ -507,7 +508,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("evicting remote bucket...")
 			xactID, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+			args := api.XactReqArgs{ID: xactID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, args)
 			tassert.CheckFatal(t, err)
 
@@ -538,7 +539,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("evicting remote bucket...")
 			xactID, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			args = api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+			args = api.XactReqArgs{ID: xactID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, args)
 			tassert.CheckFatal(t, err)
 
@@ -572,7 +573,7 @@ func TestDownloadStatus(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		baseParams = tutils.BaseAPIParams()
 		m          = ioContext{t: t}
@@ -623,7 +624,7 @@ func TestDownloadStatusError(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		files = map[string]string{
 			"invalidURL":   "http://some.invalid.url",
@@ -673,7 +674,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		objNameFirst  = "object-first"
 		objNameSecond = "object-second"
@@ -712,7 +713,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		objNameFirst  = "linkFirst"
 		objNameSecond = "linkSecond"
@@ -750,7 +751,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 
 		template        = "storage.googleapis.com/minikube/iso/minikube-v0.{21..25..2}.0.iso.sha256"
@@ -789,7 +790,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 
 	bck := cmn.Bck{
 		Name:     bucket,
-		Provider: cmn.ProviderAIS,
+		Provider: apc.ProviderAIS,
 	}
 
 	_, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, obj)
@@ -803,7 +804,7 @@ func TestDownloadMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     cos.RandString(15),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		objsCnt  = 100
 		template = "storage.googleapis.com/nvdata-openimages/openimages-train-{000000..000050}.tar"
@@ -880,7 +881,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		p = cmn.DefaultBckProps(bck)
 
@@ -926,7 +927,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		p = cmn.DefaultBckProps(bck)
 
@@ -968,7 +969,7 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		dlBody = downloader.DlBackendBody{
 			DlBase: downloader.DlBase{Bck: bck},
@@ -998,7 +999,7 @@ func TestDownloadSkipObject(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL(t)
 		bck      = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 
 		objName = cos.RandString(10)
@@ -1027,7 +1028,7 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		dlBody = downloader.DlBackendBody{
 			DlBase: downloader.DlBase{Bck: bck},
@@ -1063,7 +1064,7 @@ func TestDownloadSync(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		dlBody = downloader.DlBackendBody{
 			DlBase: downloader.DlBase{Bck: bck},
@@ -1138,7 +1139,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -1197,7 +1198,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 
 		template = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
@@ -1293,7 +1294,7 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 

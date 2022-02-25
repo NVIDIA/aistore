@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -37,7 +38,7 @@ type (
 var _ cluster.BackendProvider = (*hdfsProvider)(nil)
 
 func NewHDFS(t cluster.Target) (cluster.BackendProvider, error) {
-	providerConf, ok := cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderHDFS)
+	providerConf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.ProviderHDFS)
 	debug.Assert(ok)
 	hdfsConf := providerConf.(cmn.BackendConfHDFS)
 
@@ -68,7 +69,7 @@ func hdfsErrorToAISError(err error) (int, error) {
 	return http.StatusBadRequest, err
 }
 
-func (*hdfsProvider) Provider() string  { return cmn.ProviderHDFS }
+func (*hdfsProvider) Provider() string  { return apc.ProviderHDFS }
 func (*hdfsProvider) MaxPageSize() uint { return 10000 }
 
 ///////////////////
@@ -105,8 +106,8 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.Simple
 	}
 
 	bckProps = make(cos.SimpleKVs)
-	bckProps[cmn.HdrBackendProvider] = cmn.ProviderHDFS
-	bckProps[cmn.HdrBucketVerEnabled] = "false"
+	bckProps[apc.HdrBackendProvider] = apc.ProviderHDFS
+	bckProps[apc.HdrBucketVerEnabled] = "false"
 	return
 }
 
@@ -215,7 +216,7 @@ func (hp *hdfsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errC
 		return
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderHDFS)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderHDFS)
 	oa.Size = fr.Stat().Size()
 	if verbose {
 		glog.Infof("[head_object] %s", lom)
@@ -260,7 +261,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		errCode, err = hdfsErrorToAISError(err)
 		return
 	}
-	lom.SetCustomKey(cmn.SourceObjMD, cmn.ProviderHDFS)
+	lom.SetCustomKey(cmn.SourceObjMD, apc.ProviderHDFS)
 	setSize(ctx, fr.Stat().Size())
 	return wrapReader(ctx, fr), nil, 0, nil
 }

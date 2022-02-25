@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/cluster"
@@ -198,7 +199,7 @@ func cleanupAllRecipeBuckets() {
 		return
 	}
 
-	bcks, _ := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	bcks, _ := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: apc.ProviderAIS})
 	for _, bck := range bcks {
 		if strings.HasPrefix(bck.Name, soakPrefix) {
 			api.DestroyBucket(soakcmn.BaseAPIParams(primaryURL), bck)
@@ -209,7 +210,7 @@ func cleanupAllRecipeBuckets() {
 func bckNamePrefix(bckName string) cmn.Bck {
 	return cmn.Bck{
 		Name:     uniqueProcessPrefix + bckName,
-		Provider: cmn.ProviderAIS,
+		Provider: apc.ProviderAIS,
 	}
 }
 
@@ -222,7 +223,7 @@ func bckNameWithoutPrefix(bckName string) (res string) {
 
 // fetchBuckets returns a list of buckets in the proxy without the soakPrefix
 func fetchBuckets(tag string) []string {
-	bcks, err := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	bcks, err := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: apc.ProviderAIS})
 	if err != nil {
 		cos.AssertNoErr(fmt.Errorf("error fetching buckets for %v: %v", tag, err.Error()))
 	}

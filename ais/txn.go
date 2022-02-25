@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -158,7 +159,7 @@ func (txns *transactions) begin(txn txn) (err error) {
 		debug.AssertNoErr(err)
 		return
 	}
-	txn.started(cmn.ActBegin, time.Now())
+	txn.started(apc.ActBegin, time.Now())
 	txns.m[txn.uuid()] = txn
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s begin: %s", txns.t, txn)
@@ -168,14 +169,14 @@ func (txns *transactions) begin(txn txn) (err error) {
 
 func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 	var ok bool
-	debug.Assert(act == "" /*simply find*/ || act == cmn.ActAbort || act == cmn.ActCommit)
+	debug.Assert(act == "" /*simply find*/ || act == apc.ActAbort || act == apc.ActCommit)
 	txns.Lock()
 	if txn, ok = txns.m[uuid]; !ok {
 		goto rerr
 	} else if act != "" {
 		delete(txns.m, uuid)
 		delete(txns.rendezvous, uuid)
-		if act == cmn.ActAbort {
+		if act == apc.ActAbort {
 			txn.abort()
 		} else {
 			txn.commit()
@@ -248,7 +249,7 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 		done, found, rsvp bool
 	)
 	// timestamp
-	txn.started(cmn.ActCommit, time.Now())
+	txn.started(apc.ActCommit, time.Now())
 
 	// RSVP
 	txns.RLock()
@@ -263,9 +264,9 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 	}
 	// poll & check
 	defer func() {
-		act := cmn.ActCommit
+		act := apc.ActCommit
 		if err != nil {
-			act = cmn.ActAbort
+			act = apc.ActAbort
 		}
 		txns.find(txn.uuid(), act)
 	}()
@@ -314,8 +315,8 @@ func (txns *transactions) housekeep() (d time.Duration) {
 		d = gcTxnsInterval / 10
 	}
 	for _, txn := range txns.m {
-		elapsed := now.Sub(txn.started(cmn.ActBegin))
-		if commitTimestamp := txn.started(cmn.ActCommit); !commitTimestamp.IsZero() {
+		elapsed := now.Sub(txn.started(apc.ActBegin))
+		if commitTimestamp := txn.started(apc.ActCommit); !commitTimestamp.IsZero() {
 			elapsed = now.Sub(commitTimestamp)
 			if elapsed > gcTxnsTimeotMult*config.Timeout.MaxHostBusy.D() {
 				errs = append(errs, fmt.Sprintf("GC %s: [commit - done] timeout", txn))
@@ -358,12 +359,12 @@ func (txn *txnBase) uuid() string { return txn.uid }
 
 func (txn *txnBase) started(phase string, tm ...time.Time) (ts time.Time) {
 	switch phase {
-	case cmn.ActBegin:
+	case apc.ActBegin:
 		if len(tm) > 0 {
 			txn.phase.begin = tm[0]
 		}
 		ts = txn.phase.begin
-	case cmn.ActCommit:
+	case apc.ActCommit:
 		if len(tm) > 0 {
 			txn.phase.commit = tm[0]
 		}

@@ -7,6 +7,7 @@ package apitests
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
@@ -16,7 +17,7 @@ func BenchmarkActionMsgMarshal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		msg := cmn.ActionMsg{
 			Name:   "test-name",
-			Action: cmn.ActDeleteObjects,
+			Action: apc.ActDeleteObjects,
 			Value:  &cmn.ListRangeMsg{Template: "thisisatemplate"},
 		}
 		data, err := jsoniter.Marshal(&msg)

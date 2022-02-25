@@ -8,17 +8,18 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
 func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool) cmn.Bcks {
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS})
 	tassert.CheckFatal(t, err)
 	if includeRemote {
 		remoteBuckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 			Ns:       cmn.NsAnyRemote,
 		})
 		tassert.CheckFatal(t, err)
@@ -27,7 +28,7 @@ func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool)
 		// Make sure that listing with specific UUID also works and have
 		// similar outcome.
 		remoteClusterBuckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 			Ns:       cmn.Ns{UUID: tutils.RemoteCluster.UUID},
 		})
 		tassert.CheckFatal(t, err)
@@ -53,11 +54,11 @@ func TestNamespace(t *testing.T) {
 			remote: false,
 			bck1: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 			},
 			bck2: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Ns: cmn.Ns{
 					UUID: "",
 					Name: "namespace",
@@ -69,7 +70,7 @@ func TestNamespace(t *testing.T) {
 			remote: false,
 			bck1: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Ns: cmn.Ns{
 					UUID: "",
 					Name: "ns1",
@@ -77,7 +78,7 @@ func TestNamespace(t *testing.T) {
 			},
 			bck2: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Ns: cmn.Ns{
 					UUID: "",
 					Name: "ns2",
@@ -89,11 +90,11 @@ func TestNamespace(t *testing.T) {
 			remote: true,
 			bck1: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 			},
 			bck2: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Ns: cmn.Ns{
 					UUID: tutils.RemoteCluster.UUID,
 					Name: cmn.NsGlobal.Name,
@@ -105,7 +106,7 @@ func TestNamespace(t *testing.T) {
 			remote: true,
 			bck1: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Ns: cmn.Ns{
 					UUID: "",
 					Name: "ns1",
@@ -113,7 +114,7 @@ func TestNamespace(t *testing.T) {
 			},
 			bck2: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Ns: cmn.Ns{
 					UUID: tutils.RemoteCluster.UUID,
 					Name: "ns1",
@@ -125,7 +126,7 @@ func TestNamespace(t *testing.T) {
 			remote: true,
 			bck1: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Ns: cmn.Ns{
 					UUID: tutils.RemoteCluster.UUID,
 					Name: "ns1",
@@ -133,7 +134,7 @@ func TestNamespace(t *testing.T) {
 			},
 			bck2: cmn.Bck{
 				Name:     "tmp",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Ns: cmn.Ns{
 					UUID: tutils.RemoteCluster.UUID,
 					Name: "ns2",
@@ -216,7 +217,7 @@ func TestNamespace(t *testing.T) {
 			)
 
 			// Test summary
-			summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS}, nil)
+			summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, nil)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
 				t, len(summaries) == len(locBuckets),
@@ -293,7 +294,7 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 
 	// TODO: works until this point
 
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
 		t, len(buckets) == 1,
@@ -346,7 +347,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check that bucket is still cached
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(buckets) == 1, "number of buckets (%d) should be equal to 1", len(buckets))
 
@@ -357,7 +358,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	// TODO: it works until this point
 
 	// Check that bucket is no longer present
-	buckets, err = api.ListBuckets(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	buckets, err = api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(buckets) == 0, "number of buckets (%d) should be equal to 0", len(buckets))
 }

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -43,11 +44,11 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		cfg = cmn.GCO.Get()
 
 		bmd = newBucketMD()
-		for _, provider := range []string{cmn.ProviderAIS, cmn.ProviderAmazon} {
+		for _, provider := range []string{apc.ProviderAIS, apc.ProviderAmazon} {
 			for i := 0; i < 10; i++ {
 				var hdr http.Header
-				if provider != cmn.ProviderAIS {
-					hdr = http.Header{cmn.HdrBackendProvider: []string{provider}}
+				if provider != apc.ProviderAIS {
+					hdr = http.Header{apc.HdrBackendProvider: []string{provider}}
 				}
 
 				var (
@@ -59,13 +60,13 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		}
 	})
 
-	for _, node := range []string{cmn.Target, cmn.Proxy} {
+	for _, node := range []string{apc.Target, apc.Proxy} {
 		makeBMDOwner := func() bmdOwner {
 			var bowner bmdOwner
 			switch node {
-			case cmn.Target:
+			case apc.Target:
 				bowner = newBMDOwnerTgt()
-			case cmn.Proxy:
+			case apc.Proxy:
 				bowner = newBMDOwnerPrx(cfg)
 			}
 			return bowner
@@ -96,7 +97,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 								Signature: signature,
 							}
 							clone := bmd.clone()
-							bck := cluster.NewBck("abc"+cos.GenTie(), cmn.ProviderAIS, cmn.NsGlobal)
+							bck := cluster.NewBck("abc"+cos.GenTie(), apc.ProviderAIS, cmn.NsGlobal)
 
 							// Add bucket and save.
 							clone.add(bck, defaultBckProps(bckPropsArgs{bck: bck}))

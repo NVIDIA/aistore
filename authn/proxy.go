@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -20,7 +21,7 @@ import (
 func (m *UserManager) broadcastRevoked(token string) {
 	tokenList := TokenList{Tokens: []string{token}}
 	body := cos.MustMarshal(tokenList)
-	m.broadcast(http.MethodDelete, cmn.Tokens, body)
+	m.broadcast(http.MethodDelete, apc.Tokens, body)
 }
 
 // broadcast the request to all clusters. If a cluster has a few URLS,
@@ -62,7 +63,7 @@ func (m *UserManager) syncTokenList(cluster *Cluster) {
 	}
 	body := cos.MustMarshal(TokenList{Tokens: tokenList})
 	for _, u := range cluster.URLs {
-		if err = m.proxyRequest(http.MethodDelete, u, cmn.Tokens, body); err == nil {
+		if err = m.proxyRequest(http.MethodDelete, u, apc.Tokens, body); err == nil {
 			break
 		}
 		err = fmt.Errorf("failed to sync revoked tokens with %q: %v", cluster.ID, err)
@@ -76,7 +77,7 @@ func (m *UserManager) syncTokenList(cluster *Cluster) {
 func (m *UserManager) proxyRequest(method, proxyURL, path string, injson []byte) error {
 	startRequest := time.Now()
 	for {
-		url := proxyURL + cos.JoinWords(cmn.Version, path)
+		url := proxyURL + cos.JoinWords(apc.Version, path)
 		request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
 		if err != nil {
 			return err

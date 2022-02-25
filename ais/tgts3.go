@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/ais/s3compat"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -21,7 +22,7 @@ import (
 
 // PUT s3/bckName/objName
 func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathS3.L)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathS3.L)
 	if err != nil {
 		return
 	}
@@ -52,7 +53,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		t.writeErr(w, r, errS3Obj)
 		return
 	}
-	bckSrc := cluster.NewBck(parts[0], cmn.ProviderAIS, cmn.NsGlobal)
+	bckSrc := cluster.NewBck(parts[0], apc.ProviderAIS, cmn.NsGlobal)
 	objSrc := strings.Trim(parts[1], "/")
 	if err := bckSrc.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)
@@ -74,7 +75,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		t.writeErr(w, r, err)
 		return
 	}
-	bckDst := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+	bckDst := cluster.NewBck(items[0], apc.ProviderAIS, cmn.NsGlobal)
 	if err := bckDst.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -114,7 +115,7 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.writeErr(w, r, cs.Err, http.StatusInsufficientStorage)
 		return
 	}
-	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+	bck := cluster.NewBck(items[0], apc.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -145,7 +146,7 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 	}
 	lom.SetAtimeUnix(started.UnixNano())
 
-	// TODO: dual checksumming, e.g. lom.SetCustom(cmn.ProviderAmazon, ...)
+	// TODO: dual checksumming, e.g. lom.SetCustom(apc.ProviderAmazon, ...)
 
 	dpq := dpqAlloc()
 	defer dpqFree(dpq)
@@ -186,7 +187,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		t.writeErr(w, r, errS3Obj)
 		return
 	}
-	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+	bck := cluster.NewBck(items[0], apc.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -211,7 +212,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		return
 	}
 	bucket, objName := items[0], path.Join(items[1:]...)
-	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
+	bck := cluster.NewBck(bucket, apc.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -225,7 +226,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 
 // DEL s3/bckName/objName
 func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
+	bck := cluster.NewBck(items[0], apc.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)
 		return

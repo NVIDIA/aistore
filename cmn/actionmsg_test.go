@@ -9,6 +9,7 @@ package cmn
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -32,58 +33,58 @@ func testRawUnmarshal(t *testing.T, tc actmsgTestConf) {
 func TestActMsgRawUnmarshal(t *testing.T) {
 	tests := []actmsgTestConf{
 		{
-			action: ActEvictObjects,
+			action: apc.ActEvictObjects,
 			vals: []string{
 				`{"action":"evict-listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
 				`{"action":"evict-listrange","value":{"objnames":["o1","o2","o3"]}}`,
 			},
 		},
 		{
-			action: ActPrefetchObjects,
+			action: apc.ActPrefetchObjects,
 			vals: []string{
 				`{"action":"prefetch-listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
 				`{"action":"prefetch-listrange","value":{"objnames":["o1","o2","o3"]}}`,
 			},
 		},
 		{
-			action: ActDeleteObjects,
+			action: apc.ActDeleteObjects,
 			vals: []string{
 				`{"action":"delete-listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
 				`{"action":"delete-listrange","value":{"objnames":["o1","o2","o3"]}}`,
 			},
 		},
 		{
-			action: ActSetBprops,
+			action: apc.ActSetBprops,
 			vals: []string{
 				`{"action":"set-bprops","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
 			},
 		},
 		{
-			action: ActCreateBck,
+			action: apc.ActCreateBck,
 			vals: []string{
 				`{"action":"create-bck","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
 			},
 		},
 		{
-			action: ActXactStart,
+			action: apc.ActXactStart,
 			vals: []string{
 				`{"action":"start","value":{"kind": "rebalance"}}`,
 			},
 		},
 		{
-			action: ActXactStop,
+			action: apc.ActXactStop,
 			vals: []string{
 				`{"action":"stop","value":{"kind": "rebalance"}}`,
 			},
 		},
 		{
-			action: ActList,
+			action: apc.ActList,
 			vals: []string{
 				`{"action":"list","value":{"props": "size"}}`,
 			},
 		},
 		{
-			action: ActPromote,
+			action: apc.ActPromote,
 			vals: []string{
 				`{"action":"promote","value":{"target": "234ed78", "recurs": true, "keep": false}}`,
 			},

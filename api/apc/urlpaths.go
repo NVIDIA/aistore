@@ -1,9 +1,8 @@
-// Package cmn provides common constants, types, and utilities for AIS clients
-// and AIStore.
+// Package apc: API constants
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package apc
 
 import "github.com/NVIDIA/aistore/cmn/cos"
 

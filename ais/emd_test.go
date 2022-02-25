@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -62,10 +63,10 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 		cfg = cmn.GCO.Get()
 
 		etlMD = newEtlMD()
-		for _, initType := range []string{cmn.ETLInitCode, cmn.ETLInitSpec} {
+		for _, initType := range []string{apc.ETLInitCode, apc.ETLInitSpec} {
 			for i := 0; i < 5; i++ {
 				var msg etl.InitMsg
-				if initType == cmn.ETLInitCode {
+				if initType == apc.ETLInitCode {
 					msg = &etl.InitCodeMsg{
 						InitMsgBase: etl.InitMsgBase{
 							IDX:       fmt.Sprintf("init-code-%d", i),
@@ -87,13 +88,13 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 		}
 	})
 
-	for _, node := range []string{cmn.Target, cmn.Proxy} {
+	for _, node := range []string{apc.Target, apc.Proxy} {
 		makeEtlMDOwner := func() etlOwner {
 			var eowner etlOwner
 			switch node {
-			case cmn.Target:
+			case apc.Target:
 				eowner = newEtlMDOwnerTgt()
-			case cmn.Proxy:
+			case apc.Proxy:
 				eowner = newEtlMDOwnerPrx(cfg)
 			}
 			return eowner

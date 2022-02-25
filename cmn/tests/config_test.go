@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -24,7 +25,7 @@ func TestConfigTestEnv(t *testing.T) {
 	confPath := filepath.Join(thisFileDir(t), "configs", "config.json")
 	localConfPath := filepath.Join(thisFileDir(t), "configs", "confignet.json")
 	newConfig := cmn.Config{}
-	err := cmn.LoadConfig(confPath, localConfPath, cmn.Proxy, &newConfig)
+	err := cmn.LoadConfig(confPath, localConfPath, apc.Proxy, &newConfig)
 	tassert.CheckFatal(t, err)
 }
 
@@ -43,7 +44,7 @@ func TestConfigFSPaths(t *testing.T) {
 	_, err := jsp.LoadMeta(localConfPath, &localConf)
 	tassert.CheckFatal(t, err)
 	newConfig := cmn.Config{}
-	err = cmn.LoadConfig(confPath, localConfPath, cmn.Target, &newConfig)
+	err = cmn.LoadConfig(confPath, localConfPath, apc.Target, &newConfig)
 	tassert.CheckFatal(t, err)
 
 	mpaths := localConf.FSP.Paths

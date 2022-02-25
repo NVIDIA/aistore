@@ -35,6 +35,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -149,7 +150,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	hdr := transport.ObjHdr{
 		Bck: cmn.Bck{
 			Name:     "abc",
-			Provider: cmn.ProviderAmazon,
+			Provider: apc.ProviderAmazon,
 			Ns:       cmn.Ns{UUID: "uuid", Name: "namespace"},
 		},
 		ObjName: "X",
@@ -170,7 +171,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	hdr = transport.ObjHdr{
 		Bck: cmn.Bck{
 			Name:     "abracadabra",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 			Ns:       cmn.NsGlobal,
 		},
 		ObjName: "p/q/s",
@@ -421,7 +422,7 @@ func Test_ObjAttrs(t *testing.T) {
 			reader io.ReadCloser
 			hdr    = transport.ObjHdr{
 				Bck: cmn.Bck{
-					Provider: cmn.ProviderAIS,
+					Provider: apc.ProviderAIS,
 				},
 				ObjAttrs: attrs,
 				Opaque:   []byte{byte(idx)},
@@ -470,7 +471,7 @@ func Test_CompressedOne(t *testing.T) {
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
 	t.Setenv("AIS_STREAM_BURST_NUM", "2")
-	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Compression: cmn.CompressAlways})
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Compression: apc.CompressAlways})
 
 	slab, _ := memsys.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	random := newRand(mono.NanoTime())
@@ -654,7 +655,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	if compress || usePDU {
 		extra = &transport.Extra{}
 		if compress {
-			extra.Compression = cmn.CompressAlways
+			extra.Compression = apc.CompressAlways
 		}
 		if usePDU {
 			extra.SizePDU = transport.DefaultSizePDU
@@ -736,7 +737,7 @@ func newRand(seed int64) *rand.Rand {
 func genStaticHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 	hdr.Bck = cmn.Bck{
 		Name:     "a",
-		Provider: cmn.ProviderAIS,
+		Provider: apc.ProviderAIS,
 	}
 	hdr.ObjName = strconv.FormatInt(random.Int63(), 10)
 	hdr.Opaque = []byte("123456789abcdef")

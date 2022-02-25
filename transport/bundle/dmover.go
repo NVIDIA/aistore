@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -46,7 +47,7 @@ type (
 		}
 		config      *cmn.Config
 		mem         *memsys.MMSA
-		compression string // enum { cmn.CompressNever, ... }
+		compression string // enum { apc.CompressNever, ... }
 		xctn        cluster.Xact
 		multiplier  int
 		owt         cmn.OWT
@@ -83,8 +84,8 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 	dm.sizePDU = extra.SizePDU
 	switch extra.Compression {
 	case "":
-		dm.compression = cmn.CompressNever
-	case cmn.CompressAlways, cmn.CompressNever:
+		dm.compression = apc.CompressNever
+	case apc.CompressAlways, apc.CompressNever:
 		dm.compression = extra.Compression
 	default:
 		return nil, fmt.Errorf("invalid compression %q", extra.Compression)

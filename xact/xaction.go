@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -68,7 +69,7 @@ func GoRunW(xctn cluster.Xact) {
 //////////////
 
 func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {
-	debug.AssertMsg(kind == cmn.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
+	debug.AssertMsg(kind == apc.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
 	debug.AssertMsg(IsValidKind(kind), kind)
 	xctn.id, xctn.kind = id, kind
 	xctn.abort.ch = make(chan error, 1)
@@ -142,7 +143,7 @@ func (xctn *Base) Abort(err error) (ok bool) {
 	close(xctn.abort.ch)
 	xctn.abort.mu.Unlock()
 
-	if xctn.Kind() != cmn.ActList {
+	if xctn.Kind() != apc.ActList {
 		glog.Infof("%s aborted(%v)", xctn.Name(), err)
 	}
 	return true
@@ -257,7 +258,7 @@ func (xctn *Base) Finish(err error) {
 	if xctn.eutime.CAS(0, 1) {
 		xctn.eutime.Store(time.Now().UnixNano())
 		xctn.onFinished(err)
-		if xctn.Kind() != cmn.ActList {
+		if xctn.Kind() != apc.ActList {
 			if err == nil {
 				glog.Infof("%s finished", xctn)
 			} else {

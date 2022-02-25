@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"sync"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
@@ -81,19 +82,19 @@ func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr 
 
 func setAuthToken(r *http.Request, baseParams BaseParams) {
 	if baseParams.Token != "" {
-		r.Header.Set(cmn.HdrAuthorization, makeHeaderAuthnToken(baseParams.Token))
+		r.Header.Set(apc.HdrAuthorization, makeHeaderAuthnToken(baseParams.Token))
 	}
 }
 
 func makeHeaderAuthnToken(token string) string {
-	return cmn.AuthenticationTypeBearer + " " + token
+	return apc.AuthenticationTypeBearer + " " + token
 }
 
 func GetWhatRawQuery(getWhat, getProps string) string {
 	q := url.Values{}
-	q.Add(cmn.QparamWhat, getWhat)
+	q.Add(apc.QparamWhat, getWhat)
 	if getProps != "" {
-		q.Add(cmn.QparamProps, getProps)
+		q.Add(apc.QparamProps, getProps)
 	}
 	return q.Encode()
 }
@@ -233,7 +234,7 @@ func (reqParams *ReqParams) readResp(resp *http.Response, v interface{}) (*wrapp
 			}
 			wresp.n = n
 		} else {
-			hdrCksumType := resp.Header.Get(cmn.HdrObjCksumType)
+			hdrCksumType := resp.Header.Get(apc.HdrObjCksumType)
 			// TODO: use MMSA
 			n, cksum, err := cos.CopyAndChecksum(w, resp.Body, nil, hdrCksumType)
 			if err != nil {

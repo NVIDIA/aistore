@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -72,7 +73,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 			glog.Errorf("[%s] start sort request failed to be broadcast, err: %s",
 				managerUUID, resp.err.Error())
 
-			path := cmn.URLPathdSortAbort.Join(managerUUID)
+			path := apc.URLPathdSortAbort.Join(managerUUID)
 			broadcastTargets(http.MethodDelete, path, nil, nil, smap)
 
 			s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d",
@@ -98,7 +99,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 	if glog.V(4) {
 		glog.Infof("[dsort] %s broadcasting init request to all targets", managerUUID)
 	}
-	path := cmn.URLPathdSortInit.Join(managerUUID)
+	path := apc.URLPathdSortInit.Join(managerUUID)
 	responses := broadcastTargets(http.MethodPost, path, nil, b, smap)
 	if err := checkResponses(responses); err != nil {
 		return
@@ -107,7 +108,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 	if glog.V(4) {
 		glog.Infof("[dsort] %s broadcasting start request to all targets", managerUUID)
 	}
-	path = cmn.URLPathdSortStart.Join(managerUUID)
+	path = apc.URLPathdSortStart.Join(managerUUID)
 	responses = broadcastTargets(http.MethodPost, path, nil, nil, smap)
 	if err := checkResponses(responses); err != nil {
 		return
@@ -123,7 +124,7 @@ func ProxyGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	managerUUID := query.Get(cmn.QparamUUID)
+	managerUUID := query.Get(apc.QparamUUID)
 
 	if managerUUID == "" {
 		proxyListSortHandler(w, r)
@@ -137,14 +138,14 @@ func ProxyGetHandler(w http.ResponseWriter, r *http.Request) {
 func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		query    = r.URL.Query()
-		regexStr = query.Get(cmn.QparamRegex)
+		regexStr = query.Get(apc.QparamRegex)
 	)
 	if _, err := regexp.CompilePOSIX(regexStr); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
 
-	path := cmn.URLPathdSortList.S
+	path := apc.URLPathdSortList.S
 	responses := broadcastTargets(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
 
 	resultList := make([]*JobInfo, 0)
@@ -187,8 +188,8 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		smap        = ctx.smapOwner.Get()
 		query       = r.URL.Query()
-		managerUUID = query.Get(cmn.QparamUUID)
-		path        = cmn.URLPathdSortMetrics.Join(managerUUID)
+		managerUUID = query.Get(apc.QparamUUID)
+		path        = apc.URLPathdSortMetrics.Join(managerUUID)
 		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
 	)
 
@@ -213,7 +214,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if notFound == len(responses) && notFound > 0 {
-		msg := fmt.Sprintf("%s job %q not found", cmn.DSortName, managerUUID)
+		msg := fmt.Sprintf("%s job %q not found", apc.DSortName, managerUUID)
 		cmn.WriteErrMsg(w, r, msg, http.StatusNotFound)
 		return
 	}
@@ -231,15 +232,15 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	_, err := checkRESTItems(w, r, 0, cmn.URLPathdSortAbort.L)
+	_, err := checkRESTItems(w, r, 0, apc.URLPathdSortAbort.L)
 	if err != nil {
 		return
 	}
 
 	var (
 		query       = r.URL.Query()
-		managerUUID = query.Get(cmn.QparamUUID)
-		path        = cmn.URLPathdSortAbort.Join(managerUUID)
+		managerUUID = query.Get(apc.QparamUUID)
+		path        = apc.URLPathdSortAbort.Join(managerUUID)
 		responses   = broadcastTargets(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get())
 	)
 	allNotFound := true
@@ -255,7 +256,7 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if allNotFound {
-		err := cmn.NewErrNotFound("%s job %q", cmn.DSortName, managerUUID)
+		err := cmn.NewErrNotFound("%s job %q", apc.DSortName, managerUUID)
 		cmn.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
@@ -266,7 +267,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	_, err := checkRESTItems(w, r, 0, cmn.URLPathdSort.L)
+	_, err := checkRESTItems(w, r, 0, apc.URLPathdSort.L)
 	if err != nil {
 		return
 	}
@@ -274,8 +275,8 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		smap        = ctx.smapOwner.Get()
 		query       = r.URL.Query()
-		managerUUID = query.Get(cmn.QparamUUID)
-		path        = cmn.URLPathdSortMetrics.Join(managerUUID)
+		managerUUID = query.Get(apc.QparamUUID)
+		path        = apc.URLPathdSortMetrics.Join(managerUUID)
 		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
 	)
 
@@ -297,7 +298,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if !metrics.Archived.Load() {
 			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process %s still in progress and cannot be removed",
-				cmn.DSortName, managerUUID))
+				apc.DSortName, managerUUID))
 			return
 		}
 		seenOne = true
@@ -309,7 +310,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Next, broadcast the remove once we've checked that all targets have run cleanup
-	path = cmn.URLPathdSortRemove.Join(managerUUID)
+	path = apc.URLPathdSortRemove.Join(managerUUID)
 	responses = broadcastTargets(http.MethodDelete, path, nil, nil, smap)
 	var failed []string // nolint:prealloc // will remain not allocated when no errors
 	for _, r := range responses {
@@ -330,29 +331,29 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 
 // SortHandler is the handler called for the HTTP endpoint /v1/sort.
 func SortHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSort.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSort.L)
 	if err != nil {
 		return
 	}
 
 	switch apiItems[0] {
-	case cmn.Init:
+	case apc.Init:
 		initSortHandler(w, r)
-	case cmn.Start:
+	case apc.Start:
 		startSortHandler(w, r)
-	case cmn.Records:
+	case apc.Records:
 		recordsHandler(Managers)(w, r)
-	case cmn.Shards:
+	case apc.Shards:
 		shardsHandler(Managers)(w, r)
-	case cmn.Abort:
+	case apc.Abort:
 		abortSortHandler(w, r)
-	case cmn.Remove:
+	case apc.Remove:
 		removeSortHandler(w, r)
-	case cmn.List:
+	case apc.List:
 		listSortHandler(w, r)
-	case cmn.Metrics:
+	case apc.Metrics:
 		metricsHandler(w, r)
-	case cmn.FinishedAck:
+	case apc.FinishedAck:
 		finishedAckHandler(w, r)
 	default:
 		cmn.WriteErrMsg(w, r, "invalid path")
@@ -366,7 +367,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortInit.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortInit.L)
 	if err != nil {
 		return
 	}
@@ -377,7 +378,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = js.Unmarshal(b, &rs); err != nil {
-		err := fmt.Errorf(cmn.FmtErrUnmarshal, cmn.DSortName, "ParsedRequestSpec", cmn.BytesHead(b), err)
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, apc.DSortName, "ParsedRequestSpec", cmn.BytesHead(b), err)
 		cmn.WriteErr(w, r, err)
 		return
 	}
@@ -404,7 +405,7 @@ func startSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortStart.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortStart.L)
 	if err != nil {
 		return
 	}
@@ -437,7 +438,7 @@ func (m *Manager) startDSort() {
 			}
 
 			glog.Warning("broadcasting abort to other targets")
-			path := cmn.URLPathdSortAbort.Join(m.ManagerUUID)
+			path := apc.URLPathdSortAbort.Join(m.ManagerUUID)
 			broadcastTargets(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
 		}
 	}
@@ -448,7 +449,7 @@ func (m *Manager) startDSort() {
 	}
 
 	glog.Infof("[dsort] %s broadcasting finished ack to other targets", m.ManagerUUID)
-	path := cmn.URLPathdSortAck.Join(m.ManagerUUID, m.ctx.node.DaemonID)
+	path := apc.URLPathdSortAck.Join(m.ManagerUUID, m.ctx.node.DaemonID)
 	broadcastTargets(http.MethodPut, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
 }
 
@@ -460,7 +461,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		if !checkHTTPMethod(w, r, http.MethodPost) {
 			return
 		}
-		apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortShards.L)
+		apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortShards.L)
 		if err != nil {
 			return
 		}
@@ -473,11 +474,11 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		if !dsortManager.inProgress() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", apc.DSortName))
 			return
 		}
 		if dsortManager.aborted() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", apc.DSortName))
 			return
 		}
 
@@ -488,13 +489,13 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		defer slab.Free(buf)
 
 		if err := tmpMetadata.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, cmn.DSortName, "creation phase metadata", "-", err)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, apc.DSortName, "creation phase metadata", "-", err)
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
 
 		if !dsortManager.inProgress() || dsortManager.aborted() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", apc.DSortName))
 			return
 		}
 
@@ -511,7 +512,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		if !checkHTTPMethod(w, r, http.MethodPost) {
 			return
 		}
-		apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortRecords.L)
+		apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortRecords.L)
 		if err != nil {
 			return
 		}
@@ -523,38 +524,38 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 			return
 		}
 		if !dsortManager.inProgress() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", apc.DSortName))
 			return
 		}
 		if dsortManager.aborted() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", apc.DSortName))
 			return
 		}
 		var (
 			query     = r.URL.Query()
-			compStr   = query.Get(cmn.QparamTotalCompressedSize)
-			uncompStr = query.Get(cmn.QparamTotalUncompressedSize)
-			dStr      = query.Get(cmn.QparamTotalInputShardsExtracted)
+			compStr   = query.Get(apc.QparamTotalCompressedSize)
+			uncompStr = query.Get(apc.QparamTotalUncompressedSize)
+			dStr      = query.Get(apc.QparamTotalInputShardsExtracted)
 		)
 
 		compressed, err := strconv.ParseInt(compStr, 10, 64)
 		if err != nil {
 			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
-				cmn.QparamTotalCompressedSize, r.URL.String(), err)
+				apc.QparamTotalCompressedSize, r.URL.String(), err)
 			cmn.WriteErrMsg(w, r, s)
 			return
 		}
 		uncompressed, err := strconv.ParseInt(uncompStr, 10, 64)
 		if err != nil {
 			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
-				cmn.QparamTotalUncompressedSize, r.URL.String(), err)
+				apc.QparamTotalUncompressedSize, r.URL.String(), err)
 			cmn.WriteErrMsg(w, r, s)
 			return
 		}
 		d, err := strconv.ParseUint(dStr, 10, 64)
 		if err != nil {
 			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
-				cmn.QparamTotalInputShardsExtracted, r.URL.String(), err)
+				apc.QparamTotalInputShardsExtracted, r.URL.String(), err)
 			cmn.WriteErrMsg(w, r, s)
 			return
 		}
@@ -566,7 +567,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		defer slab.Free(buf)
 
 		if err := records.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, cmn.DSortName, "records", "-", err)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, apc.DSortName, "records", "-", err)
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
@@ -590,7 +591,7 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortAbort.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortAbort.L)
 	if err != nil {
 		return
 	}
@@ -603,19 +604,19 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if dsortManager.Metrics.Archived.Load() {
-		s := fmt.Sprintf("invalid request: %s job %q has already finished", cmn.DSortName, managerUUID)
+		s := fmt.Sprintf("invalid request: %s job %q has already finished", apc.DSortName, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusGone)
 		return
 	}
 
-	dsortManager.abort(fmt.Errorf("%s has been aborted via API (remotely)", cmn.DSortName))
+	dsortManager.abort(fmt.Errorf("%s has been aborted via API (remotely)", apc.DSortName))
 }
 
 func removeSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortRemove.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortRemove.L)
 	if err != nil {
 		return
 	}
@@ -633,7 +634,7 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch regex
-	regexStr := r.URL.Query().Get(cmn.QparamRegex)
+	regexStr := r.URL.Query().Get(apc.QparamRegex)
 	var regex *regexp.Regexp
 	if regexStr != "" {
 		var err error
@@ -658,7 +659,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodGet) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortMetrics.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortMetrics.L)
 	if err != nil {
 		return
 	}
@@ -687,7 +688,7 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPut) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 2, cmn.URLPathdSortAck.L)
+	apiItems, err := checkRESTItems(w, r, 2, apc.URLPathdSortAck.L)
 	if err != nil {
 		return
 	}
@@ -800,7 +801,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	var (
 		totalAvailMemory  uint64
 		err               error
-		path              = cmn.URLPathDae.S
+		path              = apc.URLPathDae.S
 		moreThanThreshold = true
 	)
 
@@ -808,7 +809,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	cos.AssertNoErr(err)
 
 	query := make(url.Values)
-	query.Add(cmn.QparamWhat, cmn.GetWhatDaemonStatus)
+	query.Add(apc.QparamWhat, apc.GetWhatDaemonStatus)
 	responses := broadcastTargets(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
 	for _, response := range responses {
 		if response.err != nil {

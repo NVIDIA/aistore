@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -60,7 +61,7 @@ type (
 )
 
 func voteInProgress() (xele cluster.Xact) {
-	if e := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActElection}); e != nil {
+	if e := xreg.GetRunning(xreg.XactFilter{Kind: apc.ActElection}); e != nil {
 		xele = e.Get()
 	}
 	return
@@ -76,7 +77,7 @@ func (p *proxy) voteHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
 		return
 	}
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathVote.L)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, apc.URLPathVote.L)
 	if err != nil {
 		return
 	}
@@ -85,11 +86,11 @@ func (p *proxy) voteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
-	case r.Method == http.MethodGet && apiItems[0] == cmn.Proxy:
+	case r.Method == http.MethodGet && apiItems[0] == apc.Proxy:
 		p.httpproxyvote(w, r)
-	case r.Method == http.MethodPut && apiItems[0] == cmn.Voteres:
+	case r.Method == http.MethodPut && apiItems[0] == apc.Voteres:
 		p.httpsetprimaryproxy(w, r)
-	case r.Method == http.MethodPut && apiItems[0] == cmn.VoteInit:
+	case r.Method == http.MethodPut && apiItems[0] == apc.VoteInit:
 		p.httpRequestNewPrimary(w, r)
 	default:
 		p.writeErrURL(w, r)
@@ -98,7 +99,7 @@ func (p *proxy) voteHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/vote/init
 func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathVoteInit.L); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, apc.URLPathVoteInit.L); err != nil {
 		return
 	}
 	msg := VoteInitiationMessage{}
@@ -111,7 +112,7 @@ func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	caller := r.Header.Get(cmn.HdrCallerName)
+	caller := r.Header.Get(apc.HdrCallerName)
 	glog.Infof("[vote] receive %s from %q (local: %s)", newSmap.StringEx(), caller, smap.StringEx())
 
 	if !newSmap.isPresent(p.si) {
@@ -188,7 +189,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 		curPrimary = vr.Smap.Primary
 		timeout    = cmn.Timeout.CplaneOperation() / 2
 	)
-	// 1. ping current primary (not using cmn.QparamAskPrimary as it might be transitioning)
+	// 1. ping current primary (not using apc.QparamAskPrimary as it might be transitioning)
 	for i := 0; i < 2; i++ {
 		if i > 0 {
 			runtime.Gosched()
@@ -206,7 +207,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 	}
 	if err == nil {
 		// move back to idle
-		query := url.Values{cmn.QparamAskPrimary: []string{"true"}}
+		query := url.Values{apc.QparamAskPrimary: []string{"true"}}
 		_, _, err = p.Health(curPrimary, timeout, query /*ask primary*/)
 		if err == nil {
 			glog.Infof("%s: current primary %s is up, moving back to idle", p, curPrimary)
@@ -276,11 +277,11 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 		msg = VoteMessage{Record: *vr}
 		q   = url.Values{}
 	)
-	q.Set(cmn.QparamPrimaryCandidate, p.si.ID())
+	q.Set(apc.QparamPrimaryCandidate, p.si.ID())
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
-		Path:   cmn.URLPathVoteProxy.S,
+		Path:   apc.URLPathVoteProxy.S,
 		Body:   cos.MustMarshal(&msg),
 		Query:  q,
 	}
@@ -322,7 +323,7 @@ func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StringSet {
 		}
 	)
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathVoteVoteres.S, Body: cos.MustMarshal(msg)}
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathVoteVoteres.S, Body: cos.MustMarshal(msg)}
 	args.to = cluster.AllNodes
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
@@ -347,14 +348,14 @@ func (t *target) voteHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
 		return
 	}
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathVote.L)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, apc.URLPathVote.L)
 	if err != nil {
 		return
 	}
 	switch {
-	case r.Method == http.MethodGet && apiItems[0] == cmn.Proxy:
+	case r.Method == http.MethodGet && apiItems[0] == apc.Proxy:
 		t.httpproxyvote(w, r)
-	case r.Method == http.MethodPut && apiItems[0] == cmn.Voteres:
+	case r.Method == http.MethodPut && apiItems[0] == apc.Voteres:
 		t.httpsetprimaryproxy(w, r)
 	default:
 		t.writeErrURL(w, r)
@@ -423,7 +424,7 @@ func (h *htrun) onPrimaryFail() {
 
 // GET /v1/vote/proxy
 func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, cmn.URLPathVoteProxy.L); err != nil {
+	if _, err := h.checkRESTItems(w, r, 0, false, apc.URLPathVoteProxy.L); err != nil {
 		return
 	}
 	msg := VoteMessage{}
@@ -499,7 +500,7 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/vote/result
 func (h *htrun) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, cmn.URLPathVoteVoteres.L); err != nil {
+	if _, err := h.checkRESTItems(w, r, 0, false, apc.URLPathVoteVoteres.L); err != nil {
 		return
 	}
 	msg := VoteResultMessage{}
@@ -549,10 +550,10 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluste
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodPut,
 			Base:   nextPrimaryProxy.IntraControlNet.DirectURL,
-			Path:   cmn.URLPathVoteInit.S,
+			Path:   apc.URLPathVoteInit.S,
 			Body:   body,
 		}
-		cargs.timeout = cmn.DefaultTimeout
+		cargs.timeout = apc.DefaultTimeout
 	}
 	res := h.call(cargs)
 	err = res.err

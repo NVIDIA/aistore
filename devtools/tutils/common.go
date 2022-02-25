@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -62,7 +63,7 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 	for i := 0; i < 100; i++ {
 		bck := cmn.Bck{
 			Name:     prefix + cos.RandString(8),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		_, err := api.HeadBucket(baseParams, bck)
 		if err == nil {
@@ -70,7 +71,8 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 		}
 		errHTTP, ok := err.(*cmn.ErrHTTP)
 		if !ok {
-			return "", fmt.Errorf("error generating bucket name: expected error of type *cmn.ErrHTTP, but got: %T", err)
+			return "",
+				fmt.Errorf("error generating bucket name: expected error of type *cmn.ErrHTTP, but got: %T", err)
 		}
 		if errHTTP.Status == http.StatusNotFound {
 			return bck.Name, nil

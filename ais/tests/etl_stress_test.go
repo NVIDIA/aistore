@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -45,7 +46,7 @@ def transform(input_bytes):
 		t:        t,
 		num:      10_000,
 		fileSize: cos.KiB,
-		bck:      cmn.Bck{Name: "etl_build_connection_err", Provider: cmn.ProviderAIS},
+		bck:      cmn.Bck{Name: "etl_build_connection_err", Provider: apc.ProviderAIS},
 	}
 
 	tlog.Logln("Preparing source bucket")
@@ -77,7 +78,7 @@ func TestETLBucketAbort(t *testing.T) {
 	}
 
 	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActETLBck}
 	time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 
 	tlog.Logf("Aborting ETL xaction %q\n", xactID)
@@ -123,7 +124,7 @@ func TestETLTargetDown(t *testing.T) {
 		tutils.RestoreNode(tcmd, false, "target")
 		m.waitAndCheckCluState()
 
-		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+		args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 		_, _ = api.WaitForXactionIC(baseParams, args)
 
 		tetl.CheckNoRunningETLContainers(t, baseParams)
@@ -144,8 +145,8 @@ def transform(input_bytes):
 `
 
 	var (
-		bckFrom = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etlbig"}
-		bckTo   = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etlbigout-" + cos.RandString(5)}
+		bckFrom = cmn.Bck{Provider: apc.ProviderAIS, Name: "etlbig"}
+		bckTo   = cmn.Bck{Provider: apc.ProviderAIS, Name: "etlbigout-" + cos.RandString(5)}
 
 		m = ioContext{
 			t:         t,
@@ -161,12 +162,12 @@ def transform(input_bytes):
 			initDesc  string
 			buildDesc etl.InitCodeMsg
 		}{
-			{name: "init-echo-python", ty: cmn.ETLInitSpec, initDesc: tetl.Echo},
-			{name: "init-echo-golang", ty: cmn.ETLInitSpec, initDesc: tetl.EchoGolang},
+			{name: "init-echo-python", ty: apc.ETLInitSpec, initDesc: tetl.Echo},
+			{name: "init-echo-golang", ty: apc.ETLInitSpec, initDesc: tetl.EchoGolang},
 
 			{
 				name: "build-echo-python2",
-				ty:   cmn.ETLInitCode,
+				ty:   apc.ETLInitCode,
 				buildDesc: etl.InitCodeMsg{
 					Code:    []byte(echoPythonTransform),
 					Runtime: runtime.Python2,
@@ -174,7 +175,7 @@ def transform(input_bytes):
 			},
 			{
 				name: "build-echo-python3",
-				ty:   cmn.ETLInitCode,
+				ty:   apc.ETLInitCode,
 				buildDesc: etl.InitCodeMsg{
 					Code:    []byte(echoPythonTransform),
 					Runtime: runtime.Python3,
@@ -200,9 +201,9 @@ def transform(input_bytes):
 				requestTimeout = 30 * time.Second
 			)
 			switch test.ty {
-			case cmn.ETLInitSpec:
+			case apc.ETLInitSpec:
 				uuid = tetl.Init(t, baseParams, test.initDesc, etl.RedirectCommType)
-			case cmn.ETLInitCode:
+			case apc.ETLInitCode:
 				test.buildDesc.IDX = test.name
 				test.buildDesc.WaitTimeout = cos.Duration(10 * time.Minute)
 				uuid = tetl.InitCode(t, baseParams, test.buildDesc)
@@ -243,8 +244,8 @@ def transform(input_bytes):
 // Responsible for cleaning all resources, except ETL xact.
 func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID string) {
 	var (
-		bckFrom = cmn.Bck{Name: "etl-in-" + cos.RandString(5), Provider: cmn.ProviderAIS}
-		bckTo   = cmn.Bck{Name: "etl-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
+		bckFrom = cmn.Bck{Name: "etl-in-" + cos.RandString(5), Provider: apc.ProviderAIS}
+		bckTo   = cmn.Bck{Name: "etl-out-" + cos.RandString(5), Provider: apc.ProviderAIS}
 	)
 
 	m.bck = bckFrom

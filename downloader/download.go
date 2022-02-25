@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -241,7 +242,7 @@ func (p *dowFactory) Start() error {
 	go xdl.Run(nil)
 	return nil
 }
-func (*dowFactory) Kind() string        { return cmn.ActDownload }
+func (*dowFactory) Kind() string        { return apc.ActDownload }
 func (p *dowFactory) Get() cluster.Xact { return p.xctn }
 
 func (*dowFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
@@ -260,7 +261,7 @@ func (*Downloader) Name() string {
 func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	d = &Downloader{t: t, statsT: statsT}
 	d.dispatcher = newDispatcher(d)
-	d.DemandBase.Init(cos.GenUUID(), cmn.Download, nil /*bck*/, 0 /*use default*/)
+	d.DemandBase.Init(cos.GenUUID(), apc.Download, nil /*bck*/, 0 /*use default*/)
 	instance.Inc()
 	return
 }

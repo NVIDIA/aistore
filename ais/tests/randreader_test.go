@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
@@ -18,7 +19,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		numobjects = 10 // NOTE: increase this number if need be ...
 		bck        = cmn.Bck{
 			Name:     "RRTestBucket",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)

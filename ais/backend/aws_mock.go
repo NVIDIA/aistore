@@ -8,10 +8,10 @@
 package backend
 
 import (
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 func NewAWS(_ cluster.Target) (cluster.BackendProvider, error) {
-	return nil, newErrInitBackend(cmn.ProviderAmazon)
+	return nil, newErrInitBackend(apc.ProviderAmazon)
 }

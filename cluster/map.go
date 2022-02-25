@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -194,7 +195,7 @@ func (d *Snode) Validate() error {
 	if d.ID() == "" {
 		return errors.New("invalid Snode: missing node " + d.nameNets())
 	}
-	if d.DaemonType != cmn.Proxy && d.DaemonType != cmn.Target {
+	if d.DaemonType != apc.Proxy && d.DaemonType != apc.Target {
 		cos.Assertf(false, "invalid Snode type %q", d.DaemonType)
 	}
 	return nil
@@ -233,8 +234,8 @@ func (d *Snode) isDuplicate(n *Snode) error {
 	return nil
 }
 
-func (d *Snode) IsProxy() bool  { return d.DaemonType == cmn.Proxy }
-func (d *Snode) IsTarget() bool { return d.DaemonType == cmn.Target }
+func (d *Snode) IsProxy() bool  { return d.DaemonType == apc.Proxy }
+func (d *Snode) IsTarget() bool { return d.DaemonType == apc.Target }
 
 // node flags
 func (d *Snode) IsAnySet(flags cos.BitFlags) bool { return d.Flags.IsAnySet(flags) }
@@ -385,7 +386,7 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 			return
 		}
 	}
-	return nil, cmn.NewErrNoNodes(cmn.Target)
+	return nil, cmn.NewErrNoNodes(apc.Target)
 }
 
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {

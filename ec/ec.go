@@ -18,6 +18,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -353,7 +354,7 @@ func freeSlices(slices []*slice) {
 
 // RequestECMeta returns an EC metadata found on a remote target.
 func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
-	path := cmn.URLPathEC.Join(URLMeta, bck.Name, objName)
+	path := apc.URLPathEC.Join(URLMeta, bck.Name, objName)
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
 	url := si.URL(cmn.NetIntraData) + path

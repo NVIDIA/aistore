@@ -7,6 +7,7 @@ package fs_test
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -318,7 +319,7 @@ func BenchmarkMakePathFQN(b *testing.B) {
 	var (
 		bck = cmn.Bck{
 			Name:     "bck",
-			Provider: cmn.ProviderAzure,
+			Provider: apc.ProviderAzure,
 			Ns:       cmn.Ns{Name: "name", UUID: "uuid"},
 		}
 		mi      = fs.MountpathInfo{Path: cos.RandString(200)}

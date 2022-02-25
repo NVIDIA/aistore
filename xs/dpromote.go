@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -55,12 +56,12 @@ func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 
 func (p *proFactory) Start() error {
 	xctn := &XactDirPromote{dir: p.args.SrcFQN, args: p.args}
-	xctn.BckJog.Init(p.Args.UUID /*global xID*/, cmn.ActPromote, p.Bck, &mpather.JoggerGroupOpts{T: p.T})
+	xctn.BckJog.Init(p.Args.UUID /*global xID*/, apc.ActPromote, p.Bck, &mpather.JoggerGroupOpts{T: p.T})
 	p.xctn = xctn
 	return nil
 }
 
-func (*proFactory) Kind() string        { return cmn.ActPromote }
+func (*proFactory) Kind() string        { return apc.ActPromote }
 func (p *proFactory) Get() cluster.Xact { return p.xctn }
 
 func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {

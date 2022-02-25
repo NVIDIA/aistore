@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -28,16 +29,16 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		xactMsg xact.QueryMsg
 		bck     *cluster.Bck
 	)
-	if _, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathXactions.L); err != nil {
+	if _, err := t.checkRESTItems(w, r, 0, true, apc.URLPathXactions.L); err != nil {
 		return
 	}
 	switch r.Method {
 	case http.MethodGet:
 		var (
 			query = r.URL.Query()
-			what  = query.Get(cmn.QparamWhat)
+			what  = query.Get(apc.QparamWhat)
 		)
-		if uuid := query.Get(cmn.QparamUUID); uuid != "" {
+		if uuid := query.Get(apc.QparamUUID); uuid != "" {
 			t.getXactByID(w, r, what, uuid)
 			return
 		}
@@ -66,19 +67,19 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if !xactMsg.Bck.IsEmpty() {
 			bck = cluster.NewBckEmbed(xactMsg.Bck)
-			if err := bck.Init(t.owner.bmd); err != nil && msg.Action != cmn.ActXactStop {
-				// cmn.ActXactStop: proceed anyway
+			if err := bck.Init(t.owner.bmd); err != nil && msg.Action != apc.ActXactStop {
+				// apc.ActXactStop: proceed anyway
 				t.writeErr(w, r, err)
 				return
 			}
 		}
 		switch msg.Action {
-		case cmn.ActXactStart:
+		case apc.ActXactStart:
 			if err := t.cmdXactStart(&xactMsg, bck); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
-		case cmn.ActXactStop:
+		case apc.ActXactStop:
 			err := cmn.ErrXactUserAbort
 			if msg.Name == cmn.ErrXactICNotifAbort.Error() {
 				err = cmn.ErrXactICNotifAbort
@@ -94,7 +95,7 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid string) {
-	if what != cmn.GetWhatXactStats {
+	if what != apc.GetWhatXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}
@@ -108,8 +109,8 @@ func (t *target) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid 
 }
 
 func (t *target) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.XactFilter) {
-	debug.Assert(what == cmn.GetWhatQueryXactStats)
-	if what != cmn.GetWhatQueryXactStats {
+	debug.Assert(what == apc.GetWhatQueryXactStats)
+	if what != apc.GetWhatQueryXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}
@@ -139,7 +140,7 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 
 	switch xactMsg.Kind {
 	// 1. globals
-	case cmn.ActLRU:
+	case apc.ActLRU:
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
@@ -151,12 +152,12 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 		wg.Add(1)
 		go t.runLRU(xactMsg.ID, wg, ext.Force, xactMsg.Buckets...)
 		wg.Wait()
-	case cmn.ActStoreCleanup:
+	case apc.ActStoreCleanup:
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		go t.runStoreCleanup(xactMsg.ID, wg, xactMsg.Buckets...)
 		wg.Wait()
-	case cmn.ActResilver:
+	case apc.ActResilver:
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
@@ -172,7 +173,7 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 		go t.runResilver(res.Args{UUID: xactMsg.ID, Notif: notif}, wg)
 		wg.Wait()
 	// 2. with bucket
-	case cmn.ActPrefetchObjects:
+	case apc.ActPrefetchObjects:
 		args := &cmn.ListRangeMsg{}
 		rns := xreg.RenewPrefetch(xactMsg.ID, t, bck, args)
 		xctn := rns.Entry.Get()
@@ -185,13 +186,13 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 			Xact: xctn,
 		})
 		go xctn.Run(nil)
-	case cmn.ActLoadLomCache:
+	case apc.ActLoadLomCache:
 		rns := xreg.RenewBckLoadLomCache(t, xactMsg.ID, bck)
 		return rns.Err
 	// 3. cannot start
-	case cmn.ActPutCopies:
+	case apc.ActPutCopies:
 		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", xactMsg)
-	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDeleteObjects, cmn.ActMakeNCopies, cmn.ActECEncode:
+	case apc.ActDownload, apc.ActEvictObjects, apc.ActDeleteObjects, apc.ActMakeNCopies, apc.ActECEncode:
 		return fmt.Errorf("initiating %q must be done via a separate documented API", xactMsg)
 	// 4. unknown
 	case "":

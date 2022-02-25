@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -266,7 +267,7 @@ func TestRegressionBuckets(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL(t)
 	)
@@ -280,13 +281,13 @@ func TestRenameBucket(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		renamedBck = cmn.Bck{
 			Name:     bck.Name + "_" + cos.GenTie(),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 	for _, wait := range []bool{true, false} {
@@ -351,7 +352,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 }
 
 func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, objNames []string) {
-	xactArgs := api.XactReqArgs{Kind: cmn.ActMoveBck, Bck: rtd.renamedBck, Timeout: rebalanceTimeout}
+	xactArgs := api.XactReqArgs{Kind: apc.ActMoveBck, Bck: rtd.renamedBck, Timeout: rebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, xactArgs)
 	if err != nil {
 		if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
@@ -410,7 +411,7 @@ func TestRenameObjects(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     t.Name(),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -680,10 +681,10 @@ func TestLRU(t *testing.T) {
 	})
 
 	tlog.Logln("starting LRU...")
-	xactID, err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActLRU})
+	xactID, err := api.StartXaction(baseParams, api.XactReqArgs{Kind: apc.ActLRU})
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActLRU, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActLRU, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -730,7 +731,7 @@ func TestPrefetchList(t *testing.T) {
 		t.Error(err)
 	}
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -740,7 +741,7 @@ func TestPrefetchList(t *testing.T) {
 		t.Error(err)
 	}
 
-	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: xactID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -789,7 +790,7 @@ func TestDeleteList(t *testing.T) {
 		xactID, err := api.DeleteList(baseParams, bck.Bck, files)
 		tassert.CheckError(t, err)
 
-		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
+		args := api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 
@@ -845,13 +846,13 @@ func TestPrefetchRange(t *testing.T) {
 	rng := fmt.Sprintf("%s%s", m.prefix, prefetchRange)
 	xactID, err := api.EvictRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	xactID, err = api.PrefetchRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
-	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: xactID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -901,7 +902,7 @@ func TestDeleteRange(t *testing.T) {
 		tlog.Logf("Delete in range %s\n", smallrange)
 		xactID, err := api.DeleteRange(baseParams, bck.Bck, smallrange)
 		tassert.CheckError(t, err)
-		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
+		args := api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 
@@ -930,7 +931,7 @@ func TestDeleteRange(t *testing.T) {
 		// 4. Delete the big range of objects
 		xactID, err = api.DeleteRange(baseParams, bck.Bck, bigrange)
 		tassert.CheckError(t, err)
-		args = api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
+		args = api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 
@@ -964,7 +965,7 @@ func TestStressDeleteRange(t *testing.T) {
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		bck           = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		cksumType = cmn.DefaultBckProps(bck).Cksum.Type
 	)
@@ -1007,7 +1008,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tlog.Logf("Deleting objects in range: %s\n", partialRange)
 	xactID, err := api.DeleteRange(baseParams, bck, partialRange)
 	tassert.CheckError(t, err)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1039,7 +1040,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tlog.Logf("Deleting objects in range: %s\n", fullRange)
 	xactID, err = api.DeleteRange(baseParams, bck, fullRange)
 	tassert.CheckError(t, err)
-	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 

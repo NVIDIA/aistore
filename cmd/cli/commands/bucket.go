@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -93,7 +94,7 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	}
 
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Renaming bucket", fromBck, toBck, cmn.ActMoveBck, toBck)
+		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Renaming bucket", fromBck, toBck, apc.ActMoveBck, toBck)
 		return
 	}
 
@@ -115,7 +116,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *cmn.CopyBckMsg) (er
 	}
 
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Copying bucket", fromBck, toBck, cmn.ActCopyBck, toBck)
+		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Copying bucket", fromBck, toBck, apc.ActCopyBck, toBck)
 		return
 	}
 
@@ -316,29 +317,29 @@ func reformatBackendProps(c *cli.Context, nvs cos.SimpleKVs) (err error) {
 		ok        bool
 	)
 
-	if v, ok = nvs[cmn.PropBackendBck]; ok {
-		delete(nvs, cmn.PropBackendBck)
-	} else if v, ok = nvs[cmn.PropBackendBckName]; !ok {
+	if v, ok = nvs[apc.PropBackendBck]; ok {
+		delete(nvs, apc.PropBackendBck)
+	} else if v, ok = nvs[apc.PropBackendBckName]; !ok {
 		goto validate
 	}
 
 	if v != emptyOrigin {
 		if originBck, err = parseBckURI(c, v, true /*requireProviderInURI*/); err != nil {
-			return fmt.Errorf("invalid %q: %v", cmn.PropBackendBck, err)
+			return fmt.Errorf("invalid %q: %v", apc.PropBackendBck, err)
 		}
 	}
 
-	nvs[cmn.PropBackendBckName] = originBck.Name
-	if v, ok = nvs[cmn.PropBackendBckProvider]; ok && v != "" {
-		nvs[cmn.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
+	nvs[apc.PropBackendBckName] = originBck.Name
+	if v, ok = nvs[apc.PropBackendBckProvider]; ok && v != "" {
+		nvs[apc.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
 	} else {
-		nvs[cmn.PropBackendBckProvider] = originBck.Provider
+		nvs[apc.PropBackendBckProvider] = originBck.Provider
 	}
 
 validate:
-	if nvs[cmn.PropBackendBckProvider] != "" && nvs[cmn.PropBackendBckName] == "" {
+	if nvs[apc.PropBackendBckProvider] != "" && nvs[apc.PropBackendBckName] == "" {
 		return fmt.Errorf("invalid %q: bucket name cannot be empty when bucket provider (%q) is set",
-			cmn.PropBackendBckName, cmn.PropBackendBckProvider)
+			apc.PropBackendBckName, apc.PropBackendBckProvider)
 	}
 	return err
 }
@@ -417,7 +418,7 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 				if def.Name != p.Name {
 					continue
 				}
-				if def.Name == cmn.PropBucketCreated {
+				if def.Name == apc.PropBucketCreated {
 					ts, err := cos.S2UnixNano(p.Value)
 					if err == nil {
 						p.Value = cos.FormatUnixNano(ts, "" /*RFC822*/)
@@ -485,8 +486,8 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 }
 
 func printBuckets(c *cli.Context, bcks cmn.Bcks, showHeaders bool, matches bucketFilter) {
-	providerList := make([]string, 0, len(cmn.Providers))
-	for provider := range cmn.Providers {
+	providerList := make([]string, 0, len(apc.Providers))
+	for provider := range apc.Providers {
 		providerList = append(providerList, provider)
 	}
 	sort.Strings(providerList)
@@ -504,13 +505,13 @@ func printBuckets(c *cli.Context, bcks cmn.Bcks, showHeaders bool, matches bucke
 		}
 		if showHeaders {
 			dspProvider := provider
-			if provider == cmn.ProviderHTTP {
+			if provider == apc.ProviderHTTP {
 				dspProvider = "HTTP(S)"
 			}
 			fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(dspProvider), len(filtered))
 		}
 		for _, bck := range filtered {
-			if provider == cmn.ProviderHTTP {
+			if provider == apc.ProviderHTTP {
 				if props, err := api.HeadBucket(defaultAPIParams, bck); err == nil {
 					fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
 					continue

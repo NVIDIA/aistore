@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -68,7 +69,7 @@ func (p *tcoFactory) Start() error {
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	p.xctn = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, 0 /*use default*/)
-	if p.kind == cmn.ActETLObjects {
+	if p.kind == apc.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize
 	}
 	if err := p.newDM("tco", r.recv, sizePDU); err != nil {

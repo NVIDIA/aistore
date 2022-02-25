@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -177,15 +178,15 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 	var (
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
 		logHdr     = reb.logHdr(md.id, md.smap)
-		query      = url.Values{cmn.QparamRebStatus: []string{"true"}}
+		query      = url.Values{apc.QparamRebStatus: []string{"true"}}
 	)
-	body, code, err := reb.t.Health(tsi, cmn.DefaultTimeout, query)
+	body, code, err := reb.t.Health(tsi, apc.DefaultTimeout, query)
 	if err != nil {
 		if errAborted := reb.xctn().AbortedAfter(sleepRetry); errAborted != nil {
 			glog.Infof("%s: abort check status (%v)", logHdr, errAborted)
 			return
 		}
-		body, code, err = reb.t.Health(tsi, cmn.DefaultTimeout, query) // retry once
+		body, code, err = reb.t.Health(tsi, apc.DefaultTimeout, query) // retry once
 	}
 	if err != nil {
 		detail := fmt.Sprintf("health(%s) returned err %v(%d)", tsi.StringEx(), err, code)
@@ -216,7 +217,7 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 	// Do not call `reb.abortAndBroadcast()` - no need.
 	if status.RebID == reb.RebID() && status.Aborted {
 		xreb := reb.xctn()
-		glog.Warningf("%s aborted %s[g%d] - aborting %s as well", tsi, cmn.ActRebalance, status.RebID, xreb)
+		glog.Warningf("%s aborted %s[g%d] - aborting %s as well", tsi, apc.ActRebalance, status.RebID, xreb)
 		debug.Assert(xreb.RebID() == status.RebID)
 		xreb.Abort(nil)
 		return

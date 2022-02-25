@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -304,7 +305,7 @@ func (reb *Reb) _serialize(rargs *rebArgs) (newerRMD, alreadyRunning bool) {
 }
 
 func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Duration) (err error) {
-	entry := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActRebalance})
+	entry := xreg.GetRunning(xreg.XactFilter{Kind: apc.ActRebalance})
 	if entry == nil {
 		err = fmt.Errorf("%s: acquire/release asymmetry", logHdr)
 		return
@@ -553,7 +554,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 		query  = url.Values{}
 		loghdr = reb.logHdr(rargs.id, rargs.smap)
 	)
-	query.Set(cmn.QparamSilent, "true")
+	query.Set(apc.QparamSilent, "true")
 	for _, lomAck := range reb.lomAcks() {
 		lomAck.mu.Lock()
 		for uname, lom := range lomAck.q {

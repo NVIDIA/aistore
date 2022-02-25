@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -39,7 +40,7 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/etl
 func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathETL.L)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
@@ -57,9 +58,9 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 
 	// /v1/etl/<uuid>/logs[/<target-id>] or /v1/etl/<uuid>/health
 	switch apiItems[1] {
-	case cmn.ETLLogs:
+	case apc.ETLLogs:
 		p.logsETL(w, r, apiItems[0], apiItems[2:]...)
-	case cmn.ETLHealth:
+	case apc.ETLHealth:
 		p.healthETL(w, r)
 	default:
 		p.writeErrURL(w, r)
@@ -71,7 +72,7 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 // handleETLPut is responsible validation and adding new ETL spec/code
 // to etl metadata.
 func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
-	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETL.L)
+	_, err := p.checkRESTItems(w, r, 0, false, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
@@ -119,7 +120,7 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 //
 // handleETLPost handles start/stop ETL pods
 func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 2, true, cmn.URLPathETL.L)
+	apiItems, err := p.checkRESTItems(w, r, 2, true, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
@@ -134,11 +135,11 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, cmn.NewErrNotFound("%s: etl UUID %s", p.si, etlID))
 		return
 	}
-	if apiItems[1] == cmn.ETLStop {
+	if apiItems[1] == apc.ETLStop {
 		p.stopETL(w, r)
 		return
 	}
-	if apiItems[1] == cmn.ETLStart {
+	if apiItems[1] == apc.ETLStart {
 		p.startETL(w, etlMsg, false /*add to etlMD*/)
 		return
 	}
@@ -147,7 +148,7 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /v1/etl/<uuid>
 func (p *proxy) handleETLDelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathETL.L)
+	apiItems, err := p.checkRESTItems(w, r, 1, true, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
@@ -185,8 +186,8 @@ func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 // `addToMD` is `false` for start requests, where ETL already exists in `etlMD`
 func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) (err error) {
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: cmn.URLPathETL.S, Body: cos.MustMarshal(msg)}
-	args.timeout = cmn.LongTimeout
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathETL.S, Body: cos.MustMarshal(msg)}
+	args.timeout = apc.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {
@@ -202,8 +203,8 @@ func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) (
 		// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 		//  or fail otherwise - ignore the failures).
 		argsTerm := allocBcArgs()
-		argsTerm.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathETL.Join(msg.ID(), cmn.ETLStop)}
-		argsTerm.timeout = cmn.LongTimeout
+		argsTerm.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathETL.Join(msg.ID(), apc.ETLStop)}
+		argsTerm.timeout = apc.LongTimeout
 		p.bcastGroup(argsTerm)
 		freeBcArgs(argsTerm)
 		return err
@@ -258,8 +259,8 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 		args = allocBcArgs()
 		etls *etl.InfoList
 	)
-	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: cmn.URLPathETL.S}
-	args.timeout = cmn.DefaultTimeout
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.S}
+	args.timeout = apc.DefaultTimeout
 	args.fv = func() interface{} { return &etl.InfoList{} }
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
@@ -310,9 +311,9 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, ap
 		results = make(sliceResults, 1)
 		cargs := allocCargs()
 		{
-			cargs.req = cmn.HreqArgs{Method: http.MethodGet, Path: cmn.URLPathETL.Join(etlID, cmn.ETLLogs)}
+			cargs.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.Join(etlID, apc.ETLLogs)}
 			cargs.si = si
-			cargs.timeout = cmn.DefaultTimeout
+			cargs.timeout = apc.DefaultTimeout
 			cargs.v = &etl.PodLogsMsg{}
 		}
 		results[0] = p.call(cargs)
@@ -321,7 +322,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, ap
 		// all targets
 		args = allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
-		args.timeout = cmn.DefaultTimeout
+		args.timeout = apc.DefaultTimeout
 		args.fv = func() interface{} { return &etl.PodLogsMsg{} }
 		results = p.bcastGroup(args)
 		freeBcArgs(args)
@@ -349,7 +350,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
-	args.timeout = cmn.DefaultTimeout
+	args.timeout = apc.DefaultTimeout
 	args.fv = func() interface{} { return &etl.PodHealthMsg{} }
 	results = p.bcastGroup(args)
 	defer freeBcastRes(results)
@@ -371,7 +372,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path}
-	args.timeout = cmn.LongTimeout
+	args.timeout = apc.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -41,11 +42,11 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	downloaderXact := xctn.(*downloader.Downloader)
 	switch r.Method {
 	case http.MethodPost:
-		if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathDownload.L); err != nil {
+		if _, err := t.checkRESTItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
 		}
 		var (
-			uuid             = r.URL.Query().Get(cmn.QparamUUID)
+			uuid             = r.URL.Query().Get(apc.QparamUUID)
 			dlb              = downloader.DlBody{}
 			progressInterval = downloader.DownloadProgressInterval
 		)
@@ -100,7 +101,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}, dlJob)
 		response, statusCode, respErr = downloaderXact.Download(dlJob)
 	case http.MethodGet:
-		if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathDownload.L); err != nil {
+		if _, err := t.checkRESTItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
 		}
 		payload := &downloader.DlAdminBody{}
@@ -128,7 +129,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			response, statusCode, respErr = downloaderXact.ListJobs(regex)
 		}
 	case http.MethodDelete:
-		items, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDownload.L)
+		items, err := t.checkRESTItems(w, r, 1, false, apc.URLPathDownload.L)
 		if err != nil {
 			return
 		}
@@ -143,9 +144,9 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		switch items[0] {
-		case cmn.Abort:
+		case apc.Abort:
 			response, statusCode, respErr = downloaderXact.AbortJob(payload.ID)
-		case cmn.Remove:
+		case apc.Remove:
 			response, statusCode, respErr = downloaderXact.RemoveJob(payload.ID)
 		default:
 			t.writeErrAct(w, r, items[0])

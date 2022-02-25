@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -36,8 +37,8 @@ const (
 var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
-		cmn.PropBucketAccessAttrs:             cmn.SupportedPermissions(),
-		cmn.HdrObjCksumType:                   cos.SupportedChecksums(),
+		apc.PropBucketAccessAttrs:             cmn.SupportedPermissions(),
+		apc.HdrObjCksumType:                   cos.SupportedChecksums(),
 		"md_write":                            cmn.SupportedWritePolicy,
 		"ec.compression":                      cmn.SupportedCompression,
 		"compression.checksum":                cmn.SupportedCompression,
@@ -71,7 +72,7 @@ func lastValueIsAccess(c *cli.Context) bool {
 		return false
 	}
 	lastArg := c.Args()[c.NArg()-1]
-	for _, access := range propCmpls[cmn.PropBucketAccessAttrs] {
+	for _, access := range propCmpls[apc.PropBucketAccessAttrs] {
 		if access == lastArg {
 			return true
 		}
@@ -83,7 +84,7 @@ func lastValueIsAccess(c *cli.Context) bool {
 func accessCompletions(c *cli.Context) bool {
 	typedList := c.Args()
 	printed := 0
-	for _, access := range propCmpls[cmn.PropBucketAccessAttrs] {
+	for _, access := range propCmpls[apc.PropBucketAccessAttrs] {
 		found := false
 		for _, typed := range typedList {
 			if access == typed {
@@ -198,12 +199,12 @@ func suggestUpdatableConfig(c *cli.Context) {
 	if propValueCompletion(c) {
 		return
 	}
-	scope := cmn.Cluster
+	scope := apc.Cluster
 	if c.NArg() > 0 && !isConfigProp(c.Args().First()) {
-		scope = cmn.Daemon
+		scope = apc.Daemon
 	}
 
-	props := append(cmn.ConfigPropList(scope), cmn.ActTransient)
+	props := append(cmn.ConfigPropList(scope), apc.ActTransient)
 	for _, prop := range props {
 		if !cos.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
@@ -269,7 +270,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 			if err != nil {
 				return
 			}
-			providers = []string{cmn.ProviderAIS, cmn.ProviderHTTP}
+			providers = []string{apc.ProviderAIS, apc.ProviderHTTP}
 			for provider := range config.Backend.Conf {
 				providers = append(providers, provider)
 			}
@@ -453,7 +454,7 @@ func xactionCompletions(cmd string) func(ctx *cli.Context) {
 	return func(c *cli.Context) {
 		if c.NArg() == 0 {
 			for kind, dtor := range xact.Table {
-				if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && dtor.Startable) {
+				if (cmd != apc.ActXactStart) || (cmd == apc.ActXactStart && dtor.Startable) {
 					fmt.Println(kind)
 				}
 			}

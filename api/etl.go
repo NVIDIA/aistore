@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/etl"
@@ -22,7 +23,7 @@ func ETLInit(baseParams BaseParams, msg etl.InitMsg) (id string, err error) {
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathETL.S
+		reqParams.Path = apc.URLPathETL.S
 		reqParams.Body = cos.MustMarshal(msg)
 	}
 	err = reqParams.DoHTTPReqResp(&id)
@@ -35,7 +36,7 @@ func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathETL.S
+		reqParams.Path = apc.URLPathETL.S
 	}
 	err = reqParams.DoHTTPReqResp(&list)
 	freeRp(reqParams)
@@ -46,9 +47,9 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 	baseParams.Method = http.MethodGet
 	var path string
 	if len(targetID) > 0 && targetID[0] != "" {
-		path = cmn.URLPathETL.Join(id, cmn.ETLLogs, targetID[0])
+		path = apc.URLPathETL.Join(id, apc.ETLLogs, targetID[0])
 	} else {
-		path = cmn.URLPathETL.Join(id, cmn.ETLLogs)
+		path = apc.URLPathETL.Join(id, apc.ETLLogs)
 	}
 	reqParams := allocRp()
 	{
@@ -62,7 +63,7 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 
 func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err error) {
 	params.Method = http.MethodGet
-	path := cmn.URLPathETL.Join(id, cmn.ETLHealth)
+	path := apc.URLPathETL.Join(id, apc.ETLHealth)
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = params
@@ -75,7 +76,7 @@ func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err err
 
 func ETLDelete(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPathETL.Join(id)
+	path := apc.URLPathETL.Join(id)
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
@@ -88,7 +89,7 @@ func ETLDelete(baseParams BaseParams, id string) (err error) {
 
 func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error) {
 	params.Method = http.MethodGet
-	path := cmn.URLPathETL.Join(id)
+	path := apc.URLPathETL.Join(id)
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = params
@@ -126,11 +127,11 @@ func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error
 }
 
 func ETLStop(baseParams BaseParams, id string) (err error) {
-	return etlPostAction(baseParams, id, cmn.ETLStop)
+	return etlPostAction(baseParams, id, apc.ETLStop)
 }
 
 func ETLStart(baseParams BaseParams, id string) (err error) {
-	return etlPostAction(baseParams, id, cmn.ETLStart)
+	return etlPostAction(baseParams, id, apc.ETLStart)
 }
 
 func etlPostAction(baseParams BaseParams, id, action string) (err error) {
@@ -138,7 +139,7 @@ func etlPostAction(baseParams BaseParams, id, action string) (err error) {
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathETL.Join(id, action)
+		reqParams.Path = apc.URLPathETL.Join(id, action)
 	}
 	err = reqParams.DoHTTPRequest()
 	freeRp(reqParams)
@@ -150,7 +151,7 @@ func etlPostAction(baseParams BaseParams, id, action string) (err error) {
 func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {
 	_, err = GetObject(baseParams, bck, objName, GetObjectInput{
 		Writer: w,
-		Query:  url.Values{cmn.QparamUUID: []string{id}},
+		Query:  url.Values{apc.QparamUUID: []string{id}},
 	})
 	return
 }
@@ -161,12 +162,12 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg
 	}
 	baseParams.Method = http.MethodPost
 	q := cmn.AddBckToQuery(nil, fromBck)
-	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.QparamBucketTo)
+	_ = cmn.AddBckUnameToQuery(q, toBck, apc.QparamBucketTo)
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathBuckets.Join(fromBck.Name)
-		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBck, Value: bckMsg})
+		reqParams.Path = apc.URLPathBuckets.Join(fromBck.Name)
+		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: apc.ActETLBck, Value: bckMsg})
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 		reqParams.Query = q
 	}

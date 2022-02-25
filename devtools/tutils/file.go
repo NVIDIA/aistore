@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -130,7 +131,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 		bck = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 			Ns:       cmn.NsGlobal,
 			Props: &cmn.BucketProps{
 				Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash},

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -274,7 +275,7 @@ func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, 
 }
 
 func WaitForResilvering(t *testing.T, baseParams api.BaseParams, target *cluster.Snode) {
-	args := api.XactReqArgs{Kind: cmn.ActResilver, Timeout: resilverTimeout}
+	args := api.XactReqArgs{Kind: apc.ActResilver, Timeout: resilverTimeout}
 	if target != nil {
 		args.Node = target.ID()
 		time.Sleep(2 * time.Second)

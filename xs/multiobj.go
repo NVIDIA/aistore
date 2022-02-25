@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -270,7 +271,7 @@ func (r *evictDelete) Run(*sync.WaitGroup) {
 }
 
 func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) {
-	errCode, err := r.t.DeleteObject(lom, r.Kind() == cmn.ActEvictObjects)
+	errCode, err := r.t.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
 	if errCode == http.StatusNotFound {
 		return
 	}
@@ -310,7 +311,7 @@ func (p *prfFactory) Start() error {
 	return nil
 }
 
-func (*prfFactory) Kind() string        { return cmn.ActPrefetchObjects }
+func (*prfFactory) Kind() string        { return apc.ActPrefetchObjects }
 func (p *prfFactory) Get() cluster.Xact { return p.xctn }
 
 func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {

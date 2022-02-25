@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
@@ -50,7 +50,7 @@ func (p *llcFactory) Start() error {
 	return nil
 }
 
-func (*llcFactory) Kind() string        { return cmn.ActLoadLomCache }
+func (*llcFactory) Kind() string        { return apc.ActLoadLomCache }
 func (p *llcFactory) Get() cluster.Xact { return p.xctn }
 
 func (*llcFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprUse, nil }
@@ -68,7 +68,7 @@ func newXactLLC(t cluster.Target, uuid string, bck *cluster.Bck) (r *xactLLC) {
 		VisitObj: func(*cluster.LOM, []byte) error { return nil },
 		DoLoad:   mpather.Load,
 	}
-	r.BckJog.Init(uuid, cmn.ActLoadLomCache, bck, mpopts)
+	r.BckJog.Init(uuid, apc.ActLoadLomCache, bck, mpopts)
 	return
 }
 

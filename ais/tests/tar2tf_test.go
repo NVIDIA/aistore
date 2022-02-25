@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
@@ -54,7 +55,7 @@ func TestETLTar2TFS3(t *testing.T) {
 		proxyURL     = tutils.RandomProxyURL()
 		bck          = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
@@ -114,7 +115,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL()
 		bck        = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		baseParams     = tutils.BaseAPIParams(proxyURL)
 		rangeBytesBuff = bytes.NewBuffer(nil)

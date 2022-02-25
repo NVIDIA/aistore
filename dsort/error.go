@@ -8,11 +8,12 @@ package dsort
 import (
 	"fmt"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
 func newDSortAbortedError(managerUUID string) *cmn.ErrAborted {
-	return cmn.NewErrAborted(fmt.Sprintf("%s[%s]", cmn.DSortName, managerUUID), "", nil)
+	return cmn.NewErrAborted(fmt.Sprintf("%s[%s]", apc.DSortName, managerUUID), "", nil)
 }
 
 // Returns if the error is not abort error - in other cases we need to report

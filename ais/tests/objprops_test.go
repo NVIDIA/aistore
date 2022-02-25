@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -128,7 +129,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 	}
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -378,7 +379,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 
 		newConfig := make(cos.SimpleKVs)
 		if oldVersioning != versioning {
-			newConfig[cmn.PropBucketVerEnabled] = strconv.FormatBool(versioning)
+			newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(versioning)
 		}
 		warmCheck := versioning
 		if oldChkVersion != warmCheck {
@@ -396,7 +397,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 				newConfig["versioning.validate_warm_get"] = strconv.FormatBool(oldWarmCheck)
 			}
 			if oldVersioning != versioning {
-				newConfig[cmn.PropBucketVerEnabled] = strconv.FormatBool(oldVersioning)
+				newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(oldVersioning)
 			}
 			if len(newConfig) != 0 {
 				tutils.SetClusterConfig(t, newConfig)

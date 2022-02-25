@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -62,13 +63,13 @@ func (*bsummFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 
 func (p *bsummFactory) Start() error {
 	xctn := &bsummXact{t: p.T, msg: p.msg, ctx: p.ctx}
-	xctn.InitBase(p.UUID(), cmn.ActSummaryBck, p.Bck)
+	xctn.InitBase(p.UUID(), apc.ActSummaryBck, p.Bck)
 	p.xctn = xctn
 	go p.xctn.Run(nil)
 	return nil
 }
 
-func (*bsummFactory) Kind() string        { return cmn.ActSummaryBck }
+func (*bsummFactory) Kind() string        { return apc.ActSummaryBck }
 func (p *bsummFactory) Get() cluster.Xact { return p.xctn }
 
 func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
@@ -88,7 +89,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 		buckets = append(buckets, t.Bck())
 	} else {
 		if !t.Bck().HasProvider() || t.Bck().IsAIS() {
-			provider := cmn.ProviderAIS
+			provider := apc.ProviderAIS
 			bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 				buckets = append(buckets, bck)
 				return false

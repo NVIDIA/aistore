@@ -20,6 +20,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -102,7 +103,7 @@ var (
 /////////////////
 
 func (*archFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &archFactory{streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: cmn.ActArchive}}
+	p := &archFactory{streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: apc.ActArchive}}
 	return p
 }
 
@@ -111,7 +112,7 @@ func (p *archFactory) Start() error {
 	r := &XactCreateArchMultiObj{streamingX: streamingX{p: &p.streamingF}, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xctn = r
-	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, 0 /*use default*/)
+	r.DemandBase.Init(p.UUID(), apc.ActArchive, p.Bck, 0 /*use default*/)
 	if err := p.newDM("arch", r.recv, 0); err != nil {
 		return err
 	}

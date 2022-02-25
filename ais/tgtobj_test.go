@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -64,10 +65,10 @@ func TestMain(m *testing.M) {
 	config := cmn.GCO.Get()
 	co := newConfigOwner(config)
 	t = newTarget(co)
-	t.name = cmn.Target
+	t.name = apc.Target
 	t.initNetworks()
 	tid, _ := initTID(config)
-	t.si.Init(tid, cmn.Target)
+	t.si.Init(tid, apc.Target)
 
 	fs.Add(testMountpath, t.si.ID())
 
@@ -76,7 +77,7 @@ func TestMain(m *testing.M) {
 	t.statsT = mock.NewStatsTracker()
 	cluster.Init(t)
 
-	bck := cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal)
+	bck := cluster.NewBck(testBucket, apc.ProviderAIS, cmn.NsGlobal)
 	bmd := newBucketMD()
 	bmd.add(bck, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
@@ -105,7 +106,7 @@ func BenchmarkObjPut(b *testing.B) {
 		b.Run(cos.B2S(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
-			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
+			err := lom.Init(cmn.Bck{Name: testBucket, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -152,7 +153,7 @@ func BenchmarkObjAppend(b *testing.B) {
 		b.Run(cos.B2S(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
-			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
+			err := lom.Init(cmn.Bck{Name: testBucket, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -167,7 +168,7 @@ func BenchmarkObjAppend(b *testing.B) {
 					t:       t,
 					lom:     lom,
 					r:       r,
-					op:      cmn.AppendOp,
+					op:      apc.AppendOp,
 					hi:      hi,
 				}
 				os.Remove(lom.FQN)
@@ -217,7 +218,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 		b.Run(benchName, func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
-			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
+			err := lom.Init(cmn.Bck{Name: testBucket, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
 			}

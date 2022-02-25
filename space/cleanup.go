@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -98,11 +99,11 @@ func (*clnFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 
 func (p *clnFactory) Start() error {
 	p.xctn = &XactCln{}
-	p.xctn.InitBase(p.UUID(), cmn.ActStoreCleanup, nil)
+	p.xctn.InitBase(p.UUID(), apc.ActStoreCleanup, nil)
 	return nil
 }
 
-func (*clnFactory) Kind() string        { return cmn.ActStoreCleanup }
+func (*clnFactory) Kind() string        { return apc.ActStoreCleanup }
 func (p *clnFactory) Get() cluster.Xact { return p.xctn }
 
 func (*clnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
@@ -141,7 +142,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		joggers[mpath].misplaced.ec = make([]*cluster.CT, 0, 64)
 	}
 	parent.jcnt.Store(int32(len(joggers)))
-	providers := cmn.Providers.ToSlice()
+	providers := apc.Providers.ToSlice()
 	for _, j := range joggers {
 		parent.wg.Add(1)
 		j.joggers = joggers

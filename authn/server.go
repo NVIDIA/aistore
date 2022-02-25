@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -77,11 +78,11 @@ func (a *Server) registerHandler(path string, handler func(http.ResponseWriter, 
 }
 
 func (a *Server) registerPublicHandlers() {
-	a.registerHandler(cmn.URLPathUsers.S, a.userHandler)
-	a.registerHandler(cmn.URLPathTokens.S, a.tokenHandler)
-	a.registerHandler(cmn.URLPathClusters.S, a.clusterHandler)
-	a.registerHandler(cmn.URLPathRoles.S, a.roleHandler)
-	a.registerHandler(cmn.URLPathDae.S, configHandler)
+	a.registerHandler(apc.URLPathUsers.S, a.userHandler)
+	a.registerHandler(apc.URLPathTokens.S, a.tokenHandler)
+	a.registerHandler(apc.URLPathClusters.S, a.clusterHandler)
+	a.registerHandler(apc.URLPathRoles.S, a.roleHandler)
+	a.registerHandler(apc.URLPathDae.S, configHandler)
 }
 
 func (a *Server) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +126,7 @@ func (a *Server) clusterHandler(w http.ResponseWriter, r *http.Request) {
 
 // Deletes existing token, a.k.a log out
 func (a *Server) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
-	if _, err := checkRESTItems(w, r, 0, cmn.URLPathTokens.L); err != nil {
+	if _, err := checkRESTItems(w, r, 0, apc.URLPathTokens.L); err != nil {
 		return
 	}
 	msg := &TokenMsg{}
@@ -146,7 +147,7 @@ func (a *Server) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Server) httpUserDel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -161,7 +162,7 @@ func (a *Server) httpUserDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Server) httpUserPost(w http.ResponseWriter, r *http.Request) {
-	if apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathUsers.L); err != nil {
+	if apiItems, err := checkRESTItems(w, r, 0, apc.URLPathUsers.L); err != nil {
 		return
 	} else if len(apiItems) == 0 {
 		a.userAdd(w, r)
@@ -172,7 +173,7 @@ func (a *Server) httpUserPost(w http.ResponseWriter, r *http.Request) {
 
 // Updates user credentials
 func (a *Server) httpUserPut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -217,7 +218,7 @@ func (a *Server) userAdd(w http.ResponseWriter, r *http.Request) {
 
 // Returns list of users (without superusers)
 func (a *Server) httpUserGet(w http.ResponseWriter, r *http.Request) {
-	items, err := checkRESTItems(w, r, 0, cmn.URLPathUsers.L)
+	items, err := checkRESTItems(w, r, 0, apc.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -263,7 +264,7 @@ func (a *Server) httpUserGet(w http.ResponseWriter, r *http.Request) {
 // valid. Super-user is a user created at deployment time that cannot be
 // deleted/created via REST API
 func checkAuthorization(w http.ResponseWriter, r *http.Request) error {
-	s := strings.SplitN(r.Header.Get(cmn.HdrAuthorization), " ", 2)
+	s := strings.SplitN(r.Header.Get(apc.HdrAuthorization), " ", 2)
 	if len(s) != 2 {
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("invalid header")
@@ -288,7 +289,7 @@ func checkAuthorization(w http.ResponseWriter, r *http.Request) error {
 // token is returned
 func (a *Server) userLogin(w http.ResponseWriter, r *http.Request) {
 	var err error
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -338,7 +339,7 @@ func writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
 }
 
 func (a *Server) httpSrvPost(w http.ResponseWriter, r *http.Request) {
-	if _, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L); err != nil {
+	if _, err := checkRESTItems(w, r, 0, apc.URLPathClusters.L); err != nil {
 		return
 	}
 	if err := checkAuthorization(w, r); err != nil {
@@ -355,7 +356,7 @@ func (a *Server) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Server) httpSrvPut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathClusters.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathClusters.L)
 	if err != nil {
 		return
 	}
@@ -373,7 +374,7 @@ func (a *Server) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Server) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L)
+	apiItems, err := checkRESTItems(w, r, 0, apc.URLPathClusters.L)
 	if err != nil {
 		return
 	}
@@ -395,7 +396,7 @@ func (a *Server) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L)
+	apiItems, err := checkRESTItems(w, r, 0, apc.URLPathClusters.L)
 	if err != nil {
 		return
 	}
@@ -441,7 +442,7 @@ func (a *Server) roleHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Server) httpRoleGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathRoles.L)
+	apiItems, err := checkRESTItems(w, r, 0, apc.URLPathRoles.L)
 	if err != nil {
 		return
 	}
@@ -479,7 +480,7 @@ func (a *Server) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Server) httpRoleDel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathRoles.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathRoles.L)
 	if err != nil {
 		return
 	}
@@ -494,7 +495,7 @@ func (a *Server) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Server) httpRolePost(w http.ResponseWriter, r *http.Request) {
-	_, err := checkRESTItems(w, r, 0, cmn.URLPathRoles.L)
+	_, err := checkRESTItems(w, r, 0, apc.URLPathRoles.L)
 	if err != nil {
 		return
 	}
@@ -511,7 +512,7 @@ func (a *Server) httpRolePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Server) httpRolePut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathRoles.L)
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathRoles.L)
 	if err != nil {
 		return
 	}

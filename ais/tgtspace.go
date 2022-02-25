@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -61,8 +62,8 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 	xlru := rns.Entry.Get()
 	if regToIC && xlru.ID() == id {
 		// pre-existing UUID: notify IC members
-		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActLRU, Srcs: []string{t.si.ID()}}
-		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
+		regMsg := xactRegMsg{UUID: id, Kind: apc.ActLRU, Srcs: []string{t.si.ID()}}
+		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
 	ini := space.IniLRU{
@@ -98,8 +99,8 @@ func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck)
 	xcln := rns.Entry.Get()
 	if regToIC && xcln.ID() == id {
 		// pre-existing UUID: notify IC members
-		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActStoreCleanup, Srcs: []string{t.si.ID()}}
-		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
+		regMsg := xactRegMsg{UUID: id, Kind: apc.ActStoreCleanup, Srcs: []string{t.si.ID()}}
+		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
 	ini := space.IniCln{

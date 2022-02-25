@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -547,13 +548,13 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 					query  = url.Values{}
 					sendTo = targetOrder[i+1]
 				)
-				query.Add(cmn.QparamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
-				query.Add(cmn.QparamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
-				query.Add(cmn.QparamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
+				query.Add(apc.QparamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
+				query.Add(apc.QparamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
+				query.Add(apc.QparamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
 				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
 					Base:   sendTo.URL(cmn.NetIntraData),
-					Path:   cmn.URLPathdSortRecords.Join(m.ManagerUUID),
+					Path:   apc.URLPathdSortRecords.Join(m.ManagerUUID),
 					Query:  query,
 					BodyR:  r,
 				}
@@ -886,7 +887,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
 					Base:   si.URL(cmn.NetIntraData),
-					Path:   cmn.URLPathdSortShards.Join(m.ManagerUUID),
+					Path:   apc.URLPathdSortShards.Join(m.ManagerUUID),
 					Query:  query,
 					BodyR:  r,
 				}

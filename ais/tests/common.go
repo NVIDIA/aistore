@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -130,7 +131,7 @@ func (m *ioContext) initWithCleanup() {
 		m.bck.Name = cos.RandString(15)
 	}
 	if m.bck.Provider == "" {
-		m.bck.Provider = cmn.ProviderAIS
+		m.bck.Provider = apc.ProviderAIS
 	}
 	if m.numGetsEachFile == 0 {
 		m.numGetsEachFile = 1
@@ -517,7 +518,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int, greaterOk bool) {
 		total      int
 	)
 	time.Sleep(time.Second)
-	xactArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
+	xactArgs := api.XactReqArgs{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, xactArgs)
 	tassert.CheckFatal(m.t, err)
 
@@ -683,7 +684,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 	}{
 		{
 			name: "local",
-			bck:  cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS},
+			bck:  cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS},
 		},
 		{
 			name: "remote",
@@ -697,7 +698,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			name: "remote_ais",
 			bck: cmn.Bck{
 				Name:     cos.RandString(10),
-				Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID},
+				Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID},
 			},
 			skipArgs: tutils.SkipTestArgs{
 				RequiresRemoteCluster: true,
@@ -706,7 +707,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name:       "backend",
-			bck:        cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS},
+			bck:        cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS},
 			backendBck: cliBck,
 			skipArgs: tutils.SkipTestArgs{
 				Long:      true,
@@ -715,7 +716,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "local_3_copies",
-			bck:  cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS},
+			bck:  cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS},
 			props: &cmn.BucketPropsToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
 					Enabled: api.Bool(true),
@@ -726,7 +727,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "local_ec_2_2",
-			bck:  cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS},
+			bck:  cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS},
 			props: &cmn.BucketPropsToUpdate{
 				EC: &cmn.ECConfToUpdate{
 					DataSlices:   api.Int(2),

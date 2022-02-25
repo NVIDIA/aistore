@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/valyala/fasthttp"
 )
@@ -62,9 +63,9 @@ func (s *streamBase) do(body io.Reader) (err error) {
 	req.SetRequestURI(s.dstURL)
 	req.SetBodyStream(body, -1)
 	if s.streamer.compressed() {
-		req.Header.Set(cmn.HdrCompress, cmn.LZ4Compression)
+		req.Header.Set(apc.HdrCompress, apc.LZ4Compression)
 	}
-	req.Header.Set(cmn.HdrSessID, strconv.FormatInt(s.sessID, 10))
+	req.Header.Set(apc.HdrSessID, strconv.FormatInt(s.sessID, 10))
 	// do
 	err = s.client.Do(req, resp)
 	if err != nil {

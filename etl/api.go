@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
@@ -101,11 +102,11 @@ func (m *InitCodeMsg) Validate() error {
 }
 
 func (*InitCodeMsg) InitType() string {
-	return cmn.ETLInitCode
+	return apc.ETLInitCode
 }
 
 func (*InitSpecMsg) InitType() string {
-	return cmn.ETLInitSpec
+	return apc.ETLInitSpec
 }
 
 func (m *InitSpecMsg) Validate() (err error) {

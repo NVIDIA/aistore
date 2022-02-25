@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -17,7 +17,7 @@ func TestSmoke(t *testing.T) {
 	objSizes := [3]uint64{3 * cos.KiB, 19 * cos.KiB, 77 * cos.KiB}
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		if bck.IsCloud() && bck.RemoteBck().Provider == cmn.ProviderGoogle {
+		if bck.IsCloud() && bck.RemoteBck().Provider == apc.ProviderGoogle {
 			t.Skip("GCP fails intermittently when overloaded with requests - skipping")
 		}
 		for _, objSize := range objSizes {

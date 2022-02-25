@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -49,7 +50,7 @@ func (m *BMD) numBuckets() (na, nc, nr int) {
 	for provider, namespaces := range m.Providers {
 		for nsUname, buckets := range namespaces {
 			ns := cmn.ParseNsUname(nsUname)
-			if provider == cmn.ProviderAIS {
+			if provider == apc.ProviderAIS {
 				if ns.IsRemote() {
 					nr += len(buckets)
 				} else {
@@ -196,10 +197,10 @@ func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 }
 
 func (m *BMD) initBckAnyProvider(bck *Bck) (present bool) {
-	if namespaces, ok := m.Providers[cmn.ProviderAIS]; ok {
+	if namespaces, ok := m.Providers[apc.ProviderAIS]; ok {
 		if buckets, ok := namespaces[cmn.NsGlobal.Uname()]; ok {
 			if p, present := buckets[bck.Name]; present {
-				bck.Provider = cmn.ProviderAIS
+				bck.Provider = apc.ProviderAIS
 				bck.Ns = cmn.NsGlobal
 				bck.Props = p
 				return true
@@ -210,7 +211,7 @@ func (m *BMD) initBckAnyProvider(bck *Bck) (present bool) {
 		return true
 	}
 
-	bck.Provider = cmn.ProviderAIS
+	bck.Provider = apc.ProviderAIS
 	return false
 }
 

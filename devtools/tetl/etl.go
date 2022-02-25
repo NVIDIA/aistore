@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -179,7 +180,7 @@ func waitForXactDone(baseParams api.BaseParams, xactID string, timeout time.Dura
 	}
 
 	tlog.Logf("Waiting for ETL xaction to be %s...\n", action)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: timeout /* total timeout */}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActETLBck, Timeout: timeout /* total timeout */}
 	status, err := api.WaitForXactionIC(baseParams, args)
 	if err == nil {
 		if waitForAbort && !status.Aborted() {

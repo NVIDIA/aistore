@@ -5,6 +5,7 @@
 package cluster
 
 import (
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -26,31 +27,31 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"regular ais bucket with simple object name",
-				"bck", cmn.ProviderAIS, cmn.NsGlobal, "obj",
+				"bck", apc.ProviderAIS, cmn.NsGlobal, "obj",
 			),
 			Entry(
 				"regular ais bucket with long object name",
-				"bck", cmn.ProviderAIS, cmn.NsGlobal, "obj/tmp1/tmp2",
+				"bck", apc.ProviderAIS, cmn.NsGlobal, "obj/tmp1/tmp2",
 			),
 			Entry(
 				"non-empty local namespace",
-				"bck", cmn.ProviderAIS, cmn.Ns{Name: "namespace"}, "obj/tmp1/tmp2",
+				"bck", apc.ProviderAIS, cmn.Ns{Name: "namespace"}, "obj/tmp1/tmp2",
 			),
 			Entry(
 				"non-empty cloud namespace",
-				"bck", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "namespace"}, "obj/tmp1/tmp2",
+				"bck", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "namespace"}, "obj/tmp1/tmp2",
 			),
 			Entry(
 				"aws provider",
-				"bck", cmn.ProviderAmazon, cmn.NsGlobal, "obj",
+				"bck", apc.ProviderAmazon, cmn.NsGlobal, "obj",
 			),
 			Entry(
 				"gcp provider",
-				"bck", cmn.ProviderGoogle, cmn.NsGlobal, "obj",
+				"bck", apc.ProviderGoogle, cmn.NsGlobal, "obj",
 			),
 			Entry(
 				"backend provider",
-				"bck", cmn.ProviderGoogle, cmn.NsGlobal, "obj",
+				"bck", apc.ProviderGoogle, cmn.NsGlobal, "obj",
 			),
 		)
 	})
@@ -63,33 +64,33 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"not matching names",
-				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
-				NewBck("b", cmn.ProviderAIS, cmn.NsGlobal),
+				NewBck("a", apc.ProviderAIS, cmn.NsGlobal),
+				NewBck("b", apc.ProviderAIS, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching namespace #1",
-				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns1"}),
-				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns2"}),
+				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns1"}),
+				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns2"}),
 			),
 			Entry(
 				"not matching namespace #2",
-				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid1", Name: "ns"}),
-				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid2", Name: "ns"}),
+				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid1", Name: "ns"}),
+				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid2", Name: "ns"}),
 			),
 			Entry(
 				"not matching providers #2",
-				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
-				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
+				NewBck("a", apc.ProviderAIS, cmn.NsGlobal),
+				NewBck("a", apc.ProviderAmazon, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching Backend providers #4",
-				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
-				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
+				NewBck("a", apc.ProviderAmazon, cmn.NsGlobal),
+				NewBck("a", apc.ProviderGoogle, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching Backend providers #5",
-				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
-				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
+				NewBck("a", apc.ProviderGoogle, cmn.NsGlobal),
+				NewBck("a", apc.ProviderAmazon, cmn.NsGlobal),
 			),
 		)
 
@@ -100,18 +101,18 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"matching AIS providers",
-				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
-				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
+				NewBck("a", apc.ProviderAIS, cmn.NsGlobal),
+				NewBck("a", apc.ProviderAIS, cmn.NsGlobal),
 			),
 			Entry(
 				"matching local namespaces",
-				NewBck("a", cmn.ProviderAIS, cmn.Ns{Name: "ns"}),
-				NewBck("a", cmn.ProviderAIS, cmn.Ns{Name: "ns"}),
+				NewBck("a", apc.ProviderAIS, cmn.Ns{Name: "ns"}),
+				NewBck("a", apc.ProviderAIS, cmn.Ns{Name: "ns"}),
 			),
 			Entry(
 				"matching cloud namespaces",
-				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
-				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
+				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
+				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
 			),
 		)
 	})

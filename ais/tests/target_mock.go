@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -40,11 +41,11 @@ type MockRegRequest struct {
 func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *cluster.Smap) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc(cmn.URLPathBuckets.S, mocktgt.filehdlr)
-	mux.HandleFunc(cmn.URLPathObjects.S, mocktgt.filehdlr)
-	mux.HandleFunc(cmn.URLPathDae.S, mocktgt.daemonhdlr)
-	mux.HandleFunc(cmn.URLPathVote.S, mocktgt.votehdlr)
-	mux.HandleFunc(cmn.URLPathHealth.S, mocktgt.healthdlr)
+	mux.HandleFunc(apc.URLPathBuckets.S, mocktgt.filehdlr)
+	mux.HandleFunc(apc.URLPathObjects.S, mocktgt.filehdlr)
+	mux.HandleFunc(apc.URLPathDae.S, mocktgt.daemonhdlr)
+	mux.HandleFunc(apc.URLPathVote.S, mocktgt.votehdlr)
+	mux.HandleFunc(apc.URLPathHealth.S, mocktgt.healthdlr)
 
 	target, _ := smap.GetRandTarget()
 	ip := target.PublicNet.NodeHostname
@@ -91,7 +92,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 	baseParams.Method = http.MethodPost
 	reqParams := &api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPathCluAutoReg.S,
+		Path:       apc.URLPathCluAutoReg.S,
 		Body:       jsonDaemonInfo,
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}
@@ -138,7 +139,7 @@ func (*voteRetryMockTarget) votehdlr(w http.ResponseWriter, _ *http.Request) {
 
 func (p *voteRetryMockTarget) healthdlr(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	getRebStatus := cos.IsParseBool(query.Get(cmn.QparamRebStatus))
+	getRebStatus := cos.IsParseBool(query.Get(apc.QparamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
 		status.RebID = math.MaxInt64 // to abort t[MOCK] join triggered rebalance

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -129,7 +130,7 @@ func TestConfigSetGlobal(t *testing.T) {
 	checkConfig(t, smap, check)
 
 	// wait for ec
-	flt := api.XactReqArgs{Kind: cmn.ActECEncode}
+	flt := api.XactReqArgs{Kind: apc.ActECEncode}
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
@@ -154,7 +155,7 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 		"expected 'ec.enabled' to be %v, got: %v", config.EC.Enabled, daemonConfig.EC.Enabled)
 
 	// wait for ec
-	flt := api.XactReqArgs{Kind: cmn.ActECEncode}
+	flt := api.XactReqArgs{Kind: apc.ActECEncode}
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
@@ -189,7 +190,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	smap, err = tutils.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
 
-	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
+	err = tutils.RestoreNode(cmd, false, apc.Proxy)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
@@ -238,7 +239,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	})
 
 	// 3. Restart proxy
-	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
+	err = tutils.RestoreNode(cmd, false, apc.Proxy)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
@@ -249,7 +250,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		"expected 'ec.Enabled' to be %v, got: %v", newECEnabled, daemonConfig.EC.Enabled)
 
 	// wait for ec
-	flt := api.XactReqArgs{Kind: cmn.ActECEncode}
+	flt := api.XactReqArgs{Kind: apc.ActECEncode}
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 

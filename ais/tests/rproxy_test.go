@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -94,7 +95,7 @@ func TestRProxyGCS(t *testing.T) {
 	}
 
 	initMountpaths(t, proxyURL)
-	bck := cmn.Bck{Provider: cmn.ProviderHTTP}
+	bck := cmn.Bck{Provider: apc.ProviderHTTP}
 	queryBck := cmn.QueryBcks(bck)
 	bckList, err := api.ListBuckets(baseParams, queryBck)
 	tassert.CheckFatal(t, err)

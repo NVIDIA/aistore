@@ -21,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
@@ -114,14 +115,14 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 
 	if bck.IsHTTP() {
 		objArgs.Query = make(url.Values, 2)
-		objArgs.Query.Set(cmn.QparamOrigURL, uri)
+		objArgs.Query.Set(apc.QparamOrigURL, uri)
 	}
 	// TODO: validate
 	if archPath != "" {
 		if objArgs.Query == nil {
 			objArgs.Query = make(url.Values, 1)
 		}
-		objArgs.Query.Set(cmn.QparamArchpath, archPath)
+		objArgs.Query.Set(apc.QparamArchpath, archPath)
 	}
 
 	if flagIsSet(c, cksumFlag) {
@@ -182,7 +183,7 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 	if xactID != "" {
 		s2 = fmt.Sprintf(", xaction ID %q", xactID)
 	}
-	// alternatively, print(fmtXactStatusCheck, cmn.ActPromote, ...)
+	// alternatively, print(fmtXactStatusCheck, apc.ActPromote, ...)
 	fmt.Fprintf(c.App.Writer, "%spromoted %q => %s%s\n", s1, fqn, bck, s2)
 	return nil
 }

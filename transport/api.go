@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -246,14 +247,14 @@ func Unhandle(trname string) (err error) {
 // stats and misc //
 ////////////////////
 
-func ObjURLPath(trname string) string { return _urlPath(cmn.ObjStream, trname) }
-func MsgURLPath(trname string) string { return _urlPath(cmn.MsgStream, trname) }
+func ObjURLPath(trname string) string { return _urlPath(apc.ObjStream, trname) }
+func MsgURLPath(trname string) string { return _urlPath(apc.MsgStream, trname) }
 
 func _urlPath(endp, trname string) string {
 	if trname == "" {
-		return cos.JoinWords(cmn.Version, endp)
+		return cos.JoinWords(apc.Version, endp)
 	}
-	return cos.JoinWords(cmn.Version, endp, trname)
+	return cos.JoinWords(apc.Version, endp, trname)
 }
 
 func GetStats() (netstats map[string]EndpointStats, err error) {

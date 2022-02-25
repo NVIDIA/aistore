@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort"
@@ -19,7 +20,7 @@ func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathdSort.S
+		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Body = cos.MustMarshal(rs)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -33,8 +34,8 @@ func AbortDSort(baseParams BaseParams, managerUUID string) error {
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathdSortAbort.S
-		reqParams.Query = url.Values{cmn.QparamUUID: []string{managerUUID}}
+		reqParams.Path = apc.URLPathdSortAbort.S
+		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
 	err := reqParams.DoHTTPRequest()
 	freeRp(reqParams)
@@ -46,8 +47,8 @@ func MetricsDSort(baseParams BaseParams, managerUUID string) (metrics map[string
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathdSort.S
-		reqParams.Query = url.Values{cmn.QparamUUID: []string{managerUUID}}
+		reqParams.Path = apc.URLPathdSort.S
+		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
 	err = reqParams.DoHTTPReqResp(&metrics)
 	freeRp(reqParams)
@@ -59,8 +60,8 @@ func RemoveDSort(baseParams BaseParams, managerUUID string) error {
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathdSort.S
-		reqParams.Query = url.Values{cmn.QparamUUID: []string{managerUUID}}
+		reqParams.Path = apc.URLPathdSort.S
+		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
 	err := reqParams.DoHTTPRequest()
 	freeRp(reqParams)
@@ -72,8 +73,8 @@ func ListDSort(baseParams BaseParams, regex string) (jobsInfos []*dsort.JobInfo,
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathdSort.S
-		reqParams.Query = url.Values{cmn.QparamRegex: []string{regex}}
+		reqParams.Path = apc.URLPathdSort.S
+		reqParams.Query = url.Values{apc.QparamRegex: []string{regex}}
 	}
 	err = reqParams.DoHTTPReqResp(&jobsInfos)
 	freeRp(reqParams)

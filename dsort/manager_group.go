@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/hk"
 	jsoniter "github.com/json-iterator/go"
@@ -45,7 +45,7 @@ func NewManagerGroup(db dbdriver.Driver, skipHk bool) *ManagerGroup {
 		db:       db,
 	}
 	if !skipHk {
-		hk.Reg(cmn.DSortNameLowercase, mg.housekeep, hk.DayInterval)
+		hk.Reg(apc.DSortNameLowercase, mg.housekeep, hk.DayInterval)
 	}
 	return mg
 }
@@ -135,7 +135,7 @@ func (mg *ManagerGroup) Remove(managerUUID string) error {
 	defer mg.mtx.Unlock()
 
 	if manager, ok := mg.managers[managerUUID]; ok && !manager.Metrics.Archived.Load() {
-		return errors.Errorf("%s process %s still in progress and cannot be removed", cmn.DSortName, managerUUID)
+		return errors.Errorf("%s process %s still in progress and cannot be removed", apc.DSortName, managerUUID)
 	} else if ok {
 		delete(mg.managers, managerUUID)
 	}

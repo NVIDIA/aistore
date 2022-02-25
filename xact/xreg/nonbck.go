@@ -7,6 +7,7 @@ package xreg
 import (
 	"context"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -29,44 +30,44 @@ func RegNonBckXact(entry Renewable) {
 }
 
 func RenewRebalance(id int64) RenewRes {
-	e := dreg.nonbckXacts[cmn.ActRebalance].New(Args{UUID: xact.RebID2S(id)}, nil)
+	e := dreg.nonbckXacts[apc.ActRebalance].New(Args{UUID: xact.RebID2S(id)}, nil)
 	return dreg.renew(e, nil)
 }
 
 func RenewResilver(id string) cluster.Xact {
-	e := dreg.nonbckXacts[cmn.ActResilver].New(Args{UUID: id}, nil)
+	e := dreg.nonbckXacts[apc.ActResilver].New(Args{UUID: id}, nil)
 	rns := dreg.renew(e, nil)
 	debug.Assert(!rns.IsRunning()) // NOTE: resilver is always preempted
 	return rns.Entry.Get()
 }
 
 func RenewElection() RenewRes {
-	e := dreg.nonbckXacts[cmn.ActElection].New(Args{}, nil)
+	e := dreg.nonbckXacts[apc.ActElection].New(Args{}, nil)
 	return dreg.renew(e, nil)
 }
 
 func RenewLRU(id string) RenewRes {
-	e := dreg.nonbckXacts[cmn.ActLRU].New(Args{UUID: id}, nil)
+	e := dreg.nonbckXacts[apc.ActLRU].New(Args{UUID: id}, nil)
 	return dreg.renew(e, nil)
 }
 
 func RenewStoreCleanup(id string) RenewRes {
-	e := dreg.nonbckXacts[cmn.ActStoreCleanup].New(Args{UUID: id}, nil)
+	e := dreg.nonbckXacts[apc.ActStoreCleanup].New(Args{UUID: id}, nil)
 	return dreg.renew(e, nil)
 }
 
 func RenewDownloader(t cluster.Target, statsT stats.Tracker) RenewRes {
-	e := dreg.nonbckXacts[cmn.ActDownload].New(Args{T: t, Custom: statsT}, nil)
+	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, Custom: statsT}, nil)
 	return dreg.renew(e, nil)
 }
 
 func RenewETL(t cluster.Target, msg interface{}) RenewRes {
-	e := dreg.nonbckXacts[cmn.ActETLInline].New(Args{T: t, Custom: msg}, nil)
+	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{T: t, Custom: msg}, nil)
 	return dreg.renew(e, nil)
 }
 
 func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BckSummMsg) RenewRes {
 	custom := &BckSummaryArgs{Ctx: ctx, Msg: msg}
-	e := dreg.nonbckXacts[cmn.ActSummaryBck].New(Args{T: t, UUID: msg.UUID, Custom: custom}, bck)
+	e := dreg.nonbckXacts[apc.ActSummaryBck].New(Args{T: t, UUID: msg.UUID, Custom: custom}, bck)
 	return dreg.renew(e, bck)
 }

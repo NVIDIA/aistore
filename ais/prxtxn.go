@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -46,7 +47,7 @@ type txnClientCtx struct {
 //////////////////
 
 func (c *txnClientCtx) begin(what fmt.Stringer) (err error) {
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
+	results := c.bcast(apc.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err != nil {
 			err = c.bcastAbort(what, res.toErr())
@@ -64,7 +65,7 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (err error) {
 //       must be able to ask for.
 func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xactID string, err error) {
 	globalID := true // cluster-wide xaction ID
-	results := c.bcast(cmn.ActCommit, timeout)
+	results := c.bcast(apc.ActCommit, timeout)
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
@@ -73,8 +74,8 @@ func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xactID 
 		}
 		if globalID {
 			if xactID == "" {
-				xactID = res.header.Get(cmn.HdrXactionID)
-			} else if xactID != res.header.Get(cmn.HdrXactionID) {
+				xactID = res.header.Get(apc.HdrXactionID)
+			} else if xactID != res.header.Get(apc.HdrXactionID) {
 				xactID, globalID = "", false
 			}
 		}
@@ -92,9 +93,9 @@ func (c *txnClientCtx) cmtTout(waitmsync bool) time.Duration {
 
 func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results sliceResults) {
 	c.req.Path = cos.JoinWords(c.path, phase)
-	if phase != cmn.ActAbort {
+	if phase != apc.ActAbort {
 		now := time.Now()
-		c.req.Query.Set(cmn.QparamUnixTime, cos.UnixNano2S(now.UnixNano()))
+		c.req.Query.Set(apc.QparamUnixTime, cos.UnixNano2S(now.UnixNano()))
 	}
 
 	args := allocBcArgs()
@@ -115,7 +116,7 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results slice
 
 func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
 	glog.Errorf("Abort %q %s: %v (msg=%s)", c.msg.Action, what, err, c.msg)
-	results := c.bcast(cmn.ActAbort, 0)
+	results := c.bcast(apc.ActAbort, 0)
 	freeBcastRes(results)
 	return err
 }
@@ -314,9 +315,9 @@ func (p *proxy) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprops *cmn
 
 	// 2. begin
 	switch msg.Action {
-	case cmn.ActSetBprops:
+	case apc.ActSetBprops:
 		// do nothing here (caller's responsible for validation)
-	case cmn.ActResetBprops:
+	case apc.ActResetBprops:
 		var remoteBckProps http.Header
 		if bck.IsRemote() {
 			if bck.HasBackendBck() {
@@ -366,9 +367,9 @@ func (p *proxy) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprops *cmn
 	// TODO -- FIXME: setting up IC listening prior to committing (and confirming xactID)
 	//                here and elsewhere
 	if ctx.needReMirror || ctx.needReEC {
-		action := cmn.ActMakeNCopies
+		action := apc.ActMakeNCopies
 		if ctx.needReEC {
-			action = cmn.ActECEncode
+			action = apc.ActECEncode
 		}
 		nl := xact.NewXactNL(c.uuid, action, &c.smap.Smap, nil, bck.Bck)
 		nl.SetOwner(equalIC)
@@ -387,7 +388,7 @@ func (p *proxy) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error) {
 		bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
 	)
 	cos.Assert(present)
-	if ctx.msg.Action == cmn.ActSetBprops {
+	if ctx.msg.Action == apc.ActSetBprops {
 		bck.Props = bprops
 	} else {
 		targetCnt := p.owner.smap.Get().CountActiveTargets()
@@ -422,7 +423,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.QparamBucketTo)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, apc.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -477,13 +478,13 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
 
 	// Register rebalance `nl`
-	nl = xact.NewXactNL(xact.RebID2S(rmd.Version), cmn.ActRebalance, &c.smap.Smap, nil)
+	nl = xact.NewXactNL(xact.RebID2S(rmd.Version), apc.ActRebalance, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	err = p.notifs.add(nl)
 	debug.AssertNoErr(err)
 
 	// Register resilver `nl`
-	nl = xact.NewXactNL(rmd.Resilver, cmn.ActResilver, &c.smap.Smap, nil)
+	nl = xact.NewXactNL(rmd.Resilver, apc.ActResilver, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	_ = p.notifs.add(nl)
 
@@ -501,7 +502,7 @@ func _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	bckTo.Props = bprops.Clone()
 	added := clone.add(bckTo, bckTo.Props)
 	cos.Assert(added)
-	bckFrom.Props.Renamed = cmn.ActMoveBck // NOTE: state until `BMDVersionFixup` by renaming xaction
+	bckFrom.Props.Renamed = apc.ActMoveBck // NOTE: state until `BMDVersionFixup` by renaming xaction
 	clone.set(bckFrom, bckFrom.Props)
 	return nil
 }
@@ -523,7 +524,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 		waitmsync = !dryRun
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.QparamBucketTo)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, apc.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -547,7 +548,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 		c.msg.BMDVersion = bmd.version()
 		if !ctx.terminate {
 			debug.Assert(!existsTo)
-			c.req.Query.Set(cmn.QparamWaitMetasync, "true")
+			c.req.Query.Set(apc.QparamWaitMetasync, "true")
 		}
 	}
 
@@ -560,7 +561,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 		if errNl := nl.Err(); errNl != nil {
 			if !ctx.terminate { // undo bmd.modify() - see above
 				glog.Error(errNl)
-				_ = p.destroyBucket(&cmn.ActionMsg{Action: cmn.ActDestroyBck}, bckTo)
+				_ = p.destroyBucket(&cmn.ActionMsg{Action: apc.ActDestroyBck}, bckTo)
 			}
 		}
 	}
@@ -571,7 +572,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
 	if err != nil {
 		// cleanup
-		_ = p.destroyBucket(&cmn.ActionMsg{Action: cmn.ActDestroyBck}, bckTo)
+		_ = p.destroyBucket(&cmn.ActionMsg{Action: apc.ActDestroyBck}, bckTo)
 	}
 	return
 }
@@ -589,7 +590,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID 
 		waitmsync = false
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.QparamBucketTo)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, apc.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -730,7 +731,7 @@ func _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	// begin
 	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.QparamBucketTo)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, apc.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -768,8 +769,8 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cm
 
 	// 3. Commit
 	// NOTE: Call only the target that's being decommissioned (commit is a no-op for the rest)
-	if msg.Action == cmn.ActDecommissionNode || msg.Action == cmn.ActShutdownNode {
-		c.req.Path = cos.JoinWords(c.path, cmn.ActCommit)
+	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
+		c.req.Path = cos.JoinWords(c.path, apc.ActCommit)
 		cargs := allocCargs()
 		{
 			cargs.si = si
@@ -789,7 +790,7 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cm
 	// 4. Start rebalance
 	if !opts.SkipRebalance && rebEnabled {
 		return p.rebalanceAndRmSelf(msg, si)
-	} else if msg.Action == cmn.ActDecommissionNode {
+	} else if msg.Action == apc.ActDecommissionNode {
 		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
 	}
 	return
@@ -799,13 +800,13 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cm
 func (p *proxy) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) error {
 	var flags cos.BitFlags
 	switch msg.Action {
-	case cmn.ActDecommissionNode:
+	case apc.ActDecommissionNode:
 		flags = cluster.NodeFlagDecomm
-	case cmn.ActStartMaintenance, cmn.ActShutdownNode:
+	case apc.ActStartMaintenance, apc.ActShutdownNode:
 		flags = cluster.NodeFlagMaint
 	default:
 		err := fmt.Errorf(fmtErrInvaldAction, msg.Action,
-			[]string{cmn.ActDecommissionNode, cmn.ActStartMaintenance, cmn.ActShutdownNode})
+			[]string{apc.ActDecommissionNode, apc.ActStartMaintenance, apc.ActShutdownNode})
 		debug.AssertNoErr(err)
 		return err
 	}
@@ -874,12 +875,12 @@ func (p *proxy) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 // erase bucket data from all targets (keep metadata)
 func (p *proxy) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	query := cmn.AddBckToQuery(
-		url.Values{cmn.QparamKeepBckMD: []string{"true"}},
+		url.Values{apc.QparamKeepBckMD: []string{"true"}},
 		bck.Bck)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodDelete,
-		Path:   cmn.URLPathBuckets.Join(bck.Name),
+		Path:   apc.URLPathBuckets.Join(bck.Name),
 		Body:   cos.MustMarshal(msg),
 		Query:  query,
 	}
@@ -918,7 +919,7 @@ func (p *proxy) promote(bck *cluster.Bck, msg *cmn.ActionMsg, tsi *cluster.Snode
 	// if targets "see" identical content let them all know
 	// (so that they go ahead to partition accordingly)
 	if allAgree {
-		c.req.Query.Set(cmn.QparamPromoteFileShare, "true")
+		c.req.Query.Set(apc.QparamPromoteFileShare, "true")
 	}
 
 	// 5. IC
@@ -937,7 +938,7 @@ func prmBegin(c *txnClientCtx, bck *cluster.Bck) (num int64, allAgree bool, err 
 	var cksumVal, totalN string
 	allAgree = true
 
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
+	results := c.bcast(apc.ActBegin, c.timeout.netw)
 	for i, res := range results {
 		if res.err != nil {
 			err = c.bcastAbort(bck, res.toErr())
@@ -945,12 +946,12 @@ func prmBegin(c *txnClientCtx, bck *cluster.Bck) (num int64, allAgree bool, err 
 		}
 		// all agree?
 		if i == 0 {
-			cksumVal = res.header.Get(cmn.HdrPromoteNamesHash)
-			totalN = res.header.Get(cmn.HdrPromoteNamesNum)
-		} else if val := res.header.Get(cmn.HdrPromoteNamesHash); val == "" || val != cksumVal {
+			cksumVal = res.header.Get(apc.HdrPromoteNamesHash)
+			totalN = res.header.Get(apc.HdrPromoteNamesNum)
+		} else if val := res.header.Get(apc.HdrPromoteNamesHash); val == "" || val != cksumVal {
 			allAgree = false
 		} else if allAgree {
-			debug.Assert(totalN == res.header.Get(cmn.HdrPromoteNamesNum))
+			debug.Assert(totalN == res.header.Get(apc.HdrPromoteNamesNum))
 		}
 	}
 	if err == nil {
@@ -971,18 +972,18 @@ func (p *proxy) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bo
 
 	query := make(url.Values, 2)
 	if bck == nil {
-		c.path = cmn.URLPathTxn.S
+		c.path = apc.URLPathTxn.S
 	} else {
-		c.path = cmn.URLPathTxn.Join(bck.Name)
+		c.path = apc.URLPathTxn.Join(bck.Name)
 		query = cmn.AddBckToQuery(query, bck.Bck)
 	}
 	config := cmn.GCO.Get()
 	c.timeout.netw = 2 * config.Timeout.MaxKeepalive.D()
 	c.timeout.host = config.Timeout.MaxHostBusy.D()
 	if !waitmsync { // when commit does not block behind metasync
-		query.Set(cmn.QparamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
+		query.Set(apc.QparamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
 	}
-	query.Set(cmn.QparamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
+	query.Set(apc.QparamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
 
 	c.req = cmn.HreqArgs{Method: http.MethodPost, Query: query, Body: body}
 	return c

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -167,8 +168,8 @@ func attachRemoteAISHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
-	if alias == cmn.QparamWhat {
-		return fmt.Errorf("cannot use %q as an alias", cmn.QparamWhat)
+	if alias == apc.QparamWhat {
+		return fmt.Errorf("cannot use %q as an alias", apc.QparamWhat)
 	}
 	if err = api.AttachRemoteAIS(defaultAPIParams, alias, url); err != nil {
 		return
@@ -223,13 +224,13 @@ func joinNodeHandler(c *cli.Context) (err error) {
 	}
 
 	switch parseStrFlag(c, roleFlag) {
-	case cmn.Proxy, roleProxyShort:
-		daemonType = cmn.Proxy
-	case cmn.Target, roleTargetShort:
-		daemonType = cmn.Target
+	case apc.Proxy, roleProxyShort:
+		daemonType = apc.Proxy
+	case apc.Target, roleTargetShort:
+		daemonType = apc.Target
 	default:
 		return fmt.Errorf("invalid daemon role, one of %q, %q, %q, %q expected",
-			cmn.Proxy, cmn.Target, roleProxyShort, roleTargetShort)
+			apc.Proxy, apc.Target, roleProxyShort, roleTargetShort)
 	}
 
 	prefix = getPrefixFromPrimary()
@@ -350,11 +351,11 @@ func setPrimaryHandler(c *cli.Context) (err error) {
 }
 
 func startClusterRebalanceHandler(c *cli.Context) (err error) {
-	return startXactionKindHandler(c, cmn.ActRebalance)
+	return startXactionKindHandler(c, apc.ActRebalance)
 }
 
 func stopClusterRebalanceHandler(c *cli.Context) (err error) {
-	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, OnlyRunning: true}
+	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance, OnlyRunning: true}
 	var xs api.NodesXactMultiSnap
 	xs, err = api.QueryXactionSnaps(defaultAPIParams, xactArgs)
 	if err != nil {
@@ -373,11 +374,11 @@ outer:
 		return errors.New("rebalance is not running")
 	}
 
-	xactArgs = api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance}
+	xactArgs = api.XactReqArgs{ID: rebID, Kind: apc.ActRebalance}
 	if err = api.AbortXaction(defaultAPIParams, xactArgs); err != nil {
 		return
 	}
-	_, err = fmt.Fprintf(c.App.Writer, "Stopped %s %q\n", cmn.ActRebalance, rebID)
+	_, err = fmt.Fprintf(c.App.Writer, "Stopped %s %q\n", apc.ActRebalance, rebID)
 	return
 }
 
@@ -387,7 +388,7 @@ func showClusterRebalanceHandler(c *cli.Context) (err error) {
 		return errP
 	}
 	if xactID == "" && xactKind == "" {
-		xactKind = cmn.ActRebalance
+		xactKind = apc.ActRebalance
 	}
 	return _showXactList(c, nodeID, xactID, xactKind, bck)
 }

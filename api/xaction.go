@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -63,23 +64,23 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 		Node: args.Node,
 	}
 
-	if args.Kind == cmn.ActLRU {
+	if args.Kind == apc.ActLRU {
 		ext := &xact.QueryMsgLRU{}
 		if args.Buckets != nil {
 			xactMsg.Buckets = args.Buckets
 			ext.Force = args.Force
 		}
 		xactMsg.Ext = ext
-	} else if args.Kind == cmn.ActStoreCleanup && args.Buckets != nil {
+	} else if args.Kind == apc.ActStoreCleanup && args.Buckets != nil {
 		xactMsg.Buckets = args.Buckets
 	}
 
-	msg := cmn.ActionMsg{Action: cmn.ActXactStart, Value: xactMsg}
+	msg := cmn.ActionMsg{Action: apc.ActXactStart, Value: xactMsg}
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathClu.S
+		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 		reqParams.Query = cmn.AddBckToQuery(nil, args.Bck)
@@ -92,14 +93,14 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 // AbortXaction aborts a given xact.
 func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	msg := cmn.ActionMsg{
-		Action: cmn.ActXactStop,
+		Action: apc.ActXactStop,
 		Value:  xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
 	}
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathClu.S
+		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 		reqParams.Query = cmn.AddBckToQuery(nil, args.Bck)
@@ -129,10 +130,10 @@ func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMul
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathClu.S
+		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
-		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatQueryXactStats}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatQueryXactStats}}
 	}
 	err = reqParams.DoHTTPReqResp(&xs)
 	freeRp(reqParams)
@@ -150,10 +151,10 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathClu.S
+		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
-		reqParams.Query = url.Values{cmn.QparamWhat: []string{cmn.GetWhatStatus}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStatus}}
 	}
 	err = reqParams.DoHTTPReqResp(status)
 	freeRp(reqParams)

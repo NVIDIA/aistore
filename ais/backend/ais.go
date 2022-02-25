@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -79,7 +80,7 @@ func (m *AISBackendProvider) Apply(v interface{}, action string) error {
 	defer m.mu.Unlock()
 
 	// detach
-	if action == cmn.ActDetachRemote {
+	if action == apc.ActDetachRemote {
 		for alias, uuid := range m.alias {
 			if _, ok := clusterConf[alias]; !ok {
 				if _, ok = clusterConf[uuid]; !ok {
@@ -307,8 +308,8 @@ func extractErrCode(e error) (int, error) {
 // BackendProvider //
 /////////////////////
 
-func (*AISBackendProvider) Provider() string  { return cmn.ProviderAIS }
-func (*AISBackendProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
+func (*AISBackendProvider) Provider() string  { return apc.ProviderAIS }
+func (*AISBackendProvider) MaxPageSize() uint { return apc.DefaultListPageSizeAIS }
 
 func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
 	debug.Assert(false) // Bucket creation happens only with reverse proxy to AIS cluster.
@@ -366,7 +367,7 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *cmn.ListOb
 func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (bcks cmn.Bcks, err error) {
 	var (
 		aisCluster  *remAISCluster
-		remoteQuery = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: query.Ns.Name}}
+		remoteQuery = cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{Name: query.Ns.Name}}
 	)
 	if aisCluster, err = m.remoteCluster(uuid); err != nil {
 		return
@@ -415,7 +416,7 @@ func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs,
 	}
 	oa = &cmn.ObjAttrs{}
 	*oa = op.ObjAttrs
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAIS)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderAIS)
 	return
 }
 
@@ -463,7 +464,7 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadClo
 	}
 	oa := lom.ObjAttrs()
 	*oa = op.ObjAttrs
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAIS)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderAIS)
 	expCksum = oa.Cksum
 	lom.SetCksum(nil)
 	// reader
@@ -503,7 +504,7 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 	}
 	oa := lom.ObjAttrs()
 	*oa = op.ObjAttrs
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAIS)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderAIS)
 	return
 }
 

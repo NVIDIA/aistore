@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -51,7 +52,7 @@ var _ = Describe("Mirror", func() {
 			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
 			BID:    1,
 		}
-		bck             = cmn.Bck{Name: testBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal, Props: props}
+		bck             = cmn.Bck{Name: testBucketName, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal, Props: props}
 		bmdMock         = cluster.NewBaseBownerMock(&cluster.Bck{Bck: bck})
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}

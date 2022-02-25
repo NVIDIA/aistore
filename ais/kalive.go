@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -316,11 +317,11 @@ loop:
 			if clone.GetProxy(sid) != nil {
 				clone.delProxy(sid)
 				clone.staffIC()
-				metaction += cmn.Proxy
+				metaction += apc.Proxy
 				cnt++
 			} else if clone.GetTarget(sid) != nil {
 				clone.delTarget(sid)
-				metaction += cmn.Target
+				metaction += apc.Target
 				cnt++
 			} else {
 				metaction += unknownDaemonID

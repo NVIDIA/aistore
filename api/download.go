@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
@@ -46,7 +47,7 @@ func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interf
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathDownload.S
+		reqParams.Path = apc.URLPathDownload.S
 		reqParams.Body = cos.MustMarshal(downloader.DlBody{Type: dlt, RawMessage: msg})
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -87,7 +88,7 @@ func DownloadStatus(baseParams BaseParams, id string, onlyActiveTasks ...bool) (
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathDownload.S
+		reqParams.Path = apc.URLPathDownload.S
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -102,7 +103,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJ
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathDownload.S
+		reqParams.Path = apc.URLPathDownload.S
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -118,7 +119,7 @@ func AbortDownload(baseParams BaseParams, id string) error {
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathDownloadAbort.S
+		reqParams.Path = apc.URLPathDownloadAbort.S
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -133,7 +134,7 @@ func RemoveDownload(baseParams BaseParams, id string) error {
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathDownloadRemove.S
+		reqParams.Path = apc.URLPathDownloadRemove.S
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}

@@ -23,6 +23,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -688,7 +689,7 @@ func (gco *globalConfigOwner) Update(cluConfig *ClusterConfig) (err error) {
 	config.ClusterConfig = *cluConfig
 	override := gco.GetOverrideConfig()
 	if override != nil {
-		err = config.UpdateClusterConfig(*override, Daemon) // update and validate
+		err = config.UpdateClusterConfig(*override, apc.Daemon) // update and validate
 	} else {
 		err = config.Validate()
 	}
@@ -772,7 +773,7 @@ func (c *Config) Validate() error {
 }
 
 func (c *Config) SetRole(role string) {
-	debug.Assert(role == Target || role == Proxy)
+	debug.Assert(role == apc.Target || role == apc.Proxy)
 	c.role = role
 }
 
@@ -840,7 +841,7 @@ func (c *BackendConf) Validate() (err error) {
 	for provider := range c.Conf {
 		b := cos.MustMarshal(c.Conf[provider])
 		switch provider {
-		case ProviderAIS:
+		case apc.ProviderAIS:
 			var aisConf BackendConfAIS
 			if err := jsoniter.Unmarshal(b, &aisConf); err != nil {
 				return fmt.Errorf("invalid cloud specification: %v", err)
@@ -852,7 +853,7 @@ func (c *BackendConf) Validate() (err error) {
 				break
 			}
 			c.Conf[provider] = aisConf
-		case ProviderHDFS:
+		case apc.ProviderHDFS:
 			var hdfsConf BackendConfHDFS
 			if err := jsoniter.Unmarshal(b, &hdfsConf); err != nil {
 				return fmt.Errorf("invalid cloud specification: %v", err)
@@ -896,10 +897,10 @@ func (c *BackendConf) Validate() (err error) {
 func (c *BackendConf) setProvider(provider string) {
 	var ns Ns
 	switch provider {
-	case ProviderAmazon, ProviderAzure, ProviderGoogle, ProviderHDFS:
+	case apc.ProviderAmazon, apc.ProviderAzure, apc.ProviderGoogle, apc.ProviderHDFS:
 		ns = NsGlobal
 	default:
-		cos.AssertMsg(false, "unknown backend provider "+provider)
+		debug.AssertMsg(false, "unknown backend provider "+provider)
 	}
 	if c.Providers == nil {
 		c.Providers = map[string]Ns{}
@@ -929,8 +930,8 @@ func (c *BackendConf) EqualClouds(o *BackendConf) bool {
 
 func (c *BackendConf) EqualRemAIS(o *BackendConf) bool {
 	var oldRemotes, newRemotes BackendConfAIS
-	oais, oko := o.Conf[ProviderAIS]
-	nais, okn := c.Conf[ProviderAIS]
+	oais, oko := o.Conf[apc.ProviderAIS]
+	nais, okn := c.Conf[apc.ProviderAIS]
 	if !oko && !okn {
 		return true
 	}
@@ -1327,11 +1328,11 @@ func (c *FSPConf) MarshalJSON() (data []byte, err error) {
 }
 
 func (c *FSPConf) Validate(contextConfig *Config) error {
-	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{Proxy, Target}),
+	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{apc.Proxy, apc.Target}),
 		"unexpected role: %q", contextConfig.role)
 
 	// Don't validate in testing environment.
-	if contextConfig.TestingEnv() || contextConfig.role != Target {
+	if contextConfig.TestingEnv() || contextConfig.role != apc.Target {
 		return nil
 	}
 	if len(c.Paths) == 0 {
@@ -1383,7 +1384,7 @@ func IsNestedMpath(a string, la int, b string) (err error) {
 // validate root and (NOTE: testing only) generate and fill-in counted FSP.Paths
 func (c *TestFSPConf) Validate(contextConfig *Config) (err error) {
 	// Don't validate in production environment.
-	if !contextConfig.TestingEnv() || contextConfig.role != Target {
+	if !contextConfig.TestingEnv() || contextConfig.role != apc.Target {
 		return nil
 	}
 
@@ -1510,7 +1511,7 @@ func (c *ResilverConf) String() string {
 func (ctu *ConfigToUpdate) FillFromQuery(query url.Values) error {
 	var anyExists bool
 	for key := range query {
-		if key == ActTransient {
+		if key == apc.ActTransient {
 			continue
 		}
 		anyExists = true
@@ -1560,7 +1561,7 @@ func SetLogLevel(loglevel string) (err error) {
 }
 
 func ConfigPropList(scopes ...string) []string {
-	scope := Cluster
+	scope := apc.Cluster
 	if len(scopes) > 0 {
 		scope = scopes[0]
 	}
@@ -1670,7 +1671,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (
 			config.LocalConfig.FSP = *overrideConfig.FSP
 			overrideConfig.FSP = nil
 		}
-		err = config.UpdateClusterConfig(*overrideConfig, Daemon) // update and validate
+		err = config.UpdateClusterConfig(*overrideConfig, apc.Daemon) // update and validate
 	} else {
 		err = config.Validate()
 	}
@@ -1682,7 +1683,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (
 	if err = cos.CreateDir(config.LogDir); err != nil {
 		return fmt.Errorf("failed to create log dir %q: %v", config.LogDir, err)
 	}
-	if config.TestingEnv() && daeRole == Target {
+	if config.TestingEnv() && daeRole == apc.Target {
 		debug.Assert(config.TestFSP.Count == len(config.FSP.Paths))
 		for mpath := range config.FSP.Paths {
 			if err := cos.CreateDir(mpath); err != nil {

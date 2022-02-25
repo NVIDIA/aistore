@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -39,7 +40,7 @@ func newDiscoverServerPrimary() *proxy {
 		p       = &proxy{}
 		tracker = mock.NewStatsTracker()
 	)
-	p.si = cluster.NewSnode("primary", cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
+	p.si = cluster.NewSnode("primary", apc.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
 	p.client.data = &http.Client{}
 	p.client.control = &http.Client{}
 
@@ -289,9 +290,9 @@ func TestDiscoverServers(t *testing.T) {
 				ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 				addrInfo := serverTCPAddr(ts.URL)
 				if s.isProxy {
-					discoverSmap.addProxy(cluster.NewSnode(s.id, cmn.Proxy, addrInfo, addrInfo, addrInfo))
+					discoverSmap.addProxy(cluster.NewSnode(s.id, apc.Proxy, addrInfo, addrInfo, addrInfo))
 				} else {
-					discoverSmap.addTarget(cluster.NewSnode(s.id, cmn.Target, addrInfo, addrInfo, addrInfo))
+					discoverSmap.addTarget(cluster.NewSnode(s.id, apc.Target, addrInfo, addrInfo, addrInfo))
 				}
 			}
 			svm := primary.uncoverMeta(discoverSmap)

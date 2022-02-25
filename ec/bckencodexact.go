@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -55,13 +56,13 @@ func (p *encFactory) Start() error {
 	return nil
 }
 
-func (*encFactory) Kind() string        { return cmn.ActECEncode }
+func (*encFactory) Kind() string        { return apc.ActECEncode }
 func (p *encFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*encFactory)
-	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit {
-		prev.phase = cmn.ActCommit // transition
+	if prev.phase == apc.ActBegin && p.phase == apc.ActCommit {
+		prev.phase = apc.ActCommit // transition
 		wpr = xreg.WprUse
 		return
 	}
@@ -75,7 +76,7 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 
 func newXactBckEncode(bck *cluster.Bck, t cluster.Target, uuid string) (r *XactBckEncode) {
 	r = &XactBckEncode{t: t, bck: bck, wg: &sync.WaitGroup{}, smap: t.Sowner().Get()}
-	r.InitBase(uuid, cmn.ActECEncode, bck)
+	r.InitBase(uuid, apc.ActECEncode, bck)
 	return
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -148,7 +149,7 @@ func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
 }
 
 func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) (xget *XactGet) {
-	xctn, err := _renewXact(bck, cmn.ActECGet)
+	xctn, err := _renewXact(bck, apc.ActECGet)
 	debug.AssertNoErr(err) // TODO: handle, here and elsewhere
 	xget = xctn.(*XactGet)
 	mgr.getBckXacts(bck.Name).SetGet(xget)
@@ -156,7 +157,7 @@ func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) (xget *XactGet) {
 }
 
 func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) (xput *XactPut) {
-	xctn, err := _renewXact(bck, cmn.ActECPut)
+	xctn, err := _renewXact(bck, apc.ActECPut)
 	debug.AssertNoErr(err)
 	xput = xctn.(*XactPut)
 	mgr.getBckXacts(bck.Name).SetPut(xput)
@@ -164,7 +165,7 @@ func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) (xput *XactPut) {
 }
 
 func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) (xrsp *XactRespond) {
-	xctn, err := _renewXact(bck, cmn.ActECRespond)
+	xctn, err := _renewXact(bck, apc.ActECRespond)
 	debug.AssertNoErr(err)
 	xrsp = xctn.(*XactRespond)
 	mgr.getBckXacts(bck.Name).SetReq(xrsp)
@@ -378,7 +379,7 @@ func (mgr *Manager) BucketsMDChanged() error {
 	} else if !newBckMD.IsECUsed() && oldBckMD.IsECUsed() {
 		mgr.closeECBundles()
 	}
-	provider := cmn.ProviderAIS
+	provider := apc.ProviderAIS
 	newBckMD.Range(&provider, nil, func(nbck *cluster.Bck) bool {
 		oprops, ok := oldBckMD.Get(nbck)
 		if !ok {
@@ -414,7 +415,7 @@ func (mgr *Manager) ListenSmapChanged() {
 	// bckMD will be present at this point
 	// stopping relevant EC xactions which can't be satisfied with current number of targets
 	// respond xaction is never stopped as it should respond regardless of the other targets
-	provider := cmn.ProviderAIS
+	provider := apc.ProviderAIS
 	mgr.bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 		bckName, bckProps := bck.Name, bck.Props
 		bckXacts := mgr.getBckXactsUnlocked(bckName)

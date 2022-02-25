@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -103,9 +104,9 @@ func (e *MD) UnmarshalJSON(data []byte) (err error) {
 	e.Version, e.Ext = jsonMD.Version, jsonMD.Ext
 	e.ETLs = make(ETLs, len(jsonMD.ETLs))
 	for k, v := range jsonMD.ETLs {
-		if v.Type == cmn.ETLInitCode {
+		if v.Type == apc.ETLInitCode {
 			e.ETLs[k] = &InitCodeMsg{}
-		} else if v.Type == cmn.ETLInitSpec {
+		} else if v.Type == apc.ETLInitSpec {
 			e.ETLs[k] = &InitSpecMsg{}
 		}
 		if err = jsoniter.Unmarshal(v.Msg, e.ETLs[k]); err != nil {

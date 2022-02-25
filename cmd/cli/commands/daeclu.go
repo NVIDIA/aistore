@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
@@ -124,10 +125,10 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 		return templates.DisplayOutput(res, c.App.Writer, templates.NewProxyTable(res, smap).Template(hideHeader), useJSON)
 	} else if res, targetOK := tmapStatus[daemonID]; targetOK {
 		return templates.DisplayOutput(res, c.App.Writer, templates.NewTargetTable(res).Template(hideHeader), useJSON)
-	} else if daemonID == cmn.Proxy {
+	} else if daemonID == apc.Proxy {
 		template := templates.NewProxiesTable(&body.Status, smap, true, verbose).Template(hideHeader)
 		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
-	} else if daemonID == cmn.Target {
+	} else if daemonID == apc.Target {
 		return templates.DisplayOutput(body, c.App.Writer,
 			templates.NewTargetsTable(&body.Status, true, verbose).Template(hideHeader), useJSON)
 	} else if daemonID == "" {
@@ -361,7 +362,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 			}
 			return daemonID, nil, err
 		}
-		daemonOnlyProps = cmn.ConfigPropList(cmn.Daemon)
+		daemonOnlyProps = cmn.ConfigPropList(apc.Daemon)
 	}
 
 	if len(kvs) == 0 {
@@ -392,7 +393,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
 	// run until rebalance is completed
-	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance}
+	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance}
 	for {
 		rebSnaps, err := api.QueryXactionSnaps(defaultAPIParams, xactArgs)
 		if err != nil {

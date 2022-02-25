@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -97,7 +98,7 @@ func (p *olFactory) Start() error {
 	return nil
 }
 
-func (*olFactory) Kind() string        { return cmn.ActList }
+func (*olFactory) Kind() string        { return apc.ActList }
 func (p *olFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *olFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
@@ -117,7 +118,7 @@ func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *cmn.ListObjsMsg, uuid st
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
 	debug.Assert(xctn.bck.Props != nil)
-	xctn.DemandBase.Init(uuid, cmn.ActList, bck, totallyIdle)
+	xctn.DemandBase.Init(uuid, apc.ActList, bck, totallyIdle)
 	return xctn
 }
 
@@ -406,7 +407,7 @@ func (r *ObjListXact) traverseBucket(msg *cmn.ListObjsMsg) {
 		for _, archEntry := range archList {
 			e := &cmn.BucketEntry{
 				Name:  path.Join(entry.Name, archEntry.name),
-				Flags: entry.Flags | cmn.EntryInArch,
+				Flags: entry.Flags | apc.EntryInArch,
 				Size:  int64(archEntry.size),
 			}
 			select {

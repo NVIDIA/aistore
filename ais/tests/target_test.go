@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -25,7 +26,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		smap         = tutils.GetClusterMap(t, proxyURL)
 		bck          = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 

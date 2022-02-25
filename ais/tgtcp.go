@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -123,7 +124,7 @@ func (t *target) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDae.L)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -140,18 +141,18 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActSetConfig: // set-config #2 - via action message
+	case apc.ActSetConfig: // set-config #2 - via action message
 		t.setDaemonConfigMsg(w, r, msg)
-	case cmn.ActResetConfig:
+	case apc.ActResetConfig:
 		if err := t.owner.config.resetDaemonConfig(); err != nil {
 			t.writeErr(w, r, err)
 		}
-	case cmn.ActShutdown:
+	case apc.ActShutdown:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
 		t.unreg(msg.Action, false /*rm user data*/, false /*no shutdown*/)
-	case cmn.ActDecommission:
+	case apc.ActDecommission:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
@@ -168,10 +169,10 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 
 func (t *target) daeputQuery(w http.ResponseWriter, r *http.Request, apiItems []string) {
 	switch apiItems[0] {
-	case cmn.Proxy:
+	case apc.Proxy:
 		// PUT /v1/daemon/proxy/newprimaryproxyid
 		t.daeSetPrimary(w, r, apiItems)
-	case cmn.SyncSmap:
+	case apc.SyncSmap:
 		newsmap := &smapX{}
 		if cmn.ReadJSON(w, r, newsmap) != nil {
 			return
@@ -179,10 +180,10 @@ func (t *target) daeputQuery(w http.ResponseWriter, r *http.Request, apiItems []
 		if err := t.owner.smap.synchronize(t.si, newsmap, nil /*ms payload*/); err != nil {
 			t.writeErr(w, r, cmn.NewErrFailedTo(t, "synchronize", newsmap, err))
 		}
-		glog.Infof("%s: %s %s done", t, cmn.SyncSmap, newsmap)
-	case cmn.Mountpaths:
+		glog.Infof("%s: %s %s done", t, apc.SyncSmap, newsmap)
+	case apc.Mountpaths:
 		t.handleMountpathReq(w, r)
-	case cmn.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
+	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		t.setDaemonConfigQuery(w, r)
 	}
 }
@@ -199,9 +200,9 @@ func (t *target) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems 
 
 	proxyID := apiItems[1]
 	query := r.URL.Query()
-	preparestr := query.Get(cmn.QparamPrepare)
+	preparestr := query.Get(apc.QparamPrepare)
 	if prepare, err = cos.ParseBool(preparestr); err != nil {
-		t.writeErrf(w, r, "Failed to parse %s URL Parameter: %v", cmn.QparamPrepare, err)
+		t.writeErrf(w, r, "Failed to parse %s URL Parameter: %v", apc.QparamPrepare, err)
 		return
 	}
 
@@ -231,22 +232,22 @@ func (t *target) _setPrim(ctx *smapModifier, clone *smapX) (err error) {
 }
 
 func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	getWhat := r.URL.Query().Get(cmn.QparamWhat)
+	getWhat := r.URL.Query().Get(apc.QparamWhat)
 	httpdaeWhat := "httpdaeget-" + getWhat
 	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode, cmn.GetWhatLog, cmn.GetWhatStats:
+	case apc.GetWhatConfig, apc.GetWhatSmap, apc.GetWhatBMD, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats:
 		t.htrun.httpdaeget(w, r)
-	case cmn.GetWhatSysInfo:
+	case apc.GetWhatSysInfo:
 		tsysinfo := cmn.TSysInfo{
 			SysInfo:      sys.FetchSysInfo(),
 			CapacityInfo: fs.CapStatusAux(),
 		}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
-	case cmn.GetWhatMountpaths:
+	case apc.GetWhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
-	case cmn.GetWhatDaemonStatus:
+	case apc.GetWhatDaemonStatus:
 		var rebSnap *stats.RebalanceSnap
-		if entry := xreg.GetLatest(xreg.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
+		if entry := xreg.GetLatest(xreg.XactFilter{Kind: apc.ActRebalance}); entry != nil {
 			var ok bool
 			if xctn := entry.Get(); xctn != nil {
 				rebSnap, ok = xctn.Snap().(*stats.RebalanceSnap)
@@ -267,19 +268,19 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		tstats := t.statsT.(*stats.Trunner)
 		msg.Capacity = tstats.MPCap
 		t.writeJSON(w, r, msg, httpdaeWhat)
-	case cmn.GetWhatDiskStats:
+	case apc.GetWhatDiskStats:
 		diskStats := make(ios.AllDiskStats)
 		fs.FillDiskStats(diskStats)
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
-	case cmn.GetWhatRemoteAIS:
-		conf, ok := cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderAIS)
+	case apc.GetWhatRemoteAIS:
+		conf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.ProviderAIS)
 		if !ok {
 			t.writeJSON(w, r, cmn.BackendInfoAIS{}, httpdaeWhat)
 			return
 		}
 		clusterConf, ok := conf.(cmn.BackendConfAIS)
 		cos.Assert(ok)
-		aisCloud := t.backend[cmn.ProviderAIS].(*backend.AISBackendProvider)
+		aisCloud := t.backend[apc.ProviderAIS].(*backend.AISBackendProvider)
 		t.writeJSON(w, r, aisCloud.GetInfo(clusterConf), httpdaeWhat)
 	default:
 		t.htrun.httpdaeget(w, r)
@@ -288,7 +289,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 // admin-join target | enable/disable mountpath
 func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDae.L)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -297,16 +298,16 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apiOp := apiItems[0]
-	if apiOp == cmn.Mountpaths {
+	if apiOp == apc.Mountpaths {
 		t.handleMountpathReq(w, r)
 		return
 	}
-	if apiOp != cmn.AdminJoin {
+	if apiOp != apc.AdminJoin {
 		t.writeErrURL(w, r)
 		return
 	}
 
-	// user request to join cluster (compare with `cmn.SelfJoin`)
+	// user request to join cluster (compare with `apc.SelfJoin`)
 	if !t.regstate.disabled.Load() {
 		if t.keepalive.paused() {
 			t.keepalive.ctrl(kaResumeMsg)
@@ -325,8 +326,8 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	caller := r.Header.Get(cmn.HdrCallerName)
-	if err := t.applyRegMeta(cmn.ActAdminJoinTarget, body, caller); err != nil {
+	caller := r.Header.Get(apc.HdrCallerName)
+	if err := t.applyRegMeta(apc.ActAdminJoinTarget, body, caller); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -338,15 +339,15 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDae.L)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, apc.URLPathDae.L)
 	if err != nil {
 		return
 	}
 	switch apiItems[0] {
-	case cmn.Mountpaths:
+	case apc.Mountpaths:
 		t.handleMountpathReq(w, r)
 		return
-	case cmn.CallbackRmSelf:
+	case apc.CallbackRmSelf:
 		var (
 			noShutdown, rmUserData bool
 			opts, action, err      = t.parseUnregMsg(w, r)
@@ -376,7 +377,7 @@ func (t *target) unreg(action string, rmUserData, noShutdown bool) {
 	dsort.Managers.AbortAll(errCause) // all dSort jobs
 	xreg.AbortAll(errCause)           // all xactions
 
-	if action == cmn.ActStartMaintenance || action == cmn.ActCallbackRmFromSmap {
+	if action == apc.ActStartMaintenance || action == apc.ActCallbackRmFromSmap {
 		return // return without terminating http
 	}
 
@@ -386,7 +387,7 @@ func (t *target) unreg(action string, rmUserData, noShutdown bool) {
 	t.regstate.Unlock()
 
 	writeShutdownMarker()
-	if action == cmn.ActShutdown {
+	if action == apc.ActShutdown {
 		debug.Assert(!noShutdown)
 		t.Stop(&errNoUnregister{action})
 		return
@@ -424,13 +425,13 @@ func (t *target) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActMountpathEnable:
+	case apc.ActMountpathEnable:
 		t.enableMpath(w, r, mpath)
-	case cmn.ActMountpathAttach:
+	case apc.ActMountpathAttach:
 		t.attachMpath(w, r, mpath)
-	case cmn.ActMountpathDisable:
+	case apc.ActMountpathDisable:
 		t.disableMpath(w, r, mpath)
-	case cmn.ActMountpathDetach:
+	case apc.ActMountpathDetach:
 		t.detachMpath(w, r, mpath)
 	default:
 		t.writeErrAct(w, r, msg.Action)
@@ -466,7 +467,7 @@ func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath strin
 }
 
 func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	force := cos.IsParseBool(r.URL.Query().Get(cmn.QparamForce))
+	force := cos.IsParseBool(r.URL.Query().Get(apc.QparamForce))
 	addedMi, err := t.fsprg.attachMpath(mpath, force)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -488,7 +489,7 @@ func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 }
 
 func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	dontResilver := cos.IsParseBool(r.URL.Query().Get(cmn.QparamDontResilver))
+	dontResilver := cos.IsParseBool(r.URL.Query().Get(apc.QparamDontResilver))
 	disabledMi, err := t.fsprg.disableMpath(mpath, dontResilver)
 	if err != nil {
 		if cmn.IsErrMountpathNotFound(err) {
@@ -506,7 +507,7 @@ func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath stri
 }
 
 func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	dontResilver := cos.IsParseBool(r.URL.Query().Get(cmn.QparamDontResilver))
+	dontResilver := cos.IsParseBool(r.URL.Query().Get(apc.QparamDontResilver))
 	removedMi, err := t.fsprg.detachMpath(mpath, dontResilver)
 	if err != nil {
 		t.writeErrf(w, r, err.Error())
@@ -599,12 +600,12 @@ func (t *target) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload) (rm
 			}
 			present = true
 			if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
-				flt := xreg.XactFilter{Kind: cmn.ActPutCopies, Bck: nbck}
+				flt := xreg.XactFilter{Kind: apc.ActPutCopies, Bck: nbck}
 				xreg.DoAbort(flt, errors.New("apply-bmd"))
-				// NOTE: cmn.ActMakeNCopies takes care of itself
+				// NOTE: apc.ActMakeNCopies takes care of itself
 			}
 			if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
-				flt := xreg.XactFilter{Kind: cmn.ActECEncode, Bck: nbck}
+				flt := xreg.XactFilter{Kind: apc.ActECEncode, Bck: nbck}
 				xreg.DoAbort(flt, errors.New("apply-bmd"))
 			}
 			return true
@@ -677,7 +678,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err erro
 		notif := &xact.NotifXact{
 			NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		}
-		if msg.Action == cmn.ActRebalance {
+		if msg.Action == apc.ActRebalance {
 			glog.Infof("%s: starting user-requested rebalance", t.si)
 			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 			return
@@ -690,7 +691,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err erro
 		}
 		t.owner.rmd.put(newRMD)
 		// TODO: move and refactor
-	} else if msg.Action == cmn.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.si.ID() {
+	} else if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.si.ID() {
 		glog.Warningf("%s: standby => join (msg=%s)", t, msg)
 		if _, err = t.joinCluster(msg.Action); err == nil {
 			err = t.endStartupStandby()
@@ -718,11 +719,11 @@ func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed stri
 	}
 	psi := smap.Primary
 	q := url.Values{}
-	q.Set(cmn.QparamWhat, what)
+	q.Set(apc.QparamWhat, what)
 	if renamed != "" {
 		q.Add(whatRenamedLB, renamed)
 	}
-	path := cmn.URLPathDae.S
+	path := apc.URLPathDae.S
 	url := psi.URL(cmn.NetIntraControl)
 	timeout := cmn.Timeout.CplaneOperation()
 	cargs := allocCargs()
@@ -760,13 +761,13 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 		bck = bcks[0]
 	}
 	time.Sleep(200 * time.Millisecond)
-	if err := t.fetchPrimaryMD(cmn.GetWhatBMD, newBucketMD, bck.Name); err != nil {
+	if err := t.fetchPrimaryMD(apc.GetWhatBMD, newBucketMD, bck.Name); err != nil {
 		glog.Error(err)
 		return
 	}
-	msg := t.newAmsgStr("get-what="+cmn.GetWhatBMD, newBucketMD)
+	msg := t.newAmsgStr("get-what="+apc.GetWhatBMD, newBucketMD)
 	if r != nil {
-		caller = r.Header.Get(cmn.HdrCallerName)
+		caller = r.Header.Get(apc.HdrCallerName)
 	}
 	t.regstate.Lock()
 	defer t.regstate.Unlock()
@@ -818,7 +819,7 @@ func (t *target) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	}
 	// 1. extract
 	var (
-		caller                       = r.Header.Get(cmn.HdrCallerName)
+		caller                       = r.Header.Get(apc.HdrCallerName)
 		newConf, msgConf, errConf    = t.extractConfig(payload, caller)
 		newSmap, msgSmap, errSmap    = t.extractSmap(payload, caller)
 		newBMD, msgBMD, errBMD       = t.extractBMD(payload, caller)
@@ -867,14 +868,14 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 		return
 	}
 	if !t.NodeStarted() { // starting up
-		debug.Assert(msg.Action != cmn.ActAttachRemote && msg.Action != cmn.ActDetachRemote)
+		debug.Assert(msg.Action != apc.ActAttachRemote && msg.Action != apc.ActDetachRemote)
 		return
 	}
-	if msg.Action == cmn.ActAttachRemote || msg.Action == cmn.ActDetachRemote {
+	if msg.Action == apc.ActAttachRemote || msg.Action == apc.ActDetachRemote {
 		// NOTE: apply the entire config: add new and _refresh_ existing
-		aisConf, ok := newConfig.Backend.ProviderConf(cmn.ProviderAIS)
+		aisConf, ok := newConfig.Backend.ProviderConf(apc.ProviderAIS)
 		cos.Assert(ok)
-		aisCloud := t.backend[cmn.ProviderAIS].(*backend.AISBackendProvider)
+		aisCloud := t.backend[apc.ProviderAIS].(*backend.AISBackendProvider)
 		err = aisCloud.Apply(aisConf, msg.Action)
 		if err != nil {
 			glog.Errorf("%s: %v - proceeding anyway...", t, err)
@@ -901,19 +902,19 @@ func (t *target) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	caller := r.Header.Get(cmn.HdrCallerName)
+	caller := r.Header.Get(apc.HdrCallerName)
 	newSmap, msg, err := t.extractSmap(payload, caller)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
 
-	if newSmap != nil && msg.Action == cmn.ActStartGFN {
+	if newSmap != nil && msg.Action == apc.ActStartGFN {
 		reb.ActivateTimedGFN()
 	}
 }
 
-// GET /v1/health (cmn.Health)
+// GET /v1/health (apc.Health)
 func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
 		glog.Warningf("[health] %s: standing by...", t.si)
@@ -926,9 +927,9 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// cluster info piggy-back
 	query := r.URL.Query()
-	getCii := cos.IsParseBool(query.Get(cmn.QparamClusterInfo))
+	getCii := cos.IsParseBool(query.Get(apc.QparamClusterInfo))
 	if getCii {
-		debug.Assert(!query.Has(cmn.QparamRebStatus))
+		debug.Assert(!query.Has(apc.QparamRebStatus))
 		cii := &clusterInfo{}
 		cii.fill(&t.htrun)
 		_ = t.writeJSON(w, r, cii, "cluster-info")
@@ -943,9 +944,9 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	// return ok plus optional reb info
 	var (
 		err              error
-		callerID         = r.Header.Get(cmn.HdrCallerID)
-		caller           = r.Header.Get(cmn.HdrCallerName)
-		callerSmapVer, _ = strconv.ParseInt(r.Header.Get(cmn.HdrCallerSmapVersion), 10, 64)
+		callerID         = r.Header.Get(apc.HdrCallerID)
+		caller           = r.Header.Get(apc.HdrCallerName)
+		callerSmapVer, _ = strconv.ParseInt(r.Header.Get(apc.HdrCallerSmapVersion), 10, 64)
 	)
 	if smap.version() != callerSmapVer {
 		s := "older"
@@ -955,7 +956,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d", callerID, caller, s, callerSmapVer)
 		glog.Warningf("%s[%s]: %v", t, smap.StringEx(), err)
 	}
-	getRebStatus := cos.IsParseBool(query.Get(cmn.QparamRebStatus))
+	getRebStatus := cos.IsParseBool(query.Get(apc.QparamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
 		t.reb.RebStatus(status)
@@ -1002,7 +1003,7 @@ func (t *target) enable() error {
 		return nil
 	}
 	glog.Infof("Enabling %s", t.si)
-	if _, err := t.joinCluster(cmn.ActSelfJoinTarget); err != nil {
+	if _, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
 		return err
 	}
 	t.regstate.disabled.Store(false)
@@ -1018,19 +1019,19 @@ func (t *target) enable() error {
 // (compare with api.HeadObject)
 func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	q := cmn.AddBckToQuery(nil, lom.Bucket())
-	q.Set(cmn.QparamSilent, "true")
-	q.Set(cmn.QparamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemote))
+	q.Set(apc.QparamSilent, "true")
+	q.Set(apc.QparamHeadObj, strconv.Itoa(apc.HeadObjAvoidRemote))
 	cargs := allocCargs()
 	{
 		cargs.si = tsi
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodHead,
 			Header: http.Header{
-				cmn.HdrCallerID:   []string{t.SID()},
-				cmn.HdrCallerName: []string{t.callerName()},
+				apc.HdrCallerID:   []string{t.SID()},
+				apc.HdrCallerName: []string{t.callerName()},
 			},
 			Base:  tsi.URL(cmn.NetIntraControl),
-			Path:  cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
+			Path:  apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
 			Query: q,
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
@@ -1043,21 +1044,21 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 }
 
 // headObjBcast broadcasts to all targets to find out if anyone has the specified object.
-// NOTE: 1) cmn.QparamCheckExistsAny to make an extra effort
+// NOTE: 1) apc.QparamCheckExistsAny to make an extra effort
 //       2) `ignoreMaintenance`
 func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	q := cmn.AddBckToQuery(nil, lom.Bucket())
-	q.Set(cmn.QparamSilent, "true")
+	q.Set(apc.QparamSilent, "true")
 	// lookup across all mountpaths and copy (ie., restore) if misplaced
-	q.Set(cmn.QparamHeadObj, strconv.Itoa(cmn.HeadObjAvoidRemoteCheckAllMps))
+	q.Set(apc.QparamHeadObj, strconv.Itoa(apc.HeadObjAvoidRemoteCheckAllMps))
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,
 		Header: http.Header{
-			cmn.HdrCallerID:   []string{t.SID()},
-			cmn.HdrCallerName: []string{t.callerName()},
+			apc.HdrCallerID:   []string{t.SID()},
+			apc.HdrCallerName: []string{t.callerName()},
 		},
-		Path:  cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
+		Path:  apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
 		Query: q,
 	}
 	args.ignoreMaintenance = true

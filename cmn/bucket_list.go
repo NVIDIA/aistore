@@ -5,7 +5,10 @@
  */
 package cmn
 
-import "github.com/NVIDIA/aistore/cmn/cos"
+import (
+	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
+)
 
 // BEWARE: change in this source MAY require re-running go generate ..
 
@@ -28,11 +31,11 @@ type BucketEntry struct {
 	Flags     uint16 `json:"flags,omitempty" msg:"f,omitempty"`       // object flags, like CheckExists, IsMoved etc
 }
 
-func (be *BucketEntry) CheckExists() bool  { return be.Flags&EntryIsCached != 0 }
-func (be *BucketEntry) SetExists()         { be.Flags |= EntryIsCached }
+func (be *BucketEntry) CheckExists() bool  { return be.Flags&apc.EntryIsCached != 0 }
+func (be *BucketEntry) SetExists()         { be.Flags |= apc.EntryIsCached }
 func (be *BucketEntry) IsStatusOK() bool   { return be.Status() == 0 }
-func (be *BucketEntry) Status() uint16     { return be.Flags & EntryStatusMask }
-func (be *BucketEntry) IsInsideArch() bool { return be.Flags&EntryInArch != 0 }
+func (be *BucketEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }
+func (be *BucketEntry) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
 func (be *BucketEntry) String() string     { return "{" + be.Name + "}" }
 
 func (be *BucketEntry) CopyWithProps(propsSet cos.StringSet) (ne *BucketEntry) {

@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -42,7 +43,7 @@ func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.MountpathInfo, er
 	if err != nil || enabledMi == nil {
 		return
 	}
-	g._postAdd(cmn.ActMountpathEnable, enabledMi)
+	g._postAdd(apc.ActMountpathEnable, enabledMi)
 	return
 }
 
@@ -54,7 +55,7 @@ func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.Mountpa
 		return
 	}
 
-	g._postAdd(cmn.ActMountpathAttach, addedMi)
+	g._postAdd(apc.ActMountpathAttach, addedMi)
 	return
 }
 
@@ -86,13 +87,13 @@ func (g *fsprungroup) _postAdd(action string, mi *fs.MountpathInfo) {
 // disableMpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) disableMpath(mpath string, dontResilver bool) (*fs.MountpathInfo, error) {
-	return g.doDD(cmn.ActMountpathDisable, fs.FlagBeingDisabled, mpath, dontResilver)
+	return g.doDD(apc.ActMountpathDisable, fs.FlagBeingDisabled, mpath, dontResilver)
 }
 
 // detachMpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
 func (g *fsprungroup) detachMpath(mpath string, dontResilver bool) (*fs.MountpathInfo, error) {
-	return g.doDD(cmn.ActMountpathDetach, fs.FlagBeingDetached, mpath, dontResilver)
+	return g.doDD(apc.ActMountpathDetach, fs.FlagBeingDetached, mpath, dontResilver)
 }
 
 func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilver bool) (rmi *fs.MountpathInfo, err error) {
@@ -165,10 +166,10 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resi
 	}
 
 	// 2. this action
-	if action == cmn.ActMountpathDetach {
+	if action == apc.ActMountpathDetach {
 		_, err = fs.Remove(rmi.Path, g.redistributeMD)
 	} else {
-		debug.Assert(action == cmn.ActMountpathDisable)
+		debug.Assert(action == apc.ActMountpathDisable)
 		_, err = fs.Disable(rmi.Path, g.redistributeMD)
 	}
 	if err != nil {
@@ -186,10 +187,10 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resi
 			continue
 		}
 		// TODO: assumption that `action` is the same for all
-		if action == cmn.ActMountpathDetach {
+		if action == apc.ActMountpathDetach {
 			_, err = fs.Remove(mi.Path, g.redistributeMD)
 		} else {
-			debug.Assert(action == cmn.ActMountpathDisable)
+			debug.Assert(action == apc.ActMountpathDisable)
 			_, err = fs.Disable(mi.Path, g.redistributeMD)
 		}
 		if err != nil {

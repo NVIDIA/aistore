@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -72,7 +73,7 @@ func (e *tcbFactory) Start() error {
 	cos.AssertNoErr(err)
 
 	e.xctn = newXactTCB(e, slab)
-	if e.kind == cmn.ActETLBck {
+	if e.kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize
 	}
 
@@ -117,8 +118,8 @@ func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	}
 	bckEq := prev.args.BckFrom.Equal(e.args.BckFrom, true /*same BID*/, true /* same backend */)
 	debug.Assert(bckEq)
-	debug.Assert(prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit)
-	prev.args.Phase = cmn.ActCommit // transition
+	debug.Assert(prev.phase == apc.ActBegin && e.phase == apc.ActCommit)
+	prev.args.Phase = apc.ActCommit // transition
 	wpr = xreg.WprUse
 	return
 }
@@ -154,7 +155,7 @@ func (r *XactTCB) TxnAbort() {
 func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 	var parallel int
 	r = &XactTCB{t: e.T, args: *e.args}
-	if e.kind == cmn.ActETLBck {
+	if e.kind == apc.ActETLBck {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
 	mpopts := &mpather.JoggerGroupOpts{

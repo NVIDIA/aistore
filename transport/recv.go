@@ -18,6 +18,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -91,14 +92,14 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 	mu.RUnlock()
 	// compression
-	if compressionType := r.Header.Get(cmn.HdrCompress); compressionType != "" {
-		debug.Assert(compressionType == cmn.LZ4Compression)
+	if compressionType := r.Header.Get(apc.HdrCompress); compressionType != "" {
+		debug.Assert(compressionType == apc.LZ4Compression)
 		lz4Reader = lz4.NewReader(r.Body)
 		reader = lz4Reader
 	}
 
 	// session
-	sessID, err := strconv.ParseInt(r.Header.Get(cmn.HdrSessID), 10, 64)
+	sessID, err := strconv.ParseInt(r.Header.Get(apc.HdrSessID), 10, 64)
 	if err != nil || sessID == 0 {
 		cmn.WriteErr(w, r, fmt.Errorf("%s[:%d]: invalid session ID, err %v", trname, sessID, err))
 		return

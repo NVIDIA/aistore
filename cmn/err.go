@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
@@ -175,7 +176,7 @@ var (
 	ErrNoMountpaths     = errors.New("no mountpaths")
 	// aborts
 	ErrXactRenewAbort   = errors.New("renewal abort")
-	ErrXactUserAbort    = errors.New("user abort")              // via cmn.ActXactStop
+	ErrXactUserAbort    = errors.New("user abort")              // via apc.ActXactStop
 	ErrXactICNotifAbort = errors.New("IC(notifications) abort") // ditto
 	ErrXactNoErrAbort   = errors.New("no-error abort")
 )
@@ -277,9 +278,9 @@ func NewErrorInvalidBucketProvider(bck Bck) *ErrInvalidBucketProvider {
 func (e *ErrInvalidBucketProvider) Error() string {
 	if e.bck.Name != "" {
 		return fmt.Sprintf("invalid backend provider %q for bucket %s: must be one of [%s]",
-			e.bck.Provider, e.bck, allProviders)
+			e.bck.Provider, e.bck, apc.AllProviders)
 	}
-	return fmt.Sprintf("invalid backend provider %q: must be one of [%s]", e.bck.Provider, allProviders)
+	return fmt.Sprintf("invalid backend provider %q: must be one of [%s]", e.bck.Provider, apc.AllProviders)
 }
 
 func (*ErrInvalidBucketProvider) Is(target error) bool {
@@ -413,10 +414,10 @@ func NewErrNoNodes(role string) *ErrNoNodes {
 }
 
 func (e *ErrNoNodes) Error() string {
-	if e.role == Proxy {
+	if e.role == apc.Proxy {
 		return "no available proxies"
 	}
-	debug.Assert(e.role == Target)
+	debug.Assert(e.role == apc.Target)
 	return "no available targets"
 }
 
@@ -713,7 +714,7 @@ func (e *ErrHTTP) init(r *http.Request, msg string, errCode int) {
 	if r != nil {
 		e.Method, e.URLPath = r.Method, r.URL.Path
 		e.RemoteAddr = r.RemoteAddr
-		e.Caller = r.Header.Get(HdrCallerName)
+		e.Caller = r.Header.Get(apc.HdrCallerName)
 	}
 	e.Node = thisNodeName
 }

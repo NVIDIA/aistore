@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -723,16 +724,16 @@ gfn:
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) bool {
 	query := cmn.AddBckToQuery(nil, lom.Bucket())
-	query.Set(cmn.QparamIsGFNRequest, "true")
+	query.Set(apc.QparamIsGFNRequest, "true")
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodGet
 		reqArgs.Base = tsi.URL(cmn.NetIntraData)
 		reqArgs.Header = http.Header{
-			cmn.HdrCallerID:   []string{goi.t.SID()},
-			cmn.HdrCallerName: []string{goi.t.callerName()},
+			apc.HdrCallerID:   []string{goi.t.SID()},
+			apc.HdrCallerName: []string{goi.t.callerName()},
 		}
-		reqArgs.Path = cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName)
+		reqArgs.Path = apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName)
 		reqArgs.Query = query
 	}
 	config := cmn.GCO.Get()
@@ -878,8 +879,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 				return
 			}
 			debug.Assert(n <= rrange.Length)
-			hdr.Set(cmn.HdrObjCksumVal, cksum.Value())
-			hdr.Set(cmn.HdrObjCksumType, cksumConf.Type)
+			hdr.Set(apc.HdrObjCksumVal, cksum.Value())
+			hdr.Set(apc.HdrObjCksumType, cksumConf.Type)
 			reader = sgl
 		}
 	}
@@ -964,7 +965,7 @@ func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTP
 func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err error) {
 	filePath := aoi.hi.filePath
 	switch aoi.op {
-	case cmn.AppendOp:
+	case apc.AppendOp:
 		var f *os.File
 		if filePath == "" {
 			filePath = fs.CSM.Gen(aoi.lom, fs.WorkfileType, fs.WorkfileAppend)
@@ -1004,7 +1005,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 		}
 
 		newHandle = combineAppendHandle(aoi.t.si.ID(), filePath, aoi.hi.partialCksum)
-	case cmn.FlushOp:
+	case apc.FlushOp:
 		if filePath == "" {
 			err = errors.New("handle not provided")
 			errCode = http.StatusBadRequest
@@ -1367,15 +1368,15 @@ func (coi *copyObjInfo) put(sargs *sendArgs) error {
 		query = cmn.AddBckToQuery(nil, sargs.bckTo.Bck)
 	)
 	cmn.ToHeader(sargs.objAttrs, hdr)
-	hdr.Set(cmn.HdrT2TPutterID, coi.t.si.ID())
-	query.Set(cmn.QparamOWT, sargs.owt.ToS())
+	hdr.Set(apc.HdrT2TPutterID, coi.t.si.ID())
+	query.Set(apc.QparamOWT, sargs.owt.ToS())
 	if coi.Xact != nil {
-		query.Set(cmn.QparamUUID, coi.Xact.ID())
+		query.Set(apc.QparamUUID, coi.Xact.ID())
 	}
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodPut,
 		Base:   sargs.tsi.URL(cmn.NetIntraData),
-		Path:   cmn.URLPathObjects.Join(sargs.bckTo.Name, sargs.objNameTo),
+		Path:   apc.URLPathObjects.Join(sargs.bckTo.Name, sargs.objNameTo),
 		Query:  query,
 		Header: hdr,
 		BodyR:  sargs.reader,

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -49,7 +50,7 @@ func (*rspFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	return p
 }
 
-func (*rspFactory) Kind() string        { return cmn.ActECRespond }
+func (*rspFactory) Kind() string        { return apc.ActECRespond }
 func (p *rspFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *rspFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {

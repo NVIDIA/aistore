@@ -20,6 +20,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -224,7 +225,7 @@ type (
 		archpath, archmime  string // archive
 		isGFN               string // ditto
 		origURL             string // ht://url->
-		appendTy, appendHdl string // APPEND { cmn.AppendOp, ... }
+		appendTy, appendHdl string // APPEND { apc.AppendOp, ... }
 		owt                 string // object write transaction { OwtPut, ... }
 		dontLookupRemoteBck string // (as the name implies)
 	}
@@ -721,43 +722,43 @@ func urlQuery(rawQuery string, dpq *dpq) (err error) {
 		// supported URL query parameters explicitly named below; attempt to parse anything
 		// outside this list will fail
 		switch key {
-		case cmn.QparamProvider:
+		case apc.QparamProvider:
 			dpq.provider = value
-		case cmn.QparamNamespace:
+		case apc.QparamNamespace:
 			if dpq.namespace, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.QparamSkipVC:
+		case apc.QparamSkipVC:
 			dpq.skipVC = value
-		case cmn.QparamProxyID:
+		case apc.QparamProxyID:
 			dpq.pid = value
-		case cmn.QparamUnixTime:
+		case apc.QparamUnixTime:
 			dpq.ptime = value
-		case cmn.QparamUUID:
+		case apc.QparamUUID:
 			dpq.uuid = value
-		case cmn.QparamArchpath:
+		case apc.QparamArchpath:
 			if dpq.archpath, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.QparamArchmime:
+		case apc.QparamArchmime:
 			if dpq.archmime, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.QparamIsGFNRequest:
+		case apc.QparamIsGFNRequest:
 			dpq.isGFN = value
-		case cmn.QparamOrigURL:
+		case apc.QparamOrigURL:
 			if dpq.origURL, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.QparamAppendType:
+		case apc.QparamAppendType:
 			dpq.appendTy = value
-		case cmn.QparamAppendHandle:
+		case apc.QparamAppendHandle:
 			if dpq.appendHdl, err = url.QueryUnescape(value); err != nil {
 				return
 			}
-		case cmn.QparamOWT:
+		case apc.QparamOWT:
 			dpq.owt = value
-		case cmn.QparamDontLookupRemoteBck:
+		case apc.QparamDontLookupRemoteBck:
 			dpq.dontLookupRemoteBck = value
 		default:
 			err = errors.New("failed to fast-parse [" + rawQuery + "]")

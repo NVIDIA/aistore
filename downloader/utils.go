@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -162,7 +163,7 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 	switch {
 	case cos.IsGoogleStorageURL(u) || cos.IsGoogleAPIURL(u):
 		h := cmn.BackendHelpers.Google
-		oah.SetCustomKey(cmn.SourceObjMD, cmn.ProviderGoogle)
+		oah.SetCustomKey(cmn.SourceObjMD, apc.ProviderGoogle)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.GsVersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
@@ -180,7 +181,7 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 		}
 	case cos.IsS3URL(link):
 		h := cmn.BackendHelpers.Amazon
-		oah.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAmazon)
+		oah.SetCustomKey(cmn.SourceObjMD, apc.ProviderAmazon)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.S3VersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
@@ -189,7 +190,7 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 		}
 	case cos.IsAzureURL(u):
 		h := cmn.BackendHelpers.Azure
-		oah.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAzure)
+		oah.SetCustomKey(cmn.SourceObjMD, apc.ProviderAzure)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.AzVersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}

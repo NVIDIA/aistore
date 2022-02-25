@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// via GET /v1/health (cmn.Health)
+// via GET /v1/health (apc.Health)
 func (reb *Reb) RebStatus(status *Status) {
 	var (
 		tsmap  = reb.t.Sowner().Get()

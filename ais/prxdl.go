@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -62,7 +63,7 @@ func (p *proxy) broadcastDownloadAdminRequest(method, path string, msg *download
 	respCnt := len(results)
 
 	if respCnt == 0 {
-		return nil, http.StatusBadRequest, cmn.NewErrNoNodes(cmn.Target)
+		return nil, http.StatusBadRequest, cmn.NewErrNoNodes(apc.Target)
 	}
 	validResponses := make([]*callResult, 0, respCnt) // TODO: avoid allocation
 	for _, res := range results {
@@ -128,7 +129,7 @@ func (p *proxy) broadcastDownloadAdminRequest(method, path string, msg *download
 
 func (p *proxy) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (errCode int, err error) {
 	query := r.URL.Query()
-	query.Set(cmn.QparamUUID, id)
+	query.Set(apc.QparamUUID, id)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body, Query: query}
 	config := cmn.GCO.Get()
@@ -180,13 +181,13 @@ func (p *proxy) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodDelete {
-		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.URLPathDownload.L)
+		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, apc.URLPathDownload.L)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
 
-		if items[0] != cmn.Abort && items[0] != cmn.Remove {
+		if items[0] != apc.Abort && items[0] != apc.Remove {
 			p.writeErrAct(w, r, items[0])
 			return
 		}
@@ -221,7 +222,7 @@ func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		progressInterval = downloader.DownloadProgressInterval
 	)
 
-	if _, err = p.checkRESTItems(w, r, 0, false, cmn.URLPathDownload.L); err != nil {
+	if _, err = p.checkRESTItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 		return
 	}
 

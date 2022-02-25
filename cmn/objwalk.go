@@ -9,13 +9,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 func SortBckEntries(bckEntries []*BucketEntry) {
 	entryLess := func(i, j int) bool {
 		if bckEntries[i].Name == bckEntries[j].Name {
-			return bckEntries[i].Flags&EntryStatusMask < bckEntries[j].Flags&EntryStatusMask
+			return bckEntries[i].Flags&apc.EntryStatusMask < bckEntries[j].Flags&apc.EntryStatusMask
 		}
 		return bckEntries[i].Name < bckEntries[j].Name
 	}

@@ -8,8 +8,8 @@ package xs
 import (
 	"sync"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
@@ -36,11 +36,11 @@ func (*eleFactory) New(xreg.Args, *cluster.Bck) xreg.Renewable { return &eleFact
 
 func (p *eleFactory) Start() error {
 	p.xctn = &Election{}
-	p.xctn.InitBase(cos.GenUUID(), cmn.ActElection, nil)
+	p.xctn.InitBase(cos.GenUUID(), apc.ActElection, nil)
 	return nil
 }
 
-func (*eleFactory) Kind() string        { return cmn.ActElection }
+func (*eleFactory) Kind() string        { return apc.ActElection }
 func (p *eleFactory) Get() cluster.Xact { return p.xctn }
 
 func (*eleFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {

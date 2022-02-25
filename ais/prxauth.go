@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -16,7 +17,7 @@ import (
 
 func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &tokenList{}
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathTokens.L); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, apc.URLPathTokens.L); err != nil {
 		return
 	}
 	if p.forwardCP(w, r, nil, "revoke token") {
@@ -27,7 +28,7 @@ func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	p.authn.updateRevokedList(tokenList)
 	if p.owner.smap.get().isPrimary(p.si) {
-		msg := p.newAmsgStr(cmn.ActNewPrimary, nil)
+		msg := p.newAmsgStr(apc.ActNewPrimary, nil)
 		_ = p.metasyncer.sync(revsPair{p.authn.revokedTokenList(), msg})
 	}
 }
@@ -37,12 +38,12 @@ func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
 func (p *proxy) validateToken(hdr http.Header) (*authn.Token, error) {
-	authToken := hdr.Get(cmn.HdrAuthorization)
+	authToken := hdr.Get(apc.HdrAuthorization)
 	if authToken == "" {
 		return nil, authn.ErrNoToken
 	}
 	idx := strings.Index(authToken, " ")
-	if idx == -1 || authToken[:idx] != cmn.AuthenticationTypeBearer {
+	if idx == -1 || authToken[:idx] != apc.AuthenticationTypeBearer {
 		return nil, authn.ErrNoToken
 	}
 

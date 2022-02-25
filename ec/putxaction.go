@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -70,7 +71,7 @@ func (p *putFactory) Start() error {
 	return nil
 }
 
-func (*putFactory) Kind() string        { return cmn.ActECPut }
+func (*putFactory) Kind() string        { return apc.ActECPut }
 func (p *putFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {

@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -83,16 +84,16 @@ func (b backends) init(t *target, starting bool) {
 	backend.Init()
 
 	ais := backend.NewAIS(t)
-	b[cmn.ProviderAIS] = ais // ais cloud is always present
+	b[apc.ProviderAIS] = ais // ais cloud is always present
 
 	config := cmn.GCO.Get()
-	if aisConf, ok := config.Backend.ProviderConf(cmn.ProviderAIS); ok {
+	if aisConf, ok := config.Backend.ProviderConf(apc.ProviderAIS); ok {
 		if err := ais.Apply(aisConf, "init"); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t, err)
 		}
 	}
 
-	b[cmn.ProviderHTTP], _ = backend.NewHTTP(t, config)
+	b[apc.ProviderHTTP], _ = backend.NewHTTP(t, config)
 	if err := b.initExt(t, starting); err != nil {
 		cos.ExitLogf("%v", err)
 	}
@@ -104,7 +105,7 @@ func (b backends) init(t *target, starting bool) {
 func (b backends) initExt(t *target, starting bool) (err error) {
 	config := cmn.GCO.Get()
 	for provider := range b {
-		if provider == cmn.ProviderHTTP || provider == cmn.ProviderAIS { // always present
+		if provider == apc.ProviderHTTP || provider == apc.ProviderAIS { // always present
 			continue
 		}
 		if _, ok := config.Backend.Providers[provider]; !ok {
@@ -117,22 +118,22 @@ func (b backends) initExt(t *target, starting bool) (err error) {
 	for provider := range config.Backend.Providers {
 		var add string
 		switch provider {
-		case cmn.ProviderAmazon:
+		case apc.ProviderAmazon:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewAWS(t)
 				add = provider
 			}
-		case cmn.ProviderAzure:
+		case apc.ProviderAzure:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewAzure(t)
 				add = provider
 			}
-		case cmn.ProviderGoogle:
+		case apc.ProviderGoogle:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewGCP(t)
 				add = provider
 			}
-		case cmn.ProviderHDFS:
+		case apc.ProviderHDFS:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewHDFS(t)
 				add = provider
@@ -175,7 +176,7 @@ func (t *target) init(config *cmn.Config) {
 		// in an unlikely case of losing all mountpath-stored IDs but still having a volume
 		tid = volume.RecoverTID(tid, config.FSP.Paths)
 	}
-	t.si.Init(tid, cmn.Target)
+	t.si.Init(tid, apc.Target)
 
 	cos.InitShortID(t.si.Digest())
 
@@ -242,7 +243,7 @@ func (t *target) initHostIP() {
 }
 
 func initTID(config *cmn.Config) (tid string, generated bool) {
-	if tid = envDaemonID(cmn.Target); tid != "" {
+	if tid = envDaemonID(apc.Target); tid != "" {
 		if err := cos.ValidateDaemonID(tid); err != nil {
 			glog.Errorf("Warning: %v", err)
 		}
@@ -257,7 +258,7 @@ func initTID(config *cmn.Config) (tid string, generated bool) {
 		return
 	}
 
-	tid = genDaemonID(cmn.Target, config)
+	tid = genDaemonID(apc.Target, config)
 	err = cos.ValidateDaemonID(tid)
 	debug.AssertNoErr(err)
 	glog.Infof("t[%s] ID randomly generated", tid)
@@ -335,8 +336,8 @@ func (t *target) Run() error {
 		}()
 		// see endStartupStandby()
 	} else {
-		// discover primary and join cluster (compare with manual `cmn.AdminJoin`)
-		if status, err := t.joinCluster(cmn.ActSelfJoinTarget); err != nil {
+		// discover primary and join cluster (compare with manual `apc.AdminJoin`)
+		if status, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
 			glog.Errorf("%s failed to join cluster (status: %d, err: %v)", t, status, err)
 			glog.Errorf("%s is terminating", t.si)
 			return err
@@ -349,7 +350,7 @@ func (t *target) Run() error {
 				return
 			}
 			if cii != nil {
-				if status, err := t.joinCluster(cmn.ActSelfJoinTarget,
+				if status, err := t.joinCluster(apc.ActSelfJoinTarget,
 					cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
 					glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t, status, err)
 					return
@@ -435,22 +436,22 @@ func (t *target) endStartupStandby() (err error) {
 
 func (t *target) initRecvHandlers() {
 	networkHandlers := []networkHandler{
-		{r: cmn.Buckets, h: t.bucketHandler, net: accessNetAll},
-		{r: cmn.Objects, h: t.objectHandler, net: accessNetAll},
-		{r: cmn.Daemon, h: t.daemonHandler, net: accessNetPublicControl},
-		{r: cmn.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
-		{r: cmn.Health, h: t.healthHandler, net: accessNetPublicControl},
-		{r: cmn.Xactions, h: t.xactHandler, net: accessNetIntraControl},
-		{r: cmn.EC, h: t.ecHandler, net: accessNetIntraData},
-		{r: cmn.Vote, h: t.voteHandler, net: accessNetIntraControl},
-		{r: cmn.Txn, h: t.txnHandler, net: accessNetIntraControl},
-		{r: cmn.ObjStream, h: transport.RxAnyStream, net: accessControlData},
+		{r: apc.Buckets, h: t.bucketHandler, net: accessNetAll},
+		{r: apc.Objects, h: t.objectHandler, net: accessNetAll},
+		{r: apc.Daemon, h: t.daemonHandler, net: accessNetPublicControl},
+		{r: apc.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
+		{r: apc.Health, h: t.healthHandler, net: accessNetPublicControl},
+		{r: apc.Xactions, h: t.xactHandler, net: accessNetIntraControl},
+		{r: apc.EC, h: t.ecHandler, net: accessNetIntraData},
+		{r: apc.Vote, h: t.voteHandler, net: accessNetIntraControl},
+		{r: apc.Txn, h: t.txnHandler, net: accessNetIntraControl},
+		{r: apc.ObjStream, h: transport.RxAnyStream, net: accessControlData},
 
-		{r: cmn.Download, h: t.downloadHandler, net: accessNetIntraControl},
-		{r: cmn.Sort, h: dsort.SortHandler, net: accessControlData},
-		{r: cmn.ETL, h: t.etlHandler, net: accessNetAll},
+		{r: apc.Download, h: t.downloadHandler, net: accessNetIntraControl},
+		{r: apc.Sort, h: dsort.SortHandler, net: accessControlData},
+		{r: apc.ETL, h: t.etlHandler, net: accessNetAll},
 
-		{r: "/" + cmn.S3, h: t.s3Handler, net: accessNetPublicData},
+		{r: "/" + apc.S3, h: t.s3Handler, net: accessNetPublicData},
 		{r: "/", h: t.writeErrURL, net: accessNetAll},
 	}
 	t.registerNetworkHandlers(networkHandlers)
@@ -540,7 +541,7 @@ func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/buckets[/bucket-name]
 func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var bckName string
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
@@ -554,7 +555,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 		bckName = apiItems[0]
 	}
 	switch msg.Action {
-	case cmn.ActList:
+	case apc.ActList:
 		dpq := dpqAlloc()
 		if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
 			dpqFree(dpq)
@@ -591,7 +592,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			cos.NamedVal64{Name: stats.ListCount, Value: 1},
 			cos.NamedVal64{Name: stats.ListLatency, Value: delta},
 		)
-	case cmn.ActSummaryBck:
+	case apc.ActSummaryBck:
 		query := r.URL.Query()
 		queryBcks, err := newQueryBcksFromQuery(bckName, query, nil)
 		if err != nil {
@@ -678,12 +679,12 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck,
 	msg *cmn.BckSummMsg) {
 	var (
-		taskAction = q.Get(cmn.QparamTaskAction)
-		silent     = cos.IsParseBool(q.Get(cmn.QparamSilent))
+		taskAction = q.Get(apc.QparamTaskAction)
+		silent     = cos.IsParseBool(q.Get(apc.QparamSilent))
 		ctx        = context.Background()
 	)
-	if taskAction == cmn.TaskStart {
-		if action != cmn.ActSummaryBck {
+	if taskAction == apc.TaskStart {
+		if action != apc.ActSummaryBck {
 			t.writeErrAct(w, r, action)
 			return
 		}
@@ -723,7 +724,7 @@ func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Val
 		}
 		return
 	}
-	if taskAction == cmn.TaskResult {
+	if taskAction == apc.TaskResult {
 		// return the final result only if it is requested explicitly
 		t.writeJSON(w, r, result, "")
 	}
@@ -736,7 +737,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
-	apireq := apiReqAlloc(1, cmn.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
 	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
@@ -753,8 +754,8 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch msg.Action {
-	case cmn.ActEvictRemoteBck:
-		keepMD := cos.IsParseBool(apireq.query.Get(cmn.QparamKeepBckMD))
+	case apc.ActEvictRemoteBck:
+		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepBckMD))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if apireq.bck.IsHDFS() || keepMD {
 			nlp := apireq.bck.GetNameLockPair()
@@ -773,7 +774,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck
 			}
 		}
-	case cmn.ActDeleteObjects, cmn.ActEvictObjects:
+	case apc.ActDeleteObjects, apc.ActEvictObjects:
 		lrMsg := &cmn.ListRangeMsg{}
 		if err := cos.MorphMarshal(msg.Value, lrMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
@@ -805,7 +806,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	apireq := apiReqAlloc(1, cmn.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
 	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
@@ -825,7 +826,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch msg.Action {
-	case cmn.ActPrefetchObjects:
+	case apc.ActPrefetchObjects:
 		var (
 			err   error
 			lrMsg = &cmn.ListRangeMsg{}
@@ -856,7 +857,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		ctx         = context.Background()
 		hdr         = w.Header()
 	)
-	apireq := apiReqAlloc(1, cmn.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
 	defer apiReqFree(apireq)
 	if err = t.parseReq(w, r, apireq); err != nil {
 		return
@@ -870,14 +871,14 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		inBMD = false
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		pid := apireq.query.Get(cmn.QparamProxyID)
+		pid := apireq.query.Get(apc.QparamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, apireq.bck, pid)
 	}
 
 	debug.Assert(!apireq.bck.IsAIS())
 
 	if apireq.bck.IsHTTP() {
-		originalURL := apireq.query.Get(cmn.QparamOrigURL)
+		originalURL := apireq.query.Get(apc.QparamOrigURL)
 		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
 			err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bck)
@@ -900,11 +901,11 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		}
 		glog.Warningf("%s: bucket %s, err: %v(%d)", t, apireq.bck, err, code)
 		bucketProps = make(cos.SimpleKVs)
-		bucketProps[cmn.HdrBackendProvider] = apireq.bck.Provider
-		bucketProps[cmn.HdrRemoteOffline] = strconv.FormatBool(apireq.bck.IsRemote())
+		bucketProps[apc.HdrBackendProvider] = apireq.bck.Provider
+		bucketProps[apc.HdrRemoteOffline] = strconv.FormatBool(apireq.bck.IsRemote())
 	}
 	for k, v := range bucketProps {
-		if k == cmn.HdrBucketVerEnabled && apireq.bck.Props != nil {
+		if k == apc.HdrBucketVerEnabled && apireq.bck.Props != nil {
 			if curr := strconv.FormatBool(apireq.bck.VersionConf().Enabled); curr != v {
 				// e.g., change via vendor-provided CLI and similar
 				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t, apireq.bck, v, curr)
@@ -927,7 +928,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, true /*dpq*/)
+	apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		apiReqFree(apireq)
 		return
@@ -970,7 +971,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		t.doETL(w, r, dpq.uuid, bck, lom.ObjName)
 		return
 	}
-	filename := dpq.archpath // cmn.QparamArchpath
+	filename := dpq.archpath // apc.QparamArchpath
 	if strings.HasPrefix(filename, lom.ObjName) {
 		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {
 			filename = rel
@@ -994,13 +995,13 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.ranges = byteRanges{Range: r.Header.Get(cmn.HdrRange), Size: 0}
 		goi.archive = archiveQuery{
 			filename: filename,
-			mime:     dpq.archmime, // query.Get(cmn.QparamArchmime)
+			mime:     dpq.archmime, // query.Get(apc.QparamArchmime)
 		}
-		goi.isGFN = cos.IsParseBool(dpq.isGFN) // query.Get(cmn.QparamIsGFNRequest)
+		goi.isGFN = cos.IsParseBool(dpq.isGFN) // query.Get(apc.QparamIsGFNRequest)
 		goi.chunked = cmn.GCO.Get().Net.HTTP.Chunked
 	}
 	if bck.IsHTTP() {
-		originalURL := dpq.origURL // query.Get(cmn.QparamOrigURL)
+		originalURL := dpq.origURL // query.Get(apc.QparamOrigURL)
 		goi.ctx = context.WithValue(goi.ctx, cos.CtxOriginalURL, originalURL)
 	}
 	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
@@ -1011,7 +1012,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 // PUT /v1/objects/bucket-name/object-name
 func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, true /*dpq*/)
+	apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
@@ -1056,7 +1057,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	// load (maybe)
 	var errdb error
-	skipVC := cos.IsParseBool(apireq.dpq.skipVC) // cmn.QparamSkipVC
+	skipVC := cos.IsParseBool(apireq.dpq.skipVC) // apc.QparamSkipVC
 	if skipVC {
 		errdb = lom.AllowDisconnectedBackend(false)
 	} else if lom.Load(true, false) == nil {
@@ -1072,8 +1073,8 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 		handle           string
 		err              error
 		errCode          int
-		archPathProvided = apireq.dpq.archpath != "" // cmn.QparamArchpath
-		appendTyProvided = apireq.dpq.appendTy != "" // cmn.QparamAppendType
+		archPathProvided = apireq.dpq.archpath != "" // apc.QparamArchpath
+		appendTyProvided = apireq.dpq.appendTy != "" // apc.QparamAppendType
 	)
 	if archPathProvided {
 		// TODO: resolve non-empty dpq.uuid => xaction and pass it on
@@ -1082,7 +1083,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 		// ditto
 		handle, errCode, err = t.doAppend(r, lom, started, apireq.dpq)
 		if err == nil {
-			w.Header().Set(cmn.HdrAppendHandle, handle)
+			w.Header().Set(apc.HdrAppendHandle, handle)
 			return
 		}
 	} else {
@@ -1107,7 +1108,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
 func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var msg aisMsg
-	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
+	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
 	defer apiReqFree(apireq)
 	if err := readJSON(w, r, &msg); err != nil {
 		return
@@ -1120,7 +1121,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	evict := msg.Action == cmn.ActEvictObjects
+	evict := msg.Action == apc.ActEvictObjects
 	lom := cluster.AllocLOM(apireq.items[1])
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(apireq.bck.Bck); err != nil {
@@ -1149,7 +1150,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActRenameObject:
+	case apc.ActRenameObject:
 		query := r.URL.Query()
 		if isRedirect(query) == "" {
 			t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
@@ -1163,7 +1164,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/objects/<bucket-name>/<object-name>
 func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
+	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
 	err := t.parseReq(w, r, apireq)
 	query, bck, objName := apireq.query, apireq.bck, apireq.items[1]
 	apiReqFree(apireq)
@@ -1191,14 +1192,14 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		mustBeLocal    int
 		invalidHandler = t.writeErr
 		hdr            = w.Header()
-		silent         = cos.IsParseBool(query.Get(cmn.QparamSilent))
+		silent         = cos.IsParseBool(query.Get(apc.QparamSilent))
 		exists         = true
 		addedEC        bool
 	)
 	if silent {
 		invalidHandler = t.writeErrSilent
 	}
-	if tmp := query.Get(cmn.QparamHeadObj); tmp != "" {
+	if tmp := query.Get(apc.QparamHeadObj); tmp != "" {
 		mustBeLocal, _ = strconv.Atoi(tmp)
 	}
 	if err := lom.Init(bck.Bck); err != nil {
@@ -1216,8 +1217,8 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 			return
 		}
 		exists = false
-		if (mustBeLocal == cmn.HeadObjAvoidRemote && lom.HasCopies()) ||
-			mustBeLocal == cmn.HeadObjAvoidRemoteCheckAllMps {
+		if (mustBeLocal == apc.HeadObjAvoidRemote && lom.HasCopies()) ||
+			mustBeLocal == apc.HeadObjAvoidRemoteCheckAllMps {
 			exists = lom.RestoreToLocation()
 		}
 	}
@@ -1274,9 +1275,9 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 
 // PATCH /v1/objects/<bucket-name>/<object-name>
 // By default, adds or updates existing custom keys. Will remove all existing keys and
-// replace them with the specified ones _iff_ `cmn.QparamNewCustom` is set.
+// replace them with the specified ones _iff_ `apc.QparamNewCustom` is set.
 func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
+	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
 	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
@@ -1312,7 +1313,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	delOldSetNew := cos.IsParseBool(apireq.query.Get(cmn.QparamNewCustom))
+	delOldSetNew := cos.IsParseBool(apireq.query.Get(apc.QparamNewCustom))
 	if delOldSetNew {
 		lom.SetCustomMD(custom)
 	} else {
@@ -1329,7 +1330,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 
 // Returns a slice. Does not use GFN.
 func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(3, cmn.URLPathEC.L, false)
+	apireq := apiReqAlloc(3, apc.URLPathEC.L, false)
 	apireq.bckIdx = 1
 	if err := t.parseReq(w, r, apireq); err != nil {
 		apiReqFree(apireq)
@@ -1437,12 +1438,12 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.Q
 			return
 		}
 	} else /* all providers */ {
-		for provider := range cmn.Providers {
+		for provider := range apc.Providers {
 			var buckets cmn.Bcks
 			query.Provider = provider
 			buckets, code, err = t._listBcks(query, config)
 			if err != nil {
-				if provider == cmn.ProviderAIS {
+				if provider == apc.ProviderAIS {
 					t.writeErrStatusf(w, r, code, fmterr, query, err)
 					return
 				}
@@ -1473,10 +1474,10 @@ func (t *target) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks
 func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (newHandle string,
 	errCode int, err error) {
 	var (
-		cksumValue    = r.Header.Get(cmn.HdrObjCksumVal)
-		cksumType     = r.Header.Get(cmn.HdrObjCksumType)
+		cksumValue    = r.Header.Get(apc.HdrObjCksumVal)
+		cksumType     = r.Header.Get(apc.HdrObjCksumType)
 		contentLength = r.Header.Get(cmn.HdrContentLength)
-		handle        = dpq.appendHdl // cmn.QparamAppendHandle
+		handle        = dpq.appendHdl // apc.QparamAppendHandle
 	)
 
 	hi, err := parseAppendHandle(handle)
@@ -1489,7 +1490,7 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 		t:       t,
 		lom:     lom,
 		r:       r.Body,
-		op:      dpq.appendTy, // cmn.QparamAppendType
+		op:      dpq.appendTy, // apc.QparamAppendType
 		hi:      hi,
 	}
 	if contentLength != "" {
@@ -1506,8 +1507,8 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (errCode int, err error) {
 	var (
 		sizeStr  = r.Header.Get(cmn.HdrContentLength)
-		mime     = dpq.archmime // cmn.QparamArchmime
-		filename = dpq.archpath // cmn.QparamArchpath
+		mime     = dpq.archmime // apc.QparamArchmime
+		filename = dpq.archpath // apc.QparamArchpath
 	)
 	if strings.HasPrefix(filename, lom.ObjName) {
 		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {
@@ -1621,7 +1622,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 
 // TODO: consider unifying with Promote
 func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	apireq := apiReqAlloc(2, cmn.URLPathObjects.L, false)
+	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
 	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
@@ -1691,8 +1692,8 @@ func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
 	// with no cluster-wide UUID it's a local run
 	if args.UUID == "" {
 		args.UUID = cos.GenUUID()
-		regMsg := xactRegMsg{UUID: args.UUID, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}
-		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
+		regMsg := xactRegMsg{UUID: args.UUID, Kind: apc.ActResilver, Srcs: []string{t.si.ID()}}
+		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
 	if wg != nil {

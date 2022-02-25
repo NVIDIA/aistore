@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -33,10 +34,10 @@ func (t *target) DB() dbdriver.Driver         { return t.db }
 
 func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Bck.IsRemoteAIS() {
-		return t.backend[cmn.ProviderAIS]
+		return t.backend[apc.ProviderAIS]
 	}
 	if bck.Bck.IsHTTP() {
-		return t.backend[cmn.ProviderHTTP]
+		return t.backend[apc.ProviderHTTP]
 	}
 	provider := bck.Provider
 	if bck.Props != nil {
@@ -328,17 +329,17 @@ func (t *target) DisableMpath(mpath, reason string) (err error) {
 func (t *target) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, err error) {
 	// pull the data
 	query := url.Values{}
-	query.Set(cmn.QparamRebData, "true")
+	query.Set(apc.QparamRebData, "true")
 	cargs := allocCargs()
 	{
 		cargs.si = si
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Base:   si.URL(cmn.NetIntraData),
-			Path:   cmn.URLPathRebalance.S,
+			Path:   apc.URLPathRebalance.S,
 			Query:  query,
 		}
-		cargs.timeout = cmn.DefaultTimeout
+		cargs.timeout = apc.DefaultTimeout
 	}
 	res := t.call(cargs)
 	b, status, err = res.bytes, res.status, res.err

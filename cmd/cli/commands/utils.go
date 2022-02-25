@@ -24,6 +24,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
@@ -595,7 +596,7 @@ func makeBckPropPairs(values []string) (nvs cos.SimpleKVs, err error) {
 		}
 		cmd = values[idx]
 		idx++
-		if cmd == cmn.PropBucketAccessAttrs {
+		if cmd == apc.PropBucketAccessAttrs {
 			access, idx, err = parseBucketAccessValues(values, idx)
 			if err != nil {
 				return nil, err
@@ -829,7 +830,7 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop) {
 			{"lru", props.LRU.String()},
 			{"versioning", props.Versioning.String()},
 		}
-		if props.Provider == cmn.ProviderHTTP {
+		if props.Provider == apc.ProviderHTTP {
 			origURL := props.Extra.HTTP.OrigURLBck
 			if origURL != "" {
 				propList = append(propList, prop{Name: "original-url", Value: origURL})
@@ -838,7 +839,7 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop) {
 	} else {
 		err := cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (error, bool) {
 			value := fmt.Sprintf("%v", field.Value())
-			if uniqueTag == cmn.PropBucketAccessAttrs {
+			if uniqueTag == apc.PropBucketAccessAttrs {
 				value = props.Access.Describe()
 			}
 			propList = append(propList, prop{
@@ -894,7 +895,7 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	if strURL[len(strURL)-1:] != "/" {
 		strURL += "/"
 	}
-	bck.Provider = cmn.ProviderHTTP
+	bck.Provider = apc.ProviderHTTP
 	bck.Name = cos.OrigURLBck2Name(strURL)
 	return
 }
@@ -1033,43 +1034,43 @@ func parseSource(rawURL string) (source dlSource, err error) {
 	// If `rawURL` is using `gs` or `s3` scheme ({gs/s3}://<bucket>/...)
 	// then <bucket> is considered a `Host` by `url.Parse`.
 	switch u.Scheme {
-	case cmn.GSScheme, cmn.ProviderGoogle:
+	case apc.GSScheme, apc.ProviderGoogle:
 		cloudSource = dlSourceBackend{
-			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderGoogle},
+			bck:    cmn.Bck{Name: host, Provider: apc.ProviderGoogle},
 			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
 
 		scheme = "https"
 		host = gsHost
 		fullPath = path.Join(u.Host, fullPath)
-	case cmn.S3Scheme, cmn.ProviderAmazon:
+	case apc.S3Scheme, apc.ProviderAmazon:
 		cloudSource = dlSourceBackend{
-			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAmazon},
+			bck:    cmn.Bck{Name: host, Provider: apc.ProviderAmazon},
 			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
 
 		scheme = "http"
 		host = s3Host
 		fullPath = path.Join(u.Host, fullPath)
-	case cmn.AZScheme, cmn.ProviderAzure:
+	case apc.AZScheme, apc.ProviderAzure:
 		// NOTE: We don't set the link here because there is no way to translate
 		//  `az://bucket/object` into Azure link without account name.
 		return dlSource{
 			link: "",
 			backend: dlSourceBackend{
-				bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAzure},
+				bck:    cmn.Bck{Name: host, Provider: apc.ProviderAzure},
 				prefix: strings.TrimPrefix(fullPath, "/"),
 			},
 		}, nil
-	case cmn.AISScheme:
+	case apc.AISScheme:
 		// TODO: add support for the remote cluster
 		scheme = "http" // TODO: How about `https://`?
 		if !strings.Contains(host, ":") {
 			host += ":8080" // TODO: What if host is listening on `:80` so we don't need port?
 		}
-		fullPath = path.Join(cmn.Version, cmn.Objects, fullPath)
+		fullPath = path.Join(apc.Version, apc.Objects, fullPath)
 	case "":
-		scheme = cmn.DefaultScheme
+		scheme = apc.DefaultScheme
 	case "https", "http":
 	default:
 		err = fmt.Errorf("invalid scheme: %s", scheme)

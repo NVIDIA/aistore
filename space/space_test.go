@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -67,8 +68,8 @@ var _ = Describe("space evict/cleanup tests", func() {
 			createAndAddMountpath(basePath)
 			t = newTargetLRUMock()
 			availablePaths := fs.GetAvail()
-			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			bck := cmn.Bck{Name: bucketName, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
+			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
 			filesPath = availablePaths[basePath].MakePathCT(bck, fs.ObjectType)
 			fpAnother = availablePaths[basePath].MakePathCT(bckAnother, fs.ObjectType)
 			cos.CreateDir(filesPath)
@@ -316,7 +317,7 @@ func newTargetLRUMock() *mock.TargetMock {
 	var (
 		bmdMock = cluster.NewBaseBownerMock(
 			cluster.NewBck(
-				bucketName, cmn.ProviderAIS, cmn.NsGlobal,
+				bucketName, apc.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: true},
@@ -325,7 +326,7 @@ func newTargetLRUMock() *mock.TargetMock {
 				},
 			),
 			cluster.NewBck(
-				bucketNameAnother, cmn.ProviderAIS, cmn.NsGlobal,
+				bucketNameAnother, apc.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: false},
@@ -341,7 +342,7 @@ func newTargetLRUMock() *mock.TargetMock {
 
 func newIniLRU(t cluster.Target) *space.IniLRU {
 	xlru := &space.XactLRU{}
-	xlru.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
+	xlru.InitBase(cos.GenUUID(), apc.ActLRU, nil)
 	return &space.IniLRU{
 		Xaction:             xlru,
 		StatsT:              mock.NewStatsTracker(),
@@ -353,7 +354,7 @@ func newIniLRU(t cluster.Target) *space.IniLRU {
 
 func newInitStoreCln(t cluster.Target) *space.IniCln {
 	xcln := &space.XactCln{}
-	xcln.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
+	xcln.InitBase(cos.GenUUID(), apc.ActLRU, nil)
 	return &space.IniCln{
 		Xaction: xcln,
 		StatsT:  mock.NewStatsTracker(),

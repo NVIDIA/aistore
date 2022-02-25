@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -59,7 +59,7 @@ func (p *rebFactory) Start() error {
 	return nil
 }
 
-func (*rebFactory) Kind() string        { return cmn.ActRebalance }
+func (*rebFactory) Kind() string        { return apc.ActRebalance }
 func (p *rebFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
@@ -115,7 +115,7 @@ func (p *resFactory) Start() error {
 	return nil
 }
 
-func (*resFactory) Kind() string                                       { return cmn.ActResilver }
+func (*resFactory) Kind() string                                       { return apc.ActResilver }
 func (p *resFactory) Get() cluster.Xact                                { return p.xctn }
 func (*resFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprAbort, nil }
 

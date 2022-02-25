@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -70,7 +71,7 @@ func newPrimary() *proxy {
 	)
 
 	p.owner.smap = newSmapOwner(cmn.GCO.Get())
-	p.si = cluster.NewSnode("primary", cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
+	p.si = cluster.NewSnode("primary", apc.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
 
 	smap.addProxy(p.si)
 	smap.Primary = p.si
@@ -107,7 +108,7 @@ func newPrimary() *proxy {
 
 func newSecondary(name string) *proxy {
 	p := &proxy{}
-	p.si = cluster.NewSnode(name, cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
+	p.si = cluster.NewSnode(name, apc.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
 	p.owner.smap = newSmapOwner(cmn.GCO.Get())
 	p.owner.smap.put(newSmap())
 	p.client.data = &http.Client{}
@@ -157,9 +158,9 @@ func newTransportServer(primary *proxy, s *metaSyncServer, ch chan<- transportDa
 	addrInfo := serverTCPAddr(ts.URL)
 	clone := primary.owner.smap.get().clone()
 	if s.isProxy {
-		clone.Pmap[id] = cluster.NewSnode(id, cmn.Proxy, addrInfo, addrInfo, addrInfo)
+		clone.Pmap[id] = cluster.NewSnode(id, apc.Proxy, addrInfo, addrInfo, addrInfo)
 	} else {
-		clone.Tmap[id] = cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo)
+		clone.Tmap[id] = cluster.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
 	}
 	clone.Version++
 	primary.owner.smap.put(clone)
@@ -169,22 +170,22 @@ func newTransportServer(primary *proxy, s *metaSyncServer, ch chan<- transportDa
 
 func TestMetasyncDeepCopy(t *testing.T) {
 	bmd := newBucketMD()
-	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket1", apc.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(cluster.NewBck("bucket2", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket2", apc.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket3", apc.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(cluster.NewBck("bucket4", cmn.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket4", apc.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
@@ -462,12 +463,12 @@ func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData,
 	)
 
 	// handler for /v1/metasync
-	http.HandleFunc(cmn.URLPathMetasync.S, func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(apc.URLPathMetasync.S, func(w http.ResponseWriter, r *http.Request) {
 		ch <- transportData{true, id, 1}
 	})
 
 	clone := primary.owner.smap.get().clone()
-	clone.Pmap[id] = cluster.NewSnode(id, cmn.Proxy, addrInfo, addrInfo, addrInfo)
+	clone.Pmap[id] = cluster.NewSnode(id, apc.Proxy, addrInfo, addrInfo, addrInfo)
 	clone.Version++
 	primary.owner.smap.put(clone)
 
@@ -560,9 +561,9 @@ func TestMetasyncData(t *testing.T) {
 		addrInfo := serverTCPAddr(ts.URL)
 		clone := primary.owner.smap.get().clone()
 		if s.isProxy {
-			clone.Pmap[id] = cluster.NewSnode(id, cmn.Proxy, addrInfo, addrInfo, addrInfo)
+			clone.Pmap[id] = cluster.NewSnode(id, apc.Proxy, addrInfo, addrInfo, addrInfo)
 		} else {
-			clone.Tmap[id] = cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo)
+			clone.Tmap[id] = cluster.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
 		}
 		clone.Version++
 		primary.owner.smap.put(clone)
@@ -630,12 +631,12 @@ func TestMetasyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket1", apc.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(cluster.NewBck("bucket2", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket2", apc.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
@@ -659,7 +660,7 @@ func TestMetasyncData(t *testing.T) {
 		Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash},
 		LRU:   cmn.GCO.Get().LRU,
 	}
-	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAIS, cmn.NsGlobal), bprops)
+	bmd.add(cluster.NewBck("bucket3", apc.ProviderAIS, cmn.NsGlobal), bprops)
 	primary.owner.bmd.putPersist(bmd, nil)
 	bmdBody = bmd.marshal()
 
@@ -693,7 +694,7 @@ func TestMetasyncMembership(t *testing.T) {
 		id := "t"
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.owner.smap.get().clone()
-		clone.addTarget(cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo))
+		clone.addTarget(cluster.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo))
 		primary.owner.smap.put(clone)
 		msg := primary.newAmsgStr("", nil)
 		wg1 := syncer.sync(revsPair{clone, msg})
@@ -737,7 +738,7 @@ func TestMetasyncMembership(t *testing.T) {
 
 		id := "t1111"
 		addrInfo := serverTCPAddr(s1.URL)
-		di := cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo)
+		di := cluster.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
 		clone := primary.owner.smap.get().clone()
 		clone.addTarget(di)
 		primary.owner.smap.put(clone)
@@ -763,7 +764,7 @@ func TestMetasyncMembership(t *testing.T) {
 
 		id := "t22222"
 		addrInfo := serverTCPAddr(s2.URL)
-		di := cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo)
+		di := cluster.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
 		clone := primary.owner.smap.get().clone()
 		clone.addTarget(di)
 		primary.owner.smap.put(clone)
@@ -828,7 +829,7 @@ func TestMetasyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.owner.smap.get().clone()
-		clone.addProxy(cluster.NewSnode("p1", cmn.Proxy, addrInfo, addrInfo, addrInfo))
+		clone.addProxy(cluster.NewSnode("p1", apc.Proxy, addrInfo, addrInfo, addrInfo))
 		primary.owner.smap.put(clone)
 
 		proxy1 := newSecondary("p1")

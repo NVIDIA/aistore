@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -33,7 +34,7 @@ func TestHTTPProviderBucket(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
-			Provider: cmn.ProviderHTTP,
+			Provider: apc.ProviderHTTP,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -62,7 +63,7 @@ func TestListBuckets(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -76,7 +77,7 @@ func TestListBuckets(t *testing.T) {
 		fmt.Fprintf(os.Stdout, "  provider: %s, name: %s, ns: %s\n", bck.Provider, bck.Name, bck.Ns)
 	}
 	config := tutils.GetClusterConfig(t)
-	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure, cmn.ProviderHDFS} {
+	for _, provider := range []string{apc.ProviderAmazon, apc.ProviderGoogle, apc.ProviderAzure, apc.ProviderHDFS} {
 		_, configured := config.Backend.Providers[provider]
 		query := cmn.QueryBcks{Provider: provider}
 		remoteBuckets, err := api.ListBuckets(baseParams, query)
@@ -94,7 +95,7 @@ func TestListBuckets(t *testing.T) {
 	}
 
 	// NsGlobal
-	query := cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+	query := cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
 	aisBuckets, err := api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
 	if len(aisBuckets) != len(bcks.Select(query)) {
@@ -105,7 +106,7 @@ func TestListBuckets(t *testing.T) {
 	query = cmn.QueryBcks{Ns: cmn.NsAnyRemote}
 	bcks, err = api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
-	query = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.NsAnyRemote}
+	query = cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.NsAnyRemote}
 	aisBuckets, err = api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
 	if len(aisBuckets) != len(bcks.Select(query)) {
@@ -121,7 +122,7 @@ func TestDefaultBucketProps(t *testing.T) {
 		globalConfig = tutils.GetClusterConfig(t)
 		bck          = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -153,7 +154,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 	propsToSet := &cmn.BucketPropsToUpdate{
@@ -183,7 +184,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	if bck.IsHDFS() {
-		hdfsBck := cmn.Bck{Provider: cmn.ProviderHDFS, Name: cos.RandString(10)}
+		hdfsBck := cmn.Bck{Provider: apc.ProviderHDFS, Name: cos.RandString(10)}
 		err := api.CreateBucket(baseParams, hdfsBck, &cmn.BucketPropsToUpdate{
 			Extra: &cmn.ExtraToUpdate{
 				HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
@@ -199,7 +200,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 		}{
 			{bck: bck, props: nil},
 			{ // If cluster is not built with HDFS support, bucket creation should fail.
-				bck: cmn.Bck{Provider: cmn.ProviderHDFS, Name: cos.RandString(10)},
+				bck: cmn.Bck{Provider: apc.ProviderHDFS, Name: cos.RandString(10)},
 				props: &cmn.BucketPropsToUpdate{
 					Extra: &cmn.ExtraToUpdate{
 						HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
@@ -224,7 +225,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
 	bck := cmn.Bck{
 		Name:     cos.RandString(10),
-		Provider: cmn.ProviderAIS,
+		Provider: apc.ProviderAIS,
 		Ns: cmn.Ns{
 			UUID: tutils.RemoteCluster.UUID,
 		},
@@ -297,7 +298,7 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 
 	m.puts()
 
-	// NOTE: not waiting here for cmn.ActPutCopies
+	// NOTE: not waiting here for apc.ActPutCopies
 
 	tlog.Logf("List %q\n", m.bck)
 	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsName}
@@ -320,7 +321,7 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 	// wait for pending writes (of the copies)
-	args := api.XactReqArgs{Kind: cmn.ActPutCopies, Bck: m.bck}
+	args := api.XactReqArgs{Kind: apc.ActPutCopies, Bck: m.bck}
 	api.WaitForXactionIdle(baseParams, args)
 
 	tlog.Logf("List %s new versions\n", m.bck)
@@ -398,7 +399,7 @@ func TestResetBucketProps(t *testing.T) {
 		baseParams   = tutils.BaseAPIParams(proxyURL)
 		bck          = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		propsToUpdate = &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
@@ -454,7 +455,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 
 		tests = []struct {
@@ -1005,7 +1006,7 @@ func TestListObjects(t *testing.T) {
 
 		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		wg = &sync.WaitGroup{}
 
@@ -1162,7 +1163,7 @@ func TestListObjectsPrefix(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	providers := []string{cmn.ProviderAIS}
+	providers := []string{apc.ProviderAIS}
 	if cliBck.IsRemote() {
 		providers = append(providers, cliBck.Provider)
 	}
@@ -1182,7 +1183,7 @@ func TestListObjectsPrefix(t *testing.T) {
 
 				bckProp, err := api.HeadBucket(baseParams, bck)
 				tassert.CheckFatal(t, err)
-				customPage = bckProp.Provider != cmn.ProviderAzure
+				customPage = bckProp.Provider != apc.ProviderAzure
 
 				tlog.Logf("Cleaning up the remote bucket %s\n", bck)
 				bckList, err := api.ListObjects(baseParams, bck, nil, 0)
@@ -1570,7 +1571,7 @@ func TestBucketInvalidName(t *testing.T) {
 	for _, name := range invalidNames {
 		bck := cmn.Bck{
 			Name:     name,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		if err := api.CreateBucket(baseParams, bck, nil); err == nil {
 			tutils.DestroyBucket(t, proxyURL, bck)
@@ -1607,7 +1608,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		num:             10000,
 		numGetsEachFile: 5,
 		bck: cmn.Bck{
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 			Name:     cos.RandString(10),
 		},
 	}
@@ -1639,7 +1640,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 		// Even though the bucket is empty, it can take a short while until the
 		// xaction is propagated and finished.
-		reqArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck, Timeout: 10 * time.Second}
+		reqArgs := api.XactReqArgs{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: 10 * time.Second}
 		_, err = api.WaitForXactionIC(baseParams, reqArgs)
 		tassert.CheckFatal(t, err)
 	}
@@ -1671,7 +1672,7 @@ func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies i
 	xactID, err := api.MakeNCopies(baseParams, bck, ncopies)
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActMakeNCopies}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMakeNCopies}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 }
@@ -1768,7 +1769,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
 			Name:     testBucketName + "_new",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -1791,7 +1792,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	uuid, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: uuid, Kind: cmn.ActMoveBck, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: uuid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1822,7 +1823,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
 			Name:     testBucketName + "_new",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -1851,7 +1852,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActMoveBck, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1875,7 +1876,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		tmpBck     = cmn.Bck{
 			Name:     "tmp_bck_name",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -1925,11 +1926,11 @@ func TestRenameBucketTwice(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
 			Name:     testBucketName + "_new1",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		dstBck2 = cmn.Bck{
 			Name:     testBucketName + "_new2",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -1969,7 +1970,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	}
 
 	// Wait for rename to complete
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActMoveBck, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1996,16 +1997,16 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		srcBcks = []cmn.Bck{
 			{
 				Name:     cos.RandString(10),
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 			},
 			{
 				Name:     cos.RandString(10),
-				Provider: cmn.ProviderAmazon,
+				Provider: apc.ProviderAmazon,
 			},
 		}
 	)
@@ -2029,11 +2030,11 @@ func TestRenameBucketWithBackend(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     "renamesrc",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		dstBck = cmn.Bck{
 			Name:     "bucketname",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -2135,7 +2136,7 @@ func TestCopyBucket(t *testing.T) {
 					num: objCnt,
 					bck: cmn.Bck{
 						Name:     "src_copy_bck",
-						Provider: cmn.ProviderAIS,
+						Provider: apc.ProviderAIS,
 					},
 				}
 				dstms = []*ioContext{
@@ -2144,7 +2145,7 @@ func TestCopyBucket(t *testing.T) {
 						num: objCnt,
 						bck: cmn.Bck{
 							Name:     "dst_copy_bck_1",
-							Provider: cmn.ProviderAIS,
+							Provider: apc.ProviderAIS,
 						},
 					},
 				}
@@ -2157,11 +2158,11 @@ func TestCopyBucket(t *testing.T) {
 					num: objCnt,
 					bck: cmn.Bck{
 						Name:     "dst_copy_bck_2",
-						Provider: cmn.ProviderAIS,
+						Provider: apc.ProviderAIS,
 					},
 				})
 			}
-			bckTest := cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			bckTest := cmn.Bck{Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
 			if test.srcRemote {
 				srcm.bck = cliBck
 				bckTest.Provider = cliBck.Provider
@@ -2242,7 +2243,7 @@ func TestCopyBucket(t *testing.T) {
 			}
 
 			for _, uuid := range xactIDs {
-				args := api.XactReqArgs{ID: uuid, Kind: cmn.ActCopyBck, Timeout: copyBucketTimeout}
+				args := api.XactReqArgs{ID: uuid, Kind: apc.ActCopyBck, Timeout: copyBucketTimeout}
 				_, err = api.WaitForXactionIC(baseParams, args)
 				tassert.CheckFatal(t, err)
 			}
@@ -2256,7 +2257,7 @@ func TestCopyBucket(t *testing.T) {
 				dstProps, err := api.HeadBucket(baseParams, dstm.bck)
 				tassert.CheckFatal(t, err)
 
-				if dstProps.Provider != cmn.ProviderAIS {
+				if dstProps.Provider != apc.ProviderAIS {
 					t.Fatalf("destination bucket does not seem to be 'ais': %s", dstProps.Provider)
 				}
 				// Clear providers to compare the props across different ones
@@ -2329,7 +2330,7 @@ func TestCopyBucket(t *testing.T) {
 
 func TestCopyBucketSimple(t *testing.T) {
 	var (
-		srcBck = cmn.Bck{Name: "cpybck_src", Provider: cmn.ProviderAIS}
+		srcBck = cmn.Bck{Name: "cpybck_src", Provider: apc.ProviderAIS}
 
 		m = &ioContext{
 			t:         t,
@@ -2358,7 +2359,7 @@ func TestCopyBucketSimple(t *testing.T) {
 func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	dstBck := cmn.Bck{
 		Name:     testBucketName + "_new1",
-		Provider: cmn.ProviderAIS,
+		Provider: apc.ProviderAIS,
 	}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
@@ -2381,13 +2382,13 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	dstBck := cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
+	dstBck := cmn.Bck{Name: "cpybck_dst", Provider: apc.ProviderAIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBck, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2406,14 +2407,14 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		cpyPrefix = "cpyprefix" + cos.RandString(5)
-		dstBck    = cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
+		dstBck    = cmn.Bck{Name: "cpybck_dst", Provider: apc.ProviderAIS}
 	)
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{Prefix: cpyPrefix})
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBck, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2427,13 +2428,13 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.RandString(5), Provider: cmn.ProviderAIS}
+	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.RandString(5), Provider: apc.ProviderAIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{DryRun: true})
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBck, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2467,11 +2468,11 @@ func TestRenameAndCopyBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
 			Name:     testBucketName + "_new1",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		dstBck2 = cmn.Bck{
 			Name:     testBucketName + "_new2",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -2514,7 +2515,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	}
 
 	// Wait for rename to complete
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBck, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2547,11 +2548,11 @@ func TestCopyAndRenameBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
 			Name:     testBucketName + "_new1",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		dstBck2 = cmn.Bck{
 			Name:     testBucketName + "_new2",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -2594,7 +2595,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	}
 
 	// Wait for copy to complete
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActMoveBck, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2618,7 +2619,7 @@ func TestBackendBucket(t *testing.T) {
 		remoteBck = cliBck
 		aisBck    = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		m = ioContext{
 			t:      t,
@@ -2851,13 +2852,13 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	// wait for mirroring
 	if mirrored {
-		args := api.XactReqArgs{Kind: cmn.ActPutCopies, Bck: m.bck, Timeout: xactTimeout}
+		args := api.XactReqArgs{Kind: apc.ActPutCopies, Bck: m.bck, Timeout: xactTimeout}
 		api.WaitForXactionIdle(baseParams, args)
 		m.ensureNumCopies(copyCnt, false /*greaterOk*/)
 	}
 	// wait for erasure-coding
 	if eced {
-		args := api.XactReqArgs{Kind: cmn.ActECPut, Bck: m.bck, Timeout: xactTimeout}
+		args := api.XactReqArgs{Kind: apc.ActECPut, Bck: m.bck, Timeout: xactTimeout}
 		api.WaitForXactionIdle(baseParams, args)
 	}
 
@@ -2941,7 +2942,7 @@ func TestBucketListAndSummary(t *testing.T) {
 		fast     bool // It makes sense only for summary
 	}
 
-	providers := []string{cmn.ProviderAIS}
+	providers := []string{apc.ProviderAIS}
 	if cliBck.IsRemote() {
 		providers = append(providers, cliBck.Provider)
 	}

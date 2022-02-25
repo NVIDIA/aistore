@@ -6,6 +6,7 @@ package tests
 
 import (
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -30,13 +31,13 @@ var _ = Describe("API", func() {
 			),
 			Entry("non-nested field and non-empty initial struct",
 				cmn.BucketProps{
-					Provider: cmn.ProviderAmazon,
+					Provider: apc.ProviderAmazon,
 				},
 				cmn.BucketPropsToUpdate{
 					Access: api.AccessAttrs(1024),
 				},
 				cmn.BucketProps{
-					Provider: cmn.ProviderAmazon,
+					Provider: apc.ProviderAmazon,
 					Access:   1024,
 				},
 			),
@@ -81,7 +82,7 @@ var _ = Describe("API", func() {
 			),
 			Entry("multiple nested fields and non-empty initial struct",
 				cmn.BucketProps{
-					Provider: cmn.ProviderAmazon,
+					Provider: apc.ProviderAmazon,
 					Cksum: cmn.CksumConf{
 						ValidateColdGet: true,
 						ValidateWarmGet: false,
@@ -103,7 +104,7 @@ var _ = Describe("API", func() {
 					Access: api.AccessAttrs(10),
 				},
 				cmn.BucketProps{
-					Provider: cmn.ProviderAmazon,
+					Provider: apc.ProviderAmazon,
 					Cksum: cmn.CksumConf{
 						Type:            "value",
 						ValidateColdGet: true,

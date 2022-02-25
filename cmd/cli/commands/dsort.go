@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -116,7 +117,7 @@ type dsortResult struct {
 
 func (d dsortResult) String() string {
 	if d.aborted {
-		return fmt.Sprintf("%s job was aborted", cmn.DSortName)
+		return fmt.Sprintf("%s job was aborted", apc.DSortName)
 	}
 
 	var sb strings.Builder

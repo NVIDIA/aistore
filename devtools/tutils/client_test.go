@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
@@ -52,7 +53,7 @@ func putFile(size int64, cksumType string) error {
 	}
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bck:        cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
+		Bck:        cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS},
 		Object:     "key",
 		Cksum:      r.Cksum(),
 		Reader:     r,
@@ -69,7 +70,7 @@ func putRand(size int64, cksumType string) error {
 	}
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bck:        cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
+		Bck:        cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS},
 		Object:     "key",
 		Cksum:      r.Cksum(),
 		Reader:     r,
@@ -85,7 +86,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 	}
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bck:        cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
+		Bck:        cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS},
 		Object:     "key",
 		Cksum:      r.Cksum(),
 		Reader:     r,
@@ -208,8 +209,8 @@ func TestMain(m *testing.M) {
 
 		// Verify checksum.
 		var (
-			cksumType  = r.Header.Get(cmn.HdrObjCksumType)
-			cksumValue = r.Header.Get(cmn.HdrObjCksumVal)
+			cksumType  = r.Header.Get(apc.HdrObjCksumType)
+			cksumValue = r.Header.Get(apc.HdrObjCksumVal)
 		)
 		_, cksum, err := cos.CopyAndChecksum(io.Discard, r.Body, nil, cksumType)
 		if err != nil {

@@ -8,7 +8,7 @@ package commands
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -45,13 +45,13 @@ func xactionCmds() cli.Commands {
 	splCmdKinds := make(cos.StringSet)
 	// Add any xaction which requires a separate handler here.
 	splCmdKinds.Add(
-		cmn.ActPrefetchObjects,
-		cmn.ActECEncode,
-		cmn.ActMakeNCopies,
-		cmn.ActLoadLomCache,
-		cmn.ActLRU,
-		cmn.ActStoreCleanup,
-		cmn.ActResilver,
+		apc.ActPrefetchObjects,
+		apc.ActECEncode,
+		apc.ActMakeNCopies,
+		apc.ActLoadLomCache,
+		apc.ActLRU,
+		apc.ActStoreCleanup,
+		apc.ActResilver,
 	)
 
 	startable := listXactions(true)

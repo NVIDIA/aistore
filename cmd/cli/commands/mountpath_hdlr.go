@@ -9,8 +9,8 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -72,10 +72,10 @@ var (
 	}
 )
 
-func mpathAttachHandler(c *cli.Context) (err error)  { return mpathAction(c, cmn.ActMountpathAttach) }
-func mpathEnableHandler(c *cli.Context) (err error)  { return mpathAction(c, cmn.ActMountpathEnable) }
-func mpathDetachHandler(c *cli.Context) (err error)  { return mpathAction(c, cmn.ActMountpathDetach) }
-func mpathDisableHandler(c *cli.Context) (err error) { return mpathAction(c, cmn.ActMountpathDisable) }
+func mpathAttachHandler(c *cli.Context) (err error)  { return mpathAction(c, apc.ActMountpathAttach) }
+func mpathEnableHandler(c *cli.Context) (err error)  { return mpathAction(c, apc.ActMountpathEnable) }
+func mpathDetachHandler(c *cli.Context) (err error)  { return mpathAction(c, apc.ActMountpathDetach) }
+func mpathDisableHandler(c *cli.Context) (err error) { return mpathAction(c, apc.ActMountpathDisable) }
 
 func mpathAction(c *cli.Context, action string) error {
 	if c.NArg() == 0 {
@@ -116,16 +116,16 @@ func mpathAction(c *cli.Context, action string) error {
 				nodeID)
 		}
 		switch action {
-		case cmn.ActMountpathAttach:
+		case apc.ActMountpathAttach:
 			acted = "attached"
 			err = api.AttachMountpath(defaultAPIParams, si, mountpath, flagIsSet(c, forceFlag))
-		case cmn.ActMountpathEnable:
+		case apc.ActMountpathEnable:
 			acted = "enabled"
 			err = api.EnableMountpath(defaultAPIParams, si, mountpath)
-		case cmn.ActMountpathDetach:
+		case apc.ActMountpathDetach:
 			acted = "detached"
 			err = api.DetachMountpath(defaultAPIParams, si, mountpath, flagIsSet(c, noResilverFlag))
-		case cmn.ActMountpathDisable:
+		case apc.ActMountpathDisable:
 			acted = "disabled"
 			err = api.DisableMountpath(defaultAPIParams, si, mountpath, flagIsSet(c, noResilverFlag))
 		default:

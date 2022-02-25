@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -125,22 +126,22 @@ func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder, skipCksum ...bool) {
 
 func ToHeader(oah ObjAttrsHolder, hdr http.Header) {
 	if cksum := oah.Checksum(); !cksum.IsEmpty() {
-		hdr.Set(HdrObjCksumType, cksum.Ty())
-		hdr.Set(HdrObjCksumVal, cksum.Val())
+		hdr.Set(apc.HdrObjCksumType, cksum.Ty())
+		hdr.Set(apc.HdrObjCksumVal, cksum.Val())
 	}
 	if at := oah.AtimeUnix(); at != 0 {
-		hdr.Set(HdrObjAtime, cos.UnixNano2S(at))
+		hdr.Set(apc.HdrObjAtime, cos.UnixNano2S(at))
 	}
 	if n := oah.SizeBytes(true); n > 0 {
 		hdr.Set(HdrContentLength, strconv.FormatInt(n, 10))
 	}
 	if v := oah.Version(true); v != "" {
-		hdr.Set(HdrObjVersion, v)
+		hdr.Set(apc.HdrObjVersion, v)
 	}
 	custom := oah.GetCustomMD()
 	for k, v := range custom {
 		debug.Assert(k != "")
-		hdr.Add(HdrObjCustomMD, k+"="+v)
+		hdr.Add(apc.HdrObjCustomMD, k+"="+v)
 	}
 }
 
@@ -150,12 +151,12 @@ func (oa *ObjAttrs) ToHeader(hdr http.Header) {
 
 // NOTE: returning checksum separately for subsequent validation
 func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
-	if ty := hdr.Get(HdrObjCksumType); ty != "" {
-		val := hdr.Get(HdrObjCksumVal)
+	if ty := hdr.Get(apc.HdrObjCksumType); ty != "" {
+		val := hdr.Get(apc.HdrObjCksumVal)
 		cksum = cos.NewCksum(ty, val)
 	}
 
-	if at := hdr.Get(HdrObjAtime); at != "" {
+	if at := hdr.Get(apc.HdrObjAtime); at != "" {
 		atime, err := cos.S2UnixNano(at)
 		debug.AssertNoErr(err)
 		oa.Atime = atime
@@ -165,10 +166,10 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 		debug.AssertNoErr(err)
 		oa.Size = size
 	}
-	if v := hdr.Get(HdrObjVersion); v != "" {
+	if v := hdr.Get(apc.HdrObjVersion); v != "" {
 		oa.Ver = v
 	}
-	custom := hdr[http.CanonicalHeaderKey(HdrObjCustomMD)]
+	custom := hdr[http.CanonicalHeaderKey(apc.HdrObjCustomMD)]
 	for _, v := range custom {
 		entry := strings.SplitN(v, "=", 2)
 		debug.Assert(len(entry) == 2)

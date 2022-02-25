@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -73,7 +74,7 @@ func (p *putFactory) Start() error {
 	return nil
 }
 
-func (*putFactory) Kind() string        { return cmn.ActPutCopies }
+func (*putFactory) Kind() string        { return apc.ActPutCopies }
 func (p *putFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
@@ -93,7 +94,7 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	}
 	bck := lom.Bck()
 	r = &XactPut{mirror: mirror, workCh: make(chan cluster.LIF, mirror.Burst)}
-	r.DemandBase.Init(cos.GenUUID(), cmn.ActPutCopies, bck, 0 /*use default*/)
+	r.DemandBase.Init(cos.GenUUID(), apc.ActPutCopies, bck, 0 /*use default*/)
 	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
 		Callback:  r.workCb,
 		Slab:      slab,

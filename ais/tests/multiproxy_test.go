@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -147,7 +148,7 @@ func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
 }
 
 func nodeCrashRestoreDifferentIP(t *testing.T) {
-	for _, ty := range []string{cmn.Proxy, cmn.Target} {
+	for _, ty := range []string{apc.Proxy, apc.Target} {
 		t.Run(ty, func(t *testing.T) {
 			killRestoreDiffIP(t, ty)
 		})
@@ -169,7 +170,7 @@ func killRestoreDiffIP(t *testing.T, nodeType string) {
 		restore                       bool
 	)
 
-	if nodeType == cmn.Proxy {
+	if nodeType == apc.Proxy {
 		node, err = smap.GetRandProxy(true /*exclude primary*/)
 		pdc = 1
 	} else {
@@ -219,7 +220,7 @@ killRestore:
 		goto killRestore
 	}
 
-	if nodeType == cmn.Target {
+	if nodeType == apc.Target {
 		tutils.WaitForRebalAndResil(t, tutils.BaseAPIParams(proxyURL))
 	}
 }
@@ -313,7 +314,7 @@ func proxyCrash(t *testing.T) {
 }
 
 func addNodeDuplicateDaemonID(t *testing.T) {
-	for _, ty := range []string{cmn.Proxy, cmn.Target} {
+	for _, ty := range []string{apc.Proxy, apc.Target} {
 		t.Run(ty, func(t *testing.T) {
 			_addNodeDuplicateDaemonID(t, ty)
 		})
@@ -339,7 +340,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 		portInc = 100
 	)
 
-	if nodeType == cmn.Proxy {
+	if nodeType == apc.Proxy {
 		node, err = smap.GetRandProxy(true)
 	} else {
 		node, err = smap.GetRandTarget()
@@ -365,7 +366,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 }
 
 func addNodeDuplicateIP(t *testing.T) {
-	for _, ty := range []string{cmn.Proxy, cmn.Target} {
+	for _, ty := range []string{apc.Proxy, apc.Target} {
 		t.Run(ty, func(t *testing.T) {
 			_addNodeDuplicateIP(t, ty)
 		})
@@ -387,7 +388,7 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 		err      error
 	)
 
-	if nodeType == cmn.Proxy {
+	if nodeType == apc.Proxy {
 		node, err = smap.GetRandProxy(true)
 	} else {
 		node, err = smap.GetRandTarget()
@@ -573,7 +574,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 
 	smap = killRestorePrimary(t, proxyURL, false, nil)
 	//
-	// FIXME: election is in progress if and only when xaction(cmn.ActElection) is running -
+	// FIXME: election is in progress if and only when xaction(apc.ActElection) is running -
 	//        simulating the scenario via mocktgt.voteInProgress = true is incorrect
 	//
 	// if _, ok := smap.Pmap[oldPrimaryID]; ok {
@@ -637,7 +638,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		baseParams.Method = http.MethodPut
 		reqParams := &api.ReqParams{
 			BaseParams: baseParams,
-			Path:       cmn.URLPathDae.Join(cmn.SyncSmap),
+			Path:       apc.URLPathDae.Join(apc.SyncSmap),
 			Body:       jsonMap,
 			Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		}
@@ -726,7 +727,7 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 
 	bck := cmn.Bck{
 		Name:     testBucketName,
-		Provider: cmn.ProviderAIS,
+		Provider: apc.ProviderAIS,
 	}
 	cksumType := cmn.DefaultBckProps(bck).Cksum.Type
 loop:
@@ -910,7 +911,7 @@ func proxyStress(t *testing.T) {
 		proxyURLChs = make([]chan string, workerCnt)
 		bck         = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL(t)
 	)
@@ -1250,10 +1251,10 @@ func networkFailurePrimary(t *testing.T) {
 	baseParams.Method = http.MethodPut
 	reqParams := &api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPathDaeProxy.Join(newPrimaryID),
+		Path:       apc.URLPathDaeProxy.Join(newPrimaryID),
 		Query: url.Values{
-			cmn.QparamForce:            {"true"},
-			cmn.QparamPrimaryCandidate: {newPrimaryURL},
+			apc.QparamForce:            {"true"},
+			apc.QparamPrimaryCandidate: {newPrimaryURL},
 		},
 	}
 	err = reqParams.DoHTTPRequest()
@@ -1467,12 +1468,12 @@ func icSyncOwnershipTable(t *testing.T) {
 
 		src = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 
 		dstBck = cmn.Bck{
 			Name:     testBucketName + "_new",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -1495,7 +1496,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	newICNode := smap.GetProxy(newICMemID)
 
 	baseParams = tutils.BaseAPIParams(newICNode.URL(cmn.NetPublic))
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBck}
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck}
 	_, err = api.GetXactionStatus(baseParams, xactArgs)
 	tassert.CheckError(t, err)
 
@@ -1525,12 +1526,12 @@ func icSinglePrimaryRevamp(t *testing.T) {
 
 		src = cmn.Bck{
 			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 
 		dstBck = cmn.Bck{
 			Name:     testBucketName + "_new",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -1549,7 +1550,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 
 	// Start any xaction and get ID.
 	xactID, err := api.CopyBucket(baseParams, src, dstBck)
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBck}
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck}
 
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
@@ -1687,7 +1688,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 		go func(idx int) {
 			dstBck := cmn.Bck{
 				Name:     fmt.Sprintf("%s_dst_par_%d", testBucketName, idx),
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 			}
 			xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
 			tassert.CheckError(t, err)

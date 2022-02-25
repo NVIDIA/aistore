@@ -7,7 +7,7 @@ package xs
 
 import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -23,8 +23,8 @@ func Init() {
 	xreg.RegNonBckXact(&etlFactory{})
 
 	xreg.RegBckXact(&bmvFactory{})
-	xreg.RegBckXact(&evdFactory{kind: cmn.ActEvictObjects})
-	xreg.RegBckXact(&evdFactory{kind: cmn.ActDeleteObjects})
+	xreg.RegBckXact(&evdFactory{kind: apc.ActEvictObjects})
+	xreg.RegBckXact(&evdFactory{kind: apc.ActDeleteObjects})
 	xreg.RegBckXact(&prfFactory{})
 
 	xreg.RegBckXact(&olFactory{})
@@ -33,7 +33,7 @@ func Init() {
 	xreg.RegBckXact(&proFactory{})
 	xreg.RegBckXact(&llcFactory{})
 
-	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: cmn.ActETLObjects}})
-	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: cmn.ActCopyObjects}})
-	xreg.RegBckXact(&archFactory{streamingF: streamingF{kind: cmn.ActArchive}})
+	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActETLObjects}})
+	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActCopyObjects}})
+	xreg.RegBckXact(&archFactory{streamingF: streamingF{kind: apc.ActArchive}})
 }

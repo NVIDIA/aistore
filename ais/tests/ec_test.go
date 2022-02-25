@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -364,7 +365,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 					}
 				} else {
 					tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
-					tassert.Errorf(t, ct.Bck().Provider == bck.Provider, "invalid provider %s, expected: %s", ct.Bck().Provider, cmn.ProviderAIS)
+					tassert.Errorf(t, ct.Bck().Provider == bck.Provider, "invalid provider %s, expected: %s", ct.Bck().Provider, apc.ProviderAIS)
 					tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)
 					tassert.Errorf(t, ct.ObjectName() == objPath, "invalid object name %s, expected: %s", ct.ObjectName(), objPath)
 					tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
@@ -504,7 +505,7 @@ func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOption
 		}(idx)
 	}
 	wg.Wait()
-	reqArgs := api.XactReqArgs{Kind: cmn.ActECPut, Bck: bck}
+	reqArgs := api.XactReqArgs{Kind: apc.ActECPut, Bck: bck}
 	api.WaitForXactionIdle(tutils.BaseAPIParams(proxyURL), reqArgs)
 }
 
@@ -547,7 +548,7 @@ func TestECChange(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
 			Name:     testBucketName + "-ec-change",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -819,12 +820,12 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 
 				defer func() {
 					tlog.Logln("Wait for PUTs to finish...")
-					args := api.XactReqArgs{Kind: cmn.ActECPut}
+					args := api.XactReqArgs{Kind: apc.ActECPut}
 					err := api.WaitForXactionIdle(baseParams, args)
 					tassert.CheckError(t, err)
 
 					clearAllECObjects(t, bck, true, o)
-					reqArgs := api.XactReqArgs{Kind: cmn.ActECPut, Bck: bck}
+					reqArgs := api.XactReqArgs{Kind: apc.ActECPut, Bck: bck}
 					err = api.WaitForXactionIdle(baseParams, reqArgs)
 					tassert.CheckError(t, err)
 				}()
@@ -858,7 +859,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-obj-n-slice",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -962,7 +963,7 @@ func TestECChecksum(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
 			Name:     testBucketName + "-ec-cksum",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 	)
 
@@ -1025,7 +1026,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-props",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1122,7 +1123,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-load",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1199,7 +1200,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
-	reqArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: bck}
+	reqArgs := api.XactReqArgs{Kind: apc.ActECEncode, Bck: bck}
 	_, err = api.WaitForXactionIC(baseParams, reqArgs)
 	tassert.CheckError(t, err)
 
@@ -1230,7 +1231,7 @@ func TestECStress(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-stress",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1270,11 +1271,11 @@ func TestECStressManyBuckets(t *testing.T) {
 	var (
 		bck1 = cmn.Bck{
 			Name:     testBucketName + "1",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		bck2 = cmn.Bck{
 			Name:     testBucketName + "2",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -1342,7 +1343,7 @@ func TestECExtraStress(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-extrastress",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -1468,7 +1469,7 @@ func TestECXattrs(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-attrs",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -1585,7 +1586,7 @@ func TestECDestroyBucket(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-DESTROY",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1646,7 +1647,7 @@ func TestECDestroyBucket(t *testing.T) {
 
 	wg.Wait()
 	tlog.Logf("EC put files resulted in error in %d out of %d files\n", errCnt.Load(), o.objCount)
-	args := api.XactReqArgs{Kind: cmn.ActECPut}
+	args := api.XactReqArgs{Kind: apc.ActECPut}
 	api.WaitForXactionIC(baseParams, args)
 
 	// create bucket with the same name and check if puts are successful
@@ -1676,7 +1677,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-slice-emergency",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1773,7 +1774,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-replica-emergency",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -1920,7 +1921,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-mpath-emergency",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -2023,7 +2024,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 	}
 
 	// Wait for ec to finish
-	flt := api.XactReqArgs{Kind: cmn.ActECPut, Bck: bck}
+	flt := api.XactReqArgs{Kind: apc.ActECPut, Bck: bck}
 	_ = api.WaitForXactionIdle(baseParams, flt)
 }
 
@@ -2033,7 +2034,7 @@ func TestECRebalance(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-rebalance",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -2063,7 +2064,7 @@ func TestECMountpaths(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-mpaths",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -2201,7 +2202,7 @@ func TestECBucketEncode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EC encode must start automatically for bucket %s\n", m.bck)
-	xactArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
+	xactArgs := api.XactReqArgs{Kind: apc.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
@@ -2225,11 +2226,11 @@ func TestECAndRegularRebalance(t *testing.T) {
 	var (
 		bckReg = cmn.Bck{
 			Name:     testBucketName + "-REG",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		bckEC = cmn.Bck{
 			Name:     testBucketName + "-EC",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -2358,7 +2359,7 @@ func TestECResilver(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-resilver",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -2455,7 +2456,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 	var (
 		bckEC = cmn.Bck{
 			Name:     testBucketName + "-EC",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -2568,7 +2569,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 			}
 		}
 	}()
-	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: startTimeout}
+	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: startTimeout}
 	err = api.WaitForXactionNode(baseParams, xactArgs, xactSnapRunning)
 	tassert.CheckError(t, err)
 
@@ -2691,7 +2692,7 @@ func TestECGenerations(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-obj-gens",
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		proxyURL    = tutils.RandomProxyURL()
 		baseParams  = tutils.BaseAPIParams(proxyURL)

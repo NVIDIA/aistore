@@ -4,7 +4,10 @@
  */
 package cluster
 
-import "github.com/NVIDIA/aistore/cmn"
+import (
+	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
+)
 
 // interface guard
 var _ Bowner = (*BownerMock)(nil)
@@ -21,7 +24,7 @@ func NewBaseBownerMock(bcks ...*Bck) *BownerMock {
 		namespaces = make(Namespaces)
 		buckets    = make(Buckets)
 	)
-	providers[cmn.ProviderAIS] = namespaces
+	providers[apc.ProviderAIS] = namespaces
 	namespaces[cmn.NsGlobal.Uname()] = buckets
 
 	owner := &BownerMock{BMD: BMD{Version: 1, Providers: providers}}

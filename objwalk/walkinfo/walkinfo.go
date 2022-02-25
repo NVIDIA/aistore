@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -51,7 +52,7 @@ var wiProps = []string{
 }
 
 func isObjMoved(status uint16) bool {
-	return status == cmn.ObjStatusMovedNode || status == cmn.ObjStatusMovedMpath
+	return status == apc.ObjStatusMovedNode || status == apc.ObjStatusMovedMpath
 }
 
 func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.ListObjsMsg) *WalkInfo {
@@ -154,7 +155,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 	// add the obj to the page
 	fileInfo := &cmn.BucketEntry{
 		Name:  lom.ObjName,
-		Flags: objStatus | cmn.EntryIsCached,
+		Flags: objStatus | apc.EntryIsCached,
 	}
 	if wi.msg.IsFlagSet(cmn.LsNameOnly) {
 		return fileInfo
@@ -193,7 +194,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 		return nil, nil
 	}
 
-	var objStatus uint16 = cmn.ObjStatusOK
+	var objStatus uint16 = apc.ObjStatusOK
 	lom := &cluster.LOM{FQN: fqn}
 	if err := lom.Init(cmn.Bck{}); err != nil {
 		return nil, err
@@ -204,9 +205,9 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 		return nil, err
 	}
 	if !local {
-		objStatus = cmn.ObjStatusMovedNode
+		objStatus = apc.ObjStatusMovedNode
 	} else if !lom.IsHRW() {
-		objStatus = cmn.ObjStatusMovedMpath
+		objStatus = apc.ObjStatusMovedMpath
 	}
 
 	if isObjMoved(objStatus) && !wi.msg.IsFlagSet(cmn.LsMisplaced) {

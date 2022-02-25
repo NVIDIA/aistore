@@ -75,7 +75,7 @@ type (
 		smap *smapX // smap before pre-modifcation
 		rmd  *rebMD // latest rebMD post modification
 
-		msg      *cmn.ActionMsg // action modifying smap (cmn.Act*)
+		msg      *cmn.ActionMsg // action modifying smap (apc.Act*)
 		nsi      *cluster.Snode // new node to be added
 		nid      string         // DaemonID of candidate primary to vote
 		sid      string         // DaemonID of node to modify

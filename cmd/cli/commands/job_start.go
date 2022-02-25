@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
@@ -79,14 +80,14 @@ var (
 			},
 			{
 				Name:      subcmdStartDsort,
-				Usage:     fmt.Sprintf("start a new %s job with given specification", cmn.DSortName),
+				Usage:     fmt.Sprintf("start a new %s job with given specification", apc.DSortName),
 				ArgsUsage: jsonSpecArgument,
 				Flags:     startCmdsFlags[subcmdStartDsort],
 				Action:    startDsortHandler,
 			},
 			{
 				Name:   subcmdLRU,
-				Usage:  fmt.Sprintf("start %q xaction", cmn.ActLRU),
+				Usage:  fmt.Sprintf("start %q xaction", apc.ActLRU),
 				Flags:  startCmdsFlags[subcmdLRU],
 				Action: startLRUHandler,
 			},
@@ -163,7 +164,7 @@ func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err
 }
 
 func isResilverNode(c *cli.Context, xactKind string) (sid string, err error) {
-	if xactKind != cmn.ActResilver || c.NArg() == 0 {
+	if xactKind != apc.ActResilver || c.NArg() == 0 {
 		return "", nil
 	}
 	smap, err := api.GetClusterMap(defaultAPIParams)
@@ -520,13 +521,13 @@ func startLRUHandler(c *cli.Context) (err error) {
 
 	var (
 		id       string
-		xactArgs = api.XactReqArgs{Kind: cmn.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
+		xactArgs = api.XactReqArgs{Kind: apc.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
 	)
 	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Started %s %q, %s\n", cmn.ActLRU, id, xactProgressMsg(id))
+	fmt.Fprintf(c.App.Writer, "Started %s %q, %s\n", apc.ActLRU, id, xactProgressMsg(id))
 	return
 }
 

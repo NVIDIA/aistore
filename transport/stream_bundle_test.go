@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -49,13 +50,13 @@ func Test_Bundle(t *testing.T) {
 		{
 			name: "not-compressed",
 			nvs: cos.SimpleKVs{
-				"compression": cmn.CompressNever,
+				"compression": apc.CompressNever,
 			},
 		},
 		{
 			name: "not-compressed-unsized",
 			nvs: cos.SimpleKVs{
-				"compression": cmn.CompressNever,
+				"compression": apc.CompressNever,
 				"unsized":     "yes",
 			},
 		},
@@ -68,21 +69,21 @@ func Test_Bundle(t *testing.T) {
 			{
 				name: "compress-block-1M",
 				nvs: cos.SimpleKVs{
-					"compression": cmn.CompressAlways,
+					"compression": apc.CompressAlways,
 					"block":       "1MiB",
 				},
 			},
 			{
 				name: "compress-block-256K",
 				nvs: cos.SimpleKVs{
-					"compression": cmn.CompressAlways,
+					"compression": apc.CompressAlways,
 					"block":       "256KiB",
 				},
 			},
 			{
 				name: "compress-block-256K-unsized",
 				nvs: cos.SimpleKVs{
-					"compression": cmn.CompressAlways,
+					"compression": apc.CompressAlways,
 					"block":       "256KiB",
 					"unsized":     "yes",
 				},
@@ -148,7 +149,7 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 		num            int
 		usePDU         bool
 	)
-	if nvs["compression"] != cmn.CompressNever {
+	if nvs["compression"] != apc.CompressNever {
 		v, _ := cos.S2B(nvs["block"])
 		cos.Assert(v == cos.MiB || v == cos.KiB*256 || v == cos.KiB*64)
 		config := cmn.GCO.BeginUpdate()
@@ -198,7 +199,7 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 
 	slab.Free(wbuf)
 
-	if nvs["compression"] != cmn.CompressNever {
+	if nvs["compression"] != apc.CompressNever {
 		for id, tstat := range stats {
 			fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), compression-ratio=%.2f\n",
 				id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.CompressionRatio())

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -78,7 +79,7 @@ func TestPromoteBasic(t *testing.T) {
 func (test *prmTestPermut) do(t *testing.T) {
 	const subdir = "subdir" // to promote recursively
 	var (
-		m          = ioContext{t: t, bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: cos.RandString(10)}}
+		m          = ioContext{t: t, bck: cmn.Bck{Provider: apc.ProviderAIS, Name: cos.RandString(10)}}
 		from       = 10000
 		to         = from + test.num - 1
 		baseParams = tutils.BaseAPIParams()
@@ -126,8 +127,8 @@ func (test *prmTestPermut) do(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	time.Sleep(2 * time.Second)
 
-	tlog.Logf("Waiting to %q %s => %s\n", cmn.ActPromote, tempDir, m.bck)
-	xargs := api.XactReqArgs{Kind: cmn.ActPromote, Timeout: rebalanceTimeout}
+	tlog.Logf("Waiting to %q %s => %s\n", apc.ActPromote, tempDir, m.bck)
+	xargs := api.XactReqArgs{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
 	if xactID != "" && args.DaemonID == "" {
 		// have global UUID, promoting via entire cluster
 		tassert.Errorf(t, cos.IsValidUUID(xactID), "expecting valid x-UUID %q", xactID)
@@ -153,7 +154,7 @@ func (test *prmTestPermut) do(t *testing.T) {
 		locObjs, outObjs, inObjs := snaps.ObjCounts()
 		locBytes, outBytes, inBytes := snaps.ByteCounts()
 		tlog.Logf("x-%s[%s]: (locObjs=%d(%d), outObjs=%d(%d), inObjs=%d(%d))\n",
-			cmn.ActPromote, xactID, locObjs, locBytes, outObjs, outBytes, inObjs, inBytes)
+			apc.ActPromote, xactID, locObjs, locBytes, outObjs, outBytes, inObjs, inBytes)
 	}
 
 	// list

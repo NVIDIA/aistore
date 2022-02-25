@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -27,7 +28,7 @@ func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options 
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathS3.Join(bck.Name, objectName)
+		reqParams.Path = apc.URLPathS3.Join(bck.Name, objectName)
 		reqParams.Query = q
 		reqParams.Header = hdr
 	}

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -70,7 +71,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 		evArgs = &cmn.ListRangeMsg{}
 		bmd    = cluster.NewBaseBownerMock()
 		bck    = cluster.NewBck(
-			"test", cmn.ProviderGoogle, cmn.NsGlobal,
+			"test", apc.ProviderGoogle, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
 		tMock = mock.NewTarget(bmd)
@@ -108,8 +109,8 @@ func TestXactionRenewPrefetch(t *testing.T) {
 func TestXactionAbortAll(t *testing.T) {
 	var (
 		bmd     = cluster.NewBaseBownerMock()
-		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		bckFrom = cluster.NewBck("test", apc.ProviderAIS, cmn.NsGlobal)
+		bckTo   = cluster.NewBck("test", apc.ProviderAIS, cmn.NsGlobal)
 		tMock   = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
@@ -135,8 +136,8 @@ func TestXactionAbortAll(t *testing.T) {
 func TestXactionAbortAllGlobal(t *testing.T) {
 	var (
 		bmd     = cluster.NewBaseBownerMock()
-		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		bckFrom = cluster.NewBck("test", apc.ProviderAIS, cmn.NsGlobal)
+		bckTo   = cluster.NewBck("test", apc.ProviderAIS, cmn.NsGlobal)
 		tMock   = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
@@ -165,8 +166,8 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 func TestXactionAbortBuckets(t *testing.T) {
 	var (
 		bmd     = cluster.NewBaseBownerMock()
-		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		bckFrom = cluster.NewBck("test", apc.ProviderAIS, cmn.NsGlobal)
+		bckTo   = cluster.NewBck("test", apc.ProviderAIS, cmn.NsGlobal)
 		tMock   = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
@@ -202,9 +203,9 @@ func TestXactionQueryFinished(t *testing.T) {
 	}
 	var (
 		bmd   = cluster.NewBaseBownerMock()
-		bck1  = cluster.NewBck("test1", cmn.ProviderAIS, cmn.NsGlobal)
-		bck2  = cluster.NewBck("test2", cmn.ProviderAIS, cmn.NsGlobal)
-		bck3  = cluster.NewBck("test3", cmn.ProviderGoogle, cmn.NsGlobal)
+		bck1  = cluster.NewBck("test1", apc.ProviderAIS, cmn.NsGlobal)
+		bck2  = cluster.NewBck("test2", apc.ProviderAIS, cmn.NsGlobal)
+		bck3  = cluster.NewBck("test3", apc.ProviderGoogle, cmn.NsGlobal)
 		tMock = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()

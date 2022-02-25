@@ -5,6 +5,7 @@
 package xreg
 
 import (
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -66,14 +67,14 @@ func RenewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
 }
 
 func RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) RenewRes {
-	return RenewBucketXact(cmn.ActECEncode, bck, Args{t, uuid, &ECEncodeArgs{Phase: phase}})
+	return RenewBucketXact(apc.ActECEncode, bck, Args{t, uuid, &ECEncodeArgs{Phase: phase}})
 }
 
 func RenewMakeNCopies(t cluster.Target, uuid, tag string) {
 	var (
 		cfg      = cmn.GCO.Get()
 		bmd      = t.Bowner().Get()
-		provider = cmn.ProviderAIS
+		provider = apc.ProviderAIS
 	)
 	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 		if bck.Props.Mirror.Enabled {
@@ -99,20 +100,20 @@ func RenewMakeNCopies(t cluster.Target, uuid, tag string) {
 }
 
 func RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, copies int) (res RenewRes) {
-	e := dreg.bckXacts[cmn.ActMakeNCopies].New(Args{t, uuid, &MNCArgs{tag, copies}}, bck)
+	e := dreg.bckXacts[apc.ActMakeNCopies].New(Args{t, uuid, &MNCArgs{tag, copies}}, bck)
 	return dreg.renew(e, bck)
 }
 
 func RenewPromote(t cluster.Target, uuid string, bck *cluster.Bck, args *cluster.PromoteArgs) RenewRes {
-	return RenewBucketXact(cmn.ActPromote, bck, Args{t, uuid, args})
+	return RenewBucketXact(apc.ActPromote, bck, Args{t, uuid, args})
 }
 
 func RenewBckLoadLomCache(t cluster.Target, uuid string, bck *cluster.Bck) RenewRes {
-	return RenewBucketXact(cmn.ActLoadLomCache, bck, Args{T: t, UUID: uuid})
+	return RenewBucketXact(apc.ActLoadLomCache, bck, Args{T: t, UUID: uuid})
 }
 
 func RenewPutMirror(t cluster.Target, lom *cluster.LOM) RenewRes {
-	return RenewBucketXact(cmn.ActPutCopies, lom.Bck(), Args{T: t, Custom: lom})
+	return RenewBucketXact(apc.ActPutCopies, lom.Bck(), Args{T: t, Custom: lom})
 }
 
 func RenewTCB(t cluster.Target, uuid, kind string, custom *TCBArgs) RenewRes {
@@ -130,10 +131,10 @@ func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, 
 		BckFrom: bckFrom,
 		BckTo:   bckTo,
 	}
-	return RenewBucketXact(cmn.ActMoveBck, bckTo, Args{t, uuid, custom})
+	return RenewBucketXact(apc.ActMoveBck, bckTo, Args{t, uuid, custom})
 }
 
 func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.ListObjsMsg) RenewRes {
-	e := dreg.bckXacts[cmn.ActList].New(Args{T: t, UUID: uuid, Custom: msg}, bck)
+	e := dreg.bckXacts[apc.ActList].New(Args{T: t, UUID: uuid, Custom: msg}, bck)
 	return dreg.renewByID(e, bck)
 }

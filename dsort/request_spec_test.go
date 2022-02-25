@@ -10,6 +10,7 @@ package dsort
 import (
 	"math"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -41,9 +42,9 @@ var _ = Describe("RequestSpec", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(parsed.Bck.Name).To(Equal("test"))
-			Expect(parsed.Bck.Provider).To(Equal(cmn.ProviderAIS))
+			Expect(parsed.Bck.Provider).To(Equal(apc.ProviderAIS))
 			Expect(parsed.OutputBck.Name).To(Equal("test"))
-			Expect(parsed.OutputBck.Provider).To(Equal(cmn.ProviderAIS))
+			Expect(parsed.OutputBck.Provider).To(Equal(apc.ProviderAIS))
 			Expect(parsed.Extension).To(Equal(cos.ExtTar))
 
 			Expect(parsed.InputFormat.Template).To(Equal(cos.ParsedTemplate{
@@ -76,8 +77,8 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should set buckets correctly", func() {
 			rs := RequestSpec{
-				Bck:             cmn.Bck{Provider: cmn.ProviderAmazon, Name: "test"},
-				OutputBck:       cmn.Bck{Provider: cmn.ProviderAmazon, Name: "testing"},
+				Bck:             cmn.Bck{Provider: apc.ProviderAmazon, Name: "test"},
+				OutputBck:       cmn.Bck{Provider: apc.ProviderAmazon, Name: "testing"},
 				Extension:       cos.ExtTar,
 				InputFormat:     "prefix-{0010..0111..2}-suffix",
 				OutputFormat:    "prefix-{10..111}-suffix",
@@ -89,9 +90,9 @@ var _ = Describe("RequestSpec", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(parsed.Bck.Name).To(Equal("test"))
-			Expect(parsed.Bck.Provider).To(Equal(cmn.ProviderAmazon))
+			Expect(parsed.Bck.Provider).To(Equal(apc.ProviderAmazon))
 			Expect(parsed.OutputBck.Name).To(Equal("testing"))
-			Expect(parsed.OutputBck.Provider).To(Equal(cmn.ProviderAmazon))
+			Expect(parsed.OutputBck.Provider).To(Equal(apc.ProviderAmazon))
 		})
 
 		It("should parse spec with mem usage as bytes", func() {
@@ -317,7 +318,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid output bucket provider", func() {
 			rs := RequestSpec{
-				Bck:       cmn.Bck{Provider: cmn.ProviderAIS, Name: "test"},
+				Bck:       cmn.Bck{Provider: apc.ProviderAIS, Name: "test"},
 				OutputBck: cmn.Bck{Provider: "invalid", Name: "test"},
 				Extension: ".txt",
 				Algorithm: SortAlgorithm{Kind: SortKindNone},

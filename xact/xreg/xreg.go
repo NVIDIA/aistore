@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -269,7 +270,7 @@ func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 			}
 			return []cluster.XactSnap{xctn.Snap()}, nil
 		}
-		if onlyRunning || flt.Kind != cmn.ActRebalance {
+		if onlyRunning || flt.Kind != apc.ActRebalance {
 			return nil, cmn.NewErrXactNotFoundError("ID=" + flt.ID)
 		}
 		// not running rebalance: include all finished (but not aborted) ones
@@ -604,7 +605,7 @@ func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string, oth
 		if err = dreg.limco(tsi, bck, action, otherBck...); err == nil {
 			break
 		}
-		if action == cmn.ActMoveBck {
+		if action == apc.ActMoveBck {
 			return
 		}
 		time.Sleep(sleep)
@@ -622,9 +623,9 @@ func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, ot
 		nd          *xact.Descriptor // the one that wants to run
 		adminReqAct bool             // admin-requested action that'd generate protential conflict
 	)
-	debug.Assert(tsi.Type() == cmn.Target) // TODO: extend to proxies
+	debug.Assert(tsi.Type() == apc.Target) // TODO: extend to proxies
 	switch {
-	case action == cmn.ActStartMaintenance, action == cmn.ActShutdownNode:
+	case action == apc.ActStartMaintenance, action == apc.ActShutdownNode:
 		nd = &xact.Descriptor{}
 		adminReqAct = true
 	default:
@@ -657,9 +658,9 @@ func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, ot
 		return cmn.NewErrLimitedCoexistence(tsi.String(), entry.Get().String(), action, b)
 	}
 
-	// finally, bucket rename (cmn.ActMoveBck) is a special case -
+	// finally, bucket rename (apc.ActMoveBck) is a special case -
 	// incompatible with any MassiveBck type operation _on the same_ bucket
-	if action != cmn.ActMoveBck {
+	if action != apc.ActMoveBck {
 		return nil
 	}
 	bck1, bck2 := bck, otherBck[0]

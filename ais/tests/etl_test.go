@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
@@ -119,7 +120,7 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		bck            = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
+		bck            = cmn.Bck{Provider: apc.ProviderAIS, Name: "etl-test"}
 		objName        = fmt.Sprintf("%s-%s-object", uuid, cos.RandString(5))
 		outputFileName = filepath.Join(t.TempDir(), objName+".out")
 	)
@@ -213,7 +214,7 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		bckTo          = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
+		bckTo          = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: apc.ProviderAIS}
 		requestTimeout = 30 * time.Second
 	)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
@@ -324,7 +325,7 @@ func TestETLInline(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		bck = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
+		bck = cmn.Bck{Provider: apc.ProviderAIS, Name: "etl-test"}
 
 		tests = []testObjConfig{
 			{transformer: tetl.MD5, comm: etl.PushCommType},
@@ -354,7 +355,7 @@ func TestETLInline(t *testing.T) {
 			outObject := bytes.NewBuffer(nil)
 			_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 				Writer: outObject,
-				Query:  map[string][]string{cmn.QparamUUID: {uuid}},
+				Query:  map[string][]string{apc.QparamUUID: {uuid}},
 			})
 			tassert.CheckFatal(t, err)
 
@@ -369,7 +370,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		bck         = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
+		bck         = cmn.Bck{Provider: apc.ProviderAIS, Name: "etl-test"}
 		transformer = tetl.MD5
 		comm        = etl.PushCommType
 	)
@@ -399,7 +400,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	defer outObject.Free()
 	_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 		Writer: outObject,
-		Query:  map[string][]string{cmn.QparamUUID: {uuid}},
+		Query:  map[string][]string{apc.QparamUUID: {uuid}},
 	})
 	tassert.CheckFatal(t, err)
 
@@ -416,7 +417,7 @@ func TestETLBucket(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		bck    = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
+		bck    = cmn.Bck{Name: "etloffline", Provider: apc.ProviderAIS}
 		objCnt = 10
 
 		m = ioContext{
@@ -494,7 +495,7 @@ def transform(input_bytes: bytes) -> bytes:
 			num:       10,
 			fileSize:  512,
 			fixedSize: true,
-			bck:       cmn.Bck{Name: "etl_build", Provider: cmn.ProviderAIS},
+			bck:       cmn.Bck{Name: "etl_build", Provider: apc.ProviderAIS},
 		}
 
 		tests = []struct {
@@ -563,8 +564,8 @@ func TestETLBucketDryRun(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		bckFrom = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
-		bckTo   = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
+		bckFrom = cmn.Bck{Name: "etloffline", Provider: apc.ProviderAIS}
+		bckTo   = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: apc.ProviderAIS}
 		objCnt  = 10
 
 		m = ioContext{

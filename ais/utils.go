@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -229,7 +230,7 @@ func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 	if !nprops.EC.Enabled {
 		if bprops.EC.Enabled {
 			// abort running ec-encode xaction, if exists
-			flt := xreg.XactFilter{Kind: cmn.ActECEncode, Bck: bck}
+			flt := xreg.XactFilter{Kind: apc.ActECEncode, Bck: bck}
 			xreg.DoAbort(flt, errors.New("ec-disabled"))
 		}
 		return false

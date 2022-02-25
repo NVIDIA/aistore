@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -245,18 +246,18 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		nl       nl.NotifListener
 		errMsg   error
 		uuid     string
-		tid      = r.Header.Get(cmn.HdrCallerID) // sender node ID
+		tid      = r.Header.Get(apc.HdrCallerID) // sender node ID
 		exists   bool
 	)
 	if r.Method != http.MethodPost {
 		cmn.WriteErr405(w, r, http.MethodPost)
 		return
 	}
-	apiItems, err := n.p.checkRESTItems(w, r, 1, false, cmn.URLPathNotifs.L)
+	apiItems, err := n.p.checkRESTItems(w, r, 1, false, apc.URLPathNotifs.L)
 	if err != nil {
 		return
 	}
-	if apiItems[0] != cmn.Progress && apiItems[0] != cmn.Finished {
+	if apiItems[0] != apc.Progress && apiItems[0] != apc.Finished {
 		n.p.writeErrf(w, r, "Invalid route /notifs/%s", apiItems[0])
 		return
 	}
@@ -301,9 +302,9 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	// NOTE: Default case is not required - will reach here only for valid types.
 	switch apiItems[0] {
 	// TODO: implement on Started notification
-	case cmn.Progress:
+	case apc.Progress:
 		err = n.handleProgress(nl, tsi, notifMsg.Data, errMsg)
-	case cmn.Finished:
+	case apc.Finished:
 		err = n.handleFinished(nl, tsi, notifMsg.Data, errMsg)
 	}
 

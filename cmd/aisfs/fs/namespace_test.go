@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/aisfs/ais"
 	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
@@ -33,7 +34,7 @@ func (bm *bucketMock) addObj(obj string)    { bm.objs[obj] = struct{}{} }
 func (bm *bucketMock) removeObj(obj string) { delete(bm.objs, obj) }
 
 func (*bucketMock) Name() string              { return "empty" }
-func (bm *bucketMock) Bck() cmn.Bck           { return cmn.Bck{Name: bm.Name(), Provider: cmn.ProviderAIS} }
+func (bm *bucketMock) Bck() cmn.Bck           { return cmn.Bck{Name: bm.Name(), Provider: apc.ProviderAIS} }
 func (*bucketMock) APIParams() api.BaseParams { return api.BaseParams{} }
 func (bm *bucketMock) HeadObject(objName string) (obj *ais.Object, exists bool, err error) {
 	_, ok := bm.objs[objName]

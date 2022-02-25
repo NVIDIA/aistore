@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/urfave/cli"
 )
 
@@ -31,7 +31,7 @@ var (
 				Description:  xactionDesc(false),
 				Flags:        stopCmdsFlags[subcmdStopXaction],
 				Action:       stopXactionHandler,
-				BashComplete: xactionCompletions(cmn.ActXactStop),
+				BashComplete: xactionCompletions(apc.ActXactStop),
 			},
 			{
 				Name:         subcmdStopDownload,
@@ -43,7 +43,7 @@ var (
 			},
 			{
 				Name:         subcmdStopDsort,
-				Usage:        fmt.Sprintf("stop a %s job with given ID", cmn.DSortName),
+				Usage:        fmt.Sprintf("stop a %s job with given ID", apc.DSortName),
 				ArgsUsage:    jobIDArgument,
 				Action:       stopDsortHandler,
 				BashComplete: dsortIDRunningCompletions,
@@ -103,13 +103,13 @@ func stopDsortHandler(c *cli.Context) (err error) {
 	id := c.Args().First()
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, cmn.DSortName+" job ID")
+		return missingArgumentsError(c, apc.DSortName+" job ID")
 	}
 
 	if err = api.AbortDSort(defaultAPIParams, id); err != nil {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s job %q successfully stopped\n", cmn.DSortName, id)
+	fmt.Fprintf(c.App.Writer, "%s job %q successfully stopped\n", apc.DSortName, id)
 	return
 }

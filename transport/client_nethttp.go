@@ -14,6 +14,7 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -58,9 +59,9 @@ func (s *streamBase) do(body io.Reader) (err error) {
 		return
 	}
 	if s.streamer.compressed() {
-		request.Header.Set(cmn.HdrCompress, cmn.LZ4Compression)
+		request.Header.Set(apc.HdrCompress, apc.LZ4Compression)
 	}
-	request.Header.Set(cmn.HdrSessID, strconv.FormatInt(s.sessID, 10))
+	request.Header.Set(apc.HdrSessID, strconv.FormatInt(s.sessID, 10))
 
 	response, err = s.client.Do(request)
 	if err != nil {

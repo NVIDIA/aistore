@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -32,7 +33,7 @@ func (tc testConfig) name() string {
 func createAndFillBucket(b *testing.B, objCnt uint, u string) cmn.Bck {
 	const workerCount = 10
 	var (
-		bck        = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
+		bck        = cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
 		baseParams = tutils.BaseAPIParams(u)
 
 		wg              = &sync.WaitGroup{}

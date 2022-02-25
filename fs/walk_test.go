@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -23,7 +24,7 @@ import (
 
 func TestWalkBck(t *testing.T) {
 	var (
-		bck   = cmn.Bck{Name: "name", Provider: cmn.ProviderAIS}
+		bck   = cmn.Bck{Name: "name", Provider: apc.ProviderAIS}
 		tests = []struct {
 			name     string
 			mpathCnt int
@@ -117,7 +118,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 	)
 
 	var (
-		bck           = cmn.Bck{Name: "name", Provider: cmn.ProviderAIS}
+		bck           = cmn.Bck{Name: "name", Provider: apc.ProviderAIS}
 		mpathCnt      = 5 + rand.Int()%5
 		minObjectsCnt = 10
 		mpaths        = make(map[string]*mpathMeta)

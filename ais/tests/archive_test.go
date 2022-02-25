@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -130,12 +131,12 @@ func TestGetFromArchive(t *testing.T) {
 					}
 					getOptions := api.GetObjectInput{
 						Query: url.Values{
-							cmn.QparamArchpath: []string{randomName},
-							cmn.QparamArchmime: []string{mime},
+							apc.QparamArchpath: []string{randomName},
+							apc.QparamArchmime: []string{mime},
 						},
 					}
 					n, err := api.GetObject(baseParams, m.bck, objname, getOptions)
-					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, cmn.QparamArchpath, randomName, n)
+					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, apc.QparamArchpath, randomName, n)
 					tassert.CheckFatal(t, err)
 				}
 			})
@@ -160,7 +161,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			prefix:  "archive/",
 			ordered: true,
 		}
-		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
+		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		numArchs   = 15
@@ -271,7 +272,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				}
 			}
 
-			flt := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
+			flt := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
 			if test.abrt {
 				time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
 				tlog.Logln("Aborting...")
@@ -313,13 +314,13 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 
 				getOptions := api.GetObjectInput{
 					Query: url.Values{
-						cmn.QparamArchpath: []string{entry.Name},
-						cmn.QparamArchmime: []string{mime},
+						apc.QparamArchpath: []string{entry.Name},
+						apc.QparamArchmime: []string{mime},
 					},
 				}
 				n, err := api.GetObject(baseParams, toBck, objName, getOptions)
 				if err != nil {
-					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, cmn.QparamArchpath, entry.Name, n, err)
+					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, apc.QparamArchpath, entry.Name, n, err)
 				}
 			}
 		})
@@ -328,8 +329,8 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 
 func TestAppendToArch(t *testing.T) {
 	var (
-		fromBck = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
-		toBck   = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
+		fromBck = cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
+		toBck   = cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
 		m       = ioContext{
 			t:       t,
 			bck:     fromBck,
@@ -383,7 +384,7 @@ func TestAppendToArch(t *testing.T) {
 				}(archName, list)
 			}
 
-			wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
+			wargs := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
 			lsmsg := &cmn.ListObjsMsg{Prefix: "test_lst"}
@@ -426,7 +427,7 @@ func TestAppendToArch(t *testing.T) {
 				}
 			}
 			if test.multi {
-				wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
+				wargs := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
 				api.WaitForXactionIdle(baseParams, wargs)
 			}
 

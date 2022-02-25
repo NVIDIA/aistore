@@ -13,31 +13,9 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-)
-
-// Backend Provider enum
-const (
-	ProviderAIS    = "ais"
-	ProviderAmazon = "aws"
-	ProviderAzure  = "azure"
-	ProviderGoogle = "gcp"
-	ProviderHDFS   = "hdfs"
-	ProviderHTTP   = "ht"
-	allProviders   = "ais, aws (s3://), gcp (gs://), azure (az://), hdfs://, ht://"
-
-	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
-	NsNamePrefix = '#' // BEWARE: used by on-disk layout
-
-	BckProviderSeparator = "://"
-
-	// Scheme parsing
-	DefaultScheme = "https"
-	GSScheme      = "gs"
-	S3Scheme      = "s3"
-	AZScheme      = "az"
-	AISScheme     = "ais"
 )
 
 type (
@@ -93,16 +71,7 @@ var (
 	NsGlobal = Ns{}
 	// NsAnyRemote represents any remote cluster. As such, NsGlobalRemote applies
 	// exclusively to AIS (provider) given that other Backend providers are remote by definition.
-	NsAnyRemote = Ns{UUID: string(NsUUIDPrefix)}
-
-	Providers = cos.NewStringSet(
-		ProviderAIS,
-		ProviderGoogle,
-		ProviderAmazon,
-		ProviderAzure,
-		ProviderHDFS,
-		ProviderHTTP,
-	)
+	NsAnyRemote = Ns{UUID: string(apc.NsUUIDPrefix)}
 )
 
 ////////////////
@@ -141,7 +110,7 @@ var (
 // form (`aws`, `gcp`, etc.), not aliased (`s3`, `gs`, etc.). Only providers
 // registered in `Providers` set are considered normalized.
 func IsNormalizedProvider(provider string) bool {
-	_, exists := Providers[provider]
+	_, exists := apc.Providers[provider]
 	return exists
 }
 
@@ -150,13 +119,13 @@ func NormalizeProvider(provider string) (string, error) {
 	switch provider {
 	case "":
 		// NOTE: Here is place to change default provider.
-		return ProviderAIS, nil
-	case S3Scheme:
-		return ProviderAmazon, nil
-	case AZScheme:
-		return ProviderAzure, nil
-	case GSScheme:
-		return ProviderGoogle, nil
+		return apc.ProviderAIS, nil
+	case apc.S3Scheme:
+		return apc.ProviderAmazon, nil
+	case apc.AZScheme:
+		return apc.ProviderAzure, nil
+	case apc.GSScheme:
+		return apc.ProviderGoogle, nil
 	default:
 		if !IsNormalizedProvider(provider) {
 			return provider, NewErrorInvalidBucketProvider(Bck{Provider: provider})
@@ -170,7 +139,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 	debug.Assert(opts.DefaultProvider == "" || IsNormalizedProvider(opts.DefaultProvider))
 
 	const bucketSepa = "/"
-	parts := strings.SplitN(uri, BckProviderSeparator, 2)
+	parts := strings.SplitN(uri, apc.BckProviderSeparator, 2)
 	if len(parts) > 1 && parts[0] != "" {
 		bck.Provider, err = NormalizeProvider(parts[0])
 		uri = parts[1]
@@ -183,7 +152,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 	}
 
 	parts = strings.SplitN(uri, bucketSepa, 2)
-	if len(parts[0]) > 0 && (parts[0][0] == NsUUIDPrefix || parts[0][0] == NsNamePrefix) {
+	if len(parts[0]) > 0 && (parts[0][0] == apc.NsUUIDPrefix || parts[0][0] == apc.NsNamePrefix) {
 		bck.Ns = ParseNsUname(parts[0])
 		if err := bck.Ns.Validate(); err != nil {
 			return bck, "", err
@@ -193,7 +162,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 				fmt.Errorf("provider cannot be empty when namespace is not (did you mean \"ais://%s\"?)", bck.String())
 		}
 		if len(parts) == 1 {
-			if parts[0] == string(NsUUIDPrefix) && opts.IsQuery {
+			if parts[0] == string(apc.NsUUIDPrefix) && opts.IsQuery {
 				// Case: "[provider://]@" (only valid if uri is query)
 				// We need to list buckets from all possible remote clusters
 				bck.Ns = NsAnyRemote
@@ -230,10 +199,10 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 // Parses [@uuid][#namespace]. It does a little bit more than just parsing
 // a string from `Uname` so that logic can be reused in different places.
 func ParseNsUname(s string) (n Ns) {
-	if len(s) > 0 && s[0] == NsUUIDPrefix {
+	if len(s) > 0 && s[0] == apc.NsUUIDPrefix {
 		s = s[1:]
 	}
-	idx := strings.IndexByte(s, NsNamePrefix)
+	idx := strings.IndexByte(s, apc.NsNamePrefix)
 	if idx == -1 {
 		n.UUID = s
 	} else {
@@ -249,19 +218,19 @@ func (n Ns) String() string {
 	}
 	res := ""
 	if n.UUID != "" {
-		res += string(NsUUIDPrefix) + n.UUID
+		res += string(apc.NsUUIDPrefix) + n.UUID
 	}
 	if n.Name != "" {
-		res += string(NsNamePrefix) + n.Name
+		res += string(apc.NsNamePrefix) + n.Name
 	}
 	return res
 }
 
 func (n Ns) Uname() string {
 	b := make([]byte, 0, 2+len(n.UUID)+len(n.Name))
-	b = append(b, NsUUIDPrefix)
+	b = append(b, apc.NsUUIDPrefix)
 	b = append(b, n.UUID...)
-	b = append(b, NsNamePrefix)
+	b = append(b, apc.NsNamePrefix)
 	b = append(b, n.Name...)
 	return string(b)
 }
@@ -334,12 +303,12 @@ func (b Bck) String() string {
 		if b.Provider == "" {
 			return b.Name
 		}
-		return fmt.Sprintf("%s%s%s", b.Provider, BckProviderSeparator, b.Name)
+		return fmt.Sprintf("%s%s%s", b.Provider, apc.BckProviderSeparator, b.Name)
 	}
 	if b.Provider == "" {
 		return fmt.Sprintf("%s/%s", b.Ns, b.Name)
 	}
-	return fmt.Sprintf("%s%s%s/%s", b.Provider, BckProviderSeparator, b.Ns, b.Name)
+	return fmt.Sprintf("%s%s%s/%s", b.Provider, apc.BckProviderSeparator, b.Ns, b.Name)
 }
 
 func (b Bck) IsEmpty() bool { return b.Name == "" && b.Provider == "" && b.Ns == NsGlobal }
@@ -392,7 +361,7 @@ func ParseUname(uname string) (b Bck, objName string) {
 //
 
 func IsCloudProvider(p string) bool {
-	return p == ProviderAmazon || p == ProviderGoogle || p == ProviderAzure
+	return p == apc.ProviderAmazon || p == apc.ProviderGoogle || p == apc.ProviderAzure
 }
 
 func (n Ns) IsGlobal() bool    { return n == NsGlobal }
@@ -400,7 +369,7 @@ func (n Ns) IsAnyRemote() bool { return n == NsAnyRemote }
 func (n Ns) IsRemote() bool    { return n.UUID != "" }
 
 func (b *Bck) HasBackendBck() bool {
-	return b.Provider == ProviderAIS && b.Props != nil && !b.Props.BackendBck.IsEmpty()
+	return b.Provider == apc.ProviderAIS && b.Props != nil && !b.Props.BackendBck.IsEmpty()
 }
 
 func (b *Bck) BackendBck() *Bck {
@@ -420,10 +389,13 @@ func (b *Bck) RemoteBck() *Bck {
 	return b
 }
 
-func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRemote() && !b.HasBackendBck() }
-func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }
-func (b Bck) IsHDFS() bool      { return b.Provider == ProviderHDFS }
-func (b Bck) IsHTTP() bool      { return b.Provider == ProviderHTTP }
+func (b Bck) IsAIS() bool {
+	return b.Provider == apc.ProviderAIS && !b.Ns.IsRemote() && !b.HasBackendBck()
+}
+
+func (b Bck) IsRemoteAIS() bool { return b.Provider == apc.ProviderAIS && b.Ns.IsRemote() }
+func (b Bck) IsHDFS() bool      { return b.Provider == apc.ProviderHDFS }
+func (b Bck) IsHTTP() bool      { return b.Provider == apc.ProviderHTTP }
 
 func (b Bck) IsRemote() bool {
 	return b.IsCloud() || b.IsRemoteAIS() || b.IsHDFS() || b.IsHTTP() || b.HasBackendBck()
@@ -475,7 +447,7 @@ func (query QueryBcks) Contains(other Bck) bool {
 	if query.Name != "" {
 		// NOTE: named bucket with no provider is assumed to be ais://
 		if other.Provider == "" {
-			other.Provider = ProviderAIS
+			other.Provider = apc.ProviderAIS
 		}
 		if query.Provider == "" {
 			// If query's provider not set, we should match the expected bucket
@@ -492,13 +464,13 @@ func AddBckToQuery(query url.Values, bck Bck) url.Values {
 		if query == nil {
 			query = make(url.Values)
 		}
-		query.Set(QparamProvider, bck.Provider)
+		query.Set(apc.QparamProvider, bck.Provider)
 	}
 	if !bck.Ns.IsGlobal() {
 		if query == nil {
 			query = make(url.Values)
 		}
-		query.Set(QparamNamespace, bck.Ns.Uname())
+		query.Set(apc.QparamNamespace, bck.Ns.Uname())
 	}
 	return query
 }
@@ -513,8 +485,8 @@ func AddBckUnameToQuery(query url.Values, bck Bck, uparam string) url.Values {
 }
 
 func DelBckFromQuery(query url.Values) url.Values {
-	query.Del(QparamProvider)
-	query.Del(QparamNamespace)
+	query.Del(apc.QparamProvider)
+	query.Del(apc.QparamNamespace)
 	return query
 }
 
@@ -578,7 +550,7 @@ func (bcks Bcks) Equal(other Bcks) bool {
 func NewHTTPObj(u *url.URL) *HTTPBckObj {
 	hbo := &HTTPBckObj{
 		Bck: Bck{
-			Provider: ProviderHTTP,
+			Provider: apc.ProviderHTTP,
 			Ns:       NsGlobal,
 		},
 	}

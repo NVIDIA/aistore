@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -67,7 +68,7 @@ func (p *getFactory) Start() error {
 	go xec.Run(nil)
 	return nil
 }
-func (*getFactory) Kind() string        { return cmn.ActECGet }
+func (*getFactory) Kind() string        { return apc.ActECGet }
 func (p *getFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *getFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
@@ -192,9 +193,9 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 			}
 		case mpathRequest := <-r.mpathReqCh:
 			switch mpathRequest.action {
-			case cmn.ActMountpathAttach:
+			case apc.ActMountpathAttach:
 				r.addMpath(mpathRequest.mpath)
-			case cmn.ActMountpathDetach:
+			case apc.ActMountpathDetach:
 				r.removeMpath(mpathRequest.mpath)
 			}
 		case <-r.IdleTimer():

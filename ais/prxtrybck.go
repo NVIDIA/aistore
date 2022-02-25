@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -70,7 +71,7 @@ func freeInitBckArgs(a *bckInitArgs) {
 func lookupRemoteBck(query url.Values, dpq *dpq) bool {
 	if query != nil {
 		debug.Assert(dpq == nil)
-		return !cos.IsParseBool(query.Get(cmn.QparamDontLookupRemoteBck))
+		return !cos.IsParseBool(query.Get(apc.QparamDontLookupRemoteBck))
 	}
 	return !cos.IsParseBool(dpq.dontLookupRemoteBck)
 }
@@ -144,7 +145,7 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 
 	// Destroy and Rename/Move are not permitted.
 	if args.bck.IsCloud() && args._requiresPermission(cmn.AceDestroyBucket) &&
-		args.msg.Action == cmn.ActDestroyBck {
+		args.msg.Action == apc.ActDestroyBck {
 		goto retErr
 	}
 
@@ -236,7 +237,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 
 	// From this point on it's the primary - lookup via random target and try bucket add to BMD.
 	bck = args.bck
-	action := cmn.ActCreateBck
+	action := apc.ActCreateBck
 
 	if bck.HasBackendBck() {
 		bck = cluster.BackendBck(bck)
@@ -248,7 +249,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 
 	var remoteProps http.Header
 	if bck.IsRemote() {
-		action = cmn.ActAddRemoteBck
+		action = apc.ActAddRemoteBck
 		if remoteProps, errCode, err = args._lookup(bck); err != nil {
 			bck = nil
 			return
@@ -257,20 +258,20 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 
 	if bck.IsHTTP() {
 		if args.origURLBck != "" {
-			remoteProps.Set(cmn.HdrOrigURLBck, args.origURLBck)
+			remoteProps.Set(apc.HdrOrigURLBck, args.origURLBck)
 		} else if origURL := args.getOrigURL(); origURL != "" {
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				errCode = http.StatusBadRequest
 				return bck, errCode, err
 			}
-			remoteProps.Set(cmn.HdrOrigURLBck, hbo.OrigURLBck)
+			remoteProps.Set(apc.HdrOrigURLBck, hbo.OrigURLBck)
 		} else {
 			err = fmt.Errorf("failed to initialize bucket %q: missing HTTP URL", args.bck)
 			errCode = http.StatusBadRequest
 			return
 		}
-		debug.Assert(remoteProps.Get(cmn.HdrOrigURLBck) != "")
+		debug.Assert(remoteProps.Get(apc.HdrOrigURLBck) != "")
 	}
 
 	if err = args.p.createBucket(&cmn.ActionMsg{Action: action}, bck, remoteProps); err != nil {
@@ -293,7 +294,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 func (args *bckInitArgs) getOrigURL() (ourl string) {
 	if args.query != nil {
 		debug.Assert(args.dpq == nil)
-		ourl = args.query.Get(cmn.QparamOrigURL)
+		ourl = args.query.Get(apc.QparamOrigURL)
 	} else {
 		ourl = args.dpq.origURL
 	}
@@ -304,7 +305,7 @@ func (args *bckInitArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCo
 	q := url.Values{}
 	if bck.IsHTTP() {
 		origURL := args.getOrigURL()
-		q.Set(cmn.QparamOrigURL, origURL)
+		q.Set(apc.QparamOrigURL, origURL)
 	}
 	return args.p.headRemoteBck(bck.Bck, q)
 }

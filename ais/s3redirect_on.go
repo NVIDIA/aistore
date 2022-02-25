@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -39,7 +40,7 @@ func (*proxy) s3Redirect(w http.ResponseWriter, _ *http.Request, _ *cluster.Snod
 // would be `localhost:8080/s3`
 func ExtractEndpoint(path string) string {
 	ep := path
-	if idx := strings.Index(ep, "/"+cmn.S3); idx > 0 {
+	if idx := strings.Index(ep, "/"+apc.S3); idx > 0 {
 		ep = ep[:idx+3]
 	}
 	ep = strings.TrimPrefix(ep, "http://")

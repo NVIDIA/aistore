@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -51,7 +52,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 3})
 
 	var (
-		bck = cmn.Bck{Name: "maint-list", Provider: cmn.ProviderAIS}
+		bck = cmn.Bck{Name: "maint-list", Provider: apc.ProviderAIS}
 		m   = &ioContext{
 			t:         t,
 			num:       1500,
@@ -135,7 +136,7 @@ func TestMaintenanceMD(t *testing.T) {
 	)
 
 	t.Cleanup(func() {
-		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+		args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 		api.WaitForXactionIC(baseParams, args)
 	})
 
@@ -179,7 +180,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		origTargetCount       = smap.CountTargets()
 		origActiveTargetCount = smap.CountActiveTargets()
 		origActiveProxyCount  = smap.CountActiveProxies()
-		bck                   = cmn.Bck{Name: t.Name(), Provider: cmn.ProviderAIS}
+		bck                   = cmn.Bck{Name: t.Name(), Provider: apc.ProviderAIS}
 	)
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	for i := 0; i < objCount; i++ {
@@ -230,7 +231,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	}
 	if dcm != nil {
 		tlog.Logf("Canceling maintenance for %s\n", dcm.ID())
-		args := api.XactReqArgs{Kind: cmn.ActRebalance}
+		args := api.XactReqArgs{Kind: apc.ActRebalance}
 		err = api.AbortXaction(baseParams, args)
 		tassert.CheckError(t, err)
 		val := &cmn.ActValRmNode{DaemonID: dcm.ID()}
@@ -238,7 +239,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tassert.CheckError(t, err)
 		tutils.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
 	} else {
-		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+		args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckError(t, err)
 	}
@@ -265,7 +266,7 @@ func countVMDTargets(tsMpaths map[*cluster.Snode][]string) (total int) {
 func TestMaintenanceRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
-		bck = cmn.Bck{Name: "maint-reb", Provider: cmn.ProviderAIS}
+		bck = cmn.Bck{Name: "maint-reb", Provider: apc.ProviderAIS}
 		m   = &ioContext{
 			t:               t,
 			num:             30,
@@ -336,7 +337,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
-		bck = cmn.Bck{Name: "maint-get-reb", Provider: cmn.ProviderAIS}
+		bck = cmn.Bck{Name: "maint-get-reb", Provider: apc.ProviderAIS}
 		m   = &ioContext{
 			t:               t,
 			num:             5000,
@@ -411,7 +412,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 }
 
 func TestNodeShutdown(t *testing.T) {
-	for _, ty := range []string{cmn.Proxy, cmn.Target} {
+	for _, ty := range []string{apc.Proxy, apc.Target} {
 		t.Run(ty, func(t *testing.T) {
 			testNodeShutdown(t, ty)
 		})
@@ -430,7 +431,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		origProxyCnt    = smap.CountActiveProxies()
 		origTargetCount = smap.CountActiveTargets()
 	)
-	if nodeType == cmn.Proxy {
+	if nodeType == apc.Proxy {
 		if origProxyCnt == 1 {
 			t.Skipf("%s requires at least %d proxies (have %d)", t.Name(), 2, origProxyCnt)
 		}
@@ -448,7 +449,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	// 1. Shutdown a random node.
 	pid, cmd, err := tutils.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
-	if nodeType == cmn.Target {
+	if nodeType == apc.Target {
 		tutils.WaitForRebalAndResil(t, baseParams)
 	}
 
@@ -476,7 +477,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		smap.Version, origProxyCnt, origTargetCount)
 	tassert.CheckError(t, err)
 
-	if nodeType == cmn.Target {
+	if nodeType == apc.Target {
 		tutils.WaitForRebalAndResil(t, baseParams)
 	}
 }
@@ -486,7 +487,7 @@ func TestShutdownListObjects(t *testing.T) {
 
 	const nodeOffTimeout = 10 * time.Second
 	var (
-		bck = cmn.Bck{Name: "shutdown-list", Provider: cmn.ProviderAIS}
+		bck = cmn.Bck{Name: "shutdown-list", Provider: apc.ProviderAIS}
 		m   = &ioContext{
 			t:         t,
 			num:       1500,
@@ -522,7 +523,7 @@ func TestShutdownListObjects(t *testing.T) {
 
 	// Restore target after test is over.
 	t.Cleanup(func() {
-		err = tutils.RestoreNode(cmd, false, cmn.Target)
+		err = tutils.RestoreNode(cmd, false, apc.Target)
 		tassert.CheckError(t, err)
 		_, err = tutils.WaitForClusterState(proxyURL, "target is back",
 			m.smap.Version, 0, origTargetCount-1)

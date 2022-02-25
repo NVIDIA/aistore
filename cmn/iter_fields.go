@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -221,7 +222,7 @@ func copyProps(src, dst interface{}, asType string) (err error) {
 		srcVal = reflect.ValueOf(src)
 		dstVal = reflect.ValueOf(dst).Elem()
 	)
-	debug.Assertf(cos.StringInSlice(asType, []string{Daemon, Cluster}), "unexpected config level: %s", asType)
+	debug.Assertf(cos.StringInSlice(asType, []string{apc.Daemon, apc.Cluster}), "unexpected config level: %s", asType)
 
 	for i := 0; i < srcVal.NumField(); i++ {
 		copyTag, ok := srcVal.Type().Field(i).Tag.Lookup("copy")

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -61,7 +62,7 @@ func init() {
 		Auth: AuthConfig{
 			URL: fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAuthNPort),
 		},
-		DefaultProvider: cmn.ProviderAIS,
+		DefaultProvider: apc.ProviderAIS,
 		Aliases:         DefaultAliasConfig,
 	}
 }
@@ -102,7 +103,7 @@ func (c *Config) validate() (err error) {
 		return fmt.Errorf("invalid timeout.http_timeout format %q: %v", c.Timeout.HTTPTimeoutStr, err)
 	}
 	if c.DefaultProvider != "" && !cmn.IsNormalizedProvider(c.DefaultProvider) {
-		return fmt.Errorf("invalid default_provider value %q, expected one of [%s]", c.DefaultProvider, cmn.Providers)
+		return fmt.Errorf("invalid default_provider value %q, expected one of [%s]", c.DefaultProvider, apc.Providers)
 	}
 	if c.Aliases == nil {
 		c.Aliases = DefaultAliasConfig

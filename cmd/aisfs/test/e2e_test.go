@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -62,7 +63,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck = cmn.Bck{
 			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+			Provider: apc.ProviderAIS,
 		}
 		fuseDir, err = os.MkdirTemp("/tmp", "")
 		Expect(err).NotTo(HaveOccurred())

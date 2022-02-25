@@ -8,10 +8,10 @@
 package backend
 
 import (
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 func NewHDFS(_ cluster.Target) (cluster.BackendProvider, error) {
-	return nil, newErrInitBackend(cmn.ProviderHDFS)
+	return nil, newErrInitBackend(apc.ProviderHDFS)
 }

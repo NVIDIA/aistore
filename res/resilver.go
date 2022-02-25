@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -112,7 +113,7 @@ func (res *Res) RunResilver(args Args) {
 		}
 	)
 	debug.AssertNoErr(err)
-	debug.Assert(args.PostDD == nil || (args.Action == cmn.ActMountpathDetach || args.Action == cmn.ActMountpathDisable))
+	debug.Assert(args.PostDD == nil || (args.Action == apc.ActMountpathDetach || args.Action == apc.ActMountpathDisable))
 
 	if args.SingleRmiJogger {
 		jg = mpather.NewJoggerGroup(opts, args.Rmi.Path)

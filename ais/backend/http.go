@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -57,7 +58,7 @@ func (hp *httpProvider) client(u string) *http.Client {
 	return hp.httpClient
 }
 
-func (*httpProvider) Provider() string  { return cmn.ProviderHTTP }
+func (*httpProvider) Provider() string  { return apc.ProviderHTTP }
 func (*httpProvider) MaxPageSize() uint { return 10000 }
 
 func (hp *httpProvider) CreateBucket(*cluster.Bck) (int, error) {
@@ -95,7 +96,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	}
 
 	bckProps = make(cos.SimpleKVs)
-	bckProps[cmn.HdrBackendProvider] = cmn.ProviderHTTP
+	bckProps[apc.HdrBackendProvider] = apc.ProviderHTTP
 	return
 }
 
@@ -144,7 +145,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderHTTP)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderHTTP)
 	if resp.ContentLength >= 0 {
 		oa.Size = resp.ContentLength
 	}
@@ -206,7 +207,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		glog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
-	lom.SetCustomKey(cmn.SourceObjMD, cmn.ProviderHTTP)
+	lom.SetCustomKey(cmn.SourceObjMD, apc.ProviderHTTP)
 	lom.SetCustomKey(cmn.OrigURLObjMD, origURL)
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
 		lom.SetCustomKey(cmn.ETag, v)

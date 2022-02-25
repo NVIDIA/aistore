@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
@@ -160,8 +161,8 @@ func (putter *tracePutter) do(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 		return putter.reader.Open()
 	}
 	if putter.cksum != nil {
-		req.Header.Set(cmn.HdrObjCksumType, putter.cksum.Ty())
-		req.Header.Set(cmn.HdrObjCksumVal, putter.cksum.Val())
+		req.Header.Set(apc.HdrObjCksumType, putter.cksum.Ty())
+		req.Header.Set(apc.HdrObjCksumVal, putter.cksum.Val())
 	}
 	return req.WithContext(httptrace.WithClientTrace(req.Context(), putter.tctx.trace)), nil
 }
@@ -194,7 +195,7 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum,
 	{
 		reqArgs.Method = http.MethodPut
 		reqArgs.Base = proxyURL
-		reqArgs.Path = cmn.URLPathObjects.Join(bck.Name, object)
+		reqArgs.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqArgs.Query = cmn.AddBckToQuery(nil, bck)
 		reqArgs.BodyR = reader
 	}
@@ -253,7 +254,7 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 
 	query = cmn.AddBckToQuery(query, bck)
 	if etlID != "" {
-		query.Add(cmn.QparamUUID, etlID)
+		query.Add(apc.QparamUUID, etlID)
 	}
 	if length > 0 {
 		hdr = cmn.RangeHdr(offset, length)
@@ -261,7 +262,7 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodGet,
 		Base:   proxyURL,
-		Path:   cmn.URLPathObjects.Join(bck.Name, objName),
+		Path:   apc.URLPathObjects.Join(bck.Name, objName),
 		Query:  query,
 		Header: hdr,
 	}
@@ -284,8 +285,8 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 	defer cos.Close(resp.Body)
 
 	if validate {
-		hdrCksumValue = resp.Header.Get(cmn.HdrObjCksumVal)
-		hdrCksumType = resp.Header.Get(cmn.HdrObjCksumType)
+		hdrCksumValue = resp.Header.Get(apc.HdrObjCksumVal)
+		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
 	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
 	n, cksumValue, err := readResponse(resp, io.Discard, src, hdrCksumType)
@@ -319,8 +320,8 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 
 	tctx.tr.tsHTTPEnd = time.Now()
 	if validate {
-		hdrCksumValue = resp.Header.Get(cmn.HdrObjCksumVal)
-		hdrCksumType = resp.Header.Get(cmn.HdrObjCksumType)
+		hdrCksumValue = resp.Header.Get(apc.HdrObjCksumVal)
+		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
 
 	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
@@ -353,9 +354,9 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 func getConfig(server string) (httpLatencies, error) {
 	tctx := newTraceCtx()
 
-	url := server + cmn.URLPathDae.S
+	url := server + apc.URLPathDae.S
 	req, _ := http.NewRequest(http.MethodGet, url, http.NoBody)
-	req.URL.RawQuery = api.GetWhatRawQuery(cmn.GetWhatConfig, "")
+	req.URL.RawQuery = api.GetWhatRawQuery(apc.GetWhatConfig, "")
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 
 	resp, err := tctx.tracedClient.Do(req)
@@ -382,7 +383,7 @@ func listObjCallback(ctx *api.ProgressContext) {
 
 // listObjectNames returns a slice of object names of all objects that match the prefix in a bucket.
 func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]string, error) {
-	msg := &cmn.ListObjsMsg{Prefix: prefix, PageSize: cmn.DefaultListPageSizeAIS}
+	msg := &cmn.ListObjsMsg{Prefix: prefix, PageSize: apc.DefaultListPageSizeAIS}
 	ctx := api.NewProgressContext(listObjCallback, longListTime)
 	objList, err := api.ListObjectsWithOpts(baseParams, bck, msg, 0, ctx, false)
 	if err != nil {

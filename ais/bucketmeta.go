@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -106,7 +107,7 @@ var bmdImmSize int64
 func newBucketMD() *bucketMD {
 	providers := make(cluster.Providers, 2)
 	namespaces := make(cluster.Namespaces, 1)
-	providers[cmn.ProviderAIS] = namespaces
+	providers[apc.ProviderAIS] = namespaces
 	buckets := make(cluster.Buckets, 16)
 	namespaces[cmn.NsGlobal.Uname()] = buckets
 	return &bucketMD{BMD: cluster.BMD{Providers: providers, UUID: ""}}
@@ -486,13 +487,13 @@ func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
 func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.BucketProps {
 	debug.Assert(len(header) > 0)
 	switch props.Provider {
-	case cmn.ProviderAmazon:
-		props.Extra.AWS.CloudRegion = header.Get(cmn.HdrCloudRegion)
-	case cmn.ProviderHTTP:
-		props.Extra.HTTP.OrigURLBck = header.Get(cmn.HdrOrigURLBck)
+	case apc.ProviderAmazon:
+		props.Extra.AWS.CloudRegion = header.Get(apc.HdrCloudRegion)
+	case apc.ProviderHTTP:
+		props.Extra.HTTP.OrigURLBck = header.Get(apc.HdrOrigURLBck)
 	}
 
-	if verStr := header.Get(cmn.HdrBucketVerEnabled); verStr != "" {
+	if verStr := header.Get(apc.HdrBucketVerEnabled); verStr != "" {
 		versioning, err := cos.ParseBool(verStr)
 		debug.AssertNoErr(err)
 		props.Versioning.Enabled = versioning

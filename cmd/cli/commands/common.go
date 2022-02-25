@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/urfave/cli"
@@ -26,7 +27,7 @@ const (
 	commandJob       = "job"
 	commandShow      = "show"
 	commandSearch    = "search"
-	commandETL       = cmn.ETL
+	commandETL       = apc.ETL
 	commandSource    = "source"
 
 	commandCat       = "cat"
@@ -45,8 +46,8 @@ const (
 	commandRename    = "mv"
 	commandSet       = "set"
 	commandMirror    = "mirror"
-	commandStart     = cmn.ActXactStart
-	commandStop      = cmn.ActXactStop
+	commandStart     = apc.ActXactStart
+	commandStop      = apc.ActXactStop
 	commandWait      = "wait"
 	commandAlias     = "alias"
 	commandStorage   = "storage"
@@ -56,13 +57,13 @@ const (
 
 	// Common Subcommands
 	// NOTE: second level subcommands are preferably verbs
-	subcmdDsort      = cmn.DSortNameLowercase
-	subcmdSmap       = cmn.GetWhatSmap
-	subcmdBMD        = cmn.GetWhatBMD
-	subcmdMpath      = cmn.GetWhatDiskStats
-	subcmdConfig     = cmn.GetWhatConfig
-	subcmdLog        = cmn.GetWhatLog
-	subcmdRebalance  = cmn.ActRebalance
+	subcmdDsort      = apc.DSortNameLowercase
+	subcmdSmap       = apc.GetWhatSmap
+	subcmdBMD        = apc.GetWhatBMD
+	subcmdMpath      = apc.GetWhatDiskStats
+	subcmdConfig     = apc.GetWhatConfig
+	subcmdLog        = apc.GetWhatLog
+	subcmdRebalance  = apc.ActRebalance
 	subcmdBucket     = "bucket"
 	subcmdObject     = "object"
 	subcmdProps      = "props"
@@ -75,7 +76,7 @@ const (
 	subcmdList       = commandList
 	subcmdLogs       = "logs"
 	subcmdStop       = "stop"
-	subcmdLRU        = cmn.ActLRU
+	subcmdLRU        = apc.ActLRU
 	subcmdMembership = "add-remove-nodes"
 	subcmdShutdown   = "shutdown"
 	subcmdAttach     = "attach"

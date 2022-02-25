@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -366,7 +367,7 @@ func Stop(t cluster.Target, id string, errCause error) error {
 	}
 
 	// Abort any running offline ETLs.
-	xreg.AbortAll(errCause, cmn.ActETLBck)
+	xreg.AbortAll(errCause, apc.ActETLBck)
 
 	c, err := GetCommunicator(id, t.Snode())
 	if err != nil {
@@ -554,7 +555,7 @@ func (b *etlBootstraper) setPodEnvVariables() {
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
-			Value: b.t.Snode().URL(cmn.NetPublic) + cmn.URLPathETLObject.Join(reqSecret),
+			Value: b.t.Snode().URL(cmn.NetPublic) + apc.URLPathETLObject.Join(reqSecret),
 		})
 		for k, v := range b.env {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{

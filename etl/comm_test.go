@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -36,7 +37,7 @@ var _ = Describe("CommunicatorTest", func() {
 		dataSize      = int64(cos.MiB * 50)
 		transformData = make([]byte, dataSize)
 
-		bck        = cmn.Bck{Name: "commBck", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+		bck        = cmn.Bck{Name: "commBck", Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
 		objName    = "commObj"
 		clusterBck = cluster.NewBck(
 			bck.Name, bck.Provider, bck.Ns,
@@ -108,7 +109,7 @@ var _ = Describe("CommunicatorTest", func() {
 			pod := &corev1.Pod{}
 			pod.SetName("somename")
 
-			xctn := mock.NewXact(cmn.ActETLInline)
+			xctn := mock.NewXact(apc.ActETLInline)
 			comm = makeCommunicator(commArgs{
 				bootstraper: &etlBootstraper{
 					t: tMock,

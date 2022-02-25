@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -54,22 +55,22 @@ func (*NotifXactListener) UnmarshalStats(rawMsg []byte) (stats interface{}, fini
 
 func (nxb *NotifXactListener) QueryArgs() cmn.HreqArgs {
 	args := cmn.HreqArgs{Method: http.MethodGet, Query: make(url.Values, 2)}
-	args.Query.Set(cmn.QparamWhat, cmn.GetWhatXactStats)
-	args.Query.Set(cmn.QparamUUID, nxb.UUID())
-	args.Path = cmn.URLPathXactions.S
+	args.Query.Set(apc.QparamWhat, apc.GetWhatXactStats)
+	args.Query.Set(apc.QparamUUID, nxb.UUID())
+	args.Path = apc.URLPathXactions.S
 	return args
 }
 
 // (see also downloader.AbortArgs)
 func (nxb *NotifXactListener) AbortArgs() cmn.HreqArgs {
 	msg := cmn.ActionMsg{
-		Action: cmn.ActXactStop,
+		Action: apc.ActXactStop,
 		Name:   cmn.ErrXactICNotifAbort.Error(),
 		Value:  QueryMsg{ID: nxb.UUID(), Kind: nxb.Kind()},
 	}
 	args := cmn.HreqArgs{Method: http.MethodPut}
 	args.Body = cos.MustMarshal(msg)
-	args.Path = cmn.URLPathXactions.S
+	args.Path = apc.URLPathXactions.S
 	return args
 }
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -114,7 +115,7 @@ func FormatTime(t time.Time) string {
 }
 
 func lomMD5(lom *cluster.LOM) string {
-	if v, exists := lom.GetCustomKey(cmn.SourceObjMD); exists && v == cmn.ProviderAmazon {
+	if v, exists := lom.GetCustomKey(cmn.SourceObjMD); exists && v == apc.ProviderAmazon {
 		if v, exists := lom.GetCustomKey(cmn.MD5ObjMD); exists {
 			return v
 		}

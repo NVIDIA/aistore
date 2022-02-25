@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -138,7 +139,7 @@ var (
 				BashComplete: oldAndNewBucketCompletions(
 					[]cli.BashCompleteFunc{},
 					false, /* separator */
-					cmn.ProviderAIS,
+					apc.ProviderAIS,
 				),
 			},
 			{
@@ -148,7 +149,7 @@ var (
 				Flags:     bucketCmdsFlags[commandRemove],
 				Action:    removeBucketHandler,
 				BashComplete: bucketCompletions(bckCompletionsOpts{
-					multiple: true, provider: cmn.ProviderAIS,
+					multiple: true, provider: apc.ProviderAIS,
 				}),
 			},
 			{
@@ -364,11 +365,11 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 		return err
 	}
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck, toBck, cmn.ActCopyBck, toBck)
+		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck, toBck, apc.ActCopyBck, toBck)
 		return nil
 	}
 	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck, toBck)
-	wargs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyObjects}
+	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyObjects}
 	if err = api.WaitForXactionIdle(defaultAPIParams, wargs); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
 	} else {

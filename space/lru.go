@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -119,11 +120,11 @@ func (*lruFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 
 func (p *lruFactory) Start() error {
 	p.xctn = &XactLRU{}
-	p.xctn.InitBase(p.UUID(), cmn.ActLRU, nil)
+	p.xctn.InitBase(p.UUID(), apc.ActLRU, nil)
 	return nil
 }
 
-func (*lruFactory) Kind() string        { return cmn.ActLRU }
+func (*lruFactory) Kind() string        { return apc.ActLRU }
 func (p *lruFactory) Get() cluster.Xact { return p.xctn }
 
 func (*lruFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
@@ -160,7 +161,7 @@ func RunLRU(ini *IniLRU) {
 			p:      parent,
 		}
 	}
-	providers := cmn.Providers.ToSlice()
+	providers := apc.Providers.ToSlice()
 
 	for _, j := range joggers {
 		parent.wg.Add(1)

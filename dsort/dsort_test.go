@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -30,8 +31,8 @@ import (
 
 const (
 	testIP            = "127.0.0.1"
-	testDir           = "/tmp/" + cmn.DSortNameLowercase + "_tests"
-	testBucket        = cmn.DSortNameLowercase + "_tests"
+	testDir           = "/tmp/" + apc.DSortNameLowercase + "_tests"
+	testBucket        = apc.DSortNameLowercase + "_tests"
 	globalManagerUUID = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 )
 
@@ -181,7 +182,7 @@ func (t *targetNodeMock) setHandlers(handlers map[string]http.HandlerFunc) {
 func (t *targetNodeMock) setup() {
 	// set default handlers
 	defaultHandlers := map[string]http.HandlerFunc{
-		cmn.URLPathdSortRecords.S + "/": func(w http.ResponseWriter, r *http.Request) {
+		apc.URLPathdSortRecords.S + "/": func(w http.ResponseWriter, r *http.Request) {
 			manager, _ := t.managers.Get(globalManagerUUID)
 			manager.incrementReceived()
 		},
@@ -268,7 +269,7 @@ func (tctx *testContext) setup() {
 	// Initialize BMD owner.
 	bmdMock := cluster.NewBaseBownerMock(
 		cluster.NewBck(
-			testBucket, cmn.ProviderAIS, cmn.NsGlobal,
+			testBucket, apc.ProviderAIS, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		),
 	)
@@ -362,7 +363,7 @@ var _ = Describe("Distributed Sort", func() {
 
 					for _, target := range tctx.targets {
 						handlers := map[string]http.HandlerFunc{
-							cmn.URLPathdSortRecords.S + "/": recordsHandler(target.managers),
+							apc.URLPathdSortRecords.S + "/": recordsHandler(target.managers),
 						}
 						target.setHandlers(handlers)
 					}

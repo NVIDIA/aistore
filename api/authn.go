@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -31,7 +32,7 @@ func AddUser(baseParams BaseParams, newUser *authn.User) error {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathUsers.S
+		reqParams.Path = apc.URLPathUsers.S
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -45,7 +46,7 @@ func UpdateUser(baseParams BaseParams, newUser *authn.User) error {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathUsers.Join(newUser.ID)
+		reqParams.Path = apc.URLPathUsers.Join(newUser.ID)
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -58,7 +59,7 @@ func DeleteUser(baseParams BaseParams, userID string) error {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathUsers.Join(userID)
+		reqParams.Path = apc.URLPathUsers.Join(userID)
 	}
 	return reqParams.DoHTTPRequest()
 }
@@ -73,7 +74,7 @@ func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathUsers.Join(userID)
+		reqParams.Path = apc.URLPathUsers.Join(userID)
 		reqParams.Body = cos.MustMarshal(rec)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -95,7 +96,7 @@ func RegisterClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathClusters.S
+		reqParams.Path = apc.URLPathClusters.S
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -109,7 +110,7 @@ func UpdateClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathClusters.Join(cluSpec.ID)
+		reqParams.Path = apc.URLPathClusters.Join(cluSpec.ID)
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -122,14 +123,14 @@ func UnregisterClusterAuthN(baseParams BaseParams, spec authn.Cluster) error {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathClusters.Join(spec.ID)
+		reqParams.Path = apc.URLPathClusters.Join(spec.ID)
 	}
 	return reqParams.DoHTTPRequest()
 }
 
 func GetClusterAuthN(baseParams BaseParams, spec authn.Cluster) ([]*authn.Cluster, error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPathClusters.S
+	path := apc.URLPathClusters.S
 	if spec.ID != "" {
 		path = cos.JoinWords(path, spec.ID)
 	}
@@ -161,7 +162,7 @@ func GetRoleAuthN(baseParams BaseParams, roleID string) (*authn.Role, error) {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cos.JoinWords(cmn.URLPathRoles.S, roleID)
+		reqParams.Path = cos.JoinWords(apc.URLPathRoles.S, roleID)
 	}
 	err := reqParams.DoHTTPReqResp(&rInfo)
 	return rInfo, err
@@ -169,7 +170,7 @@ func GetRoleAuthN(baseParams BaseParams, roleID string) (*authn.Role, error) {
 
 func GetRolesAuthN(baseParams BaseParams) ([]*authn.Role, error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPathRoles.S
+	path := apc.URLPathRoles.S
 	roles := make([]*authn.Role, 0)
 	reqParams := allocRp()
 	defer freeRp(reqParams)
@@ -191,7 +192,7 @@ func GetUsersAuthN(baseParams BaseParams) ([]*authn.User, error) {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathUsers.S
+		reqParams.Path = apc.URLPathUsers.S
 	}
 	err := reqParams.DoHTTPReqResp(&users)
 
@@ -216,7 +217,7 @@ func GetUserAuthN(baseParams BaseParams, userID string) (*authn.User, error) {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cos.JoinWords(cmn.URLPathUsers.S, userID)
+		reqParams.Path = cos.JoinWords(apc.URLPathUsers.S, userID)
 	}
 	err := reqParams.DoHTTPReqResp(&uInfo)
 	return uInfo, err
@@ -229,7 +230,7 @@ func AddRoleAuthN(baseParams BaseParams, roleSpec *authn.Role) error {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathRoles.S
+		reqParams.Path = apc.URLPathRoles.S
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -242,7 +243,7 @@ func DeleteRoleAuthN(baseParams BaseParams, role string) error {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathRoles.Join(role)
+		reqParams.Path = apc.URLPathRoles.Join(role)
 	}
 	return reqParams.DoHTTPRequest()
 }
@@ -255,7 +256,7 @@ func RevokeToken(baseParams BaseParams, token string) error {
 	{
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathTokens.S
+		reqParams.Path = apc.URLPathTokens.S
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
@@ -268,7 +269,7 @@ func GetAuthNConfig(baseParams BaseParams) (*authn.Config, error) {
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathDae.S
+		reqParams.Path = apc.URLPathDae.S
 	}
 	err := reqParams.DoHTTPReqResp(&conf)
 	return conf, err
@@ -281,7 +282,7 @@ func SetAuthNConfig(baseParams BaseParams, conf *authn.ConfigToUpdate) error {
 	{
 		reqParams.Body = cos.MustMarshal(conf)
 		reqParams.BaseParams = baseParams
-		reqParams.Path = cmn.URLPathDae.S
+		reqParams.Path = apc.URLPathDae.S
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()

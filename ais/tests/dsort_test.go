@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -31,7 +32,7 @@ import (
 )
 
 const (
-	dsortDescAllPrefix = cmn.DSortNameLowercase + "-test-integration"
+	dsortDescAllPrefix = apc.DSortNameLowercase + "-test-integration"
 
 	scopeConfig = "config"
 	scopeSpec   = "spec"
@@ -455,10 +456,10 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 	case cmn.IgnoreReaction:
 		for target, metrics := range allMetrics {
 			if len(metrics.Warnings) != 0 {
-				df.m.t.Errorf("target %q has %s warnings: %s", target, cmn.DSortName, metrics.Warnings)
+				df.m.t.Errorf("target %q has %s warnings: %s", target, apc.DSortName, metrics.Warnings)
 			}
 			if len(metrics.Errors) != 0 {
-				df.m.t.Errorf("target %q has %s errors: %s", target, cmn.DSortName, metrics.Errors)
+				df.m.t.Errorf("target %q has %s errors: %s", target, apc.DSortName, metrics.Errors)
 			}
 		}
 	case cmn.WarnReaction:
@@ -467,7 +468,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 			totalWarnings += len(metrics.Warnings)
 
 			if len(metrics.Errors) != 0 {
-				df.m.t.Errorf("target %q has %s errors: %s", target, cmn.DSortName, metrics.Errors)
+				df.m.t.Errorf("target %q has %s errors: %s", target, apc.DSortName, metrics.Errors)
 			}
 		}
 
@@ -478,7 +479,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 		totalErrors := 0
 		for target, metrics := range allMetrics {
 			if !metrics.Aborted.Load() {
-				df.m.t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
+				df.m.t.Errorf("%s was not aborted by target: %s", apc.DSortName, target)
 			}
 			totalErrors += len(metrics.Errors)
 		}
@@ -533,9 +534,9 @@ func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.Metri
 
 	for target, metrics := range allMetrics {
 		if expectAbort && !metrics.Aborted.Load() {
-			df.m.t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
+			df.m.t.Errorf("%s was not aborted by target: %s", apc.DSortName, target)
 		} else if !expectAbort && metrics.Aborted.Load() {
-			df.m.t.Errorf("%s was aborted by target: %s", cmn.DSortName, target)
+			df.m.t.Errorf("%s was aborted by target: %s", apc.DSortName, target)
 		}
 	}
 
@@ -658,7 +659,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
 						Name:     cos.RandString(15),
-						Provider: cmn.ProviderAIS,
+						Provider: apc.ProviderAIS,
 					},
 					tarballCnt:       500,
 					fileInTarballCnt: 100,
@@ -678,7 +679,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			rs := df.gen()
 			if _, err := api.StartDSort(df.baseParams, rs); err == nil {
-				t.Errorf("expected %s job to fail when input bucket does not exist", cmn.DSortName)
+				t.Errorf("expected %s job to fail when input bucket does not exist", apc.DSortName)
 			}
 
 			// Now destroy output bucket and create input bucket
@@ -687,7 +688,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 
 			tlog.Logln("starting second distributed sort...")
 			if _, err := api.StartDSort(df.baseParams, rs); err == nil {
-				t.Errorf("expected %s job to fail when output bucket does not exist", cmn.DSortName)
+				t.Errorf("expected %s job to fail when output bucket does not exist", apc.DSortName)
 			}
 		},
 	)
@@ -746,7 +747,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
 						Name:     cos.RandString(15),
-						Provider: cmn.ProviderAIS,
+						Provider: apc.ProviderAIS,
 					},
 					tarballCnt:       500,
 					fileInTarballCnt: 100,
@@ -1213,7 +1214,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 					aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckFatal(t, err)
 					if entry.missingKeys && !aborted {
-						t.Errorf("%s was not aborted", cmn.DSortName)
+						t.Errorf("%s was not aborted", apc.DSortName)
 					}
 
 					tlog.Logln("checking metrics...")
@@ -1225,7 +1226,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 
 					for target, metrics := range allMetrics {
 						if entry.missingKeys && !metrics.Aborted.Load() {
-							t.Errorf("%s was not aborted by target: %s", target, cmn.DSortName)
+							t.Errorf("%s was not aborted by target: %s", target, apc.DSortName)
 						}
 					}
 
@@ -1364,7 +1365,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckError(t, err)
 			if !aborted {
-				t.Errorf("%s was not aborted", cmn.DSortName)
+				t.Errorf("%s was not aborted", apc.DSortName)
 			}
 
 			tlog.Logln("checking metrics...")
@@ -1376,7 +1377,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 
 			for target, metrics := range allMetrics {
 				if !metrics.Aborted.Load() {
-					t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
+					t.Errorf("%s was not aborted by target: %s", apc.DSortName, target)
 				}
 			}
 
@@ -1531,14 +1532,14 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			if !aborted {
-				t.Errorf("%s was not aborted", cmn.DSortName)
+				t.Errorf("%s was not aborted", apc.DSortName)
 			}
 
 			tlog.Logln("checking metrics...")
 			allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			if len(allMetrics) != m.originalTargetCount-1 {
-				t.Errorf("number of metrics %d is different than number of targets when %s started %d", len(allMetrics), cmn.DSortName, m.originalTargetCount-1)
+				t.Errorf("number of metrics %d is different than number of targets when %s started %d", len(allMetrics), apc.DSortName, m.originalTargetCount-1)
 			}
 		},
 	)
@@ -1805,7 +1806,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
 						Name:     cos.RandString(15),
-						Provider: cmn.ProviderAIS,
+						Provider: apc.ProviderAIS,
 					},
 					tarballCnt:       100,
 					fileInTarballCnt: 10,
@@ -1828,8 +1829,8 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			// Set URL for order file (points to the object in cluster).
 			df.orderFileURL = fmt.Sprintf(
 				"%s/%s/%s/%s/%s?%s=%s",
-				proxyURL, cmn.Version, cmn.Objects, m.bck.Name, orderFileName,
-				cmn.QparamProvider, cmn.ProviderAIS,
+				proxyURL, apc.Version, apc.Objects, m.bck.Name, orderFileName,
+				apc.QparamProvider, apc.ProviderAIS,
 			)
 
 			df.init()

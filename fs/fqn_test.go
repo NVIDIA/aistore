@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -35,7 +36,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/@ais/#namespace/bucket/%ob/objname",
 			[]string{tmpMpath},
 			tmpMpath,
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: "namespace"}},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS, Ns: cmn.Ns{Name: "namespace"}},
 			fs.ObjectType, "objname", false,
 			false,
 		},
@@ -44,7 +45,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/@ais/bucket/%ob/objname",
 			[]string{tmpMpath},
 			tmpMpath,
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS, Ns: cmn.NsGlobal},
 			fs.ObjectType, "objname", false,
 			false,
 		},
@@ -53,7 +54,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/@aws/bucket/%wk/objname",
 			[]string{tmpMpath},
 			tmpMpath,
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.WorkfileType, "objname", false,
 			false,
 		},
@@ -62,7 +63,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/@aws/bucket/%ob/objname",
 			[]string{tmpMpath},
 			tmpMpath,
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.ObjectType, "objname", false,
 			false,
 		},
@@ -71,7 +72,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/@gcp/bucket/%ob/objname",
 			[]string{tmpMpath},
 			tmpMpath,
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle, Ns: cmn.NsGlobal},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderGoogle, Ns: cmn.NsGlobal},
 			fs.ObjectType, "objname", false,
 			false,
 		},
@@ -80,7 +81,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/@ais/#namespace/bucket/%ob/objname",
 			[]string{tmpMpath},
 			tmpMpath,
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: "namespace"}},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS, Ns: cmn.Ns{Name: "namespace"}},
 			fs.ObjectType, "objname", false,
 			false,
 		},
@@ -89,7 +90,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/@ais/@uuid#namespace/bucket/%ob/objname",
 			[]string{tmpMpath},
 			tmpMpath,
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 			fs.ObjectType, "objname", false,
 			false,
 		},
@@ -98,7 +99,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/super/long/@aws/bucket/%ob/objname",
 			[]string{tmpMpath + "/super/long"},
 			tmpMpath + "/super/long",
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.ObjectType, "objname", false,
 			false,
 		},
@@ -107,7 +108,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/super/long/@aws/bucket/%ob/folder/objname",
 			[]string{tmpMpath + "/super/long"},
 			tmpMpath + "/super/long",
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.ObjectType, "folder/objname", false,
 			false,
 		},
@@ -118,7 +119,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/super/long/long/@aws/bucket/%ob/folder/objname",
 			[]string{"/super/long", "/super/long/long"},
 			"",
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
+			cmn.Bck{Name: "bucket", Provider: apc.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.ObjectType, "folder/objname", true,
 			true,
 		},
@@ -308,7 +309,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			mpath: "/tmp/path",
 			bck: cmn.Bck{
 				Name:     "bucket",
-				Provider: cmn.ProviderAIS,
+				Provider: apc.ProviderAIS,
 				Ns:       cmn.NsGlobal,
 			},
 			contentType: fs.ObjectType,
@@ -318,7 +319,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			mpath: "/tmp/path",
 			bck: cmn.Bck{
 				Name:     "bucket",
-				Provider: cmn.ProviderAmazon,
+				Provider: apc.ProviderAmazon,
 				Ns:       cmn.Ns{UUID: "uuid", Name: "namespace"},
 			},
 			contentType: fs.WorkfileType,
@@ -328,7 +329,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			mpath: "/tmp/path",
 			bck: cmn.Bck{
 				Name:     "bucket",
-				Provider: cmn.ProviderAmazon,
+				Provider: apc.ProviderAmazon,
 				Ns:       cmn.Ns{Name: "alias"},
 			},
 			contentType: fs.ObjectType,
@@ -338,7 +339,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			mpath: "/tmp/path",
 			bck: cmn.Bck{
 				Name:     "bucket",
-				Provider: cmn.ProviderGoogle,
+				Provider: apc.ProviderGoogle,
 				Ns:       cmn.NsGlobal,
 			},
 			contentType: fs.ObjectType,
@@ -395,7 +396,7 @@ func BenchmarkParseFQN(b *testing.B) {
 	var (
 		mpath = "/tmp/mpath"
 		mios  = mock.NewIOStater()
-		bck   = cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+		bck   = cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
 	)
 
 	fs.TestNew(mios)

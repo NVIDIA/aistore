@@ -9,14 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (
 	prefCT       = '%'
 	prefProvider = '@'
-	prefNsUUID   = cmn.NsUUIDPrefix
-	prefNsName   = cmn.NsNamePrefix
+	prefNsUUID   = apc.NsUUIDPrefix
+	prefNsName   = apc.NsNamePrefix
 )
 
 const (

@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -199,7 +200,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 	baseParams := BaseAPIParams(proxyURL)
 	xactID, err := api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 }
@@ -459,7 +460,7 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: evictPrefetchTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActEvictObjects, Timeout: evictPrefetchTimeout}
 	if _, err := api.WaitForXactionIC(baseParams, args); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}
@@ -491,7 +492,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, OnlyRunning: true, Timeout: timeout}
+		xactArgs := api.XactReqArgs{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
 		if _, err := api.WaitForXactionIC(baseParams, xactArgs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
@@ -502,7 +503,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, OnlyRunning: true, Timeout: timeout}
+		xactArgs := api.XactReqArgs{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
 		if _, err := api.WaitForXactionIC(baseParams, xactArgs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
@@ -528,7 +529,7 @@ func WaitForResilver(t *testing.T, baseParams api.BaseParams, timeouts ...time.D
 	// TODO -- FIXME: concurrency trouble when tests disable multiple mountpaths back to back
 	time.Sleep(5 * time.Second)
 
-	xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, OnlyRunning: true, Timeout: timeout}
+	xactArgs := api.XactReqArgs{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
 	for i := 0; i < 10; i++ {
 		_, err := api.WaitForXactionIC(baseParams, xactArgs)
 		if err == nil {
@@ -554,7 +555,7 @@ func WaitForRebalanceByID(t *testing.T, origTargetCnt int, baseParams api.BasePa
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	xactArgs := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, OnlyRunning: true, Timeout: timeout}
+	xactArgs := api.XactReqArgs{ID: rebID, Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
 	_, err := api.WaitForXactionIC(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 }
@@ -571,7 +572,7 @@ func waitForRebalanceToStart(baseParams api.BaseParams) {
 		args     = api.XactReqArgs{Timeout: sleep, OnlyRunning: true}
 	)
 	for now.Before(deadline) {
-		for _, kind := range []string{cmn.ActRebalance, cmn.ActResilver} {
+		for _, kind := range []string{apc.ActRebalance, apc.ActResilver} {
 			args.Kind = kind
 			status, err := api.GetXactionStatus(baseParams, args)
 			if err == nil {
@@ -606,8 +607,8 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	baseParams.Method = http.MethodGet
 	reqParams := &api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPathDae.S,
-		Query:      url.Values{cmn.QparamWhat: {cmn.GetWhatStats}},
+		Path:       apc.URLPathDae.S,
+		Query:      url.Values{apc.QparamWhat: {apc.GetWhatStats}},
 	}
 	err := reqParams.DoHTTPReqResp(&stats)
 	tassert.CheckFatal(t, err)

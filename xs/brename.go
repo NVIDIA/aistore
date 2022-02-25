@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -46,7 +46,7 @@ func (*bmvFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	return p
 }
 
-func (*bmvFactory) Kind() string        { return cmn.ActMoveBck }
+func (*bmvFactory) Kind() string        { return apc.ActMoveBck }
 func (p *bmvFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *bmvFactory) Start() error {
@@ -55,7 +55,7 @@ func (p *bmvFactory) Start() error {
 }
 
 func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	if p.phase == cmn.ActBegin {
+	if p.phase == apc.ActBegin {
 		if !prevEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress",
 				p.Kind(), p.args.BckFrom, p.args.BckTo)
@@ -65,8 +65,8 @@ func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	}
 	prev := prevEntry.(*bmvFactory)
 	bckEq := prev.args.BckTo.Equal(p.args.BckTo, false /*sameID*/, false /* same backend */)
-	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit && bckEq {
-		prev.phase = cmn.ActCommit // transition
+	if prev.phase == apc.ActBegin && p.phase == apc.ActCommit && bckEq {
+		prev.phase = apc.ActCommit // transition
 		wpr = xreg.WprUse
 		return
 	}
@@ -99,7 +99,7 @@ func (r *bckRename) Run(wg *sync.WaitGroup) {
 	var (
 		onlyRunning bool
 		finished    bool
-		flt         = xreg.XactFilter{ID: r.rebID, Kind: cmn.ActRebalance, OnlyRunning: &onlyRunning}
+		flt         = xreg.XactFilter{ID: r.rebID, Kind: apc.ActRebalance, OnlyRunning: &onlyRunning}
 	)
 	glog.Infoln(r.Name())
 	wg.Done()

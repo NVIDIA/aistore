@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -55,7 +56,7 @@ func (nd *NotifDownloadListerner) QueryArgs() cmn.HreqArgs {
 	dlBody := DlAdminBody{
 		ID: nd.UUID(),
 	}
-	args.Path = cmn.URLPathDownload.S
+	args.Path = apc.URLPathDownload.S
 	args.Body = cos.MustMarshal(dlBody)
 	return args
 }
@@ -65,7 +66,7 @@ func (nd *NotifDownloadListerner) AbortArgs() cmn.HreqArgs {
 	dlBody := DlAdminBody{
 		ID: nd.UUID(),
 	}
-	args.Path = cmn.URLPathDownloadAbort.S
+	args.Path = apc.URLPathDownloadAbort.S
 	args.Body = cos.MustMarshal(dlBody)
 	return args
 }
@@ -75,7 +76,7 @@ func (nd *NotifDownloadListerner) AbortArgs() cmn.HreqArgs {
 //
 
 func (nd *NotifDownload) ToNotifMsg() cluster.NotifMsg {
-	msg := cluster.NotifMsg{UUID: nd.DlJob.ID(), Kind: cmn.ActDownload}
+	msg := cluster.NotifMsg{UUID: nd.DlJob.ID(), Kind: apc.ActDownload}
 	stats, err := nd.DlJob.ActiveStats()
 	if err != nil {
 		msg.ErrMsg = err.Error()

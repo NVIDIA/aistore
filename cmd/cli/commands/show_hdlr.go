@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
@@ -159,7 +160,7 @@ var (
 		Action:    showClusterHandler,
 		BashComplete: func(c *cli.Context) {
 			if c.NArg() == 0 {
-				fmt.Printf("%s\n%s\n%s\n%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
+				fmt.Printf("%s\n%s\n%s\n%s\n%s\n%s\n", apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
 			}
 			daemonCompletions(completeAllDaemons)(c)
 		},
@@ -256,7 +257,7 @@ var (
 	}
 	showCmdDsort = cli.Command{
 		Name:      subcmdShowDsort,
-		Usage:     fmt.Sprintf("show information about %s jobs", cmn.DSortName),
+		Usage:     fmt.Sprintf("show information about %s jobs", apc.DSortName),
 		ArgsUsage: optionalJobIDDaemonIDArgument,
 		Flags:     showCmdsFlags[subcmdShowDsort],
 		Action:    showDsortHandler,
@@ -451,9 +452,9 @@ func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck)
 	}
 
 	switch xactKind {
-	case cmn.ActECGet:
+	case apc.ActECGet:
 		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionECGetBodyTmpl, useJSON)
-	case cmn.ActECPut:
+	case apc.ActECPut:
 		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionECPutBodyTmpl, useJSON)
 	default:
 		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionsBodyTmpl, useJSON)
@@ -547,10 +548,10 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 	sev := strings.ToLower(parseStrFlag(c, logSevFlag))
 	if sev != "" {
 		switch sev[0] {
-		case cmn.LogInfo[0], cmn.LogWarn[0], cmn.LogErr[0]:
+		case apc.LogInfo[0], apc.LogWarn[0], apc.LogErr[0]:
 		default:
 			return fmt.Errorf("invalid log severity, expecting empty or one of: %s, %s, %s",
-				cmn.LogInfo, cmn.LogWarn, cmn.LogErr)
+				apc.LogInfo, apc.LogWarn, apc.LogErr)
 		}
 	}
 	args := api.GetLogInput{Writer: os.Stdout, Severity: sev}

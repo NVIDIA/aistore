@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -173,7 +174,7 @@ func (bp *BucketProps) Equal(other *BucketProps) (eq bool) {
 func (bp *BucketProps) Validate(targetCnt int) error {
 	debug.Assert(IsNormalizedProvider(bp.Provider))
 	if !bp.BackendBck.IsEmpty() {
-		if bp.Provider != ProviderAIS {
+		if bp.Provider != apc.ProviderAIS {
 			return fmt.Errorf("wrong bucket provider %q: only AIS buckets can have remote backend (%q)",
 				bp.Provider, bp.BackendBck)
 		}
@@ -209,7 +210,7 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 }
 
 func (bp *BucketProps) Apply(propsToUpdate *BucketPropsToUpdate) {
-	err := copyProps(*propsToUpdate, bp, Daemon)
+	err := copyProps(*propsToUpdate, bp, apc.Daemon)
 	debug.AssertNoErr(err)
 }
 
@@ -238,11 +239,11 @@ func NewBucketPropsToUpdate(nvs cos.SimpleKVs) (props *BucketPropsToUpdate, err 
 
 func (c *ExtraProps) ValidateAsProps(args *ValidationArgs) error {
 	switch args.Provider {
-	case ProviderHDFS:
+	case apc.ProviderHDFS:
 		if c.HDFS.RefDirectory == "" {
 			return fmt.Errorf("reference directory must be set for a bucket with HDFS provider")
 		}
-	case ProviderHTTP:
+	case apc.ProviderHTTP:
 		if c.HTTP.OrigURLBck == "" {
 			return fmt.Errorf("original bucket URL must be set for a bucket with HTTP provider")
 		}

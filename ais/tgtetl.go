@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/k8s"
@@ -42,7 +43,7 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 // handleETLPut is responsible validation and adding new ETL spec/code
 // to etl metadata.
 func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
-	_, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathETL.L)
+	_, err := t.checkRESTItems(w, r, 0, false, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
@@ -73,7 +74,7 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathETL.L)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
@@ -85,7 +86,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// /v1/etl/_objects/<secret>/<uname>
-	if apiItems[0] == cmn.ETLObject {
+	if apiItems[0] == apc.ETLObject {
 		t.getObjectETL(w, r)
 		return
 	}
@@ -99,9 +100,9 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 
 	// /v1/etl/<uuid>/logs or /v1/etl/<uuid>/health
 	switch apiItems[1] {
-	case cmn.ETLLogs:
+	case apc.ETLLogs:
 		t.logsETL(w, r, apiItems[0])
-	case cmn.ETLHealth:
+	case apc.ETLHealth:
 		t.healthETL(w, r, apiItems[0])
 	default:
 		t.writeErrURL(w, r)
@@ -112,11 +113,11 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 //
 // handleETLPost handles start/stop ETL pods
 func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 2, true, cmn.URLPathETL.L)
+	apiItems, err := t.checkRESTItems(w, r, 2, true, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
-	if apiItems[1] == cmn.ETLStop {
+	if apiItems[1] == apc.ETLStop {
 		t.stopETL(w, r, apiItems[0])
 		return
 	}
@@ -185,7 +186,7 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlID string)
 }
 
 func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *cluster.Bck, objName string, err error) {
-	items, err := cmn.MatchRESTItems(r.URL.EscapedPath(), 2, false, cmn.URLPathETLObject.L)
+	items, err := cmn.MatchRESTItems(r.URL.EscapedPath(), 2, false, apc.URLPathETLObject.L)
 	if err != nil {
 		return secret, bck, objName, err
 	}

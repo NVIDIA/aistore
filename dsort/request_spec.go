@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort/extract"
@@ -154,7 +155,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return parsedRS, errMissingBucket
 	}
 	if rs.Bck.Provider == "" {
-		rs.Bck.Provider = cmn.ProviderAIS
+		rs.Bck.Provider = apc.ProviderAIS
 	}
 	if err := rs.Bck.Validate(); err != nil {
 		return parsedRS, err

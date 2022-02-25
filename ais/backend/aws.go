@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -60,7 +61,7 @@ func NewAWS(t cluster.Target) (cluster.BackendProvider, error) {
 	return &awsProvider{t: t}, nil
 }
 
-func (*awsProvider) Provider() string { return cmn.ProviderAmazon }
+func (*awsProvider) Provider() string { return apc.ProviderAmazon }
 
 // https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html#cli-usage-pagination-serverside
 func (*awsProvider) MaxPageSize() uint { return 1000 }
@@ -110,9 +111,9 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs,
 		return
 	}
 	bckProps = make(cos.SimpleKVs, 4)
-	bckProps[cmn.HdrBackendProvider] = cmn.ProviderAmazon
-	bckProps[cmn.HdrCloudRegion] = region
-	bckProps[cmn.HdrBucketVerEnabled] = strconv.FormatBool(
+	bckProps[apc.HdrBackendProvider] = apc.ProviderAmazon
+	bckProps[apc.HdrCloudRegion] = region
+	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(
 		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
 	)
 	return
@@ -234,12 +235,12 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bc
 func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	svc, _, err := newClient(sessConf{}, "")
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAmazon})
+		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.ProviderAmazon})
 		return
 	}
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAmazon})
+		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.ProviderAmazon})
 		return
 	}
 
@@ -250,7 +251,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 		}
 		bcks[idx] = cmn.Bck{
 			Name:     aws.StringValue(bck.Name),
-			Provider: cmn.ProviderAmazon,
+			Provider: apc.ProviderAmazon,
 		}
 	}
 	return
@@ -280,7 +281,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 		return
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAmazon)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderAmazon)
 	oa.Size = *headOutput.ContentLength
 	if v, ok := h.EncodeVersion(headOutput.VersionId); ok {
 		lom.SetCustomKey(cmn.VersionObjMD, v)
@@ -352,7 +353,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 	}
 
 	// custom metadata
-	lom.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAmazon)
+	lom.SetCustomKey(cmn.SourceObjMD, apc.ProviderAmazon)
 	if cksumType, ok := obj.Metadata[awsChecksumType]; ok {
 		if cksumValue, ok := obj.Metadata[awsChecksumVal]; ok {
 			lom.SetCksum(cos.NewCksum(*cksumType, *cksumValue))

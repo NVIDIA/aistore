@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -174,7 +175,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// for queries of the type {Kind: cmn.ActRebalance}
+	// for queries of the type {Kind: apc.ActRebalance}
 	if msg.ID == "" && ic.redirectToIC(w, r) {
 		return
 	}
@@ -235,7 +236,7 @@ func (ic *ic) handler(w http.ResponseWriter, r *http.Request) {
 func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 	var (
 		smap = ic.p.owner.smap.get()
-		what = r.URL.Query().Get(cmn.QparamWhat)
+		what = r.URL.Query().Get(apc.QparamWhat)
 	)
 	if !smap.IsIC(ic.p.si) {
 		ic.p.writeErrf(w, r, "%s: not an IC member", ic.p.si)
@@ -243,7 +244,7 @@ func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch what {
-	case cmn.GetWhatICBundle:
+	case apc.GetWhatICBundle:
 		bundle := icBundle{Smap: smap, OwnershipTbl: cos.MustMarshal(&ic.p.notifs)}
 		ic.p.writeJSON(w, r, bundle, what)
 	default:
@@ -271,12 +272,12 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch msg.Action {
-	case cmn.ActMergeOwnershipTbl:
+	case apc.ActMergeOwnershipTbl:
 		if err := cos.MorphMarshal(msg.Value, &ic.p.notifs); err != nil {
 			ic.p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, ic.p.si, msg.Action, msg.Value, err)
 			return
 		}
-	case cmn.ActListenToNotif:
+	case apc.ActListenToNotif:
 		nlMsg := &notifListenMsg{}
 		if err := cos.MorphMarshal(msg.Value, nlMsg); err != nil {
 			ic.p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, ic.p.si, msg.Action, msg.Value, err)
@@ -286,11 +287,11 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			ic.p.writeErr(w, r, err)
 			return
 		}
-	case cmn.ActRegGlobalXaction:
+	case apc.ActRegGlobalXaction:
 		var (
 			regMsg     = &xactRegMsg{}
 			tmap       cluster.NodeMap
-			callerSver = r.Header.Get(cmn.HdrCallerSmapVersion)
+			callerSver = r.Header.Get(apc.HdrCallerSmapVersion)
 			err        error
 		)
 		if err = cos.MorphMarshal(msg.Value, regMsg); err != nil {
@@ -319,7 +320,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 
 func (ic *ic) registerEqual(a regIC) {
 	if a.query != nil {
-		a.query.Set(cmn.QparamNotifyMe, equalIC)
+		a.query.Set(apc.QparamNotifyMe, equalIC)
 	}
 	if a.smap.IsIC(ic.p.si) {
 		err := ic.p.notifs.add(a.nl)
@@ -332,7 +333,7 @@ func (ic *ic) registerEqual(a regIC) {
 
 func (ic *ic) bcastListenIC(nl nl.NotifListener) {
 	var (
-		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
+		actMsg = cmn.ActionMsg{Action: apc.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAmsg(&actMsg, nil)
 	)
 	ic.p.bcastAsyncIC(msg)
@@ -345,11 +346,11 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 		}
 		return nil
 	}
-	msg := ic.p.newAmsgActVal(cmn.ActMergeOwnershipTbl, &ic.p.notifs)
+	msg := ic.p.newAmsgActVal(apc.ActMergeOwnershipTbl, &ic.p.notifs)
 	cargs := allocCargs()
 	{
 		cargs.si = si
-		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cos.MustMarshal(msg)}
+		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathIC.S, Body: cos.MustMarshal(msg)}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}
 	res := ic.p.call(cargs)
@@ -376,8 +377,8 @@ func (ic *ic) syncICBundle() error {
 		cargs.si = si
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
-			Path:   cmn.URLPathIC.S,
-			Query:  url.Values{cmn.QparamWhat: []string{cmn.GetWhatICBundle}},
+			Path:   apc.URLPathIC.S,
+			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatICBundle}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}

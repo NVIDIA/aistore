@@ -55,6 +55,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
@@ -250,7 +251,7 @@ func parseCmdLine() (params, error) {
 	f.DurationVar(&transportArgs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name or bucket URI. If empty, a bucket with random name will be created")
-	f.StringVar(&p.bck.Provider, "provider", cmn.ProviderAIS,
+	f.StringVar(&p.bck.Provider, "provider", apc.ProviderAIS,
 		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"hdfs\"  for Azure, Amazon, Google, and HDFS clouds respectively")
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
@@ -616,7 +617,7 @@ func (s *sts) aggregate(other sts) {
 }
 
 func setupBucket(runParams *params) error {
-	if runParams.bck.Provider != cmn.ProviderAIS || runParams.getConfig {
+	if runParams.bck.Provider != apc.ProviderAIS || runParams.getConfig {
 		return nil
 	}
 
@@ -1168,7 +1169,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
-			args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects}
+			args := api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects}
 			if _, err = api.WaitForXactionIC(runParams.bp, args); err != nil {
 				fmt.Println("wait for xaction err ", err)
 			}
@@ -1179,7 +1180,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
-			args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects}
+			args := api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects}
 			if _, err = api.WaitForXactionIC(runParams.bp, args); err != nil {
 				fmt.Println("wait for xaction err ", err)
 			}

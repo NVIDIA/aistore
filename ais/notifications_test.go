@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
@@ -45,7 +46,7 @@ var _ = Describe("Notifications xaction test", func() {
 		getNodeMap = func(ids ...string) (snodes cluster.NodeMap) {
 			snodes = make(cluster.NodeMap, len(ids))
 			for _, id := range ids {
-				snodes[id] = mockNode(id, cmn.Target)
+				snodes[id] = mockNode(id, apc.Target)
 			}
 			return
 		}
@@ -54,7 +55,7 @@ var _ = Describe("Notifications xaction test", func() {
 			tracker := &mock.StatsTracker{}
 			p := &proxy{
 				htrun: htrun{
-					si:     mockNode(name, cmn.Proxy),
+					si:     mockNode(name, apc.Proxy),
 					statsT: tracker,
 				},
 			}
@@ -115,9 +116,9 @@ var _ = Describe("Notifications xaction test", func() {
 				Data: cos.MustMarshal(stats),
 			}
 			body := bytes.NewBuffer(cos.MustMarshal(nm))
-			req := httptest.NewRequest(http.MethodPost, cmn.URLPathNotifs.Join(notifKind), body)
+			req := httptest.NewRequest(http.MethodPost, apc.URLPathNotifs.Join(notifKind), body)
 			req.Header = make(http.Header)
-			req.Header.Add(cmn.HdrCallerID, daeID)
+			req.Header.Add(apc.HdrCallerID, daeID)
 			return req
 		}
 
@@ -141,7 +142,7 @@ var _ = Describe("Notifications xaction test", func() {
 
 	BeforeEach(func() {
 		n = testNotifs()
-		nl = xact.NewXactNL(xactID, cmn.ActECEncode, &smap.Smap, targets)
+		nl = xact.NewXactNL(xactID, apc.ActECEncode, &smap.Smap, targets)
 	})
 
 	Describe("handleMsg", func() {
@@ -217,7 +218,7 @@ var _ = Describe("Notifications xaction test", func() {
 	Describe("ListenSmapChanged", func() {
 		It("should mark xaction Aborted when node not in smap", func() {
 			notifiers := getNodeMap(target1ID, target2ID)
-			nl = xact.NewXactNL(xactID, cmn.ActECEncode, &smap.Smap, notifiers)
+			nl = xact.NewXactNL(xactID, apc.ActECEncode, &smap.Smap, notifiers)
 			n = testNotifs()
 			n.add(nl)
 
@@ -238,18 +239,18 @@ var _ = Describe("Notifications xaction test", func() {
 			stats := finishedXact(xactID)
 			n.add(nl)
 
-			request := notifRequest(target1ID, xactID, cmn.Finished, stats)
+			request := notifRequest(target1ID, xactID, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// Second target sends progress
-			request = notifRequest(target2ID, xactID, cmn.Progress, stats)
+			request = notifRequest(target2ID, xactID, apc.Progress, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should not be marked finished on progress notification
 			Expect(nl.Finished()).To(BeFalse())
 
 			// Second target finished
-			request = notifRequest(target2ID, xactID, cmn.Finished, stats)
+			request = notifRequest(target2ID, xactID, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished
@@ -262,7 +263,7 @@ var _ = Describe("Notifications xaction test", func() {
 			n.add(nl)
 
 			// First target aborts an xaction
-			request := notifRequest(target1ID, xactID, cmn.Finished, abortStats)
+			request := notifRequest(target1ID, xactID, apc.Finished, abortStats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished when an xaction aborts
@@ -270,7 +271,7 @@ var _ = Describe("Notifications xaction test", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(1))
 
 			// Second target sends finished stats
-			request = notifRequest(target2ID, xactID, cmn.Finished, stats)
+			request = notifRequest(target2ID, xactID, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
 			Expect(nl.Finished()).To(BeTrue())
 			Expect(nl.FinCount()).To(BeEquivalentTo(2))

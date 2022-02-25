@@ -8,8 +8,8 @@ package xs
 import (
 	"sync"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
@@ -49,7 +49,7 @@ func (p *etlFactory) Start() error {
 	return nil
 }
 
-func (*etlFactory) Kind() string        { return cmn.ActETLInline }
+func (*etlFactory) Kind() string        { return apc.ActETLInline }
 func (p *etlFactory) Get() cluster.Xact { return p.xctn }
 
 func (*etlFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {

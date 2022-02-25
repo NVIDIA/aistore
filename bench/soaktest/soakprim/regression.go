@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
@@ -24,7 +25,7 @@ const (
 
 var bck = cmn.Bck{
 	Name:     fmt.Sprintf("%s-%d", regBucketPrefix, os.Getpid()),
-	Provider: cmn.ProviderAIS,
+	Provider: apc.ProviderAIS,
 }
 
 type regressionContext struct {
@@ -34,7 +35,7 @@ type regressionContext struct {
 
 // Regression runs a constant get request throughout the testing
 func cleanupRegression() {
-	bcks, err := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	bcks, err := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: apc.ProviderAIS})
 	cos.AssertNoErr(err)
 
 	for _, b := range bcks {

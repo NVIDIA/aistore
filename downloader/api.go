@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -258,7 +259,7 @@ type DlAdminBody struct {
 func (b *DlAdminBody) Validate(requireID bool) error {
 	if b.ID != "" && b.Regex != "" {
 		return fmt.Errorf("regex %q and UUID %q cannot be defined together (choose one or the other)",
-			cmn.QparamRegex, cmn.QparamUUID)
+			apc.QparamRegex, apc.QparamUUID)
 	} else if b.Regex != "" {
 		if _, err := regexp.CompilePOSIX(b.Regex); err != nil {
 			return err

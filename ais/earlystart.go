@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -163,7 +164,7 @@ func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 		smap.Primary = nil
 	}
 	p.owner.smap.put(smap)
-	if status, err := p.joinCluster(cmn.ActSelfJoinProxy, primaryURLs...); err != nil {
+	if status, err := p.joinCluster(apc.ActSelfJoinProxy, primaryURLs...); err != nil {
 		glog.Errorf("%s failed to join cluster (status: %d, err: %v)", p.si.StringEx(), status, err)
 		return err
 	}
@@ -177,7 +178,7 @@ func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 			return
 		}
 		if cii != nil {
-			if status, err := p.joinCluster(cmn.ActSelfJoinProxy, cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
+			if status, err := p.joinCluster(apc.ActSelfJoinProxy, cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
 				glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", p.si.StringEx(), status, err)
 				return
 			}
@@ -470,7 +471,7 @@ until:
 		cos.ExitLogf("%s: cannot resume global rebalance - %v", p.si, err)
 	}
 	var (
-		msg    = &cmn.ActionMsg{Action: cmn.ActRebalance, Value: metaction3}
+		msg    = &cmn.ActionMsg{Action: apc.ActRebalance, Value: metaction3}
 		aisMsg = p.newAmsg(msg, nil)
 		ctx    = &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
@@ -708,8 +709,8 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 		args             = allocBcArgs()
 	)
 	args.req = cmn.HreqArgs{
-		Path:  cmn.URLPathDae.S,
-		Query: url.Values{cmn.QparamWhat: []string{cmn.GetWhatSmapVote}},
+		Path:  apc.URLPathDae.S,
+		Query: url.Values{apc.QparamWhat: []string{apc.GetWhatSmapVote}},
 	}
 	args.smap = bcastSmap
 	args.to = cluster.AllNodes

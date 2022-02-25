@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -115,8 +116,8 @@ func initDaemon(version, buildTime string) cos.Runner {
 		fmt.Fprintln(os.Stderr, "\n  Usage:\n\t"+os.Args[0]+usecli)
 		os.Exit(1)
 	}
-	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
-		cos.ExitLogf("Invalid daemon's role %q, expecting %q or %q", daemon.cli.role, cmn.Proxy, cmn.Target)
+	if daemon.cli.role != apc.Proxy && daemon.cli.role != apc.Target {
+		cos.ExitLogf("Invalid daemon's role %q, expecting %q or %q", daemon.cli.role, apc.Proxy, apc.Target)
 	}
 	if daemon.cli.globalConfigPath == "" {
 		cos.ExitLogf(erfm, "config")
@@ -152,7 +153,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		if err := toUpdate.FillFromKVS(kvs); err != nil {
 			cos.ExitLogf(err.Error())
 		}
-		if err := cmn.SetConfigInMem(toUpdate, config, cmn.Daemon); err != nil {
+		if err := cmn.SetConfigInMem(toUpdate, config, apc.Daemon); err != nil {
 			cos.ExitLogf("Failed to update config in memory: %v", err)
 		}
 
@@ -189,7 +190,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	// fork (proxy | target)
 	co := newConfigOwner(config)
-	if daemon.cli.role == cmn.Proxy {
+	if daemon.cli.role == apc.Proxy {
 		p := newProxy(co)
 		p.init(config)
 		cmn.AppGloghdr("Node: " + p.si.Name() + ", " + loghdr)
@@ -206,14 +207,14 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 func newProxy(co *configOwner) *proxy {
 	p := &proxy{}
-	p.name = cmn.Proxy
+	p.name = apc.Proxy
 	p.owner.config = co
 	return p
 }
 
 func newTarget(co *configOwner) *target {
 	t := &target{backend: make(backends, 8)}
-	t.name = cmn.Target
+	t.name = apc.Target
 	t.owner.bmd = newBMDOwnerTgt()
 	t.owner.etl = newEtlMDOwnerTgt()
 	t.owner.config = co
@@ -322,9 +323,9 @@ func genDaemonID(daemonType string, config *cmn.Config) string {
 		return cos.GenDaemonID()
 	}
 	switch daemonType {
-	case cmn.Target:
+	case apc.Target:
 		return cos.GenTestingDaemonID(fmt.Sprintf("t%d", config.HostNet.Port))
-	case cmn.Proxy:
+	case apc.Proxy:
 		return cos.GenTestingDaemonID(fmt.Sprintf("p%d", config.HostNet.Port))
 	}
 	cos.AssertMsg(false, daemonType)

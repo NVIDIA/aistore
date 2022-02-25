@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -425,13 +426,13 @@ func fmtXactStatus(rebSnap *stats.RebalanceSnap) string {
 
 func fmtObjStatus(obj *cmn.BucketEntry) string {
 	switch obj.Status() {
-	case cmn.ObjStatusOK:
+	case apc.ObjStatusOK:
 		return "ok"
-	case cmn.ObjStatusMovedNode:
+	case apc.ObjStatusMovedNode:
 		return "misplaced(cluster)"
-	case cmn.ObjStatusMovedMpath:
+	case apc.ObjStatusMovedMpath:
 		return "misplaced(mountpath)"
-	case cmn.ObjStatusDeleted:
+	case apc.ObjStatusDeleted:
 		return "deleted"
 	default:
 		return "invalid"
@@ -601,7 +602,7 @@ func fmtMilli(val cos.Duration) string {
 }
 
 func fmtNameArch(val string, flags uint16) string {
-	if flags&cmn.EntryInArch == 0 {
+	if flags&apc.EntryInArch == 0 {
 		return val
 	}
 	return "    " + val
