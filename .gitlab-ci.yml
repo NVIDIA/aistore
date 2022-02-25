@@ -306,3 +306,44 @@ test:long:k8s:aisloader:
     - sleep 10 # Give some time for the cluster to stabilize.
     - BUCKET="ais://test" FLAGS="--duration=2m --etl" make test-aisloader
     - status=$? make kill && exit $status
+
+test:long:k8s:all:
+  stage: test-long
+  tags:
+    - ais-k8s
+  variables:
+    NUM_TARGET: 5
+    NUM_PROXY: 5
+    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
+    CLOUD_BCKS: "ais://ci-test gs://ais-ci-kube aws://ais-blossom"
+  timeout: 4h
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+      when: manual
+      allow_failure: true
+  before_script:
+    - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
+    # Make sure that metrics collection is enabled.
+    - git clone https://github.com/prometheus-operator/kube-prometheus.git
+    - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
+  script:
+    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --aws
+    - |
+      echo "----- RUNNING K8S TESTS -----"
+      BUCKET="aws://ais-blossom" RE="TestETL|TestConfig|TestMountpath" make test-run
+      exit_code=$?
+      result=$((result + exit_code))
+      echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
+    - |
+      for bucket in ${CLOUD_BCKS}; do
+        echo "----- RUNNING LONG TESTS WITH: ${bucket} -----"
+        BUCKET=${bucket} make test-long && make test-aisloader
+        exit_code=$?
+        result=$((result + exit_code))
+        echo "----- LONG TESTS FINISHED WITH: ${exit_code} -----"
+      done
+    - make kill && exit $result
+  <<: *k8s_long_exit_def
