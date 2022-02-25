@@ -1480,7 +1480,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	tutils.CreateBucketWithCleanup(t, proxyURL, src, nil)
 
 	// Start any xaction and get ID.
-	xactID, err := api.CopyBucket(baseParams, src, dstBck)
+	xactID, err := api.CopyBucket(baseParams, src, dstBck, nil)
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
@@ -1549,7 +1549,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 	tutils.CreateBucketWithCleanup(t, proxyURL, src, nil)
 
 	// Start any xaction and get ID.
-	xactID, err := api.CopyBucket(baseParams, src, dstBck)
+	xactID, err := api.CopyBucket(baseParams, src, dstBck, nil)
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck}
 
 	tassert.CheckFatal(t, err)
@@ -1690,7 +1690,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 				Name:     fmt.Sprintf("%s_dst_par_%d", testBucketName, idx),
 				Provider: apc.ProviderAIS,
 			}
-			xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
+			xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, nil)
 			tassert.CheckError(t, err)
 			defer func() {
 				tutils.DestroyBucket(t, proxyURL, dstBck)

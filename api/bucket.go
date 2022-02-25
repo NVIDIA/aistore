@@ -232,13 +232,9 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 //   you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
 //   bucket, etc.
 // * Copying multiple buckets to the same destination bucket is also permitted.
-func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, optionalMsg ...*cmn.CopyBckMsg) (xactID string, err error) {
+func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msg *cmn.CopyBckMsg) (xactID string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
-	}
-	var msg *cmn.CopyBckMsg
-	if len(optionalMsg) > 0 && optionalMsg[0] != nil {
-		msg = optionalMsg[0]
 	}
 	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, apc.QparamBucketTo)

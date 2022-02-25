@@ -267,6 +267,7 @@ func (t *target) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, 
 		err = fs.ValidateNCopies(t.si.Name(), int(newCopies))
 	}
 	// NOTE: #791 "limited coexistence" here and elsewhere
+	// TODO: support "force" option to ignore "limited coexistence" conflicts (see t.tcb)
 	if err == nil {
 		err = xreg.LimitedCoexistence(t.si, bck, msg.Action)
 	}
@@ -508,7 +509,10 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, e
 			return "", cs.Err
 		}
 		if err := xreg.LimitedCoexistence(t.si, bckFrom, c.msg.Action); err != nil {
-			return "", err
+			if !msg.Force {
+				return "", err
+			}
+			glog.Errorf("%s: %v - %q is \"forced\", proceeding anyway", t, err, c.msg.Action)
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {

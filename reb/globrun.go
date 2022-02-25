@@ -307,7 +307,17 @@ func (reb *Reb) _serialize(rargs *rebArgs) (newerRMD, alreadyRunning bool) {
 func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Duration) (err error) {
 	entry := xreg.GetRunning(xreg.XactFilter{Kind: apc.ActRebalance})
 	if entry == nil {
-		err = fmt.Errorf("%s: acquire/release asymmetry", logHdr)
+		var (
+			rebID   = reb.RebID()
+			rsmap   = reb.smap.Load()
+			rlogHdr = reb.logHdr(rebID, (*cluster.Smap)(rsmap))
+			xreb    = reb.xctn()
+			s       string
+		)
+		if xreb != nil {
+			s = ", " + xreb.String()
+		}
+		err = fmt.Errorf("%s: acquire/release asymmetry vs %s%s", logHdr, rlogHdr, s)
 		return
 	}
 	otherXreb := entry.Get().(*xs.Rebalance) // running or previous

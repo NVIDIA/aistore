@@ -16,6 +16,7 @@ type (
 	CopyBckMsg struct {
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT
+		Force  bool   `json:"force"`   // Force running in presence of a potential "limited coexistence" type conflict
 	}
 	TCBMsg struct {
 		// Resulting objects names will have this extension. Warning: if in a source bucket exist two objects with the

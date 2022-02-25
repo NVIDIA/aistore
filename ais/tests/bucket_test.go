@@ -2237,7 +2237,7 @@ func TestCopyBucket(t *testing.T) {
 			xactIDs := make([]string, len(dstms))
 			for idx, dstm := range dstms {
 				tlog.Logf("copying %s => %s\n", srcm.bck, dstm.bck)
-				uuid, err := api.CopyBucket(baseParams, srcm.bck, dstm.bck)
+				uuid, err := api.CopyBucket(baseParams, srcm.bck, dstm.bck, &cmn.CopyBckMsg{Force: true})
 				xactIDs[idx] = uuid
 				tassert.CheckFatal(t, err)
 			}
@@ -2362,7 +2362,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		Provider: apc.ProviderAIS,
 	}
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, nil)
 	tassert.CheckError(t, err)
 	defer tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
@@ -2384,7 +2384,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	dstBck := cmn.Bck{Name: "cpybck_dst", Provider: apc.ProviderAIS}
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{Force: true})
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
@@ -2495,21 +2495,21 @@ func TestRenameAndCopyBucket(t *testing.T) {
 
 	// Try to copy to first destination - rename in progress, both for srcBck and dstBck1
 	tlog.Logf("try copy %s => %s\n", srcBck, dstBck1)
-	_, err = api.CopyBucket(baseParams, srcBck, dstBck1)
+	_, err = api.CopyBucket(baseParams, srcBck, dstBck1, nil)
 	if err == nil {
 		t.Error("coping bucket that is under renaming did not fail")
 	}
 
 	// Try to copy to second destination - rename in progress for srcBck
 	tlog.Logf("try copy %s => %s\n", srcBck, dstBck2)
-	_, err = api.CopyBucket(baseParams, srcBck, dstBck2)
+	_, err = api.CopyBucket(baseParams, srcBck, dstBck2, nil)
 	if err == nil {
 		t.Error("coping bucket that is under renaming did not fail")
 	}
 
 	// Try to copy from dstBck1 to dstBck1 - rename in progress for dstBck1
 	tlog.Logf("try copy %s => %s\n", dstBck1, dstBck2)
-	_, err = api.CopyBucket(baseParams, srcBck, dstBck1)
+	_, err = api.CopyBucket(baseParams, srcBck, dstBck1, nil)
 	if err == nil {
 		t.Error("coping bucket that is under renaming did not fail")
 	}
@@ -2570,7 +2570,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 
 	// Rename to first destination
 	tlog.Logf("copy %s => %s\n", srcBck, dstBck1)
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck1)
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck1, nil)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination - copy in progress, both for srcBck and dstBck1

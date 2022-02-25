@@ -223,6 +223,7 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.TCBMsg{
 		ID:             uuid,
 		RequestTimeout: cos.Duration(requestTimeout),
+		CopyBckMsg:     cmn.CopyBckMsg{Force: true},
 	})
 
 	err := tetl.WaitForFinished(baseParams, xactID, timeout)
