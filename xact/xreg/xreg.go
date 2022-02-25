@@ -100,52 +100,13 @@ type (
 	}
 )
 
-///////////////
-// RenewBase //
-///////////////
-
-func (r *RenewBase) Bucket() *cluster.Bck { return r.Bck }
-func (r *RenewBase) UUID() string         { return r.Args.UUID }
-
-func (r *RenewBase) Str(kind string) string {
-	prefix := kind
-	if r.Bck != nil {
-		prefix += "@" + r.Bck.String()
-	}
-	return fmt.Sprintf("%s, ID=%q", prefix, r.UUID())
-}
-
-//////////////
-// RenewRes //
-//////////////
-
-func (rns *RenewRes) IsRunning() bool {
-	if rns.UUID == "" {
-		return false
-	}
-	return rns.Entry.Get().Running()
-}
-
-// make sure existing on-demand is active to prevent it from (idle) expiration
-// (see demand.go hkcb())
-func (rns *RenewRes) beingRenewed() {
-	if rns.Err != nil || !rns.IsRunning() {
-		return
-	}
-	xctn := rns.Entry.Get()
-	if xdmnd, ok := xctn.(xact.Demand); ok {
-		xdmnd.IncPending()
-		xdmnd.DecPending()
-	}
-}
+// default global registry that keeps track of all running xactions
+// In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`.
+var dreg *registry
 
 //////////////////////
 // xaction registry //
 //////////////////////
-
-// default global registry that keeps track of all running xactions
-// In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`.
-var dreg *registry
 
 func Init() {
 	dreg = newRegistry()
@@ -193,10 +154,12 @@ outer:
 
 func GetRunning(flt XactFilter) Renewable { return dreg.getRunning(flt) }
 
-func (r *registry) getRunning(flt XactFilter) Renewable {
-	onl := true
-	flt.OnlyRunning = &onl
-	return r.entries.find(flt)
+func (r *registry) getRunning(flt XactFilter) (entry Renewable) {
+	e := &r.entries
+	e.mtx.RLock()
+	entry = e.findRunning(flt)
+	e.mtx.RUnlock()
+	return
 }
 
 // NOTE: relies on the find() to walk in the newer --> older order
@@ -292,12 +255,14 @@ func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 		if onlyRunning {
 			matching := make([]cluster.XactSnap, 0, 10)
 			if flt.Kind == "" {
+				dreg.entries.mtx.RLock()
 				for kind := range xact.Table {
-					entry := dreg.getRunning(XactFilter{Kind: kind, Bck: flt.Bck})
+					entry := dreg.entries.findRunning(XactFilter{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Snap())
 					}
 				}
+				dreg.entries.mtx.RUnlock()
 			} else {
 				entry := dreg.getRunning(XactFilter{Kind: flt.Kind, Bck: flt.Bck})
 				if entry != nil {
@@ -519,6 +484,29 @@ func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck
 // registry entries //
 //////////////////////
 
+// NOTE: the caller must take rlock
+func (e *entries) findRunning(flt XactFilter) Renewable {
+	onl := true
+	flt.OnlyRunning = &onl
+	for _, entry := range e.active {
+		if flt.matches(entry.Get()) {
+			return entry
+		}
+	}
+	return nil
+}
+
+// internal use, special case: XactFilter{Kind: kind}; NOTE: the caller must take rlock
+func (e *entries) findRunningKind(kind string) Renewable {
+	for _, entry := range e.active {
+		xctn := entry.Get()
+		if xctn.Kind() == kind && xctn.Running() {
+			return entry
+		}
+	}
+	return nil
+}
+
 func (e *entries) find(flt XactFilter) (entry Renewable) {
 	e.mtx.RLock()
 	entry = e.findUnlocked(flt)
@@ -527,24 +515,13 @@ func (e *entries) find(flt XactFilter) (entry Renewable) {
 }
 
 func (e *entries) findUnlocked(flt XactFilter) Renewable {
-	var onlyRunning bool
-	if flt.OnlyRunning != nil {
-		onlyRunning = *flt.OnlyRunning
+	if flt.OnlyRunning != nil && *flt.OnlyRunning {
+		return e.findRunning(flt)
 	}
-	debug.AssertMsg(flt.Kind == "" || xact.IsValidKind(flt.Kind), flt.Kind)
-	if !onlyRunning {
-		// walk in reverse as there is a greater chance
-		// the one we are looking for is at the end
-		for idx := len(e.all) - 1; idx >= 0; idx-- {
-			entry := e.all[idx]
-			if flt.matches(entry.Get()) {
-				return entry
-			}
-		}
-		return nil
-	}
-	// only running
-	for _, entry := range e.active {
+	// walk in reverse as there is a greater chance
+	// the one we are looking for is at the end
+	for idx := len(e.all) - 1; idx >= 0; idx-- {
+		entry := e.all[idx]
 		if flt.matches(entry.Get()) {
 			return entry
 		}
@@ -635,7 +612,7 @@ func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, ot
 			return nil
 		}
 	}
-
+	var locked bool
 	for kind, d := range xact.Table {
 		// note that rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
 		conflict := (d.MassiveBck && adminReqAct) ||
@@ -645,7 +622,12 @@ func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, ot
 		}
 
 		// the potential conflict becomes very real if the 'kind' is actually running
-		entry := r.getRunning(XactFilter{Kind: kind})
+		if !locked {
+			r.entries.mtx.RLock()
+			locked = true
+			defer r.entries.mtx.RUnlock()
+		}
+		entry := r.entries.findRunningKind(kind)
 		if entry == nil {
 			continue
 		}
@@ -693,6 +675,45 @@ func _eqAny(bck1, bck2, from, to *cluster.Bck) (eq bool) {
 		eq = bck1.Equal(to, false, true) || bck2.Equal(to, false, true)
 	}
 	return
+}
+
+///////////////
+// RenewBase //
+///////////////
+
+func (r *RenewBase) Bucket() *cluster.Bck { return r.Bck }
+func (r *RenewBase) UUID() string         { return r.Args.UUID }
+
+func (r *RenewBase) Str(kind string) string {
+	prefix := kind
+	if r.Bck != nil {
+		prefix += "@" + r.Bck.String()
+	}
+	return fmt.Sprintf("%s, ID=%q", prefix, r.UUID())
+}
+
+//////////////
+// RenewRes //
+//////////////
+
+func (rns *RenewRes) IsRunning() bool {
+	if rns.UUID == "" {
+		return false
+	}
+	return rns.Entry.Get().Running()
+}
+
+// make sure existing on-demand is active to prevent it from (idle) expiration
+// (see demand.go hkcb())
+func (rns *RenewRes) beingRenewed() {
+	if rns.Err != nil || !rns.IsRunning() {
+		return
+	}
+	xctn := rns.Entry.Get()
+	if xdmnd, ok := xctn.(xact.Demand); ok {
+		xdmnd.IncPending()
+		xdmnd.DecPending()
+	}
 }
 
 ////////////////

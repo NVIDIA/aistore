@@ -12,7 +12,9 @@ import (
 )
 
 func GetRebMarked() (out xact.Marked) {
-	entry := dreg.getRunning(XactFilter{Kind: apc.ActRebalance})
+	dreg.entries.mtx.RLock()
+	entry := dreg.entries.findRunningKind(apc.ActRebalance)
+	dreg.entries.mtx.RUnlock()
 	if entry != nil {
 		out.Xact = entry.Get()
 	}
@@ -21,7 +23,9 @@ func GetRebMarked() (out xact.Marked) {
 }
 
 func GetResilverMarked() (out xact.Marked) {
-	entry := dreg.getRunning(XactFilter{Kind: apc.ActResilver})
+	dreg.entries.mtx.RLock()
+	entry := dreg.entries.findRunningKind(apc.ActResilver)
+	dreg.entries.mtx.RUnlock()
 	if entry != nil {
 		out.Xact = entry.Get()
 	}
