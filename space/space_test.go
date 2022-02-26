@@ -321,7 +321,7 @@ func newTargetLRUMock() *mock.TargetMock {
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: true},
-					Access: cmn.AccessAll,
+					Access: apc.AccessAll,
 					BID:    0xa7b8c1d2,
 				},
 			),
@@ -330,7 +330,7 @@ func newTargetLRUMock() *mock.TargetMock {
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: false},
-					Access: cmn.AccessAll,
+					Access: apc.AccessAll,
 					BID:    0xf4e3d2c1,
 				},
 			),

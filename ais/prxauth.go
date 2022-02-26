@@ -64,7 +64,7 @@ func (p *proxy) validateToken(hdr http.Header) (*authn.Token, error) {
 //   Exceptions:
 //   - read-only access to a bucket is always granted
 //   - PATCH cannot be forbidden
-func (p *proxy) checkACL(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, ace cmn.AccessAttrs) error {
+func (p *proxy) checkACL(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, ace apc.AccessAttrs) error {
 	err := p._checkACL(r.Header, bck, ace)
 	if err == nil {
 		return nil
@@ -84,7 +84,7 @@ func (*proxy) aclErrToCode(err error) int {
 	}
 }
 
-func (p *proxy) _checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.AccessAttrs) error {
+func (p *proxy) _checkACL(hdr http.Header, bck *cluster.Bck, ace apc.AccessAttrs) error {
 	if p.isIntraCall(hdr, false /*from primary*/) == nil {
 		return nil
 	}
@@ -116,14 +116,14 @@ func (p *proxy) _checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.AccessAttrs
 		// PATCH and ACL are always allowed in two cases:
 		// - a user is a superuser
 		// - AuthN is disabled
-		ace &^= (cmn.AcePATCH | cmn.AceBckSetACL)
+		ace &^= (apc.AcePATCH | apc.AceBckSetACL)
 	}
 	if ace == 0 {
 		return nil
 	}
 	if !cfg.Auth.Enabled {
 		// Without AuthN, read-only access is always OK
-		ace &^= cmn.AccessRO
+		ace &^= apc.AccessRO
 	}
 	return bck.Allow(ace)
 }

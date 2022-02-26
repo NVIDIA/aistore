@@ -7,6 +7,7 @@ package ais
 import (
 	"net/http"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
@@ -25,13 +26,13 @@ func (p *proxy) proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bck := cluster.NewBckEmbed(parsedRS.Bck)
-	args := bckInitArgs{p: p, w: w, r: r, bck: bck, lookupRemote: true, perms: cmn.AceObjLIST | cmn.AceGET}
+	args := bckInitArgs{p: p, w: w, r: r, bck: bck, lookupRemote: true, perms: apc.AceObjLIST | apc.AceGET}
 	if _, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
 
 	bck = cluster.NewBckEmbed(parsedRS.OutputBck)
-	args = bckInitArgs{p: p, w: w, r: r, bck: bck, lookupRemote: true, perms: cmn.AcePUT}
+	args = bckInitArgs{p: p, w: w, r: r, bck: bck, lookupRemote: true, perms: apc.AcePUT}
 	if _, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}

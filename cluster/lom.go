@@ -777,7 +777,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 func (lom *LOM) AllowDisconnectedBackend(loaded bool) (err error) {
 	bck := lom.Bck()
 	// allowed
-	if bck.Props.Access.Has(cmn.AceDisconnectedBackend) {
+	if bck.Props.Access.Has(apc.AceDisconnectedBackend) {
 		return
 	}
 	if !loaded {
@@ -801,6 +801,6 @@ func (lom *LOM) AllowDisconnectedBackend(loaded bool) (err error) {
 	}
 rerr:
 	msg := fmt.Sprintf("%s(downoaded from %q)", lom, srcProvider)
-	err = cmn.NewObjectAccessDenied(msg, cmn.AccessOp(cmn.AceDisconnectedBackend), bck.Props.Access)
+	err = cmn.NewObjectAccessDenied(msg, apc.AccessOp(apc.AceDisconnectedBackend), bck.Props.Access)
 	return
 }

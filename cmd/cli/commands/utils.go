@@ -506,9 +506,9 @@ func isJSON(arg string) bool {
 	return false
 }
 
-func parseBucketAccessValues(values []string, idx int) (access cmn.AccessAttrs, newIdx int, err error) {
+func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, newIdx int, err error) {
 	var (
-		acc cmn.AccessAttrs
+		acc apc.AccessAttrs
 		val uint64
 	)
 	if len(values) == 0 {
@@ -522,7 +522,7 @@ func parseBucketAccessValues(values []string, idx int) (access cmn.AccessAttrs, 
 			if perm == "" {
 				continue
 			}
-			acc, err = cmn.StrToAccess(perm)
+			acc, err = apc.StrToAccess(perm)
 			if err != nil {
 				return
 			}
@@ -534,12 +534,12 @@ func parseBucketAccessValues(values []string, idx int) (access cmn.AccessAttrs, 
 		// Case: `access 0x342`
 		val, err = cos.ParseHexOrUint(values[newIdx])
 		if err == nil {
-			access |= cmn.AccessAttrs(val)
+			access |= apc.AccessAttrs(val)
 			newIdx++
 			continue
 		}
 		// Case: `access HEAD`
-		acc, err = cmn.StrToAccess(values[newIdx])
+		acc, err = apc.StrToAccess(values[newIdx])
 		if err != nil {
 			break
 		}
@@ -564,7 +564,7 @@ func makeBckPropPairs(values []string) (nvs cos.SimpleKVs, err error) {
 	}
 
 	var (
-		access cmn.AccessAttrs
+		access apc.AccessAttrs
 		cmd    string
 	)
 	nvs = make(cos.SimpleKVs, 8)

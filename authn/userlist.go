@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
@@ -49,11 +50,11 @@ var (
 	predefinedRoles = []struct {
 		prefix string
 		desc   string
-		perms  cmn.AccessAttrs
+		perms  apc.AccessAttrs
 	}{
-		{ClusterOwnerRole, "Full access to cluster %s", cmn.AccessAll},
-		{BucketOwnerRole, "Full access to buckets of cluster %s", cmn.AccessRW},
-		{GuestRole, "Read-only access to buckets of cluster %s", cmn.AccessRO},
+		{ClusterOwnerRole, "Full access to cluster %s", apc.AccessAll},
+		{BucketOwnerRole, "Full access to buckets of cluster %s", apc.AccessRW},
+		{GuestRole, "Read-only access to buckets of cluster %s", apc.AccessRO},
 	}
 )
 

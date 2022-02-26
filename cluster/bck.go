@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -201,13 +202,13 @@ func (b *Bck) VersionConf() cmn.VersionConf {
 //
 // access perms
 //
-func (b *Bck) Allow(bit cmn.AccessAttrs) error { return b.checkAccess(bit) }
+func (b *Bck) Allow(bit apc.AccessAttrs) error { return b.checkAccess(bit) }
 
-func (b *Bck) checkAccess(bit cmn.AccessAttrs) (err error) {
+func (b *Bck) checkAccess(bit apc.AccessAttrs) (err error) {
 	if b.Props.Access.Has(bit) {
 		return
 	}
-	op := cmn.AccessOp(bit)
+	op := apc.AccessOp(bit)
 	err = cmn.NewBucketAccessDenied(b.String(), op, b.Props.Access)
 	return
 }

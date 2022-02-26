@@ -574,7 +574,7 @@ func (h *DaemonStatusTemplateHelper) Deployments() cos.StringSet {
 	return p
 }
 
-func fmtACL(acl cmn.AccessAttrs) string {
+func fmtACL(acl apc.AccessAttrs) string {
 	if acl == 0 {
 		return UnknownVal
 	}

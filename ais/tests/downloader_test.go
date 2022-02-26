@@ -894,7 +894,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 	clearDownloadList(t)
 
 	// disallow updating downloaded objects
-	aattrs := cmn.AccessAll &^ cmn.AceDisconnectedBackend
+	aattrs := apc.AccessAll &^ apc.AceDisconnectedBackend
 	props := &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)}
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, props)
 

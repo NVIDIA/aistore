@@ -98,7 +98,7 @@ var _ = Describe("IterFields", func() {
 
 					"extra.aws.cloud_region": "us-central",
 
-					"access":   cmn.AccessAttrs(0),
+					"access":   apc.AccessAttrs(0),
 					"md_write": apc.MDWritePolicy(""),
 					"created":  int64(0),
 				},

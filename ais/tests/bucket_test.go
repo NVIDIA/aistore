@@ -1742,7 +1742,7 @@ func TestBucketReadOnly(t *testing.T) {
 
 	// make bucket read-only
 	// NOTE: must allow PATCH - otherwise api.SetBucketProps a few lines down below won't work
-	aattrs := cmn.AccessRO | cmn.AcePATCH
+	aattrs := apc.AccessRO | apc.AcePATCH
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)})
 	tassert.CheckFatal(t, err)
 
@@ -2694,8 +2694,8 @@ func TestBackendBucket(t *testing.T) {
 		aisObjList.Entries, cachedObjName,
 	)
 
-	// Disconnect backend bucket while denying (the default) cmn.AceDisconnectedBackend permission
-	aattrs := cmn.AccessAll &^ cmn.AceDisconnectedBackend
+	// Disconnect backend bucket while denying (the default) apc.AceDisconnectedBackend permission
+	aattrs := apc.AccessAll &^ apc.AceDisconnectedBackend
 	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(""),

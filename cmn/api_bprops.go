@@ -52,7 +52,7 @@ type (
 		EC ECConf `json:"ec"`
 
 		// Bucket access attributes - see Allow* above
-		Access AccessAttrs `json:"access,string"`
+		Access apc.AccessAttrs `json:"access,string"`
 
 		// Extra contains additional information which can depend on the provider.
 		Extra ExtraProps `json:"extra,omitempty" list:"omitempty"`
@@ -105,7 +105,7 @@ type (
 		LRU        *LRUConfToUpdate     `json:"lru"`
 		Mirror     *MirrorConfToUpdate  `json:"mirror"`
 		EC         *ECConfToUpdate      `json:"ec"`
-		Access     *AccessAttrs         `json:"access,string"`
+		Access     *apc.AccessAttrs     `json:"access,string"`
 		MDWrite    *apc.MDWritePolicy   `json:"md_write"`
 		Extra      *ExtraToUpdate       `json:"extra"`
 		Force      bool                 `json:"force" copy:"skip" list:"omit"`
@@ -146,7 +146,7 @@ func DefaultBckProps(bck Bck, cs ...*Config) *BucketProps {
 		LRU:        c.LRU,
 		Mirror:     c.Mirror,
 		Versioning: c.Versioning,
-		Access:     AccessAll,
+		Access:     apc.AccessAll,
 		EC:         c.EC,
 		MDWrite:    c.MDWrite,
 	}

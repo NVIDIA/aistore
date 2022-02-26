@@ -488,7 +488,7 @@ func (j *lruJ) allow() (ok bool, err error) {
 	if err = b.Init(bowner); err != nil {
 		return
 	}
-	ok = b.Props.LRU.Enabled && b.Allow(cmn.AceObjDELETE) == nil
+	ok = b.Props.LRU.Enabled && b.Allow(apc.AceObjDELETE) == nil
 	return
 }
 

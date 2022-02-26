@@ -76,7 +76,7 @@ type (
 	errAccessDenied       struct {
 		entity      string
 		operation   string
-		accessAttrs AccessAttrs
+		accessAttrs apc.AccessAttrs
 	}
 
 	ErrInvalidCksum struct {
@@ -308,7 +308,7 @@ func (e *ErrBucketAccessDenied) Error() string {
 	return "bucket " + e.String()
 }
 
-func NewBucketAccessDenied(bucket, oper string, aattrs AccessAttrs) *ErrBucketAccessDenied {
+func NewBucketAccessDenied(bucket, oper string, aattrs apc.AccessAttrs) *ErrBucketAccessDenied {
 	return &ErrBucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
 }
 
@@ -316,7 +316,7 @@ func (e *ErrObjectAccessDenied) Error() string {
 	return "object " + e.String()
 }
 
-func NewObjectAccessDenied(object, oper string, aattrs AccessAttrs) *ErrObjectAccessDenied {
+func NewObjectAccessDenied(object, oper string, aattrs apc.AccessAttrs) *ErrObjectAccessDenied {
 	return &ErrObjectAccessDenied{errAccessDenied{object, oper, aattrs}}
 }
 

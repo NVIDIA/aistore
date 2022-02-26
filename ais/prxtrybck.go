@@ -23,7 +23,7 @@ type bckInitArgs struct {
 	p       *proxy
 	w       http.ResponseWriter
 	r       *http.Request
-	perms   cmn.AccessAttrs // cmn.AceGET, cmn.AcePATCH etc.
+	perms   apc.AccessAttrs // apc.AceGET, apc.AcePATCH etc.
 	reqBody []byte          // request body of original request
 
 	// URL query: the conventional/slow and
@@ -129,7 +129,7 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 		return
 	}
 
-	if args._requiresPermission(cmn.AceMoveBucket) {
+	if args._requiresPermission(apc.AceMoveBucket) {
 		goto retErr
 	}
 
@@ -139,12 +139,12 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 	}
 
 	// HTTP buckets should fail on PUT and bucket rename operations
-	if args.bck.IsHTTP() && args._requiresPermission(cmn.AcePUT) {
+	if args.bck.IsHTTP() && args._requiresPermission(apc.AcePUT) {
 		goto retErr
 	}
 
 	// Destroy and Rename/Move are not permitted.
-	if args.bck.IsCloud() && args._requiresPermission(cmn.AceDestroyBucket) &&
+	if args.bck.IsCloud() && args._requiresPermission(apc.AceDestroyBucket) &&
 		args.msg.Action == apc.ActDestroyBck {
 		goto retErr
 	}
@@ -159,7 +159,7 @@ retErr:
 	return
 }
 
-func (args *bckInitArgs) _requiresPermission(perm cmn.AccessAttrs) bool {
+func (args *bckInitArgs) _requiresPermission(perm apc.AccessAttrs) bool {
 	return (args.perms & perm) == perm
 }
 

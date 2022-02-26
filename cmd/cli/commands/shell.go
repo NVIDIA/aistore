@@ -37,7 +37,7 @@ const (
 var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
-		apc.PropBucketAccessAttrs:             cmn.SupportedPermissions(),
+		apc.PropBucketAccessAttrs:             apc.SupportedPermissions(),
 		apc.HdrObjCksumType:                   cos.SupportedChecksums(),
 		"md_write":                            apc.SupportedWritePolicy,
 		"ec.compression":                      apc.SupportedCompression,

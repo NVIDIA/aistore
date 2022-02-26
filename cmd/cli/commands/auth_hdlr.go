@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
@@ -491,9 +492,9 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("cluster %q not found", cluster)
 	}
 
-	perms := cmn.AccessNone
+	perms := apc.AccessNone
 	for i := 2; i < c.NArg(); i++ {
-		p, err := cmn.StrToAccess(args.Get(i))
+		p, err := apc.StrToAccess(args.Get(i))
 		if err != nil {
 			return err
 		}

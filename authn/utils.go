@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -36,13 +37,13 @@ type (
 	Cluster struct {
 		ID     string          `json:"id"`
 		Alias  string          `json:"alias,omitempty"`
-		Access cmn.AccessAttrs `json:"perm,string,omitempty"`
+		Access apc.AccessAttrs `json:"perm,string,omitempty"`
 		URLs   []string        `json:"urls,omitempty"`
 	}
 	// Permissions for a single bucket
 	Bucket struct {
 		Bck    cmn.Bck         `json:"bck"`
-		Access cmn.AccessAttrs `json:"perm,string"`
+		Access apc.AccessAttrs `json:"perm,string"`
 	}
 	Role struct {
 		Name     string     `json:"name"`
@@ -95,7 +96,7 @@ var (
 	ErrTokenExpired  = errors.New("token expired")
 )
 
-func (tk *Token) aclForCluster(clusterID string) (perms cmn.AccessAttrs, ok bool) {
+func (tk *Token) aclForCluster(clusterID string) (perms apc.AccessAttrs, ok bool) {
 	for _, pm := range tk.Clusters {
 		if pm.ID == clusterID {
 			return pm.Access, true
@@ -104,7 +105,7 @@ func (tk *Token) aclForCluster(clusterID string) (perms cmn.AccessAttrs, ok bool
 	return 0, false
 }
 
-func (tk *Token) aclForBucket(clusterID string, bck *cmn.Bck) (perms cmn.AccessAttrs, ok bool) {
+func (tk *Token) aclForBucket(clusterID string, bck *cmn.Bck) (perms apc.AccessAttrs, ok bool) {
 	for _, b := range tk.Buckets {
 		tbBck := b.Bck
 		if tbBck.Ns.UUID != clusterID {
@@ -125,13 +126,13 @@ func (tk *Token) aclForBucket(clusterID string, bck *cmn.Bck) (perms cmn.AccessA
 // allows creating users, e.g, with read-only access to the entire cluster,
 // and read-write access to a single bucket.
 // Per-bucket ACL overrides cluster-wide one.
-func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms cmn.AccessAttrs) error {
+func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.AccessAttrs) error {
 	if tk.IsAdmin {
 		return nil
 	}
 	debug.AssertMsg(perms != 0, "Empty permissions requested")
-	cluPerms := perms & cmn.AccessCluster
-	objPerms := perms &^ cmn.AccessCluster
+	cluPerms := perms & apc.AccessCluster
+	objPerms := perms &^ apc.AccessCluster
 	cluACL, cluOk := tk.aclForCluster(clusterID)
 	if cluPerms != 0 {
 		// Cluster-wide permissions requested
