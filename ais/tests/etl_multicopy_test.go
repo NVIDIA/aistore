@@ -72,7 +72,7 @@ func TestCopyObjRange(t *testing.T) {
 	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyObjects}
 	api.WaitForXactionIdle(baseParams, wargs)
 
-	msg := &cmn.ListObjsMsg{Prefix: "test/"}
+	msg := &apc.ListObjsMsg{Prefix: "test/"}
 	bckList, err := api.ListObjects(baseParams, bckTo, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(bckList.Entries) == copyCnt, "%d != %d", copyCnt, len(bckList.Entries))
@@ -161,8 +161,8 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			wargs := api.XactReqArgs{Kind: apc.ActCopyObjects, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
-			msg := &cmn.ListObjsMsg{Prefix: m.prefix}
-			msg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
+			msg := &apc.ListObjsMsg{Prefix: m.prefix}
+			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
 			tassert.CheckFatal(t, err)
 			tlog.Logf("%s => %s: copied %d objects\n", m.bck, toBck, len(objList.Entries))

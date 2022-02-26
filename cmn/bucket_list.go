@@ -40,22 +40,22 @@ func (be *BucketEntry) String() string     { return "{" + be.Name + "}" }
 
 func (be *BucketEntry) CopyWithProps(propsSet cos.StringSet) (ne *BucketEntry) {
 	ne = &BucketEntry{Name: be.Name}
-	if propsSet.Contains(GetPropsSize) {
+	if propsSet.Contains(apc.GetPropsSize) {
 		ne.Size = be.Size
 	}
-	if propsSet.Contains(GetPropsChecksum) {
+	if propsSet.Contains(apc.GetPropsChecksum) {
 		ne.Checksum = be.Checksum
 	}
-	if propsSet.Contains(GetPropsAtime) {
+	if propsSet.Contains(apc.GetPropsAtime) {
 		ne.Atime = be.Atime
 	}
-	if propsSet.Contains(GetPropsVersion) {
+	if propsSet.Contains(apc.GetPropsVersion) {
 		ne.Version = be.Version
 	}
-	if propsSet.Contains(GetTargetURL) {
+	if propsSet.Contains(apc.GetTargetURL) {
 		ne.TargetURL = be.TargetURL
 	}
-	if propsSet.Contains(GetPropsCopies) {
+	if propsSet.Contains(apc.GetPropsCopies) {
 		ne.Copies = be.Copies
 	}
 	return

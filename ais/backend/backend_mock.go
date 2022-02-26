@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -39,7 +40,7 @@ func (*dummyBackendProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.S
 	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
 }
 
-func (*dummyBackendProvider) ListObjects(bck *cluster.Bck, _ *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (*dummyBackendProvider) ListObjects(bck *cluster.Bck, _ *apc.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	return nil, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
 }
 

@@ -7,6 +7,7 @@ package objwalk
 import (
 	"context"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -19,11 +20,11 @@ type (
 		ctx context.Context
 		t   cluster.Target
 		bck *cluster.Bck
-		msg *cmn.ListObjsMsg
+		msg *apc.ListObjsMsg
 	}
 )
 
-func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.ListObjsMsg) *Walk {
+func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.ListObjsMsg) *Walk {
 	return &Walk{ctx: ctx, t: t, bck: bck, msg: msg}
 }
 
@@ -75,10 +76,10 @@ func (w *Walk) DefaultLocalObjPage() (*cmn.BucketList, error) {
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
 func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
-	if w.msg.IsFlagSet(cmn.LsPresent) {
+	if w.msg.IsFlagSet(apc.LsPresent) {
 		return w.DefaultLocalObjPage()
 	}
-	msg := &cmn.ListObjsMsg{}
+	msg := &apc.ListObjsMsg{}
 	*msg = *w.msg
 	objList, _, err := w.t.Backend(w.bck).ListObjects(w.bck, msg)
 	if err != nil {
@@ -89,11 +90,11 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 		localID         = w.t.SID()
 		smap            = w.t.Sowner().Get()
 		postCallback, _ = w.ctx.Value(walkinfo.CtxPostCallbackKey).(walkinfo.PostCallbackFunc)
-		needURL         = w.msg.WantProp(cmn.GetTargetURL)
-		needAtime       = w.msg.WantProp(cmn.GetPropsAtime)
-		needCksum       = w.msg.WantProp(cmn.GetPropsChecksum)
-		needVersion     = w.msg.WantProp(cmn.GetPropsVersion)
-		needCopies      = w.msg.WantProp(cmn.GetPropsCopies)
+		needURL         = w.msg.WantProp(apc.GetTargetURL)
+		needAtime       = w.msg.WantProp(apc.GetPropsAtime)
+		needCksum       = w.msg.WantProp(apc.GetPropsChecksum)
+		needVersion     = w.msg.WantProp(apc.GetPropsVersion)
+		needCopies      = w.msg.WantProp(apc.GetPropsCopies)
 	)
 	for _, e := range objList.Entries {
 		si, _ := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)

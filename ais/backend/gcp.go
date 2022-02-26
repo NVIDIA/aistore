@@ -152,7 +152,7 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
@@ -181,15 +181,15 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bc
 	for _, attrs := range objs {
 		entry := &cmn.BucketEntry{}
 		entry.Name = attrs.Name
-		if msg.WantProp(cmn.GetPropsSize) {
+		if msg.WantProp(apc.GetPropsSize) {
 			entry.Size = attrs.Size
 		}
-		if msg.WantProp(cmn.GetPropsChecksum) {
+		if msg.WantProp(apc.GetPropsChecksum) {
 			if v, ok := h.EncodeCksum(attrs.MD5); ok {
 				entry.Checksum = v
 			}
 		}
-		if msg.WantProp(cmn.GetPropsVersion) {
+		if msg.WantProp(apc.GetPropsVersion) {
 			if v, ok := h.EncodeVersion(attrs.Generation); ok {
 				entry.Version = v
 			}

@@ -41,15 +41,15 @@ type (
 	olFactory struct {
 		xreg.RenewBase
 		xctn *ObjListXact
-		msg  *cmn.ListObjsMsg
+		msg  *apc.ListObjsMsg
 	}
 	ObjListXact struct {
 		xact.DemandBase
 		t   cluster.Target
 		bck *cluster.Bck
-		msg *cmn.ListObjsMsg
+		msg *apc.ListObjsMsg
 
-		workCh chan *cmn.ListObjsMsg // Incoming requests.
+		workCh chan *apc.ListObjsMsg // Incoming requests.
 		respCh chan *Resp            // Outgoing responses.
 		stopCh *cos.StopCh           // Informs about stopped xact.
 
@@ -89,7 +89,7 @@ var (
 )
 
 func (*olFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &olFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: args.Custom.(*cmn.ListObjsMsg)}
+	p := &olFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: args.Custom.(*apc.ListObjsMsg)}
 	return p
 }
 
@@ -106,13 +106,13 @@ func (p *olFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *cmn.ListObjsMsg, uuid string) *ObjListXact {
+func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *apc.ListObjsMsg, uuid string) *ObjListXact {
 	totallyIdle := cmn.GCO.Get().Timeout.MaxHostBusy.D()
 	xctn := &ObjListXact{
 		t:        t,
 		bck:      bck,
 		msg:      lsmsg,
-		workCh:   make(chan *cmn.ListObjsMsg),
+		workCh:   make(chan *apc.ListObjsMsg),
 		respCh:   make(chan *Resp),
 		stopCh:   cos.NewStopCh(),
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
@@ -132,7 +132,7 @@ func (r *ObjListXact) Abort(err error) (ok bool) {
 	return
 }
 
-func (r *ObjListXact) Do(msg *cmn.ListObjsMsg) *Resp {
+func (r *ObjListXact) Do(msg *apc.ListObjsMsg) *Resp {
 	// The guarantee here is that we either put something on the channel and our
 	// request will be processed (since the `workCh` is unbuffered) or we receive
 	// message that the xaction has been stopped.
@@ -145,7 +145,7 @@ func (r *ObjListXact) Do(msg *cmn.ListObjsMsg) *Resp {
 }
 
 func (r *ObjListXact) init() {
-	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(cmn.LsPresent)
+	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(apc.LsPresent)
 	if r.fromRemote {
 		return
 	}
@@ -380,7 +380,7 @@ func (r *ObjListXact) discardObsolete(token string) {
 	r.lastPage = r.lastPage[:l-j]
 }
 
-func (r *ObjListXact) traverseBucket(msg *cmn.ListObjsMsg) {
+func (r *ObjListXact) traverseBucket(msg *apc.ListObjsMsg) {
 	wi := walkinfo.NewWalkInfo(r.walkCtx(), r.t, msg)
 	defer r.walkWg.Done()
 	cb := func(fqn string, de fs.DirEntry) error {
@@ -397,7 +397,7 @@ func (r *ObjListXact) traverseBucket(msg *cmn.ListObjsMsg) {
 		case <-r.walkStopCh.Listen():
 			return errStopped
 		}
-		if !msg.IsFlagSet(cmn.LsArchDir) {
+		if !msg.IsFlagSet(apc.LsArchDir) {
 			return nil
 		}
 		archList, err := listArchive(fqn)

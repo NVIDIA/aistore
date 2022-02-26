@@ -769,14 +769,14 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		return templates.DisplayOutput(objProps, c.App.Writer, templates.PropsSimpleTmpl, true)
 	}
 	if flagIsSet(c, allPropsFlag) {
-		propsFlag = cmn.GetPropsAll
+		propsFlag = apc.GetPropsAll
 	} else if flagIsSet(c, objPropsFlag) {
 		propsFlag = strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	}
 	if len(propsFlag) == 0 {
-		selectedProps = cmn.GetPropsDefault
+		selectedProps = apc.GetPropsDefault
 	} else if cos.StringInSlice("all", propsFlag) {
-		selectedProps = cmn.GetPropsAll
+		selectedProps = apc.GetPropsAll
 	} else {
 		selectedProps = propsFlag
 	}

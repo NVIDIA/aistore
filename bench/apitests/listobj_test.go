@@ -81,9 +81,9 @@ func BenchmarkListObject(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				msg := &cmn.ListObjsMsg{PageSize: test.pageSize}
+				msg := &apc.ListObjsMsg{PageSize: test.pageSize}
 				if test.useCache {
-					msg.SetFlag(cmn.UseListObjsCache)
+					msg.SetFlag(apc.UseListObjsCache)
 				}
 				objs, err := api.ListObjects(baseParams, bck, msg, 0)
 				tassert.CheckFatal(b, err)

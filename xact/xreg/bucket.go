@@ -134,7 +134,7 @@ func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, 
 	return RenewBucketXact(apc.ActMoveBck, bckTo, Args{t, uuid, custom})
 }
 
-func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.ListObjsMsg) RenewRes {
+func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *apc.ListObjsMsg) RenewRes {
 	e := dreg.bckXacts[apc.ActList].New(Args{T: t, UUID: uuid, Custom: msg}, bck)
 	return dreg.renewByID(e, bck)
 }

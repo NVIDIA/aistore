@@ -217,7 +217,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 // LIST OBJECTS //
 //////////////////
 
-func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
 
 	var (
@@ -252,16 +252,16 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bc
 			blob  = &resp.Segment.BlobItems[idx]
 			entry = &cmn.BucketEntry{Name: blob.Name}
 		)
-		if blob.Properties.ContentLength != nil && msg.WantProp(cmn.GetPropsSize) {
+		if blob.Properties.ContentLength != nil && msg.WantProp(apc.GetPropsSize) {
 			entry.Size = *blob.Properties.ContentLength
 		}
-		if msg.WantProp(cmn.GetPropsVersion) {
+		if msg.WantProp(apc.GetPropsVersion) {
 			// NOTE: here and elsewhere (below), use Etag as the version
 			if v, ok := h.EncodeVersion(string(blob.Properties.Etag)); ok {
 				entry.Version = v
 			}
 		}
-		if msg.WantProp(cmn.GetPropsChecksum) {
+		if msg.WantProp(apc.GetPropsChecksum) {
 			if v, ok := h.EncodeCksum(blob.Properties.ContentMD5); ok {
 				entry.Checksum = v
 			}

@@ -111,28 +111,28 @@ func objectPropList(bck cmn.Bck, props *cmn.ObjectProps, selection []string) (pr
 	var propValue string
 	for _, currProp := range selection {
 		switch currProp {
-		case cmn.GetPropsName:
+		case apc.GetPropsName:
 			propValue = props.Bck.String() + "/" + props.Name
-		case cmn.GetPropsSize:
+		case apc.GetPropsSize:
 			propValue = cos.B2S(props.Size, 2)
-		case cmn.GetPropsChecksum:
+		case apc.GetPropsChecksum:
 			propValue = props.Cksum.String()
-		case cmn.GetPropsAtime:
+		case apc.GetPropsAtime:
 			propValue = cos.FormatUnixNano(props.Atime, "")
-		case cmn.GetPropsVersion:
+		case apc.GetPropsVersion:
 			propValue = props.Ver
-		case cmn.GetPropsCached:
+		case apc.GetPropsCached:
 			if bck.IsAIS() {
 				continue
 			}
 			propValue = templates.FmtBool(props.Present)
-		case cmn.GetPropsCopies:
+		case apc.GetPropsCopies:
 			propValue = templates.FmtCopies(props.NumCopies)
-		case cmn.GetPropsEC:
+		case apc.GetPropsEC:
 			propValue = templates.FmtEC(
 				props.EC.Generation, props.EC.DataSlices, props.EC.ParitySlices, props.EC.IsECCopy,
 			)
-		case cmn.GetPropsCustom:
+		case apc.GetPropsCustom:
 			if custom := props.GetCustomMD(); len(custom) == 0 {
 				propValue = templates.NotSetVal
 			} else {

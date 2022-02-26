@@ -174,9 +174,9 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 					msg.Cached = true
 				}
 
-				lsmsg := &cmn.ListObjsMsg{Props: cmn.GetPropsSize}
+				lsmsg := &apc.ListObjsMsg{Props: apc.GetPropsSize}
 				if msg.Cached {
-					lsmsg.Flags = cmn.LsPresent
+					lsmsg.Flags = apc.LsPresent
 				}
 				for {
 					walk := objwalk.NewWalk(context.Background(), t.t, bck, lsmsg)

@@ -485,7 +485,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.ContentLength == 0 && r.Header.Get(cmn.HdrContentType) != cmn.ContentJSON {
 		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
-		msg = &apc.ActionMsg{Action: apc.ActList, Value: &cmn.ListObjsMsg{}}
+		msg = &apc.ActionMsg{Action: apc.ActList, Value: &apc.ListObjsMsg{}}
 	} else if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
@@ -1277,7 +1277,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	var (
 		err     error
 		bckList *cmn.BucketList
-		lsmsg   = cmn.ListObjsMsg{}
+		lsmsg   = apc.ListObjsMsg{}
 		smap    = p.owner.smap.get()
 	)
 	if err := cos.MorphMarshal(amsg.Value, &lsmsg); err != nil {
@@ -1291,16 +1291,16 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 
 	// If props were not explicitly specified always return default ones.
 	if lsmsg.Props == "" {
-		lsmsg.AddProps(cmn.GetPropsDefault...)
+		lsmsg.AddProps(apc.GetPropsDefault...)
 	}
 
 	// Vanilla HTTP buckets do not support remote listing.
 	// LsArchDir needs files locally to read archive content.
-	if bck.IsHTTP() || lsmsg.IsFlagSet(cmn.LsArchDir) {
-		lsmsg.SetFlag(cmn.LsPresent)
+	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
+		lsmsg.SetFlag(apc.LsPresent)
 	}
 
-	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(cmn.LsPresent)
+	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(apc.LsPresent)
 	if lsmsg.UUID == "" {
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()
@@ -1978,7 +1978,7 @@ func (p *proxy) checkBckTaskResp(uuid string, results sliceResults) (allOK bool,
 // listObjectsAIS reads object list from all targets, combines, sorts and returns
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
+func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
 	var (
 		aisMsg    *aisMsg
 		args      *bcastArgs
@@ -2000,13 +2000,13 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntr
 	//  request already in-flight that requests the same page as we do - if yes
 	//  then we should just patiently wait for the cache to get populated.
 
-	if lsmsg.IsFlagSet(cmn.UseListObjsCache) {
+	if lsmsg.IsFlagSet(apc.UseListObjsCache) {
 		entries, hasEnough = p.qm.c.get(cacheID, token, pageSize)
 		if hasEnough {
 			goto end
 		}
 		// Request for all the props if (cache should always have all entries).
-		lsmsg.AddProps(cmn.GetPropsAll...)
+		lsmsg.AddProps(apc.GetPropsAll...)
 	}
 	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
 	if hasEnough {
@@ -2049,11 +2049,11 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntr
 	cos.Assert(hasEnough)
 
 endWithCache:
-	if lsmsg.IsFlagSet(cmn.UseListObjsCache) {
+	if lsmsg.IsFlagSet(apc.UseListObjsCache) {
 		p.qm.c.set(cacheID, token, entries, pageSize)
 	}
 end:
-	if lsmsg.IsFlagSet(cmn.UseListObjsCache) && !props.All(cmn.GetPropsAll...) {
+	if lsmsg.IsFlagSet(apc.UseListObjsCache) && !props.All(apc.GetPropsAll...) {
 		// Since cache keeps entries with whole subset props we must create copy
 		// of the entries with smaller subset of props (if we would change the
 		// props of the `entries` it would also affect entries inside cache).
@@ -2079,7 +2079,7 @@ end:
 // (cloud or remote AIS). If request requires local data then it is broadcast
 // to all targets which perform traverse on the disks, otherwise random target
 // is chosen to perform cloud listing.
-func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
+func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
 	if lsmsg.StartAfter != "" {
 		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", lsmsg.StartAfter)
 	}
@@ -2143,7 +2143,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allE
 		glog.Infof("Objects after merge: %d, token: %q", len(allEntries.Entries), allEntries.ContinuationToken)
 	}
 
-	if lsmsg.WantProp(cmn.GetTargetURL) {
+	if lsmsg.WantProp(apc.GetTargetURL) {
 		for _, e := range allEntries.Entries {
 			si, err := cluster.HrwTarget(bck.MakeUname(e.Name), &smap.Smap)
 			if err == nil {

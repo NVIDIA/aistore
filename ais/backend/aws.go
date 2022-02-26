@@ -123,7 +123,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs,
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		h        = cmn.BackendHelpers.Amazon
@@ -156,10 +156,10 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bc
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(resp.Contents))}
 	for _, key := range resp.Contents {
 		entry := &cmn.BucketEntry{Name: *key.Key}
-		if msg.WantProp(cmn.GetPropsSize) {
+		if msg.WantProp(apc.GetPropsSize) {
 			entry.Size = *key.Size
 		}
-		if msg.WantProp(cmn.GetPropsChecksum) {
+		if msg.WantProp(apc.GetPropsChecksum) {
 			if v, ok := h.EncodeCksum(key.ETag); ok {
 				entry.Checksum = v
 			}
@@ -182,7 +182,7 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bc
 	// If version is requested, read versions page by page and stop when there
 	// is nothing to read or the version page marker is greater than object page marker.
 	// Page is limited with 500+ items, so reading them is slow.
-	if msg.WantProp(cmn.GetPropsVersion) {
+	if msg.WantProp(apc.GetPropsVersion) {
 		var (
 			versions   = make(map[string]string, len(bckList.Entries))
 			keyMarker  = ""

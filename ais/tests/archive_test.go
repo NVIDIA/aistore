@@ -282,8 +282,8 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			api.WaitForXactionIdle(baseParams, flt)
 
 			tlog.Logf("List %q\n", toBck)
-			msg := &cmn.ListObjsMsg{Prefix: "test_"}
-			msg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
+			msg := &apc.ListObjsMsg{Prefix: "test_"}
+			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
 			tassert.CheckFatal(t, err)
 			for _, entry := range objList.Entries {
@@ -292,7 +292,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
 
-			msg.SetFlag(cmn.LsArchDir)
+			msg.SetFlag(apc.LsArchDir)
 			objList, err = api.ListObjects(baseParams, toBck, msg, 0)
 			tassert.CheckFatal(t, err)
 			num = len(objList.Entries)
@@ -387,8 +387,8 @@ func TestAppendToArch(t *testing.T) {
 			wargs := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
-			lsmsg := &cmn.ListObjsMsg{Prefix: "test_lst"}
-			lsmsg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
+			lsmsg := &apc.ListObjsMsg{Prefix: "test_lst"}
+			lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, toBck, lsmsg, 0)
 			tassert.CheckFatal(t, err)
 			num := len(objList.Entries)
@@ -431,7 +431,7 @@ func TestAppendToArch(t *testing.T) {
 				api.WaitForXactionIdle(baseParams, wargs)
 			}
 
-			lsmsg.SetFlag(cmn.LsArchDir)
+			lsmsg.SetFlag(apc.LsArchDir)
 			objList, err = api.ListObjects(baseParams, toBck, lsmsg, 0)
 			tassert.CheckError(t, err)
 			num = len(objList.Entries)

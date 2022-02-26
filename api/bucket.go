@@ -348,22 +348,22 @@ func (reqParams *ReqParams) waitForAsyncReqComplete(action string, msg *cmn.BckS
 
 // ListObjects returns list of objects in a bucket. `numObjects` is the
 // maximum number of objects to be returned (0 - return all objects in a bucket).
-// This API supports numerous options and flags. In particular, `cmn.ListObjsMsg`
+// This API supports numerous options and flags. In particular, `apc.ListObjsMsg`
 // supports "opening" objects formatted as one of the supported
 // archival types and include contents of archived directories in generated
 // result sets.
 // See also: CLI and CLI usage examples
-// See also: `cmn.ListObjsMsg`
+// See also: `apc.ListObjsMsg`
 // See also: `api.ListObjectsInvalidateCache`
 // See also: `api.ListObjectsPage`
-func ListObjects(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjsMsg, numObjects uint) (*cmn.BucketList, error) {
+func ListObjects(baseParams BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObjects uint) (*cmn.BucketList, error) {
 	return ListObjectsWithOpts(baseParams, bck, lsmsg, numObjects, nil, false)
 }
 
 // additional (advance-usage) arguments include:
 // - "progress-bar" context
 // - option to override the system default and _not_ try to lookup remote bucket
-func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjsMsg, numObjects uint,
+func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObjects uint,
 	progress *ProgressContext, dontLookupRemote bool) (bckList *cmn.BucketList, err error) {
 	var (
 		q    url.Values
@@ -378,7 +378,7 @@ func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjs
 	)
 	baseParams.Method = http.MethodGet
 	if lsmsg == nil {
-		lsmsg = &cmn.ListObjsMsg{}
+		lsmsg = &apc.ListObjsMsg{}
 	}
 	if dontLookupRemote {
 		q = url.Values{apc.QparamDontLookupRemoteBck: []string{"true"}}
@@ -466,13 +466,13 @@ func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjs
 // On success the function updates `lsmsg.ContinuationToken` which client then can reuse
 // to fetch the next page.
 // See also: CLI and CLI usage examples
-// See also: `cmn.ListObjsMsg`
+// See also: `apc.ListObjsMsg`
 // See also: `api.ListObjectsInvalidateCache`
 // See also: `api.ListObjects`
-func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjsMsg) (*cmn.BucketList, error) {
+func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodGet
 	if lsmsg == nil {
-		lsmsg = &cmn.ListObjsMsg{}
+		lsmsg = &apc.ListObjsMsg{}
 	}
 	actMsg := apc.ActionMsg{Action: apc.ActList, Value: lsmsg}
 	reqParams := allocRp()

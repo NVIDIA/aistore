@@ -182,33 +182,33 @@ func listObjects(c *cli.Context, bck cmn.Bck) error {
 func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
 	var (
 		showUnmatched         = flagIsSet(c, showUnmatchedFlag)
-		msg                   = &cmn.ListObjsMsg{Prefix: prefix}
+		msg                   = &apc.ListObjsMsg{Prefix: prefix}
 		objectListFilter, err = newObjectListFilter(c)
 	)
 	if err != nil {
 		return err
 	}
 	if flagIsSet(c, listCachedFlag) {
-		msg.SetFlag(cmn.LsPresent)
+		msg.SetFlag(apc.LsPresent)
 	}
 	if listArch {
-		msg.SetFlag(cmn.LsArchDir)
+		msg.SetFlag(apc.LsArchDir)
 	}
 	if flagIsSet(c, allItemsFlag) {
-		msg.SetFlag(cmn.LsMisplaced)
+		msg.SetFlag(apc.LsMisplaced)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	if flagIsSet(c, nameOnlyFlag) {
-		msg.SetFlag(cmn.LsNameOnly)
-		msg.Props = cmn.GetPropsName
-		if cos.StringInSlice("all", props) || cos.StringInSlice(cmn.GetPropsStatus, props) {
-			msg.AddProps(cmn.GetPropsStatus)
+		msg.SetFlag(apc.LsNameOnly)
+		msg.Props = apc.GetPropsName
+		if cos.StringInSlice("all", props) || cos.StringInSlice(apc.GetPropsStatus, props) {
+			msg.AddProps(apc.GetPropsStatus)
 		}
 	} else {
 		if cos.StringInSlice("all", props) {
-			msg.AddProps(cmn.GetPropsAll...)
+			msg.AddProps(apc.GetPropsAll...)
 		} else {
-			msg.AddProps(cmn.GetPropsName)
+			msg.AddProps(apc.GetPropsName)
 			msg.AddProps(props...)
 		}
 	}
@@ -216,7 +216,7 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 		// If `all` flag is set print status of the file. Multiple files with
 		// the same name can be displayed (e.g, due to mirroring, EC), so
 		// the status helps to tell the real object from its replicas.
-		msg.AddProps(cmn.GetPropsStatus)
+		msg.AddProps(apc.GetPropsStatus)
 	}
 	if flagIsSet(c, startAfterFlag) {
 		msg.StartAfter = parseStrFlag(c, startAfterFlag)

@@ -1,9 +1,8 @@
-// Package cmn provides common constants, types, and utilities for AIS clients
-// and AIStore.
+// Package apc: API constants
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package apc
 
 import (
 	"strings"
@@ -24,6 +23,22 @@ const (
 	UseListObjsCache
 )
 
+// ListObjsMsg and HEAD(object) enum
+// NOTE: compare with `ObjectProps` below and popular lists of selected props (below as well)
+const (
+	GetPropsName     = "name"
+	GetPropsSize     = "size"
+	GetPropsVersion  = "version"
+	GetPropsChecksum = "checksum"
+	GetPropsAtime    = "atime"
+	GetPropsCached   = "cached"
+	GetTargetURL     = "target_url"
+	GetPropsStatus   = "status"
+	GetPropsCopies   = "copies"
+	GetPropsEC       = "ec"
+	GetPropsCustom   = "custom"
+)
+
 type (
 	ListObjsMsg struct {
 		UUID              string `json:"uuid"`               // ID to identify a single multi-page request
@@ -35,6 +50,18 @@ type (
 		Flags             uint64 `json:"flags,string"`       // enum {LsPresent, ...} - see above
 		PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 	}
+)
+
+// popular lists of selected props (NOTE: update when/if `ObjectProps` type changes)
+var (
+	// minimal
+	GetPropsMinimal = []string{GetPropsName, GetPropsSize}
+	// compact
+	GetPropsDefault = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
+	// all
+	GetPropsAll = append(GetPropsDefault,
+		GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom,
+	)
 )
 
 /////////////////

@@ -626,12 +626,12 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
 func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
-	var msg *cmn.ListObjsMsg
+	var msg *apc.ListObjsMsg
 	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
 		return
 	}
-	if !bck.IsAIS() && !msg.IsFlagSet(cmn.LsPresent) {
+	if !bck.IsAIS() && !msg.IsFlagSet(apc.LsPresent) {
 		maxCloudPageSize := t.Backend(bck).MaxPageSize()
 		if msg.PageSize > maxCloudPageSize {
 			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxCloudPageSize)

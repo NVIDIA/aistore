@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -60,9 +61,9 @@ func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err 
 }
 
 func (bck *bucketAPI) ListObjects(prefix, token string, pageSize uint) (objs []*Object, nextToken string, err error) {
-	selectMsg := &cmn.ListObjsMsg{
+	selectMsg := &apc.ListObjsMsg{
 		Prefix:            prefix,
-		Props:             cmn.GetPropsSize,
+		Props:             apc.GetPropsSize,
 		PageSize:          pageSize,
 		ContinuationToken: token,
 	}

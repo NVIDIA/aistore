@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
@@ -28,7 +29,7 @@ type (
 		Provider() string
 		MaxPageSize() uint
 		CreateBucket(bck *Bck) (errCode int, err error)
-		ListObjects(bck *Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error)
+		ListObjects(bck *Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error)
 		ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
 		PutObj(r io.ReadCloser, lom *LOM) (errCode int, err error)
 		DeleteObj(lom *LOM) (errCode int, err error)

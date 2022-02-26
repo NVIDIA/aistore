@@ -30,7 +30,7 @@ type (
 		prefix       string
 		Marker       string
 		markerDir    string
-		msg          *cmn.ListObjsMsg
+		msg          *apc.ListObjsMsg
 		timeFormat   string
 	}
 
@@ -42,20 +42,20 @@ const (
 )
 
 var wiProps = []string{
-	cmn.GetPropsSize,
-	cmn.GetPropsAtime,
-	cmn.GetPropsChecksum,
-	cmn.GetPropsVersion,
-	cmn.GetPropsStatus,
-	cmn.GetPropsCopies,
-	cmn.GetTargetURL,
+	apc.GetPropsSize,
+	apc.GetPropsAtime,
+	apc.GetPropsChecksum,
+	apc.GetPropsVersion,
+	apc.GetPropsStatus,
+	apc.GetPropsCopies,
+	apc.GetTargetURL,
 }
 
 func isObjMoved(status uint16) bool {
 	return status == apc.ObjStatusMovedNode || status == apc.ObjStatusMovedMpath
 }
 
-func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.ListObjsMsg) *WalkInfo {
+func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) *WalkInfo {
 	// TODO: this should be removed.
 	// TODO: we should take care of `msg.StartAfter`.
 	// Marker is always a file name, so we need to strip filename from the path
@@ -88,13 +88,13 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.ListObjsMsg) *W
 	}
 }
 
-func (wi *WalkInfo) needSize() bool      { return wi.propNeeded[cmn.GetPropsSize] }
-func (wi *WalkInfo) needAtime() bool     { return wi.propNeeded[cmn.GetPropsAtime] }
-func (wi *WalkInfo) needCksum() bool     { return wi.propNeeded[cmn.GetPropsChecksum] }
-func (wi *WalkInfo) needVersion() bool   { return wi.propNeeded[cmn.GetPropsVersion] }
-func (wi *WalkInfo) needStatus() bool    { return wi.propNeeded[cmn.GetPropsStatus] } //nolint:unused // left for consistency
-func (wi *WalkInfo) needCopies() bool    { return wi.propNeeded[cmn.GetPropsCopies] }
-func (wi *WalkInfo) needTargetURL() bool { return wi.propNeeded[cmn.GetTargetURL] }
+func (wi *WalkInfo) needSize() bool      { return wi.propNeeded[apc.GetPropsSize] }
+func (wi *WalkInfo) needAtime() bool     { return wi.propNeeded[apc.GetPropsAtime] }
+func (wi *WalkInfo) needCksum() bool     { return wi.propNeeded[apc.GetPropsChecksum] }
+func (wi *WalkInfo) needVersion() bool   { return wi.propNeeded[apc.GetPropsVersion] }
+func (wi *WalkInfo) needStatus() bool    { return wi.propNeeded[apc.GetPropsStatus] } //nolint:unused // left for consistency
+func (wi *WalkInfo) needCopies() bool    { return wi.propNeeded[apc.GetPropsCopies] }
+func (wi *WalkInfo) needTargetURL() bool { return wi.propNeeded[apc.GetTargetURL] }
 
 // Checks if the directory should be processed by cache list call
 // Does checks:
@@ -134,7 +134,7 @@ func (wi *WalkInfo) matchObj(lom *cluster.LOM) bool {
 	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, lom.ObjName) {
 		return false
 	}
-	if wi.msg.IsFlagSet(cmn.LsNameOnly) {
+	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return true
 	}
 	return wi.objectFilter == nil || wi.objectFilter(lom)
@@ -157,7 +157,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 		Name:  lom.ObjName,
 		Flags: objStatus | apc.EntryIsCached,
 	}
-	if wi.msg.IsFlagSet(cmn.LsNameOnly) {
+	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return fileInfo
 	}
 
@@ -210,10 +210,10 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 		objStatus = apc.ObjStatusMovedMpath
 	}
 
-	if isObjMoved(objStatus) && !wi.msg.IsFlagSet(cmn.LsMisplaced) {
+	if isObjMoved(objStatus) && !wi.msg.IsFlagSet(apc.LsMisplaced) {
 		return nil, nil
 	}
-	if wi.msg.IsFlagSet(cmn.LsNameOnly) {
+	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return wi.lsObject(lom, objStatus), nil
 	}
 

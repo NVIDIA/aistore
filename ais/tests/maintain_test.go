@@ -71,8 +71,8 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 	m.puts()
 	// 1. Perform list-object and populate entries map
-	msg := &cmn.ListObjsMsg{}
-	msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies, cmn.GetPropsSize)
+	msg := &apc.ListObjsMsg{}
+	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsSize)
 	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
@@ -205,7 +205,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
-	msgList := &cmn.ListObjsMsg{Prefix: objPath}
+	msgList := &apc.ListObjsMsg{Prefix: objPath}
 	bucketList, err := api.ListObjects(baseParams, bck, msgList, 0)
 	tassert.CheckError(t, err)
 	if bucketList != nil && len(bucketList.Entries) != objCount {
@@ -507,8 +507,8 @@ func TestShutdownListObjects(t *testing.T) {
 	m.puts()
 
 	// 1. Perform list-object and populate entries map.
-	msg := &cmn.ListObjsMsg{}
-	msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsCopies, cmn.GetPropsSize)
+	msg := &apc.ListObjsMsg{}
+	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsCopies, apc.GetPropsSize)
 	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))

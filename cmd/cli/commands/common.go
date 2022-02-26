@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/urfave/cli"
 )
@@ -277,12 +276,12 @@ var (
 	objPropsFlag = cli.StringFlag{
 		Name:  "props",
 		Usage: "comma-separated list of object properties including name, size, version, ##copies, EC data and parity info, custom props",
-		Value: strings.Join(cmn.GetPropsDefault, ","),
+		Value: strings.Join(apc.GetPropsDefault, ","),
 	}
 	objPropsLsFlag = cli.StringFlag{
 		Name:  objPropsFlag.Name,
 		Usage: objPropsFlag.Usage,
-		Value: strings.Join(cmn.GetPropsMinimal, ","),
+		Value: strings.Join(apc.GetPropsMinimal, ","),
 	}
 	allPropsFlag = cli.BoolFlag{Name: "all", Usage: "show all object properties"}
 	prefixFlag   = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}

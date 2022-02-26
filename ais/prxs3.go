@@ -272,11 +272,11 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 		p.writeErr(w, r, err)
 		return
 	}
-	lsmsg := cmn.ListObjsMsg{UUID: cos.GenUUID(), TimeFormat: time.RFC3339}
-	lsmsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
+	lsmsg := apc.ListObjsMsg{UUID: cos.GenUUID(), TimeFormat: time.RFC3339}
+	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &lsmsg)
 
-	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(cmn.LsPresent)
+	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(apc.LsPresent)
 	var (
 		objList *cmn.BucketList
 		err     error

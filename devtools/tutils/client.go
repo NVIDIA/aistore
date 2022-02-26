@@ -115,7 +115,7 @@ func PutObject(t *testing.T, bck cmn.Bck, objName string, reader readers.Reader)
 func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint) ([]string, error) {
 	var (
 		baseParams = BaseAPIParams(proxyURL)
-		msg        = &cmn.ListObjsMsg{Flags: cmn.LsPresent, Prefix: prefix}
+		msg        = &apc.ListObjsMsg{Flags: apc.LsPresent, Prefix: prefix}
 	)
 
 	data, err := api.ListObjects(baseParams, bck, msg, objectCountLimit)
@@ -253,7 +253,7 @@ func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName 
 		if time.Now().After(maxTime) {
 			return fmt.Errorf("timed out when downloading %s/%s", bck, objName)
 		}
-		reslist, err := api.ListObjects(baseParams, bck, &cmn.ListObjsMsg{}, 0)
+		reslist, err := api.ListObjects(baseParams, bck, &apc.ListObjsMsg{}, 0)
 		if err != nil {
 			return err
 		}
@@ -365,7 +365,7 @@ func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, obj
 }
 
 func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object, timeFormat string) (time.Time, string) {
-	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
+	msg := &apc.ListObjsMsg{Props: apc.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
 	bucketList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -400,7 +401,7 @@ func (j *backendDlJob) getNextObjs() error {
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {
-		msg := &cmn.ListObjsMsg{
+		msg := &apc.ListObjsMsg{
 			Prefix:            j.prefix,
 			ContinuationToken: j.continuationToken,
 			PageSize:          backend.MaxPageSize(),

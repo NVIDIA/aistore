@@ -115,7 +115,7 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.Simple
 // LIST OBJECTS //
 //////////////////
 
-func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList,
+func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList,
 	errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 
@@ -154,10 +154,10 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bck
 			Name:    objName,
 			Version: "",
 		}
-		if msg.WantProp(cmn.GetPropsSize) {
+		if msg.WantProp(apc.GetPropsSize) {
 			entry.Size = fi.Size()
 		}
-		if msg.WantProp(cmn.GetPropsChecksum) {
+		if msg.WantProp(apc.GetPropsChecksum) {
 			fr, err := hp.c.Open(path)
 			if err != nil {
 				return err

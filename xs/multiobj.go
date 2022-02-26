@@ -150,7 +150,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 		return fmt.Errorf("cannot list bucket %s for prefix %q (plain HTTP buckets are not list-able) - use alternative templating",
 			bck, prefix)
 	}
-	msg := &cmn.ListObjsMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
+	msg := &apc.ListObjsMsg{Prefix: prefix, Props: apc.GetPropsStatus}
 	for {
 		if r.xctn.IsAborted() || r.xctn.Finished() {
 			break
