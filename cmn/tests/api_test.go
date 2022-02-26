@@ -148,7 +148,7 @@ var _ = Describe("API", func() {
 						Compression:  api.String("false"),
 					},
 					Access:  api.AccessAttrs(1024),
-					MDWrite: api.MDWritePolicy(cmn.WriteDelayed),
+					MDWrite: api.MDWritePolicy(apc.WriteDelayed),
 				},
 				cmn.BucketProps{
 					Versioning: cmn.VersionConf{

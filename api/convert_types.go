@@ -7,6 +7,7 @@ package api
 import (
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -35,7 +36,7 @@ func AccessAttrs(v cmn.AccessAttrs) *cmn.AccessAttrs {
 	return &v
 }
 
-func MDWritePolicy(v cmn.MDWritePolicy) *cmn.MDWritePolicy {
+func MDWritePolicy(v apc.MDWritePolicy) *apc.MDWritePolicy {
 	return &v
 }
 

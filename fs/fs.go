@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -486,7 +487,7 @@ func (mi *MountpathInfo) _addEnabled(tid string, availablePaths MPI, config *cmn
 	if err != nil {
 		return err
 	}
-	if tid != "" && config.MDWrite != cmn.WriteNever {
+	if tid != "" && config.MDWrite != apc.WriteNever {
 		if err := mi.SetDaemonIDXattr(tid); err != nil {
 			return err
 		}

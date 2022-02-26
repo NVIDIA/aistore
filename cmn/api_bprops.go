@@ -46,7 +46,7 @@ type (
 		Mirror MirrorConf `json:"mirror"`
 
 		// Metadata write policy
-		MDWrite MDWritePolicy `json:"md_write"`
+		MDWrite apc.MDWritePolicy `json:"md_write"`
 
 		// EC defines erasure coding setting for the bucket
 		EC ECConf `json:"ec"`
@@ -106,7 +106,7 @@ type (
 		Mirror     *MirrorConfToUpdate  `json:"mirror"`
 		EC         *ECConfToUpdate      `json:"ec"`
 		Access     *AccessAttrs         `json:"access,string"`
-		MDWrite    *MDWritePolicy       `json:"md_write"`
+		MDWrite    *apc.MDWritePolicy   `json:"md_write"`
 		Extra      *ExtraToUpdate       `json:"extra"`
 		Force      bool                 `json:"force" copy:"skip" list:"omit"`
 	}
@@ -188,21 +188,23 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 			return fmt.Errorf("backend bucket %q must be remote", bp.BackendBck)
 		}
 	}
-
-	var (
-		softErr        error
-		validationArgs = &ValidationArgs{Provider: bp.Provider, TargetCnt: targetCnt}
-		validators     = []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, &bp.Extra, bp.MDWrite}
-	)
-	for _, validator := range validators {
-		if err := validator.ValidateAsProps(validationArgs); err != nil {
+	var softErr error
+	for _, pv := range []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, &bp.Extra, bp.MDWrite} {
+		var err error
+		if pv == &bp.EC {
+			err = bp.EC.ValidateAsProps(targetCnt)
+		} else if pv == &bp.Extra {
+			err = bp.Extra.ValidateAsProps(bp.Provider)
+		} else {
+			err = pv.ValidateAsProps()
+		}
+		if err != nil {
 			if !IsErrSoft(err) {
 				return err
 			}
 			softErr = err
 		}
 	}
-
 	if bp.Mirror.Enabled && bp.EC.Enabled {
 		return fmt.Errorf("cannot enable mirroring and ec at the same time for the same bucket")
 	}
@@ -237,8 +239,10 @@ func NewBucketPropsToUpdate(nvs cos.SimpleKVs) (props *BucketPropsToUpdate, err 
 	return
 }
 
-func (c *ExtraProps) ValidateAsProps(args *ValidationArgs) error {
-	switch args.Provider {
+func (c *ExtraProps) ValidateAsProps(arg ...interface{}) error {
+	provider, ok := arg[0].(string)
+	debug.Assert(ok)
+	switch provider {
 	case apc.ProviderHDFS:
 		if c.HDFS.RefDirectory == "" {
 			return fmt.Errorf("reference directory must be set for a bucket with HDFS provider")

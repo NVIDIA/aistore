@@ -70,15 +70,11 @@ const (
 )
 
 type (
-	ValidationArgs struct {
-		Provider  string // For ExtraProps.
-		TargetCnt int    // For EC.
-	}
 	Validator interface {
 		Validate() error
 	}
 	PropsValidator interface {
-		ValidateAsProps(args *ValidationArgs) error
+		ValidateAsProps(arg ...interface{}) error
 	}
 )
 
@@ -109,32 +105,32 @@ type (
 	}
 
 	ClusterConfig struct {
-		Backend     BackendConf     `json:"backend" allow:"cluster"`
-		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
-		EC          ECConf          `json:"ec" allow:"cluster"`
-		Log         LogConf         `json:"log"`
-		Periodic    PeriodConf      `json:"periodic"`
-		Timeout     TimeoutConf     `json:"timeout"`
-		Client      ClientConf      `json:"client"`
-		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
-		LRU         LRUConf         `json:"lru"`
-		Disk        DiskConf        `json:"disk"`
-		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
-		Resilver    ResilverConf    `json:"resilver"`
-		Cksum       CksumConf       `json:"checksum"`
-		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
-		Net         NetConf         `json:"net"`
-		FSHC        FSHCConf        `json:"fshc"`
-		Auth        AuthConf        `json:"auth"`
-		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
-		Downloader  DownloaderConf  `json:"downloader"`
-		DSort       DSortConf       `json:"distributed_sort"`
-		Compression CompressionConf `json:"compression"`
-		MDWrite     MDWritePolicy   `json:"md_write"`
-		LastUpdated string          `json:"lastupdate_time"`
-		UUID        string          `json:"uuid"`                  // immutable
-		Version     int64           `json:"config_version,string"` // version
-		Ext         interface{}     `json:"ext,omitempty"`         // within meta-version extensions
+		Backend     BackendConf       `json:"backend" allow:"cluster"`
+		Mirror      MirrorConf        `json:"mirror" allow:"cluster"`
+		EC          ECConf            `json:"ec" allow:"cluster"`
+		Log         LogConf           `json:"log"`
+		Periodic    PeriodConf        `json:"periodic"`
+		Timeout     TimeoutConf       `json:"timeout"`
+		Client      ClientConf        `json:"client"`
+		Proxy       ProxyConf         `json:"proxy" allow:"cluster"`
+		LRU         LRUConf           `json:"lru"`
+		Disk        DiskConf          `json:"disk"`
+		Rebalance   RebalanceConf     `json:"rebalance" allow:"cluster"`
+		Resilver    ResilverConf      `json:"resilver"`
+		Cksum       CksumConf         `json:"checksum"`
+		Versioning  VersionConf       `json:"versioning" allow:"cluster"`
+		Net         NetConf           `json:"net"`
+		FSHC        FSHCConf          `json:"fshc"`
+		Auth        AuthConf          `json:"auth"`
+		Keepalive   KeepaliveConf     `json:"keepalivetracker"`
+		Downloader  DownloaderConf    `json:"downloader"`
+		DSort       DSortConf         `json:"distributed_sort"`
+		Compression CompressionConf   `json:"compression"`
+		MDWrite     apc.MDWritePolicy `json:"md_write"`
+		LastUpdated string            `json:"lastupdate_time"`
+		UUID        string            `json:"uuid"`                  // immutable
+		Version     int64             `json:"config_version,string"` // version
+		Ext         interface{}       `json:"ext,omitempty"`         // within meta-version extensions
 		// obsolete
 		Replication ReplicationConf `json:"replication"`
 	}
@@ -187,7 +183,7 @@ type (
 		Downloader  *DownloaderConfToUpdate  `json:"downloader,omitempty"`
 		DSort       *DSortConfToUpdate       `json:"distributed_sort,omitempty"`
 		Compression *CompressionConfToUpdate `json:"compression,omitempty"`
-		MDWrite     *MDWritePolicy           `json:"md_write,omitempty"`
+		MDWrite     *apc.MDWritePolicy       `json:"md_write,omitempty"`
 		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
 
 		// LocalConfig
@@ -989,7 +985,7 @@ func (c *LRUConf) Validate() (err error) {
 	return
 }
 
-func (c *LRUConf) ValidateAsProps(_ *ValidationArgs) (err error) {
+func (c *LRUConf) ValidateAsProps(...interface{}) (err error) {
 	if !c.Enabled {
 		return nil
 	}
@@ -1012,7 +1008,7 @@ func (c *CksumConf) Validate() (err error) {
 	return cos.ValidateCksumType(c.Type)
 }
 
-func (c *CksumConf) ValidateAsProps(_ *ValidationArgs) (err error) {
+func (c *CksumConf) ValidateAsProps(...interface{}) (err error) {
 	return c.Validate()
 }
 
@@ -1084,7 +1080,7 @@ func (c *MirrorConf) Validate() error {
 	return nil
 }
 
-func (c *MirrorConf) ValidateAsProps(_ *ValidationArgs) error {
+func (c *MirrorConf) ValidateAsProps(...interface{}) error {
 	if !c.Enabled {
 		return nil
 	}
@@ -1098,19 +1094,6 @@ func (c *MirrorConf) String() string {
 
 	return fmt.Sprintf("%d copies", c.Copies)
 }
-
-///////////////////////////////////////////
-// MDWritePolicy (part of ClusterConfig) //
-///////////////////////////////////////////
-
-func (c MDWritePolicy) Validate() (err error) {
-	if c.IsImmediate() || c == WriteDelayed || c == WriteNever {
-		return
-	}
-	return fmt.Errorf("invalid md_write policy %q", c)
-}
-
-func (c MDWritePolicy) ValidateAsProps(_ *ValidationArgs) (err error) { return c.Validate() }
 
 ////////////////////////////////////
 // ECConf (part of ClusterConfig) //
@@ -1131,20 +1114,22 @@ func (c *ECConf) Validate() error {
 	return nil
 }
 
-func (c *ECConf) ValidateAsProps(args *ValidationArgs) (err error) {
+func (c *ECConf) ValidateAsProps(arg ...interface{}) (err error) {
 	if !c.Enabled {
 		return
 	}
 	if err = c.Validate(); err != nil {
 		return
 	}
+	targetCnt, ok := arg[0].(int)
+	debug.Assert(ok)
 	required := c.RequiredEncodeTargets()
-	if required <= args.TargetCnt {
+	if required <= targetCnt {
 		return
 	}
 	err = fmt.Errorf("%v: EC configuration (%d data and %d parity slices) requires at least %d (have %d)",
-		ErrNotEnoughTargets, c.DataSlices, c.ParitySlices, required, args.TargetCnt)
-	if c.ParitySlices > args.TargetCnt {
+		ErrNotEnoughTargets, c.DataSlices, c.ParitySlices, required, targetCnt)
+	if c.ParitySlices > targetCnt {
 		return
 	}
 	return NewErrSoft(err.Error())

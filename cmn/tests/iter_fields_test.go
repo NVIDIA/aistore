@@ -99,7 +99,7 @@ var _ = Describe("IterFields", func() {
 					"extra.aws.cloud_region": "us-central",
 
 					"access":   cmn.AccessAttrs(0),
-					"md_write": cmn.MDWritePolicy(""),
+					"md_write": apc.MDWritePolicy(""),
 					"created":  int64(0),
 				},
 			),
@@ -298,7 +298,7 @@ var _ = Describe("IterFields", func() {
 						ValidateWarmGet: api.Bool(true),
 					},
 					Access:  api.AccessAttrs(12),
-					MDWrite: api.MDWritePolicy(cmn.WriteNever),
+					MDWrite: api.MDWritePolicy(apc.WriteNever),
 				},
 			),
 		)

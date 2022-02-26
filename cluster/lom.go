@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -195,9 +196,9 @@ func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
 // see also: transport.ObjHdr.FullName()
 func (lom *LOM) FullName() string { return filepath.Join(lom.bck.Name, lom.ObjName) }
 
-func (lom *LOM) WritePolicy() (p cmn.MDWritePolicy) {
+func (lom *LOM) WritePolicy() (p apc.MDWritePolicy) {
 	if bprops := lom.Bprops(); bprops == nil {
-		p = cmn.WriteImmediate
+		p = apc.WriteImmediate
 	} else {
 		p = bprops.MDWrite
 	}

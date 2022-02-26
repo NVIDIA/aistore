@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -202,7 +203,7 @@ func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
 	if err := lom.flushAtime(atime); err != nil {
 		return
 	}
-	if !md.isDirty() || lom.WritePolicy() == cmn.WriteNever {
+	if !md.isDirty() || lom.WritePolicy() == apc.WriteNever {
 		return
 	}
 	lom.md = *md

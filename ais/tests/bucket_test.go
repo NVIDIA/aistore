@@ -253,7 +253,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 }
 
 func TestOverwriteLomCache(t *testing.T) {
-	for _, mdwrite := range []cmn.MDWritePolicy{cmn.WriteImmediate, cmn.WriteNever} {
+	for _, mdwrite := range []apc.MDWritePolicy{apc.WriteImmediate, apc.WriteNever} {
 		name := string(mdwrite)
 		if name == "" {
 			name = "write-immediate"
@@ -266,7 +266,7 @@ func TestOverwriteLomCache(t *testing.T) {
 	}
 }
 
-func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
+func overwriteLomCache(mdwrite apc.MDWritePolicy, t *testing.T) {
 	var (
 		m = ioContext{
 			t:         t,
