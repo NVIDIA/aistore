@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -128,7 +128,7 @@ func (rctx *Context) PutPrimitiveStats(p *stats.PrimitiveStat) {
 }
 
 // The system info stats don't need a context
-func WriteSystemInfoStats(systemInfoStats *cmn.ClusterSysInfo) {
+func WriteSystemInfoStats(systemInfoStats *apc.ClusterSysInfo) {
 	sysinfoStats := stats.ParseClusterSysInfo(systemInfoStats, time.Now())
 	for _, st := range sysinfoStats {
 		sysinfoWriter.WriteStat(st)

@@ -86,7 +86,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg i
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: action, Value: msg})
+		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: action, Value: msg})
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 		reqParams.Query = q
 	}

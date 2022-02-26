@@ -606,9 +606,9 @@ func PutMPI(available, disabled MPI) {
 	putDisabMPI(disabled)
 }
 
-func MountpathsToLists() (mpl *cmn.MountpathList) {
+func MountpathsToLists() (mpl *apc.MountpathList) {
 	availablePaths, disabledPaths := Get()
-	mpl = &cmn.MountpathList{
+	mpl = &apc.MountpathList{
 		Available: make([]string, 0, len(availablePaths)),
 		WaitingDD: make([]string, 0),
 		Disabled:  make([]string, 0, len(disabledPaths)),
@@ -1123,7 +1123,7 @@ func CapPeriodic(mpcap MPCap) (cs CapStatus, updated bool, err error) {
 	return
 }
 
-func CapStatusAux() (fsInfo cmn.CapacityInfo) {
+func CapStatusAux() (fsInfo apc.CapacityInfo) {
 	cs := GetCapStatus()
 	fsInfo.Used = cs.TotalUsed
 	fsInfo.Total = cs.TotalUsed + cs.TotalAvail

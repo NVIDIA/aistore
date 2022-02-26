@@ -119,7 +119,7 @@ func BenchmarkECRebalance(b *testing.B) {
 			tgtLost, err := smap.GetRandTarget()
 			tassert.CheckFatal(b, err)
 
-			args := &cmn.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
+			args := &apc.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 			_, err = api.StartMaintenance(baseParams, args)
 			tassert.CheckFatal(b, err)
 			fillBucket(b, proxyURL, bck, uint64(size), objCount)
@@ -140,7 +140,7 @@ func BenchmarkECRebalance(b *testing.B) {
 				_, err = api.WaitForXactionIC(baseParams, reqArgs)
 				tassert.CheckFatal(b, err)
 
-				args := &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
+				args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 				_, err = api.StopMaintenance(baseParams, args)
 				tassert.CheckError(b, err)
 				tutils.WaitForRebalAndResil(b, baseParams, rebalanceTime)
@@ -171,13 +171,13 @@ func BenchmarkRebalance(b *testing.B) {
 		tgtLost, err := smap.GetRandTarget()
 		tassert.CheckFatal(b, err)
 
-		args := &cmn.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
+		args := &apc.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 		_, err = api.StartMaintenance(baseParams, args)
 		tassert.CheckFatal(b, err)
 		fillBucket(b, proxyURL, bck, uint64(size), objCount)
 
 		b.Run("rebalance", func(b *testing.B) {
-			args := &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
+			args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 			_, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(b, err)
 			tutils.WaitForRebalAndResil(b, baseParams, rebalanceTime)

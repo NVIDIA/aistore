@@ -81,7 +81,7 @@ func GetNodeClusterMap(baseParams BaseParams, nodeID string) (smap *cluster.Smap
 }
 
 // GetClusterSysInfo retrieves AIStore system info.
-func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err error) {
+func GetClusterSysInfo(baseParams BaseParams) (sysInfo apc.ClusterSysInfo, err error) {
 	baseParams.Method = http.MethodGet
 	reqParams := allocRp()
 	{
@@ -150,7 +150,7 @@ func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.BackendInfoAIS, err error)
 
 // JoinCluster add a node to a cluster.
 func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID, daemonID string, err error) {
-	var info cmn.JoinNodeResult
+	var info apc.JoinNodeResult
 	baseParams.Method = http.MethodPost
 	reqParams := allocRp()
 	{
@@ -206,7 +206,7 @@ func SetClusterConfig(baseParams BaseParams, nvs cos.SimpleKVs, transient ...boo
 // using the `cmn.ConfigToUpdate` parameter provided.
 func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigToUpdate, transient ...bool) error {
 	q := url.Values{}
-	msg := cmn.ActionMsg{
+	msg := apc.ActionMsg{
 		Action: apc.ActSetConfig,
 		Value:  configToUpdate,
 	}
@@ -234,7 +234,7 @@ func ResetClusterConfig(baseParams BaseParams) error {
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
-		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: apc.ActResetConfig})
+		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActResetConfig})
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	err := reqParams.DoHTTPRequest()
@@ -310,8 +310,8 @@ func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 
 // Maintenance API
 //
-func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
-	msg := cmn.ActionMsg{
+func StartMaintenance(baseParams BaseParams, actValue *apc.ActValRmNode) (id string, err error) {
+	msg := apc.ActionMsg{
 		Action: apc.ActStartMaintenance,
 		Value:  actValue,
 	}
@@ -328,8 +328,8 @@ func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id str
 	return id, err
 }
 
-func DecommissionNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
-	msg := cmn.ActionMsg{
+func DecommissionNode(baseParams BaseParams, actValue *apc.ActValRmNode) (id string, err error) {
+	msg := apc.ActionMsg{
 		Action: apc.ActDecommissionNode,
 		Value:  actValue,
 	}
@@ -346,8 +346,8 @@ func DecommissionNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id str
 	return id, err
 }
 
-func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
-	msg := cmn.ActionMsg{
+func StopMaintenance(baseParams BaseParams, actValue *apc.ActValRmNode) (id string, err error) {
+	msg := apc.ActionMsg{
 		Action: apc.ActStopMaintenance,
 		Value:  actValue,
 	}
@@ -366,7 +366,7 @@ func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id stri
 
 // ShutdownCluster shuts down the whole cluster
 func ShutdownCluster(baseParams BaseParams) error {
-	msg := cmn.ActionMsg{Action: apc.ActShutdown}
+	msg := apc.ActionMsg{Action: apc.ActShutdown}
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
 	{
@@ -382,7 +382,7 @@ func ShutdownCluster(baseParams BaseParams) error {
 
 // DecommissionCluster decommissions whole cluster
 func DecommissionCluster(baseParams BaseParams) error {
-	msg := cmn.ActionMsg{Action: apc.ActDecommission}
+	msg := apc.ActionMsg{Action: apc.ActDecommission}
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
 	{
@@ -400,8 +400,8 @@ func DecommissionCluster(baseParams BaseParams) error {
 }
 
 // ShutdownNode shuts down a specific node
-func ShutdownNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
-	msg := cmn.ActionMsg{
+func ShutdownNode(baseParams BaseParams, actValue *apc.ActValRmNode) (id string, err error) {
+	msg := apc.ActionMsg{
 		Action: apc.ActShutdownNode,
 		Value:  actValue,
 	}

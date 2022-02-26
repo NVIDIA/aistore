@@ -32,7 +32,7 @@ type GetLogInput struct {
 }
 
 // GetMountpaths given the direct public URL of the target, returns the target's mountpaths or error.
-func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.MountpathList, err error) {
+func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *apc.MountpathList, err error) {
 	baseParams.Method = http.MethodGet
 	reqParams := allocRp()
 	{
@@ -56,7 +56,7 @@ func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
-		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: apc.ActMountpathAttach, Value: mountpath})
+		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathAttach, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			apc.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
@@ -75,7 +75,7 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
-		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: apc.ActMountpathEnable, Value: mountpath})
+		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathEnable, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			apc.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
@@ -97,7 +97,7 @@ func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
-		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: apc.ActMountpathDetach, Value: mountpath})
+		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathDetach, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
@@ -119,7 +119,7 @@ func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath stri
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
-		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: apc.ActMountpathDisable, Value: mountpath})
+		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathDisable, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
@@ -243,7 +243,7 @@ func ResetDaemonConfig(baseParams BaseParams, nodeID string) error {
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.S
-		reqParams.Body = cos.MustMarshal(cmn.ActionMsg{Action: apc.ActResetConfig})
+		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActResetConfig})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{nodeID},
 			cmn.HdrContentType: []string{cmn.ContentJSON},

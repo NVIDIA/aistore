@@ -15,7 +15,7 @@ import (
 
 func BenchmarkActionMsgMarshal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		msg := cmn.ActionMsg{
+		msg := apc.ActionMsg{
 			Name:   "test-name",
 			Action: apc.ActDeleteObjects,
 			Value:  &cmn.ListRangeMsg{Template: "thisisatemplate"},
@@ -24,7 +24,7 @@ func BenchmarkActionMsgMarshal(b *testing.B) {
 		if err != nil {
 			b.Errorf("marshaling errored: %v", err)
 		}
-		msg2 := &cmn.ActionMsg{}
+		msg2 := &apc.ActionMsg{}
 		err = jsoniter.Unmarshal(data, &msg2)
 		if err != nil {
 			b.Errorf("unmarshaling errored: %v", err)

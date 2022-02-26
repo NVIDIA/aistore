@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
@@ -169,7 +170,7 @@ func (rctx *RecipeContext) RemoveTarget(conds *PostConds, delay time.Duration) {
 		rctx.targetMutex.Lock()
 		smap := fetchSmap("RestoreTarget")
 		for _, v := range smap.Tmap {
-			args := &cmn.ActValRmNode{DaemonID: v.ID(), SkipRebalance: true}
+			args := &apc.ActValRmNode{DaemonID: v.ID(), SkipRebalance: true}
 			err := soakcmn.UnregisterNode(primaryURL, args)
 			rctx.targetMutex.Unlock()
 			cos.AssertNoErr(err)

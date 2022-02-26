@@ -221,7 +221,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 
 	removeTarget, _ := smap.GetRandTarget()
 
-	args := &cmn.ActValRmNode{DaemonID: removeTarget.ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: removeTarget.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForClusterState(
@@ -236,7 +236,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	// rewrite objects and compare versions - they should change
 	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled, cksumType)
 
-	args = &cmn.ActValRmNode{DaemonID: removeTarget.ID()}
+	args = &apc.ActValRmNode{DaemonID: removeTarget.ID()}
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -53,6 +54,6 @@ func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 	return devtools.JoinCluster(devtoolsCtx, proxyURL, node, registerTimeout)
 }
 
-func UnregisterNode(proxyURL string, args *cmn.ActValRmNode) error {
+func UnregisterNode(proxyURL string, args *apc.ActValRmNode) error {
 	return devtools.RemoveNodeFromSmap(devtoolsCtx, proxyURL, args.DaemonID, registerTimeout)
 }

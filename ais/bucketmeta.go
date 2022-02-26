@@ -76,7 +76,7 @@ type (
 		pre   func(*bmdModifier, *bucketMD) error
 		final func(*bmdModifier, *bucketMD)
 
-		msg   *cmn.ActionMsg
+		msg   *apc.ActionMsg
 		txnID string // transaction UUID
 		bcks  []*cluster.Bck
 

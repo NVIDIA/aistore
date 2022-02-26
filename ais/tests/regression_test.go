@@ -504,7 +504,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	targets := m.smap.Tmap.ActiveNodes()
 	for i := 0; i < targetsToUnregister; i++ {
 		tlog.Logf("Put %s in maintenance (no rebalance)\n", targets[i].StringEx())
-		args := &cmn.ActValRmNode{DaemonID: targets[i].ID(), SkipRebalance: true}
+		args := &apc.ActValRmNode{DaemonID: targets[i].ID(), SkipRebalance: true}
 		_, err := api.StartMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
 		removed[targets[i].ID()] = targets[i]

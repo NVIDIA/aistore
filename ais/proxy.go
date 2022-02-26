@@ -472,7 +472,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/buckets[/bucket-name]
 func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg       *cmn.ActionMsg
+		msg       *apc.ActionMsg
 		bckName   string
 		queryBcks cmn.QueryBcks
 	)
@@ -485,7 +485,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.ContentLength == 0 && r.Header.Get(cmn.HdrContentType) != cmn.ContentJSON {
 		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
-		msg = &cmn.ActionMsg{Action: apc.ActList, Value: &cmn.ListObjsMsg{}}
+		msg = &apc.ActionMsg{Action: apc.ActList, Value: &cmn.ListObjsMsg{}}
 	} else if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
@@ -927,7 +927,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 // PUT { action } /v1/buckets/bucket-name
 func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg           *cmn.ActionMsg
+		msg           *apc.ActionMsg
 		query         = r.URL.Query()
 		apiItems, err = p.checkRESTItems(w, r, 1, true, apc.URLPathBuckets.L)
 	)
@@ -988,7 +988,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	var msg *cmn.ActionMsg
+	var msg *apc.ActionMsg
 	apiItems, err := p.checkRESTItems(w, r, 1, true, apc.URLPathBuckets.L)
 	if err != nil {
 		return
@@ -1000,7 +1000,7 @@ func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	p.hpostBucket(w, r, msg, bucket)
 }
 
-func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bucket string) {
+func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bucket string) {
 	query := r.URL.Query()
 	bck, err := newBckFromQuery(bucket, query, nil)
 	if err != nil {
@@ -1207,7 +1207,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.Act
 	}
 }
 
-func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query url.Values, msg *cmn.ActionMsg, bck *cluster.Bck) {
+func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActionMsg, bck *cluster.Bck) {
 	bucket := bck.Name
 	err := p.checkACL(w, r, nil, apc.AceCreateBucket)
 	if err != nil {
@@ -1273,7 +1273,7 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query 
 	}
 }
 
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *cmn.ActionMsg, begin int64) {
+func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg, begin int64) {
 	var (
 		err     error
 		bckList *cmn.BucketList
@@ -1358,7 +1358,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 }
 
 // bucket == "": all buckets for a given provider
-func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, amsg *cmn.ActionMsg, dpq *dpq) {
+func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, amsg *apc.ActionMsg, dpq *dpq) {
 	var lsmsg cmn.BckSummMsg
 	if err := cos.MorphMarshal(amsg.Value, &lsmsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
@@ -1553,7 +1553,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	ctx := &bmdModifier{
 		pre:        p._bckHeadPre,
 		final:      p._syncBMDFinal,
-		msg:        &cmn.ActionMsg{Action: apc.ActResyncBprops},
+		msg:        &apc.ActionMsg{Action: apc.ActResyncBprops},
 		bcks:       []*cluster.Bck{bck},
 		cloudProps: cloudProps,
 	}
@@ -1595,7 +1595,7 @@ func (p *proxy) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	var (
 		err           error
-		msg           *cmn.ActionMsg
+		msg           *apc.ActionMsg
 		propsToUpdate cmn.BucketPropsToUpdate
 		xactID        string
 		nprops        *cmn.BucketProps // complete instance of bucket props with propsToUpdate changes
@@ -1723,7 +1723,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 //============================
 // forward control plane request to the current primary proxy
 // return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
-func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg,
+func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg,
 	s string, origBody ...[]byte) (forf bool) {
 	var (
 		body []byte
@@ -1810,7 +1810,7 @@ func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID st
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck cmn.Bck) (err error) {
+func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck cmn.Bck) (err error) {
 	var (
 		remoteUUID    = bck.Ns.UUID
 		query         = r.URL.Query()
@@ -1863,7 +1863,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *cm
 	return nil
 }
 
-func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks, msg *cmn.ActionMsg) {
+func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks, msg *apc.ActionMsg) {
 	bmd := p.owner.bmd.get()
 	if query.Provider != "" {
 		if query.IsAIS() || query.IsHDFS() {
@@ -2155,7 +2155,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allE
 	return allEntries, nil
 }
 
-func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, msg *cmn.ActionMsg) {
+func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, msg *apc.ActionMsg) {
 	started := time.Now()
 	if objName == msg.Name {
 		p.writeErrMsg(w, r, "the new and the current name are the same")
@@ -2178,7 +2178,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, 
 	p.statsT.Add(stats.RenameCount, 1)
 }
 
-func (p *proxy) doListRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) (xactID string, err error) {
+func (p *proxy) doListRange(method, bucket string, msg *apc.ActionMsg, query url.Values) (xactID string, err error) {
 	var (
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAmsg(msg, nil, cos.GenUUID())
@@ -2271,7 +2271,7 @@ func (p *proxy) handlePendingRenamedLB(renamedBucket string) {
 	ctx := &bmdModifier{
 		pre:   p._pendingRnPre,
 		final: p._syncBMDFinal,
-		msg:   &cmn.ActionMsg{Value: apc.ActMoveBck},
+		msg:   &apc.ActionMsg{Value: apc.ActMoveBck},
 		bcks:  []*cluster.Bck{cluster.NewBck(renamedBucket, apc.ProviderAIS, cmn.NsGlobal)},
 	}
 	_, err := p.owner.bmd.modify(ctx)

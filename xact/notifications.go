@@ -63,7 +63,7 @@ func (nxb *NotifXactListener) QueryArgs() cmn.HreqArgs {
 
 // (see also downloader.AbortArgs)
 func (nxb *NotifXactListener) AbortArgs() cmn.HreqArgs {
-	msg := cmn.ActionMsg{
+	msg := apc.ActionMsg{
 		Action: apc.ActXactStop,
 		Name:   cmn.ErrXactICNotifAbort.Error(),
 		Value:  QueryMsg{ID: nxb.UUID(), Kind: nxb.Kind()},

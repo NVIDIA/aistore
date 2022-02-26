@@ -32,7 +32,7 @@ type (
 
 	targetMpath struct {
 		DaemonID string
-		Mpl      *cmn.MountpathList
+		Mpl      *apc.MountpathList
 	}
 )
 

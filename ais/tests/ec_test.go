@@ -1751,7 +1751,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	_, removedTarget := tutils.RmTargetSkipRebWait(t, proxyURL, o.smap)
 	defer func() {
-		val := &cmn.ActValRmNode{DaemonID: removedTarget.ID()}
+		val := &apc.ActValRmNode{DaemonID: removedTarget.ID()}
 		rebID, err := api.StopMaintenance(baseParams, val)
 		tassert.CheckError(t, err)
 		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
@@ -2117,7 +2117,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 
 	removedTarget, err := o.smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	args := &cmn.ActValRmNode{DaemonID: removedTarget.ID()}
+	args := &apc.ActValRmNode{DaemonID: removedTarget.ID()}
 	rebID, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	defer func() {
@@ -2267,13 +2267,13 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tgtLost := tgtList[0]
 
 	tlog.Logf("Put %s in maintenance (no rebalance)\n", tgtLost.StringEx())
-	args := &cmn.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered := false
 	defer func() {
 		if !registered {
-			args := &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
+			args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
 			tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
@@ -2315,7 +2315,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
 	tlog.Logf("Take %s out of maintenance\n", tgtLost.StringEx())
-	args = &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
+	args = &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered = true
@@ -2501,7 +2501,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tgtGone := tgtList[1]
 
 	tlog.Logf("Put %s in maintenance (no rebalance)\n", tgtLost.StringEx())
-	args := &cmn.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "target removed",
@@ -2514,7 +2514,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	// See: https://blog.golang.org/defer-panic-and-recover
 	defer func() {
 		if !registered {
-			args := &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
+			args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
 			tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
@@ -2543,7 +2543,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tlog.Logf("Created %d objects in %s - starting global rebalance...\n", len(resECOld.Entries), bckEC)
 
 	tlog.Logf("Take %s out of maintenance\n", tgtLost.StringEx())
-	args = &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
+	args = &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 	_, err = api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered = true
@@ -2579,11 +2579,11 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tassert.CheckError(t, err)
 
 	tlog.Logf("Put %s in maintenance\n", tgtGone.StringEx())
-	args = &cmn.ActValRmNode{DaemonID: tgtGone.ID()}
+	args = &apc.ActValRmNode{DaemonID: tgtGone.ID()}
 	rebID, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	defer func() {
-		args = &cmn.ActValRmNode{DaemonID: tgtGone.ID()}
+		args = &apc.ActValRmNode{DaemonID: tgtGone.ID()}
 		rebID, _ := api.StopMaintenance(baseParams, args)
 		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
 	}()

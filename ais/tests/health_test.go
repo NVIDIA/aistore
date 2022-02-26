@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
@@ -20,7 +20,7 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	tassert.CheckError(t, err)
 
 	smapOrig := tutils.GetClusterMap(t, proxyURL)
-	args := &cmn.ActValRmNode{DaemonID: si.DaemonID, SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: si.DaemonID, SkipRebalance: true}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	_, err = api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -35,7 +35,7 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	_, err = tutils.WaitForClusterState(proxyURL, "decommission node", smapOrig.Version, proxyCount, targetCount)
 	tassert.CheckFatal(t, err)
 	defer func() {
-		val := &cmn.ActValRmNode{DaemonID: si.ID()}
+		val := &apc.ActValRmNode{DaemonID: si.ID()}
 		rebID, err := api.StopMaintenance(baseParams, val)
 		tassert.CheckFatal(t, err)
 		_, err = tutils.WaitForClusterState(proxyURL, "join node", smapOrig.Version, smapOrig.CountActiveProxies(),

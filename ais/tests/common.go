@@ -564,11 +564,11 @@ func (m *ioContext) ensureNoGetErrors() {
 	}
 }
 
-func (m *ioContext) ensureNumMountpaths(target *cluster.Snode, mpList *cmn.MountpathList) {
+func (m *ioContext) ensureNumMountpaths(target *cluster.Snode, mpList *apc.MountpathList) {
 	ensureNumMountpaths(m.t, target, mpList)
 }
 
-func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.MountpathList) {
+func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *apc.MountpathList) {
 	t.Helper()
 	tname := target.StringEx()
 	baseParams := tutils.BaseAPIParams()
@@ -591,7 +591,7 @@ func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.Mountp
 	}
 }
 
-func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.MountpathList) {
+func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *apc.MountpathList) {
 	t.Helper()
 	for i := 0; i < 6; i++ {
 		if len(mpList.WaitingDD) == 0 && len(mpList.Disabled) == 0 {
@@ -608,7 +608,7 @@ func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn
 func (m *ioContext) startMaintenanceNoRebalance() *cluster.Snode {
 	target, _ := m.smap.GetRandTarget()
 	tlog.Logf("Put %s in maintenance\n", target.StringEx())
-	args := &cmn.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
 	m.smap, err = tutils.WaitForClusterState(
@@ -630,7 +630,7 @@ func (m *ioContext) stopMaintenance(target *cluster.Snode) (rebID string) {
 	)
 	var err error
 	tlog.Logf("Take %s out of maintenance...\n", target.StringEx())
-	args := &cmn.ActValRmNode{DaemonID: target.ID()}
+	args := &apc.ActValRmNode{DaemonID: target.ID()}
 	rebID, err = api.StopMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetPublic))

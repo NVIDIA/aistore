@@ -33,7 +33,7 @@ type bckInitArgs struct {
 
 	origURLBck string
 	bck        *cluster.Bck
-	msg        *cmn.ActionMsg
+	msg        *apc.ActionMsg
 
 	skipBackend  bool // initialize bucket via `bck.InitNoBackend`
 	createAIS    bool // create ais bucket on the fly
@@ -274,7 +274,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 		debug.Assert(remoteProps.Get(apc.HdrOrigURLBck) != "")
 	}
 
-	if err = args.p.createBucket(&cmn.ActionMsg{Action: action}, bck, remoteProps); err != nil {
+	if err = args.p.createBucket(&apc.ActionMsg{Action: action}, bck, remoteProps); err != nil {
 		if _, ok := err.(*cmn.ErrBucketAlreadyExists); !ok {
 			errCode = http.StatusConflict
 			return

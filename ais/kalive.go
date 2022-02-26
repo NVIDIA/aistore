@@ -339,7 +339,7 @@ loop:
 	if cnt == 0 {
 		return fmt.Errorf("%s: nothing to do [%s, %s]", pkr.p.si, ctx.smap.StringEx(), metaction)
 	}
-	ctx.msg = &cmn.ActionMsg{Value: metaction}
+	ctx.msg = &apc.ActionMsg{Value: metaction}
 	return nil
 }
 

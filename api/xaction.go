@@ -75,7 +75,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 		xactMsg.Buckets = args.Buckets
 	}
 
-	msg := cmn.ActionMsg{Action: apc.ActXactStart, Value: xactMsg}
+	msg := apc.ActionMsg{Action: apc.ActXactStart, Value: xactMsg}
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
 	{
@@ -92,7 +92,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 
 // AbortXaction aborts a given xact.
 func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
-	msg := cmn.ActionMsg{
+	msg := apc.ActionMsg{
 		Action: apc.ActXactStop,
 		Value:  xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
 	}

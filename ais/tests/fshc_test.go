@@ -38,7 +38,7 @@ type checkerMD struct {
 	bck        cmn.Bck
 	smap       *cluster.Smap
 	mpList     cluster.NodeMap
-	allMps     map[string]*cmn.MountpathList
+	allMps     map[string]*apc.MountpathList
 	origAvail  int
 	fileSize   int64
 	baseParams api.BaseParams
@@ -58,7 +58,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		},
 		fileSize: 64 * cos.KiB,
 		mpList:   make(cluster.NodeMap, 10),
-		allMps:   make(map[string]*cmn.MountpathList, 10),
+		allMps:   make(map[string]*apc.MountpathList, 10),
 		chstop:   make(chan struct{}),
 		chfail:   make(chan struct{}),
 		wg:       &sync.WaitGroup{},
@@ -92,11 +92,11 @@ func (md *checkerMD) init() {
 	}
 }
 
-func (md *checkerMD) ensureNumMountpaths(target *cluster.Snode, mpList *cmn.MountpathList) {
+func (md *checkerMD) ensureNumMountpaths(target *cluster.Snode, mpList *apc.MountpathList) {
 	ensureNumMountpaths(md.t, target, mpList)
 }
 
-func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, mpathMap *cmn.MountpathList) {
+func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, mpathMap *apc.MountpathList) {
 	// select random target and mountpath
 	for m, t := range md.mpList {
 		target, mpath = t, m
@@ -106,7 +106,7 @@ func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, m
 	return
 }
 
-func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, suffix string) {
+func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath string, mpathList *apc.MountpathList, suffix string) {
 	md.wg.Add(1)
 	go runAsyncJob(md.t, md.bck, md.wg, method, mpath, fileNames, md.chfail, md.chstop, suffix)
 	// let the job run for a while and then make a mountpath broken
@@ -122,7 +122,7 @@ func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath st
 	repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
 }
 
-func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList,
+func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *apc.MountpathList,
 	objList []string, suffix string) {
 	breakMountpath(md.t, mpath, suffix)
 	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
@@ -162,7 +162,7 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disabledLen int, failIfDiffer bool) bool {
 	var (
 		err        error
-		newMpaths  *cmn.MountpathList
+		newMpaths  *apc.MountpathList
 		baseParams = tutils.BaseAPIParams()
 	)
 
@@ -237,7 +237,7 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	tlog.Logln("Recheck mountpaths")
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
-	var mpaths *cmn.MountpathList
+	var mpaths *apc.MountpathList
 	// Wait for fsckeeper detects that the mountpath is accessible now
 	for detectLimit.After(time.Now()) {
 		mpaths, err = api.GetMountpaths(baseParams, target)

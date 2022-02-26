@@ -1621,7 +1621,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 ///////////////////
 
 // TODO: consider unifying with Promote
-func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
 	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {

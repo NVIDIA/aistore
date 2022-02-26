@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -75,7 +76,7 @@ type (
 		smap *smapX // smap before pre-modifcation
 		rmd  *rebMD // latest rebMD post modification
 
-		msg      *cmn.ActionMsg // action modifying smap (apc.Act*)
+		msg      *apc.ActionMsg // action modifying smap (apc.Act*)
 		nsi      *cluster.Snode // new node to be added
 		nid      string         // DaemonID of candidate primary to vote
 		sid      string         // DaemonID of node to modify
@@ -91,7 +92,7 @@ type (
 		final func(ctx *rmdModifier, clone *rebMD)
 
 		smap  *smapX
-		msg   *cmn.ActionMsg
+		msg   *apc.ActionMsg
 		rebCB func(nl nl.NotifListener)
 		wait  bool
 	}

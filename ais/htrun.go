@@ -426,7 +426,7 @@ func (h *htrun) tryLoadSmap() (_ *smapX, reliable bool) {
 	return smap, reliable
 }
 
-func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	transient := cos.IsParseBool(r.URL.Query().Get(apc.ActTransient))
 	toUpdate := &cmn.ConfigToUpdate{}
 	if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
@@ -516,16 +516,16 @@ func (h *htrun) stopHTTPServer() {
 	}
 }
 
-// on success returns `cmn.ActValRmNode` options; on failure writes http error
-func (h *htrun) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*cmn.ActValRmNode, string, error) {
+// on success returns `apc.ActValRmNode` options; on failure writes http error
+func (h *htrun) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*apc.ActValRmNode, string, error) {
 	var (
-		msg  cmn.ActionMsg
-		opts cmn.ActValRmNode
+		msg  apc.ActionMsg
+		opts apc.ActValRmNode
 	)
 	if err := readJSON(w, r, &msg); err != nil {
 		return nil, "", err
 	}
-	// NOTE: `cmn.ActValRmNode` options are currently supported only by ais targets
+	// NOTE: `apc.ActValRmNode` options are currently supported only by ais targets
 	//       and only when decommissioning
 	if msg.Action != apc.ActDecommissionNode || h.si.IsProxy() {
 		return nil, msg.Action, nil
@@ -974,7 +974,7 @@ func _parseNCopies(value interface{}) (copies int64, err error) {
 	return
 }
 
-func _checkAction(msg *cmn.ActionMsg, expectedActions ...string) (err error) {
+func _checkAction(msg *apc.ActionMsg, expectedActions ...string) (err error) {
 	found := false
 	for _, action := range expectedActions {
 		found = found || msg.Action == action
@@ -1988,14 +1988,14 @@ func (msg *aisMsg) String() string {
 }
 
 func (h *htrun) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
-	return h.newAmsg(&cmn.ActionMsg{Value: msgStr}, bmd)
+	return h.newAmsg(&apc.ActionMsg{Value: msgStr}, bmd)
 }
 
 func (h *htrun) newAmsgActVal(act string, val interface{}) *aisMsg {
-	return h.newAmsg(&cmn.ActionMsg{Action: act, Value: val}, nil)
+	return h.newAmsg(&apc.ActionMsg{Action: act, Value: val}, nil)
 }
 
-func (h *htrun) newAmsg(actionMsg *cmn.ActionMsg, bmd *bucketMD, uuid ...string) *aisMsg {
+func (h *htrun) newAmsg(actionMsg *apc.ActionMsg, bmd *bucketMD, uuid ...string) *aisMsg {
 	msg := &aisMsg{ActionMsg: *actionMsg}
 	if bmd != nil {
 		msg.BMDVersion = bmd.Version
@@ -2009,10 +2009,10 @@ func (h *htrun) newAmsg(actionMsg *cmn.ActionMsg, bmd *bucketMD, uuid ...string)
 }
 
 //
-// cmn.ActionMsg c-tor and reader
+// apc.ActionMsg c-tor and reader
 //
-func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *cmn.ActionMsg, err error) {
-	msg = &cmn.ActionMsg{}
+func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.ActionMsg, err error) {
+	msg = &apc.ActionMsg{}
 	err = cmn.ReadJSON(w, r, msg)
 	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
 		glog.InfoDepth(1, h.si.String()+": "+msg.String())

@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
@@ -283,7 +282,7 @@ func maintShutDecommHandler(c *cli.Context) (err error) {
 		skipRebalance = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
 		noShutdown    = flagIsSet(c, noShutdownFlag)
 		rmUserData    = flagIsSet(c, rmUserDataFlag)
-		actValue      = &cmn.ActValRmNode{DaemonID: daemonID, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
+		actValue      = &apc.ActValRmNode{DaemonID: daemonID, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
 	)
 	if skipRebalance && node.IsTarget() {
 		fmt.Fprintf(c.App.Writer,

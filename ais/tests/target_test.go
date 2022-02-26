@@ -50,7 +50,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 }
 
 func TestDeleteInvalidDaemonID(t *testing.T) {
-	val := &cmn.ActValRmNode{
+	val := &apc.ActValRmNode{
 		DaemonID:      "abcde:abcde",
 		SkipRebalance: true,
 	}

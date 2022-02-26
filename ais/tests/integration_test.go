@@ -212,7 +212,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	target := m.startMaintenanceNoRebalance()
 
 	// Decommission the same target again.
-	args := &cmn.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.Errorf(t, err != nil, "error expected")
 
@@ -244,7 +244,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Unregister target[0]
-	args := &cmn.ActValRmNode{DaemonID: targets[0].ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: targets[0].ID(), SkipRebalance: true}
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -273,7 +273,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	// Register target 0 in parallel
 	go func() {
 		defer wg.Done()
-		args := &cmn.ActValRmNode{DaemonID: targets[0].ID()}
+		args := &apc.ActValRmNode{DaemonID: targets[0].ID()}
 		tlog.Logf("Take %s out of maintenance\n", targets[0].StringEx())
 		_, err = api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
@@ -282,7 +282,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	// Decommission target[1] in parallel
 	go func() {
 		defer wg.Done()
-		args := &cmn.ActValRmNode{DaemonID: targets[1].ID(), SkipRebalance: true}
+		args := &apc.ActValRmNode{DaemonID: targets[1].ID(), SkipRebalance: true}
 		_, err = api.StartMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
 	}()
@@ -427,7 +427,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target0, target1 := targets[0], targets[1]
-	args := &cmn.ActValRmNode{DaemonID: target0.ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: target0.ID(), SkipRebalance: true}
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -450,7 +450,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		tlog.Logf("Take %s out of maintenance\n", target0.StringEx())
-		args := &cmn.ActValRmNode{DaemonID: target0.ID()}
+		args := &apc.ActValRmNode{DaemonID: target0.ID()}
 		_, err = api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
 	}()
@@ -573,7 +573,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	err = api.DisableMountpath(baseParams, selectedTarget, mpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
-	args := &cmn.ActValRmNode{DaemonID: killTarget.ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: killTarget.ID(), SkipRebalance: true}
 	_, err = api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	smap, err := tutils.WaitForClusterState(
@@ -599,7 +599,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	time.Sleep(time.Second * 4)
 
 	// register a new target
-	args = &cmn.ActValRmNode{DaemonID: killTarget.ID()}
+	args = &apc.ActValRmNode{DaemonID: killTarget.ID()}
 	_, err = api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -755,7 +755,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 	// Decommission targets
 	for i := 0; i < unregisterTargetCount; i++ {
-		args := &cmn.ActValRmNode{DaemonID: targets[i].ID(), SkipRebalance: true}
+		args := &apc.ActValRmNode{DaemonID: targets[i].ID(), SkipRebalance: true}
 		_, err := api.StartMaintenance(baseParams, args)
 		tassert.CheckError(t, err)
 	}
@@ -772,7 +772,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 	for i := 0; i < unregisterTargetCount; i++ {
 		go func(number int) {
 			defer wg.Done()
-			args := &cmn.ActValRmNode{DaemonID: targets[number].ID()}
+			args := &apc.ActValRmNode{DaemonID: targets[number].ID()}
 			_, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
 		}(i)
@@ -932,7 +932,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		}
 		baseParams = tutils.BaseAPIParams()
 
-		allMps = make(map[string]*cmn.MountpathList)
+		allMps = make(map[string]*apc.MountpathList)
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -1455,7 +1455,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	targets := m.smap.Tmap.ActiveNodes()
 
 	// Unregister target[0]
-	args := &cmn.ActValRmNode{DaemonID: targets[0].ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: targets[0].ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(t, err)
 	tutils.WaitForClusterState(
@@ -1847,12 +1847,12 @@ func TestICDecommission(t *testing.T) {
 	tsi, err := m.smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
 
-	args := &cmn.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: true}
 	_, err = api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		args := &cmn.ActValRmNode{DaemonID: tsi.ID()}
+		args := &apc.ActValRmNode{DaemonID: tsi.ID()}
 		rebID, err := api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
 		tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)

@@ -169,7 +169,7 @@ type (
 
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
 	aisMsg struct {
-		cmn.ActionMsg
+		apc.ActionMsg
 		BMDVersion int64  `json:"bmdversion,string"`
 		RMDVersion int64  `json:"rmdversion,string"`
 		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)

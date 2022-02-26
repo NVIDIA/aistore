@@ -7,7 +7,7 @@ package stats
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -19,14 +19,14 @@ const (
 // Tracks System Info Stats
 type SysInfoStat struct {
 	cos.SysInfo
-	cmn.CapacityInfo
+	apc.CapacityInfo
 
 	Type      string    `json:"type"` // type (proxy|target)
 	DaemonID  string    `json:"daemonid"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
-func ParseClusterSysInfo(csi *cmn.ClusterSysInfo, timestamp time.Time) []*SysInfoStat {
+func ParseClusterSysInfo(csi *apc.ClusterSysInfo, timestamp time.Time) []*SysInfoStat {
 	result := make([]*SysInfoStat, 0)
 	for k, v := range csi.Proxy {
 		result = append(result, &SysInfoStat{SysInfo: *v, Type: TypeProxy, DaemonID: k, Timestamp: timestamp})

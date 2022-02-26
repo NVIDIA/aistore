@@ -471,7 +471,7 @@ until:
 		cos.ExitLogf("%s: cannot resume global rebalance - %v", p.si, err)
 	}
 	var (
-		msg    = &cmn.ActionMsg{Action: apc.ActRebalance, Value: metaction3}
+		msg    = &apc.ActionMsg{Action: apc.ActRebalance, Value: metaction3}
 		aisMsg = p.newAmsg(msg, nil)
 		ctx    = &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },

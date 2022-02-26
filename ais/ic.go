@@ -333,7 +333,7 @@ func (ic *ic) registerEqual(a regIC) {
 
 func (ic *ic) bcastListenIC(nl nl.NotifListener) {
 	var (
-		actMsg = cmn.ActionMsg{Action: apc.ActListenToNotif, Value: newNLMsg(nl)}
+		actMsg = apc.ActionMsg{Action: apc.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAmsg(&actMsg, nil)
 	)
 	ic.p.bcastAsyncIC(msg)

@@ -157,7 +157,7 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 		p.writeErr(w, r, err)
 		return
 	}
-	msg := cmn.ActionMsg{Action: apc.ActCreateBck}
+	msg := apc.ActionMsg{Action: apc.ActCreateBck}
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
@@ -174,7 +174,7 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 // TODO: AWS allows to delete bucket only if it is empty
 func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, apc.ProviderAIS, cmn.NsGlobal)
-	msg := cmn.ActionMsg{Action: apc.ActDestroyBck}
+	msg := apc.ActionMsg{Action: apc.ActDestroyBck}
 	if err := bck.Init(p.owner.bmd); err != nil {
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
@@ -218,7 +218,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	if len(objList.Object) == 0 {
 		return
 	}
-	msg := cmn.ActionMsg{Action: apc.ActDeleteObjects}
+	msg := apc.ActionMsg{Action: apc.ActDeleteObjects}
 	query := make(url.Values)
 	query.Set(apc.QparamProvider, apc.ProviderAIS)
 	lrMsg := &cmn.ListRangeMsg{ObjNames: make([]string, 0, len(objList.Object))}
@@ -229,7 +229,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	// Marshal+Unmashal to new struct:
 	// hack to make `doListRange` treat `listMsg` as `map[string]interface`
 	var (
-		msg2 cmn.ActionMsg
+		msg2 apc.ActionMsg
 		bt   = cos.MustMarshal(&msg)
 	)
 	if err := jsoniter.Unmarshal(bt, &msg2); err != nil {
@@ -518,7 +518,7 @@ func (p *proxy) unsupported(w http.ResponseWriter, r *http.Request, bucket strin
 
 // PUT s3/bk-name?versioning
 func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	msg := &cmn.ActionMsg{Action: apc.ActSetBprops}
+	msg := &apc.ActionMsg{Action: apc.ActSetBprops}
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}

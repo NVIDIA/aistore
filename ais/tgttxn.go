@@ -815,7 +815,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 func (t *target) startMaintenance(c *txnServerCtx) error {
 	switch c.phase {
 	case apc.ActBegin:
-		var opts cmn.ActValRmNode
+		var opts apc.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}
@@ -826,7 +826,7 @@ func (t *target) startMaintenance(c *txnServerCtx) error {
 	case apc.ActAbort:
 		reb.AbortTimedGFN()
 	case apc.ActCommit:
-		var opts cmn.ActValRmNode
+		var opts apc.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}

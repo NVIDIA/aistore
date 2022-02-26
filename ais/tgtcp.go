@@ -156,7 +156,7 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		var opts cmn.ActValRmNode
+		var opts apc.ActValRmNode
 		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -238,7 +238,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case apc.GetWhatConfig, apc.GetWhatSmap, apc.GetWhatBMD, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats:
 		t.htrun.httpdaeget(w, r)
 	case apc.GetWhatSysInfo:
-		tsysinfo := cmn.TSysInfo{
+		tsysinfo := apc.TSysInfo{
 			SysInfo:      sys.FetchSysInfo(),
 			CapacityInfo: fs.CapStatusAux(),
 		}

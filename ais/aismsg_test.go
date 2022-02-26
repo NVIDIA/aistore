@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
@@ -29,7 +30,7 @@ func testAisMsgMarshal(t *testing.T, tc aismsgTestConf) {
 	t.Run(tc.Name(), func(t *testing.T) {
 		beforeMsg := &aisMsg{}
 		if tc.actionMsgPresent {
-			actionMsg := cmn.ActionMsg{
+			actionMsg := apc.ActionMsg{
 				Action: "test-action",
 				Name:   "test-name",
 				Value: &cmn.Bck{

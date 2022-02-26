@@ -602,7 +602,7 @@ func TestMetasyncData(t *testing.T) {
 
 	emptyAisMsg, err := jsoniter.Marshal(aisMsg{})
 	if err != nil {
-		t.Fatal("Failed to marshal empty cmn.ActionMsg, err =", err)
+		t.Fatal("Failed to marshal empty apc.ActionMsg, err =", err)
 	}
 
 	var wg sync.WaitGroup

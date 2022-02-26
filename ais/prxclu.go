@@ -147,7 +147,7 @@ func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what
 		p.writeErr(w, r, err)
 		return
 	}
-	out := &cmn.ClusterSysInfoRaw{}
+	out := &apc.ClusterSysInfoRaw{}
 	out.Proxy = proxyResults
 	targetResults, err := p.cluSysinfo(r, timeout, cluster.Targets)
 	if err != nil {
@@ -408,7 +408,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := &cmn.ActionMsg{Action: action, Name: nsi.ID()}
+	msg := &apc.ActionMsg{Action: action, Name: nsi.ID()}
 	glog.Infof("%s: %s(%q) %s (%s)...", p, apiOp, action, nsi.StringEx(), regReq.Smap)
 
 	if apiOp == apc.AdminJoin {
@@ -418,7 +418,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			p.writeErr(w, r, err)
 			return
 		}
-		p.writeJSON(w, r, cmn.JoinNodeResult{DaemonID: nsi.Name(), RebalanceID: rebID}, "")
+		p.writeJSON(w, r, apc.JoinNodeResult{DaemonID: nsi.Name(), RebalanceID: rebID}, "")
 		return
 	}
 
@@ -504,7 +504,7 @@ func (p *proxy) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp strin
 	return
 }
 
-func (p *proxy) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, flags cos.BitFlags) (xactID string,
+func (p *proxy) updateAndDistribute(nsi *cluster.Snode, msg *apc.ActionMsg, flags cos.BitFlags) (xactID string,
 	err error) {
 	ctx := &smapModifier{
 		pre:   p._updPre,
@@ -753,7 +753,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
+func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *apc.ActionMsg) {
 	ctx := &configModifier{
 		pre:      _setConfPre,
 		final:    p._syncConfFinal,
@@ -766,7 +766,7 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 	}
 }
 
-func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	if err := p.owner.config.resetDaemonConfig(); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -779,7 +779,7 @@ func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, ms
 	freeBcArgs(args)
 }
 
-func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
+func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *apc.ActionMsg) {
 	if err := p.owner.config.setDaemonConfig(toUpdate, true /* transient */); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -811,7 +811,7 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 	}
 }
 
-func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	xactMsg := xact.QueryMsg{}
 	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
@@ -832,7 +832,7 @@ func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn.Actio
 	}
 
 	// all the rest `startable` (see xaction/api.go)
-	body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
+	body := cos.MustMarshal(apc.ActionMsg{Action: msg.Action, Value: xactMsg})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
 	args.to = cluster.Targets
@@ -853,13 +853,13 @@ func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn.Actio
 	w.Write([]byte(xactMsg.ID))
 }
 
-func (p *proxy) xactStop(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (p *proxy) xactStop(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	xactMsg := xact.QueryMsg{}
 	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
-	body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
+	body := cos.MustMarshal(apc.ActionMsg{Action: msg.Action, Value: xactMsg})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
 	args.to = cluster.Targets
@@ -890,7 +890,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 	rmdCtx := &rmdModifier{
 		pre:   func(_ *rmdModifier, clone *rebMD) { clone.inc() },
 		final: p.metasyncRMD,
-		msg:   &cmn.ActionMsg{Action: apc.ActRebalance},
+		msg:   &apc.ActionMsg{Action: apc.ActRebalance},
 		smap:  p.owner.smap.get(),
 	}
 	rmdClone, err := p.owner.rmd.modify(rmdCtx)
@@ -901,7 +901,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(xact.RebID2S(rmdClone.version())))
 }
 
-func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, xactMsg xact.QueryMsg) {
+func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, xactMsg xact.QueryMsg) {
 	smap := p.owner.smap.get()
 	si := smap.GetTarget(xactMsg.Node)
 	if si == nil {
@@ -909,7 +909,7 @@ func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *cmn.Act
 		return
 	}
 
-	body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
+	body := cos.MustMarshal(apc.ActionMsg{Action: msg.Action, Value: xactMsg})
 	cargs := allocCargs()
 	{
 		cargs.si = si
@@ -927,7 +927,7 @@ func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *cmn.Act
 	freeCR(res)
 }
 
-func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	var (
 		smap  = p.owner.smap.get()
 		dstID string
@@ -980,9 +980,9 @@ func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cmn.Acti
 
 // gracefully remove node via apc.ActStartMaintenance, apc.ActDecommission, apc.ActShutdownNode
 // TODO: support forceful (--force) removal
-func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	var (
-		opts cmn.ActValRmNode
+		opts apc.ActValRmNode
 		smap = p.owner.smap.get()
 	)
 	if err := p.checkACL(w, r, nil, apc.AceAdmin); err != nil {
@@ -1031,9 +1031,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMs
 	}
 }
 
-func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	var (
-		opts cmn.ActValRmNode
+		opts apc.ActValRmNode
 		smap = p.owner.smap.get()
 	)
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
@@ -1071,7 +1071,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *cmn
 }
 
 func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action string) {
-	if p.forwardCP(w, r, &cmn.ActionMsg{Action: action}, "") {
+	if p.forwardCP(w, r, &apc.ActionMsg{Action: action}, "") {
 		return
 	}
 	switch action {
@@ -1082,7 +1082,7 @@ func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action strin
 		var (
 			query    = r.URL.Query()
 			toUpdate = &cmn.ConfigToUpdate{}
-			msg      = &cmn.ActionMsg{Action: action}
+			msg      = &apc.ActionMsg{Action: action}
 		)
 		if err := toUpdate.FillFromQuery(query); err != nil {
 			p.writeErrf(w, r, err.Error())
@@ -1125,7 +1125,7 @@ func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, actio
 	ctx := &configModifier{
 		pre:   p.attachDetachRemoteAIS,
 		final: p._syncConfFinal,
-		msg:   &cmn.ActionMsg{Action: action},
+		msg:   &apc.ActionMsg{Action: action},
 		query: query,
 		wait:  true,
 	}
@@ -1199,7 +1199,7 @@ rret:
 }
 
 // Callback: remove the node from the cluster if rebalance finished successfully
-func (p *proxy) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionMsg, si *cluster.Snode) {
+func (p *proxy) removeAfterRebalance(nl nl.NotifListener, msg *apc.ActionMsg, si *cluster.Snode) {
 	if err := nl.Err(); err != nil || nl.Aborted() {
 		glog.Errorf("Rebalance(%s) didn't finish successfully, err: %v, aborted: %v",
 			nl.UUID(), err, nl.Aborted())
@@ -1215,7 +1215,7 @@ func (p *proxy) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionMsg, si
 
 // Run rebalance if needed; remove self from the cluster when rebalance finishes
 // the method handles msg.Action == apc.ActStartMaintenance | apc.ActDecommission | apc.ActShutdownNode
-func (p *proxy) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) (rebID string, err error) {
+func (p *proxy) rebalanceAndRmSelf(msg *apc.ActionMsg, si *cluster.Snode) (rebID string, err error) {
 	var (
 		cb   nl.NotifCallback
 		smap = p.owner.smap.get()
@@ -1254,7 +1254,7 @@ func (p *proxy) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) (rebID
 }
 
 // Stop rebalance, cleanup, and get the node back to the cluster.
-func (p *proxy) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValRmNode) (rebID string, err error) {
+func (p *proxy) cancelMaintenance(msg *apc.ActionMsg, opts *apc.ActValRmNode) (rebID string, err error) {
 	ctx := &smapModifier{
 		pre:     p._cancelMaintPre,
 		post:    p._newRebRMD,
@@ -1424,13 +1424,13 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 	var errCode int
 	if p.isIntraCall(r.Header, false /*from primary*/) == nil {
 		if cid := r.Header.Get(apc.HdrCallerID); cid == sid {
-			errCode, err = p.unregNode(&cmn.ActionMsg{Action: "self-initiated-removal"}, node, false /*skipReb*/)
+			errCode, err = p.unregNode(&apc.ActionMsg{Action: "self-initiated-removal"}, node, false /*skipReb*/)
 		} else {
 			err = fmt.Errorf("expecting self-initiated removal (%s != %s)", cid, sid)
 		}
 	} else {
 		// Immediately removes a node from Smap (advanced usage - potential data loss)
-		errCode, err = p.callRmSelf(&cmn.ActionMsg{Action: apc.ActCallbackRmFromSmap}, node, false /*skipReb*/)
+		errCode, err = p.callRmSelf(&apc.ActionMsg{Action: apc.ActCallbackRmFromSmap}, node, false /*skipReb*/)
 	}
 	if err != nil {
 		p.writeErr(w, r, err, errCode)
@@ -1439,7 +1439,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 
 // Ask the node (`si`) to permanently or temporarily remove itself from the cluster, in
 // accordance with the specific `msg.Action` (that we also enumerate and assert below).
-func (p *proxy) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
+func (p *proxy) callRmSelf(msg *apc.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	var (
 		smap    = p.owner.smap.get()
 		node    = smap.GetNode(si.ID())
@@ -1455,10 +1455,10 @@ func (p *proxy) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) 
 	cargs.si, cargs.timeout = node, timeout
 	switch msg.Action {
 	case apc.ActShutdownNode:
-		body := cos.MustMarshal(cmn.ActionMsg{Action: apc.ActShutdown})
+		body := cos.MustMarshal(apc.ActionMsg{Action: apc.ActShutdown})
 		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
 	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActCallbackRmFromSmap:
-		act := &cmn.ActionMsg{Action: msg.Action}
+		act := &apc.ActionMsg{Action: msg.Action}
 		if msg.Action == apc.ActDecommissionNode {
 			act.Value = msg.Value
 		}
@@ -1486,7 +1486,7 @@ func (p *proxy) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) 
 	return
 }
 
-func (p *proxy) unregNode(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
+func (p *proxy) unregNode(msg *apc.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,
 		post:    p._newRebRMD,

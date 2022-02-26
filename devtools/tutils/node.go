@@ -64,7 +64,7 @@ func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID string, newSmap *cluster.Smap) {
 	smap := GetClusterMap(t, proxyURL)
 	tlog.Logf("Joining target %s (current %s)\n", target.StringEx(), smap.StringEx())
-	val := &cmn.ActValRmNode{DaemonID: target.ID()}
+	val := &apc.ActValRmNode{DaemonID: target.ID()}
 	rebID, err := api.StopMaintenance(BaseAPIParams(proxyURL), val)
 	tassert.CheckFatal(t, err)
 	newSmap, err = WaitForClusterState(
@@ -79,7 +79,7 @@ func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID 
 }
 
 func ClearMaintenance(baseParams api.BaseParams, tsi *cluster.Snode) {
-	val := &cmn.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: true}
+	val := &apc.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: true}
 	// it can fail if the node is not under maintenance but it is OK
 	_, _ = api.StopMaintenance(baseParams, val)
 }
@@ -379,7 +379,7 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 		return
 	}
 
-	actValue := &cmn.ActValRmNode{DaemonID: daemonID}
+	actValue := &apc.ActValRmNode{DaemonID: daemonID}
 	_, err = api.ShutdownNode(baseParams, actValue)
 	return
 }

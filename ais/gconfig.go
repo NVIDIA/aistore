@@ -39,7 +39,7 @@ type (
 
 		oldConfig *cmn.Config
 		toUpdate  *cmn.ConfigToUpdate
-		msg       *cmn.ActionMsg
+		msg       *apc.ActionMsg
 		query     url.Values
 		wait      bool
 	}
