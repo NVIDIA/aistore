@@ -7,9 +7,18 @@ stages:
 
 variables:
   MODE: debug # run tests with debug asserts
-  NUM_TARGET: 5
-  NUM_PROXY: 5
-  FS_CNT: 6
+  NUM_TARGET:
+    value: "5"
+    description: "Number of targets deployed."
+  NUM_PROXY:
+    value: "5"
+    description: "Number of proxies deployed."
+  FS_CNT:
+    value: "6"
+    description: "Number of disks defined for each target."
+  CLOUD_BCKS:
+    value: "ais://ci-test gs://ais-ci-kube aws://ais-blossom"
+    description: "Set of buckets used when running cloud tests."
 
 
 # Templates
@@ -312,10 +321,7 @@ test:long:k8s:all:
   tags:
     - ais-k8s
   variables:
-    NUM_TARGET: 5
-    NUM_PROXY: 5
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
-    CLOUD_BCKS: "ais://ci-test gs://ais-ci-kube aws://ais-blossom"
   timeout: 4h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
