@@ -99,7 +99,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
 			dp    cluster.DP
-			tcmsg = &cmn.TCBMsg{}
+			tcmsg = &apc.TCBMsg{}
 		)
 		if err := cos.MorphMarshal(c.msg.Value, tcmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
@@ -480,19 +480,19 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) err
 	return nil
 }
 
-func (t *target) etlDP(msg *cmn.TCBMsg) (dp cluster.DP, err error) {
+func (t *target) etlDP(msg *apc.TCBMsg) (dp cluster.DP, err error) {
 	if err = k8s.Detect(); err != nil {
 		return
 	}
 	if msg.ID == "" {
-		err = cmn.ErrETLMissingUUID
+		err = apc.ErrETLMissingUUID
 		return
 	}
 	return etl.NewOfflineDataProvider(msg, t.si)
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
-func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, error) {
+func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return "", err
 	}
@@ -568,7 +568,7 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, e
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair, err error) {
+func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair, err error) {
 	bckTo, bckFrom := c.bckTo, c.bck
 	nlpFrom = bckFrom.GetNameLockPair()
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {

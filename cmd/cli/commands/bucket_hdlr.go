@@ -322,7 +322,7 @@ func summaryBucketHandler(c *cli.Context) (err error) {
 }
 
 func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
-	msg := &cmn.CopyBckMsg{
+	msg := &apc.CopyBckMsg{
 		Prefix: parseStrFlag(c, cpBckPrefixFlag),
 		DryRun: flagIsSet(c, cpBckDryRunFlag),
 	}

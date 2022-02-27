@@ -7,13 +7,14 @@ package etl
 import (
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type OfflineDataProvider struct {
-	tcbMsg         *cmn.TCBMsg
+	tcbMsg         *apc.TCBMsg
 	comm           Communicator
 	requestTimeout time.Duration
 }
@@ -21,7 +22,7 @@ type OfflineDataProvider struct {
 // interface guard
 var _ cluster.DP = (*OfflineDataProvider)(nil)
 
-func NewOfflineDataProvider(msg *cmn.TCBMsg, lsnode *cluster.Snode) (*OfflineDataProvider, error) {
+func NewOfflineDataProvider(msg *apc.TCBMsg, lsnode *cluster.Snode) (*OfflineDataProvider, error) {
 	comm, err := GetCommunicator(msg.ID, lsnode)
 	if err != nil {
 		return nil, err

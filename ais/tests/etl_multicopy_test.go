@@ -228,7 +228,7 @@ func testETLMultiObj(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRang
 		objCnt         = len(objList)
 		requestTimeout = 30 * time.Second
 		tcoMsg         = cmn.TCObjsMsg{
-			TCBMsg: cmn.TCBMsg{
+			TCBMsg: apc.TCBMsg{
 				ID:             uuid,
 				RequestTimeout: cos.Duration(requestTimeout),
 			},

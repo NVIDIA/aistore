@@ -34,13 +34,13 @@ type (
 		xreg.RenewBase
 		xctn *bsummXact
 		ctx  context.Context
-		msg  *cmn.BckSummMsg
+		msg  *apc.BckSummMsg
 	}
 	bsummXact struct {
 		xact.Base
 		ctx context.Context
 		t   cluster.Target
-		msg *cmn.BckSummMsg
+		msg *apc.BckSummMsg
 		res atomic.Pointer
 	}
 )
@@ -141,7 +141,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 			}
 
 			var (
-				msg     = cmn.BckSummMsg{}
+				msg     = apc.BckSummMsg{}
 				summary = cmn.BckSumm{
 					Bck:            bck.Bck,
 					TotalDisksSize: totalDisksSize,

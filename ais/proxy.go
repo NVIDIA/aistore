@@ -1081,7 +1081,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 		var (
 			xactID  string
 			bckTo   *cluster.Bck
-			tcbMsg  = &cmn.TCBMsg{}
+			tcbMsg  = &apc.TCBMsg{}
 			errCode int
 		)
 		switch msg.Action {
@@ -1359,7 +1359,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 
 // bucket == "": all buckets for a given provider
 func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, amsg *apc.ActionMsg, dpq *dpq) {
-	var lsmsg cmn.BckSummMsg
+	var lsmsg apc.BckSummMsg
 	if err := cos.MorphMarshal(amsg.Value, &lsmsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
@@ -1393,8 +1393,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks 
 	p.writeJSON(w, r, summaries, "bucket_summary")
 }
 
-func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *cmn.BckSummMsg) (
-	summaries cmn.BckSummaries, uuid string, err error) {
+func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, uuid string, err error) {
 	var (
 		isNew, q = initAsyncQuery(cmn.Bck(bck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
@@ -1925,7 +1924,7 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 	return
 }
 
-func initAsyncQuery(bck cmn.Bck, msg *cmn.BckSummMsg, newTaskID string) (bool, url.Values) {
+func initAsyncQuery(bck cmn.Bck, msg *apc.BckSummMsg, newTaskID string) (bool, url.Values) {
 	isNew := msg.UUID == ""
 	q := url.Values{}
 	if isNew {

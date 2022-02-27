@@ -5,7 +5,11 @@
  */
 package cmn
 
-import "path/filepath"
+import (
+	"path/filepath"
+
+	"github.com/NVIDIA/aistore/api/apc"
+)
 
 // used in multi-object (list|range) operations
 type (
@@ -35,7 +39,7 @@ type (
 	TCObjsMsg struct {
 		TxnUUID string `json:"-"`
 		ListRangeMsg
-		TCBMsg
+		apc.TCBMsg
 		ToBck Bck `json:"tobck"`
 		// flags
 		ContinueOnError bool `json:"coer"` // keep running in presence of errors in a any given multi-object transaction

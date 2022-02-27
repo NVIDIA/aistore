@@ -1,4 +1,4 @@
-// Package apc: API constants
+// Package apc: API constants and message types
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */

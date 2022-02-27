@@ -613,7 +613,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		var bsumMsg cmn.BckSummMsg
+		var bsumMsg apc.BckSummMsg
 		if err := cos.MorphMarshal(msg.Value, &bsumMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
@@ -677,7 +677,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 }
 
 func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck,
-	msg *cmn.BckSummMsg) {
+	msg *apc.BckSummMsg) {
 	var (
 		taskAction = q.Get(apc.QparamTaskAction)
 		silent     = cos.IsParseBool(q.Get(apc.QparamSilent))

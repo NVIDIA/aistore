@@ -268,7 +268,7 @@ func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) stri
 	return uuid
 }
 
-func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg) string {
+func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg) string {
 	xactID, err := api.ETLBucket(baseParams, fromBck, toBck, bckMsg)
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {

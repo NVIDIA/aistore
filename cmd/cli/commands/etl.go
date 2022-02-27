@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -396,9 +397,9 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("cannot ETL bucket %q onto itself", fromBck)
 	}
 
-	msg := &cmn.TCBMsg{
+	msg := &apc.TCBMsg{
 		ID: id,
-		CopyBckMsg: cmn.CopyBckMsg{
+		CopyBckMsg: apc.CopyBckMsg{
 			Prefix: parseStrFlag(c, cpBckPrefixFlag),
 			DryRun: flagIsSet(c, cpBckDryRunFlag),
 		},

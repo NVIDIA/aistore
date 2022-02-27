@@ -149,10 +149,9 @@ func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.Bcks, erro
 
 // GetBucketsSummaries returns bucket summaries for the specified backend provider
 // (and all bucket summaries for unspecified ("") provider).
-func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
-	msg *cmn.BckSummMsg) (cmn.BckSummaries, error) {
+func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *apc.BckSummMsg) (cmn.BckSummaries, error) {
 	if msg == nil {
-		msg = &cmn.BckSummMsg{}
+		msg = &apc.BckSummMsg{}
 	}
 	baseParams.Method = http.MethodGet
 	reqParams := allocRp()
@@ -232,7 +231,7 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 //   you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
 //   bucket, etc.
 // * Copying multiple buckets to the same destination bucket is also permitted.
-func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msg *cmn.CopyBckMsg) (xactID string, err error) {
+func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xactID string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
 	}
@@ -304,7 +303,7 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 // 3. Breaks loop on error
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
-func (reqParams *ReqParams) waitForAsyncReqComplete(action string, msg *cmn.BckSummMsg, v interface{}) error {
+func (reqParams *ReqParams) waitForAsyncReqComplete(action string, msg *apc.BckSummMsg, v interface{}) error {
 	var (
 		uuid   string
 		sleep  = initialPollInterval

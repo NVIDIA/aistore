@@ -172,7 +172,6 @@ var (
 	ErrStartupTimeout   = errors.New("startup timeout")
 	ErrQuiesceTimeout   = errors.New("timed out waiting for quiescence")
 	ErrNotEnoughTargets = errors.New("not enough target nodes")
-	ErrETLMissingUUID   = errors.New("ETL UUID can't be empty")
 	ErrNoMountpaths     = errors.New("no mountpaths")
 	// aborts
 	ErrXactRenewAbort   = errors.New("renewal abort")

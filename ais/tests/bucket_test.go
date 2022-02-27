@@ -2237,7 +2237,7 @@ func TestCopyBucket(t *testing.T) {
 			xactIDs := make([]string, len(dstms))
 			for idx, dstm := range dstms {
 				tlog.Logf("copying %s => %s\n", srcm.bck, dstm.bck)
-				uuid, err := api.CopyBucket(baseParams, srcm.bck, dstm.bck, &cmn.CopyBckMsg{Force: true})
+				uuid, err := api.CopyBucket(baseParams, srcm.bck, dstm.bck, &apc.CopyBckMsg{Force: true})
 				xactIDs[idx] = uuid
 				tassert.CheckFatal(t, err)
 			}
@@ -2384,7 +2384,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	dstBck := cmn.Bck{Name: "cpybck_dst", Provider: apc.ProviderAIS}
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{Force: true})
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
@@ -2410,7 +2410,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		dstBck    = cmn.Bck{Name: "cpybck_dst", Provider: apc.ProviderAIS}
 	)
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{Prefix: cpyPrefix})
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prefix: cpyPrefix})
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
@@ -2430,7 +2430,7 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.RandString(5), Provider: apc.ProviderAIS}
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{DryRun: true})
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{DryRun: true})
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
@@ -3022,7 +3022,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			tlog.Logln("checking objects...")
 
 			if test.summary {
-				msg := &cmn.BckSummMsg{Cached: test.cached, Fast: test.fast}
+				msg := &apc.BckSummMsg{Cached: test.cached, Fast: test.fast}
 				summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks(m.bck), msg)
 				tassert.CheckFatal(t, err)
 

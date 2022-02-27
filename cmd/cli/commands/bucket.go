@@ -108,7 +108,7 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 }
 
 // Copy ais bucket
-func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *cmn.CopyBckMsg) (err error) {
+func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (err error) {
 	var xactID string
 
 	if xactID, err = api.CopyBucket(defaultAPIParams, fromBck, toBck, msg); err != nil {
@@ -298,7 +298,7 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 
 func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.BckSummaries, err error) {
 	fDetails := func() (err error) {
-		msg := &cmn.BckSummMsg{Cached: cached, Fast: fast}
+		msg := &apc.BckSummMsg{Cached: cached, Fast: fast}
 		summaries, err = api.GetBucketsSummaries(defaultAPIParams, query, msg)
 		return
 	}

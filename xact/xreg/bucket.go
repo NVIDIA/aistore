@@ -18,7 +18,7 @@ type (
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
 		DP      cluster.DP
-		Msg     *cmn.TCBMsg
+		Msg     *apc.TCBMsg
 	}
 
 	TCObjsArgs struct {
