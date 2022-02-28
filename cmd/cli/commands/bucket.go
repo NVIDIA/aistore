@@ -149,7 +149,7 @@ type (
 	bucketFilter func(cmn.Bck) bool
 )
 
-func listBuckets(c *cli.Context, query cmn.QueryBcks) (err error) {
+func listBuckets(c *cli.Context, qbck cmn.QueryBcks) (err error) {
 	// TODO: Think if there is a need to make generic filter for buckets as well ?
 	var (
 		filter = func(_ cmn.Bck) bool { return true }
@@ -163,7 +163,7 @@ func listBuckets(c *cli.Context, query cmn.QueryBcks) (err error) {
 		filter = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
 	}
 
-	bcks, err := api.ListBuckets(defaultAPIParams, query)
+	bcks, err := api.ListBuckets(defaultAPIParams, qbck)
 	if err != nil {
 		return
 	}
@@ -296,10 +296,10 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 	return printObjectProps(c, objList.Entries, objectListFilter, msg.Props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.BckSummaries, err error) {
+func fetchSummaries(qbck cmn.QueryBcks, fast, cached bool) (summaries cmn.BckSummaries, err error) {
 	fDetails := func() (err error) {
 		msg := &apc.BckSummMsg{Cached: cached, Fast: fast}
-		summaries, err = api.GetBucketsSummaries(defaultAPIParams, query, msg)
+		summaries, err = api.GetBucketsSummaries(defaultAPIParams, qbck, msg)
 		return
 	}
 	err = cmn.WaitForFunc(fDetails, longCommandTime)
@@ -492,8 +492,8 @@ func printBuckets(c *cli.Context, bcks cmn.Bcks, showHeaders bool, matches bucke
 	}
 	sort.Strings(providerList)
 	for _, provider := range providerList {
-		query := cmn.QueryBcks{Provider: provider}
-		bcks := bcks.Select(query)
+		qbck := cmn.QueryBcks{Provider: provider}
+		bcks := bcks.Select(qbck)
 		if len(bcks) == 0 {
 			continue
 		}

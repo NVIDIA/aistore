@@ -30,7 +30,7 @@ type (
 		MaxPageSize() uint
 		CreateBucket(bck *Bck) (errCode int, err error)
 		ListObjects(bck *Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error)
-		ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
+		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
 		PutObj(r io.ReadCloser, lom *LOM) (errCode int, err error)
 		DeleteObj(lom *LOM) (errCode int, err error)
 

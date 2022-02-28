@@ -472,9 +472,9 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/buckets[/bucket-name]
 func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg       *apc.ActionMsg
-		bckName   string
-		queryBcks cmn.QueryBcks
+		msg     *apc.ActionMsg
+		bckName string
+		qbck    cmn.QueryBcks
 	)
 	apiItems, err := p.checkRESTItems(w, r, 0, true, apc.URLPathBuckets.L)
 	if err != nil {
@@ -495,33 +495,33 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if queryBcks, err = newQueryBcksFromQuery(bckName, nil, dpq); err != nil {
+	if qbck, err = newQueryBcksFromQuery(bckName, nil, dpq); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 	switch msg.Action {
 	case apc.ActList:
 		// list buckets
-		if queryBcks.Name == "" {
+		if qbck.Name == "" {
 			if err := p.checkACL(w, r, nil, apc.AceListBuckets); err == nil {
-				p.listBuckets(w, r, queryBcks, msg)
+				p.listBuckets(w, r, qbck, msg)
 			}
 			return
 		}
 		// list objects
 		var (
 			err error
-			bck = cluster.NewBckEmbed(cmn.Bck(queryBcks))
+			bck = cluster.NewBckEmbed(cmn.Bck(qbck))
 		)
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: apc.AceObjLIST, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
 		bckArgs.lookupRemote = lookupRemoteBck(nil, dpq)
-		if bck, err = bckArgs.initAndTry(queryBcks.Name); err == nil {
+		if bck, err = bckArgs.initAndTry(qbck.Name); err == nil {
 			begin := mono.NanoTime()
 			p.listObjects(w, r, bck, msg, begin)
 		}
 	case apc.ActSummaryBck:
-		p.bucketSummary(w, r, queryBcks, msg, dpq)
+		p.bucketSummary(w, r, qbck, msg, dpq)
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
@@ -1393,9 +1393,9 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks 
 	p.writeJSON(w, r, summaries, "bucket_summary")
 }
 
-func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, uuid string, err error) {
+func (p *proxy) gatherBckSumm(qbck cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, uuid string, err error) {
 	var (
-		isNew, q = initAsyncQuery(cmn.Bck(bck), msg, cos.GenUUID())
+		isNew, q = initAsyncQuery(cmn.Bck(qbck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
 		aisMsg   = p.newAmsgActVal(apc.ActSummaryBck, msg)
@@ -1403,7 +1403,7 @@ func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *apc.BckSummMsg) (summaries
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
-		Path:   apc.URLPathBuckets.Join(bck.Name),
+		Path:   apc.URLPathBuckets.Join(qbck.Name),
 		Query:  q,
 		Body:   cos.MustMarshal(aisMsg),
 	}
@@ -1423,7 +1423,7 @@ func (p *proxy) gatherBckSumm(bck cmn.QueryBcks, msg *apc.BckSummMsg) (summaries
 
 	// all targets are ready, prepare the final result
 	q = url.Values{}
-	q = cmn.AddBckToQuery(q, cmn.Bck(bck))
+	q = cmn.AddBckToQuery(q, cmn.Bck(qbck))
 	q.Set(apc.QparamTaskAction, apc.TaskResult)
 	q.Set(apc.QparamSilent, "true")
 	args.req.Query = q
@@ -1862,18 +1862,18 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	return nil
 }
 
-func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks, msg *apc.ActionMsg) {
+func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck cmn.QueryBcks, msg *apc.ActionMsg) {
 	bmd := p.owner.bmd.get()
-	if query.Provider != "" {
-		if query.IsAIS() || query.IsHDFS() {
-			bcks := selectBMDBuckets(bmd, query)
+	if qbck.Provider != "" {
+		if qbck.IsAIS() || qbck.IsHDFS() {
+			bcks := selectBMDBuckets(bmd, qbck)
 			p.writeJSON(w, r, bcks, listBuckets)
 			return
-		} else if query.IsCloud() {
+		} else if qbck.IsCloud() {
 			config := cmn.GCO.Get()
-			if _, ok := config.Backend.Providers[query.Provider]; !ok {
-				err := &cmn.ErrMissingBackend{Provider: query.Provider}
-				p.writeErrf(w, r, "cannot list %q bucket: %v", query, err)
+			if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
+				err := &cmn.ErrMissingBackend{Provider: qbck.Provider}
+				p.writeErrf(w, r, "cannot list %q bucket: %v", qbck, err)
 				return
 			}
 		}

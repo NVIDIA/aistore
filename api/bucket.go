@@ -123,12 +123,12 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck) (p *cmn.BucketProps, err err
 }
 
 // ListBuckets returns buckets for provided query.
-func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.Bcks, error) {
+func ListBuckets(baseParams BaseParams, qbck cmn.QueryBcks) (cmn.Bcks, error) {
 	var (
 		bcks  = cmn.Bcks{}
 		path  = apc.URLPathBuckets.S
 		body  = cos.MustMarshal(apc.ActionMsg{Action: apc.ActList})
-		query = cmn.AddBckToQuery(nil, cmn.Bck(queryBcks))
+		query = cmn.AddBckToQuery(nil, cmn.Bck(qbck))
 	)
 	baseParams.Method = http.MethodGet
 	reqParams := allocRp()
@@ -149,7 +149,7 @@ func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.Bcks, erro
 
 // GetBucketsSummaries returns bucket summaries for the specified backend provider
 // (and all bucket summaries for unspecified ("") provider).
-func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *apc.BckSummMsg) (cmn.BckSummaries, error) {
+func GetBucketsSummaries(baseParams BaseParams, qbck cmn.QueryBcks, msg *apc.BckSummMsg) (cmn.BckSummaries, error) {
 	if msg == nil {
 		msg = &apc.BckSummMsg{}
 	}
@@ -159,9 +159,9 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *apc.Bc
 	summaries := cmn.BckSummaries{}
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = apc.URLPathBuckets.Join(query.Name)
+		reqParams.Path = apc.URLPathBuckets.Join(qbck.Name)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
-		reqParams.Query = cmn.AddBckToQuery(nil, cmn.Bck(query))
+		reqParams.Query = cmn.AddBckToQuery(nil, cmn.Bck(qbck))
 	}
 	if err := reqParams.waitForAsyncReqComplete(apc.ActSummaryBck, msg, &summaries); err != nil {
 		return nil, err
@@ -214,12 +214,12 @@ func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 
 // DoesBucketExist queries a proxy or target to get a list of all AIS buckets,
 // returns true if the bucket is present in the list.
-func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
-	bcks, err := ListBuckets(baseParams, query)
+func DoesBucketExist(baseParams BaseParams, qbck cmn.QueryBcks) (bool, error) {
+	bcks, err := ListBuckets(baseParams, qbck)
 	if err != nil {
 		return false, err
 	}
-	return bcks.Contains(query), nil
+	return bcks.Contains(qbck), nil
 }
 
 // CopyBucket copies existing `fromBck` bucket to the destination `toBck` thus,

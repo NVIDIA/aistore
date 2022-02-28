@@ -259,8 +259,8 @@ func (n Ns) Contains(other Ns) bool {
 // Bck //
 /////////
 
-func (b Bck) Less(other Bck) bool {
-	if QueryBcks(b).Contains(other) {
+func (b *Bck) Less(other Bck) bool {
+	if QueryBcks(*b).Contains(other) {
 		return true
 	}
 	if b.Provider != other.Provider {
@@ -311,10 +311,10 @@ func (b Bck) String() string {
 	return fmt.Sprintf("%s%s%s/%s", b.Provider, apc.BckProviderSeparator, b.Ns, b.Name)
 }
 
-func (b Bck) IsEmpty() bool { return b.Name == "" && b.Provider == "" && b.Ns == NsGlobal }
+func (b *Bck) IsEmpty() bool { return b.Name == "" && b.Provider == "" && b.Ns == NsGlobal }
 
 // Bck => unique name (use ParseUname below to translate back)
-func (b Bck) MakeUname(objName string) string {
+func (b *Bck) MakeUname(objName string) string {
 	var (
 		nsUname = b.Ns.Uname()
 		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName)
@@ -389,19 +389,19 @@ func (b *Bck) RemoteBck() *Bck {
 	return b
 }
 
-func (b Bck) IsAIS() bool {
+func (b *Bck) IsAIS() bool {
 	return b.Provider == apc.ProviderAIS && !b.Ns.IsRemote() && !b.HasBackendBck()
 }
 
-func (b Bck) IsRemoteAIS() bool { return b.Provider == apc.ProviderAIS && b.Ns.IsRemote() }
-func (b Bck) IsHDFS() bool      { return b.Provider == apc.ProviderHDFS }
-func (b Bck) IsHTTP() bool      { return b.Provider == apc.ProviderHTTP }
+func (b *Bck) IsRemoteAIS() bool { return b.Provider == apc.ProviderAIS && b.Ns.IsRemote() }
+func (b *Bck) IsHDFS() bool      { return b.Provider == apc.ProviderHDFS }
+func (b *Bck) IsHTTP() bool      { return b.Provider == apc.ProviderHTTP }
 
-func (b Bck) IsRemote() bool {
+func (b *Bck) IsRemote() bool {
 	return b.IsCloud() || b.IsRemoteAIS() || b.IsHDFS() || b.IsHTTP() || b.HasBackendBck()
 }
 
-func (b Bck) IsCloud() bool {
+func (b *Bck) IsCloud() bool {
 	if bck := b.BackendBck(); bck != nil {
 		debug.Assert(bck.IsCloud()) // Currently, backend bucket is always cloud.
 		return bck.IsCloud()
@@ -409,7 +409,7 @@ func (b Bck) IsCloud() bool {
 	return IsCloudProvider(b.Provider)
 }
 
-func (b Bck) HasProvider() bool {
+func (b *Bck) HasProvider() bool {
 	if b.Provider != "" {
 		// If the provider is set it must be valid.
 		debug.Assert(IsNormalizedProvider(b.Provider))
@@ -418,46 +418,9 @@ func (b Bck) HasProvider() bool {
 	return false
 }
 
-func (query QueryBcks) String() string    { return Bck(query).String() }
-func (query QueryBcks) IsAIS() bool       { return Bck(query).IsAIS() }
-func (query QueryBcks) IsHDFS() bool      { return Bck(query).IsHDFS() }
-func (query QueryBcks) IsRemoteAIS() bool { return Bck(query).IsRemoteAIS() }
-func (query QueryBcks) IsCloud() bool     { return IsCloudProvider(query.Provider) }
-
-func (query *QueryBcks) Validate() (err error) {
-	if query.Name != "" {
-		bck := Bck(*query)
-		if err := bck.ValidateName(); err != nil {
-			return err
-		}
-	}
-	if query.Provider != "" {
-		query.Provider, err = NormalizeProvider(query.Provider)
-		if err != nil {
-			return err
-		}
-	}
-	if query.Ns != NsGlobal && query.Ns != NsAnyRemote {
-		return query.Ns.Validate()
-	}
-	return nil
-}
-func (query QueryBcks) Equal(bck Bck) bool { return Bck(query).Equal(bck) }
-func (query QueryBcks) Contains(other Bck) bool {
-	if query.Name != "" {
-		// NOTE: named bucket with no provider is assumed to be ais://
-		if other.Provider == "" {
-			other.Provider = apc.ProviderAIS
-		}
-		if query.Provider == "" {
-			// If query's provider not set, we should match the expected bucket
-			query.Provider = other.Provider // nolint:revive // temp change to compare
-		}
-		return query.Equal(other)
-	}
-	ok := query.Provider == other.Provider || query.Provider == ""
-	return ok && query.Ns.Contains(other.Ns)
-}
+//
+// useful helpers
+//
 
 func AddBckToQuery(query url.Values, bck Bck) url.Values {
 	if bck.Provider != "" {
@@ -488,6 +451,53 @@ func DelBckFromQuery(query url.Values) url.Values {
 	query.Del(apc.QparamProvider)
 	query.Del(apc.QparamNamespace)
 	return query
+}
+
+///////////////
+// QueryBcks //
+///////////////
+
+func (qbck QueryBcks) String() string    { b := Bck(qbck); return b.String() }
+func (qbck QueryBcks) IsAIS() bool       { b := Bck(qbck); return b.IsAIS() }
+func (qbck QueryBcks) IsHDFS() bool      { b := Bck(qbck); return b.IsHDFS() }
+func (qbck QueryBcks) IsRemoteAIS() bool { b := Bck(qbck); return b.IsRemoteAIS() }
+func (qbck QueryBcks) IsCloud() bool     { return IsCloudProvider(qbck.Provider) }
+
+func (qbck *QueryBcks) Validate() (err error) {
+	if qbck.Name != "" {
+		bck := Bck(*qbck)
+		if err := bck.ValidateName(); err != nil {
+			return err
+		}
+	}
+	if qbck.Provider != "" {
+		qbck.Provider, err = NormalizeProvider(qbck.Provider)
+		if err != nil {
+			return err
+		}
+	}
+	if qbck.Ns != NsGlobal && qbck.Ns != NsAnyRemote {
+		return qbck.Ns.Validate()
+	}
+	return nil
+}
+
+func (qbck QueryBcks) Equal(bck Bck) bool { return Bck(qbck).Equal(bck) }
+
+func (qbck QueryBcks) Contains(other Bck) bool {
+	if qbck.Name != "" {
+		// NOTE: named bucket with no provider is assumed to be ais://
+		if other.Provider == "" {
+			other.Provider = apc.ProviderAIS
+		}
+		if qbck.Provider == "" {
+			// If qbck's provider not set, we should match the expected bucket
+			qbck.Provider = other.Provider // nolint:revive // temp change to compare
+		}
+		return qbck.Equal(other)
+	}
+	ok := qbck.Provider == other.Provider || qbck.Provider == ""
+	return ok && qbck.Ns.Contains(other.Ns)
 }
 
 //////////

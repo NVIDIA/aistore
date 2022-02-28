@@ -1423,7 +1423,7 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 	return
 }
 
-func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
+func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck cmn.QueryBcks) {
 	const fmterr = "failed to list %q buckets: [%v]"
 	var (
 		bcks   cmn.Bcks
@@ -1431,24 +1431,24 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.Q
 		err    error
 		config = cmn.GCO.Get()
 	)
-	if query.Provider != "" {
-		bcks, code, err = t._listBcks(query, config)
+	if qbck.Provider != "" {
+		bcks, code, err = t._listBcks(qbck, config)
 		if err != nil {
-			t.writeErrStatusf(w, r, code, fmterr, query, err)
+			t.writeErrStatusf(w, r, code, fmterr, qbck, err)
 			return
 		}
 	} else /* all providers */ {
 		for provider := range apc.Providers {
 			var buckets cmn.Bcks
-			query.Provider = provider
-			buckets, code, err = t._listBcks(query, config)
+			qbck.Provider = provider
+			buckets, code, err = t._listBcks(qbck, config)
 			if err != nil {
 				if provider == apc.ProviderAIS {
-					t.writeErrStatusf(w, r, code, fmterr, query, err)
+					t.writeErrStatusf(w, r, code, fmterr, qbck, err)
 					return
 				}
 				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Warningf(fmterr, query, err)
+					glog.Warningf(fmterr, qbck, err)
 				}
 			}
 			bcks = append(bcks, buckets...)
@@ -1458,14 +1458,14 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.Q
 	t.writeJSON(w, r, bcks, listBuckets)
 }
 
-func (t *target) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks, errCode int, err error) {
-	_, ok := cfg.Backend.Providers[query.Provider]
+func (t *target) _listBcks(qbck cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks, errCode int, err error) {
+	_, ok := cfg.Backend.Providers[qbck.Provider]
 	// HDFS doesn't support listing remote buckets (there are no remote buckets).
-	if (!ok && !query.IsRemoteAIS()) || query.IsHDFS() {
-		names = selectBMDBuckets(t.owner.bmd.get(), query)
+	if (!ok && !qbck.IsRemoteAIS()) || qbck.IsHDFS() {
+		names = selectBMDBuckets(t.owner.bmd.get(), qbck)
 	} else {
-		bck := cluster.NewBck("", query.Provider, query.Ns)
-		names, errCode, err = t.Backend(bck).ListBuckets(query)
+		bck := cluster.NewBck("", qbck.Provider, qbck.Ns)
+		names, errCode, err = t.Backend(bck).ListBuckets(qbck)
 		sort.Sort(names)
 	}
 	return

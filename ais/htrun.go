@@ -1815,16 +1815,16 @@ func (h *htrun) healthByExternalWD(w http.ResponseWriter, r *http.Request) (resp
 	return
 }
 
-func selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.Bcks {
+func selectBMDBuckets(bmd *bucketMD, qbck cmn.QueryBcks) cmn.Bcks {
 	var (
 		names = make(cmn.Bcks, 0, 10)
-		cp    = &query.Provider
+		cp    = &qbck.Provider
 	)
-	if query.Provider == "" {
+	if qbck.Provider == "" {
 		cp = nil
 	}
 	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		if query.Equal(bck.Bck) || query.Contains(bck.Bck) {
+		if qbck.Equal(bck.Bck) || qbck.Contains(bck.Bck) {
 			names = append(names, bck.Bck)
 		}
 		return false

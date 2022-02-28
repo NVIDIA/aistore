@@ -364,10 +364,10 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.ListOb
 	return
 }
 
-func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (bcks cmn.Bcks, err error) {
+func (m *AISBackendProvider) listBucketsCluster(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error) {
 	var (
 		aisCluster  *remAISCluster
-		remoteQuery = cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{Name: query.Ns.Name}}
+		remoteQuery = cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{Name: qbck.Ns.Name}}
 	)
 	if aisCluster, err = m.remoteCluster(uuid); err != nil {
 		return
@@ -384,12 +384,12 @@ func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks
 	return bcks, nil
 }
 
-func (m *AISBackendProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
-	if !query.Ns.IsAnyRemote() {
-		bcks, err = m.listBucketsCluster(query.Ns.UUID, query)
+func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+	if !qbck.Ns.IsAnyRemote() {
+		bcks, err = m.listBucketsCluster(qbck.Ns.UUID, qbck)
 	} else {
 		for uuid := range m.remote {
-			remoteBcks, tryErr := m.listBucketsCluster(uuid, query)
+			remoteBcks, tryErr := m.listBucketsCluster(uuid, qbck)
 			bcks = append(bcks, remoteBcks...)
 			if tryErr != nil {
 				err = tryErr

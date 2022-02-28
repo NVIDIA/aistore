@@ -132,13 +132,13 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 // GET s3/
 func (p *proxy) bckNamesToS3(w http.ResponseWriter) {
 	var (
-		bmd   = p.owner.bmd.get()
-		query = cmn.QueryBcks{Provider: apc.ProviderAIS}
-		cp    = &query.Provider
+		bmd  = p.owner.bmd.get()
+		qbck = cmn.QueryBcks{Provider: apc.ProviderAIS}
+		cp   = &qbck.Provider
 	)
 	resp := s3compat.NewListBucketResult()
 	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		if query.Equal(bck.Bck) || query.Contains(bck.Bck) {
+		if qbck.Equal(bck.Bck) || qbck.Contains(bck.Bck) {
 			resp.Add(bck)
 		}
 		return false
