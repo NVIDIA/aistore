@@ -491,11 +491,11 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	dpq := dpqAlloc()
 	defer dpqFree(dpq)
-	if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
+	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	if qbck, err = newQueryBcksFromQuery(bckName, nil, dpq); err != nil {
+	if qbck, err = newQbckFromQ(bckName, nil, dpq); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -935,7 +935,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apiItems[0]
-	bck, err := newBckFromQuery(bucket, query, nil)
+	bck, err := newBckFromQ(bucket, query, nil)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1002,7 +1002,7 @@ func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bucket string) {
 	query := r.URL.Query()
-	bck, err := newBckFromQuery(bucket, query, nil)
+	bck, err := newBckFromQ(bucket, query, nil)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1044,7 +1044,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 	switch msg.Action {
 	case apc.ActMoveBck:
 		bckFrom := bck
-		bckTo, err := newBckFromQueryUname(query, true /*required*/)
+		bckTo, err := newBckFromQuname(query, true /*required*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1100,7 +1100,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 				return
 			}
 		}
-		bckTo, err = newBckFromQueryUname(query, true /*required*/)
+		bckTo, err = newBckFromQuname(query, true /*required*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return

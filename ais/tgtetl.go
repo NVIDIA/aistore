@@ -224,7 +224,7 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dpq := dpqAlloc()
-	if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
+	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
 		dpqFree(dpq)
 		t.writeErr(w, r, err)
 		return

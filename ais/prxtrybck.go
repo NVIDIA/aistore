@@ -79,7 +79,7 @@ func lookupRemoteBck(query url.Values, dpq *dpq) bool {
 // args.init initializes bucket and checks access permissions.
 func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, err error) {
 	if args.bck == nil {
-		args.bck, err = newBckFromQuery(bckName, args.query, args.dpq)
+		args.bck, err = newBckFromQ(bckName, args.query, args.dpq)
 		if err != nil {
 			errCode = http.StatusBadRequest
 			return

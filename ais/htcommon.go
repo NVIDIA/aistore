@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	rdebug "runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -664,9 +665,8 @@ func extractCii(body []byte, smap *smapX, self, si *cluster.Snode) *clusterInfo 
 // apiRequest //
 ////////////////
 var (
-	apiReqPool, dpqPool sync.Pool
-	apireq0             apiRequest
-	dpq0                dpq
+	apiReqPool sync.Pool
+	apireq0    apiRequest
 )
 
 func apiReqAlloc(after int, prefix []string, useDpq bool) (a *apiRequest) {
@@ -690,80 +690,69 @@ func apiReqFree(a *apiRequest) {
 	apiReqPool.Put(a)
 }
 
-func dpqAlloc() *dpq {
-	if v := dpqPool.Get(); v != nil {
-		return v.(*dpq)
+//
+// misc helpers
+//
+
+func selectBMDBuckets(bmd *bucketMD, qbck *cmn.QueryBcks) cmn.Bcks {
+	var (
+		names = make(cmn.Bcks, 0, 10)
+		cp    = &qbck.Provider
+	)
+	if qbck.Provider == "" {
+		cp = nil
 	}
-	return &dpq{}
+	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
+		if qbck.Equal(bck.Bucket()) || qbck.Contains(bck.Bucket()) {
+			names = append(names, bck.Clone())
+		}
+		return false
+	})
+	sort.Sort(names)
+	return names
 }
 
-func dpqFree(dpq *dpq) {
-	*dpq = dpq0
-	dpqPool.Put(dpq)
+func newBckFromQ(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, error) {
+	bck := _bckFromQ(bckName, query, dpq)
+	return bck, bck.Validate()
 }
 
-// Data Path Query structure (dpq):
-// Parse URL query for a selected few parameters used in the datapath.
-// (This is a faster alternative to the conventional and RFC-compliant URL.Query()
-// to be used narrowly to handle those few (keys) and nothing else.)
+func newQbckFromQ(bckName string, query url.Values, dpq *dpq) (*cmn.QueryBcks, error) {
+	b := _bckFromQ(bckName, query, dpq)
+	bck := (*cmn.QueryBcks)(b)
+	return bck, bck.Validate()
+}
 
-func urlQuery(rawQuery string, dpq *dpq) (err error) {
-	query := rawQuery
-	for query != "" {
-		key, value := query, ""
-		if i := strings.IndexAny(key, "&"); i >= 0 {
-			key, query = key[:i], key[i+1:]
-		} else {
-			query = ""
-		}
-		if i := strings.Index(key, "="); i >= 0 {
-			key, value = key[:i], key[i+1:]
-		}
-		// supported URL query parameters explicitly named below; attempt to parse anything
-		// outside this list will fail
-		switch key {
-		case apc.QparamProvider:
-			dpq.provider = value
-		case apc.QparamNamespace:
-			if dpq.namespace, err = url.QueryUnescape(value); err != nil {
-				return
-			}
-		case apc.QparamSkipVC:
-			dpq.skipVC = value
-		case apc.QparamProxyID:
-			dpq.pid = value
-		case apc.QparamUnixTime:
-			dpq.ptime = value
-		case apc.QparamUUID:
-			dpq.uuid = value
-		case apc.QparamArchpath:
-			if dpq.archpath, err = url.QueryUnescape(value); err != nil {
-				return
-			}
-		case apc.QparamArchmime:
-			if dpq.archmime, err = url.QueryUnescape(value); err != nil {
-				return
-			}
-		case apc.QparamIsGFNRequest:
-			dpq.isGFN = value
-		case apc.QparamOrigURL:
-			if dpq.origURL, err = url.QueryUnescape(value); err != nil {
-				return
-			}
-		case apc.QparamAppendType:
-			dpq.appendTy = value
-		case apc.QparamAppendHandle:
-			if dpq.appendHdl, err = url.QueryUnescape(value); err != nil {
-				return
-			}
-		case apc.QparamOWT:
-			dpq.owt = value
-		case apc.QparamDontLookupRemoteBck:
-			dpq.dontLookupRemoteBck = value
-		default:
-			err = errors.New("failed to fast-parse [" + rawQuery + "]")
-			return
-		}
+func _bckFromQ(bckName string, query url.Values, dpq *dpq) (bck *cluster.Bck) {
+	var (
+		provider  string
+		namespace cmn.Ns
+	)
+	if query != nil {
+		debug.Assert(dpq == nil)
+		provider = query.Get(apc.QparamProvider)
+		namespace = cmn.ParseNsUname(query.Get(apc.QparamNamespace))
+	} else {
+		provider = dpq.provider
+		namespace = cmn.ParseNsUname(dpq.namespace)
 	}
-	return
+	return &cluster.Bck{Name: bckName, Provider: provider, Ns: namespace}
+}
+
+func newBckFromQuname(query url.Values, required bool) (*cluster.Bck, error) {
+	uname := query.Get(apc.QparamBucketTo)
+	if uname == "" {
+		if required {
+			return nil, fmt.Errorf("missing %q query parameter", apc.QparamBucketTo)
+		}
+		return nil, nil
+	}
+	bck, objName := cmn.ParseUname(uname)
+	if objName != "" {
+		return nil, fmt.Errorf("bucket %s: unexpected non-empty object name %q", bck, objName)
+	}
+	if err := bck.Validate(); err != nil {
+		return nil, err
+	}
+	return cluster.CloneBck(&bck), nil
 }

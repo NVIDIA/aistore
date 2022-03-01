@@ -1047,11 +1047,11 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 	c.phase = phase
 
 	if bucket != "" {
-		if c.bck, err = newBckFromQuery(bucket, query, nil); err != nil {
+		if c.bck, err = newBckFromQ(bucket, query, nil); err != nil {
 			return c, err
 		}
 	}
-	c.bckTo, err = newBckFromQueryUname(query, false /*required*/)
+	c.bckTo, err = newBckFromQuname(query, false /*required*/)
 	if err != nil {
 		return c, err
 	}

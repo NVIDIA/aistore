@@ -557,12 +557,12 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case apc.ActList:
 		dpq := dpqAlloc()
-		if err := urlQuery(r.URL.RawQuery, dpq); err != nil {
+		if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
 			dpqFree(dpq)
 			t.writeErr(w, r, err)
 			return
 		}
-		qbck, err := newQueryBcksFromQuery(bckName, nil, dpq)
+		qbck, err := newQbckFromQ(bckName, nil, dpq)
 		dpqFree(dpq)
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -594,7 +594,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 		)
 	case apc.ActSummaryBck:
 		query := r.URL.Query()
-		qbck, err := newQueryBcksFromQuery(bckName, query, nil)
+		qbck, err := newQbckFromQ(bckName, query, nil)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -933,7 +933,7 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 		apiReqFree(apireq)
 		return
 	}
-	if err := urlQuery(r.URL.RawQuery, apireq.dpq); err != nil {
+	if err := apireq.dpq.fromRawQ(r.URL.RawQuery); err != nil {
 		debug.AssertNoErr(err)
 		t.writeErr(w, r, err)
 		return

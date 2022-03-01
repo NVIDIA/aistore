@@ -16,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -96,10 +95,10 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	bckName := apireq.items[apireq.bckIdx]
 	if apireq.dpq == nil {
 		apireq.query = r.URL.Query()
-	} else if err = urlQuery(r.URL.RawQuery, apireq.dpq); err != nil {
+	} else if err = apireq.dpq.fromRawQ(r.URL.RawQuery); err != nil {
 		return
 	}
-	apireq.bck, err = newBckFromQuery(bckName, apireq.query, apireq.dpq)
+	apireq.bck, err = newBckFromQ(bckName, apireq.query, apireq.dpq)
 	if err != nil {
 		h.writeErr(w, r, err)
 	}
@@ -1813,68 +1812,6 @@ func (h *htrun) healthByExternalWD(w http.ResponseWriter, r *http.Request) (resp
 		responded = true
 	}
 	return
-}
-
-func selectBMDBuckets(bmd *bucketMD, qbck *cmn.QueryBcks) cmn.Bcks {
-	var (
-		names = make(cmn.Bcks, 0, 10)
-		cp    = &qbck.Provider
-	)
-	if qbck.Provider == "" {
-		cp = nil
-	}
-	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		if qbck.Equal(bck.Bucket()) || qbck.Contains(bck.Bucket()) {
-			names = append(names, bck.Clone())
-		}
-		return false
-	})
-	sort.Sort(names)
-	return names
-}
-
-func bfromQ(bckName string, query url.Values, dpq *dpq) (bck *cmn.Bck) {
-	var (
-		provider  string
-		namespace cmn.Ns
-	)
-	if query != nil {
-		debug.Assert(dpq == nil)
-		provider = query.Get(apc.QparamProvider)
-		namespace = cmn.ParseNsUname(query.Get(apc.QparamNamespace))
-	} else {
-		provider = dpq.provider
-		namespace = cmn.ParseNsUname(dpq.namespace)
-	}
-	return &cmn.Bck{Name: bckName, Provider: provider, Ns: namespace}
-}
-
-func newBckFromQuery(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, error) {
-	bck := cluster.CloneBck(bfromQ(bckName, query, dpq))
-	return bck, bck.Validate()
-}
-
-func newQueryBcksFromQuery(bckName string, query url.Values, dpq *dpq) (*cmn.QueryBcks, error) {
-	bck := (*cmn.QueryBcks)(bfromQ(bckName, query, dpq))
-	return bck, bck.Validate()
-}
-
-func newBckFromQueryUname(query url.Values, required bool) (*cluster.Bck, error) {
-	uname := query.Get(apc.QparamBucketTo)
-	if uname == "" {
-		if required {
-			return nil, fmt.Errorf("missing %q query parameter", apc.QparamBucketTo)
-		}
-		return nil, nil
-	}
-	bck, objName := cmn.ParseUname(uname)
-	if objName != "" {
-		return nil, fmt.Errorf("bucket %s: unexpected non-empty object name %q", bck, objName)
-	}
-	if err := bck.Validate(); err != nil {
-		return nil, err
-	}
-	return cluster.CloneBck(&bck), nil
 }
 
 //
