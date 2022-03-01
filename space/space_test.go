@@ -70,8 +70,8 @@ var _ = Describe("space evict/cleanup tests", func() {
 			availablePaths := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
-			filesPath = availablePaths[basePath].MakePathCT(bck, fs.ObjectType)
-			fpAnother = availablePaths[basePath].MakePathCT(bckAnother, fs.ObjectType)
+			filesPath = availablePaths[basePath].MakePathCT(&bck, fs.ObjectType)
+			fpAnother = availablePaths[basePath].MakePathCT(&bckAnother, fs.ObjectType)
 			cos.CreateDir(filesPath)
 			cos.CreateDir(fpAnother)
 		})
@@ -389,7 +389,7 @@ func saveRandomFile(filename string, size int64) {
 	_, err := cos.SaveReader(filename, rand.Reader, buff, cos.ChecksumNone, size, "")
 	Expect(err).NotTo(HaveOccurred())
 	lom := &cluster.LOM{FQN: filename}
-	err = lom.Init(cmn.Bck{})
+	err = lom.Init(&cmn.Bck{})
 	Expect(err).NotTo(HaveOccurred())
 	lom.SetSize(size)
 	lom.IncVersion()

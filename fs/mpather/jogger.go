@@ -210,7 +210,7 @@ func (j *jogger) run() error {
 	if j.opts.Bck.IsEmpty() {
 		bmd := j.opts.T.Bowner().Get()
 		bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
-			aborted, err = j.runBck(bck.Bck)
+			aborted, err = j.runBck(bck.Clone())
 			return err != nil || aborted
 		})
 		return err
@@ -223,11 +223,11 @@ func (j *jogger) run() error {
 func (j *jogger) runBck(bck cmn.Bck) (aborted bool, err error) {
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
-		Bck:      bck,
 		CTs:      j.opts.CTs,
 		Callback: j.jog,
 		Sorted:   false,
 	}
+	opts.Bck.Copy(&bck)
 
 	err = fs.Walk(opts)
 	if j.syncGroup != nil {
@@ -313,7 +313,7 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	switch ct.ContentType() {
 	case fs.ObjectType:
 		lom := cluster.AllocLOMbyFQN(fqn)
-		err := lom.Init(j.opts.Bck)
+		err := lom.Init(&j.opts.Bck)
 		if err == nil {
 			err = j.visitObj(lom, buf)
 		}

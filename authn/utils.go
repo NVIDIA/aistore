@@ -114,7 +114,7 @@ func (tk *Token) aclForBucket(clusterID string, bck *cmn.Bck) (perms apc.AccessA
 		// For AuthN all buckets are external, so they have UUIDs. To correctly
 		// compare with local bucket, token's bucket should be fixed.
 		tbBck.Ns.UUID = ""
-		if b.Bck.Equal(*bck) {
+		if b.Bck.Equal(bck) {
 			return b.Access, true
 		}
 	}
@@ -176,7 +176,7 @@ func MergeBckACLs(oldACLs, newACLs []*Bucket) []*Bucket {
 	for _, n := range newACLs {
 		found := false
 		for _, o := range oldACLs {
-			if o.Bck.Equal(n.Bck) {
+			if o.Bck.Equal(&n.Bck) {
 				found = true
 				o.Access = n.Access
 				break

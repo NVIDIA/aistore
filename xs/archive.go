@@ -129,7 +129,7 @@ func (p *archFactory) Start() error {
 
 func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	lom := cluster.AllocLOM(msg.ArchName)
-	if err = lom.Init(msg.ToBck); err != nil {
+	if err = lom.Init(&msg.ToBck); err != nil {
 		r.raiseErr(err, 0, msg.ContinueOnError)
 		return
 	}
@@ -366,7 +366,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 		coldGet bool
 	)
 	debug.Assert(t == wi.r.p.T)
-	debug.Assert(wi.r.bckFrom.Bck.Equal(lom.Bucket()))
+	debug.Assert(wi.r.bckFrom.Equal(lom.Bck(), true /*same ID*/, true /*same backend*/))
 	debug.Assert(lom.Bprops() != nil) // must be init-ed
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {

@@ -196,7 +196,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 
 	var objStatus uint16 = apc.ObjStatusOK
 	lom := &cluster.LOM{FQN: fqn}
-	if err := lom.Init(cmn.Bck{}); err != nil {
+	if err := lom.Init(&cmn.Bck{}); err != nil {
 		return nil, err
 	}
 

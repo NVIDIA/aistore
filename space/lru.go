@@ -301,7 +301,7 @@ func (j *lruJ) visitLOM(parsedFQN fs.ParsedFQN) {
 		return
 	}
 	lom := &cluster.LOM{ObjName: parsedFQN.ObjName}
-	err := lom.Init(j.bck)
+	err := lom.Init(&j.bck)
 	if err != nil {
 		return
 	}
@@ -468,7 +468,7 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 		v uint64
 	}, len(bcks))
 	for i := range bcks {
-		path := j.mi.MakePathCT(bcks[i], fs.ObjectType)
+		path := j.mi.MakePathCT(&bcks[i], fs.ObjectType)
 		sized[i].b = bcks[i]
 		sized[i].v, _ = ios.GetDirSize(path)
 	}
@@ -483,7 +483,7 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 func (j *lruJ) allow() (ok bool, err error) {
 	var (
 		bowner = j.ini.T.Bowner()
-		b      = cluster.NewBckEmbed(j.bck)
+		b      = cluster.CloneBck(&j.bck)
 	)
 	if err = b.Init(bowner); err != nil {
 		return

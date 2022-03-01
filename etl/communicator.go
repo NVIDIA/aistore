@@ -170,7 +170,7 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, timeout time.Dur
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 
-	if err := lom.Init(bck.Bck); err != nil {
+	if err := lom.Init(bck.Bucket()); err != nil {
 		return nil, err
 	}
 
@@ -409,7 +409,7 @@ finish:
 func determineSize(bck *cluster.Bck, objName string) (int64, error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(bck.Bck); err != nil {
+	if err := lom.Init(bck.Bucket()); err != nil {
 		return 0, err
 	}
 	if err := lom.Load(true /*cacheIt*/, false /*locked*/); err != nil {

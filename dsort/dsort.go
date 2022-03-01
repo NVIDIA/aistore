@@ -165,7 +165,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		shardName := name + m.rs.Extension
 		lom := cluster.AllocLOM(shardName)
 		defer cluster.FreeLOM(lom)
-		if err := lom.Init(m.rs.Bck); err != nil {
+		if err := lom.Init(&m.rs.Bck); err != nil {
 			return err
 		}
 		_, local, err := lom.HrwTarget(m.smap)
@@ -324,7 +324,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// TODO: use cluster.AllocLOM, review `t.PutObject` below
 	//
 	lom := &cluster.LOM{ObjName: shardName}
-	if err = lom.Init(m.rs.OutputBck); err != nil {
+	if err = lom.Init(&m.rs.OutputBck); err != nil {
 		return
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())
@@ -432,10 +432,10 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 		o := transport.AllocSend()
 		o.Hdr = transport.ObjHdr{
-			Bck:      lom.Bucket(),
 			ObjName:  shardName,
 			ObjAttrs: cmn.ObjAttrs{Size: lom.SizeBytes(), Cksum: lom.Checksum()},
 		}
+		o.Hdr.Bck.Copy(lom.Bucket())
 
 		// Make send synchronous.
 		streamWg := &sync.WaitGroup{}
@@ -818,7 +818,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	// 	// target.
 	// }
 
-	bck := cluster.NewBckEmbed(m.rs.OutputBck)
+	bck := cluster.CloneBck(&m.rs.OutputBck)
 	if err := bck.Init(m.ctx.bmdOwner); err != nil {
 		return err
 	}
@@ -883,7 +883,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			})
 
 			group.Go(func() error {
-				query := cmn.AddBckToQuery(nil, m.rs.Bck)
+				query := m.rs.Bck.AddToQuery(nil)
 				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
 					Base:   si.URL(cmn.NetIntraData),

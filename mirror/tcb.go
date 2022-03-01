@@ -159,7 +159,7 @@ func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
 	mpopts := &mpather.JoggerGroupOpts{
-		Bck:      e.args.BckFrom.Bck,
+		Bck:      e.args.BckFrom.Clone(),
 		T:        e.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.copyObject,
@@ -250,7 +250,7 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(hdr.Bck); err != nil {
+	if err := lom.Init(&hdr.Bck); err != nil {
 		r.err.Store(err)
 		glog.Error(err)
 		return err

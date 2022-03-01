@@ -453,12 +453,12 @@ type bckPropsArgs struct {
 // See also:
 //    * github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
 //    * cmn.BucketPropsToUpdate
-//    * cmn.DefaultBckProps
+//    * cmn.Bck.DefaultProps
 func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
-	props = cmn.DefaultBckProps(args.bck.Bck)
+	props = args.bck.Bucket().DefaultProps()
 	props.SetProvider(args.bck.Provider)
 	switch {
-	case args.bck.IsAIS() || args.bck.HasBackendBck():
+	case args.bck.IsAIS() || args.bck.Backend() != nil:
 		debug.Assert(args.hdr == nil)
 	case args.bck.IsHDFS():
 		props.Versioning.Enabled = false

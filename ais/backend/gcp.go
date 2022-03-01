@@ -434,7 +434,7 @@ func readCredFile() (projectID string) {
 
 func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 	if gcpError == storage.ErrBucketNotExist {
-		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(*bck)
+		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	}
 	status := http.StatusBadRequest
 	if apiErr, ok := gcpError.(*googleapi.Error); ok {

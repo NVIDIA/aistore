@@ -457,7 +457,7 @@ func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath strin
 	// create missing buckets dirs
 	bmd := t.owner.bmd.get()
 	bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
-		err = enabledMi.CreateMissingBckDirs(bck.Bck)
+		err = enabledMi.CreateMissingBckDirs(bck.Bucket())
 		return err != nil // break on error
 	})
 	if err != nil {
@@ -479,7 +479,7 @@ func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 	// create missing buckets dirs, if any
 	bmd := t.owner.bmd.get()
 	bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
-		err = addedMi.CreateMissingBckDirs(bck.Bck)
+		err = addedMi.CreateMissingBckDirs(bck.Bucket())
 		return err != nil // break on error
 	})
 	if err != nil {
@@ -576,7 +576,7 @@ func (t *target) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload) (rm
 		if _, present := bmd.Get(bck); present {
 			return false
 		}
-		errs := fs.CreateBucket("recv-bmd-"+msg.Action, bck.Bck, bmd.version() == 0 /*nilbmd*/)
+		errs := fs.CreateBucket("recv-bmd-"+msg.Action, bck.Bucket(), bmd.version() == 0 /*nilbmd*/)
 		createErrs = append(createErrs, errs...)
 		return false
 	})
@@ -612,7 +612,7 @@ func (t *target) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload) (rm
 		})
 		if !present {
 			rmbcks = append(rmbcks, obck)
-			if errD := fs.DestroyBucket("recv-bmd-"+msg.Action, obck.Bck, obck.Props.BID); errD != nil {
+			if errD := fs.DestroyBucket("recv-bmd-"+msg.Action, obck.Bucket(), obck.Props.BID); errD != nil {
 				destroyErrs = append(destroyErrs, errD)
 			}
 		}
@@ -1018,7 +1018,7 @@ func (t *target) enable() error {
 // HeadObjT2T checks with a given target to see if it has the object.
 // (compare with api.HeadObject)
 func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
-	q := cmn.AddBckToQuery(nil, lom.Bucket())
+	q := lom.Bck().AddToQuery(nil)
 	q.Set(apc.QparamSilent, "true")
 	q.Set(apc.QparamHeadObj, strconv.Itoa(apc.HeadObjAvoidRemote))
 	cargs := allocCargs()
@@ -1047,7 +1047,7 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 // NOTE: 1) apc.QparamCheckExistsAny to make an extra effort
 //       2) `ignoreMaintenance`
 func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
-	q := cmn.AddBckToQuery(nil, lom.Bucket())
+	q := lom.Bck().AddToQuery(nil)
 	q.Set(apc.QparamSilent, "true")
 	// lookup across all mountpaths and copy (ie., restore) if misplaced
 	q.Set(apc.QparamHeadObj, strconv.Itoa(apc.HeadObjAvoidRemoteCheckAllMps))

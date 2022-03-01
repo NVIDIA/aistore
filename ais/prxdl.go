@@ -276,7 +276,7 @@ func (p *proxy) validateStartDownloadRequest(w http.ResponseWriter, r *http.Requ
 		p.writeErr(w, r, err)
 		return
 	}
-	bck := cluster.NewBckEmbed(dlBase.Bck)
+	bck := cluster.CloneBck(&dlBase.Bck)
 	args := bckInitArgs{p: p, w: w, r: r, reqBody: body, bck: bck, perms: apc.AccessRW}
 	args.createAIS = true
 	args.lookupRemote = true

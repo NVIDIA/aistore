@@ -129,7 +129,7 @@ type (
 //    * github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
 //    * BucketPropsToUpdate (above)
 //    * ais.defaultBckProps()
-func DefaultBckProps(bck Bck, cs ...*Config) *BucketProps {
+func (bck *Bck) DefaultProps(cs ...*Config) *BucketProps {
 	var c *Config
 	if len(cs) > 0 {
 		c = &Config{}

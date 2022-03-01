@@ -945,7 +945,7 @@ func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
 	if err != nil {
 		return nil, err
 	}
-	props := cmn.DefaultBckProps(bck, cfg)
+	props := bck.DefaultProps(cfg)
 	return props, nil
 }
 

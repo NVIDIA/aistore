@@ -33,7 +33,7 @@ var (
 	_ nl.NotifListener = (*NotifXactListener)(nil)
 )
 
-func NewXactNL(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, bck ...cmn.Bck) *NotifXactListener {
+func NewXactNL(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, bck ...*cmn.Bck) *NotifXactListener {
 	if srcs == nil {
 		srcs = smap.Tmap.ActiveMap()
 	}

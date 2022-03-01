@@ -89,7 +89,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	// Rx
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(hdr.Bck); err != nil {
+	if err := lom.Init(&hdr.Bck); err != nil {
 		glog.Error(err)
 		return nil
 	}
@@ -154,7 +154,7 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(hdr.Bck); err != nil {
+	if err := lom.Init(&hdr.Bck); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -232,7 +232,7 @@ func (*Reb) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 // A sender sent an MD update. This target must update local information partially:
 // only list of daemons and the "main" target.
 func (reb *Reb) receiveMD(req *stageNtfn, hdr transport.ObjHdr) error {
-	ctMeta, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECMetaType)
+	ctMeta, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return err
 	}
@@ -253,7 +253,7 @@ func (reb *Reb) receiveMD(req *stageNtfn, hdr transport.ObjHdr) error {
 }
 
 func (reb *Reb) receiveCT(req *stageNtfn, hdr transport.ObjHdr, reader io.Reader) error {
-	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECSliceType)
+	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -312,11 +312,8 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr transport.ObjHdr, reader io.Reader
 			break
 		}
 		o := transport.AllocSend()
-		o.Hdr = transport.ObjHdr{
-			Bck:      ct.Bck().Bck,
-			ObjName:  ct.ObjectName(),
-			ObjAttrs: cmn.ObjAttrs{Size: 0},
-		}
+		o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: 0}}
+		o.Hdr.Bck.Copy(ct.Bck().Bucket())
 		o.Hdr.Opaque = ntfnMD.NewPack(rebMsgEC)
 		o.Callback = reb.transportECCB
 		if errSend := reb.dm.Send(o, nil, tsi); errSend != nil && err == nil {

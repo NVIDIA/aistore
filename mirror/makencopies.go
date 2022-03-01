@@ -85,7 +85,7 @@ func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC)
 	r = &xactMNC{tag: p.args.Tag, copies: p.args.Copies}
 	debug.Assert(r.tag != "" && r.copies > 0)
 	mpopts := &mpather.JoggerGroupOpts{
-		Bck:      bck.Bck,
+		Bck:      bck.Clone(),
 		T:        p.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.visitObj,

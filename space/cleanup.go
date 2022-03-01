@@ -259,14 +259,14 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 		var (
 			sz  int64
 			err error
-			b   = cluster.NewBckEmbed(bck)
+			b   = cluster.CloneBck(&bck)
 		)
 		j.bck = bck
 		err = b.Init(bowner)
 		if err != nil {
 			if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
 				const act = "delete non-existing"
-				if err = fs.DestroyBucket(act, bck, 0 /*unknown bid*/); err == nil {
+				if err = fs.DestroyBucket(act, &bck, 0 /*unknown bid*/); err == nil {
 					glog.Infof("%s: %s %s", j, act, bck)
 				} else {
 					glog.Errorf("%s: failed to %s %s, err %v", j, act, bck, err)
@@ -381,7 +381,7 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 // TODO: revisit rm-ed byte counting
 func (j *clnJ) visitObj(fqn string) {
 	lom := &cluster.LOM{FQN: fqn}
-	if err := lom.Init(j.bck); err != nil {
+	if err := lom.Init(&j.bck); err != nil {
 		return
 	}
 	// handle load err
@@ -508,7 +508,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 				removed bool
 			)
 			lom := &cluster.LOM{ObjName: mlom.ObjName} // yes placed
-			if lom.Init(j.bck) != nil {
+			if lom.Init(&j.bck) != nil {
 				removed = os.Remove(fqn) == nil
 			} else if lom.FromFS() != nil {
 				removed = os.Remove(fqn) == nil

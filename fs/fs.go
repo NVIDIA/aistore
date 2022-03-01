@@ -180,7 +180,7 @@ func (mi *MountpathInfo) EvictLomCache() {
 	}
 }
 
-func (mi *MountpathInfo) evictLomBucketCache(bck cmn.Bck) {
+func (mi *MountpathInfo) evictLomBucketCache(bck *cmn.Bck) {
 	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
 		cache := mi.LomCache(idx)
 		cache.Range(func(hkey interface{}, _ interface{}) bool {
@@ -199,7 +199,7 @@ func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
 	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
 }
 
-func (mi *MountpathInfo) CreateMissingBckDirs(bck cmn.Bck) (err error) {
+func (mi *MountpathInfo) CreateMissingBckDirs(bck *cmn.Bck) (err error) {
 	for contentType := range CSM.m {
 		dir := mi.MakePathCT(bck, contentType)
 		if err = cos.Stat(dir); err == nil {
@@ -269,7 +269,8 @@ func (mi *MountpathInfo) SetDaemonIDXattr(tid string) error {
 
 // make-path methods
 
-func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int) (buf []byte) {
+// TODO -- FIXME: need `makePathBuf(bck *cluster.Bck, ...)`
+func (mi *MountpathInfo) makePathBuf(bck *cmn.Bck, contentType string, extra int) (buf []byte) {
 	var provLen, nsLen, bckNameLen, ctLen int
 	if contentType != "" {
 		debug.Assert(len(contentType) == contentTypeLen)
@@ -322,7 +323,7 @@ ct:
 	return
 }
 
-func (mi *MountpathInfo) MakePathBck(bck cmn.Bck) string {
+func (mi *MountpathInfo) MakePathBck(bck *cmn.Bck) string {
 	if bck.Props == nil {
 		buf := mi.makePathBuf(bck, "", 0)
 		return *(*string)(unsafe.Pointer(&buf))
@@ -345,13 +346,13 @@ func (mi *MountpathInfo) MakePathBck(bck cmn.Bck) string {
 	return dir
 }
 
-func (mi *MountpathInfo) MakePathCT(bck cmn.Bck, contentType string) string {
+func (mi *MountpathInfo) MakePathCT(bck *cmn.Bck, contentType string) string {
 	debug.Assert(contentType != "")
 	buf := mi.makePathBuf(bck, contentType, 0)
 	return *(*string)(unsafe.Pointer(&buf))
 }
 
-func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) string {
+func (mi *MountpathInfo) MakePathFQN(bck *cmn.Bck, contentType, objName string) string {
 	debug.Assert(contentType != "" && objName != "")
 	buf := mi.makePathBuf(bck, contentType, 1+len(objName))
 	buf = append(buf, filepath.Separator)
@@ -359,7 +360,7 @@ func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) s
 	return *(*string)(unsafe.Pointer(&buf))
 }
 
-func (mi *MountpathInfo) makeDelPathBck(bck cmn.Bck, bid uint64) string {
+func (mi *MountpathInfo) makeDelPathBck(bck *cmn.Bck, bid uint64) string {
 	mi.bpc.Lock()
 	dir, ok := mi.bpc.m[bid]
 	if ok {
@@ -374,7 +375,7 @@ func (mi *MountpathInfo) makeDelPathBck(bck cmn.Bck, bid uint64) string {
 }
 
 // Creates all CT directories for a given (mountpath, bck) - NOTE handling of empty dirs
-func (mi *MountpathInfo) createBckDirs(bck cmn.Bck, nilbmd bool) (num int, err error) {
+func (mi *MountpathInfo) createBckDirs(bck *cmn.Bck, nilbmd bool) (num int, err error) {
 	for contentType := range CSM.m {
 		dir := mi.MakePathCT(bck, contentType)
 		if err := cos.Stat(dir); err == nil {
@@ -923,7 +924,7 @@ func GetAvail() MPI {
 	return *availablePaths
 }
 
-func CreateBucket(op string, bck cmn.Bck, nilbmd bool) (errs []error) {
+func CreateBucket(op string, bck *cmn.Bck, nilbmd bool) (errs []error) {
 	var (
 		availablePaths   = GetAvail()
 		totalDirs        = len(availablePaths) * len(CSM.m)
@@ -946,7 +947,7 @@ func CreateBucket(op string, bck cmn.Bck, nilbmd bool) (errs []error) {
 	return
 }
 
-func DestroyBucket(op string, bck cmn.Bck, bid uint64) (err error) {
+func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 	var (
 		n              int
 		availablePaths = GetAvail()
@@ -968,7 +969,7 @@ func DestroyBucket(op string, bck cmn.Bck, bid uint64) (err error) {
 	return
 }
 
-func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo cmn.Bck) (err error) {
+func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo *cmn.Bck) (err error) {
 	availablePaths := GetAvail()
 	renamed := make([]*MountpathInfo, 0, len(availablePaths))
 	for _, mi := range availablePaths {

@@ -179,7 +179,7 @@ func mvObjectHandler(c *cli.Context) (err error) {
 	}
 
 	if bckDst, objDst, err := parseBckObjectURI(c, newObj); err == nil && bckDst.Name != "" {
-		if !bckDst.Equal(bck) {
+		if !bckDst.Equal(&bck) {
 			return incorrectUsageMsg(c, "moving an object to another bucket(%s) is not supported", bckDst)
 		}
 		if oldObj == "" {

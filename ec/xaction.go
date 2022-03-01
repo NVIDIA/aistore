@@ -76,13 +76,13 @@ func newXactReqECBase() xactReqBase {
 }
 
 func newXactECBase(t cluster.Target, smap cluster.Sowner,
-	si *cluster.Snode, bck cmn.Bck, mgr *Manager) xactECBase {
+	si *cluster.Snode, bck *cmn.Bck, mgr *Manager) xactECBase {
 	return xactECBase{
 		t:     t,
 		smap:  smap,
 		si:    si,
-		stats: stats{bck: bck},
-		bck:   bck,
+		stats: stats{bck: *bck},
+		bck:   *bck,
 
 		dOwner: &dataOwner{
 			mtx:    sync.Mutex{},
@@ -150,7 +150,7 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *cluster.Bck,
 	objName string) (reader cos.ReadOpenCloser, err error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
-	err = lom.Init(bck.Bck)
+	err = lom.Init(bck.Bucket())
 	if err != nil {
 		glog.Warning(err)
 		return nil, err
@@ -195,12 +195,8 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 	}
 	cos.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
 
-	rHdr := transport.ObjHdr{
-		Bck:      bck.Bck,
-		ObjName:  objName,
-		ObjAttrs: objAttrs,
-		Opcode:   act,
-	}
+	rHdr := transport.ObjHdr{ObjName: objName, ObjAttrs: objAttrs, Opcode: act}
+	rHdr.Bck.Copy(bck.Bucket())
 	rHdr.Opaque = ireq.NewPack(r.t.ByteMM())
 
 	r.ObjsAdd(1, objAttrs.Size)
@@ -261,14 +257,9 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, re
 //		name, it puts the data to its writer and notifies when download is done
 // * request - request to send
 // * writer - an opened writer that will receive the replica/slice/meta
-func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte,
-	writer io.Writer) (int64, error) {
-	hdr := transport.ObjHdr{
-		Bck:     lom.Bucket(),
-		ObjName: lom.ObjName,
-		Opaque:  request,
-		Opcode:  reqGet,
-	}
+func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
+	hdr := transport.ObjHdr{ObjName: lom.ObjName, Opaque: request, Opcode: reqGet}
+	hdr.Bck.Copy(lom.Bucket())
 	sw := &slice{
 		writer: writer,
 		wg:     cos.NewTimeoutGroup(),
@@ -367,12 +358,12 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		objAttrs.Cksum = lom.Checksum()
 	}
 	hdr := transport.ObjHdr{
-		Bck:      lom.Bucket(),
 		ObjName:  lom.ObjName,
 		ObjAttrs: objAttrs,
 		Opaque:   putData,
 		Opcode:   src.reqType,
 	}
+	hdr.Bck.Copy(lom.Bucket())
 	oldCallback := cb
 	cb = func(hdr transport.ObjHdr, reader io.ReadCloser, arg interface{}, err error) {
 		mm.Free(hdr.Opaque)

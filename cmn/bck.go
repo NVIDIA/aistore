@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -159,7 +159,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 		}
 		if !opts.IsQuery && bck.Provider == "" {
 			return bck, "",
-				fmt.Errorf("provider cannot be empty when namespace is not (did you mean \"ais://%s\"?)", bck.String())
+				fmt.Errorf("provider cannot be empty when namespace is not (did you mean \"ais://%s\"?)", bck)
 		}
 		if len(parts) == 1 {
 			if parts[0] == string(apc.NsUUIDPrefix) && opts.IsQuery {
@@ -183,7 +183,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 			return bck, "", err
 		}
 		if bck.Provider == "" {
-			return bck, "", fmt.Errorf("provider cannot be empty - did you mean: \"ais://%s\"?", bck.String())
+			return bck, "", fmt.Errorf("provider cannot be empty - did you mean: \"ais://%s\"?", bck)
 		}
 	}
 	if len(parts) > 1 {
@@ -256,46 +256,11 @@ func (n Ns) Contains(other Ns) bool {
 }
 
 /////////
-// Bck //
+// Bck (value)
 /////////
 
-func (b *Bck) Less(other Bck) bool {
-	if QueryBcks(*b).Contains(other) {
-		return true
-	}
-	if b.Provider != other.Provider {
-		return b.Provider < other.Provider
-	}
-	sb, so := b.Ns.String(), other.Ns.String()
-	if sb != so {
-		return sb < so
-	}
-	return b.Name < other.Name
-}
-
-func (b Bck) Equal(other Bck) bool {
+func (b Bck) Equal(other *Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
-}
-
-func (b *Bck) Validate() (err error) {
-	if err := b.ValidateName(); err != nil {
-		return err
-	}
-	b.Provider, err = NormalizeProvider(b.Provider)
-	if err != nil {
-		return err
-	}
-	return b.Ns.Validate()
-}
-
-func (b *Bck) ValidateName() (err error) {
-	if b.Name == "" || b.Name == "." {
-		return fmt.Errorf(fmtErrBckName, b.Name)
-	}
-	if !cos.IsAlphaPlus(b.Name, true /*with period*/) {
-		err = fmt.Errorf(fmtErrBckName, b.Name)
-	}
-	return
 }
 
 func (b Bck) String() string {
@@ -309,25 +274,6 @@ func (b Bck) String() string {
 		return fmt.Sprintf("%s/%s", b.Ns, b.Name)
 	}
 	return fmt.Sprintf("%s%s%s/%s", b.Provider, apc.BckProviderSeparator, b.Ns, b.Name)
-}
-
-func (b *Bck) IsEmpty() bool { return b.Name == "" && b.Provider == "" && b.Ns == NsGlobal }
-
-// Bck => unique name (use ParseUname below to translate back)
-func (b *Bck) MakeUname(objName string) string {
-	var (
-		nsUname = b.Ns.Uname()
-		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName)
-		buf     = make([]byte, 0, l)
-	)
-	buf = append(buf, b.Provider...)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, nsUname...)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, b.Name...)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, objName...)
-	return *(*string)(unsafe.Pointer(&buf))
 }
 
 // unique name => Bck (use MakeUname above to perform the reverse translation)
@@ -356,6 +302,68 @@ func ParseUname(uname string) (b Bck, objName string) {
 	return
 }
 
+/////////
+// Bck (ref)
+/////////
+
+func (b *Bck) Copy(src *Bck) { *b = *src }
+
+func (b *Bck) Less(other *Bck) bool {
+	if QueryBcks(*b).Contains(other) {
+		return true
+	}
+	if b.Provider != other.Provider {
+		return b.Provider < other.Provider
+	}
+	sb, so := b.Ns.String(), other.Ns.String()
+	if sb != so {
+		return sb < so
+	}
+	return b.Name < other.Name
+}
+
+func (b *Bck) Validate() (err error) {
+	if err := b.ValidateName(); err != nil {
+		return err
+	}
+	b.Provider, err = NormalizeProvider(b.Provider)
+	if err != nil {
+		return err
+	}
+	return b.Ns.Validate()
+}
+
+func (b *Bck) ValidateName() (err error) {
+	if b.Name == "" || b.Name == "." {
+		return fmt.Errorf(fmtErrBckName, b.Name)
+	}
+	if !cos.IsAlphaPlus(b.Name, true /*with period*/) {
+		err = fmt.Errorf(fmtErrBckName, b.Name)
+	}
+	return
+}
+
+func (b *Bck) IsEmpty() bool {
+	return b == nil || (b.Name == "" && b.Provider == "" && b.Ns == NsGlobal)
+}
+
+// Bck => unique name (use ParseUname below to translate back)
+func (b *Bck) MakeUname(objName string) string {
+	var (
+		nsUname = b.Ns.Uname()
+		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName)
+		buf     = make([]byte, 0, l)
+	)
+	buf = append(buf, b.Provider...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, nsUname...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, b.Name...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, objName...)
+	return *(*string)(unsafe.Pointer(&buf))
+}
+
 //
 // Is-Whats
 //
@@ -368,29 +376,25 @@ func (n Ns) IsGlobal() bool    { return n == NsGlobal }
 func (n Ns) IsAnyRemote() bool { return n == NsAnyRemote }
 func (n Ns) IsRemote() bool    { return n.UUID != "" }
 
-func (b *Bck) HasBackendBck() bool {
-	return b.Provider == apc.ProviderAIS && b.Props != nil && !b.Props.BackendBck.IsEmpty()
-}
-
-func (b *Bck) BackendBck() *Bck {
-	if b.HasBackendBck() {
-		return &b.Props.BackendBck
+func (b *Bck) Backend() *Bck {
+	if b.Props == nil || b.Props.BackendBck.IsEmpty() {
+		return nil
 	}
-	return nil
+	return &b.Props.BackendBck
 }
 
 func (b *Bck) RemoteBck() *Bck {
 	if !b.IsRemote() {
 		return nil
 	}
-	if b.HasBackendBck() {
-		return &b.Props.BackendBck
+	if bck := b.Backend(); bck != nil {
+		return bck
 	}
 	return b
 }
 
 func (b *Bck) IsAIS() bool {
-	return b.Provider == apc.ProviderAIS && !b.Ns.IsRemote() && !b.HasBackendBck()
+	return b.Provider == apc.ProviderAIS && !b.Ns.IsRemote() && b.Backend() == nil
 }
 
 func (b *Bck) IsRemoteAIS() bool { return b.Provider == apc.ProviderAIS && b.Ns.IsRemote() }
@@ -398,11 +402,11 @@ func (b *Bck) IsHDFS() bool      { return b.Provider == apc.ProviderHDFS }
 func (b *Bck) IsHTTP() bool      { return b.Provider == apc.ProviderHTTP }
 
 func (b *Bck) IsRemote() bool {
-	return b.IsCloud() || b.IsRemoteAIS() || b.IsHDFS() || b.IsHTTP() || b.HasBackendBck()
+	return b.IsCloud() || b.IsRemoteAIS() || b.IsHDFS() || b.IsHTTP() || b.Backend() != nil
 }
 
 func (b *Bck) IsCloud() bool {
-	if bck := b.BackendBck(); bck != nil {
+	if bck := b.Backend(); bck != nil {
 		debug.Assert(bck.IsCloud()) // Currently, backend bucket is always cloud.
 		return bck.IsCloud()
 	}
@@ -422,27 +426,27 @@ func (b *Bck) HasProvider() bool {
 // useful helpers
 //
 
-func AddBckToQuery(query url.Values, bck Bck) url.Values {
-	if bck.Provider != "" {
+func (b *Bck) AddToQuery(query url.Values) url.Values {
+	if b.Provider != "" {
 		if query == nil {
 			query = make(url.Values)
 		}
-		query.Set(apc.QparamProvider, bck.Provider)
+		query.Set(apc.QparamProvider, b.Provider)
 	}
-	if !bck.Ns.IsGlobal() {
+	if !b.Ns.IsGlobal() {
 		if query == nil {
 			query = make(url.Values)
 		}
-		query.Set(apc.QparamNamespace, bck.Ns.Uname())
+		query.Set(apc.QparamNamespace, b.Ns.Uname())
 	}
 	return query
 }
 
-func AddBckUnameToQuery(query url.Values, bck Bck, uparam string) url.Values {
+func (b *Bck) AddUnameToQuery(query url.Values, uparam string) url.Values {
 	if query == nil {
 		query = make(url.Values)
 	}
-	uname := bck.MakeUname("")
+	uname := b.MakeUname("")
 	query.Set(uparam, uname)
 	return query
 }
@@ -457,11 +461,17 @@ func DelBckFromQuery(query url.Values) url.Values {
 // QueryBcks //
 ///////////////
 
-func (qbck QueryBcks) String() string    { b := Bck(qbck); return b.String() }
-func (qbck QueryBcks) IsAIS() bool       { b := Bck(qbck); return b.IsAIS() }
-func (qbck QueryBcks) IsHDFS() bool      { b := Bck(qbck); return b.IsHDFS() }
-func (qbck QueryBcks) IsRemoteAIS() bool { b := Bck(qbck); return b.IsRemoteAIS() }
-func (qbck QueryBcks) IsCloud() bool     { return IsCloudProvider(qbck.Provider) }
+func (qbck QueryBcks) String() string { b := Bck(qbck); return b.String() }
+
+func (qbck *QueryBcks) IsAIS() bool       { b := (*Bck)(qbck); return b.IsAIS() }
+func (qbck *QueryBcks) IsHDFS() bool      { b := (*Bck)(qbck); return b.IsHDFS() }
+func (qbck *QueryBcks) IsRemoteAIS() bool { b := (*Bck)(qbck); return b.IsRemoteAIS() }
+func (qbck *QueryBcks) IsCloud() bool     { return IsCloudProvider(qbck.Provider) }
+
+func (qbck *QueryBcks) AddToQuery(query url.Values) url.Values {
+	bck := (*Bck)(qbck)
+	return bck.AddToQuery(query)
+}
 
 func (qbck *QueryBcks) Validate() (err error) {
 	if qbck.Name != "" {
@@ -482,9 +492,9 @@ func (qbck *QueryBcks) Validate() (err error) {
 	return nil
 }
 
-func (qbck QueryBcks) Equal(bck Bck) bool { return Bck(qbck).Equal(bck) }
+func (qbck QueryBcks) Equal(bck *Bck) bool { return Bck(qbck).Equal(bck) }
 
-func (qbck QueryBcks) Contains(other Bck) bool {
+func (qbck QueryBcks) Contains(other *Bck) bool {
 	if qbck.Name != "" {
 		// NOTE: named bucket with no provider is assumed to be ais://
 		if other.Provider == "" {
@@ -509,7 +519,7 @@ func (bcks Bcks) Len() int {
 }
 
 func (bcks Bcks) Less(i, j int) bool {
-	return bcks[i].Less(bcks[j])
+	return bcks[i].Less(&bcks[j])
 }
 
 func (bcks Bcks) Swap(i, j int) {
@@ -518,7 +528,7 @@ func (bcks Bcks) Swap(i, j int) {
 
 func (bcks Bcks) Select(query QueryBcks) (filtered Bcks) {
 	for _, bck := range bcks {
-		if query.Contains(bck) {
+		if query.Contains(&bck) {
 			filtered = append(filtered, bck)
 		}
 	}
@@ -527,7 +537,7 @@ func (bcks Bcks) Select(query QueryBcks) (filtered Bcks) {
 
 func (bcks Bcks) Contains(query QueryBcks) bool {
 	for _, bck := range bcks {
-		if query.Equal(bck) || query.Contains(bck) {
+		if query.Equal(&bck) || query.Contains(&bck) {
 			return true
 		}
 	}
@@ -541,7 +551,7 @@ func (bcks Bcks) Equal(other Bcks) bool {
 	for _, b1 := range bcks {
 		var found bool
 		for _, b2 := range other {
-			if b1.Equal(b2) {
+			if b1.Equal(&b2) {
 				found = true
 				break
 			}

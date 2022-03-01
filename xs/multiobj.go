@@ -211,7 +211,7 @@ func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
 }
 
 func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
-	if err := lom.Init(r.xctn.Bck().Bck); err != nil {
+	if err := lom.Init(r.xctn.Bck().Bucket()); err != nil {
 		return err
 	}
 	if smap != nil {
@@ -296,7 +296,7 @@ func (*prfFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *prfFactory) Start() error {
-	b := cluster.NewBckEmbed(p.Bck.Bck)
+	b := p.Bck
 	if err := b.Init(p.Args.T.Bowner()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			glog.Warning(err) // may show up later via ais/prxtrybck.go logic

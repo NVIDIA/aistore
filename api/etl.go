@@ -161,8 +161,8 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg
 		return
 	}
 	baseParams.Method = http.MethodPost
-	q := cmn.AddBckToQuery(nil, fromBck)
-	_ = cmn.AddBckUnameToQuery(q, toBck, apc.QparamBucketTo)
+	q := fromBck.AddToQuery(nil)
+	_ = toBck.AddUnameToQuery(q, apc.QparamBucketTo)
 	reqParams := allocRp()
 	{
 		reqParams.BaseParams = baseParams

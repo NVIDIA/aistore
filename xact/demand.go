@@ -120,7 +120,7 @@ func (r *DemandBase) ExtSnap() *SnapExt {
 	snap := &SnapExt{}
 	r.ToSnap(&snap.Snap)
 	if r.Bck() != nil {
-		snap.Bck = r.Bck().Bck
+		snap.Bck = *r.Bck().Bucket()
 	}
 	snap.Ext = &BaseDemandStatsExt{IsIdle: r.likelyIdle()}
 	return snap

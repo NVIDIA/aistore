@@ -456,7 +456,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = "/" + path.Join(apc.Version, apc.Buckets, bucket)
 	}
 	if r.URL.RawQuery == "" {
-		query := cmn.AddBckToQuery(nil, bck)
+		query := bck.AddToQuery(nil)
 		r.URL.RawQuery = query.Encode()
 	} else if !strings.Contains(r.URL.RawQuery, apc.QparamProvider) {
 		r.URL.RawQuery += "&" + apc.QparamProvider + "=" + bck.Provider
@@ -474,7 +474,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg     *apc.ActionMsg
 		bckName string
-		qbck    cmn.QueryBcks
+		qbck    *cmn.QueryBcks
 	)
 	apiItems, err := p.checkRESTItems(w, r, 0, true, apc.URLPathBuckets.L)
 	if err != nil {
@@ -511,7 +511,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		// list objects
 		var (
 			err error
-			bck = cluster.NewBckEmbed(cmn.Bck(qbck))
+			bck = cluster.CloneBck((*cmn.Bck)(qbck))
 		)
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: apc.AceObjLIST, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
@@ -757,7 +757,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			// After successful removal of local copy of a bucket, remove the bucket from remote.
-			p.reverseReqRemote(w, r, msg, bck.Bck)
+			p.reverseReqRemote(w, r, msg, bck.Bucket())
 			return
 		}
 		if err := p.destroyBucket(msg, bck); err != nil {
@@ -959,7 +959,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		bckTo := cluster.NewBckEmbed(archMsg.ToBck)
+		bckTo := cluster.CloneBck(&archMsg.ToBck)
 		if bckTo.IsEmpty() {
 			bckTo = bckFrom
 		} else {
@@ -1012,7 +1012,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 		switch msg.Action {
 		case apc.ActInvalListCache:
 		default:
-			p.reverseReqRemote(w, r, msg, bck.Bck)
+			p.reverseReqRemote(w, r, msg, bck.Bucket())
 			return
 		}
 	}
@@ -1049,8 +1049,8 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			p.writeErr(w, r, err)
 			return
 		}
-		if !bckFrom.IsAIS() && !bckFrom.HasBackendBck() {
-			p.writeErrf(w, r, "cannot rename bucket %q, it is not an AIS bucket", bckFrom)
+		if !bckFrom.IsAIS() && bckFrom.Backend() == nil {
+			p.writeErrf(w, r, "source bucket %q must be an AIS bucket", bckFrom)
 			return
 		}
 		if bckTo.IsRemote() {
@@ -1066,7 +1066,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 		bckTo.Provider = apc.ProviderAIS
 
 		if _, present := p.owner.bmd.get().Get(bckTo); present {
-			err := cmn.NewErrBckAlreadyExists(bckTo.Bck)
+			err := cmn.NewErrBckAlreadyExists(bckTo.Bucket())
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1143,7 +1143,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		bckTo = cluster.NewBckEmbed(tcoMsg.ToBck)
+		bckTo = cluster.CloneBck(&tcoMsg.ToBck)
 		if err = bckTo.Init(p.owner.bmd); err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1187,7 +1187,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 		}
 		w.Write([]byte(xactID))
 	case apc.ActInvalListCache:
-		p.qm.c.invalidate(bck.Bck)
+		p.qm.c.invalidate(bck.Bucket())
 	case apc.ActMakeNCopies:
 		var xactID string
 		if xactID, err = p.makeNCopies(msg, bck); err != nil {
@@ -1242,9 +1242,8 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query 
 			return
 		}
 
-		if bck.HasBackendBck() {
+		if backend := bck.Backend(); backend != nil {
 			// Initialize backend bucket.
-			backend := cluster.BackendBck(bck)
 			if err = backend.InitNoBackend(p.owner.bmd); err != nil {
 				if !cmn.IsErrRemoteBckNotFound(err) {
 					p.writeErrf(w, r,
@@ -1305,13 +1304,12 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()
 		if locationIsAIS || lsmsg.NeedLocalMD() {
-			nl = xact.NewXactNL(lsmsg.UUID,
-				apc.ActList, &smap.Smap, nil, bck.Bck)
+			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())
 		} else {
 			// random target to execute `list-objects` on a Cloud bucket
 			si, _ := smap.GetRandTarget()
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList,
-				&smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bck)
+				&smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bucket())
 		}
 		nl.SetHrwOwner(&smap.Smap)
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
@@ -1358,25 +1356,25 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 }
 
 // bucket == "": all buckets for a given provider
-func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, amsg *apc.ActionMsg, dpq *dpq) {
+func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, amsg *apc.ActionMsg, dpq *dpq) {
 	var lsmsg apc.BckSummMsg
 	if err := cos.MorphMarshal(amsg.Value, &lsmsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
 	}
-	if queryBcks.Name != "" {
-		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
+	if qbck.Name != "" {
+		bck := cluster.CloneBck((*cmn.Bck)(qbck))
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
 		bckArgs.lookupRemote = lookupRemoteBck(nil, dpq)
-		if _, err := bckArgs.initAndTry(queryBcks.Name); err != nil {
+		if _, err := bckArgs.initAndTry(qbck.Name); err != nil {
 			return
 		}
 	}
 	if dpq.uuid != "" { // apc.QparamUUID
 		lsmsg.UUID = dpq.uuid
 	}
-	summaries, uuid, err := p.gatherBckSumm(queryBcks, &lsmsg)
+	summaries, uuid, err := p.gatherBckSumm(qbck, &lsmsg)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1393,9 +1391,9 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks 
 	p.writeJSON(w, r, summaries, "bucket_summary")
 }
 
-func (p *proxy) gatherBckSumm(qbck cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, uuid string, err error) {
+func (p *proxy) gatherBckSumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, uuid string, err error) {
 	var (
-		isNew, q = initAsyncQuery(cmn.Bck(qbck), msg, cos.GenUUID())
+		isNew, q = initAsyncQuery((*cmn.Bck)(qbck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
 		aisMsg   = p.newAmsgActVal(apc.ActSummaryBck, msg)
@@ -1423,7 +1421,7 @@ func (p *proxy) gatherBckSumm(qbck cmn.QueryBcks, msg *apc.BckSummMsg) (summarie
 
 	// all targets are ready, prepare the final result
 	q = url.Values{}
-	q = cmn.AddBckToQuery(q, cmn.Bck(qbck))
+	q = qbck.AddToQuery(q)
 	q.Set(apc.QparamTaskAction, apc.TaskResult)
 	q.Set(apc.QparamSilent, "true")
 	args.req.Query = q
@@ -1538,7 +1536,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		_bpropsToHdr(bck, w.Header())
 		return
 	}
-	cloudProps, statusCode, err := p.headRemoteBck(*bck.RemoteBck(), nil)
+	cloudProps, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
 	if err != nil {
 		// TODO: what if HEAD fails
 		p.writeErr(w, r, err, statusCode)
@@ -1578,7 +1576,7 @@ func (p *proxy) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
 		bprops, present = clone.Get(bck)
 	)
 	if !present {
-		return cmn.NewErrBckNotFound(bck.Bck)
+		return cmn.NewErrBckNotFound(bck.Bucket())
 	}
 	nprops := mergeRemoteBckProps(bprops, ctx.cloudProps)
 	if nprops.Equal(bprops) {
@@ -1635,7 +1633,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if !nprops.BackendBck.IsEmpty() {
 		// backend must exist
-		backendBck := cluster.NewBckEmbed(nprops.BackendBck)
+		backendBck := cluster.CloneBck(&nprops.BackendBck)
 		args := bckInitArgs{p: p, w: w, r: r, bck: backendBck, msg: msg, dpq: apireq.dpq, query: apireq.query}
 		args.createAIS = false
 		args.lookupRemote = true
@@ -1809,7 +1807,7 @@ func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID st
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck cmn.Bck) (err error) {
+func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck *cmn.Bck) (err error) {
 	var (
 		remoteUUID    = bck.Ns.UUID
 		query         = r.URL.Query()
@@ -1856,13 +1854,13 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 
 	bck.Ns.UUID = ""
 	query = cmn.DelBckFromQuery(query)
-	query = cmn.AddBckToQuery(query, bck)
+	query = bck.AddToQuery(query)
 	r.URL.RawQuery = query.Encode()
 	p.reverseRequest(w, r, remoteUUID, u)
 	return nil
 }
 
-func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck cmn.QueryBcks, msg *apc.ActionMsg) {
+func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActionMsg) {
 	bmd := p.owner.bmd.get()
 	if qbck.Provider != "" {
 		if qbck.IsAIS() || qbck.IsHDFS() {
@@ -1924,7 +1922,7 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 	return
 }
 
-func initAsyncQuery(bck cmn.Bck, msg *apc.BckSummMsg, newTaskID string) (bool, url.Values) {
+func initAsyncQuery(bck *cmn.Bck, msg *apc.BckSummMsg, newTaskID string) (bool, url.Values) {
 	isNew := msg.UUID == ""
 	q := url.Values{}
 	if isNew {
@@ -1942,7 +1940,7 @@ func initAsyncQuery(bck cmn.Bck, msg *apc.BckSummMsg, newTaskID string) (bool, u
 		}
 	}
 
-	q = cmn.AddBckToQuery(q, bck)
+	q = bck.AddToQuery(q)
 	return isNew, q
 }
 
@@ -1984,7 +1982,7 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allEntr
 		entries   []*cmn.BucketEntry
 		results   sliceResults
 		smap      = p.owner.smap.get()
-		cacheID   = cacheReqID{bck: bck.Bck, prefix: lsmsg.Prefix}
+		cacheID   = cacheReqID{bck: bck.Bucket(), prefix: lsmsg.Prefix}
 		token     = lsmsg.ContinuationToken
 		props     = lsmsg.PropsSet()
 		hasEnough bool
@@ -2023,7 +2021,7 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allEntr
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
-		Query:  cmn.AddBckToQuery(nil, bck.Bck),
+		Query:  bck.AddToQuery(nil),
 		Body:   cos.MustMarshal(aisMsg),
 	}
 	args.timeout = apc.LongTimeout // TODO: should it be `Client.ListObjects`?
@@ -2093,7 +2091,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allE
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
-		Query:  cmn.AddBckToQuery(nil, bck.Bck),
+		Query:  bck.AddToQuery(nil),
 		Body:   cos.MustMarshal(aisMsg),
 	}
 	if lsmsg.NeedLocalMD() {
@@ -2880,7 +2878,7 @@ func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error)
 	return
 }
 
-func (p *proxy) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
+func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
 	var (
 		tsi  *cluster.Snode
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -2897,7 +2895,7 @@ func (p *proxy) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, st
 			return
 		}
 	}
-	q = cmn.AddBckToQuery(q, bck)
+	q = bck.AddToQuery(q)
 	cargs := allocCargs()
 	{
 		cargs.si = tsi

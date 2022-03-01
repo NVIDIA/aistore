@@ -102,7 +102,7 @@ func prepareObject(t *testing.T) *cluster.LOM {
 		ObjectSize:    1024,
 	})
 	lom := &cluster.LOM{FQN: out.FQNs[fs.ObjectType][0]}
-	err := lom.Init(out.Bck)
+	err := lom.Init(&out.Bck)
 	tassert.CheckFatal(t, err)
 	err = lom.Load(false, false)
 	tassert.CheckFatal(t, err)

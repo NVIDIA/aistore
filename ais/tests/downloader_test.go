@@ -212,7 +212,7 @@ func TestDownloadSingle(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		m := ioContext{
 			t:   t,
-			bck: bck.Bck,
+			bck: bck.Clone(),
 		}
 
 		m.initWithCleanup()
@@ -220,13 +220,13 @@ func TestDownloadSingle(t *testing.T) {
 
 		clearDownloadList(t)
 
-		id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck.Bck, objName, linkLarge)
+		id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), m.bck, objName, linkLarge)
 		tassert.CheckError(t, err)
 
 		time.Sleep(time.Second)
 
 		// Schedule second object.
-		idSecond, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck.Bck, objNameSecond, linkLarge)
+		idSecond, err := api.DownloadSingle(baseParams, generateDownloadDesc(), m.bck, objNameSecond, linkLarge)
 		tassert.CheckError(t, err)
 
 		// Cancel second object.
@@ -254,11 +254,11 @@ func TestDownloadSingle(t *testing.T) {
 		err = api.RemoveDownload(baseParams, id)
 		tassert.Errorf(t, err != nil, "expected error when removing non-existent task")
 
-		id, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck.Bck, objName, linkSmall)
+		id, err = api.DownloadSingle(baseParams, generateDownloadDesc(), m.bck, objName, linkSmall)
 		tassert.CheckError(t, err)
 
 		waitForDownload(t, id, 30*time.Second)
-		checkDownloadedObjects(t, id, bck.Bck, []string{objName})
+		checkDownloadedObjects(t, id, m.bck, []string{objName})
 
 		checkDownloadList(t, 2)
 	})
@@ -282,7 +282,7 @@ func TestDownloadRange(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		m := ioContext{
 			t:   t,
-			bck: bck.Bck,
+			bck: bck.Clone(),
 		}
 
 		m.initWithCleanup()
@@ -290,11 +290,11 @@ func TestDownloadRange(t *testing.T) {
 
 		clearDownloadList(t)
 
-		id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck.Bck, template)
+		id, err := api.DownloadRange(baseParams, generateDownloadDesc(), m.bck, template)
 		tassert.CheckFatal(t, err)
 
 		waitForDownload(t, id, 10*time.Second)
-		checkDownloadedObjects(t, id, bck.Bck, expectedObjects)
+		checkDownloadedObjects(t, id, m.bck, expectedObjects)
 
 		checkDownloadList(t)
 	})
@@ -317,18 +317,18 @@ func TestDownloadMultiRange(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		m := ioContext{
 			t:   t,
-			bck: bck.Bck,
+			bck: bck.Clone(),
 		}
 
 		m.initWithCleanup()
 		defer m.del()
 		clearDownloadList(t)
 
-		id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck.Bck, template)
+		id, err := api.DownloadRange(baseParams, generateDownloadDesc(), m.bck, template)
 		tassert.CheckFatal(t, err)
 
 		waitForDownload(t, id, 10*time.Second)
-		checkDownloadedObjects(t, id, bck.Bck, expectedObjects)
+		checkDownloadedObjects(t, id, m.bck, expectedObjects)
 
 		checkDownloadList(t)
 	})
@@ -346,18 +346,18 @@ func TestDownloadMultiMap(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		m := ioContext{
 			t:   t,
-			bck: bck.Bck,
+			bck: bck.Clone(),
 		}
 
 		m.initWithCleanup()
 		defer m.del()
 		clearDownloadList(t)
 
-		id, err := api.DownloadMulti(tutils.BaseAPIParams(), generateDownloadDesc(), bck.Bck, mapping)
+		id, err := api.DownloadMulti(tutils.BaseAPIParams(), generateDownloadDesc(), m.bck, mapping)
 		tassert.CheckFatal(t, err)
 
 		waitForDownload(t, id, 30*time.Second)
-		checkDownloadedObjects(t, id, bck.Bck, expectedObjects)
+		checkDownloadedObjects(t, id, m.bck, expectedObjects)
 
 		checkDownloadList(t)
 	})
@@ -377,18 +377,18 @@ func TestDownloadMultiList(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		m := ioContext{
 			t:   t,
-			bck: bck.Bck,
+			bck: bck.Clone(),
 		}
 
 		m.initWithCleanup()
 		defer m.del()
 		clearDownloadList(t)
 
-		id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck.Bck, l)
+		id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), m.bck, l)
 		tassert.CheckFatal(t, err)
 
 		waitForDownload(t, id, 30*time.Second)
-		checkDownloadedObjects(t, id, bck.Bck, expectedObjs)
+		checkDownloadedObjects(t, id, m.bck, expectedObjs)
 
 		checkDownloadList(t)
 	})
@@ -883,7 +883,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 			Name:     cos.RandString(10),
 			Provider: apc.ProviderAIS,
 		}
-		p = cmn.DefaultBckProps(bck)
+		p = bck.DefaultProps()
 
 		objName = cos.RandString(10)
 		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
@@ -929,7 +929,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 			Name:     cos.RandString(10),
 			Provider: apc.ProviderAIS,
 		}
-		p = cmn.DefaultBckProps(bck)
+		p = bck.DefaultProps()
 
 		objName = cos.RandString(10)
 		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/master/LICENSE"

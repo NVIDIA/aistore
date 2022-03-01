@@ -59,7 +59,7 @@ func (p *rspFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 }
 
 func (p *rspFactory) Start() error {
-	xec := ECM.NewRespondXact(p.Bck.Bck)
+	xec := ECM.NewRespondXact(p.Bck.Bucket())
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xctn = xec
 	go xec.Run(nil)
@@ -70,7 +70,7 @@ func (p *rspFactory) Start() error {
 // XactRespond //
 /////////////////
 
-func NewRespondXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactRespond {
+func NewRespondXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactRespond {
 	smap, si := t.Sowner(), t.Snode()
 	runner := &XactRespond{
 		xactECBase: newXactECBase(t, smap, si, bck, mgr),
@@ -112,7 +112,7 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 		glog.Infof("Delete request for %s/%s", bck.Name, objName)
 	}
 
-	ct, err := cluster.NewCTFromBO(bck.Bck, objName, r.t.Bowner(), fs.ECSliceType)
+	ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, r.t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{fs.ECMetaType, fs.ObjectType, fs.ECSliceType} {
-		fqnMeta, _, err := cluster.HrwFQN(bck, tp, objName)
+		fqnMeta, _, err := cluster.HrwFQN(bck.Bucket(), tp, objName)
 		if err != nil {
 			return err
 		}
@@ -148,7 +148,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *clust
 		glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
-		ct, err := cluster.NewCTFromBO(bck.Bck, objName, r.t.Bowner(), fs.ECSliceType)
+		ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, r.t.Bowner(), fs.ECSliceType)
 		if err != nil {
 			return err
 		}

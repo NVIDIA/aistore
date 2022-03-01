@@ -102,7 +102,7 @@ func (p *proxy) _checkACL(hdr http.Header, bck *cluster.Bck, ace apc.AccessAttrs
 		uid := p.owner.smap.Get().UUID
 
 		if bck != nil {
-			bucket = &bck.Bck
+			bucket = (*cmn.Bck)(bck)
 		}
 		if err := token.CheckPermissions(uid, bucket, ace); err != nil {
 			return err

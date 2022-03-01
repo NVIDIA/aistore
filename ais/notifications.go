@@ -708,7 +708,8 @@ func (nf *nlFilter) match(nl nl.NotifListener) bool {
 			return true
 		}
 		for _, bck := range nl.Bcks() {
-			if cmn.QueryBcks(nf.Bck.Bck).Contains(bck) {
+			qbck := (*cmn.QueryBcks)(nf.Bck.Bucket())
+			if qbck.Contains(bck) {
 				return true
 			}
 		}

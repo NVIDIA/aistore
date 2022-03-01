@@ -98,7 +98,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 
 		m = ioContext{
 			t:       t,
-			bck:     bck.Bck,
+			bck:     bck.Clone(),
 			num:     objCnt,
 			prefix:  "copy-multiobj/",
 			ordered: true,
@@ -126,7 +126,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			if m.bck.IsRemote() {
 				defer m.del()
 			}
-			if !toBck.Equal(m.bck) && toBck.IsAIS() {
+			if !toBck.Equal(&m.bck) && toBck.IsAIS() {
 				tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 			}
 			var erv atomic.Value

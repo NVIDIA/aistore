@@ -95,7 +95,7 @@ func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, err
 		return
 	}
 	if errCh == nil {
-		fmt.Printf("PUT %s/%s failed, err: %v (nil error channel)\n", bck.String(), object, err)
+		fmt.Printf("PUT %s/%s failed, err: %v (nil error channel)\n", bck, object, err)
 	} else {
 		errCh <- err
 	}
@@ -177,8 +177,8 @@ func EvictRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	if !bck.IsRemote() {
 		return
 	}
-	if bck.HasBackendBck() {
-		bck = *bck.BackendBck()
+	if backend := bck.Backend(); backend != nil {
+		bck.Copy(backend)
 	}
 	err := api.EvictRemoteBucket(BaseAPIParams(proxyURL), bck, false)
 	tassert.CheckFatal(tb, err)

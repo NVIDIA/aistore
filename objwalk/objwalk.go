@@ -49,18 +49,14 @@ func (w *Walk) DefaultLocalObjPage() (*cmn.BucketList, error) {
 	}
 
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{
-			Bck:      w.bck.Bck,
-			CTs:      []string{fs.ObjectType},
-			Callback: cb,
-			Sorted:   true,
-		},
-		ValidateCallback: func(fqn string, de fs.DirEntry) error {
-			if de.IsDir() {
-				return wi.ProcessDir(fqn)
-			}
-			return nil
-		},
+		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: cb, Sorted: true},
+	}
+	opts.WalkOpts.Bck.Copy(w.bck.Bucket())
+	opts.ValidateCallback = func(fqn string, de fs.DirEntry) error {
+		if de.IsDir() {
+			return wi.ProcessDir(fqn)
+		}
+		return nil
 	}
 
 	if err := fs.WalkBck(opts); err != nil {
@@ -106,7 +102,7 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 			e.TargetURL = localURL
 		}
 		lom := cluster.AllocLOM(e.Name)
-		if err := lom.Init(w.bck.Bck); err != nil {
+		if err := lom.Init(w.bck.Bucket()); err != nil {
 			cluster.FreeLOM(lom)
 			if cmn.IsErrBucketNought(err) {
 				return nil, err

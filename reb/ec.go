@@ -57,7 +57,7 @@ func (reb *Reb) runECjoggers() {
 			bck = cmn.Bck{Name: b.Name, Provider: apc.ProviderAIS, Ns: b.Ns}
 		}
 		wg.Add(1)
-		go reb.jogEC(mpathInfo, bck, wg)
+		go reb.jogEC(mpathInfo, &bck, wg)
 	}
 	for _, provider := range cfg.Backend.Providers {
 		for _, mpathInfo := range availablePaths {
@@ -66,22 +66,22 @@ func (reb *Reb) runECjoggers() {
 				bck = cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
 			}
 			wg.Add(1)
-			go reb.jogEC(mpathInfo, bck, wg)
+			go reb.jogEC(mpathInfo, &bck, wg)
 		}
 	}
 	wg.Wait()
 }
 
 // mountpath walker - walks through files in /meta/ directory
-func (reb *Reb) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.WaitGroup) {
+func (reb *Reb) jogEC(mpathInfo *fs.MountpathInfo, bck *cmn.Bck, wg *sync.WaitGroup) {
 	defer wg.Done()
 	opts := &fs.WalkOpts{
 		Mi:       mpathInfo,
-		Bck:      bck,
 		CTs:      []string{fs.ECMetaType},
 		Callback: reb.walkEC,
 		Sorted:   false,
 	}
+	opts.Bck.Copy(bck)
 	if err := fs.Walk(opts); err != nil {
 		xreb := reb.xctn()
 		if xreb.IsAborted() || xreb.Finished() {
@@ -110,7 +110,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 	//  locked and handled similarly.
 	if ct.ContentType() == fs.ObjectType {
 		lom = cluster.AllocLOM(ct.ObjectName())
-		if err = lom.Init(ct.Bck().Bck); err != nil {
+		if err = lom.Init(ct.Bck().Bucket()); err != nil {
 			cluster.FreeLOM(lom)
 			return
 		}
@@ -140,11 +140,8 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 	// transmit
 	ntfn := stageNtfn{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: meta, action: action}
 	o := transport.AllocSend()
-	o.Hdr = transport.ObjHdr{
-		Bck:      ct.Bck().Bck,
-		ObjName:  ct.ObjectName(),
-		ObjAttrs: cmn.ObjAttrs{Size: meta.Size},
-	}
+	o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: meta.Size}}
+	o.Hdr.Bck.Copy(ct.Bck().Bucket())
 	if lom != nil {
 		o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
 	}
@@ -175,7 +172,7 @@ func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Rea
 	cos.Assert(ntfn.md != nil)
 	var (
 		err error
-		bck = cluster.NewBckEmbed(hdr.Bck)
+		bck = cluster.CloneBck(&hdr.Bck)
 	)
 	if err := bck.Init(reb.t.Bowner()); err != nil {
 		return err
@@ -254,7 +251,7 @@ func (reb *Reb) detectLocalCT(req *stageNtfn, ct *cluster.CT) (*ec.Metadata, err
 	if _, ok := req.md.Daemons[reb.t.SID()]; !ok {
 		return nil, nil
 	}
-	mdCT, err := cluster.NewCTFromBO(ct.Bck().Bck, ct.ObjectName(), reb.t.Bowner(), fs.ECMetaType)
+	mdCT, err := cluster.NewCTFromBO(ct.Bck().Bucket(), ct.ObjectName(), reb.t.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return nil, err
 	}

@@ -152,11 +152,10 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHeader 
 		} else {
 			bucketProps.Versioning.Enabled = remoteProps.Versioning.Enabled // always takes precedence
 		}
-	} else if bck.HasBackendBck() {
+	} else if backend := bck.Backend(); backend != nil {
 		if bucketProps == nil {
 			bucketProps = defaultBckProps(bckPropsArgs{bck: bck})
 		}
-		backend := cluster.BackendBck(bck)
 		cloudProps, present := bmd.Get(backend)
 		debug.Assert(present)
 		bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
@@ -171,7 +170,7 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHeader 
 
 	// 1. try add
 	if _, present := bmd.Get(bck); present {
-		return cmn.NewErrBckAlreadyExists(bck.Bck)
+		return cmn.NewErrBckAlreadyExists(bck.Bucket())
 	}
 
 	// 2. begin
@@ -209,7 +208,7 @@ func _createBMDPre(ctx *bmdModifier, clone *bucketMD) (err error) {
 	bck := ctx.bcks[0]
 	added := clone.add(bck, ctx.setProps)
 	if !added {
-		err = cmn.NewErrBckAlreadyExists(bck.Bck)
+		err = cmn.NewErrBckAlreadyExists(bck.Bucket())
 	}
 	return
 }
@@ -217,7 +216,7 @@ func _createBMDPre(ctx *bmdModifier, clone *bucketMD) (err error) {
 func _destroyBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	bck := ctx.bcks[0]
 	if _, present := clone.Get(bck); !present {
-		return cmn.NewErrBckNotFound(bck.Bck)
+		return cmn.NewErrBckNotFound(bck.Bucket())
 	}
 	deleted := clone.del(bck)
 	cos.Assert(deleted)
@@ -234,7 +233,7 @@ func (p *proxy) makeNCopies(msg *apc.ActionMsg, bck *cluster.Bck) (xactID string
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bck); !present {
-		err = cmn.NewErrBckNotFound(bck.Bck)
+		err = cmn.NewErrBckNotFound(bck.Bucket())
 		return
 	}
 
@@ -272,7 +271,7 @@ func (p *proxy) makeNCopies(msg *apc.ActionMsg, bck *cluster.Bck) (xactID string
 	c.msg.BMDVersion = bmd.version()
 
 	// 4. IC
-	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
+	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bucket())
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -308,7 +307,7 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 	// 1. confirm existence
 	bprops, present := p.owner.bmd.get().Get(bck)
 	if !present {
-		err = cmn.NewErrBckNotFound(bck.Bck)
+		err = cmn.NewErrBckNotFound(bck.Bucket())
 		return
 	}
 	bck.Props = bprops
@@ -320,12 +319,11 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 	case apc.ActResetBprops:
 		var remoteBckProps http.Header
 		if bck.IsRemote() {
-			if bck.HasBackendBck() {
-				err = fmt.Errorf("%q has backend %q - detach it prior to resetting the props",
-					bck.Bck, bck.BackendBck())
+			if backend := bck.Backend(); backend != nil {
+				err = fmt.Errorf("%q has backend %q - detach it prior to resetting the props", bck, backend)
 				return
 			}
-			remoteBckProps, _, err = p.headRemoteBck(bck.Bck, nil)
+			remoteBckProps, _, err = p.headRemoteBck(bck.Bucket(), nil)
 			if err != nil {
 				return "", err
 			}
@@ -371,7 +369,7 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 		if ctx.needReEC {
 			action = apc.ActECEncode
 		}
-		nl := xact.NewXactNL(c.uuid, action, &c.smap.Smap, nil, bck.Bck)
+		nl := xact.NewXactNL(c.uuid, action, &c.smap.Smap, nil, bck.Bucket())
 		nl.SetOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 	}
@@ -410,11 +408,11 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (x
 	// 1. confirm existence & non-existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		err = cmn.NewErrBckNotFound(bckFrom.Bck)
+		err = cmn.NewErrBckNotFound(bckFrom.Bucket())
 		return
 	}
 	if _, present := bmd.Get(bckTo); present {
-		err = cmn.NewErrBckAlreadyExists(bckTo.Bck)
+		err = cmn.NewErrBckAlreadyExists(bckTo.Bucket())
 		return
 	}
 
@@ -423,7 +421,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (x
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, apc.QparamBucketTo)
+	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -461,7 +459,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (x
 	c.msg.RMDVersion = rmd.version()
 
 	// 4. IC
-	nl := xact.NewXactNL(c.uuid, c.msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
+	nl := xact.NewXactNL(c.uuid, c.msg.Action, &c.smap.Smap, nil, bckFrom.Bucket(), bckTo.Bucket())
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: c.smap, nl: nl, query: c.req.Query})
 
@@ -513,7 +511,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg, dryRun bool
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, existsFrom := bmd.Get(bckFrom); !existsFrom {
-		err = cmn.NewErrBckNotFound(bckFrom.Bck)
+		err = cmn.NewErrBckNotFound(bckFrom.Bucket())
 		return
 	}
 	_, existsTo := bmd.Get(bckTo)
@@ -524,7 +522,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg, dryRun bool
 		waitmsync = !dryRun
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, apc.QparamBucketTo)
+	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -553,7 +551,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg, dryRun bool
 	}
 
 	// 4. IC
-	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
+	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bckFrom.Bucket(), bckTo.Bucket())
 	nl.SetOwner(equalIC)
 	// cleanup upon failure via notification listener callback
 	// (note synchronous cleanup below)
@@ -582,7 +580,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (xactID 
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		err = cmn.NewErrBckNotFound(bckFrom.Bck)
+		err = cmn.NewErrBckNotFound(bckFrom.Bucket())
 		return
 	}
 	// 2. begin
@@ -590,7 +588,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (xactID 
 		waitmsync = false
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, apc.QparamBucketTo)
+	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -658,7 +656,7 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActionMsg) (xactID string, e
 		return
 	}
 	if !nlp.TryLock(cmn.Timeout.CplaneOperation() / 2) {
-		err = cmn.NewErrBckIsBusy(bck.Bck)
+		err = cmn.NewErrBckIsBusy(bck.Bucket())
 		return
 	}
 	defer nlp.Unlock()
@@ -666,7 +664,7 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActionMsg) (xactID string, e
 	// 1. confirm existence
 	props, present := p.owner.bmd.get().Get(bck)
 	if !present {
-		err = cmn.NewErrBckNotFound(bck.Bck)
+		err = cmn.NewErrBckNotFound(bck.Bucket())
 		return
 	}
 	if props.EC.Enabled {
@@ -703,7 +701,7 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActionMsg) (xactID string, e
 	c.msg.BMDVersion = bmd.version()
 
 	// 5. IC
-	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
+	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bucket())
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -731,7 +729,7 @@ func _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (xactID string, err error) {
 	// begin
 	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
-	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, apc.QparamBucketTo)
+	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBucketTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -874,9 +872,7 @@ func (p *proxy) destroyBucket(msg *apc.ActionMsg, bck *cluster.Bck) error {
 
 // erase bucket data from all targets (keep metadata)
 func (p *proxy) destroyBucketData(msg *apc.ActionMsg, bck *cluster.Bck) error {
-	query := cmn.AddBckToQuery(
-		url.Values{apc.QparamKeepBckMD: []string{"true"}},
-		bck.Bck)
+	query := bck.AddToQuery(url.Values{apc.QparamKeepBckMD: []string{"true"}})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodDelete,
@@ -924,7 +920,7 @@ func (p *proxy) promote(bck *cluster.Bck, msg *apc.ActionMsg, tsi *cluster.Snode
 
 	// 5. IC
 	if totalN > promoteNumSync<<1 { // TODO -- FIXME
-		nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
+		nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bucket())
 		nl.SetOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 	}
@@ -975,7 +971,7 @@ func (p *proxy) prepTxnClient(msg *apc.ActionMsg, bck *cluster.Bck, waitmsync bo
 		c.path = apc.URLPathTxn.S
 	} else {
 		c.path = apc.URLPathTxn.Join(bck.Name)
-		query = cmn.AddBckToQuery(query, bck.Bck)
+		query = bck.AddToQuery(query)
 	}
 	config := cmn.GCO.Get()
 	c.timeout.netw = 2 * config.Timeout.MaxKeepalive.D()
@@ -1064,7 +1060,7 @@ func (p *proxy) makeNewBckProps(bck *cluster.Bck, propsToUpdate *cmn.BucketProps
 	remirror := reMirror(bprops, nprops)
 	reec := reEC(bprops, nprops, bck)
 	if len(creating) == 0 && remirror && reec {
-		err = cmn.NewErrBckIsBusy(bck.Bck)
+		err = cmn.NewErrBckIsBusy(bck.Bucket())
 		return
 	}
 
@@ -1088,7 +1084,7 @@ func (p *proxy) initBackendProp(nprops *cmn.BucketProps) (err error) {
 	if nprops.BackendBck.IsEmpty() {
 		return
 	}
-	backend := cluster.NewBckEmbed(nprops.BackendBck)
+	backend := cluster.CloneBck(&nprops.BackendBck)
 	if err = backend.InitNoBackend(p.owner.bmd); err != nil {
 		return
 	}

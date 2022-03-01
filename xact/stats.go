@@ -45,7 +45,7 @@ type (
 		Kind        string      `json:"kind"`
 		Bck         cmn.Bck     `json:"bck"`
 		OnlyRunning *bool       `json:"show_active"`
-		Buckets     []cmn.Bck   `json:"buckets,omitempty"` // list of buckets on which LRU should run
+		Buckets     []cmn.Bck   `json:"buckets,omitempty"` // list of buckets to LRU-evict
 		Node        string      `json:"node,omitempty"`
 		Ext         interface{} `json:"ext"`
 	}

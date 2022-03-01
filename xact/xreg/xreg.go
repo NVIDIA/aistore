@@ -291,7 +291,7 @@ func (r *registry) abort(args abortArgs) {
 		} else if len(args.bcks) > 0 {
 			debug.AssertMsg(args.ty == "", args.ty)
 			for _, bck := range args.bcks {
-				if xctn.Bck() != nil && bck.Bck.Equal(xctn.Bck().Bck) {
+				if xctn.Bck() != nil && bck.Equal(xctn.Bck(), true /*sameID*/, true /*same backend*/) {
 					abort = true
 					break
 				}

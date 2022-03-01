@@ -203,7 +203,7 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 	} else if objName == "" {
 		return secret, bck, objName, fmt.Errorf("object name is missing")
 	}
-	bck = cluster.NewBckEmbed(b)
+	bck = cluster.CloneBck(&b)
 	return
 }
 

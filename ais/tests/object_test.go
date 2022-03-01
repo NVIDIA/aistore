@@ -322,17 +322,17 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("Validating responses for non-existent ais bucket...\n")
 	err := api.PutObject(putArgsLocal)
 	if err == nil {
-		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal)
+		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
 
 	_, err = api.GetObject(baseParams, bckLocal, fileName1)
 	if err == nil {
-		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal)
+		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
 
 	err = api.DeleteObject(baseParams, bckLocal, fileName1)
 	if err == nil {
-		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal)
+		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
 
 	tlog.Logf("PrefetchList %d\n", len(files))
@@ -493,7 +493,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 	if len(resLocal.Entries) != 1 {
 		t.Fatalf("Expected number of files in ais bucket (%s) does not match: expected %v, got %v",
-			bckRemote, 1, len(resLocal.Entries))
+			bckRemote.String(), 1, len(resLocal.Entries))
 	}
 
 	for _, entry := range resRemote.Entries {
@@ -504,7 +504,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	}
 
 	if !found {
-		t.Fatalf("File (%s) not found in cloud bucket (%s)", fileName, bckRemote)
+		t.Fatalf("File (%s) not found in cloud bucket (%s)", fileName, bckRemote.String())
 	}
 
 	// Get
@@ -955,9 +955,9 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 				m.bck.Name, apc.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 1},
 			),
-			cluster.NewBckEmbed(m.bck),
+			cluster.CloneBck(&m.bck),
 		))
-		cksumConf = cmn.DefaultBckProps(m.bck).Cksum
+		cksumConf = m.bck.DefaultProps().Cksum
 	)
 
 	m.initWithCleanup()
@@ -1044,7 +1044,7 @@ func TestRangeRead(t *testing.T) {
 		var (
 			m = ioContext{
 				t:         t,
-				bck:       bck.Bck,
+				bck:       bck.Clone(),
 				num:       5,
 				fileSize:  5271,
 				fixedSize: true,
@@ -1068,7 +1068,7 @@ func TestRangeRead(t *testing.T) {
 					EnableReadRange: api.Bool(cksumProps.EnableReadRange),
 				},
 			}
-			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
+			_, err := api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 			tassert.CheckError(t, err)
 		}()
 
@@ -1080,10 +1080,10 @@ func TestRangeRead(t *testing.T) {
 					EnableReadRange: api.Bool(false),
 				},
 			}
-			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
+			_, err := api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, m.fileSize, objName, true)
+		testValidCases(t, proxyURL, bck.Clone(), cksumProps.Type, m.fileSize, objName, true)
 
 		// Validate only that range checksum is being returned
 		tlog.Logln("Valid range with range checksum...")
@@ -1093,31 +1093,31 @@ func TestRangeRead(t *testing.T) {
 					EnableReadRange: api.Bool(true),
 				},
 			}
-			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
+			_, err := api.SetBucketProps(baseParams, bck.Clone(), propsToUpdate)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, m.fileSize, objName, false)
+		testValidCases(t, proxyURL, m.bck, cksumProps.Type, m.fileSize, objName, false)
 
 		tlog.Logln("Valid range query...")
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1", 1)
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=0-", int64(m.fileSize))
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=10-", int64(m.fileSize-10))
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize), int64(m.fileSize))
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize+2), int64(m.fileSize))
+		verifyValidRangesQuery(t, proxyURL, m.bck, objName, "bytes=-1", 1)
+		verifyValidRangesQuery(t, proxyURL, m.bck, objName, "bytes=0-", int64(m.fileSize))
+		verifyValidRangesQuery(t, proxyURL, m.bck, objName, "bytes=10-", int64(m.fileSize-10))
+		verifyValidRangesQuery(t, proxyURL, m.bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize), int64(m.fileSize))
+		verifyValidRangesQuery(t, proxyURL, m.bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize+2), int64(m.fileSize))
 
 		tlog.Logln("======================================================================")
 		tlog.Logln("Invalid range query:")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "potatoes=0-1")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-", m.fileSize+1))
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-%d", m.fileSize+1, m.fileSize+2))
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=0--1")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=1-0")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1-0")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1-2")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=10--1")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=1-2,4-6")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=--1")
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, "potatoes=0-1")
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, "bytes")
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, fmt.Sprintf("bytes=%d-", m.fileSize+1))
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, fmt.Sprintf("bytes=%d-%d", m.fileSize+1, m.fileSize+2))
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, "bytes=0--1")
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, "bytes=1-0")
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, "bytes=-1-0")
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, "bytes=-1-2")
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, "bytes=10--1")
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, "bytes=1-2,4-6")
+		verifyInvalidRangesQuery(t, proxyURL, m.bck, objName, "bytes=--1")
 	})
 }
 
@@ -1425,7 +1425,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					r, _ := readers.NewRandReader(objSize, cksumType)
 					err := api.PutObject(api.PutObjectArgs{
 						BaseParams: baseParams,
-						Bck:        bck.Bck,
+						Bck:        bck.Clone(),
 						Object:     objName,
 						Reader:     r,
 						Size:       objSize,
@@ -1472,6 +1472,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					totalFiles  = objCnt
 					baseParams  = tutils.BaseAPIParams(proxyURL)
 					waitTimeout = 10 * time.Second
+					b           = bck.Clone()
 				)
 
 				if bck.IsRemote() {
@@ -1488,11 +1489,11 @@ func TestOperationsWithRanges(t *testing.T) {
 						msg    = &apc.ListObjsMsg{Prefix: "test/"}
 					)
 					if evict {
-						xactID, err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
+						xactID, err = api.EvictRange(baseParams, b, test.rangeStr)
 						msg.Flags = apc.LsPresent
 						kind = apc.ActEvictObjects
 					} else {
-						xactID, err = api.DeleteRange(baseParams, bck.Bck, test.rangeStr)
+						xactID, err = api.DeleteRange(baseParams, b, test.rangeStr)
 						kind = apc.ActDeleteObjects
 					}
 					if err != nil {
@@ -1505,7 +1506,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					tassert.CheckFatal(t, err)
 
 					totalFiles -= test.delta
-					objList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
+					objList, err := api.ListObjects(baseParams, b, msg, 0)
 					if err != nil {
 						t.Error(err)
 						continue
@@ -1519,12 +1520,12 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 
 				msg := &apc.ListObjsMsg{Prefix: "test/"}
-				bckList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
+				bckList, err := api.ListObjects(baseParams, b, msg, 0)
 				tassert.CheckFatal(t, err)
 
 				tlog.Logf("Cleaning up remaining objects...\n")
 				for _, obj := range bckList.Entries {
-					err := tutils.Del(proxyURL, bck.Bck, obj.Name, nil, nil, true /*silent*/)
+					err := tutils.Del(proxyURL, b, obj.Name, nil, nil, true /*silent*/)
 					tassert.CheckError(t, err)
 				}
 			})

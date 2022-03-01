@@ -75,7 +75,7 @@ func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {
 	xctn.abort.ch = make(chan error, 1)
 	xctn.bck = bck
 	if xctn.bck != nil {
-		xctn.origBck = bck.Bck
+		xctn.origBck = bck.Clone()
 	}
 	xctn.setStartTime(time.Now())
 }

@@ -29,7 +29,7 @@ var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
 
 	Describe("ListObjectsCache", func() {
 		var (
-			id    = cacheReqID{bck: cmn.Bck{Name: "some_bck"}}
+			id    = cacheReqID{bck: &cmn.Bck{Name: "some_bck"}}
 			cache *lsobjCaches
 		)
 
@@ -170,7 +170,7 @@ var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
 		})
 
 		It("should correctly distinguish between different caches", func() {
-			otherID := cacheReqID{bck: cmn.Bck{Name: "something"}}
+			otherID := cacheReqID{bck: &cmn.Bck{Name: "something"}}
 
 			cache.set(id, "", makeEntries("a", "b", "c"), 3)
 			entries, hasEnough := cache.get(id, "", 3)

@@ -34,7 +34,7 @@ var (
 )
 
 func NewDownloadNL(uuid string, action string, smap *cluster.Smap,
-	progressInterval time.Duration, bck ...cmn.Bck) *NotifDownloadListerner {
+	progressInterval time.Duration, bck ...*cmn.Bck) *NotifDownloadListerner {
 	return &NotifDownloadListerner{
 		NotifListenerBase: *nl.NewNLB(uuid, action, smap, smap.Tmap.ActiveMap(), progressInterval, bck...),
 	}

@@ -778,7 +778,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			p, err := api.HeadBucket(baseParams, test.bck)
 			tassert.CheckFatal(t, err)
 
-			bck := cluster.NewBckEmbed(test.bck)
+			bck := cluster.CloneBck(&test.bck)
 			bck.Props = p
 
 			f(t, bck)

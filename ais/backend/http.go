@@ -114,7 +114,7 @@ func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (stri
 	origURL, ok := ctx.Value(cos.CtxOriginalURL).(string)
 	if !ok || origURL == "" {
 		if bck.Props == nil {
-			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck.Bck)
+			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck)
 		}
 		origURL = bck.Props.Extra.HTTP.OrigURLBck
 		debug.Assert(origURL != "")

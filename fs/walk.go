@@ -112,7 +112,7 @@ func Walk(opts *WalkOpts) error {
 		if opts.Bck.Name != "" {
 			// walk specific content-types inside the bucket.
 			for _, ct := range opts.CTs {
-				fqns = append(fqns, opts.Mi.MakePathCT(opts.Bck, ct))
+				fqns = append(fqns, opts.Mi.MakePathCT(&opts.Bck, ct))
 			}
 		} else {
 			// all content-type paths for all bucket subdirectories
@@ -173,7 +173,7 @@ func allMpathCTpaths(opts *WalkOpts) (fqns []string, err error) {
 			continue
 		}
 		for _, ct := range opts.CTs {
-			fqns = append(fqns, opts.Mi.MakePathCT(bck, ct))
+			fqns = append(fqns, opts.Mi.MakePathCT(&bck, ct))
 		}
 	}
 	return
@@ -197,7 +197,7 @@ func AllMpathBcks(opts *WalkOpts) (bcks []cmn.Bck, err error) {
 
 func mpathChildren(opts *WalkOpts) (children []string, err error) {
 	var (
-		fqn           = opts.Mi.MakePathBck(opts.Bck)
+		fqn           = opts.Mi.MakePathBck(&opts.Bck)
 		scratch, slab = memsys.PageMM().AllocSize(memsys.DefaultBufSize)
 	)
 	children, err = godirwalk.ReadDirnames(fqn, scratch)

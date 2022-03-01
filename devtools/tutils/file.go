@@ -64,7 +64,7 @@ func SetXattrCksum(fqn string, bck cmn.Bck, cksum *cos.Cksum) error {
 	lom := &cluster.LOM{FQN: fqn}
 	// NOTE: this is an intentional hack to go ahead and corrupt the checksum
 	//       - init and/or load errors are ignored on purpose
-	_ = lom.Init(bck)
+	_ = lom.Init(&bck)
 	_ = lom.LoadMetaFromFS()
 	lom.SetCksum(cksum)
 	return lom.Persist()
@@ -138,7 +138,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				BID:   0xa5b6e7d8,
 			},
 		}
-		bmd   = cluster.NewBaseBownerMock(cluster.NewBckEmbed(bck))
+		bmd   = cluster.NewBaseBownerMock((*cluster.Bck)(&bck))
 		tMock cluster.Target
 	)
 
@@ -167,14 +167,14 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	tMock = mock.NewTarget(bmd)
 
-	errs := fs.CreateBucket("testing", bck, false /*nilbmd*/)
+	errs := fs.CreateBucket("testing", &bck, false /*nilbmd*/)
 	if len(errs) > 0 {
 		tassert.CheckFatal(t, errs[0])
 	}
 
 	for _, ct := range desc.CTs {
 		for i := 0; i < ct.ContentCnt; i++ {
-			fqn, _, err := cluster.HrwFQN(cluster.NewBckEmbed(bck), ct.Type, cos.RandString(15))
+			fqn, _, err := cluster.HrwFQN(&bck, ct.Type, cos.RandString(15))
 			tassert.CheckFatal(t, err)
 
 			fqns[ct.Type] = append(fqns[ct.Type], fqn)
@@ -193,7 +193,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 			switch ct.Type {
 			case fs.ObjectType:
 				lom := &cluster.LOM{FQN: fqn}
-				err = lom.Init(cmn.Bck{})
+				err = lom.Init(&cmn.Bck{})
 				tassert.CheckFatal(t, err)
 
 				lom.SetSize(desc.ObjectSize)

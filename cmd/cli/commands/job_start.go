@@ -262,7 +262,7 @@ func startDownloadHandler(c *cli.Context) error {
 			if err != nil {
 				return err
 			}
-			if !p.BackendBck.Equal(source.backend.bck) {
+			if !p.BackendBck.Equal(&source.backend.bck) {
 				color.New(color.FgYellow).Fprintf(c.App.ErrWriter,
 					"Warning: bucket %q does not have Cloud bucket %q as its *backend* - proceeding to download anyway\n",
 					basePayload.Bck, source.backend.bck,

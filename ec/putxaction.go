@@ -64,7 +64,7 @@ func (*putFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *putFactory) Start() error {
-	xec := ECM.NewPutXact(p.Bck.Bck)
+	xec := ECM.NewPutXact(p.Bck.Bucket())
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xctn = xec
 	go xec.Run(nil)
@@ -83,7 +83,7 @@ func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 // XactPut //
 /////////////
 
-func NewPutXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactPut {
+func NewPutXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactPut {
 	availablePaths, disabledPaths := fs.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 	smap, si := t.Sowner(), t.Snode()

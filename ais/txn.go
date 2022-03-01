@@ -446,7 +446,7 @@ func (txn *txnBckBase) String() string {
 		}
 	}
 	return fmt.Sprintf("txn-%s[%s-(v%d, v%d)-%s-%s]-%s%s]",
-		txn.tag, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.bck.Bck.String(), tm, res)
+		txn.tag, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.bck.String(), tm, res)
 }
 
 func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (found bool, errDone error) {

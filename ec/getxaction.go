@@ -62,7 +62,7 @@ func (*getFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *getFactory) Start() error {
-	xec := ECM.NewGetXact(p.Bck.Bck)
+	xec := ECM.NewGetXact(p.Bck.Bucket())
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xctn = xec
 	go xec.Run(nil)
@@ -80,7 +80,7 @@ func (p *getFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 // XactGet //
 /////////////
 
-func NewGetXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactGet {
+func NewGetXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactGet {
 	availablePaths, disabledPaths := fs.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 	smap, si := t.Sowner(), t.Snode()

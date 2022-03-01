@@ -86,7 +86,7 @@ type (
 	// Cache request ID. This identifies and splits requests into
 	// multiple caches that these requests can use.
 	cacheReqID struct {
-		bck    cmn.Bck
+		bck    *cmn.Bck
 		prefix string
 	}
 
@@ -495,7 +495,7 @@ func (c *lsobjCaches) set(reqID cacheReqID, token string, entries []*cmn.BucketE
 	v.(*lsobjCache).set(token, entries, size)
 }
 
-func (c *lsobjCaches) invalidate(bck cmn.Bck) {
+func (c *lsobjCaches) invalidate(bck *cmn.Bck) {
 	c.caches.Range(func(key, value interface{}) bool {
 		id := key.(cacheReqID)
 		if id.bck.Equal(bck) {

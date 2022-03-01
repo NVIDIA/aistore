@@ -52,13 +52,13 @@ var _ = Describe("Mirror", func() {
 			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
 			BID:    1,
 		}
-		bck             = cmn.Bck{Name: testBucketName, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal, Props: props}
-		bmdMock         = cluster.NewBaseBownerMock(&cluster.Bck{Bck: bck})
+		bck             = cluster.Bck{Name: testBucketName, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal, Props: props}
+		bmdMock         = cluster.NewBaseBownerMock(&bck)
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}
-		bucketPath      = mi.MakePathCT(bck, fs.ObjectType)
-		defaultObjFQN   = mi.MakePathFQN(bck, fs.ObjectType, testObjectName)
-		expectedCopyFQN = mi2.MakePathFQN(bck, fs.ObjectType, testObjectName)
+		bucketPath      = mi.MakePathCT(bck.Bucket(), fs.ObjectType)
+		defaultObjFQN   = mi.MakePathFQN(bck.Bucket(), fs.ObjectType, testObjectName)
+		expectedCopyFQN = mi2.MakePathFQN(bck.Bucket(), fs.ObjectType, testObjectName)
 	)
 
 	BeforeEach(func() {
@@ -130,7 +130,7 @@ func createTestFile(filePath, objName string, size int64) {
 
 func newBasicLom(fqn string) *cluster.LOM {
 	lom := &cluster.LOM{FQN: fqn}
-	err := lom.Init(cmn.Bck{})
+	err := lom.Init(&cmn.Bck{})
 	Expect(err).NotTo(HaveOccurred())
 	lom.Uncache(false)
 	return lom

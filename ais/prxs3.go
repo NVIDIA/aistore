@@ -138,7 +138,7 @@ func (p *proxy) bckNamesToS3(w http.ResponseWriter) {
 	)
 	resp := s3compat.NewListBucketResult()
 	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		if qbck.Equal(bck.Bck) || qbck.Contains(bck.Bck) {
+		if qbck.Equal(bck.Bucket()) || qbck.Contains(bck.Bucket()) {
 			resp.Add(bck)
 		}
 		return false

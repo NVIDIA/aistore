@@ -76,7 +76,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		bck := cluster.NewBckEmbed(dlBodyBase.Bck)
+		bck := cluster.CloneBck(&dlBodyBase.Bck)
 		if err := bck.Init(t.Bowner()); err != nil {
 			t.writeErr(w, r, err)
 			return

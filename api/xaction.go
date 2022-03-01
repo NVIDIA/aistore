@@ -83,7 +83,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
-		reqParams.Query = cmn.AddBckToQuery(nil, args.Bck)
+		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
 	err = reqParams.DoHTTPReqResp(&id)
 	freeRp(reqParams)
@@ -103,7 +103,7 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
-		reqParams.Query = cmn.AddBckToQuery(nil, args.Bck)
+		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
 	err := reqParams.DoHTTPRequest()
 	freeRp(reqParams)

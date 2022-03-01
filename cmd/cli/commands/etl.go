@@ -393,7 +393,7 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	if fromBck.Equal(toBck) {
+	if fromBck.Equal(&toBck) {
 		return fmt.Errorf("cannot ETL bucket %q onto itself", fromBck)
 	}
 

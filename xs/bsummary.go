@@ -143,7 +143,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 			var (
 				msg     = apc.BckSummMsg{}
 				summary = cmn.BckSumm{
-					Bck:            bck.Bck,
+					Bck:            bck.Clone(),
 					TotalDisksSize: totalDisksSize,
 				}
 			)
@@ -236,7 +236,7 @@ func (t *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, e
 	for _, mpathInfo := range availablePaths {
 		group.Go(func(mpathInfo *fs.MountpathInfo) func() error {
 			return func() error {
-				path := mpathInfo.MakePathCT(bck.Bck, fs.ObjectType)
+				path := mpathInfo.MakePathCT(bck.Bucket(), fs.ObjectType)
 				dirSize, err := ios.GetDirSize(path)
 				if err != nil {
 					return err

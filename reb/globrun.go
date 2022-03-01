@@ -657,7 +657,7 @@ func (rj *rebJogger) jog(mpathInfo *fs.MountpathInfo) {
 }
 
 func (rj *rebJogger) walkBck(bck *cluster.Bck) bool {
-	rj.opts.Bck = bck.Bck
+	rj.opts.Bck.Copy(bck.Bucket())
 	err := fs.Walk(&rj.opts)
 	if err == nil {
 		return rj.xreb.IsAborted()
@@ -704,7 +704,7 @@ func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) (err error) {
 }
 
 func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
-	err = lom.Init(cmn.Bck{})
+	err = lom.Init(&cmn.Bck{})
 	if err != nil {
 		if cmn.IsErrBucketLevel(err) {
 			return err
@@ -777,7 +777,7 @@ func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOp
 		o      = transport.AllocSend()
 		opaque = ack.NewPack()
 	)
-	o.Hdr.Bck = lom.Bucket()
+	o.Hdr.Bck.Copy(lom.Bucket())
 	o.Hdr.ObjName = lom.ObjName
 	o.Hdr.Opaque = opaque
 	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())

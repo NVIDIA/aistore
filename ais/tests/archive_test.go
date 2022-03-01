@@ -36,7 +36,7 @@ func TestGetFromArchive(t *testing.T) {
 		var (
 			m = ioContext{
 				t:   t,
-				bck: bck.Bck,
+				bck: bck.Clone(),
 			}
 			baseParams  = tutils.BaseAPIParams(m.proxyURL)
 			errCh       = make(chan error, m.num)
@@ -156,7 +156,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 		numPuts = 100
 		m       = ioContext{
 			t:       t,
-			bck:     bck.Bck,
+			bck:     bck.Clone(),
 			num:     numPuts,
 			prefix:  "archive/",
 			ordered: true,
@@ -237,7 +237,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			if m.bck.IsRemote() {
 				defer m.del()
 			}
-			if !toBck.Equal(m.bck) && toBck.IsAIS() {
+			if !toBck.Equal(&m.bck) && toBck.IsAIS() {
 				tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 			}
 

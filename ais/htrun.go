@@ -1815,7 +1815,7 @@ func (h *htrun) healthByExternalWD(w http.ResponseWriter, r *http.Request) (resp
 	return
 }
 
-func selectBMDBuckets(bmd *bucketMD, qbck cmn.QueryBcks) cmn.Bcks {
+func selectBMDBuckets(bmd *bucketMD, qbck *cmn.QueryBcks) cmn.Bcks {
 	var (
 		names = make(cmn.Bcks, 0, 10)
 		cp    = &qbck.Provider
@@ -1824,8 +1824,8 @@ func selectBMDBuckets(bmd *bucketMD, qbck cmn.QueryBcks) cmn.Bcks {
 		cp = nil
 	}
 	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		if qbck.Equal(bck.Bck) || qbck.Contains(bck.Bck) {
-			names = append(names, bck.Bck)
+		if qbck.Equal(bck.Bucket()) || qbck.Contains(bck.Bucket()) {
+			names = append(names, bck.Clone())
 		}
 		return false
 	})
@@ -1833,7 +1833,7 @@ func selectBMDBuckets(bmd *bucketMD, qbck cmn.QueryBcks) cmn.Bcks {
 	return names
 }
 
-func bfromQ(bckName string, query url.Values, dpq *dpq) (bck cmn.Bck) {
+func bfromQ(bckName string, query url.Values, dpq *dpq) (bck *cmn.Bck) {
 	var (
 		provider  string
 		namespace cmn.Ns
@@ -1846,16 +1846,16 @@ func bfromQ(bckName string, query url.Values, dpq *dpq) (bck cmn.Bck) {
 		provider = dpq.provider
 		namespace = cmn.ParseNsUname(dpq.namespace)
 	}
-	return cmn.Bck{Name: bckName, Provider: provider, Ns: namespace}
+	return &cmn.Bck{Name: bckName, Provider: provider, Ns: namespace}
 }
 
 func newBckFromQuery(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, error) {
-	bck := cluster.NewBckEmbed(bfromQ(bckName, query, dpq))
+	bck := cluster.CloneBck(bfromQ(bckName, query, dpq))
 	return bck, bck.Validate()
 }
 
-func newQueryBcksFromQuery(bckName string, query url.Values, dpq *dpq) (cmn.QueryBcks, error) {
-	bck := cmn.QueryBcks(bfromQ(bckName, query, dpq))
+func newQueryBcksFromQuery(bckName string, query url.Values, dpq *dpq) (*cmn.QueryBcks, error) {
+	bck := (*cmn.QueryBcks)(bfromQ(bckName, query, dpq))
 	return bck, bck.Validate()
 }
 
@@ -1874,7 +1874,7 @@ func newBckFromQueryUname(query url.Values, required bool) (*cluster.Bck, error)
 	if err := bck.Validate(); err != nil {
 		return nil, err
 	}
-	return cluster.NewBckEmbed(bck), nil
+	return cluster.CloneBck(&bck), nil
 }
 
 //

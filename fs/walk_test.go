@@ -64,7 +64,7 @@ func TestWalkBck(t *testing.T) {
 			avail, _ := fs.Get()
 			var fileNames []string
 			for _, mpath := range avail {
-				dir := mpath.MakePathCT(bck, fs.ObjectType)
+				dir := mpath.MakePathCT(&bck, fs.ObjectType)
 				err := cos.CreateDir(dir)
 				tassert.CheckFatal(t, err)
 
@@ -148,7 +148,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 
 	avail, _ := fs.Get()
 	for _, mpath := range avail {
-		dir := mpath.MakePathCT(bck, fs.ObjectType)
+		dir := mpath.MakePathCT(&bck, fs.ObjectType)
 		err := cos.CreateDir(dir)
 		tassert.CheckFatal(t, err)
 

@@ -25,7 +25,7 @@ func TestSmoke(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				m := ioContext{
 					t:        t,
-					bck:      bck.Bck,
+					bck:      bck.Clone(),
 					num:      100,
 					fileSize: objSize,
 					prefix:   "smoke/obj-",

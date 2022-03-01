@@ -404,7 +404,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 			}
 		}()
 
-		propsTestCore(t, bck.Bck, bck.Props.Versioning.Enabled, bck.Props.Cksum.Type)
+		propsTestCore(t, bck.Clone(), bck.Props.Versioning.Enabled, bck.Props.Cksum.Type)
 	})
 }
 

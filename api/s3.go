@@ -23,7 +23,7 @@ func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options 
 	if len(options) != 0 {
 		w, q, hdr = getObjectOptParams(options[0])
 	}
-	q = cmn.AddBckToQuery(q, bck)
+	q = bck.AddToQuery(q)
 	baseParams.Method = http.MethodGet
 	reqParams := allocRp()
 	{

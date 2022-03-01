@@ -47,11 +47,11 @@ const (
 )
 
 type (
-	ErrBucketAlreadyExists struct{ bck Bck }
-	ErrRemoteBckNotFound   struct{ bck Bck }
-	ErrRemoteBucketOffline struct{ bck Bck }
-	ErrBckNotFound         struct{ bck Bck }
-	ErrBucketIsBusy        struct{ bck Bck }
+	ErrBucketAlreadyExists struct{ bck *Bck }
+	ErrRemoteBckNotFound   struct{ bck *Bck }
+	ErrRemoteBucketOffline struct{ bck *Bck }
+	ErrBckNotFound         struct{ bck *Bck }
+	ErrBucketIsBusy        struct{ bck *Bck }
 
 	ErrFailedTo struct {
 		actor  interface{} // most of the time it's this (target|proxy) node but may also be some other "actor"
@@ -206,7 +206,7 @@ func (e *ErrFailedTo) Unwrap() (err error) { return e.err }
 
 // ais ErrBucketAlreadyExists
 
-func NewErrBckAlreadyExists(bck Bck) *ErrBucketAlreadyExists {
+func NewErrBckAlreadyExists(bck *Bck) *ErrBucketAlreadyExists {
 	return &ErrBucketAlreadyExists{bck: bck}
 }
 
@@ -221,7 +221,7 @@ func IsErrBucketAlreadyExists(err error) bool {
 
 // remote ErrRemoteBckNotFound (compare with ErrBckNotFound)
 
-func NewErrRemoteBckNotFound(bck Bck) *ErrRemoteBckNotFound {
+func NewErrRemoteBckNotFound(bck *Bck) *ErrRemoteBckNotFound {
 	return &ErrRemoteBckNotFound{bck: bck}
 }
 
@@ -240,7 +240,7 @@ func IsErrRemoteBckNotFound(err error) bool {
 // ErrBckNotFound - applies to ais buckets exclusively
 // (compare with ErrRemoteBckNotFound)
 
-func NewErrBckNotFound(bck Bck) *ErrBckNotFound {
+func NewErrBckNotFound(bck *Bck) *ErrBckNotFound {
 	return &ErrBckNotFound{bck: bck}
 }
 
@@ -255,7 +255,7 @@ func IsErrBckNotFound(err error) bool {
 
 // ErrRemoteBucketOffline
 
-func NewErrRemoteBckOffline(bck Bck) *ErrRemoteBucketOffline {
+func NewErrRemoteBckOffline(bck *Bck) *ErrRemoteBucketOffline {
 	return &ErrRemoteBucketOffline{bck: bck}
 }
 
@@ -289,7 +289,7 @@ func (*ErrInvalidBucketProvider) Is(target error) bool {
 
 // ErrBucketIsBusy
 
-func NewErrBckIsBusy(bck Bck) *ErrBucketIsBusy {
+func NewErrBckIsBusy(bck *Bck) *ErrBucketIsBusy {
 	return &ErrBucketIsBusy{bck: bck}
 }
 

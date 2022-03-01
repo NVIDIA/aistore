@@ -531,7 +531,7 @@ func getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
 func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return reqErr.StatusCode(), cmn.NewErrRemoteBckNotFound(*bck)
+			return reqErr.StatusCode(), cmn.NewErrRemoteBckNotFound(bck)
 		}
 		return reqErr.StatusCode(), _clearErr(awsError)
 	}

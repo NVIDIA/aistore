@@ -225,7 +225,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	// In case of HDFS if the bucket does not exist in BMD there is no point
 	// in checking if it exists remotely if we don't have `ref_directory`.
 	if args.bck.IsHDFS() {
-		err = cmn.NewErrBckNotFound(args.bck.Bck)
+		err = cmn.NewErrBckNotFound(args.bck.Bucket())
 		errCode = http.StatusNotFound
 		return
 	}
@@ -239,12 +239,11 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	bck = args.bck
 	action := apc.ActCreateBck
 
-	if bck.HasBackendBck() {
-		bck = cluster.BackendBck(bck)
+	if backend := bck.Backend(); backend != nil {
+		bck = backend
 	}
-
 	if bck.IsAIS() {
-		glog.Warningf("%s: bucket %q doesn't exist, proceeding to create", args.p.si, args.bck.Bck)
+		glog.Warningf("%s: %q doesn't exist, proceeding to create", args.p.si, args.bck)
 	}
 
 	var remoteProps http.Header
@@ -307,5 +306,5 @@ func (args *bckInitArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCo
 		origURL := args.getOrigURL()
 		q.Set(apc.QparamOrigURL, origURL)
 	}
-	return args.p.headRemoteBck(bck.Bck, q)
+	return args.p.headRemoteBck(bck.Bucket(), q)
 }

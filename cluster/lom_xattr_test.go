@@ -74,16 +74,16 @@ var _ = Describe("LOM Xattributes", func() {
 			testObjectName = "xattr-foldr/test-obj.ext"
 
 			// Bucket needs to have checksum enabled
-			localFQN  = mix.MakePathFQN(localBck, fs.ObjectType, testObjectName)
-			cachedFQN = mix.MakePathFQN(cachedBck, fs.ObjectType, testObjectName)
+			localFQN  = mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			cachedFQN = mix.MakePathFQN(&cachedBck, fs.ObjectType, testObjectName)
 
 			fqns []string
 		)
 
 		BeforeEach(func() {
 			fqns = []string{
-				copyMpathInfo.MakePathFQN(localBck, fs.ObjectType, "copy/fqn"),
-				copyMpathInfo.MakePathFQN(localBck, fs.ObjectType, "other/copy/fqn"),
+				copyMpathInfo.MakePathFQN(&localBck, fs.ObjectType, "copy/fqn"),
+				copyMpathInfo.MakePathFQN(&localBck, fs.ObjectType, "other/copy/fqn"),
 			}
 
 			for _, fqn := range fqns {
@@ -112,7 +112,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
-				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
+				Expect(hrwLom.Init(&localBck)).NotTo(HaveOccurred())
 				hrwLom.Uncache(false)
 
 				newLom := NewBasicLom(localFQN)
@@ -148,7 +148,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).To(HaveOccurred())
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
-				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
+				Expect(hrwLom.Init(&localBck)).NotTo(HaveOccurred())
 				hrwLom.Uncache(false)
 
 				ver := lom.Version()
@@ -190,7 +190,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).To(HaveOccurred())
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
-				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
+				Expect(hrwLom.Init(&localBck)).NotTo(HaveOccurred())
 				hrwLom.Uncache(false)
 
 				lom.Uncache(false)
@@ -230,7 +230,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
-				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
+				Expect(hrwLom.Init(&localBck)).NotTo(HaveOccurred())
 				hrwLom.Uncache(false)
 
 				newLom := NewBasicLom(localFQN)

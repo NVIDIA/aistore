@@ -136,15 +136,15 @@ func (mgr *Manager) closeECBundles() {
 	transport.Unhandle(RespStreamName)
 }
 
-func (mgr *Manager) NewGetXact(bck cmn.Bck) *XactGet {
+func (mgr *Manager) NewGetXact(bck *cmn.Bck) *XactGet {
 	return NewGetXact(mgr.t, bck, mgr)
 }
 
-func (mgr *Manager) NewPutXact(bck cmn.Bck) *XactPut {
+func (mgr *Manager) NewPutXact(bck *cmn.Bck) *XactPut {
 	return NewPutXact(mgr.t, bck, mgr)
 }
 
-func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
+func (mgr *Manager) NewRespondXact(bck *cmn.Bck) *XactRespond {
 	return NewRespondXact(mgr.t, bck, mgr)
 }
 
@@ -224,7 +224,7 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 			return err
 		}
 	}
-	bck := cluster.NewBckEmbed(hdr.Bck)
+	bck := cluster.CloneBck(&hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			glog.Errorf("failed to init bucket %s: %v", bck, err)
@@ -255,7 +255,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 		glog.Errorf("Failed to unmarshal request: %v", err)
 		return err
 	}
-	bck := cluster.NewBckEmbed(hdr.Bck)
+	bck := cluster.CloneBck(&hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			glog.Error(err)

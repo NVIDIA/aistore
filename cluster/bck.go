@@ -6,6 +6,7 @@ package cluster
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -22,9 +23,8 @@ const (
 )
 
 type (
-	Bck struct {
-		cmn.Bck
-	}
+	Bck cmn.Bck
+
 	noCopy       struct{}
 	NameLockPair struct {
 		_         noCopy
@@ -45,33 +45,49 @@ func initBckLocker() {
 }
 
 func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck {
-	var (
-		props *cmn.BucketProps
-		err   error
-	)
-
+	var err error
 	provider, err = cmn.NormalizeProvider(provider)
 	debug.AssertNoErr(err)
-
-	bck := cmn.Bck{Name: name, Provider: provider, Ns: ns}
+	bck := &Bck{Name: name, Provider: provider, Ns: ns}
 	if len(optProps) > 0 {
-		props = optProps[0]
+		bck.Props = optProps[0]
+		debug.Assert(bck.Props != nil)
 	}
-	bck.Props = props
-	b := &Bck{Bck: bck}
-	return b
+	return bck
 }
 
-func BackendBck(bck *Bck) *Bck { return &Bck{Bck: bck.Props.BackendBck} }
+// clone (*cluster.Bck | *cmn.Bck) <=> (cmn.Bck | cluster.Bck) respectively
+func (b *Bck) Clone() cmn.Bck    { return cmn.Bck(*b) }
+func CloneBck(bck *cmn.Bck) *Bck { b := *bck; return (*Bck)(&b) }
 
-// cluster.Bck <=> cmn.Bck
-func NewBckEmbed(bck cmn.Bck) *Bck { return &Bck{Bck: bck} }
-func (b *Bck) Bucket() cmn.Bck     { return b.Bck }
+// cast *cluster.Bck => *cmn.Bck
+func (b *Bck) Bucket() *cmn.Bck { return (*cmn.Bck)(b) }
+func (b *Bck) Backend() *Bck    { return (*Bck)(b.Bucket().Backend()) }
 
-func (b *Bck) MakeUname(objName string) string { return b.Bck.MakeUname(objName) }
+//
+// inline delegations => cmn.Bck
+//
+func (b *Bck) IsAIS() bool                        { bck := (*cmn.Bck)(b); return bck.IsAIS() }
+func (b *Bck) HasProvider() bool                  { bck := (*cmn.Bck)(b); return bck.HasProvider() }
+func (b *Bck) IsHTTP() bool                       { bck := (*cmn.Bck)(b); return bck.IsHTTP() }
+func (b *Bck) IsHDFS() bool                       { bck := (*cmn.Bck)(b); return bck.IsHDFS() }
+func (b *Bck) IsCloud() bool                      { bck := (*cmn.Bck)(b); return bck.IsCloud() }
+func (b *Bck) IsRemote() bool                     { bck := (*cmn.Bck)(b); return bck.IsRemote() }
+func (b *Bck) IsRemoteAIS() bool                  { bck := (*cmn.Bck)(b); return bck.IsRemoteAIS() }
+func (b *Bck) RemoteBck() *cmn.Bck                { bck := (*cmn.Bck)(b); return bck.RemoteBck() }
+func (b *Bck) Validate() error                    { bck := (*cmn.Bck)(b); return bck.Validate() }
+func (b *Bck) MakeUname(name string) string       { bck := (*cmn.Bck)(b); return bck.MakeUname(name) }
+func (b *Bck) IsEmpty() bool                      { bck := (*cmn.Bck)(b); return bck.IsEmpty() }
+func (b *Bck) AddToQuery(q url.Values) url.Values { bck := (*cmn.Bck)(b); return bck.AddToQuery(q) }
+
+func (b *Bck) AddUnameToQuery(q url.Values, uparam string) url.Values {
+	bck := (*cmn.Bck)(b)
+	return bck.AddUnameToQuery(q, uparam)
+}
 
 func (b *Bck) MaskBID(i int64) uint64 {
-	if b.IsAIS() {
+	bck := (*cmn.Bck)(b)
+	if bck.IsAIS() {
 		return uint64(i) | aisBIDmask
 	}
 	return uint64(i)
@@ -81,7 +97,8 @@ func (b *Bck) unmaskBID() uint64 {
 	if b.Props == nil || b.Props.BID == 0 {
 		return 0
 	}
-	if b.IsAIS() {
+	bck := (*cmn.Bck)(b)
+	if bck.IsAIS() {
 		return b.Props.BID ^ aisBIDmask
 	}
 	return b.Props.BID
@@ -92,19 +109,19 @@ func (b *Bck) String() string {
 		s   string
 		bid = b.unmaskBID()
 	)
+	bck := (*cmn.Bck)(b)
 	if bid == 0 {
-		return b.Bck.String()
+		return bck.String()
 	}
-	if b.HasBackendBck() {
-		s = ", backend=" + b.Props.BackendBck.String()
+	if backend := bck.Backend(); backend != nil {
+		s = ", backend=" + backend.String()
 	}
-	return fmt.Sprintf("%s(%#x%s)", b.Bck.String(), bid, s)
+	return fmt.Sprintf("%s(%#x%s)", bck, bid, s)
 }
 
 func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
-	left, right := b.Bck, other.Bck
-	left.Props, right.Props = nil, nil
-	if left != right {
+	left, right := (*cmn.Bck)(b), (*cmn.Bck)(other)
+	if !left.Equal(right) {
 		return false
 	}
 	if sameID && b.Props != nil && other.Props != nil && b.Props.BID != other.Props.BID {
@@ -113,10 +130,8 @@ func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 	if !sameBackend {
 		return true
 	}
-	if b.HasBackendBck() && other.HasBackendBck() {
-		left, right = *b.BackendBck(), *other.BackendBck()
-		left.Props, right.Props = nil, nil
-		return left == right
+	if backleft, backright := left.Backend(), right.Backend(); backleft != nil && backright != nil {
+		return backleft.Equal(backright)
 	}
 	return true
 }
@@ -133,19 +148,17 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 	if err = b.InitNoBackend(bowner); err != nil {
 		return
 	}
-	if !b.HasBackendBck() {
+	backend := b.Backend()
+	if backend == nil {
 		return
 	}
-	backend := NewBckEmbed(b.Props.BackendBck)
+	debug.Assert(backend.Backend() == nil) // recursive "backend-ing" not permitted
 	if backend.Provider == "" || backend.IsAIS() {
 		return fmt.Errorf("bucket %s: invalid backend %s (must be remote)", b, backend)
 	}
 	backend.Props = nil // always re-init
 	if err = backend.InitNoBackend(bowner); err != nil {
 		return
-	}
-	if backend.HasBackendBck() {
-		err = fmt.Errorf("bucket %s: invalid backend %s (recursion is not permitted)", b, backend)
 	}
 	return
 }
@@ -182,17 +195,17 @@ func (b *Bck) InitNoBackend(bowner Bowner) (err error) {
 	if b.Props != nil {
 		return
 	}
-	if b.Bck.IsAIS() {
-		return cmn.NewErrBckNotFound(b.Bck)
+	if b.IsAIS() {
+		return cmn.NewErrBckNotFound(b.Bucket())
 	}
-	return cmn.NewErrRemoteBckNotFound(b.Bck)
+	return cmn.NewErrRemoteBckNotFound(b.Bucket())
 }
 
 func (b *Bck) CksumConf() (conf *cmn.CksumConf) { return &b.Props.Cksum }
 
 func (b *Bck) VersionConf() cmn.VersionConf {
-	if b.HasBackendBck() && b.Props.BackendBck.Props != nil {
-		conf := b.Props.BackendBck.Props.Versioning
+	if backend := b.Backend(); backend != nil && backend.Props != nil {
+		conf := backend.Props.Versioning
 		conf.ValidateWarmGet = b.Props.Versioning.ValidateWarmGet
 		return conf
 	}

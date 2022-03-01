@@ -664,7 +664,7 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		}
 		lom := cluster.AllocLOM(hdr.ObjName)
 		defer cluster.FreeLOM(lom)
-		if err = lom.Init(hdr.Bck); err == nil {
+		if err = lom.Init(&hdr.Bck); err == nil {
 			err = lom.Load(false /*cache it*/, false /*locked*/)
 		}
 		if err != nil && !os.IsNotExist(err) {

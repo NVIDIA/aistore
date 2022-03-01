@@ -27,7 +27,7 @@ type NotifListener interface {
 	RUnlock()
 	Notifiers() cluster.NodeMap
 	Kind() string
-	Bcks() []cmn.Bck
+	Bcks() []*cmn.Bck
 	SetErr(error)
 	Err() error
 	UUID() string
@@ -73,7 +73,7 @@ type (
 			Action      string // async operation kind (see cmn/api_const.go)
 			Owned       string // "": not owned | equalIC: IC | otherwise, pid + IC
 			SmapVersion int64  // smap version in which NL is added
-			Bck         []cmn.Bck
+			Bck         []*cmn.Bck
 		}
 		// construction
 		Srcs        cluster.NodeMap  // all notifiers
@@ -102,7 +102,7 @@ type (
 // notifListenerBase //
 ///////////////////////
 
-func NewNLB(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, progress time.Duration, bck ...cmn.Bck) *NotifListenerBase {
+func NewNLB(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, progress time.Duration, bck ...*cmn.Bck) *NotifListenerBase {
 	nlb := &NotifListenerBase{
 		Srcs:        srcs,
 		Stats:       NewNodeStats(len(srcs)),
@@ -133,7 +133,7 @@ func (nlb *NotifListenerBase) NodeStats() *NodeStats           { return nlb.Stat
 func (nlb *NotifListenerBase) GetOwner() string                { return nlb.Common.Owned }
 func (nlb *NotifListenerBase) SetOwner(o string)               { nlb.Common.Owned = o }
 func (nlb *NotifListenerBase) Kind() string                    { return nlb.Common.Action }
-func (nlb *NotifListenerBase) Bcks() []cmn.Bck                 { return nlb.Common.Bck }
+func (nlb *NotifListenerBase) Bcks() []*cmn.Bck                { return nlb.Common.Bck }
 func (nlb *NotifListenerBase) AddedTime() int64                { return nlb.addedTime.Load() }
 func (nlb *NotifListenerBase) SetAddedTime()                   { nlb.addedTime.Store(mono.NanoTime()) }
 

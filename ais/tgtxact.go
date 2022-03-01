@@ -46,7 +46,7 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if xactMsg.Bck.Name != "" {
-			bck = cluster.NewBckEmbed(xactMsg.Bck)
+			bck = cluster.CloneBck(&xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd); err != nil {
 				t.writeErrSilent(w, r, err, http.StatusNotFound)
 				return
@@ -66,7 +66,7 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !xactMsg.Bck.IsEmpty() {
-			bck = cluster.NewBckEmbed(xactMsg.Bck)
+			bck = cluster.CloneBck(&xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd); err != nil && msg.Action != apc.ActXactStop {
 				// apc.ActXactStop: proceed anyway
 				t.writeErr(w, r, err)

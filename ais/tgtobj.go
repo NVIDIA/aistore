@@ -723,7 +723,7 @@ gfn:
 }
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) bool {
-	query := cmn.AddBckToQuery(nil, lom.Bucket())
+	query := lom.Bck().AddToQuery(nil)
 	query.Set(apc.QparamIsGFNRequest, "true")
 	reqArgs := cmn.AllocHra()
 	{
@@ -1109,7 +1109,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 	// dry-run
 	if coi.dryRun {
 		// TODO: replace with something similar to lom.FQN == dst.FQN, but dstBck might not exist.
-		if lom.Bucket().Equal(coi.BckTo.Bck) && lom.ObjName == objNameTo {
+		if lom.Bck().Equal(coi.BckTo, true /*same ID*/, true /*same backend*/) && lom.ObjName == objNameTo {
 			return 0, nil
 		}
 		return lom.SizeBytes(), nil
@@ -1118,7 +1118,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 	// local
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
-	if err = dst.Init(coi.BckTo.Bck); err != nil {
+	if err = dst.Init(coi.BckTo.Bucket()); err != nil {
 		return
 	}
 	if lom.FQN == dst.FQN { // resilvering with a single mountpath?
@@ -1208,10 +1208,10 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	}
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
-	if err = dst.Init(coi.BckTo.Bck); err != nil {
+	if err = dst.Init(coi.BckTo.Bucket()); err != nil {
 		return
 	}
-	if lom.Bucket().Equal(coi.BckTo.Bck) {
+	if lom.Bck().Equal(coi.BckTo, true, true) {
 		dst.SetVersion(lom.Version())
 	}
 	if reader, _, err = coi.DP.Reader(lom); err != nil {
@@ -1350,7 +1350,7 @@ func (coi *copyObjInfo) dm(lom *cluster.LOM, sargs *sendArgs) error {
 	o := transport.AllocSend()
 	hdr, oa := &o.Hdr, sargs.objAttrs
 	{
-		hdr.Bck = sargs.bckTo.Bck
+		hdr.Bck.Copy(sargs.bckTo.Bucket())
 		hdr.ObjName = sargs.objNameTo
 		hdr.ObjAttrs.CopyFrom(oa)
 	}
@@ -1365,7 +1365,7 @@ func (coi *copyObjInfo) dm(lom *cluster.LOM, sargs *sendArgs) error {
 func (coi *copyObjInfo) put(sargs *sendArgs) error {
 	var (
 		hdr   = make(http.Header, 8)
-		query = cmn.AddBckToQuery(nil, sargs.bckTo.Bck)
+		query = sargs.bckTo.AddToQuery(nil)
 	)
 	cmn.ToHeader(sargs.objAttrs, hdr)
 	hdr.Set(apc.HdrT2TPutterID, coi.t.si.ID())
@@ -1390,7 +1390,7 @@ func (coi *copyObjInfo) put(sargs *sendArgs) error {
 	defer cancel()
 	resp, err := coi.t.client.data.Do(req)
 	if err != nil {
-		return cmn.NewErrFailedTo(coi.t, "coi.put "+sargs.bckTo.Bck.Name+"/"+sargs.objNameTo, sargs.tsi, err)
+		return cmn.NewErrFailedTo(coi.t, "coi.put "+sargs.bckTo.Name+"/"+sargs.objNameTo, sargs.tsi, err)
 	}
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()

@@ -562,17 +562,17 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		queryBcks, err := newQueryBcksFromQuery(bckName, nil, dpq)
+		qbck, err := newQueryBcksFromQuery(bckName, nil, dpq)
 		dpqFree(dpq)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
-		if queryBcks.Name == "" {
-			t.listBuckets(w, r, queryBcks)
+		if qbck.Name == "" {
+			t.listBuckets(w, r, qbck)
 			return
 		}
-		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
+		bck := cluster.CloneBck((*cmn.Bck)(qbck))
 		if err := bck.Init(t.owner.bmd); err != nil {
 			if cmn.IsErrRemoteBckNotFound(err) {
 				t.BMDVersionFixup(r)
@@ -594,12 +594,12 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 		)
 	case apc.ActSummaryBck:
 		query := r.URL.Query()
-		queryBcks, err := newQueryBcksFromQuery(bckName, query, nil)
+		qbck, err := newQueryBcksFromQuery(bckName, query, nil)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
-		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
+		bck := cluster.CloneBck((*cmn.Bck)(qbck))
 		if bck.Name != "" {
 			// Ensure that the bucket exists.
 			if err := bck.Init(t.owner.bmd); err != nil {
@@ -762,13 +762,13 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			nlp.Lock()
 			defer nlp.Unlock()
 
-			err := fs.DestroyBucket(msg.Action, apireq.bck.Bck, apireq.bck.Props.BID)
+			err := fs.DestroyBucket(msg.Action, apireq.bck.Bucket(), apireq.bck.Props.BID)
 			if err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 			// Recreate bucket directories (now empty), since bck is still in BMD
-			errs := fs.CreateBucket(msg.Action, apireq.bck.Bck, false /*nilbmd*/)
+			errs := fs.CreateBucket(msg.Action, apireq.bck.Bucket(), false /*nilbmd*/)
 			if len(errs) > 0 {
 				debug.AssertNoErr(errs[0])
 				t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck
@@ -881,7 +881,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		originalURL := apireq.query.Get(apc.QparamOrigURL)
 		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
-			err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bck)
+			err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
 			return
 		}
@@ -891,7 +891,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
-				err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bck)
+				err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
 				t.writeErrSilent(w, r, err, code)
 			} else {
 				err = cmn.NewErrFailedTo(t, "locate remote", apireq.bck, err, code)
@@ -956,10 +956,10 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 // getObject is main function to get the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
 func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *cluster.Bck, lom *cluster.LOM) {
-	if err := lom.Init(bck.Bck); err != nil {
+	if err := lom.Init(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.Init(bck.Bck)
+			err = lom.Init(bck.Bucket())
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -1044,10 +1044,10 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	// init
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(apireq.bck.Bck); err != nil {
+	if err := lom.Init(apireq.bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.Init(apireq.bck.Bck)
+			err = lom.Init(apireq.bck.Bucket())
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -1124,7 +1124,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	evict := msg.Action == apc.ActEvictObjects
 	lom := cluster.AllocLOM(apireq.items[1])
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(apireq.bck.Bck); err != nil {
+	if err := lom.Init(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -1132,8 +1132,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	errCode, err := t.DeleteObject(lom, evict)
 	if err != nil {
 		if errCode == http.StatusNotFound {
-			t.writeErrSilentf(w, r, http.StatusNotFound, "object %s/%s doesn't exist",
-				lom.Bucket(), lom.ObjName)
+			t.writeErrSilentf(w, r, http.StatusNotFound, "object %s/%s doesn't exist", lom.Bucket(), lom.ObjName)
 		} else {
 			t.writeErr(w, r, err, errCode)
 		}
@@ -1202,7 +1201,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	if tmp := query.Get(apc.QparamHeadObj); tmp != "" {
 		mustBeLocal, _ = strconv.Atoi(tmp)
 	}
-	if err := lom.Init(bck.Bck); err != nil {
+	if err := lom.Init(bck.Bucket()); err != nil {
 		invalidHandler(w, r, err)
 		return
 	}
@@ -1229,7 +1228,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	}
 
 	// props
-	op := cmn.ObjectProps{Name: lom.ObjName, Bck: lom.Bucket(), Present: exists}
+	op := cmn.ObjectProps{Name: lom.ObjName, Bck: *lom.Bucket(), Present: exists}
 	if lom.Bck().IsAIS() {
 		op.ObjAttrs = *lom.ObjAttrs()
 	} else if exists {
@@ -1301,7 +1300,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	lom := cluster.AllocLOM(apireq.items[1] /*objName*/)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(apireq.bck.Bck); err != nil {
+	if err := lom.Init(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -1370,17 +1369,17 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *clu
 func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(bck.Bck); err != nil {
+	if err := lom.Init(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.Init(bck.Bck)
+			err = lom.Init(bck.Bucket())
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
 	}
-	sliceFQN := lom.MpathInfo().MakePathFQN(bck.Bck, fs.ECSliceType, objName)
+	sliceFQN := lom.MpathInfo().MakePathFQN(bck.Bucket(), fs.ECSliceType, objName)
 	finfo, err := os.Stat(sliceFQN)
 	if err != nil {
 		t.writeErrSilent(w, r, err, http.StatusNotFound)
@@ -1423,7 +1422,7 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 	return
 }
 
-func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck cmn.QueryBcks) {
+func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks) {
 	const fmterr = "failed to list %q buckets: [%v]"
 	var (
 		bcks   cmn.Bcks
@@ -1458,14 +1457,14 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck cmn.Qu
 	t.writeJSON(w, r, bcks, listBuckets)
 }
 
-func (t *target) _listBcks(qbck cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks, errCode int, err error) {
+func (t *target) _listBcks(qbck *cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks, errCode int, err error) {
 	_, ok := cfg.Backend.Providers[qbck.Provider]
 	// HDFS doesn't support listing remote buckets (there are no remote buckets).
 	if (!ok && !qbck.IsRemoteAIS()) || qbck.IsHDFS() {
 		names = selectBMDBuckets(t.owner.bmd.get(), qbck)
 	} else {
 		bck := cluster.NewBck("", qbck.Provider, qbck.Ns)
-		names, errCode, err = t.Backend(bck).ListBuckets(qbck)
+		names, errCode, err = t.Backend(bck).ListBuckets(*qbck)
 		sort.Sort(names)
 	}
 	return
@@ -1629,7 +1628,7 @@ func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *apc.ActionMs
 	}
 	lom := cluster.AllocLOM(apireq.items[1])
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(apireq.bck.Bck); err != nil {
+	if err := lom.Init(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

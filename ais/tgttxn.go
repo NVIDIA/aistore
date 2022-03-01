@@ -217,7 +217,7 @@ func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return "", cmn.NewErrBckIsBusy(c.bck.Bck)
+			return "", cmn.NewErrBckIsBusy(c.bck.Bucket())
 		}
 		txn := newTxnMakeNCopies(c, curCopies, newCopies)
 		if err := t.transactions.begin(txn); err != nil {
@@ -301,7 +301,7 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return "", cmn.NewErrBckIsBusy(c.bck.Bck)
+			return "", cmn.NewErrBckIsBusy(c.bck.Bucket())
 		}
 		txn := newTxnSetBucketProps(c, nprops)
 		if err := t.transactions.begin(txn); err != nil {
@@ -402,11 +402,11 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 		nlpFrom := bckFrom.GetNameLockPair()
 		nlpTo := bckTo.GetNameLockPair()
 		if !nlpFrom.TryLock(c.timeout.netw / 4) {
-			return "", cmn.NewErrBckIsBusy(bckFrom.Bck)
+			return "", cmn.NewErrBckIsBusy(bckFrom.Bucket())
 		}
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpFrom.Unlock()
-			return "", cmn.NewErrBckIsBusy(bckTo.Bck)
+			return "", cmn.NewErrBckIsBusy(bckTo.Bucket())
 		}
 		txn := newTxnRenameBucket(c, bckFrom, bckTo)
 		if err := t.transactions.begin(txn); err != nil {
@@ -432,7 +432,7 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 			return "", rns.Err // must not happen at commit time
 		}
 		xctn := rns.Entry.Get()
-		err = fs.RenameBucketDirs(txnRenB.bckFrom.Props.BID, txnRenB.bckFrom.Bck, txnRenB.bckTo.Bck)
+		err = fs.RenameBucketDirs(txnRenB.bckFrom.Props.BID, txnRenB.bckFrom.Bucket(), txnRenB.bckTo.Bucket())
 		if err != nil {
 			return "", err // ditto
 		}
@@ -457,14 +457,14 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) err
 	}
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		return cmn.NewErrBckNotFound(bckFrom.Bck)
+		return cmn.NewErrBckNotFound(bckFrom.Bucket())
 	}
 	if _, present := bmd.Get(bckTo); present {
-		return cmn.NewErrBckAlreadyExists(bckTo.Bck)
+		return cmn.NewErrBckAlreadyExists(bckTo.Bucket())
 	}
 	availablePaths := fs.GetAvail()
 	for _, mi := range availablePaths {
-		path := mi.MakePathCT(bckTo.Bck, fs.ObjectType)
+		path := mi.MakePathCT(bckTo.Bucket(), fs.ObjectType)
 		if err := cos.Stat(path); err != nil {
 			if !os.IsNotExist(err) {
 				return err
@@ -516,7 +516,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {
-			return "", cmn.NewErrBckNotFound(bckFrom.Bck)
+			return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
 		nlpTo, nlpFrom, err := t._tcbBegin(c, msg, dp)
 		if err != nil {
@@ -573,14 +573,14 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlp
 	nlpFrom = bckFrom.GetNameLockPair()
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
 		nlpFrom = nil
-		err = cmn.NewErrBckIsBusy(bckFrom.Bck)
+		err = cmn.NewErrBckIsBusy(bckFrom.Bucket())
 		return
 	}
 	if !msg.DryRun {
 		nlpTo = bckTo.GetNameLockPair()
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpTo = nil
-			err = cmn.NewErrBckIsBusy(bckTo.Bck)
+			err = cmn.NewErrBckIsBusy(bckTo.Bucket())
 			return
 		}
 	}
@@ -628,7 +628,7 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {
-			return xactID, cmn.NewErrBckNotFound(bckFrom.Bck)
+			return xactID, cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
 		// begin
 		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
@@ -687,7 +687,7 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 4) {
-			return "", cmn.NewErrBckIsBusy(c.bck.Bck)
+			return "", cmn.NewErrBckIsBusy(c.bck.Bucket())
 		}
 
 		txn := newTxnECEncode(c, c.bck)
@@ -852,7 +852,7 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 	case apc.ActBegin:
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrBckIsBusy(c.bck.Bck)
+			return cmn.NewErrBckIsBusy(c.bck.Bucket())
 		}
 		txn := newTxnBckBase("dlb", c.bck)
 		txn.fillFromCtx(c)

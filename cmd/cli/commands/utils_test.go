@@ -312,7 +312,8 @@ func TestParseQueryBckURI(t *testing.T) {
 	for _, test := range positiveTests {
 		bck, err := parseQueryBckURI(&cli.Context{}, test.uri)
 		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
-		tassert.Errorf(t, test.bck.Equal(cmn.Bck(bck)), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
+		b := cmn.Bck(bck)
+		tassert.Errorf(t, test.bck.Equal(&b), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
 	}
 
 	negativeTests := []struct {
@@ -348,7 +349,7 @@ func TestParseBckURI(t *testing.T) {
 	for _, test := range positiveTests {
 		bck, err := parseBckURI(&cli.Context{}, test.uri)
 		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
-		tassert.Errorf(t, test.bck.Equal(bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
+		tassert.Errorf(t, test.bck.Equal(&bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
 	}
 
 	negativeTests := []struct {
@@ -429,7 +430,7 @@ func TestParseBckObjectURI(t *testing.T) {
 	for _, test := range positiveTests {
 		bck, objName, err := parseBckObjectURI(&cli.Context{}, test.uri, test.optObjName)
 		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
-		tassert.Errorf(t, test.bck.Equal(bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
+		tassert.Errorf(t, test.bck.Equal(&bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
 		tassert.Errorf(t, test.objName == objName, "failed on %s object names are not equal (expected: %q, got: %q)", test.uri, test.objName, objName)
 	}
 

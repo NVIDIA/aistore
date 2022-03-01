@@ -94,7 +94,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 
 	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
 		T:        r.t,
-		Bck:      r.bck.Bck,
+		Bck:      r.bck.Clone(),
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.bckEncode,
 		DoLoad:   mpather.Load,
@@ -139,7 +139,7 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 	if !local {
 		return nil
 	}
-	mdFQN, _, err := cluster.HrwFQN(lom.Bck(), fs.ECMetaType, lom.ObjName)
+	mdFQN, _, err := cluster.HrwFQN(lom.Bck().Bucket(), fs.ECMetaType, lom.ObjName)
 	if err != nil {
 		glog.Warningf("metadata FQN generation failed %q: %v", lom, err)
 		return nil

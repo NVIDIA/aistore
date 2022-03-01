@@ -101,7 +101,7 @@ func initLomLocker() {
 func (lif *LIF) LOM() (lom *LOM, err error) {
 	b, objName := cmn.ParseUname(lif.Uname)
 	lom = AllocLOM(objName)
-	if err = lom.Init(b); err != nil {
+	if err = lom.Init(&b); err != nil {
 		return
 	}
 	if bprops := lom.Bprops(); bprops == nil {
@@ -171,7 +171,7 @@ func (lom *LOM) SetCustomKey(key, value string)         { lom.md.SetCustomKey(ke
 // lom <= transport.ObjHdr (NOTE: caller must call freeLOM)
 func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *LOM, err error) {
 	lom = AllocLOM(hdr.ObjName)
-	if err = lom.Init(hdr.Bck); err != nil {
+	if err = lom.Init(&hdr.Bck); err != nil {
 		return
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, false /*skip checksum*/)
@@ -181,7 +181,6 @@ func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *LOM, err error) {
 func (lom *LOM) ECEnabled() bool { return lom.Bprops().EC.Enabled }
 func (lom *LOM) IsHRW() bool     { return lom.HrwFQN == lom.FQN } // subj to resilvering
 
-func (lom *LOM) Bck() *Bck                { return lom.bck }
 func (lom *LOM) Bprops() *cmn.BucketProps { return lom.bck.Props }
 
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
@@ -190,7 +189,8 @@ func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 
 // as fs.PartsFQN
 func (lom *LOM) ObjectName() string           { return lom.ObjName }
-func (lom *LOM) Bucket() cmn.Bck              { return lom.bck.Bucket() } // as fs.PartsFQN
+func (lom *LOM) Bck() *Bck                    { return lom.bck }
+func (lom *LOM) Bucket() *cmn.Bck             { return (*cmn.Bck)(lom.bck) }
 func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
 
 // see also: transport.ObjHdr.FullName()
@@ -460,7 +460,8 @@ func lcacheIdx(digest uint64) int {
 
 func (lom *LOM) LcacheIdx() int { return lcacheIdx(lom.mpathDigest) }
 
-func (lom *LOM) Init(bck cmn.Bck) (err error) {
+// TODO -- FIXME: need `func (lom *LOM) Init(bck *Bck) (err error)`
+func (lom *LOM) Init(bck *cmn.Bck) (err error) {
 	if lom.FQN != "" {
 		var parsedFQN fs.ParsedFQN
 		parsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN)
@@ -491,7 +492,7 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 		}
 	}
 	bowner := T.Bowner()
-	lom.bck = NewBckEmbed(bck)
+	lom.bck = CloneBck(bck)
 	if err = lom.bck.Init(bowner); err != nil {
 		return
 	}
@@ -671,7 +672,7 @@ func EvictLomCache(b *Bck) {
 			cache.Range(func(hkey, _ interface{}) bool {
 				uname := hkey.(string)
 				bck, _ := cmn.ParseUname(uname)
-				if bck.Equal(b.Bck) {
+				if bck.Equal((*cmn.Bck)(b)) {
 					cache.Delete(hkey)
 				}
 				return true

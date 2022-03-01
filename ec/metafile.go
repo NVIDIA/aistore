@@ -112,7 +112,7 @@ func (md *Metadata) Clone() *Metadata {
 
 // ObjectMetadata returns metadata for an object or its slice if any exists
 func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
-	fqn, _, err := cluster.HrwFQN(bck, fs.ECMetaType, objName)
+	fqn, _, err := cluster.HrwFQN(bck.Bucket(), fs.ECMetaType, objName)
 	if err != nil {
 		return nil, err
 	}

@@ -382,11 +382,11 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 	mm := c.parent.t.ByteMM()
 	request := iReq.NewPack(mm)
 	hdr := transport.ObjHdr{
-		Bck:     ctx.lom.Bck().Bck,
 		ObjName: ctx.lom.ObjName,
 		Opaque:  request,
 		Opcode:  reqGet,
 	}
+	hdr.Bck.Copy(ctx.lom.Bucket())
 
 	// Broadcast slice request and wait for targets to respond
 	if glog.FastV(4, glog.SmoduleEC) {

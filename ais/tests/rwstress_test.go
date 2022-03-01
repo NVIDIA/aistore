@@ -153,14 +153,15 @@ func parallelPutGetStress(t *testing.T) {
 			errChanSize = numLoops * numFiles * 2
 			errCh       = make(chan opRes, errChanSize)
 			cksumType   = bck.Props.Cksum.Type
+			b           = bck.Clone()
 		)
 
-		initRWStress(t, bck.Bck, cksumType)
-		parallelOpLoop(bck.Bck, cksumType, errCh, opPut)
-		parallelOpLoop(bck.Bck, cksumType, errCh, opGet)
+		initRWStress(t, b, cksumType)
+		parallelOpLoop(b, cksumType, errCh, opPut)
+		parallelOpLoop(b, cksumType, errCh, opGet)
 		close(errCh)
 		reportErr(t, errCh, false)
-		cleanRWStress(bck.Bck, cksumType)
+		cleanRWStress(b, cksumType)
 	})
 }
 
@@ -174,12 +175,13 @@ func multiOpStress(opNames ...string) func(t *testing.T) {
 				errChanSize = numLoops * numFiles * 3
 				errCh       = make(chan opRes, errChanSize)
 				cksumType   = bck.Props.Cksum.Type
+				b           = bck.Clone()
 			)
 
-			parallelOpLoop(bck.Bck, cksumType, errCh, multiOp(opNames...))
+			parallelOpLoop(b, cksumType, errCh, multiOp(opNames...))
 			close(errCh)
 			reportErr(t, errCh, true)
-			cleanRWStress(bck.Bck, cksumType)
+			cleanRWStress(b, cksumType)
 		})
 	}
 }

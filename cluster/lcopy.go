@@ -271,7 +271,7 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 		cksumType = srcCksum.Ty()
 	}
 	dst = lom.Clone(dstFQN)
-	if err = dst.Init(cmn.Bck{}); err != nil {
+	if err = dst.Init(&cmn.Bck{}); err != nil {
 		return
 	}
 	dst.md.copies = nil
@@ -289,7 +289,7 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 	}
 
-	if !dst.Bucket().Equal(lom.Bucket()) {
+	if !dst.Bck().Equal(lom.Bck(), true /*same ID*/, true /*same backend*/) {
 		// The copy will be in a new bucket - completely separate object. Hence, we have to set initial version.
 		dst.SetVersion(lomInitialVersion)
 	}

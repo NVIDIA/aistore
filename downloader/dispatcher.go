@@ -172,28 +172,25 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	if job.Sync() {
 		go func() {
 			defer diffResolver.CloseSrc()
-
-			err := fs.WalkBck(&fs.WalkBckOpts{
-				WalkOpts: fs.WalkOpts{
-					Bck: job.Bck(),
-					CTs: []string{fs.ObjectType},
-					Callback: func(fqn string, de fs.DirEntry) error {
-						if diffResolver.Stopped() {
-							return cmn.NewErrAborted(job.String(), "diff-resolver stopped", nil)
-						}
-						lom := &cluster.LOM{FQN: fqn}
-						if err := lom.Init(job.Bck()); err != nil {
-							return err
-						}
-						if !job.checkObj(lom.ObjName) {
-							return nil
-						}
-						diffResolver.PushSrc(lom)
-						return nil
-					},
-					Sorted: true,
-				},
-			})
+			opts := &fs.WalkBckOpts{
+				WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Sorted: true},
+			}
+			opts.WalkOpts.Bck.Copy(job.Bck())
+			opts.Callback = func(fqn string, de fs.DirEntry) error {
+				if diffResolver.Stopped() {
+					return cmn.NewErrAborted(job.String(), "diff-resolver stopped", nil)
+				}
+				lom := &cluster.LOM{FQN: fqn}
+				if err := lom.Init(job.Bck()); err != nil {
+					return err
+				}
+				if !job.checkObj(lom.ObjName) {
+					return nil
+				}
+				diffResolver.PushSrc(lom)
+				return nil
+			}
+			err := fs.WalkBck(opts)
 			if err != nil && !cmn.IsErrAborted(err) {
 				diffResolver.Abort(err)
 			}
@@ -357,7 +354,7 @@ func (d *dispatcher) checkAborted() bool {
 
 // returns false if dispatcher encountered hard error, true otherwise
 func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok bool, err error) {
-	bck := cluster.NewBckEmbed(task.job.Bck())
+	bck := cluster.CloneBck(task.job.Bck())
 	if err := bck.Init(d.parent.t.Bowner()); err != nil {
 		return true, err
 	}

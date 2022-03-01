@@ -285,7 +285,7 @@ func TestParseFQN(t *testing.T) {
 			if gotMpath != tt.wantMPath {
 				t.Errorf("gotMpath = %v, want %v", gotMpath, tt.wantMPath)
 			}
-			if !gotBck.Equal(tt.wantBck) {
+			if !gotBck.Equal(&tt.wantBck) {
 				t.Errorf("gotBck = %v, want %v", gotBck, tt.wantBck)
 			}
 			if gotContentType != tt.wantContentType {
@@ -364,7 +364,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 			mpaths := fs.GetAvail()
-			fqn := mpaths[tt.mpath].MakePathFQN(tt.bck, tt.contentType, tt.objName)
+			fqn := mpaths[tt.mpath].MakePathFQN(&tt.bck, tt.contentType, tt.objName)
 
 			parsedFQN, err := fs.ParseFQN(fqn)
 			if err != nil {
@@ -407,7 +407,7 @@ func BenchmarkParseFQN(b *testing.B) {
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
 
 	mpaths := fs.GetAvail()
-	fqn := mpaths[mpath].MakePathFQN(bck, fs.ObjectType, "super/long/name")
+	fqn := mpaths[mpath].MakePathFQN(&bck, fs.ObjectType, "super/long/name")
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

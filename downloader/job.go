@@ -42,7 +42,7 @@ type (
 
 	DlJob interface {
 		ID() string
-		Bck() cmn.Bck
+		Bck() *cmn.Bck
 		Description() string
 		Timeout() time.Duration
 		ActiveStats() (*DlStatusResp, error)
@@ -156,7 +156,7 @@ func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc s
 }
 
 func (j *baseDlJob) ID() string             { return j.id }
-func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
+func (j *baseDlJob) Bck() *cmn.Bck          { return j.bck.Bucket() }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
 func (*baseDlJob) Sync() bool               { return false }
@@ -307,8 +307,8 @@ func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRan
 	return job, nil
 }
 
-func (j *rangeDlJob) SrcBck() cmn.Bck { return j.bck.Bck }
-func (j *rangeDlJob) Len() int        { return j.count }
+func (j *rangeDlJob) SrcBck() *cmn.Bck { return j.bck.Bucket() }
+func (j *rangeDlJob) Len() int         { return j.count }
 
 func (j *rangeDlJob) genNext() ([]dlObj, bool, error) {
 	if j.done {

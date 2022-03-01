@@ -304,7 +304,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 						if err != nil {
 							return
 						}
-						if parsedArgBck.Equal(bckToPrint) {
+						if parsedArgBck.Equal(&bckToPrint) {
 							alreadyListed = true
 							break
 						}

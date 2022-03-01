@@ -420,18 +420,14 @@ func (r *ObjListXact) traverseBucket(msg *apc.ListObjsMsg) {
 		return nil
 	}
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{
-			Bck:      r.Bck().Bck,
-			CTs:      []string{fs.ObjectType},
-			Callback: cb,
-			Sorted:   true,
-		},
-		ValidateCallback: func(fqn string, de fs.DirEntry) error {
-			if de.IsDir() {
-				return wi.ProcessDir(fqn)
-			}
-			return nil
-		},
+		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: cb, Sorted: true},
+	}
+	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
+	opts.ValidateCallback = func(fqn string, de fs.DirEntry) error {
+		if de.IsDir() {
+			return wi.ProcessDir(fqn)
+		}
+		return nil
 	}
 
 	if err := fs.WalkBck(opts); err != nil {

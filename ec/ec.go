@@ -353,10 +353,10 @@ func freeSlices(slices []*slice) {
 }
 
 // RequestECMeta returns an EC metadata found on a remote target.
-func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
+func RequestECMeta(bck *cmn.Bck, objName string, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
 	path := apc.URLPathEC.Join(URLMeta, bck.Name, objName)
 	query := url.Values{}
-	query = cmn.AddBckToQuery(query, bck)
+	query = bck.AddToQuery(query)
 	url := si.URL(cmn.NetIntraData) + path
 	rq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
 	if err != nil {
@@ -401,11 +401,11 @@ func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 	return err
 }
 
-func validateBckBID(t cluster.Target, bck cmn.Bck, bid uint64) error {
+func validateBckBID(t cluster.Target, bck *cmn.Bck, bid uint64) error {
 	if bid == 0 {
 		return nil
 	}
-	newBck := cluster.NewBckEmbed(bck)
+	newBck := cluster.CloneBck(bck)
 	err := newBck.Init(t.Bowner())
 	if err == nil && newBck.Props.BID != bid {
 		err = fmt.Errorf("bucket ID mismatch: local %d, sender %d", newBck.Props.BID, bid)
@@ -415,7 +415,7 @@ func validateBckBID(t cluster.Target, bck cmn.Bck, bid uint64) error {
 
 // WriteSliceAndMeta saves slice and its metafile
 func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs) error {
-	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, t.Bowner(), fs.ECSliceType)
+	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -449,7 +449,7 @@ func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs)
 		err = fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
 		return err
 	}
-	err = validateBckBID(t, hdr.Bck, args.BID)
+	err = validateBckBID(t, &hdr.Bck, args.BID)
 	return err
 }
 

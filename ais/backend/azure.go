@@ -158,7 +158,7 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 	}
 	switch stgErr.ServiceCode() {
 	case azblob.ServiceCodeContainerNotFound:
-		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(*bck)
+		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	case azblob.ServiceCodeBlobNotFound:
 		msg := fmt.Sprintf("%s/%s not found", bck, objName)
 		return http.StatusNotFound, cmn.NewErrHTTP(nil, msg, http.StatusNotFound)

@@ -5,6 +5,7 @@
 package cluster
 
 import (
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -17,9 +18,8 @@ func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 	if err != nil {
 		return
 	}
-	// NOTE: "misplaced" (when hrwFQN != fqn) is to be checked separately, via lom.IsHRW()
-	bck := &Bck{Bck: parsedFQN.Bck}
-	hrwFQN, digest, err = HrwFQN(bck, parsedFQN.ContentType, parsedFQN.ObjName)
+	// NOTE: _misplaced_ (hrwFQN != fqn) is checked elsewhere (see lom.IsHRW())
+	hrwFQN, digest, err = HrwFQN(&parsedFQN.Bck, parsedFQN.ContentType, parsedFQN.ObjName)
 	if err != nil {
 		return
 	}
@@ -27,11 +27,13 @@ func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 	return
 }
 
-func HrwFQN(bck *Bck, contentType, objName string) (fqn string, digest uint64, err error) {
-	var mi *fs.MountpathInfo
-	uname := bck.MakeUname(objName)
+func HrwFQN(bck *cmn.Bck, contentType, objName string) (fqn string, digest uint64, err error) {
+	var (
+		mi    *fs.MountpathInfo
+		uname = bck.MakeUname(objName)
+	)
 	if mi, digest, err = HrwMpath(uname); err == nil {
-		fqn = mi.MakePathFQN(bck.Bucket(), contentType, objName)
+		fqn = mi.MakePathFQN(bck, contentType, objName)
 	}
 	return
 }

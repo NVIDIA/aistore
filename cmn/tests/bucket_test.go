@@ -126,7 +126,7 @@ func TestParseBckObjectURI(t *testing.T) {
 		bck, obj, err := cmn.ParseBckObjectURI(test.uri, test.opts)
 		tassert.Errorf(t, err == nil, "unexpected error for input: %s, err: %v", test.uri, err)
 
-		if !bck.Equal(test.expectedBck) {
+		if !bck.Equal(&test.expectedBck) {
 			t.Errorf("buckets does not match got: %v, expected: %v (input: %s)", bck, test.expectedBck, test.uri)
 		}
 		if obj != test.expectedObj {

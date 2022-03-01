@@ -289,10 +289,7 @@ func (m *AISBackendProvider) remoteCluster(uuid string) (*remAISCluster, error) 
 	return remAis, nil
 }
 
-func unsetUUID(bck cmn.Bck) cmn.Bck {
-	bck.Ns.UUID = ""
-	return bck
-}
+func unsetUUID(bck *cmn.Bck) { bck.Ns.UUID = "" }
 
 func extractErrCode(e error) (int, error) {
 	if e == nil {
@@ -324,7 +321,8 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
 	}
-	bck := unsetUUID(remoteBck.Bck)
+	bck := remoteBck.Clone()
+	unsetUUID(&bck)
 	if p, err = api.HeadBucket(aisCluster.bp, bck); err != nil {
 		errCode, err = extractErrCode(err)
 		return
@@ -354,7 +352,8 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.ListOb
 	// will think that it already knows this UUID and problems will arise.
 	remoteMsg.UUID = ""
 
-	bck := unsetUUID(remoteBck.Bck)
+	bck := remoteBck.Clone()
+	unsetUUID(&bck)
 	if bckList, err = api.ListObjectsPage(aisCluster.bp, bck, remoteMsg); err != nil {
 		errCode, err = extractErrCode(err)
 		return
@@ -404,13 +403,13 @@ func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs,
 	var (
 		aisCluster *remAISCluster
 		op         *cmn.ObjectProps
-		remoteBck  = lom.Bucket()
+		remoteBck  = lom.Bck().Clone()
 	)
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
 	}
-	bck := unsetUUID(remoteBck)
-	if op, err = api.HeadObject(aisCluster.bp, bck, lom.ObjName); err != nil {
+	unsetUUID(&remoteBck)
+	if op, err = api.HeadObject(aisCluster.bp, remoteBck, lom.ObjName); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}
@@ -424,13 +423,13 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM, owt cmn.OWT) (errCo
 	var (
 		aisCluster *remAISCluster
 		r          io.ReadCloser
-		remoteBck  = lom.Bucket()
+		remoteBck  = lom.Bck().Clone()
 	)
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
 	}
-	bck := unsetUUID(remoteBck)
-	if r, err = api.GetObjectReader(aisCluster.bp, bck, lom.ObjName); err != nil {
+	unsetUUID(&remoteBck)
+	if r, err = api.GetObjectReader(aisCluster.bp, remoteBck, lom.ObjName); err != nil {
 		return extractErrCode(err)
 	}
 	params := cluster.AllocPutObjParams()
@@ -445,20 +444,19 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM, owt cmn.OWT) (errCo
 	return extractErrCode(err)
 }
 
-func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum,
-	errCode int, err error) {
+func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum, errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
 		op         *cmn.ObjectProps
-		remoteBck  = lom.Bucket()
+		remoteBck  = lom.Bck().Clone()
 	)
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
 	}
 	// NOTE -- TODO: piggy-back props on GET request to optimize out HEAD call
 	// attrs
-	bck := unsetUUID(remoteBck)
-	if op, err = api.HeadObject(aisCluster.bp, bck, lom.ObjName); err != nil {
+	unsetUUID(&remoteBck)
+	if op, err = api.HeadObject(aisCluster.bp, remoteBck, lom.ObjName); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}
@@ -477,16 +475,16 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 	var (
 		aisCluster *remAISCluster
 		op         *cmn.ObjectProps
-		remoteBck  = lom.Bucket()
+		remoteBck  = lom.Bck().Clone()
 	)
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		cos.Close(r)
 		return
 	}
-	bck := unsetUUID(remoteBck)
+	unsetUUID(&remoteBck)
 	args := api.PutObjectArgs{
 		BaseParams: aisCluster.bp,
-		Bck:        bck,
+		Bck:        remoteBck,
 		Object:     lom.ObjName,
 		Cksum:      lom.Checksum(),
 		Reader:     r.(cos.ReadOpenCloser),
@@ -498,7 +496,7 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 	}
 	// NOTE -- TODO: piggy-back props on PUT request to optimize out HEAD call
 	// attrs
-	if op, err = api.HeadObject(aisCluster.bp, bck, lom.ObjName); err != nil {
+	if op, err = api.HeadObject(aisCluster.bp, remoteBck, lom.ObjName); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}
@@ -511,12 +509,12 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 func (m *AISBackendProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
-		remoteBck  = lom.Bucket()
+		remoteBck  = lom.Bck().Clone()
 	)
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
 	}
-	bck := unsetUUID(remoteBck)
-	err = api.DeleteObject(aisCluster.bp, bck, lom.ObjName)
+	unsetUUID(&remoteBck)
+	err = api.DeleteObject(aisCluster.bp, remoteBck, lom.ObjName)
 	return extractErrCode(err)
 }

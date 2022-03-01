@@ -312,7 +312,8 @@ func (c *putJogger) cleanup(lom *cluster.LOM) error {
 	mm := c.parent.t.ByteMM()
 	request := newIntraReq(reqDel, nil, lom.Bck()).NewPack(mm)
 	o := transport.AllocSend()
-	o.Hdr = transport.ObjHdr{Bck: lom.Bucket(), ObjName: lom.ObjName, Opaque: request, Opcode: reqDel}
+	o.Hdr = transport.ObjHdr{ObjName: lom.ObjName, Opaque: request, Opcode: reqDel}
+	o.Hdr.Bck.Copy(lom.Bucket())
 	o.Callback = c.ctSendCallback
 	c.parent.IncPending()
 	return c.parent.mgr.req().Send(o, nil, nodes...)

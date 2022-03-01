@@ -33,10 +33,10 @@ func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
 func (t *target) DB() dbdriver.Driver         { return t.db }
 
 func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
-	if bck.Bck.IsRemoteAIS() {
+	if bck.IsRemoteAIS() {
 		return t.backend[apc.ProviderAIS]
 	}
-	if bck.Bck.IsHTTP() {
+	if bck.IsHTTP() {
 		return t.backend[apc.ProviderHTTP]
 	}
 	provider := bck.Provider
@@ -190,7 +190,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 func (t *target) Promote(params cluster.PromoteParams) (errCode int, err error) {
 	lom := cluster.AllocLOM(params.ObjName)
 	defer cluster.FreeLOM(lom)
-	if eri := lom.Init(params.Bck.Bck); eri != nil {
+	if eri := lom.Init(params.Bck.Bucket()); eri != nil {
 		return 0, eri
 	}
 	smap := t.owner.smap.get()

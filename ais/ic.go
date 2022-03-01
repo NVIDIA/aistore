@@ -184,7 +184,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if msg.Bck.Name != "" {
-		bck = cluster.NewBckEmbed(msg.Bck)
+		bck = cluster.CloneBck(&msg.Bck)
 		if err := bck.Init(ic.p.owner.bmd); err != nil {
 			ic.p.writeErrSilent(w, r, err, http.StatusNotFound)
 			return

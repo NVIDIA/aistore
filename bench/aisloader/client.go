@@ -196,7 +196,7 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum,
 		reqArgs.Method = http.MethodPut
 		reqArgs.Base = proxyURL
 		reqArgs.Path = apc.URLPathObjects.Join(bck.Name, object)
-		reqArgs.Query = cmn.AddBckToQuery(nil, bck)
+		reqArgs.Query = bck.AddToQuery(nil)
 		reqArgs.BodyR = reader
 	}
 	putter := tracePutter{
@@ -251,8 +251,7 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 		hdr   http.Header
 		query = url.Values{}
 	)
-
-	query = cmn.AddBckToQuery(query, bck)
+	query = bck.AddToQuery(query)
 	if etlID != "" {
 		query.Add(apc.QparamUUID, etlID)
 	}
@@ -266,7 +265,6 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 		Query:  query,
 		Header: hdr,
 	}
-
 	return reqArgs.Req()
 }
 

@@ -59,7 +59,7 @@ type (
 
 	PartsFQN interface {
 		ObjectName() string
-		Bucket() cmn.Bck
+		Bucket() *cmn.Bck
 		MpathInfo() *MountpathInfo
 	}
 

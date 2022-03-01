@@ -671,7 +671,7 @@ func concurrentPutGetDel(t *testing.T) {
 			wg.Add(1)
 			go func(url string) {
 				defer wg.Done()
-				errCh <- proxyPutGetDelete(100, url, bck.Bck, cksumType)
+				errCh <- proxyPutGetDelete(100, url, bck.Clone(), cksumType)
 			}(v.URL(cmn.NetPublic))
 		}
 
@@ -729,7 +729,7 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 		Name:     testBucketName,
 		Provider: apc.ProviderAIS,
 	}
-	cksumType := cmn.DefaultBckProps(bck).Cksum.Type
+	cksumType := bck.DefaultProps().Cksum.Type
 loop:
 	for {
 		select {

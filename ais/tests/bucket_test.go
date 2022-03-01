@@ -568,7 +568,7 @@ func TestListObjectsSmoke(t *testing.T) {
 			m          = ioContext{
 				t:        t,
 				num:      100,
-				bck:      bck.Bck,
+				bck:      bck.Clone(),
 				fileSize: 5 * cos.KiB,
 			}
 
@@ -603,7 +603,7 @@ func TestListObjectsGoBack(t *testing.T) {
 			m          = ioContext{
 				t:        t,
 				num:      2000,
-				bck:      bck.Bck,
+				bck:      bck.Clone(),
 				fileSize: 128,
 			}
 
@@ -672,7 +672,7 @@ func TestListObjectsRerequestPage(t *testing.T) {
 			baseParams = tutils.BaseAPIParams()
 			m          = ioContext{
 				t:        t,
-				bck:      bck.Bck,
+				bck:      bck.Clone(),
 				num:      500,
 				fileSize: 128,
 			}
@@ -722,7 +722,7 @@ func TestListObjectsStartAfter(t *testing.T) {
 			m          = ioContext{
 				t:        t,
 				num:      200,
-				bck:      bck.Bck,
+				bck:      bck.Clone(),
 				fileSize: 128,
 			}
 		)
@@ -764,7 +764,7 @@ func TestListObjectsProps(t *testing.T) {
 			m          = ioContext{
 				t:        t,
 				num:      rand.Intn(5000) + 1000,
-				bck:      bck.Bck,
+				bck:      bck.Clone(),
 				fileSize: 128,
 			}
 		)
@@ -912,7 +912,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 		var (
 			m = ioContext{
 				t:        t,
-				bck:      bck.Bck,
+				bck:      bck.Clone(),
 				num:      rand.Intn(5000) + 1000,
 				fileSize: 5 * cos.KiB,
 			}
@@ -953,7 +953,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 			baseParams = tutils.BaseAPIParams()
 			m          = ioContext{
 				t:        t,
-				bck:      bck.Bck,
+				bck:      bck.Clone(),
 				num:      rand.Intn(5000) + 1000,
 				fileSize: 128,
 			}
@@ -1041,7 +1041,7 @@ func TestListObjects(t *testing.T) {
 
 			tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-			p := cmn.DefaultBckProps(bck)
+			p := bck.DefaultProps()
 
 			totalObjects := 0
 			for iter := 1; iter <= iterations; iter++ {
@@ -2664,7 +2664,7 @@ func TestBackendBucket(t *testing.T) {
 	p, err = api.HeadBucket(baseParams, aisBck)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
-		t, p.BackendBck.Equal(remoteBck),
+		t, p.BackendBck.Equal(&remoteBck),
 		"backend bucket wasn't set correctly (got: %s, expected: %s)",
 		p.BackendBck, remoteBck,
 	)

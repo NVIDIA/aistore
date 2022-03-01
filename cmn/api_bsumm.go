@@ -29,12 +29,12 @@ func (bs *BckSumm) Aggregate(bckSummary BckSumm) {
 }
 
 func (s BckSummaries) Len() int           { return len(s) }
-func (s BckSummaries) Less(i, j int) bool { return s[i].Bck.Less(s[j].Bck) }
+func (s BckSummaries) Less(i, j int) bool { return s[i].Bck.Less(&s[j].Bck) }
 func (s BckSummaries) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 func (s BckSummaries) Aggregate(summary BckSumm) BckSummaries {
 	for idx, bckSummary := range s {
-		if bckSummary.Bck.Equal(summary.Bck) {
+		if bckSummary.Bck.Equal(&summary.Bck) {
 			bckSummary.Aggregate(summary)
 			s[idx] = bckSummary
 			return s
@@ -46,7 +46,7 @@ func (s BckSummaries) Aggregate(summary BckSumm) BckSummaries {
 
 func (s BckSummaries) Get(bck Bck) (BckSumm, bool) {
 	for _, bckSummary := range s {
-		if bckSummary.Bck.Equal(bck) {
+		if bckSummary.Bck.Equal(&bck) {
 			return bckSummary, true
 		}
 	}

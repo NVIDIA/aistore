@@ -79,7 +79,7 @@ func (goi *getObjInfo) freadArch(file *os.File) (cos.ReadCloseSizer, error) {
 	if err != nil {
 		return nil, err
 	}
-	archname := filepath.Join(goi.lom.Bucket().Name, goi.lom.ObjName)
+	archname := filepath.Join(goi.lom.Bck().Name, goi.lom.ObjName)
 	filename := goi.archive.filename
 	switch mime {
 	case cos.ExtTar:

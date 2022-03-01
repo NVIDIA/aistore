@@ -1318,12 +1318,12 @@ func TestECStressManyBuckets(t *testing.T) {
 	msg := &apc.ListObjsMsg{Props: "size,status"}
 	objList, err := api.ListObjects(baseParams, bck1, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(objList.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1, len(objList.Entries), o1.objCount)
+	tassert.Fatalf(t, len(objList.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1.String(), len(objList.Entries), o1.objCount)
 
 	msg = &apc.ListObjsMsg{Props: "size,status"}
 	objList, err = api.ListObjects(baseParams, bck2, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(objList.Entries) == o2.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2, len(objList.Entries), o2.objCount)
+	tassert.Fatalf(t, len(objList.Entries) == o2.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2.String(), len(objList.Entries), o2.objCount)
 }
 
 // ExtraStress test to check that EC works as expected
@@ -2302,7 +2302,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		ObjPath:   ecTestDir,
 		ObjCnt:    o.objCount,
 		ObjSize:   fileSize,
-		CksumType: cmn.DefaultBckProps(bckReg).Cksum.Type,
+		CksumType: bckReg.DefaultProps().Cksum.Type,
 	})
 	tassert.CheckFatal(t, err)
 

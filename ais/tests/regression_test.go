@@ -421,7 +421,7 @@ func TestRenameObjects(t *testing.T) {
 		ProxyURL:  proxyURL,
 		Bck:       bck,
 		ObjCnt:    100,
-		CksumType: cmn.DefaultBckProps(bck).Cksum.Type,
+		CksumType: bck.DefaultProps().Cksum.Type,
 	})
 	tassert.CheckFatal(t, err)
 
@@ -450,10 +450,11 @@ func TestObjectPrefix(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			proxyURL  = tutils.RandomProxyURL(t)
-			fileNames = prefixCreateFiles(t, proxyURL, bck.Bck, bck.Props.Cksum.Type)
+			b         = bck.Clone()
+			fileNames = prefixCreateFiles(t, proxyURL, b, bck.Props.Cksum.Type)
 		)
-		prefixLookup(t, proxyURL, bck.Bck, fileNames)
-		prefixCleanup(t, proxyURL, bck.Bck, fileNames)
+		prefixLookup(t, proxyURL, b, fileNames)
+		prefixCleanup(t, proxyURL, b, fileNames)
 	})
 }
 
@@ -766,6 +767,7 @@ func TestDeleteList(t *testing.T) {
 			files      = make([]string, 0, objCnt)
 			proxyURL   = tutils.RandomProxyURL(t)
 			baseParams = tutils.BaseAPIParams(proxyURL)
+			b          = bck.Clone()
 		)
 
 		// 1. Put files to delete
@@ -778,7 +780,7 @@ func TestDeleteList(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				tutils.Put(proxyURL, bck.Bck, keyname, r, errCh)
+				tutils.Put(proxyURL, b, keyname, r, errCh)
 			}()
 			files = append(files, keyname)
 		}
@@ -787,7 +789,7 @@ func TestDeleteList(t *testing.T) {
 		tlog.Logf("PUT done.\n")
 
 		// 2. Delete the objects
-		xactID, err := api.DeleteList(baseParams, bck.Bck, files)
+		xactID, err := api.DeleteList(baseParams, b, files)
 		tassert.CheckError(t, err)
 
 		args := api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
@@ -796,7 +798,7 @@ func TestDeleteList(t *testing.T) {
 
 		// 3. Check to see that all the files have been deleted
 		msg := &apc.ListObjsMsg{Prefix: prefix}
-		bktlst, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
+		bktlst, err := api.ListObjects(baseParams, b, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
 			t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -881,6 +883,7 @@ func TestDeleteRange(t *testing.T) {
 			errCh          = make(chan error, objCnt)
 			proxyURL       = tutils.RandomProxyURL(t)
 			baseParams     = tutils.BaseAPIParams(proxyURL)
+			b              = bck.Clone()
 		)
 
 		// 1. Put files to delete
@@ -891,7 +894,7 @@ func TestDeleteRange(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				tutils.Put(proxyURL, bck.Bck, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
+				tutils.Put(proxyURL, b, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
 			}(i)
 		}
 		wg.Wait()
@@ -900,7 +903,7 @@ func TestDeleteRange(t *testing.T) {
 
 		// 2. Delete the small range of objects
 		tlog.Logf("Delete in range %s\n", smallrange)
-		xactID, err := api.DeleteRange(baseParams, bck.Bck, smallrange)
+		xactID, err := api.DeleteRange(baseParams, b, smallrange)
 		tassert.CheckError(t, err)
 		args := api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
@@ -908,7 +911,7 @@ func TestDeleteRange(t *testing.T) {
 
 		// 3. Check to see that the correct files have been deleted
 		msg := &apc.ListObjsMsg{Prefix: prefix}
-		bktlst, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
+		bktlst, err := api.ListObjects(baseParams, b, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != objCnt-smallrangesize {
 			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), objCnt-smallrangesize)
@@ -929,14 +932,14 @@ func TestDeleteRange(t *testing.T) {
 
 		tlog.Logf("Delete in range %s\n", bigrange)
 		// 4. Delete the big range of objects
-		xactID, err = api.DeleteRange(baseParams, bck.Bck, bigrange)
+		xactID, err = api.DeleteRange(baseParams, b, bigrange)
 		tassert.CheckError(t, err)
 		args = api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 
 		// 5. Check to see that all the files have been deleted
-		bktlst, err = api.ListObjects(baseParams, bck.Bck, msg, 0)
+		bktlst, err = api.ListObjects(baseParams, b, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
 			t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -967,7 +970,7 @@ func TestStressDeleteRange(t *testing.T) {
 			Name:     testBucketName,
 			Provider: apc.ProviderAIS,
 		}
-		cksumType = cmn.DefaultBckProps(bck).Cksum.Type
+		cksumType = bck.DefaultProps().Cksum.Type
 	)
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)

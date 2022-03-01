@@ -37,11 +37,11 @@ func (*dummyBackendProvider) CreateBucket(*cluster.Bck) (errCode int, err error)
 }
 
 func (*dummyBackendProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
-	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
+	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
 func (*dummyBackendProvider) ListObjects(bck *cluster.Bck, _ *apc.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
-	return nil, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
+	return nil, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
 // The function must not fail - it should return empty list.

@@ -229,7 +229,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 	msg := &apc.ListObjsMsg{Flags: apc.LsMisplaced}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsCached)
 	for _, bck := range bckList {
-		if queryBcks.Name != "" && !queryBcks.Equal(bck) {
+		if queryBcks.Name != "" && !queryBcks.Equal(&bck) {
 			continue
 		}
 		var (
@@ -384,7 +384,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if bckFrom.Equal(bckTo) {
+	if bckFrom.Equal(&bckTo) {
 		return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
 	}
 
@@ -425,7 +425,7 @@ func mvBucketHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if bckFrom.Equal(bckTo) {
+	if bckFrom.Equal(&bckTo) {
 		return incorrectUsageMsg(c, errFmtSameBucket, commandRename, bckTo)
 	}
 

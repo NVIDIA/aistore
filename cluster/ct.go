@@ -36,7 +36,7 @@ func (ct *CT) FQN() string                  { return ct.fqn }
 func (ct *CT) ObjectName() string           { return ct.objName }
 func (ct *CT) ContentType() string          { return ct.contentType }
 func (ct *CT) Bck() *Bck                    { return ct.bck }
-func (ct *CT) Bucket() cmn.Bck              { return ct.bck.Bucket() }
+func (ct *CT) Bucket() *cmn.Bck             { return (*cmn.Bck)(ct.bck) }
 func (ct *CT) MpathInfo() *fs.MountpathInfo { return ct.mpathInfo }
 func (ct *CT) SizeBytes() int64             { return ct.size }
 func (ct *CT) MtimeUnix() int64             { return ct.mtime }
@@ -89,7 +89,7 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 		fqn:         fqn,
 		objName:     parsedFQN.ObjName,
 		contentType: parsedFQN.ContentType,
-		bck:         &Bck{Bck: parsedFQN.Bck},
+		bck:         CloneBck(&parsedFQN.Bck),
 		mpathInfo:   parsedFQN.MpathInfo,
 		digest:      parsedFQN.Digest,
 	}
@@ -99,11 +99,8 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 	return
 }
 
-func NewCTFromBO(bck cmn.Bck, objName string, b Bowner, ctType ...string) (ct *CT, err error) {
-	ct = &CT{
-		objName: objName,
-		bck:     NewBckEmbed(bck),
-	}
+func NewCTFromBO(bck *cmn.Bck, objName string, b Bowner, ctType ...string) (ct *CT, err error) {
+	ct = &CT{objName: objName, bck: CloneBck(bck)}
 	if b != nil {
 		if err = ct.bck.Init(b); err != nil {
 			return
