@@ -210,24 +210,24 @@ func (j *jogger) run() error {
 	if j.opts.Bck.IsEmpty() {
 		bmd := j.opts.T.Bowner().Get()
 		bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
-			aborted, err = j.runBck(bck.Clone())
+			aborted, err = j.runBck(bck.Bucket())
 			return err != nil || aborted
 		})
 		return err
 	}
 	// walk the specified bucket
-	_, err = j.runBck(j.opts.Bck)
+	_, err = j.runBck(&j.opts.Bck)
 	return err
 }
 
-func (j *jogger) runBck(bck cmn.Bck) (aborted bool, err error) {
+func (j *jogger) runBck(bck *cmn.Bck) (aborted bool, err error) {
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		CTs:      j.opts.CTs,
 		Callback: j.jog,
 		Sorted:   false,
 	}
-	opts.Bck.Copy(&bck)
+	opts.Bck.Copy(bck)
 
 	err = fs.Walk(opts)
 	if j.syncGroup != nil {

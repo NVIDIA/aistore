@@ -63,11 +63,11 @@ func newXactLLC(t cluster.Target, uuid string, bck *cluster.Bck) (r *xactLLC) {
 	r = &xactLLC{}
 	mpopts := &mpather.JoggerGroupOpts{
 		T:        t,
-		Bck:      bck.Clone(),
 		CTs:      []string{fs.ObjectType},
 		VisitObj: func(*cluster.LOM, []byte) error { return nil },
 		DoLoad:   mpather.Load,
 	}
+	mpopts.Bck.Copy(bck.Bucket())
 	r.BckJog.Init(uuid, apc.ActLoadLomCache, bck, mpopts)
 	return
 }

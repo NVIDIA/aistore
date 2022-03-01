@@ -142,11 +142,9 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 
 			var (
 				msg     = apc.BckSummMsg{}
-				summary = cmn.BckSumm{
-					Bck:            bck.Clone(),
-					TotalDisksSize: totalDisksSize,
-				}
+				summary = cmn.BckSumm{TotalDisksSize: totalDisksSize}
 			)
+			summary.Bck.Copy(bck.Bucket())
 
 			// Each bucket should have it's own copy of msg (we may update it).
 			cos.CopyStruct(&msg, t.msg)

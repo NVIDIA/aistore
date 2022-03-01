@@ -159,7 +159,6 @@ func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
 	mpopts := &mpather.JoggerGroupOpts{
-		Bck:      e.args.BckFrom.Clone(),
 		T:        e.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.copyObject,
@@ -168,6 +167,7 @@ func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 		DoLoad:   mpather.Load,
 		Throttle: true,
 	}
+	mpopts.Bck.Copy(e.args.BckFrom.Bucket())
 	r.BckJog.Init(e.UUID(), e.kind, e.args.BckTo, mpopts)
 	return
 }

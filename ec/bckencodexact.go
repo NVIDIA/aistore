@@ -92,13 +92,14 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		return
 	}
 
-	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
+	opts := &mpather.JoggerGroupOpts{
 		T:        r.t,
-		Bck:      r.bck.Clone(),
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.bckEncode,
 		DoLoad:   mpather.Load,
-	})
+	}
+	opts.Bck.Copy(r.bck.Bucket())
+	jg := mpather.NewJoggerGroup(opts)
 	jg.Run()
 
 	var err error
