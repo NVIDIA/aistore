@@ -1243,7 +1243,24 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		op.ObjAttrs = *objAttrs
 	}
 	if exists {
-		op.NumCopies = lom.NumCopies()
+		op.DaemonID = t.Snode().ID()
+		op.Mirror.Copies = lom.NumCopies()
+		if lom.HasCopies() {
+			lom.Lock(false)
+			for fs := range lom.GetCopies() {
+				if idx := strings.Index(fs, "/@"); idx >= 0 {
+					fs = fs[:idx]
+				}
+				op.Mirror.Paths = append(op.Mirror.Paths, fs)
+			}
+			lom.Unlock(false)
+		} else {
+			fs := lom.FQN
+			if idx := strings.Index(fs, "/@"); idx >= 0 {
+				fs = fs[:idx]
+			}
+			op.Mirror.Paths = append(op.Mirror.Paths, fs)
+		}
 		if lom.Bck().Props.EC.Enabled {
 			if md, err := ec.ObjectMetadata(lom.Bck(), lom.ObjName); err == nil {
 				addedEC = true

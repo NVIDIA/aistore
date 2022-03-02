@@ -37,6 +37,7 @@ const (
 	GetPropsCopies   = "copies"
 	GetPropsEC       = "ec"
 	GetPropsCustom   = "custom"
+	GetPropsNode     = "node"
 )
 
 type (
@@ -60,7 +61,7 @@ var (
 	GetPropsDefault = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
 	// all
 	GetPropsAll = append(GetPropsDefault,
-		GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom,
+		GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsNode,
 	)
 )
 

@@ -561,8 +561,8 @@ func TestObjProps(t *testing.T) {
 					} else {
 						tassert.Errorf(t, props.Present, "object seems to be not present")
 						tassert.Errorf(
-							t, props.NumCopies == 1,
-							"number of copies (%d) is different than 1", props.NumCopies,
+							t, props.Mirror.Copies == 1,
+							"number of copies (%d) is different than 1", props.Mirror.Copies,
 						)
 						if test.verEnabled {
 							tassert.Errorf(

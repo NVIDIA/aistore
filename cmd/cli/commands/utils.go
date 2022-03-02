@@ -127,7 +127,10 @@ func objectPropList(bck cmn.Bck, props *cmn.ObjectProps, selection []string) (pr
 			}
 			propValue = templates.FmtBool(props.Present)
 		case apc.GetPropsCopies:
-			propValue = templates.FmtCopies(props.NumCopies)
+			propValue = templates.FmtCopies(props.Mirror.Copies)
+			if len(props.Mirror.Paths) != 0 {
+				propValue += fmt.Sprintf(" %v", props.Mirror.Paths)
+			}
 		case apc.GetPropsEC:
 			propValue = templates.FmtEC(
 				props.EC.Generation, props.EC.DataSlices, props.EC.ParitySlices, props.EC.IsECCopy,
@@ -138,6 +141,8 @@ func objectPropList(bck cmn.Bck, props *cmn.ObjectProps, selection []string) (pr
 			} else {
 				propValue = fmt.Sprintf("%+v", custom)
 			}
+		case apc.GetPropsNode:
+			propValue = cluster.Tname(props.DaemonID)
 		default:
 			continue
 		}

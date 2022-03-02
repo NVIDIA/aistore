@@ -159,7 +159,15 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 		}
 
 		var dirtyField bool
-		if srcValField.Kind() != reflect.Struct {
+		if srcValField.Kind() == reflect.Slice {
+			if !jsonTagPresent {
+				continue
+			}
+			name := prefix + fieldName
+			field := &field{name: name, v: srcValField, listTag: listTag, opts: opts}
+			err, stop = updf(name, field)
+			dirtyField = field.dirty
+		} else if srcValField.Kind() != reflect.Struct {
 			// We require that not-omitted fields have JSON tag.
 			cos.AssertMsg(jsonTagPresent, prefix+"["+fieldName+"]")
 
@@ -369,6 +377,22 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 			dst.Set(reflect.New(dst.Type().Elem())) // set pointer to default value
 			dst = dst.Elem()                        // dereference pointer
 			goto reflectDst
+		case reflect.Slice:
+			// A slice value looks like: "[value1 value2]"
+			s := strings.TrimPrefix(srcVal.String(), "[")
+			s = strings.TrimSuffix(s, "]")
+			if s != "" {
+				vals := strings.Split(s, " ")
+				tp := reflect.TypeOf(vals[0])
+				lst := reflect.MakeSlice(reflect.SliceOf(tp), 0, 10)
+				for _, v := range vals {
+					if v == "" {
+						continue
+					}
+					lst = reflect.Append(lst, reflect.ValueOf(v))
+				}
+				dst.Set(lst)
+			}
 		case reflect.Map:
 			// TODO: do nothing, just skip (ObjAttrs contains Map)
 		default:

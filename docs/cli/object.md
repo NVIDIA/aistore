@@ -157,8 +157,9 @@ Supported properties:
 - `size` - object size
 - `version` - object version (it is empty if versioning is disabled for the bucket)
 - `atime` - object's last access time
-- `copies` - the number of object replicas per target (empty if bucket mirroring is disabled)
+- `copies` - the number of object replicas per target (`1` if bucket mirroring is disabled), and mountpath where object and its mirrors are located
 - `checksum` - object's checksum
+- `node` - on which target the object is located
 - `ec` - object's EC info (empty if EC is disabled for the bucket, if EC is enabled it looks like `DATA:PARITY[MODE]`, where `DATA` - the number of data slices,
       `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets,
       `encoded`  the object is erasure coded and other targets contains only encoded slices
@@ -186,14 +187,15 @@ Display all properties of object `list.txt` from bucket `texts`.
 ```console
 $ ais object show ais://texts/list.txt --props=all
 PROPERTY    VALUE
-name        provider://texts/list.txt
-checksum    2d61e9b8b299c41f
-size        7.63MiB
 atime       06 Jan 20 14:55 PST
-version     2
-cached      yes
-copies      1
+checksum    2d61e9b8b299c41f
+copies      1 [/data/mp1]
+custom      -
 ec          1:1[replicated]
+name        provider://texts/list.txt
+node        t[neft8086]
+size        7.63MiB
+version     2
 ```
 
 ## Show selected object properties

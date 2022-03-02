@@ -53,16 +53,20 @@ const (
 // object properties (NOTE: embeds system `ObjAttrs` that in turn includes custom user-defined)
 type ObjectProps struct {
 	ObjAttrs
-	Name      string `json:"name"`
-	Bck       Bck    `json:"bucket"`
-	NumCopies int    `json:"copies"`
-	EC        struct {
-		Generation   int64 `json:"ec-generation"`
-		DataSlices   int   `json:"ec-data"`
-		ParitySlices int   `json:"ec-parity"`
-		IsECCopy     bool  `json:"ec-replicated"`
-	}
-	Present bool `json:"present"`
+	Name   string `json:"name"`
+	Bck    Bck    `json:"bucket"`
+	Mirror struct {
+		Copies int      `json:"copies,omitempty"`
+		Paths  []string `json:"paths,omitempty"`
+	} `json:"mirror"`
+	EC struct {
+		Generation   int64 `json:"generation"`
+		DataSlices   int   `json:"data"`
+		ParitySlices int   `json:"parity"`
+		IsECCopy     bool  `json:"replicated"`
+	} `json:"ec"`
+	DaemonID string `json:"daemon_id"`
+	Present  bool   `json:"present"`
 }
 
 type (
