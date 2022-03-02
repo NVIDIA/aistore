@@ -2362,7 +2362,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		Provider: apc.ProviderAIS,
 	}
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, nil)
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
 	tassert.CheckError(t, err)
 	defer tutils.DestroyBucket(t, m.proxyURL, dstBck)
 

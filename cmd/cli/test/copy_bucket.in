@@ -5,7 +5,7 @@ ais object put "/tmp/rdir/test{0..4}/{0..100}/test.txt" ais://$BUCKET_1 -y // IG
 
 ais bucket cp aiss://$BUCKET_1/ ais://$BUCKET_2/ // FAIL "invalid backend provider "aiss""
 ais bucket cp ais://$BUCKET_1/ aiss://$BUCKET_2/ // FAIL "invalid backend provider "aiss""
-ais bucket cp ais://$BUCKET_1 ais://$BUCKET_2
+ais bucket cp ais://$BUCKET_1 ais://$BUCKET_2 --force
 
 ais job wait xaction copy-bck ais://$BUCKET_2
 ais show job xaction copy-bck ais://$BUCKET_1

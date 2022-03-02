@@ -39,6 +39,7 @@ var (
 			listFlag,
 			waitFlag,
 			continueOnErrorFlag,
+			forceFlag,
 		},
 		commandEvict: append(
 			baseLstRngFlags,
@@ -124,7 +125,7 @@ var (
 			},
 			{
 				Name:         commandCopy,
-				Usage:        "copy ais buckets in the cluster",
+				Usage:        "copy bucket",
 				ArgsUsage:    "SRC_BUCKET DST_BUCKET",
 				Flags:        bucketCmdsFlags[commandCopy],
 				Action:       copyBucketHandler,
@@ -325,6 +326,7 @@ func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
 	msg := &apc.CopyBckMsg{
 		Prefix: parseStrFlag(c, cpBckPrefixFlag),
 		DryRun: flagIsSet(c, cpBckDryRunFlag),
+		Force:  flagIsSet(c, forceFlag),
 	}
 
 	return copyBucket(c, bckFrom, bckTo, msg)
@@ -406,7 +408,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return fullBckCopy(c, bckFrom, bckTo)
 	}
 
-	// Copy only objects which matches the condition
+	// Copy matching objects
 	if listObjs != "" && tmplObjs != "" {
 		return incorrectUsageMsg(c, errFmtExclusive, listFlag.Name, templateFlag.Name)
 	}
