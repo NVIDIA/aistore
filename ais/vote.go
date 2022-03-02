@@ -372,7 +372,7 @@ func (h *htrun) onPrimaryFail() {
 		return
 	}
 	clone := smap.clone()
-	glog.Infof("%s: primary %s has FAILED", h.si, clone.Primary)
+	glog.Infof("%s: primary %s has FAILED", h.si, clone.Primary.StringEx())
 
 	for {
 		// use HRW ordering
@@ -383,7 +383,7 @@ func (h *htrun) onPrimaryFail() {
 			}
 			return
 		}
-		glog.Infof("%s: trying %s as the primary candidate", h.si, nextPrimaryProxy.ID())
+		glog.Infof("%s: trying %s as the new primary candidate", h.si, cluster.Pname(nextPrimaryProxy.ID()))
 
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
 		if nextPrimaryProxy.ID() == h.si.ID() {

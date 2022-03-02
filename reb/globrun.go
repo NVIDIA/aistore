@@ -138,7 +138,8 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 	return reb
 }
 
-// NOTE: these receive handlers are statically present throughout: unreg never done
+// TODO: currently, all receive handlers are statically present throughout: Unreg never done
+//       and any receive failure is fatal (aborting a running xreb, though, is fine)
 func (reb *Reb) _regRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
 		cos.ExitLogf("%v", err)

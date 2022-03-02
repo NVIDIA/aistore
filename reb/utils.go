@@ -103,8 +103,7 @@ func (reb *Reb) changeStage(newStage uint32) {
 // Aborts global rebalance and notifies all other targets.
 // (compare with `Abort` above)
 func (reb *Reb) abortAndBroadcast(err error) {
-	xreb := reb.xctn()
-	if xreb == nil || !xreb.Abort(err) {
+	if xreb := reb.xctn(); xreb == nil || !xreb.Abort(err) {
 		return
 	}
 	var (

@@ -180,6 +180,9 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 		logHdr     = reb.logHdr(md.id, md.smap)
 		query      = url.Values{apc.QparamRebStatus: []string{"true"}}
 	)
+	if xreb := reb.xctn(); xreb == nil || xreb.IsAborted() {
+		return
+	}
 	body, code, err := reb.t.Health(tsi, apc.DefaultTimeout, query)
 	if err != nil {
 		if errAborted := reb.xctn().AbortedAfter(sleepRetry); errAborted != nil {
@@ -204,8 +207,11 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 	// enforce global transaction ID
 	if status.RebID > reb.rebID.Load() {
 		detail := fmt.Sprintf("%s runs newer (g%d) global rebalance", tsi.StringEx(), status.RebID)
-		err = cmn.NewErrAborted(logHdr, detail, nil)
+		err := cmn.NewErrAborted(logHdr, detail, nil)
 		reb.abortAndBroadcast(err)
+		return
+	}
+	if xreb := reb.xctn(); xreb == nil || xreb.IsAborted() {
 		return
 	}
 	// let the target to catch-up
@@ -216,18 +222,20 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 	// Remote target has aborted its running rebalance with the same ID.
 	// Do not call `reb.abortAndBroadcast()` - no need.
 	if status.RebID == reb.RebID() && status.Aborted {
-		xreb := reb.xctn()
-		glog.Warningf("%s aborted %s[g%d] - aborting %s as well", tsi, apc.ActRebalance, status.RebID, xreb)
-		debug.Assert(xreb.RebID() == status.RebID)
-		xreb.Abort(nil)
+		if xreb := reb.xctn(); xreb != nil {
+			debug.Assert(xreb.RebID() == status.RebID)
+			detail := fmt.Sprintf("%s aborted %s[g%d] - aborting %s as well", tsi, apc.ActRebalance, status.RebID, xreb)
+			err := cmn.NewErrAborted(logHdr, detail, nil)
+			if xreb.Abort(err) {
+				glog.Warning(err)
+			}
+		}
 		return
 	}
-
 	if status.Stage >= desiredStage {
 		ok = true
 		return
 	}
-	glog.Infof("%s: %s[%s] not yet at the right stage %s",
-		logHdr, tsi.StringEx(), stages[status.Stage], stages[desiredStage])
+	glog.Infof("%s: %s[%s] not yet at the right stage %s", logHdr, tsi.StringEx(), stages[status.Stage], stages[desiredStage])
 	return
 }

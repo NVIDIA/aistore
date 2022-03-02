@@ -20,31 +20,43 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
+// TODO: currently, cannot return errors from the receive handlers, here and elsewhere
+//       (see `_regRecv` for "static lifecycle")
+
+func (reb *Reb) _recvErr(err error) error {
+	if err == nil {
+		return err
+	}
+	if xreb := reb.xctn(); xreb != nil {
+		xreb.Abort(err)
+	}
+	return nil
+}
+
 func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(objReader)
 	if err != nil {
 		glog.Error(err)
 		return err
 	}
+
 	smap, err := reb._waitForSmap()
 	if err != nil {
-		glog.Errorf("%v: dropping %s", err, hdr.FullName())
-		return err
+		return reb._recvErr(err)
 	}
-
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
 		glog.Errorf("Failed to read message type: %v", err)
-		return err
+		return reb._recvErr(err)
 	}
 	if act == rebMsgRegular {
-		return reb.recvObjRegular(hdr, smap, unpacker, objReader)
+		err := reb.recvObjRegular(hdr, smap, unpacker, objReader)
+		return reb._recvErr(err)
 	}
-	if act != rebMsgEC {
-		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgEC)
-	}
-	return reb.recvECData(hdr, unpacker, objReader)
+	debug.Assertf(act == rebMsgEC, "act=%d", act)
+	err = reb.recvECData(hdr, unpacker, objReader)
+	return reb._recvErr(err)
 }
 
 func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) error {
@@ -52,33 +64,79 @@ func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) error {
 		glog.Error(err)
 		return err
 	}
+
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
 		err = fmt.Errorf("failed to read message type: %v", err)
-		glog.Error(err)
-		return err
+		return reb._recvErr(err)
 	}
 	if act == rebMsgEC {
-		reb.recvECAck(hdr, unpacker)
+		err := reb.recvECAck(hdr, unpacker)
+		return reb._recvErr(err)
+	}
+	debug.Assertf(act == rebMsgRegular, "act=%d", act)
+	err = reb.recvRegularAck(hdr, unpacker)
+	return reb._recvErr(err)
+}
+
+func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) error {
+	if errRx != nil {
+		glog.Errorf("%s: %v", reb.t, errRx)
+		return errRx
+	}
+	ntfn, err := reb.decodeStageNtfn(hdr.Opaque)
+	if err != nil {
+		return reb._recvErr(err)
+	}
+
+	var (
+		rebID      = reb.RebID()
+		rsmap      = reb.smap.Load()
+		otherStage = stages[ntfn.stage]
+		xreb       = reb.xctn()
+	)
+	if xreb == nil {
+		if reb.stages.stage.Load() != rebStageInactive {
+			glog.Errorf("%s: nil rebalancing xaction", reb.logHdr(rebID, (*cluster.Smap)(rsmap)))
+		}
 		return nil
 	}
-	if act != rebMsgRegular {
-		glog.Errorf("Invalid ACK type %d, expected %d", act, rebMsgRegular)
+	if xreb.IsAborted() {
+		return nil
 	}
-	reb.recvRegularAck(hdr, unpacker)
+
+	// TODO: see "static lifecycle" comment above
+
+	// eq
+	if rebID == ntfn.rebID {
+		reb.stages.setStage(ntfn.daemonID, ntfn.stage)
+		if ntfn.stage == rebStageAbort {
+			err := fmt.Errorf("abort stage notification from %s(%s)", cluster.Tname(ntfn.daemonID), otherStage)
+			glog.Error(err)
+			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*cluster.Smap)(rsmap)), err))
+		}
+		return nil
+	}
+	// other's old
+	if rebID > ntfn.rebID {
+		glog.Warningf("%s: stage notification from %s(%s): %s", reb.logHdr(rebID, (*cluster.Smap)(rsmap)),
+			cluster.Tname(ntfn.daemonID), otherStage, reb.warnID(ntfn.rebID, ntfn.daemonID))
+		return nil
+	}
+
+	xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*cluster.Smap)(rsmap)), err))
 	return nil
 }
 
-///////////////
-// Rx non-EC //
-///////////////
+//
+// regular (non-EC) receive
+//
 
-func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cos.ByteUnpack,
-	objReader io.Reader) error {
+func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
-		glog.Errorf("Failed to parse acknowledgement: %v", err)
+		glog.Errorf("Failed to parse ACK: %v", err)
 		return err
 	}
 	if ack.rebID != reb.RebID() {
@@ -104,6 +162,9 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 	xreb := reb.xctn()
+	if xreb.IsAborted() {
+		return nil
+	}
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfilePut
@@ -141,96 +202,47 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	return nil
 }
 
-func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
+func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
-		glog.Errorf("Failed to parse acknowledge: %v", err)
-		return
+		glog.Errorf("Failed to parse ACK: %v", err)
+		return err
 	}
 	if ack.rebID != reb.rebID.Load() {
 		glog.Warningf("ACK from %s: %s", ack.daemonID, reb.warnID(ack.rebID, ack.daemonID))
-		return
+		return nil
 	}
 
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(&hdr.Bck); err != nil {
 		glog.Error(err)
-		return
+		return nil
 	}
 	if glog.FastV(5, glog.SmoduleReb) {
-		glog.Infof("%s: ack from %s on %s", reb.t, string(hdr.Opaque), lom)
+		glog.Infof("%s: ACK from %s on %s", reb.t, string(hdr.Opaque), lom)
 	}
 	// No immediate file deletion: let LRU cleanup the "misplaced" object
 	// TODO: mark the object "Deleted"
 	reb.delLomAck(lom)
-}
-
-///////////
-// Rx EC //
-///////////
-
-func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) error {
-	if errRx != nil {
-		glog.Errorf("%s: %v", reb.t, errRx)
-		return errRx
-	}
-	ntfn, err := reb.decodeStageNtfn(hdr.Opaque)
-	if err != nil {
-		debug.AssertNoErr(err)
-		return err
-	}
-	var (
-		rebID      = reb.RebID()
-		rsmap      = reb.smap.Load()
-		otherStage = stages[ntfn.stage]
-		xreb       = reb.xctn()
-	)
-	if xreb == nil {
-		if reb.stages.stage.Load() != rebStageInactive {
-			glog.Errorf("%s: nil rebalancing xaction", reb.logHdr(rebID, (*cluster.Smap)(rsmap)))
-		}
-		return nil
-	}
-	// eq
-	if rebID == ntfn.rebID {
-		reb.stages.setStage(ntfn.daemonID, ntfn.stage)
-		if ntfn.stage == rebStageAbort {
-			err := fmt.Errorf("abort stage notification from %s(%s)", cluster.Tname(ntfn.daemonID), otherStage)
-			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*cluster.Smap)(rsmap)), err))
-			return err
-		}
-		return nil
-	}
-	// other's old
-	if rebID > ntfn.rebID {
-		glog.Warningf("%s: stage notification from %s(%s): %s", reb.logHdr(rebID, (*cluster.Smap)(rsmap)),
-			cluster.Tname(ntfn.daemonID), otherStage, reb.warnID(ntfn.rebID, ntfn.daemonID))
-		return nil
-	}
-	// mine's old
-	smap := reb.t.Sowner().Get()
-	if tsi := smap.GetTarget(ntfn.daemonID); tsi != nil {
-		err := fmt.Errorf("newer rebalance via stage notification from %s(%s)", tsi.StringEx(), otherStage)
-		xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*cluster.Smap)(rsmap)), err))
-		return err
-	}
-	// TODO: revisit
-	glog.Errorf("%s: stage notification from %s(%s): %s", reb.logHdr(rebID, (*cluster.Smap)(rsmap)),
-		cluster.Tname(ntfn.daemonID), otherStage, reb.warnID(ntfn.rebID, ntfn.daemonID))
 	return nil
 }
 
-func (*Reb) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
+//
+// EC receive
+//
+
+func (*Reb) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) (err error) {
 	ack := &ecAck{}
-	if err := unpacker.ReadAny(ack); err != nil {
+	err = unpacker.ReadAny(ack)
+	if err != nil {
 		glog.Errorf("Failed to unmarshal EC ACK for %s: %v", hdr.FullName(), err)
-		return
 	}
+	return
 }
 
-// A sender sent an MD update. This target must update local information partially:
-// only list of daemons and the "main" target.
+// Receive MD update. Handling includes partially updating local information:
+// only the list of daemons and the _main_ target.
 func (reb *Reb) receiveMD(req *stageNtfn, hdr transport.ObjHdr) error {
 	ctMeta, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECMetaType)
 	if err != nil {
@@ -308,7 +320,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr transport.ObjHdr, reader io.Reader
 		reb.onAir.Inc()
 		xreb := reb.xctn()
 		if xreb.IsAborted() {
-			err = fmt.Errorf("failed to send updated metafile: %s", xreb)
+			glog.Errorf("not sendiing updated metafile: %s", xreb)
 			break
 		}
 		o := transport.AllocSend()

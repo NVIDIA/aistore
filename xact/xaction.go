@@ -134,7 +134,9 @@ func (xctn *Base) Abort(err error) (ok bool) {
 	if err == nil {
 		err = cmn.ErrXactNoErrAbort
 	} else if errAborted := cmn.AsErrAborted(err); errAborted != nil {
-		err = errAborted.Unwrap()
+		if errCause := errAborted.Unwrap(); errCause != nil {
+			err = errCause
+		}
 	}
 	xctn.abort.mu.Lock()
 	debug.AssertMsg(xctn.abort.err == nil, xctn.String())
