@@ -132,11 +132,9 @@ test:short:minimal:
   <<: *test_short_def
   variables:
     BUCKET: "ais://test"
-    NUM_PROXY: 1
-    NUM_TARGET: 1
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
-    - make test-short
+    - deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt $FS_CNT --deployment all
+    - NUM_PROXY=1 NUM_TARGET=1 make test-short
 
 test:short:authn:
   <<: *test_short_optional_def
