@@ -460,7 +460,6 @@ func lcacheIdx(digest uint64) int {
 
 func (lom *LOM) LcacheIdx() int { return lcacheIdx(lom.mpathDigest) }
 
-// TODO -- FIXME: need `func (lom *LOM) Init(bck *Bck) (err error)`
 func (lom *LOM) Init(bck *cmn.Bck) (err error) {
 	if lom.FQN != "" {
 		var parsedFQN fs.ParsedFQN

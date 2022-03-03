@@ -269,8 +269,9 @@ const (
 	QparamHostTimeout  = "xht" // [begin, txn-done] timeout
 	QparamWaitMetasync = "xwm" // true: wait for metasync (used only when there's an alternative)
 
-	// promote(dir)
-	QparamPromoteFileShare = "prmshr"
+	// promote
+	QparamConfirmFshare = "confirm-fshr" // confirm file share
+	QparamActNoXact     = "act-no-xact"  // execute synchronously, i.e. without xaction
 
 	// Notification target's node ID (usually, the node that initiates the operation).
 	QparamNotifyMe = "nft"

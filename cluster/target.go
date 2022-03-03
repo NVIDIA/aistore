@@ -84,7 +84,7 @@ type (
 		// explicit request _not_ to treat the source as a potential file share
 		// and _not_ to try to auto-detect if it is;
 		// (auto-detection takes time, etc.)
-		SrcIsNotFileShare bool `json:"notshr,omitempty"` // the source is not a file share equally accessible by all targets
+		SrcIsNotFshare bool `json:"notshr,omitempty"` // the source is not a file share equally accessible by all targets
 	}
 	PromoteParams struct {
 		Bck         *Bck       // destination bucket

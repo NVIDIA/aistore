@@ -401,7 +401,7 @@ var (
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
 	targetIDFlag  = cli.StringFlag{Name: "target-id", Usage: "ais target designated to carry out the entire operation"}
 
-	notFileShareFlag = cli.BoolFlag{
+	notFshareFlag = cli.BoolFlag{
 		Name:  "not-file-share",
 		Usage: "each target must act autonomously skipping file-share auto-detection and promoting the entire source (as seen from _the_ target)",
 	}

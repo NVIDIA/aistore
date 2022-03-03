@@ -63,10 +63,10 @@ type (
 			begin  time.Time
 			commit time.Time
 		}
-		action     string
+		xctn       cluster.Xact
 		smapVer    int64
 		bmdVer     int64
-		tag        string
+		action     string
 		callerName string
 		callerID   string
 		err        *txnError
@@ -124,6 +124,7 @@ type (
 		dirFQN string
 		xprm   *xs.XactDirPromote
 		totalN int
+		fshare bool
 	}
 )
 
@@ -404,16 +405,13 @@ func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 // txnBckBase //
 ////////////////
 
-func newTxnBckBase(tag string, bck *cluster.Bck) (txn *txnBckBase) {
+func newTxnBckBase(bck *cluster.Bck) (txn *txnBckBase) {
 	txn = &txnBckBase{}
-	txn.init(tag, bck)
+	txn.init(bck)
 	return
 }
 
-func (txn *txnBckBase) init(tag string, bck *cluster.Bck) {
-	txn.tag = tag
-	txn.bck = *bck
-}
+func (txn *txnBckBase) init(bck *cluster.Bck) { txn.bck = *bck }
 
 func (txn *txnBckBase) cleanup() {
 	for _, p := range txn.nlps {
@@ -431,13 +429,7 @@ func (txn *txnBckBase) abort() {
 func (txn *txnBckBase) commit() { txn.cleanup() }
 
 func (txn *txnBckBase) String() string {
-	var (
-		res string
-		tm  = cos.FormatTimestamp(txn.phase.begin)
-	)
-	if !txn.phase.commit.IsZero() {
-		tm += "-" + cos.FormatTimestamp(txn.phase.commit)
-	}
+	var res, tm string
 	if done, err := txn.isDone(); done {
 		if err == nil {
 			res = "-done"
@@ -445,8 +437,13 @@ func (txn *txnBckBase) String() string {
 			res = fmt.Sprintf("-fail(%v)", err)
 		}
 	}
-	return fmt.Sprintf("txn-%s[%s-(v%d, v%d)-%s-%s]-%s%s]",
-		txn.tag, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.bck.String(), tm, res)
+	if txn.xctn != nil {
+		return fmt.Sprintf("txn-%s%s", txn.xctn, res)
+	}
+	if !txn.phase.commit.IsZero() {
+		tm = "-" + cos.FormatTimestamp(txn.phase.commit)
+	}
+	return fmt.Sprintf("txn-%s[%s]-%s%s%s]", txn.action, txn.uid, txn.bck.Bucket().String(), tm, res)
 }
 
 func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (found bool, errDone error) {
@@ -473,7 +470,7 @@ func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args .
 
 func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
 	txn = &txnCreateBucket{}
-	txn.init("crb", c.bck)
+	txn.init(c.bck)
 	txn.fillFromCtx(c)
 	return
 }
@@ -484,14 +481,14 @@ func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
 
 func newTxnMakeNCopies(c *txnServerCtx, curCopies, newCopies int64) (txn *txnMakeNCopies) {
 	txn = &txnMakeNCopies{curCopies: curCopies, newCopies: newCopies}
-	txn.init("mnc", c.bck)
+	txn.init(c.bck)
 	txn.fillFromCtx(c)
 	return
 }
 
 func (txn *txnMakeNCopies) String() string {
 	s := txn.txnBckBase.String()
-	return fmt.Sprintf("%s, copies %d => %d", s, txn.curCopies, txn.newCopies)
+	return fmt.Sprintf("%s-copies(%d=>%d)", s, txn.curCopies, txn.newCopies)
 }
 
 ///////////////////////
@@ -502,7 +499,7 @@ func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSet
 	cos.Assert(c.bck.Props != nil)
 	bprops := c.bck.Props.Clone()
 	txn = &txnSetBucketProps{bprops: bprops, nprops: nprops}
-	txn.init("spb", c.bck)
+	txn.init(c.bck)
 	txn.fillFromCtx(c)
 	return
 }
@@ -513,7 +510,7 @@ func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSet
 
 func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnRenameBucket) {
 	txn = &txnRenameBucket{bckFrom: bckFrom, bckTo: bckTo}
-	txn.init("rnb", bckFrom)
+	txn.init(bckFrom)
 	txn.fillFromCtx(c)
 	return
 }
@@ -524,7 +521,7 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 
 func newTxnTCB(c *txnServerCtx, xtcb *mirror.XactTCB) (txn *txnTCB) {
 	txn = &txnTCB{xtcb: xtcb}
-	txn.init("tcb", xtcb.Args().BckFrom)
+	txn.init(xtcb.Args().BckFrom)
 	txn.fillFromCtx(c)
 	return
 }
@@ -534,13 +531,18 @@ func (txn *txnTCB) abort() {
 	txn.xtcb.TxnAbort()
 }
 
+func (txn *txnTCB) String() string {
+	txn.xctn = txn.xtcb
+	return txn.txnBckBase.String()
+}
+
 ///////////////
 // txnTCObjs //
 ///////////////
 
 func newTxnTCObjs(c *txnServerCtx, bckFrom *cluster.Bck, xtco *xs.XactTCObjs, msg *cmn.TCObjsMsg) (txn *txnTCObjs) {
 	txn = &txnTCObjs{xtco: xtco, msg: msg}
-	txn.init("tco", bckFrom)
+	txn.init(bckFrom)
 	txn.fillFromCtx(c)
 	return
 }
@@ -550,13 +552,18 @@ func (txn *txnTCObjs) abort() {
 	txn.xtco.TxnAbort()
 }
 
+func (txn *txnTCObjs) String() string {
+	txn.xctn = txn.xtco
+	return txn.txnBckBase.String()
+}
+
 /////////////////
 // txnECEncode //
 /////////////////
 
 func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 	txn = &txnECEncode{}
-	txn.init("enc", bck)
+	txn.init(bck)
 	txn.fillFromCtx(c)
 	return
 }
@@ -568,7 +575,7 @@ func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 func newTxnArchMultiObj(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactCreateArchMultiObj,
 	msg *cmn.ArchiveMsg) (txn *txnArchMultiObj) {
 	txn = &txnArchMultiObj{xarch: xarch, msg: msg}
-	txn.init("arc", bckFrom)
+	txn.init(bckFrom)
 	txn.fillFromCtx(c)
 	return
 }
@@ -578,19 +585,23 @@ func (txn *txnArchMultiObj) abort() {
 	txn.xarch.TxnAbort()
 }
 
+func (txn *txnArchMultiObj) String() string {
+	txn.xctn = txn.xarch
+	return txn.txnBckBase.String()
+}
+
 ////////////////
 // txnPromote //
 ////////////////
 
 func newTxnPromote(c *txnServerCtx, msg *cluster.PromoteArgs, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
 	txn = &txnPromote{msg: msg, fqns: fqns, dirFQN: dirFQN, totalN: totalN}
-	txn.init("prm", c.bck)
+	txn.init(c.bck)
 	txn.fillFromCtx(c)
 	return
 }
 
-func (txn *txnPromote) String() string {
-	s := txn.txnBckBase.String()
-	return fmt.Sprintf("%s, msg=%+v, fqns=%v, dirFQN=%s, xprm=%s, totalN=%d",
-		s, txn.msg, txn.fqns, txn.dirFQN, txn.xprm, txn.totalN)
+func (txn *txnPromote) String() (s string) {
+	txn.xctn = txn.xprm
+	return fmt.Sprintf("%s-src(%s)-N(%d)-fshare(%t)", txn.txnBckBase.String(), txn.dirFQN, txn.totalN, txn.fshare)
 }

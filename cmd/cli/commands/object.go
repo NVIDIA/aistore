@@ -163,13 +163,13 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
 		PromoteArgs: cluster.PromoteArgs{
-			DaemonID:          target,
-			ObjName:           objName,
-			SrcFQN:            fqn,
-			Recursive:         recurs,
-			SrcIsNotFileShare: flagIsSet(c, notFileShareFlag),
-			OverwriteDst:      flagIsSet(c, overwriteFlag),
-			DeleteSrc:         flagIsSet(c, deleteSrcFlag),
+			DaemonID:       target,
+			ObjName:        objName,
+			SrcFQN:         fqn,
+			Recursive:      recurs,
+			SrcIsNotFshare: flagIsSet(c, notFshareFlag),
+			OverwriteDst:   flagIsSet(c, overwriteFlag),
+			DeleteSrc:      flagIsSet(c, deleteSrcFlag),
 		},
 	}
 	xactID, err := api.Promote(promoteArgs)

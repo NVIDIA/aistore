@@ -854,7 +854,7 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 		if !nlp.TryLock(c.timeout.netw / 2) {
 			return cmn.NewErrBckIsBusy(c.bck.Bucket())
 		}
-		txn := newTxnBckBase("dlb", c.bck)
+		txn := newTxnBckBase(c.bck)
 		txn.fillFromCtx(c)
 		if err := t.transactions.begin(txn); err != nil {
 			nlp.Unlock()
@@ -870,9 +870,6 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 	}
 	return nil
 }
-
-// execute synchronously (ie, wo/ xaction) if the number of files is less or equal
-const promoteNumSync = 16
 
 func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -928,28 +925,27 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 			glog.Infof("%s: nothing to do (%s)", t, txnPrm)
 			return "", nil
 		}
-		// if and only when the commanding proxy sets this param
-		// (which it does after collecting all the results from the begin phase)
-		confirmedFileShare := c.query.Get(apc.QparamPromoteFileShare) != ""
+		// set by controlling proxy upon collecting and comparing all the begin-phase results
+		txnPrm.fshare = c.query.Get(apc.QparamConfirmFshare) != ""
 
-		// promote synchronously wo/ xaction
-		if txnPrm.totalN == len(txnPrm.fqns) {
+		// promote synchronously wo/ xaction;
+		// (set by proxy to eliminate any ambiguity vis-a-vis `promoteNumSync` special)
+		if noXact := c.query.Get(apc.QparamActNoXact) != ""; noXact {
 			glog.Infof("%s: promote synchronously %s", t, txnPrm)
-			err := t.prmNumFiles(c, txnPrm, confirmedFileShare)
+			err := t.prmNumFiles(c, txnPrm, txnPrm.fshare)
 			return "", err
 		}
-		// with
+
 		rns := xreg.RenewPromote(t, c.uuid, c.bck, txnPrm.msg)
 		if rns.Err != nil {
 			return "", rns.Err
 		}
 		xprm := rns.Entry.Get().(*xs.XactDirPromote)
-		xprm.SetFileShare(confirmedFileShare)
+		xprm.SetFshare(txnPrm.fshare)
 		txnPrm.xprm = xprm
 
 		c.addNotif(xprm) // upon completion
 		xact.GoRunW(xprm)
-
 		return xprm.ID(), nil
 	default:
 		debug.Assert(false)
@@ -961,7 +957,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
 	var (
 		cksum      *cos.CksumHash
-		autoDetect = !prmMsg.SrcIsNotFileShare
+		autoDetect = !prmMsg.SrcIsNotFshare
 	)
 	cb := func(fqn string, de fs.DirEntry) (err error) {
 		if de.IsDir() {
@@ -998,7 +994,7 @@ func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN 
 }
 
 // synchronously wo/ xaction
-func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFileShare bool) error {
+func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshare bool) error {
 	smap := t.owner.smap.Get()
 	for _, fqn := range txnPrm.fqns {
 		objName, err := cmn.PromotedObjDstName(fqn, txnPrm.dirFQN, txnPrm.msg.ObjName)
@@ -1006,7 +1002,7 @@ func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFileS
 			return err
 		}
 		// file share == true: promote only the part of the txnPrm.fqns that "lands" locally
-		if confirmedFileShare {
+		if confirmedFshare {
 			si, err := cluster.HrwTarget(c.bck.MakeUname(objName), smap)
 			if err != nil {
 				return err

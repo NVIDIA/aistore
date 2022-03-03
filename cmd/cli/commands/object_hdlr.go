@@ -54,7 +54,7 @@ var (
 		commandPromote: {
 			recursiveFlag,
 			overwriteFlag,
-			notFileShareFlag,
+			notFshareFlag,
 			deleteSrcFlag,
 			targetIDFlag,
 			verboseFlag,

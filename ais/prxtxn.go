@@ -892,47 +892,57 @@ func (p *proxy) destroyBucketData(msg *apc.ActionMsg, bck *cluster.Bck) error {
 	return nil
 }
 
+// promote synchronously if the number of files (to promote) is less or equal
+const promoteNumSync = 16
+
 func (p *proxy) promote(bck *cluster.Bck, msg *apc.ActionMsg, tsi *cluster.Snode) (xactID string, err error) {
 	var (
-		totalN    int64
-		allAgree  bool
-		waitmsync = true
-		c         = p.prepTxnClient(msg, bck, waitmsync)
+		totalN           int64
+		waitmsync        bool
+		allAgree, noXact bool
+		singleT          bool
 	)
+	c := p.prepTxnClient(msg, bck, waitmsync)
 	if c.smap.CountActiveTargets() == 1 {
-		if err = c.begin(bck); err != nil {
-			return
-		}
+		singleT = true
 	} else if tsi != nil {
 		c.selected = []*cluster.Snode{tsi}
-		if err = c.begin(bck); err != nil {
-			return
-		}
-	} else if totalN, allAgree, err = prmBegin(c, bck); err != nil {
+		singleT = true
+	}
+
+	// begin
+	if totalN, allAgree, err = prmBegin(c, bck, singleT); err != nil {
 		return
 	}
 
-	// if targets "see" identical content let them all know
-	// (so that they go ahead to partition accordingly)
+	// feat
 	if allAgree {
-		c.req.Query.Set(apc.QparamPromoteFileShare, "true")
+		// confirm file share when, and only if, all targets see identical content
+		// (so that they go ahead and partition the work accordingly)
+		c.req.Query.Set(apc.QparamConfirmFshare, "true")
+	} else if totalN <= promoteNumSync {
+		// targets to operate autonomously and synchronously
+		c.req.Query.Set(apc.QparamActNoXact, "true")
+		noXact = true
 	}
 
-	// 5. IC
-	if totalN > promoteNumSync<<1 { // TODO -- FIXME
+	// IC
+	if !noXact {
 		nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bucket())
 		nl.SetOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 	}
+
+	// commit
 	xactID, err = c.commit(bck, c.cmtTout(waitmsync))
-	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
+	debug.Assertf(noXact || xactID == c.uuid, "noXact=%t, committed %q vs generated %q", noXact, xactID, c.uuid)
 	return
 }
 
 // begin phase customized to (specifically) detect file share
-func prmBegin(c *txnClientCtx, bck *cluster.Bck) (num int64, allAgree bool, err error) {
+func prmBegin(c *txnClientCtx, bck *cluster.Bck, singleT bool) (num int64, allAgree bool, err error) {
 	var cksumVal, totalN string
-	allAgree = true
+	allAgree = !singleT
 
 	results := c.bcast(apc.ActBegin, c.timeout.netw)
 	for i, res := range results {
@@ -940,6 +950,12 @@ func prmBegin(c *txnClientCtx, bck *cluster.Bck) (num int64, allAgree bool, err 
 			err = c.bcastAbort(bck, res.toErr())
 			break
 		}
+		if singleT {
+			totalN = res.header.Get(apc.HdrPromoteNamesNum)
+			debug.Assert(len(results) == 1)
+			break
+		}
+
 		// all agree?
 		if i == 0 {
 			cksumVal = res.header.Get(apc.HdrPromoteNamesHash)

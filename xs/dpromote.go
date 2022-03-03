@@ -34,7 +34,7 @@ type (
 		args *cluster.PromoteArgs
 		smap *cluster.Smap
 		// set separately in the commit phase prior to Run
-		confirmedFileShare bool
+		confirmedFshare bool
 	}
 )
 
@@ -72,7 +72,7 @@ func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 // XactDirPromote //
 ////////////////////
 
-func (r *XactDirPromote) SetFileShare(v bool) { r.confirmedFileShare = v } // is called before Run()
+func (r *XactDirPromote) SetFshare(v bool) { r.confirmedFshare = v } // is called before Run()
 
 func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	wg.Done()
@@ -103,7 +103,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		return err
 	}
 	// file share == true: promote only the part of the namespace that "lands" locally
-	if r.confirmedFileShare {
+	if r.confirmedFshare {
 		si, err := cluster.HrwTarget(bck.MakeUname(objName), r.smap)
 		if err != nil {
 			return err

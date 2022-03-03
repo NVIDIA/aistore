@@ -129,7 +129,7 @@ func (test *prmTestPermut) do(t *testing.T) {
 
 	tlog.Logf("Waiting to %q %s => %s\n", apc.ActPromote, tempDir, m.bck)
 	xargs := api.XactReqArgs{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
-	if xactID != "" && args.DaemonID == "" {
+	if xactID != "" {
 		// have global UUID, promoting via entire cluster
 		tassert.Errorf(t, cos.IsValidUUID(xactID), "expecting valid x-UUID %q", xactID)
 		xargs.ID = xactID
@@ -143,12 +143,11 @@ func (test *prmTestPermut) do(t *testing.T) {
 			tassert.CheckFatal(t, err)
 		}
 	} else {
-		// promote a) using selected target OR b) synchronously (limited ## files without xaction)
 		err := api.WaitForXactionNode(baseParams, xargs, xactSnapNotRunning)
 		tassert.CheckFatal(t, err)
 	}
 
-	// stats
+	// collect stats
 	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
 	if err == nil {
 		locObjs, outObjs, inObjs := snaps.ObjCounts()

@@ -269,7 +269,6 @@ func (mi *MountpathInfo) SetDaemonIDXattr(tid string) error {
 
 // make-path methods
 
-// TODO -- FIXME: need `makePathBuf(bck *cluster.Bck, ...)`
 func (mi *MountpathInfo) makePathBuf(bck *cmn.Bck, contentType string, extra int) (buf []byte) {
 	var provLen, nsLen, bckNameLen, ctLen int
 	if contentType != "" {
