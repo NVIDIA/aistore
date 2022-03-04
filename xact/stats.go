@@ -40,13 +40,15 @@ type (
 		IsIdle bool `json:"is_idle"`
 	}
 
+	// NOTE: see closely related `api.XactReqArgs` and comments
+	// TODO: apc package, here and elsewhere
 	QueryMsg struct {
 		ID          string      `json:"id"`
 		Kind        string      `json:"kind"`
 		Bck         cmn.Bck     `json:"bck"`
 		OnlyRunning *bool       `json:"show_active"`
-		Buckets     []cmn.Bck   `json:"buckets,omitempty"` // list of buckets to LRU-evict
-		Node        string      `json:"node,omitempty"`
+		Buckets     []cmn.Bck   `json:"buckets,omitempty"`
+		DaemonID    string      `json:"node,omitempty"`
 		Ext         interface{} `json:"ext"`
 	}
 

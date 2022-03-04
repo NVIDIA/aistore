@@ -23,30 +23,37 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
-// TODO: permutations (wait-xact-by-id | wait-for-node)
+// TODO:
+// - run under `runProviderTests`
+// - add overwrite-dst checks
+// - use loopback dev-s
+// - use nfs
 
-var genfiles = `for f in {%d..%d}; do b=$RANDOM;
-for i in {1..3}; do echo $b; done > %s/$f.test;
-for i in {1..5}; do echo $b --- $b; done > %s/%s/$f.test.test;
-done`
-
-type prmTestPermut struct {
+type prmTests struct {
 	num          int
 	singleTarget bool
 	recurs       bool
 	deleteSrc    bool
 	overwriteDst bool
+	notFshare    bool
 }
 
-func TestPromoteBasic(t *testing.T) {
-	tests := []prmTestPermut{
-		{num: 10000, singleTarget: false, recurs: false, deleteSrc: true, overwriteDst: false},
-		{num: 10000, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false},
-		{num: 10, singleTarget: false, recurs: false, deleteSrc: true, overwriteDst: true},
-		{num: 10, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false},
-		{num: 10000, singleTarget: false, recurs: true, deleteSrc: true, overwriteDst: false},
-		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true},
-		{num: 10, singleTarget: false, recurs: true, deleteSrc: false, overwriteDst: false},
+func TestPromote(t *testing.T) {
+	tests := []prmTests{
+		{num: 10000, singleTarget: false, recurs: false, deleteSrc: true, overwriteDst: false, notFshare: false},
+		{num: 10000, singleTarget: false, recurs: true, deleteSrc: true, overwriteDst: false, notFshare: false},
+		{num: 10, singleTarget: false, recurs: false, deleteSrc: true, overwriteDst: true, notFshare: false},
+
+		{num: 10000, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
+		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true, notFshare: false},
+		{num: 10, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
+		{num: 10, singleTarget: false, recurs: true, deleteSrc: false, overwriteDst: false, notFshare: false},
+		{num: 10000, singleTarget: false, recurs: true, deleteSrc: true, overwriteDst: false, notFshare: true},
+		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true, notFshare: true},
+		{num: 10, singleTarget: false, recurs: true, deleteSrc: false, overwriteDst: false, notFshare: true},
+	}
+	if testing.Short() {
+		tests = tests[0:3]
 	}
 	for _, test := range tests {
 		var name string
@@ -71,12 +78,30 @@ func TestPromoteBasic(t *testing.T) {
 		} else {
 			name += "/skip-existing-dst"
 		}
+		if test.notFshare {
+			name += "/execute-autonomously"
+		} else {
+			name += "/collaborate-on-fshare"
+		}
 		name = name[1:]
 		t.Run(name, test.do)
 	}
 }
 
-func (test *prmTestPermut) do(t *testing.T) {
+// generate ngen files in tempdir and tempdir/subdir, respectively
+var genfiles = `for f in {%d..%d}; do b=$RANDOM;
+for i in {1..3}; do echo $b; done > %s/$f.test;
+for i in {1..5}; do echo $b --- $b; done > %s/%s/$f.test.test;
+done`
+
+func (test *prmTests) generate(t *testing.T, from, to int, tempdir, subdir string) {
+	tlog.Logf("Generating %d files...\n", test.num*2)
+	cmd := fmt.Sprintf(genfiles, from, to, tempdir, tempdir, subdir)
+	_, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	tassert.CheckFatal(t, err)
+}
+
+func (test *prmTests) do(t *testing.T) {
 	const subdir = "subdir" // to promote recursively
 	var (
 		m          = ioContext{t: t, bck: cmn.Bck{Provider: apc.ProviderAIS, Name: cos.RandString(10)}}
@@ -87,102 +112,118 @@ func (test *prmTestPermut) do(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
-	if testing.Short() {
-		to = from + cos.Max(cos.Min(test.num/100, 99), 10)
-	}
-	tempDir, err := os.MkdirTemp("", "prm")
+	tempdir, err := os.MkdirTemp("", "prm")
 	tassert.CheckFatal(t, err)
-	subdirFQN := filepath.Join(tempDir, subdir)
+	subdirFQN := filepath.Join(tempdir, subdir)
 	err = cos.CreateDir(subdirFQN)
 	tassert.CheckFatal(t, err)
-	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
 
-	// generate ngen files in tempDir and tempDir/subdir, respectively
-	// (with total = 2 * ngen)
-	ngen := to - from + 1
-	tlog.Logf("Generating %d files...\n", ngen*2)
-	cmd := fmt.Sprintf(genfiles, from, to, tempDir, tempDir, subdir)
-	_, err = exec.Command("bash", "-c", cmd).CombinedOutput()
-
-	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		_ = os.RemoveAll(tempdir)
+	})
+	test.generate(t, from, to, tempdir, subdir)
 
 	// prepare request
 	args := api.PromoteArgs{
 		BaseParams: baseParams,
 		Bck:        m.bck,
 		PromoteArgs: cluster.PromoteArgs{
-			SrcFQN:    tempDir,
-			Recursive: test.recurs,
-			DeleteSrc: test.deleteSrc,
+			SrcFQN:         tempdir,
+			Recursive:      test.recurs,
+			OverwriteDst:   test.overwriteDst,
+			DeleteSrc:      test.deleteSrc,
+			SrcIsNotFshare: test.notFshare,
 		},
 	}
+	var target *cluster.Snode
 	if test.singleTarget {
-		target, _ := m.smap.GetRandTarget()
+		target, _ = m.smap.GetRandTarget()
 		tlog.Logf("Promoting via %s\n", target.StringEx())
 		args.DaemonID = target.ID()
 	}
 
-	// promote
+	// do
 	xactID, err := api.Promote(&args)
 	tassert.CheckFatal(t, err)
 	time.Sleep(2 * time.Second)
 
-	tlog.Logf("Waiting to %q %s => %s\n", apc.ActPromote, tempDir, m.bck)
 	xargs := api.XactReqArgs{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
+	xname := fmt.Sprintf("%q", apc.ActPromote)
 	if xactID != "" {
-		// have global UUID, promoting via entire cluster
-		tassert.Errorf(t, cos.IsValidUUID(xactID), "expecting valid x-UUID %q", xactID)
 		xargs.ID = xactID
+		xname = fmt.Sprintf("x-%s[%s]", apc.ActPromote, xactID)
+		tassert.Errorf(t, cos.IsValidUUID(xactID), "expecting valid x-UUID %q", xactID)
+	}
+
+	// "wait" cases 1 through 3
+	if xactID != "" && !test.singleTarget { // 1. cluster-wide xaction
+		tlog.Logf("Waiting for global %s(%s=>%s)\n", xname, tempdir, m.bck)
 		notifStatus, err := api.WaitForXactionIC(baseParams, xargs)
+		tassert.CheckFatal(t, err)
 		if notifStatus != nil && (notifStatus.AbortedX || notifStatus.ErrMsg != "") {
 			tlog.Logf("Warning: notif-status: %+v\n", notifStatus)
 		}
-		if cmn.IsStatusNotFound(err) {
-			time.Sleep(time.Second)
-		} else {
-			tassert.CheckFatal(t, err)
-		}
-	} else {
+	} else if xactID != "" && test.singleTarget { // 2. single-target xaction
+		xargs.DaemonID = target.ID()
+		tlog.Logf("Waiting for %s(%s=>%s) at %s\n", xname, tempdir, m.bck, target.StringEx())
 		err := api.WaitForXactionNode(baseParams, xargs, xactSnapNotRunning)
 		tassert.CheckFatal(t, err)
+	} else { // 3. synchronous execution
+		tlog.Logf("Promoting without xaction (%s=>%s)\n", tempdir, m.bck)
 	}
 
 	// collect stats
 	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
-	if err == nil {
-		locObjs, outObjs, inObjs := snaps.ObjCounts()
-		locBytes, outBytes, inBytes := snaps.ByteCounts()
-		tlog.Logf("x-%s[%s]: (locObjs=%d(%d), outObjs=%d(%d), inObjs=%d(%d))\n",
-			apc.ActPromote, xactID, locObjs, locBytes, outObjs, outBytes, inObjs, inBytes)
-	}
+	tassert.CheckFatal(t, err)
+	locObjs, outObjs, inObjs := snaps.ObjCounts()
+	tlog.Logf("%s: (loc, out, in) = (%d, %d, %d)\n", xname, locObjs, outObjs, inObjs)
 
 	// list
-	tlog.Logln("Listing and counting objects...")
+	tlog.Logln("Listing and counting...")
 	list, err := api.ListObjects(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)
 
-	// perform checks
-	cnt, cntsub := countFiles(t, tempDir)
+	//
+	// run some checks
+	//
+	cnt, cntsub := countFiles(t, tempdir)
 	if !test.deleteSrc {
-		tassert.Errorf(t, cnt == ngen && cntsub == ngen,
+		tassert.Errorf(t, cnt == test.num && cntsub == test.num,
 			"delete-src == false: expected cnt (%d) == cntsub (%d) == num (%d) gererated",
-			cnt, cntsub, ngen)
+			cnt, cntsub, test.num)
 	}
+	expNum, s := test.num, ""
 	if test.recurs {
-		tassert.Errorf(t, len(list.Entries) == ngen*2,
-			"expected to recursively promote %d, got %d", ngen*2, len(list.Entries))
-		if test.deleteSrc {
+		expNum = test.num * 2
+		s = " recursively"
+	}
+
+	// num promoted
+	tassert.Errorf(t, len(list.Entries) == expNum, "expected to%s promote %d, got %d", s, test.num*2, len(list.Entries))
+
+	// delete source
+	if test.deleteSrc {
+		if test.recurs {
 			tassert.Errorf(t, cnt == 0 && cntsub == 0,
 				"delete-src == true, recursive: expected cnt (%d) == cntsub (%d) == 0",
 				cnt, cntsub)
-		}
-	} else {
-		tassert.Errorf(t, len(list.Entries) == ngen, "expected to promote %d, got %d", ngen, len(list.Entries))
-		if test.deleteSrc {
-			tassert.Errorf(t, cnt == 0 && cntsub == ngen,
+		} else {
+			tassert.Errorf(t, cnt == 0 && cntsub == test.num,
 				"delete-src == true, non-recursive: expected cnt (%d) == 0 and cntsub (%d) == (%d)",
-				cnt, cntsub, ngen)
+				cnt, cntsub, test.num)
 		}
+	}
+	// vs stats
+	if xactID == "" {
+		return // TODO: add checks
+	}
+	if test.singleTarget {
+		tassert.Errorf(t, locObjs+outObjs == int64(expNum), "single-target promote: expected sum(loc+out)==%d, got (%d + %d)=%d",
+			expNum, locObjs, outObjs, locObjs+outObjs)
+	} else if !test.notFshare {
+		tassert.Errorf(t, int(locObjs) == expNum && int(inObjs) == 0 && int(outObjs) == 0,
+			"file share: expected each target to handle the entire content locally, got (loc, out, in) = (%d, %d, %d)",
+			locObjs, outObjs, inObjs)
 	}
 }
 

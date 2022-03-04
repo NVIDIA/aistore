@@ -826,7 +826,7 @@ func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *apc.Actio
 	xactMsg.ID = cos.GenUUID() // common for all targets
 
 	// cluster-wide resilver
-	if xactMsg.Kind == apc.ActResilver && xactMsg.Node != "" {
+	if xactMsg.Kind == apc.ActResilver && xactMsg.DaemonID != "" {
 		p.resilverOne(w, r, msg, xactMsg)
 		return
 	}
@@ -903,7 +903,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, xactMsg xact.QueryMsg) {
 	smap := p.owner.smap.get()
-	si := smap.GetTarget(xactMsg.Node)
+	si := smap.GetTarget(xactMsg.DaemonID)
 	if si == nil {
 		p.writeErrf(w, r, "cannot resilver %v: node must exist and be a target", si)
 		return

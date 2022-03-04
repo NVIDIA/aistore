@@ -76,7 +76,8 @@ func (r *XactDirPromote) SetFshare(v bool) { r.confirmedFshare = v } // is calle
 
 func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	glog.Infoln(r.Name(), r.dir, "=>", r.Bck())
+	glog.Infof("%s(%s)", r.Name(), r.dir)
+
 	r.smap = r.Target().Sowner().Get()
 	var (
 		err  error

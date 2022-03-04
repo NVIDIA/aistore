@@ -41,14 +41,18 @@ type (
 	}
 
 	XactReqArgs struct {
-		ID          string
-		Kind        string    // Xaction kind, see: cmn.Table
-		Node        string    // Optional
-		Bck         cmn.Bck   // Optional bucket
-		Buckets     []cmn.Bck // Optional: Xaction on list of buckets
-		Timeout     time.Duration
-		Force       bool // Optional: force LRU
-		OnlyRunning bool // Read only active xactions
+		// either xaction ID or Kind _must_ be specified
+		ID   string // xaction UUID
+		Kind string // xaction kind, see `xact.Table`)
+		// optional parameters to further narrow down or filter out xactions in question
+		DaemonID string    // node that runs this xaction
+		Bck      cmn.Bck   // bucket
+		Buckets  []cmn.Bck // list of buckets (e.g., copy-bucket, lru-evict, etc.)
+		// max time to wait and other "non-filters"
+		Timeout time.Duration
+		Force   bool // force
+		// more filters
+		OnlyRunning bool // look only for running xactions
 	}
 )
 
@@ -57,13 +61,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 	if !xact.Table[args.Kind].Startable {
 		return id, fmt.Errorf("cannot start \"kind=%s\" xaction", args.Kind)
 	}
-
-	xactMsg := xact.QueryMsg{
-		Kind: args.Kind,
-		Bck:  args.Bck,
-		Node: args.Node,
-	}
-
+	xactMsg := xact.QueryMsg{Kind: args.Kind, Bck: args.Bck, DaemonID: args.DaemonID}
 	if args.Kind == apc.ActLRU {
 		ext := &xact.QueryMsgLRU{}
 		if args.Buckets != nil {

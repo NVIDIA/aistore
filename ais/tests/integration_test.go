@@ -1895,7 +1895,7 @@ func TestSingleResilver(t *testing.T) {
 	target, _ := m.smap.GetRandTarget()
 
 	// Start resilvering just on the target
-	args := api.XactReqArgs{Kind: apc.ActResilver, Node: target.DaemonID}
+	args := api.XactReqArgs{Kind: apc.ActResilver, DaemonID: target.DaemonID}
 	id, err := api.StartXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 

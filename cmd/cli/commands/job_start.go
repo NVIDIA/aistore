@@ -147,7 +147,7 @@ func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err
 
 	var (
 		id       string
-		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck, Node: sid}
+		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck, DaemonID: sid}
 	)
 
 	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
