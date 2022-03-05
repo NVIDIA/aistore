@@ -313,7 +313,7 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	switch ct.ContentType() {
 	case fs.ObjectType:
 		lom := cluster.AllocLOMbyFQN(fqn)
-		err := lom.Init(&j.opts.Bck)
+		err := lom.Init(&cmn.Bck{})
 		if err == nil {
 			err = j.visitObj(lom, buf)
 		}
