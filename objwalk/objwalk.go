@@ -102,7 +102,7 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 			e.TargetURL = localURL
 		}
 		lom := cluster.AllocLOM(e.Name)
-		if err := lom.Init(w.bck.Bucket()); err != nil {
+		if err := lom.InitBck(w.bck.Bucket()); err != nil {
 			cluster.FreeLOM(lom)
 			if cmn.IsErrBucketNought(err) {
 				return nil, err

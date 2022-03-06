@@ -189,14 +189,19 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 // A note in re cmn.LsNameOnly (usage below):
 //    the flag cmn.LsNameOnly optimizes-out loading object metadata. If defined,
 //    the function returns (only the) name and status.
-func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, error) {
+func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.BucketEntry, err error) {
 	if de.IsDir() {
-		return nil, nil
+		return
 	}
+	lom := cluster.AllocLOM("")
+	entry, err = wi.cb(lom, fqn)
+	cluster.FreeLOM(lom)
+	return
+}
 
+func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.BucketEntry, error) {
 	var objStatus uint16 = apc.ObjStatusOK
-	lom := &cluster.LOM{FQN: fqn}
-	if err := lom.Init(&cmn.Bck{}); err != nil {
+	if err := lom.InitFQN(fqn, nil); err != nil {
 		return nil, err
 	}
 

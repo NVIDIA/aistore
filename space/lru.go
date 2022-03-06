@@ -300,13 +300,17 @@ func (j *lruJ) visitLOM(parsedFQN fs.ParsedFQN) {
 	if !j.allowDelObj {
 		return
 	}
-	lom := &cluster.LOM{ObjName: parsedFQN.ObjName}
-	err := lom.Init(&j.bck)
-	if err != nil {
+	lom := cluster.AllocLOM(parsedFQN.ObjName)
+	if pushed := j._visit(lom); !pushed {
+		cluster.FreeLOM(lom)
+	}
+}
+
+func (j *lruJ) _visit(lom *cluster.LOM) (pushed bool) {
+	if err := lom.InitBck(&j.bck); err != nil {
 		return
 	}
-	err = lom.Load(false /*cache it*/, false /*locked*/)
-	if err != nil {
+	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return
 	}
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
@@ -315,7 +319,6 @@ func (j *lruJ) visitLOM(parsedFQN fs.ParsedFQN) {
 	if lom.HasCopies() && lom.IsCopy() {
 		return
 	}
-
 	// do nothing if the heap's curSize >= totalSize and
 	// the file is more recent then the the heap's newest.
 	if j.curSize >= j.totalSize && lom.AtimeUnix() > j.newest {
@@ -326,6 +329,7 @@ func (j *lruJ) visitLOM(parsedFQN fs.ParsedFQN) {
 	if lom.AtimeUnix() > j.newest {
 		j.newest = lom.AtimeUnix()
 	}
+	return true
 }
 
 func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
@@ -358,9 +362,11 @@ func (j *lruJ) evict() (size int64, err error) {
 	for h.Len() > 0 && j.totalSize > 0 {
 		lom := heap.Pop(h).(*cluster.LOM)
 		if !evictObj(lom) {
+			cluster.FreeLOM(lom)
 			continue
 		}
 		objSize := lom.SizeBytes(true /*not loaded*/)
+		cluster.FreeLOM(lom)
 		bevicted += objSize
 		size += objSize
 		fevicted++

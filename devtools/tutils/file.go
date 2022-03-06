@@ -61,10 +61,10 @@ func RandomObjDir(dirLen, maxDepth int) (dir string) {
 }
 
 func SetXattrCksum(fqn string, bck cmn.Bck, cksum *cos.Cksum) error {
-	lom := &cluster.LOM{FQN: fqn}
+	lom := &cluster.LOM{}
 	// NOTE: this is an intentional hack to go ahead and corrupt the checksum
 	//       - init and/or load errors are ignored on purpose
-	_ = lom.Init(&bck)
+	_ = lom.InitFQN(fqn, &bck)
 	_ = lom.LoadMetaFromFS()
 	lom.SetCksum(cksum)
 	return lom.Persist()
@@ -192,8 +192,8 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 			switch ct.Type {
 			case fs.ObjectType:
-				lom := &cluster.LOM{FQN: fqn}
-				err = lom.Init(&cmn.Bck{})
+				lom := &cluster.LOM{}
+				err = lom.InitFQN(fqn, nil)
 				tassert.CheckFatal(t, err)
 
 				lom.SetSize(desc.ObjectSize)

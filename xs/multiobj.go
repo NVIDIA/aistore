@@ -211,7 +211,7 @@ func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
 }
 
 func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
-	if err := lom.Init(r.xctn.Bck().Bucket()); err != nil {
+	if err := lom.InitBck(r.xctn.Bck().Bucket()); err != nil {
 		return err
 	}
 	if smap != nil {

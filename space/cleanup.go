@@ -380,8 +380,9 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 // TODO: add stats error counters (stats.ErrLmetaCorruptedCount, ...)
 // TODO: revisit rm-ed byte counting
 func (j *clnJ) visitObj(fqn string) {
-	lom := &cluster.LOM{FQN: fqn}
-	if err := lom.Init(&j.bck); err != nil {
+	lom := cluster.AllocLOM("")
+	defer cluster.FreeLOM(lom)
+	if err := lom.InitFQN(fqn, &j.bck); err != nil {
 		return
 	}
 	// handle load err
@@ -507,14 +508,15 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 				fqn     = mlom.FQN
 				removed bool
 			)
-			lom := &cluster.LOM{ObjName: mlom.ObjName} // yes placed
-			if lom.Init(&j.bck) != nil {
+			lom := cluster.AllocLOM(mlom.ObjName) // yes placed
+			if lom.InitBck(&j.bck) != nil {
 				removed = os.Remove(fqn) == nil
 			} else if lom.FromFS() != nil {
 				removed = os.Remove(fqn) == nil
 			} else {
 				removed, _ = lom.DelExtraCopies(fqn)
 			}
+			cluster.FreeLOM(lom)
 			if removed {
 				fevicted++
 				bevicted += mlom.SizeBytes(true /*not loaded*/)

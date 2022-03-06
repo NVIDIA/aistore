@@ -956,10 +956,10 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 // getObject is main function to get the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
 func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *cluster.Bck, lom *cluster.LOM) {
-	if err := lom.Init(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.Init(bck.Bucket())
+			err = lom.InitBck(bck.Bucket())
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -1044,10 +1044,10 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	// init
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(apireq.bck.Bucket()); err != nil {
+	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.Init(apireq.bck.Bucket())
+			err = lom.InitBck(apireq.bck.Bucket())
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -1124,7 +1124,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	evict := msg.Action == apc.ActEvictObjects
 	lom := cluster.AllocLOM(apireq.items[1])
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(apireq.bck.Bucket()); err != nil {
+	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -1201,7 +1201,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	if tmp := query.Get(apc.QparamHeadObj); tmp != "" {
 		mustBeLocal, _ = strconv.Atoi(tmp)
 	}
-	if err := lom.Init(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck.Bucket()); err != nil {
 		invalidHandler(w, r, err)
 		return
 	}
@@ -1317,7 +1317,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	lom := cluster.AllocLOM(apireq.items[1] /*objName*/)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(apireq.bck.Bucket()); err != nil {
+	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -1386,10 +1386,10 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *clu
 func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.Init(bck.Bucket())
+			err = lom.InitBck(bck.Bucket())
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -1645,7 +1645,7 @@ func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *apc.ActionMs
 	}
 	lom := cluster.AllocLOM(apireq.items[1])
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(apireq.bck.Bucket()); err != nil {
+	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

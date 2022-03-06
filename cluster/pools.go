@@ -5,7 +5,6 @@
 package cluster
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -29,29 +28,16 @@ var (
 /////////////
 
 func AllocLOM(objName string) (lom *LOM) {
-	lom = _allocLOM()
-	lom.ObjName = objName
-	return
-}
-
-func AllocLOMbyFQN(fqn string) (lom *LOM) {
-	debug.Assert(strings.Contains(fqn, "/"))
-	lom = _allocLOM()
-	lom.FQN = fqn
-	return
-}
-
-func _allocLOM() (lom *LOM) {
 	if v := lomPool.Get(); v != nil {
 		lom = v.(*LOM)
 	} else {
 		lom = &LOM{}
 	}
+	lom.ObjName = objName
 	return
 }
 
 func FreeLOM(lom *LOM) {
-	debug.Assert(lom.ObjName != "" || lom.FQN != "")
 	*lom = lom0
 	lomPool.Put(lom)
 }

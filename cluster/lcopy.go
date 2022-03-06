@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
@@ -203,9 +202,9 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 }
 
 func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
-	src := lom.Clone(fqn)
+	src := lom.CloneMD(fqn)
 	defer FreeLOM(src)
-	if err = src.Init(lom.Bucket()); err != nil {
+	if err = src.InitFQN(fqn, lom.Bucket()); err != nil {
 		return
 	}
 	if err = src.Load(false /*cache it*/, true /*locked*/); err != nil {
@@ -225,9 +224,9 @@ func (lom *LOM) Copy(mi *fs.MountpathInfo, buf []byte) (err error) {
 	)
 	// check if the copy destination exists and then skip copying if it's also identical
 	if errExists := cos.Stat(copyFQN); errExists == nil {
-		cplom := AllocLOMbyFQN(copyFQN)
+		cplom := AllocLOM("")
 		defer FreeLOM(cplom)
-		if errExists = cplom.Init(lom.Bucket()); errExists == nil {
+		if errExists = cplom.InitFQN(copyFQN, lom.Bucket()); errExists == nil {
 			if errExists = cplom.Load(false /*cache it*/, true /*locked*/); errExists == nil && cplom.Equal(lom) {
 				goto add
 			}
@@ -270,10 +269,13 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 	if !srcCksum.IsEmpty() {
 		cksumType = srcCksum.Ty()
 	}
-	dst = lom.Clone(dstFQN)
-	if err = dst.Init(&cmn.Bck{}); err != nil {
+	dst = lom.CloneMD(dstFQN)
+	if err = dst.InitFQN(dstFQN, nil); err != nil {
+		FreeLOM(dst)
+		dst = nil
 		return
 	}
+	dst.md = lom.md
 	dst.md.copies = nil
 	if dst.isMirror(lom) {
 		// caller must take wlock

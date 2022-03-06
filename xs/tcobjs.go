@@ -184,7 +184,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(&hdr.Bck); err != nil {
+	if err := lom.InitBck(&hdr.Bck); err != nil {
 		glog.Error(err)
 		return err
 	}

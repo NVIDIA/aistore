@@ -106,7 +106,7 @@ func BenchmarkObjPut(b *testing.B) {
 		b.Run(cos.B2S(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
-			err := lom.Init(&cmn.Bck{Name: testBucket, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal})
+			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -153,7 +153,7 @@ func BenchmarkObjAppend(b *testing.B) {
 		b.Run(cos.B2S(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
-			err := lom.Init(&cmn.Bck{Name: testBucket, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal})
+			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -218,7 +218,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 		b.Run(benchName, func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
-			err := lom.Init(&cmn.Bck{Name: testBucket, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal})
+			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
 			}

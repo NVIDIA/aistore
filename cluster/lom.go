@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -25,13 +24,10 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-//
-// Local Object Metadata (LOM) is a locally stored object metadata comprising:
-// - version, atime, checksum, size, etc. object attributes and flags
-// - user and internally visible object names
-// - associated runtime context including properties and configuration of the
-//   bucket that contains the object, etc.
-//
+// Local Object Metadata (LOM) is a locally stored object metadata comprising, in part:
+// - name, version, atime, checksum, size, etc. object attributes and flags
+// - runtime context including properties and configuration of the bucket
+//   that contains this LOM
 
 const (
 	fmtNestedErr      = "nested err: %v"
@@ -49,7 +45,7 @@ type (
 	}
 	LOM struct {
 		md          lmeta             // local persistent metadata
-		bck         *Bck              // bucket
+		bck         Bck               // bucket
 		mpathInfo   *fs.MountpathInfo // object's mountpath
 		mpathDigest uint64            // mountpath's digest
 		FQN         string            // fqn
@@ -91,31 +87,6 @@ func initLomLocker() {
 	lomLocker = make(nameLocker, cos.MultiSyncMapCount)
 	lomLocker.init()
 	maxLmeta.Store(xattrMaxSize)
-}
-
-/////////
-// LIF //
-/////////
-
-// LIF => LOF with a check for bucket existence
-func (lif *LIF) LOM() (lom *LOM, err error) {
-	b, objName := cmn.ParseUname(lif.Uname)
-	lom = AllocLOM(objName)
-	if err = lom.Init(&b); err != nil {
-		return
-	}
-	if bprops := lom.Bprops(); bprops == nil {
-		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.BID)
-	} else if bprops.BID != lif.BID {
-		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.BID)
-	}
-	return
-}
-
-func (lom *LOM) LIF() (lif LIF) {
-	debug.Assert(lom.md.uname != "")
-	debug.Assert(lom.Bprops() != nil && lom.Bprops().BID != 0)
-	return LIF{lom.md.uname, lom.Bprops().BID}
 }
 
 /////////
@@ -171,7 +142,7 @@ func (lom *LOM) SetCustomKey(key, value string)         { lom.md.SetCustomKey(ke
 // lom <= transport.ObjHdr (NOTE: caller must call freeLOM)
 func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *LOM, err error) {
 	lom = AllocLOM(hdr.ObjName)
-	if err = lom.Init(&hdr.Bck); err != nil {
+	if err = lom.InitBck(&hdr.Bck); err != nil {
 		return
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, false /*skip checksum*/)
@@ -189,8 +160,8 @@ func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 
 // as fs.PartsFQN
 func (lom *LOM) ObjectName() string           { return lom.ObjName }
-func (lom *LOM) Bck() *Bck                    { return lom.bck }
-func (lom *LOM) Bucket() *cmn.Bck             { return (*cmn.Bck)(lom.bck) }
+func (lom *LOM) Bck() *Bck                    { return &lom.bck }
+func (lom *LOM) Bucket() *cmn.Bck             { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
 
 // see also: transport.ObjHdr.FullName()
@@ -216,55 +187,6 @@ func (lom *LOM) HrwTarget(smap *Smap) (tsi *Snode, local bool, err error) {
 	return
 }
 
-//
-// lom.String() and helpers
-//
-
-func (lom *LOM) String() string {
-	if lom.info != "" {
-		return lom.info
-	}
-	return lom._string(bool(glog.FastV(4, glog.SmoduleCluster)))
-}
-
-func (lom *LOM) StringEx() string { return lom._string(true) }
-
-func (lom *LOM) _string(verbose bool) string {
-	var a, s string
-	if verbose {
-		s = "o[" + lom.bck.String() + "/" + lom.ObjName + ", " + lom.mpathInfo.String()
-		if lom.md.Size != 0 {
-			s += " size=" + cos.B2S(lom.md.Size, 1)
-		}
-		if lom.md.Ver != "" {
-			s += " ver=" + lom.md.Ver
-		}
-		if lom.md.Cksum != nil {
-			s += " " + lom.md.Cksum.String()
-		}
-	} else {
-		s = "o[" + lom.bck.Name + "/" + lom.ObjName
-	}
-	if lom.loaded() {
-		if lom.IsCopy() {
-			a += "(copy)"
-		} else if !lom.IsHRW() {
-			a += "(misplaced)"
-		}
-		if n := lom.NumCopies(); n > 1 {
-			a += fmt.Sprintf("(%dc)", n)
-		}
-	} else {
-		a = "(-)"
-		if !lom.IsHRW() {
-			a += "(not-hrw)"
-		}
-	}
-	lom.info = s + a + "]"
-	return lom.info
-}
-
-// increment ais LOM's version
 func (lom *LOM) IncVersion() error {
 	debug.Assert(lom.Bck().IsAIS())
 	if lom.md.Ver == "" {
@@ -427,86 +349,6 @@ func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cos.CksumHash, err er
 	return
 }
 
-// NOTE: Clone shallow-copies LOM to be further initialized (lom.Init) for a given replica
-//       (mountpath/FQN)
-func (lom *LOM) Clone(fqn string) *LOM {
-	dst := AllocLOMbyFQN(fqn)
-	*dst = *lom
-	dst.md = lom.md
-	dst.FQN = fqn
-	return dst
-}
-
-// Local Object Metadata (LOM) - is cached. Respectively, lifecycle of any given LOM
-// instance includes the following steps:
-// 1) construct LOM instance and initialize its runtime state: lom = LOM{...}.Init()
-// 2) load persistent state (aka lmeta) from one of the LOM caches or the underlying
-//    filesystem: lom.Load(); Load(false) also entails *not adding* LOM to caches
-//    (useful when deleting or moving objects
-// 3) usage: lom.Atime(), lom.Cksum(), and other accessors
-//    It is illegal to check LOM's existence and, generally, do almost anything
-//    with it prior to loading - see previous
-// 4) update persistent state in memory: lom.Set*() methods
-//    (requires subsequent re-caching via lom.ReCache())
-// 5) update persistent state on disk: lom.Persist()
-// 6) remove a given LOM instance from cache: lom.Uncache()
-// 7) evict an entire bucket-load of LOM cache: cluster.EvictCache(bucket)
-// 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
-// =======================================================================================
-
-func lcacheIdx(digest uint64) int {
-	return int(digest & (cos.MultiSyncMapCount - 1))
-}
-
-func (lom *LOM) LcacheIdx() int { return lcacheIdx(lom.mpathDigest) }
-
-func (lom *LOM) Init(bck *cmn.Bck) (err error) {
-	if lom.FQN != "" {
-		var parsedFQN fs.ParsedFQN
-		parsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN)
-		if err != nil {
-			return
-		}
-		debug.Assertf(parsedFQN.ContentType == fs.ObjectType,
-			"use CT for non-objects[%s]: %s", parsedFQN.ContentType, lom.FQN)
-		lom.mpathInfo = parsedFQN.MpathInfo
-		lom.mpathDigest = parsedFQN.Digest
-		if bck.Name == "" {
-			bck.Name = parsedFQN.Bck.Name
-		} else if bck.Name != parsedFQN.Bck.Name {
-			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, bck, parsedFQN.Bck)
-		}
-		lom.ObjName = parsedFQN.ObjName
-		prov := parsedFQN.Bck.Provider
-		if bck.Provider == "" {
-			bck.Provider = prov
-		} else if bck.Provider != prov {
-			return fmt.Errorf("lom-init %s: provider mismatch (%s != %s)", lom.FQN, bck.Provider, prov)
-		}
-		if bck.Ns.IsGlobal() {
-			bck.Ns = parsedFQN.Bck.Ns
-		} else if bck.Ns != parsedFQN.Bck.Ns {
-			return fmt.Errorf("lom-init %s: namespace mismatch (%s != %s)",
-				lom.FQN, bck.Ns, parsedFQN.Bck.Ns)
-		}
-	}
-	bowner := T.Bowner()
-	lom.bck = CloneBck(bck)
-	if err = lom.bck.Init(bowner); err != nil {
-		return
-	}
-	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
-	if lom.FQN == "" {
-		lom.mpathInfo, lom.mpathDigest, err = HrwMpath(lom.md.uname)
-		if err != nil {
-			return
-		}
-		lom.FQN = lom.mpathInfo.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-		lom.HrwFQN = lom.FQN
-	}
-	return
-}
-
 // * locked: is locked by the immediate caller (or otherwise is known to be locked);
 //   if false, try Rlock temporarily *if and only when* reading from FS
 func (lom *LOM) Load(cacheit, locked bool) (err error) {
@@ -547,13 +389,16 @@ func (lom *LOM) Load(cacheit, locked bool) (err error) {
 
 func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
 	debug.Assert(lom.loaded())
-	err = bmd.Check(lom.bck, lom.md.bckID)
+	err = bmd.Check(&lom.bck, lom.md.bckID)
 	if err == errBucketIDMismatch {
 		err = cmn.NewErrObjDefunct(lom.String(), lom.md.bckID, lom.bck.Props.BID)
 	}
 	return
 }
 
+//
+// lom cache
+//
 func (lom *LOM) ReCache(store bool) {
 	debug.Assert(!lom.IsCopy()) // not caching copies
 	lcache, lmd := lom.fromCache()
@@ -580,11 +425,10 @@ func (lom *LOM) Uncache(delDirty bool) {
 	}
 }
 
+func (lom *LOM) CacheIdx() int { return fs.LcacheIdx(lom.mpathDigest) }
+
 func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
-	var (
-		mi  = lom.mpathInfo
-		idx = lom.LcacheIdx()
-	)
+	mi := lom.mpathInfo
 	if !lom.IsHRW() {
 		hmi, digest, err := HrwMpath(lom.md.uname)
 		if err != nil {
@@ -594,7 +438,7 @@ func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 		_ = digest
 		mi = hmi
 	}
-	lcache = mi.LomCache(idx)
+	lcache = mi.LomCache(lom.CacheIdx())
 	if md, ok := lcache.Load(lom.md.uname); ok {
 		lmd = md.(*lmeta)
 	}
@@ -702,53 +546,35 @@ func lomCaches() []*sync.Map {
 // lock/unlock
 //
 
-func getLomLocker(idx int) *nlc { return &lomLocker[idx] }
+func (lom *LOM) getLocker() *nlc { return &lomLocker[lom.CacheIdx()] }
 
 func (lom *LOM) IsLocked() (int /*rc*/, bool /*exclusive*/) {
-	var (
-		idx = lom.LcacheIdx()
-		nlc = getLomLocker(idx)
-	)
+	nlc := lom.getLocker()
 	return nlc.IsLocked(lom.Uname())
 }
 
 func (lom *LOM) TryLock(exclusive bool) bool {
-	var (
-		idx = lom.LcacheIdx()
-		nlc = getLomLocker(idx)
-	)
+	nlc := lom.getLocker()
 	return nlc.TryLock(lom.Uname(), exclusive)
 }
 
 func (lom *LOM) Lock(exclusive bool) {
-	var (
-		idx = lom.LcacheIdx()
-		nlc = getLomLocker(idx)
-	)
+	nlc := lom.getLocker()
 	nlc.Lock(lom.Uname(), exclusive)
 }
 
 func (lom *LOM) UpgradeLock() (finished bool) {
-	var (
-		idx = lom.LcacheIdx()
-		nlc = getLomLocker(idx)
-	)
+	nlc := lom.getLocker()
 	return nlc.UpgradeLock(lom.Uname())
 }
 
 func (lom *LOM) DowngradeLock() {
-	var (
-		idx = lom.LcacheIdx()
-		nlc = getLomLocker(idx)
-	)
+	nlc := lom.getLocker()
 	nlc.DowngradeLock(lom.Uname())
 }
 
 func (lom *LOM) Unlock(exclusive bool) {
-	var (
-		idx = lom.LcacheIdx()
-		nlc = getLomLocker(idx)
-	)
+	nlc := lom.getLocker()
 	nlc.Unlock(lom.Uname(), exclusive)
 }
 

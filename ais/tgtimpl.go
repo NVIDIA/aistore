@@ -190,7 +190,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 func (t *target) Promote(params cluster.PromoteParams) (errCode int, err error) {
 	lom := cluster.AllocLOM(params.ObjName)
 	defer cluster.FreeLOM(lom)
-	if eri := lom.Init(params.Bck.Bucket()); eri != nil {
+	if eri := lom.InitBck(params.Bck.Bucket()); eri != nil {
 		return 0, eri
 	}
 	smap := t.owner.smap.get()
@@ -255,7 +255,7 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 		if params.Cksum != nil {
 			lom.SetCksum(params.Cksum) // already computed somewhere else, use it
 		} else {
-			clone := lom.Clone(params.SrcFQN)
+			clone := lom.CloneMD(params.SrcFQN)
 			if cksum, err = clone.ComputeCksum(); err != nil {
 				return 0, err
 			}

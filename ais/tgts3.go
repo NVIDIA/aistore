@@ -61,10 +61,10 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	}
 	lom := cluster.AllocLOM(objSrc)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(bckSrc.Bucket()); err != nil {
+	if err := lom.InitBck(bckSrc.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.Init(bckSrc.Bucket())
+			err = lom.InitBck(bckSrc.Bucket())
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -130,10 +130,10 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 		lom     = cluster.AllocLOM(objName)
 	)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.Init(bck.Bucket())
+			err = lom.InitBck(bck.Bucket())
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -238,7 +238,7 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 	objName := path.Join(items[1:]...)
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

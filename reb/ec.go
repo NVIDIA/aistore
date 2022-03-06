@@ -110,7 +110,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 	//  locked and handled similarly.
 	if ct.ContentType() == fs.ObjectType {
 		lom = cluster.AllocLOM(ct.ObjectName())
-		if err = lom.Init(ct.Bck().Bucket()); err != nil {
+		if err = lom.InitBck(ct.Bck().Bucket()); err != nil {
 			cluster.FreeLOM(lom)
 			return
 		}

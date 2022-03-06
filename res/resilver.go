@@ -347,8 +347,9 @@ func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.MountpathInfo, buf []byte) (hl
 		return
 	}
 	hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-	hlom = cluster.AllocLOMbyFQN(hrwFQN)
-	if err = hlom.Init(lom.Bucket()); err != nil {
+	hlom = cluster.AllocLOM("")
+	if err = hlom.InitFQN(hrwFQN, lom.Bucket()); err != nil {
+		cluster.FreeLOM(hlom)
 		return
 	}
 	debug.Assert(hlom.MpathInfo().Path == mi.Path)
@@ -356,6 +357,9 @@ func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.MountpathInfo, buf []byte) (hl
 	// uncache and reload
 	hlom.Uncache(false /*delDirty*/)
 	err = hlom.Load(false /*cache it*/, true /*locked*/)
+	if err != nil {
+		cluster.FreeLOM(hlom)
+	}
 	return
 }
 

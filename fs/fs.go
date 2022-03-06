@@ -170,6 +170,8 @@ func (mi *MountpathInfo) _string() string {
 
 func (mi *MountpathInfo) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
 
+func LcacheIdx(digest uint64) int { return int(digest & (cos.MultiSyncMapCount - 1)) }
+
 func (mi *MountpathInfo) EvictLomCache() {
 	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
 		cache := mi.LomCache(idx)

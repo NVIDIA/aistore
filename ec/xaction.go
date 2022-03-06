@@ -146,13 +146,10 @@ func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos
 }
 
 // replica/full object request
-func newReplicaResponse(attrs *cmn.ObjAttrs, bck *cluster.Bck,
-	objName string) (reader cos.ReadOpenCloser, err error) {
+func newReplicaResponse(attrs *cmn.ObjAttrs, bck *cluster.Bck, objName string) (reader cos.ReadOpenCloser, err error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
-	err = lom.Init(bck.Bucket())
-	if err != nil {
-		glog.Warning(err)
+	if err = lom.InitBck(bck.Bucket()); err != nil {
 		return nil, err
 	}
 	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {

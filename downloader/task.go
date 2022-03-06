@@ -68,7 +68,7 @@ func (t *singleObjectTask) download() {
 
 	lom := cluster.AllocLOM(t.obj.objName)
 	defer cluster.FreeLOM(lom)
-	err := lom.Init(t.job.Bck())
+	err := lom.InitBck(t.job.Bck())
 	if err == nil {
 		err = lom.Load(true /*cache it*/, false /*locked*/)
 	}

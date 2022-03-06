@@ -180,8 +180,8 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 				if diffResolver.Stopped() {
 					return cmn.NewErrAborted(job.String(), "diff-resolver stopped", nil)
 				}
-				lom := &cluster.LOM{FQN: fqn}
-				if err := lom.Init(job.Bck()); err != nil {
+				lom := &cluster.LOM{}
+				if err := lom.InitFQN(fqn, job.Bck()); err != nil {
 					return err
 				}
 				if !job.checkObj(lom.ObjName) {
@@ -229,7 +229,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 					// When it is not a sync job, push LOM for a given object
 					// because we need to check if it exists.
 					lom := &cluster.LOM{ObjName: obj.objName}
-					if err := lom.Init(job.Bck()); err != nil {
+					if err := lom.InitBck(job.Bck()); err != nil {
 						diffResolver.Abort(err)
 						return
 					}

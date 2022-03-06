@@ -473,7 +473,7 @@ do:
 		doubleCheck, errCode, err = goi.restoreFromAny(false /*skipLomRestore*/)
 		if doubleCheck && err != nil {
 			lom2 := &cluster.LOM{ObjName: goi.lom.ObjName}
-			er2 := lom2.Init(goi.lom.Bucket())
+			er2 := lom2.InitBck(goi.lom.Bucket())
 			if er2 == nil {
 				er2 = lom2.Load(true /*cache it*/, false /*locked*/)
 				if er2 == nil {
@@ -1118,7 +1118,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 	// local
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
-	if err = dst.Init(coi.BckTo.Bucket()); err != nil {
+	if err = dst.InitBck(coi.BckTo.Bucket()); err != nil {
 		return
 	}
 	if lom.FQN == dst.FQN { // resilvering with a single mountpath?
@@ -1208,7 +1208,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	}
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
-	if err = dst.Init(coi.BckTo.Bucket()); err != nil {
+	if err = dst.InitBck(coi.BckTo.Bucket()); err != nil {
 		return
 	}
 	if lom.Bck().Equal(coi.BckTo, true, true) {
@@ -1275,9 +1275,8 @@ func (coi *copyObjInfo) sendRemote(lom *cluster.LOM, objNameTo string, tsi *clus
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
 func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, err error) {
 	if coi.DM != nil {
-		// We need to clone the `lom` to use it in async operation.
-		// The `lom` is freed upon callback in `_sendObjDM`.
-		lom = lom.Clone(lom.FQN)
+		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
+		lom = lom.CloneMD(lom.FQN)
 	}
 	if coi.DP == nil { // read from local file
 		var reader cos.ReadOpenCloser

@@ -43,8 +43,8 @@ func TestWorkerGroup(t *testing.T) {
 	wg.Run()
 
 	for _, fqn := range out.FQNs[fs.ObjectType] {
-		lom := &cluster.LOM{FQN: fqn}
-		err := lom.Init(&out.Bck)
+		lom := &cluster.LOM{}
+		err := lom.InitFQN(fqn, &out.Bck)
 		tassert.CheckError(t, err)
 
 		wg.Do(lom)

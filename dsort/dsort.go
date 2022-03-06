@@ -165,7 +165,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		shardName := name + m.rs.Extension
 		lom := cluster.AllocLOM(shardName)
 		defer cluster.FreeLOM(lom)
-		if err := lom.Init(&m.rs.Bck); err != nil {
+		if err := lom.InitBck(&m.rs.Bck); err != nil {
 			return err
 		}
 		_, local, err := lom.HrwTarget(m.smap)
@@ -324,7 +324,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// TODO: use cluster.AllocLOM, review `t.PutObject` below
 	//
 	lom := &cluster.LOM{ObjName: shardName}
-	if err = lom.Init(&m.rs.OutputBck); err != nil {
+	if err = lom.InitBck(&m.rs.OutputBck); err != nil {
 		return
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())

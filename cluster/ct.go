@@ -58,15 +58,16 @@ func (ct *CT) Uname() string {
 	return ct.uname
 }
 
+func (ct *CT) CacheIdx() int      { return fs.LcacheIdx(ct.digest) }
+func (ct *CT) getLomLocker() *nlc { return &lomLocker[ct.CacheIdx()] }
+
 func (ct *CT) Lock(exclusive bool) {
-	idx := lcacheIdx(ct.digest)
-	nlc := getLomLocker(idx)
+	nlc := ct.getLomLocker()
 	nlc.Lock(ct.Uname(), exclusive)
 }
 
 func (ct *CT) Unlock(exclusive bool) {
-	idx := lcacheIdx(ct.digest)
-	nlc := getLomLocker(idx)
+	nlc := ct.getLomLocker()
 	nlc.Unlock(ct.Uname(), exclusive)
 }
 

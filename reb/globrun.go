@@ -693,8 +693,9 @@ func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) (err error) {
 	if de.IsDir() {
 		return nil
 	}
-	lom := cluster.AllocLOMbyFQN(fqn) // NOTE: free on error or via (send => ... => delLomAck) path
-	err = rj._lwalk(lom)
+	// NOTE: free on error or via (send => ... => delLomAck)
+	lom := cluster.AllocLOM("")
+	err = rj._lwalk(lom, fqn)
 	if err != nil {
 		cluster.FreeLOM(lom)
 		if err == cmn.ErrSkip {
@@ -704,8 +705,8 @@ func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) (err error) {
 	return
 }
 
-func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
-	err = lom.Init(&cmn.Bck{})
+func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) (err error) {
+	err = lom.InitFQN(fqn, nil)
 	if err != nil {
 		if cmn.IsErrBucketLevel(err) {
 			return err
@@ -744,7 +745,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 }
 
 func _prepSend(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
-	clone := lom.Clone(lom.FQN)
+	clone := lom.CloneMD(lom.FQN)
 	lom.Lock(false)
 	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		goto retErr

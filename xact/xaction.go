@@ -26,13 +26,12 @@ const abortErrWait = time.Second
 
 type (
 	Base struct {
-		id      string
-		kind    string
-		bck     *cluster.Bck
-		origBck cmn.Bck
-		sutime  atomic.Int64
-		eutime  atomic.Int64
-		stats   struct {
+		id     string
+		kind   string
+		bck    cluster.Bck
+		sutime atomic.Int64
+		eutime atomic.Int64
+		stats  struct {
 			objs     atomic.Int64 // locally processed
 			bytes    atomic.Int64
 			outobjs  atomic.Int64 // transmit
@@ -73,16 +72,16 @@ func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {
 	debug.AssertMsg(IsValidKind(kind), kind)
 	xctn.id, xctn.kind = id, kind
 	xctn.abort.ch = make(chan error, 1)
-	xctn.bck = bck
-	if xctn.bck != nil {
-		xctn.origBck.Copy(bck.Bucket())
+	if bck != nil {
+		debug.Assert(!bck.IsEmpty())
+		xctn.bck = *bck
 	}
 	xctn.setStartTime(time.Now())
 }
 
 func (xctn *Base) ID() string                      { return xctn.id }
 func (xctn *Base) Kind() string                    { return xctn.kind }
-func (xctn *Base) Bck() *cluster.Bck               { return xctn.bck }
+func (xctn *Base) Bck() *cluster.Bck               { return &xctn.bck }
 func (*Base) FromTo() (*cluster.Bck, *cluster.Bck) { return nil, nil }
 func (xctn *Base) Finished() bool                  { return xctn.eutime.Load() != 0 }
 
@@ -186,8 +185,8 @@ func (xctn *Base) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes {
 
 func (xctn *Base) Name() (s string) {
 	var b string
-	if xctn.bck != nil {
-		b = "-" + xctn.origBck.String()
+	if !xctn.bck.IsEmpty() {
+		b = "-" + xctn.bck.String()
 	}
 	s = "x-" + xctn.Kind() + "[" + xctn.ID() + "]" + b
 	return
@@ -313,7 +312,7 @@ func (xctn *Base) Snap() cluster.XactSnap {
 func (xctn *Base) ToSnap(snap *Snap) {
 	snap.ID = xctn.ID()
 	snap.Kind = xctn.Kind()
-	snap.Bck = xctn.origBck
+	snap.Bck = *(xctn.bck.Bucket())
 	snap.StartTime = xctn.StartTime()
 	snap.EndTime = xctn.EndTime()
 	snap.AbortedX = xctn.IsAborted()

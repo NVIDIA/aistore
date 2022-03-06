@@ -129,7 +129,7 @@ func (p *archFactory) Start() error {
 
 func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	lom := cluster.AllocLOM(msg.ArchName)
-	if err = lom.Init(&msg.ToBck); err != nil {
+	if err = lom.InitBck(&msg.ToBck); err != nil {
 		r.raiseErr(err, 0, msg.ContinueOnError)
 		return
 	}

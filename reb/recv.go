@@ -147,7 +147,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	// Rx
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(&hdr.Bck); err != nil {
+	if err := lom.InitBck(&hdr.Bck); err != nil {
 		glog.Error(err)
 		return nil
 	}
@@ -215,7 +215,7 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) e
 
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
-	if err := lom.Init(&hdr.Bck); err != nil {
+	if err := lom.InitBck(&hdr.Bck); err != nil {
 		glog.Error(err)
 		return nil
 	}
