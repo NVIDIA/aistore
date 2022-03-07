@@ -27,14 +27,15 @@ var (
 // lomPool //
 /////////////
 
-func AllocLOM(objName string) (lom *LOM) {
-	if v := lomPool.Get(); v != nil {
-		lom = v.(*LOM)
-	} else {
-		lom = &LOM{}
+func AllocLOM(objName string) *LOM {
+	v := lomPool.Get()
+	if v == nil {
+		return &LOM{ObjName: objName}
 	}
+	lom := v.(*LOM)
+	debug.Assert(lom.ObjName == "" && lom.mpathInfo == nil)
 	lom.ObjName = objName
-	return
+	return lom
 }
 
 func FreeLOM(lom *LOM) {
