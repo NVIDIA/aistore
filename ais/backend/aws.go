@@ -533,10 +533,10 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
 			return reqErr.StatusCode(), cmn.NewErrRemoteBckNotFound(bck)
 		}
-		return reqErr.StatusCode(), _clearErr(awsError)
+		return reqErr.StatusCode(), cleanError(awsError)
 	}
 
-	return http.StatusInternalServerError, _clearErr(awsError)
+	return http.StatusInternalServerError, cleanError(awsError)
 }
 
 // Original AWS error contains extra information that a caller does not need:
@@ -544,19 +544,19 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 // The extra information starts from the new line (`\n`) and tab (`\t`) of the message.
 // At the same time we want to preserve original error which starts with `\ncaused by:`.
 // See more `aws-sdk-go/aws/awserr/types.go:12` (`SprintError`).
-func _clearErr(awsError error) error {
+func cleanError(awsError error) error {
 	var (
-		msg    string
-		errMsg = awsError.Error()
+		msg        = awsError.Error()
+		origErrMsg = awsError.Error()
 	)
 	// Strip extra information...
-	if idx := strings.Index(errMsg, "\n\t"); idx > 0 {
-		msg = errMsg[:idx]
+	if idx := strings.Index(msg, "\n\t"); idx > 0 {
+		msg = msg[:idx]
 	}
 	// ...but preserve original error information.
-	if idx := strings.Index(errMsg, "\ncaused"); idx > 0 {
+	if idx := strings.Index(origErrMsg, "\ncaused"); idx > 0 {
 		// `idx+1` because we want to remove `\n`.
-		msg += " (" + errMsg[idx+1:] + ")"
+		msg += " (" + origErrMsg[idx+1:] + ")"
 	}
 	return errors.New(msg)
 }
