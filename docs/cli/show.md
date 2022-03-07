@@ -9,9 +9,9 @@ redirect_from:
 
 # CLI Reference for `show` commands
 
-AIS CLI `show` command can universally be used to view summaries and details on cluster and its nodes, buckets and objects, running and finished jobs - in short, _all_ managed entities (see below). The command is a "hub" for all information-viewing commands that are currently supported.
+AIS CLI `show` command can universally be used to view summaries and details on a cluster and its nodes, buckets and objects, running and finished jobs - in short, _all_ managed entities (see below). The command is a "hub" for all information-viewing commands that are currently supported.
 
-Note that some of these commands (such as `ais show cluster` and `ais show job`) are aliased to their respective top-level commands for ease of use. This means that running `ais show cluster` is equivalent to running `ais cluster show`.
+All `show` commands have been aliased to their respective top-level commands for ease of use. This means that running `ais show cluster` is equivalent to running `ais cluster show`.
 
 ## Table of Contents
 - [`ais show auth`](#ais-show-auth)
@@ -62,47 +62,6 @@ bmd   config   proxy   smap   stats   target    [DAEMON_ID ...]
 
 [Refer to `ais cluster` documentation for more.](cluster.md#cluster-or-daemon-status)
 
-## `ais show mountpath`
-Show mountpath list for targets.
-
-[Refer to `ais mountpath` documentation for more.](mpath.md#show-mountpaths)
-
-## `ais show job`
-Show long-running jobs (aka [xactions](/docs/batch.md)). Example:
-
-```console
-$ ais show job xaction t[ugoFtqUrrm]
-NODE          ID            KIND         BUCKET                     OBJECTS     BYTES        START           END             STATE
-ugoFtqUrrm    vOYSo5pHG     ec-get       mybucket-ec-rebalance      -           -            12-03 10:32:25  -               Running
-ugoFtqUrrm    b4Ks45pHv     ec-get       mybucket-obj-n-slice       9           42.36MiB     12-03 10:31:33  -               Running
-ugoFtqUrrm    vUYSo5pHvS    ec-put       mybucket-ec-rebalance      3           1.43MiB      12-03 10:32:25  -               Running
-ugoFtqUrrm    Kobs45pHvS    ec-put       mybucket-obj-n-slice       9           4.75MiB      12-03 10:31:33  -               Running
-ugoFtqUrrm    U8UcSo5pHv    ec-resp      mybucket-ec-rebalance      18          89.45MiB     12-03 10:32:25  -               Running
-ugoFtqUrrm    M8M6sodqmv    ec-resp      mybucket-obj-n-slice       13          64.49MiB     12-03 10:31:34  -               Idle
-ugoFtqUrrm    Ioa31VqaB     list         mybucket-ec-rebalance      5           -            12-03 10:32:32  12-03 10:32:42  Aborted
-ugoFtqUrrm    X3H381Vqau    list         mybucket-ec-rebalance      3           -            12-03 10:32:29  12-03 10:32:42  Aborted
-ugoFtqUrrm    g5            rebalance    -                          6           25.59MiB     12-03 10:32:32  12-03 10:32:39  Finished
-```
-
-For details and many more examples, please refer to:
-
-- [`ais show job`](/docs/cli/job.md)
-- [`ais show job dsort`](/docs/cli/dsort.md)
-- [`ais show job download`](/docs/cli/download.md)
-- [`ais show rebalance`](/docs/rebalance.md)
-- [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges)
-- [reading, writing, and listing archives](/docs/cli/object.md)
-- [copying buckets](/docs/cli/bucket.md#copy-bucket)
-
----
-
-The following commands do not have any built-in aliases (in other words, they can only be accessed through `ais show <command>`).
-
-## `ais show disk`
-Show disk statistics for targets.
-
-[Refer to `ais cluster` documentation for more.](cluster.md#show-disk-stats)
-
 ## `ais show config`
 Show daemon configuration.
 
@@ -145,6 +104,40 @@ g1       xZntt8087   0              0B          0              0B          03-25
 
 Rebalance completed.
 ```
+
+## `ais show mountpath`
+Show mountpath list for targets.
+
+[Refer to `ais mountpath` documentation for more.](/docs/cli/storage.md)
+
+## `ais show job`
+Show status of long-running jobs (aka [xactions](/docs/batch.md)). Choose from `download`, `dsort`, `xaction`, `etl`. Example:
+
+```console
+$ ais show job xaction t[ugoFtqUrrm]
+NODE          ID            KIND         BUCKET                     OBJECTS     BYTES        START           END             STATE
+ugoFtqUrrm    vOYSo5pHG     ec-get       mybucket-ec-rebalance      -           -            12-03 10:32:25  -               Running
+ugoFtqUrrm    b4Ks45pHv     ec-get       mybucket-obj-n-slice       9           42.36MiB     12-03 10:31:33  -               Running
+ugoFtqUrrm    vUYSo5pHvS    ec-put       mybucket-ec-rebalance      3           1.43MiB      12-03 10:32:25  -               Running
+ugoFtqUrrm    Kobs45pHvS    ec-put       mybucket-obj-n-slice       9           4.75MiB      12-03 10:31:33  -               Running
+ugoFtqUrrm    U8UcSo5pHv    ec-resp      mybucket-ec-rebalance      18          89.45MiB     12-03 10:32:25  -               Running
+ugoFtqUrrm    M8M6sodqmv    ec-resp      mybucket-obj-n-slice       13          64.49MiB     12-03 10:31:34  -               Idle
+ugoFtqUrrm    Ioa31VqaB     list         mybucket-ec-rebalance      5           -            12-03 10:32:32  12-03 10:32:42  Aborted
+ugoFtqUrrm    X3H381Vqau    list         mybucket-ec-rebalance      3           -            12-03 10:32:29  12-03 10:32:42  Aborted
+ugoFtqUrrm    g5            rebalance    -                          6           25.59MiB     12-03 10:32:32  12-03 10:32:39  Finished
+```
+
+For details and many more examples, please refer to:
+
+- [`ais show job`](/docs/cli/job.md)
+- [`ais show job dsort`](/docs/cli/dsort.md)
+- [`ais show job download`](/docs/cli/download.md)
+- [`ais show rebalance`](/docs/rebalance.md)
+- [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges)
+- [reading, writing, and listing archives](/docs/cli/object.md)
+- [copying buckets](/docs/cli/bucket.md#copy-bucket)
+
+---
 
 ## `ais show log`
 
@@ -192,3 +185,11 @@ ais show log OqlWpgwrY --severity=warning
 # or, same
 ais show log OqlWpgwrY --severity=w | less
 ```
+
+
+The following commands do not have any built-in aliases (in other words, they can only be accessed through `ais show <command>`).
+
+## `ais show disk`
+Show disk statistics for targets.
+
+[Refer to `ais cluster` documentation for more.](cluster.md#show-disk-stats)
