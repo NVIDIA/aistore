@@ -7,7 +7,7 @@ redirect_from:
  - /docs/cli/config.md/
 ---
 
-This section lists configuration management operations the AIS CLI, with `ais config`.
+This section lists configuration management operations within the AIS CLI, using `ais config`.
 
 ## Table of Contents
 
@@ -19,10 +19,12 @@ This section lists configuration management operations the AIS CLI, with `ais co
 
 ## Show configuration
 
+`ais show config cluster` or `ais show config cli` or `ais show config [DAEMON_ID]`
+
 A daemon configuration consists of two parts:
 
 - global cluster configuration which is the same across the cluster
-- local daemon configuration which overrides the cluster one.
+- local daemon configuration which overrides the global one.
 
 ### Cluster configuration
 
@@ -43,7 +45,7 @@ To see all configurations, specify `--type all` and no prefix. You can also filt
 
 `ais show config DAEMON_ID [CONFIG_PREFIX]`
 
-Display the actual daemon configuration. If `CONFIG_PREFIX` is given, only that configurations matching the prefix will be shown.
+Display the actual daemon configuration. If `CONFIG_PREFIX` is given, only the configurations matching the prefix will be shown.
 The output includes extra column with global values. Some values in the column have special meaning:
 
 - `-` - the local and global values are the same, the option is not overridden
@@ -53,7 +55,7 @@ The output includes extra column with global values. Some values in the column h
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--all` | `bool` | Show all configuration values | `false` |
+| `--type` | `bool` | Show configuration values (`all`, `cluster`, or `local`)| `false` |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
 
 ### Examples

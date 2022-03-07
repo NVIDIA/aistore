@@ -204,7 +204,7 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--regex` | `string` | Regex for the description of dSort jobs | `""` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds). E.g.:  `--refresh 2s`| ` ` |
 | `--verbose, -v` | `bool` | Show detailed metrics | `false` |
 | `--log` | `string` | Path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
 | `--json, -j` | `bool` | Show only json metrics | `false` |
