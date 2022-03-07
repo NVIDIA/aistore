@@ -16,6 +16,9 @@ variables:
   FS_CNT:
     value: "6"
     description: "Number of disks defined for each target."
+  AWS_REGION:
+    value: "us-east-2"
+    description: "Region of AWS bucket."
   CLOUD_BCKS:
     value: "ais://ci-test gs://ais-ci-kube aws://ais-blossom"
     description: "Set of buckets used when running cloud tests."
@@ -188,7 +191,6 @@ test:long:aws:
   <<: *test_long_def
   variables:
     NUM_PROXY: 6
-    AWS_REGION: "us-east-2"
     BUCKET: "aws://ais-cicd"
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws
