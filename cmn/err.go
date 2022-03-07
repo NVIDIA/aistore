@@ -47,11 +47,11 @@ const (
 )
 
 type (
-	ErrBucketAlreadyExists struct{ bck *Bck }
-	ErrRemoteBckNotFound   struct{ bck *Bck }
-	ErrRemoteBucketOffline struct{ bck *Bck }
-	ErrBckNotFound         struct{ bck *Bck }
-	ErrBucketIsBusy        struct{ bck *Bck }
+	ErrBucketAlreadyExists struct{ bck Bck }
+	ErrRemoteBckNotFound   struct{ bck Bck }
+	ErrRemoteBucketOffline struct{ bck Bck }
+	ErrBckNotFound         struct{ bck Bck }
+	ErrBucketIsBusy        struct{ bck Bck }
 
 	ErrFailedTo struct {
 		actor  interface{} // most of the time it's this (target|proxy) node but may also be some other "actor"
@@ -207,7 +207,7 @@ func (e *ErrFailedTo) Unwrap() (err error) { return e.err }
 // ais ErrBucketAlreadyExists
 
 func NewErrBckAlreadyExists(bck *Bck) *ErrBucketAlreadyExists {
-	return &ErrBucketAlreadyExists{bck: bck}
+	return &ErrBucketAlreadyExists{bck: *bck}
 }
 
 func (e *ErrBucketAlreadyExists) Error() string {
@@ -222,7 +222,7 @@ func IsErrBucketAlreadyExists(err error) bool {
 // remote ErrRemoteBckNotFound (compare with ErrBckNotFound)
 
 func NewErrRemoteBckNotFound(bck *Bck) *ErrRemoteBckNotFound {
-	return &ErrRemoteBckNotFound{bck: bck}
+	return &ErrRemoteBckNotFound{bck: *bck}
 }
 
 func (e *ErrRemoteBckNotFound) Error() string {
@@ -241,7 +241,7 @@ func IsErrRemoteBckNotFound(err error) bool {
 // (compare with ErrRemoteBckNotFound)
 
 func NewErrBckNotFound(bck *Bck) *ErrBckNotFound {
-	return &ErrBckNotFound{bck: bck}
+	return &ErrBckNotFound{bck: *bck}
 }
 
 func (e *ErrBckNotFound) Error() string {
@@ -256,7 +256,7 @@ func IsErrBckNotFound(err error) bool {
 // ErrRemoteBucketOffline
 
 func NewErrRemoteBckOffline(bck *Bck) *ErrRemoteBucketOffline {
-	return &ErrRemoteBucketOffline{bck: bck}
+	return &ErrRemoteBucketOffline{bck: *bck}
 }
 
 func (e *ErrRemoteBucketOffline) Error() string {
@@ -290,7 +290,7 @@ func (*ErrInvalidBucketProvider) Is(target error) bool {
 // ErrBucketIsBusy
 
 func NewErrBckIsBusy(bck *Bck) *ErrBucketIsBusy {
-	return &ErrBucketIsBusy{bck: bck}
+	return &ErrBucketIsBusy{bck: *bck}
 }
 
 func (e *ErrBucketIsBusy) Error() string {

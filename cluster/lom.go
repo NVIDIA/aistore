@@ -415,30 +415,30 @@ func (lom *LOM) ReCache(store bool) {
 }
 
 func (lom *LOM) Uncache(delDirty bool) {
+	if delDirty {
+		lcache := lom.lcache()
+		if md, ok := lcache.LoadAndDelete(lom.md.uname); ok {
+			lmd := md.(*lmeta)
+			lom.md.cpAtime(lmd)
+		}
+		return
+	}
+
 	lcache, lmd := lom.fromCache()
 	if lmd == nil {
 		return
 	}
-	if delDirty || !lmd.isDirty() {
+	if !lmd.isDirty() {
 		lom.md.cpAtime(lmd)
 		lcache.Delete(lom.md.uname)
 	}
 }
 
-func (lom *LOM) CacheIdx() int { return fs.LcacheIdx(lom.mpathDigest) }
+func (lom *LOM) CacheIdx() int     { return fs.LcacheIdx(lom.mpathDigest) }
+func (lom *LOM) lcache() *sync.Map { return lom.mpathInfo.LomCache(lom.CacheIdx()) }
 
 func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
-	mi := lom.mpathInfo
-	if !lom.IsHRW() {
-		hmi, digest, err := HrwMpath(lom.md.uname)
-		if err != nil {
-			return
-		}
-		// TODO -- FIXME: digest == lom.mpathDigest
-		_ = digest
-		mi = hmi
-	}
-	lcache = mi.LomCache(lom.CacheIdx())
+	lcache = lom.lcache()
 	if md, ok := lcache.Load(lom.md.uname); ok {
 		lmd = md.(*lmeta)
 	}

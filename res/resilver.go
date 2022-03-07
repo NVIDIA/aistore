@@ -279,6 +279,9 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 	}
 redo:
 	if isHrw {
+		// cannot have it associated with a non-hrw mp; TODO: !lom.WritePolicy().IsImmediate()
+		lom.Uncache(true)
+
 		hlom, errHrw = jg.fixHrw(lom, mi, buf)
 		if errHrw != nil {
 			if !os.IsNotExist(errHrw) && !strings.Contains(errHrw.Error(), "does not exist") {
@@ -292,7 +295,7 @@ redo:
 			}
 			return
 		}
-		// can swap on the fly; NOTE -- TODO: better
+		// can swap on the fly; TODO: better
 		lom.Unlock(true)
 		lom = hlom
 		copied = true
@@ -354,9 +357,8 @@ func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.MountpathInfo, buf []byte) (hl
 	}
 	debug.Assert(hlom.MpathInfo().Path == mi.Path)
 
-	// uncache and reload
-	hlom.Uncache(false /*delDirty*/)
-	err = hlom.Load(false /*cache it*/, true /*locked*/)
+	// reload; cache iff write-policy != immediate
+	err = hlom.Load(!hlom.WritePolicy().IsImmediate() /*cache it*/, true /*locked*/)
 	if err != nil {
 		cluster.FreeLOM(hlom)
 	}
