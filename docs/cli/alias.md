@@ -9,7 +9,7 @@ redirect_from:
 
 # CLI Reference for Aliases
 
-AIS CLI supports user-defined aliases, similar to the Unix `alias` command.
+AIS CLI supports user-defined aliases, similar to the Unix `alias` command. Defining your own alias for an existing command can make the AIS CLI more intuitive and efficient to use. *Autocomplete options also hold for the alias you create!*
 
 ## Table of Contents
 
@@ -17,12 +17,12 @@ AIS CLI supports user-defined aliases, similar to the Unix `alias` command.
 
 `ais alias set ALIAS AIS_COMMAND`
 
-Create an alias "`ALIAS`" for `AIS_COMMAND`.
+Create an alias "`my-new-alias`" for existing `AIS_COMMAND`.
 
-Note: ALIAS is always a single word, or possibly multiple words connected with - (hyphen) or _ (underscore). The rest of arguments is the full command.
-The command can be put inside quotes for readability.
+Note: ALIAS must be a single word, or multiple words connected with - (hyphen) or _ (underscore). The arguments following ALIAS constitute the full `ais` command.
+The `ais` command can be put inside quotes for readability.
 
-For example, `ais alias set show-clu show cluster` and `ais alias set show-clu "show cluster"` creates the same alias.
+For example, `ais alias set show-clu show cluster` and `ais alias set show-clu "show cluster"` create the same alias for `show cluster`.
 
 ### Examples
 
@@ -87,7 +87,7 @@ put     object put
 `ais alias show` or `ais alias`
 
 List all created aliases.
-Similar to how the `alias` command works, `ais alias` lists all aliases when no arguments are provided.
+`ais alias` with no arguments lists all previously added aliases -- the same behavior you expect from Unix shell `alias`. 
 
 Note that aliases are also shown in the app-level help message (`ais -h`).
 
@@ -184,7 +184,6 @@ put     object put
 As with other CLI configurations, aliases are stored in the [CLI config file](/docs/cli.md#config).
 
 All aliases are stored under `"aliases"` as a map of strings (`ALIAS` to `AIS_COMMAND`).
-If an incorrect alias is manually added to the config file, it will be silently ignored.
 
 ```json
 // cat ~/.config/ais/config.json
@@ -208,3 +207,11 @@ If an incorrect alias is manually added to the config file, it will be silently 
   }
 }
 ```
+Users can manually add aliases to the config file, but all commands must follow the rules for [creating an alias](#create-an-alias).
+E.g., aliases: 
+
+```json
+   "show clu": "show cluster",
+   "show-clu": "show kluster",
+```
+are ignored because the name of the first one is not a single (or hyphenated ) word, while the AIS command of the second one does not exist.  
