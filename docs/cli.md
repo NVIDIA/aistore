@@ -21,16 +21,20 @@ redirect_from:
 - [Default flag and argument values via environment variables](#default-flag-and-argument-values-via-environment-variables)
 
 
-AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle.
+AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle. 
 In addition, CLI provides dataset management commands, commands to read and write data, and more.
 
-**TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list CLI resources with numerous examples and usage guides that we constantly keep updating.
+You should be able to start by running ais <TAB-TAB>, selecting one of the available (completion) options, and repeating until the command is ready to be entered.
+
+**TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list of CLI resources with numerous examples and usage guides that we constantly keep updating.
+
+**TIP**: For more hands-on learners who want to jump right in after skimming the docs, the [`ais search`](/docs/cli/search.md) command may be especially handy. Search will list all possible variations of a command you are looking for, by exact match, synonym, or even Regex! 
 
 {% include youtubePlayer.html id="VPIhQm2sMD8" %}
 
 ## Getting Started
 
-Run `make cli` in AIStore repo root directory to install AIS CLI binary in your `$GOPATH/bin` directory.
+Run `make cli` in AIStore repo root directory to install the AIS CLI binary in your `$GOPATH/bin` directory.
 You can also install [shell autocompletions](#ais-cli-shell-autocomplete) for AIS CLI with `make cli-autocompletions`.
 
 > The rest of the README assumes that user's `PATH` environment variable contains `$GOPATH/bin` directory.
