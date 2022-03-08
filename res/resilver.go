@@ -240,10 +240,8 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 	}
 	// cleanup
 	defer func() {
+		lom = orig
 		lom.Unlock(true)
-		if hlom != nil {
-			cluster.FreeLOM(hlom)
-		}
 		if copied && errHrw == nil {
 			jg.xres.ObjsAdd(1, size)
 		}
@@ -295,11 +293,8 @@ redo:
 			}
 			return
 		}
-		// can swap on the fly; TODO: better
-		lom.Unlock(true)
 		lom = hlom
 		copied = true
-		lom.Lock(true)
 	}
 
 	// 3. fix copies
@@ -318,7 +313,6 @@ redo:
 				return
 			}
 			copied = false
-			cluster.FreeLOM(hlom)
 			lom, hlom = orig, nil
 			time.Sleep(cmn.Timeout.CplaneOperation() / 2)
 			goto redo
@@ -350,18 +344,14 @@ func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.MountpathInfo, buf []byte) (hl
 		return
 	}
 	hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-	hlom = cluster.AllocLOM("")
+	hlom = &cluster.LOM{}
 	if err = hlom.InitFQN(hrwFQN, lom.Bucket()); err != nil {
-		cluster.FreeLOM(hlom)
 		return
 	}
 	debug.Assert(hlom.MpathInfo().Path == mi.Path)
 
 	// reload; cache iff write-policy != immediate
 	err = hlom.Load(!hlom.WritePolicy().IsImmediate() /*cache it*/, true /*locked*/)
-	if err != nil {
-		cluster.FreeLOM(hlom)
-	}
 	return
 }
 

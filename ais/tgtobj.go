@@ -1116,7 +1116,8 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 	}
 
 	// local
-	dst := &cluster.LOM{ObjName: objNameTo}
+	dst := cluster.AllocLOM(objNameTo)
+	defer cluster.FreeLOM(dst)
 	if err = dst.InitBck(coi.BckTo.Bucket()); err != nil {
 		return
 	}
@@ -1152,7 +1153,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 		}
 	}
 	err = err2
-	// TODO: FreeLOM dst2
+	cluster.FreeLOM(dst2)
 
 	// xaction stats: inc locally processed (and see data mover for in and out objs)
 	if coi.Xact != nil {
@@ -1205,7 +1206,8 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		// discard the reader and be done
 		return coi.dryRunCopyReader(lom)
 	}
-	dst := &cluster.LOM{ObjName: objNameTo}
+	dst := cluster.AllocLOM(objNameTo)
+	defer cluster.FreeLOM(dst)
 	if err = dst.InitBck(coi.BckTo.Bucket()); err != nil {
 		return
 	}

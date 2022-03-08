@@ -79,14 +79,14 @@ type (
 	// progressState abstracts all information meta information about progress of
 	// the job.
 	progressState struct {
-		inProgress atomic.Bool
-		aborted    atomic.Bool
-		cleaned    uint8      // current state of the cleanliness - no cleanup, initial cleanup, final cleanup
-		cleanWait  *sync.Cond // waiting room for `cleanup` and `finalCleanup` method so then can run in correct order
-		wg         *sync.WaitGroup
+		cleanWait *sync.Cond // waiting room for `cleanup` and `finalCleanup` method so then can run in correct order
+		wg        *sync.WaitGroup
 		// doneCh is closed when the job is aborted so that goroutines know when
 		// they need to stop.
-		doneCh chan struct{}
+		doneCh     chan struct{}
+		inProgress atomic.Bool
+		aborted    atomic.Bool
+		cleaned    uint8 // current state of the cleanliness - no cleanup, initial cleanup, final cleanup
 	}
 
 	// Manager maintains all the state required for a single run of a distributed archive file shuffle.
@@ -304,6 +304,7 @@ func (m *Manager) cleanupStreams() (err error) {
 //
 // NOTE: If cleanup is invoked during the run it is treated as abort.
 func (m *Manager) cleanup() {
+	glog.Infof("[dsort] %s started cleanup", m.ManagerUUID)
 	m.lock()
 	if m.state.cleaned != noCleanedState {
 		m.unlock()
@@ -311,7 +312,6 @@ func (m *Manager) cleanup() {
 	}
 
 	m.dsorter.cleanup()
-	glog.Infof("[dsort] %s has started a cleanup", m.ManagerUUID)
 	now := time.Now()
 
 	defer func() {
@@ -321,7 +321,7 @@ func (m *Manager) cleanup() {
 		glog.Infof("[dsort] %s finished cleanup in %v", m.ManagerUUID, time.Since(now))
 	}()
 
-	cos.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
+	debug.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
 
 	m.extractCreator = nil
 	m.client = nil
@@ -350,13 +350,14 @@ func (m *Manager) finalCleanup() {
 		if m.state.cleaned == finallyCleanedState {
 			m.unlock()
 			return // Do not clean if already cleaned.
-		} else if m.state.cleaned == noCleanedState {
+		}
+		if m.state.cleaned == noCleanedState {
 			// Wait for wake up from `cleanup` or other `finalCleanup` method.
 			m.state.cleanWait.Wait()
 		}
 	}
 
-	glog.Infof("[dsort] %s has started a final cleanup", m.ManagerUUID)
+	glog.Infof("[dsort] %s started final cleanup", m.ManagerUUID)
 	now := time.Now()
 
 	if err := m.cleanupStreams(); err != nil {
