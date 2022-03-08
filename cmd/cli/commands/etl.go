@@ -53,6 +53,7 @@ var (
 			listFlag,
 			continueOnErrorFlag,
 		},
+		subcmdStart: {},
 	}
 	showCmdETL = cli.Command{
 		Name:   commandShow,
@@ -74,6 +75,14 @@ var (
 		Action:       etlStopHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        etlSubcmdsFlags[subcmdStop],
+	}
+	startCmdETL = cli.Command{
+		Name:         subcmdStart,
+		Usage:        "start ETL",
+		ArgsUsage:    "ETL_ID",
+		Action:       etlStartHandler,
+		BashComplete: etlIDCompletions,
+		Flags:        etlSubcmdsFlags[subcmdStart],
 	}
 	initCmdETL = cli.Command{
 		Name: subcmdInit,
@@ -122,6 +131,7 @@ var (
 			initCmdETL,
 			showCmdETL,
 			logsCmdETL,
+			startCmdETL,
 			stopCmdETL,
 			objCmdETL,
 			bckCmdETL,
@@ -335,6 +345,21 @@ func etlStopHandler(c *cli.Context) (err error) {
 		fmt.Fprintf(c.App.Writer, "ETL %q stopped successfully\n", id)
 	}
 
+	return nil
+}
+
+func etlStartHandler(c *cli.Context) (err error) {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "ETL_ID")
+	}
+	etlID := c.Args()[0]
+	if err := api.ETLStart(defaultAPIParams, etlID); err != nil {
+		if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
+			color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL %q not found", etlID)
+		}
+		return err
+	}
+	fmt.Fprintf(c.App.Writer, "ETL %q started successfully\n", etlID)
 	return nil
 }
 

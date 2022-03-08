@@ -105,6 +105,14 @@ It is possible to pass an additional parameter to specify a particular `TARGET_I
 
 Stop ETL with the specified id.
 
+
+## Start ETL
+
+`ais etl start ETL_ID` or, same, `ais job start etl`
+
+Start ETL with the specified id.
+
+
 ## Transform object on-the-fly with given ETL
 
 `ais etl object ETL_ID BUCKET/OBJECT_NAME OUTPUT`

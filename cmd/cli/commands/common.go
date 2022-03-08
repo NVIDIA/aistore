@@ -76,6 +76,7 @@ const (
 	subcmdList       = commandList
 	subcmdLogs       = "logs"
 	subcmdStop       = "stop"
+	subcmdStart      = "start"
 	subcmdLRU        = apc.ActLRU
 	subcmdMembership = "add-remove-nodes"
 	subcmdShutdown   = "shutdown"
