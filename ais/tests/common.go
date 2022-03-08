@@ -466,9 +466,9 @@ func (m *ioContext) gets(withValidation ...bool) {
 
 	if !m.silent {
 		if m.numGetsEachFile == 1 {
-			tlog.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bck)
+			tlog.Logf("GET %d objects from %s\n", m.num, m.bck)
 		} else {
-			tlog.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bck)
+			tlog.Logf("GET %d objects %d times from %s\n", m.num, m.numGetsEachFile, m.bck)
 		}
 	}
 

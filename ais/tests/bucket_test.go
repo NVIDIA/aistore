@@ -2456,82 +2456,75 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 // Tries to rename and then copy bucket at the same time.
-// TODO: This test should be enabled (not skipped)
 func TestRenameAndCopyBucket(t *testing.T) {
-	t.Skip("fails - necessary checks are not yet implemented")
-
 	var (
-		m = ioContext{
-			t:   t,
-			num: 500,
-		}
 		baseParams = tutils.BaseAPIParams()
-		dstBck1    = cmn.Bck{
-			Name:     testBucketName + "_new1",
-			Provider: apc.ProviderAIS,
-		}
-		dstBck2 = cmn.Bck{
-			Name:     testBucketName + "_new2",
-			Provider: apc.ProviderAIS,
-		}
+		src        = cmn.Bck{Name: testBucketName + "_rc_src", Provider: apc.ProviderAIS}
+		m          = ioContext{t: t, bck: src, num: 500}
+		dst1       = cmn.Bck{Name: testBucketName + "_rc_dst1", Provider: apc.ProviderAIS}
+		dst2       = cmn.Bck{Name: testBucketName + "_rc_dst2", Provider: apc.ProviderAIS}
 	)
-
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
+	tutils.DestroyBucket(t, m.proxyURL, dst1)
 
-	srcBck := m.bck
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, srcBck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, src, nil)
 	defer func() {
-		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
-		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
+		tutils.DestroyBucket(t, m.proxyURL, dst1)
+		tutils.DestroyBucket(t, m.proxyURL, dst2)
 	}()
 
 	m.puts()
 
 	// Rename to first destination
-	tlog.Logf("rename %s => %s\n", srcBck, dstBck1)
-	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck1)
+	tlog.Logf("Rename %s => %s\n", src, dst1)
+	xactID, err := api.RenameBucket(baseParams, src, dst1)
 	tassert.CheckFatal(t, err)
+	tlog.Logf("x-%s[%s] in progress...\n", apc.ActMoveBck, xactID)
 
-	// Try to copy to first destination - rename in progress, both for srcBck and dstBck1
-	tlog.Logf("try copy %s => %s\n", srcBck, dstBck1)
-	_, err = api.CopyBucket(baseParams, srcBck, dstBck1, nil)
-	if err == nil {
-		t.Error("coping bucket that is under renaming did not fail")
-	}
+	// Try to copy src to dst1 - and note that rename src => dst1 in progress
+	tlog.Logf("Copy %s => %s (note: expecting to fail)\n", src, dst1)
+	_, err = api.CopyBucket(baseParams, src, dst1, nil)
+	tassert.Fatalf(t, err != nil, "expected copy %s => %s to fail", src, dst1)
 
-	// Try to copy to second destination - rename in progress for srcBck
-	tlog.Logf("try copy %s => %s\n", srcBck, dstBck2)
-	_, err = api.CopyBucket(baseParams, srcBck, dstBck2, nil)
-	if err == nil {
-		t.Error("coping bucket that is under renaming did not fail")
-	}
+	// Try to copy bucket that is being renamed
+	tlog.Logf("Copy %s => %s (note: expecting to fail)\n", src, dst2)
+	_, err = api.CopyBucket(baseParams, src, dst2, nil)
+	tassert.Fatalf(t, err != nil, "expected copy %s => %s to fail", src, dst2)
 
-	// Try to copy from dstBck1 to dstBck1 - rename in progress for dstBck1
-	tlog.Logf("try copy %s => %s\n", dstBck1, dstBck2)
-	_, err = api.CopyBucket(baseParams, srcBck, dstBck1, nil)
-	if err == nil {
-		t.Error("coping bucket that is under renaming did not fail")
-	}
+	// Try to copy from dst1 to dst1
+	tlog.Logf("Copy %s => %s (note: expecting to fail)\n", dst1, dst2)
+	_, err = api.CopyBucket(baseParams, src, dst1, nil)
+	tassert.Fatalf(t, err != nil, "expected copy %s => %s to fail (as %s is the renaming destination)", dst1, dst2, dst1)
 
-	// Wait for rename to complete
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: rebalanceTimeout}
+	// Wait for rename to finish
+	tlog.Logf("Waiting for x-%s[%s] to finish\n", apc.ActMoveBck, xactID)
+	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck))
+	time.Sleep(time.Second)
+
+	//
+	// more checks
+	//
+	tlog.Logln("Listing and counting")
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS})
 	tassert.CheckFatal(t, err)
 
-	if bcks.Contains(cmn.QueryBcks(srcBck)) {
-		t.Error("source bucket found in buckets list")
-	}
-	if !bcks.Contains(cmn.QueryBcks(dstBck1)) {
-		t.Error("destination bucket not found in buckets list")
-	}
-	if bcks.Contains(cmn.QueryBcks(dstBck2)) {
-		t.Error("second (failed) destination bucket found in buckets list")
-	}
+	tassert.Fatalf(t, !bcks.Contains(cmn.QueryBcks(src)), "expected %s to not exist (be renamed from), got %v", src, bcks)
+	tassert.Fatalf(t, bcks.Contains(cmn.QueryBcks(dst1)), "expected %s to exist (be renamed to), got %v", dst1, bcks)
+	tassert.Fatalf(t, !bcks.Contains(cmn.QueryBcks(dst2)), "expected %s to not exist (got %v)", dst2, bcks)
+
+	list, err := api.ListObjects(baseParams, dst1, nil, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(list.Entries) == m.num, "expected %d to be copied to %s, got %d", m.num, dst1, len(list.Entries))
+
+	m.bck = dst1
+	m.gets()
+	m.ensureNoGetErrors()
+	m.bck = src
 }
 
 // Tries to copy and then rename bucket at the same time - similar to
