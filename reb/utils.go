@@ -37,13 +37,17 @@ func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
 func (reb *Reb) xctn() *xs.Rebalance        { return (*xs.Rebalance)(reb.xreb.Load()) }
 func (reb *Reb) setXact(xctn *xs.Rebalance) { reb.xreb.Store(unsafe.Pointer(xctn)) }
 
-func (reb *Reb) logHdr(rebID int64, smap *cluster.Smap) string {
-	stage := stages[reb.stages.stage.Load()]
+func (reb *Reb) logHdr(rebID int64, smap *cluster.Smap, initializing ...bool) string {
 	smapv := "v<???>"
 	if smap != nil {
 		smapv = "v" + strconv.FormatInt(smap.Version, 10)
 	}
-	return fmt.Sprintf("%s[g%d,%s,%s]", reb.t, rebID, smapv, stage)
+	s := fmt.Sprintf("%s[g%d,%s", reb.t, rebID, smapv)
+	if len(initializing) > 0 {
+		return s + "]"
+	}
+	stage := stages[reb.stages.stage.Load()]
+	return fmt.Sprintf("%s,%s]", s, stage)
 }
 
 func (reb *Reb) warnID(remoteID int64, tid string) (s string) {

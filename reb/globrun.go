@@ -63,6 +63,8 @@ var stages = map[uint32]string{
 	rebStageAbort:      "<abort>",
 }
 
+const fmtpend = "%s: newer rebalance[g%d] pending - not running"
+
 type (
 	Reb struct {
 		mu        sync.RWMutex
@@ -83,6 +85,7 @@ type (
 		// atomic state
 		xreb    atomic.Pointer // unsafe(*xact.Rebalance)
 		rebID   atomic.Int64
+		nxtID   atomic.Int64
 		inQueue atomic.Int64
 		onAir   atomic.Int64
 		laterx  atomic.Bool
@@ -163,13 +166,25 @@ func (reb *Reb) _regRecv() {
 //    `stage < rebStageWaitAck`. Since all EC stages are between
 //    `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
 func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact) {
-	logHdr := reb.logHdr(id, smap)
-	glog.Infof("%s: initializing...", logHdr)
-	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: reb.t.Bowner().Get().IsECUsed()}
-	if !reb.rebSerialize(rargs) {
+	if reb.nxtID.Load() >= id {
 		return
 	}
-	if !reb.rebInitRenew(rargs, notif) {
+	reb.mu.Lock()
+	if reb.nxtID.Load() >= id {
+		reb.mu.Unlock()
+		return
+	}
+	debug.Assert(id > reb.rebID.Load())
+	reb.nxtID.Store(id)
+	reb.mu.Unlock()
+
+	logHdr := reb.logHdr(id, smap, true /*initializing*/)
+	glog.Infof("%s: initializing...", logHdr)
+	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: reb.t.Bowner().Get().IsECUsed()}
+	if !reb.rebSerialize(rargs, logHdr) {
+		return
+	}
+	if !reb.rebInitRenew(rargs, notif, logHdr) {
 		return
 	}
 	// single-active-target cluster (singleATC)
@@ -235,7 +250,7 @@ func (reb *Reb) run(rargs *rebArgs) error {
 	return group.Wait()
 }
 
-func (reb *Reb) rebSerialize(rargs *rebArgs) bool {
+func (reb *Reb) rebSerialize(rargs *rebArgs, logHdr string) bool {
 	// 1. check whether other targets are up and running
 	if errCnt := reb.bcast(rargs, reb.pingTarget); errCnt > 0 {
 		return false
@@ -245,7 +260,7 @@ func (reb *Reb) rebSerialize(rargs *rebArgs) bool {
 	}
 	// 2. serialize global rebalance (one at a time post this point)
 	//    start new xaction unless the one for the current version is already in progress
-	if newerRMD, alreadyRunning := reb._serialize(rargs); newerRMD || alreadyRunning {
+	if newerRMD, alreadyRunning := reb._serialize(rargs, logHdr); newerRMD || alreadyRunning {
 		return false
 	}
 	if rargs.smap.Version == 0 {
@@ -255,7 +270,7 @@ func (reb *Reb) rebSerialize(rargs *rebArgs) bool {
 	return true
 }
 
-func (reb *Reb) _serialize(rargs *rebArgs) (newerRMD, alreadyRunning bool) {
+func (reb *Reb) _serialize(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunning bool) {
 	var (
 		total    time.Duration
 		sleep    = rargs.config.Timeout.CplaneOperation.D()
@@ -270,9 +285,8 @@ func (reb *Reb) _serialize(rargs *rebArgs) (newerRMD, alreadyRunning bool) {
 		default:
 			runtime.Gosched()
 		}
-		logHdr := reb.logHdr(rargs.id, rargs.smap)
-		if reb.rebID.Load() > rargs.id {
-			glog.Warningf("%s: seeing newer rebalance[g%d] - not running", logHdr, reb.rebID.Load())
+		if id := reb.nxtID.Load(); id > rargs.id {
+			glog.Warningf(fmtpend, logHdr, id)
 			newerRMD = true
 			if acquired {
 				reb.semaCh.Release()
@@ -311,7 +325,7 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 		var (
 			rebID   = reb.RebID()
 			rsmap   = reb.smap.Load()
-			rlogHdr = reb.logHdr(rebID, (*cluster.Smap)(rsmap))
+			rlogHdr = reb.logHdr(rebID, (*cluster.Smap)(rsmap), true)
 			xreb    = reb.xctn()
 			s       string
 		)
@@ -342,8 +356,11 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 	return
 }
 
-func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xact.NotifXact) bool {
-	reb.stages.stage.Store(rebStageInit)
+func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string) bool {
+	if id := reb.nxtID.Load(); id > rargs.id {
+		glog.Warningf(fmtpend, logHdr, id)
+		return false
+	}
 	rns := xreg.RenewRebalance(rargs.id)
 	debug.AssertNoErr(rns.Err)
 	if rns.IsRunning() {
@@ -355,6 +372,12 @@ func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xact.NotifXact) bool {
 	xctn.AddNotif(notif)
 
 	reb.mu.Lock()
+	if id := reb.nxtID.Load(); id > rargs.id {
+		reb.mu.Unlock()
+		glog.Warningf(fmtpend, logHdr, id)
+		return false
+	}
+	reb.stages.stage.Store(rebStageInit)
 	xreb := xctn.(*xs.Rebalance)
 	reb.setXact(xreb)
 
