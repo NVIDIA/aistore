@@ -20,7 +20,7 @@ variables:
     value: "us-east-2"
     description: "Region of AWS bucket."
   CLOUD_BCKS:
-    value: "ais://ci-test gs://ais-ci-kube aws://ais-blossom"
+    value: "aws://ais-blossom gs://ais-ci-kube"
     description: "Set of buckets used when running cloud tests."
 
 
@@ -323,7 +323,7 @@ test:long:k8s:all:
     - ais-k8s
   variables:
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
-  timeout: 4h
+  timeout: 5h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'

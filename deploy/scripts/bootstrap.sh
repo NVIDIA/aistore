@@ -12,7 +12,7 @@ run_tests() {
     tests_dir="${AISTORE_DIR}/${TESTS_DIR}"
   fi
 
-  timeout="-timeout=2h"
+  timeout="-timeout=3h"
   if [[ -n "${SHORT}" ]]; then
     short="-short"
     shuffle="-shuffle=on"
