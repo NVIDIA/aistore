@@ -7,6 +7,7 @@ package integration
 import (
 	"fmt"
 	iofs "io/fs"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +26,6 @@ import (
 
 // TODO:
 // - run under `runProviderTests`
-// - add overwrite-dst checks
 // - use loopback dev-s
 // - use nfs
 
@@ -40,10 +40,11 @@ type prmTests struct {
 
 func TestPromote(t *testing.T) {
 	tests := []prmTests{
-		{num: 10000, singleTarget: false, recurs: false, deleteSrc: true, overwriteDst: false, notFshare: false},
+		// short and long
+		{num: 10000, singleTarget: false, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
 		{num: 10000, singleTarget: false, recurs: true, deleteSrc: true, overwriteDst: false, notFshare: false},
 		{num: 10, singleTarget: false, recurs: false, deleteSrc: true, overwriteDst: true, notFshare: false},
-
+		// long
 		{num: 10000, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
 		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true, notFshare: false},
 		{num: 10, singleTarget: true, recurs: false, deleteSrc: false, overwriteDst: false, notFshare: false},
@@ -142,41 +143,12 @@ func (test *prmTests) do(t *testing.T) {
 		args.DaemonID = target.ID()
 	}
 
-	// do
+	// (I) do
 	xactID, err := api.Promote(&args)
 	tassert.CheckFatal(t, err)
-	time.Sleep(2 * time.Second)
 
-	xargs := api.XactReqArgs{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
-	xname := fmt.Sprintf("%q", apc.ActPromote)
-	if xactID != "" {
-		xargs.ID = xactID
-		xname = fmt.Sprintf("x-%s[%s]", apc.ActPromote, xactID)
-		tassert.Errorf(t, cos.IsValidUUID(xactID), "expecting valid x-UUID %q", xactID)
-	}
-
-	// "wait" cases 1 through 3
-	if xactID != "" && !test.singleTarget { // 1. cluster-wide xaction
-		tlog.Logf("Waiting for global %s(%s=>%s)\n", xname, tempdir, m.bck)
-		notifStatus, err := api.WaitForXactionIC(baseParams, xargs)
-		tassert.CheckFatal(t, err)
-		if notifStatus != nil && (notifStatus.AbortedX || notifStatus.ErrMsg != "") {
-			tlog.Logf("Warning: notif-status: %+v\n", notifStatus)
-		}
-	} else if xactID != "" && test.singleTarget { // 2. single-target xaction
-		xargs.DaemonID = target.ID()
-		tlog.Logf("Waiting for %s(%s=>%s) at %s\n", xname, tempdir, m.bck, target.StringEx())
-		err := api.WaitForXactionNode(baseParams, xargs, xactSnapNotRunning)
-		tassert.CheckFatal(t, err)
-	} else { // 3. synchronous execution
-		tlog.Logf("Promoting without xaction (%s=>%s)\n", tempdir, m.bck)
-	}
-
-	// collect stats
-	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
-	tassert.CheckFatal(t, err)
-	locObjs, outObjs, inObjs := snaps.ObjCounts()
-	tlog.Logf("%s: (loc, out, in) = (%d, %d, %d)\n", xname, locObjs, outObjs, inObjs)
+	// wait and then collect snaps
+	locObjs, outObjs, inObjs := test.wait(t, xactID, tempdir, target, &m)
 
 	// list
 	tlog.Logln("Listing and counting...")
@@ -184,7 +156,7 @@ func (test *prmTests) do(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	//
-	// run some checks
+	// run checks
 	//
 	cnt, cntsub := countFiles(t, tempdir)
 	if !test.deleteSrc {
@@ -213,18 +185,102 @@ func (test *prmTests) do(t *testing.T) {
 				cnt, cntsub, test.num)
 		}
 	}
-	// vs stats
-	if xactID == "" {
-		return // TODO: add checks
+	// vs xaction stats
+	if xactID != "" {
+		if test.singleTarget {
+			tassert.Errorf(t, locObjs+outObjs == int64(expNum),
+				"single-target promote: expected sum(loc+out)==%d, got (%d + %d)=%d",
+				expNum, locObjs, outObjs, locObjs+outObjs)
+		} else if !test.notFshare {
+			tassert.Errorf(t, int(locObjs) == expNum && int(inObjs) == 0 && int(outObjs) == 0,
+				"file share: expected each target to handle the entire content locally, got (loc, out, in) = (%d, %d, %d)",
+				locObjs, outObjs, inObjs)
+		}
 	}
-	if test.singleTarget {
-		tassert.Errorf(t, locObjs+outObjs == int64(expNum), "single-target promote: expected sum(loc+out)==%d, got (%d + %d)=%d",
-			expNum, locObjs, outObjs, locObjs+outObjs)
-	} else if !test.notFshare {
-		tassert.Errorf(t, int(locObjs) == expNum && int(inObjs) == 0 && int(outObjs) == 0,
-			"file share: expected each target to handle the entire content locally, got (loc, out, in) = (%d, %d, %d)",
-			locObjs, outObjs, inObjs)
+
+	// (II) do more when _not_ overwriting destination, namely:
+	// delete a few promoted objects, and then immediately
+	// promote them again from the original (non-deleted) source
+	if test.overwriteDst || test.deleteSrc {
+		return
 	}
+	numDel := cos.Max(len(list.Entries)/100, 2)
+	idx := rand.Intn(len(list.Entries))
+	if idx+numDel >= len(list.Entries) {
+		idx = cos.Max(0, len(list.Entries)-numDel)
+		tassert.Fatalf(t, idx+numDel < len(list.Entries), "unexpected test configuration (???)")
+	}
+	tlog.Logf("Deleting %d random objects\n", numDel)
+	for i := 0; i < numDel; i++ {
+		name := list.Entries[idx+i].Name
+		err := api.DeleteObject(baseParams, m.bck, name)
+		tassert.CheckFatal(t, err)
+	}
+
+	// do
+	xactID, err = api.Promote(&args)
+	tassert.CheckFatal(t, err)
+
+	locObjs, outObjs, inObjs = test.wait(t, xactID, tempdir, target, &m)
+
+	// list
+	tlog.Logln("Listing and counting the 2nd time...")
+	list, err = api.ListObjects(baseParams, m.bck, nil, 0)
+	tassert.CheckFatal(t, err)
+
+	// num promoted
+	tassert.Errorf(t, len(list.Entries) == expNum, "expected to%s promote %d, got %d", s, test.num*2, len(list.Entries))
+
+	// xaction stats versus `numDel` - but note:
+	// other than the selected few objects that were deleted prior to promoting the 2nd time,
+	// all the rest already exists and is not expected to "show up" in the stats
+	if xactID != "" {
+		if test.singleTarget {
+			tassert.Errorf(t, locObjs+outObjs == int64(numDel),
+				"single-target promote: expected sum(loc+out)==%d, got (%d + %d)=%d",
+				expNum, locObjs, outObjs, locObjs+outObjs)
+		} else if !test.notFshare {
+			tassert.Errorf(t, int(locObjs) == numDel && int(inObjs) == 0 && int(outObjs) == 0,
+				"file share: expected each target to handle the entire content locally, got (loc, out, in) = (%d, %d, %d)",
+				locObjs, outObjs, inObjs)
+		}
+	}
+}
+
+// wait for an xaction (if there's one) and then query all targets for stats
+func (test *prmTests) wait(t *testing.T, xactID, tempdir string, target *cluster.Snode, m *ioContext) (locObjs, outObjs, inObjs int64) {
+	time.Sleep(2 * time.Second)
+	xargs := api.XactReqArgs{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
+	xname := fmt.Sprintf("%q", apc.ActPromote)
+	if xactID != "" {
+		xargs.ID = xactID
+		xname = fmt.Sprintf("x-%s[%s]", apc.ActPromote, xactID)
+		tassert.Errorf(t, cos.IsValidUUID(xactID), "expecting valid x-UUID %q", xactID)
+	}
+
+	// wait "cases" 1. through 3.
+	if xactID != "" && !test.singleTarget { // 1. cluster-wide xaction
+		tlog.Logf("Waiting for global %s(%s=>%s)\n", xname, tempdir, m.bck)
+		notifStatus, err := api.WaitForXactionIC(baseParams, xargs)
+		tassert.CheckFatal(t, err)
+		if notifStatus != nil && (notifStatus.AbortedX || notifStatus.ErrMsg != "") {
+			tlog.Logf("Warning: notif-status: %+v\n", notifStatus)
+		}
+	} else if xactID != "" && test.singleTarget { // 2. single-target xaction
+		xargs.DaemonID = target.ID()
+		tlog.Logf("Waiting for %s(%s=>%s) at %s\n", xname, tempdir, m.bck, target.StringEx())
+		err := api.WaitForXactionNode(baseParams, xargs, xactSnapNotRunning)
+		tassert.CheckFatal(t, err)
+	} else { // 3. synchronous execution
+		tlog.Logf("Promoting without xaction (%s=>%s)\n", tempdir, m.bck)
+	}
+
+	// collect stats
+	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
+	tassert.CheckFatal(t, err)
+	locObjs, outObjs, inObjs = snaps.ObjCounts()
+	tlog.Logf("%s: (loc, out, in) = (%d, %d, %d)\n", xname, locObjs, outObjs, inObjs)
+	return
 }
 
 func countFiles(t *testing.T, dir string) (n, nsubdir int) {
