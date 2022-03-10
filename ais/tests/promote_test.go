@@ -11,23 +11,22 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
-// TODO:
-// - run under `runProviderTests`
-// - use loopback dev-s
-// - use nfs
+// TODO: stress notFshare
+
+const subdir = "subdir" // to promote recursively
 
 type prmTests struct {
 	num          int
@@ -38,6 +37,9 @@ type prmTests struct {
 	notFshare    bool
 }
 
+//
+// flow: TestPromote (tests) => runProvider x (provider tests) => test.do(bck)
+//
 func TestPromote(t *testing.T) {
 	tests := []prmTests{
 		// short and long
@@ -53,12 +55,13 @@ func TestPromote(t *testing.T) {
 		{num: 10000, singleTarget: true, recurs: true, deleteSrc: false, overwriteDst: true, notFshare: true},
 		{num: 10, singleTarget: false, recurs: true, deleteSrc: false, overwriteDst: false, notFshare: true},
 	}
+	// see also "filtering" below
 	if testing.Short() {
 		tests = tests[0:3]
 	}
 	for _, test := range tests {
 		var name string
-		if test.num < 100 {
+		if test.num < 32 {
 			name += "/few-files"
 		}
 		if test.singleTarget {
@@ -85,7 +88,7 @@ func TestPromote(t *testing.T) {
 			name += "/collaborate-on-fshare"
 		}
 		name = name[1:]
-		t.Run(name, test.do)
+		t.Run(name, func(t *testing.T) { runProviderTests(t, test.do) })
 	}
 }
 
@@ -96,22 +99,35 @@ for i in {1..5}; do echo $b --- $b; done > %s/%s/$f.test.test;
 done`
 
 func (test *prmTests) generate(t *testing.T, from, to int, tempdir, subdir string) {
-	tlog.Logf("Generating %d files...\n", test.num*2)
+	tlog.Logf("Generating %d (%d + %d) files...\n", test.num*2, test.num, test.num)
 	cmd := fmt.Sprintf(genfiles, from, to, tempdir, tempdir, subdir)
 	_, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 	tassert.CheckFatal(t, err)
 }
 
-func (test *prmTests) do(t *testing.T) {
-	const subdir = "subdir" // to promote recursively
+func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
+	if bck.IsCloud() {
+		// NOTE: filtering out some test permutations to save time
+		if testing.Short() {
+			t.Skipf("skipping %s for cloud bucket in short mode", t.Name())
+		}
+		if strings.Contains(t.Name(), "few-files") ||
+			strings.Contains(t.Name(), "single-target") ||
+			strings.Contains(t.Name(), "recurs") {
+			t.Skipf("skipping %s for Cloud bucket", t.Name())
+		}
+
+		// also, reducing the number of files to promote
+		test.num = cos.Min(test.num, 50)
+	}
+
 	var (
-		m          = ioContext{t: t, bck: cmn.Bck{Provider: apc.ProviderAIS, Name: cos.RandString(10)}}
+		m          = ioContext{t: t, bck: bck.Clone()}
 		from       = 10000
 		to         = from + test.num - 1
 		baseParams = tutils.BaseAPIParams()
 	)
-	m.initWithCleanupAndSaveState()
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	m.saveCluState(m.proxyURL)
 
 	tempdir, err := os.MkdirTemp("", "prm")
 	tassert.CheckFatal(t, err)
@@ -119,8 +135,14 @@ func (test *prmTests) do(t *testing.T) {
 	err = cos.CreateDir(subdirFQN)
 	tassert.CheckFatal(t, err)
 
+	if m.bck.IsRemote() {
+		m.del()
+	}
 	t.Cleanup(func() {
 		_ = os.RemoveAll(tempdir)
+		if m.bck.IsRemote() {
+			m.del()
+		}
 	})
 	test.generate(t, from, to, tempdir, subdir)
 
@@ -147,7 +169,7 @@ func (test *prmTests) do(t *testing.T) {
 	xactID, err := api.Promote(&args)
 	tassert.CheckFatal(t, err)
 
-	// wait and then collect snaps
+	// wait for the operation to finish and collect stats
 	locObjs, outObjs, inObjs := test.wait(t, xactID, tempdir, target, &m)
 
 	// list
@@ -164,14 +186,14 @@ func (test *prmTests) do(t *testing.T) {
 			"delete-src == false: expected cnt (%d) == cntsub (%d) == num (%d) gererated",
 			cnt, cntsub, test.num)
 	}
+
+	// num promoted
 	expNum, s := test.num, ""
 	if test.recurs {
 		expNum = test.num * 2
 		s = " recursively"
 	}
-
-	// num promoted
-	tassert.Errorf(t, len(list.Entries) == expNum, "expected to%s promote %d, got %d", s, test.num*2, len(list.Entries))
+	tassert.Fatalf(t, len(list.Entries) == expNum, "expected to%s promote %d files, got %d", s, expNum, len(list.Entries))
 
 	// delete source
 	if test.deleteSrc {
@@ -204,11 +226,16 @@ func (test *prmTests) do(t *testing.T) {
 	if test.overwriteDst || test.deleteSrc {
 		return
 	}
-	numDel := cos.Max(len(list.Entries)/100, 2)
-	idx := rand.Intn(len(list.Entries))
-	if idx+numDel >= len(list.Entries) {
-		idx = cos.Max(0, len(list.Entries)-numDel)
-		tassert.Fatalf(t, idx+numDel < len(list.Entries), "unexpected test configuration (???)")
+	tlog.Logln("Running test case _not_ to overwrite destination...")
+	l := len(list.Entries)
+	numDel := cos.Max(l/100, 2)
+	idx := rand.Intn(l)
+	if idx+numDel >= l {
+		if numDel >= l {
+			idx, numDel = 0, l
+		} else {
+			idx = l - numDel
+		}
 	}
 	tlog.Logf("Deleting %d random objects\n", numDel)
 	for i := 0; i < numDel; i++ {
@@ -249,7 +276,7 @@ func (test *prmTests) do(t *testing.T) {
 
 // wait for an xaction (if there's one) and then query all targets for stats
 func (test *prmTests) wait(t *testing.T, xactID, tempdir string, target *cluster.Snode, m *ioContext) (locObjs, outObjs, inObjs int64) {
-	time.Sleep(2 * time.Second)
+	time.Sleep(4 * time.Second)
 	xargs := api.XactReqArgs{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
 	xname := fmt.Sprintf("%q", apc.ActPromote)
 	if xactID != "" {

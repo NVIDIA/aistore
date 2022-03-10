@@ -795,7 +795,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 func TestMountpathDetachAll(t *testing.T) {
 	if true {
-		t.Skipf("skipping %s", t.Name())
+		t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: add back, here and elsewhere
 	}
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 2})
 
