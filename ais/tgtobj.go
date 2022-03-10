@@ -1153,8 +1153,9 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 		}
 	}
 	err = err2
-	cluster.FreeLOM(dst2)
-
+	if dst2 != nil {
+		cluster.FreeLOM(dst2)
+	}
 	// xaction stats: inc locally processed (and see data mover for in and out objs)
 	if coi.Xact != nil {
 		debug.Assert(coi.DM == nil || coi.Xact == coi.DM.GetXact())

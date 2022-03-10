@@ -275,8 +275,6 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 		dst = nil
 		return
 	}
-	dst.md = lom.md
-	dst.md.copies = nil
 	if dst.isMirror(lom) {
 		// caller must take wlock
 		debug.AssertFunc(func() bool {

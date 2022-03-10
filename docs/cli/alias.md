@@ -9,7 +9,9 @@ redirect_from:
 
 # CLI Reference for Aliases
 
-AIS CLI supports user-defined aliases, similar to the Unix `alias` command. Defining your own alias for an existing command can make the AIS CLI more intuitive and efficient to use. *Autocomplete options also hold for the alias you create!*
+AIS CLI supports user-defined aliases, similar to the Unix `alias` command. Defining your own alias for an existing command can make the AIS CLI more intuitive and efficient to use.
+
+> [Auto-complete](/docs/cli.md) options also hold for the alias you create!
 
 ## Table of Contents
 
@@ -17,7 +19,7 @@ AIS CLI supports user-defined aliases, similar to the Unix `alias` command. Defi
 
 `ais alias set ALIAS AIS_COMMAND`
 
-Create an alias "`my-new-alias`" for existing `AIS_COMMAND`.
+Create an alias "`ALIAS`" for existing `AIS_COMMAND`.
 
 Note: ALIAS must be a single word, or multiple words connected with - (hyphen) or _ (underscore). The arguments following ALIAS constitute the full `ais` command.
 The `ais` command can be put inside quotes for readability.
@@ -117,35 +119,38 @@ sc      show cluster
 
 ```console
 $ ais -h
-NAME:
-   ais - AIS CLI: command-line management utility for AIStore(tm)
+   0.8 (build 30bf97129)
 
-USAGE:
-   ais [global options] command [command options] [arguments...]
-
-VERSION:
-   0.5 (build aff1f037d)
+DESCRIPTION:
+   If [Tab] completion doesn't work:
+   * download https://github.com/NVIDIA/aistore/tree/master/cmd/cli/autocomplete
+   * and run 'install.sh'.
+   For more information, please refer to https://github.com/NVIDIA/aistore/blob/master/cmd/cli/README.md
 
 COMMANDS:
-   bucket     create/destroy buckets, list bucket's content, show existing buckets and their properties
-   object     PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket
-   cluster    monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
-   config     set local/global AIS cluster configurations
-   mountpath  manage mountpaths (disks) in a given storage target
-   etl        execute custom transformations on objects
-   job        query and manage jobs (aka extended actions or xactions)
-   auth       add/remove/show users, manage user roles, manage access to remote clusters
-   show       show information about buckets, jobs, all other managed entities in the cluster and the cluster itself
-   help       show a list of commands; show help for a given command
-   advanced   special commands intended for development and advanced usage
-   alias      create top-level alias to a CLI command
-   search     search ais commands
+   bucket          create/destroy buckets, list bucket's content, show existing buckets and their properties
+   object          put, get, rename, remove, and other operations on objects
+   cluster         monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
+   config          set local/global AIS cluster configurations
+   etl             execute custom transformations on objects
+   job             query and manage jobs (aka extended actions or xactions)
+   auth            add/remove/show users, manage user roles, manage access to remote clusters
+   show            show information about buckets, jobs, all other managed entities in the cluster and the cluster itself
+   help            show a list of commands; show help for a given command
+   advanced        special commands intended for development and advanced usage
+   storage         monitor and manage clustered storage
+   archive         Create archive and append files to archive
+   log             show log
+   rebalance       show rebalance details
+   remote-cluster  show attached AIS clusters
+   alias           manage top-level aliases
+   kubectl         show kubernetes pods and services
+   search          search ais commands
 
    ALIASES:
-     sc   (alias for "show cluster") show cluster details
-     get  (alias for "object get") get the object from the specified bucket
+     get  (alias for "object get") get object from the specified bucket
+     put  (alias for "object put") put object(s) into the specified bucket
      ls   (alias for "bucket ls") list buckets and their objects
-     put  (alias for "object put") put the objects into the specified bucket
 
 GLOBAL OPTIONS:
    --help, -h     show help
@@ -208,10 +213,10 @@ All aliases are stored under `"aliases"` as a map of strings (`ALIAS` to `AIS_CO
 }
 ```
 Users can manually add aliases to the config file, but all commands must follow the rules for [creating an alias](#create-an-alias).
-E.g., aliases: 
+E.g., aliases:
 
 ```json
    "show clu": "show cluster",
    "show-clu": "show kluster",
 ```
-are ignored because the name of the first one is not a single (or hyphenated ) word, while the AIS command of the second one does not exist.  
+are ignored because the name of the first one is not a single (or hyphenated ) word, while the AIS command of the second one does not exist.

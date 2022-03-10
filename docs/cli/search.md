@@ -9,16 +9,14 @@ redirect_from:
 
 # CLI Command Search
 
-AIS CLI is designed for easy use, without needing to spend time reading CLI docs.
+AIS CLI is designed for ease of usage. In most cases, there must be no need to spend time reading CLI docs.
 
-However, while developing, you may find yourself wondering whether the command you are looking for is, for instance, `ais list`, or `ls`, or maybe even `dir`?
+However, when starting to type a command, you may find yourself wondering whether the next keyword you are looking for is, for instance, `ais list`, or `ls`, or maybe `dir`?
 
-Or, you may not know how to use a certain command, like `ais storage mountpath`. 
+In those cases, the `search` command would be exactly the tool to use.
 
-If this is the case, the search command is exactly the tool that helps you search through all supported commands.
-
-You can search via:
-1. keyword,
+You can search all supported commands via:
+1. keyword or part of thereof,
 2. regular expression, or
 3. synonym
 

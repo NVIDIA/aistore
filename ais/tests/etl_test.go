@@ -589,7 +589,7 @@ func TestETLBucketDryRun(t *testing.T) {
 
 	tlog.Logf("Start offline ETL %q\n", uuid)
 	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo,
-		&apc.TCBMsg{ID: uuid, CopyBckMsg: apc.CopyBckMsg{DryRun: true}})
+		&apc.TCBMsg{ID: uuid, CopyBckMsg: apc.CopyBckMsg{DryRun: true, Force: true}})
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Timeout: time.Minute}

@@ -28,7 +28,7 @@ You should be able to start by running ais <TAB-TAB>, selecting one of the avail
 
 **TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list of CLI resources with numerous examples and usage guides that we constantly keep updating.
 
-**TIP**: For more hands-on learners who want to jump right in after skimming the docs, the [`ais search`](/docs/cli/search.md) command may be especially handy. Search will list all possible variations of a command you are looking for, by exact match, synonym, or even Regex! 
+**TIP**: when starting with AIS, [`ais search`](/docs/cli/search.md) command may be especially handy. It will list all possible variations of a command you are maybe looking for - by exact match, synonym, or regex.
 
 {% include youtubePlayer.html id="VPIhQm2sMD8" %}
 

@@ -2344,45 +2344,26 @@ func TestCopyBucketSimple(t *testing.T) {
 		m.num /= 10
 	}
 
-	tlog.Logln("Preparing a source bucket")
+	tlog.Logf("Preparing source bucket %s\n", srcBck)
 	tutils.CreateBucketWithCleanup(t, proxyURL, srcBck, nil)
 	m.initWithCleanup()
 
 	m.puts()
 
-	t.Run("Stats", func(t *testing.T) { testCopyBucketStats(t, srcBck, m) })
-	t.Run("Prefix", func(t *testing.T) { testCopyBucketPrefix(t, srcBck, m) })
-	t.Run("Abort", func(t *testing.T) { testCopyBucketAbort(t, srcBck, m) })
-	t.Run("DryRun", func(t *testing.T) { testCopyBucketDryRun(t, srcBck, m) })
-}
-
-func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	dstBck := cmn.Bck{
-		Name:     testBucketName + "_new1",
-		Provider: apc.ProviderAIS,
+	f := func() {
+		list, err := api.ListObjects(baseParams, srcBck, nil, 0)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, len(list.Entries) == m.num, "expected %d in the source bucket, got %d", m.num, len(list.Entries))
 	}
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
-	tassert.CheckError(t, err)
-	defer tutils.DestroyBucket(t, m.proxyURL, dstBck)
-
-	time.Sleep(time.Second)
-
-	err = api.AbortXaction(baseParams, api.XactReqArgs{ID: xactID})
-	tassert.CheckError(t, err)
-
-	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
-	tassert.CheckError(t, err)
-	tassert.Errorf(t, snaps.IsAborted(), "failed to abort copy-bucket (%s)", xactID)
-
-	time.Sleep(time.Second)
-	bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck))
-	tassert.CheckError(t, err)
-	tassert.Errorf(t, !bck.Contains(cmn.QueryBcks(dstBck)), "should not contain destination bucket %s", dstBck)
+	t.Run("Stats", func(t *testing.T) { f(); testCopyBucketStats(t, srcBck, m) })
+	t.Run("Prefix", func(t *testing.T) { f(); testCopyBucketPrefix(t, srcBck, m) })
+	t.Run("Abort", func(t *testing.T) { f(); testCopyBucketAbort(t, srcBck, m) })
+	t.Run("DryRun", func(t *testing.T) { f(); testCopyBucketDryRun(t, srcBck, m) })
 }
 
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	dstBck := cmn.Bck{Name: "cpybck_dst", Provider: apc.ProviderAIS}
+	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.ProviderAIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
 	tassert.CheckFatal(t, err)
@@ -2407,13 +2388,14 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		cpyPrefix = "cpyprefix" + cos.RandString(5)
-		dstBck    = cmn.Bck{Name: "cpybck_dst", Provider: apc.ProviderAIS}
+		dstBck    = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.ProviderAIS}
 	)
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prefix: cpyPrefix})
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
+	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xactID)
 	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2426,14 +2408,38 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	}
 }
 
+func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
+	dstBck := cmn.Bck{Name: testBucketName + cos.GenTie(), Provider: apc.ProviderAIS}
+
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
+	tassert.CheckError(t, err)
+	defer tutils.DestroyBucket(t, m.proxyURL, dstBck)
+
+	time.Sleep(time.Second)
+
+	tlog.Logf("Aborting x-%s[%s]\n", apc.ActCopyBck, xactID)
+	err = api.AbortXaction(baseParams, api.XactReqArgs{ID: xactID})
+	tassert.CheckError(t, err)
+
+	time.Sleep(time.Second)
+	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
+	tassert.CheckError(t, err)
+	tassert.Errorf(t, snaps.IsAborted(), "failed to abort copy-bucket (%s)", xactID)
+
+	bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck))
+	tassert.CheckError(t, err)
+	tassert.Errorf(t, !bck.Contains(cmn.QueryBcks(dstBck)), "should not contain destination bucket %s", dstBck)
+}
+
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.RandString(5), Provider: apc.ProviderAIS}
+	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie() + cos.RandString(5), Provider: apc.ProviderAIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{DryRun: true})
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
+	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xactID)
 	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
