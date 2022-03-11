@@ -377,10 +377,14 @@ func (n Ns) IsAnyRemote() bool { return n == NsAnyRemote }
 func (n Ns) IsRemote() bool    { return n.UUID != "" }
 
 func (b *Bck) Backend() *Bck {
-	if b.Props == nil || b.Props.BackendBck.IsEmpty() {
+	bprops := b.Props
+	if bprops == nil {
 		return nil
 	}
-	return &b.Props.BackendBck
+	if bprops.BackendBck.Name == "" {
+		return nil
+	}
+	return &bprops.BackendBck
 }
 
 func (b *Bck) RemoteBck() *Bck {

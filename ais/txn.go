@@ -432,9 +432,9 @@ func (txn *txnBckBase) String() string {
 	var res, tm string
 	if done, err := txn.isDone(); done {
 		if err == nil {
-			res = "-done"
+			res = " done"
 		} else {
-			res = fmt.Sprintf("-fail(%v)", err)
+			res = fmt.Sprintf(" fail(%v)", err)
 		}
 	}
 	if txn.xctn != nil {
