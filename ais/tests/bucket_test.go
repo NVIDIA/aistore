@@ -2863,7 +2863,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	// read all
 	if cksumType != cos.ChecksumNone {
-		tlog.Logf("Reading %q objects with checksum validation by AIS targets\n", m.bck)
+		tlog.Logf("Reading %q objects with checksum validation\n", m.bck)
 	} else {
 		tlog.Logf("Reading %q objects\n", m.bck)
 	}

@@ -104,6 +104,13 @@ func whingeLmeta(err error) (*lmeta, error) {
 	return nil, os.NewSyscallError(getxattr, err)
 }
 
+func (lom *LOM) lmfsReload(populate bool) (md *lmeta, err error) {
+	saved := lom.md.pushrt()
+	md, err = lom.lmfs(populate)
+	md.poprt(saved)
+	return
+}
+
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	var (
 		size      int64
@@ -259,6 +266,14 @@ func _recomputeMdSize(size, mdSize int64) {
 func (md *lmeta) makeDirty()    { md.atimefs |= lomDirtyMask }
 func (md *lmeta) clearDirty()   { md.atimefs &= ^lomDirtyMask }
 func (md *lmeta) isDirty() bool { return md.atimefs&lomDirtyMask == lomDirtyMask }
+
+func (md *lmeta) pushrt() []uint64 {
+	return []uint64{uint64(md.Atime), md.atimefs, md.bckID}
+}
+
+func (md *lmeta) poprt(saved []uint64) {
+	md.Atime, md.atimefs, md.bckID = int64(saved[0]), saved[1], saved[2]
+}
 
 func (md *lmeta) unmarshal(buf []byte) error {
 	const invalid = "invalid lmeta"

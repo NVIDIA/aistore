@@ -175,8 +175,11 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 		lom.Unlock(true)
 		return true // nothing to do
 	}
-	availablePaths := fs.GetAvail()
-	buf, slab := T.PageMM().Alloc()
+	var (
+		saved          = lom.md.pushrt()
+		availablePaths = fs.GetAvail()
+		buf, slab      = T.PageMM().Alloc()
+	)
 	for path, mi := range availablePaths {
 		if path == lom.mpathInfo.Path {
 			continue
@@ -188,6 +191,7 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 		dst, err := lom._restore(fqn, buf)
 		if err == nil {
 			lom.md = dst.md
+			lom.md.poprt(saved)
 			exists = true
 			FreeLOM(dst)
 			break

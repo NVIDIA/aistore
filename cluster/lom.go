@@ -232,7 +232,12 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	if lom.CksumConf().Type == cos.ChecksumNone {
 		return nil
 	}
-	md, err = lom.lmfs(false)
+	wmd := lom.WritePolicy()
+	if wmd == apc.WriteNever || (wmd == apc.WriteDelayed && lom.md.isDirty()) {
+		// cannot validate meta checksum
+		return nil
+	}
+	md, err = lom.lmfsReload(false)
 	if err != nil {
 		return err
 	}
@@ -293,7 +298,7 @@ recomp:
 	}
 	// retry: load from disk and check again
 	reloaded = true
-	if _, err = lom.lmfs(true); err == nil && lom.md.Cksum != nil {
+	if _, err = lom.lmfsReload(true); err == nil && lom.md.Cksum != nil {
 		if cksumType == lom.md.Cksum.Ty() {
 			if cksums.comp.Equal(lom.md.Cksum) {
 				return

@@ -578,6 +578,7 @@ validate:
 		return
 	}
 	if !lom.Bck().IsAIS() {
+		// TODO: configure (potential EC/mirror recovery) vs (cold GET)
 		coldGet = true
 		return
 	}
