@@ -307,8 +307,12 @@ redo:
 			// redo hlom in an unlikely event
 			retries++
 			if retries > maxRetries {
+				hmi := "???"
+				if hlom != nil && hlom.MpathInfo() != nil {
+					hmi = hlom.MpathInfo().String()
+				}
 				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
-					xname, orig, orig.MpathInfo(), hlom.MpathInfo(), mi)
+					xname, orig, orig.MpathInfo(), hmi, mi)
 				glog.Error(errHrw)
 				return
 			}

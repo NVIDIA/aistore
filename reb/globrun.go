@@ -276,6 +276,7 @@ func (reb *Reb) _serialize(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunn
 		sleep    = rargs.config.Timeout.CplaneOperation.D()
 		maxTotal = cos.MaxDuration(20*sleep, 10*time.Second) // time to abort prev. streams
 		maxwt    = cos.MaxDuration(rargs.config.Rebalance.DestRetryTime.D(), 2*maxTotal)
+		errcnt   int
 		acquired bool
 	)
 	for {
@@ -303,23 +304,26 @@ func (reb *Reb) _serialize(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunn
 		}
 
 		if acquired { // ok
+			if errcnt > 1 {
+				glog.Infof("%s: resolved (%d)", logHdr, errcnt)
+			}
 			return
 		}
 
 		// try to preempt
-		err := reb._preempt(rargs, logHdr, total, maxTotal)
+		err := reb._preempt(rargs, logHdr, total, maxTotal, errcnt)
 		if err != nil {
 			if total > maxwt {
 				cos.ExitLogf("%v", err)
 			}
-			glog.Error(err)
+			errcnt++
 		}
 		time.Sleep(sleep)
 		total += sleep
 	}
 }
 
-func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Duration) (err error) {
+func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Duration, errcnt int) (err error) {
 	entry := xreg.GetRunning(xreg.XactFilter{Kind: apc.ActRebalance})
 	if entry == nil {
 		var (
@@ -333,6 +337,9 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 			s = ", " + xreb.String()
 		}
 		err = fmt.Errorf("%s: acquire/release asymmetry vs %s%s", logHdr, rlogHdr, s)
+		if errcnt%2 == 1 {
+			glog.Error(err)
+		}
 		return
 	}
 	otherXreb := entry.Get().(*xs.Rebalance) // running or previous
@@ -347,6 +354,7 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 	}
 	if total > maxTotal {
 		err = fmt.Errorf("%s: preempting older %s takes too much time", logHdr, otherXreb)
+		glog.Error(err)
 		if xreb := reb.xctn(); xreb != nil && xreb.ID() == otherXreb.ID() {
 			debug.Assert(reb.dm.GetXact().ID() == otherXreb.ID())
 			glog.Warningf("%s: aborting older streams...", logHdr)
@@ -631,6 +639,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 }
 
 func (reb *Reb) rebFini(rargs *rebArgs, err error) {
+	var stats xact.Stats
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs.id, rargs.smap))
 	}
@@ -642,19 +651,17 @@ func (reb *Reb) rebFini(rargs *rebArgs, err error) {
 	}
 	reb.endStreams(err)
 	reb.filterGFN.Reset()
-	{
-		status := &Status{}
-		reb.RebStatus(status)
-		stats, err := jsoniter.MarshalIndent(&status.Stats, "", " ")
-		if err == nil {
-			glog.Infoln(string(stats))
-		}
+	xreb := reb.xctn()
+	xreb.ToStats(&stats)
+	if stats.Objs > 0 || stats.OutObjs > 0 || stats.InObjs > 0 {
+		s, e := jsoniter.MarshalIndent(&stats, "", " ")
+		debug.AssertNoErr(e)
+		glog.Infoln(string(s))
 	}
 	reb.stages.stage.Store(rebStageDone)
 	reb.stages.cleanup()
 
 	reb.semaCh.Release()
-	xreb := reb.xctn()
 	if !xreb.Finished() {
 		xreb.Finish(nil)
 	} else {

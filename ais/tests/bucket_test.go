@@ -1675,6 +1675,9 @@ func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies i
 	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMakeNCopies}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
+
+	args = api.XactReqArgs{Kind: apc.ActPutCopies, Bck: bck}
+	api.WaitForXactionIdle(baseParams, args)
 }
 
 func TestRemoteBucketMirror(t *testing.T) {
