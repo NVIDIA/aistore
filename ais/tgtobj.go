@@ -472,20 +472,27 @@ do:
 		goi.lom.Unlock(false)
 		doubleCheck, errCode, err = goi.restoreFromAny(false /*skipLomRestore*/)
 		if doubleCheck && err != nil {
-			lom2 := &cluster.LOM{ObjName: goi.lom.ObjName}
+			lom2 := cluster.AllocLOM(goi.lom.ObjName)
 			er2 := lom2.InitBck(goi.lom.Bucket())
 			if er2 == nil {
 				er2 = lom2.Load(true /*cache it*/, false /*locked*/)
-				if er2 == nil {
-					goi.lom = lom2
-					err = nil
-				}
+			}
+			if er2 == nil {
+				cluster.FreeLOM(goi.lom)
+				goi.lom = lom2
+				err = nil
+			} else {
+				cluster.FreeLOM(lom2)
 			}
 		}
 		if err != nil {
 			return
 		}
 		goi.lom.Lock(false)
+		if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
+			goi.lom.Unlock(false)
+			return
+		}
 		goto get
 	}
 	// exists && remote|cloud: check ver if requested

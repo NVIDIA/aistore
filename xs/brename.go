@@ -79,6 +79,7 @@ func newBckRename(uuid, kind string, bck *cluster.Bck, t cluster.Target, bckFrom
 	// NOTE: `bck` = `bckTo` = (the new name) while `bckFrom` is the existing bucket to be renamed
 	debug.AssertMsg(bck.Equal(bckTo, false, true), bck.String()+" vs "+bckTo.String())
 
+	debug.AssertMsg(xact.IsValidRebID(rebID), rebID)
 	x = &bckRename{t: t, bckFrom: bckFrom, bckTo: bckTo, rebID: rebID}
 	x.InitBase(uuid, kind, bck)
 	return

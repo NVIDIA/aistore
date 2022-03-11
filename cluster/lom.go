@@ -104,7 +104,7 @@ func (lom *LOM) CopyAttrs(oah cmn.ObjAttrsHolder, skipCksum bool) {
 
 // special a) when a new version is being created b) for usage in unit tests
 func (lom *LOM) SizeBytes(special ...bool) int64 {
-	debug.Assert(len(special) > 0 || lom.loaded())
+	debug.AssertMsg(len(special) > 0 || lom.loaded(), lom.String())
 	return lom.md.Size
 }
 

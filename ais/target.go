@@ -947,15 +947,14 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	lom := cluster.AllocLOM(apireq.items[1])
-	t.getObject(w, r, apireq.dpq, apireq.bck, lom)
-
+	lom = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
 	cluster.FreeLOM(lom)
 	apiReqFree(apireq)
 }
 
 // getObject is main function to get the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
-func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *cluster.Bck, lom *cluster.LOM) {
+func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *cluster.Bck, lom *cluster.LOM) *cluster.LOM {
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -963,13 +962,13 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
-			return
+			return lom
 		}
 	}
 	// isETLRequest (TODO: !4455 comment)
 	if dpq.uuid != "" {
 		t.doETL(w, r, dpq.uuid, bck, lom.ObjName)
-		return
+		return lom
 	}
 	filename := dpq.archpath // apc.QparamArchpath
 	if strings.HasPrefix(filename, lom.ObjName) {
@@ -1007,7 +1006,9 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
 		t.writeErr(w, r, err, errCode)
 	}
+	lom = goi.lom
 	freeGetObjInfo(goi)
+	return lom
 }
 
 // PUT /v1/objects/bucket-name/object-name
