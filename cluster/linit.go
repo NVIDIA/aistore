@@ -64,6 +64,18 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
 	return nil
 }
 
+func (lom *LOM) InitCT(ct *CT) {
+	debug.Assert(ct.contentType == fs.ObjectType)
+	debug.AssertMsg(ct.bck.Props != nil, ct.bck.String()+" must be initialized")
+	lom.FQN = ct.fqn
+	lom.HrwFQN = ct.hrwFQN
+	lom.mpathInfo = ct.mpathInfo
+	lom.mpathDigest = ct.digest
+	lom.ObjName = ct.objName
+	lom.bck = *ct.bck
+	lom.md.uname = ct.Uname()
+}
+
 func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 	debug.Assert(!bck.IsEmpty())
 	lom.bck = *(*Bck)(bck)

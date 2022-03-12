@@ -21,6 +21,7 @@ type CT struct {
 	fqn         string
 	objName     string
 	contentType string
+	hrwFQN      string
 	bck         *Bck
 	mpathInfo   *fs.MountpathInfo
 	uname       string
@@ -82,7 +83,7 @@ func (ct *CT) Unlock(exclusive bool) {
 //  fqn := ct.Make(fs.ECMetaType)
 
 func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
-	parsedFQN, _, err := ResolveFQN(fqn)
+	parsedFQN, hrwFQN, err := ResolveFQN(fqn)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +91,7 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 		fqn:         fqn,
 		objName:     parsedFQN.ObjName,
 		contentType: parsedFQN.ContentType,
+		hrwFQN:      hrwFQN,
 		bck:         CloneBck(&parsedFQN.Bck),
 		mpathInfo:   parsedFQN.MpathInfo,
 		digest:      parsedFQN.Digest,

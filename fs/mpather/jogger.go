@@ -313,10 +313,8 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	switch ct.ContentType() {
 	case fs.ObjectType:
 		lom := cluster.AllocLOM("")
-		err := lom.InitFQN(fqn, nil)
-		if err == nil {
-			err = j.visitObj(lom, buf)
-		}
+		lom.InitCT(ct)
+		err := j.visitObj(lom, buf)
 		// NOTE: j.visitObj() callback impl-s must either finish the entire
 		//       operation synchronously OR pass lom.LIF to other gorouine(s)
 		cluster.FreeLOM(lom)
