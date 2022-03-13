@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -23,7 +23,7 @@ import "github.com/NVIDIA/aistore/cmn/jsp"
 //   has a certain meta-version that corresponds to the specific way
 //   `jsp` formats its *signature* and other implementation details.
 
-const AIStoreSoftwareVersion = "3.8"
+const AIStoreSoftwareVersion = "3.9"
 
 const (
 	MetaverSmap  = 1 // Smap (cluster map) formatting version (jsp)

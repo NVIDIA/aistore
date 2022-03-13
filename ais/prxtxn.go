@@ -362,8 +362,7 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 	c.msg.BMDVersion = bmd.version()
 
 	// 4. if remirror|re-EC|TBD-storage-svc
-	// TODO -- FIXME: setting up IC listening prior to committing (and confirming xactID)
-	//                here and elsewhere
+	// NOTE: setting up IC listening prior to committing (and confirming xactID) here and elsewhere
 	if ctx.needReMirror || ctx.needReEC {
 		action := apc.ActMakeNCopies
 		if ctx.needReEC {

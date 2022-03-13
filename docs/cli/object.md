@@ -498,12 +498,11 @@ Colocation in the context means that the files in question are already located *
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--verbose` or `-v` | `bool` | Verbose printout | `false` |
-| `--target` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
+| `--target-id` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
 | `--recursive` or `-r` | `bool` | Promote nested directories | `false` |
-| `--overwrite` or `-o` | `bool` | Overwrite destination (object) if exists | `true` |
-| `--keep` | `bool` | Keep original files | `true` |
-
-**Note:** `--keep` flag defaults to `true` and we retain the origin file to ensure safety.
+| `--overwrite-dst` or `-o` | `bool` | Overwrite destination (object) if exists | `false` |
+| `--delete-src` | `bool` | Delete promoted source | `false` |
+| `--not-file-share` | `bool` | Each target must act autonomously, skipping file-share auto-detection and promoting the entire source (as seen from _the_ target) | `false` |
 
 ## Object names
 

@@ -152,7 +152,7 @@ To this end, AIS provides 6 (six) easy ways ranging from the conventional on-dem
 2. [Prefetch](#existing-datasets-batch-prefetch)
 3. [Internet Downloader](#existing-datasets-integrated-downloader)
 4. [HTTP(S) Datasets](#existing-datasets-https-datasets)
-5. [Promote (API and CLI)](#existing-datasets-promote-api-and-cli)
+5. [Promote local or shared files](#promote-local-or-shared-files)
 6. [Backend Bucket](bucket.md#backend-bucket)
 
 In particular:
@@ -195,17 +195,16 @@ $ export http_proxy=<AIS proxy IPv4 or hostname>
 
 In combination, these two settings have an effect of redirecting all **unmodified** client-issued HTTP(S) requests to the AIS proxy/gateway with subsequent execution transparently from the client perspective. AIStore will on the fly create a bucket to store and cache HTTP(S) reachable files all the while supporting the entire gamut of functionality including ETL. Examples for HTTP(S) datasets can be found in [this readme](bucket.md#public-https-dataset)
 
-### Existing Datasets: Promote (API and CLI)
+### Promote local or shared files
 
-Finally, AIS can *promote* files and directories to objects. The only requirement is that the files and directories in question are colocated within AIS storage target machines.
+AIS can also `promote` files and directories to objects. The operation entails synchronous or asynchronus massively-parallel downloading of any accessible file source, including:
 
-Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/docs/cli.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
+- a local directory (or directories) of any target node (or nodes);
+- a file share mounted on one or several (or all) target nodes in the cluster.
 
-```console
-$ ais object promote /tmp/mydata mybucket/ -r --keep=false
-```
+You can now use `promote` ([CLI](/docs/cli/object.md#promote-files-and-directories), API) to populate AIS datasets with **any external file source**.
 
-In this example, `mybucket` would be the designated (destination) bucket.
+Originally (experimentally) introduced in the v3.0 to handle "files and directories colocated within AIS storage target machines", `promote` has been redefined, extended (in terms of supported options and permutations), and completely reworked in the v3.9.
 
 ## Data Protection
 
