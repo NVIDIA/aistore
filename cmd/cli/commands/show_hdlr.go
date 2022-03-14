@@ -68,9 +68,10 @@ var (
 			noHeaderFlag,
 			verboseFlag,
 		),
-		subcmdSmap: {
+		subcmdSmap: append(
+			longRunFlags,
 			jsonFlag,
-		},
+		),
 		subcmdBMD: {
 			jsonFlag,
 		},
@@ -493,6 +494,9 @@ func showSmapHandler(c *cli.Context) (err error) {
 		daemonID    = argDaemonID(c)
 	)
 	if primarySmap, err = fillMap(); err != nil {
+		return
+	}
+	if err = updateLongRunParams(c); err != nil {
 		return
 	}
 	return clusterSmap(c, primarySmap, daemonID, flagIsSet(c, jsonFlag))
