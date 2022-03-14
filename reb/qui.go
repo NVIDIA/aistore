@@ -11,13 +11,13 @@ import (
 )
 
 type quiArgs struct {
-	md   *rebArgs
-	reb  *Reb
-	done func(md *rebArgs) bool
+	rargs *rebArgs
+	reb   *Reb
+	done  func(rargs *rebArgs) bool
 }
 
 func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
-	if q.done(q.md) {
+	if q.done(q.rargs) {
 		return cluster.QuiDone
 	}
 	if q.reb.laterx.CAS(true, false) {
@@ -28,19 +28,19 @@ func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
 
 // Uses generic xact.Quiesce to make sure that no objects are received
 // during a given `maxWait` interval of time.
-func (reb *Reb) quiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) cluster.QuiRes {
-	q := &quiArgs{md, reb, cb}
+func (reb *Reb) quiesce(rargs *rebArgs, maxWait time.Duration, cb func(rargs *rebArgs) bool) cluster.QuiRes {
+	q := &quiArgs{rargs, reb, cb}
 	return reb.xctn().Quiesce(maxWait, q.quicb)
 }
 
 // Returns true if all transport queues are empty
-func (reb *Reb) nodesQuiescent(md *rebArgs) (quiescent bool) {
+func (reb *Reb) nodesQuiescent(rargs *rebArgs) (quiescent bool) {
 	locStage := reb.stages.stage.Load()
-	for _, si := range md.smap.Tmap {
+	for _, si := range rargs.smap.Tmap {
 		if si.ID() == reb.t.SID() && !reb.isQuiescent() {
 			return
 		}
-		status, ok := reb.checkGlobStatus(si, locStage, md)
+		status, ok := reb.checkStage(si, rargs, locStage)
 		if !ok || !status.Quiescent {
 			return
 		}

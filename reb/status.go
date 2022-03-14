@@ -49,7 +49,7 @@ func (reb *Reb) RebStatus(status *Status) {
 					reb.t, xreb, stages[status.Stage], marked.Xact)
 				status.Running = false // not yet
 			} else {
-				debug.Assertf(reb.rebID.Load() == xreb.RebID(), "rebID[%d] vs %s", reb.rebID.Load(), xreb)
+				debug.Assertf(reb.RebID() == xreb.RebID(), "rebID[%d] vs %s", reb.RebID(), xreb)
 			}
 		}
 	} else if status.Running {

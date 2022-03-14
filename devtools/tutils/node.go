@@ -69,7 +69,7 @@ func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID 
 	tassert.CheckFatal(t, err)
 	newSmap, err = WaitForClusterState(
 		proxyURL,
-		"to join target back",
+		"join target",
 		smap.Version,
 		smap.CountActiveProxies(),
 		smap.CountActiveTargets()+1,
