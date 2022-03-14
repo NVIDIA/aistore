@@ -60,7 +60,7 @@ If you give no arguments to `ais show cluster`, information about all daemons in
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
-| `--count` | `int` | Total number of generated reports | `1` |
+| `--count` | `int` | Can be used in combination with `--refresh` option to limit the number of generated reports | `1` |
 | `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
@@ -101,7 +101,7 @@ If `DAEMON_ID` is not set, it will show the smap of the daemon that the `AIS_END
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--count` | `int` | Total number of generated reports | `1` |
+| `--count` | `int` | Can be used in combination with `--refresh` option to limit the number of generated reports | `1` |
 | `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
 
@@ -318,7 +318,7 @@ Show the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats f
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
-| `--count` | `int` | Total number of generated reports | `1` |
+| `--count` | `int` | Can be used in combination with `--refresh` option to limit the number of generated reports | `1` |
 | `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 

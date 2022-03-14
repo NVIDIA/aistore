@@ -71,6 +71,9 @@ When `--fast` option is used the summary will include (internal-usage) details s
 | `--fast` | `bool` | The option is designed primarily for internal usage. The output may not accurately reflect user-accessible content. | `false` |
 | `--validate` | `bool` | Check objects for errors: misplaced, insufficient number of copies etc | `false` |
 | `--cached` | `bool` | For buckets that have remote backend, list only objects stored in the cluster | `false` |
+| `--count` | `int` | Can be used in combination with `--refresh` option to limit the number of generated reports | `1` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
+
 
 ### Example
 

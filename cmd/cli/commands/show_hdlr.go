@@ -38,10 +38,18 @@ type (
 
 var (
 	showCmdsFlags = map[string][]cli.Flag{
+		subcmdShowStorage: append(
+			longRunFlags,
+			jsonFlag,
+		),
 		subcmdShowDisk: append(
 			longRunFlags,
 			jsonFlag,
 			noHeaderFlag,
+		),
+		subcmdShowMpath: append(
+			longRunFlags,
+			jsonFlag,
 		),
 		subcmdShowDownload: {
 			regexFlag,
@@ -95,9 +103,6 @@ var (
 		},
 		subcmdShowRemoteAIS: {
 			noHeaderFlag,
-		},
-		subcmdShowMpath: {
-			jsonFlag,
 		},
 		subcmdShowLog: {
 			logSevFlag,
@@ -315,12 +320,14 @@ func showDisksHandler(c *cli.Context) (err error) {
 	if _, err = fillMap(); err != nil {
 		return
 	}
-
 	if err = updateLongRunParams(c); err != nil {
 		return
 	}
-
-	return daemonDiskStats(c, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+	var (
+		useJSON    = flagIsSet(c, jsonFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
+	)
+	return daemonDiskStats(c, daemonID, useJSON, hideHeader)
 }
 
 func showDownloadsHandler(c *cli.Context) (err error) {
@@ -345,20 +352,27 @@ func showDsortHandler(c *cli.Context) (err error) {
 	return dsortJobStatus(c, id)
 }
 
-func showClusterHandler(c *cli.Context) (err error) {
+func showClusterHandler(c *cli.Context) error {
 	daemonID := argDaemonID(c)
 	primarySmap, err := fillMap()
 	if err != nil {
-		return
+		return err
 	}
-
-	if err = updateLongRunParams(c); err != nil {
-		return
+	if err := updateLongRunParams(c); err != nil {
+		return err
 	}
-	return clusterDaemonStatus(c, primarySmap, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag), flagIsSet(c, verboseFlag))
+	var (
+		useJSON    = flagIsSet(c, jsonFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
+		verbose    = flagIsSet(c, verboseFlag)
+	)
+	return clusterDaemonStatus(c, primarySmap, daemonID, useJSON, hideHeader, verbose)
 }
 
 func showStorageHandler(c *cli.Context) (err error) {
+	if err = updateLongRunParams(c); err != nil {
+		return
+	}
 	return showDisksHandler(c)
 }
 
@@ -603,6 +617,9 @@ func showMpathHandler(c *cli.Context) error {
 	)
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
+		return err
+	}
+	if err = updateLongRunParams(c); err != nil {
 		return err
 	}
 	if daemonID != "" {
