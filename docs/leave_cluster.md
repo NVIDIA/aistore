@@ -19,14 +19,20 @@ Sometimes a node has to be removed from a cluster - either temporarily (e.g., to
 
 Two kinds of node removal are supported:
 
-- temporary removal, e.g. for node maintenance. In this case, the node remains in the cluster but it stops responding to client requests. Temporary removal comes in two flavors: `start-maintenance` that keeps the node running, and `shutdown` that stops the node;
-- permanent removal, e.g. node decommission. This operation disables a node and starts moving all its objects to other targets. When rebalance finishes, the primary proxy automatically removes the node from the cluster. On leaving the cluster, the node erases its AIS metadata and optionally deletes all user data.
+- temporary removal, e.g. for node maintenance. In this case, the node remains in the cluster but it stops responding to client requests. Temporary removal can be done in two ways: `start-maintenance` keeps the node running, and `shutdown` stops the node;
+- permanent removal, e.g. node decommission. `decommission` disables a node and starts moving all its objects to other targets. When rebalancing finishes, the primary proxy automatically removes the node from the cluster. On leaving the cluster, the node erases its AIS metadata and optionally deletes all user data.
 
 ### Putting a node in maintenance
 
 ![Put a node under maintenance](images/maintenance.png)
 
-To take a node out of the cluster temporary while keeping it in the cluster list, put a node under maintenance (CLI):
+To temporarily take a node out of the cluster, put a node under maintenance (CLI). Nodes undergoing maintenance remain in the cluster map, as shown in the above diagram.
+
+In general, when storage targets leave (or join) the cluster, the current *primary* (leader) proxy transactionally creates the *next* updated version of the cluster map and synchronizes the new map across the entire cluster so that each and every node gets the new version. 
+This results in each AIS target starting to traverse its locally stored content, recomputing object locations, and sending at least some of the objects to their respective *new* locations.
+Object migration is then carried out via an intra-cluster optimized [communication mechanism](/transport/README.md) and over a separate [physical or logical network](/cmn/network.go), if provisioned.
+
+For more details about the rebalancing process, see [REBALANCE](/docs/rebalance.md). 
 
 ```console
 $ ais cluster add-remove-nodes start-maintenance 59262t8087
@@ -34,7 +40,7 @@ Node "59262t8087" is under maintenance
 Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
 ```
 
-Alternative way is to shut down the node which additionally stops all AIS services on the node after putting it under maintenance:
+Alternatively, you can shut down the node to stop all AIS services on the node after putting it under maintenance:
 
 ```console
 $ ais cluster add-remove-nodes shutdown 59262t8087
@@ -42,9 +48,9 @@ Node "59262t8087" is under maintenance
 Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
 ```
 
-If the node is a target, after a quick preparation, the cluster starts rebalance. When the rebalance finishes, it is safe to turn the node off.
+If the node is a target, after a quick preparation, the cluster will rebalance. When the rebalance finishes, it is safe to turn the node off.
 
-If the node does not contain any important data, rebalance can be skipped, so the node is safe to switch off in a short time after putting it under maintenance:
+If the node does not contain any important data, you can skip rebalancing with `--no-rebalance`, so the node is safe to switch off shortly after putting it under maintenance:
 
 ```console
 $ ais cluster add-remove-nodes start-maintenance 59262t8087 --no-rebalance
@@ -64,18 +70,18 @@ Started rebalance "g3", use 'ais show job xaction g3' to monitor the progress
 ```
 
 To skip automatic rebalance, provide flag `--no-rebalance`.
-It is recommended to keep automatic rebalance running automatically, but in some cases it is safe to skip it:
+It is *recommended* to keep automatic rebalance running automatically, but these are some cases in which it is *safe to skip rebalancing*:
 
 - all buckets are empty
 - maintenance was started with `--no-rebalance` and no object was added or updated during maintenance
-- objects can be refetched from remote sources. E.g, all buckets are remote AIS, HTTP or Cloud ones. In this case, targets redownload missing objects. That can cost extra money for Cloud traffic
+- objects can be refetched from remote sources. E.g, all buckets are remote AIS, HTTP or Cloud ones. In this case, targets redownload missing objects. This can cost extra money for Cloud traffic
 - you are going to stop maintenance for more than 1 node. So, all nodes except the last one are back to the cluster with the flag `--no-rebalance`, and the last node starts the automatic rebalance
 
 ### Removing a node from a cluster
 
 ![Decommission a node](images/decommission.png)
 
-To completely remove the node from the cluster, start the node decommissioning (CLI):
+To completely remove the node from the cluster, decommission the node (CLI):
 
 ```console
 $ ais cluster add-remove-nodes decommission 59262t8087
@@ -85,14 +91,14 @@ Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
 
 When the rebalance finishes, the cluster removes the node automatically from the list.
 On unregistering, the node erases its AIS metadata.
-Disabling rebalance runs quick preparations and removes the node from the cluster immediately:
+Skipping rebalance runs quick preparations and removes the node from the cluster immediately:
 
 ```console
 $ ais cluster add-remove-nodes decommission --no-rebalance 59262t8087
 Node "59262t8087" removed from the cluster
 ```
 
-Note that decommission cleans up all AIS metadata and stops the node. The shutdown only stops AIS services.
+Note that `decommission` cleans up all AIS metadata and stops the node. `shutdown` only stops AIS services.
 If the node is a target, the node will be shut down after the rebalance has finished. Otherwise, if the node is a proxy, the node will shut down immediately.
 
 ```console
@@ -101,14 +107,14 @@ Node "59262t8087" is being shut down
 Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
 ```
 
-Note that removing a node with rebalance disabled can be interrupted. If a node is removed by mistake, you have to join it manually with `ais cluster add-remove-nodes join` command.
+Note that you can interrupt a node removal with rebalance skipped. If you remove a node by mistake, you have to join it manually with `ais cluster add-remove-nodes join` command.
 
 ### Interrupt node removal
 
 ![Interrupt node removal](images/decommission_abort.png)
 
-While rebalance is running, the removal operation can be interrupted to get the node back to the cluster.
-Rebalance starts automatically when a node is a target and flag `--no-rebalance` is not set after the node is registered at the cluster and the cluster clears node's maintenance state.
+While rebalance is running, you can interrupt the node removal to get the node back to the cluster.
+Rebalance starts automatically when a node is a target and flag `--no-rebalance` is not set after the node is registered at the cluster and the cluster clears the node's maintenance state.
 
 ```console
 $ ais cluster add-remove-nodes stop-maintenance 59262t8087
@@ -120,7 +126,7 @@ The node starts accepting all the requests after joining the cluster and after t
 
 ### Checking removal status
 
-Putting a node under maintenance does not do anything automatically after the rebalance finishes. Check the cluster health to be sure that it is safe to turn the node off. Besides checking xaction progress, the removal status can be monitored with `ais cluster status` command.
+Putting a node under maintenance does NOT automatically power off the node. AIS only runs a **rebalance** when a node is put under maintenance. Manually check the cluster health (`show cluster target`) to ensure that it is safe to turn the node off. Besides checking xaction progress, the removal status can be monitored with `ais cluster status`.
 
 In the example below it is safe to turn off the node (the column `REBALANCE` states that the rebalance has already finished and the node is labeled `maintenance`):
 

@@ -9,14 +9,14 @@ redirect_from:
 
 # Introduction
 
-`ais cluster` commands supports the following subcommands:
+The `ais cluster` command supports the following subcommands:
 
 ```console
 $ ais cluster <TAB-TAB>
 add-remove-nodes  decommission  rebalance  remote-attach  remote-detach  set-primary  show  shutdown
 ```
 
-As always, each subcommand (above) will have its own help and usage examples - the latter possibly spread across multiple markdowns.
+As always, each above subcommand will have its own help and usage examples - the latter possibly spread across multiple documents.
 
 > For any keyword or text of any kind, you can easily look up examples and descriptions (if available) via a simple `find`, for instance:
 
@@ -24,14 +24,14 @@ As always, each subcommand (above) will have its own help and usage examples - t
 $ find . -type f -name "*.md" | xargs grep "ais.*mountpath"
 ```
 
-Note that there is a single CLI command to [grow](#join-a-node) a cluster and multiple commands to scale it down.
+Note that there is a single CLI command to [grow](#join-a-node) a cluster, and multiple commands to scale it down.
 
-This (scaling down) can be done gracefully or forcefully, and also temporarily or permanently.
+Scaling down can be done gracefully or forcefully, and also temporarily or permanently.
 
 For background, usage examples, and details, please see [this document](/docs/leave_cluster.md).
 
 # CLI Reference for Cluster and Node (Daemon) management
-This section lists cluster and node management operations the AIS CLI, with `ais cluster`.
+This section lists cluster and node management operations within the AIS CLI, via `ais cluster`.
 
 ## Table of Contents
 - [Cluster or Daemon status](#cluster-or-daemon-status)
@@ -50,10 +50,10 @@ This section lists cluster and node management operations the AIS CLI, with `ais
 `ais show cluster [DAEMON_TYPE|DAEMON_ID]`
 
 Display information about `DAEMON_ID` or all nodes of `DAEMON_TYPE`. `DAEMON_TYPE` is either `proxy` or `target`.
-If nothing is set, information from all the daemons in the AIS cluster is displayed.
+If you give no arguments to `ais show cluster`, information about all daemons in the AIS cluster is displayed.
 
-> Note: Like many other `ais show` commands, `ais show cluster` is aliased to `ais cluster show` for ease of use.
-> Both of these commands are used interchangeably throughout the documentation.
+> Note: Like all other `ais show` commands, `ais show cluster` is aliased to `ais cluster show` for ease of use.
+> Both variations are used interchangeably throughout the documentation.
 
 ### Options
 
@@ -95,7 +95,7 @@ Summary:
 `ais show cluster smap [DAEMON_ID]`
 
 Show a copy of the cluster map (smap) present on `DAEMON_ID`.
-If `DAEMON_ID` is not set, it will show the smap of the daemon that the `AIS_ENDPOINT` points at.
+If `DAEMON_ID` is not set, it will show the smap of the daemon that the `AIS_ENDPOINT` points at by default.
 
 ### Options
 
@@ -143,12 +143,12 @@ Proxies: 5       Targets: 5      Smap Version: 14
 Show current (live) statistics, including:
 * utilization percentages
 * used and available storage capacity
-* variety of latencies including list-objects and intra-cluster control comm.
+* variety of latencies, including list-objects and intra-cluster control comm.
 * networking stats (transmitted and received object numbers and total bytes), and more.
 
 For a broader background and details, please see [Monitoring AIStore with Prometheus](/docs/prometheus.md).
 
-The scope of the `ais show cluster stats` command can be a specific node (denoted by `DAEMON_ID`) or the entire cluster.
+You can give a specific node (denoted by `DAEMON_ID`) as the argument for `ais show cluster stats` to narrow the scope of the statistics, or you can view stats for the entire cluster. 
 In the latter case, the command displays aggregated counters and cluster-wide averages, where applicable.
 
 ### Options
@@ -326,7 +326,7 @@ Show the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats f
 
 #### Display disk reports stats N times every M seconds
 
-Display 5 reports with disk statistics of all targets with 10s intervals between each report.
+Display 5 reports of all targets' disk statistics, with 10s intervals between each report.
 
 ```console
 $ ais show storage disk --count 2 --refresh 10s
@@ -355,7 +355,7 @@ Join a proxy to the cluster.
 
 Join a target to the cluster.
 
-Note: The node will try to join the cluster using an ID it detects (either in the filesystem's xattrs or on disk) or generates for itself.
+Note: The node will try to join the cluster using an ID it detects (either in the filesystem's xattrs or on disk) or that it generates for itself.
 If you would like to specify an ID, you can do so while starting the [`aisnode` executable](/docs/command_line.md).
 
 ### Examples
@@ -371,7 +371,7 @@ Proxy with ID "23kfa10f" successfully joined the cluster.
 
 ## Remove a node
 
-Temporarily remove an existing node from the cluster:
+**Temporarily remove an existing node from the cluster:**
 
 `ais cluster add-remove-nodes start-maintenance DAEMON_ID`
 `ais cluster add-remove-nodes stop-maintenance DAEMON_ID`
@@ -386,7 +386,7 @@ Shutting down a node will put the node in maintenance mode first, and then shut 
 process on the node.
 
 
-Permanently remove an existing node from the cluster:
+**Permanently remove an existing node from the cluster:**
 
 `ais cluster add-remove-nodes decommission DAEMON_ID`
 
@@ -404,7 +404,7 @@ rebalance first. This can be avoided by specifying `--no-rebalance`.
 
 #### Decommission node
 
-Permananently remove proxy p[omWp8083] from the cluster:
+**Permananently remove proxy p[omWp8083] from the cluster:**
 
 ```console
 $ ais cluster add-remove-nodes decommission <TAB-TAB>
@@ -416,13 +416,13 @@ $ ais cluster add-remove-nodes decommission p[omWp8083]
 Node "omWp8083" has been successfully removed from the cluster.
 ```
 
-To terminate `aisnode` on a given machine, use the `shutdown` command, e.g.:
+**To terminate `aisnode` on a given machine, use the `shutdown` command, e.g.:**
 
 ```console
 $ ais cluster add-remove-nodes shutdown t[23kfa10f]
 ```
 
-Similar to the `maintenance` option, `shutdown` triggers global rebalancing followed by shutting down the correspondoing `aisnode` process (target `t[23kfa10f]` in the example above).
+Similar to the `maintenance` option, `shutdown` triggers global rebalancing then shuts down the corresponding `aisnode` process (target `t[23kfa10f]` in the example above).
 
 #### Temporarily put node in maintenance
 
@@ -463,9 +463,9 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 
 ## Remote AIS cluster
 
-Given an arbitrary pair of AIS clusters A and B, cluster B can be *attached* to cluster A thus in effect providing (to A) a fully-accessible (list-able, readable, writeable) *backend*.
+Given an arbitrary pair of AIS clusters A and B, cluster B can be *attached* to cluster A, thus providing (to A) a fully-accessible (list-able, readable, writeable) *backend*.
 
-For background, terminologyi and definitions, and for many more usage examples, please see:
+For background, terminology, and definitions, and for many more usage examples, please see:
 
 * [Remote AIS cluster](/docs/providers.md#remote-ais-cluster)
 * [Usage examples and easy-to-use scripts for developers](/docs/development.md)
@@ -478,7 +478,7 @@ or
 
 `ais cluster remote-attach ALIAS=URL [ALIAS=URL...]`
 
-Attach a remote AIS cluster to this one by the remote cluster public URL. Alias(a user-defined name) can be used instead of cluster UUID for convenience.
+Attach a remote AIS cluster to a local one via the remote cluster public URL. Alias (a user-defined name) can be used instead of cluster UUID for convenience.
 For more details and background on *remote clustering*, please refer to this [document](/docs/providers.md).
 
 #### Examples
@@ -510,7 +510,7 @@ $ ais cluster remote-detach two
 Show details about attached remote clusters.
 
 #### Examples
-The following two commands attach and then show remote cluster at the address `my.remote.ais:51080`:
+The following two commands attach and then show the remote cluster at the address `my.remote.ais:51080`:
 
 ```console
 $ ais cluster remote-attach alias111=http://my.remote.ais:51080
@@ -523,7 +523,7 @@ eKyvPyHr  my.remote.ais:51080     alias111  p[80381p11080]  v27   10       yes
 Notice that:
 
 * user can assign an arbitrary name (aka alias) to a given remote cluster
-* the remote cluster does *not* have to be online at attachment time; offline or currently not reachable clusters are shown as follows:
+* the remote cluster does *not* have to be online at attachment time; offline or currently unreachable clusters are shown as follows:
 
 ```console
 $ ais show remote-cluster
@@ -532,9 +532,9 @@ eKyvPyHr    my.remote.ais:51080       alias111  p[primary1]     v27   10       n
 <alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
 ```
 
-Notice the difference between the first and the second lines in the printout above: while both clusters appear to be currently offline (see the rightmost column), the first one was accessible at some earlier time and therefore we do show that it has (in this example) 10 storage nodes and other details.
+Notice the difference between the first and the second lines in the printout above: while both clusters appear to be currently offline (see the rightmost column), the first one was accessible at some earlier time and therefore we show that it has (in this example) 10 storage nodes and other details.
 
-To `detach` any of the previously configured association, simply run:
+To `detach` any of the previously configured associations, simply run:
 
 ```console
 $ ais cluster remote-detach alias111

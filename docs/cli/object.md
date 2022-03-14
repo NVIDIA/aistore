@@ -32,7 +32,7 @@ This document contains `ais object` commands - the commands to read (GET), write
 
 `ais object get BUCKET/OBJECT_NAME [OUT_FILE]`
 
-Get an object from a bucket.  If a local file of the same name exists, the local file will be overwritten without confirmation.
+Get an object from a bucket. If a local file of the same name exists, the local file will be *overwritten without confirmation*.
 
 ## Options
 
@@ -47,14 +47,14 @@ Get an object from a bucket.  If a local file of the same name exists, the local
 
 ## Save object to local file with explicit file name
 
-Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `~/train-10.tgz`.
+Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `~/train-10.tgz`:
 
 ```console
 $ ais object get ais://imagenet/imagenet_train-000010.tgz ~/train-10.tgz
 GET "imagenet_train-000010.tgz" from bucket "imagenet" as "/home/user/train-10.tgz" [946.8MiB]
 ```
 
-For comparison, the same GET using `curl` and the two supported variants of RESTful API):
+For comparison, the same GET using `curl` and [the two supported variants of RESTful API](/docs/http_api.md):
 
 ```console
 # 1. curl GET using conventional RESTful API
@@ -62,7 +62,7 @@ For comparison, the same GET using `curl` and the two supported variants of REST
 
 $ curl -L -X GET 'http://aistore/v1/objects/imagenet/magenet_train-000010.tgz?provider=gs -o ~/train-10.tgz'
 
-# 2. and the same using "easy URL" (documented elsewhere):
+# 2. and the same using "easy URL":
 
 $ curl -L -X GET 'http://aistore/ais/imagenet/magenet_train-000010.tgz -o ~/train-10.tgz'
 ```
@@ -71,7 +71,7 @@ $ curl -L -X GET 'http://aistore/ais/imagenet/magenet_train-000010.tgz -o ~/trai
 
 If `OUT_FILE` is omitted, the local file name is implied from the object name.
 
-Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `imagenet_train-000010.tgz`.
+Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `imagenet_train-000010.tgz`:
 
 ```console
 $ ais object get imagenet/imagenet_train-000010.tgz
@@ -80,7 +80,7 @@ GET "imagenet_train-000010.tgz" from bucket "imagenet" as "imagenet_train-000010
 
 ## Get object and print it to standard output
 
-Get the `imagenet_train-000010.tgz` object from the `imagenet` AWS bucket and write it to standard output.
+Get the `imagenet_train-000010.tgz` object from the `imagenet` AWS bucket and write it to standard output:
 
 ```console
 $ ais object get aws://imagenet/imagenet_train-000010.tgz -
@@ -94,7 +94,7 @@ We say that "an object is _cached_" to indicate two separate things:
 * The object is stored in the AIS cluster.
 
 In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go to the object's original location.
-Being "cached" does not have any implications on an object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
+Being "cached" does not have any implications on an object's persistence: "cached" objects, similar to objects that originated in a given AIS cluster, are stored with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
 
 The following example checks whether `imagenet_train-000010.tgz` is "cached" in the bucket `imagenet`:
 
@@ -105,7 +105,7 @@ Cached: true
 
 ### Read range
 
-Get the contents of object `list.txt` from `texts` bucket starting from offset `1024` length `1024` and save it as `~/list.txt` file.
+Get the contents of object `list.txt` from `texts` bucket starting from offset `1024` length `1024` and save it as `~/list.txt` file:
 
 ```console
 $ ais object get --offset 1024 --length 1024 ais://texts/list.txt ~/list.txt
@@ -129,7 +129,7 @@ Alias for `ais object get BUCKET/OBJECT_NAME -`.
 
 ## Print content of object
 
-Print content of `list.txt` from local bucket `texts` to the standard output.
+Print content of `list.txt` from local bucket `texts` to the standard output:
 
 ```console
 $ ais object cat ais://texts/list.txt
@@ -137,7 +137,7 @@ $ ais object cat ais://texts/list.txt
 
 ## Read range
 
-Print content of object `list.txt` starting from offset `1024` length `1024` to the standard output.
+Print content of object `list.txt` starting from offset `1024` length `1024` to the standard output:
 
 ```console
 $ ais object cat ais://texts/list.txt --offset 1024 --length 1024
@@ -149,13 +149,13 @@ $ ais object cat ais://texts/list.txt --offset 1024 --length 1024
 
 Get object detailed information.
 `PROP_LIST` is a comma-separated list of properties to display.
-If `PROP_LIST` is omitted default properties are shown.
+If `PROP_LIST` is omitted, default properties are shown.
 
 Supported properties:
 
-- `cached` - is the object cached on local drives (always `true` for AIS buckets)
+- `cached` - the object cached on local drives (always `true` for AIS buckets)
 - `size` - object size
-- `version` - object version (it is empty if versioning is disabled for the bucket)
+- `version` - object version (empty if versioning is disabled for the bucket)
 - `atime` - object's last access time
 - `copies` - the number of object replicas per target (`1` if bucket mirroring is disabled), and mountpath where object and its mirrors are located
 - `checksum` - object's checksum
@@ -169,7 +169,7 @@ Supported properties:
 
 ## Show default object properties
 
-Display default properties of object `list.txt` from bucket `texts`.
+Display default properties of object `list.txt` from bucket `texts`:
 
 ```console
 $ ais object show ais://texts/list.txt
@@ -182,7 +182,7 @@ version     1
 
 ## Show all object properties
 
-Display all properties of object `list.txt` from bucket `texts`.
+Display all properties of object `list.txt` from bucket `texts`:
 
 ```console
 $ ais object show ais://texts/list.txt --props=all
@@ -200,7 +200,7 @@ version     2
 
 ## Show selected object properties
 
-Show only selected (`size,version,ec`) properties.
+Show only selected (`size,version,ec`) properties:
 
 ```console
 $ ais object show --props size,version,ec ais://texts/listx.txt
@@ -217,8 +217,8 @@ ec          2:2[replicated]
 Put a file, an entire directory of files, or content from STDIN (`-`) into the specified bucket. If an object of the same name exists,
 the object will be overwritten without confirmation.
 
-If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty,
-then shows all gathered info to the user and asks for confirmation to continue. Confirmation request can be disabled with the option `--yes` for use in scripts.
+If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size, and checks if the bucket is empty. Then it shows all gathered info to the user and asks for confirmation to continue. 
+Confirmation request can be disabled with the option `--yes` for use in scripts.
 
 ## Options
 
@@ -248,17 +248,17 @@ then shows all gathered info to the user and asks for confirmation to continue. 
  This makes shell wildcards like `**` redundant, and the following patterns won't work in `ais`: `/home/user/img-set-*/*.tar` or `/home/user/bck/**/*.tar.gz`
 
 `FILE` must point to an existing file.
-File masks and directory uploading are not supported in single-file upload mode.
+File masks and directory uploading are NOT supported in single-file upload mode.
 
 ## Object names
 
 PUT command handles two possible ways to specify resulting object name if source references single file:
-- Object name is not provided: `ais object put path/to/(..)/file.go bucket/` creates object `file.go` in `bucket`
-- Explicit object name is provided: `ais object put path/to/(..)/file.go bucket/path/to/object.go` creates object `path/to/object.go` in `bucket`
+1. Object name is not provided: `ais object put path/to/(..)/file.go bucket/` creates object `file.go` in `bucket`
+2. Explicit object name is provided: `ais object put path/to/(..)/file.go bucket/path/to/object.go` creates object `path/to/object.go` in `bucket`
 
 PUT command handles object naming with range syntax as follows:
 - Object names are file paths without longest common prefix of all files from source.
-It means that leading part of file path until the last `/` before first `{` is excluded from object name.
+This means that the leading part of file path until the last `/` before first `{` is excluded from object name.
 - `OBJECT_NAME` is prepended to each object name.
 - Abbreviations in source like `../` are not supported at the moment.
 
@@ -311,7 +311,7 @@ $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --xxhash
 ```
 
 Optionally, the user can choose to provide a `--compute-cksum` flag for the checksum flag and
-let the api take care of the computation.
+let the API take care of the computation.
 
 ```console
 $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --compute-cksum
@@ -332,7 +332,7 @@ $ ais object put "~/bck/img1.tar" ais://mybucket/
 
 Read unpacked content from STDIN and put it into bucket `mybucket` with name `img-unpacked`.
 
-Note that content is put in chunks what can have a slight overhead.
+Note that content is put in chunks that can have a slight overhead.
 `--chunk-size` allows for controlling the chunk size - the bigger the chunk size the better performance (but also higher memory usage).
 
 ```bash
@@ -354,7 +354,7 @@ $ ais object put "/home/user/bck" ais://mybucket
 
 ## Put directory into bucket with directory prefix
 
-The same as above, but add `OBJECT_NAME` (`../subdir/`) prefix to objects names.
+The same as above, but add `OBJECT_NAME` (`../subdir/`) prefix to object names.
 
 ```console
 $ ais object put "/home/user/bck" ais://mybucket/subdir/
@@ -416,7 +416,7 @@ $ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket/dir/ -y
 
 ## Preview putting files with dry-run
 
-Preview the files that would be sent to the cluster, without really putting them.
+Preview the files that would be sent to the cluster, without actually putting them.
 
 ```bash
 $ for d1 in {0..2}; do for d2 in {0..2}; mkdir -p ~/dir/test${d1}/dir && do echo "0" > ~/dir/test${d1}/dir/test${d2}.txt; done; done
@@ -457,15 +457,15 @@ TOTAL            33      66B
 
 `ais object put FILE BUCKET/OBJECT_NAME --archpath ARCH_PATH`
 
-Append a file to an existing archive in a specified bucket. More exactly,
-the command allows to append any reader (e.g., an open file) to an existing object formatted as
+Append a file to an existing archive in a specified bucket. More specifically,
+the command allows a user to append any reader (e.g., an open file) to an existing object formatted as
 one of the supported archives.
 
 Environment variable `ARCH_PATH` defines the path inside the archive for the new file.
 
 ## Examples
 
-Add a file to an archive
+Add a file to an archive:
 
 ```console
 $ # list archived content prior to appending new files
@@ -491,7 +491,7 @@ test.tar                         45.50KiB
 `ais object promote FILE|DIRECTORY BUCKET/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
 Promote **AIS-colocated** files and directories to AIS objects in a specified bucket.
-Colocation in the context means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
+Colocation in context means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
 
 ## Options
 
@@ -506,13 +506,13 @@ Colocation in the context means that the files in question are already located *
 
 ## Object names
 
-When the specified source references a directory, or a tree of nested directories, object naming is done as follows:
+When the specified source references a **directory, or a tree of nested directories**, object naming is set as follows:
 
 - For path `p` of source directory, resulting objects names are path to files with trimmed `p` prefix
 - `OBJECT_NAME` is prepended to each object name.
 - Abbreviations in source like `../` are not supported at the moment.
 
-If the source references a single file, the resulting object name is set as follows:
+If the source references a **single file**, the resulting object name is set as follows:
 
 - Object name is not provided: `ais object promote /path/to/(..)/file.go ais://bucket/` promotes to object `file.go` in `bucket`
 - Explicit object name is provided: `ais object promote /path/to/(..)/file.go ais://bucket/path/to/object.go` promotes object `path/to/object.go` in `bucket`
@@ -550,7 +550,7 @@ $ ais object promote /tmp/examples ais://mybucket/ -r --keep=true
 
 ## Promote directory with custom prefix
 
-Promote `/tmp/examples` files to AIS objects. Objects names will have `examples/` prefix.
+Promote `/tmp/examples` files to AIS objects. Object names will have `examples/` prefix.
 
 ```console
 $ ais object promote /tmp/examples ais://mybucket/examples/ -r --keep=false
@@ -686,9 +686,9 @@ $ ais object concat dirB dirA ais://mybucket/obj
 
 # Set custom properties
 
-Generally, AIS objects have two kinds of properties: system and, optionally, custom (user-defined). Unlike the system-maintained properties, such as checksum and the number of copies (or EC parity slices, etc.) custom properties may have arbitrary user-defined names and values.
+Generally, AIS objects have two kinds of properties: system and, optionally, custom (user-defined). Unlike the system-maintained properties, such as checksum and the number of copies (or EC parity slices, etc.), custom properties may have arbitrary user-defined names and values.
 
-Custom properties are not impacted by object updates (PUTs) - a new version of an object simply inherits custom properties of the previous version, as is with no changes.
+Custom properties are not impacted by object updates (PUTs) -- a new version of an object simply inherits custom properties of the previous version as is with no changes.
 
 The command's syntax is similar to the one used to assign [bucket properties](bucket.md#set-bucket-properties):
 
@@ -724,13 +724,13 @@ Note the flag `--props=all` used to show _all_ object's properties including the
 
 # Operations on Lists and Ranges
 
-Generally, multi-object operations are supported in two different ways:
+Generally, multi-object operations are supported in 2 different ways:
 
 1. specifying source directory in the command line - see e.g. [Promote files and directories](#promote-files-and-directories) and [Concat objects](#concat-objects);
-2. via `--list` or `--template` options, whereby the latter supports Bash expansion syntax and can also contain prefix, such as a virtul parent directory, etc.)
+2. via `--list` or `--template` options, whereby the latter supports Bash expansion syntax and can also contain prefix, such as a virtual parent directory, etc.)
 
 This section documents and exemplifies AIS CLI operating on multiple (source) objects that you can specify either explicitly or implicitly
-using the `--list` or the `--template` flags.
+using the `--list` or `--template` flags.
 
 The number of objects "involved" in a single operation does not have any designed-in limitations: all AIS targets work on a given multi-object operation simultaneously and in parallel.
 
