@@ -24,6 +24,7 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 Also, AIStore:
 
 * can be deployed on any commodity hardware - effectively, on any Linux machine(s);
+* can be immediately populated - i.e., hydrated - from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch);
 * provides for easy Kubernetes deployment via a separate GitHub repo with
   * step-by-step [deployment playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks), and
   * [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator);
