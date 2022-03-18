@@ -144,8 +144,10 @@ func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 // - Remote (Cloud or Remote AIS) bucket: caller can type-cast err.(*cmn.ErrRemoteBckNotFound) and proceed
 //
 // NOTE: most of the above applies to a backend bucket, if specified
-//
 func (b *Bck) Init(bowner Bowner) error {
+	if err := b.Validate(); err != nil {
+		return err
+	}
 	if err := b.InitNoBackend(bowner); err != nil {
 		return err
 	}
@@ -153,17 +155,31 @@ func (b *Bck) Init(bowner Bowner) error {
 	if backend == nil {
 		return nil
 	}
+	// init backend
 	if backend.Provider == "" || backend.IsAIS() {
 		return fmt.Errorf("bucket %s: invalid backend %s (must be remote)", b, backend)
+	}
+	if err := backend.Validate(); err != nil {
+		return err
 	}
 	backend.Props = nil // always re-init
 	return backend.InitNoBackend(bowner)
 }
 
-func (b *Bck) InitNoBackend(bowner Bowner) error {
-	if err := b.Validate(); err != nil {
+// without bucket name, provider, namespace validations (compare with `Init` above)
+func (b *Bck) initFast(bowner Bowner) error {
+	if err := b.InitNoBackend(bowner); err != nil {
 		return err
 	}
+	backend := b.Backend()
+	if backend == nil {
+		return nil
+	}
+	backend.Props = nil // always reinitialize
+	return backend.InitNoBackend(bowner)
+}
+
+func (b *Bck) InitNoBackend(bowner Bowner) error {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)

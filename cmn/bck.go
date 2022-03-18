@@ -116,10 +116,12 @@ func IsNormalizedProvider(provider string) bool {
 
 // NormalizeProvider replaces provider aliases with their normalized form/name.
 func NormalizeProvider(provider string) (string, error) {
+	if IsNormalizedProvider(provider) {
+		return provider, nil
+	}
 	switch provider {
 	case "":
-		// NOTE: Here is place to change default provider.
-		return apc.ProviderAIS, nil
+		return apc.ProviderAIS, nil // NOTE: ais is the default provider
 	case apc.S3Scheme:
 		return apc.ProviderAmazon, nil
 	case apc.AZScheme:
@@ -127,10 +129,7 @@ func NormalizeProvider(provider string) (string, error) {
 	case apc.GSScheme:
 		return apc.ProviderGoogle, nil
 	default:
-		if !IsNormalizedProvider(provider) {
-			return provider, NewErrorInvalidBucketProvider(Bck{Provider: provider})
-		}
-		return provider, nil
+		return provider, NewErrorInvalidBucketProvider(Bck{Provider: provider})
 	}
 }
 
@@ -236,6 +235,9 @@ func (n Ns) Uname() string {
 }
 
 func (n Ns) Validate() error {
+	if n.IsGlobal() {
+		return nil // to speedup a bit
+	}
 	if cos.IsAlphaPlus(n.UUID, false /*with period*/) && cos.IsAlphaPlus(n.Name, false) {
 		return nil
 	}

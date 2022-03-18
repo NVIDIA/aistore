@@ -1100,6 +1100,9 @@ func (p *proxy) initBackendProp(nprops *cmn.BucketProps) (err error) {
 		return
 	}
 	backend := cluster.CloneBck(&nprops.BackendBck)
+	if err = backend.Validate(); err != nil {
+		return
+	}
 	if err = backend.InitNoBackend(p.owner.bmd); err != nil {
 		return
 	}

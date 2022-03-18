@@ -57,7 +57,7 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
 		}
 	}
 
-	if err = lom.bck.Init(T.Bowner()); err != nil {
+	if err = lom.bck.initFast(T.Bowner()); err != nil {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
@@ -79,7 +79,7 @@ func (lom *LOM) InitCT(ct *CT) {
 func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 	debug.Assert(!bck.IsEmpty())
 	lom.bck = *(*Bck)(bck)
-	if err = lom.bck.Init(T.Bowner()); err != nil {
+	if err = lom.bck.initFast(T.Bowner()); err != nil {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)

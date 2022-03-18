@@ -93,7 +93,10 @@ func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, er
 	}
 
 	if args.skipBackend {
-		err = bck.InitNoBackend(args.p.owner.bmd)
+		err = bck.Validate()
+		if err == nil {
+			err = bck.InitNoBackend(args.p.owner.bmd)
+		}
 	} else {
 		err = bck.Init(args.p.owner.bmd)
 	}

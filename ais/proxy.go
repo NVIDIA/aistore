@@ -1243,11 +1243,14 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query 
 		}
 
 		if backend := bck.Backend(); backend != nil {
+			if err := backend.Validate(); err != nil {
+				p.writeErrf(w, r, "cannot create %s: invalid backend %s, err: %v", bck, backend, err)
+				return
+			}
 			// Initialize backend bucket.
-			if err = backend.InitNoBackend(p.owner.bmd); err != nil {
+			if err := backend.InitNoBackend(p.owner.bmd); err != nil {
 				if !cmn.IsErrRemoteBckNotFound(err) {
-					p.writeErrf(w, r,
-						"cannot create %s: failing to initialize backend %s, err: %v",
+					p.writeErrf(w, r, "cannot create %s: failing to initialize backend %s, err: %v",
 						bck, backend, err)
 					return
 				}
