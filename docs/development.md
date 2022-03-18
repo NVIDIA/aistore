@@ -10,6 +10,7 @@ redirect_from:
 ## Table of Contents
 
 - [Debugging](#debugging)
+- [MsgPack](/docs/msgp.md)
 - [Useful scripts](#scripts)
   - [Clean deploy](#clean-deploy)
   - [Performance comparison](#performance-comparison)

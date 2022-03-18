@@ -233,7 +233,7 @@ ci: spell-check fmt-check lint test-short ## Run CI related checkers and linters
 
 
 # Target for linters
-.PHONY: lint-update lint fmt-check fmt-fix spell-check spell-fix cyclo
+.PHONY: lint-update lint fmt-check fmt-fix spell-check spell-fix cyclo msgp-update
 
 lint-update: ## Update the linter version (removes previous one and downloads a new one)
 	@rm -f $(GOPATH)/bin/golangci-lint
@@ -260,6 +260,8 @@ spell-fix: ## Fix spell checking issues
 	@GOOS="" go install github.com/client9/misspell/cmd/misspell@latest
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" spell --fix
 
+msgp-update: ## MessagePack generator
+	@GOOS="" go install github.com/tinylib/msgp@latest
 
 # Misc Targets
 .PHONY: cpuprof flamegraph dev-init
