@@ -21,7 +21,7 @@ function check_gomod {
 }
 
 function check_files_headers {
-  for f in $(find ${AISTORE_DIR} -type f -name "*.go" ! -regex $EXTERNAL_SRC_REGEX); do
+  for f in $(find ${AISTORE_DIR} -type f -name "*.go" -not -name "*gen.go"  ! -regex $EXTERNAL_SRC_REGEX); do
     # Expect '//go:build ...' or '// Package ...'.
     out=$(head -n 1 $f | grep -P "\/\/(go:build(.*)|\sPackage(.*))")
     if [[ $? -ne 0 ]]; then
