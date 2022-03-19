@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -363,7 +362,7 @@ func (b *Bck) MakeUname(objName string) string {
 	buf = append(buf, b.Name...)
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
-	return *(*string)(unsafe.Pointer(&buf))
+	return cos.UnsafeS(buf)
 }
 
 //

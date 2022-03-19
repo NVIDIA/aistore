@@ -327,7 +327,7 @@ ct:
 func (mi *MountpathInfo) MakePathBck(bck *cmn.Bck) string {
 	if bck.Props == nil {
 		buf := mi.makePathBuf(bck, "", 0)
-		return *(*string)(unsafe.Pointer(&buf))
+		return cos.UnsafeS(buf)
 	}
 
 	bid := bck.Props.BID
@@ -339,7 +339,7 @@ func (mi *MountpathInfo) MakePathBck(bck *cmn.Bck) string {
 		return dir
 	}
 	buf := mi.makePathBuf(bck, "", 0)
-	dir = *(*string)(unsafe.Pointer(&buf))
+	dir = cos.UnsafeS(buf)
 
 	mi.bpc.Lock()
 	mi.bpc.m[bid] = dir
@@ -350,7 +350,7 @@ func (mi *MountpathInfo) MakePathBck(bck *cmn.Bck) string {
 func (mi *MountpathInfo) MakePathCT(bck *cmn.Bck, contentType string) string {
 	debug.Assert(contentType != "")
 	buf := mi.makePathBuf(bck, contentType, 0)
-	return *(*string)(unsafe.Pointer(&buf))
+	return cos.UnsafeS(buf)
 }
 
 func (mi *MountpathInfo) MakePathFQN(bck *cmn.Bck, contentType, objName string) string {
@@ -358,7 +358,7 @@ func (mi *MountpathInfo) MakePathFQN(bck *cmn.Bck, contentType, objName string) 
 	buf := mi.makePathBuf(bck, contentType, 1+len(objName))
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
-	return *(*string)(unsafe.Pointer(&buf))
+	return cos.UnsafeS(buf)
 }
 
 func (mi *MountpathInfo) makeDelPathBck(bck *cmn.Bck, bid uint64) string {

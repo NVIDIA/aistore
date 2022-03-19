@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -422,7 +421,7 @@ func (wi *archwi) nameInArch(objName string) string {
 	buf = append(buf, wi.msg.FromBckName...)
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
-	return *(*string)(unsafe.Pointer(&buf))
+	return cos.UnsafeS(buf)
 }
 
 func (wi *archwi) openTarForAppend() (err error) {

@@ -7,7 +7,6 @@ package cos
 import (
 	"encoding/binary"
 	"errors"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -268,7 +267,7 @@ func (bw *BytePack) WriteUint32(i uint32) {
 }
 
 func (bw *BytePack) WriteBytes(b []byte) {
-	bw.WriteString(*(*string)(unsafe.Pointer(&b)))
+	bw.WriteString(UnsafeS(b))
 }
 
 func (bw *BytePack) WriteString(s string) {

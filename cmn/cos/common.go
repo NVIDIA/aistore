@@ -330,3 +330,7 @@ func Plural(num int) (s string) {
 	}
 	return
 }
+
+// UnsafeS casts bytes to an immutable string.
+// ***** CAUTION! the resulting string must never change *****
+func UnsafeS(b []byte) string { return *(*string)(unsafe.Pointer(&b)) }
