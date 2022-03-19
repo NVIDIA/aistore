@@ -920,23 +920,22 @@ func (h *htrun) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfte
 	return items, nil
 }
 
-func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
+func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v msgp.Encodable, tag string) (ok bool) {
 	var (
 		err       error
-		buf, slab = h.gmm.AllocSize(msgpObjListBufSize)
+		buf, slab = h.gmm.AllocSize(msgpObjListBufSize) // max size
 		mw        = msgp.NewWriterBuf(w, buf)
 	)
-	defer slab.Free(buf)
-
 	w.Header().Set(cmn.HdrContentType, cmn.ContentMsgPack)
-	if err = v.(msgp.Encodable).EncodeMsg(mw); err == nil {
+	if err = v.EncodeMsg(mw); err == nil {
 		err = mw.Flush()
 	}
-	if err != nil {
-		h.handleWriteError(r, tag, err)
-		return false
+	slab.Free(buf)
+	if err == nil {
+		return true
 	}
-	return true
+	h.handleWriteError(r, tag, err)
+	return false
 }
 
 func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
