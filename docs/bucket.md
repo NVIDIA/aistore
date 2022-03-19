@@ -34,7 +34,7 @@ redirect_from:
 
 ## Bucket
 
-AIStore uses the popular and well-known bucket abstraction. Each object ina cluster is assigned to (and stored in) a basic container called *bucket*.
+AIStore uses the popular and well-known bucket abstraction. Each object in a cluster is assigned to (and stored in) a basic container called *bucket*.
 
 In a flat storage hierarchy, bucket is a named container of user dataset(s) (represented as objects) and, simultaneously, a point of applying storage management policies: checksumming, erasure coding, mirroring, LRU eviction, etc.
 
