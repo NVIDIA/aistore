@@ -83,9 +83,9 @@ func (ct *CT) Unlock(exclusive bool) {
 //  fqn := ct.Make(fs.ECMetaType)
 
 func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
-	parsedFQN, hrwFQN, err := ResolveFQN(fqn)
-	if err != nil {
-		return nil, err
+	parsedFQN, hrwFQN, errP := ResolveFQN(fqn)
+	if errP != nil {
+		return nil, errP
 	}
 	ct = &CT{
 		fqn:         fqn,
@@ -97,7 +97,7 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 		digest:      parsedFQN.Digest,
 	}
 	if b != nil {
-		err = ct.bck.Init(b)
+		err = ct.bck.initFast(b)
 	}
 	return
 }

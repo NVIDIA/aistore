@@ -162,11 +162,11 @@ func (b *Bck) Init(bowner Bowner) error {
 	if err := backend.Validate(); err != nil {
 		return err
 	}
-	backend.Props = nil // always re-init
+	backend.Props = nil // always reinitialize
 	return backend.InitNoBackend(bowner)
 }
 
-// without bucket name, provider, namespace validations (compare with `Init` above)
+// is used to init LOM, skips validations (compare with `Init` above)
 func (b *Bck) initFast(bowner Bowner) error {
 	if err := b.InitNoBackend(bowner); err != nil {
 		return err
@@ -175,7 +175,7 @@ func (b *Bck) initFast(bowner Bowner) error {
 	if backend == nil {
 		return nil
 	}
-	backend.Props = nil // always reinitialize
+	backend.Props = nil // ditto
 	return backend.InitNoBackend(bowner)
 }
 
