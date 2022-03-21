@@ -173,7 +173,7 @@ func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
-		cargs.cresv = &backendAISResv{} // -> cmn.BackendInfoAIS
+		cargs.cresv = cresBA{} // -> cmn.BackendInfoAIS
 	}
 	res := p.call(cargs)
 	v, err := res.v.(*cmn.BackendInfoAIS), res.toErr()

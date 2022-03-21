@@ -578,7 +578,7 @@ func (h *htrun) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastResults
 	if bargs.req.BodyR != nil {
 		cargs.req.BodyR, _ = bargs.req.BodyR.(cos.ReadOpenCloser).Open()
 	}
-	cargs.cresv = bargs.v
+	cargs.cresv = bargs.cresv
 	res := h.call(cargs)
 	if bargs.async {
 		freeCR(res) // discard right away
@@ -682,13 +682,13 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 	}
 
 	if args.cresv != nil { // TODO -- FIXME: remove this `if` and wrap readAll() via more cresv impl-s
-		res.v = args.cresv.newVal()
-		args.cresv.decode(res, resp.Body)
+		res.v = args.cresv.newV()
+		args.cresv.read(res, resp.Body)
 		if res.err != nil {
 			return
 		}
 	} else {
-		res.readAll(resp.Body)
+		res.read(resp.Body)
 		if res.err != nil {
 			return
 		}

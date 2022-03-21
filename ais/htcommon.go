@@ -76,8 +76,8 @@ type (
 	// cresv: call result value factory and result-type specific decoder
 	// (used in both callArgs and bcastArgs)
 	cresv interface {
-		newVal() interface{}
-		decode(*callResult, io.Reader)
+		newV() interface{}
+		read(*callResult, io.Reader)
 	}
 
 	// callArgs: unicast control-plane call arguments
@@ -93,7 +93,7 @@ type (
 		req               cmn.HreqArgs      // h.call args
 		network           string            // one of the cmn.KnownNetworks
 		timeout           time.Duration     // call timeout
-		v                 cresv             // same as `callArgs.v`
+		cresv             cresv             // call result value (comment above)
 		nodes             []cluster.NodeMap // broadcast destinations - map(s)
 		selected          cluster.Nodes     // broadcast destinations - slice of selected few
 		smap              *smapX            // Smap to use
@@ -426,11 +426,34 @@ func freeBcastRes(results sliceResults) {
 // and common read-body methods w/ optional value-unmarshaling
 //
 
-func (res *callResult) readAll(body io.Reader) { res.bytes, res.err = io.ReadAll(body) }
+type (
+	cresCM struct{} // -> cluMeta
+	cresBm struct{} // -> cmn.BckSummaries
+	cresBL struct{} // -> cmn.BucketList
+	cresSM struct{} // -> smapX
+	cresND struct{} // -> cluster.Snode
+	cresBA struct{} // -> cmn.BackendInfoAIS
+	cresEI struct{} // -> etl.InfoList
+	cresEL struct{} // -> etl.PodLogsMsg
+	cresEH struct{} // -> etl.PodHealthMsg
+)
 
-func (res *callResult) jsonDecode(body io.Reader) { res.err = jsoniter.NewDecoder(body).Decode(res.v) }
+var (
+	_ cresv = cresCM{}
+	_ cresv = cresBm{}
+	_ cresv = cresBL{}
+	_ cresv = cresSM{}
+	_ cresv = cresND{}
+	_ cresv = cresBA{}
+	_ cresv = cresEI{}
+	_ cresv = cresEL{}
+	_ cresv = cresEH{}
+)
 
-func (res *callResult) msgpDecode(body io.Reader) {
+func (res *callResult) read(body io.Reader)  { res.bytes, res.err = io.ReadAll(body) }
+func (res *callResult) jread(body io.Reader) { res.err = jsoniter.NewDecoder(body).Decode(res.v) }
+
+func (res *callResult) mread(body io.Reader) {
 	vv, ok := res.v.(msgp.Decodable)
 	debug.Assert(ok)
 	buf, slab := memsys.PageMM().AllocSize(msgpObjListBufSize)
@@ -438,113 +461,32 @@ func (res *callResult) msgpDecode(body io.Reader) {
 	slab.Free(buf)
 }
 
-// cluMetaResv -> cluMeta
-type cluMetaResv struct{}
+func (cresCM) newV() interface{}                      { return &cluMeta{} }
+func (c cresCM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-var _ cresv = (*cluMetaResv)(nil)
+func (cresBm) newV() interface{}                      { return &cmn.BckSummaries{} }
+func (c cresBm) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (*cluMetaResv) newVal() interface{} { return &cluMeta{} }
+func (cresBL) newV() interface{}                      { return &cmn.BucketList{} }
+func (c cresBL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
 
-func (c *cluMetaResv) decode(res *callResult, body io.Reader) {
-	res.v = c.newVal()
-	res.jsonDecode(body)
-}
+func (cresSM) newV() interface{}                      { return &smapX{} }
+func (c cresSM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-// bckSummResv -> cmn.BckSummaries
-type bckSummResv struct{}
+func (cresND) newV() interface{}                      { return &cluster.Snode{} }
+func (c cresND) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-var _ cresv = (*bckSummResv)(nil)
+func (cresBA) newV() interface{}                      { return &cmn.BackendInfoAIS{} }
+func (c cresBA) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (*bckSummResv) newVal() interface{} { return &cmn.BckSummaries{} }
+func (cresEI) newV() interface{}                      { return &etl.InfoList{} }
+func (c cresEI) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (c *bckSummResv) decode(res *callResult, body io.Reader) {
-	res.v = c.newVal()
-	res.jsonDecode(body)
-}
+func (cresEL) newV() interface{}                      { return &etl.PodLogsMsg{} }
+func (c cresEL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-// bucketListResv -> cmn.BucketList
-type bucketListResv struct{}
-
-var _ cresv = (*bucketListResv)(nil)
-
-func (*bucketListResv) newVal() interface{} { return &cmn.BucketList{} }
-
-func (c *bucketListResv) decode(res *callResult, body io.Reader) {
-	res.v = c.newVal()
-	res.msgpDecode(body)
-}
-
-// smapXResv -> smapX
-type smapXResv struct{}
-
-var _ cresv = (*smapXResv)(nil)
-
-func (*smapXResv) newVal() interface{} { return &smapX{} }
-
-func (c *smapXResv) decode(res *callResult, body io.Reader) {
-	res.v = c.newVal()
-	res.jsonDecode(body)
-}
-
-// snodeResv -> cluster.Snode
-type snodeResv struct{}
-
-var _ cresv = (*snodeResv)(nil)
-
-func (*snodeResv) newVal() interface{} { return &cluster.Snode{} }
-
-func (c *snodeResv) decode(res *callResult, body io.Reader) {
-	res.v = c.newVal()
-	res.jsonDecode(body)
-}
-
-// backendAISResv -> cmn.BackendInfoAIS
-type backendAISResv struct{}
-
-var _ cresv = (*backendAISResv)(nil)
-
-func (*backendAISResv) newVal() interface{} { return &cmn.BackendInfoAIS{} }
-
-func (c *backendAISResv) decode(res *callResult, body io.Reader) {
-	res.v = c.newVal()
-	res.jsonDecode(body)
-}
-
-// etlInfoResv -> etl.InfoList
-type etlInfoResv struct{}
-
-var _ cresv = (*etlInfoResv)(nil)
-
-func (*etlInfoResv) newVal() interface{} { return &etl.InfoList{} }
-
-func (c *etlInfoResv) decode(res *callResult, body io.Reader) {
-	res.v = c.newVal()
-	res.jsonDecode(body)
-}
-
-// etlPodLogsResv -> etl.PodLogsMsg
-type etlPodLogsResv struct{}
-
-var _ cresv = (*etlPodLogsResv)(nil)
-
-func (*etlPodLogsResv) newVal() interface{} { return &etl.PodLogsMsg{} }
-
-func (c *etlPodLogsResv) decode(res *callResult, body io.Reader) {
-	res.v = c.newVal()
-	res.jsonDecode(body)
-}
-
-// etlPodHealthResv -> etl.PodHealthMsg
-type etlPodHealthResv struct{}
-
-var _ cresv = (*etlPodHealthResv)(nil)
-
-func (*etlPodHealthResv) newVal() interface{} { return &etl.PodHealthMsg{} }
-
-func (c *etlPodHealthResv) decode(res *callResult, body io.Reader) {
-	res.v = c.newVal()
-	res.jsonDecode(body)
-}
+func (cresEH) newV() interface{}                      { return &etl.PodHealthMsg{} }
+func (c cresEH) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 ////////////////
 // glogWriter //

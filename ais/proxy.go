@@ -1428,7 +1428,7 @@ func (p *proxy) gatherBckSumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summari
 	q.Set(apc.QparamTaskAction, apc.TaskResult)
 	q.Set(apc.QparamSilent, "true")
 	args.req.Query = q
-	args.v = &bckSummResv{} // -> cmn.BckSummaries
+	args.cresv = cresBm{} // -> cmn.BckSummaries
 	summaries = make(cmn.BckSummaries, 0)
 	results = p.bcastGroup(args)
 	freeBcArgs(args)
@@ -2029,7 +2029,7 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allEntr
 	}
 	args.timeout = apc.LongTimeout
 	args.smap = smap
-	args.v = &bucketListResv{} // -> cmn.BucketList
+	args.cresv = cresBL{} // -> cmn.BucketList
 
 	// Combine the results.
 	results = p.bcastGroup(args)
@@ -2100,7 +2100,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allE
 	if lsmsg.NeedLocalMD() {
 		args.timeout = reqTimeout
 		args.smap = smap
-		args.v = &bucketListResv{} // -> cmn.BucketList
+		args.cresv = cresBL{} // -> cmn.BucketList
 		results = p.bcastGroup(args)
 	} else {
 		nl, exists := p.notifs.entry(lsmsg.UUID)
@@ -2111,7 +2111,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allE
 				cargs.si = si
 				cargs.req = args.req
 				cargs.timeout = reqTimeout
-				cargs.cresv = &bucketListResv{} // -> cmn.BucketList
+				cargs.cresv = cresBL{} // -> cmn.BucketList
 			}
 			res := p.call(cargs)
 			freeCargs(cargs)
@@ -2501,7 +2501,7 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatSmap}},
 		}
 		cargs.timeout = apc.DefaultTimeout
-		cargs.cresv = &smapXResv{} // -> smapX
+		cargs.cresv = cresSM{} // -> smapX
 	}
 	res := p.call(cargs)
 	if res.err != nil {
@@ -2868,7 +2868,7 @@ func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error)
 			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatSnode}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
-		cargs.cresv = &snodeResv{} // -> cluster.Snode
+		cargs.cresv = cresND{} // -> cluster.Snode
 	}
 	res := p.call(cargs)
 	if res.err != nil {
