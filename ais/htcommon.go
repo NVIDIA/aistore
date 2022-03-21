@@ -26,7 +26,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tinylib/msgp/msgp"
 )
 
 const unknownDaemonID = "unknown"
@@ -70,27 +73,34 @@ type (
 		s  sliceResults
 	}
 
-	// callArgs contains arguments for a peer-to-peer control plane call.
+	// cresv: call result value factory and result-type specific decoder
+	// (used in both callArgs and bcastArgs)
+	cresv interface {
+		newVal() interface{}
+		decode(*callResult, io.Reader)
+	}
+
+	// callArgs: unicast control-plane call arguments
 	callArgs struct {
 		req     cmn.HreqArgs
 		timeout time.Duration
 		si      *cluster.Snode
-		v       interface{} // Value that needs to be unmarshalled.
+		cresv   cresv
 	}
 
-	// bcastArgs contains arguments for an intra-cluster broadcast call.
+	// bcastArgs: intra-cluster broadcast call args
 	bcastArgs struct {
-		req               cmn.HreqArgs       // h.call args
-		network           string             // one of the cmn.KnownNetworks
-		timeout           time.Duration      // call timeout
-		fv                func() interface{} // optional; returns marshaled msg (see `callArgs.v`)
-		nodes             []cluster.NodeMap  // broadcast destinations - map(s)
-		selected          cluster.Nodes      // broadcast destinations - slice of selected few
-		smap              *smapX             // Smap to use
-		to                int                // (all targets, all proxies, all nodes) enum
-		nodeCount         int                // m.b. greater or equal destination count
-		ignoreMaintenance bool               // do not skip nodes under maintenance
-		async             bool               // ignore results
+		req               cmn.HreqArgs      // h.call args
+		network           string            // one of the cmn.KnownNetworks
+		timeout           time.Duration     // call timeout
+		v                 cresv             // same as `callArgs.v`
+		nodes             []cluster.NodeMap // broadcast destinations - map(s)
+		selected          cluster.Nodes     // broadcast destinations - slice of selected few
+		smap              *smapX            // Smap to use
+		to                int               // (all targets, all proxies, all nodes) enum
+		nodeCount         int               // m.b. greater or equal destination count
+		ignoreMaintenance bool              // do not skip nodes under maintenance
+		async             bool              // ignore results
 	}
 
 	networkHandler struct {
@@ -332,8 +342,7 @@ func (e *errNotPrimary) Error() string {
 }
 
 ///////////////
-// bargsPool //
-// callArgsPool //
+// bargsPool & callArgsPool
 ///////////////
 
 var (
@@ -410,6 +419,131 @@ func freeBcastRes(results sliceResults) {
 	}
 	results = results[:0]
 	resultsPool.Put(&results)
+}
+
+//
+// all `cresv` implementations
+// and common read-body methods w/ optional value-unmarshaling
+//
+
+func (res *callResult) readAll(body io.Reader) { res.bytes, res.err = io.ReadAll(body) }
+
+func (res *callResult) jsonDecode(body io.Reader) { res.err = jsoniter.NewDecoder(body).Decode(res.v) }
+
+func (res *callResult) msgpDecode(body io.Reader) {
+	vv, ok := res.v.(msgp.Decodable)
+	debug.Assert(ok)
+	buf, slab := memsys.PageMM().AllocSize(msgpObjListBufSize)
+	res.err = vv.DecodeMsg(msgp.NewReaderBuf(body, buf))
+	slab.Free(buf)
+}
+
+// cluMetaResv -> cluMeta
+type cluMetaResv struct{}
+
+var _ cresv = (*cluMetaResv)(nil)
+
+func (*cluMetaResv) newVal() interface{} { return &cluMeta{} }
+
+func (c *cluMetaResv) decode(res *callResult, body io.Reader) {
+	res.v = c.newVal()
+	res.jsonDecode(body)
+}
+
+// bckSummResv -> cmn.BckSummaries
+type bckSummResv struct{}
+
+var _ cresv = (*bckSummResv)(nil)
+
+func (*bckSummResv) newVal() interface{} { return &cmn.BckSummaries{} }
+
+func (c *bckSummResv) decode(res *callResult, body io.Reader) {
+	res.v = c.newVal()
+	res.jsonDecode(body)
+}
+
+// bucketListResv -> cmn.BucketList
+type bucketListResv struct{}
+
+var _ cresv = (*bucketListResv)(nil)
+
+func (*bucketListResv) newVal() interface{} { return &cmn.BucketList{} }
+
+func (c *bucketListResv) decode(res *callResult, body io.Reader) {
+	res.v = c.newVal()
+	res.msgpDecode(body)
+}
+
+// smapXResv -> smapX
+type smapXResv struct{}
+
+var _ cresv = (*smapXResv)(nil)
+
+func (*smapXResv) newVal() interface{} { return &smapX{} }
+
+func (c *smapXResv) decode(res *callResult, body io.Reader) {
+	res.v = c.newVal()
+	res.jsonDecode(body)
+}
+
+// snodeResv -> cluster.Snode
+type snodeResv struct{}
+
+var _ cresv = (*snodeResv)(nil)
+
+func (*snodeResv) newVal() interface{} { return &cluster.Snode{} }
+
+func (c *snodeResv) decode(res *callResult, body io.Reader) {
+	res.v = c.newVal()
+	res.jsonDecode(body)
+}
+
+// backendAISResv -> cmn.BackendInfoAIS
+type backendAISResv struct{}
+
+var _ cresv = (*backendAISResv)(nil)
+
+func (*backendAISResv) newVal() interface{} { return &cmn.BackendInfoAIS{} }
+
+func (c *backendAISResv) decode(res *callResult, body io.Reader) {
+	res.v = c.newVal()
+	res.jsonDecode(body)
+}
+
+// etlInfoResv -> etl.InfoList
+type etlInfoResv struct{}
+
+var _ cresv = (*etlInfoResv)(nil)
+
+func (*etlInfoResv) newVal() interface{} { return &etl.InfoList{} }
+
+func (c *etlInfoResv) decode(res *callResult, body io.Reader) {
+	res.v = c.newVal()
+	res.jsonDecode(body)
+}
+
+// etlPodLogsResv -> etl.PodLogsMsg
+type etlPodLogsResv struct{}
+
+var _ cresv = (*etlPodLogsResv)(nil)
+
+func (*etlPodLogsResv) newVal() interface{} { return &etl.PodLogsMsg{} }
+
+func (c *etlPodLogsResv) decode(res *callResult, body io.Reader) {
+	res.v = c.newVal()
+	res.jsonDecode(body)
+}
+
+// etlPodHealthResv -> etl.PodHealthMsg
+type etlPodHealthResv struct{}
+
+var _ cresv = (*etlPodHealthResv)(nil)
+
+func (*etlPodHealthResv) newVal() interface{} { return &etl.PodHealthMsg{} }
+
+func (c *etlPodHealthResv) decode(res *callResult, body io.Reader) {
+	res.v = c.newVal()
+	res.jsonDecode(body)
 }
 
 ////////////////
@@ -548,7 +682,7 @@ func (server *netServer) shutdown() {
 ////////////////
 
 // interface guard
-var _ http.Handler = httpMuxers{}
+var _ http.Handler = (*httpMuxers)(nil)
 
 func newMuxers() httpMuxers {
 	m := make(httpMuxers, len(allHTTPverbs))

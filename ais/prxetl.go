@@ -261,7 +261,7 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 	)
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.S}
 	args.timeout = apc.DefaultTimeout
-	args.fv = func() interface{} { return &etl.InfoList{} }
+	args.v = &etlInfoResv{} // -> etl.InfoList
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 
@@ -314,7 +314,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, ap
 			cargs.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.Join(etlID, apc.ETLLogs)}
 			cargs.si = si
 			cargs.timeout = apc.DefaultTimeout
-			cargs.v = &etl.PodLogsMsg{}
+			cargs.cresv = &etlPodLogsResv{} // -> etl.PodLogsMsg
 		}
 		results[0] = p.call(cargs)
 		freeCargs(cargs)
@@ -323,7 +323,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, ap
 		args = allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 		args.timeout = apc.DefaultTimeout
-		args.fv = func() interface{} { return &etl.PodLogsMsg{} }
+		args.v = &etlPodLogsResv{} // -> etl.PodLogsMsg
 		results = p.bcastGroup(args)
 		freeBcArgs(args)
 	}
@@ -351,7 +351,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 	args.timeout = apc.DefaultTimeout
-	args.fv = func() interface{} { return &etl.PodHealthMsg{} }
+	args.v = &etlPodHealthResv{} // -> etl.PodHealthMsg
 	results = p.bcastGroup(args)
 	defer freeBcastRes(results)
 	freeBcArgs(args)

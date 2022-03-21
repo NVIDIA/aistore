@@ -1428,7 +1428,7 @@ func (p *proxy) gatherBckSumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summari
 	q.Set(apc.QparamTaskAction, apc.TaskResult)
 	q.Set(apc.QparamSilent, "true")
 	args.req.Query = q
-	args.fv = func() interface{} { return &cmn.BckSummaries{} }
+	args.v = &bckSummResv{} // -> cmn.BckSummaries
 	summaries = make(cmn.BckSummaries, 0)
 	results = p.bcastGroup(args)
 	freeBcArgs(args)
@@ -2027,9 +2027,9 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allEntr
 		Query:  bck.AddToQuery(nil),
 		Body:   cos.MustMarshal(aisMsg),
 	}
-	args.timeout = apc.LongTimeout // TODO: should it be `Client.ListObjects`?
+	args.timeout = apc.LongTimeout
 	args.smap = smap
-	args.fv = func() interface{} { return &cmn.BucketList{} }
+	args.v = &bucketListResv{} // -> cmn.BucketList
 
 	// Combine the results.
 	results = p.bcastGroup(args)
@@ -2100,7 +2100,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allE
 	if lsmsg.NeedLocalMD() {
 		args.timeout = reqTimeout
 		args.smap = smap
-		args.fv = func() interface{} { return &cmn.BucketList{} }
+		args.v = &bucketListResv{} // -> cmn.BucketList
 		results = p.bcastGroup(args)
 	} else {
 		nl, exists := p.notifs.entry(lsmsg.UUID)
@@ -2111,7 +2111,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allE
 				cargs.si = si
 				cargs.req = args.req
 				cargs.timeout = reqTimeout
-				cargs.v = &cmn.BucketList{}
+				cargs.cresv = &bucketListResv{} // -> cmn.BucketList
 			}
 			res := p.call(cargs)
 			freeCargs(cargs)
@@ -2501,7 +2501,7 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatSmap}},
 		}
 		cargs.timeout = apc.DefaultTimeout
-		cargs.v = &smapX{}
+		cargs.cresv = &smapXResv{} // -> smapX
 	}
 	res := p.call(cargs)
 	if res.err != nil {
@@ -2868,7 +2868,7 @@ func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error)
 			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatSnode}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
-		cargs.v = &cluster.Snode{}
+		cargs.cresv = &snodeResv{} // -> cluster.Snode
 	}
 	res := p.call(cargs)
 	if res.err != nil {

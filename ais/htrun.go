@@ -578,9 +578,7 @@ func (h *htrun) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastResults
 	if bargs.req.BodyR != nil {
 		cargs.req.BodyR, _ = bargs.req.BodyR.(cos.ReadOpenCloser).Open()
 	}
-	if bargs.fv != nil {
-		cargs.v = bargs.fv()
-	}
+	cargs.cresv = bargs.v
 	res := h.call(cargs)
 	if bargs.async {
 		freeCR(res) // discard right away
@@ -683,28 +681,15 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 		return
 	}
 
-	if args.v != nil {
-		if v, ok := args.v.(msgp.Decodable); ok {
-			buf, slab := h.gmm.AllocSize(msgpObjListBufSize)
-			res.err = v.DecodeMsg(msgp.NewReaderBuf(resp.Body, buf))
-			slab.Free(buf)
-		} else {
-			res.err = jsoniter.NewDecoder(resp.Body).Decode(args.v)
-		}
+	if args.cresv != nil { // TODO -- FIXME: remove this `if` and wrap readAll() via more cresv impl-s
+		res.v = args.cresv.newVal()
+		args.cresv.decode(res, resp.Body)
 		if res.err != nil {
-			res.details = fmt.Sprintf(
-				"failed to unmarshal response from %s (%s %s), read response err: %v",
-				sid, args.req.Method, args.req.URL(), res.err,
-			)
 			return
 		}
-		res.v = args.v
 	} else {
-		res.bytes, res.err = io.ReadAll(resp.Body)
+		res.readAll(resp.Body)
 		if res.err != nil {
-			res.details = fmt.Sprintf("failed to call %s (%s %s), read response err: %v",
-				sid, args.req.Method, args.req.URL(), res.err,
-			)
 			return
 		}
 	}

@@ -185,9 +185,9 @@ func (m *BMD) Range(providerQuery *string, nsQuery *cmn.Ns, callback func(*Bck) 
 	}
 }
 
-/////////////////////
-// private methods //
-/////////////////////
+//
+// private methods
+//
 
 func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 	if namespaces, ok := m.Providers[bck.Provider]; ok {

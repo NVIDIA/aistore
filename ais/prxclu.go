@@ -160,11 +160,10 @@ func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what
 
 func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 	smap := p.owner.smap.get()
-	si, err := smap.GetRandTarget()
-	if err != nil {
-		return nil, err
+	si, errT := smap.GetRandTarget()
+	if errT != nil {
+		return nil, errT
 	}
-	remoteInfo := &cmn.BackendInfoAIS{}
 	cargs := allocCargs()
 	{
 		cargs.si = si
@@ -174,16 +173,13 @@ func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
-		cargs.v = remoteInfo
+		cargs.cresv = &backendAISResv{} // -> cmn.BackendInfoAIS
 	}
 	res := p.call(cargs)
-	err = res.toErr()
+	v, err := res.v.(*cmn.BackendInfoAIS), res.toErr()
 	freeCargs(cargs)
 	freeCR(res)
-	if err != nil {
-		remoteInfo = nil
-	}
-	return remoteInfo, err
+	return v, err
 }
 
 func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cos.JSONRawMsgs, error) {
@@ -1051,12 +1047,24 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		return
 	}
 	timeout := cmn.GCO.Get().Timeout.CplaneOperation.D()
-	if _, _, err := p.Health(si, timeout, nil); err != nil {
-		time.Sleep(timeout * 2)
-		if _, status, err := p.Health(si, timeout, nil); err != nil && status != http.StatusServiceUnavailable {
-			// (note that health() returns 503 when starting up)
-			p.writeErrf(w, r, "node %q is unreachable, err: %v(%d)", si.StringEx(), err, status)
-			return
+	if _, status, err := p.Health(si, timeout, nil); err != nil {
+		sleep, retries := timeout/2, 5
+		time.Sleep(sleep)
+		for i := 0; i < retries; i++ {
+			time.Sleep(sleep)
+			_, status, err = p.Health(si, timeout, nil)
+			if err == nil {
+				break
+			}
+			if status != http.StatusServiceUnavailable {
+				p.writeErrf(w, r, "%s is unreachable: %v(%d)", si, err, status)
+				return
+			}
+		}
+		if err != nil {
+			debug.Assert(status == http.StatusServiceUnavailable)
+			glog.Errorf("%s: node %s takes unusually long time to start: %v(%d) - proceeding anyway",
+				p.si, si, err, status)
 		}
 	}
 

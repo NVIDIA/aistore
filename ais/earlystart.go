@@ -714,7 +714,7 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 	}
 	args.smap = bcastSmap
 	args.to = cluster.AllNodes
-	args.fv = func() interface{} { return &cluMeta{} }
+	args.v = &cluMetaResv{} // -> cluMeta
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	done = true
