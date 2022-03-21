@@ -1428,7 +1428,7 @@ func (p *proxy) gatherBckSumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summari
 	q.Set(apc.QparamTaskAction, apc.TaskResult)
 	q.Set(apc.QparamSilent, "true")
 	args.req.Query = q
-	args.cresv = cresBm{} // -> cmn.BckSummaries
+	args.cresv = cresBsumm{} // -> cmn.BckSummaries
 	summaries = make(cmn.BckSummaries, 0)
 	results = p.bcastGroup(args)
 	freeBcArgs(args)

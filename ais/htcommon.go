@@ -428,7 +428,6 @@ func freeBcastRes(results sliceResults) {
 
 type (
 	cresCM struct{} // -> cluMeta
-	cresBm struct{} // -> cmn.BckSummaries
 	cresBL struct{} // -> cmn.BucketList
 	cresSM struct{} // -> smapX
 	cresND struct{} // -> cluster.Snode
@@ -437,11 +436,13 @@ type (
 	cresEL struct{} // -> etl.PodLogsMsg
 	cresEH struct{} // -> etl.PodHealthMsg
 	cresIC struct{} // -> icBundle
+	cresBM struct{} // -> bucketMD
+
+	cresBsumm struct{} // -> cmn.BckSummaries
 )
 
 var (
 	_ cresv = cresCM{}
-	_ cresv = cresBm{}
 	_ cresv = cresBL{}
 	_ cresv = cresSM{}
 	_ cresv = cresND{}
@@ -450,6 +451,8 @@ var (
 	_ cresv = cresEL{}
 	_ cresv = cresEH{}
 	_ cresv = cresIC{}
+	_ cresv = cresBM{}
+	_ cresv = cresBsumm{}
 )
 
 func (res *callResult) read(body io.Reader)  { res.bytes, res.err = io.ReadAll(body) }
@@ -465,9 +468,6 @@ func (res *callResult) mread(body io.Reader) {
 
 func (cresCM) newV() interface{}                      { return &cluMeta{} }
 func (c cresCM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresBm) newV() interface{}                      { return &cmn.BckSummaries{} }
-func (c cresBm) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 func (cresBL) newV() interface{}                      { return &cmn.BucketList{} }
 func (c cresBL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
@@ -492,6 +492,12 @@ func (c cresEH) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jr
 
 func (cresIC) newV() interface{}                      { return &icBundle{} }
 func (c cresIC) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
+
+func (cresBM) newV() interface{}                      { return &bucketMD{} }
+func (c cresBM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
+
+func (cresBsumm) newV() interface{}                      { return &cmn.BckSummaries{} }
+func (c cresBsumm) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 ////////////////
 // glogWriter //

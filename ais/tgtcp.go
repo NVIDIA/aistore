@@ -712,25 +712,28 @@ func (t *target) ensureLatestBMD(msg *aisMsg, r *http.Request) {
 	}
 }
 
-func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed string) (err error) {
+func (t *target) getPrimaryBMD(renamed string) (bmd *bucketMD, err error) {
 	smap := t.owner.smap.get()
 	if err = smap.validate(); err != nil {
-		return cmn.NewErrFailedTo(t, "fetch-primary", smap, err)
+		return nil, cmn.NewErrFailedTo(t, "get-primary-bmd", smap, err)
 	}
-	psi := smap.Primary
-	q := url.Values{}
-	q.Set(apc.QparamWhat, what)
+	var (
+		what    = apc.GetWhatBMD
+		q       = url.Values{apc.QparamWhat: []string{what}}
+		psi     = smap.Primary
+		path    = apc.URLPathDae.S
+		url     = psi.URL(cmn.NetIntraControl)
+		timeout = cmn.Timeout.CplaneOperation()
+	)
 	if renamed != "" {
-		q.Add(whatRenamedLB, renamed)
+		q.Set(whatRenamedLB, renamed)
 	}
-	path := apc.URLPathDae.S
-	url := psi.URL(cmn.NetIntraControl)
-	timeout := cmn.Timeout.CplaneOperation()
 	cargs := allocCargs()
 	{
 		cargs.si = psi
 		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q}
 		cargs.timeout = timeout
+		cargs.cresv = cresBM{}
 	}
 	res := t.call(cargs)
 	if res.err != nil {
@@ -741,10 +744,7 @@ func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed stri
 		}
 	}
 	if err == nil {
-		err = jsoniter.Unmarshal(res.bytes, outStruct)
-		if err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, t, what, cmn.BytesHead(res.bytes), err)
-		}
+		bmd = res.v.(*bucketMD)
 	}
 	freeCargs(cargs)
 	freeCR(res)
@@ -753,15 +753,15 @@ func (t *target) fetchPrimaryMD(what string, outStruct interface{}, renamed stri
 
 func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	var (
-		caller      string
-		bck         cmn.Bck
-		newBucketMD = &bucketMD{}
+		caller string
+		bck    cmn.Bck
 	)
 	if len(bcks) > 0 {
 		bck = bcks[0]
 	}
 	time.Sleep(200 * time.Millisecond)
-	if err := t.fetchPrimaryMD(apc.GetWhatBMD, newBucketMD, bck.Name); err != nil {
+	newBucketMD, err := t.getPrimaryBMD(bck.Name)
+	if err != nil {
 		glog.Error(err)
 		return
 	}
