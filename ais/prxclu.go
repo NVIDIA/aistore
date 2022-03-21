@@ -434,17 +434,16 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 // when joining manually, update the node with cluster meta that does not include Smap (the later
 // gets metasync-ed upon success of this primary <=> joining node "handshake")
 func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error) {
-	meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
+	cm, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
 	glog.Infof("%s: %s %s => (%s)", p, apiOp, nsi.StringEx(), p.owner.smap.get().StringEx())
 
-	body := cos.MustMarshal(meta)
 	cargs := allocCargs()
 	{
 		cargs.si = nsi
-		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathDaeAdminJoin.S, Body: body}
+		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathDaeAdminJoin.S, Body: cos.MustMarshal(cm)}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}
 	res := p.call(cargs)

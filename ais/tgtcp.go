@@ -52,29 +52,29 @@ func (t *target) joinCluster(action string, primaryURLs ...string) (status int, 
 	if len(res.bytes) == 0 {
 		return
 	}
-	err = t.applyRegMeta(action, res.bytes, "")
+	err = t.applyCluMeta(action, res.bytes, "")
 	return
 }
 
-func (t *target) applyRegMeta(action string, body []byte, caller string) (err error) {
-	var regMeta cluMeta
-	err = jsoniter.Unmarshal(body, &regMeta)
+func (t *target) applyCluMeta(action string, body []byte, caller string) (err error) {
+	var cm cluMeta
+	err = jsoniter.Unmarshal(body, &cm)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "reg-meta", cmn.BytesHead(body), err)
 		return
 	}
-	msg := t.newAmsgStr(action, regMeta.BMD)
+	msg := t.newAmsgStr(action, cm.BMD)
 
 	// Config
-	debug.Assert(regMeta.Config != nil)
-	if err = t.receiveConfig(regMeta.Config, msg, nil, caller); err != nil {
+	debug.Assert(cm.Config != nil)
+	if err = t.receiveConfig(cm.Config, msg, nil, caller); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
 			glog.Error(err)
 		}
-		// Received outdated/invalid config in regMeta, ignore by setting to `nil`.
-		regMeta.Config = nil
+		// Received outdated/invalid config in cm, ignore by setting to `nil`.
+		cm.Config = nil
 		// fall through
 	}
 
@@ -86,7 +86,7 @@ func (t *target) applyRegMeta(action string, body []byte, caller string) (err er
 	reb.ActivateTimedGFN()
 
 	// BMD
-	if err = t.receiveBMD(regMeta.BMD, msg, nil /*ms payload */, bmdReg, caller, true /*silent*/); err != nil {
+	if err = t.receiveBMD(cm.BMD, msg, nil /*ms payload */, bmdReg, caller, true /*silent*/); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
@@ -94,11 +94,11 @@ func (t *target) applyRegMeta(action string, body []byte, caller string) (err er
 		}
 	}
 	// Smap
-	if err = t.receiveSmap(regMeta.Smap, msg, nil /*ms payload*/, caller, nil); err != nil {
+	if err = t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, nil); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
-			glog.Error(cmn.NewErrFailedTo(t, "sync", regMeta.Smap, err))
+			glog.Error(cmn.NewErrFailedTo(t, "sync", cm.Smap, err))
 		}
 	} else {
 		glog.Infof("%s: synch %s", t, t.owner.smap.get())
@@ -327,7 +327,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	caller := r.Header.Get(apc.HdrCallerName)
-	if err := t.applyRegMeta(apc.ActAdminJoinTarget, body, caller); err != nil {
+	if err := t.applyCluMeta(apc.ActAdminJoinTarget, body, caller); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

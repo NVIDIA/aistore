@@ -255,16 +255,16 @@ func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, e
 	if len(res.bytes) == 0 {
 		return
 	}
-	err = p.applyRegMeta(action, res.bytes, "")
+	err = p.applyCluMeta(action, res.bytes, "")
 	return
 }
 
-func (p *proxy) applyRegMeta(action string, body []byte, caller string) error {
-	var regMeta cluMeta
-	if err := jsoniter.Unmarshal(body, &regMeta); err != nil {
+func (p *proxy) applyCluMeta(action string, body []byte, caller string) error {
+	var cm cluMeta
+	if err := jsoniter.Unmarshal(body, &cm); err != nil {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, p, "reg-meta", cmn.BytesHead(body), err)
 	}
-	return p.receiveCluMeta(&regMeta, action, caller)
+	return p.receiveCluMeta(&cm, action, caller)
 }
 
 func (p *proxy) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err error) {
@@ -2486,7 +2486,7 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	caller := r.Header.Get(apc.HdrCallerName)
-	if err := p.applyRegMeta(apc.ActAdminJoinProxy, body, caller); err != nil {
+	if err := p.applyCluMeta(apc.ActAdminJoinProxy, body, caller); err != nil {
 		p.writeErr(w, r, err)
 	}
 }

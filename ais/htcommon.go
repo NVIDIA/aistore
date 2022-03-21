@@ -436,6 +436,7 @@ type (
 	cresEI struct{} // -> etl.InfoList
 	cresEL struct{} // -> etl.PodLogsMsg
 	cresEH struct{} // -> etl.PodHealthMsg
+	cresIC struct{} // -> icBundle
 )
 
 var (
@@ -448,6 +449,7 @@ var (
 	_ cresv = cresEI{}
 	_ cresv = cresEL{}
 	_ cresv = cresEH{}
+	_ cresv = cresIC{}
 )
 
 func (res *callResult) read(body io.Reader)  { res.bytes, res.err = io.ReadAll(body) }
@@ -487,6 +489,9 @@ func (c cresEL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jr
 
 func (cresEH) newV() interface{}                      { return &etl.PodHealthMsg{} }
 func (c cresEH) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
+
+func (cresIC) newV() interface{}                      { return &icBundle{} }
+func (c cresIC) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 ////////////////
 // glogWriter //

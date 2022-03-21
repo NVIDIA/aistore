@@ -358,7 +358,7 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 	return res.err
 }
 
-// sync ownership table
+// sync ownership table; TODO: review control flows and revisit impl.
 func (ic *ic) syncICBundle() error {
 	smap := ic.p.owner.smap.get()
 	si := ic.p.si
@@ -381,20 +381,15 @@ func (ic *ic) syncICBundle() error {
 			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatICBundle}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
+		cargs.cresv = cresIC{} // -> icBundle
 	}
 	res := ic.p.call(cargs)
 	freeCargs(cargs)
 	if res.err != nil {
-		// TODO: Handle error. Should try calling another IC member maybe.
-		glog.Errorf("%s: failed to get ownership table from %s, err: %v", ic.p, si, res.err)
 		return res.err
 	}
 
-	bundle := &icBundle{}
-	if err := jsoniter.Unmarshal(res.bytes, bundle); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p, "IC bundle", cmn.BytesHead(res.bytes), err)
-	}
-
+	bundle := res.v.(*icBundle)
 	debug.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
 
 	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, nil /*ms payload*/); err != nil {

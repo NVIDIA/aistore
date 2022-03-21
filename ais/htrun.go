@@ -1577,12 +1577,13 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 			}
 			candidates = append(candidates, url)
 		}
+		resPrev *callResult
 	)
 	debug.Assert(pubValid && intraValid)
 	primaryURL, psi := h.getPrimaryURLAndSI(nil)
 	addCandidate(primaryURL)
 	// NOTE: The url above is either config or the primary's IntraControlNet.DirectURL;
-	//  Add its public URL as "more static" in various virtualized environments.
+	//       Add its public URL as "more static" in various virtualized environments.
 	if psi != nil {
 		addCandidate(psi.URL(cmn.NetPublic))
 	}
@@ -1592,19 +1593,24 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 	for _, u := range contactURLs {
 		addCandidate(u)
 	}
-
-	for i := 0; i < 2; i++ {
+	sleep := cos.MaxDuration(2*time.Second, cmn.Timeout.MaxKeepalive())
+	for i := 0; i < 4; i++ {
 		for _, candidateURL := range candidates {
 			if daemon.stopping.Load() {
 				return
 			}
+			if resPrev != nil {
+				freeCR(resPrev)
+				resPrev = nil // nolint:ineffassign // readability
+			}
 			res = h.registerToURL(candidateURL, nil, apc.DefaultTimeout, query, false)
 			if res.err == nil {
 				glog.Infof("%s: joined cluster via %s", h.si, candidateURL)
-				return
+				return // ok
 			}
+			resPrev = res
 		}
-		time.Sleep(10 * time.Second)
+		time.Sleep(sleep)
 	}
 
 	smap := h.owner.smap.get()
@@ -1623,6 +1629,9 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 	if daemon.stopping.Load() {
 		return
 	}
+	if resPrev != nil {
+		freeCR(resPrev)
+	}
 	res = h.registerToURL(primaryURL, nil, apc.DefaultTimeout, query, false)
 	if res.err == nil {
 		glog.Infof("%s: joined cluster via %s", h.si, primaryURL)
@@ -1630,7 +1639,7 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 	return
 }
 
-func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values, keepalive bool) *callResult {
+func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration, q url.Values, keepalive bool) *callResult {
 	var (
 		path          string
 		skipPrxKalive = h.si.IsProxy() || keepalive
@@ -1643,13 +1652,13 @@ func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration
 			fillRebMarker: !keepalive,
 		}
 	)
-	regReq, err := h.cluMeta(opts)
+	cm, err := h.cluMeta(opts)
 	if err != nil {
 		res := allocCR()
 		res.err = err
 		return res
 	}
-	info := cos.MustMarshal(regReq)
+
 	if keepalive {
 		path = apc.URLPathCluKalive.S
 	} else {
@@ -1658,7 +1667,7 @@ func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration
 	cargs := allocCargs()
 	{
 		cargs.si = psi
-		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: url, Path: path, Query: query, Body: info}
+		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: url, Path: path, Query: q, Body: cos.MustMarshal(cm)}
 		cargs.timeout = tout
 	}
 	res := h.call(cargs)
