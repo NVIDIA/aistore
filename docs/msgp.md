@@ -41,7 +41,7 @@ Second, generate the encoding and decoding functions.
 For better compatibility and to minimize the size of a diff patch, use the same flags as in example:
 
 ```console
-$ msgp -file <PATH_TO_CHANGED_FILE> -tests=false -marshal=false
+$ msgp -file <PATH_TO_CHANGED_FILE> -tests=false -marshal=false -unexported
 ```
 
 When the generation completes, `msgp` creates a file with the original name and `_gen` prefix.
@@ -52,7 +52,7 @@ Workflow example:
 ```console
 $ ls cmn/bucket_list*
 bucket_list.go
-$ msgp -file cmn/bucket_list.go -tests=false -marshal=false
+$ msgp -file cmn/bucket_list.go -tests=false -marshal=false -unexported
 $ ls cmn/bucket_list*
 bucket_list.go  bucket_list_gen.go
 ```

@@ -72,10 +72,10 @@ type (
 	// Records abstract array of records. It safe to be used concurrently.
 	Records struct {
 		sync.RWMutex     `msg:"-"`
-		arr              []*Record `msg:"a"`
-		m                map[string]*Record
-		dups             map[string]struct{} // contains duplicate object names, if any
-		totalObjectCount int                 // total number of objects in all records (dups are removed so not counted)
+		arr              []*Record           `msg:"a"`
+		m                map[string]*Record  `msg:"-"`
+		dups             map[string]struct{} `msg:"-"` // contains duplicate object names, if any
+		totalObjectCount int                 `msg:"-"` // total number of objects in all records (dups are removed so not counted)
 	}
 )
 
