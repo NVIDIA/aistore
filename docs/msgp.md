@@ -38,7 +38,7 @@ $ make msgp-update
 ```
 
 Second, generate the encoding and decoding functions.
-For better compatibility and to minimize the size of a diff patch, use the same flags as in example:
+For better compatibility and to minimize the diff size, use the same flags as in the example:
 
 ```console
 $ msgp -file <PATH_TO_CHANGED_FILE> -tests=false -marshal=false -unexported
