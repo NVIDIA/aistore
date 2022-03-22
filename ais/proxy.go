@@ -255,19 +255,19 @@ func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, e
 	if len(res.bytes) == 0 {
 		return
 	}
-	err = p.applyCluMeta(action, res.bytes, "")
+	err = p.recvCluMetaBytes(action, res.bytes, "")
 	return
 }
 
-func (p *proxy) applyCluMeta(action string, body []byte, caller string) error {
+func (p *proxy) recvCluMetaBytes(action string, body []byte, caller string) error {
 	var cm cluMeta
 	if err := jsoniter.Unmarshal(body, &cm); err != nil {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, p, "reg-meta", cmn.BytesHead(body), err)
 	}
-	return p.receiveCluMeta(&cm, action, caller)
+	return p.recvCluMeta(&cm, action, caller)
 }
 
-func (p *proxy) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err error) {
+func (p *proxy) recvCluMeta(cluMeta *cluMeta, action, caller string) (err error) {
 	msg := p.newAmsgStr(action, cluMeta.BMD)
 
 	// Config
@@ -784,8 +784,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /v1/metasync
-// NOTE: compare with receiveCluMeta()
-// NOTE: compare with t.metasyncHandlerPut
+// (compare with p.recvCluMeta and t.metasyncHandlerPut)
 func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err = &errMsync{}
@@ -2486,7 +2485,7 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	caller := r.Header.Get(apc.HdrCallerName)
-	if err := p.applyCluMeta(apc.ActAdminJoinProxy, body, caller); err != nil {
+	if err := p.recvCluMetaBytes(apc.ActAdminJoinProxy, body, caller); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
@@ -2597,7 +2596,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 		if err := cmn.ReadJSON(w, r, &cluMeta); err != nil {
 			return
 		}
-		if err := p.receiveCluMeta(&cluMeta, "set-primary", cluMeta.SI.String()); err != nil {
+		if err := p.recvCluMeta(&cluMeta, "set-primary", cluMeta.SI.String()); err != nil {
 			p.writeErrf(w, r, "failed to receive clu-meta: %v", err)
 			return
 		}

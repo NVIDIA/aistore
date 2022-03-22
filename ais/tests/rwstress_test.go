@@ -146,8 +146,8 @@ func cleanRWStress(bck cmn.Bck, cksumType string) {
 
 func parallelPutGetStress(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		if bck.IsRemote() {
-			t.Skipf("skipping %s for remote buckets", t.Name())
+		if bck.IsCloud() {
+			t.Skipf("skipping %s for Cloud bucket %s", t.Name(), bck.Bucket())
 		}
 		var (
 			errChanSize = numLoops * numFiles * 2
@@ -168,8 +168,8 @@ func parallelPutGetStress(t *testing.T) {
 func multiOpStress(opNames ...string) func(t *testing.T) {
 	return func(t *testing.T) {
 		runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-			if bck.IsRemote() {
-				t.Skipf("skipping %s for remote buckets", t.Name())
+			if bck.IsCloud() {
+				t.Skipf("skipping %s for Cloud bucket %s", t.Name(), bck.Bucket())
 			}
 			var (
 				errChanSize = numLoops * numFiles * 3
@@ -215,7 +215,7 @@ func TestRWStressShort(t *testing.T) {
 func TestRWStress(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	numLoops = 15
-	numFiles = 100
+	numLoops = 30
+	numFiles = 1000
 	rwstress(t)
 }

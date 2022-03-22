@@ -681,7 +681,9 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 		return
 	}
 
-	if args.cresv != nil { // TODO -- FIXME: remove this `if` and wrap readAll() via more cresv impl-s
+	// read and decode via call result value (`cresv`), if provided
+	// othwerwise, read and return bytes for the caller to unmarshal
+	if args.cresv != nil {
 		res.v = args.cresv.newV()
 		args.cresv.read(res, resp.Body)
 		if res.err != nil {

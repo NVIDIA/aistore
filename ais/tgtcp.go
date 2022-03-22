@@ -52,11 +52,11 @@ func (t *target) joinCluster(action string, primaryURLs ...string) (status int, 
 	if len(res.bytes) == 0 {
 		return
 	}
-	err = t.applyCluMeta(action, res.bytes, "")
+	err = t.recvCluMetaBytes(action, res.bytes, "")
 	return
 }
 
-func (t *target) applyCluMeta(action string, body []byte, caller string) (err error) {
+func (t *target) recvCluMetaBytes(action string, body []byte, caller string) (err error) {
 	var cm cluMeta
 	err = jsoniter.Unmarshal(body, &cm)
 	if err != nil {
@@ -327,7 +327,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	caller := r.Header.Get(apc.HdrCallerName)
-	if err := t.applyCluMeta(apc.ActAdminJoinTarget, body, caller); err != nil {
+	if err := t.recvCluMetaBytes(apc.ActAdminJoinTarget, body, caller); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -798,11 +798,8 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /v1/metasync
-// TODO: excepting small difference around receiveSmap and ReceiveBMD
-//       the code is identical to p.metasyncHandler() - not reducing it to
-//       one is lack of polymorphism to execute target-specific
-//       receive* while adding interfaces won't do enough.
-// NOTE: compare with receiveCluMeta() and p.metasyncHandlerPut
+// (compare w/ p.metasyncHandler - minor differences around receiving Smap
+//  and rmd - code reduction must be doable)
 func (t *target) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	var (
 		err = &errMsync{}
