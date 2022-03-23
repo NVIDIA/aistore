@@ -745,7 +745,7 @@ waitStartup:
 	config = cmn.GCO.Get()
 	goMaxProcs := runtime.GOMAXPROCS(0)
 	glog.Infof("Starting %s", r.Name())
-	hk.Reg(r.Name()+".gc.logs", recycleLogs, logsMaxSizeCheckTime)
+	hk.Reg(r.Name()+"-logs"+hk.NameSuffix, recycleLogs, logsMaxSizeCheckTime)
 
 	statsTime := config.Periodic.StatsTime.D()
 	r.ticker = time.NewTicker(statsTime)

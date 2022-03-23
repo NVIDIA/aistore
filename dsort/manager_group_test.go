@@ -45,7 +45,7 @@ var _ = Describe("ManagerGroup", func() {
 	AfterEach(func() {
 		err := os.RemoveAll(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
-		hk.Unreg(apc.DSortNameLowercase)
+		hk.Unreg(apc.DSortNameLowercase + hk.NameSuffix)
 	})
 
 	Context("add", func() {

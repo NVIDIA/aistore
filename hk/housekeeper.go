@@ -20,9 +20,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
+const NameSuffix = ".gc" // reg name suffix
+
 const (
 	DayInterval   = 24 * time.Hour
-	UnregInterval = 365 * DayInterval
+	UnregInterval = 365 * DayInterval // to unregister upon return from the callback
 )
 
 type (
@@ -185,6 +187,7 @@ func (hk *housekeeper) Run() (err error) {
 				if idx >= 0 {
 					heap.Remove(hk.actions, idx)
 				} else {
+					debug.AssertMsg(false, req.name)
 					glog.Warningln(req.name, "already removed")
 				}
 			}

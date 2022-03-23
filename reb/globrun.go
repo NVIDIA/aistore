@@ -137,21 +137,25 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 		cos.ExitLogf("%v", err)
 	}
 	reb.dm = dm
-	reb._regRecv()
+
+	// serialize one global rebalance at a time
+	reb.semaCh = cos.NewSemaphore(1)
 	return reb
 }
 
-// TODO: currently, all receive handlers are statically present throughout: Unreg never done
-//       and any receive failure is fatal (aborting a running xreb, though, is fine)
-func (reb *Reb) _regRecv() {
+func (reb *Reb) regRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
 		cos.ExitLogf("%v", err)
 	}
-	if err := transport.HandleObjStream(trnamePsh, reb.recvStageNtfn); err != nil {
+	if err := transport.HandleObjStream(trnamePsh, reb.recvStageNtfn /*ReceiveObj*/); err != nil {
 		cos.ExitLogf("%v", err)
 	}
-	// serialization: one at a time
-	reb.semaCh = cos.NewSemaphore(1)
+}
+
+func (reb *Reb) unregRecv() {
+	reb.dm.UnregRecv()
+	err := transport.Unhandle(trnamePsh)
+	debug.AssertNoErr(err)
 }
 
 //
@@ -181,27 +185,28 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 	logHdr := reb.logHdr(id, smap, true /*initializing*/)
 	glog.Infof("%s: initializing...", logHdr)
 	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: reb.t.Bowner().Get().IsECUsed()}
-	if !reb.rebSerialize(rargs, logHdr) {
+	if !reb.serialize(rargs, logHdr) {
 		return
 	}
-	if !reb.rebInitRenew(rargs, notif, logHdr) {
-		return
-	}
-	// single-active-target cluster (singleATC)
-	// NOTE: compare with `rebFini`
-	if smap.CountActiveTargets() == 1 {
-		reb.stages.stage.Store(rebStageDone)
+	reb.regRecv()
+	haveStreams := smap.CountActiveTargets() > 1
+	if !reb.initRenew(rargs, notif, logHdr, haveStreams) {
+		reb.unregRecv()
 		reb.semaCh.Release()
-		reb.dm.Close(nil)
-		reb.pushes.Close(true)
+		return
+	}
+	if !haveStreams { // nothing to do
+		reb.stages.stage.Store(rebStageDone)
+		reb.unregRecv()
+		reb.semaCh.Release()
 		fs.RemoveMarker(cmn.RebalanceMarker)
 		reb.xctn().Finish(nil)
 		return
 	}
 
-	// At this point only one rebalance is running so we can safely enable regular GFN.
+	// At this point only one rebalance is running
+
 	activateGFN()
-	defer deactivateGFN()
 
 	errCnt := 0
 	err := reb.run(rargs)
@@ -219,7 +224,9 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 		errCnt = reb.bcast(rargs, reb.waitFinExtended)
 	}
 
-	reb.rebFini(rargs, err)
+	reb.fini(rargs, logHdr, err)
+
+	deactivateGFN()
 }
 
 // To optimize goroutine creation:
@@ -250,7 +257,7 @@ func (reb *Reb) run(rargs *rebArgs) error {
 	return group.Wait()
 }
 
-func (reb *Reb) rebSerialize(rargs *rebArgs, logHdr string) bool {
+func (reb *Reb) serialize(rargs *rebArgs, logHdr string) bool {
 	// 1. check whether other targets are up and running
 	if errCnt := reb.bcast(rargs, reb.pingTarget); errCnt > 0 {
 		return false
@@ -258,9 +265,9 @@ func (reb *Reb) rebSerialize(rargs *rebArgs, logHdr string) bool {
 	if rargs.smap.Version == 0 {
 		rargs.smap = reb.t.Sowner().Get()
 	}
-	// 2. serialize global rebalance (one at a time post this point)
-	//    start new xaction unless the one for the current version is already in progress
-	if newerRMD, alreadyRunning := reb._serialize(rargs, logHdr); newerRMD || alreadyRunning {
+	// 2. serialize global rebalance and start new xaction -
+	//    but only if the one that handles the current version is _not_ already in progress
+	if newerRMD, alreadyRunning := reb.acquire(rargs, logHdr); newerRMD || alreadyRunning {
 		return false
 	}
 	if rargs.smap.Version == 0 {
@@ -270,7 +277,7 @@ func (reb *Reb) rebSerialize(rargs *rebArgs, logHdr string) bool {
 	return true
 }
 
-func (reb *Reb) _serialize(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunning bool) {
+func (reb *Reb) acquire(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunning bool) {
 	var (
 		total    time.Duration
 		sleep    = rargs.config.Timeout.CplaneOperation.D()
@@ -364,7 +371,7 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 	return
 }
 
-func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string) bool {
+func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, haveStreams bool) bool {
 	if id := reb.nxtID.Load(); id > rargs.id {
 		glog.Warningf(fmtpend, logHdr, id)
 		return false
@@ -390,7 +397,10 @@ func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr strin
 	reb.setXact(xreb)
 
 	// 3. init streams and data structures
-	reb.beginStreams()
+	if haveStreams {
+		reb.beginStreams()
+	}
+
 	if reb.awaiting.targets == nil {
 		reb.awaiting.targets = make(cluster.Nodes, 0, maxWackTargets)
 	} else {
@@ -638,7 +648,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 	return
 }
 
-func (reb *Reb) rebFini(rargs *rebArgs, err error) {
+func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 	var stats xact.Stats
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs.id, rargs.smap))
@@ -661,12 +671,12 @@ func (reb *Reb) rebFini(rargs *rebArgs, err error) {
 	reb.stages.stage.Store(rebStageDone)
 	reb.stages.cleanup()
 
+	reb.unregRecv()
 	reb.semaCh.Release()
 	if !xreb.Finished() {
 		xreb.Finish(nil)
-	} else {
-		glog.Infoln(xreb.String())
 	}
+	glog.Infof("%s: done (%s)", logHdr, xreb)
 }
 
 //////////////////////////////

@@ -235,7 +235,7 @@ func Unhandle(trname string) (err error) {
 	if h, ok := handlers[trname]; ok {
 		delete(handlers, trname)
 		mu.Unlock()
-		hk.Unreg(h.hkName)
+		hk.Unreg(h.hkName + hk.NameSuffix)
 	} else {
 		mu.Unlock()
 		err = fmt.Errorf(cmn.FmtErrUnknown, "transport", "endpoint", trname)

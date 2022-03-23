@@ -128,8 +128,8 @@ func newRegistry() (r *registry) {
 
 // register w/housekeeper periodic registry cleanups
 func RegWithHK() {
-	hk.Reg("x-old", dreg.hkDelOld, 0 /*time.Duration*/)
-	hk.Reg("x-prune-active", dreg.hkPruneActive, 0 /*time.Duration*/)
+	hk.Reg("x-old"+hk.NameSuffix, dreg.hkDelOld, 0 /*time.Duration*/)
+	hk.Reg("x-prune-active"+hk.NameSuffix, dreg.hkPruneActive, 0 /*time.Duration*/)
 }
 
 func GetXact(uuid string) (xctn cluster.Xact) { return dreg.getXact(uuid) }

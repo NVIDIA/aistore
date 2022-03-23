@@ -149,7 +149,7 @@ func (txns *transactions) init(t *target) {
 	txns.t = t
 	txns.m = make(map[string]txn, 8)
 	txns.rendezvous = make(map[string]rndzvs, 8)
-	hk.Reg("cp.transactions.gc", txns.housekeep, gcTxnsInterval)
+	hk.Reg("cp-transactions"+hk.NameSuffix, txns.housekeep, gcTxnsInterval)
 }
 
 func (txns *transactions) begin(txn txn) (err error) {

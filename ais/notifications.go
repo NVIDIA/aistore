@@ -39,7 +39,7 @@ import (
 
 // notification category
 const (
-	notifsName       = ".notifications.prx"
+	notifsName       = "p-notifs"
 	notifsHousekeepT = 2 * time.Minute
 	notifsRemoveMult = 3 // time-to-keep multiplier (time = notifsRemoveMult * notifsHousekeepT)
 )
@@ -176,11 +176,14 @@ func (n *notifs) init(p *proxy) {
 	n.removed = make([]nl.NotifListener, 16)
 	n.finished = make([]nl.NotifListener, 16)
 
-	hk.Reg(notifsName+".gc", n.housekeep, notifsHousekeepT)
+	hk.Reg(notifsName+hk.NameSuffix, n.housekeep, notifsHousekeepT)
 	n.p.Sowner().Listeners().Reg(n)
 }
 
-func (*notifs) String() string { return notifsName }
+func (n *notifs) String() string {
+	l, f := n.nls.len(), n.fin.len() // not r-locking
+	return fmt.Sprintf("%s (nls=%d, fin=%d)", notifsName, l, f)
+}
 
 // start listening
 func (n *notifs) add(nl nl.NotifListener) (err error) {

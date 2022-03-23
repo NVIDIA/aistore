@@ -145,7 +145,7 @@ func (r *streamingX) fin(err error) error {
 		err = cmn.NewErrAborted(r.Name(), "streaming-fin", err)
 	}
 	r.p.dm.Close(err)
-	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
+	hk.Reg(r.ID()+hk.NameSuffix, r.unreg, waitUnregRecv)
 	r.Finish(err)
 	return err
 }

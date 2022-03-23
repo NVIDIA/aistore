@@ -34,7 +34,7 @@ func RegLomCacheWithHK(t Target) {
 	lchk.t = t
 	lchk.mm = t.PageMM()
 	lchk.running.Store(false)
-	hk.Reg("lom-cache.gc", lchk.housekeep, iniEvictAtime)
+	hk.Reg("lom-cache"+hk.NameSuffix, lchk.housekeep, iniEvictAtime)
 }
 
 func (lchk *lcHK) housekeep() (d time.Duration) {

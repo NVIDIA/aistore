@@ -43,7 +43,7 @@ func newInfoStore(driver dbdriver.Driver) *infoStore {
 		downloaderDB: db,
 		jobInfo:      make(map[string]*downloadJobInfo),
 	}
-	hk.Reg("downloader", is.housekeep, hk.DayInterval)
+	hk.Reg("downloader"+hk.NameSuffix, is.housekeep, hk.DayInterval)
 	return is
 }
 

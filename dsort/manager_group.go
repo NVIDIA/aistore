@@ -45,7 +45,7 @@ func NewManagerGroup(db dbdriver.Driver, skipHk bool) *ManagerGroup {
 		db:       db,
 	}
 	if !skipHk {
-		hk.Reg(apc.DSortNameLowercase, mg.housekeep, hk.DayInterval)
+		hk.Reg(apc.DSortNameLowercase+hk.NameSuffix, mg.housekeep, hk.DayInterval)
 	}
 	return mg
 }

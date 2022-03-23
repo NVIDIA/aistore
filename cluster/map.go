@@ -306,7 +306,7 @@ func (m *Smap) StringEx() string {
 		return fmt.Sprintf("Smap v%d[%s, primary=nil, t=%d, p=%d]", m.Version, m.UUID,
 			m.CountTargets(), m.CountProxies())
 	}
-	return fmt.Sprintf("Smap v%d[%s, primary=%s, t=%d, p=%d]", m.Version, m.UUID,
+	return fmt.Sprintf("Smap v%d[%s, %s, t=%d, p=%d]", m.Version, m.UUID,
 		m.Primary.StringEx(), m.CountTargets(), m.CountProxies())
 }
 

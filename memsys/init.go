@@ -89,7 +89,7 @@ func (r *MMSA) RegWithHK() {
 	if mem.Free < r.lowWM || mem.Free < minMemFree {
 		d >>= 1
 	}
-	hk.Reg(r.Name+".gc", r.hkcb, d)
+	hk.Reg(r.Name+hk.NameSuffix, r.hkcb, d)
 }
 
 // initialize new MMSA instance
@@ -184,7 +184,7 @@ func (r *MMSA) Terminate(unregHK bool) {
 		gced  string
 	)
 	if unregHK {
-		hk.Unreg(r.Name + ".gc")
+		hk.Unreg(r.Name + hk.NameSuffix)
 	}
 	for _, s := range r.rings {
 		freed += s.cleanup()

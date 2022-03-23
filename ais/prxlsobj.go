@@ -134,7 +134,7 @@ func (qm *lsobjMem) init() {
 	qm.b = &lsobjBuffers{}
 	qm.c = &lsobjCaches{}
 	qm.d = qmTimeHk
-	hk.Reg("lsobj-buffer-cache", qm.housekeep, qmTimeHk)
+	hk.Reg("lsobj-buffer-cache"+hk.NameSuffix, qm.housekeep, qmTimeHk)
 }
 
 func (qm *lsobjMem) housekeep() time.Duration {

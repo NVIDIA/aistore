@@ -29,6 +29,8 @@ import (
 	"github.com/pierrec/lz4/v3"
 )
 
+const hkOld = time.Hour
+
 // private types
 type (
 	iterator struct {
@@ -59,8 +61,6 @@ type (
 		trname string
 	}
 )
-
-const cleanupInterval = time.Minute * 10
 
 var (
 	nextSID  atomic.Int64        // next unique session ID
@@ -152,7 +152,7 @@ func (h *handler) handle() error {
 	}
 	handlers[h.trname] = h
 	mu.Unlock()
-	hk.Reg(h.hkName, h.cleanupOldSessions, 0 /*time.Duration*/)
+	hk.Reg(h.hkName+hk.NameSuffix, h.cleanupOldSessions, hkOld)
 	return nil
 }
 
@@ -161,14 +161,14 @@ func (h *handler) cleanupOldSessions() time.Duration {
 	f := func(key, value interface{}) bool {
 		uid := key.(uint64)
 		timeClosed := value.(int64)
-		if time.Duration(now-timeClosed) > cleanupInterval {
+		if time.Duration(now-timeClosed) > hkOld {
 			h.oldSessions.Delete(uid)
 			h.sessions.Delete(uid)
 		}
 		return true
 	}
 	h.oldSessions.Range(f)
-	return cleanupInterval
+	return hkOld
 }
 
 //////////////

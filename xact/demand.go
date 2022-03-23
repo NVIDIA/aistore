@@ -67,7 +67,7 @@ func (r *DemandBase) _initIdle() {
 	r.active++
 	r.idle.last = mono.NanoTime()
 	r.hkReg.Store(true)
-	hk.Reg(r.hkName, r.hkcb, 0 /*time.Duration*/)
+	hk.Reg(r.hkName+hk.NameSuffix, r.hkcb, 0 /*time.Duration*/)
 }
 
 func (r *DemandBase) hkcb() time.Duration {
@@ -110,7 +110,7 @@ func (r *DemandBase) SubPending(n int) {
 }
 
 func (r *DemandBase) Stop() {
-	hk.Unreg(r.hkName)
+	hk.Unreg(r.hkName + hk.NameSuffix)
 	r.idle.ticks.Close()
 }
 
