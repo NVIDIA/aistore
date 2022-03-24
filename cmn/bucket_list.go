@@ -10,9 +10,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// BEWARE: change in this source MAY require re-running go generate ..
-
-//go:generate msgp -tests=false -marshal=false
+//
+// NOTE: changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md for details.
+//
 
 // BucketEntry corresponds to a single entry in the BucketList and
 // contains file and directory metadata as per the ListObjsMsg

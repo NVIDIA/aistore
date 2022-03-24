@@ -6,7 +6,9 @@ package dsort
 
 import "github.com/NVIDIA/aistore/dsort/extract"
 
-//go:generate msgp -tests=false -marshal=false
+//
+// NOTE: changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md for details.
+//
 
 type (
 	CreationPhaseMetadata struct {

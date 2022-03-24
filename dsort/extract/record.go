@@ -14,10 +14,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-// NOTE: Since tags for unexported fields are not supported before generation
-//  change `Records.arr` to `Records.Arr` and then rename it back.
 //
-//go:generate msgp -tests=false -marshal=false
+// NOTE: changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md for details.
+//
+// NOTE: Since tags for unexported fields are not supported before generation
+//       change `Records.arr` to `Records.Arr` and then rename it back.
+//
 
 // interface guard
 var (

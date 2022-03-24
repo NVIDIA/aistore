@@ -6,7 +6,9 @@ package extract
 
 import "encoding/json"
 
-//go:generate msgp -tests=false -marshal=false
+//
+// NOTE: changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md for details.
+//
 
 // interface guard
 var (
