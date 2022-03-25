@@ -134,6 +134,7 @@ outer:
 	// otherwise, hand it over
 	if msg != nil {
 		body := cos.MustMarshal(msg)
+		r.ContentLength = int64(len(body))
 		r.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	ic.p.reverseNodeRequest(w, r, psi)

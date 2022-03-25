@@ -1851,6 +1851,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	}
 	if msg != nil {
 		body := cos.MustMarshal(msg)
+		r.ContentLength = int64(len(body))
 		r.Body = io.NopCloser(bytes.NewReader(body))
 	}
 
