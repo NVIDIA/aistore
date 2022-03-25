@@ -88,7 +88,7 @@ func Infof(f string, a ...interface{}) {
 func Func(f func()) { f() }
 
 func _panic(a ...interface{}) {
-	var msg = "DEBUG PANIC: "
+	msg := "DEBUG PANIC: "
 	if len(a) > 0 {
 		msg += fmt.Sprint(a...) + ": "
 	}
@@ -182,9 +182,7 @@ func Handlers() map[string]http.HandlerFunc {
 // environment variables. It is to help enable asserts that were originally
 // used for testing/initial development and to set the verbosity of glog.
 func loadLogLevel() {
-	var (
-		opts []string
-	)
+	var opts []string
 
 	// Input will be in the format of AIS_DEBUG=transport=4,memsys=3 (same as GODEBUG).
 	if val := os.Getenv("AIS_DEBUG"); val != "" {

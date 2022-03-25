@@ -15,11 +15,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// interface guard
+// interface guard (and a collection of provided io.* interfaces)
 var (
-	_ cos.WriterAt       = (*SGL)(nil)
-	_ io.ReaderFrom      = (*SGL)(nil)
-	_ io.WriterTo        = (*SGL)(nil)
+	_ cos.WriterAt   = (*SGL)(nil)
+	_ io.ReaderFrom  = (*SGL)(nil)
+	_ io.WriterTo    = (*SGL)(nil)
+	_ io.ByteScanner = (*SGL)(nil)
+
 	_ cos.ReadOpenCloser = (*SGL)(nil)
 	_ cos.ReadOpenCloser = (*Reader)(nil)
 )
@@ -84,18 +86,16 @@ func _freeSGL(z *SGL, isPage bool) {
 	pool.Put(z)
 }
 
-// SGL implements io.ReadWriteCloser  + Reset (see https://golang.org/pkg/io/#ReadWriteCloser)
-//
-// SGL grows "automatically" and on demand upon writing.
-// The package does not provide any mechanism to limit the sizes
-// of allocated slabs or to react on memory pressure by dynamically shrinking slabs
-// at runtime. The responsibility to call sgl.Reclaim (see below) lies with the user.
+/////////
+// SGL //
+/////////
 
 func (z *SGL) Cap() int64  { return int64(len(z.sgl)) * z.slab.Size() }
 func (z *SGL) Size() int64 { return z.woff }
 func (z *SGL) Slab() *Slab { return z.slab }
 func (z *SGL) IsNil() bool { return z == nil || z.slab == nil }
 
+// grows on demand upon writing
 func (z *SGL) grow(toSize int64) {
 	z.slab.muget.Lock()
 	for z.Cap() < toSize {
@@ -184,15 +184,34 @@ func (z *SGL) Read(b []byte) (n int, err error) {
 	return
 }
 
+func (z *SGL) ReadByte() (byte, error) {
+	var (
+		b           [1]byte
+		_, off, err = z.readAtOffset(b[:], z.roff)
+	)
+	z.roff = off
+	return b[0], err
+}
+
+func (z *SGL) UnreadByte() error {
+	if z.roff == 0 {
+		return errors.New("cannot unread-byte at zero offset")
+	}
+	z.roff--
+	return nil
+}
+
 func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error) {
 	roff = roffin
 	if roff >= z.woff {
 		err = io.EOF
 		return
 	}
-	idx, off := int(roff/z.slab.Size()), roff%z.slab.Size()
-	buf := z.sgl[idx]
-	size := cos.MinI64(int64(len(b)), z.woff-roff)
+	var (
+		idx, off = int(roff / z.slab.Size()), roff % z.slab.Size()
+		buf      = z.sgl[idx]
+		size     = cos.MinI64(int64(len(b)), z.woff-roff)
+	)
 	n = copy(b[:size], buf[off:])
 	roff += int64(n)
 	for n < len(b) && idx < len(z.sgl)-1 {
@@ -212,7 +231,8 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error
 // ReadAll is a convenience method and an optimized alternative to the generic
 // io.ReadAll. Similarly to the latter, a successful call returns err == nil,
 // not err == EOF. The difference, though, is that the method always succeeds.
-// NOTE: intended usage includes testing code and debug.
+//
+// NOTE: intended for testing code and debug.
 func (z *SGL) ReadAll() (b []byte, err error) {
 	b = make([]byte, z.Size())
 	for off, i := 0, 0; i < len(z.sgl); i++ {
@@ -222,7 +242,7 @@ func (z *SGL) ReadAll() (b []byte, err error) {
 	return
 }
 
-// NOTE: Not fully implemented use carefully!
+// NOTE assert and use with caution.
 func (z *SGL) WriteAt(p []byte, off int64) (n int, err error) {
 	debug.Assert(z.woff >= off+int64(len(p)))
 
@@ -233,11 +253,13 @@ func (z *SGL) WriteAt(p []byte, off int64) (n int, err error) {
 	return n, err
 }
 
-// reuse already allocated SGL
-func (z *SGL) Reset()                            { z.woff, z.roff = 0, 0 }
+// reuse already allocated SGL (compare with Reader below)
+func (z *SGL) Reset() { z.woff, z.roff = 0, 0 }
+
 func (z *SGL) Len() int64                        { return z.woff - z.roff }
 func (z *SGL) Open() (cos.ReadOpenCloser, error) { return NewReader(z), nil }
-func (*SGL) Close() error                        { return nil }
+
+func (*SGL) Close() error { return nil } // NOTE: no-op
 
 func (z *SGL) Free() {
 	debug.Assert(z.slab != nil)
@@ -254,8 +276,9 @@ func (z *SGL) Free() {
 	_freeSGL(z, z.slab.m.isPage())
 }
 
+// NOTE assert and use with caution.
 func (z *SGL) Bytes() (b []byte) {
-	cos.Assert(z.roff == 0) // NOTE: done for existing limited use case
+	cos.Assert(z.roff == 0)
 	if z.woff >= z.slab.Size() {
 		b, _ = z.ReadAll()
 		return
@@ -263,10 +286,15 @@ func (z *SGL) Bytes() (b []byte) {
 	return z.sgl[0][:z.woff]
 }
 
+////////////
+// Reader //
+////////////
+
+// Reader implements (io.ReadWriteCloser + io.Seeker) on top of an existing SGL.
+// In the most common write-once-read-many usage scenario, SGL can be simultaneously
+// read via multiple concurrent Readers.
 //
-// SGL Reader - implements io.ReadWriteCloser + io.Seeker
-// A given SGL can be simultaneously utilized by multiple Readers
-//
+// See also: SGL.Reset() and SGL.Open()
 
 func NewReader(z *SGL) *Reader                      { return &Reader{z, 0} }
 func (r *Reader) Open() (cos.ReadOpenCloser, error) { return NewReader(r.z), nil }
