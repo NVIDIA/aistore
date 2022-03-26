@@ -34,9 +34,15 @@ redirect_from:
 
 ## Bucket
 
-AIStore uses the popular and well-known bucket abstraction. Each object ina cluster is assigned to (and stored in) a basic container called *bucket*.
+AIStore uses the popular and well-known bucket abstraction, originally (likely) introduced by Amazon S3.
 
-In a flat storage hierarchy, bucket is a named container of user dataset(s) (represented as objects) and, simultaneously, a point of applying storage management policies: checksumming, erasure coding, mirroring, LRU eviction, etc.
+Similar to S3, AIS bucket is a _container for objects_.
+
+> An object, in turn, is a file **and** a metadata that describes that object and normally includes: checksum, version, references to copies (replicas), size, last access time, source bucket (if object's origin is a Cloud bucket), custom user-defined attributes, and more.
+
+AIS is a flat `<bucket-name>/<object-name>` storage hierarchy where named buckets store user datasets.
+
+In addition, each AIS bucket is a point of applying (per-bucket) management policies: checksumming, versioning, erasure coding, mirroring, LRU eviction, checksum and/or version validation, and more.
 
 AIS buckets *contain* user data performing the same function as, for instance:
 

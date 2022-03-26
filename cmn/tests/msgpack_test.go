@@ -15,11 +15,10 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-//
-// NOTE: github.com/vmihailenco/msgpack/v5 (here) vs github.com/tinylib/msgp/msgp
-//       - tinylib reqires code-gen
-//       - tinylib fails these tests in about 5% to 10% of the time
-//
+// Pros and cons: vmihailenco/msgpack/v5 vs. tinylib/msgp/msgp
+// - tinylib reqires code-gen
+// - tinylib fails these tests (below) 5% to 10% of the time
+// - unfortunately, neither one supports _streaming_ write
 
 const (
 	bzero = "\x00"
@@ -54,14 +53,22 @@ func TestMsgpackGenericShardMarshal(t *testing.T) {
 }
 
 func TestMsgpackGenericShardEncode(t *testing.T) {
+	mm := memsys.PageMM()
+	sgl := mm.NewSGL(0)
+	defer sgl.Free()
+	sgl.Reset()
+
 	for i := 0; i < 3; i++ {
 		var (
 			dst interface{}
 			in  = makeShard(1000 /* num files in a shard */, false /* non-ascii key*/)
-			sgl = memsys.PageMM().NewSGL(0)
 			enc = msgpack.NewEncoder(sgl)
-			err = enc.Encode(in)
+			w   = enc.Writer()
 		)
+		if _, ok := w.(*memsys.SGL); !ok {
+			t.Fatal("encoder.w is not sgl")
+		}
+		err := enc.Encode(in)
 		if err != nil {
 			t.Fatal(err)
 		}

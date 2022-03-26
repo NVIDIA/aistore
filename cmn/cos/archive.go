@@ -19,20 +19,27 @@ const (
 	ExtTarTgz = ".tar.gz"
 	ExtZip    = ".zip"
 
-	TarBlockSize = 512 // Size of each block in a tar stream
+	// msgpack doesn't have a "common extension", see for instance:
+	// * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
+	// however, there seems to be a de-facto agreement wrt Content-Type
+	// * application/msgpack
+	// * application/x-msgpack (<<< recommended)
+	// * application/*+msgpack
+	// AIS, therefore, will use the following two constants - one for the filename extension,
+	// and another - for Content-Type:
+	ExtMsgpack     = ".mp"
+	ContentMsgpack = "msgpack"
 )
 
-var ArchExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip}
+const TarBlockSize = 512 // Size of each block in a tar stream
+
+var ArchExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip, ExtMsgpack}
+
+type ErrUnknownMime struct{ detail string }
 
 func IsGzipped(filename string) bool {
 	return strings.HasSuffix(filename, ExtTgz) || strings.HasSuffix(filename, ExtTarTgz)
 }
-
-type (
-	ErrUnknownMime struct {
-		detail string
-	}
-)
 
 func (e *ErrUnknownMime) Error() string            { return "unknown mime type \"" + e.detail + "\"" }
 func NewUnknownMimeError(d string) *ErrUnknownMime { return &ErrUnknownMime{d} }
@@ -41,25 +48,34 @@ func NewUnknownMimeError(d string) *ErrUnknownMime { return &ErrUnknownMime{d} }
 func Mime(mime, filename string) (ext string, err error) {
 	// user-specified (intended) format takes precedence
 	if mime != "" {
-		if strings.Contains(mime, ExtTarTgz[1:]) { // ExtTarTgz contains ExtTar
-			return ExtTarTgz, nil
-		}
-		for _, ext := range ArchExtensions {
-			if strings.Contains(mime, ext[1:]) {
-				return ext, nil
-			}
-		}
-		err = NewUnknownMimeError(mime)
-		return
+		return byMime(mime)
 	}
-	// otherwise, by extension
+
+	// otherwise, by filename extension
 	for _, ext := range ArchExtensions {
 		if strings.HasSuffix(filename, ext) {
 			return ext, nil
 		}
 	}
+
 	err = NewUnknownMimeError(filename)
 	return
+}
+
+func byMime(mime string) (string, error) {
+	if strings.Contains(mime, ExtTarTgz[1:]) { // ExtTarTgz contains ExtTar
+		return ExtTarTgz, nil
+	}
+	for _, ext := range ArchExtensions {
+		if ext == ExtMsgpack {
+			if mime == ext || mime == ext[1:] || strings.Contains(mime, ContentMsgpack) {
+				return ext, nil
+			}
+		} else if strings.Contains(mime, ext[1:]) {
+			return ext, nil
+		}
+	}
+	return "", NewUnknownMimeError(mime)
 }
 
 // OpenTarForAppend opens a TAR and uses tar's reader Next() to skip

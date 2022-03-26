@@ -228,11 +228,10 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error
 	return
 }
 
-// ReadAll is a convenience method and an optimized alternative to the generic
-// io.ReadAll. Similarly to the latter, a successful call returns err == nil,
-// not err == EOF. The difference, though, is that the method always succeeds.
-//
-// NOTE: intended for testing code and debug.
+// ReadAll is a strictly _convenience_ method as it performs heap allocation.
+// Still, it's an optimized alternative to the generic io.ReadAll which
+// normally returns err == nil (and not io.EOF) upon successful reading until EOF.
+// ReadAll always returns err == nil.
 func (z *SGL) ReadAll() (b []byte, err error) {
 	b = make([]byte, z.Size())
 	for off, i := 0, 0; i < len(z.sgl); i++ {
@@ -276,7 +275,8 @@ func (z *SGL) Free() {
 	_freeSGL(z, z.slab.m.isPage())
 }
 
-// NOTE assert and use with caution.
+// NOTE assert and use with caution: heap allocation (via ReadAll)
+// is intended for tests (and only tests)
 func (z *SGL) Bytes() (b []byte) {
 	cos.Assert(z.roff == 0)
 	if z.woff >= z.slab.Size() {
