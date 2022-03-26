@@ -107,7 +107,9 @@ func whingeLmeta(err error) (*lmeta, error) {
 func (lom *LOM) lmfsReload(populate bool) (md *lmeta, err error) {
 	saved := lom.md.pushrt()
 	md, err = lom.lmfs(populate)
-	md.poprt(saved)
+	if err == nil {
+		md.poprt(saved)
+	}
 	return
 }
 
