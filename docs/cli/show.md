@@ -18,9 +18,8 @@ All `show` commands have been aliased to their respective top-level commands for
 - [`ais show bucket`](#ais-show-bucket)
 - [`ais show object`](#ais-show-object)
 - [`ais show cluster`](#ais-show-cluster)
-- [`ais show mountpath`](#ais-show-mountpath)
+- [`ais show storage`](#ais-show-storage)
 - [`ais show job`](#ais-show-job)
-- [`ais show disk`](#ais-show-disk)
 - [`ais show config`](#ais-show-config)
 - [`ais show remote-cluster`](#ais-show-remote-cluster)
 - [`ais show rebalance`](#ais-show-rebalance)
@@ -38,39 +37,54 @@ The following subcommands are currently supported:
    config   show AuthN server configuration
 ```
 
-[Refer to `ais auth` documentation for more.](auth.md#command-list)
+[Refer to `ais auth` documentation for details and examples.](auth.md#command-list)
 
 ## `ais show bucket`
 Show bucket properties.
 
-[Refer to `ais bucket` documentation for more.](bucket.md#show-bucket-properties)
+[Refer to `ais bucket` documentation for details and examples.](bucket.md#show-bucket-properties)
 
 ## `ais show object`
 Show object details.
 
-[Refer to `ais object` documentation for more.](object.md#show-object-properties)
+[Refer to `ais object` documentation for details and examples.](object.md#show-object-properties)
 
 ## `ais show cluster`
-Show cluster and node details.
+Show cluster.
 
-The command supports a variety of scoping options and (sub-command) specifiers:
+The command supports a variety of sub-commands and scoping options:
 
 ```console
 # ais show cluster <TAB-TAB>
 bmd   config   proxy   smap   stats   target    [DAEMON_ID ...]
 ```
 
-[Refer to `ais cluster` documentation for more.](cluster.md#cluster-or-daemon-status)
+[Refer to `ais cluster` documentation for details and examples.](cluster.md#cluster-or-daemon-status)
+
+## `ais show storage`
+Show storage usage and utilization in the cluster. Show disks and mountpaths - for a single selected node or for all storage nodes.
+
+When run with no sub-commands, `ais show storage` defaults to `ais show storage disk`.
+
+In addition, the command support the following sub-commands:
+
+```console
+# ais show storage <TAB-TAB>
+disk   mountpath   summary      [DAEMON_ID ...]
+```
+
+[Refer to `ais storage` documentation for details and examples.](storage.md)
+
 
 ## `ais show config`
 Show daemon configuration.
 
-[Refer to `ais cluster` documentation for more.](config.md##show-configuration)
+[Refer to `ais cluster` documentation for details and examples.](config.md##show-configuration)
 
 ## `ais show remote-cluster`
 Show information about attached AIS clusters.
 
-[Refer to `ais cluster` documentation for more.](cluster.md#show-remote-clusters)
+[Refer to `ais cluster` documentation for details and examples.](cluster.md#show-remote-clusters)
 
 ## `ais show rebalance`
 
@@ -104,11 +118,6 @@ g1       xZntt8087   0              0B          0              0B          03-25
 
 Rebalance completed.
 ```
-
-## `ais show mountpath`
-Show mountpath list for targets.
-
-[Refer to `ais mountpath` documentation for more.](/docs/cli/storage.md)
 
 ## `ais show job`
 Show status of long-running jobs (aka [xactions](/docs/batch.md)). Choose from `download`, `dsort`, `xaction`, `etl`. Example:
@@ -186,10 +195,3 @@ ais show log OqlWpgwrY --severity=warning
 ais show log OqlWpgwrY --severity=w | less
 ```
 
-
-The following commands do not have any built-in aliases (in other words, they can only be accessed through `ais show <command>`).
-
-## `ais show disk`
-Show disk statistics for targets.
-
-[Refer to `ais cluster` documentation for more.](cluster.md#show-disk-stats)

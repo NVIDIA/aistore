@@ -124,21 +124,43 @@ It results in `ais ls ais://bck2` returns only 2 objects.
 
 ## Mountpath (and disk) management
 
+There are two related commands:
+
+* `ais storage disk`
+* `ais storage mountpath`
+
+where `mountpath` is a higher-level abstraction that typically "utilizes" a single undivided disk. More exactly:
+
 > A *mountpath* is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
+
+You can manage and monitor (i.e., `show`) disks and mountpaths using `ais storage` command.
+
+> For strictly monitoring purposes, you can universally use `ais show` command, e.g.: `ais show storage disk`, etc.
+
+## Show disks
+
+`ais storage disk show [DAEMON_ID]`
+
+or, same:
+
+`ais show storage disk [DAEMON_ID]`
 
 ## Show mountpaths
 
 `ais storage mountpath show [DAEMON_ID]`
 
+or, same:
+
+`ais show storage mountpath [DAEMON_ID]`
+
 Show mountpaths for a given target or all targets.
 
-> Note: Like many other `ais show` commands, `ais show mountpath` is aliased to `ais storage mountpath show` for ease of use.
-> Both of these commands are used interchangeably throughout the documentation.
+> **Ease of Usage** notice: like all other `ais show` commands, `ais show storage mountpath` is an alias (or a shortcut) - in this specific case - for `ais storage mountpath show`.
 
 ### Examples
 
 ```console
-$ ais storage mountpath show 12367t8085
+$ ais storage mountpath show 12356t8085
 247389t8085
         Available:
 			/tmp/ais/5/3
@@ -147,7 +169,7 @@ $ ais storage mountpath show 12367t8085
 			/tmp/ais/5/2
 
 $ ais storage mountpath show
-247389t8085
+12356t8085
         Available:
 			/tmp/ais/5/3
 			/tmp/ais/5/1
@@ -159,7 +181,7 @@ $ ais storage mountpath show
 			/tmp/ais/4/1
 			/tmp/ais/4/2
 426988t8086
-		No mountpaths
+	No mountpaths
 ```
 
 ## Attach mountpath
