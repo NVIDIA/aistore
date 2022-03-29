@@ -25,9 +25,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/vmihailenco/msgpack"
 )
 
 type (
@@ -53,6 +55,11 @@ type (
 	zipWriter struct {
 		baseW
 		zw *zip.Writer
+	}
+	sglShard      map[string]*memsys.SGL
+	msgpackWriter struct {
+		baseW
+		shard sglShard
 	}
 	archwi struct { // archival work item; implements lrwi
 		r   *XactCreateArchMultiObj
@@ -95,6 +102,7 @@ var (
 	_ archWriter = (*tarWriter)(nil)
 	_ archWriter = (*tgzWriter)(nil)
 	_ archWriter = (*zipWriter)(nil)
+	_ archWriter = (*msgpackWriter)(nil)
 )
 
 /////////////////
@@ -163,7 +171,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 		if err != nil {
 			return
 		}
-		wi.buf, _ = r.p.T.PageMM().Alloc()
+		wi.buf, _ = r.p.T.PageMM().Alloc() // TODO -- FIXME: not needed for msgpack
 		switch msg.Mime {
 		case cos.ExtTar:
 			tw := &tarWriter{}
@@ -174,6 +182,9 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 		case cos.ExtZip:
 			zw := &zipWriter{}
 			zw.init(wi)
+		case cos.ExtMsgpack:
+			mpw := &msgpackWriter{}
+			mpw.init(wi)
 		default:
 			debug.AssertMsg(false, msg.Mime)
 			return
@@ -360,13 +371,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 // archwi //
 ////////////
 func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
-	var (
-		t       = lrit.t
-		coldGet bool
-	)
-	debug.Assert(t == wi.r.p.T)
-	debug.Assert(wi.r.bckFrom.Equal(lom.Bck(), true /*same ID*/, true /*same backend*/))
-	debug.Assert(lom.Bprops() != nil) // must be init-ed
+	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
 			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
@@ -378,8 +383,9 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 			return
 		}
 	}
-	// cold
+	t := lrit.t
 	if coldGet {
+		// cold
 		if errCode, err := t.GetCold(lrit.ctx, lom, cmn.OwtGetLock); err != nil {
 			if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
 				return
@@ -388,6 +394,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 			return
 		}
 	}
+
 	fh, err := cos.NewFileHandle(lom.FQN)
 	debug.AssertNoErr(err)
 	if err != nil {
@@ -550,5 +557,52 @@ func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 		zw.archwi.errCnt.Inc()
 	}
 	zw.archwi.wmu.Unlock()
+	return err
+}
+
+///////////////////
+// msgpackWriter //
+///////////////////
+
+const dfltShardSize = 32
+
+func (mpw *msgpackWriter) init(wi *archwi) {
+	mpw.archwi = wi
+	mpw.shard = make(sglShard, dfltShardSize)
+	mpw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
+	wi.writer = mpw
+}
+
+func (mpw *msgpackWriter) fini() {
+	genShard := make(cmn.GenShard, len(mpw.shard))
+	for fullname, sgl := range mpw.shard {
+		genShard[fullname] = sgl.Bytes() // NOTE potential heap alloc
+	}
+	enc := msgpack.NewEncoder(mpw.wmul)
+	err := enc.Encode(genShard)
+	debug.AssertNoErr(err)
+
+	// free
+	for fullname, sgl := range mpw.shard {
+		delete(mpw.shard, fullname)
+		delete(genShard, fullname)
+		sgl.Free()
+	}
+}
+
+// (cmn.GenShard has no per-file headers to make use of cmn.ObjAttrsHolder)
+func (mpw *msgpackWriter) write(fullname string, _ cmn.ObjAttrsHolder, reader io.Reader) error {
+	// allocate max-size slab buffer to increase the chances
+	// of _not_ allocating heap via `sgl.Bytes` (above)
+	sgl := memsys.PageMM().NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
+
+	mpw.archwi.wmu.Lock()
+	mpw.shard[fullname] = sgl
+	_, err := io.Copy(sgl, reader) // buffer's not needed since SGL is `io.ReaderFrom`
+	if err != nil {
+		mpw.archwi.err = err
+		mpw.archwi.errCnt.Inc()
+	}
+	mpw.archwi.wmu.Unlock()
 	return err
 }

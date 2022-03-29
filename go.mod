@@ -30,6 +30,7 @@ require (
 	github.com/urfave/cli v1.22.5
 	github.com/valyala/fasthttp v1.34.0
 	github.com/vbauerster/mpb/v4 v4.12.2
+	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c

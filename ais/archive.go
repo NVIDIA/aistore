@@ -9,6 +9,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/vmihailenco/msgpack"
 )
 
 // References:
@@ -88,6 +90,8 @@ func (goi *getObjInfo) freadArch(file *os.File) (cos.ReadCloseSizer, error) {
 		return freadTgz(file, filename, archname)
 	case cos.ExtZip:
 		return freadZip(file, filename, archname, goi.lom.SizeBytes())
+	case cos.ExtMsgpack:
+		return freadMsgpack(file, filename, archname)
 	default:
 		debug.Assert(false)
 		return nil, cos.NewUnknownMimeError(mime)
@@ -175,6 +179,28 @@ func freadZip(readerAt cos.ReadReaderAt, filename, archname string, size int64) 
 		}
 	}
 	err = notFoundInArch(filename, archname)
+	return
+}
+
+func freadMsgpack(readerAt cos.ReadReaderAt, filename, archname string) (csf *cslFile, err error) {
+	var (
+		dst interface{}
+		dec = msgpack.NewDecoder(readerAt)
+	)
+	if err = dec.Decode(&dst); err != nil {
+		return
+	}
+	out, ok := dst.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected type (%T)", dst)
+	}
+	v, ok := out[filename]
+	if !ok {
+		return nil, notFoundInArch(filename, archname)
+	}
+	vout := v.([]byte)
+	csf = &cslFile{size: int64(len(vout))}
+	csf.file = io.NopCloser(bytes.NewReader(vout))
 	return
 }
 

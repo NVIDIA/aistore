@@ -25,10 +25,9 @@ const (
 	// * application/msgpack
 	// * application/x-msgpack (<<< recommended)
 	// * application/*+msgpack
-	// AIS, therefore, will use the following two constants - one for the filename extension,
-	// and another - for Content-Type:
-	ExtMsgpack     = ".mp"
-	ContentMsgpack = "msgpack"
+	// AIS uses the following single constant for both the default file extension
+	// and for the Content-Type (the latter with offset [1:])
+	ExtMsgpack = ".msgpack"
 )
 
 const TarBlockSize = 512 // Size of each block in a tar stream
@@ -67,11 +66,7 @@ func byMime(mime string) (string, error) {
 		return ExtTarTgz, nil
 	}
 	for _, ext := range ArchExtensions {
-		if ext == ExtMsgpack {
-			if mime == ext || mime == ext[1:] || strings.Contains(mime, ContentMsgpack) {
-				return ext, nil
-			}
-		} else if strings.Contains(mime, ext[1:]) {
+		if strings.Contains(mime, ext[1:]) {
 			return ext, nil
 		}
 	}

@@ -32,6 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/vmihailenco/msgpack"
 )
 
 // Xaction is on-demand one to avoid creating a new xaction per page even
@@ -438,56 +439,6 @@ func (r *ObjListXact) traverseBucket(msg *apc.ListObjsMsg) {
 	close(r.objCache)
 }
 
-func listZip(readerAt cos.ReadReaderAt, size int64) ([]*archEntry, error) {
-	zr, err := zip.NewReader(readerAt, size)
-	if err != nil {
-		return nil, err
-	}
-	fileList := make([]*archEntry, 0, 8)
-	for _, f := range zr.File {
-		finfo := f.FileInfo()
-		if finfo.IsDir() {
-			continue
-		}
-		e := &archEntry{
-			name: f.FileHeader.Name,
-			size: f.FileHeader.UncompressedSize64,
-		}
-		fileList = append(fileList, e)
-	}
-	return fileList, nil
-}
-
-func listTar(reader io.Reader) ([]*archEntry, error) {
-	fileList := make([]*archEntry, 0, 8)
-	tr := tar.NewReader(reader)
-	for {
-		hdr, err := tr.Next()
-		if err != nil {
-			if err == io.EOF {
-				return fileList, nil
-			}
-			return nil, err
-		}
-		if hdr.FileInfo().IsDir() {
-			continue
-		}
-		e := &archEntry{
-			name: hdr.Name,
-			size: uint64(hdr.Size),
-		}
-		fileList = append(fileList, e)
-	}
-}
-
-func listTgz(reader io.Reader) ([]*archEntry, error) {
-	gzr, err := gzip.NewReader(reader)
-	if err != nil {
-		return nil, err
-	}
-	return listTar(gzr)
-}
-
 func listArchive(fqn string) ([]*archEntry, error) {
 	var arch string
 	for _, ext := range cos.ArchExtensions {
@@ -516,6 +467,8 @@ func listArchive(fqn string) ([]*archEntry, error) {
 			if err == nil {
 				archList, err = listZip(f, finfo.Size())
 			}
+		case cos.ExtMsgpack:
+			archList, err = listMsgpack(f)
 		default:
 			debug.Assert(false, arch)
 		}
@@ -527,4 +480,76 @@ func listArchive(fqn string) ([]*archEntry, error) {
 	// Files in archive can be in arbitrary order, but paging requires them sorted
 	sort.Slice(archList, func(i, j int) bool { return archList[i].name < archList[j].name })
 	return archList, nil
+}
+
+//
+// list: tar, tgz, zip, msgpack
+//
+func listTar(reader io.Reader) ([]*archEntry, error) {
+	fileList := make([]*archEntry, 0, 8)
+	tr := tar.NewReader(reader)
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				return fileList, nil
+			}
+			return nil, err
+		}
+		if hdr.FileInfo().IsDir() {
+			continue
+		}
+		e := &archEntry{name: hdr.Name, size: uint64(hdr.Size)}
+		fileList = append(fileList, e)
+	}
+}
+
+func listTgz(reader io.Reader) ([]*archEntry, error) {
+	gzr, err := gzip.NewReader(reader)
+	if err != nil {
+		return nil, err
+	}
+	return listTar(gzr)
+}
+
+func listZip(readerAt cos.ReadReaderAt, size int64) ([]*archEntry, error) {
+	zr, err := zip.NewReader(readerAt, size)
+	if err != nil {
+		return nil, err
+	}
+	fileList := make([]*archEntry, 0, 8)
+	for _, f := range zr.File {
+		finfo := f.FileInfo()
+		if finfo.IsDir() {
+			continue
+		}
+		e := &archEntry{
+			name: f.FileHeader.Name,
+			size: f.FileHeader.UncompressedSize64,
+		}
+		fileList = append(fileList, e)
+	}
+	return fileList, nil
+}
+
+func listMsgpack(readerAt cos.ReadReaderAt) ([]*archEntry, error) {
+	var (
+		dst interface{}
+		dec = msgpack.NewDecoder(readerAt)
+	)
+	err := dec.Decode(&dst)
+	if err != nil {
+		return nil, err
+	}
+	out, ok := dst.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected type (%T)", dst)
+	}
+	fileList := make([]*archEntry, 0, len(out))
+	for fullname, v := range out {
+		vout := v.([]byte)
+		e := &archEntry{name: fullname, size: uint64(len(vout))}
+		fileList = append(fileList, e)
+	}
+	return fileList, nil
 }
