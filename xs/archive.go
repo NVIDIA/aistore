@@ -43,6 +43,8 @@ type (
 	baseW struct {
 		wmul   *cos.WriterMulti
 		archwi *archwi
+		buf    []byte
+		slab   *memsys.Slab
 	}
 	tarWriter struct {
 		baseW
@@ -70,7 +72,6 @@ type (
 		tsi *cluster.Snode
 		// writing
 		wmu    sync.Mutex
-		buf    []byte
 		writer archWriter
 		cksum  cos.CksumHashSize
 		err    error
@@ -171,7 +172,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 		if err != nil {
 			return
 		}
-		wi.buf, _ = r.p.T.PageMM().Alloc() // TODO -- FIXME: not needed for msgpack
+		// construct format-specific writer
 		switch msg.Mime {
 		case cos.ExtTar:
 			tw := &tarWriter{}
@@ -348,10 +349,7 @@ func (r *XactCreateArchMultiObj) finalize(wi *archwi) {
 
 func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	var size int64
-
 	wi.writer.fini()
-	r.p.T.PageMM().Free(wi.buf)
-
 	if size, err = wi.finalize(); err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -477,12 +475,16 @@ func (wi *archwi) finalize() (size int64, err error) {
 ///////////////
 func (tw *tarWriter) init(wi *archwi) {
 	tw.archwi = wi
+	tw.buf, tw.slab = memsys.PageMM().Alloc()
 	tw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
 	tw.tw = tar.NewWriter(tw.wmul)
 	wi.writer = tw
 }
 
-func (tw *tarWriter) fini() { tw.tw.Close() }
+func (tw *tarWriter) fini() {
+	tw.slab.Free(tw.buf)
+	tw.tw.Close()
+}
 
 func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) (err error) {
 	tarhdr := new(tar.Header)
@@ -495,7 +497,7 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 	// one at a time
 	tw.archwi.wmu.Lock()
 	if err = tw.tw.WriteHeader(tarhdr); err == nil {
-		_, err = io.CopyBuffer(tw.tw, reader, tw.archwi.buf)
+		_, err = io.CopyBuffer(tw.tw, reader, tw.buf)
 	}
 	if err != nil {
 		tw.archwi.err = err
@@ -510,6 +512,7 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 ///////////////
 func (tzw *tgzWriter) init(wi *archwi) {
 	tzw.tw.archwi = wi
+	tzw.tw.buf, tzw.tw.slab = memsys.PageMM().Alloc()
 	tzw.tw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
 	tzw.gzw = gzip.NewWriter(tzw.tw.wmul)
 	tzw.tw.tw = tar.NewWriter(tzw.gzw)
@@ -532,12 +535,16 @@ func (tzw *tgzWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.R
 // wi.writer = &zipWriter{archwi: wi, w: zip.NewWriter(wi.fh)}
 func (zw *zipWriter) init(wi *archwi) {
 	zw.archwi = wi
+	zw.buf, zw.slab = memsys.PageMM().Alloc()
 	zw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
 	zw.zw = zip.NewWriter(zw.wmul)
 	wi.writer = zw
 }
 
-func (zw *zipWriter) fini() { zw.zw.Close() }
+func (zw *zipWriter) fini() {
+	zw.slab.Free(zw.buf)
+	zw.zw.Close()
+}
 
 func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
 	ziphdr := new(zip.FileHeader)
@@ -550,7 +557,7 @@ func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 	zw.archwi.wmu.Lock()
 	zipw, err := zw.zw.CreateHeader(ziphdr)
 	if err == nil {
-		_, err = io.CopyBuffer(zipw, reader, zw.archwi.buf)
+		_, err = io.CopyBuffer(zipw, reader, zw.buf)
 	}
 	if err != nil {
 		zw.archwi.err = err
@@ -564,11 +571,11 @@ func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 // msgpackWriter //
 ///////////////////
 
-const dfltShardSize = 32
+const dfltNumPerShard = 32
 
 func (mpw *msgpackWriter) init(wi *archwi) {
 	mpw.archwi = wi
-	mpw.shard = make(sglShard, dfltShardSize)
+	mpw.shard = make(sglShard, dfltNumPerShard)
 	mpw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
 	wi.writer = mpw
 }
@@ -590,15 +597,30 @@ func (mpw *msgpackWriter) fini() {
 	}
 }
 
-// (cmn.GenShard has no per-file headers to make use of cmn.ObjAttrsHolder)
-func (mpw *msgpackWriter) write(fullname string, _ cmn.ObjAttrsHolder, reader io.Reader) error {
+// NOTE: ***************** msgpack formatting limitation *******************
+//
+// The format we are supporting for msgpack archiving is the most generic, simplified
+// to the point where there's no need for any schema-specific code on the client side.
+// Inter-operating with existing clients comes at a cost, though:
+// 1. `map[string][]byte` (aka `cmn.GenShard`) has no per-file headers where we could
+//    store the attributes of packed files.
+// 2. `map[string][]byte` certainly does not allow for same-name duplicates - in a given
+//    shard the names of packed files must be unique.
+//
+func (mpw *msgpackWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
 	// allocate max-size slab buffer to increase the chances
 	// of _not_ allocating heap via `sgl.Bytes` (above)
 	sgl := memsys.PageMM().NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
 
 	mpw.archwi.wmu.Lock()
+	if _, ok := mpw.shard[fullname]; ok {
+		// warn and proceed
+		glog.Errorf("Warning: no duplicates in a msgpack-formatted shard (%s, %s, %s)",
+			mpw.archwi.r, mpw.archwi.lom, fullname)
+	}
 	mpw.shard[fullname] = sgl
-	_, err := io.Copy(sgl, reader) // buffer's not needed since SGL is `io.ReaderFrom`
+	size, err := io.Copy(sgl, reader)                   // buffer's not needed since SGL is `io.ReaderFrom`
+	debug.Assert(err == nil || size == oah.SizeBytes()) // other than this assert, `oah` is unused
 	if err != nil {
 		mpw.archwi.err = err
 		mpw.archwi.errCnt.Inc()

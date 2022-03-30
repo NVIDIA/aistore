@@ -196,8 +196,15 @@ func freadMsgpack(readerAt cos.ReadReaderAt, filename, archname string) (csf *cs
 	}
 	v, ok := out[filename]
 	if !ok {
+		var name string
+		for name, v = range out {
+			if archNamesEq(name, filename) {
+				goto found
+			}
+		}
 		return nil, notFoundInArch(filename, archname)
 	}
+found:
 	vout := v.([]byte)
 	csf = &cslFile{size: int64(len(vout))}
 	csf.file = io.NopCloser(bytes.NewReader(vout))

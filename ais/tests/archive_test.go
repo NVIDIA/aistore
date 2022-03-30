@@ -251,8 +251,16 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 					list := make([]string, 0, numInArch)
-					for j := 0; j < numInArch; j++ {
-						list = append(list, m.objNames[rand.Intn(m.num)])
+					if test.ext == cos.ExtMsgpack {
+						// m.b. unique for msgpack
+						start := rand.Intn(m.num - numInArch)
+						for j := start; j < start+numInArch; j++ {
+							list = append(list, m.objNames[j])
+						}
+					} else {
+						for j := 0; j < numInArch; j++ {
+							list = append(list, m.objNames[rand.Intn(m.num)])
+						}
 					}
 					go func(archName string, list []string) {
 						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
