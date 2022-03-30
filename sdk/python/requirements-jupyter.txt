@@ -1,0 +1,11 @@
+python_version >= "3.6.4"
+tensorflow >= 2.0
+requests >= 2.20
+jupyterlab >= 2.0.0
+jupyter-client >= 6.0.0
+jupyter-core >= 4.6.3
+jupyterlab-server >= 1.0.7
+ipython >= 7.13.0
+humanfriendly
+braceexpand
+tensorflow-addons
