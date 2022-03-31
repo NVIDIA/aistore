@@ -31,12 +31,12 @@ Also, AIStore:
 * contains integrated [CLI](/docs/cli.md) for easy management and monitoring;
 * can ad-hoc attach remote AIS clusters, thus gaining immediate access to the respective hosted datasets
   * (referred to as [global namespace](/docs/providers.md#remote-ais-cluster) capability);
-* natively reads, writes, and lists [popular archives](/docs/cli/archive.md) including tar, tar.gz, and zip
+* natively reads, writes, and lists [popular archives](/docs/cli/archive.md) including tar, tar.gz, zip, and [MessagePack](https://msgpack.org);
   * [distributed shuffle](/docs/dsort.md) of those archival formats is also supported;
 * fully supports Amazon S3, Google Cloud, and Microsoft Azure backends
   * providing [unified global namespace](/docs/bucket.md) simultaneously across multiple backends:
 
-<img src="docs/images/backends.png" alt="AIStore" width="360">
+<img src="docs/images/backends.png" alt="Supported Backends" width="360">
 
 * can be deployed as LRU-based fast cache for remote buckets; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;

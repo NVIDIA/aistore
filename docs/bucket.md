@@ -630,14 +630,14 @@ At the high level, the idea is that a proxy dispatches a request to targets whic
 
 ![](images/query_high.png)
 
-*(Proxy combines and sorts the outputs returned from targets)*
+*(Proxy combines and sorts the outputs returned by all targets)*
 
 
-When target receives a request from the proxy, it then traverses disks applying the filters and selections on each of the object.
+When a target receives a request from the proxy, it traverses disks applying the specified filters and selections.
 
 ![](images/query_target.png)
 
-*(Objects marked as green pass all the filtering and selection whereas objects marked red don't)*
+*(Objects marked green supposedly pass all the filtering and selection, whereas red objects - do not)*
 
 ### Query Options
 

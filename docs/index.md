@@ -28,18 +28,19 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 Also, AIStore:
 
 * can be deployed on any commodity hardware - effectively, on any Linux machine(s);
+* can be immediately populated - i.e., hydrated - from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch);
 * provides for easy Kubernetes deployment via a separate GitHub repo with
   * step-by-step [deployment playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks), and
   * [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator);
 * contains integrated [CLI](/docs/cli.md) for easy management and monitoring;
 * can ad-hoc attach remote AIS clusters, thus gaining immediate access to the respective hosted datasets
   * (referred to as [global namespace](/docs/providers.md#remote-ais-cluster) capability);
-* natively reads, writes, and lists [popular archives](/docs/cli/archive.md) including tar, tar.gz, and zip
+* natively reads, writes, and lists [popular archives](/docs/cli/archive.md) including tar, tar.gz, zip, and [MessagePack](https://msgpack.org);
   * [distributed shuffle](/docs/dsort.md) of those archival formats is also supported;
 * fully supports Amazon S3, Google Cloud, and Microsoft Azure backends
   * providing [unified global namespace](/docs/bucket.md) simultaneously across multiple backends:
 
-![AIStore](images/backends.png)
+![Supported Backends](images/backends.png)
 
 * can be deployed as LRU-based fast cache for remote buckets; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;

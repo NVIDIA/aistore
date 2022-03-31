@@ -7,19 +7,29 @@ redirect_from:
  - /docs/archive.md/
 ---
 
-Training on very large datasets is not easy. One of the many associated challenges is a so-called [small-file problem](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22small+file+problem%22) - the problem that gets progressively worse given continuous random access to the entirety of an underlying dataset.
+Training neural networks on very large datasets is not easy (an understatement).
 
-Addressing the problem often means providing some sort of serialization (formatting, logic) that, ideally, also hides the fact and allows to run unmodified clients and apps. AIS approach to this and closely related problems (choices, tradeoffs) can be summarized in one word: TAR. As in: TAR archive.
+One of the many associated challenges is a so-called [small-file problem](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22small+file+problem%22) - the problem that gets progressively worse given continuous random access to the entirety of an underlying dataset (that often also has a tendency to annually double in size).
 
-More precisely, AIS equally supports several archival mime types, including TAR, TGZ (TAR.GZ), and ZIP.
+One way to address the small-file problem involves providing some sort of *serialization* or *sharding* that allows to run **unmodified** clients and apps.
 
-The support itself started way back when we introduced [distributed shuffle](/docs/dsort.md) (extension) that works with all the 3 listed formats and performs massively-parallel custom sorting of any-size datasets. Version 3.7 adds an API-level native capability to read, write and list archives.
+Sharding - is exactly the approach that we took in AIStore. Archiving or sharding, in the context, means utilizing TAR, for instance, to combine small files into .tar formatted shards.
 
-In particular, `list-objects` API supports "opening" objects formatted as one of the supported archival types and including contents of archived directories into generated result sets.
+> While I/O performance was always the primary motivation, the fact that a sharded dataset is, effectively, a backup of the original one must be considered an important added bonus.
 
-APPEND to existing archives is also supported, although at the time of this writing is limited to TAR (format).
+Today AIS equally supports **four** archival formats: TAR, TGZ (TAR.GZ), ZIP, and [MessagePack](https://msgpack.org).
 
-In addition, clients can run concurrent multi-object (source bucket to destination bucket) transactions to generate new archives, and more.
+> MessagePack, although very [popular](https://msgpack.org), is relatively less well-known, which is why this [Wikipedia](https://en.wikipedia.org/wiki/MessagePack) page might be a good start.
+
+> For MessagePack-formatted shards, there's no default [mime type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types) and no (de-facto) standard file extension. AIS uses `application/*+msgpack` for mime and, respectively, `.msgpack` - for file extension.
+
+AIS can natively read, write, append(**), and list archives. In fact, the associated development started way back when we introduced [distributed shuffle](/docs/dsort.md) that performs massively-parallel custom sorting of any-size sharded datasets. Version 3.7 adds an API-level native capability to read, write and list archives, while version 3.10 adds the 4th supported format: MessagePack.
+
+All sharding formats are equally supported across the entire set of AIS APIs. For instance, `list-objects` API supports "opening" objects formatted as one of the supported archival types and including contents of archived directories into generated result sets. Clients can run concurrent multi-object (source bucket => destination bucket) transactions to en masse generate new archives from [selected](/docs/batch.md) subsets of files, and more.
+
+APPEND to existing archives is also provided but limited to [TAR only](https://aiatscale.org/blog/2021/08/10/tar-append).
+
+> Maybe with exception of TAR, none of the listed sharding/archiving formats was ever designed to be append-able - that is, not if we are actually talking about *appending* and not some sort of extract-all-create-new type emulation (that will certainly break the performance in several well-documented ways).
 
 See also:
 

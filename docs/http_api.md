@@ -20,7 +20,7 @@ redirect_from:
   - [Footnotes](#footnotes)
   - [Storage Services](#storage-services)
   - [Multi-Object Operations](#multi-object-operations)
-  - [Working with archives (TAR, TGZ, ZIP)](#working-with-archives-tar-tgz-zip)
+  - [Working with archives (TAR, TGZ, ZIP, MessagePack)](#working-with-archives-tar-tgz-zip-messagepack)
   - [Starting, stopping, and querying batch operations (jobs)](#starting-stopping-and-querying-batch-operations-jobs)
 - [Backend Provider](#backend-provider)
 - [Curl Examples](#curl-examples)
@@ -243,7 +243,7 @@ These APIs also require specific node ID (to identify the target in the cluster 
 | Copy multiple objects from bucket to bucket | (to be added) | (to be added) | `api.CopyMultiObj` |
 | Copy and, simultaneously, transform multiple objects (i.e., perform user-defined offline transformation) | (to be added) | (to be added) | `api.ETLMultiObj` |
 
-### Working with archives (TAR, TGZ, ZIP)
+### Working with archives (TAR, TGZ, ZIP, [MessagePack](https://msgpack.org))
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
