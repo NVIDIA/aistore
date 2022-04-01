@@ -14,6 +14,20 @@ import (
 	"unicode"
 )
 
+// Supported syntax includes 3 standalone variations, 3 alternative formats:
+// 1. bash (or shell) brace expansion:
+//    * `prefix-{0..100}-suffix`
+//    * `prefix-{00001..00010..2}-gap-{001..100..2}-suffix`
+// 2. at style:
+//    * `prefix-@100-suffix`
+//    * `prefix-@00001-gap-@100-suffix`
+// 3. fmt style:
+//    * `prefix-%06d-suffix`
+// In all cases, prefix and/or suffix are optional.
+//
+// NOTE: if none of the above applies, `NewParsedTemplate()` simply returns
+//       `ParsedTemplate{Prefix = original template string}` with nil Ranges
+
 type (
 	TemplateRange struct {
 		Start      int64
@@ -26,23 +40,30 @@ type (
 		Prefix string
 		Ranges []TemplateRange
 	}
+	ErrTemplate struct {
+		msg string
+	}
 )
 
-var (
-	ErrInvalidFmtFormat  = errors.New("input 'fmt' format is invalid should be 'prefix-%06d-suffix")
-	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix-{0001..0010..1}-suffix'")
-	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix-@00100-suffix'")
-
-	ErrStartAfterEnd   = errors.New("'start' cannot be greater than 'end'")
-	ErrNegativeStart   = errors.New("'start' is negative")
-	ErrNonPositiveStep = errors.New("'step' is non positive number")
+const (
+	templateInvalidFmt      = "input 'fmt' format is invalid, expecting 'prefix-%06d-suffix"
+	templateInvalidBash     = "input 'bash' format is invalid, expecting 'prefix-{0001..0010..1}-suffix'"
+	templateInvalidAt       = "input 'at' format is invalid, expecting 'prefix-@00100-suffix'"
+	templateStartAfterEnd   = "'start' cannot be greater than 'end'"
+	templateNegativeStart   = "'start' is negative"
+	templateNonPositiveStep = "'step' is non-positive"
 )
 
-// Parsing:
-// 1. bash-extension style: `file-{0..100}-suffix`
-// 2. at-style: `file-@100-suffix`
-// 3. fmt-style: `file-%06d-suffix`
-// 4. if none of the above, fall back to just prefix matching
+func newErrTemplate(msg, template string) error {
+	return &ErrTemplate{msg: "\"" + template + "\": " + msg}
+}
+
+func (e *ErrTemplate) Error() string { return e.msg }
+
+////////////////////
+// ParsedTemplate //
+////////////////////
+
 func NewParsedTemplate(template string) (ParsedTemplate, error) {
 	if template == "" {
 		return ParsedTemplate{}, errors.New("empty range template")
@@ -56,6 +77,8 @@ func NewParsedTemplate(template string) (ParsedTemplate, error) {
 	if parsed, err := ParseFmtTemplate(template); err == nil {
 		return parsed, nil
 	}
+	// NOTE: prefix can be _anything_, and so given a certain ambiguity here,
+	//       we simply fall back to returning no-ranges prefix-only template
 	return ParsedTemplate{Prefix: template}, nil
 }
 
@@ -121,22 +144,26 @@ func (pt *ParsedTemplate) Iter() func() (string, bool) {
 	}
 }
 
-func ParseFmtTemplate(template string) (pt ParsedTemplate, err error) {
-	// "prefix-%06d-suffix"
+//
+// parsing --- parsing --- parsing
+//
 
+// template: "prefix-%06d-suffix"
+// (both prefix and suffix are optional, here and elsewhere)
+func ParseFmtTemplate(template string) (pt ParsedTemplate, err error) {
 	percent := strings.IndexByte(template, '%')
 	if percent == -1 {
-		err = ErrInvalidFmtFormat
+		err = newErrTemplate(templateInvalidFmt, template)
 		return
 	}
 	if idx := strings.IndexByte(template[percent+1:], '%'); idx != -1 {
-		err = ErrInvalidFmtFormat
+		err = newErrTemplate(templateInvalidFmt, template)
 		return
 	}
 
 	d := strings.IndexByte(template[percent:], 'd')
 	if d == -1 {
-		err = ErrInvalidFmtFormat
+		err = newErrTemplate(templateInvalidFmt, template)
 		return
 	}
 	d += percent
@@ -145,18 +172,18 @@ func ParseFmtTemplate(template string) (pt ParsedTemplate, err error) {
 	if d-percent > 1 {
 		s := template[percent+1 : d]
 		if len(s) == 1 {
-			err = ErrInvalidFmtFormat
+			err = newErrTemplate(templateInvalidFmt, template)
 			return
 		}
 		if s[0] != '0' {
-			err = ErrInvalidFmtFormat
+			err = newErrTemplate(templateInvalidFmt, template)
 			return
 		}
 		i, err := strconv.ParseInt(s[1:], 10, 64)
 		if err != nil {
-			return pt, ErrInvalidFmtFormat
+			return pt, newErrTemplate(templateInvalidFmt, template)
 		} else if i < 0 {
-			return pt, ErrInvalidFmtFormat
+			return pt, newErrTemplate(templateInvalidFmt, template)
 		}
 		digitCount = int(i)
 	}
@@ -173,21 +200,22 @@ func ParseFmtTemplate(template string) (pt ParsedTemplate, err error) {
 	}, nil
 }
 
+// e.g. single-range template: "prefix{0001..0010}suffix"
+//      multi-range:           "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
+// (both prefix and suffix are optional, here and elsewhere)
 func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
-	// "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
-
 	left := strings.IndexByte(template, '{')
 	if left == -1 {
-		err = ErrInvalidBashFormat
+		err = newErrTemplate(templateInvalidBash, template)
 		return
 	}
 	right := strings.LastIndexByte(template, '}')
 	if right == -1 {
-		err = ErrInvalidBashFormat
+		err = newErrTemplate(templateInvalidBash, template)
 		return
 	}
 	if right < left {
-		err = ErrInvalidBashFormat
+		err = newErrTemplate(templateInvalidBash, template)
 		return
 	}
 	pt.Prefix = template[:left]
@@ -202,18 +230,18 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 
 		right := strings.IndexByte(template, '}')
 		if right == -1 {
-			err = ErrInvalidBashFormat
+			err = newErrTemplate(templateInvalidBash, template)
 			return
 		}
 		if right < left {
-			err = ErrInvalidBashFormat
+			err = newErrTemplate(templateInvalidBash, template)
 			return
 		}
 		inside := template[left+1 : right]
 
 		numbers := strings.Split(inside, "..")
 		if len(numbers) < 2 || len(numbers) > 3 {
-			err = ErrInvalidBashFormat
+			err = newErrTemplate(templateInvalidBash, template)
 			return
 		} else if len(numbers) == 2 { // {0001..0999} case
 			if tr.Start, err = strconv.ParseInt(numbers[0], 10, 64); err != nil {
@@ -236,7 +264,7 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 			}
 			tr.DigitCount = Min(len(numbers[0]), len(numbers[1]))
 		}
-		if err = validateBoundaries(tr.Start, tr.End, tr.Step); err != nil {
+		if err = validateBoundaries(template, tr.Start, tr.End, tr.Step); err != nil {
 			return
 		}
 
@@ -254,12 +282,12 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 	return
 }
 
+// e.g. multi-range template: "prefix-@00001-gap-@100-suffix"
+//      single range:         "prefix@00100suffix"
 func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
-	// "prefix-@00001-gap-@100-suffix"
-
 	left := strings.IndexByte(template, '@')
 	if left == -1 {
-		err = ErrInvalidAtFormat
+		err = newErrTemplate(templateInvalidAt, template)
 		return
 	}
 	pt.Prefix = template[:left]
@@ -284,7 +312,7 @@ func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
 		tr.Step = 1
 		tr.DigitCount = len(number)
 
-		if err = validateBoundaries(tr.Start, tr.End, tr.Step); err != nil {
+		if err = validateBoundaries(template, tr.Start, tr.End, tr.Step); err != nil {
 			return
 		}
 
@@ -302,15 +330,15 @@ func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
 	return
 }
 
-func validateBoundaries(start, end, step int64) error {
+func validateBoundaries(template string, start, end, step int64) error {
 	if start > end {
-		return ErrStartAfterEnd
+		return newErrTemplate(templateStartAfterEnd, template)
 	}
 	if start < 0 {
-		return ErrNegativeStart
+		return newErrTemplate(templateNegativeStart, template)
 	}
 	if step <= 0 {
-		return ErrNonPositiveStep
+		return newErrTemplate(templateNonPositiveStep, template)
 	}
 	return nil
 }

@@ -23,6 +23,10 @@ const (
 	SortKindContent      = "content" // sort by content of given file
 )
 
+const (
+	fmtInvalidAlgorithmKind = "invalid algorithm kind, expecting one of: %+v" // <--- supportedAlgorithms
+)
+
 var supportedAlgorithms = []string{sortKindEmpty, SortKindAlphanumeric, SortKindMD5, SortKindShuffle, SortKindContent, SortKindNone}
 
 type (

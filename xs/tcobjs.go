@@ -119,7 +119,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 				goto fin
 			}
 			wi.refc.Store(int32(smap.CountTargets() - 1))
-			lrit.init(r, r.p.T, &msg.ListRangeMsg, freeLOM)
+			lrit.init(r, r.p.T, &msg.SelectObjsMsg, freeLOM)
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
 			} else {

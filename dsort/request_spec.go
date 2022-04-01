@@ -27,20 +27,23 @@ const (
 )
 
 var (
+	templateExamples         = "(examples: bash format: 'prefix{0001..0010}suffix', at format: 'prefix@00100suffix')"
+	errInvalidInputTemplate  = errors.New("could not parse input template " + templateExamples)
+	errInvalidOutputTemplate = errors.New("could not parse output template " + templateExamples)
+)
+
+var (
 	errMissingBucket            = errors.New("missing field 'bucket'")
 	errInvalidExtension         = errors.New("extension must be one of '.tar', '.tar.gz', or '.tgz'")
 	errNegOutputShardSize       = errors.New("output shard size must be >= 0")
 	errEmptyOutputShardSize     = errors.New("output shard size must be set (cannot be 0)")
-	errNegativeConcurrencyLimit = fmt.Errorf("concurrency max limit must be 0 (limits will be calculated) or > 0")
+	errNegativeConcurrencyLimit = errors.New("concurrency max limit must be 0 (limits will be calculated) or > 0")
 
-	errInvalidInputTemplateFormat  = errors.New("could not parse given input format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
-	errInvalidOutputTemplateFormat = errors.New("could not parse given output format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
-	errInvalidOrderParam           = errors.New("could not parse order format, required URL")
+	errInvalidOrderParam = errors.New("could not parse order format, required URL")
 
 	errInvalidAlgorithm          = errors.New("invalid algorithm specified")
-	errInvalidAlgorithmKind      = fmt.Errorf("invalid algorithm kind, should be one of: %+v", supportedAlgorithms)
 	errInvalidSeed               = errors.New("invalid seed provided, should be int")
-	errInvalidAlgorithmExtension = errors.New("invalid extension provided, should be in format: .ext")
+	errInvalidAlgorithmExtension = errors.New("invalid extension provided, should be in the format: .ext")
 )
 
 // supportedExtensions is a list of extensions (archives) supported by dSort
@@ -271,7 +274,8 @@ func validateExtension(ext string) bool {
 	return cos.StringInSlice(ext, supportedExtensions)
 }
 
-// parseInputFormat checks if input format was specified correctly
+// parseInputFormat makes sure that the input format is either `at` or `bash`
+// (see cmn/cos/template.go for detaiuls)
 func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) {
 	pit = &parsedInputTemplate{}
 	template := strings.TrimSpace(inputFormat)
@@ -280,32 +284,26 @@ func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) 
 	} else if pit.Template, err = cos.ParseAtTemplate(template); err == nil {
 		pit.Type = templAt
 	} else {
-		return nil, errInvalidInputTemplateFormat
+		return nil, errInvalidInputTemplate
 	}
-
 	return
 }
 
-// parseOutputFormat checks if output format was specified correctly.
+// parseOutputFormat validates the output format
 func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err error) {
 	pot = &parsedOutputTemplate{}
-	template := strings.TrimSpace(outputFormat)
-	if pot.Template, err = cos.ParseFmtTemplate(template); err == nil {
-		// Pass
-	} else if pot.Template, err = cos.ParseBashTemplate(template); err == nil {
-		// Pass
-	} else if pot.Template, err = cos.ParseAtTemplate(template); err == nil {
-		// Pass
-	} else {
-		return nil, errInvalidOutputTemplateFormat
+	if pot.Template, err = cos.NewParsedTemplate(strings.TrimSpace(outputFormat)); err != nil {
+		return
 	}
-
+	if len(pot.Template.Ranges) == 0 { // with no parsed ranges, we currently assume that there's only prefix
+		return nil, errInvalidOutputTemplate
+	}
 	return
 }
 
 func parseAlgorithm(algo SortAlgorithm) (parsedAlgo *SortAlgorithm, err error) {
 	if !cos.StringInSlice(algo.Kind, supportedAlgorithms) {
-		return nil, errInvalidAlgorithmKind
+		return nil, fmt.Errorf(fmtInvalidAlgorithmKind, supportedAlgorithms)
 	}
 
 	if algo.Seed != "" {

@@ -174,7 +174,7 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 		wg.Wait()
 	// 2. with bucket
 	case apc.ActPrefetchObjects:
-		args := &cmn.ListRangeMsg{}
+		args := &cmn.SelectObjsMsg{}
 		rns := xreg.RenewPrefetch(xactMsg.ID, t, bck, args)
 		xctn := rns.Entry.Get()
 		xctn.AddNotif(&xact.NotifXact{

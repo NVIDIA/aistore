@@ -14,7 +14,7 @@ import (
 // used in multi-object (list|range) operations
 type (
 	// List of object names _or_ a template specifying { Prefix, Regex, and/or Range }
-	ListRangeMsg struct {
+	SelectObjsMsg struct {
 		ObjNames []string `json:"objnames"`
 		Template string   `json:"template"`
 	}
@@ -25,7 +25,7 @@ type (
 	ArchiveMsg struct {
 		TxnUUID     string `json:"-"`
 		FromBckName string `json:"-"`
-		ListRangeMsg
+		SelectObjsMsg
 		ToBck    Bck    `json:"tobck"`
 		ArchName string `json:"archname"` // must have one of the cos.ArchExtensions
 		Mime     string `json:"mime"`     // user-specified mime type takes precedence if defined
@@ -38,7 +38,7 @@ type (
 	//  Multi-object copy & transform (see also: TCBMsg)
 	TCObjsMsg struct {
 		TxnUUID string `json:"-"`
-		ListRangeMsg
+		SelectObjsMsg
 		apc.TCBMsg
 		ToBck Bck `json:"tobck"`
 		// flags
@@ -46,10 +46,10 @@ type (
 	}
 )
 
-// NOTE: empty ListRangeMsg{} corresponds to (range = entire bucket)
+// NOTE: empty SelectObjsMsg{} corresponds to (range = entire bucket)
 
-func (lrm *ListRangeMsg) IsList() bool      { return len(lrm.ObjNames) > 0 }
-func (lrm *ListRangeMsg) HasTemplate() bool { return lrm.Template != "" }
+func (lrm *SelectObjsMsg) IsList() bool      { return len(lrm.ObjNames) > 0 }
+func (lrm *SelectObjsMsg) HasTemplate() bool { return lrm.Template != "" }
 
 ////////////////
 // ArchiveMsg //

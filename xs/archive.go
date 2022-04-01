@@ -222,7 +222,7 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 				lrit    = &lriterator{}
 				freeLOM = false // not delegating to iterator
 			)
-			lrit.init(r, r.p.T, &msg.ListRangeMsg, freeLOM)
+			lrit.init(r, r.p.T, &msg.SelectObjsMsg, freeLOM)
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
 			} else {

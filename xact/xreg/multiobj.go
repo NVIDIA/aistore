@@ -14,10 +14,10 @@ func RenewPutArchive(uuid string, t cluster.Target, bckFrom *cluster.Bck) RenewR
 	return RenewBucketXact(apc.ActArchive, bckFrom, Args{T: t, UUID: uuid})
 }
 
-func RenewEvictDelete(uuid string, t cluster.Target, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) RenewRes {
+func RenewEvictDelete(uuid string, t cluster.Target, kind string, bck *cluster.Bck, msg *cmn.SelectObjsMsg) RenewRes {
 	return RenewBucketXact(kind, bck, Args{T: t, UUID: uuid, Custom: msg})
 }
 
-func RenewPrefetch(uuid string, t cluster.Target, bck *cluster.Bck, msg *cmn.ListRangeMsg) RenewRes {
+func RenewPrefetch(uuid string, t cluster.Target, bck *cluster.Bck, msg *cmn.SelectObjsMsg) RenewRes {
 	return RenewBucketXact(apc.ActPrefetchObjects, bck, Args{T: t, UUID: uuid, Custom: msg})
 }

@@ -64,7 +64,7 @@ func TestCopyObjRange(t *testing.T) {
 
 		template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
 		tlog.Logf("template: [%s]\n", template)
-		msg := cmn.TCObjsMsg{ListRangeMsg: cmn.ListRangeMsg{Template: template}, ToBck: bckTo}
+		msg := cmn.TCObjsMsg{SelectObjsMsg: cmn.SelectObjsMsg{Template: template}, ToBck: bckTo}
 		xactID, err = api.CopyMultiObj(baseParams, bckFrom, msg)
 		tassert.CheckFatal(t, err)
 	}
@@ -137,7 +137,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					go func(list []string) {
-						msg := cmn.TCObjsMsg{ListRangeMsg: cmn.ListRangeMsg{ObjNames: list}, ToBck: toBck}
+						msg := cmn.TCObjsMsg{SelectObjsMsg: cmn.SelectObjsMsg{ObjNames: list}, ToBck: toBck}
 						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
 							erv.Store(err)
 						}
@@ -148,7 +148,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 					start := rand.Intn(m.num - numToCopy)
 					go func(start int) {
 						template := fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
-						msg := cmn.TCObjsMsg{ListRangeMsg: cmn.ListRangeMsg{Template: template}, ToBck: toBck}
+						msg := cmn.TCObjsMsg{SelectObjsMsg: cmn.SelectObjsMsg{Template: template}, ToBck: toBck}
 						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
 							erv.Store(err)
 						}
@@ -236,9 +236,9 @@ func testETLMultiObj(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRang
 		}
 	)
 	if opType == "list" {
-		tcoMsg.ListRangeMsg.ObjNames = objList
+		tcoMsg.SelectObjsMsg.ObjNames = objList
 	} else {
-		tcoMsg.ListRangeMsg.Template = fileRange
+		tcoMsg.SelectObjsMsg.Template = fileRange
 	}
 
 	tlog.Logf("Start offline ETL %q\n", uuid)

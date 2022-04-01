@@ -264,7 +264,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 					}
 					go func(archName string, list []string) {
 						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
-						msg.ListRangeMsg.ObjNames = list
+						msg.SelectObjsMsg.ObjNames = list
 						msg.InclSrcBname = test.inclSrcBckName
 
 						_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
@@ -277,7 +277,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 					start := rand.Intn(m.num - numInArch)
 					go func(archName string, start int) {
 						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
-						msg.ListRangeMsg.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
+						msg.SelectObjsMsg.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
 						msg.InclSrcBname = test.inclSrcBckName
 
 						_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
@@ -398,7 +398,7 @@ func TestAppendToArch(t *testing.T) {
 				}
 				go func(archName string, list []string) {
 					msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
-					msg.ListRangeMsg.ObjNames = list
+					msg.SelectObjsMsg.ObjNames = list
 
 					_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
 					tassert.CheckFatal(t, err)
@@ -423,7 +423,7 @@ func TestAppendToArch(t *testing.T) {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName, AllowAppendToExisting: true}
-					msg.ListRangeMsg.ObjNames = list
+					msg.SelectObjsMsg.ObjNames = list
 					go func() {
 						_, err = api.CreateArchMultiObj(baseParams, fromBck, msg)
 						tassert.CheckError(t, err)

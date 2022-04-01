@@ -33,37 +33,37 @@ func ETLMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xac
 
 // DeleteList sends request to remove a list of objects from a bucket.
 func DeleteList(baseParams BaseParams, bck cmn.Bck, filesList []string) (string, error) {
-	deleteMsg := cmn.ListRangeMsg{ObjNames: filesList}
+	deleteMsg := cmn.SelectObjsMsg{ObjNames: filesList}
 	return doListRangeRequest(baseParams, bck, apc.ActDeleteObjects, deleteMsg)
 }
 
 // DeleteRange sends request to remove a range of objects from a bucket.
 func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
-	deleteMsg := cmn.ListRangeMsg{Template: rng}
+	deleteMsg := cmn.SelectObjsMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, apc.ActDeleteObjects, deleteMsg)
 }
 
 // PrefetchList sends request to prefetch a list of objects from a remote bucket.
 func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
-	prefetchMsg := cmn.ListRangeMsg{ObjNames: fileslist}
+	prefetchMsg := cmn.SelectObjsMsg{ObjNames: fileslist}
 	return doListRangeRequest(baseParams, bck, apc.ActPrefetchObjects, prefetchMsg)
 }
 
 // PrefetchRange sends request to prefetch a range of objects from a remote bucket.
 func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
-	prefetchMsg := cmn.ListRangeMsg{Template: rng}
+	prefetchMsg := cmn.SelectObjsMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, apc.ActPrefetchObjects, prefetchMsg)
 }
 
 // EvictList sends request to evict a list of objects from a remote bucket.
 func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
-	evictMsg := cmn.ListRangeMsg{ObjNames: fileslist}
+	evictMsg := cmn.SelectObjsMsg{ObjNames: fileslist}
 	return doListRangeRequest(baseParams, bck, apc.ActEvictObjects, evictMsg)
 }
 
 // EvictRange sends request to evict a range of objects from a remote bucket.
 func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
-	evictMsg := cmn.ListRangeMsg{Template: rng}
+	evictMsg := cmn.SelectObjsMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, apc.ActEvictObjects, evictMsg)
 }
 

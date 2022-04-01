@@ -339,7 +339,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidInputTemplateFormat))
+			Expect(err).To(Equal(errInvalidInputTemplate))
 		})
 
 		It("should fail due to start after end in output format", func() {
@@ -353,7 +353,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidOutputTemplateFormat))
+			Expect(err).To(Equal(errInvalidOutputTemplate))
 		})
 
 		It("should fail due invalid parentheses", func() {
@@ -367,7 +367,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidInputTemplateFormat))
+			Expect(err).To(Equal(errInvalidInputTemplate))
 		})
 
 		It("should fail due to invalid extension", func() {

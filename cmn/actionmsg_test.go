@@ -7,25 +7,36 @@
 package cmn
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
 
 type actmsgTestConf struct {
-	action string
-	vals   []string
+	action       string
+	vals         []string
+	isSelectObjs bool
 }
 
 func testRawUnmarshal(t *testing.T, tc actmsgTestConf) {
 	t.Run(tc.action, func(t *testing.T) {
 		for _, val := range tc.vals {
 			msg := &apc.ActionMsg{}
-			err := jsoniter.Unmarshal([]byte(val), &msg)
+			raw := fmt.Sprintf(val, tc.action)
+			err := jsoniter.Unmarshal([]byte(raw), &msg)
 			tassert.CheckError(t, err)
 			tassert.Errorf(t, tc.action == msg.Action, "actions do not match (%q vs %q)", tc.action, msg.Action)
+
+			// parse the template
+			if tc.isSelectObjs {
+				lrMsg := &SelectObjsMsg{}
+				err = cos.MorphMarshal(msg.Value, lrMsg)
+				tassert.CheckError(t, err)
+			}
 		}
 	})
 }
@@ -35,58 +46,61 @@ func TestActMsgRawUnmarshal(t *testing.T) {
 		{
 			action: apc.ActEvictObjects,
 			vals: []string{
-				`{"action":"evict-listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
-				`{"action":"evict-listrange","value":{"objnames":["o1","o2","o3"]}}`,
+				`{"action":"%s","value":{"template":"__tst/test-{1000..2000}"}}`,
+				`{"action":"%s","value":{"objnames":["o1","o2","o3"]}}`,
 			},
+			isSelectObjs: true,
 		},
 		{
 			action: apc.ActPrefetchObjects,
 			vals: []string{
-				`{"action":"prefetch-listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
-				`{"action":"prefetch-listrange","value":{"objnames":["o1","o2","o3"]}}`,
+				`{"action":"%s","value":{"template":"__tst/test-{1000..2000}"}}`,
+				`{"action":"%s","value":{"objnames":["o1","o2","o3"]}}`,
 			},
+			isSelectObjs: true,
 		},
 		{
 			action: apc.ActDeleteObjects,
 			vals: []string{
-				`{"action":"delete-listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
-				`{"action":"delete-listrange","value":{"objnames":["o1","o2","o3"]}}`,
+				`{"action":"%s","value":{"template":"__tst/test-{1000..2000}"}}`,
+				`{"action":"%s","value":{"objnames":["o1","o2","o3"]}}`,
 			},
+			isSelectObjs: true,
 		},
 		{
 			action: apc.ActSetBprops,
 			vals: []string{
-				`{"action":"set-bprops","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
+				`{"action":"%s","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
 			},
 		},
 		{
 			action: apc.ActCreateBck,
 			vals: []string{
-				`{"action":"create-bck","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
+				`{"action":"%s","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
 			},
 		},
 		{
 			action: apc.ActXactStart,
 			vals: []string{
-				`{"action":"start","value":{"kind": "rebalance"}}`,
+				`{"action":"%s","value":{"kind": "rebalance"}}`,
 			},
 		},
 		{
 			action: apc.ActXactStop,
 			vals: []string{
-				`{"action":"stop","value":{"kind": "rebalance"}}`,
+				`{"action":"%s","value":{"kind": "rebalance"}}`,
 			},
 		},
 		{
 			action: apc.ActList,
 			vals: []string{
-				`{"action":"list","value":{"props": "size"}}`,
+				`{"action":"%s","value":{"props": "size"}}`,
 			},
 		},
 		{
 			action: apc.ActPromote,
 			vals: []string{
-				`{"action":"promote","value":{"target": "234ed78", "recurs": true, "keep": false}}`,
+				`{"action":"%s","value":{"target": "234ed78", "recurs": true, "keep": false}}`,
 			},
 		},
 	}

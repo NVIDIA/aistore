@@ -337,7 +337,7 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 	if listObjs != "" && tmplObjs != "" {
 		return incorrectUsageMsg(c, errFmtExclusive, listFlag.Name, templateFlag.Name)
 	}
-	var lrMsg cmn.ListRangeMsg
+	var lrMsg cmn.SelectObjsMsg
 	if listObjs != "" {
 		lrMsg.ObjNames = strings.Split(listObjs, ",")
 	} else {
@@ -347,8 +347,8 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 		lrMsg.Template = tmplObjs
 	}
 	msg := cmn.TCObjsMsg{
-		ListRangeMsg: lrMsg,
-		ToBck:        toBck,
+		SelectObjsMsg: lrMsg,
+		ToBck:         toBck,
 	}
 	msg.DryRun = flagIsSet(c, cpBckDryRunFlag)
 	if flagIsSet(c, etlBucketRequestTimeout) {

@@ -35,16 +35,40 @@ Related CLI documentation:
 * [CLI: copying buckets](/docs/cli/bucket.md#copy-bucket)
 
 ## Table of Contents
-- [List/Range Operations](#listrange-operations)
+- [Operations on multiple selected objects](#operations-on-multiple-selected-objects)
   - [List](#list)
   - [Range](#range)
   - [Examples](#examples)
 
-## List/Range Operations
+## Operations on multiple selected objects
 
-AIStore provides two APIs to operate on groups of objects: List, and Template.
+AIStore provides APIs to operate on *batches* of objects:
+
+| API Message (apc.ActionMsg) | Description |
+| --- | --- |
+| `apc.ActCopyObjects`     | copy multiple objects |
+| `apc.ActDeleteObjects`   | delete --/-- |
+| `apc.ActETLObjects`      | etl (transform) --/-- |
+| `apc.ActEvictObjects`    | evict --/-- |
+| `apc.ActPrefetchObjects` | prefetch --/-- |
+| `apc.ActArchive`         | archive --/-- |
 
 For CLI documentation and examples, please see [Operations on Lists and Ranges](cli/object.md#operations-on-lists-and-ranges).
+
+There are two distinct ways to specify the objects: **list** them (ie., the names) explicitly, or specify a **template**.
+
+Supported template syntax includes 3 standalone variations - 3 alternative formats:
+
+1. bash (or shell) brace expansion:
+   * `prefix-{0..100}-suffix`
+   * `prefix-{00001..00010..2}-gap-{001..100..2}-suffix`
+2. at style:
+   * `prefix-@100-suffix`
+   * `prefix-@00001-gap-@100-suffix`
+3. fmt style:
+   * `prefix-%06d-suffix`
+
+In all cases, prefix and/or suffix are optional.
 
 #### List
 

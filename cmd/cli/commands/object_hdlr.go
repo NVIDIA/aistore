@@ -272,10 +272,10 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 
 	if list != "" {
-		msg.ListRangeMsg.ObjNames = makeList(list)
+		msg.SelectObjsMsg.ObjNames = makeList(list)
 		_, err = api.CreateArchMultiObj(defaultAPIParams, bckFrom, msg)
 	} else {
-		msg.ListRangeMsg.Template = template
+		msg.SelectObjsMsg.Template = template
 		_, err = api.CreateArchMultiObj(defaultAPIParams, bckFrom, msg)
 	}
 	if err != nil {
