@@ -130,6 +130,16 @@ test:short:
     - make test-short
     - FLAGS="--duration=10s" make test-aisloader
 
+# Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
+test:short:python:
+  <<: *test_short_def
+  variables:
+    BUCKET: "ais://test"
+  script:
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - cd sdk/python
+    - make unit_test
+
 # Runs cluster with 1 proxy and 1 target (with 6 mountpaths).
 test:short:minimal:
   <<: *test_short_def
