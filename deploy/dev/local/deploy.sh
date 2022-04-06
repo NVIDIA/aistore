@@ -9,6 +9,40 @@
 #
 ############################################
 
+if ! command -v go &> /dev/null; then
+  echo "Go (toolchain) is not installed"
+  echo "Use https://go.dev/dl to install the required (as per go.mod) version of Go"
+  echo "See https://aiatscale.org/docs/getting-started for step-by-step instruction"
+  exit 1
+fi
+
+if [[ -z $GOPATH ]]; then
+  echo "Warning: GOPATH variable is not defined, using home directory ${HOME}"
+  echo "(Tip: see https://aiatscale.org/docs/getting-started for step-by-step instruction)"
+  echo ""
+  if [ ! -d "${HOME}/go/pkg" ]; then
+    echo "${HOME}/go/pkg does not exist (deploying the very first time and from scratch?)"
+    echo "(Tip: run 'make mod-tidy' to download required packages)"
+    mkdir -p "${HOME}/go/pkg"
+    echo ""
+  fi
+  if [ ! -w "${HOME}/go/pkg" ]; then
+    echo "${HOME}/go/pkg is not writable - exiting"
+    exit 1
+  fi
+else
+  if [ ! -d "${GOPATH}/go/pkg" ]; then
+    echo "${GOPATH}/go/pkg does not exist (deploying the very first time and from scratch?)"
+    echo "(Tip: run 'make mod-tidy' to download required packages)"
+    mkdir -p "${GOPATH}/go/pkg"
+    echo ""
+  fi
+  if [ ! -w "${GOPATH}/go/pkg" ]; then
+    echo "${GOPATH}/go/pkg is not writable - exiting"
+    exit 1
+  fi
+fi
+
 AISTORE_DIR=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
 source $AISTORE_DIR/deploy/dev/utils.sh
 AIS_USE_HTTPS=${AIS_USE_HTTPS:-false}
