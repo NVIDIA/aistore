@@ -32,6 +32,7 @@ The second related option is [`noatime`](#noatime) - and the same argument appli
 - [Virtualization](#virtualization)
 - [Metadata write policy](#metadata-write-policy)
 - [PUT latency](#put-latency)
+- [GET throughput](#get-throughput)
 - [`aisloader`](#aisloader)
 
 ## Operating System
@@ -252,12 +253,48 @@ AIS provides checksumming and self-healing - the capabilities that ensure that u
 
 There's a price, though, and the scenarios where you could make an educated choice to trade checksumming for performance.
 
-In particular, let's say that we are massively writing a new content into a bucket. (Type of the bucket doesn't matter - it may be an `ais://` bucket, or `s3://`, or any other supported Cloud, or `hdfs://`, `ht://`, etc.)
+In particular, let's say that we are massively writing a new content into a bucket.
 
-What matters is that we do *know* that we'll be overwriting few objects (or none at all). Then it would stand to reason that AIS, on its end, should probably skip trying to load the corresponding object's metadata. Skip loading existing object's metadata in order to compare checksums (and thus maybe avoid writing altogether if the checksums match) and/or update the object's version, etc.
+> Type of the bucket doesn't matter - it may be an `ais://` bucket, or `s3://`, or any other supported [backend](/docs/bucket.md#backend-provider) including HDFS and HTTP.
+
+What matters is that we do *know* that we'll be overwriting few objects, percentage-wise. Then it would stand to reason that AIS, on its end, should probably refrain from trying to load the destination object's metadata. Skip loading existing object's metadata in order to compare checksums (and thus maybe avoid writing altogether if the checksums match) and/or update the object's version, etc.
 
 * [API: PUT(object)](/api/object.go) - and look for `SkipVC` option
-* [CLI: PUT(object)](docs/cli/object.md#put-object) - and look for `--skip-vc` option
+* [CLI: PUT(object)](/docs/cli/object.md#put-object) - `--skip-vc` option
+
+## GET throughput
+
+AIS is elastic cluster that can grow and shrink at runtime when you attach (or detach) disks and add (or remove) nodes. Drive are prone to sudden failures while nodes can experience unexpected crashes. At all times, though, and in presence of any and all events, AIS tries to keep [fair and balanced](/docs/rebalance.md) distribution of user data across all clustered nodes and drives.
+
+The idea to keep all drives **equally utilized** is the absolute cornerstone of the design.
+
+There's one simple trick, though, to improve drive utilization even further: [n-way mirroring](/docs/storage_svcs.md#n-way-mirror). In fact, 
+
+  * if you observe <span style="color:red">90% and higher</span> utilizations,
+  * and if adding more drives (or more nodes) is not an option,
+  * and if you still have some spare capacity to create additional copies of data
+
+- if all of the above is true, it would be a very good idea to *mirror* the corresponding bucket, e.g.:
+
+```console
+# reconfigure existing bucket (`ais://abc` in the example) for 3 copies
+
+$ ais bucket props set ais://abc mirror.enabled=true mirror.copies=3
+Bucket props successfully updated
+"mirror.copies" set to: "3" (was: "2")
+"mirror.enabled" set to: "true" (was: "false")
+```
+
+When (and if) it comes to performing under extreme loads we would be strongly recommending to mirror your datasets.
+
+> Data protection would then be an additional bonus, needless to say.
+
+The way it works is simple:
+
+* AIS target constantly monitors drive utilizations
+* Given multiple copies, AIS target always selects a copy (and a drive that stores this replica) based on the drive utilization.
+
+Ultimately, a drive that has fewer outstanding I/O requests and is less utilized - will always win.
 
 ## `aisloader`
 
@@ -281,6 +318,7 @@ Further details at https://github.com/NVIDIA/aistore/blob/master/docs/howto_benc
 
 Command-line options
 ====================
+...
 ...
 
 ```
