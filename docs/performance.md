@@ -7,7 +7,7 @@ redirect_from:
  - /docs/performance.md/
 ---
 
-AIStore is all about performance. It's all about performance and reliability, to be precise. An assortment of tips and recommendations that you find in this text - will help. It'll go a long way to ensure that AIS _does_ deliver.
+AIStore is all about performance. It's all about performance and reliability, to be precise. An assortment of tips and recommendations that you find in this text will go a long way to ensure that AIS _does_ deliver.
 
 But first, here's an important consideration:
 
@@ -42,13 +42,15 @@ There are two types of nodes in AIS cluster:
 * targets (ie., storage nodes)
 * proxies (aka gateways)
 
-AIS target must have a data disk, or disks. AIS proxies do not "see" a single byte of user data - they implement most of the control plane and provide access points (that can be used equally and in parallel).
+> AIS target must have a data disk, or disks. AIS proxies do not "see" a single byte of user data - they implement most of the control plane and provide access points to the cluster.
 
-To get the maximum out of the underlying hardware and improve datapath performance, it is, therefore, advisable to tune-up, specifically, target's operating system. For starters, we would recommend to `sysctl`-modify a number of well-known system variables, such as `net.core.wmem_max`, `net.core.rmem_max`, `vm.swappiness`, and more:
+The question, then, is how to get the maximum out of the underlying hardware? How to improve datapath performance. This and similar questions have one simple answer: **tune-up** target's operating system.
+
+Specifically, `sysctl` selected system variables, such as `net.core.wmem_max`, `net.core.rmem_max`, `vm.swappiness`, and more - here's the approximate list:
 
 * https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/vars/host_config_sysctl.yml
 
-The document above is part of the separate [repository](https://github.com/NVIDIA/ais-k8s) that serves the purposes of deploying AIS on **bare-metal Kubernetes**. The repo includes a number of READMEs (also known as *playbooks*) to [prepare AIS nodes for deployment on bare-metal Kubernetes](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/README.md).
+The document is part of a separate [repository](https://github.com/NVIDIA/ais-k8s) that serves the (specific) purposes of deploying AIS on **bare-metal Kubernetes**. The repo includes a number of readmes (also known as *playbooks*) to [prepare AIS nodes for deployment on bare-metal Kubernetes](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/README.md).
 
 In particular, there are playbooks:
 
@@ -67,7 +69,7 @@ General references:
 
 Setting CPU governor (P-States) to `performance` may make a big difference and, in particular, result in much better network throughput:
 
-* [Recent Linux TCP Updates, and how to tune your 100G host](https://fasterdata.es.net/assets/Papers-and-Publications/100G-Tuning-TechEx2016.tierney.pdf) (slide 13)
+* [How to tune your 100G host](https://fasterdata.es.net/assets/Papers-and-Publications/100G-Tuning-TechEx2016.tierney.pdf) (slide 13)
 
 On `Linux`:
 
@@ -199,14 +201,14 @@ More: [Tune hard disk with `hdparm`](http://www.linux-magazine.com/Online/Featur
 ### Local filesystem
 
 Another way to increase storage performance is to benchmark different filesystems: `ext`, `xfs`, `openzfs`.
-Tuning the IO scheduler can be a very important part of this process:
- * http://blackbird.si/tips-for-optimizing-disk-performance-on-linux/
- * https://cromwell-intl.com/open-source/performance-tuning/disks.html
+Tuning the corresponding IO scheduler can prove to be important:
 
-It seems like generally `deadline` scheduler is a good choice for AIStore, instead of default `cfq`.
-When you consider using `xfs` keep in mind that:
+* [ais_enable_multiqueue](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/docs/ais_enable_multiqueue.md)
 
-> According to xfs.org, the CFQ scheduler defeats much of the parallelization in XFS.
+Other related references:
+
+* http://blackbird.si/tips-for-optimizing-disk-performance-on-linux/
+* https://cromwell-intl.com/open-source/performance-tuning/disks.html
 
 ### `noatime`
 
