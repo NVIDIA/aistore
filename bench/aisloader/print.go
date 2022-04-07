@@ -58,9 +58,9 @@ func printUsage(f *flag.FlagSet) {
 	fmt.Println("\nAbout")
 	fmt.Println("=====")
 	fmt.Printf("AIS loader (aisloader v%s, build %s) is a tool to measure storage performance.\n", _version, _build)
-	fmt.Println("It's a load generator that has been developed (and is currently used) to benchmark and")
-	fmt.Println("stress-test AIStore(tm) but can be easily extended for any S3-compatible backend.")
-	fmt.Println("For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.")
+	fmt.Println("It's a load generator that has been developed to benchmark and stress-test AIStore")
+	fmt.Println("but can be easily extended to benchmark any S3-compatible backend.")
+	fmt.Println("For usage, run: `aisloader`, or `aisloader usage`, or `aisloader --help`.")
 	fmt.Println("Further details at https://github.com/NVIDIA/aistore/blob/master/docs/howto_benchmark.md")
 
 	fmt.Println("\nCommand-line options")

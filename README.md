@@ -66,6 +66,8 @@ Further, there's the capability referred to as [global namespace](/docs/provider
 
 > For detailed discussion on supported deployments, please refer to [Getting Started](/docs/getting_started.md).
 
+> For performance tuning and preparing AIS nodes for bare-metal deployment, see [performance](/docs/performance.md).
+
 ## Related Software
 
 When it comes to PyTorch, [WebDataset](https://github.com/webdataset/webdataset) is the preferred AIStore client.

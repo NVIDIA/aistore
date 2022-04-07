@@ -4,9 +4,9 @@
  */
 
 // AIS loader (aisloader) is a tool to measure storage performance. It's a load
-// generator that has been developed (and is currently used) to benchmark and
-// stress-test AIStore(tm) but can be easily extended for any S3-compatible backend.
-// For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
+// generator that has been developed to benchmark and stress-test AIStore
+// but can be easily extended to benchmark any S3-compatible backend.
+// For usage, run: `aisloader`, or `aisloader usage`, or `aisloader --help`.
 
 // Examples:
 // 1. Destroy existing ais bucket:
