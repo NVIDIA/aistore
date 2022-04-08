@@ -9,7 +9,7 @@ redirect_from:
 
 AIStore is all about performance. It's all about performance and reliability, to be precise. An assortment of tips and recommendations that you find in this text will go a long way to ensure that AIS _does_ deliver.
 
-But first, here's an important consideration:
+But first, one important consideration:
 
 Currently(**) AIS utilizes local filesystems - local formatted drives of any kind. You could use HDDs and/or NVMes, and any Linux filesystem: xfs, zfs, ext4... you name it. In all cases, the resulting throughput of an AIS cluster will be the sum of throughputs of individual drives.
 
@@ -25,7 +25,7 @@ The second related option is [`noatime`](#noatime) - and the same argument appli
 - [Smoke test](#smoke-test)
 - [Maximum number of open files](#maximum-number-of-open-files)
 - [Storage](#storage)
-  - [Block settings](#block-settings)
+  - [Disk priority](#disk-priority)
   - [Benchmarking disk](#benchmarking-disk)
   - [Local filesystem](#local-filesystem)
   - [`noatime`](#noatime)
@@ -48,7 +48,7 @@ The question, then, is how to get the maximum out of the underlying hardware? Ho
 
 Specifically, `sysctl` selected system variables, such as `net.core.wmem_max`, `net.core.rmem_max`, `vm.swappiness`, and more - here's the approximate list:
 
-* https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/vars/host_config_sysctl.yml
+* [https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/vars/host_config_sysctl.yml](sysctl)
 
 The document is part of a separate [repository](https://github.com/NVIDIA/ais-k8s) that serves the (specific) purposes of deploying AIS on **bare-metal Kubernetes**. The repo includes a number of readmes (also known as *playbooks*) to [prepare AIS nodes for deployment on bare-metal Kubernetes](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/README.md).
 
@@ -69,7 +69,7 @@ General references:
 
 Setting CPU governor (P-States) to `performance` may make a big difference and, in particular, result in much better network throughput:
 
-* [How to tune your 100G host](https://fasterdata.es.net/assets/Papers-and-Publications/100G-Tuning-TechEx2016.tierney.pdf) (slide 13)
+* [How to tune your 100G host](https://fasterdata.es.net/assets/Papers-and-Publications/100G-Tuning-TechEx2016.tierney.pdf)
 
 On `Linux`:
 
@@ -166,14 +166,6 @@ $ # Best effort, highest priority
 $ sudo ionice -c2 -n0 -p $(pgrep aisnode)
 ```
 
-### Block settings
-
-When initializing the disk it is necessary to set proper block size: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/disk-performance.html
-
-```console
-$ dd if=/dev/zero of=/dev/<disk_name> bs=<block_size>
-```
-
 ### Benchmarking disk
 
 **TIP:** double check that rootfs/tmpfs of the AIStore target are _not_ used when reading and writing data.
@@ -207,8 +199,8 @@ Tuning the corresponding IO scheduler can prove to be important:
 
 Other related references:
 
-* http://blackbird.si/tips-for-optimizing-disk-performance-on-linux/
-* https://cromwell-intl.com/open-source/performance-tuning/disks.html
+* [How to improve disk IO performance in Linux](https://www.golinuxcloud.com/how-to-improve-disk-io-performance-in-linux/)
+* [Performance Tuning on Linux — Disk I/O](https://cromwell-intl.com/open-source/performance-tuning/disks.html)
 
 ### `noatime`
 
@@ -221,19 +213,24 @@ Therefore, we **strongly** advise to use the `noatime` option when mounting a di
 Important to note is that AIStore will still maintain access time updates but with using more optimized techniques as well as ensuring that it is consistent during object migration.
 
 External links:
- * http://en.tldp.org/LDP/solrhe/Securing-Optimizing-Linux-RH-Edition-v1.3/chap6sec73.html
- * https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/global_file_system_2/s2-manage-mountnoatime
- * https://lonesysadmin.net/2013/12/08/gain-30-linux-disk-performance-noatime-nodiratime-relatime/
+
+* [The atime and noatime attribute](http://en.tldp.org/LDP/solrhe/Securing-Optimizing-Linux-RH-Edition-v1.3/chap6sec73.html)
+* [Mount with noatime](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/global_file_system_2/s2-manage-mountnoatime)
+* [Gain 30% Linux Disk Performance with noatime](https://lonesysadmin.net/2013/12/08/gain-30-linux-disk-performance-noatime-nodiratime-relatime)
 
 ## Virtualization
 
-AIStore node (proxy and target) must be deployed as a single VM on a given bare-metal host.
-There must be no sharing of host resources between two or more VMs.
-Even if there is a single VM, the host may decide to swap it out when idle, or give it a single hyperthreaded vCPU instead of a full-blown physical core - this condition must be prevented.
-AIStore node needs to have a physical resource in its entirety: RAM, CPU, network, and storage. Hypervisor must resort to the remaining absolutely required minimum.
-Make sure to use PCI passthrough to assign a device (NIC, HDD) directly to the AIStore node VM.
+There must be no sharing of host resources between two or more VMs that are AIS nodes.
 
-AIStore's primary goal is to scale with clustered drives. Therefore, the choice of a drive (type and capabilities) is very important.
+Even if there is a single virtual machine, the host may decide to swap it out when idle, or give it a single hyperthreaded vCPU instead of a full-blown physical core - this condition must be prevented.
+
+Virtualized AIS node needs to have a physical resource - memory, CPU, network, storage - in its entirety. Hypervisor must resort to the remaining absolutely required minimum.
+
+Make sure to use PCI passthrough to assign a device (NIC, HDD) directly to the AIS VM.
+
+AIStore's primary goal is to scale with clustered drives. Therefore, the choice of a drive type and its capabilities remains very important.
+
+Finally, when initializing virtualized disks it'd be advisable to set an optimal [block size](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/disk-performance.html).
 
 ## Metadata write policy
 
@@ -305,9 +302,9 @@ AIStore includes `aisloader` - a powerful benchmarking tool that can be used to 
 For numerous command-line options and usage examples, please see:
 
 * [Load Generator](/docs/aisloader.md)
-* [How To Benchmark AIStore](howto_benchmark.md).
+* [How To Benchmark AIStore](howto_benchmark.md)
 
-Or, simply run `aisloader` with an empty command line and see its online help, command line options, and examples:
+Or, simply run `aisloader` with no arguments and see its online help, including command-line options and numerous usage examples:
 
 ```console
 $ make aisloader; aisloader
@@ -325,4 +322,4 @@ Command-line options
 
 ```
 
-> Note as well that `aisloader` is fully StatsD-enabled - the metrics can be formwarded to any StatsD-compliant backend for visualization and further analysis.
+Note as well that `aisloader` is fully StatsD-enabled - collected metrics can be formwarded to any StatsD-compliant backend for visualization and further analysis.
