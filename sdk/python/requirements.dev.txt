@@ -13,6 +13,7 @@ packaging==21.3
 platformdirs==2.5.1
 pluggy==1.0.0
 py==1.11.0
+pydantic==1.9.0
 pylint==2.13.4
 pyparsing==3.0.7
 pytest==7.1.1

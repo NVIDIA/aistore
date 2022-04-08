@@ -3,19 +3,19 @@ import os
 
 from aistore.client.api import Client
 from aistore.client.msg import Bck
-from aistore.client.const import PROVIDER_AIS
+from aistore.client.const import ProviderAIS
 
 
 class TestBasicOps(unittest.TestCase):  #pylint: disable=unused-variable
     def test_bucket(self):
         client = Client('http://localhost:8080')
 
-        res = client.list_buckets(provider=PROVIDER_AIS)
+        res = client.list_buckets(provider=ProviderAIS)
         count = len(res)
-        bck = Bck('test', PROVIDER_AIS)
+        bck = Bck(name='test', provider=ProviderAIS)
         res = client.create_bucket(bck)
         self.assertEqual(res.status_code, 200)
-        res = client.list_buckets(provider=PROVIDER_AIS)
+        res = client.list_buckets(provider=ProviderAIS)
         count_new = len(res)
         self.assertEqual(count + 1, count_new)
 
@@ -25,8 +25,8 @@ class TestBasicOps(unittest.TestCase):  #pylint: disable=unused-variable
     def test_put_get(self):
         client = Client('http://localhost:8080')
 
-        res = client.list_buckets(provider=PROVIDER_AIS)
-        bck = Bck('test', PROVIDER_AIS)
+        res = client.list_buckets(provider=ProviderAIS)
+        bck = Bck(name='test', provider=ProviderAIS)
         res = client.create_bucket(bck)
         self.assertEqual(res.status_code, 200)
 
