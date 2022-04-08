@@ -273,7 +273,7 @@ There's one simple trick, though, to improve drive utilization even further: [n-
   * and if adding more drives (or more nodes) is not an option,
   * and if you still have some spare capacity to create additional copies of data
 
-- if all of the above is true, it would be a very good idea to *mirror* the corresponding bucket, e.g.:
+**if** all of the above is true, it'd be a very good idea to *mirror* the corresponding bucket, e.g.:
 
 ```console
 # reconfigure existing bucket (`ais://abc` in the example) for 3 copies
@@ -284,14 +284,10 @@ Bucket props successfully updated
 "mirror.enabled" set to: "true" (was: "false")
 ```
 
-When (and if) it comes to performing under extreme loads we would be strongly recommending to mirror your datasets.
-
-> Data protection would then be an additional bonus, needless to say.
-
-The way it works is simple:
+In other words, under extreme loads n-way mirroring is especially, and strongly, recommended. (Data protection would then be an additional bonus, needless to say.) The way it works is simple:
 
 * AIS target constantly monitors drive utilizations
-* Given multiple copies, AIS target always selects a copy (and a drive that stores this replica) based on the drive utilization.
+* Given multiple copies, AIS target always selects a copy (and a drive that stores it) based on the drive's utilization.
 
 Ultimately, a drive that has fewer outstanding I/O requests and is less utilized - will always win.
 
