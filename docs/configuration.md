@@ -333,16 +333,23 @@ AIStore [HTTP API](http_api.md) makes it possible to list, add, remove, enable, 
 
 ## Disabling extended attributes
 
-To make sure that AIStore does not utilize xattrs, configure `checksum.type`=`none`, `versioning.enabled`=`true`,
-and `md_write`=`never` for all targets in a AIStore cluster.
+To make sure that AIStore does not utilize xattrs, configure:
+* `checksum.type`=`none`
+* `versioning.enabled`=`true`, and
+* `write_policy.md`=`never`
+
+for all targets in AIStore cluster.
+
+Or, simply update global configuration (to have those cluster-wide defaults later inherited by all newly created buckets).
+
 This can be done via the [common configuration "part"](/deploy/dev/local/aisnode_config.sh) that'd be further used to deploy the cluster.
 
 Extended attributes can be disabled on per bucket basis. To do this, turn off saving metadata to disks (CLI):
 
 ```console
-$ ais bucket props ais://mybucket md_write=never
+$ ais bucket props ais://mybucket write_policy.md=never
 Bucket props successfully updated
-"md_write" set to: "never" (was: "")
+"write_policy.md" set to: "never" (was: "")
 ```
 
 Disable extended attributes only if you need fast and **temporary** storage.

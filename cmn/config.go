@@ -105,32 +105,32 @@ type (
 	}
 
 	ClusterConfig struct {
-		Backend     BackendConf       `json:"backend" allow:"cluster"`
-		Mirror      MirrorConf        `json:"mirror" allow:"cluster"`
-		EC          ECConf            `json:"ec" allow:"cluster"`
-		Log         LogConf           `json:"log"`
-		Periodic    PeriodConf        `json:"periodic"`
-		Timeout     TimeoutConf       `json:"timeout"`
-		Client      ClientConf        `json:"client"`
-		Proxy       ProxyConf         `json:"proxy" allow:"cluster"`
-		LRU         LRUConf           `json:"lru"`
-		Disk        DiskConf          `json:"disk"`
-		Rebalance   RebalanceConf     `json:"rebalance" allow:"cluster"`
-		Resilver    ResilverConf      `json:"resilver"`
-		Cksum       CksumConf         `json:"checksum"`
-		Versioning  VersionConf       `json:"versioning" allow:"cluster"`
-		Net         NetConf           `json:"net"`
-		FSHC        FSHCConf          `json:"fshc"`
-		Auth        AuthConf          `json:"auth"`
-		Keepalive   KeepaliveConf     `json:"keepalivetracker"`
-		Downloader  DownloaderConf    `json:"downloader"`
-		DSort       DSortConf         `json:"distributed_sort"`
-		Compression CompressionConf   `json:"compression"`
-		MDWrite     apc.MDWritePolicy `json:"md_write"`
-		LastUpdated string            `json:"lastupdate_time"`
-		UUID        string            `json:"uuid"`                  // immutable
-		Version     int64             `json:"config_version,string"` // version
-		Ext         interface{}       `json:"ext,omitempty"`         // within meta-version extensions
+		Backend     BackendConf     `json:"backend" allow:"cluster"`
+		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
+		EC          ECConf          `json:"ec" allow:"cluster"`
+		Log         LogConf         `json:"log"`
+		Periodic    PeriodConf      `json:"periodic"`
+		Timeout     TimeoutConf     `json:"timeout"`
+		Client      ClientConf      `json:"client"`
+		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
+		LRU         LRUConf         `json:"lru"`
+		Disk        DiskConf        `json:"disk"`
+		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
+		Resilver    ResilverConf    `json:"resilver"`
+		Cksum       CksumConf       `json:"checksum"`
+		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
+		Net         NetConf         `json:"net"`
+		FSHC        FSHCConf        `json:"fshc"`
+		Auth        AuthConf        `json:"auth"`
+		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
+		Downloader  DownloaderConf  `json:"downloader"`
+		DSort       DSortConf       `json:"distributed_sort"`
+		Compression CompressionConf `json:"compression"`
+		WritePolicy WritePolicyConf `json:"write_policy"`
+		LastUpdated string          `json:"lastupdate_time"`
+		UUID        string          `json:"uuid"`                  // immutable
+		Version     int64           `json:"config_version,string"` // version
+		Ext         interface{}     `json:"ext,omitempty"`         // within meta-version extensions
 		// obsolete
 		Replication ReplicationConf `json:"replication"`
 	}
@@ -183,7 +183,7 @@ type (
 		Downloader  *DownloaderConfToUpdate  `json:"downloader,omitempty"`
 		DSort       *DSortConfToUpdate       `json:"distributed_sort,omitempty"`
 		Compression *CompressionConfToUpdate `json:"compression,omitempty"`
-		MDWrite     *apc.MDWritePolicy       `json:"md_write,omitempty"`
+		WritePolicy *WritePolicyConfToUpdate `json:"write_policy,omitempty"`
 		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
 
 		// LocalConfig
@@ -559,6 +559,15 @@ type (
 		Checksum     *bool `json:"checksum,omitempty"`
 	}
 
+	WritePolicyConf struct {
+		Data apc.WritePolicy `json:"data"`
+		MD   apc.WritePolicy `json:"md"`
+	}
+	WritePolicyConfToUpdate struct {
+		Data *apc.WritePolicy `json:"data,omitempty"`
+		MD   *apc.WritePolicy `json:"md,omitempty"`
+	}
+
 	// obsolete; TODO: remove with the next meta-version update
 	ReplicationConf struct {
 		OnColdGet     bool `json:"on_cold_get"`
@@ -720,11 +729,13 @@ var (
 	_ Validator = (*DownloaderConf)(nil)
 	_ Validator = (*DSortConf)(nil)
 	_ Validator = (*CompressionConf)(nil)
+	_ Validator = (*WritePolicyConf)(nil)
 
 	_ PropsValidator = (*CksumConf)(nil)
 	_ PropsValidator = (*LRUConf)(nil)
 	_ PropsValidator = (*MirrorConf)(nil)
 	_ PropsValidator = (*ECConf)(nil)
+	_ PropsValidator = (*WritePolicyConf)(nil)
 
 	_ json.Marshaler   = (*BackendConf)(nil)
 	_ json.Unmarshaler = (*BackendConf)(nil)
@@ -1151,6 +1162,20 @@ func (c *ECConf) RequiredEncodeTargets() int {
 func (c *ECConf) RequiredRestoreTargets() int {
 	return c.DataSlices
 }
+
+/////////////////////
+// WritePolicyConf //
+/////////////////////
+
+func (c *WritePolicyConf) Validate() (err error) {
+	err = c.Data.Validate()
+	if err == nil {
+		err = c.MD.Validate()
+	}
+	return
+}
+
+func (c *WritePolicyConf) ValidateAsProps(...interface{}) error { return c.Validate() }
 
 ///////////////////////////////////////////
 // KeepaliveConf (part of ClusterConfig) //

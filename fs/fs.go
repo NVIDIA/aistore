@@ -489,7 +489,7 @@ func (mi *MountpathInfo) _addEnabled(tid string, availablePaths MPI, config *cmn
 	if err != nil {
 		return err
 	}
-	if tid != "" && config.MDWrite != apc.WriteNever {
+	if tid != "" && config.WritePolicy.MD != apc.WriteNever {
 		if err := mi.SetDaemonIDXattr(tid); err != nil {
 			return err
 		}

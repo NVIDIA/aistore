@@ -35,7 +35,7 @@ func AccessAttrs(v apc.AccessAttrs) *apc.AccessAttrs {
 	return &v
 }
 
-func MDWritePolicy(v apc.MDWritePolicy) *apc.MDWritePolicy {
+func WritePolicy(v apc.WritePolicy) *apc.WritePolicy {
 	return &v
 }
 

@@ -165,7 +165,10 @@ func TestCreateWithBucketProps(t *testing.T) {
 			ValidateColdGet: api.Bool(false),
 			ValidateObjMove: api.Bool(true),
 		},
-		MDWrite: api.MDWritePolicy("never"),
+		WritePolicy: &cmn.WritePolicyConfToUpdate{
+			Data: api.WritePolicy(apc.WriteImmediate),
+			MD:   api.WritePolicy(apc.WriteNever),
+		},
 	}
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, propsToSet)
 
@@ -253,7 +256,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 }
 
 func TestOverwriteLomCache(t *testing.T) {
-	for _, mdwrite := range []apc.MDWritePolicy{apc.WriteImmediate, apc.WriteNever} {
+	for _, mdwrite := range []apc.WritePolicy{apc.WriteImmediate, apc.WriteNever} {
 		name := string(mdwrite)
 		if name == "" {
 			name = "write-immediate"
@@ -266,7 +269,7 @@ func TestOverwriteLomCache(t *testing.T) {
 	}
 }
 
-func overwriteLomCache(mdwrite apc.MDWritePolicy, t *testing.T) {
+func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	var (
 		m = ioContext{
 			t:         t,
@@ -289,10 +292,13 @@ func overwriteLomCache(mdwrite apc.MDWritePolicy, t *testing.T) {
 		l := len(mpList.Available)
 		tassert.Fatalf(t, l >= 2, "%s has %d mountpaths, need at least 2", target, l)
 	}
-	tlog.Logf("Create %s(mirrored, md-write=never)\n", m.bck)
+	tlog.Logf("Create %s(mirrored, write-policy-md=%s)\n", m.bck, mdwrite)
 	propsToSet := &cmn.BucketPropsToUpdate{
-		Mirror:  &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
-		MDWrite: api.MDWritePolicy(mdwrite),
+		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
+		WritePolicy: &cmn.WritePolicyConfToUpdate{
+			Data: api.WritePolicy(apc.WriteImmediate),
+			MD:   api.WritePolicy(mdwrite),
+		},
 	}
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, propsToSet)
 

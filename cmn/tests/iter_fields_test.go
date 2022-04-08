@@ -98,9 +98,11 @@ var _ = Describe("IterFields", func() {
 
 					"extra.aws.cloud_region": "us-central",
 
-					"access":   apc.AccessAttrs(0),
-					"md_write": apc.MDWritePolicy(""),
-					"created":  int64(0),
+					"access":  apc.AccessAttrs(0),
+					"created": int64(0),
+
+					"write_policy.data": apc.WritePolicy(""),
+					"write_policy.md":   apc.WritePolicy(""),
 				},
 			),
 			Entry("list BucketPropsToUpdate fields",
@@ -113,8 +115,10 @@ var _ = Describe("IterFields", func() {
 					Cksum: &cmn.CksumConfToUpdate{
 						Type: api.String(cos.ChecksumXXHash),
 					},
-					Access:  api.AccessAttrs(1024),
-					MDWrite: api.MDWritePolicy("never"),
+					Access: api.AccessAttrs(1024),
+					WritePolicy: &cmn.WritePolicyConfToUpdate{
+						MD: api.WritePolicy(apc.WriteDelayed),
+					},
 				},
 				map[string]interface{}{
 					"backend_bck.name":     (*string)(nil),
@@ -150,8 +154,10 @@ var _ = Describe("IterFields", func() {
 					"lru.capacity_upd_time": (*cos.Duration)(nil),
 					"lru.out_of_space":      (*int64)(nil),
 
-					"access":   api.AccessAttrs(1024),
-					"md_write": api.MDWritePolicy("never"),
+					"access": api.AccessAttrs(1024),
+
+					"write_policy.data": (*apc.WritePolicy)(nil),
+					"write_policy.md":   api.WritePolicy(apc.WriteDelayed),
 
 					"extra.hdfs.ref_directory": (*string)(nil),
 				},
@@ -230,8 +236,8 @@ var _ = Describe("IterFields", func() {
 
 					"checksum.type": cos.ChecksumXXHash,
 
-					"access":   "12", // type == uint64
-					"md_write": "never",
+					"access":          "12", // type == uint64
+					"write_policy.md": apc.WriteNever,
 				},
 				&cmn.BucketProps{
 					Mirror: cmn.MirrorConf{
@@ -251,8 +257,8 @@ var _ = Describe("IterFields", func() {
 						Enabled:         false,
 						ValidateWarmGet: true,
 					},
-					Access:  12,
-					MDWrite: "never",
+					Access:      12,
+					WritePolicy: cmn.WritePolicyConf{MD: apc.WriteNever},
 				},
 			),
 			Entry("update some BucketPropsToUpdate",
@@ -275,8 +281,8 @@ var _ = Describe("IterFields", func() {
 
 					"checksum.type": cos.ChecksumXXHash,
 
-					"access":   "12", // type == uint64
-					"md_write": "never",
+					"access":          "12", // type == uint64
+					"write_policy.md": apc.WriteNever,
 				},
 				&cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
@@ -297,8 +303,10 @@ var _ = Describe("IterFields", func() {
 						Type:            api.String(cos.ChecksumXXHash),
 						ValidateWarmGet: api.Bool(true),
 					},
-					Access:  api.AccessAttrs(12),
-					MDWrite: api.MDWritePolicy(apc.WriteNever),
+					Access: api.AccessAttrs(12),
+					WritePolicy: &cmn.WritePolicyConfToUpdate{
+						MD: api.WritePolicy(apc.WriteNever),
+					},
 				},
 			),
 		)

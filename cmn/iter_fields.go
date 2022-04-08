@@ -310,7 +310,7 @@ func (f *field) Value() interface{} { return f.v.Interface() }
 
 func (f *field) String() (s string) {
 	if f.v.Kind() == reflect.String {
-		// NOTE: this will panic if the value's type is derived from string (e.g. MDWrite)
+		// NOTE: this will panic if the value's type is derived from string (e.g. WritePolicy)
 		s = f.Value().(string)
 	} else {
 		s = fmt.Sprintf("%v", f.Value())

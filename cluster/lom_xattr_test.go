@@ -43,7 +43,11 @@ var _ = Describe("LOM Xattributes", func() {
 			),
 			cluster.NewBck(
 				bucketCached, apc.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, MDWrite: "never", BID: 202},
+				&cmn.BucketProps{
+					Cksum:       cmn.CksumConf{Type: cos.ChecksumXXHash},
+					WritePolicy: cmn.WritePolicyConf{Data: apc.WriteImmediate, MD: apc.WriteNever},
+					BID:         202,
+				},
 			),
 		)
 	)

@@ -236,7 +236,7 @@ Finally, when initializing virtualized disks it'd be advisable to set an optimal
 
 There will be times when it'll make sense to keep storage system's metadata strictly in memory or, maybe, cache and flush it on a best-effort basis. The corresponding use cases include temporary datasets - transient data of any kind that can (and will) be discarded. There's also the case when AIS is used as a high-performance caching layer where original data is already sufficiently replicated and protected.
 
-Metadata write policy - json tag `md_write` - was introduced specifically to support those and related scenarios. Configurable both globally and for each individual bucket (or dataset), the current set of supported policies includes:
+Metadata write policy - json tag `write_policy.md` - was introduced specifically to support those and related scenarios. Configurable both globally and for each individual bucket (or dataset), the current set of supported policies includes:
 
 | Policy | Description |
 | --- | ---|

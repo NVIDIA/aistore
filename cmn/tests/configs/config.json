@@ -75,9 +75,9 @@
     "multiplier": 4,
     "enabled": true
   },
-	"resilver": {
-		"enabled": true
-	},
+  "resilver": {
+    "enabled": true
+  },
   "checksum": {
     "type":                       "xxhash",
     "validate_cold_get":          true,
@@ -124,10 +124,10 @@
   "downloader": {
     "timeout": "1h"
   },
- "compression": {
-  "block_size": 262144,
-  "checksum": false
- },
+  "compression": {
+    "block_size": 262144,
+    "checksum": false
+  },
   "distributed_sort": {
     "duplicated_records":    "ignore",
     "missing_shards":        "ignore",
@@ -136,5 +136,9 @@
     "default_max_mem_usage": "80%",
     "dsorter_mem_threshold": "100GB",
     "call_timeout":          "10m"
+  },
+  "write_policy": {
+    "data": "",
+    "md": ""
   }
 }

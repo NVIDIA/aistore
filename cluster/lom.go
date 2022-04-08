@@ -52,6 +52,7 @@ type (
 		ObjName     string            // object name in the bucket
 		HrwFQN      string            // => main replica (misplaced?)
 		info        string
+		// sgl         *memsys.SGL TODO -- FIXME: in progress
 	}
 	// LOM In Flight (LIF)
 	LIF struct {
@@ -167,11 +168,11 @@ func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
 // see also: transport.ObjHdr.FullName()
 func (lom *LOM) FullName() string { return filepath.Join(lom.bck.Name, lom.ObjName) }
 
-func (lom *LOM) WritePolicy() (p apc.MDWritePolicy) {
+func (lom *LOM) WritePolicy() (p apc.WritePolicy) {
 	if bprops := lom.Bprops(); bprops == nil {
 		p = apc.WriteImmediate
 	} else {
-		p = bprops.MDWrite
+		p = bprops.WritePolicy.MD
 	}
 	return
 }

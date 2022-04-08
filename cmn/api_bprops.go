@@ -46,7 +46,7 @@ type (
 		Mirror MirrorConf `json:"mirror"`
 
 		// Metadata write policy
-		MDWrite apc.MDWritePolicy `json:"md_write"`
+		WritePolicy WritePolicyConf `json:"write_policy"`
 
 		// EC defines erasure coding setting for the bucket
 		EC ECConf `json:"ec"`
@@ -99,16 +99,16 @@ type (
 	// The struct may have extra fields that do not exist in BucketProps.
 	// Add tag 'copy:"skip"' to ignore those fields when copying values.
 	BucketPropsToUpdate struct {
-		BackendBck *BckToUpdate         `json:"backend_bck"`
-		Versioning *VersionConfToUpdate `json:"versioning"`
-		Cksum      *CksumConfToUpdate   `json:"checksum"`
-		LRU        *LRUConfToUpdate     `json:"lru"`
-		Mirror     *MirrorConfToUpdate  `json:"mirror"`
-		EC         *ECConfToUpdate      `json:"ec"`
-		Access     *apc.AccessAttrs     `json:"access,string"`
-		MDWrite    *apc.MDWritePolicy   `json:"md_write"`
-		Extra      *ExtraToUpdate       `json:"extra"`
-		Force      bool                 `json:"force" copy:"skip" list:"omit"`
+		BackendBck  *BckToUpdate             `json:"backend_bck,omitempty"`
+		Versioning  *VersionConfToUpdate     `json:"versioning,omitempty"`
+		Cksum       *CksumConfToUpdate       `json:"checksum,omitempty"`
+		LRU         *LRUConfToUpdate         `json:"lru,omitempty"`
+		Mirror      *MirrorConfToUpdate      `json:"mirror,omitempty"`
+		EC          *ECConfToUpdate          `json:"ec,omitempty"`
+		Access      *apc.AccessAttrs         `json:"access,string,omitempty"`
+		WritePolicy *WritePolicyConfToUpdate `json:"write_policy,omitempty"`
+		Extra       *ExtraToUpdate           `json:"extra,omitempty"`
+		Force       bool                     `json:"force,omitempty" copy:"skip" list:"omit"`
 	}
 
 	BckToUpdate struct {
@@ -142,13 +142,13 @@ func (bck *Bck) DefaultProps(cs ...*Config) *BucketProps {
 		c.LRU.Enabled = false
 	}
 	return &BucketProps{
-		Cksum:      c.Cksum,
-		LRU:        c.LRU,
-		Mirror:     c.Mirror,
-		Versioning: c.Versioning,
-		Access:     apc.AccessAll,
-		EC:         c.EC,
-		MDWrite:    c.MDWrite,
+		Cksum:       c.Cksum,
+		LRU:         c.LRU,
+		Mirror:      c.Mirror,
+		Versioning:  c.Versioning,
+		Access:      apc.AccessAll,
+		EC:          c.EC,
+		WritePolicy: c.WritePolicy,
 	}
 }
 
@@ -189,7 +189,7 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 		}
 	}
 	var softErr error
-	for _, pv := range []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, &bp.Extra, bp.MDWrite} {
+	for _, pv := range []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy} {
 		var err error
 		if pv == &bp.EC {
 			err = bp.EC.ValidateAsProps(targetCnt)

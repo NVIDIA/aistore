@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 
@@ -147,8 +147,10 @@ var _ = Describe("API", func() {
 						ParitySlices: api.Int(1024),
 						Compression:  api.String("false"),
 					},
-					Access:  api.AccessAttrs(1024),
-					MDWrite: api.MDWritePolicy(apc.WriteDelayed),
+					Access: api.AccessAttrs(1024),
+					WritePolicy: &cmn.WritePolicyConfToUpdate{
+						MD: api.WritePolicy(apc.WriteDelayed),
+					},
 				},
 				cmn.BucketProps{
 					Versioning: cmn.VersionConf{
@@ -176,8 +178,11 @@ var _ = Describe("API", func() {
 						ParitySlices: 1024,
 						Compression:  "false",
 					},
-					Access:  1024,
-					MDWrite: "delayed",
+					Access: 1024,
+					WritePolicy: cmn.WritePolicyConf{
+						Data: "",
+						MD:   apc.WriteDelayed,
+					},
 				},
 			),
 		)

@@ -39,7 +39,8 @@ var (
 	propCmpls     = map[string][]string{
 		apc.PropBucketAccessAttrs:             apc.SupportedPermissions(),
 		apc.HdrObjCksumType:                   cos.SupportedChecksums(),
-		"md_write":                            apc.SupportedWritePolicy,
+		"write_policy.data":                   apc.SupportedWritePolicy,
+		"write_policy.md":                     apc.SupportedWritePolicy,
 		"ec.compression":                      apc.SupportedCompression,
 		"compression.checksum":                apc.SupportedCompression,
 		"rebalance.compression":               apc.SupportedCompression,
