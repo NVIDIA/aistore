@@ -49,8 +49,8 @@ type (
 		Allowed string
 		// Visits all the fields, not only the leaves.
 		VisitAll bool
-		// Determines whether this is only a read-only or write walk.
-		// Read-only walk takes into consideration `tagOmitempty`.
+		// Read-only walk is true by default (compare with `UpdateFieldValue`)
+		// Note that `tagOmitempty` is limited to read-only - has no effect when `OnlyRead == false`.
 		OnlyRead bool
 	}
 
@@ -169,7 +169,7 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 			dirtyField = field.dirty
 		} else if srcValField.Kind() != reflect.Struct {
 			// We require that not-omitted fields have JSON tag.
-			cos.AssertMsg(jsonTagPresent, prefix+"["+fieldName+"]")
+			debug.AssertMsg(jsonTagPresent, prefix+"["+fieldName+"]")
 
 			// Set value for the field
 			name := prefix + fieldName
@@ -249,7 +249,7 @@ func copyProps(src, dst interface{}, asType string) (err error) {
 		}
 
 		t, ok := dstVal.Type().FieldByName(fieldName)
-		cos.AssertMsg(ok, fieldName)
+		debug.AssertMsg(ok, fieldName)
 		// NOTE: the tag is used exclusively to enforce local vs global scope of the config var
 		allowed := t.Tag.Get("allow")
 		if allowed != "" && allowed != asType {
@@ -319,7 +319,7 @@ func (f *field) String() (s string) {
 }
 
 func (f *field) SetValue(src interface{}, force ...bool) error {
-	cos.Assert(!f.opts.OnlyRead)
+	debug.Assert(!f.opts.OnlyRead)
 
 	dst := f.v
 	if f.listTag == tagReadonly && (len(force) == 0 || !force[0]) {
@@ -394,9 +394,9 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 				dst.Set(lst)
 			}
 		case reflect.Map:
-			// TODO: do nothing, just skip (ObjAttrs contains Map)
+			// do nothing, skip (ObjAttrs contains Map)
 		default:
-			cos.AssertMsg(false, fmt.Sprintf("field.name: %s, field.type: %s", f.listTag, dst.Kind()))
+			debug.Assertf(false, "field.name: %s, field.type: %s", f.listTag, dst.Kind())
 		}
 	default:
 		if dst.Kind() == reflect.Ptr {

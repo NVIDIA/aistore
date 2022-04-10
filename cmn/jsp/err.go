@@ -18,10 +18,10 @@ type (
 		got      uint32
 		expected uint32
 	}
-	ErrCompatibleVersion struct {
+	ErrJspCompatibleVersion struct {
 		ErrVersion
 	}
-	ErrUnsupportedVersion struct {
+	ErrUnsupportedMetaVersion struct {
 		ErrVersion
 	}
 )
@@ -34,18 +34,18 @@ func newErrVersion(tag string, got, expected uint32, compatibles ...uint32) erro
 	err := &ErrVersion{tag, got, expected}
 	for _, v := range compatibles {
 		if got == v {
-			return &ErrCompatibleVersion{*err}
+			return &ErrJspCompatibleVersion{*err}
 		}
 	}
-	return &ErrUnsupportedVersion{*err}
+	return &ErrUnsupportedMetaVersion{*err}
 }
 
 func (e *ErrVersion) Version() uint32 { return e.got }
 
-func (e *ErrUnsupportedVersion) Error() string {
+func (e *ErrUnsupportedMetaVersion) Error() string {
 	return fmt.Sprintf("unsupported meta-version %q: got %d, expected %d", e.tag, e.got, e.expected)
 }
 
-func (e *ErrCompatibleVersion) Error() string {
+func (e *ErrJspCompatibleVersion) Error() string {
 	return fmt.Sprintf("older compatible meta-version %q: got %d, expected %d", e.tag, e.got, e.expected)
 }

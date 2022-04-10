@@ -106,8 +106,7 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err err
 	if err != nil {
 		return
 	}
-	// NOTE: config `nil` implies missing cluster config - use the config provided through CLI
-	//       to initiate one.
+	// NOTE: nil config == missing config
 	if clone == nil {
 		clone = &globalConfig{}
 		_, err = jsp.Load(cmn.GCO.GetInitialGconfPath(), clone, jsp.Plain())

@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -1629,68 +1629,69 @@ func ipv4ListsEqual(alist, blist string) bool {
 // jsp //
 /////////
 
-func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (err error) {
-	var (
-		overrideConfig *ConfigToUpdate
-		initial        bool
-	)
+func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) error {
 	debug.Assert(globalConfPath != "" && localConfPath != "")
 	GCO.SetInitialGconfPath(globalConfPath)
 
-	// Load local config
-	_, err = jsp.LoadMeta(localConfPath, &config.LocalConfig)
-	if err != nil {
+	// firs, local config
+	if _, err := jsp.LoadMeta(localConfPath, &config.LocalConfig); err != nil {
 		return fmt.Errorf("failed to load plain-text local config %q: %v", localConfPath, err)
 	}
 	glog.SetLogDir(config.LogDir)
 
-	// NOTE: Normally, the last updated version of config doesn't exist in the config.ConfigDir
-	//       _iff_ the node is being deployed the very first time. In which case, we load the
-	//       initial plain-text global config from the command-line/environment specified `globalConfPath`.
-	//       Once started, the node then always relies on the last updated version stored in a binary
-	//       form according to associated ClusterConfig.JspOpts()
+	// Global (aka Cluster) config
+	// Normally, when the node is being deployed the very first time the last updated version
+	// of the config doesn't exist.
+	// In this case, we load the initial plain-text global config from the command-line/environment
+	// specified `globalConfPath`.
+	// Once started, the node then always relies on the last updated version stored in a binary
+	// form (in accordance with the associated ClusterConfig.JspOpts()).
 	globalFpath := filepath.Join(config.ConfigDir, GlobalConfigFname)
-	_, err = jsp.LoadMeta(globalFpath, &config.ClusterConfig)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("failed to load global config %q: %v", globalFpath, err)
+	if _, err := jsp.LoadMeta(globalFpath, &config.ClusterConfig); err != nil {
+		const txt = "load global config"
+		if os.IsNotExist(err) {
+			const itxt = "load initial global config"
+			// initial (plain-text)
+			glog.Warningf("%s %q", itxt, globalConfPath)
+			_, err = jsp.Load(globalConfPath, &config.ClusterConfig, jsp.Plain())
+			if err != nil {
+				return fmt.Errorf("failed to %s %q: %v", itxt, globalConfPath, err)
+			}
+			debug.Assert(config.Version == 0)
+			globalFpath = globalConfPath
+		} else if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
+			// previous meta-version (in re: backward compatibility)
+			glog.Warningf("failed to %s - trying the previous meta-version v%d", txt, oldMetaverConfig)
+			errOld := tryLoadOldClusterConfig(globalFpath, config)
+			if errOld != nil {
+				return fmt.Errorf("failed to %s %q: [%v] [%v]", txt, globalFpath, err, errOld)
+			}
+			debug.Assert(config.Version > 0 && config.UUID != "")
+
+			// rewrite with the current meta-version
+			if errSav := jsp.SaveMeta(globalFpath, &config.ClusterConfig, nil); errSav != nil {
+				return fmt.Errorf("failed to %s %q: [%v] [%v]", txt, globalFpath, err, errSav)
+			}
+			glog.Warningf("backward compatibility: saved %s meta-version v%d => v%d",
+				&config.ClusterConfig, oldMetaverConfig, MetaverConfig)
+		} else {
+			// otherwise
+			return fmt.Errorf("failed to %s %q: %v", txt, globalConfPath, err)
 		}
-		glog.Warningf("loading initial (plain-text) global config from %q", globalConfPath)
-		_, err = jsp.Load(globalConfPath, &config.ClusterConfig, jsp.Plain())
-		if err != nil {
-			return fmt.Errorf("failed to load global config %q: %v", globalConfPath, err)
-		}
-		initial = true
-		globalFpath = globalConfPath
+	} else {
+		debug.Assert(config.Version > 0 && config.UUID != "")
 	}
-	debug.Assert(initial && config.Version == 0 || !initial && config.Version > 0)
 
 	Timeout.setReadOnly(config)
-
 	config.SetRole(daeRole)
-	overrideConfig, err = loadOverrideConfig(config.ConfigDir)
-	if err != nil {
-		return
-	}
 
-	if overrideConfig != nil {
-		// update config with locally-stored 'OverrideConfigFname' and validate the result
-		GCO.PutOverrideConfig(overrideConfig)
-		if overrideConfig.FSP != nil {
-			// separately, override local config's fspaths
-			config.LocalConfig.FSP = *overrideConfig.FSP
-			overrideConfig.FSP = nil
-		}
-		err = config.UpdateClusterConfig(*overrideConfig, apc.Daemon) // update and validate
-	} else {
-		err = config.Validate()
-	}
-	if err != nil {
-		return
+	// override config - locally updated global defaults
+	if err := handleOverrideConfig(config); err != nil {
+		return err
 	}
 
 	// create dirs
-	if err = cos.CreateDir(config.LogDir); err != nil {
+	if err := cos.CreateDir(config.LogDir); err != nil {
 		return fmt.Errorf("failed to create log dir %q: %v", config.LogDir, err)
 	}
 	if config.TestingEnv() && daeRole == apc.Target {
@@ -1702,21 +1703,61 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (
 		}
 	}
 
-	// log rotate
+	// rotate log
 	glog.MaxSize = config.Log.MaxSize
 	if glog.MaxSize > cos.GiB {
 		glog.Warningf("log.max_size %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
 		glog.MaxSize = cos.MiB
 	}
 	// log level
-	if err = SetLogLevel(config.Log.Level); err != nil {
+	if err := SetLogLevel(config.Log.Level); err != nil {
 		return fmt.Errorf("failed to set log level %q: %s", config.Log.Level, err)
 	}
 	// log header
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
 	glog.Infof("config: %q periodic.stats_time: %v", globalFpath, config.Periodic.StatsTime)
-	return
+	return nil
+}
+
+func handleOverrideConfig(config *Config) error {
+	overrideConfig, err := loadOverrideConfig(config.ConfigDir)
+	if err != nil {
+		return err
+	}
+	if overrideConfig == nil {
+		return config.Validate() // always validate
+	}
+
+	// update config with locally-stored 'OverrideConfigFname' and validate the result
+	GCO.PutOverrideConfig(overrideConfig)
+	if overrideConfig.FSP != nil {
+		config.LocalConfig.FSP = *overrideConfig.FSP // override local config's fspaths
+		overrideConfig.FSP = nil
+	}
+	return config.UpdateClusterConfig(*overrideConfig, apc.Daemon)
+}
+
+// (backward compatibility)
+func tryLoadOldClusterConfig(globalFpath string, config *Config) error {
+	var old oldClusterConfig
+	if _, err := jsp.LoadMeta(globalFpath, &old); err != nil {
+		return err
+	}
+
+	// iterate successfully loaded (old) source to
+	// a) copy same-name/same-type fields while b) taking special care of assorted changes
+	err := IterFields(&old, func(name string, fld IterField) (error, bool /*stop*/) {
+		if strings.HasSuffix(name, "md_write") {
+			v, ok := fld.Value().(apc.WritePolicy)
+			debug.Assert(ok)
+			config.ClusterConfig.WritePolicy.MD = v
+			return nil, false
+		}
+		// copy dst = fld.Value()
+		return UpdateFieldValue(&config.ClusterConfig, name, fld.Value()), false // NOTE: keep going
+	}, IterOpts{OnlyRead: true})
+	return err
 }
 
 func SaveOverrideConfig(configDir string, toUpdate *ConfigToUpdate) error {
