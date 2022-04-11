@@ -394,11 +394,18 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 				dst.Set(lst)
 			}
 		case reflect.Map:
-			// do nothing, skip (ObjAttrs contains Map)
+			// do nothing (e.g. ObjAttrs.CustomMD)
 		default:
 			debug.Assertf(false, "field.name: %s, field.type: %s", f.listTag, dst.Kind())
 		}
 	default:
+		if !srcVal.IsValid() {
+			if src != nil {
+				debug.Assertf(false, "src is invalid: %v(%T)", srcVal, srcVal)
+				return nil
+			}
+			srcVal = reflect.Zero(dst.Type())
+		}
 		if dst.Kind() == reflect.Ptr {
 			if dst.IsNil() {
 				dst.Set(reflect.New(dst.Type().Elem()))

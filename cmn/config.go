@@ -1748,14 +1748,15 @@ func tryLoadOldClusterConfig(globalFpath string, config *Config) error {
 	// iterate successfully loaded (old) source to
 	// a) copy same-name/same-type fields while b) taking special care of assorted changes
 	err := IterFields(&old, func(name string, fld IterField) (error, bool /*stop*/) {
-		if strings.HasSuffix(name, "md_write") {
+		debug.Assert(name == "ext" || fld.Value() != nil)
+		if name == "md_write" {
 			v, ok := fld.Value().(apc.WritePolicy)
 			debug.Assert(ok)
 			config.ClusterConfig.WritePolicy.MD = v
 			return nil, false
 		}
 		// copy dst = fld.Value()
-		return UpdateFieldValue(&config.ClusterConfig, name, fld.Value()), false // NOTE: keep going
+		return UpdateFieldValue(&config.ClusterConfig, name, fld.Value()), false /*stop*/
 	}, IterOpts{OnlyRead: true})
 	return err
 }

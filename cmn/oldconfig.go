@@ -39,7 +39,7 @@ type (
 		LastUpdated string          `json:"lastupdate_time"`
 		UUID        string          `json:"uuid"`
 		Version     int64           `json:"config_version,string"`
-		// DEBUG Ext         interface{}     `json:"ext"` // <<< omitempty DEBUG
+		Ext         interface{}     `json:"ext,omitempty"`
 		// obsolete
 		Replication ReplicationConf `json:"replication"`
 	}
