@@ -16,7 +16,7 @@ type (
 	oldClusterConfig struct {
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
 		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
-		EC          ECConf          `json:"ec" allow:"cluster"`
+		EC          oldECConf       `json:"ec" allow:"cluster"`
 		Log         LogConf         `json:"log"`
 		Periodic    PeriodConf      `json:"periodic"`
 		Timeout     TimeoutConf     `json:"timeout"`
@@ -41,12 +41,21 @@ type (
 		Version     int64           `json:"config_version,string"`
 		Ext         interface{}     `json:"ext,omitempty"`
 		// obsolete
-		Replication ReplicationConf `json:"replication"`
+		Replication replicationConf `json:"replication"`
 	}
-	ReplicationConf struct {
+	replicationConf struct {
 		OnColdGet     bool `json:"on_cold_get"`
 		OnPut         bool `json:"on_put"`
 		OnLRUEviction bool `json:"on_lru_eviction"`
+	}
+	oldECConf struct {
+		ObjSizeLimit int64  `json:"objsize_limit"`
+		Compression  string `json:"compression"`
+		DataSlices   int    `json:"data_slices"`
+		BatchSize    int    `json:"batch_size"`
+		ParitySlices int    `json:"parity_slices"`
+		Enabled      bool   `json:"enabled"`
+		DiskOnly     bool   `json:"disk_only"`
 	}
 )
 

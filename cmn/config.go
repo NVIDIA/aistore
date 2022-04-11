@@ -231,7 +231,6 @@ type (
 		ObjSizeLimit int64  `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
 		Compression  string `json:"compression"`   // see CompressAlways, etc. enum
 		DataSlices   int    `json:"data_slices"`   // number of data slices
-		BatchSize    int    `json:"batch_size"`    // TODO: remove with the next Config meta-version update
 		ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
 		Enabled      bool   `json:"enabled"`       // EC is enabled
 		DiskOnly     bool   `json:"disk_only"`     // if true, EC does not use SGL - data goes directly to drives
@@ -240,7 +239,6 @@ type (
 		Enabled      *bool   `json:"enabled,omitempty"`
 		ObjSizeLimit *int64  `json:"objsize_limit,omitempty"`
 		DataSlices   *int    `json:"data_slices,omitempty"`
-		BatchSize    *int    `json:"batch_size,omitempty"` // TODO: remove with the next Config meta-version update
 		ParitySlices *int    `json:"parity_slices,omitempty"`
 		Compression  *string `json:"compression,omitempty"`
 		DiskOnly     *bool   `json:"disk_only,omitempty"`
@@ -1740,15 +1738,19 @@ func tryLoadOldClusterConfig(globalFpath string, config *Config) error {
 	// a) copy same-name/same-type fields while b) taking special care of assorted changes
 	err := IterFields(&old, func(name string, fld IterField) (error, bool /*stop*/) {
 		debug.Assert(name == "ext" || fld.Value() != nil)
-		if name == "md_write" {
+		if name == "md_write" { // scalar field => struct in v2
 			v, ok := fld.Value().(apc.WritePolicy)
 			debug.Assert(ok)
 			config.ClusterConfig.WritePolicy.MD = v
 			return nil, false
 		}
-		if strings.HasPrefix(name, "replication.") {
+		if strings.HasPrefix(name, "replication.") { // removed in v2
 			return nil, false
 		}
+		if name == "ec.batch_size" { // removed in v2
+			return nil, false
+		}
+
 		// copy dst = fld.Value()
 		return UpdateFieldValue(&config.ClusterConfig, name, fld.Value()), false /*stop*/
 	}, IterOpts{OnlyRead: true})
