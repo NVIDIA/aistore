@@ -131,8 +131,6 @@ type (
 		UUID        string          `json:"uuid"`                  // immutable
 		Version     int64           `json:"config_version,string"` // version
 		Ext         interface{}     `json:"ext,omitempty"`         // within meta-version extensions
-		// obsolete
-		Replication ReplicationConf `json:"replication"`
 	}
 
 	// most often used timeouts: assign at startup and never change
@@ -566,13 +564,6 @@ type (
 	WritePolicyConfToUpdate struct {
 		Data *apc.WritePolicy `json:"data,omitempty"`
 		MD   *apc.WritePolicy `json:"md,omitempty"`
-	}
-
-	// obsolete; TODO: remove with the next meta-version update
-	ReplicationConf struct {
-		OnColdGet     bool `json:"on_cold_get"`
-		OnPut         bool `json:"on_put"`
-		OnLRUEviction bool `json:"on_lru_eviction"`
 	}
 )
 
@@ -1753,6 +1744,9 @@ func tryLoadOldClusterConfig(globalFpath string, config *Config) error {
 			v, ok := fld.Value().(apc.WritePolicy)
 			debug.Assert(ok)
 			config.ClusterConfig.WritePolicy.MD = v
+			return nil, false
+		}
+		if strings.HasPrefix(name, "replication.") {
 			return nil, false
 		}
 		// copy dst = fld.Value()

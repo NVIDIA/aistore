@@ -43,6 +43,11 @@ type (
 		// obsolete
 		Replication ReplicationConf `json:"replication"`
 	}
+	ReplicationConf struct {
+		OnColdGet     bool `json:"on_cold_get"`
+		OnPut         bool `json:"on_put"`
+		OnLRUEviction bool `json:"on_lru_eviction"`
+	}
 )
 
 // interface guard
