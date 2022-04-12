@@ -16,7 +16,7 @@ Docker image can be started with attached volumes which will be used by the targ
 #### Minimal setup
 
 ```console
-$ docker run \
+$ docker run -d \
     -p 51080:51080 \
     -v $(mktemp -d):/ais/disk0 \
     aistore/cluster-minimal:latest
@@ -44,7 +44,7 @@ Summary:
 #### Multiple (static) disks
 
 ```console
-$ docker run \
+$ docker run -d \
     -p 51080:51080 \
     -v /disk0:/ais/disk0 \
     -v /disk1:/ais/disk1 \
@@ -71,7 +71,7 @@ When using `aws` backend provider it is possible to explicitly pass the credenti
 Start an AIS docker cluster with single disk and `aws` provider credentials in envvars:
 
 ```console
-$ docker run \
+$ docker run -d \
     -p 51080:51080 \
     -e AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
     -e AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
@@ -85,7 +85,7 @@ $ docker run \
 Start an AIS docker cluster with single disk and `gcp` provider credentials as a mounted volume:
 
 ```console
-$ docker run \
+$ docker run -d \
     -p 51080:51080 \
     -v <path_to_gcp_config>.json:/credentials/gcp.json \
     -e GOOGLE_APPLICATION_CREDENTIALS="/credentials/gcp.json" \

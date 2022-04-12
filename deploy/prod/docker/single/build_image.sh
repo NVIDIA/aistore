@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-TAG=${1:-aistore/aistore:latest-minimal}
+TAG=${1:-aistore/cluster-minimal:latest}
 
 DIR=$(cd "$(dirname "$0")"; pwd -P)
 AISTORE_PATH=$(git rev-parse --show-toplevel)

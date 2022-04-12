@@ -15,7 +15,7 @@ If you don't have Docker and Docker-Compose installed, please see [Getting start
 1. To quick-start AIStore, run:
 
     ```console
-    $ ./deploy_docker -qs
+    $ ./deploy_docker.sh -qs
     ```
 
     > The first build may take some time, but subsequent builds will be much faster.
@@ -23,10 +23,9 @@ If you don't have Docker and Docker-Compose installed, please see [Getting start
 2. Once it finishes building, you should be inside the AIS container. Run:
 
     ```console
-    $ make deploy
+    $ make deploy cli
+    root@0459b601dcc7$ ais show cluster
     ```
-
-Type `1` for all options to create a very basic AIStore cluster.
 
 ### Quick-start Example
 

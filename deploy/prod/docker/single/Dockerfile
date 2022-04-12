@@ -12,7 +12,7 @@ RUN git clone https://github.com/NVIDIA/aistore.git && cd aistore && \
     AIS_BACKEND_PROVIDERS="ais aws gcp azure" make node
 
 
-FROM alpine:3.11
+FROM alpine:3.15
 
 RUN apk upgrade --no-cache && \
   apk add --no-cache --virtual .build-deps \
