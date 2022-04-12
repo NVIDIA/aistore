@@ -9,7 +9,7 @@
 
 ## Introduction
 
-[Minikube](https://kubernetes.io/docs/setup/learning-environment/minikube/) allows one to run Kubernetes in a local environment like your laptop for testing out applications in a native Kubernetes envrironment. It can only be used for single-node Kubernetes cluster. It supports a range of drivers like Virtualbox, KVM, Docker etc. Virtualbox, KVM require a hypervisor.  However, if you choose to use docker on a Linux machine there is no need for a hypervisor.
+[Minikube](https://minikube.sigs.k8s.io/docs) allows one to run Kubernetes in a local environment like your laptop for testing out applications in a native Kubernetes envrironment. It can only be used for single-node Kubernetes cluster. It supports a range of drivers like Virtualbox, KVM, Docker etc. Virtualbox, KVM require a hypervisor.  However, if you choose to use docker on a Linux machine there is no need for a hypervisor.
 
 Our [scripts](/deploy/dev/k8s) use Docker as the driver. This document shows how to deploy AIStore on Minikube and use it for some of its features like ETL(transformers) etc. or to develop new features on it.
 

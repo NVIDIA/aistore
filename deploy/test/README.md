@@ -1,12 +1,9 @@
-## Docker
+To support development and testing we include here a script to run
+all tests inside a docker container. This way you are can rebuild your local
+sources, change tests, and play with local development without worrying
+that the changes you've made impact other tests or other deployments.
 
-To allow fast development and painless testing we provide script which allow you
-to run all tests inside Docker. This way you are able to rebuild your local
-sources, change tests and play with local development without worrying if
-the changes you've made might impact the tests you are currently running for
-other branch/feature.
-
-To start testing Docker run:
+To start testing, run:
 
 ```console
 $ ./docker/test.sh --name=your_container_name
@@ -21,7 +18,7 @@ were developing eg.: `new_feature`. This way you can start multiple testing
 dockers and they will not interfere with each other. Moreover, you will be able
 easily distinguish and switch between different Dockers.
 
-### Clouds
+## Clouds
 
 You can also provide credentials to `AWS` or `GCP` and pass it to script:
 

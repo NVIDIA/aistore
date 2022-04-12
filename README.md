@@ -51,7 +51,9 @@ Finally, [getting started](/docs/getting_started.md) with AIS takes only a few m
 
 ## Deployment options
 
-The prerequisites boil down to having Linux with a disk. The result is a practically unlimited set of deployment options ranging from [all-in-one container](/docs/videos.md#minimal-all-in-one-standalone-docker) to a petascale bare-metal cluster of any size, from a single VM to multiple racks of high-end servers.
+The prerequisites boil down to having Linux with a disk. The result is a (practically unlimited) set of options ranging from [all-in-one container](/docs/videos.md#minimal-all-in-one-standalone-docker) to a petascale bare-metal cluster of any size, and from single VM to multiple racks of high-end servers.
+
+Contents of this repository, intended (development vs. production vs. first-time, etc.) usages and further references are all [summarized here](deploy/README.md).
 
 Use cases include:
 
