@@ -11,6 +11,7 @@ from .const import (
     HTTP_METHOD_GET,
     QParamArchpath,
     QParamProvider,
+    ProviderAIS,
 )
 from .msg import ActionMsg, Bck
 
@@ -43,7 +44,7 @@ class Client:
         resp.raise_for_status()
         return parse_raw_as(res_model, resp.text)
 
-    def list_buckets(self, provider: str = ""):
+    def list_buckets(self, provider: str = ProviderAIS):
         """
         Returns list of buckets in AIStore cluster
 
@@ -69,28 +70,32 @@ class Client:
             params=params,
         )
 
-    def create_bucket(self, bck):
-        url = "{}/buckets/{}".format(self.base_url, bck.name)
+    def create_bucket(self, bck_name, **kwargs):
+        url = "{}/buckets/{}".format(self.base_url, bck_name)
+        bck = Bck(name=bck_name, **kwargs)
         params = {QParamProvider: bck.provider}
         action = ActionMsg(action="create-bck").dict()
         return requests.post(url=url, json=action, params=params)
 
-    def destroy_bucket(self, bck):
-        url = "{}/buckets/{}".format(self.base_url, bck.name)
+    def destroy_bucket(self, bck_name, **kwargs):
+        url = "{}/buckets/{}".format(self.base_url, bck_name)
+        bck = Bck(name=bck_name, **kwargs)
         params = {QParamProvider: bck.provider}
         action = ActionMsg(action="destroy-bck").dict()
         return requests.delete(url=url, json=action, params=params)
 
-    def list_objects(self, bck, prefix=""):
-        url = "{}/buckets/{}".format(self.base_url, bck.name)
+    def list_objects(self, bck_name, **kwargs):
+        url = "{}/buckets/{}".format(self.base_url, bck_name)
+        bck = Bck(name=bck_name, **kwargs)
 
-        params = {"action": "list", "value": {}}
-        if prefix != "":
-            params["value"]["prefix"] = prefix
+        value = None
+        if "prefix" in kwargs:
+            value = {"prefix": kwargs.get("prefix")}
+        params = ActionMsg(action="list", value=value)
 
         resp = requests.get(
             url=url,
-            json=params,
+            data=params.json(),
             headers={"Accept": "application/json"},
         )
         if resp.status_code == 200:
@@ -99,19 +104,21 @@ class Client:
 
         return resp.json()
 
-    def get_object(self, bck, object_name, transform_id="", archpath=""):
-        url = "{}/objects/{}/{}".format(self.base_url, bck.name, object_name)
+    def get_object(self, bck_name, object_name, **kwargs):
+        url = "{}/objects/{}/{}".format(self.base_url, bck_name, object_name)
+        bck = Bck(name=bck_name, **kwargs)
         params = {}
         if bck.provider != "":
             params[QParamProvider] = bck.provider
-        if archpath != "":
-            params[QParamArchpath] = archpath
-        if transform_id != "":
-            params["uuid"] = transform_id
+        if "archpath" in kwargs:
+            params[QParamArchpath] = kwargs.get("archpath")
+        if "transform_id" in kwargs:
+            params["uuid"] = kwargs.get("transform_id")
         return requests.get(url=url, params=params)
 
-    def put_object(self, bck, object_name, path):
-        url = "{}/objects/{}/{}".format(self.base_url, bck.name, object_name)
+    def put_object(self, bck_name, object_name, path, **kwargs):
+        url = "{}/objects/{}/{}".format(self.base_url, bck_name, object_name)
+        bck = Bck(name=bck_name, **kwargs)
         params = {}
         if bck.provider != "":
             params[QParamProvider] = bck.provider
@@ -120,4 +127,4 @@ class Client:
 
     def get_cluster_info(self):
         url = "{}/daemon".format(self.base_url)
-        return requests.get(url, params={"what": "smap"}).json()
+        return requests.get(url, params={"what": "smap"})
