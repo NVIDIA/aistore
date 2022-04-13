@@ -51,13 +51,11 @@ Finally, [getting started](/docs/getting_started.md) with AIS takes only a few m
 
 ## Deployment options
 
-The prerequisites boil down to having Linux with a disk. The result is a (practically unlimited) set of options ranging from [all-in-one container](/docs/videos.md#minimal-all-in-one-standalone-docker) to a petascale bare-metal cluster of any size, and from single VM to multiple racks of high-end servers.
+AIS deployment options, as well as intended (development vs. production vs. first-time) usages, are all [summarized here](deploy/README.md).
 
-Contents of this repository, intended (development vs. production vs. first-time, etc.) usages and further references are all [summarized here](deploy/README.md).
+Since prerequisites boil down to having a Linux with a disk the deployment options range from [all-in-one container](/docs/videos.md#minimal-all-in-one-standalone-docker) to a petascale bare-metal cluster of any size, and from a single VM to multiple racks of high-end servers. But practical use cases require, of course, further consideration and may include:
 
-Use cases include:
-
-| Deployment option | Targeted audience and objective |
+| Option | Objective |
 | --- | ---|
 | [Local playground](/docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
