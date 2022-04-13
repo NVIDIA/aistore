@@ -24,20 +24,32 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 
 > It is expected that within a given cluster, all AIS target machines are identical, hardware-wise.
 
-* [Linux](#Linux-host) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) or [MacOS](#MacOS-host)
-* [Go 1.17 or later](https://golang.org/dl/)
-* Extended attributes (`xattrs` - see below)
+* [Linux](#Linux) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) or [MacOS](#MacOS)
+* [Go 1.17](https://golang.org/dl/) (and look for go1.17.9)
+* Extended attributes (`xattrs` - see next section)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 
-### Linux host
+### Linux
 
-Depending on your Linux distribution, you may or may not have `gcc`, `sysstat`, and/or `attr` packages.
+Depending on your Linux distribution, you may or may not have `gcc`, `sysstat`, and/or `attr` packages. These packages must be installed.
+
+Speaking of distributions, our current default recommendations is Ubuntu Server 20.04 LTS. But Ubuntu 18.04 and CentOS 8.x (or later) will also work. As well as numerous others.
+
+For the [local filesystem](performance.md), we currently recommend xfs. But again, this (default) recommendation shall not be interpreted as a limitation of any kind: other fine choices include zfs, ext4, f2fs, and more.
+
+Since AIS itself provides n-way mirroring and erasure coding, hardware RAID would _not_ be recommended. But can be used, and will work.
 
 The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or `xattrs`, is a long time POSIX legacy supported by all mainstream filesystems with no exceptions. Unfortunately, `xattrs` may not always be enabled in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
 
-> If disabled, please make sure to enable xattrs in your Linux kernel configuration.
+If disabled, please make sure to enable xattrs in your Linux kernel configuration. To quickly check:
 
-### MacOS host
+```console
+$ touch foo
+$ setfattr -n user.bar -v ttt foo
+$ getfattr -n user.bar foo
+```
+
+### MacOS
 
 MacOS/Darwin is also supported, albeit for development only.
 Certain capabilities related to querying the state-and-status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
@@ -93,7 +105,13 @@ $ RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $'4\n1\
 ...
 ```
 
-## Kubernetes Deployments
+## Multiple deployment options
+
+Are [all summarized and further referenced here](deploy/README.md).
+
+In particular:
+
+### Kubernetes Deployments
 
 For any Kubernetes deployments (including, of course, production deployments) please use a separate and dedicated [AIS-K8s GitHub](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md) repository. The repo contains [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/master/helm/ais/charts) and detailed [Playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks) that cover a variety of use cases and configurations.
 
@@ -105,20 +123,30 @@ The following GIF illustrates steps to deploy AIS on Google Cloud Platform (GCP)
 
 Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
 
-## Minimal all-in-one-docker Deployment
+### Minimal all-in-one-docker Deployment
 
 This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/deploy/prod/docker/single/README.md) for details.
 
 ## Local Playground
 
-You could use the instruction below for a quick evaluation, experimenting with features, first-time usage - and, of course, for development.
-Local AIStore playground is not intended for production clusters and is not meant to provide optimal performance.
+Running AIS locally is good for quick evaluation, experimenting with features, first-time usage, and, of course, development.
 
-The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
+> Local AIStore playground is not intended for production clusters and is not meant to provide optimal performance.
 
-{% include youtubePlayer.html id="ANshjHphqfI" %}
+To run it locally from the source, you have to have **Go** (compiler, linker, tools, system packages).
 
-### Deployment Script
+For Linux:
+
+* download `go1.17.9.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
+* and follow [installation instructions](https://go.dev/doc/install)
+
+> Note that Go 1.18 is _not_ supported yet. See [go.mod](/go.mod) for the most recently updated information.
+
+Finally, if not done yet, export [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
+
+At this point you should be able to run it, as follows:
+
+### Steps to run AIS from source
 
 Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
 
@@ -145,6 +173,12 @@ $ clean_deploy.sh --proxy-cnt 1 --target-cnt 7 --gcp
 ```
 
 For more options and detailed description, run `make help` and see: [`clean_deploy.sh`](/docs/development.md#clean-deploy).
+
+### Local Playground Demo
+
+This [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
+
+{% include youtubePlayer.html id="ANshjHphqfI" %}
 
 ### Manual Deployment
 
