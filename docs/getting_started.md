@@ -107,7 +107,7 @@ $ RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $'4\n1\
 
 ## Multiple deployment options
 
-Are [all summarized and further referenced here](deploy/README.md).
+Are [all summarized and further referenced here](/deploy/README.md).
 
 In particular:
 
