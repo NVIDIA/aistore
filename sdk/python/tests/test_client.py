@@ -11,22 +11,19 @@ class TestBasicOps(unittest.TestCase):  #pylint: disable=unused-variable
 
         res = client.list_buckets()
         count = len(res)
-        res = client.create_bucket(bck_name)
-        self.assertEqual(res.status_code, 200)
+        client.create_bucket(bck_name)
         res = client.list_buckets()
         count_new = len(res)
         self.assertEqual(count + 1, count_new)
 
-        res = client.destroy_bucket(bck_name)
-        self.assertEqual(res.status_code, 200)
+        client.destroy_bucket(bck_name)
 
     def test_put_get(self):
         client = Client('http://localhost:8080')
         bck_name = "test"
 
         res = client.list_buckets()
-        res = client.create_bucket(bck_name)
-        self.assertEqual(res.status_code, 200)
+        client.create_bucket(bck_name)
 
         tmpfile = "/tmp/py-sdk-test"
         orig_cont = "test string"
@@ -46,13 +43,12 @@ class TestBasicOps(unittest.TestCase):  #pylint: disable=unused-variable
         self.assertEqual(res.content.decode("utf-8"), orig_cont)
         res.close()
 
-        res = client.destroy_bucket(bck_name)
+        client.destroy_bucket(bck_name)
         self.assertEqual(res.status_code, 200)
 
     def test_cluster_map(self):
         client = Client('http://localhost:8080')
-        res = client.get_cluster_info()
-        self.assertEqual(res.status_code, 200)
+        client.get_cluster_info()
 
 
 if __name__ == '__main__':
