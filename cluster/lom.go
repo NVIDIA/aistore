@@ -52,7 +52,6 @@ type (
 		ObjName     string            // object name in the bucket
 		HrwFQN      string            // => main replica (misplaced?)
 		info        string
-		// sgl         *memsys.SGL TODO -- FIXME: in progress
 	}
 	// LOM In Flight (LIF)
 	LIF struct {
@@ -413,7 +412,9 @@ func (lom *LOM) ReCache(store bool) {
 	}
 	// store new or refresh existing
 	md := lom.md
-	md.cpAtime(lmd)
+	if lmd != nil {
+		md.cpAtime(lmd)
+	}
 	md.bckID = lom.Bprops().BID
 	lom.md.bckID = md.bckID
 	debug.Assert(md.bckID != 0)

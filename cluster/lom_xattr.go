@@ -470,7 +470,7 @@ func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cos.SimpleKVs) []byte {
 }
 
 func (md *lmeta) cpAtime(from *lmeta) {
-	if from == nil || !isValidAtime(from.Atime) {
+	if !isValidAtime(from.Atime) {
 		return
 	}
 	if !isValidAtime(md.Atime) || (md.Atime > 0 && md.Atime < from.Atime) {

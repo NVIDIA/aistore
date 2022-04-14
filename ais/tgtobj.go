@@ -286,7 +286,6 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 		return
 	}
 	if lom.HasCopies() {
-		// TODO: recover
 		if errdc := lom.DelAllCopies(); errdc != nil {
 			glog.Errorf("PUT (%s): failed to delete old copies [%v], proceeding to PUT anyway...", poi.loghdr(), errdc)
 		}
@@ -394,9 +393,10 @@ write:
 			return
 		}
 	}
+
+	// ok
 	cos.Close(lmfh)
 	lmfh = nil
-	// ok
 	poi.lom.SetSize(written) // TODO: compare with non-zero lom.SizeBytes() that may have been set via oa.FromHeader()
 	if cksums.store != nil {
 		cksums.store.Finalize()
@@ -407,7 +407,9 @@ write:
 
 // post-write close & cleanup
 func (poi *putObjInfo) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err error) {
-	slab.Free(buf)
+	if buf != nil {
+		slab.Free(buf)
+	}
 	if err == nil {
 		debug.Assert(lmfh == nil)
 		cos.Close(poi.r)
@@ -444,16 +446,17 @@ func (poi *putObjInfo) validateCksum(c *cmn.CksumConf) (v bool) {
 
 func (goi *getObjInfo) getObject() (errCode int, err error) {
 	var (
-		cs                                   fs.CapStatus
-		doubleCheck, retry, retried, coldGet bool
+		cs                          fs.CapStatus
+		doubleCheck, retry, retried bool
+		cold                        bool
 	)
 	// under lock: lom init, restore from cluster
 	goi.lom.Lock(false)
 do:
 	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
-		coldGet = cmn.IsObjNotExist(err)
-		if !coldGet {
+		cold = cmn.IsObjNotExist(err)
+		if !cold {
 			goi.lom.Unlock(false)
 			errCode = http.StatusInternalServerError
 			return
@@ -467,58 +470,54 @@ do:
 		}
 	}
 
-	if coldGet && goi.lom.Bck().IsAIS() {
-		// try lookup and restore
-		goi.lom.Unlock(false)
-		doubleCheck, errCode, err = goi.restoreFromAny(false /*skipLomRestore*/)
-		if doubleCheck && err != nil {
-			lom2 := cluster.AllocLOM(goi.lom.ObjName)
-			er2 := lom2.InitBck(goi.lom.Bucket())
-			if er2 == nil {
-				er2 = lom2.Load(true /*cache it*/, false /*locked*/)
-			}
-			if er2 == nil {
-				cluster.FreeLOM(goi.lom)
-				goi.lom = lom2
-				err = nil
-			} else {
-				cluster.FreeLOM(lom2)
-			}
-		}
-		if err != nil {
-			return
-		}
-		goi.lom.Lock(false)
-		if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
+	if cold {
+		if goi.lom.Bck().IsAIS() { // ais bucket with no backend - try lookup and restore
 			goi.lom.Unlock(false)
-			return
-		}
-		goto get
-	}
-	// exists && remote|cloud: check ver if requested
-	if !coldGet && goi.lom.Bck().IsRemote() {
-		if goi.lom.VersionConf().ValidateWarmGet {
-			var equal bool
-			goi.lom.Unlock(false)
-			if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {
-				goi.lom.Uncache(true /*delDirty*/)
-				return
-			}
-			coldGet = !equal
-			if coldGet {
-				if err = goi.lom.AllowDisconnectedBackend(true /*loaded*/); err != nil {
-					return
+			doubleCheck, errCode, err = goi.restoreFromAny(false /*skipLomRestore*/)
+			if doubleCheck && err != nil {
+				lom2 := cluster.AllocLOM(goi.lom.ObjName)
+				er2 := lom2.InitBck(goi.lom.Bucket())
+				if er2 == nil {
+					er2 = lom2.Load(true /*cache it*/, false /*locked*/)
+				}
+				if er2 == nil {
+					cluster.FreeLOM(goi.lom)
+					goi.lom = lom2
+					err = nil
+				} else {
+					cluster.FreeLOM(lom2)
 				}
 			}
+			if err != nil {
+				return
+			}
 			goi.lom.Lock(false)
+			if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
+				goi.lom.Unlock(false)
+				return
+			}
+			goto get
 		}
+	} else if goi.lom.Bck().IsRemote() && goi.lom.VersionConf().ValidateWarmGet { // check remote version
+		var equal bool
+		goi.lom.Unlock(false)
+		if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {
+			goi.lom.Uncache(true /*delDirty*/)
+			return
+		}
+		cold = !equal
+		if cold {
+			if err = goi.lom.AllowDisconnectedBackend(true /*loaded*/); err != nil {
+				return
+			}
+		}
+		goi.lom.Lock(false)
 	}
 
-	// checksum validation, if requested
-	if !coldGet && goi.lom.CksumConf().ValidateWarmGet {
-		coldGet, errCode, err = goi.recoverObj()
+	if !cold && goi.lom.CksumConf().ValidateWarmGet { // validate checksums and recover (self-heal) if corrupted
+		cold, errCode, err = goi.recoverObj()
 		if err != nil {
-			if !coldGet {
+			if !cold {
 				goi.lom.Unlock(false)
 				glog.Error(err)
 				return
@@ -527,8 +526,8 @@ do:
 		}
 	}
 
-	// go ahead to read the respective backend (ie., cold-GET)
-	if coldGet {
+	// do cold GET
+	if cold {
 		if cs.IsNil() {
 			cs = fs.GetCapStatus()
 		}
@@ -546,7 +545,7 @@ do:
 
 	// read locally and stream back
 get:
-	retry, errCode, err = goi.finalize(coldGet)
+	retry, errCode, err = goi.finalize(cold)
 	if retry && !retried {
 		debug.Assert(err != errSendingResp)
 		glog.Warningf("GET %s: retrying...", goi.lom)
@@ -782,28 +781,11 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) boo
 func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err error) {
 	var (
 		lmfh    *os.File
-		sgl     *memsys.SGL
 		slab    *memsys.Slab
 		buf     []byte
-		reader  io.Reader
-		csl     cos.ReadCloseSizer
-		hdr     http.Header // if it is http request we will write also header
+		hdr     http.Header
 		written int64
 	)
-	defer func() { // cleanup
-		if lmfh != nil {
-			cos.Close(lmfh)
-		}
-		if buf != nil {
-			slab.Free(buf)
-		}
-		if sgl != nil {
-			sgl.Free()
-		}
-		if csl != nil {
-			csl.Close()
-		}
-	}()
 	if resp, ok := goi.w.(http.ResponseWriter); ok {
 		hdr = resp.Header()
 	}
@@ -812,6 +794,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		// best-effort GET load balancing (see also mirror.findLeastUtilized())
 		fqn = goi.lom.LBGet()
 	}
+	// open
 	lmfh, err = os.Open(fqn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -827,10 +810,19 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 
 	var (
 		rrange     *cmn.HTTPRange
-		size       = goi.lom.SizeBytes()
-		cksumConf  = goi.lom.CksumConf()
+		reader     io.Reader = lmfh
+		size                 = goi.lom.SizeBytes()
+		cksumConf            = goi.lom.CksumConf()
 		cksumRange bool
 	)
+	defer func() {
+		if lmfh != nil {
+			cos.Close(lmfh)
+		}
+		if buf != nil {
+			slab.Free(buf)
+		}
+	}()
 	// parse, validate, set response header
 	if hdr != nil {
 		// read range
@@ -850,11 +842,11 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		goi.lom.ObjAttrs().ToHeader(hdr)
 	}
 
-	// set reader
+	// reader
 	w := goi.w
 	if rrange == nil {
-		reader = lmfh
 		if goi.archive.filename != "" {
+			var csl cos.ReadCloseSizer
 			csl, err = goi.freadArch(lmfh)
 			if err != nil {
 				if cmn.IsErrNotFound(err) {
@@ -864,15 +856,17 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 				}
 				return
 			}
+			defer func() {
+				csl.Close()
+			}()
 			reader, size = csl, csl.Size() // Content-Length
-			//
-			// TODO: support checksumming extracted files
-			//
 		}
 		if goi.chunked {
 			// NOTE: hide `ReadFrom` of the `http.ResponseWriter` (in re: sendfile)
 			w = cos.WriterOnly{Writer: goi.w}
-			buf, slab = goi.t.gmm.AllocSize(size)
+			if lmfh != nil {
+				buf, slab = goi.t.gmm.AllocSize(size)
+			}
 		}
 	} else {
 		buf, slab = goi.t.gmm.AllocSize(rrange.Length)
@@ -881,8 +875,11 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			var (
 				cksum *cos.CksumHash
 				n     int64
+				sgl   = slab.MMSA().NewSGL(rrange.Length, slab.Size())
 			)
-			sgl = slab.MMSA().NewSGL(rrange.Length, slab.Size())
+			defer func() {
+				sgl.Free()
+			}()
 			if n, cksum, err = cos.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
 				return
 			}
