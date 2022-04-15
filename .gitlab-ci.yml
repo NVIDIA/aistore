@@ -80,7 +80,7 @@ variables:
   stage: test-long
   tags:
     - ais
-  timeout: 2h30m
+  timeout: 3h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
@@ -278,7 +278,7 @@ test:short:k8s:
 test:long:k8s:
   stage: test-long
   <<: *test_k8s_def
-  timeout: 2h
+  timeout: 3h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
@@ -296,7 +296,7 @@ test:long:k8s:
 test:long:k8s:single-target:
   stage: test-long
   <<: *test_k8s_def
-  timeout: 2h
+  timeout: 3h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
