@@ -80,7 +80,7 @@ func Detect() error {
 	detectOnce.Do(initDetect)
 
 	if NodeName == "" {
-		return fmt.Errorf("operation requires Kubernetes deployment")
+		return fmt.Errorf("the operation requires Kubernetes")
 	}
 	return nil
 }

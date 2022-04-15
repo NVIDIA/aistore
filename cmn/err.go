@@ -722,7 +722,11 @@ func (e *ErrHTTP) init(r *http.Request, msg string, errCode int) {
 // Bad Request: Bucket abc does not appear to be local or does not exist:
 // DELETE /v1/buckets/abc from (127.0.0.1:54064, vhsjxq8000) stack: (httpcommon.go:840 <- proxy.go:484 <- proxy.go:264)
 func (e *ErrHTTP) String() (s string) {
-	s = http.StatusText(e.Status) + ": " + e.Message
+	if e.Status == http.StatusBadRequest || e.Status == http.StatusInternalServerError {
+		s = e.Message
+	} else {
+		s = http.StatusText(e.Status) + ": " + e.Message
+	}
 	if e.Method != "" || e.URLPath != "" {
 		if !strings.HasSuffix(s, ".") {
 			s += ":"

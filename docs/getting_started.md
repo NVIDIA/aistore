@@ -200,13 +200,17 @@ Azure: (y/n) ?
 n
 HDFS: (y/n) ?
 n
-Would you like to create loopback mount points: (y/n) ?
+Create loopback devices (note that it may take some time): (y/n) ?
 n
 Building aisnode: version=df24df77 providers=
 ```
 > Notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
-`make kill` will terminate local AIStore if it's already running.
+Further:
+
+* `make kill`    - terminate local AIStore.
+* `make restart` - shut it down and immediately restart using existing configuration.
+* `make help`    - show make options and usage examples.
 
 For more development options and tools, please refer to the [development docs](/docs/development.md).
 
@@ -228,6 +232,20 @@ For example, the following will download objects from your (presumably) S3 bucke
 ```console
 $ BUCKET=aws://myS3bucket go test ./ais/tests -v -run=download
 ```
+
+To run all tests in the category [short tests](https://pkg.go.dev/testing#Short):
+
+```console
+# using randomly named ais://nnn bucket (that will be created on the fly and destroyed in the end):
+$ BUCKET=ais://nnn make test-short
+
+# with existing Google Cloud bucket gs://myGCPbucket
+$ BUCKET=gs://myGCPbucket make test-short
+```
+
+The command randomly shuffles existing short tests and then, depending on your platform, usually takes anywhere between 15 and 30 minutes. To terminate, press Ctrl-C at any time.
+
+> Ctrl-C or any other (kind of) abnormal termination of a running test may have a side effect of leaving some test data in the test bucket.
 
 ## Kubernetes Playground
 

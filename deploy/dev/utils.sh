@@ -60,7 +60,7 @@ parse_backend_providers() {
 }
 
 create_loopback_paths() {
-  echo "Would you like to create loopback mount points: (y/n) ?"
+  echo "Create loopback devices (note that it may take some time): (y/n) ?"
   read -r create_mount_points
   if [[ "$create_mount_points" == "y" ]] ; then
     for ((i=1; i<=TEST_FSPATH_COUNT; i++)); do

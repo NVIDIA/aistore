@@ -79,7 +79,7 @@ Azure: (y/n) ?
 n
 HDFS: (y/n) ?
 y
-Would you like to create loopback mount points: (y/n) ?
+Create loopback devices (note that it may take some time): (y/n) ?
 n
 ```
 
