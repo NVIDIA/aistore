@@ -7,8 +7,16 @@ package cmn
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
+
+/////////////////////////////////////////////////////////////////////////////
+//                  (backward compatibility)                               //
+// oldClusterConfig meta-version = 1 is present here for a single reason:  //
+// to support upgrades to ClusterConfig meta-version = 2                   //
+/////////////////////////////////////////////////////////////////////////////
 
 const oldMetaverConfig = 1
 
@@ -16,11 +24,11 @@ type (
 	oldClusterConfig struct {
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
 		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
-		EC          oldECConf       `json:"ec" allow:"cluster"`
+		EC          oldECConf       `json:"ec" allow:"cluster"` // <<< (changed)
 		Log         LogConf         `json:"log"`
 		Periodic    PeriodConf      `json:"periodic"`
 		Timeout     TimeoutConf     `json:"timeout"`
-		Client      ClientConf      `json:"client"`
+		Client      oldClientConf   `json:"client"` // <<< (changed)
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		LRU         LRUConf         `json:"lru"`
 		Disk        DiskConf        `json:"disk"`
@@ -40,8 +48,7 @@ type (
 		UUID        string          `json:"uuid"`
 		Version     int64           `json:"config_version,string"`
 		Ext         interface{}     `json:"ext,omitempty"`
-		// obsolete
-		Replication replicationConf `json:"replication"`
+		Replication replicationConf `json:"replication"` // <<< (removed)
 	}
 	replicationConf struct {
 		OnColdGet     bool `json:"on_cold_get"`
@@ -56,6 +63,12 @@ type (
 		ParitySlices int    `json:"parity_slices"`
 		Enabled      bool   `json:"enabled"`
 		DiskOnly     bool   `json:"disk_only"`
+	}
+	oldClientConf struct {
+		Timeout     cos.Duration `json:"client_timeout"`
+		TimeoutLong cos.Duration `json:"client_long_timeout"`
+		ListObjects cos.Duration `json:"list_timeout"`
+		Features    feat.Flags   `json:"features,string"`
 	}
 )
 

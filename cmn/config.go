@@ -127,40 +127,16 @@ type (
 		DSort       DSortConf       `json:"distributed_sort"`
 		Compression CompressionConf `json:"compression"`
 		WritePolicy WritePolicyConf `json:"write_policy"`
-		LastUpdated string          `json:"lastupdate_time"`
-		UUID        string          `json:"uuid"`                  // immutable
-		Version     int64           `json:"config_version,string"` // version
-		Ext         interface{}     `json:"ext,omitempty"`         // within meta-version extensions
+		Features    feat.Flags      `json:"features,string" allow:"cluster"` // feature flags (to flip assorted defaults)
+		// read-only
+		LastUpdated string `json:"lastupdate_time"`       // timestamp
+		UUID        string `json:"uuid"`                  // UUID
+		Version     int64  `json:"config_version,string"` // version
+		// within meta-version extensions
+		Ext interface{} `json:"ext,omitempty"`
 	}
-
-	// most often used timeouts: assign at startup and never change
-	timeout struct {
-		cplane    time.Duration // Config.Timeout.CplaneOperation
-		keepalive time.Duration // ditto MaxKeepalive
-	}
-
-	LocalConfig struct {
-		ConfigDir string         `json:"confdir"`
-		LogDir    string         `json:"log_dir"`
-		HostNet   LocalNetConfig `json:"host_net"`
-		FSP       FSPConf        `json:"fspaths"`
-		TestFSP   TestFSPConf    `json:"test_fspaths"`
-	}
-
-	// Network config specific to node
-	LocalNetConfig struct {
-		Hostname             string `json:"hostname"`
-		HostnameIntraControl string `json:"hostname_intra_control"`
-		HostnameIntraData    string `json:"hostname_intra_data"`
-		Port                 int    `json:"port,string"`               // listening port
-		PortIntraControl     int    `json:"port_intra_control,string"` // listening port for intra control network
-		PortIntraData        int    `json:"port_intra_data,string"`    // listening port for intra data network
-		// omit
-		UseIntraControl bool `json:"-"`
-		UseIntraData    bool `json:"-"`
-	}
-
 	ConfigToUpdate struct {
+		// ClusterConfig
 		Backend     *BackendConf             `json:"backend,omitempty"`
 		Mirror      *MirrorConfToUpdate      `json:"mirror,omitempty"`
 		EC          *ECConfToUpdate          `json:"ec,omitempty"`
@@ -183,9 +159,31 @@ type (
 		Compression *CompressionConfToUpdate `json:"compression,omitempty"`
 		WritePolicy *WritePolicyConfToUpdate `json:"write_policy,omitempty"`
 		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
+		Features    *feat.Flags              `json:"features,string,omitempty"`
 
 		// LocalConfig
 		FSP *FSPConf `json:"fspaths,omitempty"`
+	}
+
+	LocalConfig struct {
+		ConfigDir string         `json:"confdir"`
+		LogDir    string         `json:"log_dir"`
+		HostNet   LocalNetConfig `json:"host_net"`
+		FSP       FSPConf        `json:"fspaths"`
+		TestFSP   TestFSPConf    `json:"test_fspaths"`
+	}
+
+	// Network config specific to node
+	LocalNetConfig struct {
+		Hostname             string `json:"hostname"`
+		HostnameIntraControl string `json:"hostname_intra_control"`
+		HostnameIntraData    string `json:"hostname_intra_data"`
+		Port                 int    `json:"port,string"`               // listening port
+		PortIntraControl     int    `json:"port_intra_control,string"` // listening port for intra control network
+		PortIntraData        int    `json:"port_intra_data,string"`    // listening port for intra data network
+		// omit
+		UseIntraControl bool `json:"-"`
+		UseIntraData    bool `json:"-"`
 	}
 
 	BackendConf struct {
@@ -294,13 +292,11 @@ type (
 		Timeout     cos.Duration `json:"client_timeout"`
 		TimeoutLong cos.Duration `json:"client_long_timeout"`
 		ListObjects cos.Duration `json:"list_timeout"`
-		Features    feat.Flags   `json:"features,string"` // TODO: move into cluster config with the next meta-version update
 	}
 	ClientConfToUpdate struct {
 		Timeout     *cos.Duration `json:"client_timeout,omitempty"`
 		TimeoutLong *cos.Duration `json:"client_long_timeout,omitempty"`
 		ListObjects *cos.Duration `json:"list_timeout,omitempty"`
-		Features    *feat.Flags   `json:"features,string,omitempty"` // TODO: ditto
 	}
 
 	ProxyConf struct {
@@ -1451,6 +1447,10 @@ func (c *CompressionConf) Validate() (err error) {
 /////////////////
 
 // most often used timeouts: assign at startup to reduce the number of GCO.Get() calls
+type timeout struct {
+	cplane    time.Duration // Config.Timeout.CplaneOperation
+	keepalive time.Duration // ditto MaxKeepalive
+}
 
 var Timeout = &timeout{
 	cplane:    time.Second + time.Millisecond,
@@ -1622,7 +1622,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	debug.Assert(globalConfPath != "" && localConfPath != "")
 	GCO.SetInitialGconfPath(globalConfPath)
 
-	// firs, local config
+	// first, local config
 	if _, err := jsp.LoadMeta(localConfPath, &config.LocalConfig); err != nil {
 		return fmt.Errorf("failed to load plain-text local config %q: %v", localConfPath, err)
 	}
@@ -1649,7 +1649,6 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 			debug.Assert(config.Version == 0)
 			globalFpath = globalConfPath
 		} else if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
-			// previous meta-version (in re: backward compatibility)
 			glog.Warningf("failed to %s - trying the previous meta-version v%d", txt, oldMetaverConfig)
 			errOld := tryLoadOldClusterConfig(globalFpath, config)
 			if errOld != nil {
@@ -1727,7 +1726,7 @@ func handleOverrideConfig(config *Config) error {
 	return config.UpdateClusterConfig(*overrideConfig, apc.Daemon)
 }
 
-// (backward compatibility)
+// (for backward compatibility)
 func tryLoadOldClusterConfig(globalFpath string, config *Config) error {
 	var old oldClusterConfig
 	if _, err := jsp.LoadMeta(globalFpath, &old); err != nil {
@@ -1738,16 +1737,20 @@ func tryLoadOldClusterConfig(globalFpath string, config *Config) error {
 	// a) copy same-name/same-type fields while b) taking special care of assorted changes
 	err := IterFields(&old, func(name string, fld IterField) (error, bool /*stop*/) {
 		debug.Assert(name == "ext" || fld.Value() != nil)
-		if name == "md_write" { // scalar field => struct in v2
+		switch {
+		case name == "md_write": // scalar => struct in v2
 			v, ok := fld.Value().(apc.WritePolicy)
 			debug.Assert(ok)
 			config.ClusterConfig.WritePolicy.MD = v
 			return nil, false
-		}
-		if strings.HasPrefix(name, "replication.") { // removed in v2
+		case name == "client.features": // moved in v2
+			v, ok := fld.Value().(feat.Flags)
+			debug.Assert(ok)
+			config.ClusterConfig.Features = v
 			return nil, false
-		}
-		if name == "ec.batch_size" { // removed in v2
+		case strings.HasPrefix(name, "replication."): // removed in v2
+			return nil, false
+		case name == "ec.batch_size": // removed in v2
 			return nil, false
 		}
 

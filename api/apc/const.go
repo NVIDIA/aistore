@@ -224,10 +224,10 @@ const (
 	QparamArchpath = "archpath"
 	QparamArchmime = "archmime"
 
-	// Skip loading existing object's metadata in order to
-	// compare its Checksum and update its existing Version (if exists);
-	// can be used to reduce PUT latency when:
-	// - we massively write a new content into a bucket, and/or
+	// Skip loading existing object's metadata, in part to
+	// compare its Checksum and update its existing Version (if exists).
+	// Can be used to reduce PUT latency when:
+	// - we massively write new content into a bucket, and/or
 	// - we simply don't care.
 	QparamSkipVC = "skip_vc"
 )

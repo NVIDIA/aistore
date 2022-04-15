@@ -285,24 +285,28 @@ func getDaemonConfig(c *cli.Context) error {
 func cluConfig(c *cli.Context) error {
 	daemonID, nvs, err := daemonKeyValueArgs(c)
 	if err != nil {
-		// check whether user is trying to show it, not set
 		tail := c.Args().Tail()
 		if len(tail) > 0 && tail[0] == commandShow {
 			return &errUsage{
 				context: c,
-				message: "expecting key=value pairs",
+				message: "expecting key=value pair(s)",
 				bottomMessage: fmt.Sprintf("(Hint: to show %q config, run 'ais show config %s'.)",
 					daemonID, daemonID),
 				helpData:     c.Command,
 				helpTemplate: templates.ShortUsageTmpl,
 			}
 		}
-		if strings.Contains(err.Error(), "key=value pair") && daemonID != "" {
+		// check whether user is trying to show it, not set
+		if strings.Contains(err.Error(), "key=value pair") {
 			// show what we can and still return err
-			if daemonID != c.Args().First() {
-				_ = showClusterOrDaemonOrCLIConfigHandler(c) // nolint:errcheck // on purpose
+			var errShow error
+			if daemonID != "" && daemonID != c.Args().First() {
+				errShow = showClusterOrDaemonOrCLIConfigHandler(c)
 			} else {
-				_ = showClusterConfigHandler(c) // nolint:errcheck // on purpose
+				errShow = showClusterConfigHandler(c)
+			}
+			if errShow == nil {
+				return nil
 			}
 		}
 		return err

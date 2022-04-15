@@ -226,20 +226,6 @@ type (
 	errNoUnregister struct {
 		detail string
 	}
-
-	// RESTful API parse context
-	dpq struct {
-		provider, namespace string // bucket
-		pid, ptime          string // proxy ID, timestamp
-		uuid                string // xaction
-		skipVC              string // (disconnected backend)
-		archpath, archmime  string // archive
-		isGFN               string // ditto
-		origURL             string // ht://url->
-		appendTy, appendHdl string // APPEND { apc.AppendOp, ... }
-		owt                 string // object write transaction { OwtPut, ... }
-		dontLookupRemoteBck string // (as the name implies)
-	}
 	apiRequest struct {
 		prefix []string     // in: URL must start with these items
 		after  int          // in: the number of items after the prefix

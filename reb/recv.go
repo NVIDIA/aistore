@@ -320,7 +320,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr transport.ObjHdr, reader io.Reader
 		reb.onAir.Inc()
 		xreb := reb.xctn()
 		if xreb.IsAborted() {
-			glog.Errorf("not sendiing updated metafile: %s", xreb)
+			glog.Errorf("not sending updated metafile: %s", xreb)
 			break
 		}
 		o := transport.AllocSend()

@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
@@ -957,7 +958,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
 	var (
 		cksum      *cos.CksumHash
-		autoDetect = !prmMsg.SrcIsNotFshare
+		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.GCO.Get().Features.IsSet(feat.DontAutoDetectFshare)
 	)
 	cb := func(fqn string, de fs.DirEntry) (err error) {
 		if de.IsDir() {

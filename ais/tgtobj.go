@@ -1182,7 +1182,8 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 //
 // If destination bucket is remote bucket, copyReader will always create a cached copy of an object on one of the
 // targets as well as make put to the relevant backend provider.
-// TODO: support not storing an object from a cloud bucket.
+//
+// TODO: consider adding support for _not_ storing (aka "caching") an object from bucket that has remote backend.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	var (
 		reader cos.ReadOpenCloser

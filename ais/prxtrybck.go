@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -69,6 +70,9 @@ func freeInitBckArgs(a *bckInitArgs) {
 /////////////////////////////////////////////
 
 func lookupRemoteBck(query url.Values, dpq *dpq) bool {
+	if cmn.GCO.Get().Features.IsSet(feat.DontLookupRemoteBck) {
+		return false
+	}
 	if query != nil {
 		debug.Assert(dpq == nil)
 		return !cos.IsParseBool(query.Get(apc.QparamDontLookupRemoteBck))

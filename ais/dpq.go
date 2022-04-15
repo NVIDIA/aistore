@@ -13,6 +13,20 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 )
 
+// RESTful API parse context
+type dpq struct {
+	provider, namespace string // bucket
+	pid, ptime          string // proxy ID, timestamp
+	uuid                string // xaction
+	skipVC              string // (skip loading existing object's metadata)
+	archpath, archmime  string // archive
+	isGFN               string // ditto
+	origURL             string // ht://url->
+	appendTy, appendHdl string // APPEND { apc.AppendOp, ... }
+	owt                 string // object write transaction { OwtPut, ... }
+	dontLookupRemoteBck string // (as the name implies)
+}
+
 var (
 	dpqPool sync.Pool
 	dpq0    dpq

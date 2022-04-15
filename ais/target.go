@@ -938,7 +938,7 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-	features := cmn.GCO.Get().Client.Features
+	features := cmn.GCO.Get().Features
 	if features.IsSet(feat.EnforceIntraClusterAccess) {
 		if apireq.dpq.ptime == "" /*isRedirect*/ && t.isIntraCall(r.Header, false /*from primary*/) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
@@ -1057,8 +1057,11 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// load (maybe)
-	var errdb error
-	skipVC := cos.IsParseBool(apireq.dpq.skipVC) // apc.QparamSkipVC
+	var (
+		errdb    error
+		features = cmn.GCO.Get().Features
+		skipVC   = features.IsSet(feat.SkipVC) || cos.IsParseBool(apireq.dpq.skipVC) // apc.QparamSkipVC
+	)
 	if skipVC {
 		errdb = lom.AllowDisconnectedBackend(false)
 	} else if lom.Load(true, false) == nil {
@@ -1171,7 +1174,7 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	features := cmn.GCO.Get().Client.Features
+	features := cmn.GCO.Get().Features
 	if features.IsSet(feat.EnforceIntraClusterAccess) {
 		// validates that the request is internal (by a node in the same cluster)
 		if isRedirect(query) == "" && t.isIntraCall(r.Header, false) != nil {
@@ -1299,7 +1302,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	features := cmn.GCO.Get().Client.Features
+	features := cmn.GCO.Get().Features
 	if features.IsSet(feat.EnforceIntraClusterAccess) {
 		if isRedirect(apireq.query) == "" && t.isIntraCall(r.Header, false) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",

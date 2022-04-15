@@ -149,7 +149,8 @@ cat > $AIS_CONF_FILE <<EOL
 	"write_policy": {
 		"data": "${WRITE_POLICY_DATA:-}",
 		"md": "${WRITE_POLICY_MD:-}"
-	}
+	},
+	"features": "0"
 }
 EOL
 

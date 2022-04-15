@@ -117,10 +117,10 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 			if i == 0 {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
-			tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": feat.EnforceIntraClusterAccess.Value()})
+			tutils.SetClusterConfig(t, cos.SimpleKVs{"features": feat.EnforceIntraClusterAccess.Value()})
 			_, err = api.GetObject(baseParams, m.bck, e.Name)
 			tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
-			tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": "0"})
+			tutils.SetClusterConfig(t, cos.SimpleKVs{"features": "0"})
 		}
 	}
 
@@ -198,10 +198,10 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 			if i == 0 {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
-			tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": feat.EnforceIntraClusterAccess.Value()})
+			tutils.SetClusterConfig(t, cos.SimpleKVs{"features": feat.EnforceIntraClusterAccess.Value()})
 			_, err = api.GetObject(baseParams, m.bck, object.Name)
 			tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
-			tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": "0"})
+			tutils.SetClusterConfig(t, cos.SimpleKVs{"features": "0"})
 		}
 	}
 

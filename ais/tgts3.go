@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -140,10 +141,6 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 			return
 		}
 	}
-	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
-		// load it to see the current version; TODO: skipVC
-		lom.Load(true /*cache it*/, false /*locked*/)
-	}
 	lom.SetAtimeUnix(started.UnixNano())
 
 	// TODO: dual checksumming, e.g. lom.SetCustom(apc.ProviderAmazon, ...)
@@ -154,12 +151,13 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.writeErr(w, r, err)
 		return
 	}
+	features := cmn.GCO.Get().Features
 	poi := allocPutObjInfo()
 	{
 		poi.atime = started
 		poi.t = t
 		poi.lom = lom
-		poi.skipVC = false
+		poi.skipVC = features.IsSet(feat.SkipVC) || cos.IsParseBool(dpq.skipVC) // apc.QparamSkipVC
 		poi.restful = true
 	}
 	errCode, err := poi.do(r, dpq)
