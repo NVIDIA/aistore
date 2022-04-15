@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -326,7 +325,6 @@ var (
 		"FormatMilli":         fmtMilli,
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
-		"FormatFeatureFlags":  fmtFeatureFlags,
 		"Deployments":         func(h DaemonStatusTemplateHelper) string { return strings.Join(h.Deployments().ToSlice(), ",") },
 		"FormatACL":           fmtACL,
 		"ExtECGetStats":       extECGetStats,
@@ -551,13 +549,6 @@ func fmtStringListGeneric(lst []string, sep string) string {
 		fmt.Fprint(&s, url)
 	}
 	return s.String()
-}
-
-func fmtFeatureFlags(flags feat.Flags) string {
-	if flags == 0 {
-		return NotSetVal
-	}
-	return fmt.Sprintf("%s(%s)", flags, flags.Describe())
 }
 
 func daemonsDeployments(ds map[string]*stats.DaemonStatus) cos.StringSet {

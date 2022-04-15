@@ -21,9 +21,7 @@ var all = []struct {
 
 func (cflags Flags) IsSet(flag Flags) bool { return cflags&flag == flag }
 func (cflags Flags) Value() string         { return strconv.FormatUint(uint64(cflags), 10) }
-func (cflags Flags) String() string        { return "0x" + strconv.FormatUint(uint64(cflags), 16) }
-
-func (cflags Flags) Describe() string {
+func (cflags Flags) String() string {
 	var s string
 	for _, flag := range all {
 		if cflags&flag.value != flag.value {
