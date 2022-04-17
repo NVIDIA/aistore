@@ -177,6 +177,10 @@ fi
 
 # run all daemons
 CMD="${GOPATH}/bin/aisnode"
+listening_on="Listening on ports: "
+if [ $PROXY_CNT -eq 1 ]; then
+   listening_on="Listening on port: "
+fi
 for (( c=START; c<=END; c++ )); do
   AIS_CONF_DIR="$HOME/.ais${NEXT_TIER}$c"
   AIS_CONF_FILE="$AIS_CONF_DIR/ais.json"
@@ -185,15 +189,18 @@ for (( c=START; c<=END; c++ )); do
   PROXY_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=proxy -ntargets=${TARGET_CNT} ${RUN_ARGS}"
   TARGET_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=target ${RUN_ARGS}"
 
+  pub_port=`grep "\"port\":" ${AIS_LOCAL_CONF_FILE} | awk '{ print $2 }'`
   if [[ $c -eq 0 ]]; then
     export AIS_IS_PRIMARY="true"
     run_cmd "${CMD} ${PROXY_PARAM}"
+    listening_on+=${pub_port:1:-2}
     unset AIS_IS_PRIMARY
 
     # Wait for the proxy to start up
     sleep 2
   elif [[ $c -lt ${PROXY_CNT} ]]; then
     run_cmd "${CMD} ${PROXY_PARAM}"
+    listening_on+=", ${pub_port:1:-2}"
   else
     run_cmd "${CMD} ${TARGET_PARAM}"
   fi
@@ -218,4 +225,4 @@ if [[ $MODE == "debug" ]]; then
 else
 	sleep 0.1
 fi
-echo "Done."
+echo ${listening_on}

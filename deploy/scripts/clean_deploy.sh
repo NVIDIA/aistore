@@ -112,6 +112,9 @@ fi
 make -j8 authn aisloader aisfs cli 1>/dev/null # Build binaries in parallel
 
 if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
+  if [[ ${deployment} == "all" ]]; then
+    echo -e "\n*** Remote cluster ***"
+  fi
   echo -e "1\n1\n3\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${hdfs_provider}\n${loopback}\n" | DEPLOY_AS_NEXT_TIER="true" make deploy
 
   # Do not try attach remote cluster if the main cluster did not start.
