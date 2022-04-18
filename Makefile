@@ -194,19 +194,12 @@ endif
 #
 # tests
 #
-.PHONY: test-bench test-soak test-aisloader test-envcheck test-short test-long test-run test-docker test
+.PHONY: test-bench test-aisloader test-envcheck test-short test-long test-run test-docker test
 
 # Target for benchmark tests
 test-bench: ## Run benchmarking tests
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-bench
 
-
-# Target for soak test
-test-soak: ## Run soaking tests
-ifeq ($(FLAGS),)
-	$(warning FLAGS="soak test flags" not passed, using defaults)
-endif
-	@./bench/soaktest/soaktest.sh $(FLAGS)
 
 test-envcheck:
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-env

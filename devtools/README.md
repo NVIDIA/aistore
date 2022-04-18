@@ -1,21 +1,20 @@
-Devtools package purpose is solely to provide common functions for golang-based development tools around AIStore, which
-include: tests, benchmarks, AIS Loader, soaktests.
+Package `devtools` provides common methods and utilities for Golang-based **development** tools that include:
 
+* integration tests (primarily, `ais/tests/*`),
+* benchmarks (under `bench/`),
+* [`aisloader`](/docs/aisloader.md).
 
-This package should not be merged to/unified with the `cmn` package, or any other general-purpose package. 
-General-purpose packages like `cnm` are used in core parts of AIStore, so using `devtools` in general-purpose
-packages is strongly discouraged.
+This package and its sub-packages (listed below) should not be linked into production code. Unlike, say, `cmn` package
+(that also contains common functions) `devtools` is solely intended for usage with development tools.
 
-### When to not use `devtools`
+Package `devtools` is further sub-divided into packages that group closely related functions:
 
-Functions from this package should not be used outside of packages mentioned above (`bench`, `soak`, etc). The functions
- are not optimized for performance.
+| Folder | Intended for |
+| --- | --- |
+| archive | Create, list, and read from [archives](/docs/archive.md) |
+| readers | Provides `io.Reader` and related primitives based on: random source, file, [scatter-gather list](/memsys/README.md) |
+| tassert | Testing asserts - `CheckFatal`, `Errorf`, `Fatalf`, and other convenient assertions |
+| tetl | Common functions used for (and by) ETL tests |
+| tlog | Uniform logging for integrations tests |
+| tutils | A broad spectrum of common testing utilities |
 
-If a function's use is solely for testing (for example, the function uses `testing` package), it should be placed
- in `tutils` package.
-
-### When to use `devtools`
-
-When writing a function which is supposed to be used outside of core AIS parts (tests, soaktests, aisloader),
-and shared between them.
- 
