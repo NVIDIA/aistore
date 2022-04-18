@@ -1155,6 +1155,9 @@ func (c *ECConf) RequiredRestoreTargets() int {
 func (c *WritePolicyConf) Validate() (err error) {
 	err = c.Data.Validate()
 	if err == nil {
+		if !c.Data.IsImmediate() {
+			return fmt.Errorf("invalid write policy for data: %q not implemented yet", c.Data)
+		}
 		err = c.MD.Validate()
 	}
 	return
