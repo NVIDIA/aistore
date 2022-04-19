@@ -3,10 +3,12 @@ import os
 
 from aistore.client.api import Client
 
+CLUSTER_ENDPOINT = os.environ.get("AIS_ENDPOINT", "http://localhost:8080")
+
 
 class TestBasicOps(unittest.TestCase):  #pylint: disable=unused-variable
     def test_bucket(self):
-        client = Client('http://localhost:8080')
+        client = Client(CLUSTER_ENDPOINT)
         bck_name = "test"
 
         res = client.list_buckets()
@@ -19,10 +21,8 @@ class TestBasicOps(unittest.TestCase):  #pylint: disable=unused-variable
         client.destroy_bucket(bck_name)
 
     def test_put_get(self):
-        client = Client('http://localhost:8080')
+        client = Client(CLUSTER_ENDPOINT)
         bck_name = "test"
-
-        res = client.list_buckets()
         client.create_bucket(bck_name)
 
         tmpfile = "/tmp/py-sdk-test"
@@ -30,25 +30,27 @@ class TestBasicOps(unittest.TestCase):  #pylint: disable=unused-variable
         with open(tmpfile, mode="w", encoding="utf-8") as fdata:
             fdata.write(orig_cont)
 
-        res = client.put_object(bck_name, "obj1", tmpfile)
+        client.put_object(bck_name, "obj1", tmpfile)
         os.remove(tmpfile)
-        self.assertEqual(res.status_code, 200)
-        res.close()
 
         objects = client.list_objects(bck_name)
         self.assertFalse(objects is None)
 
-        res = client.get_object(bck_name, "obj1")
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.content.decode("utf-8"), orig_cont)
-        res.close()
+        obj = client.get_object(bck_name, "obj1")
+        self.assertEqual(obj.decode("utf-8"), orig_cont)
 
         client.destroy_bucket(bck_name)
-        self.assertEqual(res.status_code, 200)
 
     def test_cluster_map(self):
-        client = Client('http://localhost:8080')
-        client.get_cluster_info()
+        client = Client(CLUSTER_ENDPOINT)
+        smap = client.get_cluster_info()
+
+        self.assertIsNotNone(smap)
+        self.assertIsNotNone(smap.proxy_si)
+        self.assertNotEqual(len(smap.pmap), 0)
+        self.assertNotEqual(len(smap.tmap), 0)
+        self.assertNotEqual(smap.version, 0)
+        self.assertIsNot(smap.uuid, "")
 
 
 if __name__ == '__main__':

@@ -11,6 +11,7 @@ START = "start"
 # URL Params
 QParamArchpath = "archpath"
 QParamProvider = "provider"
+QParamWhat = "what"
 
 # Bucket providers
 ProviderAIS = "ais"
