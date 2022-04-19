@@ -3,6 +3,7 @@
 - [Extended Actions (xactions)](#extended-actions-xactions)
     - [Start and Stop](#start-and-stop)
 	- [Stats](#stats)
+- [References](#references)
 
 ## Extended Actions (xactions)
 
@@ -143,3 +144,9 @@ Example rebalance stats response:
 
 If flag `--all` is provided, stats command will display old, finished xactions, along with currently running ones. If `--all` is not set (default), only
 the most recent xactions will be displayed, for each bucket, kind or (bucket, kind)
+
+## References
+
+For xaction-related CLI documentation and examples, supported multi-object (batch) operations, and more, please see:
+
+* [Batch operations](/docs/batch.md)

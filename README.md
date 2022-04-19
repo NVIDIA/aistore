@@ -132,7 +132,7 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
   - Profiling, race-detecting, and more
 - Batch operations
   - [Batch operations](/docs/batch.md)
-  - [eXtended Actions (xactions)](/xaction/README.md)
+  - [eXtended Actions (xactions)](/xact/README.md)
   - [CLI: job management](/docs/cli/job.md)
 - Topics
   - [System files](/docs/sysfiles.md)

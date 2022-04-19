@@ -9,7 +9,7 @@ redirect_from:
 
 ## Introduction
 
-AIStore tracks, logs, and reports a large and growing number of counters, latencies and throughputs including (but not limited to) metrics that reflect cluster recovery and global rebalancing, all [extended long-running operations](/xaction/README.md), and, of course, the basic read, write, list transactions, and more.
+AIStore tracks, logs, and reports a large and growing number of counters, latencies and throughputs including (but not limited to) metrics that reflect cluster recovery and global rebalancing, all [extended long-running operations](/xact/README.md), and, of course, the basic read, write, list transactions, and more.
 
 Viewership is equally supported via:
 
