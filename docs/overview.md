@@ -223,7 +223,7 @@ Similar to the AIS gateways, AIS storage targets can join and leave at any momen
 AIS features a [highly-available control plane](ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](http_api.md). Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
 ## Fast Tier
-AIS can be deployed as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage.
+AIS can be deployed as a fast tier in front of any of the multiple supported [backends](providers.md).
 
 As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](batch.md#listrange-operations)) that runs in the background to download batches of objects.
 

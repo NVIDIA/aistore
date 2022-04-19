@@ -144,7 +144,9 @@ For Linux:
 
 Finally, if not done yet, export [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 
-At this point you should be able to run it, as follows:
+This [local-playground usage example](/deploy/dev/local/README.md) is a 5 minutes long introduction on setting up Go environment, provisioniong data drives for AIS deployment, and running a minimal AIS cluster - locally.
+
+Alternatively, or in addition, run it as follows:
 
 ### Steps to run AIS from source
 
