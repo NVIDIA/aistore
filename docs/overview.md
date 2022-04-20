@@ -213,7 +213,7 @@ AIS supports end-to-end checksumming and two distinct [storage services](storage
 
 The functionality that we denote as end-to-end checksumming further entails:
 
-  - autromatic self-healing upon detecting corruption,
+  - self-healing upon detecting corruption,
   - optimizing-out redundant writes upon detecting existence of the destination object,
   - utilizing client-provided checksum (iff provided) to perform end-to-end checksum validation,
   - utilizing Cloud checksum of an object that originated in a Cloud bucket, and
