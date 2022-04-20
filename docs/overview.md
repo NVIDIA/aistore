@@ -31,6 +31,7 @@ The rest of this document is structured as follows:
 - [Open Format](#open-format)
 - [Existing Datasets](#existing-datasets)
 - [Data Protection](#data-protection)
+  - [Erasure Coding vs IO Performance](#erasure-coding-vs-io-performance)
 - [Scale-Out](#scale-out)
 - [HA](#ha)
 - [Other Services](#other-services)
@@ -208,7 +209,35 @@ Originally (experimentally) introduced in the v3.0 to handle "files and director
 
 ## Data Protection
 
-AIS [supports](storage_svcs.md) end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon [erasure coding](storage_svcs.md#erasure-coding) - thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
+AIS supports end-to-end checksumming and two distinct [storage services](storage_svcs.md) - N-way mirroring and erasure coding - providing for data redundancy.
+
+The functionality that we denote as end-to-end checksumming further entails:
+
+  - autromatic self-healing upon detecting corruption,
+  - optimizing-out redundant writes upon detecting existence of the destination object,
+  - utilizing client-provided checksum (iff provided) to perform end-to-end checksum validation,
+  - utilizing Cloud checksum of an object that originated in a Cloud bucket, and
+  - utilizing its version to perform so-called "cold" GET when object exists both in AIS and in the Cloud,
+
+and more.
+
+Needless to say, each of these sub-topics may require additional discussion of:
+
+* [configurable options](configuration.md),
+* [default settings](bucket.md), and
+* the corresponding performance tradeoffs.
+
+### Erasure Coding vs IO Performance
+
+When an AIS bucket is EC-configured as (D, P), where D is the number of data slices and P - the number of parity slices, the corresponding space utilization ratio is not `(D + P)/D`, as one would assume.
+
+It is, actually, `1 + (D + P)/D`.
+
+This is because AIS was created to perform and scale in the first place. AIS always keeps one full replica at its [HRW location](traffic_patterns.md).
+
+AIS will utilize EC to automatically self-heal upon detecting corruption (of the full replica). When a client performs a read on a non-existing (or not found) name, AIS will check with EC - assuming, obviously, that the bucket is erasure coded.
+
+EC-related philosophy can be summarized as one word: **recovery**. EC plays no part in the fast path.
 
 ## Scale-Out
 
@@ -220,7 +249,9 @@ Similar to the AIS gateways, AIS storage targets can join and leave at any momen
 
 ## HA
 
-AIS features a [highly-available control plane](ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](http_api.md). Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
+AIS features a [highly-available control plane](ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](http_api.md).
+
+Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
 ## Fast Tier
 AIS can be deployed as a fast tier in front of any of the multiple supported [backends](providers.md).

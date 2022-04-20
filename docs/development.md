@@ -14,6 +14,7 @@ redirect_from:
 - [Useful scripts](#scripts)
   - [Clean deploy](#clean-deploy)
   - [Performance comparison](#performance-comparison)
+- [More](#more)
 
 ## Debugging
 
@@ -156,3 +157,7 @@ $ bash ./deploy/scripts/bootstrap.sh bench cmp f9a1536f4c9af0d1ac84c200e68f2ba73
 | `--bench BENCHMARK_NAME` | Name or prefix of benchmark(s) to run |
 | `--post_checkout SCRIPT_NAME` | Script name which will executed after each `git checkout <commit>` (old and new commit) |
 | `--verbose` | Run benchmarks in verbose mode |
+
+## More
+
+This [local-playground usage example](/deploy/dev/local/README.md) is a yet another brief introduction into setting up Go environment, provisioniong data drives for AIS deployment, and running a minimal AIS cluster - locally.
