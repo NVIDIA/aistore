@@ -1,8 +1,8 @@
 #
-# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
 #
 
-from typing import TypeVar, Type, List
+from typing import TypeVar, Type, List, NewType
 import requests
 from urllib.parse import urljoin
 from pydantic.tools import parse_raw_as
@@ -10,7 +10,9 @@ from pydantic.tools import parse_raw_as
 from .const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
+    HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
+    HTTP_METHOD_HEAD,
     QParamArchpath,
     QParamProvider,
     ProviderAIS,
@@ -19,6 +21,7 @@ from .const import (
 from .msg import ActionMsg, Bck, BucketList, Smap
 
 T = TypeVar("T")
+Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
 
 # pylint: disable=unused-variable
@@ -135,6 +138,34 @@ class Client:
             params=params,
         )
 
+    def head_bucket(self, bck_name: str, **kwargs) -> Header:
+        """
+        Tests if a bucket exists in AIStore cluster
+
+        Args:
+            bck_name (str): Name of the new bucket
+
+        Keyword Args:
+            provider (str): Name of bucket provider, one of "ais", "aws", "gcp" or "az". Defaults to "ais"
+
+        Returns:
+            Nothing
+
+        Raises:
+            requests.RequestException: Ambiguous while handling request
+            requests.ConnectionError: A connection error occurred
+            requests.ConnectionTimeout: Timed out while connecting to AIStore server
+            requests.ReadTimeout: Timeout receiving response from server
+            requests.exeptions.HTTPError(404): The bucket does not exist
+        """
+        bck = Bck(name=bck_name, **kwargs)
+        params = {QParamProvider: bck.provider}
+        return self._request(
+            HTTP_METHOD_HEAD,
+            path=f"buckets/{ bck_name }",
+            params=params,
+        ).headers
+
     def list_objects(self, bck_name, **kwargs):
         """
         Returns list of objects in a bucket
@@ -191,16 +222,14 @@ class Client:
             requests.ReadTimeout: Timeout receiving response from server
         """
         bck = Bck(name=bck_name, **kwargs)
-        params = {}
-        if bck.provider != "":
-            params[QParamProvider] = bck.provider
+        params = {QParamProvider: bck.provider}
         if "archpath" in kwargs:
             params[QParamArchpath] = kwargs["archpath"]
         if "transform_id" in kwargs:
             params["uuid"] = kwargs["transform_id"]
         return self._request_raw(HTTP_METHOD_GET, path=f"objects/{ bck_name }/{ object_name }", params=params)
 
-    def put_object(self, bck_name, object_name, path, **kwargs):
+    def put_object(self, bck_name: str, object_name: str, path: str, **kwargs) -> Header:
         """
         Puts a local file as an object to a bucket in AIS storage
 
@@ -221,12 +250,16 @@ class Client:
             requests.ConnectionTimeout: Timed out while connecting to AIStore server
             requests.ReadTimeout: Timeout receiving response from server
         """
-        url = "{}/objects/{}/{}".format(self.base_url, bck_name, object_name)
+        url = f"/objects/{ bck_name }/{ object_name }"
         bck = Bck(name=bck_name, **kwargs)
-        params = {QParamProvider: bck.provider} if bck.provider else {}
+        params = {QParamProvider: bck.provider}
         with open(path, "rb") as data:
-            resp = requests.put(url=url, params=params, data=data)
-            resp.raise_for_status()
+            return self._request(
+                HTTP_METHOD_PUT,
+                path=url,
+                params=params,
+                data=data,
+            ).headers
 
     def get_cluster_info(self) -> Smap:
         """

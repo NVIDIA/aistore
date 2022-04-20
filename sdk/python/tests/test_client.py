@@ -1,5 +1,10 @@
+#
+# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+#
+
 import unittest
 import os
+import requests
 
 from aistore.client.api import Client
 
@@ -19,6 +24,18 @@ class TestBasicOps(unittest.TestCase):  #pylint: disable=unused-variable
         self.assertEqual(count + 1, count_new)
 
         client.destroy_bucket(bck_name)
+
+    def test_head_bucket(self):
+        client = Client(CLUSTER_ENDPOINT)
+        bck_name = "test"
+
+        client.create_bucket(bck_name)
+        client.head_bucket(bck_name)
+        client.destroy_bucket(bck_name)
+        try:
+            client.head_bucket(bck_name)
+        except requests.exceptions.HTTPError as e:
+            self.assertEqual(e.response.status_code, 404)
 
     def test_put_get(self):
         client = Client(CLUSTER_ENDPOINT)
