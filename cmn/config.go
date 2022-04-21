@@ -980,11 +980,9 @@ func (c *DiskConf) Validate() (err error) {
 ///////////////////////////////////////
 
 func (c *SpaceConf) Validate() (err error) {
-	clwm, lwm, hwm, oos := c.CleanupWM, c.LowWM, c.HighWM, c.OOS
-	if clwm <= 0 || lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
+	if c.CleanupWM <= 0 || c.LowWM < c.CleanupWM || c.HighWM < c.LowWM || c.OOS < c.HighWM || c.OOS > 100 {
 		err = fmt.Errorf("invalid %s", c)
 	}
-	// TODO -- FIXME: lwm < clwm
 	return
 }
 

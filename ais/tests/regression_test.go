@@ -50,20 +50,6 @@ const (
 	testBucketName = "TESTAISBUCKET"
 )
 
-var (
-	HighWaterMark    = int32(80)
-	LowWaterMark     = int32(66)
-	UpdTime          = time.Second * 20
-	configRegression = map[string]string{
-		"periodic.stats_time":   UpdTime.String(),
-		"space.lowwm":           fmt.Sprintf("%d", LowWaterMark),
-		"space.highwm":          fmt.Sprintf("%d", HighWaterMark),
-		"lru.enabled":           "true",
-		"lru.capacity_upd_time": UpdTime.String(),
-		"lru.dont_evict_time":   UpdTime.String(),
-	}
-)
-
 func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	var (
 		m = ioContext{
@@ -602,10 +588,6 @@ func TestGetClusterStats(t *testing.T) {
 					"Used: %v, %v | Available:  %v, %v | Percentage: %v, %v",
 					tfstats["used"], fstats.Used, tfstats["avail"],
 					fstats.Avail, tfstats["pct_used"], fstats.PctUsed)
-			}
-			if fstats.PctUsed > HighWaterMark {
-				t.Errorf("Used Percentage (%d%%) is above High Watermark (%d%%)",
-					fstats.PctUsed, HighWaterMark)
 			}
 		}
 	}

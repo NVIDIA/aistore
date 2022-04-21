@@ -659,15 +659,22 @@ func (m *ioContext) stopMaintenance(target *cluster.Snode) (rebID string) {
 	return
 }
 
-func (m *ioContext) setRandBucketProps() {
+func (m *ioContext) setNonDefaultBucketProps() {
 	baseParams := tutils.BaseAPIParams()
-
-	// Set some weird bucket props to see if they were changed or not.
+	copies := int64(rand.Intn(2))
 	props := &cmn.BucketPropsToUpdate{
-		Space: &cmn.SpaceConfToUpdate{
-			LowWM:  api.Int64(int64(rand.Intn(35) + 1)),
-			HighWM: api.Int64(int64(rand.Intn(15) + 40)),
-			OOS:    api.Int64(int64(rand.Intn(30) + 60)),
+		Mirror: &cmn.MirrorConfToUpdate{
+			Enabled: api.Bool(copies > 0),
+			Copies:  api.Int64(copies),
+		},
+		Cksum: &cmn.CksumConfToUpdate{
+			Type:            api.String(cos.ChecksumSHA512),
+			EnableReadRange: api.Bool(true),
+			ValidateWarmGet: api.Bool(true),
+			ValidateColdGet: api.Bool(false),
+		},
+		Extra: &cmn.ExtraToUpdate{
+			HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/abc")},
 		},
 	}
 	_, err := api.SetBucketProps(baseParams, m.bck, props)

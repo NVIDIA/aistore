@@ -1792,7 +1792,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	}()
 	tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
-	m.setRandBucketProps()
+	m.setNonDefaultBucketProps()
 	srcProps, err := api.HeadBucket(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
@@ -1848,7 +1848,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	}()
 	tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
-	m.setRandBucketProps()
+	m.setNonDefaultBucketProps()
 	srcProps, err := api.HeadBucket(baseParams, srcBck)
 	tassert.CheckFatal(t, err)
 
@@ -1894,7 +1894,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
-	m.setRandBucketProps()
+	m.setNonDefaultBucketProps()
 
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, tmpBck, nil)
 
@@ -2197,14 +2197,13 @@ func TestCopyBucket(t *testing.T) {
 
 			if bckTest.IsAIS() {
 				tutils.CreateBucketWithCleanup(t, srcm.proxyURL, srcm.bck, nil)
-				srcm.setRandBucketProps()
+				srcm.setNonDefaultBucketProps()
 			}
 
 			if test.dstBckExist {
 				for _, dstm := range dstms {
 					if !dstm.bck.IsRemote() {
 						tutils.CreateBucketWithCleanup(t, dstm.proxyURL, dstm.bck, nil)
-						dstm.setRandBucketProps()
 					}
 				}
 			} else { // cleanup

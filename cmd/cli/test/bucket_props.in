@@ -10,7 +10,6 @@ ais bucket props reset ais://$BUCKET_1
 
 ais bucket props set ais://$BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'
 ais show bucket ais://$BUCKET_1 --compact
-ais show bucket ais://$BUCKET_1 space
 ais show bucket ais://$BUCKET_1 lru
 
 ais bucket props set ais://$BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'

@@ -26,10 +26,34 @@ import (
 const errWMConfigNotExpected = "expected 'disk.disk_util_low_wm' to be %d, got: %d"
 
 func TestConfig(t *testing.T) {
-	oconfig := tutils.GetClusterConfig(t)
-	ospaceconfig := oconfig.Space
-	olruconfig := oconfig.LRU
-	operiodic := oconfig.Periodic
+	var (
+		highWM           = int32(80)
+		lowWM            = int32(60)
+		cleanupWM        = int32(55)
+		updTime          = time.Second * 20
+		configRegression = map[string]string{
+			"periodic.stats_time":   updTime.String(),
+			"space.cleanupwm":       fmt.Sprintf("%d", cleanupWM),
+			"space.lowwm":           fmt.Sprintf("%d", lowWM),
+			"space.highwm":          fmt.Sprintf("%d", highWM),
+			"lru.enabled":           "true",
+			"lru.capacity_upd_time": updTime.String(),
+			"lru.dont_evict_time":   updTime.String(),
+		}
+		oconfig      = tutils.GetClusterConfig(t)
+		ospaceconfig = oconfig.Space
+		olruconfig   = oconfig.LRU
+		operiodic    = oconfig.Periodic
+	)
+	defer tutils.SetClusterConfig(t, cos.SimpleKVs{
+		"periodic.stats_time":   oconfig.Periodic.StatsTime.String(),
+		"space.cleanupwm":       fmt.Sprintf("%d", oconfig.Space.CleanupWM),
+		"space.lowwm":           fmt.Sprintf("%d", oconfig.Space.LowWM),
+		"space.highwm":          fmt.Sprintf("%d", oconfig.Space.HighWM),
+		"lru.enabled":           strconv.FormatBool(oconfig.LRU.Enabled),
+		"lru.capacity_upd_time": oconfig.LRU.CapacityUpdTime.String(),
+		"lru.dont_evict_time":   oconfig.LRU.DontEvictTime.String(),
+	})
 
 	tutils.SetClusterConfig(t, configRegression)
 
