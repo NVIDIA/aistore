@@ -17,9 +17,10 @@ import (
 
 // bucket properties
 type (
-	// BucketProps defines the configuration of the bucket with regard to
-	// its type, checksum, and LRU. These characteristics determine its behavior
-	// in response to operations on the bucket itself or the objects inside the bucket.
+	// BucketProps defines the bucket's configuration and include
+	// checksum, space, LRU, and more.
+	//
+	// For all inheritable props, see DefaultProps below.
 	//
 	// Naming convention for setting/getting the particular props is defined as
 	// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
@@ -36,10 +37,13 @@ type (
 		// Versioning can be enabled or disabled on a per-bucket basis
 		Versioning VersionConf `json:"versioning"`
 
-		// Cksum is the embedded struct of the same name
+		// checksum that's used for this bucket
 		Cksum CksumConf `json:"checksum"`
 
-		// LRU is the embedded struct of the same name
+		// Space watermarks for the bucket
+		Space SpaceConf `json:"space"`
+
+		// LRU config for the bucket
 		LRU LRUConf `json:"lru"`
 
 		// Mirror defines local-mirroring policy for the bucket
@@ -102,6 +106,7 @@ type (
 		BackendBck  *BckToUpdate             `json:"backend_bck,omitempty"`
 		Versioning  *VersionConfToUpdate     `json:"versioning,omitempty"`
 		Cksum       *CksumConfToUpdate       `json:"checksum,omitempty"`
+		Space       *SpaceConfToUpdate       `json:"space,omitempty"`
 		LRU         *LRUConfToUpdate         `json:"lru,omitempty"`
 		Mirror      *MirrorConfToUpdate      `json:"mirror,omitempty"`
 		EC          *ECConfToUpdate          `json:"ec,omitempty"`
@@ -143,6 +148,7 @@ func (bck *Bck) DefaultProps(cs ...*Config) *BucketProps {
 	}
 	return &BucketProps{
 		Cksum:       c.Cksum,
+		Space:       c.Space,
 		LRU:         c.LRU,
 		Mirror:      c.Mirror,
 		Versioning:  c.Versioning,
@@ -189,7 +195,7 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 		}
 	}
 	var softErr error
-	for _, pv := range []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy} {
+	for _, pv := range []PropsValidator{&bp.Cksum, &bp.Space, &bp.LRU, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy} {
 		var err error
 		if pv == &bp.EC {
 			err = bp.EC.ValidateAsProps(targetCnt)

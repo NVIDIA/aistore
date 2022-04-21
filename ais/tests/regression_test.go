@@ -52,13 +52,13 @@ const (
 
 var (
 	HighWaterMark    = int32(80)
-	LowWaterMark     = int32(60)
+	LowWaterMark     = int32(66)
 	UpdTime          = time.Second * 20
 	configRegression = map[string]string{
 		"periodic.stats_time":   UpdTime.String(),
+		"space.lowwm":           fmt.Sprintf("%d", LowWaterMark),
+		"space.highwm":          fmt.Sprintf("%d", HighWaterMark),
 		"lru.enabled":           "true",
-		"lru.lowwm":             fmt.Sprintf("%d", LowWaterMark),
-		"lru.highwm":            fmt.Sprintf("%d", HighWaterMark),
 		"lru.capacity_upd_time": UpdTime.String(),
 		"lru.dont_evict_time":   UpdTime.String(),
 	}
@@ -647,8 +647,9 @@ func TestLRU(t *testing.T) {
 	}
 
 	var (
-		lowWM  = usedPct - 5
-		highWM = usedPct - 2
+		lowWM     = usedPct - 5
+		cleanupWM = lowWM - 1
+		highWM    = usedPct - 2
 	)
 	if int(lowWM) < 2 {
 		t.Skipf("The current space usage is too low (%d) for the LRU to be tested", lowWM)
@@ -656,27 +657,33 @@ func TestLRU(t *testing.T) {
 	}
 
 	tlog.Logf("LRU: current min space usage in the cluster: %d%%\n", usedPct)
-	tlog.Logf("setting 'lru.lowm=%d' and 'lru.highwm=%d'\n", lowWM, highWM)
+	tlog.Logf("setting 'space.lowm=%d' and 'space.highwm=%d'\n", lowWM, highWM)
 
 	// All targets: set new watermarks; restore upon exit
 	oconfig := tutils.GetClusterConfig(t)
 	defer func() {
-		lowWMStr, _ := cos.ConvertToString(oconfig.LRU.LowWM)
-		highWMStr, _ := cos.ConvertToString(oconfig.LRU.HighWM)
+		var (
+			cleanupWMStr, _ = cos.ConvertToString(oconfig.Space.CleanupWM)
+			lowWMStr, _     = cos.ConvertToString(oconfig.Space.LowWM)
+			highWMStr, _    = cos.ConvertToString(oconfig.Space.HighWM)
+		)
 		tutils.SetClusterConfig(t, cos.SimpleKVs{
-			"lru.lowwm":             lowWMStr,
-			"lru.highwm":            highWMStr,
+			"space.cleanupwm":       cleanupWMStr,
+			"space.lowwm":           lowWMStr,
+			"space.highwm":          highWMStr,
 			"lru.dont_evict_time":   oconfig.LRU.DontEvictTime.String(),
 			"lru.capacity_upd_time": oconfig.LRU.CapacityUpdTime.String(),
 		})
 	}()
 
 	// Cluster-wide reduce dont-evict-time
+	cleanupWMStr, _ := cos.ConvertToString(cleanupWM)
 	lowWMStr, _ := cos.ConvertToString(lowWM)
 	highWMStr, _ := cos.ConvertToString(highWM)
 	tutils.SetClusterConfig(t, cos.SimpleKVs{
-		"lru.lowwm":             lowWMStr,
-		"lru.highwm":            highWMStr,
+		"space.cleanupwm":       cleanupWMStr,
+		"space.lowwm":           lowWMStr,
+		"space.highwm":          highWMStr,
 		"lru.dont_evict_time":   "0s",
 		"lru.capacity_upd_time": "2s",
 	})

@@ -43,13 +43,6 @@ const (
 )
 
 const (
-	// TODO: Storage Cleanup watermark, i.e., used capacity percentage that triggers cleanup
-	// (compare with config.LRU.High/LowWM).
-	// NOTE: must have its own config section (with config.LRU amended accordingly).
-	StoreCleanupWM = 65
-)
-
-const (
 	MinSliceCount = 1  // erasure coding: minimum number of data or parity slices
 	MaxSliceCount = 32 // erasure coding: maximum number of data or parity slices
 )
@@ -113,6 +106,7 @@ type (
 		Timeout     TimeoutConf     `json:"timeout"`
 		Client      ClientConf      `json:"client"`
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
+		Space       SpaceConf       `json:"space"`
 		LRU         LRUConf         `json:"lru"`
 		Disk        DiskConf        `json:"disk"`
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
@@ -144,6 +138,7 @@ type (
 		Periodic    *PeriodConfToUpdate      `json:"periodic,omitempty"`
 		Timeout     *TimeoutConfToUpdate     `json:"timeout,omitempty"`
 		Client      *ClientConfToUpdate      `json:"client,omitempty"`
+		Space       *SpaceConfToUpdate       `json:"space,omitempty"`
 		LRU         *LRUConfToUpdate         `json:"lru,omitempty"`
 		Disk        *DiskConfToUpdate        `json:"disk,omitempty"`
 		Rebalance   *RebalanceConfToUpdate   `json:"rebalance,omitempty"`
@@ -312,7 +307,11 @@ type (
 		NonElectable *bool   `json:"non_electable,omitempty"`
 	}
 
-	LRUConf struct {
+	SpaceConf struct {
+		// Storage Cleanup watermark: used capacity (%) that triggers cleanup
+		// (deleted objects and buckets, extra copies, etc.)
+		CleanupWM int64 `json:"cleanupwm"`
+
 		// LowWM: used capacity low-watermark (% of total local storage capacity)
 		LowWM int64 `json:"lowwm"`
 
@@ -325,7 +324,15 @@ type (
 		// Out-of-Space: if exceeded, the target starts failing new PUTs and keeps
 		// failing them until its local used-cap gets back below HighWM (see above)
 		OOS int64 `json:"out_of_space"`
+	}
+	SpaceConfToUpdate struct {
+		CleanupWM *int64 `json:"cleanupwm,omitempty"`
+		LowWM     *int64 `json:"lowwm,omitempty"`
+		HighWM    *int64 `json:"highwm,omitempty"`
+		OOS       *int64 `json:"out_of_space,omitempty"`
+	}
 
+	LRUConf struct {
 		// DontEvictTimeStr denotes the period of time during which eviction of an object
 		// is forbidden [atime, atime + DontEvictTime]
 		DontEvictTime cos.Duration `json:"dont_evict_time"`
@@ -337,9 +344,6 @@ type (
 		Enabled bool `json:"enabled"`
 	}
 	LRUConfToUpdate struct {
-		LowWM           *int64        `json:"lowwm,omitempty"`
-		HighWM          *int64        `json:"highwm,omitempty"`
-		OOS             *int64        `json:"out_of_space,omitempty"`
 		DontEvictTime   *cos.Duration `json:"dont_evict_time,omitempty"`
 		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty"`
 		Enabled         *bool         `json:"enabled,omitempty"`
@@ -700,6 +704,7 @@ var (
 var (
 	_ Validator = (*BackendConf)(nil)
 	_ Validator = (*CksumConf)(nil)
+	_ Validator = (*SpaceConf)(nil)
 	_ Validator = (*LRUConf)(nil)
 	_ Validator = (*MirrorConf)(nil)
 	_ Validator = (*ECConf)(nil)
@@ -717,6 +722,7 @@ var (
 	_ Validator = (*WritePolicyConf)(nil)
 
 	_ PropsValidator = (*CksumConf)(nil)
+	_ PropsValidator = (*SpaceConf)(nil)
 	_ PropsValidator = (*LRUConf)(nil)
 	_ PropsValidator = (*MirrorConf)(nil)
 	_ PropsValidator = (*ECConf)(nil)
@@ -969,31 +975,38 @@ func (c *DiskConf) Validate() (err error) {
 	return nil
 }
 
+///////////////////////////////////////
+// SpaceConf (part of ClusterConfig) //
+///////////////////////////////////////
+
+func (c *SpaceConf) Validate() (err error) {
+	clwm, lwm, hwm, oos := c.CleanupWM, c.LowWM, c.HighWM, c.OOS
+	if clwm <= 0 || lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
+		err = fmt.Errorf("invalid %s", c)
+	}
+	// TODO -- FIXME: lwm < clwm
+	return
+}
+
+func (c *SpaceConf) ValidateAsProps(...interface{}) error { return c.Validate() }
+
+func (c *SpaceConf) String() string {
+	return fmt.Sprintf("space config: cleanup=%d%%, low=%d%%, high=%d%%, OOS=%d%%",
+		c.CleanupWM, c.LowWM, c.HighWM, c.OOS)
+}
+
 /////////////////////////////////////
 // LRUConf (part of ClusterConfig) //
 /////////////////////////////////////
 
-func (c *LRUConf) Validate() (err error) {
-	lwm, hwm, oos := c.LowWM, c.HighWM, c.OOS
-	if lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
-		err = fmt.Errorf("invalid lru (lwm, hwm, oos) configuration (%d, %d, %d)", lwm, hwm, oos)
-	}
-	return
-}
-
-func (c *LRUConf) ValidateAsProps(...interface{}) (err error) {
-	if !c.Enabled {
-		return nil
-	}
-	return c.Validate()
-}
+func (*LRUConf) Validate() error                      { return nil }
+func (*LRUConf) ValidateAsProps(...interface{}) error { return nil }
 
 func (c *LRUConf) String() string {
 	if !c.Enabled {
 		return "Disabled"
 	}
-	return fmt.Sprintf("Watermarks: %d%%/%d%% | Do not evict time: %v | OOS: %v%%",
-		c.LowWM, c.HighWM, c.DontEvictTime, c.OOS)
+	return fmt.Sprintf("LRU don't evict: %v", c.DontEvictTime)
 }
 
 ///////////////////////////////////////
@@ -1755,11 +1768,28 @@ func tryLoadOldClusterConfig(globalFpath string, config *Config) error {
 			return nil, false
 		case name == "ec.batch_size": // removed in v2
 			return nil, false
+		case name == "lru.lowwm":
+			v, ok := fld.Value().(int64)
+			debug.Assert(ok)
+			config.ClusterConfig.Space.LowWM = v
+			return nil, false
+		case name == "lru.highwm":
+			v, ok := fld.Value().(int64)
+			debug.Assert(ok)
+			config.ClusterConfig.Space.HighWM = v
+			return nil, false
+		case name == "lru.out_of_space":
+			v, ok := fld.Value().(int64)
+			debug.Assert(ok)
+			config.ClusterConfig.Space.OOS = v
+			return nil, false
 		}
 
 		// copy dst = fld.Value()
 		return UpdateFieldValue(&config.ClusterConfig, name, fld.Value()), false /*stop*/
 	}, IterOpts{OnlyRead: true})
+
+	config.ClusterConfig.Space.CleanupWM = 65
 	return err
 }
 

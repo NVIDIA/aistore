@@ -208,7 +208,7 @@ func (r *Trunner) GetWhatStats() (ds *DaemonStats) {
 	return
 }
 
-func (r *Trunner) log(now int64, uptime time.Duration) {
+func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.lines = r.lines[:0]
 
 	// 1 collect disk stats and populate the tracker
@@ -242,7 +242,7 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 	// 3. capacity
 	cs, updated, errfs := fs.CapPeriodic(r.MPCap)
 	if updated {
-		if cs.Err != nil || cs.PctMax > cmn.StoreCleanupWM {
+		if cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
 			r.T.OOS(&cs)
 		}
 		for mpath, fsCapacity := range r.MPCap {

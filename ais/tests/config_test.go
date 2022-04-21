@@ -27,6 +27,7 @@ const errWMConfigNotExpected = "expected 'disk.disk_util_low_wm' to be %d, got: 
 
 func TestConfig(t *testing.T) {
 	oconfig := tutils.GetClusterConfig(t)
+	ospaceconfig := oconfig.Space
 	olruconfig := oconfig.LRU
 	operiodic := oconfig.Periodic
 
@@ -34,6 +35,7 @@ func TestConfig(t *testing.T) {
 
 	nconfig := tutils.GetClusterConfig(t)
 	nlruconfig := nconfig.LRU
+	nspaceconfig := nconfig.Space
 	nperiodic := nconfig.Periodic
 
 	if v, _ := time.ParseDuration(configRegression["periodic.stats_time"]); nperiodic.StatsTime != cos.Duration(v) {
@@ -58,29 +60,29 @@ func TestConfig(t *testing.T) {
 		o := olruconfig.CapacityUpdTime
 		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.capacity_upd_time": o.String()})
 	}
-	if hw, err := strconv.Atoi(configRegression["lru.highwm"]); err != nil {
+	if hw, err := strconv.Atoi(configRegression["space.highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
-	} else if nlruconfig.HighWM != int64(hw) {
+	} else if nspaceconfig.HighWM != int64(hw) {
 		t.Errorf("HighWatermark was not set properly: %d, should be: %d",
-			nlruconfig.HighWM, hw)
+			nspaceconfig.HighWM, hw)
 	} else {
-		oldhwmStr, err := cos.ConvertToString(olruconfig.HighWM)
+		oldhwmStr, err := cos.ConvertToString(ospaceconfig.HighWM)
 		if err != nil {
 			t.Fatalf("Error parsing HighWM: %v", err)
 		}
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.highwm": oldhwmStr})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"space.highwm": oldhwmStr})
 	}
-	if lw, err := strconv.Atoi(configRegression["lru.lowwm"]); err != nil {
+	if lw, err := strconv.Atoi(configRegression["space.lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
-	} else if nlruconfig.LowWM != int64(lw) {
+	} else if nspaceconfig.LowWM != int64(lw) {
 		t.Errorf("LowWatermark was not set properly: %d, should be: %d",
-			nlruconfig.LowWM, lw)
+			nspaceconfig.LowWM, lw)
 	} else {
-		oldlwmStr, err := cos.ConvertToString(olruconfig.LowWM)
+		oldlwmStr, err := cos.ConvertToString(ospaceconfig.LowWM)
 		if err != nil {
 			t.Fatalf("Error parsing LowWM: %v", err)
 		}
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.lowwm": oldlwmStr})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"space.lowwm": oldlwmStr})
 	}
 	if pt, err := cos.ParseBool(configRegression["lru.enabled"]); err != nil {
 		t.Fatalf("Error parsing lru.enabled: %v", err)

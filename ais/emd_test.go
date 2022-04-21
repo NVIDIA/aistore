@@ -55,8 +55,10 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 		config := cmn.GCO.BeginUpdate()
 		config.ConfigDir = mpath
 		config.Cksum.Type = cos.ChecksumXXHash
-		config.LRU = cmn.LRUConf{
+		config.Space = cmn.SpaceConf{
 			LowWM: 75, HighWM: 90, OOS: 95,
+		}
+		config.LRU = cmn.LRUConf{
 			DontEvictTime: cos.Duration(time.Second), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
 		}
 		cmn.GCO.CommitUpdate(config)

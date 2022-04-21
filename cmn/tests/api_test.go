@@ -87,10 +87,12 @@ var _ = Describe("API", func() {
 						ValidateColdGet: true,
 						ValidateWarmGet: false,
 					},
+					Space: cmn.SpaceConf{
+						LowWM:  90,
+						HighWM: 95,
+						OOS:    99,
+					},
 					LRU: cmn.LRUConf{
-						LowWM:   90,
-						HighWM:  95,
-						OOS:     99,
 						Enabled: true,
 					},
 				},
@@ -98,7 +100,7 @@ var _ = Describe("API", func() {
 					Cksum: &cmn.CksumConfToUpdate{
 						Type: api.String("value"),
 					},
-					LRU: &cmn.LRUConfToUpdate{
+					Space: &cmn.SpaceConfToUpdate{
 						OOS: api.Int64(100),
 					},
 					Access: api.AccessAttrs(10),
@@ -110,10 +112,12 @@ var _ = Describe("API", func() {
 						ValidateColdGet: true,
 						ValidateWarmGet: false,
 					},
+					Space: cmn.SpaceConf{
+						LowWM:  90,
+						HighWM: 95,
+						OOS:    100,
+					},
 					LRU: cmn.LRUConf{
-						LowWM:   90,
-						HighWM:  95,
-						OOS:     100,
 						Enabled: true,
 					},
 					Access: 10,

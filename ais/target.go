@@ -1021,6 +1021,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	// prep and check
 	var (
+		config  = cmn.GCO.Get()
 		objName = apireq.items[1]
 		started = time.Now()
 		t2tput  = isT2TPut(r.Header)
@@ -1033,7 +1034,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	} else if redelta := ptLatency(started.UnixNano(), apireq.dpq.ptime); redelta != 0 {
 		t.statsT.Add(stats.PutRedirLatency, redelta)
 	}
-	if cs := fs.GetCapStatus(); cs.Err != nil || cs.PctMax > cmn.StoreCleanupWM {
+	if cs := fs.GetCapStatus(); cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
 		cs = t.OOS(nil)
 		if cs.OOS {
 			// fail this write
@@ -1059,7 +1060,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	// load (maybe)
 	var (
 		errdb    error
-		features = cmn.GCO.Get().Features
+		features = config.Features
 		skipVC   = features.IsSet(feat.SkipVC) || cos.IsParseBool(apireq.dpq.skipVC) // apc.QparamSkipVC
 	)
 	if skipVC {

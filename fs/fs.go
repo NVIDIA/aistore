@@ -434,7 +434,7 @@ func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capaci
 	}
 	bused := statfs.Blocks - statfs.Bavail
 	pct := bused * 100 / statfs.Blocks
-	if pct >= uint64(config.LRU.HighWM)-1 {
+	if pct >= uint64(config.Space.HighWM)-1 {
 		fpct := math.Ceil(float64(bused) * 100 / float64(statfs.Blocks))
 		pct = uint64(fpct)
 	}
@@ -1059,7 +1059,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 	if config == nil {
 		config = cmn.GCO.Get()
 	}
-	high, oos := config.LRU.HighWM, config.LRU.OOS
+	high, oos := config.Space.HighWM, config.Space.OOS
 	for path, mi := range availablePaths {
 		if c, err = mi.getCapacity(config, true); err != nil {
 			glog.Error(err)
@@ -1091,12 +1091,12 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 func nextRefresh(config *cmn.Config) time.Duration {
 	var (
 		util = int64(mfs.capStatus.PctMax)
-		umin = cos.MinI64(config.LRU.HighWM-10, config.LRU.LowWM)
-		umax = config.LRU.OOS
+		umin = cos.MinI64(config.Space.HighWM-10, config.Space.LowWM)
+		umax = config.Space.OOS
 		tmax = config.LRU.CapacityUpdTime.D()
 		tmin = config.Periodic.StatsTime.D()
 	)
-	umin = cos.MinI64(umin, cmn.StoreCleanupWM) // calibrate potentially further down
+	umin = cos.MinI64(umin, config.Space.CleanupWM) // calibrate potentially further down
 	if util <= umin {
 		return tmax
 	}

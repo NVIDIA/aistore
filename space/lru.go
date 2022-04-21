@@ -26,15 +26,14 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// TODO: unify and refactor (lru, cleanup-store)
-
-// LRU-driven eviction is based on the two configurable watermarks: config.LRU.LowWM and
-// config.LRU.HighWM (section "lru" in the /deploy/dev/local/aisnode_config.sh).
-// When and if exceeded, AIStore target will start gradually evicting objects from its
+// LRU-driven eviction is based on configurable watermarks: config.Space.LowWM and
+// config.Space.HighWM (section "space" in the cluster config).
+//
+// When and if exceeded, AIS target will start gradually evicting objects from its
 // stable storage: oldest first access-time wise.
 //
-// LRU is implemented as a so-called extended action (aka x-action, see xact.go) that gets
-// triggered when/if a used local capacity exceeds high watermark (config.LRU.HighWM). LRU then
+// LRU is implemented as eXtended Action (xaction, see xact/README.md) that gets
+// triggered when/if a used local capacity exceeds high watermark (config.Space.HighWM). LRU then
 // runs automatically. In order to reduce its impact on the live workload, LRU throttles itself
 // in accordance with the current storage-target's utilization (see xaction_throttle.go).
 //
@@ -396,7 +395,7 @@ func (j *lruJ) postRemove(prev, size int64) (capCheck int64, err error) {
 	j.config = cmn.GCO.Get()
 	j.now = time.Now().UnixNano()
 	usedPct, ok := j.ini.GetFSUsedPercentage(j.mi.Path)
-	if ok && usedPct < j.config.LRU.HighWM {
+	if ok && usedPct < j.config.Space.HighWM {
 		err = j._throttle(usedPct)
 	}
 	return
@@ -407,11 +406,11 @@ func (j *lruJ) _throttle(usedPct int64) (err error) {
 		return
 	}
 	// throttle self
-	ratioCapacity := cos.Ratio(j.config.LRU.HighWM, j.config.LRU.LowWM, usedPct)
+	ratioCapacity := cos.Ratio(j.config.Space.HighWM, j.config.Space.LowWM, usedPct)
 	curr := fs.GetMpathUtil(j.mi.Path)
 	ratioUtilization := cos.Ratio(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
 	if ratioUtilization > ratioCapacity {
-		if usedPct < (j.config.LRU.LowWM+j.config.LRU.HighWM)/2 {
+		if usedPct < (j.config.Space.LowWM+j.config.Space.HighWM)/2 {
 			j.throttle = true
 		}
 		time.Sleep(cmn.ThrottleMaxDur)
@@ -433,7 +432,7 @@ func evictObj(lom *cluster.LOM) (ok bool) {
 }
 
 func (j *lruJ) evictSize() (err error) {
-	lwm, hwm := j.config.LRU.LowWM, j.config.LRU.HighWM
+	lwm, hwm := j.config.Space.LowWM, j.config.Space.HighWM
 	blocks, bavail, bsize, err := j.ini.GetFSStats(j.mi.Path)
 	if err != nil {
 		return err

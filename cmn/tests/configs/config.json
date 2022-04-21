@@ -53,10 +53,13 @@
     "original_url":  "127.0.0.2",
     "discovery_url": "127.0.0.255"
   },
-  "lru": {
+  "space": {
+    "cleanupwm":         65,
     "lowwm":             75,
     "highwm":            90,
-    "out_of_space":      95,
+    "out_of_space":      95
+  },
+  "lru": {
     "dont_evict_time":   "120m",
     "capacity_upd_time": "10m",
     "enabled":           true

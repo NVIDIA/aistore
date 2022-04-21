@@ -664,7 +664,7 @@ func (m *ioContext) setRandBucketProps() {
 
 	// Set some weird bucket props to see if they were changed or not.
 	props := &cmn.BucketPropsToUpdate{
-		LRU: &cmn.LRUConfToUpdate{
+		Space: &cmn.SpaceConfToUpdate{
 			LowWM:  api.Int64(int64(rand.Intn(35) + 1)),
 			HighWM: api.Int64(int64(rand.Intn(15) + 40)),
 			OOS:    api.Int64(int64(rand.Intn(30) + 60)),

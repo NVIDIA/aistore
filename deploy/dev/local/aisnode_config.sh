@@ -55,10 +55,13 @@ cat > $AIS_CONF_FILE <<EOL
 		"discovery_url": "${AIS_DISCOVERY_URL}",
 		"non_electable": ${NON_ELECTABLE:-false}
 	},
-	"lru": {
+	"space": {
+		"cleanupwm":         65,
 		"lowwm":             75,
 		"highwm":            90,
-		"out_of_space":      95,
+		"out_of_space":      95
+	},
+	"lru": {
 		"dont_evict_time":   "120m",
 		"capacity_upd_time": "10m",
 		"enabled":           true

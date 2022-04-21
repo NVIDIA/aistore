@@ -50,7 +50,7 @@ Therefore: remove the previously generated configuration (if any) and redeploy f
 $ deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 0 --deployment local --remote-alias remais --gcp --aws
 
 # or, same:
-$ make kill clean deploy <<< $'1\n1\n0\ny\ny\nn\nn\n'
+$ make kill clean cli deploy <<< $'1\n1\n0\ny\ny\nn\nn\n'
 ```
 
 The result will looks something like:

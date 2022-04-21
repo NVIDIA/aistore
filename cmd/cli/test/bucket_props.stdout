@@ -22,11 +22,13 @@ lru		     Disabled
 mirror		 Disabled
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
- PROPERTY		        VALUE
-lru.capacity_upd_time	 10m
-lru.dont_evict_time	     2h0m
-lru.enabled     		 false
-lru.highwm      		 90
-lru.lowwm       		 75
-lru.out_of_space         95
+PROPERTY		        VALUE
+space.cleanupwm      		65
+space.highwm      		90
+space.lowwm       		75
+space.out_of_space              95
+PROPERTY		        VALUE
+lru.capacity_upd_time	        10m
+lru.dont_evict_time	        2h0m
+lru.enabled     	        false
 Bucket "ais://$BUCKET_1" already has the set props, nothing to do

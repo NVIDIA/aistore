@@ -88,10 +88,12 @@ var _ = Describe("IterFields", func() {
 					"checksum.validate_obj_move": false,
 					"checksum.enable_read_range": false,
 
+					"space.cleanupwm":    int64(0),
+					"space.lowwm":        int64(0),
+					"space.highwm":       int64(0),
+					"space.out_of_space": int64(0),
+
 					"lru.enabled":           false,
-					"lru.lowwm":             int64(0),
-					"lru.highwm":            int64(0),
-					"lru.out_of_space":      int64(0),
 					"lru.dont_evict_time":   cos.Duration(0),
 					"lru.capacity_upd_time": cos.Duration(0),
 
@@ -145,12 +147,14 @@ var _ = Describe("IterFields", func() {
 					"checksum.validate_obj_move": (*bool)(nil),
 					"checksum.enable_read_range": (*bool)(nil),
 
+					"space.cleanupwm":    (*int64)(nil),
+					"space.lowwm":        (*int64)(nil),
+					"space.highwm":       (*int64)(nil),
+					"space.out_of_space": (*int64)(nil),
+
 					"lru.enabled":           (*bool)(nil),
-					"lru.lowwm":             (*int64)(nil),
-					"lru.highwm":            (*int64)(nil),
 					"lru.dont_evict_time":   (*cos.Duration)(nil),
 					"lru.capacity_upd_time": (*cos.Duration)(nil),
-					"lru.out_of_space":      (*int64)(nil),
 
 					"access": api.AccessAttrs(1024),
 

@@ -207,8 +207,8 @@ var _ = Describe("space evict/cleanup tests", func() {
 			It("should do nothing when disk usage is below hwm", func() {
 				const numberOfFiles = 4
 				config := cmn.GCO.BeginUpdate()
-				config.LRU.HighWM = 95
-				config.LRU.LowWM = 40
+				config.Space.HighWM = 95
+				config.Space.LowWM = 40
 				cmn.GCO.CommitUpdate(config)
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
@@ -365,8 +365,8 @@ func newInitStoreCln(t cluster.Target) *space.IniCln {
 func initConfig() {
 	config := cmn.GCO.BeginUpdate()
 	config.LRU.DontEvictTime = 0
-	config.LRU.HighWM = hwm
-	config.LRU.LowWM = lwm
+	config.Space.HighWM = hwm
+	config.Space.LowWM = lwm
 	config.LRU.Enabled = true
 	cmn.GCO.CommitUpdate(config)
 }

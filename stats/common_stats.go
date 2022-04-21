@@ -171,7 +171,7 @@ type (
 
 	// implemented by the stats runners
 	statsLogger interface {
-		log(now int64, uptime time.Duration)
+		log(now int64, uptime time.Duration, config *cmn.Config)
 		doAdd(nv cos.NamedVal64)
 		statsTime(newval time.Duration)
 		standingBy() bool
@@ -763,10 +763,10 @@ waitStartup:
 			}
 		case <-r.ticker.C:
 			now := mono.NanoTime()
-			logger.log(now, time.Duration(now-startTime)) // uptime
+			config = cmn.GCO.Get()
+			logger.log(now, time.Duration(now-startTime) /*uptime*/, config)
 			checkNumGorHigh = _whingeGoroutines(now, checkNumGorHigh, goMaxProcs)
 
-			config = cmn.GCO.Get()
 			if statsTime != config.Periodic.StatsTime.D() {
 				statsTime = config.Periodic.StatsTime.D()
 				r.ticker.Reset(statsTime)

@@ -55,7 +55,7 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 // statsLogger interface impl
 //
 
-func (r *Prunner) log(now int64, uptime time.Duration) {
+func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
 	r.Core.updateUptime(uptime)
 	r.Core.promLock()
 	idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime})

@@ -30,7 +30,7 @@ type (
 		Timeout     TimeoutConf     `json:"timeout"`
 		Client      oldClientConf   `json:"client"` // <<< (changed)
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
-		LRU         LRUConf         `json:"lru"`
+		LRU         oldLRUConf      `json:"lru"`
 		Disk        DiskConf        `json:"disk"`
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
 		Resilver    ResilverConf    `json:"resilver"`
@@ -50,10 +50,13 @@ type (
 		Ext         interface{}     `json:"ext,omitempty"`
 		Replication replicationConf `json:"replication"` // <<< (removed)
 	}
-	replicationConf struct {
-		OnColdGet     bool `json:"on_cold_get"`
-		OnPut         bool `json:"on_put"`
-		OnLRUEviction bool `json:"on_lru_eviction"`
+	oldLRUConf struct {
+		LowWM           int64        `json:"lowwm"`
+		HighWM          int64        `json:"highwm"`
+		OOS             int64        `json:"out_of_space"`
+		DontEvictTime   cos.Duration `json:"dont_evict_time"`
+		CapacityUpdTime cos.Duration `json:"capacity_upd_time"`
+		Enabled         bool         `json:"enabled"`
 	}
 	oldECConf struct {
 		ObjSizeLimit int64  `json:"objsize_limit"`
@@ -69,6 +72,11 @@ type (
 		TimeoutLong cos.Duration `json:"client_long_timeout"`
 		ListObjects cos.Duration `json:"list_timeout"`
 		Features    feat.Flags   `json:"features,string"`
+	}
+	replicationConf struct {
+		OnColdGet     bool `json:"on_cold_get"`
+		OnPut         bool `json:"on_put"`
+		OnLRUEviction bool `json:"on_lru_eviction"`
 	}
 )
 
