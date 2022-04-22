@@ -36,7 +36,7 @@ var _ = Describe("LOM Xattributes", func() {
 	var (
 		copyMpathInfo *fs.MountpathInfo
 		mix           = fs.MountpathInfo{Path: xattrMpath}
-		bmdMock       = cluster.NewBaseBownerMock(
+		bmdMock       = mock.NewBaseBownerMock(
 			cluster.NewBck(
 				bucketLocal, apc.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 201},

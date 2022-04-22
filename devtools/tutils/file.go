@@ -138,7 +138,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				BID:   0xa5b6e7d8,
 			},
 		}
-		bmd   = cluster.NewBaseBownerMock((*cluster.Bck)(&bck))
+		bmd   = mock.NewBaseBownerMock((*cluster.Bck)(&bck))
 		tMock cluster.Target
 	)
 

@@ -756,7 +756,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
-	_ = mock.NewTarget(cluster.NewBaseBownerMock(
+	_ = mock.NewTarget(mock.NewBaseBownerMock(
 		cluster.NewBck(
 			m.bck.Name, m.bck.Provider, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
@@ -950,7 +950,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		_          = mock.NewTarget(cluster.NewBaseBownerMock(
+		_          = mock.NewTarget(mock.NewBaseBownerMock(
 			cluster.NewBck(
 				m.bck.Name, apc.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 1},

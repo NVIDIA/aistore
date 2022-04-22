@@ -72,7 +72,7 @@ var _ = Describe("LOM", func() {
 	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
-	bmd := cluster.NewBaseBownerMock(
+	bmd := mock.NewBaseBownerMock(
 		cluster.NewBck(
 			bucketLocalA, apc.ProviderAIS, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumNone}, BID: 1},

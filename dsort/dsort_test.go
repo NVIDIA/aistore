@@ -267,7 +267,7 @@ func (tctx *testContext) setup() {
 	ctx.smapOwner = smap
 
 	// Initialize BMD owner.
-	bmdMock := cluster.NewBaseBownerMock(
+	bmdMock := mock.NewBaseBownerMock(
 		cluster.NewBck(
 			testBucket, apc.ProviderAIS, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},

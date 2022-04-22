@@ -1,6 +1,6 @@
 // Package mock provides mock implementation for cluster interfaces.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package mock
 
@@ -17,13 +17,13 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// interface guard
-var _ cluster.Target = (*TargetMock)(nil)
-
 // TargetMock provides cluster.Target interface with mocked return values.
 type TargetMock struct {
 	BO cluster.Bowner
 }
+
+// interface guard
+var _ cluster.Target = (*TargetMock)(nil)
 
 func NewTarget(bo cluster.Bowner) *TargetMock {
 	t := &TargetMock{BO: bo}

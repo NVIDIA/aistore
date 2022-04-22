@@ -43,7 +43,7 @@ var _ = Describe("CommunicatorTest", func() {
 			bck.Name, bck.Provider, bck.Ns,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
-		bmdMock = cluster.NewBaseBownerMock(clusterBck)
+		bmdMock = mock.NewBaseBownerMock(clusterBck)
 	)
 
 	BeforeEach(func() {

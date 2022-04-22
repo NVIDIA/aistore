@@ -53,7 +53,7 @@ var _ = Describe("Mirror", func() {
 			BID:    1,
 		}
 		bck             = cluster.Bck{Name: testBucketName, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal, Props: props}
-		bmdMock         = cluster.NewBaseBownerMock(&bck)
+		bmdMock         = mock.NewBaseBownerMock(&bck)
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}
 		bucketPath      = mi.MakePathCT(bck.Bucket(), fs.ObjectType)

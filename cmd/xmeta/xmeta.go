@@ -255,7 +255,7 @@ func extractLOM() (err error) {
 	}
 	os.Setenv(cluster.DumpLomEnvVar, "1")
 	fs.TestNew(nil)
-	bmdMock := cluster.NewBaseBownerMock()
+	bmdMock := mock.NewBaseBownerMock()
 	t := &mock.TargetMock{BO: bmdMock}
 	cluster.Init(t)
 	lom := &cluster.LOM{FQN: flags.in}

@@ -315,7 +315,7 @@ func getMockGetFSStats(currentFilesNum int) func(string) (uint64, uint64, int64,
 func newTargetLRUMock() *mock.TargetMock {
 	// Bucket owner mock, required for LOM
 	var (
-		bmdMock = cluster.NewBaseBownerMock(
+		bmdMock = mock.NewBaseBownerMock(
 			cluster.NewBck(
 				bucketName, apc.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{
