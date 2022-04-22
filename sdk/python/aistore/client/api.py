@@ -63,7 +63,7 @@ class Client:
         Returns list of buckets in AIStore cluster
 
         Args:
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp" or "az".
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
             Defaults to "ais". Empty provider returns buckets of all providers.
 
         Returns:
@@ -85,12 +85,13 @@ class Client:
             params=params,
         )
 
-    def create_bucket(self, bck_name, **kwargs):
+    def create_bucket(self, bck_name: str):
         """
-        Creates a bucket in AIStore cluster
+        Creates a bucket in AIStore cluster.
+        Always creates a bucket for AIS provider. Other providers do not support bucket creation.
 
         Args:
-            bck_name (str): Name of the new bucket
+            bck_name (str): Name of the new bucket.
 
         Returns:
             Nothing
@@ -102,8 +103,7 @@ class Client:
             requests.ReadTimeout: Timeout receiving response from server
             requests.exceptions.HTTPError(409): Bucket already exists
         """
-        bck = Bck(name=bck_name, **kwargs)
-        params = {QParamProvider: bck.provider}
+        params = {QParamProvider: ProviderAIS}
         action = ActionMsg(action="create-bck").dict()
         self._request(
             HTTP_METHOD_POST,
@@ -112,9 +112,10 @@ class Client:
             params=params,
         )
 
-    def destroy_bucket(self, bck_name, **kwargs):
+    def destroy_bucket(self, bck_name: str):
         """
-        Destroys a bucket in AIStore cluster
+        Destroys a bucket in AIStore cluster.
+        Can delete only AIS buckets. Other providers do not support bucket deletion.
 
         Args:
             bck_name (str): Name of the existing bucket
@@ -128,8 +129,7 @@ class Client:
             requests.ConnectionTimeout: Timed out while connecting to AIStore server
             requests.ReadTimeout: Timeout receiving response from server
         """
-        bck = Bck(name=bck_name, **kwargs)
-        params = {QParamProvider: bck.provider}
+        params = {QParamProvider: ProviderAIS}
         action = ActionMsg(action="destroy-bck").dict()
         self._request(
             HTTP_METHOD_DELETE,
@@ -138,18 +138,17 @@ class Client:
             params=params,
         )
 
-    def head_bucket(self, bck_name: str, **kwargs) -> Header:
+    def head_bucket(self, bck_name: str, provider: str = ProviderAIS) -> Header:
         """
-        Tests if a bucket exists in AIStore cluster
+        Requests bucket properties.
 
         Args:
             bck_name (str): Name of the new bucket
-
-        Keyword Args:
-            provider (str): Name of bucket provider, one of "ais", "aws", "gcp" or "az". Defaults to "ais"
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+                Defaults to "ais". Empty provider returns buckets of all providers.
 
         Returns:
-            Nothing
+            Response header with the bucket properties
 
         Raises:
             requests.RequestException: Ambiguous while handling request
@@ -158,24 +157,22 @@ class Client:
             requests.ReadTimeout: Timeout receiving response from server
             requests.exeptions.HTTPError(404): The bucket does not exist
         """
-        bck = Bck(name=bck_name, **kwargs)
-        params = {QParamProvider: bck.provider}
+        params = {QParamProvider: provider}
         return self._request(
             HTTP_METHOD_HEAD,
             path=f"buckets/{ bck_name }",
             params=params,
         ).headers
 
-    def list_objects(self, bck_name, **kwargs):
+    def list_objects(self, bck_name: str, provider: str = ProviderAIS, prefix: str = "") -> BucketList:
         """
         Returns list of objects in a bucket
 
         Args:
             bck_name (str): Name of a bucket
-
-        Keyword Args:
-            provider (str): Name of bucket provider, one of "ais", "aws", "gcp" or "az". Defaults to "ais"
-            prefix (str): return only objects that starts with the prefix
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+                Defaults to "ais". Empty provider returns buckets of all providers.
+            prefix (str, optional): return only objects that start with the prefix
 
         Returns:
             BucketList: next page of objects in the bucket
@@ -186,10 +183,9 @@ class Client:
             requests.ConnectionTimeout: Timed out while connecting to AIStore server
             requests.ReadTimeout: Timeout receiving response from server
         """
-        bck = Bck(name=bck_name, **kwargs)
-        value = {"prefix": kwargs["prefix"]} if "prefix" in kwargs else None
+        value = {"prefix": prefix} if prefix != "" else None
         action = ActionMsg(action="list", value=value).dict()
-        params = {QParamProvider: bck.provider}
+        params = {QParamProvider: provider}
 
         return self._request_deserialize(
             HTTP_METHOD_GET,
@@ -199,21 +195,18 @@ class Client:
             params=params,
         )
 
-    def get_object(self, bck_name, object_name, **kwargs):
+    def get_object(self, bck_name: str, object_name: str, provider: str = ProviderAIS, archpath: str = "") -> bytes:
         """
         Reads an object content
 
         Args:
             bck_name (str): Name of a bucket
             object_name (str): Name of an object in the bucket
-
-        Keyword Args:
-            provider (str): Name of bucket provider, one of "ais", "aws", "gcp" or "az". Defaults to "ais"
-            archpath (str): If the object is an archive, use `archpath` to extract a single file from the archive
-            transform_id (str): UUID of ETL transformation worker
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+            archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
 
         Returns:
-            List[byte] - the content of an object or a file inside an archive
+            The content of an object or a file inside an archive
 
         Raises:
             requests.RequestException: Ambiguous while handling request
@@ -221,15 +214,10 @@ class Client:
             requests.ConnectionTimeout: Timed out while connecting to AIStore server
             requests.ReadTimeout: Timeout receiving response from server
         """
-        bck = Bck(name=bck_name, **kwargs)
-        params = {QParamProvider: bck.provider}
-        if "archpath" in kwargs:
-            params[QParamArchpath] = kwargs["archpath"]
-        if "transform_id" in kwargs:
-            params["uuid"] = kwargs["transform_id"]
+        params = {QParamProvider: provider, QParamArchpath: archpath}
         return self._request_raw(HTTP_METHOD_GET, path=f"objects/{ bck_name }/{ object_name }", params=params)
 
-    def put_object(self, bck_name: str, object_name: str, path: str, **kwargs) -> Header:
+    def put_object(self, bck_name: str, object_name: str, path: str, provider: str = ProviderAIS) -> Header:
         """
         Puts a local file as an object to a bucket in AIS storage
 
@@ -237,12 +225,10 @@ class Client:
             bck_name (str): Name of a bucket
             object_name (str): Name of an object in the bucket
             path (str): path to local file
-
-        Keyword Args:
-            provider (str): Name of bucket provider, one of "ais", "aws", "gcp" or "az". Defaults to "ais"
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
 
         Returns:
-            Nothing
+            Object properties
 
         Raises:
             requests.RequestException: Ambiguous while handling request
@@ -251,8 +237,7 @@ class Client:
             requests.ReadTimeout: Timeout receiving response from server
         """
         url = f"/objects/{ bck_name }/{ object_name }"
-        bck = Bck(name=bck_name, **kwargs)
-        params = {QParamProvider: bck.provider}
+        params = {QParamProvider: provider}
         with open(path, "rb") as data:
             return self._request(
                 HTTP_METHOD_PUT,
