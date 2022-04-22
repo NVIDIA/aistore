@@ -241,6 +241,7 @@ func (m *bucketMD) _encode() (sgl *memsys.SGL) {
 
 func (bo *bmdOwnerBase) Get() *cluster.BMD    { return &bo.get().BMD }
 func (bo *bmdOwnerBase) get() (bmd *bucketMD) { return (*bucketMD)(bo.bmd.Load()) }
+
 func (bo *bmdOwnerBase) put(bmd *bucketMD) {
 	bmd.vstr = strconv.FormatInt(bmd.Version, 10)
 	bo.bmd.Store(unsafe.Pointer(bmd))
@@ -273,8 +274,7 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 }
 
 func (bo *bmdOwnerPrx) init() {
-	bmd := newBucketMD()
-	_, err := jsp.LoadMeta(bo.fpath, bmd)
+	bmd, err := _loadBMD(bo.fpath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			glog.Errorf("failed to load %s from %s, err: %v", bmd, bo.fpath, err)
@@ -422,13 +422,29 @@ func loadBMD(mpaths fs.MPI, path string) (mainBMD *bucketMD) {
 	return
 }
 
+func _loadBMD(path string) (bmd *bucketMD, err error) {
+	bmd = newBucketMD()
+	bmd.cksum, err = jsp.LoadMeta(path, bmd)
+	if err == nil {
+		return
+	}
+	if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); !ok {
+		return
+	}
+	glog.Warningln("failed to load BMD - trying the previous meta-version")
+	err = loadBMDV1(path, bmd)
+	if err == nil {
+		err = jsp.SaveMeta(path, bmd, nil) // overwrite w/ v2
+	}
+	return
+}
+
 func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 	var (
 		fpath = filepath.Join(mpath.Path, path)
 		err   error
 	)
-	bmd = newBucketMD()
-	bmd.cksum, err = jsp.LoadMeta(fpath, bmd)
+	bmd, err = _loadBMD(fpath)
 	if err == nil {
 		return bmd
 	}

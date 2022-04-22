@@ -1663,8 +1663,8 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 			debug.Assert(config.Version == 0)
 			globalFpath = globalConfPath
 		} else if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
-			glog.Warningf("failed to %s - trying the previous meta-version v%d", txt, oldMetaverConfig)
-			errOld := tryLoadOldClusterConfig(globalFpath, config)
+			glog.Warningf("failed to %s - trying the previous meta-version v%d", txt, v1MetaverConfig)
+			errOld := loadClusterConfigV1(globalFpath, config)
 			if errOld != nil {
 				return fmt.Errorf("failed to %s %q: [%v] [%v]", txt, globalFpath, err, errOld)
 			}
@@ -1675,7 +1675,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 				return fmt.Errorf("failed to %s %q: [%v] [%v]", txt, globalFpath, err, errSav)
 			}
 			glog.Warningf("backward compatibility: saved %s meta-version v%d => v%d",
-				&config.ClusterConfig, oldMetaverConfig, MetaverConfig)
+				&config.ClusterConfig, v1MetaverConfig, MetaverConfig)
 		} else {
 			// otherwise
 			return fmt.Errorf("failed to %s %q: %v", txt, globalConfPath, err)
@@ -1738,57 +1738,6 @@ func handleOverrideConfig(config *Config) error {
 		overrideConfig.FSP = nil
 	}
 	return config.UpdateClusterConfig(*overrideConfig, apc.Daemon)
-}
-
-// (for backward compatibility)
-func tryLoadOldClusterConfig(globalFpath string, config *Config) error {
-	var old oldClusterConfig
-	if _, err := jsp.LoadMeta(globalFpath, &old); err != nil {
-		return err
-	}
-
-	// iterate successfully loaded (old) source to
-	// a) copy same-name/same-type fields while b) taking special care of assorted changes
-	err := IterFields(&old, func(name string, fld IterField) (error, bool /*stop*/) {
-		debug.Assert(name == "ext" || fld.Value() != nil)
-		switch {
-		case name == "md_write": // scalar => struct in v2
-			v, ok := fld.Value().(apc.WritePolicy)
-			debug.Assert(ok)
-			config.ClusterConfig.WritePolicy.MD = v
-			return nil, false
-		case name == "client.features": // moved in v2
-			v, ok := fld.Value().(feat.Flags)
-			debug.Assert(ok)
-			config.ClusterConfig.Features = v
-			return nil, false
-		case strings.HasPrefix(name, "replication."): // removed in v2
-			return nil, false
-		case name == "ec.batch_size": // removed in v2
-			return nil, false
-		case name == "lru.lowwm":
-			v, ok := fld.Value().(int64)
-			debug.Assert(ok)
-			config.ClusterConfig.Space.LowWM = v
-			return nil, false
-		case name == "lru.highwm":
-			v, ok := fld.Value().(int64)
-			debug.Assert(ok)
-			config.ClusterConfig.Space.HighWM = v
-			return nil, false
-		case name == "lru.out_of_space":
-			v, ok := fld.Value().(int64)
-			debug.Assert(ok)
-			config.ClusterConfig.Space.OOS = v
-			return nil, false
-		}
-
-		// copy dst = fld.Value()
-		return UpdateFieldValue(&config.ClusterConfig, name, fld.Value()), false /*stop*/
-	}, IterOpts{OnlyRead: true})
-
-	config.ClusterConfig.Space.CleanupWM = 65
-	return err
 }
 
 func SaveOverrideConfig(configDir string, toUpdate *ConfigToUpdate) error {
