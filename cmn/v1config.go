@@ -84,30 +84,31 @@ type (
 	}
 )
 
+// (compare w/ ais/v1bmd.go)
 func loadClusterConfigV1(globalFpath string, config *Config) error {
 	var old v1ClusterConfig
 	if _, err := jsp.LoadMeta(globalFpath, &old); err != nil {
 		return err
 	}
 
-	// iterate successfully loaded (old) source to
-	// a) copy same-name/same-type fields while b) taking special care of assorted changes
+	// iterate v1 source to copy same-name/same-type fields while taking special care
+	// of assorted changes
 	err := IterFields(&old, func(name string, fld IterField) (error, bool /*stop*/) {
 		debug.Assert(name == "ext" || fld.Value() != nil)
 		switch {
-		case name == "md_write": // scalar => struct in v2
+		case name == "md_write":
 			v, ok := fld.Value().(apc.WritePolicy)
 			debug.Assert(ok)
 			config.ClusterConfig.WritePolicy.MD = v
 			return nil, false
-		case name == "client.features": // moved in v2
+		case name == "client.features":
 			v, ok := fld.Value().(feat.Flags)
 			debug.Assert(ok)
 			config.ClusterConfig.Features = v
 			return nil, false
-		case strings.HasPrefix(name, "replication."): // removed in v2
+		case strings.HasPrefix(name, "replication."):
 			return nil, false
-		case name == "ec.batch_size": // removed in v2
+		case name == "ec.batch_size":
 			return nil, false
 		case name == "lru.lowwm":
 			v, ok := fld.Value().(int64)
