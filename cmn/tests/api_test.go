@@ -137,11 +137,9 @@ var _ = Describe("API", func() {
 						EnableReadRange: api.Bool(false),
 					},
 					Mirror: &cmn.MirrorConfToUpdate{
-						Copies:      api.Int64(10),
-						Burst:       api.Int(32),
-						UtilThresh:  api.Int64(64),
-						OptimizePUT: api.Bool(true),
-						Enabled:     api.Bool(false),
+						Copies:  api.Int64(10),
+						Burst:   api.Int(32),
+						Enabled: api.Bool(false),
 					},
 					EC: &cmn.ECConfToUpdate{
 						Enabled:      api.Bool(true),
@@ -168,11 +166,9 @@ var _ = Describe("API", func() {
 						EnableReadRange: false,
 					},
 					Mirror: cmn.MirrorConf{
-						Copies:      10,
-						Burst:       32,
-						UtilThresh:  64,
-						OptimizePUT: true,
-						Enabled:     false,
+						Copies:  10,
+						Burst:   32,
+						Enabled: false,
 					},
 					EC: cmn.ECConf{
 						Enabled:      true,

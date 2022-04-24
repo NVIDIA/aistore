@@ -16,6 +16,7 @@ import (
 )
 
 // backward compatibility, to support ClusterConfig meta-v1 => v2 upgrades
+// all changes are prefixed with `v1`
 // NOTE: to be removed in 3.11
 
 const v1MetaverConfig = 1
@@ -27,12 +28,12 @@ const v1MetaverConfig = 1
 type (
 	v1ClusterConfig struct {
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
-		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
-		EC          v1ECConf        `json:"ec" allow:"cluster"` // <<< (changed)
+		Mirror      v1MirrorConf    `json:"mirror" allow:"cluster"`
+		EC          v1ECConf        `json:"ec" allow:"cluster"`
 		Log         LogConf         `json:"log"`
 		Periodic    PeriodConf      `json:"periodic"`
 		Timeout     TimeoutConf     `json:"timeout"`
-		Client      v1ClientConf    `json:"client"` // <<< (changed)
+		Client      v1ClientConf    `json:"client"`
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		LRU         v1LRUConf       `json:"lru"`
 		Disk        DiskConf        `json:"disk"`
@@ -61,6 +62,13 @@ type (
 		DontEvictTime   cos.Duration `json:"dont_evict_time"`
 		CapacityUpdTime cos.Duration `json:"capacity_upd_time"`
 		Enabled         bool         `json:"enabled"`
+	}
+	v1MirrorConf struct {
+		Copies      int64 `json:"copies"`
+		UtilThresh  int64 `json:"util_thresh"`
+		Burst       int   `json:"burst_buffer"`
+		OptimizePUT bool  `json:"optimize_put"`
+		Enabled     bool  `json:"enabled"`
 	}
 	v1ECConf struct {
 		ObjSizeLimit int64  `json:"objsize_limit"`
@@ -108,7 +116,7 @@ func loadClusterConfigV1(globalFpath string, config *Config) error {
 			return nil, false
 		case strings.HasPrefix(name, "replication."):
 			return nil, false
-		case name == "ec.batch_size":
+		case name == "ec.batch_size", name == "mirror.optimize_put", name == "mirror.util_thresh":
 			return nil, false
 		case name == "lru.lowwm":
 			v, ok := fld.Value().(int64)
@@ -146,7 +154,7 @@ type (
 		Versioning VersionConf     `json:"versioning"`
 		Cksum      CksumConf       `json:"checksum"`
 		LRU        v1LRUConf       `json:"lru"`
-		Mirror     MirrorConf      `json:"mirror"`
+		Mirror     v1MirrorConf    `json:"mirror"`
 		MDWrite    apc.WritePolicy `json:"md_write"`
 		EC         v1ECConf        `json:"ec"`
 		Access     apc.AccessAttrs `json:"access,string"`

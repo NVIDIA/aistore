@@ -531,8 +531,8 @@ func parseCmdLine() (params, error) {
 
 		if p.bProps.Mirror.Enabled {
 			// fill mirror default properties
-			if p.bProps.Mirror.UtilThresh == 0 {
-				p.bProps.Mirror.UtilThresh = 5
+			if p.bProps.Mirror.Burst == 0 {
+				p.bProps.Mirror.Burst = 512
 			}
 			if p.bProps.Mirror.Copies == 0 {
 				p.bProps.Mirror.Copies = 2
@@ -669,9 +669,9 @@ func setupBucket(runParams *params) error {
 	}
 	if runParams.bProps.Mirror.Enabled != oldProps.Mirror.Enabled {
 		propsToUpdate.Mirror = &cmn.MirrorConfToUpdate{
-			Enabled:    api.Bool(runParams.bProps.Mirror.Enabled),
-			Copies:     api.Int64(runParams.bProps.Mirror.Copies),
-			UtilThresh: api.Int64(runParams.bProps.Mirror.UtilThresh),
+			Enabled: api.Bool(runParams.bProps.Mirror.Enabled),
+			Copies:  api.Int64(runParams.bProps.Mirror.Copies),
+			Burst:   api.Int(runParams.bProps.Mirror.Burst),
 		}
 		change = true
 	}

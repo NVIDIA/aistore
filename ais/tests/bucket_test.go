@@ -1405,10 +1405,10 @@ func TestListObjectsWithRebalance(t *testing.T) {
 
 func TestBucketSingleProp(t *testing.T) {
 	const (
-		dataSlices      = 1
-		paritySlices    = 1
-		objLimit        = 300 * cos.KiB
-		mirrorThreshold = 15
+		dataSlices   = 1
+		paritySlices = 1
+		objLimit     = 300 * cos.KiB
+		burst        = 15
 	)
 	var (
 		m = ioContext{
@@ -1502,14 +1502,14 @@ func TestBucketSingleProp(t *testing.T) {
 
 	// Change mirroring threshold
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{UtilThresh: api.Int64(mirrorThreshold)},
+		Mirror: &cmn.MirrorConfToUpdate{Burst: api.Int(burst)},
 	},
 	)
 	tassert.CheckError(t, err)
 	p, err = api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
-	if p.Mirror.UtilThresh != mirrorThreshold {
-		t.Errorf("Mirror utilization threshold was not changed to %d. Current value %d", mirrorThreshold, p.Mirror.UtilThresh)
+	if p.Mirror.Burst != burst {
+		t.Errorf("Mirror burst was not changed to %d. Current value %d", burst, p.Mirror.Burst)
 	}
 
 	// Disable mirroring
@@ -2048,7 +2048,7 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	)
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck,
-		&cmn.BucketPropsToUpdate{BackendBck: &cmn.BckToUpdate{
+		&cmn.BucketPropsToUpdate{BackendBck: &cmn.BackendBckToUpdate{
 			Name:     api.String(cliBck.Name),
 			Provider: api.String(cliBck.Provider),
 		}})
@@ -2658,7 +2658,7 @@ func TestBackendBucket(t *testing.T) {
 
 	// Connect backend bucket to a aisBck
 	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BucketPropsToUpdate{
-		BackendBck: &cmn.BckToUpdate{
+		BackendBck: &cmn.BackendBckToUpdate{
 			Name:     api.String(remoteBck.Name),
 			Provider: api.String(remoteBck.Provider),
 		},
@@ -2704,7 +2704,7 @@ func TestBackendBucket(t *testing.T) {
 	// Disconnect backend bucket while denying (the default) apc.AceDisconnectedBackend permission
 	aattrs := apc.AccessAll &^ apc.AceDisconnectedBackend
 	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BucketPropsToUpdate{
-		BackendBck: &cmn.BckToUpdate{
+		BackendBck: &cmn.BackendBckToUpdate{
 			Name:     api.String(""),
 			Provider: api.String(""),
 		},

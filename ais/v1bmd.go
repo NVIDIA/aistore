@@ -67,7 +67,7 @@ func loadBMDV1(path string, bmd *bucketMD) error {
 						debug.Assert(ok)
 						bck.Props.WritePolicy.MD = v
 						return nil, false
-					case name == "ec.batch_size":
+					case name == "ec.batch_size", name == "mirror.optimize_put", name == "mirror.util_thresh":
 						return nil, false
 					case name == "lru.lowwm", name == "lru.highwm", name == "lru.out_of_space":
 						return nil, false

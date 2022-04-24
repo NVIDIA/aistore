@@ -14,8 +14,6 @@ cat > $AIS_CONF_FILE <<EOL
 	"mirror": {
 		"copies":       2,
 		"burst_buffer": 512,
-		"util_thresh":  ${MIRROR_UTIL_THRESH:-20},
-		"optimize_put": false,
 		"enabled":      ${MIRROR_ENABLED:-false}
 	},
 	"ec": {

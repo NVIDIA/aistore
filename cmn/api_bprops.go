@@ -102,7 +102,7 @@ type (
 	// The struct may have extra fields that do not exist in BucketProps.
 	// Add tag 'copy:"skip"' to ignore those fields when copying values.
 	BucketPropsToUpdate struct {
-		BackendBck  *BckToUpdate             `json:"backend_bck,omitempty"`
+		BackendBck  *BackendBckToUpdate      `json:"backend_bck,omitempty"`
 		Versioning  *VersionConfToUpdate     `json:"versioning,omitempty"`
 		Cksum       *CksumConfToUpdate       `json:"checksum,omitempty"`
 		LRU         *LRUConfToUpdate         `json:"lru,omitempty"`
@@ -114,7 +114,7 @@ type (
 		Force       bool                     `json:"force,omitempty" copy:"skip" list:"omit"`
 	}
 
-	BckToUpdate struct {
+	BackendBckToUpdate struct {
 		Name     *string `json:"name"`
 		Provider *string `json:"provider"`
 	}

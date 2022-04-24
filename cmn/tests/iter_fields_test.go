@@ -68,9 +68,7 @@ var _ = Describe("IterFields", func() {
 
 					"mirror.enabled":      false,
 					"mirror.copies":       int64(0),
-					"mirror.util_thresh":  int64(0),
 					"mirror.burst_buffer": 0,
-					"mirror.optimize_put": false,
 
 					"ec.enabled":       true,
 					"ec.parity_slices": 1024,
@@ -122,9 +120,7 @@ var _ = Describe("IterFields", func() {
 
 					"mirror.enabled":      (*bool)(nil),
 					"mirror.copies":       (*int64)(nil),
-					"mirror.util_thresh":  (*int64)(nil),
 					"mirror.burst_buffer": (*int)(nil),
-					"mirror.optimize_put": (*bool)(nil),
 
 					"ec.enabled":       api.Bool(true),
 					"ec.parity_slices": api.Int(1024),
@@ -215,9 +211,7 @@ var _ = Describe("IterFields", func() {
 				map[string]interface{}{
 					"mirror.enabled":      "true", // type == bool
 					"mirror.copies":       "120",  // type == int
-					"mirror.util_thresh":  int64(0),
 					"mirror.burst_buffer": "9560", // type == int64
-					"mirror.optimize_put": false,
 
 					"ec.enabled":       true,
 					"ec.parity_slices": 1024,

@@ -206,18 +206,14 @@ type (
 	}
 
 	MirrorConf struct {
-		Copies      int64 `json:"copies"`       // num local copies
-		UtilThresh  int64 `json:"util_thresh"`  // considered equivalent when below threshold
-		Burst       int   `json:"burst_buffer"` // channel buffer size
-		OptimizePUT bool  `json:"optimize_put"` // optimization objective
-		Enabled     bool  `json:"enabled"`      // will only generate local copies when set to true
+		Copies  int64 `json:"copies"`       // num copies
+		Burst   int   `json:"burst_buffer"` // xaction channel (buffer) size
+		Enabled bool  `json:"enabled"`      // enabled (to generate copies)
 	}
 	MirrorConfToUpdate struct {
-		Copies      *int64 `json:"copies,omitempty"`
-		Burst       *int   `json:"burst_buffer,omitempty"`
-		UtilThresh  *int64 `json:"util_thresh,omitempty"`
-		OptimizePUT *bool  `json:"optimize_put,omitempty"`
-		Enabled     *bool  `json:"enabled,omitempty"`
+		Copies  *int64 `json:"copies,omitempty"`
+		Burst   *int   `json:"burst_buffer,omitempty"`
+		Enabled *bool  `json:"enabled,omitempty"`
 	}
 
 	ECConf struct {
@@ -1074,12 +1070,8 @@ func (c *VersionConf) String() string {
 ////////////////////////////////////////
 
 func (c *MirrorConf) Validate() error {
-	if c.UtilThresh < 0 || c.UtilThresh > 100 {
-		return fmt.Errorf("invalid mirror.util_thresh: %v (expected value in range [0, 100])",
-			c.UtilThresh)
-	}
 	if c.Burst < 0 {
-		return fmt.Errorf("invalid mirror.burst: %v (expected >0)", c.UtilThresh)
+		return fmt.Errorf("invalid mirror.burst: %v (expected >0)", c.Burst)
 	}
 	if c.Copies < 2 || c.Copies > 32 {
 		return fmt.Errorf("invalid mirror.copies: %d (expected value in range [2, 32])", c.Copies)

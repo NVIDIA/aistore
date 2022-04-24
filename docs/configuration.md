@@ -240,10 +240,9 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `ec.objsize_limit` | No | `262144` | Indicated the minimum size of an object in bytes that is erasure encoded. Smaller objects are replicated |
 | `ec.parity_slices` | No | `2` | Represents the number of redundant fragments to provide protection from failures (in the range [2, 32]) |
 | `ec.compression` | No | `"never"` | LZ4 compression parameters used when EC sends its fragments and replicas over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
-| `mirror.burst_buffer` | No | `512` | the maximum length of the queue of objects to be mirrored. When the queue length exceeds the value, a target may skip creating replicas for new objects |
+| `mirror.burst_buffer` | No | `512` | the maximum queue size for the (pending) objects to be mirrored. When exceeded, target logs a warning. |
 | `mirror.copies` | No | `1` | the number of local copies of an object |
 | `mirror.enabled` | No | `false` | If true, for every object PUT a target creates object replica on another mountpath. Later, on object GET request, loadbalancer chooses a mountpath with lowest disk utilization and reads the object from it |
-| `mirror.util_thresh` | No | `20` | If mirroring is enabled, loadbalancer chooses an object replica to read but only if main object's mountpath utilization exceeds the replica' s mountpath utilization by this value. Main object's mountpath is the mountpath used to store the object when mirroring is disabled |
 | `rebalance.dest_retry_time` | No | `2m` | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | `rebalance.enabled` | No | `true` | Enables and disables automatic rebalance after a target receives the updated cluster map. If the (automated rebalancing) option is disabled, you can still use the REST API (`PUT {"action": "start", "value": {"kind": "rebalance"}} v1/cluster`) to initiate cluster-wide rebalancing |
 | `rebalance.multiplier` | No | `4` | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |

@@ -13,8 +13,6 @@
   "mirror": {
     "copies":       2,
     "burst_buffer": 512,
-    "util_thresh":  10,
-    "optimize_put": false,
     "enabled":      false
   },
   "ec": {

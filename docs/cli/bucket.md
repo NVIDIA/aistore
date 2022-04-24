@@ -704,10 +704,8 @@ $ ais bucket props set ais://bucket_name '{
       "enabled": true
     },
     "mirror": {
-      "copies": 0,
-      "burst_buffer": 0,
-      "util_thresh": 0,
-      "optimize_put": false,
+      "copies": 2,
+      "burst_buffer": 512,
       "enabled": false
     },
     "ec": {

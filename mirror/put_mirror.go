@@ -41,9 +41,8 @@ type (
 		workers *mpather.WorkerGroup
 		workCh  chan cluster.LIF
 		// init
-		mirror  cmn.MirrorConf
-		total   atomic.Int64
-		dropped int64
+		mirror cmn.MirrorConf
+		total  atomic.Int64
 	}
 )
 
@@ -145,20 +144,11 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 // main method: replicate onto a given (and different) mountpath
 func (r *XactPut) Repl(lom *cluster.LOM) {
 	debug.AssertMsg(!r.Finished(), r.String())
-	r.total.Inc()
+	total := r.total.Inc()
 
-	// [throttle]
-	// when the optimization objective is write perf,
-	// we start dropping requests to make sure callers don't block
 	pending, max := int(r.Pending()), r.mirror.Burst
-	if r.mirror.OptimizePUT {
-		if pending > 1 && pending >= max {
-			r.dropped++
-			if (r.dropped % logNumProcessed) == 0 {
-				glog.Errorf("%s: pending=%d, total=%d, dropped=%d", r, pending, r.total.Load(), r.dropped)
-			}
-			return
-		}
+	if pending > 1 && pending >= max && (total%logNumProcessed) == 0 {
+		glog.Warningf("%s: pending=%d exceeded %d=burst (total=%d)", r, pending, max, total)
 	}
 	r.IncPending() // ref-count via base to support on-demand action
 
