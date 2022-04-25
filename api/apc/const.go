@@ -175,11 +175,6 @@ const (
 	PropBackendBckProvider = PropBackendBck + ".provider"
 )
 
-// HeaderCompress enum (supported compression algorithms)
-const (
-	LZ4Compression = "lz4"
-)
-
 // enum that may accompany HEAD(obj) to specify additional _nuances_:
 // - object's in-cluster existence (and whether to avoid executing remote HEAD when not found)
 // - thoroughness of local lookup (all mountpaths or just the designated one)
@@ -428,12 +423,6 @@ const (
 const (
 	Proxy  = "proxy"
 	Target = "target"
-)
-
-// Compression enum
-const (
-	CompressAlways = "always"
-	CompressNever  = "never"
 )
 
 // timeouts for intra-cluster requests

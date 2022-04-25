@@ -151,11 +151,11 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 	)
 	if nvs["compression"] != apc.CompressNever {
 		v, _ := cos.S2B(nvs["block"])
-		cos.Assert(v == cos.MiB || v == cos.KiB*256 || v == cos.KiB*64)
+		cos.Assert(v == cos.MiB*4 || v == cos.MiB || v == cos.KiB*256 || v == cos.KiB*64)
 		config := cmn.GCO.BeginUpdate()
-		config.Compression.BlockMaxSize = int(v)
+		config.Transport.LZ4BlockMaxSize = int(v)
 		cmn.GCO.CommitUpdate(config)
-		if err := config.Compression.Validate(); err != nil {
+		if err := config.Transport.Validate(); err != nil {
 			tassert.CheckFatal(t, err)
 		}
 	}

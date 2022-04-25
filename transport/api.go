@@ -113,7 +113,7 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	}
 	debug.Assert(s.usePDU() == extra.UsePDU())
 
-	burst := burst()                  // num objects the caller can post without blocking
+	burst := burst(extra.Config)      // num objects the caller can post without blocking
 	s.workCh = make(chan *Obj, burst) // Send Qeueue (SQ)
 	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue (SCQ)
 
@@ -179,10 +179,11 @@ func (s *Stream) Fin() {
 ////////////////////
 
 func NewMsgStream(client Client, dstURL, dstID string) (s *MsgStream) {
-	s = &MsgStream{streamBase: *newStreamBase(client, dstURL, dstID, &Extra{Config: cmn.GCO.Get()})}
+	extra := &Extra{Config: cmn.GCO.Get()}
+	s = &MsgStream{streamBase: *newStreamBase(client, dstURL, dstID, extra)}
 	s.streamBase.streamer = s
 
-	burst := burst()                  // num messages the caller can post without blocking
+	burst := burst(extra.Config)      // num messages the caller can post without blocking
 	s.workCh = make(chan *Msg, burst) // Send Qeueue or SQ
 
 	s.wg.Add(1)

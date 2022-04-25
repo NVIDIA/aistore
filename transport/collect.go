@@ -42,22 +42,6 @@ var _ cos.Runner = (*StreamCollector)(nil)
 // 2. provides each stream with its own idle timer (with timeout measured in ticks - see tickUnit)
 // 3. deactivates idle streams
 
-func Init(st cos.StatsTracker) *StreamCollector {
-	debug.Assert(gc == nil)
-	statsTracker = st
-	// real stream collector
-	gc = &collector{
-		stopCh:  cos.NewStopCh(),
-		ctrlCh:  make(chan ctrl, 64),
-		streams: make(map[string]*streamBase, 64),
-		heap:    make([]*streamBase, 0, 64), // min-heap sorted by stream.time.ticks
-	}
-	heap.Init(gc)
-
-	sc = &StreamCollector{}
-	return sc
-}
-
 func (*StreamCollector) Name() string { return "stream_collector" }
 
 func (sc *StreamCollector) Run() (err error) {
@@ -72,7 +56,7 @@ func (sc *StreamCollector) Stop(err error) {
 }
 
 func (gc *collector) run() (err error) {
-	gc.ticker = time.NewTicker(tickUnit)
+	gc.ticker = time.NewTicker(dfltTick)
 	for {
 		select {
 		case <-gc.ticker.C:
@@ -171,7 +155,7 @@ func (gc *collector) do() {
 		if s.time.ticks > 0 {
 			continue
 		}
-		gc.update(s, int(s.time.idleTeardown/tickUnit))
+		gc.update(s, int(s.time.idleTeardown/dfltTick))
 		if s.time.inSend.Swap(false) {
 			continue
 		}

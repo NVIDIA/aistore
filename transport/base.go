@@ -23,13 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// transport defaults
-const (
-	maxHeaderSize = memsys.PageSize
-	burstNum      = 32 // default num msg-s that can be posted without any back-pressure
-	tickUnit      = time.Second
-)
-
 // stream TCP/HTTP session: inactive <=> active transitions
 const (
 	inactive = iota
@@ -143,19 +136,18 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 	if extra.IdleTeardown > 0 {
 		s.time.idleTeardown = extra.IdleTeardown
 	} else {
-		s.time.idleTeardown = extra.Config.Timeout.TransportIdleTeardown.D()
-		// TODO: remove with the next config meta-version update
+		s.time.idleTeardown = extra.Config.Transport.IdleTeardown.D()
 		if s.time.idleTeardown == 0 {
-			s.time.idleTeardown = 4 * time.Second
+			s.time.idleTeardown = dfltIdleTeardown
 		}
 	}
-	debug.Assertf(s.time.idleTeardown > 2*tickUnit, "%v vs. %v", s.time.idleTeardown, tickUnit)
-	s.time.ticks = int(s.time.idleTeardown / tickUnit)
+	debug.Assertf(s.time.idleTeardown > 2*dfltTick, "%v vs. %v", s.time.idleTeardown, dfltTick)
+	s.time.ticks = int(s.time.idleTeardown / dfltTick)
 
 	s.lid = fmt.Sprintf("s-%s%s[%d]=>%s", s.trname, sid, s.sessID, dstID)
 
-	s.maxheader, _ = s.mm.AllocSize(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
-	s.sessST.Store(inactive)                       // NOTE: initiate HTTP session upon the first arrival
+	s.maxheader, _ = s.mm.AllocSize(int64(maxHeaderSize)) // must be large enough to accommodate max-size
+	s.sessST.Store(inactive)                              // initiate HTTP session upon the first arrival
 	return
 }
 
@@ -301,22 +293,9 @@ func (extra *Extra) Compressed() bool {
 	return extra.Compression != "" && extra.Compression != apc.CompressNever
 }
 
-//////////////////
-// misc helpers //
-//////////////////
-
-func burst() (burst int) {
-	burst = burstNum
-	if a := os.Getenv("AIS_STREAM_BURST_NUM"); a != "" {
-		if burst64, err := strconv.ParseInt(a, 10, 0); err != nil {
-			glog.Error(err)
-			burst = burstNum
-		} else {
-			burst = int(burst64)
-		}
-	}
-	return
-}
+//
+// misc
+//
 
 func dryrun() (dryrun bool) {
 	var err error

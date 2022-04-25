@@ -90,8 +90,8 @@ func (s *Stream) initCompression(extra *Extra) {
 		config = cmn.GCO.Get()
 	}
 	s.lz4s.s = s
-	s.lz4s.blockMaxSize = config.Compression.BlockMaxSize
-	s.lz4s.frameChecksum = config.Compression.Checksum
+	s.lz4s.blockMaxSize = config.Transport.LZ4BlockMaxSize
+	s.lz4s.frameChecksum = config.Transport.LZ4FrameChecksum
 	mem := extra.MMSA
 	if mem == nil {
 		mem = memsys.PageMM()

@@ -119,7 +119,7 @@ type (
 		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
 		Downloader  DownloaderConf  `json:"downloader"`
 		DSort       DSortConf       `json:"distributed_sort"`
-		Compression CompressionConf `json:"compression"`
+		Transport   TransportConf   `json:"transport"`
 		WritePolicy WritePolicyConf `json:"write_policy"`
 		Features    feat.Flags      `json:"features,string" allow:"cluster"` // feature flags (to flip assorted defaults)
 		// read-only
@@ -151,7 +151,7 @@ type (
 		Keepalive   *KeepaliveConfToUpdate   `json:"keepalivetracker,omitempty"`
 		Downloader  *DownloaderConfToUpdate  `json:"downloader,omitempty"`
 		DSort       *DSortConfToUpdate       `json:"distributed_sort,omitempty"`
-		Compression *CompressionConfToUpdate `json:"compression,omitempty"`
+		Transport   *TransportConfToUpdate   `json:"transport,omitempty"`
 		WritePolicy *WritePolicyConfToUpdate `json:"write_policy,omitempty"`
 		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
 		Features    *feat.Flags              `json:"features,string,omitempty"`
@@ -218,7 +218,7 @@ type (
 
 	ECConf struct {
 		ObjSizeLimit int64  `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
-		Compression  string `json:"compression"`   // see CompressAlways, etc. enum
+		Compression  string `json:"compression"`   // enum { CompressAlways, ... } in api/apc/compression.go
 		DataSlices   int    `json:"data_slices"`   // number of data slices
 		ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
 		Enabled      bool   `json:"enabled"`       // EC is enabled
@@ -263,11 +263,6 @@ type (
 		MaxHostBusy     cos.Duration `json:"max_host_busy"`
 		Startup         cos.Duration `json:"startup_time"`
 		SendFile        cos.Duration `json:"send_file_time"`
-		// Max idle time - the time with no transmissions over a long-lived
-		// http/tcp intra-cluster connection. When exceeded, sender terminates
-		// the connection (and will then reestablish it upon the very first "next"
-		// PDU to send). Added in v3.8.
-		TransportIdleTeardown cos.Duration `json:"transport_idle_term"`
 	}
 	TimeoutConfToUpdate struct {
 		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
@@ -363,15 +358,13 @@ type (
 	RebalanceConf struct {
 		DestRetryTime cos.Duration `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
 		Quiesce       cos.Duration `json:"quiescent"`       // max wait for no-obj before next stage/batch
-		Compression   string       `json:"compression"`     // see CompressAlways, etc. enum
-		Multiplier    uint8        `json:"multiplier"`      // stream-bundle-and-jogger multiplier
+		Compression   string       `json:"compression"`     // enum { CompressAlways, ... } in api/apc/compression.go
 		Enabled       bool         `json:"enabled"`         // true=auto-rebalance | manual rebalancing
 	}
 	RebalanceConfToUpdate struct {
 		DestRetryTime *cos.Duration `json:"dest_retry_time,omitempty"`
 		Quiesce       *cos.Duration `json:"quiescent,omitempty"`
 		Compression   *string       `json:"compression,omitempty"`
-		Multiplier    *uint8        `json:"multiplier,omitempty"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
@@ -523,7 +516,7 @@ type (
 		EKMMissingKey       string       `json:"ekm_missing_key"`
 		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
 		CallTimeout         cos.Duration `json:"call_timeout"`
-		Compression         string       `json:"compression"` // enum { CompressAlways, ... }
+		Compression         string       `json:"compression"` // enum { CompressAlways, ... } in api/apc/compression.go
 		DSorterMemThreshold string       `json:"dsorter_mem_threshold"`
 	}
 	DSortConfToUpdate struct {
@@ -541,14 +534,24 @@ type (
 		Paths cos.StringSet `json:"paths,omitempty"`
 	}
 
-	// lz4 block and frame formats: http://fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
-	CompressionConf struct {
-		BlockMaxSize int  `json:"block_size"` // *uncompressed* block max size
-		Checksum     bool `json:"checksum"`   // true: checksum lz4 frames
+	TransportConf struct {
+		MaxHeaderSize    int `json:"max_header"`        // max transport header buffer (default=4K)
+		Burst            int `json:"burst_buffer"`      // num sends with no back pressure; see also AIS_STREAM_BURST_NUM
+		BundleMultiplier int `json:"bundle_multiplier"` // stream bundle multiplier (num streams to destination)
+		// max idle time - the time with no transmissions over a long-lived intra-cluster connection;
+		// when exceeded, sender terminates the connection (to reestablish it then upon the very first/next PDU)
+		IdleTeardown cos.Duration `json:"idle_teardown"`
+		// lz4
+		LZ4BlockMaxSize  int  `json:"lz4_block"`          // max uncompressed block size, one of [64K, 256K(*), 1M, 4M]
+		LZ4FrameChecksum bool `json:"lz4_frame_checksum"` // fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
 	}
-	CompressionConfToUpdate struct {
-		BlockMaxSize *int  `json:"block_size,omitempty"`
-		Checksum     *bool `json:"checksum,omitempty"`
+	TransportConfToUpdate struct {
+		MaxHeaderSize    *int          `json:"max_header,omitempty"`
+		Burst            *int          `json:"burst_buffer,omitempty"`
+		BundleMultiplier *int          `json:"bundle_multiplier,omitempty"`
+		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty"`
+		LZ4BlockMaxSize  *int          `json:"lz4_block,omitempty"`
+		LZ4FrameChecksum *bool         `json:"lz4_frame_checksum,omitempty"`
 	}
 
 	WritePolicyConf struct {
@@ -714,7 +717,7 @@ var (
 	_ Validator = (*NetConf)(nil)
 	_ Validator = (*DownloaderConf)(nil)
 	_ Validator = (*DSortConf)(nil)
-	_ Validator = (*CompressionConf)(nil)
+	_ Validator = (*TransportConf)(nil)
 	_ Validator = (*WritePolicyConf)(nil)
 
 	_ PropsValidator = (*CksumConf)(nil)
@@ -1071,7 +1074,7 @@ func (c *VersionConf) String() string {
 
 func (c *MirrorConf) Validate() error {
 	if c.Burst < 0 {
-		return fmt.Errorf("invalid mirror.burst: %v (expected >0)", c.Burst)
+		return fmt.Errorf("invalid mirror.burst_buffer: %v (expected >0)", c.Burst)
 	}
 	if c.Copies < 2 || c.Copies > 32 {
 		return fmt.Errorf("invalid mirror.copies: %d (expected value in range [2, 32])", c.Copies)
@@ -1435,15 +1438,27 @@ func ValidateMpath(mpath string) (string, error) {
 	return cleanMpath, nil
 }
 
-/////////////////////////////////////////////
-// CompressionConf (part of ClusterConfig) //
-/////////////////////////////////////////////
+///////////////////////////////////////////
+// TransportConf (part of ClusterConfig) //
+///////////////////////////////////////////
 
 // NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
-func (c *CompressionConf) Validate() (err error) {
-	if c.BlockMaxSize != 64*cos.KiB && c.BlockMaxSize != 256*cos.KiB &&
-		c.BlockMaxSize != cos.MiB && c.BlockMaxSize != 4*cos.MiB {
-		return fmt.Errorf("invalid compression.block_size %d", c.BlockMaxSize)
+func (c *TransportConf) Validate() (err error) {
+	if c.LZ4BlockMaxSize != 64*cos.KiB && c.LZ4BlockMaxSize != 256*cos.KiB &&
+		c.LZ4BlockMaxSize != cos.MiB && c.LZ4BlockMaxSize != 4*cos.MiB {
+		return fmt.Errorf("invalid compression.block_size %d", c.LZ4BlockMaxSize)
+	}
+	if c.Burst < 0 {
+		return fmt.Errorf("invalid transport.burst_buffer: %v (expected >0)", c.Burst)
+	}
+	if c.MaxHeaderSize < 0 {
+		return fmt.Errorf("invalid transport.max_header: %v (expected >0)", c.MaxHeaderSize)
+	}
+	if c.MaxHeaderSize > 0 && c.MaxHeaderSize < 512 {
+		return fmt.Errorf("invalid transport.max_header: %v (expected >= 512)", c.MaxHeaderSize)
+	}
+	if c.BundleMultiplier < 0 || c.BundleMultiplier > 16 {
+		return fmt.Errorf("invalid transport.bundle_multiplier: %v (expected range [0, 16])", c.BundleMultiplier)
 	}
 	return nil
 }

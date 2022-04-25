@@ -18,10 +18,7 @@ const (
 	WriteDefault = WritePolicy("") // same as `WriteImmediate` - see IsImmediate() below
 )
 
-var (
-	SupportedWritePolicy = []string{string(WriteImmediate), string(WriteDelayed), string(WriteNever)}
-	SupportedCompression = []string{CompressNever, CompressAlways}
-)
+var SupportedWritePolicy = []string{string(WriteImmediate), string(WriteDelayed), string(WriteNever)}
 
 func (wp WritePolicy) IsImmediate() bool { return wp == WriteDefault || wp == WriteImmediate }
 

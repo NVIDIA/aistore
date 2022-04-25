@@ -22,10 +22,6 @@ import (
 const (
 	closeFin = iota
 	closeStop
-
-	// bundle.Multiplier is used to "amplify" intra-cluster workloads when each
-	// target talks to each other target: dSort, EC, rebalance, ETL, etc.
-	Multiplier = 4
 )
 
 type (
@@ -114,7 +110,7 @@ func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Clien
 		sb.lid = fmt.Sprintf("sb[%s-%s-%s]", sb.lsnode.ID(), sb.network, sb.trname)
 	} else {
 		sb.lid = fmt.Sprintf("sb[%s-%s-%s[%s]]", sb.lsnode.ID(), sb.network, sb.trname,
-			cos.B2S(int64(sb.extra.Config.Compression.BlockMaxSize), 0))
+			cos.B2S(int64(sb.extra.Config.Transport.LZ4BlockMaxSize), 0))
 	}
 
 	// update streams when Smap changes

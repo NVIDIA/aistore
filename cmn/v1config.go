@@ -32,12 +32,12 @@ type (
 		EC          v1ECConf        `json:"ec" allow:"cluster"`
 		Log         LogConf         `json:"log"`
 		Periodic    PeriodConf      `json:"periodic"`
-		Timeout     TimeoutConf     `json:"timeout"`
+		Timeout     v1TimeoutConf   `json:"timeout"`
 		Client      v1ClientConf    `json:"client"`
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		LRU         v1LRUConf       `json:"lru"`
 		Disk        DiskConf        `json:"disk"`
-		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
+		Rebalance   v1RebalanceConf `json:"rebalance" allow:"cluster"`
 		Resilver    ResilverConf    `json:"resilver"`
 		Cksum       CksumConf       `json:"checksum"`
 		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
@@ -47,21 +47,13 @@ type (
 		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
 		Downloader  DownloaderConf  `json:"downloader"`
 		DSort       DSortConf       `json:"distributed_sort"`
-		Compression CompressionConf `json:"compression"`
+		Compression v1CompressConf  `json:"compression"`
 		MDWrite     apc.WritePolicy `json:"md_write"` // <<< (changed)
 		LastUpdated string          `json:"lastupdate_time"`
 		UUID        string          `json:"uuid"`
 		Version     int64           `json:"config_version,string"`
 		Ext         interface{}     `json:"ext,omitempty"`
 		Replication replicationConf `json:"replication"` // <<< (removed)
-	}
-	v1LRUConf struct {
-		LowWM           int64        `json:"lowwm"`
-		HighWM          int64        `json:"highwm"`
-		OOS             int64        `json:"out_of_space"`
-		DontEvictTime   cos.Duration `json:"dont_evict_time"`
-		CapacityUpdTime cos.Duration `json:"capacity_upd_time"`
-		Enabled         bool         `json:"enabled"`
 	}
 	v1MirrorConf struct {
 		Copies      int64 `json:"copies"`
@@ -79,11 +71,39 @@ type (
 		Enabled      bool   `json:"enabled"`
 		DiskOnly     bool   `json:"disk_only"`
 	}
+	v1TimeoutConf struct {
+		CplaneOperation cos.Duration `json:"cplane_operation"`
+		MaxKeepalive    cos.Duration `json:"max_keepalive"`
+		MaxHostBusy     cos.Duration `json:"max_host_busy"`
+		Startup         cos.Duration `json:"startup_time"`
+		SendFile        cos.Duration `json:"send_file_time"`
+		// (in v2 moved to transport section)
+		TransportIdleTeardown cos.Duration `json:"transport_idle_term"`
+	}
 	v1ClientConf struct {
 		Timeout     cos.Duration `json:"client_timeout"`
 		TimeoutLong cos.Duration `json:"client_long_timeout"`
 		ListObjects cos.Duration `json:"list_timeout"`
 		Features    feat.Flags   `json:"features,string"`
+	}
+	v1LRUConf struct {
+		LowWM           int64        `json:"lowwm"`
+		HighWM          int64        `json:"highwm"`
+		OOS             int64        `json:"out_of_space"`
+		DontEvictTime   cos.Duration `json:"dont_evict_time"`
+		CapacityUpdTime cos.Duration `json:"capacity_upd_time"`
+		Enabled         bool         `json:"enabled"`
+	}
+	v1RebalanceConf struct {
+		DestRetryTime cos.Duration `json:"dest_retry_time"`
+		Quiesce       cos.Duration `json:"quiescent"`
+		Compression   string       `json:"compression"`
+		Multiplier    uint8        `json:"multiplier"`
+		Enabled       bool         `json:"enabled"`
+	}
+	v1CompressConf struct {
+		BlockMaxSize int  `json:"block_size"`
+		Checksum     bool `json:"checksum"`
 	}
 	replicationConf struct {
 		OnColdGet     bool `json:"on_cold_get"`

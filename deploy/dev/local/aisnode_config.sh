@@ -37,7 +37,6 @@ cat > $AIS_CONF_FILE <<EOL
 	"timeout": {
 		"cplane_operation":     "2s",
 		"max_keepalive":        "4s",
-		"transport_idle_term":  "4s",
 		"max_host_busy":        "20s",
 		"startup_time":         "1m",
 		"send_file_time":       "5m"
@@ -72,11 +71,10 @@ cat > $AIS_CONF_FILE <<EOL
 	    "disk_util_max_wm":  95
 	},
 	"rebalance": {
-		"enabled":         true,
 		"dest_retry_time": "2m",
 		"quiescent":       "15s",
 		"compression":     "${COMPRESSION:-never}",
-		"multiplier":      ${REBALANCE_MULTIPLIER:-2}
+		"enabled":         true
 	},
 	"resilver": {
 		"enabled": true
@@ -88,9 +86,13 @@ cat > $AIS_CONF_FILE <<EOL
 		"validate_obj_move":	false,
 		"enable_read_range":	false
 	},
-	"compression": {
-		"block_size": ${BLOCK_SIZE:-262144},
-		"checksum":   ${CHECKSUM:-false}
+	"transport": {
+		"max_header":		4096,
+		"burst_buffer":		32,
+		"bundle_multiplier":	${BUNDLE_MULTIPLIER:-2},
+		"idle_teardown":	"4s",
+		"lz4_block":		${LZ4_BLOCK:-262144},
+		"lz4_frame_checksum":	${LZ4_FRAME_CHECKSUM:-false}
 	},
 	"versioning": {
 		"enabled":           true,

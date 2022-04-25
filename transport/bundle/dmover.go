@@ -74,11 +74,9 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 	extra Extra) (*DataMover, error) {
 	dm := &DataMover{t: t, config: cmn.GCO.Get(), mem: t.PageMM()}
 	if extra.Multiplier == 0 {
-		extra.Multiplier = int(dm.config.Rebalance.Multiplier)
+		extra.Multiplier = dm.config.Transport.BundleMultiplier
 	}
-	if extra.Multiplier > 8 {
-		return nil, fmt.Errorf("invalid multiplier %d", extra.Multiplier)
-	}
+	debug.Assert(extra.Multiplier <= 16)
 	dm.owt = owt
 	dm.multiplier = extra.Multiplier
 	dm.sizePDU = extra.SizePDU

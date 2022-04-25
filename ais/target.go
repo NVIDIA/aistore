@@ -199,8 +199,7 @@ func (t *target) init(config *cmn.Config) {
 
 	t.fsprg.init(t, newVol) // subgroup of the daemon.rg rungroup
 
-	// Stream Collector - a singleton object with responsibilities that include:
-	sc := transport.Init(ts)
+	sc := transport.Init(ts, config) // init transport sub-system; new stream collector
 	daemon.rg.add(sc)
 
 	fshc := health.NewFSHC(t)

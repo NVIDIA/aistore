@@ -83,16 +83,16 @@ func (e *tcbFactory) Start() error {
 	e.xctn.wg.Add(1)
 
 	config := cmn.GCO.Get()
-	err = e.newDM(&config.Rebalance, e.UUID(), sizePDU)
+	err = e.newDM(config, e.UUID(), sizePDU)
 	return err
 }
 
-func (e *tcbFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32) error {
+func (e *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error {
 	const trname = "transcpy" // copy&transform transport endpoint prefix
 	dmExtra := bundle.Extra{
-		RecvAck:     nil,                    // NOTE: no ACKs
-		Compression: rebcfg.Compression,     // TODO: define separately
-		Multiplier:  int(rebcfg.Multiplier), // ditto
+		RecvAck:     nil,                          // NOTE: no ACKs
+		Compression: config.Rebalance.Compression, // TODO: define separately
+		Multiplier:  config.Transport.BundleMultiplier,
 		SizePDU:     sizePDU,
 	}
 	dm, err := bundle.NewDataMover(e.T, trname+"_"+uuid, e.xctn.recv, cmn.OwtPut, dmExtra)

@@ -253,27 +253,26 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 //  create streams once and have them available for all the dSort jobs so they
 //  would share the resource rather than competing for it.
 func (m *Manager) initStreams() error {
-	cfg := cmn.GCO.Get()
+	config := cmn.GCO.Get()
 
 	// Responses to the other targets are objects that is why we want to use
 	// intraData network.
 	respNetwork := cmn.NetIntraData
 	trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
 	shardsSbArgs := bundle.Args{
-		Multiplier: bundle.Multiplier,
+		Multiplier: cos.Max(config.Transport.BundleMultiplier, 4),
 		Net:        respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 		Extra: &transport.Extra{
-			Compression: cfg.DSort.Compression,
-			Config:      cfg,
+			Compression: config.DSort.Compression,
+			Config:      config,
 			MMSA:        mm,
 		},
 	}
 	if err := transport.HandleObjStream(trname, m.makeRecvShardFunc()); err != nil {
 		return errors.WithStack(err)
 	}
-
 	client := transport.NewIntraDataClient()
 	m.streams.shards = bundle.NewStreams(m.ctx.smapOwner, m.ctx.node, client, shardsSbArgs)
 	return nil

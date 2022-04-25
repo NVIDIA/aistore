@@ -291,7 +291,10 @@ func (tctx *testContext) teardown() {
 }
 
 var _ = Describe("Distributed Sort", func() {
-	sc := transport.Init(&stats.Trunner{})
+	config := cmn.GCO.BeginUpdate()
+	config.Transport.MaxHeaderSize = memsys.PageSize
+	cmn.GCO.CommitUpdate(config)
+	sc := transport.Init(&stats.Trunner{}, config)
 	go sc.Run()
 
 	Describe("participateInRecordDistribution", func() {

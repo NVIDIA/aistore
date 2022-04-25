@@ -80,36 +80,31 @@ func (mgr *Manager) initECBundles() error {
 	if !mgr.bundleEnabled.CAS(false, true) {
 		return nil
 	}
-
 	if err := transport.HandleObjStream(ReqStreamName, ECM.recvRequest); err != nil {
 		return fmt.Errorf("failed to register recvRequest: %v", err)
 	}
 	if err := transport.HandleObjStream(RespStreamName, ECM.recvResponse); err != nil {
 		return fmt.Errorf("failed to register respResponse: %v", err)
 	}
-
 	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ interface{}, err error) {
 		if err != nil {
 			glog.Errorf("failed to request %s: %v", hdr.FullName(), err)
 		}
 	}
-
-	client := transport.NewIntraDataClient()
-	compression := cmn.GCO.Get().EC.Compression
-	extraReq := transport.Extra{
-		Callback:    cbReq,
-		Compression: compression,
-	}
-
+	var (
+		client      = transport.NewIntraDataClient()
+		config      = cmn.GCO.Get()
+		compression = config.EC.Compression
+		extraReq    = transport.Extra{Callback: cbReq, Compression: compression}
+	)
 	reqSbArgs := bundle.Args{
-		Multiplier: bundle.Multiplier,
+		Multiplier: config.Transport.BundleMultiplier,
 		Extra:      &extraReq,
 		Net:        mgr.netReq,
 		Trname:     ReqStreamName,
 	}
-
 	respSbArgs := bundle.Args{
-		Multiplier: bundle.Multiplier,
+		Multiplier: config.Transport.BundleMultiplier,
 		Trname:     RespStreamName,
 		Net:        mgr.netResp,
 		Extra:      &transport.Extra{Compression: compression},

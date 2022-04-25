@@ -126,11 +126,10 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 		stages:    newNodeStages(),
 		ecClient:  ecClient,
 	}
-	rebcfg := &config.Rebalance
 	dmExtra := bundle.Extra{
 		RecvAck:     reb.recvAck,
-		Compression: rebcfg.Compression,
-		Multiplier:  int(rebcfg.Multiplier),
+		Compression: config.Rebalance.Compression,
+		Multiplier:  config.Transport.BundleMultiplier,
 	}
 	dm, err := bundle.NewDataMover(t, trname, reb.recvObj, cmn.OwtMigrate, dmExtra)
 	if err != nil {

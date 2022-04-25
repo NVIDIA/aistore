@@ -1,145 +1,146 @@
 {
-  "backend": {
-    "ais": {
-      "cluster-uuid": [
-        "http://localhost:10080",
-        "http://127.0.0.2",
-        "https://api.web.org"
-      ]
-    },
-    "aws": {},
-    "gcp": {}
-  },
-  "mirror": {
-    "copies":       2,
-    "burst_buffer": 512,
-    "enabled":      false
-  },
-  "ec": {
-    "objsize_limit": 262144,
-    "data_slices": 1,
-    "parity_slices": 1,
-    "compression": "never",
-    "enabled": false
-  },
-  "log": {
-    "level":     "3",
-    "max_size":  4194304,
-    "max_total": 67108864
-  },
-  "periodic": {
-    "stats_time":        "10s",
-    "notif_time":        "30s",
-    "retry_sync_time":   "2s"
-  },
-  "timeout": {
-    "cplane_operation":     "2s",
-    "max_keepalive":        "4s",
-    "transport_idle_term":  "4s",
-    "max_host_busy":        "20s",
-    "startup_time":         "1m",
-    "send_file_time":       "5m"
-  },
-  "client": {
-    "client_timeout":      "10s",
-    "client_long_timeout": "30m",
-    "list_timeout":        "2m"
-  },
-  "proxy": {
-    "non_electable": false,
-    "primary_url":   "127.0.0.1",
-    "original_url":  "127.0.0.2",
-    "discovery_url": "127.0.0.255"
-  },
-  "space": {
-    "cleanupwm":         65,
-    "lowwm":             75,
-    "highwm":            90,
-    "out_of_space":      95
-  },
-  "lru": {
-    "dont_evict_time":   "120m",
-    "capacity_upd_time": "10m",
-    "enabled":           true
-  },
-  "disk":{
-    "disk_util_low_wm": 20,
-    "disk_util_high_wm": 80,
-    "disk_util_max_wm": 95,
-    "iostat_time_long": "2s",
-    "iostat_time_short": "100ms"
-  },
-  "rebalance": {
-    "dest_retry_time": "2m",
-    "quiescent": "20s",
-    "compression": "never",
-    "multiplier": 4,
-    "enabled": true
-  },
-  "resilver": {
-    "enabled": true
-  },
-  "checksum": {
-    "type":                       "xxhash",
-    "validate_cold_get":          true,
-    "validate_warm_get":          false,
-    "enable_read_range":          false
-  },
-  "versioning": {
-    "enabled":           true,
-    "validate_warm_get": false
-  },
-  "net": {
-    "l4": {
-      "proto":              "tcp"
-    },
-    "http": {
-      "server_crt":	"server.crt",
-      "server_key":		"server.key",
-      "use_https":		false
-    }
-  },
-  "fshc": {
-    "enabled":     true,
-    "test_files":  4,
-    "error_limit": 2
-  },
-  "auth": {
-    "secret":  "FAKESECRETKEY",
-    "enabled": false
-  },
-  "keepalivetracker": {
-    "proxy": {
-      "interval": "10s",
-      "name":     "heartbeat",
-      "factor":   3
-    },
-    "target": {
-      "interval": "10s",
-      "name":     "heartbeat",
-      "factor":   3
-    },
-    "retry_factor":   5,
-    "timeout_factor": 3
-  },
-  "downloader": {
-    "timeout": "1h"
-  },
-  "compression": {
-    "block_size": 262144,
-    "checksum": false
-  },
-  "distributed_sort": {
-    "duplicated_records":    "ignore",
-    "missing_shards":        "ignore",
-    "ekm_malformed_line":    "abort",
-    "ekm_missing_key":       "abort",
-    "default_max_mem_usage": "80%",
-    "dsorter_mem_threshold": "100GB",
-    "call_timeout":          "10m"
-  },
-  "write_policy": {
-    "data": "",
-    "md": ""
-  }
+	"backend": {"aws":   {},"gcp":   {}},
+	"mirror": {
+		"copies":       2,
+		"burst_buffer": 512,
+		"enabled":      false
+	},
+	"ec": {
+		"objsize_limit": 262144,
+		"data_slices":   1,
+		"parity_slices": 1,
+		"compression":   "never",
+		"enabled":       false,
+		"disk_only":     false
+	},
+	"log": {
+		"level":     "3",
+		"max_size":  524288,
+		"max_total": 67108864
+	},
+	"periodic": {
+		"stats_time":        "10s",
+		"notif_time":        "30s",
+		"retry_sync_time":   "2s"
+	},
+	"timeout": {
+		"cplane_operation":     "2s",
+		"max_keepalive":        "4s",
+		"max_host_busy":        "20s",
+		"startup_time":         "1m",
+		"send_file_time":       "5m"
+	},
+	"client": {
+		"client_timeout":      "10s",
+		"client_long_timeout": "30m",
+		"list_timeout":        "3m"
+	},
+	"proxy": {
+		"primary_url":   "http://localhost:8080",
+		"original_url":  "http://localhost:8080",
+		"discovery_url": "",
+		"non_electable": false
+	},
+	"space": {
+		"cleanupwm":         65,
+		"lowwm":             75,
+		"highwm":            90,
+		"out_of_space":      95
+	},
+	"lru": {
+		"dont_evict_time":   "120m",
+		"capacity_upd_time": "10m",
+		"enabled":           true
+	},
+	"disk":{
+	    "iostat_time_long":  "2s",
+	    "iostat_time_short": "100ms",
+	    "disk_util_low_wm":  20,
+	    "disk_util_high_wm": 80,
+	    "disk_util_max_wm":  95
+	},
+	"rebalance": {
+		"dest_retry_time": "2m",
+		"quiescent":       "15s",
+		"compression":     "never",
+		"enabled":         true
+	},
+	"resilver": {
+		"enabled": true
+	},
+	"checksum": {
+		"type":			"xxhash",
+		"validate_cold_get":	true,
+		"validate_warm_get":	false,
+		"validate_obj_move":	false,
+		"enable_read_range":	false
+	},
+	"transport": {
+		"max_header":		4096,
+		"burst_buffer":		32,
+		"bundle_multiplier":	2,
+		"idle_teardown":	"4s",
+		"lz4_block":		262144,
+		"lz4_frame_checksum":	false
+	},
+	"versioning": {
+		"enabled":           true,
+		"validate_warm_get": false
+	},
+	"net": {
+		"l4": {
+			"proto":              "tcp",
+			"sndrcv_buf_size":    131072
+		},
+		"http": {
+			"use_https":         false,
+			"server_crt":        "server.crt",
+			"server_key":        "server.key",
+			"write_buffer_size": 65536,
+			"read_buffer_size":  65536,
+			"chunked_transfer":  true,
+			"skip_verify":       false
+		}
+	},
+	"fshc": {
+		"enabled":     true,
+		"test_files":  4,
+		"error_limit": 2
+	},
+	"auth": {
+		"secret":      "aBitLongSecretKey",
+		"enabled":     false
+	},
+	"keepalivetracker": {
+		"proxy": {
+			"interval": "10s",
+			"name":     "heartbeat",
+			"factor":   3
+		},
+		"target": {
+			"interval": "10s",
+			"name":     "heartbeat",
+			"factor":   3
+		},
+		"retry_factor":   5,
+		"timeout_factor": 3
+	},
+	"downloader": {
+		"timeout": "1h"
+	},
+	"distributed_sort": {
+		"duplicated_records":    "ignore",
+		"missing_shards":        "ignore",
+		"ekm_malformed_line":    "abort",
+		"ekm_missing_key":       "abort",
+		"default_max_mem_usage": "80%",
+		"dsorter_mem_threshold": "100GB",
+		"compression":           "never",
+		"call_timeout":          "10m"
+	},
+	"write_policy": {
+		"data": "",
+		"md": ""
+	},
+	"features": "0"
 }

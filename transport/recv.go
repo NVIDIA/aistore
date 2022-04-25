@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -66,15 +66,7 @@ var (
 	nextSID  atomic.Int64        // next unique session ID
 	handlers map[string]*handler // by trname
 	mu       *sync.RWMutex       // ptotect handlers
-	verbose  bool
 )
-
-func init() {
-	nextSID.Store(100)
-	handlers = make(map[string]*handler, 16)
-	mu = &sync.RWMutex{}
-	verbose = bool(glog.FastV(4, glog.SmoduleTransport))
-}
 
 // main Rx objects
 func RxAnyStream(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +106,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	stats := statsif.(*Stats)
 
 	// receive loop
-	hbuf, _ := h.mm.AllocSize(maxHeaderSize)
+	hbuf, _ := h.mm.AllocSize(int64(maxHeaderSize))
 	it := &iterator{handler: h, body: reader, hbuf: hbuf, stats: stats}
 	err = it.rxloop(uid, loghdr)
 

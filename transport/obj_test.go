@@ -84,7 +84,10 @@ func TestMain(t *testing.M) {
 		cos.Exitf("Invalid duration %q", d)
 	}
 
-	sc := transport.Init(&dummyStatsTracker{})
+	config := cmn.GCO.BeginUpdate()
+	config.Transport.MaxHeaderSize = memsys.PageSize
+	cmn.GCO.CommitUpdate(config)
+	sc := transport.Init(&dummyStatsTracker{}, config)
 	go sc.Run()
 
 	objmux = mux.NewServeMux()
@@ -455,9 +458,9 @@ func receive10G(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 func Test_CompressedOne(t *testing.T) {
 	trname := "cmpr-one"
 	config := cmn.GCO.BeginUpdate()
-	config.Compression.BlockMaxSize = 256 * cos.KiB
+	config.Transport.LZ4BlockMaxSize = 256 * cos.KiB
 	cmn.GCO.CommitUpdate(config)
-	if err := config.Compression.Validate(); err != nil {
+	if err := config.Transport.Validate(); err != nil {
 		tassert.CheckFatal(t, err)
 	}
 
@@ -642,9 +645,9 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 
 	if compress {
 		config := cmn.GCO.BeginUpdate()
-		config.Compression.BlockMaxSize = cos.KiB * 256
+		config.Transport.LZ4BlockMaxSize = cos.KiB * 256
 		cmn.GCO.CommitUpdate(config)
-		if err := config.Compression.Validate(); err != nil {
+		if err := config.Transport.Validate(); err != nil {
 			tassert.CheckFatal(t, err)
 		}
 	}
