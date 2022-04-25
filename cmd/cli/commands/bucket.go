@@ -306,9 +306,10 @@ func fetchSummaries(qbck cmn.QueryBcks, fast, cached bool) (summaries cmn.BckSum
 	return
 }
 
-// Replace user-friendly properties like:
-//  * `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
-//    `backend_bck.provider=gcp` so they match the expected fields in structs.
+// If both backend_bck.name and backend_bck.provider are present, use them.
+// Otherwise, replace as follows:
+//  * e.g., `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
+//    `backend_bck.provider=gcp` to match expected fields.
 //  * `backend_bck=none` with `backend_bck.name=""` and `backend_bck.provider=""`.
 func reformatBackendProps(c *cli.Context, nvs cos.SimpleKVs) (err error) {
 	var (
@@ -316,6 +317,13 @@ func reformatBackendProps(c *cli.Context, nvs cos.SimpleKVs) (err error) {
 		v         string
 		ok        bool
 	)
+
+	if v, ok = nvs[apc.PropBackendBckName]; ok && v != "" {
+		if v, ok = nvs[apc.PropBackendBckProvider]; ok && v != "" {
+			nvs[apc.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
+			return
+		}
+	}
 
 	if v, ok = nvs[apc.PropBackendBck]; ok {
 		delete(nvs, apc.PropBackendBck)
