@@ -30,7 +30,7 @@ type (
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
 		Mirror      v1MirrorConf    `json:"mirror" allow:"cluster"`
 		EC          v1ECConf        `json:"ec" allow:"cluster"`
-		Log         LogConf         `json:"log"`
+		Log         v1LogConf       `json:"log"`
 		Periodic    PeriodConf      `json:"periodic"`
 		Timeout     v1TimeoutConf   `json:"timeout"`
 		Client      v1ClientConf    `json:"client"`
@@ -70,6 +70,11 @@ type (
 		ParitySlices int    `json:"parity_slices"`
 		Enabled      bool   `json:"enabled"`
 		DiskOnly     bool   `json:"disk_only"`
+	}
+	v1LogConf struct {
+		Level    string `json:"level"`
+		MaxSize  uint64 `json:"max_size"`
+		MaxTotal uint64 `json:"max_total"`
 	}
 	v1TimeoutConf struct {
 		CplaneOperation       cos.Duration `json:"cplane_operation"`
@@ -184,6 +189,16 @@ func loadClusterConfigV1(globalFpath string, config *Config) error {
 			config.ClusterConfig.Transport.LZ4FrameChecksum = v
 			return nil, false
 		case name == "keepalivetracker.timeout_factor":
+			return nil, false
+		case name == "log.max_size":
+			v, ok := fld.Value().(uint64)
+			debug.Assert(ok)
+			config.ClusterConfig.Log.MaxSize = cos.Size(v)
+			return nil, false
+		case name == "log.max_total":
+			v, ok := fld.Value().(uint64)
+			debug.Assert(ok)
+			config.ClusterConfig.Log.MaxTotal = cos.Size(v)
 			return nil, false
 		}
 
