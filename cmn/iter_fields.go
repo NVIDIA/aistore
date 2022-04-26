@@ -25,23 +25,19 @@ const (
 )
 
 type (
-	// Represents a single field in a struct found when walking its parent.
+	// Represents a single named field
 	IterField interface {
-		// Value returns value of given field.
-		Value() interface{}
-		// String returns string value's representation
-		String() string
-		// SetValue sets a given value. `force` ignores `tagReadonly` and sets
-		// a given value anyway - should be used with caution.
-		SetValue(v interface{}, force ...bool) error
+		Value() interface{}                          // returns the value
+		String() string                              // string representation of the value
+		SetValue(v interface{}, force ...bool) error // `force` ignores `tagReadonly` (to be used with caution!)
 	}
 
 	field struct {
 		name    string
 		v       reflect.Value
 		listTag string
-		dirty   bool // Determines if the value for the field was set by `SetValue`.
 		opts    IterOpts
+		dirty   bool // indicates `SetValue` done
 	}
 
 	IterOpts struct {

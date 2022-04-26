@@ -258,20 +258,18 @@ type (
 
 	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
-		CplaneOperation cos.Duration `json:"cplane_operation"` // NOTE: read-only via Timeout{cplane, ...}
-		MaxKeepalive    cos.Duration `json:"max_keepalive"`    // ditto
+		CplaneOperation cos.Duration `json:"cplane_operation"`
+		MaxKeepalive    cos.Duration `json:"max_keepalive"`
 		MaxHostBusy     cos.Duration `json:"max_host_busy"`
 		Startup         cos.Duration `json:"startup_time"`
 		SendFile        cos.Duration `json:"send_file_time"`
 	}
 	TimeoutConfToUpdate struct {
-		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
-		MaxKeepalive    *cos.Duration `json:"max_keepalive,omitempty"`
+		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty" list:"readonly"`
+		MaxKeepalive    *cos.Duration `json:"max_keepalive,omitempty" list:"readonly"`
 		MaxHostBusy     *cos.Duration `json:"max_host_busy,omitempty"`
 		Startup         *cos.Duration `json:"startup_time,omitempty"`
 		SendFile        *cos.Duration `json:"send_file_time,omitempty"`
-		// v3.8
-		TransportIdleTeardown *cos.Duration `json:"transport_idle_term,omitempty"`
 	}
 
 	ClientConf struct {
@@ -280,7 +278,7 @@ type (
 		ListObjects cos.Duration `json:"list_timeout"`
 	}
 	ClientConfToUpdate struct {
-		Timeout     *cos.Duration `json:"client_timeout,omitempty"`
+		Timeout     *cos.Duration `json:"client_timeout,omitempty"` // readonly as far as intra-cluster
 		TimeoutLong *cos.Duration `json:"client_long_timeout,omitempty"`
 		ListObjects *cos.Duration `json:"list_timeout,omitempty"`
 	}
@@ -362,7 +360,6 @@ type (
 	}
 	RebalanceConfToUpdate struct {
 		DestRetryTime *cos.Duration `json:"dest_retry_time,omitempty"`
-		Quiesce       *cos.Duration `json:"quiescent,omitempty"`
 		Compression   *string       `json:"compression,omitempty"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
@@ -447,10 +444,10 @@ type (
 	}
 	HTTPConfToUpdate struct {
 		Certificate     *string `json:"server_crt,omitempty"`
-		Key             *string `json:"server_key,omitempty"`
-		WriteBufferSize *int    `json:"write_buffer_size,omitempty"`
-		ReadBufferSize  *int    `json:"read_buffer_size,omitempty"`
-		UseHTTPS        *bool   `json:"use_https,omitempty"`
+		Key             *string `json:"server_key,omitempty" list:"readonly"`
+		WriteBufferSize *int    `json:"write_buffer_size,omitempty" list:"readonly"`
+		ReadBufferSize  *int    `json:"read_buffer_size,omitempty" list:"readonly"`
+		UseHTTPS        *bool   `json:"use_https,omitempty" list:"readonly"`
 		SkipVerify      *bool   `json:"skip_verify,omitempty"`
 		Chunked         *bool   `json:"chunked_transfer,omitempty"`
 	}
@@ -484,21 +481,19 @@ type (
 	}
 	KeepaliveTrackerConfToUpdate struct {
 		Interval *cos.Duration `json:"interval,omitempty"`
-		Name     *string       `json:"name,omitempty"`
+		Name     *string       `json:"name,omitempty" list:"readonly"`
 		Factor   *uint8        `json:"factor,omitempty"`
 	}
 
 	KeepaliveConf struct {
-		Proxy         KeepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
-		Target        KeepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
-		RetryFactor   uint8                `json:"retry_factor"`
-		TimeoutFactor uint8                `json:"timeout_factor"`
+		Proxy       KeepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
+		Target      KeepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
+		RetryFactor uint8                `json:"retry_factor"`
 	}
 	KeepaliveConfToUpdate struct {
-		Proxy         *KeepaliveTrackerConfToUpdate `json:"proxy,omitempty"`
-		Target        *KeepaliveTrackerConfToUpdate `json:"target,omitempty"`
-		RetryFactor   *uint8                        `json:"retry_factor,omitempty"`
-		TimeoutFactor *uint8                        `json:"timeout_factor,omitempty"`
+		Proxy       *KeepaliveTrackerConfToUpdate `json:"proxy,omitempty"`
+		Target      *KeepaliveTrackerConfToUpdate `json:"target,omitempty"`
+		RetryFactor *uint8                        `json:"retry_factor,omitempty"`
 	}
 
 	DownloaderConf struct {
@@ -547,8 +542,8 @@ type (
 		LZ4FrameChecksum bool `json:"lz4_frame_checksum"` // fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
 	}
 	TransportConfToUpdate struct {
-		MaxHeaderSize    *int          `json:"max_header,omitempty"`
-		Burst            *int          `json:"burst_buffer,omitempty"`
+		MaxHeaderSize    *int          `json:"max_header,omitempty" list:"readonly"`
+		Burst            *int          `json:"burst_buffer,omitempty" list:"readonly"`
 		BundleMultiplier *int          `json:"bundle_multiplier,omitempty"`
 		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty"`
 		Quiesce          *cos.Duration `json:"quiescent,omitempty"`
@@ -561,7 +556,7 @@ type (
 		MD   apc.WritePolicy `json:"md"`
 	}
 	WritePolicyConfToUpdate struct {
-		Data *apc.WritePolicy `json:"data,omitempty"`
+		Data *apc.WritePolicy `json:"data,omitempty" list:"readonly"` // NOTE: niy
 		MD   *apc.WritePolicy `json:"md,omitempty"`
 	}
 )
@@ -1486,17 +1481,26 @@ var Timeout = &timeout{
 	keepalive: 2*time.Second + time.Millisecond,
 }
 
-// enforce read-only
-func (c *TimeoutConf) Validate() (err error) {
-	const fmtErr = "config %s (%v) is read-only: updating requires restart"
-	if c.CplaneOperation.D() != Timeout.cplane {
-		err = fmt.Errorf(fmtErr, "timeout.cplane_operation", Timeout.cplane)
-	} else if c.MaxKeepalive.D() != Timeout.keepalive {
-		err = fmt.Errorf(fmtErr, "timeout.max_keepalive", Timeout.keepalive)
+func (c *TimeoutConf) Validate() error {
+	if c.CplaneOperation.D() < 10*time.Millisecond {
+		return fmt.Errorf("invalid cplane_operation=%v", c.CplaneOperation)
 	}
-	return
+	if c.MaxKeepalive < 2*c.CplaneOperation {
+		return fmt.Errorf("invalid max_keepalive=%v (cplane_operation=%v)", c.MaxKeepalive, c.CplaneOperation)
+	}
+	if c.MaxHostBusy.D() < 10*time.Second {
+		return fmt.Errorf("invalid max_host_busy=%v", c.MaxHostBusy)
+	}
+	if c.Startup.D() < 30*time.Second {
+		return fmt.Errorf("invalid startup_time=%v", c.Startup)
+	}
+	if c.SendFile.D() < time.Minute {
+		return fmt.Errorf("invalid send_file_time=%v", c.SendFile)
+	}
+	return nil
 }
 
+// once upon startup
 func (d *timeout) setReadOnly(config *Config) {
 	d.cplane = config.Timeout.CplaneOperation.D()
 	d.keepalive = config.Timeout.MaxKeepalive.D()

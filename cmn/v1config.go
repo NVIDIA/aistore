@@ -44,7 +44,7 @@ type (
 		Net         NetConf         `json:"net"`
 		FSHC        FSHCConf        `json:"fshc"`
 		Auth        AuthConf        `json:"auth"`
-		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
+		Keepalive   v1KeepaliveConf `json:"keepalivetracker"`
 		Downloader  DownloaderConf  `json:"downloader"`
 		DSort       DSortConf       `json:"distributed_sort"`
 		Compression v1CompressConf  `json:"compression"`
@@ -99,6 +99,12 @@ type (
 		Compression   string       `json:"compression"`
 		Multiplier    uint8        `json:"multiplier"`
 		Enabled       bool         `json:"enabled"`
+	}
+	v1KeepaliveConf struct {
+		Proxy         KeepaliveTrackerConf `json:"proxy"`
+		Target        KeepaliveTrackerConf `json:"target"`
+		RetryFactor   uint8                `json:"retry_factor"`
+		TimeoutFactor uint8                `json:"timeout_factor"`
 	}
 	v1CompressConf struct {
 		BlockMaxSize int  `json:"block_size"`
@@ -176,6 +182,8 @@ func loadClusterConfigV1(globalFpath string, config *Config) error {
 			v, ok := fld.Value().(bool)
 			debug.Assert(ok)
 			config.ClusterConfig.Transport.LZ4FrameChecksum = v
+			return nil, false
+		case name == "keepalivetracker.timeout_factor":
 			return nil, false
 		}
 

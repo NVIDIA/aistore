@@ -133,8 +133,7 @@ cat > $AIS_CONF_FILE <<EOL
 			"name":     "heartbeat",
 			"factor":   3
 		},
-		"retry_factor":   5,
-		"timeout_factor": 3
+		"retry_factor":   5
 	},
 	"downloader": {
 		"timeout": "1h"
