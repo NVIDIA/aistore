@@ -72,7 +72,6 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"rebalance": {
 		"dest_retry_time": "2m",
-		"quiescent":       "15s",
 		"compression":     "${COMPRESSION:-never}",
 		"enabled":         true
 	},
@@ -90,7 +89,8 @@ cat > $AIS_CONF_FILE <<EOL
 		"max_header":		4096,
 		"burst_buffer":		32,
 		"bundle_multiplier":	${BUNDLE_MULTIPLIER:-2},
-		"idle_teardown":	"4s",
+		"idle_teardown":	"${IDLE_TEARDOWN:-4s}",
+		"quiescent":		"${QUIESCENT:-10s}",
 		"lz4_block":		${LZ4_BLOCK:-262144},
 		"lz4_frame_checksum":	${LZ4_FRAME_CHECKSUM:-false}
 	},

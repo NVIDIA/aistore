@@ -21,8 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-// NOTE: configuration-wise, currently using config.Rebalance.Multiplier and Rebalance.Quiesce
-
 type (
 	DataMover struct {
 		t    cluster.Target
@@ -194,7 +192,7 @@ func (dm *DataMover) UnregRecv() {
 		return // e.g., 2PC (begin => abort) sequence with no Open
 	}
 	if dm.xctn != nil {
-		dm.Quiesce(dm.config.Rebalance.Quiesce.D())
+		dm.Quiesce(dm.config.Transport.Quiesce.D())
 	}
 	if err := transport.Unhandle(dm.data.trname); err != nil {
 		glog.Error(err)

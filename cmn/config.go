@@ -357,7 +357,6 @@ type (
 
 	RebalanceConf struct {
 		DestRetryTime cos.Duration `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
-		Quiesce       cos.Duration `json:"quiescent"`       // max wait for no-obj before next stage/batch
 		Compression   string       `json:"compression"`     // enum { CompressAlways, ... } in api/apc/compression.go
 		Enabled       bool         `json:"enabled"`         // true=auto-rebalance | manual rebalancing
 	}
@@ -538,9 +537,11 @@ type (
 		MaxHeaderSize    int `json:"max_header"`        // max transport header buffer (default=4K)
 		Burst            int `json:"burst_buffer"`      // num sends with no back pressure; see also AIS_STREAM_BURST_NUM
 		BundleMultiplier int `json:"bundle_multiplier"` // stream bundle multiplier (num streams to destination)
-		// max idle time - the time with no transmissions over a long-lived intra-cluster connection;
-		// when exceeded, sender terminates the connection (to reestablish it then upon the very first/next PDU)
+		// two no-new-transmissions durations:
+		// after `IdleTeardown` sender terminates the connection (to reestablish it upon the very first/next PDU)
 		IdleTeardown cos.Duration `json:"idle_teardown"`
+		// after Quiesce time, it is safe to terminate (or transition to the next (rebalance) stage)
+		Quiesce cos.Duration `json:"quiescent"`
 		// lz4
 		LZ4BlockMaxSize  int  `json:"lz4_block"`          // max uncompressed block size, one of [64K, 256K(*), 1M, 4M]
 		LZ4FrameChecksum bool `json:"lz4_frame_checksum"` // fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
@@ -550,6 +551,7 @@ type (
 		Burst            *int          `json:"burst_buffer,omitempty"`
 		BundleMultiplier *int          `json:"bundle_multiplier,omitempty"`
 		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty"`
+		Quiesce          *cos.Duration `json:"quiescent,omitempty"`
 		LZ4BlockMaxSize  *int          `json:"lz4_block,omitempty"`
 		LZ4FrameChecksum *bool         `json:"lz4_frame_checksum,omitempty"`
 	}
@@ -1453,6 +1455,12 @@ func (c *TransportConf) Validate() (err error) {
 	}
 	if c.MaxHeaderSize < 0 {
 		return fmt.Errorf("invalid transport.max_header: %v (expected >0)", c.MaxHeaderSize)
+	}
+	if c.IdleTeardown.D() < time.Second {
+		return fmt.Errorf("invalid transport.idle_teardown: %v (expected >= 1s)", c.IdleTeardown)
+	}
+	if c.Quiesce.D() < 8*time.Second {
+		return fmt.Errorf("invalid transport.quiescent: %v (expected >= 8s)", c.Quiesce)
 	}
 	if c.MaxHeaderSize > 0 && c.MaxHeaderSize < 512 {
 		return fmt.Errorf("invalid transport.max_header: %v (expected >= 512)", c.MaxHeaderSize)

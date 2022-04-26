@@ -72,12 +72,11 @@ type (
 		DiskOnly     bool   `json:"disk_only"`
 	}
 	v1TimeoutConf struct {
-		CplaneOperation cos.Duration `json:"cplane_operation"`
-		MaxKeepalive    cos.Duration `json:"max_keepalive"`
-		MaxHostBusy     cos.Duration `json:"max_host_busy"`
-		Startup         cos.Duration `json:"startup_time"`
-		SendFile        cos.Duration `json:"send_file_time"`
-		// (in v2 moved to transport section)
+		CplaneOperation       cos.Duration `json:"cplane_operation"`
+		MaxKeepalive          cos.Duration `json:"max_keepalive"`
+		MaxHostBusy           cos.Duration `json:"max_host_busy"`
+		Startup               cos.Duration `json:"startup_time"`
+		SendFile              cos.Duration `json:"send_file_time"`
 		TransportIdleTeardown cos.Duration `json:"transport_idle_term"`
 	}
 	v1ClientConf struct {
@@ -152,6 +151,31 @@ func loadClusterConfigV1(globalFpath string, config *Config) error {
 			v, ok := fld.Value().(int64)
 			debug.Assert(ok)
 			config.ClusterConfig.Space.OOS = v
+			return nil, false
+		case name == "timeout.transport_idle_term":
+			v, ok := fld.Value().(cos.Duration)
+			debug.Assert(ok)
+			config.ClusterConfig.Transport.IdleTeardown = v
+			return nil, false
+		case name == "rebalance.quiescent":
+			v, ok := fld.Value().(cos.Duration)
+			debug.Assert(ok)
+			config.ClusterConfig.Transport.Quiesce = v
+			return nil, false
+		case name == "rebalance.multiplier":
+			v, ok := fld.Value().(uint8)
+			debug.Assert(ok)
+			config.ClusterConfig.Transport.BundleMultiplier = int(v)
+			return nil, false
+		case name == "compression.block_size":
+			v, ok := fld.Value().(int)
+			debug.Assert(ok)
+			config.ClusterConfig.Transport.LZ4BlockMaxSize = v
+			return nil, false
+		case name == "compression.checksum":
+			v, ok := fld.Value().(bool)
+			debug.Assert(ok)
+			config.ClusterConfig.Transport.LZ4FrameChecksum = v
 			return nil, false
 		}
 

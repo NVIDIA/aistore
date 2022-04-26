@@ -653,7 +653,7 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs.id, rargs.smap))
 	}
 	// prior to closing the streams
-	if q := reb.quiesce(rargs, rargs.config.Rebalance.Quiesce.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
+	if q := reb.quiesce(rargs, rargs.config.Transport.Quiesce.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
 		if errM := fs.RemoveMarker(cmn.RebalanceMarker); errM == nil {
 			glog.Infof("%s: %s removed marker ok", reb.t, reb.xctn())
 		}

@@ -38,7 +38,7 @@
 	"proxy": {
 		"primary_url":   "http://localhost:8080",
 		"original_url":  "http://localhost:8080",
-		"discovery_url": "",
+		"discovery_url": "http://localhost:8081",
 		"non_electable": false
 	},
 	"space": {
@@ -61,7 +61,6 @@
 	},
 	"rebalance": {
 		"dest_retry_time": "2m",
-		"quiescent":       "15s",
 		"compression":     "never",
 		"enabled":         true
 	},
@@ -80,6 +79,7 @@
 		"burst_buffer":		32,
 		"bundle_multiplier":	2,
 		"idle_teardown":	"4s",
+		"quiescent":		"10s",
 		"lz4_block":		262144,
 		"lz4_frame_checksum":	false
 	},

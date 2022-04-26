@@ -141,7 +141,7 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 			s.time.idleTeardown = dfltIdleTeardown
 		}
 	}
-	debug.Assertf(s.time.idleTeardown > 2*dfltTick, "%v vs. %v", s.time.idleTeardown, dfltTick)
+	debug.Assertf(s.time.idleTeardown >= dfltTick, "%v vs. %v", s.time.idleTeardown, dfltTick)
 	s.time.ticks = int(s.time.idleTeardown / dfltTick)
 
 	s.lid = fmt.Sprintf("s-%s%s[%d]=>%s", s.trname, sid, s.sessID, dstID)
