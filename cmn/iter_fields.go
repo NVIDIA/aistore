@@ -342,10 +342,14 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 			dst.SetBool(n)
 		case reflect.Int64:
 			n, err := strconv.ParseInt(s, 10, 64)
-			if err != nil && dst.Type().Name() == "Duration" /*cos.Duration*/ {
-				var d time.Duration
-				d, err = time.ParseDuration(s)
-				n = int64(d)
+			if err != nil {
+				if dst.Type().Name() == "Duration" /*cos.Duration*/ {
+					var d time.Duration
+					d, err = time.ParseDuration(s)
+					n = int64(d)
+				} else if dst.Type().Name() == "Size" /*cos.Size*/ {
+					n, err = cos.S2B(s)
+				}
 			}
 			if err != nil {
 				return err

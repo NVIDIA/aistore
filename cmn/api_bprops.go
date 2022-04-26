@@ -199,7 +199,7 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 		}
 	}
 	var softErr error
-	for _, pv := range []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy} {
+	for _, pv := range []PropsValidator{&bp.Cksum, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy} {
 		var err error
 		if pv == &bp.EC {
 			err = bp.EC.ValidateAsProps(targetCnt)

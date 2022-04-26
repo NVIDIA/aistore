@@ -234,15 +234,15 @@ type (
 	}
 
 	LogConf struct {
-		Level    string `json:"level"`     // log level aka verbosity
-		MaxSize  uint64 `json:"max_size"`  // size that triggers log rotation
-		MaxTotal uint64 `json:"max_total"` // max total size of all the logs in the log directory
+		Level    string   `json:"level"`     // log level (aka verbosity)
+		MaxSize  cos.Size `json:"max_size"`  // exceeding this size triggers log rotation
+		MaxTotal cos.Size `json:"max_total"` // (sum individual log sizes); exceeding this number triggers cleanup
 	}
 	LogConfToUpdate struct {
-		Dir      *string `json:"dir,omitempty"`       // log directory
-		Level    *string `json:"level,omitempty"`     // log level aka verbosity
-		MaxSize  *uint64 `json:"max_size,omitempty"`  // size that triggers log rotation
-		MaxTotal *uint64 `json:"max_total,omitempty"` // max total size of all the logs in the log directory
+		Dir      *string   `json:"dir,omitempty"`       // log directory
+		Level    *string   `json:"level,omitempty"`     // log level aka verbosity
+		MaxSize  *cos.Size `json:"max_size,omitempty"`  // size that triggers log rotation
+		MaxTotal *cos.Size `json:"max_total,omitempty"` // max total size of all the logs in the log directory
 	}
 
 	PeriodConf struct {
@@ -700,8 +700,8 @@ var (
 var (
 	_ Validator = (*BackendConf)(nil)
 	_ Validator = (*CksumConf)(nil)
+	_ Validator = (*LogConf)(nil)
 	_ Validator = (*SpaceConf)(nil)
-	_ Validator = (*LRUConf)(nil)
 	_ Validator = (*MirrorConf)(nil)
 	_ Validator = (*ECConf)(nil)
 	_ Validator = (*VersionConf)(nil)
@@ -719,7 +719,6 @@ var (
 
 	_ PropsValidator = (*CksumConf)(nil)
 	_ PropsValidator = (*SpaceConf)(nil)
-	_ PropsValidator = (*LRUConf)(nil)
 	_ PropsValidator = (*MirrorConf)(nil)
 	_ PropsValidator = (*ECConf)(nil)
 	_ PropsValidator = (*WritePolicyConf)(nil)
@@ -817,6 +816,25 @@ func (c *LocalConfig) AddPath(mpath string) {
 func (c *LocalConfig) DelPath(mpath string) {
 	debug.Assert(!c.TestingEnv())
 	c.FSP.Paths.Delete(mpath)
+}
+
+/////////////
+// LogConf //
+/////////////
+
+func (c *LogConf) Validate() error {
+	switch c.Level {
+	case "0", "1", "2", "3", "4", "5":
+	default:
+		return fmt.Errorf("invalid log.level=%q", c.Level)
+	}
+	if c.MaxSize < cos.KiB || c.MaxSize > cos.GiB {
+		return fmt.Errorf("invalid log.max_size=%s (expected range [1KB, 1GB]", c.MaxSize)
+	}
+	if c.MaxTotal < cos.MiB || c.MaxTotal > 10*cos.GiB {
+		return fmt.Errorf("invalid log.max_total=%s (expected range [1MB, 10GB]", c.MaxTotal)
+	}
+	return nil
 }
 
 /////////////////////////////////////////
@@ -992,9 +1010,6 @@ func (c *SpaceConf) String() string {
 /////////////////////////////////////
 // LRUConf (part of ClusterConfig) //
 /////////////////////////////////////
-
-func (*LRUConf) Validate() error                      { return nil }
-func (*LRUConf) ValidateAsProps(...interface{}) error { return nil }
 
 func (c *LRUConf) String() string {
 	if !c.Enabled {
@@ -1725,10 +1740,10 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	}
 
 	// rotate log
-	glog.MaxSize = config.Log.MaxSize
+	glog.MaxSize = uint64(config.Log.MaxSize)
 	if glog.MaxSize > cos.GiB {
-		glog.Warningf("log.max_size %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
-		glog.MaxSize = cos.MiB
+		glog.Warningf("log.max_size %d exceeds 1GB, setting log.max_size=4MB", glog.MaxSize)
+		glog.MaxSize = 4 * cos.MiB
 	}
 	// log level
 	if err := SetLogLevel(config.Log.Level); err != nil {

@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -11,7 +11,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-type Duration time.Duration // NOTE: the type name is used in iter-fields to parse
+// is used in cmn/config; is known to cmn/iter-fields parser
+// (compare w/ size.go)
+
+type Duration time.Duration
 
 func (d Duration) D() time.Duration             { return time.Duration(d) }
 func (d Duration) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(d.String()) }
