@@ -55,6 +55,7 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
 
         objects = self.client.list_objects(self.bck_name)
         self.assertFalse(objects is None)
+        self.assertEqual(len(objects), 1)
 
         properties = self.client.head_object(self.bck_name, "obj1")
         self.assertEqual(properties['ais-version'], '1')
@@ -72,6 +73,24 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertNotEqual(len(smap.tmap), 0)
         self.assertNotEqual(smap.version, 0)
         self.assertIsNot(smap.uuid, "")
+
+    def test_list_objects(self):
+        bucket_size = 110
+        short_list_len = 87
+        short_page_len = 17
+        self.client.create_bucket(self.bck_name)
+        content = "test".encode("utf-8")
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(content)
+            f.flush()
+            for obj_id in range(bucket_size):
+                self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
+        objects = self.client.list_objects(self.bck_name, count=short_list_len)
+        self.assertEqual(len(objects), short_list_len)
+        objects = self.client.list_objects(self.bck_name)
+        self.assertEqual(len(objects), bucket_size)
+        objects = self.client.list_objects(self.bck_name, page_size=short_page_len)
+        self.assertEqual(len(objects), bucket_size)
 
 
 if __name__ == '__main__':

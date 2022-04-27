@@ -18,7 +18,7 @@ from .const import (
     ProviderAIS,
     QParamWhat,
 )
-from .msg import ActionMsg, Bck, BucketList, Smap
+from .msg import ActionMsg, Bck, BucketList, BucketEntry, Smap
 
 T = TypeVar("T")
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
@@ -164,7 +164,7 @@ class Client:
             params=params,
         ).headers
 
-    def list_objects(self, bck_name: str, provider: str = ProviderAIS, prefix: str = "") -> BucketList:
+    def list_objects(self, bck_name: str, provider: str = ProviderAIS, prefix: str = "", count: int = 0, page_size: int = 0) -> List[BucketEntry]:
         """
         Returns list of objects in a bucket
 
@@ -173,9 +173,11 @@ class Client:
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
                 Defaults to "ais". Empty provider returns buckets of all providers.
             prefix (str, optional): return only objects that start with the prefix
+            count (int, optional): return first "count" objects, default is "0" - return all objects in the bucket
+            page_size (int, optional): read by page_size objects at a time
 
         Returns:
-            BucketList: next page of objects in the bucket
+            List[BucketEntry]: the list of objects in the bucket
 
         Raises:
             requests.RequestException: Ambiguous while handling request
@@ -183,17 +185,36 @@ class Client:
             requests.ConnectionTimeout: Timed out while connecting to AIStore server
             requests.ReadTimeout: Timeout receiving response from server
         """
-        value = {"prefix": prefix} if prefix != "" else None
-        action = ActionMsg(action="list", value=value).dict()
+        page_size = count if page_size == 0 else page_size
+        value = {"prefix": prefix, "pagesize": page_size, "uuid": ""}
         params = {QParamProvider: provider}
+        obj_list = None
+        to_read = count
+        list_all = count == 0
 
-        return self._request_deserialize(
-            HTTP_METHOD_GET,
-            path=f"buckets/{ bck_name }",
-            res_model=BucketList,
-            json=action,
-            params=params,
-        )
+        while list_all or to_read > 0:
+            action = ActionMsg(action="list", value=value).dict()
+            curr = self._request_deserialize(
+                HTTP_METHOD_GET,
+                path=f"buckets/{ bck_name }",
+                res_model=BucketList,
+                json=action,
+                params=params,
+            )
+            if obj_list:
+                obj_list.entries = obj_list.entries + curr.entries
+                # TODO: report flags somehow
+                obj_list.flags = obj_list.flags or curr.flags
+            obj_list = obj_list or curr
+            if curr.continuation_token == "":
+                break
+            value["uuid"] = curr.uuid
+            value["continuation_token"] = curr.continuation_token
+            if not list_all:
+                to_read -= len(curr.entries)
+                value["pagesize"] = min(to_read, page_size)
+
+        return obj_list.entries
 
     def head_object(self, bck_name: str, object_name: str, provider: str = ProviderAIS) -> Header:
         """
