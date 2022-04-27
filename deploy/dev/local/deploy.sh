@@ -221,8 +221,11 @@ if [[ $AUTH_ENABLED == "true" ]]; then
 fi
 
 if [[ $MODE == "debug" ]]; then
-	sleep 1.5
+   sleep 1.5
 else
-	sleep 0.1
+   sleep 0.1
 fi
-echo ${listening_on}
+runcount=`pgrep -a aisnode | grep "$NEXT_TIER" | wc -l`
+if [ $runcount -eq $((TARGET_CNT + PROXY_CNT)) ]; then
+   echo ${listening_on}
+fi

@@ -23,10 +23,11 @@ is_command_available() {
   fi
 }
 
+# uncomment to see the commands
 run_cmd() {
-  set -x
+#  set -x
   $@ &
-  { set +x; } 2>/dev/null
+#  { set +x; } 2>/dev/null
 }
 
 parse_backend_providers() {
