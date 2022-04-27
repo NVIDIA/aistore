@@ -225,7 +225,13 @@ if [[ $MODE == "debug" ]]; then
 else
    sleep 0.1
 fi
-runcount=`pgrep -a aisnode | grep "$NEXT_TIER" | wc -l`
-if [ $runcount -eq $((TARGET_CNT + PROXY_CNT)) ]; then
+
+if command -v pgrep &> /dev/null; then
+   runcount=`pgrep -a aisnode | grep "$NEXT_TIER" | wc -l`
+   if [ $runcount -eq $((TARGET_CNT + PROXY_CNT)) ]; then
+      echo ${listening_on}
+   fi
+else
+   echo "Warning: pgrep not found"
    echo ${listening_on}
 fi
