@@ -106,7 +106,7 @@ func (p *proxy) init(config *cmn.Config) {
 	p.initNetworks()
 	p.si.Init(initPID(config), apc.Proxy)
 
-	memsys.Init(p.si.ID(), p.si.ID())
+	memsys.Init(p.si.ID(), p.si.ID(), config)
 
 	cos.InitShortID(p.si.Digest())
 

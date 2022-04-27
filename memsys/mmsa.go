@@ -119,14 +119,10 @@ const (
 	minDepth = 4    // depth when idle or under OOM
 	maxDepth = 4096 // exceeding warrants reallocation
 
-	loadAvg  = 10                   // "idle" load average to deallocate Slabs when below
-	sizeToGC = cos.GiB + cos.GiB>>1 // see heuristics ("Heu")
+	loadAvg = 10 // "idle" load average to deallocate Slabs when below
 )
 
-// slab constants
-const (
-	countThreshold = 16 // exceeding this scatter-gather count warrants selecting a larger-size Slab
-)
+const countThreshold = 16 // exceeding this scatter-gather count warrants selecting a larger-(buffer)-size Slab
 
 const swappingMax = 4 // make sure that `swapping` condition, once noted, lingers for a while
 

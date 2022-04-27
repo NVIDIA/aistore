@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
@@ -54,6 +55,8 @@ var examples = `# 1. Cleanup (i.e., destroy) an existing bucket:
      $ aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid	# 0xdb
 `
 
+const readme = cmn.GitHubHome + "/blob/master/docs/howto_benchmark.md"
+
 func printUsage(f *flag.FlagSet) {
 	fmt.Println("\nAbout")
 	fmt.Println("=====")
@@ -61,7 +64,7 @@ func printUsage(f *flag.FlagSet) {
 	fmt.Println("It's a load generator that has been developed to benchmark and stress-test AIStore")
 	fmt.Println("but can be easily extended to benchmark any S3-compatible backend.")
 	fmt.Println("For usage, run: `aisloader`, or `aisloader usage`, or `aisloader --help`.")
-	fmt.Println("Further details at https://github.com/NVIDIA/aistore/blob/master/docs/howto_benchmark.md")
+	fmt.Println("Further details at " + readme)
 
 	fmt.Println("\nCommand-line options")
 	fmt.Println("====================")

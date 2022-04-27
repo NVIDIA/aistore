@@ -18,9 +18,14 @@ import (
 )
 
 const (
-	memCheckAbove  = 90 * time.Second   // default memory checking frequency when above low watermark
-	freeIdleMinDur = memCheckAbove      // time to reduce an idle slab to a minimum depth (see mindepth)
+	freeIdleMinDur = 90 * time.Second   // time to reduce an idle slab to a minimum depth (see mindepth)
 	freeIdleZero   = freeIdleMinDur * 2 // ... to zero
+)
+
+// hk tunables (via config.Memsys section)
+var (
+	sizeToGC      int64 = cos.GiB + cos.GiB>>1 // run GC when sum(`freed`) > sizeToGC
+	memCheckAbove       = 90 * time.Second     // memory checking frequency when above low watermark
 )
 
 // API: on-demand memory freeing to the user-provided specification
@@ -90,8 +95,8 @@ func (r *MMSA) hkcb() time.Duration {
 
 	// 4. calibrate and mem-free accordingly
 	var (
-		mingc = int64(sizeToGC) // minimum accumulated size that triggers GC
-		depth int               // => current ring depth tbd
+		mingc = sizeToGC // minimum accumulated size that triggers GC
+		depth int        // => current ring depth tbd
 	)
 	switch pressure {
 	case OOM, PressureExtreme:

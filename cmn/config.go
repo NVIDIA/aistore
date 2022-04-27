@@ -86,11 +86,10 @@ type (
 
 type (
 	// Config contains all configuration values used by a given ais daemon.
-	// NOTE:
-	//     Naming convention for setting/getting specific values is defined as a join:
-	//     (parent json tag . child json tag).
-	//     E.g., to set/get `EC.Enabled` use `ec.enabled`. And so on.
-	//     For details, see `IterFields`.
+	// Naming convention for setting/getting specific values is defined as follows:
+	//              (parent json tag . child json tag)
+	// E.g., to set/get `EC.Enabled` use `ec.enabled`. And so on.
+	// For details, see `IterFields`.
 	Config struct {
 		role          string `list:"omit"` // Proxy or Target
 		ClusterConfig `json:",inline"`
@@ -120,6 +119,7 @@ type (
 		Downloader  DownloaderConf  `json:"downloader"`
 		DSort       DSortConf       `json:"distributed_sort"`
 		Transport   TransportConf   `json:"transport"`
+		Memsys      MemsysConf      `json:"memsys"`
 		WritePolicy WritePolicyConf `json:"write_policy"`
 		Features    feat.Flags      `json:"features,string" allow:"cluster"` // feature flags (to flip assorted defaults)
 		// read-only
@@ -152,6 +152,7 @@ type (
 		Downloader  *DownloaderConfToUpdate  `json:"downloader,omitempty"`
 		DSort       *DSortConfToUpdate       `json:"distributed_sort,omitempty"`
 		Transport   *TransportConfToUpdate   `json:"transport,omitempty"`
+		Memsys      *MemsysConfToUpdate      `json:"memsys,omitempty"`
 		WritePolicy *WritePolicyConfToUpdate `json:"write_policy,omitempty"`
 		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
 		Features    *feat.Flags              `json:"features,string,omitempty"`
@@ -551,12 +552,29 @@ type (
 		LZ4FrameChecksum *bool         `json:"lz4_frame_checksum,omitempty"`
 	}
 
+	MemsysConf struct {
+		MinFree        cos.Size     `json:"min_free"`
+		DefaultBufSize cos.Size     `json:"default_buf"`
+		SizeToGC       cos.Size     `json:"to_gc"`
+		HousekeepTime  cos.Duration `json:"hk_time"`
+		MinPctTotal    int          `json:"min_pct_total"`
+		MinPctFree     int          `json:"min_pct_free"`
+	}
+	MemsysConfToUpdate struct {
+		MinFree        *cos.Size     `json:"min_free,omitempty" list:"readonly"`
+		DefaultBufSize *cos.Size     `json:"default_buf,omitempty"`
+		SizeToGC       *cos.Size     `json:"to_gc,omitempty"`
+		HousekeepTime  *cos.Duration `json:"hk_time,omitempty"`
+		MinPctTotal    *int          `json:"min_pct_total,omitempty" list:"readonly"`
+		MinPctFree     *int          `json:"min_pct_free,omitempty" list:"readonly"`
+	}
+
 	WritePolicyConf struct {
 		Data apc.WritePolicy `json:"data"`
 		MD   apc.WritePolicy `json:"md"`
 	}
 	WritePolicyConfToUpdate struct {
-		Data *apc.WritePolicy `json:"data,omitempty" list:"readonly"` // NOTE: niy
+		Data *apc.WritePolicy `json:"data,omitempty" list:"readonly"` // NOTE: NIY
 		MD   *apc.WritePolicy `json:"md,omitempty"`
 	}
 )
@@ -715,6 +733,7 @@ var (
 	_ Validator = (*DownloaderConf)(nil)
 	_ Validator = (*DSortConf)(nil)
 	_ Validator = (*TransportConf)(nil)
+	_ Validator = (*MemsysConf)(nil)
 	_ Validator = (*WritePolicyConf)(nil)
 
 	_ PropsValidator = (*CksumConf)(nil)
@@ -837,9 +856,9 @@ func (c *LogConf) Validate() error {
 	return nil
 }
 
-/////////////////////////////////////////
-// BackendConf (part of ClusterConfig) //
-/////////////////////////////////////////
+/////////////////
+// BackendConf //
+/////////////////
 
 func (c *BackendConf) UnmarshalJSON(data []byte) error {
 	return jsoniter.Unmarshal(data, &c.Conf)
@@ -967,9 +986,9 @@ func (c *BackendConf) EqualRemAIS(o *BackendConf) bool {
 	return true
 }
 
-//////////////////////////////////////
-// DiskConf (part of ClusterConfig) //
-//////////////////////////////////////
+//////////////
+// DiskConf //
+//////////////
 
 func (c *DiskConf) Validate() (err error) {
 	lwm, hwm, maxwm := c.DiskUtilLowWM, c.DiskUtilHighWM, c.DiskUtilMaxWM
@@ -989,9 +1008,9 @@ func (c *DiskConf) Validate() (err error) {
 	return nil
 }
 
-///////////////////////////////////////
-// SpaceConf (part of ClusterConfig) //
-///////////////////////////////////////
+///////////////
+// SpaceConf //
+///////////////
 
 func (c *SpaceConf) Validate() (err error) {
 	if c.CleanupWM <= 0 || c.LowWM < c.CleanupWM || c.HighWM < c.LowWM || c.OOS < c.HighWM || c.OOS > 100 {
@@ -1007,9 +1026,9 @@ func (c *SpaceConf) String() string {
 		c.CleanupWM, c.LowWM, c.HighWM, c.OOS)
 }
 
-/////////////////////////////////////
-// LRUConf (part of ClusterConfig) //
-/////////////////////////////////////
+/////////////
+// LRUConf //
+/////////////
 
 func (c *LRUConf) String() string {
 	if !c.Enabled {
@@ -1018,9 +1037,9 @@ func (c *LRUConf) String() string {
 	return fmt.Sprintf("LRU don't evict: %v", c.DontEvictTime)
 }
 
-///////////////////////////////////////
-// CksumConf (part of ClusterConfig) //
-///////////////////////////////////////
+///////////////
+// CksumConf //
+///////////////
 
 func (c *CksumConf) Validate() (err error) {
 	return cos.ValidateCksumType(c.Type)
@@ -1054,9 +1073,9 @@ func (c *CksumConf) String() string {
 	return fmt.Sprintf("Type: %s | Validate: %s", c.Type, toValidateStr)
 }
 
-////////////////////////////////////////
-// VersionConf (part of ClusterConfig) //
-////////////////////////////////////////
+/////////////////
+// VersionConf //
+/////////////////
 
 func (c *VersionConf) Validate() error {
 	if !c.Enabled && c.ValidateWarmGet {
@@ -1080,9 +1099,9 @@ func (c *VersionConf) String() string {
 	return text
 }
 
-////////////////////////////////////////
-// MirrorConf (part of ClusterConfig) //
-////////////////////////////////////////
+////////////////
+// MirrorConf //
+////////////////
 
 func (c *MirrorConf) Validate() error {
 	if c.Burst < 0 {
@@ -1109,9 +1128,9 @@ func (c *MirrorConf) String() string {
 	return fmt.Sprintf("%d copies", c.Copies)
 }
 
-////////////////////////////////////
-// ECConf (part of ClusterConfig) //
-////////////////////////////////////
+////////////
+// ECConf //
+////////////
 
 func (c *ECConf) Validate() error {
 	if c.ObjSizeLimit < 0 {
@@ -1183,9 +1202,9 @@ func (c *WritePolicyConf) Validate() (err error) {
 
 func (c *WritePolicyConf) ValidateAsProps(...interface{}) error { return c.Validate() }
 
-///////////////////////////////////////////
-// KeepaliveConf (part of ClusterConfig) //
-///////////////////////////////////////////
+///////////////////
+// KeepaliveConf //
+///////////////////
 
 // validKeepaliveType returns true if the keepalive type is supported.
 func validKeepaliveType(t string) bool {
@@ -1212,9 +1231,9 @@ func KeepaliveRetryDuration(cs ...*Config) time.Duration {
 	return c.Timeout.CplaneOperation.D() * time.Duration(c.Keepalive.RetryFactor)
 }
 
-/////////////////////////////////////
-// NetConf (part of ClusterConfig) //
-/////////////////////////////////////
+/////////////
+// NetConf //
+/////////////
 
 func (c *NetConf) Validate() (err error) {
 	if !cos.StringInSlice(c.L4.Proto, supportedL4Protos) {
@@ -1229,9 +1248,9 @@ func (c *NetConf) Validate() (err error) {
 	return nil
 }
 
-/////////////////////////////////////////////
-// LocalNetConfig (part of LocalNetConfig) //
-/////////////////////////////////////////////
+////////////////////
+// LocalNetConfig //
+////////////////////
 
 func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")
@@ -1283,9 +1302,9 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	return
 }
 
-///////////////////////////////////////
-// DSortConf (part of ClusterConfig) //
-///////////////////////////////////////
+///////////////
+// DSortConf //
+///////////////
 
 func (c *DSortConf) Validate() (err error) {
 	return c.ValidateWithOpts(false)
@@ -1325,9 +1344,9 @@ func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 	return nil
 }
 
-///////////////////////////////////
-// FSPConf (part of LocalConfig) //
-///////////////////////////////////
+/////////////
+// FSPConf //
+/////////////
 
 func (c *FSPConf) UnmarshalJSON(data []byte) (err error) {
 	m := cos.NewStringSet()
@@ -1393,9 +1412,9 @@ func IsNestedMpath(a string, la int, b string) (err error) {
 	return
 }
 
-///////////////////////////////////////
-// TestFSPConf (part of LocalConfig) //
-///////////////////////////////////////
+/////////////////
+// TestFSPConf //
+/////////////////
 
 // validate root and (NOTE: testing only) generate and fill-in counted FSP.Paths
 func (c *TestFSPConf) Validate(contextConfig *Config) (err error) {
@@ -1450,9 +1469,38 @@ func ValidateMpath(mpath string) (string, error) {
 	return cleanMpath, nil
 }
 
-///////////////////////////////////////////
-// TransportConf (part of ClusterConfig) //
-///////////////////////////////////////////
+////////////////
+// MemsysConf //
+////////////////
+
+func (c *MemsysConf) Validate() (err error) {
+	if c.MinFree > 0 && c.MinFree < 100*cos.MiB {
+		return fmt.Errorf("invalid memsys.min_free %d", c.MinFree)
+	}
+	if c.DefaultBufSize > 128*cos.KiB {
+		return fmt.Errorf("invalid memsys.default_buf %d", c.DefaultBufSize)
+	}
+	if c.DefaultBufSize%(4*cos.KiB) != 0 {
+		return fmt.Errorf("memsys.default_buf %d must multiple of 4KB", c.DefaultBufSize)
+	}
+	if c.SizeToGC > cos.TiB {
+		return fmt.Errorf("invalid memsys.to_gc %d", c.SizeToGC)
+	}
+	if c.HousekeepTime.D() > time.Hour {
+		return fmt.Errorf("invalid memsys.hk_time %d", c.HousekeepTime)
+	}
+	if c.MinPctTotal < 0 || c.MinPctTotal > 95 {
+		return fmt.Errorf("invalid memsys.min_pct_total %d", c.MinPctTotal)
+	}
+	if c.MinPctFree < 0 || c.MinPctFree > 95 {
+		return fmt.Errorf("invalid memsys.min_pct_free %d", c.MinPctFree)
+	}
+	return nil
+}
+
+///////////////////
+// TransportConf //
+///////////////////
 
 // NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
 func (c *TransportConf) Validate() (err error) {

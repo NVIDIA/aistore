@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
@@ -29,19 +30,41 @@ var (
 	verbose          bool
 )
 
-func Init(gmmName, smmName string) {
+func Init(gmmName, smmName string, config *cmn.Config) {
 	debug.Assert(gmm == nil && smm == nil)
-	gmm = &MMSA{Name: gmmName + ".gmm", defBufSize: DefaultBufSize}
+
+	// page mmsa config (see also "AIS_MINMEM_FREE" and related environment)
+	defBufSize := int64(DefaultBufSize)
+	if config.Memsys.DefaultBufSize != 0 {
+		defBufSize = int64(config.Memsys.DefaultBufSize)
+	}
+	gmm = &MMSA{Name: gmmName + ".gmm", defBufSize: defBufSize, slabIncStep: PageSlabIncStep}
+	gmm.MinFree = uint64(config.Memsys.MinFree)
+	gmm.MinPctTotal = config.Memsys.MinPctTotal
+	gmm.MinPctFree = config.Memsys.MinPctFree
+
+	// hk config
+	if config.Memsys.SizeToGC != 0 {
+		sizeToGC = int64(config.Memsys.SizeToGC)
+	}
+	if config.Memsys.HousekeepTime != 0 {
+		memCheckAbove = config.Memsys.HousekeepTime.D()
+	}
+
 	gmm.Init(0)
-	smm = &MMSA{Name: smmName + ".smm", defBufSize: DefaultSmallBufSize}
+
+	// byte mmsa:
+	smm = &MMSA{Name: smmName + ".smm", defBufSize: DefaultSmallBufSize, slabIncStep: SmallSlabIncStep}
 	smm.Init(0)
 	smm.sibling = gmm
 	gmm.sibling = smm
+
+	// verbosity
 	verbose = bool(glog.FastV(4, glog.SmoduleMemsys))
 }
 
 func NewMMSA(name string) (mem *MMSA, err error) {
-	mem = &MMSA{Name: name + ".test.pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
+	mem = &MMSA{Name: name + ".test.pmm", defBufSize: DefaultBufSize, slabIncStep: PageSlabIncStep, MinFree: minMemFreeTests}
 	err = mem.Init(0)
 	return
 }
@@ -51,7 +74,12 @@ func PageMM() *MMSA {
 	gmmOnce.Do(func() {
 		if gmm == nil {
 			// tests only
-			gmm = &MMSA{Name: "test.pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
+			gmm = &MMSA{
+				Name:        "test.pmm",
+				defBufSize:  DefaultBufSize,
+				slabIncStep: PageSlabIncStep,
+				MinFree:     minMemFreeTests,
+			}
 			gmm.Init(maxMemUsedTests)
 			if smm != nil {
 				smm.sibling = gmm
@@ -68,7 +96,12 @@ func ByteMM() *MMSA {
 	smmOnce.Do(func() {
 		if smm == nil {
 			// tests only
-			smm = &MMSA{Name: "test.smm", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
+			smm = &MMSA{
+				Name:        "test.smm",
+				defBufSize:  DefaultSmallBufSize,
+				slabIncStep: SmallSlabIncStep,
+				MinFree:     minMemFreeTests,
+			}
 			smm.Init(maxMemUsedTests)
 			if gmm != nil {
 				gmm.sibling = smm
@@ -80,8 +113,8 @@ func ByteMM() *MMSA {
 	return smm
 }
 
-// NOTE: byte rings vs page rings: NumSmallSlabs x 128 vs. NumPageSlabs x 4K, respectively
-func (r *MMSA) isPage() bool { return r.defBufSize == DefaultBufSize }
+// byte vs page rings: (NumSmallSlabs x 128) vs (NumPageSlabs x 4K), respectively
+func (r *MMSA) isPage() bool { return r.slabIncStep == PageSlabIncStep }
 
 func (r *MMSA) RegWithHK() {
 	d := r.TimeIval
@@ -94,7 +127,6 @@ func (r *MMSA) RegWithHK() {
 
 // initialize new MMSA instance
 func (r *MMSA) Init(maxUse int64) (err error) {
-	debug.Assert(r.Name != "")
 	// 1. environment overrides defaults and MMSA{...} hard-codings
 	if err = r.env(); err != nil {
 		cos.Errorf("%v", err)
@@ -145,13 +177,15 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 	r.optDepth.Store(optDepth)
 	r.toGC.Store(0)
 
-	// init rings and slabs
 	if r.defBufSize == 0 {
+		// assume page
+		debug.Assert(r.slabIncStep == 0 || r.slabIncStep == PageSlabIncStep)
 		r.defBufSize = DefaultBufSize
+		r.slabIncStep = PageSlabIncStep
 	}
-	r.slabIncStep, r.maxSlabSize, r.numSlabs = PageSlabIncStep, MaxPageSlabSize, NumPageSlabs
+	r.maxSlabSize, r.numSlabs = MaxPageSlabSize, NumPageSlabs
 	if !r.isPage() {
-		r.slabIncStep, r.maxSlabSize, r.numSlabs = SmallSlabIncStep, MaxSmallSlabSize, NumSmallSlabs
+		r.maxSlabSize, r.numSlabs = MaxSmallSlabSize, NumSmallSlabs
 	}
 	r.slabStats = &slabStats{}
 	r.statsSnapshot = &Stats{}

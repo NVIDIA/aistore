@@ -94,6 +94,14 @@ cat > $AIS_CONF_FILE <<EOL
 		"lz4_block":		${LZ4_BLOCK:-262144},
 		"lz4_frame_checksum":	${LZ4_FRAME_CHECKSUM:-false}
 	},
+	"memsys": {
+		"min_free":		"2gb",
+		"default_buf":		"32kb",
+		"to_gc":		"2gb",
+		"hk_time":		"90s",
+		"min_pct_total":	0,
+		"min_pct_free":		0
+	},
 	"versioning": {
 		"enabled":           true,
 		"validate_warm_get": false

@@ -180,7 +180,7 @@ func (t *target) init(config *cmn.Config) {
 
 	cos.InitShortID(t.si.Digest())
 
-	memsys.Init(t.si.ID(), t.si.ID())
+	memsys.Init(t.si.ID(), t.si.ID(), config)
 
 	newVol := volume.Init(t, config,
 		daemon.cli.target.allowSharedDisksAndNoDisks, daemon.cli.target.startWithLostMountpath)
