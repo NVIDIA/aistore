@@ -43,9 +43,6 @@ const (
 	numGorHighCheckTime  = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
 )
 
-// TODO -- FIXME
-const startupDeadlineMultiplier = 1000 // deadline = startupDeadlineMultiplier * config.Timeout.Startup
-
 const (
 	KindCounter = "counter"
 	KindGauge   = "gauge"
@@ -710,8 +707,13 @@ func (r *statsRunner) runcommon(logger statsLogger) error {
 
 		// NOTE: the maximum time we agree to wait for r.daemon.ClusterStarted()
 		config   = cmn.GCO.Get()
-		deadline = startupDeadlineMultiplier * config.Timeout.Startup.D()
+		deadline = config.Timeout.JoinAtStartup.D()
 	)
+	if logger.standingBy() {
+		deadline = 24 * time.Hour
+	} else if deadline == 0 {
+		deadline = 2 * config.Timeout.Startup.D()
+	}
 waitStartup:
 	for {
 		select {

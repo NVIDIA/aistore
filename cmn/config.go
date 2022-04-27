@@ -42,9 +42,10 @@ const (
 	ThrottleMaxDur = time.Millisecond * 100
 )
 
+// erasure coding
 const (
-	MinSliceCount = 1  // erasure coding: minimum number of data or parity slices
-	MaxSliceCount = 32 // erasure coding: maximum number of data or parity slices
+	MinSliceCount = 1  // minimum number of data or parity slices
+	MaxSliceCount = 32 // maximum --/--
 )
 
 const (
@@ -264,6 +265,7 @@ type (
 		MaxKeepalive    cos.Duration `json:"max_keepalive"`
 		MaxHostBusy     cos.Duration `json:"max_host_busy"`
 		Startup         cos.Duration `json:"startup_time"`
+		JoinAtStartup   cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout
 		SendFile        cos.Duration `json:"send_file_time"`
 	}
 	TimeoutConfToUpdate struct {
@@ -271,6 +273,7 @@ type (
 		MaxKeepalive    *cos.Duration `json:"max_keepalive,omitempty" list:"readonly"`
 		MaxHostBusy     *cos.Duration `json:"max_host_busy,omitempty"`
 		Startup         *cos.Duration `json:"startup_time,omitempty"`
+		JoinAtStartup   *cos.Duration `json:"join_startup_time,omitempty"`
 		SendFile        *cos.Duration `json:"send_file_time,omitempty"`
 	}
 
@@ -1550,19 +1553,22 @@ var Timeout = &timeout{
 
 func (c *TimeoutConf) Validate() error {
 	if c.CplaneOperation.D() < 10*time.Millisecond {
-		return fmt.Errorf("invalid cplane_operation=%v", c.CplaneOperation)
+		return fmt.Errorf("invalid timeout.cplane_operation=%s", c.CplaneOperation)
 	}
 	if c.MaxKeepalive < 2*c.CplaneOperation {
-		return fmt.Errorf("invalid max_keepalive=%v (cplane_operation=%v)", c.MaxKeepalive, c.CplaneOperation)
+		return fmt.Errorf("invalid timeout.max_keepalive=%s (cplane_operation=%s)", c.MaxKeepalive, c.CplaneOperation)
 	}
 	if c.MaxHostBusy.D() < 10*time.Second {
-		return fmt.Errorf("invalid max_host_busy=%v", c.MaxHostBusy)
+		return fmt.Errorf("invalid timeout.max_host_busy=%s", c.MaxHostBusy)
 	}
 	if c.Startup.D() < 30*time.Second {
-		return fmt.Errorf("invalid startup_time=%v", c.Startup)
+		return fmt.Errorf("invalid timeout.startup_time=%s", c.Startup)
+	}
+	if c.JoinAtStartup != 0 && c.JoinAtStartup < 2*c.Startup {
+		return fmt.Errorf("invalid timeout.join_startup_time=%s", c.JoinAtStartup)
 	}
 	if c.SendFile.D() < time.Minute {
-		return fmt.Errorf("invalid send_file_time=%v", c.SendFile)
+		return fmt.Errorf("invalid timeout.send_file_time=%s", c.SendFile)
 	}
 	return nil
 }
