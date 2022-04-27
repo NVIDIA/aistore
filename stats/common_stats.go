@@ -34,15 +34,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const (
-	logsMaxSizeCheckTime  = 48 * time.Minute       // periodically check the logs for max accumulated size
-	startupSleep          = 300 * time.Millisecond // periodically poll ClusterStarted()
-	numGorHighCheckTime   = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
-	glogPeriodicFlushTime = 40 * time.Second       // not to have `go glog.flushDaemon`
+const dfltPeriodicFlushTime = 40 * time.Second // when config.Log.FlushTime == 0
 
-	// TODO -- FIXME
-	startupDeadlineMultiplier = 1000 // deadline = startupDeadlineMultiplier * config.Timeout.Startup
+// more periodic
+const (
+	logsMaxSizeCheckTime = 48 * time.Minute       // periodically check the logs for max accumulated size
+	startupSleep         = 300 * time.Millisecond // periodically poll ClusterStarted()
+	numGorHighCheckTime  = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
 )
+
+// TODO -- FIXME
+const startupDeadlineMultiplier = 1000 // deadline = startupDeadlineMultiplier * config.Timeout.Startup
 
 const (
 	KindCounter = "counter"
@@ -773,7 +775,11 @@ waitStartup:
 				logger.statsTime(statsTime)
 			}
 			now = mono.NanoTime()
-			if time.Duration(now-lastGlogFlushTime) > glogPeriodicFlushTime {
+			flushTime := dfltPeriodicFlushTime
+			if config.Log.FlushTime != 0 {
+				flushTime = config.Log.FlushTime.D()
+			}
+			if time.Duration(now-lastGlogFlushTime) > flushTime {
 				glog.Flush()
 				lastGlogFlushTime = mono.NanoTime()
 			}

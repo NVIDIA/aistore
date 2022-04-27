@@ -235,15 +235,16 @@ type (
 	}
 
 	LogConf struct {
-		Level    string   `json:"level"`     // log level (aka verbosity)
-		MaxSize  cos.Size `json:"max_size"`  // exceeding this size triggers log rotation
-		MaxTotal cos.Size `json:"max_total"` // (sum individual log sizes); exceeding this number triggers cleanup
+		Level     string       `json:"level"`      // log level (aka verbosity)
+		MaxSize   cos.Size     `json:"max_size"`   // exceeding this size triggers log rotation
+		MaxTotal  cos.Size     `json:"max_total"`  // (sum individual log sizes); exceeding this number triggers cleanup
+		FlushTime cos.Duration `json:"flush_time"` // glog flush interval
 	}
 	LogConfToUpdate struct {
-		Dir      *string   `json:"dir,omitempty"`       // log directory
-		Level    *string   `json:"level,omitempty"`     // log level aka verbosity
-		MaxSize  *cos.Size `json:"max_size,omitempty"`  // size that triggers log rotation
-		MaxTotal *cos.Size `json:"max_total,omitempty"` // max total size of all the logs in the log directory
+		Level     *string       `json:"level,omitempty"`
+		MaxSize   *cos.Size     `json:"max_size,omitempty"`
+		MaxTotal  *cos.Size     `json:"max_total,omitempty"`
+		FlushTime *cos.Duration `json:"flush_time,omitempty"`
 	}
 
 	PeriodConf struct {
@@ -369,11 +370,11 @@ type (
 		Enabled bool `json:"enabled"` // true=auto-resilver | manual resilvering
 	}
 	ResilverConfToUpdate struct {
-		Enabled *bool `json:"enabled,omitempty"` // true=auto-resilver | manual resilvering
+		Enabled *bool `json:"enabled,omitempty"`
 	}
 
 	CksumConf struct {
-		// Object checksum; ChecksumNone ("none") disables checksumming.
+		// (note that `ChecksumNone` ("none") disables checksumming)
 		Type string `json:"type"`
 
 		// validate the checksum of the object that we cold-GET
@@ -852,6 +853,9 @@ func (c *LogConf) Validate() error {
 	}
 	if c.MaxTotal < cos.MiB || c.MaxTotal > 10*cos.GiB {
 		return fmt.Errorf("invalid log.max_total=%s (expected range [1MB, 10GB]", c.MaxTotal)
+	}
+	if c.FlushTime.D() > time.Hour {
+		return fmt.Errorf("invalid log.flush_time=%s (expected range [0, 1h)", c.FlushTime)
 	}
 	return nil
 }
@@ -1475,25 +1479,25 @@ func ValidateMpath(mpath string) (string, error) {
 
 func (c *MemsysConf) Validate() (err error) {
 	if c.MinFree > 0 && c.MinFree < 100*cos.MiB {
-		return fmt.Errorf("invalid memsys.min_free %d", c.MinFree)
+		return fmt.Errorf("invalid memsys.min_free %s", c.MinFree)
 	}
 	if c.DefaultBufSize > 128*cos.KiB {
-		return fmt.Errorf("invalid memsys.default_buf %d", c.DefaultBufSize)
+		return fmt.Errorf("invalid memsys.default_buf %s", c.DefaultBufSize)
 	}
 	if c.DefaultBufSize%(4*cos.KiB) != 0 {
-		return fmt.Errorf("memsys.default_buf %d must multiple of 4KB", c.DefaultBufSize)
+		return fmt.Errorf("memsys.default_buf %s must a multiple of 4KB", c.DefaultBufSize)
 	}
 	if c.SizeToGC > cos.TiB {
-		return fmt.Errorf("invalid memsys.to_gc %d", c.SizeToGC)
+		return fmt.Errorf("invalid memsys.to_gc %s (expected range [0, 1TB)", c.SizeToGC)
 	}
 	if c.HousekeepTime.D() > time.Hour {
-		return fmt.Errorf("invalid memsys.hk_time %d", c.HousekeepTime)
+		return fmt.Errorf("invalid memsys.hk_time %s (expected range [0, 1h)", c.HousekeepTime)
 	}
 	if c.MinPctTotal < 0 || c.MinPctTotal > 95 {
-		return fmt.Errorf("invalid memsys.min_pct_total %d", c.MinPctTotal)
+		return fmt.Errorf("invalid memsys.min_pct_total %d%%", c.MinPctTotal)
 	}
 	if c.MinPctFree < 0 || c.MinPctFree > 95 {
-		return fmt.Errorf("invalid memsys.min_pct_free %d", c.MinPctFree)
+		return fmt.Errorf("invalid memsys.min_pct_free %d%%", c.MinPctFree)
 	}
 	return nil
 }
