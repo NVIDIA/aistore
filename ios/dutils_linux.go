@@ -67,14 +67,19 @@ func fs2disks(fs string) (disks FsDisks) {
 	}
 	disks = make(FsDisks, 4)
 	findDevDisks(lsBlkOutput.BlockDevices, trimmedFS, disks)
+
+	// 4. log
 	if flag.Parsed() {
 		if len(disks) == 0 {
-			s, _ := jsoniter.MarshalIndent(lsBlkOutput.BlockDevices, "", " ")
-			glog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
+			if fs != "overlay" { // skip docker union mounts
+				s, _ := jsoniter.MarshalIndent(lsBlkOutput.BlockDevices, "", " ")
+				glog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
+			}
 		} else {
 			glog.Infof("%s: %v", fs, disks)
 		}
 	}
+
 	return disks
 }
 
