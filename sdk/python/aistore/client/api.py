@@ -54,7 +54,7 @@ class Client:
         resp.raise_for_status()
         return resp
 
-    def _request_raw(self, method: str, path: str, **kwargs) -> List[bytes]:
+    def _request_raw(self, method: str, path: str, **kwargs) -> bytes:
         resp = self._request(method, path, **kwargs)
         return resp.content
 
