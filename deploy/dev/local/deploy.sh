@@ -31,14 +31,14 @@ if [[ -z $GOPATH ]]; then
     exit 1
   fi
 else
-  if [ ! -d "${GOPATH}/go/pkg" ]; then
-    echo "${GOPATH}/go/pkg does not exist (deploying the very first time and from scratch?)"
+  if [ ! -d "${GOPATH}/pkg" ]; then
+    echo "${GOPATH}/pkg does not exist (deploying the very first time and from scratch?)"
     echo "(Tip: run 'make mod-tidy' to download required packages)"
-    mkdir -p "${GOPATH}/go/pkg"
+    mkdir -p "${GOPATH}/pkg"
     echo ""
   fi
-  if [ ! -w "${GOPATH}/go/pkg" ]; then
-    echo "${GOPATH}/go/pkg is not writable - exiting"
+  if [ ! -w "${GOPATH}/pkg" ]; then
+    echo "${GOPATH}/pkg is not writable - exiting"
     exit 1
   fi
 fi
@@ -177,9 +177,9 @@ fi
 
 # run all daemons
 CMD="${GOPATH}/bin/aisnode"
-listening_on="Listening on ports: "
+listening_on="Proxies are listening on ports: "
 if [ $PROXY_CNT -eq 1 ]; then
-   listening_on="Listening on port: "
+   listening_on="Proxy is listening on port: "
 fi
 for (( c=START; c<=END; c++ )); do
   AIS_CONF_DIR="$HOME/.ais${NEXT_TIER}$c"
@@ -189,18 +189,19 @@ for (( c=START; c<=END; c++ )); do
   PROXY_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=proxy -ntargets=${TARGET_CNT} ${RUN_ARGS}"
   TARGET_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=target ${RUN_ARGS}"
 
-  pub_port=`grep "\"port\":" ${AIS_LOCAL_CONF_FILE} | awk '{ print $2 }'`
+  pub_port=$(grep "\"port\":" ${AIS_LOCAL_CONF_FILE} | awk '{ print $2 }')
+  pub_port=${pub_port:1:$((${#pub_port} - 3))}
   if [[ $c -eq 0 ]]; then
     export AIS_IS_PRIMARY="true"
     run_cmd "${CMD} ${PROXY_PARAM}"
-    listening_on+=${pub_port:1:-2}
+    listening_on+=${pub_port}
     unset AIS_IS_PRIMARY
 
     # Wait for the proxy to start up
     sleep 2
   elif [[ $c -lt ${PROXY_CNT} ]]; then
     run_cmd "${CMD} ${PROXY_PARAM}"
-    listening_on+=", ${pub_port:1:-2}"
+    listening_on+=", ${pub_port}"
   else
     run_cmd "${CMD} ${TARGET_PARAM}"
   fi
@@ -227,11 +228,11 @@ else
 fi
 
 if command -v pgrep &> /dev/null; then
-   runcount=`pgrep -a aisnode | grep "$NEXT_TIER" | wc -l`
-   if [ $runcount -eq $((TARGET_CNT + PROXY_CNT)) ]; then
-      echo ${listening_on}
+   run_count=$(pgrep -a aisnode | grep -c "${NEXT_TIER}")
+   if [[ "${run_count}" -eq $((TARGET_CNT + PROXY_CNT)) ]]; then
+      echo "${listening_on}"
    fi
 else
    echo "Warning: pgrep not found"
-   echo ${listening_on}
+   echo "${listening_on}"
 fi
