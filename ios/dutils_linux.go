@@ -41,7 +41,12 @@ type (
 // retrieve the disk(s) associated with a filesystem.
 // This returns multiple disks only if the filesystem is RAID.
 func fs2disks(fs string) (disks FsDisks) {
-	// 1. run lsblk
+	// skip docker union mounts
+	if fs == "overlay" {
+		return
+	}
+
+	// 1. lsblk
 	var (
 		getDiskCommand   = exec.Command("lsblk", "-Jt")
 		outputBytes, err = getDiskCommand.Output()
@@ -68,13 +73,11 @@ func fs2disks(fs string) (disks FsDisks) {
 	disks = make(FsDisks, 4)
 	findDevDisks(lsBlkOutput.BlockDevices, trimmedFS, disks)
 
-	// 4. log
+	// log
 	if flag.Parsed() {
 		if len(disks) == 0 {
-			if fs != "overlay" { // skip docker union mounts
-				s, _ := jsoniter.MarshalIndent(lsBlkOutput.BlockDevices, "", " ")
-				glog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
-			}
+			s, _ := jsoniter.MarshalIndent(lsBlkOutput.BlockDevices, "", " ")
+			glog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
 		} else {
 			glog.Infof("%s: %v", fs, disks)
 		}
