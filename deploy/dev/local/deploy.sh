@@ -46,7 +46,7 @@ fi
 AISTORE_DIR=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
 source $AISTORE_DIR/deploy/dev/utils.sh
 AIS_USE_HTTPS=${AIS_USE_HTTPS:-false}
-CHUNKED_TRANSFER=true
+AIS_HTTP_CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
 HTTP_READ_BUFFER_SIZE=65536
 if [[ -z $DEPLOY_AS_NEXT_TIER ]]; then
@@ -67,7 +67,7 @@ fi
 LOG_ROOT="${LOG_ROOT:-/tmp/ais}${NEXT_TIER}"
 #### Authentication setup #########
 AIS_SECRET_KEY="${AIS_SECRET_KEY:-aBitLongSecretKey}"
-AUTH_ENABLED="${AUTH_ENABLED:-false}"
+AIS_AUTH_ENABLED="${AIS_AUTH_ENABLED:-false}"
 AUTH_SU_NAME="${AUTH_SU_NAME:-admin}"
 AUTH_SU_PASS="${AUTH_SU_PASS:-admin}"
 ###################################
@@ -207,7 +207,7 @@ for (( c=START; c<=END; c++ )); do
   fi
 done
 
-if [[ $AUTH_ENABLED == "true" ]]; then
+if [[ $AIS_AUTH_ENABLED == "true" ]]; then
   # conf file for authn
   AUTHN_CONF_DIR="$HOME/.authn"
   mkdir -p "$AUTHN_CONF_DIR"

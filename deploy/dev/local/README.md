@@ -70,8 +70,6 @@ HDFS: (y/n) ?
 Create loopback devices (note that it may take some time): (y/n) ?
 Building aisnode: version=100676b29 providers= aws gcp tags= aws gcp debug mono
 done.
-+ /root/gocode/bin/aisnode -config=/root/.ais0/ais.json -local_config=/root/.ais0/ais_local.json -role=proxy -ntargets=1
-+ /root/gocode/bin/aisnode -config=/root/.ais1/ais.json -local_config=/root/.ais1/ais_local.json -role=target
 Listening on port: 8080
 ```
 

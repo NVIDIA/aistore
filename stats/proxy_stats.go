@@ -55,7 +55,7 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 // statsLogger interface impl
 //
 
-func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
+func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.Core.updateUptime(uptime)
 	r.Core.promLock()
 	idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime})
@@ -63,7 +63,11 @@ func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
 	if now >= r.nextLogTime && !idle {
 		b := cos.MustMarshal(r.ctracker)
 		glog.Infoln(string(b))
-		r.nextLogTime = now + cos.MinI64(int64(r.Core.statsTime)*logIntervalMult, logIntervalMax)
+		i := int64(config.Log.StatsTime)
+		if i == 0 {
+			i = dfltStatsLogInterval
+		}
+		r.nextLogTime = now + cos.MinI64(i, maxStatsLogInterval)
 	}
 }
 

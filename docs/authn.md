@@ -60,15 +60,15 @@ Environment variables used by the deployment script to setup AuthN server:
 | Variable | Default value | Description |
 |---|---|---|
 | AIS_SECRET_KEY | `aBitLongSecretKey` | A secret key to sign tokens |
-| AUTH_ENABLED | `false` | Set it to `true` to enable AuthN server and token-based access in AIStore proxy |
-| AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
-| AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 which means "no expiration time" |
+| AIS_AUTH_ENABLED | `false` | Set it to `true` to enable AuthN server and token-based access in AIStore proxy |
+| AIS_AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
+| AIS_AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 which means "no expiration time" |
 
 All variables can be set at AIStore cluster deployment.
 Example of starting a cluster with AuthN enabled:
 
 ```console
-$ AUTH_ENABLED=true make deploy
+$ AIS_AUTH_ENABLED=true make deploy
 ```
 
 Note: don't forget to change the default secret key used to sign tokens before starting the deployment process.

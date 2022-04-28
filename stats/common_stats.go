@@ -59,10 +59,9 @@ const (
 	numGorExtreme = 1000
 )
 
-// logging frequency
 const (
-	logIntervalMult = 6                      // every (logIntervalMult * config.Periodic.StatsTime)
-	logIntervalMax  = int64(2 * time.Minute) // but not less frequently than logIntervalMax
+	dfltStatsLogInterval = int64(time.Minute)
+	maxStatsLogInterval  = int64(2 * time.Minute)
 )
 
 // NOTE: all supported metrics
@@ -751,7 +750,7 @@ waitStartup:
 	glog.Infof("Starting %s", r.Name())
 	hk.Reg(r.Name()+"-logs"+hk.NameSuffix, recycleLogs, logsMaxSizeCheckTime)
 
-	statsTime := config.Periodic.StatsTime.D()
+	statsTime := config.Periodic.StatsTime.D() // (NOTE: not to confuse with config.Log.StatsTime)
 	r.ticker = time.NewTicker(statsTime)
 	r.startedUp.Store(true)
 	var (

@@ -239,19 +239,21 @@ type (
 		Level     string       `json:"level"`      // log level (aka verbosity)
 		MaxSize   cos.Size     `json:"max_size"`   // exceeding this size triggers log rotation
 		MaxTotal  cos.Size     `json:"max_total"`  // (sum individual log sizes); exceeding this number triggers cleanup
-		FlushTime cos.Duration `json:"flush_time"` // glog flush interval
+		FlushTime cos.Duration `json:"flush_time"` // log flush interval
+		StatsTime cos.Duration `json:"stats_time"` // log stats interval (must be a multiple of `PeriodConf.StatsTime`)
 	}
 	LogConfToUpdate struct {
 		Level     *string       `json:"level,omitempty"`
 		MaxSize   *cos.Size     `json:"max_size,omitempty"`
 		MaxTotal  *cos.Size     `json:"max_total,omitempty"`
 		FlushTime *cos.Duration `json:"flush_time,omitempty"`
+		StatsTime *cos.Duration `json:"stats_time,omitempty"`
 	}
 
 	PeriodConf struct {
-		StatsTime     cos.Duration `json:"stats_time"`
-		RetrySyncTime cos.Duration `json:"retry_sync_time"`
-		NotifTime     cos.Duration `json:"notif_time"`
+		StatsTime     cos.Duration `json:"stats_time"`      // collect and publish stats (NOTE: this is one important timer)
+		RetrySyncTime cos.Duration `json:"retry_sync_time"` // metasync retry
+		NotifTime     cos.Duration `json:"notif_time"`      // (IC notifications)
 	}
 	PeriodConfToUpdate struct {
 		StatsTime     *cos.Duration `json:"stats_time,omitempty"`
@@ -278,14 +280,14 @@ type (
 	}
 
 	ClientConf struct {
-		Timeout     cos.Duration `json:"client_timeout"`
-		TimeoutLong cos.Duration `json:"client_long_timeout"`
-		ListObjects cos.Duration `json:"list_timeout"`
+		Timeout        cos.Duration `json:"client_timeout"`
+		TimeoutLong    cos.Duration `json:"client_long_timeout"`
+		ListObjTimeout cos.Duration `json:"list_timeout"`
 	}
 	ClientConfToUpdate struct {
-		Timeout     *cos.Duration `json:"client_timeout,omitempty"` // readonly as far as intra-cluster
-		TimeoutLong *cos.Duration `json:"client_long_timeout,omitempty"`
-		ListObjects *cos.Duration `json:"list_timeout,omitempty"`
+		Timeout        *cos.Duration `json:"client_timeout,omitempty"` // readonly as far as intra-cluster
+		TimeoutLong    *cos.Duration `json:"client_long_timeout,omitempty"`
+		ListObjTimeout *cos.Duration `json:"list_timeout,omitempty"`
 	}
 
 	ProxyConf struct {
@@ -841,6 +843,26 @@ func (c *LocalConfig) DelPath(mpath string) {
 	c.FSP.Paths.Delete(mpath)
 }
 
+////////////////
+// PeriodConf //
+////////////////
+
+func (c *PeriodConf) Validate() error {
+	if c.StatsTime.D() < time.Second || c.StatsTime.D() > time.Minute {
+		return fmt.Errorf("invalid periodic.stats_time=%s (expected range [1s, 1m])",
+			c.StatsTime)
+	}
+	if c.RetrySyncTime.D() < 10*time.Millisecond || c.RetrySyncTime.D() > 10*time.Second {
+		return fmt.Errorf("invalid periodic.retry_sync_time=%s (expected range [10ms, 10s])",
+			c.StatsTime)
+	}
+	if c.NotifTime.D() < time.Second || c.NotifTime.D() > time.Minute {
+		return fmt.Errorf("invalid periodic.notif_time=%s (expected range [1s, 1m])",
+			c.StatsTime)
+	}
+	return nil
+}
+
 /////////////
 // LogConf //
 /////////////
@@ -859,6 +881,33 @@ func (c *LogConf) Validate() error {
 	}
 	if c.FlushTime.D() > time.Hour {
 		return fmt.Errorf("invalid log.flush_time=%s (expected range [0, 1h)", c.FlushTime)
+	}
+	if c.StatsTime != 0 {
+		if c.StatsTime < c.FlushTime {
+			return fmt.Errorf("invalid log.stats_time=%s (must be a multiple of log.flush_time=%s)",
+				c.StatsTime, c.FlushTime)
+		}
+		if c.StatsTime.D() > 10*time.Minute {
+			return fmt.Errorf("invalid log.stats_time=%s (expected range [log.stats_time, 10m])",
+				c.StatsTime)
+		}
+	}
+	return nil
+}
+
+////////////////
+// ClientConf //
+////////////////
+
+func (c *ClientConf) Validate() error {
+	if j := c.Timeout.D(); j < time.Second || j > time.Minute {
+		return fmt.Errorf("invalid client.client_timeout=%s (expected range [1s, 1m])", j)
+	}
+	if j := c.TimeoutLong.D(); j < 30*time.Second || j < c.Timeout.D() || j > 30*time.Minute {
+		return fmt.Errorf("invalid client.client_long_timeout=%s (expected range [30s, 30m])", j)
+	}
+	if j := c.ListObjTimeout.D(); j < 2*time.Second || j > 15*time.Minute {
+		return fmt.Errorf("invalid client.list_timeout=%s (expected range [2s, 15m])", j)
 	}
 	return nil
 }
@@ -1151,7 +1200,8 @@ func (c *ECConf) Validate() error {
 		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])",
 			c.ParitySlices, MinSliceCount, MaxSliceCount)
 	}
-	return nil
+	j := apc.WritePolicy(c.Compression)
+	return j.Validate()
 }
 
 func (c *ECConf) ValidateAsProps(arg ...interface{}) (err error) {
@@ -1314,6 +1364,10 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 ///////////////
 
 func (c *DSortConf) Validate() (err error) {
+	j := apc.WritePolicy(c.Compression)
+	if err := j.Validate(); err != nil {
+		return err
+	}
 	return c.ValidateWithOpts(false)
 }
 
@@ -1582,15 +1636,28 @@ func (d *timeout) setReadOnly(config *Config) {
 func (d *timeout) CplaneOperation() time.Duration { return d.cplane }
 func (d *timeout) MaxKeepalive() time.Duration    { return d.keepalive }
 
-//
-// remaining no-op validators
-//
+////////////////////
+// DownloaderConf //
+////////////////////
 
-func (*ClientConf) Validate() error     { return nil }
-func (*PeriodConf) Validate() error     { return nil }
-func (*DownloaderConf) Validate() error { return nil }
+func (c *DownloaderConf) Validate() error {
+	if j := c.Timeout.D(); j < time.Second || j > time.Hour {
+		return fmt.Errorf("invalid downloader.timeout=%s (expected range [1s, 1h])", j)
+	}
+	return nil
+}
 
-func (*RebalanceConf) Validate() error { return nil }
+///////////////////
+// RebalanceConf //
+///////////////////
+
+func (c *RebalanceConf) Validate() error {
+	if j := c.DestRetryTime.D(); j < time.Second || j > 10*time.Minute {
+		return fmt.Errorf("invalid rebalance.dest_retry_time=%s (expected range [1s, 10m])", j)
+	}
+	j := apc.WritePolicy(c.Compression)
+	return j.Validate()
+}
 
 func (c *RebalanceConf) String() string {
 	if c.Enabled {

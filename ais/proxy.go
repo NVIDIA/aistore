@@ -2086,7 +2086,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg apc.ListObjsMsg) (allE
 	var (
 		smap       = p.owner.smap.get()
 		config     = cmn.GCO.Get()
-		reqTimeout = config.Client.ListObjects.D()
+		reqTimeout = config.Client.ListObjTimeout.D()
 		aisMsg     = p.newAmsgActVal(apc.ActList, &lsmsg)
 		args       = allocBcArgs()
 		results    sliceResults

@@ -17,7 +17,8 @@
 		"level":     "3",
 		"max_size":  "512kb",
 		"max_total": "64mb",
-		"flush_time": "40s"
+		"flush_time": "40s",
+		"stats_time": "60s"
 	},
 	"periodic": {
 		"stats_time":        "10s",

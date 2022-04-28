@@ -14,21 +14,22 @@ cat > $AIS_CONF_FILE <<EOL
 	"mirror": {
 		"copies":       2,
 		"burst_buffer": 512,
-		"enabled":      ${MIRROR_ENABLED:-false}
+		"enabled":      ${AIS_MIRROR_ENABLED:-false}
 	},
 	"ec": {
-		"objsize_limit": ${OBJ_SIZE_LIMIT:-262144},
-		"data_slices":   ${DATA_SLICES:-1},
-		"parity_slices": ${PARITY_SLICES:-1},
-		"compression":   "${COMPRESSION:-never}",
-		"enabled":       ${EC_ENABLED:-false},
+		"objsize_limit": ${AIS_OBJ_SIZE_LIMIT:-262144},
+		"data_slices":   ${AIS_DATA_SLICES:-1},
+		"parity_slices": ${AIS_PARITY_SLICES:-1},
+		"compression":   "${AIS_EC_COMPRESSION:-never}",
+		"enabled":       ${AIS_EC_ENABLED:-false},
 		"disk_only":     false
 	},
 	"log": {
 		"level":     "${AIS_LOG_LEVEL:-3}",
 		"max_size":  "512kb",
 		"max_total": "64mb",
-		"flush_time": "40s"
+		"flush_time": "40s",
+		"stats_time": "60s"
 	},
 	"periodic": {
 		"stats_time":        "10s",
@@ -52,7 +53,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"primary_url":   "${AIS_PRIMARY_URL}",
 		"original_url":  "${AIS_PRIMARY_URL}",
 		"discovery_url": "${AIS_DISCOVERY_URL}",
-		"non_electable": ${NON_ELECTABLE:-false}
+		"non_electable": ${AIS_NON_ELECTABLE:-false}
 	},
 	"space": {
 		"cleanupwm":         65,
@@ -66,15 +67,15 @@ cat > $AIS_CONF_FILE <<EOL
 		"enabled":           true
 	},
 	"disk":{
-	    "iostat_time_long":  "${IOSTAT_TIME_LONG:-2s}",
-	    "iostat_time_short": "${IOSTAT_TIME_SHORT:-100ms}",
+	    "iostat_time_long":  "${AIS_IOSTAT_TIME_LONG:-2s}",
+	    "iostat_time_short": "${AIS_IOSTAT_TIME_SHORT:-100ms}",
 	    "disk_util_low_wm":  20,
 	    "disk_util_high_wm": 80,
 	    "disk_util_max_wm":  95
 	},
 	"rebalance": {
 		"dest_retry_time": "2m",
-		"compression":     "${COMPRESSION:-never}",
+		"compression":     "${AIS_REBALANCE_COMPRESSION:-never}",
 		"enabled":         true
 	},
 	"resilver": {
@@ -90,11 +91,11 @@ cat > $AIS_CONF_FILE <<EOL
 	"transport": {
 		"max_header":		4096,
 		"burst_buffer":		32,
-		"bundle_multiplier":	${BUNDLE_MULTIPLIER:-2},
-		"idle_teardown":	"${IDLE_TEARDOWN:-4s}",
-		"quiescent":		"${QUIESCENT:-10s}",
-		"lz4_block":		${LZ4_BLOCK:-262144},
-		"lz4_frame_checksum":	${LZ4_FRAME_CHECKSUM:-false}
+		"bundle_multiplier":	${AIS_TRANSPORT_BUNDLE_MULTIPLIER:-2},
+		"idle_teardown":	"${AIS_TRANSPORT_IDLE_TEARDOWN:-4s}",
+		"quiescent":		"${AIS_TRANSPORT_QUIESCENT:-10s}",
+		"lz4_block":		${AIS_TRANSPORT_LZ4_BLOCK:-262144},
+		"lz4_frame_checksum":	${AIS_TRANSPORT_LZ4_FRAME_CHECKSUM:-false}
 	},
 	"memsys": {
 		"min_free":		"2gb",
@@ -119,7 +120,7 @@ cat > $AIS_CONF_FILE <<EOL
 			"server_key":        "${AIS_SERVER_KEY:-server.key}",
 			"write_buffer_size": ${HTTP_WRITE_BUFFER_SIZE:-0},
 			"read_buffer_size":  ${HTTP_READ_BUFFER_SIZE:-0},
-			"chunked_transfer":  ${CHUNKED_TRANSFER:-true},
+			"chunked_transfer":  ${AIS_HTTP_CHUNKED_TRANSFER:-true},
 			"skip_verify":       ${AIS_SKIP_VERIFY_CRT:-false}
 		}
 	},
@@ -130,7 +131,7 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"auth": {
 		"secret":      "$AIS_SECRET_KEY",
-		"enabled":     ${AUTH_ENABLED:-false}
+		"enabled":     ${AIS_AUTH_ENABLED:-false}
 	},
 	"keepalivetracker": {
 		"proxy": {
@@ -155,7 +156,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"ekm_missing_key":       "abort",
 		"default_max_mem_usage": "80%",
 		"dsorter_mem_threshold": "100GB",
-		"compression":           "${COMPRESSION:-never}",
+		"compression":           "${AIS_DSORT_COMPRESSION:-never}",
 		"call_timeout":          "10m"
 	},
 	"write_policy": {

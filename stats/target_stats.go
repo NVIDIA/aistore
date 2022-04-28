@@ -236,7 +236,11 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		ln, err := cos.MarshalToString(r.ctracker)
 		debug.AssertNoErr(err)
 		r.lines = append(r.lines, ln)
-		r.nextLogTime = now + cos.MinI64(int64(r.Core.statsTime)*logIntervalMult, logIntervalMax)
+		i := int64(config.Log.StatsTime)
+		if i == 0 {
+			i = dfltStatsLogInterval
+		}
+		r.nextLogTime = now + cos.MinI64(i, maxStatsLogInterval)
 	}
 
 	// 3. capacity
