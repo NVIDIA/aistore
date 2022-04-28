@@ -38,6 +38,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const (
+	DSortName          = "dSort"
+	DSortNameLowercase = "dsort"
+)
+
 type (
 	dsorter interface {
 		name() string

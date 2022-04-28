@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -38,7 +39,7 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:      commandGenShards,
-				Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", apc.DSortName),
+				Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", dsort.DSortName),
 				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
 				Flags:     advancedCmdsFlags[commandGenShards],
 				Action:    genShardsHandler,

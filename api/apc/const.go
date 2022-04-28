@@ -8,12 +8,6 @@ import (
 	"time"
 )
 
-// module names
-const (
-	DSortName          = "dSort"
-	DSortNameLowercase = "dsort"
-)
-
 // ActionMsg.Action
 // includes Xaction.Kind == ActionMsg.Action (when the action is asynchronous)
 const (

@@ -153,7 +153,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		if err := toUpdate.FillFromKVS(kvs); err != nil {
 			cos.ExitLogf(err.Error())
 		}
-		if err := cmn.SetConfigInMem(toUpdate, config, apc.Daemon); err != nil {
+		if err := setConfigInMem(toUpdate, config, apc.Daemon); err != nil {
 			cos.ExitLogf("Failed to update config in memory: %v", err)
 		}
 

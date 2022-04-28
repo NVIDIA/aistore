@@ -9,8 +9,8 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
 )
 
@@ -36,7 +36,7 @@ var (
 			},
 			{
 				Name:         subcmdRemoveDsort,
-				Usage:        fmt.Sprintf("remove finished %s job identified by the job's ID", apc.DSortName),
+				Usage:        fmt.Sprintf("remove finished %s job identified by the job's ID", dsort.DSortName),
 				ArgsUsage:    jobIDArgument,
 				Flags:        removeCmdsFlags[subcmdRemoveDsort],
 				Action:       removeDsortHandler,
@@ -95,13 +95,13 @@ func removeDsortHandler(c *cli.Context) (err error) {
 	id := c.Args().First()
 
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, apc.DSortName+" job ID")
+		return missingArgumentsError(c, dsort.DSortName+" job ID")
 	}
 
 	if err = api.RemoveDSort(defaultAPIParams, id); err != nil {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "removed %s job %q\n", apc.DSortName, id)
+	fmt.Fprintf(c.App.Writer, "removed %s job %q\n", dsort.DSortName, id)
 	return
 }

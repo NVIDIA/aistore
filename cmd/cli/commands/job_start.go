@@ -80,7 +80,7 @@ var (
 			},
 			{
 				Name:      subcmdStartDsort,
-				Usage:     fmt.Sprintf("start a new %s job with given specification", apc.DSortName),
+				Usage:     fmt.Sprintf("start a new %s job with given specification", dsort.DSortName),
 				ArgsUsage: jsonSpecArgument,
 				Flags:     startCmdsFlags[subcmdStartDsort],
 				Action:    startDsortHandler,

@@ -1,6 +1,6 @@
 // Package mpather provides per-mountpath concepts.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package mpather
 
@@ -32,6 +32,12 @@ const (
 	Load
 	LoadRLock
 	LoadLock
+)
+
+const (
+	ThrottleMinDur = time.Millisecond
+	ThrottleAvgDur = time.Millisecond * 10
+	ThrottleMaxDur = time.Millisecond * 100
 )
 
 type (
@@ -381,7 +387,7 @@ func (sg *joggerSyncGroup) abortAsyncTasks() error {
 func (j *jogger) throttle() {
 	curUtil := fs.GetMpathUtil(j.mi.Path)
 	if curUtil >= j.config.Disk.DiskUtilHighWM {
-		time.Sleep(cmn.ThrottleMinDur)
+		time.Sleep(ThrottleMinDur)
 	}
 }
 

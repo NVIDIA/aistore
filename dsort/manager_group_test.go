@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -45,7 +44,7 @@ var _ = Describe("ManagerGroup", func() {
 	AfterEach(func() {
 		err := os.RemoveAll(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
-		hk.Unreg(apc.DSortNameLowercase + hk.NameSuffix)
+		hk.Unreg(DSortNameLowercase + hk.NameSuffix)
 	})
 
 	Context("add", func() {

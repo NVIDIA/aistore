@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
 )
 
@@ -57,7 +58,7 @@ const (
 
 	// Common Subcommands
 	// NOTE: second level subcommands are preferably verbs
-	subcmdDsort      = apc.DSortNameLowercase
+	subcmdDsort      = dsort.DSortNameLowercase
 	subcmdSmap       = apc.GetWhatSmap
 	subcmdBMD        = apc.GetWhatBMD
 	subcmdMpath      = apc.GetWhatDiskStats

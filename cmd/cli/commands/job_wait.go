@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
 )
 
@@ -51,7 +51,7 @@ var (
 			},
 			{
 				Name:         subcmdWaitDSort,
-				Usage:        fmt.Sprintf("wait for %s to finish", apc.DSortName),
+				Usage:        fmt.Sprintf("wait for %s to finish", dsort.DSortName),
 				ArgsUsage:    jobIDArgument,
 				Flags:        waitCmdsFlags[subcmdWaitDSort],
 				Action:       waitDSortHandler,

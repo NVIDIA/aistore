@@ -14,7 +14,6 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -33,9 +32,9 @@ import (
 
 const (
 	// Stream names
-	recvReqStreamNameFmt  = apc.DSortNameLowercase + "-%s-recv_req"
-	recvRespStreamNameFmt = apc.DSortNameLowercase + "-%s-recv_resp"
-	shardStreamNameFmt    = apc.DSortNameLowercase + "-%s-shard"
+	recvReqStreamNameFmt  = DSortNameLowercase + "-%s-recv_req"
+	recvRespStreamNameFmt = DSortNameLowercase + "-%s-recv_resp"
+	shardStreamNameFmt    = DSortNameLowercase + "-%s-shard"
 )
 
 // State of the cleans - see `cleanup` and `finalCleanup`

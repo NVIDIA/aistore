@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -265,7 +266,7 @@ var (
 	}
 	showCmdDsort = cli.Command{
 		Name:      subcmdShowDsort,
-		Usage:     fmt.Sprintf("show information about %s jobs", apc.DSortName),
+		Usage:     fmt.Sprintf("show information about %s jobs", dsort.DSortName),
 		ArgsUsage: optionalJobIDDaemonIDArgument,
 		Flags:     showCmdsFlags[subcmdShowDsort],
 		Action:    showDsortHandler,

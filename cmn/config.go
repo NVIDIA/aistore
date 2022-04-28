@@ -17,11 +17,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
-	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -29,38 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
-)
-
-const (
-	KeepaliveHeartbeatType = "heartbeat"
-	KeepaliveAverageType   = "average"
-)
-
-const (
-	ThrottleMinDur = time.Millisecond
-	ThrottleAvgDur = time.Millisecond * 10
-	ThrottleMaxDur = time.Millisecond * 100
-)
-
-// erasure coding
-const (
-	MinSliceCount = 1  // minimum number of data or parity slices
-	MaxSliceCount = 32 // maximum --/--
-)
-
-const (
-	IgnoreReaction = "ignore"
-	WarnReaction   = "warn"
-	AbortReaction  = "abort"
-)
-
-const (
-	// L4
-	tcpProto = "tcp"
-
-	// L7
-	httpProto  = "http"
-	httpsProto = "https"
 )
 
 type (
@@ -71,19 +36,6 @@ type (
 		ValidateAsProps(arg ...interface{}) error
 	}
 )
-
-type (
-	globalConfigOwner struct {
-		mtx      sync.Mutex     // mutex for protecting updates of config
-		c        atomic.Pointer // pointer to `Config` (cluster + local + override config)
-		oc       atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
-		confPath atomic.Pointer // initial global config path
-	}
-)
-
-//
-// global (aka cluster) configuration
-//
 
 type (
 	// Config contains all configuration values used by a given ais daemon.
@@ -97,6 +49,7 @@ type (
 		LocalConfig   `json:",inline"`
 	}
 
+	// global configuration
 	ClusterConfig struct {
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
 		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
@@ -585,6 +538,14 @@ type (
 	}
 )
 
+const (
+	IgnoreReaction = "ignore"
+	WarnReaction   = "warn"
+	AbortReaction  = "abort"
+)
+
+var SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
+
 ////////////////////////////////////////////
 // config meta-versioning & serialization //
 ////////////////////////////////////////////
@@ -602,124 +563,6 @@ func (*ClusterConfig) JspOpts() jsp.Options  { return configJspOpts }
 func (*LocalConfig) JspOpts() jsp.Options    { return jsp.Plain() }
 func (*ConfigToUpdate) JspOpts() jsp.Options { return configJspOpts }
 
-///////////////////////
-// globalConfigOwner //
-///////////////////////
-
-// GCO (Global Config Owner) is responsible for updating and notifying
-// listeners about any changes in the config. Global Config is loaded
-// at startup and then can be accessed/updated by other services.
-var GCO *globalConfigOwner
-
-func SetConfigInMem(toUpdate *ConfigToUpdate, config *Config, asType string) (err error) {
-	if toUpdate.Log != nil && toUpdate.Log.Level != nil {
-		if err := SetLogLevel(*toUpdate.Log.Level); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.Log.Level, err)
-		}
-	}
-	err = config.UpdateClusterConfig(*toUpdate, asType)
-	return
-}
-
-func (gco *globalConfigOwner) Get() *Config {
-	return (*Config)(gco.c.Load())
-}
-
-func (gco *globalConfigOwner) Put(config *Config) {
-	gco.c.Store(unsafe.Pointer(config))
-}
-
-func (gco *globalConfigOwner) GetOverrideConfig() *ConfigToUpdate {
-	return (*ConfigToUpdate)(gco.oc.Load())
-}
-
-func (gco *globalConfigOwner) MergeOverrideConfig(toUpdate *ConfigToUpdate) (overrideConfig *ConfigToUpdate) {
-	overrideConfig = gco.GetOverrideConfig()
-	if overrideConfig == nil {
-		overrideConfig = toUpdate
-	} else {
-		overrideConfig.Merge(toUpdate)
-	}
-	return
-}
-
-func (gco *globalConfigOwner) SetLocalFSPaths(toUpdate *ConfigToUpdate) (overrideConfig *ConfigToUpdate) {
-	overrideConfig = gco.GetOverrideConfig()
-	if overrideConfig == nil {
-		overrideConfig = toUpdate
-	} else {
-		overrideConfig.FSP = toUpdate.FSP // no merging required
-	}
-	return
-}
-
-func (gco *globalConfigOwner) PutOverrideConfig(config *ConfigToUpdate) {
-	gco.oc.Store(unsafe.Pointer(config))
-}
-
-// CopyStruct is a shallow copy, which is fine as FSPaths and BackendConf "exceptions"
-// are taken care of separately. When cloning, beware: config is a large structure.
-func (gco *globalConfigOwner) Clone() *Config {
-	config := &Config{}
-
-	cos.CopyStruct(config, gco.Get())
-	return config
-}
-
-// When updating we need to make sure that the update is transaction and no
-// other update can happen when other transaction is in progress. Therefore,
-// we introduce locking mechanism which targets this problem.
-//
-// NOTE: BeginUpdate must be followed by CommitUpdate.
-// NOTE: `ais` package must use config-owner to modify config.
-func (gco *globalConfigOwner) BeginUpdate() *Config {
-	gco.mtx.Lock()
-	return gco.Clone()
-}
-
-// CommitUpdate finalizes config update and notifies listeners.
-// NOTE: `ais` package must use config-owner to modify config.
-func (gco *globalConfigOwner) CommitUpdate(config *Config) {
-	gco.c.Store(unsafe.Pointer(config))
-	gco.mtx.Unlock()
-}
-
-// DiscardUpdate discards commit updates.
-// NOTE: `ais` package must use config-owner to modify config
-func (gco *globalConfigOwner) DiscardUpdate() {
-	gco.mtx.Unlock()
-}
-
-func (gco *globalConfigOwner) SetInitialGconfPath(path string) {
-	gco.confPath.Store(unsafe.Pointer(&path))
-}
-
-func (gco *globalConfigOwner) GetInitialGconfPath() (s string) {
-	return *(*string)(gco.confPath.Load())
-}
-
-func (gco *globalConfigOwner) Update(cluConfig *ClusterConfig) (err error) {
-	config := gco.Clone()
-	config.ClusterConfig = *cluConfig
-	override := gco.GetOverrideConfig()
-	if override != nil {
-		err = config.UpdateClusterConfig(*override, apc.Daemon) // update and validate
-	} else {
-		err = config.Validate()
-	}
-	if err != nil {
-		return
-	}
-	gco.Put(config)
-	return
-}
-
-var (
-	SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
-	supportedL4Protos  = []string{tcpProto}
-)
-
-// NOTE: new validators must be run via Config.Validate() - see below
 // interface guard
 var (
 	_ Validator = (*BackendConf)(nil)
@@ -1188,6 +1031,11 @@ func (c *MirrorConf) String() string {
 // ECConf //
 ////////////
 
+const (
+	MinSliceCount = 1  // minimum number of data or parity slices
+	MaxSliceCount = 32 // maximum --/--
+)
+
 func (c *ECConf) Validate() error {
 	if c.ObjSizeLimit < 0 {
 		return fmt.Errorf("invalid ec.obj_size_limit: %d (expected >=0)", c.ObjSizeLimit)
@@ -1263,7 +1111,11 @@ func (c *WritePolicyConf) ValidateAsProps(...interface{}) error { return c.Valid
 // KeepaliveConf //
 ///////////////////
 
-// validKeepaliveType returns true if the keepalive type is supported.
+const (
+	KeepaliveHeartbeatType = "heartbeat"
+	KeepaliveAverageType   = "average"
+)
+
 func validKeepaliveType(t string) bool {
 	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
 }
@@ -1292,12 +1144,16 @@ func KeepaliveRetryDuration(cs ...*Config) time.Duration {
 // NetConf //
 /////////////
 
-func (c *NetConf) Validate() (err error) {
-	if !cos.StringInSlice(c.L4.Proto, supportedL4Protos) {
-		return fmt.Errorf("l4 proto is not recognized %s, expected one of: %s",
-			c.L4.Proto, supportedL4Protos)
-	}
+const (
+	tcpProto   = "tcp"
+	httpProto  = "http"
+	httpsProto = "https"
+)
 
+func (c *NetConf) Validate() (err error) {
+	if c.L4.Proto != tcpProto {
+		return fmt.Errorf("l4 proto %q is not recognized (expecting %s)", c.L4.Proto, tcpProto)
+	}
 	c.HTTP.Proto = httpProto // not validating: read-only, and can take only two values
 	if c.HTTP.UseHTTPS {
 		c.HTTP.Proto = httpsProto
@@ -1787,10 +1643,7 @@ func ipv4ListsEqual(alist, blist string) bool {
 	return cos.StrSlicesEqual(al, bl)
 }
 
-/////////
-// jsp //
-/////////
-
+// is called at startup
 func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) error {
 	debug.Assert(globalConfPath != "" && localConfPath != "")
 	GCO.SetInitialGconfPath(globalConfPath)

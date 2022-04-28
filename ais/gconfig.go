@@ -6,6 +6,7 @@ package ais
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -184,7 +185,7 @@ func (*configOwner) persistBytes(payload msPayload, globalFpath string) (done bo
 func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
 	co.Lock()
 	clone := cmn.GCO.Clone()
-	err = cmn.SetConfigInMem(toUpdate, clone, apc.Daemon)
+	err = setConfigInMem(toUpdate, clone, apc.Daemon)
 	if err != nil {
 		co.Unlock()
 		return
@@ -207,6 +208,16 @@ func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient b
 	cmn.GCO.Put(clone)
 	cmn.GCO.PutOverrideConfig(override)
 	co.Unlock()
+	return
+}
+
+func setConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config, asType string) (err error) {
+	if toUpdate.Log != nil && toUpdate.Log.Level != nil {
+		if err := cmn.SetLogLevel(*toUpdate.Log.Level); err != nil {
+			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.Log.Level, err)
+		}
+	}
+	err = config.UpdateClusterConfig(*toUpdate, asType)
 	return
 }
 

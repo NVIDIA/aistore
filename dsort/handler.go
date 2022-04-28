@@ -214,7 +214,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if notFound == len(responses) && notFound > 0 {
-		msg := fmt.Sprintf("%s job %q not found", apc.DSortName, managerUUID)
+		msg := fmt.Sprintf("%s job %q not found", DSortName, managerUUID)
 		cmn.WriteErrMsg(w, r, msg, http.StatusNotFound)
 		return
 	}
@@ -256,7 +256,7 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if allNotFound {
-		err := cmn.NewErrNotFound("%s job %q", apc.DSortName, managerUUID)
+		err := cmn.NewErrNotFound("%s job %q", DSortName, managerUUID)
 		cmn.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
@@ -298,7 +298,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if !metrics.Archived.Load() {
 			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process %s still in progress and cannot be removed",
-				apc.DSortName, managerUUID))
+				DSortName, managerUUID))
 			return
 		}
 		seenOne = true
@@ -378,7 +378,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = js.Unmarshal(b, &rs); err != nil {
-		err := fmt.Errorf(cmn.FmtErrUnmarshal, apc.DSortName, "ParsedRequestSpec", cmn.BytesHead(b), err)
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "ParsedRequestSpec", cmn.BytesHead(b), err)
 		cmn.WriteErr(w, r, err)
 		return
 	}
@@ -474,11 +474,11 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		if !dsortManager.inProgress() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", apc.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
 			return
 		}
 		if dsortManager.aborted() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", apc.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
 			return
 		}
 
@@ -489,13 +489,13 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		defer slab.Free(buf)
 
 		if err := tmpMetadata.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, apc.DSortName, "creation phase metadata", "-", err)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "creation phase metadata", "-", err)
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
 
 		if !dsortManager.inProgress() || dsortManager.aborted() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", apc.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", DSortName))
 			return
 		}
 
@@ -524,11 +524,11 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 			return
 		}
 		if !dsortManager.inProgress() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", apc.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
 			return
 		}
 		if dsortManager.aborted() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", apc.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
 			return
 		}
 		var (
@@ -567,7 +567,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		defer slab.Free(buf)
 
 		if err := records.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, apc.DSortName, "records", "-", err)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "records", "-", err)
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
@@ -604,12 +604,12 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if dsortManager.Metrics.Archived.Load() {
-		s := fmt.Sprintf("invalid request: %s job %q has already finished", apc.DSortName, managerUUID)
+		s := fmt.Sprintf("invalid request: %s job %q has already finished", DSortName, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusGone)
 		return
 	}
 
-	dsortManager.abort(fmt.Errorf("%s has been aborted via API (remotely)", apc.DSortName))
+	dsortManager.abort(fmt.Errorf("%s has been aborted via API (remotely)", DSortName))
 }
 
 func removeSortHandler(w http.ResponseWriter, r *http.Request) {

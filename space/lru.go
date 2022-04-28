@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -413,7 +414,7 @@ func (j *lruJ) _throttle(usedPct int64) (err error) {
 		if usedPct < (j.config.Space.LowWM+j.config.Space.HighWM)/2 {
 			j.throttle = true
 		}
-		time.Sleep(cmn.ThrottleMaxDur)
+		time.Sleep(mpather.ThrottleMaxDur)
 		err = j.yieldTerm()
 	}
 	return
@@ -456,7 +457,7 @@ func (j *lruJ) yieldTerm() error {
 		return cmn.NewErrAborted(xlru.Name(), "", nil)
 	default:
 		if j.throttle {
-			time.Sleep(cmn.ThrottleMinDur)
+			time.Sleep(mpather.ThrottleMinDur)
 		}
 		break
 	}
