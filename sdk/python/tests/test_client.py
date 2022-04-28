@@ -45,9 +45,8 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
         except requests.exceptions.HTTPError as e:
             self.assertEqual(e.response.status_code, 404)
 
-    def test_put_get(self):
+    def test_put_head_get(self):
         self.client.create_bucket(self.bck_name)
-
         content = "test string".encode('utf-8')
         with tempfile.NamedTemporaryFile() as f:
             f.write(content)
@@ -56,6 +55,10 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
 
         objects = self.client.list_objects(self.bck_name)
         self.assertFalse(objects is None)
+
+        properties = self.client.head_object(self.bck_name, "obj1")
+        self.assertEqual(properties['ais-version'], '1')
+        self.assertEqual(properties['content-length'], str(len(content)))
 
         obj = self.client.get_object(self.bck_name, "obj1")
         self.assertEqual(obj, content)

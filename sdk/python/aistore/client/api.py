@@ -195,6 +195,33 @@ class Client:
             params=params,
         )
 
+    def head_object(self, bck_name: str, object_name: str, provider: str = ProviderAIS) -> Header:
+        """
+        Requests object properties.
+
+        Args:
+            bck_name (str): Name of the new bucket
+            object_name (str): Name of an object in the bucket
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+                Defaults to "ais". Empty provider returns buckets of all providers.
+
+        Returns:
+            Response header with the object properties.
+
+        Raises:
+            requests.RequestException: Ambiguous while handling request
+            requests.ConnectionError: A connection error occurred
+            requests.ConnectionTimeout: Timed out while connecting to AIStore server
+            requests.ReadTimeout: Timeout receiving response from server
+            requests.exeptions.HTTPError(404): The object does not exist
+        """
+        params = {QParamProvider: provider}
+        return self._request(
+            HTTP_METHOD_HEAD,
+            path=f"objects/{ bck_name }/{ object_name }",
+            params=params,
+        ).headers
+
     def get_object(self, bck_name: str, object_name: str, provider: str = ProviderAIS, archpath: str = "") -> bytes:
         """
         Reads an object content
