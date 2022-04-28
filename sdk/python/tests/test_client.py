@@ -2,6 +2,8 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
 #
 
+import random
+import string
 import unittest
 import os
 import requests
@@ -11,56 +13,56 @@ from aistore.client.api import Client
 CLUSTER_ENDPOINT = os.environ.get("AIS_ENDPOINT", "http://localhost:8080")
 
 
-class TestBasicOps(unittest.TestCase):  #pylint: disable=unused-variable
-    def test_bucket(self):
-        client = Client(CLUSTER_ENDPOINT)
-        bck_name = "test"
+class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
+    def setUp(self) -> None:
+        letters = string.ascii_lowercase
+        self.bck_name = ''.join(random.choice(letters) for _ in range(10))
 
-        res = client.list_buckets()
+        self.client = Client(CLUSTER_ENDPOINT)
+
+    def tearDown(self) -> None:
+        # Try to destroy bucket if there is one left.
+        try:
+            self.client.destroy_bucket(self.bck_name)
+        except requests.exceptions.HTTPError:
+            pass
+
+    def test_bucket(self):
+        res = self.client.list_buckets()
         count = len(res)
-        client.create_bucket(bck_name)
-        res = client.list_buckets()
+        self.client.create_bucket(self.bck_name)
+        res = self.client.list_buckets()
         count_new = len(res)
         self.assertEqual(count + 1, count_new)
 
-        client.destroy_bucket(bck_name)
-
     def test_head_bucket(self):
-        client = Client(CLUSTER_ENDPOINT)
-        bck_name = "test"
-
-        client.create_bucket(bck_name)
-        client.head_bucket(bck_name)
-        client.destroy_bucket(bck_name)
+        self.client.create_bucket(self.bck_name)
+        self.client.head_bucket(self.bck_name)
+        self.client.destroy_bucket(self.bck_name)
         try:
-            client.head_bucket(bck_name)
+            self.client.head_bucket(self.bck_name)
         except requests.exceptions.HTTPError as e:
             self.assertEqual(e.response.status_code, 404)
 
     def test_put_get(self):
-        client = Client(CLUSTER_ENDPOINT)
-        bck_name = "test"
-        client.create_bucket(bck_name)
+        self.client.create_bucket(self.bck_name)
 
         tmpfile = "/tmp/py-sdk-test"
         orig_cont = "test string"
         with open(tmpfile, mode="w", encoding="utf-8") as fdata:
             fdata.write(orig_cont)
 
-        client.put_object(bck_name, "obj1", tmpfile)
+        self.client.put_object(self.bck_name, "obj1", tmpfile)
         os.remove(tmpfile)
 
-        objects = client.list_objects(bck_name)
+        objects = self.client.list_objects(self.bck_name)
         self.assertFalse(objects is None)
 
-        obj = client.get_object(bck_name, "obj1")
+        obj = self.client.get_object(self.bck_name, "obj1")
         self.assertEqual(obj.decode("utf-8"), orig_cont)
 
-        client.destroy_bucket(bck_name)
-
     def test_cluster_map(self):
-        client = Client(CLUSTER_ENDPOINT)
-        smap = client.get_cluster_info()
+        smap = self.client.get_cluster_info()
 
         self.assertIsNotNone(smap)
         self.assertIsNotNone(smap.proxy_si)
