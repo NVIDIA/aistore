@@ -259,7 +259,7 @@ func (m *Manager) initStreams() error {
 	respNetwork := cmn.NetIntraData
 	trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
 	shardsSbArgs := bundle.Args{
-		Multiplier: cos.Max(config.Transport.BundleMultiplier, 4),
+		Multiplier: config.DSort.SbundleMult,
 		Net:        respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,

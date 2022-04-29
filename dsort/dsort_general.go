@@ -136,11 +136,6 @@ func (ds *dsorterGeneral) start() error {
 
 	client := transport.NewIntraDataClient()
 
-	streamMultiplier := cos.Max(config.Transport.BundleMultiplier, 4)
-	if ds.m.rs.StreamMultiplier != 0 {
-		streamMultiplier = ds.m.rs.StreamMultiplier
-	}
-
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
 	reqSbArgs := bundle.Args{
 		Multiplier: 20,
@@ -153,6 +148,10 @@ func (ds *dsorterGeneral) start() error {
 	}
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
+	streamMultiplier := config.DSort.SbundleMult
+	if ds.m.rs.StreamMultiplier != 0 {
+		streamMultiplier = ds.m.rs.StreamMultiplier
+	}
 	respSbArgs := bundle.Args{
 		Multiplier: streamMultiplier,
 		Net:        respNetwork,

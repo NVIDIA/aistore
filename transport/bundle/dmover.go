@@ -68,13 +68,8 @@ var _ cluster.DataMover = (*DataMover)(nil)
 // is saved to local drives(e.g, PUT the object to the Cloud as well).
 // For DMs that do not create new objects(e.g, rebalance), owt should
 // be set to `OwtMigrate`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
-func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, owt cmn.OWT,
-	extra Extra) (*DataMover, error) {
+func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, owt cmn.OWT, extra Extra) (*DataMover, error) {
 	dm := &DataMover{t: t, config: cmn.GCO.Get(), mem: t.PageMM()}
-	if extra.Multiplier == 0 {
-		extra.Multiplier = dm.config.Transport.BundleMultiplier
-	}
-	debug.Assert(extra.Multiplier <= 16)
 	dm.owt = owt
 	dm.multiplier = extra.Multiplier
 	dm.sizePDU = extra.SizePDU
@@ -192,7 +187,7 @@ func (dm *DataMover) UnregRecv() {
 		return // e.g., 2PC (begin => abort) sequence with no Open
 	}
 	if dm.xctn != nil {
-		dm.Quiesce(dm.config.Transport.Quiesce.D())
+		dm.Quiesce(dm.config.Transport.QuiesceTime.D())
 	}
 	if err := transport.Unhandle(dm.data.trname); err != nil {
 		glog.Error(err)

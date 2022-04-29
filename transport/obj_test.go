@@ -460,7 +460,7 @@ func Test_CompressedOne(t *testing.T) {
 	config := cmn.GCO.BeginUpdate()
 	config.Transport.LZ4BlockMaxSize = 256 * cos.KiB
 	config.Transport.IdleTeardown = cos.Duration(time.Second)
-	config.Transport.Quiesce = cos.Duration(8 * time.Second)
+	config.Transport.QuiesceTime = cos.Duration(8 * time.Second)
 	cmn.GCO.CommitUpdate(config)
 	if err := config.Transport.Validate(); err != nil {
 		tassert.CheckFatal(t, err)

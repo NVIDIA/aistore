@@ -4,6 +4,10 @@
  */
 package apc
 
+import (
+	"github.com/NVIDIA/aistore/cmn/cos"
+)
+
 // NOTE:
 // LZ4 block and frame formats: http://fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
 
@@ -18,3 +22,5 @@ const (
 const LZ4Compression = "lz4"
 
 var SupportedCompression = []string{CompressNever, CompressAlways}
+
+func IsValidCompression(c string) bool { return c == "" || cos.StringInSlice(c, SupportedCompression) }

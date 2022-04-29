@@ -90,9 +90,9 @@ func (e *tcbFactory) Start() error {
 func (e *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error {
 	const trname = "transcpy" // copy&transform transport endpoint prefix
 	dmExtra := bundle.Extra{
-		RecvAck:     nil,                          // NOTE: no ACKs
-		Compression: config.Rebalance.Compression, // TODO: define separately
-		Multiplier:  config.Transport.BundleMultiplier,
+		RecvAck:     nil, // NOTE: no ACKs
+		Compression: config.TCB.Compression,
+		Multiplier:  config.TCB.SbundleMult,
 		SizePDU:     sizePDU,
 	}
 	dm, err := bundle.NewDataMover(e.T, trname+"_"+uuid, e.xctn.recv, cmn.OwtPut, dmExtra)

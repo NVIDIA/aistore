@@ -74,6 +74,7 @@ type (
 		DSort       DSortConf       `json:"distributed_sort"`
 		Transport   TransportConf   `json:"transport"`
 		Memsys      MemsysConf      `json:"memsys"`
+		TCB         TCBConf         `json:"tcb"` // transform/copy bucket
 		WritePolicy WritePolicyConf `json:"write_policy"`
 		Features    feat.Flags      `json:"features,string" allow:"cluster"` // feature flags (to flip assorted defaults)
 		// read-only
@@ -107,6 +108,7 @@ type (
 		DSort       *DSortConfToUpdate       `json:"distributed_sort,omitempty"`
 		Transport   *TransportConfToUpdate   `json:"transport,omitempty"`
 		Memsys      *MemsysConfToUpdate      `json:"memsys,omitempty"`
+		TCB         *TCBConfToUpdate         `json:"tcb,omitempty"`
 		WritePolicy *WritePolicyConfToUpdate `json:"write_policy,omitempty"`
 		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
 		Features    *feat.Flags              `json:"features,string,omitempty"`
@@ -172,19 +174,21 @@ type (
 	}
 
 	ECConf struct {
-		ObjSizeLimit int64  `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
-		Compression  string `json:"compression"`   // enum { CompressAlways, ... } in api/apc/compression.go
-		DataSlices   int    `json:"data_slices"`   // number of data slices
-		ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
-		Enabled      bool   `json:"enabled"`       // EC is enabled
-		DiskOnly     bool   `json:"disk_only"`     // if true, EC does not use SGL - data goes directly to drives
+		ObjSizeLimit int64  `json:"objsize_limit"`     // objects below this size are replicated instead of EC'ed
+		Compression  string `json:"compression"`       // enum { CompressAlways, ... } in api/apc/compression.go
+		SbundleMult  int    `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
+		DataSlices   int    `json:"data_slices"`       // number of data slices
+		ParitySlices int    `json:"parity_slices"`     // number of parity slices/replicas
+		Enabled      bool   `json:"enabled"`           // EC is enabled
+		DiskOnly     bool   `json:"disk_only"`         // if true, EC does not use SGL - data goes directly to drives
 	}
 	ECConfToUpdate struct {
-		Enabled      *bool   `json:"enabled,omitempty"`
 		ObjSizeLimit *int64  `json:"objsize_limit,omitempty"`
+		Compression  *string `json:"compression,omitempty"`
+		SbundleMult  *int    `json:"bundle_multiplier,omitempty"`
 		DataSlices   *int    `json:"data_slices,omitempty"`
 		ParitySlices *int    `json:"parity_slices,omitempty"`
-		Compression  *string `json:"compression,omitempty"`
+		Enabled      *bool   `json:"enabled,omitempty"`
 		DiskOnly     *bool   `json:"disk_only,omitempty"`
 	}
 
@@ -314,13 +318,15 @@ type (
 	}
 
 	RebalanceConf struct {
-		DestRetryTime cos.Duration `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
-		Compression   string       `json:"compression"`     // enum { CompressAlways, ... } in api/apc/compression.go
-		Enabled       bool         `json:"enabled"`         // true=auto-rebalance | manual rebalancing
+		DestRetryTime cos.Duration `json:"dest_retry_time"`   // max wait for ACKs & neighbors to complete
+		Compression   string       `json:"compression"`       // enum { CompressAlways, ... } in api/apc/compression.go
+		SbundleMult   int          `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
+		Enabled       bool         `json:"enabled"`           // true=auto-rebalance | manual rebalancing
 	}
 	RebalanceConfToUpdate struct {
 		DestRetryTime *cos.Duration `json:"dest_retry_time,omitempty"`
 		Compression   *string       `json:"compression,omitempty"`
+		SbundleMult   *int          `json:"bundle_multiplier"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
@@ -470,8 +476,9 @@ type (
 		EKMMissingKey       string       `json:"ekm_missing_key"`
 		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
 		CallTimeout         cos.Duration `json:"call_timeout"`
-		Compression         string       `json:"compression"` // enum { CompressAlways, ... } in api/apc/compression.go
 		DSorterMemThreshold string       `json:"dsorter_mem_threshold"`
+		Compression         string       `json:"compression"`       // enum { CompressAlways, ... } in api/apc/compression.go
+		SbundleMult         int          `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
 	}
 	DSortConfToUpdate struct {
 		DuplicatedRecords   *string       `json:"duplicated_records,omitempty"`
@@ -480,8 +487,9 @@ type (
 		EKMMissingKey       *string       `json:"ekm_missing_key,omitempty"`
 		DefaultMaxMemUsage  *string       `json:"default_max_mem_usage,omitempty"`
 		CallTimeout         *cos.Duration `json:"call_timeout,omitempty"`
-		Compression         *string       `json:"compression,omitempty"`
 		DSorterMemThreshold *string       `json:"dsorter_mem_threshold,omitempty"`
+		Compression         *string       `json:"compression,omitempty"`
+		SbundleMult         *int          `json:"bundle_multiplier,omitempty"`
 	}
 
 	FSPConf struct {
@@ -489,14 +497,13 @@ type (
 	}
 
 	TransportConf struct {
-		MaxHeaderSize    int `json:"max_header"`        // max transport header buffer (default=4K)
-		Burst            int `json:"burst_buffer"`      // num sends with no back pressure; see also AIS_STREAM_BURST_NUM
-		BundleMultiplier int `json:"bundle_multiplier"` // stream bundle multiplier (num streams to destination)
+		MaxHeaderSize int `json:"max_header"`   // max transport header buffer (default=4K)
+		Burst         int `json:"burst_buffer"` // num sends with no back pressure; see also AIS_STREAM_BURST_NUM
 		// two no-new-transmissions durations:
-		// after `IdleTeardown` sender terminates the connection (to reestablish it upon the very first/next PDU)
+		// * IdleTeardown: sender terminates the connection (to reestablish it upon the very first/next PDU)
+		// * QuiesceTime:  safe to terminate or transition to the next (in re: rebalance) stage
 		IdleTeardown cos.Duration `json:"idle_teardown"`
-		// after Quiesce time, it is safe to terminate (or transition to the next (rebalance) stage)
-		Quiesce cos.Duration `json:"quiescent"`
+		QuiesceTime  cos.Duration `json:"quiescent"`
 		// lz4
 		LZ4BlockMaxSize  int  `json:"lz4_block"`          // max uncompressed block size, one of [64K, 256K(*), 1M, 4M]
 		LZ4FrameChecksum bool `json:"lz4_frame_checksum"` // fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
@@ -504,9 +511,8 @@ type (
 	TransportConfToUpdate struct {
 		MaxHeaderSize    *int          `json:"max_header,omitempty" list:"readonly"`
 		Burst            *int          `json:"burst_buffer,omitempty" list:"readonly"`
-		BundleMultiplier *int          `json:"bundle_multiplier,omitempty"`
 		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty"`
-		Quiesce          *cos.Duration `json:"quiescent,omitempty"`
+		QuiesceTime      *cos.Duration `json:"quiescent,omitempty"`
 		LZ4BlockMaxSize  *int          `json:"lz4_block,omitempty"`
 		LZ4FrameChecksum *bool         `json:"lz4_frame_checksum,omitempty"`
 	}
@@ -526,6 +532,15 @@ type (
 		HousekeepTime  *cos.Duration `json:"hk_time,omitempty"`
 		MinPctTotal    *int          `json:"min_pct_total,omitempty" list:"readonly"`
 		MinPctFree     *int          `json:"min_pct_free,omitempty" list:"readonly"`
+	}
+
+	TCBConf struct {
+		Compression string `json:"compression"`       // enum { CompressAlways, ... } in api/apc/compression.go
+		SbundleMult int    `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
+	}
+	TCBConfToUpdate struct {
+		Compression *string `json:"compression,omitempty"`
+		SbundleMult *int    `json:"bundle_multiplier,omitempty"`
 	}
 
 	WritePolicyConf struct {
@@ -583,6 +598,7 @@ var (
 	_ Validator = (*DSortConf)(nil)
 	_ Validator = (*TransportConf)(nil)
 	_ Validator = (*MemsysConf)(nil)
+	_ Validator = (*TCBConf)(nil)
 	_ Validator = (*WritePolicyConf)(nil)
 
 	_ PropsValidator = (*CksumConf)(nil)
@@ -1048,8 +1064,13 @@ func (c *ECConf) Validate() error {
 		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])",
 			c.ParitySlices, MinSliceCount, MaxSliceCount)
 	}
-	j := apc.WritePolicy(c.Compression)
-	return j.Validate()
+	if c.SbundleMult < 0 || c.SbundleMult > 16 {
+		return fmt.Errorf("invalid ec.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
+	}
+	if !apc.IsValidCompression(c.Compression) {
+		return fmt.Errorf("invalid ec.compression: %q (expecting one of: %v)", c.Compression, apc.SupportedCompression)
+	}
+	return nil
 }
 
 func (c *ECConf) ValidateAsProps(arg ...interface{}) (err error) {
@@ -1220,9 +1241,12 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 ///////////////
 
 func (c *DSortConf) Validate() (err error) {
-	j := apc.WritePolicy(c.Compression)
-	if err := j.Validate(); err != nil {
-		return err
+	if c.SbundleMult < 0 || c.SbundleMult > 16 {
+		return fmt.Errorf("invalid distributed_sort.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
+	}
+	if !apc.IsValidCompression(c.Compression) {
+		return fmt.Errorf("invalid distributed_sort.compression: %q (expecting one of: %v)",
+			c.Compression, apc.SupportedCompression)
 	}
 	return c.ValidateWithOpts(false)
 }
@@ -1434,14 +1458,26 @@ func (c *TransportConf) Validate() (err error) {
 	if c.IdleTeardown.D() < time.Second {
 		return fmt.Errorf("invalid transport.idle_teardown: %v (expected >= 1s)", c.IdleTeardown)
 	}
-	if c.Quiesce.D() < 8*time.Second {
-		return fmt.Errorf("invalid transport.quiescent: %v (expected >= 8s)", c.Quiesce)
+	if c.QuiesceTime.D() < 8*time.Second {
+		return fmt.Errorf("invalid transport.quiescent: %v (expected >= 8s)", c.QuiesceTime)
 	}
 	if c.MaxHeaderSize > 0 && c.MaxHeaderSize < 512 {
 		return fmt.Errorf("invalid transport.max_header: %v (expected >= 512)", c.MaxHeaderSize)
 	}
-	if c.BundleMultiplier < 0 || c.BundleMultiplier > 16 {
-		return fmt.Errorf("invalid transport.bundle_multiplier: %v (expected range [0, 16])", c.BundleMultiplier)
+	return nil
+}
+
+/////////////
+// TCBConf //
+/////////////
+
+func (c *TCBConf) Validate() error {
+	if c.SbundleMult < 0 || c.SbundleMult > 16 {
+		return fmt.Errorf("invalid tcb.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
+	}
+	if !apc.IsValidCompression(c.Compression) {
+		return fmt.Errorf("invalid tcb.compression: %q (expecting one of: %v)",
+			c.Compression, apc.SupportedCompression)
 	}
 	return nil
 }
@@ -1511,8 +1547,14 @@ func (c *RebalanceConf) Validate() error {
 	if j := c.DestRetryTime.D(); j < time.Second || j > 10*time.Minute {
 		return fmt.Errorf("invalid rebalance.dest_retry_time=%s (expected range [1s, 10m])", j)
 	}
-	j := apc.WritePolicy(c.Compression)
-	return j.Validate()
+	if c.SbundleMult < 0 || c.SbundleMult > 16 {
+		return fmt.Errorf("invalid rebalance.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
+	}
+	if !apc.IsValidCompression(c.Compression) {
+		return fmt.Errorf("invalid rebalance.compression: %q (expecting one of: %v)",
+			c.Compression, apc.SupportedCompression)
+	}
+	return nil
 }
 
 func (c *RebalanceConf) String() string {

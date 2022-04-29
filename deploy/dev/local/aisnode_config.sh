@@ -17,12 +17,13 @@ cat > $AIS_CONF_FILE <<EOL
 		"enabled":      ${AIS_MIRROR_ENABLED:-false}
 	},
 	"ec": {
-		"objsize_limit": ${AIS_OBJ_SIZE_LIMIT:-262144},
-		"data_slices":   ${AIS_DATA_SLICES:-1},
-		"parity_slices": ${AIS_PARITY_SLICES:-1},
-		"compression":   "${AIS_EC_COMPRESSION:-never}",
-		"enabled":       ${AIS_EC_ENABLED:-false},
-		"disk_only":     false
+		"objsize_limit":	${AIS_OBJ_SIZE_LIMIT:-262144},
+		"compression":		"${AIS_EC_COMPRESSION:-never}",
+		"bundle_multiplier":	${AIS_EC_BUNDLE_MULTIPLIER:-2},
+		"data_slices":		${AIS_DATA_SLICES:-1},
+		"parity_slices":	${AIS_PARITY_SLICES:-1},
+		"enabled":		${AIS_EC_ENABLED:-false},
+		"disk_only":		false
 	},
 	"log": {
 		"level":     "${AIS_LOG_LEVEL:-3}",
@@ -74,9 +75,10 @@ cat > $AIS_CONF_FILE <<EOL
 	    "disk_util_max_wm":  95
 	},
 	"rebalance": {
-		"dest_retry_time": "2m",
-		"compression":     "${AIS_REBALANCE_COMPRESSION:-never}",
-		"enabled":         true
+		"dest_retry_time":	"2m",
+		"compression":     	"${AIS_REBALANCE_COMPRESSION:-never}",
+		"bundle_multiplier":	${AIS_REBALANCE_BUNDLE_MULTIPLIER:-2},
+		"enabled":         	true
 	},
 	"resilver": {
 		"enabled": true
@@ -91,7 +93,6 @@ cat > $AIS_CONF_FILE <<EOL
 	"transport": {
 		"max_header":		4096,
 		"burst_buffer":		32,
-		"bundle_multiplier":	${AIS_TRANSPORT_BUNDLE_MULTIPLIER:-2},
 		"idle_teardown":	"${AIS_TRANSPORT_IDLE_TEARDOWN:-4s}",
 		"quiescent":		"${AIS_TRANSPORT_QUIESCENT:-10s}",
 		"lz4_block":		${AIS_TRANSPORT_LZ4_BLOCK:-262144},
@@ -155,9 +156,14 @@ cat > $AIS_CONF_FILE <<EOL
 		"ekm_malformed_line":    "abort",
 		"ekm_missing_key":       "abort",
 		"default_max_mem_usage": "80%",
+		"call_timeout":          "10m",
 		"dsorter_mem_threshold": "100GB",
 		"compression":           "${AIS_DSORT_COMPRESSION:-never}",
-		"call_timeout":          "10m"
+		"bundle_multiplier":	${AIS_DSORT_BUNDLE_MULTIPLIER:-4}
+	},
+	"tcb": {
+		"compression":		"never",
+		"bundle_multiplier":	2
 	},
 	"write_policy": {
 		"data": "${WRITE_POLICY_DATA:-}",

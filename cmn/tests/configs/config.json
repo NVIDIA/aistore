@@ -6,12 +6,13 @@
 		"enabled":      false
 	},
 	"ec": {
-		"objsize_limit": 262144,
-		"data_slices":   1,
-		"parity_slices": 1,
-		"compression":   "never",
-		"enabled":       false,
-		"disk_only":     false
+		"objsize_limit":	262144,
+		"compression":		"never",
+		"bundle_multiplier":	2,
+		"data_slices":		1,
+		"parity_slices":	1,
+		"enabled":		false,
+		"disk_only":		false
 	},
 	"log": {
 		"level":     "3",
@@ -63,9 +64,10 @@
 	    "disk_util_max_wm":  95
 	},
 	"rebalance": {
-		"dest_retry_time": "2m",
-		"compression":     "never",
-		"enabled":         true
+		"dest_retry_time":	"2m",
+		"compression":     	"never",
+		"bundle_multiplier":	2,
+		"enabled":         	true
 	},
 	"resilver": {
 		"enabled": true
@@ -80,7 +82,6 @@
 	"transport": {
 		"max_header":		4096,
 		"burst_buffer":		32,
-		"bundle_multiplier":	2,
 		"idle_teardown":	"4s",
 		"quiescent":		"10s",
 		"lz4_block":		262144,
@@ -144,9 +145,14 @@
 		"ekm_malformed_line":    "abort",
 		"ekm_missing_key":       "abort",
 		"default_max_mem_usage": "80%",
+		"call_timeout":          "10m",
 		"dsorter_mem_threshold": "100GB",
 		"compression":           "never",
-		"call_timeout":          "10m"
+		"bundle_multiplier":	4
+	},
+	"tcb": {
+		"compression":		"never",
+		"bundle_multiplier":	2
 	},
 	"write_policy": {
 		"data": "",

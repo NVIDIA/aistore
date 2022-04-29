@@ -171,12 +171,12 @@ func loadClusterConfigV1(globalFpath string, config *Config) error {
 		case name == "rebalance.quiescent":
 			v, ok := fld.Value().(cos.Duration)
 			debug.Assert(ok)
-			config.ClusterConfig.Transport.Quiesce = v
+			config.ClusterConfig.Transport.QuiesceTime = v
 			return nil, false
 		case name == "rebalance.multiplier":
 			v, ok := fld.Value().(uint8)
 			debug.Assert(ok)
-			config.ClusterConfig.Transport.BundleMultiplier = int(v)
+			config.ClusterConfig.Rebalance.SbundleMult = int(v)
 			return nil, false
 		case name == "compression.block_size":
 			v, ok := fld.Value().(int)

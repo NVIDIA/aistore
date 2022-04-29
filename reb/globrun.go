@@ -129,7 +129,7 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 	dmExtra := bundle.Extra{
 		RecvAck:     reb.recvAck,
 		Compression: config.Rebalance.Compression,
-		Multiplier:  config.Transport.BundleMultiplier,
+		Multiplier:  config.Rebalance.SbundleMult,
 	}
 	dm, err := bundle.NewDataMover(t, trname, reb.recvObj, cmn.OwtMigrate, dmExtra)
 	if err != nil {
@@ -397,7 +397,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 
 	// 3. init streams and data structures
 	if haveStreams {
-		reb.beginStreams()
+		reb.beginStreams(rargs.config)
 	}
 
 	if reb.awaiting.targets == nil {
@@ -433,13 +433,18 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	return true
 }
 
-func (reb *Reb) beginStreams() {
+func (reb *Reb) beginStreams(config *cmn.Config) {
 	debug.Assert(reb.stages.stage.Load() == rebStageInit)
 
 	xreb := reb.xctn()
 	reb.dm.SetXact(xreb)
 	reb.dm.Open()
-	pushArgs := bundle.Args{Net: reb.dm.NetC(), Trname: trnamePsh, Extra: &transport.Extra{SenderID: xreb.ID()}}
+	pushArgs := bundle.Args{
+		Net:        reb.dm.NetC(),
+		Trname:     trnamePsh,
+		Multiplier: config.Rebalance.SbundleMult,
+		Extra:      &transport.Extra{SenderID: xreb.ID()},
+	}
 	reb.pushes = bundle.NewStreams(reb.t.Sowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
 
 	reb.laterx.Store(false)
@@ -653,7 +658,7 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs.id, rargs.smap))
 	}
 	// prior to closing the streams
-	if q := reb.quiesce(rargs, rargs.config.Transport.Quiesce.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
+	if q := reb.quiesce(rargs, rargs.config.Transport.QuiesceTime.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
 		if errM := fs.RemoveMarker(cmn.RebalanceMarker); errM == nil {
 			glog.Infof("%s: %s removed marker ok", reb.t, reb.xctn())
 		}

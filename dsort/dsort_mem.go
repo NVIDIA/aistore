@@ -209,14 +209,13 @@ func (ds *dsorterMem) start() error {
 
 	client := transport.NewIntraDataClient()
 
-	streamMultiplier := cos.Max(config.Transport.BundleMultiplier, 4)
+	streamMultiplier := config.DSort.SbundleMult
 	if ds.m.rs.StreamMultiplier != 0 {
 		streamMultiplier = ds.m.rs.StreamMultiplier
 	}
-
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
 	reqSbArgs := bundle.Args{
-		Multiplier: 16,
+		Multiplier: streamMultiplier,
 		Net:        reqNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,

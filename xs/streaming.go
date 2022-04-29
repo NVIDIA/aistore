@@ -62,12 +62,12 @@ func (p *streamingF) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
+// NOTE: transport endpoint `trname` identifies the flow and must be identical across all participating targets
 func (p *streamingF) newDM(prefix string, recv transport.ReceiveObj, sizePDU int32) (err error) {
-	// NOTE:
-	// transport endpoint `trname` must be identical across all participating targets
 	bmd := p.Args.T.Bowner().Get()
 	trname := fmt.Sprintf("%s-%s-%s-%d", prefix, p.Bck.Provider, p.Bck.Name, bmd.Version)
 
+	// NOTE: stream-bundle multiplier always 1 (see also: `SbundleMult`)
 	dmExtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
 	p.dm, err = bundle.NewDataMover(p.Args.T, trname, recv, cmn.OwtPut, dmExtra)
 	if err != nil {

@@ -11,7 +11,6 @@ import (
 	"runtime"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -85,13 +84,9 @@ func (s *Stream) terminate(err error, reason string) (actReason string, actErr e
 }
 
 func (s *Stream) initCompression(extra *Extra) {
-	config := extra.Config
-	if config == nil {
-		config = cmn.GCO.Get()
-	}
 	s.lz4s.s = s
-	s.lz4s.blockMaxSize = config.Transport.LZ4BlockMaxSize
-	s.lz4s.frameChecksum = config.Transport.LZ4FrameChecksum
+	s.lz4s.blockMaxSize = extra.Config.Transport.LZ4BlockMaxSize
+	s.lz4s.frameChecksum = extra.Config.Transport.LZ4FrameChecksum
 	mem := extra.MMSA
 	if mem == nil {
 		mem = memsys.PageMM()
@@ -101,7 +96,6 @@ func (s *Stream) initCompression(extra *Extra) {
 	} else {
 		s.lz4s.sgl = mem.NewSGL(cos.KiB*64, cos.KiB*64)
 	}
-
 	s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cos.B2S(int64(s.lz4s.blockMaxSize), 0))
 }
 

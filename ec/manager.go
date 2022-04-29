@@ -98,13 +98,13 @@ func (mgr *Manager) initECBundles() error {
 		extraReq    = transport.Extra{Callback: cbReq, Compression: compression}
 	)
 	reqSbArgs := bundle.Args{
-		Multiplier: config.Transport.BundleMultiplier,
+		Multiplier: config.EC.SbundleMult,
 		Extra:      &extraReq,
 		Net:        mgr.netReq,
 		Trname:     ReqStreamName,
 	}
 	respSbArgs := bundle.Args{
-		Multiplier: config.Transport.BundleMultiplier,
+		Multiplier: config.EC.SbundleMult,
 		Trname:     RespStreamName,
 		Net:        mgr.netResp,
 		Extra:      &transport.Extra{Compression: compression},
