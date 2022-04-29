@@ -58,6 +58,12 @@ class BucketEntry(BaseModel):  # pylint: disable=too-few-public-methods,unused-v
     copies: int = 0
     flags: int = 0
 
+    def is_cached(self):
+        return (self.flags & (1 << 6)) != 0
+
+    def is_ok(self):
+        return (self.flags & ((1 << 5) - 1)) == 0
+
 
 class BucketList(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
     uuid: str

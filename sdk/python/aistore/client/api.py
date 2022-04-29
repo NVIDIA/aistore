@@ -17,8 +17,10 @@ from .const import (
     QParamProvider,
     ProviderAIS,
     QParamWhat,
+    QParamKeepBckMD,
 )
 from .msg import ActionMsg, Bck, BucketList, BucketEntry, Smap
+from .errors import InvalidBckProvider
 
 T = TypeVar("T")
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
@@ -138,6 +140,39 @@ class Client:
             params=params,
         )
 
+    def evict_bucket(self, bck_name: str, provider: str, keepMD: bool = True):
+        """
+        Evicts a bucket in AIStore cluster.
+        NOTE: only Cloud buckets can be evicted
+
+        Args:
+            bck_name (str): Name of the existing bucket
+            provider (str): Name of bucket provider, one of "aws", "gcp", "az", "hdfs" or "ht"
+            keepMD (bool, optional): if true, it evicts objects but keeps bucket metadata
+
+        Returns:
+            Nothing
+
+        Raises:
+            requests.RequestException: Ambiguous while handling request
+            requests.ConnectionError: A connection error occurred
+            requests.ConnectionTimeout: Timed out while connecting to AIStore server
+            requests.ReadTimeout: Timeout receiving response from server
+            InvalidBckProvider: Evicting AIS bucket
+        """
+        if provider == ProviderAIS:
+            raise InvalidBckProvider(provider)
+        params = {QParamProvider: provider}
+        if keepMD:
+            params[QParamKeepBckMD] = "true"
+        action = ActionMsg(action="evict-remote-bck").dict()
+        self._request(
+            HTTP_METHOD_DELETE,
+            path=f"buckets/{ bck_name }",
+            json=action,
+            params=params,
+        )
+
     def head_bucket(self, bck_name: str, provider: str = ProviderAIS) -> Header:
         """
         Requests bucket properties.
@@ -164,7 +199,13 @@ class Client:
             params=params,
         ).headers
 
-    def list_objects(self, bck_name: str, provider: str = ProviderAIS, prefix: str = "", count: int = 0, page_size: int = 0) -> List[BucketEntry]:
+    def list_objects(self,
+                     bck_name: str,
+                     provider: str = ProviderAIS,
+                     prefix: str = "",
+                     props: str = "",
+                     count: int = 0,
+                     page_size: int = 0) -> List[BucketEntry]:
         """
         Returns list of objects in a bucket
 
@@ -173,6 +214,7 @@ class Client:
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
                 Defaults to "ais". Empty provider returns buckets of all providers.
             prefix (str, optional): return only objects that start with the prefix
+            props (str, optional): comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
             count (int, optional): return first "count" objects, default is "0" - return all objects in the bucket
             page_size (int, optional): read by page_size objects at a time
 
@@ -186,7 +228,7 @@ class Client:
             requests.ReadTimeout: Timeout receiving response from server
         """
         page_size = count if page_size == 0 else page_size
-        value = {"prefix": prefix, "pagesize": page_size, "uuid": ""}
+        value = {"prefix": prefix, "pagesize": page_size, "uuid": "", "props": props}
         params = {QParamProvider: provider}
         obj_list = None
         to_read = count
@@ -293,6 +335,33 @@ class Client:
                 params=params,
                 data=data,
             ).headers
+
+    def delete_object(self, bck_name: str, object_name: str, provider: str = ProviderAIS):
+        """
+        Delete an object from a bucket.
+
+        Args:
+            bck_name (str): Name of the new bucket
+            object_name (str): Name of an object in the bucket
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+                Defaults to "ais".
+
+        Returns:
+            None
+
+        Raises:
+            requests.RequestException: Ambiguous while handling request
+            requests.ConnectionError: A connection error occurred
+            requests.ConnectionTimeout: Timed out while connecting to AIStore server
+            requests.ReadTimeout: Timeout receiving response from server
+            requests.exeptions.HTTPError(404): The object does not exist
+        """
+        params = {QParamProvider: provider}
+        self._request(
+            HTTP_METHOD_DELETE,
+            path=f"objects/{ bck_name }/{ object_name }",
+            params=params,
+        )
 
     def get_cluster_info(self) -> Smap:
         """
