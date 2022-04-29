@@ -1197,7 +1197,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		hdr            = w.Header()
 		silent         = cos.IsParseBool(query.Get(apc.QparamSilent))
 		exists         = true
-		addedEC        bool
+		hasEC          bool
 	)
 	if silent {
 		invalidHandler = t.writeErrSilent
@@ -1267,7 +1267,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		}
 		if lom.Bck().Props.EC.Enabled {
 			if md, err := ec.ObjectMetadata(lom.Bck(), lom.ObjName); err == nil {
-				addedEC = true
+				hasEC = true
 				op.EC.DataSlices = md.Data
 				op.EC.ParitySlices = md.Parity
 				op.EC.IsECCopy = md.IsCopy
@@ -1277,17 +1277,26 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	}
 
 	// to header
-	op.ObjAttrs.ToHeader(hdr)
+	cmn.ToHeader(&op.ObjAttrs, hdr)
 	errIter := cmn.IterFields(op, func(tag string, field cmn.IterField) (err error, b bool) {
-		if !addedEC && strings.HasPrefix(tag, "ec-") {
+		if !hasEC && strings.HasPrefix(tag, "ec.") {
+			return nil, false
+		}
+		// NOTE: op.ObjAttrs are already added via cmn.ToHeader
+		if tag[0] == '.' {
 			return nil, false
 		}
 		v := field.String()
 		if v == "" {
 			return nil, false
 		}
-		headerName := cmn.PropToHeader(tag)
-		hdr.Set(headerName, v)
+		name := cmn.PropToHeader(tag)
+		debug.Func(func() {
+			if vv := hdr.Get(name); vv != "" {
+				debug.Assertf(false, "not expecting duplications: %s=(%q, %q)", name, v, vv)
+			}
+		})
+		hdr.Set(name, v)
 		return nil, false
 	})
 	debug.AssertNoErr(errIter)

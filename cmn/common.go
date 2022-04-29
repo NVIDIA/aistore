@@ -139,6 +139,9 @@ func PropToHeader(prop string) string {
 	if strings.HasPrefix(prop, apc.HeaderPrefix) {
 		return prop
 	}
+	if prop[0] == '.' || prop[0] == '_' {
+		prop = prop[1:]
+	}
 	prop = strings.ReplaceAll(prop, ".", "-")
 	prop = strings.ReplaceAll(prop, "_", "-")
 	return apc.HeaderPrefix + prop

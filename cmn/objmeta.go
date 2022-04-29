@@ -80,12 +80,13 @@ type (
 		SetCustomKey(k, v string)
 		String() string
 	}
+	// see also apc.HdrObjAtime et al. @ api/apc/const.go (and note that naming must be consistent)
 	ObjAttrs struct {
-		Atime    int64         `json:"access_time,omitempty"` // access time (nanoseconds since UNIX epoch)
-		Size     int64         `json:"size,omitempty"`        // object size (bytes)
-		Ver      string        `json:"version,omitempty"`     // object version
-		Cksum    *cos.Cksum    `json:"checksum,omitempty"`    // object checksum (NOTE: m.b. cloned)
-		CustomMD cos.SimpleKVs `json:"custom,omitempty"`      // custom metadata: ETag, MD5, CRC, user-defined ...
+		Atime    int64         `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
+		Size     int64         `json:"size,omitempty"`      // object size (bytes)
+		Ver      string        `json:"version,omitempty"`   // object version
+		Cksum    *cos.Cksum    `json:"checksum,omitempty"`  // object checksum (cloned)
+		CustomMD cos.SimpleKVs `json:"custom-md,omitempty"` // custom metadata: ETag, MD5, CRC, user-defined ...
 	}
 )
 
@@ -162,10 +163,6 @@ func ToHeader(oah ObjAttrsHolder, hdr http.Header) {
 		debug.Assert(k != "")
 		hdr.Add(apc.HdrObjCustomMD, k+"="+v)
 	}
-}
-
-func (oa *ObjAttrs) ToHeader(hdr http.Header) {
-	ToHeader(oa, hdr)
 }
 
 // NOTE: returning checksum separately for subsequent validation

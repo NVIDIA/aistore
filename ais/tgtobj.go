@@ -839,7 +839,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 				size = rrange.Length // Content-Length
 			}
 		}
-		goi.lom.ObjAttrs().ToHeader(hdr)
+		cmn.ToHeader(goi.lom.ObjAttrs(), hdr)
 	}
 
 	// reader
