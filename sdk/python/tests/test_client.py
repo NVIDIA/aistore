@@ -7,6 +7,7 @@ import string
 import unittest
 import os
 import requests
+import tempfile
 
 from aistore.client.api import Client
 
@@ -47,19 +48,17 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
     def test_put_get(self):
         self.client.create_bucket(self.bck_name)
 
-        tmpfile = "/tmp/py-sdk-test"
-        orig_cont = "test string"
-        with open(tmpfile, mode="w", encoding="utf-8") as fdata:
-            fdata.write(orig_cont)
-
-        self.client.put_object(self.bck_name, "obj1", tmpfile)
-        os.remove(tmpfile)
+        content = "test string".encode('utf-8')
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(content)
+            f.flush()
+            self.client.put_object(self.bck_name, "obj1", f.name)
 
         objects = self.client.list_objects(self.bck_name)
         self.assertFalse(objects is None)
 
         obj = self.client.get_object(self.bck_name, "obj1")
-        self.assertEqual(obj.decode("utf-8"), orig_cont)
+        self.assertEqual(obj, content)
 
     def test_cluster_map(self):
         smap = self.client.get_cluster_info()
