@@ -35,7 +35,7 @@ type (
 const (
 	initPollInterval = 10 * time.Microsecond
 	maxPollInterval  = 100 * time.Millisecond
-	initCapacity     = 128
+	initCapacity     = 32
 )
 
 ////////////////

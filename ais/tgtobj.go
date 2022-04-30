@@ -59,16 +59,17 @@ type (
 	}
 
 	getObjInfo struct {
-		atime   int64
-		nanotim int64
-		t       *target
-		lom     *cluster.LOM
-		w       io.Writer       // not necessarily http.ResponseWriter
-		ctx     context.Context // context used when getting object from remote backend (access creds)
-		ranges  byteRanges      // range read (see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)
-		archive archiveQuery    // archive query
-		isGFN   bool            // is GFN request
-		chunked bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
+		atime    int64
+		nanotim  int64
+		t        *target
+		lom      *cluster.LOM
+		w        io.Writer       // not necessarily http.ResponseWriter
+		ctx      context.Context // context used when getting object from remote backend (access creds)
+		ranges   byteRanges      // range read (see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)
+		archive  archiveQuery    // archive query
+		isGFN    bool            // is GFN request
+		chunked  bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
+		unlocked bool
 	}
 
 	// Contains information packed in append handle.
@@ -445,26 +446,32 @@ func (poi *putObjInfo) validateCksum(c *cmn.CksumConf) (v bool) {
 ////////////////
 
 func (goi *getObjInfo) getObject() (errCode int, err error) {
+	debug.Assert(!goi.unlocked)
+	goi.lom.Lock(false)
+	errCode, err = goi.get()
+	if !goi.unlocked {
+		goi.lom.Unlock(false)
+	}
+	return errCode, err
+}
+
+// is under rlock
+func (goi *getObjInfo) get() (errCode int, err error) {
 	var (
 		cs                          fs.CapStatus
 		doubleCheck, retry, retried bool
 		cold                        bool
 	)
-	// under lock: lom init, restore from cluster
-	goi.lom.Lock(false)
 do:
 	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
 		cold = cmn.IsObjNotExist(err)
 		if !cold {
-			goi.lom.Unlock(false)
 			errCode = http.StatusInternalServerError
 			return
 		}
 		cs = fs.GetCapStatus()
 		if cs.OOS {
-			// Immediate return for no space left to restore object.
-			goi.lom.Unlock(false)
 			errCode, err = http.StatusInsufficientStorage, cs.Err
 			return
 		}
@@ -489,25 +496,27 @@ do:
 				}
 			}
 			if err != nil {
+				goi.unlocked = true
 				return
 			}
 			goi.lom.Lock(false)
 			if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-				goi.lom.Unlock(false)
 				return
 			}
-			goto get
+			goto fin
 		}
 	} else if goi.lom.Bck().IsRemote() && goi.lom.VersionConf().ValidateWarmGet { // check remote version
 		var equal bool
 		goi.lom.Unlock(false)
 		if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {
 			goi.lom.Uncache(true /*delDirty*/)
+			goi.unlocked = true
 			return
 		}
 		cold = !equal
 		if cold {
 			if err = goi.lom.AllowDisconnectedBackend(true /*loaded*/); err != nil {
+				goi.unlocked = true
 				return
 			}
 		}
@@ -518,33 +527,32 @@ do:
 		cold, errCode, err = goi.recoverObj()
 		if err != nil {
 			if !cold {
-				goi.lom.Unlock(false)
 				glog.Error(err)
 				return
 			}
-			glog.Errorf("%v - proceeding to cold GET from %s", err, goi.lom.Bck())
+			glog.Errorf("%v - proceeding to cold-GET from %s", err, goi.lom.Bck())
 		}
 	}
 
-	// do cold GET
+	// cold GET
 	if cold {
 		if cs.IsNil() {
 			cs = fs.GetCapStatus()
 		}
 		if cs.OOS {
-			goi.lom.Unlock(false)
 			errCode, err = http.StatusInsufficientStorage, cs.Err
 			return
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
 		// (will upgrade rlock => wlock)
 		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cmn.OwtGet); err != nil {
+			goi.unlocked = true
 			return
 		}
 	}
 
 	// read locally and stream back
-get:
+fin:
 	retry, errCode, err = goi.finalize(cold)
 	if retry && !retried {
 		debug.Assert(err != errSendingResp)
@@ -553,8 +561,6 @@ get:
 		goi.lom.Uncache(true /*delDirty*/)
 		goto do
 	}
-
-	goi.lom.Unlock(false)
 	return
 }
 
