@@ -149,7 +149,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		}
 		tlog.Logf("%s/%s [%d] - cached: [%v], atime [%v]\n", bck, m.Name, m.Flags, m.CheckExists(), m.Atime)
 
-		// invalid object: rebalance leftover or uploaded directly to target
+		// e.g. misplaced replica
 		if !m.IsStatusOK() {
 			continue
 		}

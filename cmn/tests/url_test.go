@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
@@ -23,7 +24,7 @@ func TestParseURLScheme(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		scheme, address := cos.ParseURLScheme(tc.url)
+		scheme, address := cmn.ParseURLScheme(tc.url)
 		tassert.Errorf(t, scheme == tc.expectedScheme, "expected scheme %s, got %s", tc.expectedScheme, scheme)
 		tassert.Errorf(t, address == tc.expectedAddress, "expected address %s, got %s", tc.expectedAddress, address)
 	}

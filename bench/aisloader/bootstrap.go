@@ -552,7 +552,7 @@ func parseCmdLine() (params, error) {
 
 	traceHTTPSig.Store(p.traceHTTP)
 
-	scheme, address := cos.ParseURLScheme(aisEndpoint)
+	scheme, address := cmn.ParseURLScheme(aisEndpoint)
 	if scheme == "" {
 		scheme = "http"
 	}

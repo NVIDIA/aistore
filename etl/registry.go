@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -46,7 +47,7 @@ func init() {
 }
 
 func (r *registry) put(uuid string, c Communicator) error {
-	cos.Assert(uuid != "")
+	debug.Assert(uuid != "")
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	if _, ok := r.byUUID[uuid]; ok {
@@ -65,7 +66,7 @@ func (r *registry) getByUUID(uuid string) (c Communicator, exists bool) {
 
 func (r *registry) removeByUUID(uuid string) (c Communicator) {
 	var ok bool
-	cos.Assert(uuid != "")
+	debug.Assert(uuid != "")
 	r.mtx.Lock()
 	if c, ok = r.byUUID[uuid]; ok {
 		delete(r.byUUID, uuid)

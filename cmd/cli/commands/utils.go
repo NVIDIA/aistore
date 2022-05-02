@@ -357,11 +357,11 @@ validate:
 }
 
 func getPrefixFromPrimary() string {
-	scheme, _ := cos.ParseURLScheme(clusterURL)
+	scheme, _ := cmn.ParseURLScheme(clusterURL)
 	if scheme == "" {
 		scheme = "http"
 	}
-	return scheme + "://"
+	return scheme + apc.BckProviderSeparator
 }
 
 func calcRefreshRate(c *cli.Context) time.Duration {
@@ -459,7 +459,7 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 		xactID = xactKind
 		xactKind = ""
 		uri = c.Args().Get(1 + shift)
-	} else if strings.Contains(xactKind, "://") {
+	} else if strings.Contains(xactKind, apc.BckProviderSeparator) {
 		uri = xactKind
 		xactKind = ""
 	}
@@ -897,11 +897,11 @@ func ensureHasProvider(bck cmn.Bck, cmd string) error {
 }
 
 func parseURLtoBck(strURL string) (bck cmn.Bck) {
-	if strURL[len(strURL)-1:] != "/" {
-		strURL += "/"
+	if strURL[len(strURL)-1:] != apc.BckObjnameSeparator {
+		strURL += apc.BckObjnameSeparator
 	}
 	bck.Provider = apc.ProviderHTTP
-	bck.Name = cos.OrigURLBck2Name(strURL)
+	bck.Name = cmn.OrigURLBck2Name(strURL)
 	return
 }
 

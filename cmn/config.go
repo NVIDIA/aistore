@@ -733,10 +733,13 @@ func (c *LogConf) Validate() error {
 		return fmt.Errorf("invalid log.level=%q", c.Level)
 	}
 	if c.MaxSize < cos.KiB || c.MaxSize > cos.GiB {
-		return fmt.Errorf("invalid log.max_size=%s (expected range [1KB, 1GB]", c.MaxSize)
+		return fmt.Errorf("invalid log.max_size=%s (expected range [1KB, 1GB])", c.MaxSize)
 	}
 	if c.MaxTotal < cos.MiB || c.MaxTotal > 10*cos.GiB {
-		return fmt.Errorf("invalid log.max_total=%s (expected range [1MB, 10GB]", c.MaxTotal)
+		return fmt.Errorf("invalid log.max_total=%s (expected range [1MB, 10GB])", c.MaxTotal)
+	}
+	if c.MaxSize > c.MaxTotal/2 {
+		return fmt.Errorf("invalid log.max_total=%s, must be >= 2*(log.max_size=%s)", c.MaxTotal, c.MaxSize)
 	}
 	if c.FlushTime.D() > time.Hour {
 		return fmt.Errorf("invalid log.flush_time=%s (expected range [0, 1h)", c.FlushTime)
@@ -929,7 +932,7 @@ func (c *DiskConf) Validate() (err error) {
 
 func (c *SpaceConf) Validate() (err error) {
 	if c.CleanupWM <= 0 || c.LowWM < c.CleanupWM || c.HighWM < c.LowWM || c.OOS < c.HighWM || c.OOS > 100 {
-		err = fmt.Errorf("invalid %s", c)
+		err = fmt.Errorf("invalid %s (expecting: 0 < cleanup < low < high < OOS < 100)", c)
 	}
 	return
 }
@@ -1392,7 +1395,7 @@ func (c *TestFSPConf) ValidateMpath(p string) (err error) {
 			return
 		}
 	}
-	err = fmt.Errorf("%q does not appear to be a valid testing mountpath where (root=%q, count=%d)",
+	err = fmt.Errorf("%q does not appear to be a valid testing mountpath, where (root=%q, count=%d)",
 		p, c.Root, c.Count)
 	return
 }
@@ -1416,19 +1419,19 @@ func ValidateMpath(mpath string) (string, error) {
 
 func (c *MemsysConf) Validate() (err error) {
 	if c.MinFree > 0 && c.MinFree < 100*cos.MiB {
-		return fmt.Errorf("invalid memsys.min_free %s", c.MinFree)
+		return fmt.Errorf("invalid memsys.min_free %s (cannot be less than 100MB, optimally at least 2GB)", c.MinFree)
 	}
 	if c.DefaultBufSize > 128*cos.KiB {
-		return fmt.Errorf("invalid memsys.default_buf %s", c.DefaultBufSize)
+		return fmt.Errorf("invalid memsys.default_buf %s (must be a multiple of 4KB in range [4KB, 128KB]", c.DefaultBufSize)
 	}
 	if c.DefaultBufSize%(4*cos.KiB) != 0 {
 		return fmt.Errorf("memsys.default_buf %s must a multiple of 4KB", c.DefaultBufSize)
 	}
 	if c.SizeToGC > cos.TiB {
-		return fmt.Errorf("invalid memsys.to_gc %s (expected range [0, 1TB)", c.SizeToGC)
+		return fmt.Errorf("invalid memsys.to_gc %s (expected range [0, 1TB))", c.SizeToGC)
 	}
 	if c.HousekeepTime.D() > time.Hour {
-		return fmt.Errorf("invalid memsys.hk_time %s (expected range [0, 1h)", c.HousekeepTime)
+		return fmt.Errorf("invalid memsys.hk_time %s (expected range [0, 1h))", c.HousekeepTime)
 	}
 	if c.MinPctTotal < 0 || c.MinPctTotal > 95 {
 		return fmt.Errorf("invalid memsys.min_pct_total %d%%", c.MinPctTotal)
@@ -1502,19 +1505,20 @@ func (c *TimeoutConf) Validate() error {
 		return fmt.Errorf("invalid timeout.cplane_operation=%s", c.CplaneOperation)
 	}
 	if c.MaxKeepalive < 2*c.CplaneOperation {
-		return fmt.Errorf("invalid timeout.max_keepalive=%s (cplane_operation=%s)", c.MaxKeepalive, c.CplaneOperation)
+		return fmt.Errorf("invalid timeout.max_keepalive=%s, must be >= 2*(cplane_operation=%s)", c.MaxKeepalive, c.CplaneOperation)
 	}
 	if c.MaxHostBusy.D() < 10*time.Second {
-		return fmt.Errorf("invalid timeout.max_host_busy=%s", c.MaxHostBusy)
+		return fmt.Errorf("invalid timeout.max_host_busy=%s (cannot be less than 10s)", c.MaxHostBusy)
 	}
 	if c.Startup.D() < 30*time.Second {
-		return fmt.Errorf("invalid timeout.startup_time=%s", c.Startup)
+		return fmt.Errorf("invalid timeout.startup_time=%s (cannot be less than 30s)", c.Startup)
 	}
 	if c.JoinAtStartup != 0 && c.JoinAtStartup < 2*c.Startup {
-		return fmt.Errorf("invalid timeout.join_startup_time=%s", c.JoinAtStartup)
+		return fmt.Errorf("invalid timeout.join_startup_time=%s, must be >= 2*(timeout.startup_time=%s)",
+			c.JoinAtStartup, c.Startup)
 	}
 	if c.SendFile.D() < time.Minute {
-		return fmt.Errorf("invalid timeout.send_file_time=%s", c.SendFile)
+		return fmt.Errorf("invalid timeout.send_file_time=%s (cannot be less than 1m)", c.SendFile)
 	}
 	return nil
 }

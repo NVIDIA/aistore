@@ -586,9 +586,19 @@ func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {
 	}
 }
 
-func listAnyHandler(c *cli.Context) (err error) {
-	opts := cmn.ParseURIOpts{IsQuery: true}
-	bck, objName, err := cmn.ParseBckObjectURI(c.Args().First(), opts)
+func listAnyHandler(c *cli.Context) error {
+	var (
+		opts = cmn.ParseURIOpts{IsQuery: true}
+		uri  = c.Args().First()
+	)
+	// allow for `provider:` shortcut
+	if l := len(uri); l > 0 && uri[l-1] == ':' {
+		provider := uri[0 : l-1]
+		if _, err := cmn.NormalizeProvider(provider); err == nil {
+			uri = provider + apc.BckProviderSeparator
+		}
+	}
+	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
 	if err != nil {
 		return err
 	}

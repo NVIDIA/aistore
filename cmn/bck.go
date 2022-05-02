@@ -132,64 +132,6 @@ func NormalizeProvider(provider string) (string, error) {
 	}
 }
 
-// Parses "[provider://][@uuid#namespace][/][bucketName[/objectName]]"
-func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, err error) {
-	debug.Assert(opts.DefaultProvider == "" || IsNormalizedProvider(opts.DefaultProvider))
-
-	const bucketSepa = "/"
-	parts := strings.SplitN(uri, apc.BckProviderSeparator, 2)
-	if len(parts) > 1 && parts[0] != "" {
-		bck.Provider, err = NormalizeProvider(parts[0])
-		uri = parts[1]
-	} else if !opts.IsQuery {
-		bck.Provider = opts.DefaultProvider
-	}
-
-	if err != nil {
-		return
-	}
-
-	parts = strings.SplitN(uri, bucketSepa, 2)
-	if len(parts[0]) > 0 && (parts[0][0] == apc.NsUUIDPrefix || parts[0][0] == apc.NsNamePrefix) {
-		bck.Ns = ParseNsUname(parts[0])
-		if err := bck.Ns.Validate(); err != nil {
-			return bck, "", err
-		}
-		if !opts.IsQuery && bck.Provider == "" {
-			return bck, "",
-				fmt.Errorf("provider cannot be empty when namespace is not (did you mean \"ais://%s\"?)", bck)
-		}
-		if len(parts) == 1 {
-			if parts[0] == string(apc.NsUUIDPrefix) && opts.IsQuery {
-				// Case: "[provider://]@" (only valid if uri is query)
-				// We need to list buckets from all possible remote clusters
-				bck.Ns = NsAnyRemote
-				return bck, "", nil
-			}
-
-			// Case: "[provider://]@uuid#ns"
-			return bck, "", nil
-		}
-
-		// Case: "[provider://]@uuid#ns/bucket"
-		parts = strings.SplitN(parts[1], bucketSepa, 2)
-	}
-
-	bck.Name = parts[0]
-	if bck.Name != "" {
-		if err := bck.ValidateName(); err != nil {
-			return bck, "", err
-		}
-		if bck.Provider == "" {
-			return bck, "", fmt.Errorf("provider cannot be empty - did you mean: \"ais://%s\"?", bck)
-		}
-	}
-	if len(parts) > 1 {
-		objName = parts[1]
-	}
-	return
-}
-
 ////////
 // Ns //
 ////////
@@ -580,8 +522,8 @@ func NewHTTPObj(u *url.URL) *HTTPBckObj {
 		},
 	}
 	hbo.OrigURLBck, hbo.ObjName = filepath.Split(u.Path)
-	hbo.OrigURLBck = u.Scheme + "://" + u.Host + hbo.OrigURLBck
-	hbo.Bck.Name = cos.OrigURLBck2Name(hbo.OrigURLBck)
+	hbo.OrigURLBck = u.Scheme + apc.BckProviderSeparator + u.Host + hbo.OrigURLBck
+	hbo.Bck.Name = OrigURLBck2Name(hbo.OrigURLBck)
 	return hbo
 }
 

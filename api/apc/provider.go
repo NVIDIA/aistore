@@ -21,6 +21,7 @@ const (
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
 
 	BckProviderSeparator = "://"
+	BckObjnameSeparator  = "/"
 
 	// Scheme parsing
 	DefaultScheme = "https"

@@ -193,7 +193,7 @@ func (b *Bck) InitNoBackend(bowner Bowner) error {
 			if present {
 				var (
 					origURL = b.Props.Extra.HTTP.OrigURLBck
-					bckName = cos.OrigURLBck2Name(origURL)
+					bckName = cmn.OrigURLBck2Name(origURL)
 				)
 				debug.Assertf(b.Name == bckName, "%s != %s; original_url: %s", b.Name, bckName, origURL)
 			}

@@ -311,7 +311,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 
 	smap, err := tutils.WaitForClusterState(
 		proxyURL,
-		"to target removed from the cluster",
+		"target removed from the cluster",
 		m.smap.Version, origProxyCnt, origTargetCount-1, tsi.ID(),
 	)
 	tassert.CheckFatal(t, err)
@@ -403,7 +403,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	restored = true
 	smap, err = tutils.WaitForClusterState(
 		proxyURL,
-		"to target joined the cluster",
+		"target joined the cluster",
 		m.smap.Version, origProxyCnt, origTargetCount,
 	)
 	tassert.CheckFatal(t, err)

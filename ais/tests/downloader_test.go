@@ -813,7 +813,7 @@ func TestDownloadMountpath(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Prepare objects to be downloaded to targets. Multiple objects to make
+	// Prepare objects to be downloaded. Multiple objects to make
 	// sure that at least one of them gets into target with disabled mountpath.
 	for i := 0; i < objsCnt; i++ {
 		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
