@@ -84,7 +84,7 @@
 		"burst_buffer":		32,
 		"idle_teardown":	"4s",
 		"quiescent":		"10s",
-		"lz4_block":		262144,
+		"lz4_block":		"256kb",
 		"lz4_frame_checksum":	false
 	},
 	"memsys": {
