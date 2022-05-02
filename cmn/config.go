@@ -505,15 +505,15 @@ type (
 		IdleTeardown cos.Duration `json:"idle_teardown"`
 		QuiesceTime  cos.Duration `json:"quiescent"`
 		// lz4
-		LZ4BlockMaxSize  int  `json:"lz4_block"`          // max uncompressed block size, one of [64K, 256K(*), 1M, 4M]
-		LZ4FrameChecksum bool `json:"lz4_frame_checksum"` // fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
+		LZ4BlockMaxSize  cos.Size `json:"lz4_block"`          // max uncompressed block size, one of [64K, 256K(*), 1M, 4M]
+		LZ4FrameChecksum bool     `json:"lz4_frame_checksum"` // fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
 	}
 	TransportConfToUpdate struct {
 		MaxHeaderSize    *int          `json:"max_header,omitempty" list:"readonly"`
 		Burst            *int          `json:"burst_buffer,omitempty" list:"readonly"`
 		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty"`
 		QuiesceTime      *cos.Duration `json:"quiescent,omitempty"`
-		LZ4BlockMaxSize  *int          `json:"lz4_block,omitempty"`
+		LZ4BlockMaxSize  *cos.Size     `json:"lz4_block,omitempty"`
 		LZ4FrameChecksum *bool         `json:"lz4_frame_checksum,omitempty"`
 	}
 
@@ -1450,7 +1450,8 @@ func (c *MemsysConf) Validate() (err error) {
 func (c *TransportConf) Validate() (err error) {
 	if c.LZ4BlockMaxSize != 64*cos.KiB && c.LZ4BlockMaxSize != 256*cos.KiB &&
 		c.LZ4BlockMaxSize != cos.MiB && c.LZ4BlockMaxSize != 4*cos.MiB {
-		return fmt.Errorf("invalid compression.block_size %d", c.LZ4BlockMaxSize)
+		return fmt.Errorf("invalid transport.block_size %s (expected one of: [64K, 256K, 1MB, 4MB])",
+			c.LZ4BlockMaxSize)
 	}
 	if c.Burst < 0 {
 		return fmt.Errorf("invalid transport.burst_buffer: %v (expected >0)", c.Burst)

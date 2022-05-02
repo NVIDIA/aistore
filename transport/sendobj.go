@@ -85,7 +85,7 @@ func (s *Stream) terminate(err error, reason string) (actReason string, actErr e
 
 func (s *Stream) initCompression(extra *Extra) {
 	s.lz4s.s = s
-	s.lz4s.blockMaxSize = extra.Config.Transport.LZ4BlockMaxSize
+	s.lz4s.blockMaxSize = int(extra.Config.Transport.LZ4BlockMaxSize)
 	s.lz4s.frameChecksum = extra.Config.Transport.LZ4FrameChecksum
 	mem := extra.MMSA
 	if mem == nil {

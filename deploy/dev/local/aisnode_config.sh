@@ -95,7 +95,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"burst_buffer":		32,
 		"idle_teardown":	"${AIS_TRANSPORT_IDLE_TEARDOWN:-4s}",
 		"quiescent":		"${AIS_TRANSPORT_QUIESCENT:-10s}",
-		"lz4_block":		${AIS_TRANSPORT_LZ4_BLOCK:-262144},
+		"lz4_block":		"${AIS_TRANSPORT_LZ4_BLOCK:-256kb}",
 		"lz4_frame_checksum":	${AIS_TRANSPORT_LZ4_FRAME_CHECKSUM:-false}
 	},
 	"memsys": {

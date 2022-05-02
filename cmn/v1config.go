@@ -181,7 +181,7 @@ func loadClusterConfigV1(globalFpath string, config *Config) error {
 		case name == "compression.block_size":
 			v, ok := fld.Value().(int)
 			debug.Assert(ok)
-			config.ClusterConfig.Transport.LZ4BlockMaxSize = v
+			config.ClusterConfig.Transport.LZ4BlockMaxSize = cos.Size(v)
 			return nil, false
 		case name == "compression.checksum":
 			v, ok := fld.Value().(bool)
