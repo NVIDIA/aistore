@@ -258,13 +258,13 @@ class Client:
 
         return obj_list.entries
 
-    def head_object(self, bck_name: str, object_name: str, provider: str = ProviderAIS) -> Header:
+    def head_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS) -> Header:
         """
         Requests object properties.
 
         Args:
             bck_name (str): Name of the new bucket
-            object_name (str): Name of an object in the bucket
+            obj_name (str): Name of an object in the bucket
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
                 Defaults to "ais". Empty provider returns buckets of all providers.
 
@@ -281,17 +281,17 @@ class Client:
         params = {QParamProvider: provider}
         return self._request(
             HTTP_METHOD_HEAD,
-            path=f"objects/{ bck_name }/{ object_name }",
+            path=f"objects/{ bck_name }/{ obj_name }",
             params=params,
         ).headers
 
-    def get_object(self, bck_name: str, object_name: str, provider: str = ProviderAIS, archpath: str = "") -> bytes:
+    def get_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS, archpath: str = "") -> bytes:
         """
         Reads an object content
 
         Args:
             bck_name (str): Name of a bucket
-            object_name (str): Name of an object in the bucket
+            obj_name (str): Name of an object in the bucket
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
             archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
 
@@ -305,15 +305,15 @@ class Client:
             requests.ReadTimeout: Timeout receiving response from server
         """
         params = {QParamProvider: provider, QParamArchpath: archpath}
-        return self._request_raw(HTTP_METHOD_GET, path=f"objects/{ bck_name }/{ object_name }", params=params)
+        return self._request_raw(HTTP_METHOD_GET, path=f"objects/{ bck_name }/{ obj_name }", params=params)
 
-    def put_object(self, bck_name: str, object_name: str, path: str, provider: str = ProviderAIS) -> Header:
+    def put_object(self, bck_name: str, obj_name: str, path: str, provider: str = ProviderAIS) -> Header:
         """
         Puts a local file as an object to a bucket in AIS storage
 
         Args:
             bck_name (str): Name of a bucket
-            object_name (str): Name of an object in the bucket
+            obj_name (str): Name of an object in the bucket
             path (str): path to local file
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
 
@@ -326,7 +326,7 @@ class Client:
             requests.ConnectionTimeout: Timed out while connecting to AIStore server
             requests.ReadTimeout: Timeout receiving response from server
         """
-        url = f"/objects/{ bck_name }/{ object_name }"
+        url = f"/objects/{ bck_name }/{ obj_name }"
         params = {QParamProvider: provider}
         with open(path, "rb") as data:
             return self._request(
@@ -336,13 +336,13 @@ class Client:
                 data=data,
             ).headers
 
-    def delete_object(self, bck_name: str, object_name: str, provider: str = ProviderAIS):
+    def delete_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS):
         """
         Delete an object from a bucket.
 
         Args:
             bck_name (str): Name of the new bucket
-            object_name (str): Name of an object in the bucket
+            obj_name (str): Name of an object in the bucket
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
                 Defaults to "ais".
 
@@ -359,7 +359,7 @@ class Client:
         params = {QParamProvider: provider}
         self._request(
             HTTP_METHOD_DELETE,
-            path=f"objects/{ bck_name }/{ object_name }",
+            path=f"objects/{ bck_name }/{ obj_name }",
             params=params,
         )
 
