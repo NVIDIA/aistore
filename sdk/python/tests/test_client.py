@@ -52,22 +52,29 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_put_head_get(self):
         self.client.create_bucket(self.bck_name)
-        content = "test string".encode('utf-8')
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(content)
-            f.flush()
-            self.client.put_object(self.bck_name, "obj1", f.name)
+        num_objs = 10
 
-        objects = self.client.list_objects(self.bck_name)
-        self.assertFalse(objects is None)
-        self.assertEqual(len(objects), 1)
+        for i in range(num_objs):
+            s = "test string" * random.randrange(1, 10)
+            content = s.encode('utf-8')
+            obj_name = f"obj{ i }"
+            with tempfile.NamedTemporaryFile() as f:
+                f.write(content)
+                f.flush()
+                self.client.put_object(self.bck_name, obj_name, f.name)
 
-        properties = self.client.head_object(self.bck_name, "obj1")
-        self.assertEqual(properties['ais-version'], '1')
-        self.assertEqual(properties['content-length'], str(len(content)))
+            properties = self.client.head_object(self.bck_name, obj_name)
+            self.assertEqual(properties['ais-version'], '1')
+            self.assertEqual(properties['content-length'], str(len(content)))
 
-        obj = self.client.get_object(self.bck_name, "obj1")
-        self.assertEqual(obj, content)
+            obj = b''
+            stream = self.client.get_object(self.bck_name, obj_name)
+            self.assertEqual(stream.contentLength, len(content))
+            self.assertTrue(stream.e_tag != "")
+            chunk_size = random.randrange(1, len(content) + 10)
+            for chunk in stream.iter_content(chunk_size=chunk_size):
+                obj += chunk
+            self.assertEqual(obj, content)
 
     def test_cluster_map(self):
         smap = self.client.get_cluster_info()

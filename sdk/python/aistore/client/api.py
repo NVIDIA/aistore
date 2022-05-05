@@ -2,7 +2,7 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
 #
 
-from typing import TypeVar, Type, List, NewType
+from typing import TypeVar, Type, List, NewType, BinaryIO
 import requests
 from urllib.parse import urljoin
 from pydantic.tools import parse_raw_as
@@ -24,6 +24,30 @@ from .errors import InvalidBckProvider
 
 T = TypeVar("T")
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
+
+
+# pylint: disable=unused-variable
+class ObjStream:
+    def __init__(self, length: int = 0, e_tag: str = "", e_tag_type: str = "", stream: BinaryIO = None):
+        self._contentLength = length
+        self._stream = stream
+        self._e_tag = e_tag
+        self._e_tag_type = e_tag_type
+
+    @property
+    def contentLength(self) -> int:
+        return self._contentLength
+
+    @property
+    def e_tag(self) -> str:
+        return self._e_tag
+
+    @property
+    def e_tag_type(self) -> str:
+        return self._e_tag_type
+
+    def iter_content(self, chunk_size: int = 1) -> List[bytes]:
+        return self._stream.iter_content(chunk_size=chunk_size)
 
 
 # pylint: disable=unused-variable
@@ -55,10 +79,6 @@ class Client:
         resp = requests.request(method, url, headers={"Accept": "application/json"}, **kwargs)
         resp.raise_for_status()
         return resp
-
-    def _request_raw(self, method: str, path: str, **kwargs) -> bytes:
-        resp = self._request(method, path, **kwargs)
-        return resp.content
 
     def list_buckets(self, provider: str = ProviderAIS):
         """
@@ -285,9 +305,9 @@ class Client:
             params=params,
         ).headers
 
-    def get_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS, archpath: str = "") -> bytes:
+    def get_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS, archpath: str = "") -> ObjStream:
         """
-        Reads an object content
+        Reads an object
 
         Args:
             bck_name (str): Name of a bucket
@@ -296,7 +316,7 @@ class Client:
             archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
 
         Returns:
-            The content of an object or a file inside an archive
+            The stream of bytes to read an object or a file inside an archive.
 
         Raises:
             requests.RequestException: Ambiguous while handling request
@@ -305,7 +325,11 @@ class Client:
             requests.ReadTimeout: Timeout receiving response from server
         """
         params = {QParamProvider: provider, QParamArchpath: archpath}
-        return self._request_raw(HTTP_METHOD_GET, path=f"objects/{ bck_name }/{ obj_name }", params=params)
+        resp = self._request(HTTP_METHOD_GET, path=f"objects/{ bck_name }/{ obj_name }", params=params, stream=True)
+        length = int(resp.headers.get("content-length", 0))
+        e_tag = resp.headers.get("ais-checksum-value", "")
+        e_tag_type = resp.headers.get("ais-checksum-type", "")
+        return ObjStream(length, e_tag, e_tag_type, resp)
 
     def put_object(self, bck_name: str, obj_name: str, path: str, provider: str = ProviderAIS) -> Header:
         """
