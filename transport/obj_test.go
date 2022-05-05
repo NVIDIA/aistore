@@ -86,6 +86,8 @@ func TestMain(t *testing.M) {
 
 	config := cmn.GCO.BeginUpdate()
 	config.Transport.MaxHeaderSize = memsys.PageSize
+	config.Transport.IdleTeardown = cos.Duration(time.Second)
+	config.Transport.QuiesceTime = cos.Duration(10 * time.Second)
 	cmn.GCO.CommitUpdate(config)
 	sc := transport.Init(&dummyStatsTracker{}, config)
 	go sc.Run()
