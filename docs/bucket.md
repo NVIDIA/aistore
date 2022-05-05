@@ -206,6 +206,9 @@ And here are CLI examples of listing buckets by a given provider:
 #### List Google buckets:
 ```console
 $ ais ls gs://
+# or, same:
+$ ais ls gs:
+
 GCP Buckets (7)
   gcp://lpr-foo
   gcp://lpr-bar
@@ -215,6 +218,8 @@ GCP Buckets (7)
 #### List AIS buckets:
 ```console
 $ ais ls ais://
+# or, same:
+$ ais ls ais:
 ```
 
 #### List remote AIS buckets:

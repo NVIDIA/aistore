@@ -47,7 +47,7 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 | Create bucket | `ais bucket create ais://bck` (note: consider using S3 default `md5` checksum - see [discussion](#object-checksum) and examples below) | `s3cmd mb` | `aws s3 mb` |
 | Head bucket | `ais bucket show ais://bck` | `s3cmd info s3://bck` | `aws s3api head-bucket` |
 | Destroy bucket (aka "remove bucket") | `ais bucket rm ais://bck` | `s3cmd rb`, `aws s3 rb` ||
-| List buckets | `ais ls ais://` | `s3cmd ls s3://` | `aws s3 ls s3://` |
+| List buckets | `ais ls ais://` (or, same: `ais ls ais:`) | `s3cmd ls s3://` | `aws s3 ls s3://` |
 | PUT object | `ais object put filename ais://bck/obj` | `s3cmd put ...` | `aws s3 cp ..`(needs `s3rproxy` tag) |
 | GET object | `ais object get ais://bck/obj filename` | `s3cmd get ...` | `aws s3 cp ..`(needs `s3rproxy` tag) |
 | GET object(range) | `ais object get ais://bck/obj --offset 0 --length 10` | **Not supported** | `aws s3api get-object --range= ..`(needs `s3rproxy` tag) |
