@@ -524,7 +524,7 @@ do:
 	}
 
 	if !cold && goi.lom.CksumConf().ValidateWarmGet { // validate checksums and recover (self-heal) if corrupted
-		cold, errCode, err = goi.recoverObj()
+		cold, errCode, err = goi.validateRecover()
 		if err != nil {
 			if !cold {
 				glog.Error(err)
@@ -564,8 +564,10 @@ fin:
 	return
 }
 
-// validate checksum; if corrupted try to recover from other replicas or EC slices
-func (goi *getObjInfo) recoverObj() (coldGet bool, code int, err error) {
+// - validate checksums
+// - if corrupted and IsAIS, try to recover from redundant replicas or EC slices
+// - otherwise, rely on the remote backend for recovery (tradeoff; TODO: make it configurable)
+func (goi *getObjInfo) validateRecover() (coldGet bool, code int, err error) {
 	var (
 		lom     = goi.lom
 		retried bool
@@ -583,7 +585,6 @@ validate:
 		return
 	}
 	if !lom.Bck().IsAIS() {
-		// TODO: configure (potential EC/mirror recovery) vs (cold GET)
 		coldGet = true
 		return
 	}
@@ -597,7 +598,7 @@ validate:
 		//
 		// TODO: mark `deleted` and postpone actual deletion
 		//
-		if erl := lom.Remove(); erl != nil {
+		if erl := lom.Remove(true /*force through rlock*/); erl != nil {
 			glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 		}
 		return
@@ -633,7 +634,7 @@ validate:
 	}
 
 	// TODO: ditto
-	if erl := lom.Remove(); erl != nil {
+	if erl := lom.Remove(true /*force through rlock*/); erl != nil {
 		glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 	}
 	return

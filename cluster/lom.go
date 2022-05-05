@@ -487,12 +487,11 @@ func (lom *LOM) whingeSize(size int64) error {
 	return fmt.Errorf("errsize (%d != %d)", lom.md.Size, size)
 }
 
-func (lom *LOM) Remove() (err error) {
-	// caller must take w-lock
-	// TODO -- FIXME: making a (read-only) exception to rm corrupted obj in the GET path
+func (lom *LOM) Remove(force ...bool) (err error) {
+	// making "rlock" exception to be able to (forcefully) remove corrupted obj in the GET path
 	debug.AssertFunc(func() bool {
 		rc, exclusive := lom.IsLocked()
-		return exclusive || rc > 0
+		return exclusive || (len(force) > 0 && force[0] && rc > 0)
 	})
 	lom.Uncache(true /*delDirty*/)
 	err = cos.RemoveFile(lom.FQN)
