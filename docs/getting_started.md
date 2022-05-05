@@ -25,7 +25,7 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 > It is expected that within a given cluster, all AIS target machines are identical, hardware-wise.
 
 * [Linux](#Linux) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) or [MacOS](#MacOS)
-* [Go 1.17](https://golang.org/dl/) (and look for go1.17.9)
+* [Go 1.18 or later](https://golang.org/dl/) (and look for go1.18.1)
 * Extended attributes (`xattrs` - see next section)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 
@@ -137,10 +137,8 @@ To run it locally from the source, you have to have **Go** (compiler, linker, to
 
 For Linux:
 
-* download `go1.17.9.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
+* download `go1.18.1.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
 * and follow [installation instructions](https://go.dev/doc/install)
-
-> Note that Go 1.18 is _not_ supported yet. See [go.mod](/go.mod) for the most recently updated information.
 
 Finally, if not done yet, export [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 

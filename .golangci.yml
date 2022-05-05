@@ -12,7 +12,6 @@ linters:
     - gci
     - gocritic
     - gofmt
-    - gofumpt
     - goheader
     - goimports
     - gomoddirectives
@@ -22,7 +21,7 @@ linters:
     - importas
     - ineffassign
     - misspell
-    - nolintlint
+    # - nolintlint # FIXME: This should be uncommented when `golangci-lint` will fully support Go1.18.
     - prealloc
     - rowserrcheck
     - sqlclosecheck
@@ -48,6 +47,7 @@ linters:
     # - nestif
     # - scopelint
     # - structcheck - doesn't handle embedded structs
+    # - gofumpt
     #
     # Following linters are not really helpful:
     # - cyclop
@@ -194,6 +194,7 @@ issues:
   max-per-linter: 0
 
 run:
+  go: '1.18'
   tests: true # enable linting test files
 
   build-tags:

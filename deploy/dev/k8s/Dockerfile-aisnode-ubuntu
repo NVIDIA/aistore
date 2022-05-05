@@ -18,7 +18,7 @@ RUN apt-get clean && apt-get update &&\
   apt-get -y clean all
 
 # Setting ENV variables
-ENV GOLANG_VERSION 1.17
+ENV GOLANG_VERSION 1.18
 COPY deploy/dev/local/aisnode_config.sh /etc/ais/aisnode_config.sh
 
 # Reassign arguments to environment variables so run.sh can use them

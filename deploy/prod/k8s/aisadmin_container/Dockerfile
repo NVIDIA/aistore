@@ -1,7 +1,7 @@
 #
 # Dockerfile to build an AIS admin Docker image
 #
-FROM golang:1.17 AS builder
+FROM golang:1.18 AS builder
 
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:${PATH}"
