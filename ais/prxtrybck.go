@@ -196,9 +196,10 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}
-	// create remote bucket on the fly?  ("creation" with respect to BMD, that is)
+	// create remote bucket on the fly?  (creation with respect to BMD, that is)
 	if cmn.IsErrRemoteBckNotFound(err) && !args.lookupRemote {
-		args.p.writeErr(args.w, args.r, err, errCode)
+		// QparamDontLookupRemoteBck: proceed silently, glog-wise
+		args.p.writeErrSilent(args.w, args.r, err, errCode)
 		return
 	}
 

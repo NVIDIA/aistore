@@ -362,8 +362,7 @@ func (m *ioContext) del(cnt ...int) {
 	if !exists {
 		return
 	}
-	// TODO -- FIXME: set dont-lookup-remote-bucket = true (the last arg)
-	objList, err := api.ListObjectsWithOpts(baseParams, m.bck, lsmsg, 0, nil, false)
+	objList, err := api.ListObjectsWithOpts(baseParams, m.bck, lsmsg, 0, nil, true /*dontLookupRemote*/)
 	if err != nil {
 		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
 			return
