@@ -18,6 +18,7 @@ run_tests() {
     shuffle="-shuffle=on"
     timeout="-timeout=30m"
   fi
+  shuffle="-shuffle=on"
 
   failed_tests=$(
     BUCKET="${BUCKET}" AIS_ENDPOINT="${AIS_ENDPOINT}" \

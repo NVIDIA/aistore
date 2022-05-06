@@ -99,7 +99,7 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 
 	for {
 		if time.Now().After(deadline) {
-			t.Errorf("Timed out waiting for download %s.", id)
+			t.Errorf("Timed out waiting %v for download %s.", timeout, id)
 			return
 		}
 
@@ -644,7 +644,7 @@ func TestDownloadStatusError(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Wait to make sure both files were processed by downloader
-	waitForDownload(t, id, 10*time.Second)
+	waitForDownload(t, id, 15*time.Second)
 
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)

@@ -137,12 +137,16 @@ To run it locally from the source, you have to have **Go** (compiler, linker, to
 
 For Linux:
 
-* download `go1.18.1.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
-* and follow [installation instructions](https://go.dev/doc/install)
+* download the latest `go1.18.x.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
+* follow [installation instructions](https://go.dev/doc/install)
 
 Finally, if not done yet, export [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 
-This [local-playground usage example](/deploy/dev/local/README.md) is a 5 minutes long introduction on setting up Go environment, provisioniong data drives for AIS deployment, and running a minimal AIS cluster - locally.
+Here's one [local-playground usage example](/deploy/dev/local/README.md) that can serve as a 5-minute introduction on:
+
+* setting up Go environment
+* provisioniong data drives for AIS deployment, and
+* running a minimal AIS cluster - locally.
 
 Alternatively, or in addition, run it as follows:
 
