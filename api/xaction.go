@@ -210,7 +210,8 @@ func _waitForXaction(baseParams BaseParams, args XactReqArgs, condFn ...XactSnap
 }
 
 // WaitForXactionIC waits for a given xaction to complete.
-// Use it only for global xactions(e.g rebalance) that reports their statuses to IC.
+// Use it only for global xactions
+// (those that execute on all targets and report their status to IC, e.g. rebalance).
 func WaitForXactionIC(baseParams BaseParams, args XactReqArgs) (status *nl.NotifStatus, err error) {
 	return _waitForXaction(baseParams, args)
 }

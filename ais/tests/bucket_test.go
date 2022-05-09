@@ -1859,6 +1859,11 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	tlog.Logf("rename %s => %s\n", srcBck, dstBck)
 	m.bck = dstBck
 	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck)
+	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
+		// can retry
+		xactID, err = api.RenameBucket(baseParams, srcBck, dstBck)
+	}
+
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
@@ -2491,7 +2496,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 
 	m.puts()
 
-	// Rename to first destination
+	// Rename as dst1
 	tlog.Logf("Rename %s => %s\n", src, dst1)
 	xactID, err := api.RenameBucket(baseParams, src, dst1)
 	tassert.CheckFatal(t, err)

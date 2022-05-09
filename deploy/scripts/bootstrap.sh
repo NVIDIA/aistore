@@ -13,12 +13,11 @@ run_tests() {
   fi
 
   timeout="-timeout=3h"
+  shuffle="-shuffle=on"
   if [[ -n "${SHORT}" ]]; then
     short="-short"
-    shuffle="-shuffle=on"
     timeout="-timeout=30m"
   fi
-  shuffle="-shuffle=on"
 
   failed_tests=$(
     BUCKET="${BUCKET}" AIS_ENDPOINT="${AIS_ENDPOINT}" \

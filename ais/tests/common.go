@@ -604,6 +604,25 @@ func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *apc
 	}
 }
 
+// background: shuffle=on increases the chance to have still-running rebalance
+// at the beginning of a new rename, rebalance, copy-bucket and similar
+func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
+	httpErr, ok := err.(*cmn.ErrHTTP)
+	if !ok {
+		return false
+	}
+	// TODO: improve checking for cmn.ErrLimitedCoexistence
+	if !strings.Contains(httpErr.Message, "is currently running,") {
+		return false
+	}
+	tlog.Logln("Warning: wait for unfinished rebalance(?)")
+	time.Sleep(5 * time.Second)
+	args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	_, _ = api.WaitForXactionIC(baseParams, args)
+	time.Sleep(5 * time.Second)
+	return true
+}
+
 func (m *ioContext) startMaintenanceNoRebalance() *cluster.Snode {
 	target, _ := m.smap.GetRandTarget()
 	tlog.Logf("Put %s in maintenance\n", target.StringEx())

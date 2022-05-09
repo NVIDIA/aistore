@@ -23,7 +23,7 @@ import "github.com/NVIDIA/aistore/cmn/jsp"
 //   has a certain meta-version that corresponds to the specific way
 //   `jsp` formats its *signature* and other implementation details.
 
-const AIStoreSoftwareVersion = "3.10-rc2"
+const AIStoreSoftwareVersion = "3.10-rc3"
 
 const (
 	MetaverSmap  = 1 // Smap (cluster map) formatting version (jsp)

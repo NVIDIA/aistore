@@ -174,9 +174,7 @@ func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 }
 
 func EvictRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
-	if !bck.IsRemote() {
-		return
-	}
+	cos.Assert(bck.IsRemote())
 	if backend := bck.Backend(); backend != nil {
 		bck.Copy(backend)
 	}

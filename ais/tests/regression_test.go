@@ -151,16 +151,12 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 
 	m.puts()
 
-	t.Cleanup(func() {
-		m.del()
-	})
-
-	listObjectsMsg := &apc.ListObjsMsg{Props: apc.GetTargetURL}
+	listObjectsMsg := &apc.ListObjsMsg{Props: apc.GetTargetURL, Flags: apc.LsPresent}
 	bucketList, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
-	if len(bucketList.Entries) != m.num {
-		t.Errorf("Number of entries in bucket list [%d] must be equal to [%d]", len(bucketList.Entries), m.num)
+	if len(bucketList.Entries) < m.num {
+		t.Errorf("Bucket %s has %d objects, expected %d", m.bck, len(bucketList.Entries), m.num)
 	}
 	j := 10
 	if len(bucketList.Entries) >= 200 {
