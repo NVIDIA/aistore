@@ -2932,8 +2932,15 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			_, err = api.GetObject(baseParams, m.bck, objName)
 			if mirrored || eced {
 				if err != nil && cksumType != cos.ChecksumNone {
-					t.Errorf("%s/%s corruption detected but not resolved, mirror=%t, ec=%t\n",
-						m.bck, objName, mirrored, eced)
+					if eced {
+						// retry EC
+						time.Sleep(2 * time.Second)
+						_, err = api.GetObject(baseParams, m.bck, objName)
+					}
+					if err != nil {
+						t.Errorf("%s/%s corruption detected but not resolved, mirror=%t, ec=%t\n",
+							m.bck, objName, mirrored, eced)
+					}
 				}
 			} else {
 				if err == nil && cksumType != cos.ChecksumNone {

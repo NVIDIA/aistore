@@ -1,5 +1,4 @@
 //go:build debug
-// +build debug
 
 // Package provides debug utilities
 /*

@@ -1,5 +1,4 @@
 //go:build aws
-// +build aws
 
 // Package backend contains implementation of various backend providers.
 /*

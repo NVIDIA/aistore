@@ -1,5 +1,4 @@
 //go:build azure
-// +build azure
 
 // Package backend contains implementation of various backend providers.
 /*

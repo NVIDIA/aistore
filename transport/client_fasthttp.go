@@ -1,5 +1,4 @@
 //go:build !nethttp
-// +build !nethttp
 
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
