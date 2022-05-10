@@ -956,7 +956,7 @@ func createECFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objName 
 // Checks that after corrupting all slices it is not possible to recover an object
 func TestECChecksum(t *testing.T) {
 	if containers.DockerRunning() {
-		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
+		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
 	}
 
 	var (

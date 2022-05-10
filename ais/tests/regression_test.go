@@ -224,7 +224,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	)
 
 	if containers.DockerRunning() {
-		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
+		t.Skipf("%q requires setting xattrs, doesn't work with docker", t.Name())
 	}
 
 	m.initWithCleanup()

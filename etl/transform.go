@@ -131,12 +131,13 @@ func (e *Aborter) ListenSmapChanged() {
 		}
 
 		if !newSmap.CompareTargets(e.currentSmap) {
-			glog.Warning(cmn.NewErrETL(&cmn.ETLErrorContext{
+			err := cmn.NewErrETL(&cmn.ETLErrorContext{
 				TID:  e.t.SID(),
 				UUID: e.uuid,
-			}, "targets have changed, aborting..."))
+			}, "targets have changed, aborting...")
+			glog.Warning(err)
 			// Stop will unregister `e` from smap listeners.
-			if err := Stop(e.t, e.uuid, nil /*TODO*/); err != nil {
+			if err := Stop(e.t, e.uuid, err); err != nil {
 				glog.Error(err.Error())
 			}
 		}

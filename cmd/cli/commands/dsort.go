@@ -36,7 +36,7 @@ var phasesOrdered = []string{
 }
 
 func phaseToBarText(phase string) string {
-	return strings.Title(phase) + " phase: "
+	return strings.ToUpper(phase[:1]) + phase[1:] + " phase: "
 }
 
 func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64) error {

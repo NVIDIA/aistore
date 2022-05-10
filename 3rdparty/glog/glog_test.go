@@ -55,9 +55,7 @@ func (l *loggingT) swap(writers [numSeverity]flushSyncWriter) (old [numSeverity]
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	old = l.file
-	for i, w := range writers {
-		logging.file[i] = w
-	}
+	copy(logging.file[:], writers[:])
 	return
 }
 

@@ -750,7 +750,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	if containers.DockerRunning() {
-		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
+		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
 	}
 
 	p, err := api.HeadBucket(baseParams, m.bck)
@@ -963,7 +963,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	m.initWithCleanup()
 
 	if containers.DockerRunning() {
-		t.Skip(fmt.Sprintf("test %q requires write access to xattrs, doesn't work with docker", t.Name()))
+		t.Skipf("test %q requires write access to xattrs, doesn't work with docker", t.Name())
 	}
 
 	initMountpaths(t, proxyURL)
