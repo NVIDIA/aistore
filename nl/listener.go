@@ -178,7 +178,7 @@ func (nlb *NotifListenerBase) LastUpdated(si *cluster.Snode) int64 {
 	if nlb.lastUpdated == nil {
 		return 0
 	}
-	return nlb.lastUpdated[si.DaemonID]
+	return nlb.lastUpdated[si.ID()]
 }
 
 func (nlb *NotifListenerBase) NodesTardy(durs ...time.Duration) (nodes cluster.NodeMap, tardy bool) {

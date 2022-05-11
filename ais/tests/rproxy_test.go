@@ -50,8 +50,8 @@ func genObjURL(isSecure, isXML bool) (s string) {
 func genCURLCmdLine(t *testing.T, resURL, proxyURL string, targets cluster.NodeMap) []string {
 	var noProxy []string
 	for _, t := range targets {
-		if !cos.StringInSlice(t.PublicNet.NodeHostname, noProxy) {
-			noProxy = append(noProxy, t.PublicNet.NodeHostname)
+		if !cos.StringInSlice(t.PubNet.Hostname, noProxy) {
+			noProxy = append(noProxy, t.PubNet.Hostname)
 		}
 	}
 

@@ -446,7 +446,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 					err = cmn.NewErrAborted("wait for remote content", "", nil)
 				} else if timed {
 					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)",
-						ds.m.ctx.node.DaemonID, daemonID)
+						ds.m.ctx.node.ID(), daemonID)
 				} else {
 					cos.AssertMsg(false, "pulled but not stopped or timed?!")
 				}
@@ -460,7 +460,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			return 0, newDSortAbortedError(ds.m.ManagerUUID)
 		}
 
-		if rec.DaemonID != ds.m.ctx.node.DaemonID { // File source contents are located on a different target.
+		if rec.DaemonID != ds.m.ctx.node.ID() { // File source contents are located on a different target.
 			return loadRemote(w, rec.DaemonID)
 		}
 

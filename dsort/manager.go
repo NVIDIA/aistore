@@ -327,7 +327,7 @@ func (m *Manager) cleanup() {
 	m.ctx.smapOwner.Listeners().Unreg(m)
 
 	if !m.aborted() {
-		m.updateFinishedAck(m.ctx.node.DaemonID)
+		m.updateFinishedAck(m.ctx.node.ID())
 	}
 }
 

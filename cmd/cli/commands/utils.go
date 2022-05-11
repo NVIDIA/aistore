@@ -207,7 +207,7 @@ func fillMap() (*cluster.Smap, error) {
 	if err != nil {
 		return nil, err
 	}
-	if smap.Primary.PublicNet.DirectURL != defaultAPIParams.URL {
+	if smap.Primary.PubNet.URL != defaultAPIParams.URL {
 		// TODO: cluster map (Smap) is replicated & synchronized across all nodes, and so
 		//       this step can be made optional/configurable with default='not doing it'
 		smapPrimary, err := api.GetNodeClusterMap(defaultAPIParams, smap.Primary.ID())

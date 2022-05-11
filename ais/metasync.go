@@ -241,8 +241,8 @@ func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
 	debug.Assert(len(pairs) > 0)
 	req := revsReq{pairs: pairs}
 	req.wg = &sync.WaitGroup{}
-	if y.isPrimary() != nil {
-		debug.Assert(false)
+	if err := y.isPrimary(); err != nil {
+		glog.Error(err)
 		return req.wg
 	}
 	req.wg.Add(1)

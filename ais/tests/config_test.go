@@ -171,9 +171,7 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Try overriding cluster only config on a daemon
-	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
-		"ec.enabled": strconv.FormatBool(!config.EC.Enabled),
-	})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"ec.enabled": strconv.FormatBool(!config.EC.Enabled)})
 	tassert.Fatalf(t, err != nil, "expected error to occur when trying to override cluster only config")
 
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
@@ -200,9 +198,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 
 	// Override cluster config on the selected proxy
 	newLowWM := config.Disk.DiskUtilLowWM - 10
-	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
-		"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM),
-	})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 	tassert.CheckFatal(t, err)
 
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
@@ -226,9 +222,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Reset node config.
-	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
-		"disk.disk_util_low_wm": fmt.Sprintf("%d", config.Disk.DiskUtilLowWM),
-	})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", config.Disk.DiskUtilLowWM)})
 	tassert.CheckFatal(t, err)
 }
 
@@ -304,9 +298,7 @@ func TestConfigOverrideAndResetDaemon(t *testing.T) {
 
 	// Override a cluster config on daemon
 	newLowWM := config.Disk.DiskUtilLowWM - 10
-	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
-		"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM),
-	})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 	tassert.CheckFatal(t, err)
 
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
@@ -314,7 +306,7 @@ func TestConfigOverrideAndResetDaemon(t *testing.T) {
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Reset daemon and check if the override is gone.
-	err = api.ResetDaemonConfig(baseParams, proxy.DaemonID)
+	err = api.ResetDaemonConfig(baseParams, proxy.ID())
 	tassert.CheckFatal(t, err)
 	daemonConfig = tutils.GetDaemonConfig(t, proxy)
 	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == config.Disk.DiskUtilLowWM,
@@ -338,9 +330,7 @@ func TestConfigOverrideAndResetCluster(t *testing.T) {
 	primary, err := tutils.GetPrimaryProxy(proxyURL)
 	tassert.CheckFatal(t, err)
 	for _, node := range []*cluster.Snode{primary, proxy} {
-		err = api.SetDaemonConfig(baseParams, node.DaemonID, cos.SimpleKVs{
-			"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM),
-		})
+		err = api.SetDaemonConfig(baseParams, node.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 		tassert.CheckFatal(t, err)
 
 		daemonConfig = tutils.GetDaemonConfig(t, node)

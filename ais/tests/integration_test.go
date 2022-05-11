@@ -1122,7 +1122,7 @@ func TestForwardCP(t *testing.T) {
 	m.expectProxies(2)
 
 	// Step 2.
-	origID, origURL := m.smap.Primary.ID(), m.smap.Primary.PublicNet.DirectURL
+	origID, origURL := m.smap.Primary.ID(), m.smap.Primary.PubNet.URL
 	nextProxyID, nextProxyURL, err := chooseNextProxy(m.smap)
 	tassert.CheckFatal(t, err)
 
@@ -1895,7 +1895,7 @@ func TestSingleResilver(t *testing.T) {
 	target, _ := m.smap.GetRandTarget()
 
 	// Start resilvering just on the target
-	args := api.XactReqArgs{Kind: apc.ActResilver, DaemonID: target.DaemonID}
+	args := api.XactReqArgs{Kind: apc.ActResilver, DaemonID: target.ID()}
 	id, err := api.StartXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 

@@ -48,7 +48,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	mux.HandleFunc(apc.URLPathHealth.S, mocktgt.healthdlr)
 
 	target, _ := smap.GetRandTarget()
-	ip := target.PublicNet.NodeHostname
+	ip := target.PubNet.Hostname
 
 	s := &http.Server{Addr: ip + ":" + mockTargetPort, Handler: mux}
 	go s.ListenAndServe()
@@ -73,14 +73,14 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 
 	// borrow a random target's ip but using a different port to register the mock target
 	for _, v := range smap.Tmap {
-		v.DaemonID = tutils.MockDaemonID
-		v.PublicNet = cluster.NetInfo{
-			NodeHostname: v.PublicNet.NodeHostname,
-			DaemonPort:   mockTargetPort,
-			DirectURL:    "http://" + v.PublicNet.NodeHostname + ":" + mockTargetPort,
+		v.DaeID = tutils.MockDaemonID
+		v.PubNet = cluster.NetInfo{
+			Hostname: v.PubNet.Hostname,
+			Port:     mockTargetPort,
+			URL:      "http://" + v.PubNet.Hostname + ":" + mockTargetPort,
 		}
-		v.IntraControlNet = v.PublicNet
-		v.IntraDataNet = v.PublicNet
+		v.ControlNet = v.PubNet
+		v.DataNet = v.PubNet
 		regReq := MockRegRequest{SI: v}
 		jsonDaemonInfo, err = jsoniter.Marshal(regReq)
 		if err != nil {

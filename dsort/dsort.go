@@ -92,7 +92,7 @@ func (m *Manager) start() (err error) {
 	targetOrder := randomTargetOrder(s, m.smap.Tmap)
 	if glog.V(4) {
 		glog.Infof("[dsort] %s final target in targetOrder => URL: %s, Daemon ID: %s", m.ManagerUUID,
-			targetOrder[len(targetOrder)-1].PublicNet.DirectURL, targetOrder[len(targetOrder)-1].DaemonID)
+			targetOrder[len(targetOrder)-1].PubNet.URL, targetOrder[len(targetOrder)-1].ID())
 	}
 
 	// Phase 2.
@@ -417,7 +417,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// according to HRW, send it there. Since it doesn't really matter
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
-	if si.DaemonID != m.ctx.node.DaemonID && !m.rs.DryRun {
+	if si.ID() != m.ctx.node.ID() && !m.rs.DryRun {
 		lom.Lock(false)
 		defer lom.Unlock(false)
 
@@ -463,7 +463,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 exit:
 	metrics.mu.Lock()
 	metrics.CreatedCnt++
-	if si.DaemonID != m.ctx.node.DaemonID {
+	if si.ID() != m.ctx.node.ID() {
 		metrics.MovedShardCnt++
 	}
 	if m.Metrics.extended {
@@ -517,7 +517,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 		}
 
 		for i, d = range targetOrder {
-			if d != dummyTarget && d.DaemonID == m.ctx.node.DaemonID {
+			if d != dummyTarget && d.ID() == m.ctx.node.ID() {
 				break
 			}
 		}
@@ -566,7 +566,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 				err := m.doWithAbort(reqArgs)
 				r.CloseWithError(err)
 				if err != nil {
-					return errors.Errorf("failed to send SortedRecords to next target (%s), err: %v", sendTo.DaemonID, err)
+					return errors.Errorf("failed to send SortedRecords to next target (%s), err: %v", sendTo.ID(), err)
 				}
 				return nil
 			})
@@ -792,7 +792,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		}
 		shardsToTarget[d] = nil
 		if m.dsorter.name() == DSorterMemType {
-			sendOrder[d.DaemonID] = make(map[string]*extract.Shard, 100)
+			sendOrder[d.ID()] = make(map[string]*extract.Shard, 100)
 		}
 	}
 
@@ -904,7 +904,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				errCh <- err
 				return
 			}
-		}(si, s, sendOrder[si.DaemonID])
+		}(si, s, sendOrder[si.ID()])
 	}
 
 	wg.Wait()

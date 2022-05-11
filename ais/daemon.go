@@ -76,7 +76,7 @@ type (
 var daemon = daemonCtx{}
 
 func init() {
-	// role aka `DaemonType`
+	// role aka `DaeType`
 	flag.StringVar(&daemon.cli.role, "role", "", "_role_ of this aisnode: 'proxy' OR 'target'")
 	flag.StringVar(&daemon.cli.daemonID, "daemon_id", "", "user-specified node ID (advanced usage only!)")
 

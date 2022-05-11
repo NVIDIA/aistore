@@ -158,7 +158,7 @@ func (c *rwConnector) connectWriter(key string, w io.Writer) (int64, error) {
 
 	timed, stopped := rw.wgr.WaitTimeoutWithStop(c.m.callTimeout, c.m.listenAborted()) // wait for reader
 	if timed {
-		return 0, errors.Errorf("wait for remote content has timed out (%q was waiting)", c.m.ctx.node.DaemonID)
+		return 0, errors.Errorf("wait for remote content has timed out (%q was waiting)", c.m.ctx.node.ID())
 	} else if stopped {
 		return 0, errors.Errorf("wait for remote content was aborted")
 	}
@@ -460,7 +460,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 
 func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj, toNode *cluster.Snode) (err error) {
 	var (
-		local = toNode.DaemonID == ds.m.ctx.node.DaemonID
+		local = toNode.ID() == ds.m.ctx.node.ID()
 		req   = RemoteResponse{
 			Record:    rec,
 			RecordObj: obj,
@@ -483,7 +483,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		beforeSend = mono.NanoTime()
 	}
 
-	cos.Assert(ds.m.ctx.node.DaemonID == rec.DaemonID)
+	cos.Assert(ds.m.ctx.node.ID() == rec.DaemonID)
 
 	if local {
 		defer ds.m.decrementRef(1)

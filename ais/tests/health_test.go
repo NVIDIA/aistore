@@ -16,11 +16,11 @@ import (
 
 // health should respond with 200 even is node is unregistered
 func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
-	err := api.Health(tutils.BaseAPIParams(si.PublicNet.DirectURL))
+	err := api.Health(tutils.BaseAPIParams(si.PubNet.URL))
 	tassert.CheckError(t, err)
 
 	smapOrig := tutils.GetClusterMap(t, proxyURL)
-	args := &apc.ActValRmNode{DaemonID: si.DaemonID, SkipRebalance: true}
+	args := &apc.ActValRmNode{DaemonID: si.ID(), SkipRebalance: true}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	_, err = api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -46,13 +46,13 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 		}
 	}()
 
-	err = api.Health(tutils.BaseAPIParams(si.PublicNet.DirectURL))
+	err = api.Health(tutils.BaseAPIParams(si.PubNet.URL))
 	tassert.CheckError(t, err)
 }
 
 func TestPrimaryProxyHealth(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
-	err := api.Health(tutils.BaseAPIParams(smap.Primary.PublicNet.DirectURL))
+	err := api.Health(tutils.BaseAPIParams(smap.Primary.PubNet.URL))
 	tassert.CheckError(t, err)
 }
 
@@ -80,7 +80,7 @@ func TestTargetHealth(t *testing.T) {
 	)
 	tsi, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	err = api.Health(tutils.BaseAPIParams(tsi.PublicNet.DirectURL))
+	err = api.Health(tutils.BaseAPIParams(tsi.PubNet.URL))
 	tassert.CheckFatal(t, err)
 }
 

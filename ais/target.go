@@ -227,17 +227,17 @@ func (t *target) initHostIP() {
 		cos.AssertNoErr(err)
 		extPort = portNum
 	}
-	t.si.PublicNet.NodeHostname = extAddr.String()
-	t.si.PublicNet.DaemonPort = strconv.Itoa(extPort)
-	t.si.PublicNet.DirectURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
+	t.si.PubNet.Hostname = extAddr.String()
+	t.si.PubNet.Port = strconv.Itoa(extPort)
+	t.si.PubNet.URL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
 	glog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetPublic))
 
 	// applies to intra-cluster networks unless separately defined
 	if !config.HostNet.UseIntraControl {
-		t.si.IntraControlNet = t.si.PublicNet
+		t.si.ControlNet = t.si.PubNet
 	}
 	if !config.HostNet.UseIntraData {
-		t.si.IntraDataNet = t.si.PublicNet
+		t.si.DataNet = t.si.PubNet
 	}
 }
 

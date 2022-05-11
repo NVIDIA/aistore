@@ -206,7 +206,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 		if !satisfied {
 			if d := time.Since(timeStart); d > 7*time.Second {
 				p := "primary"
-				if smap.Primary.PublicNet.DirectURL != proxyURL {
+				if smap.Primary.PubNet.URL != proxyURL {
 					p = proxyURL
 				}
 				tlog.Logf("Polling %s[%s] for (t=%d, p=%d, Smap > v%d)\n", p, smap, expTgt, expPrx, origVersion)
@@ -223,7 +223,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			// skip primary proxy and mock targets
 			var proxyID string
 			for _, p := range smap.Pmap {
-				if p.PublicNet.DirectURL == proxyURL {
+				if p.PubNet.URL == proxyURL {
 					proxyID = p.ID()
 				}
 			}
@@ -313,7 +313,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 
 	var (
 		daemonID = node.ID()
-		port     = node.PublicNet.DaemonPort
+		port     = node.PubNet.Port
 		pid      int
 	)
 	cmd.Node = node
@@ -364,7 +364,7 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 
 	var (
 		daemonID = node.ID()
-		port     = node.PublicNet.DaemonPort
+		port     = node.PubNet.Port
 	)
 	tlog.Logf("Shutting down %s\n", node.StringEx())
 	cmd.Node = node
@@ -573,7 +573,7 @@ func GetRestoreCmd(si *cluster.Snode) RestoreCmd {
 	if containers.DockerRunning() {
 		return cmd
 	}
-	cmd.PID, cmd.Cmd, cmd.Args, err = getProcess(si.PublicNet.DaemonPort)
+	cmd.PID, cmd.Cmd, cmd.Args, err = getProcess(si.PubNet.Port)
 	cos.AssertNoErr(err)
 	return cmd
 }
@@ -616,7 +616,7 @@ func EnsureOrigClusterState(t *testing.T) {
 			continue
 		}
 
-		_, err := getPID(cmd.Node.PublicNet.DaemonPort)
+		_, err := getPID(cmd.Node.PubNet.Port)
 		if err != nil {
 			tassert.CheckError(t, err)
 			if err = RestoreNode(cmd, false, cmd.Node.Type()); err == nil {

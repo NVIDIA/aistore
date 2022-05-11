@@ -50,28 +50,28 @@ type (
 
 	// Snode's networking info
 	NetInfo struct {
-		NodeHostname string `json:"node_ip_addr"`
-		DaemonPort   string `json:"daemon_port"`
-		DirectURL    string `json:"direct_url"`
-		tcpEndpoint  string
+		Hostname    string `json:"node_ip_addr"`
+		Port        string `json:"daemon_port"`
+		URL         string `json:"direct_url"`
+		tcpEndpoint string
 	}
 
 	// Snode - a node (gateway or target) in a cluster
 	Snode struct {
-		DaemonID        string       `json:"daemon_id"`
-		DaemonType      string       `json:"daemon_type"`       // enum: "target" or "proxy"
-		PublicNet       NetInfo      `json:"public_net"`        // cmn.NetPublic
-		IntraControlNet NetInfo      `json:"intra_control_net"` // cmn.NetIntraControl
-		IntraDataNet    NetInfo      `json:"intra_data_net"`    // cmn.NetIntraData
-		Flags           cos.BitFlags `json:"flags"`             // enum { SnodeNonElectable, SnodeIC, ... } - see above
-		Ext             interface{}  `json:"ext,omitempty"`     // within meta-version extensions
+		DaeID      string       `json:"daemon_id"`
+		DaeType    string       `json:"daemon_type"`       // enum: "target" or "proxy"
+		PubNet     NetInfo      `json:"public_net"`        // cmn.NetPublic
+		ControlNet NetInfo      `json:"intra_control_net"` // cmn.NetIntraControl
+		DataNet    NetInfo      `json:"intra_data_net"`    // cmn.NetIntraData
+		Flags      cos.BitFlags `json:"flags"`             // enum { SnodeNonElectable, SnodeIC, ... } - see above
+		Ext        interface{}  `json:"ext,omitempty"`     // within meta-version extensions
 		// runtime
 		idDigest uint64
 		name     string
 		LocalNet *net.IPNet `json:"-"`
 	}
 	Nodes   []*Snode          // slice of Snodes
-	NodeMap map[string]*Snode // map of Snodes: DaemonID => Snodes
+	NodeMap map[string]*Snode // map of Snodes: DaeID => Snodes
 
 	Smap struct {
 		Tmap         NodeMap     `json:"tmap"`           // targetID -> targetInfo
@@ -101,15 +101,15 @@ func MaxBcastParallel() int { return sys.NumCPU() * MaxBcastMultiplier }
 ///////////
 
 func NewSnode(id, daeType string, publicNet, intraControlNet, intraDataNet NetInfo) (snode *Snode) {
-	snode = &Snode{PublicNet: publicNet, IntraControlNet: intraControlNet, IntraDataNet: intraDataNet}
+	snode = &Snode{PubNet: publicNet, ControlNet: intraControlNet, DataNet: intraDataNet}
 	snode.Init(id, daeType)
 	return
 }
 
 func (d *Snode) Init(id, daeType string) {
-	debug.Assert(d.DaemonID == "" && d.DaemonType == "")
+	debug.Assert(d.DaeID == "" && d.DaeType == "")
 	debug.Assert(id != "" && daeType != "")
-	d.DaemonID, d.DaemonType = id, daeType
+	d.DaeID, d.DaeType = id, daeType
 	d.SetName()
 	d.Digest()
 }
@@ -121,8 +121,8 @@ func (d *Snode) Digest() uint64 {
 	return d.idDigest
 }
 
-func (d *Snode) ID() string   { return d.DaemonID }
-func (d *Snode) Type() string { return d.DaemonType }
+func (d *Snode) ID() string   { return d.DaeID }
+func (d *Snode) Type() string { return d.DaeType }
 
 func (d *Snode) Name() string   { return d.name }
 func (d *Snode) String() string { return d.Name() }
@@ -150,42 +150,50 @@ func N2ID(name string) string {
 
 func (d *Snode) StringEx() string {
 	if d.IsProxy() {
-		return Pname(d.DaemonID)
+		return Pname(d.DaeID)
 	}
-	return Tname(d.DaemonID)
+	return Tname(d.DaeID)
 }
 
 func (d *Snode) nameNets() string {
-	if d.PublicNet.DirectURL != d.IntraControlNet.DirectURL ||
-		d.PublicNet.DirectURL != d.IntraDataNet.DirectURL {
+	if d.PubNet.URL != d.ControlNet.URL ||
+		d.PubNet.URL != d.DataNet.URL {
 		return fmt.Sprintf("%s(pub: %s, control: %s, data: %s)", d.Name(),
-			d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL)
+			d.PubNet.URL, d.ControlNet.URL, d.DataNet.URL)
 	}
-	return fmt.Sprintf("%s(%s)", d.Name(), d.PublicNet.DirectURL)
+	return fmt.Sprintf("%s(%s)", d.Name(), d.PubNet.URL)
 }
 
 func (d *Snode) URL(network string) string {
 	switch network {
 	case cmn.NetPublic:
-		return d.PublicNet.DirectURL
+		return d.PubNet.URL
 	case cmn.NetIntraControl:
-		return d.IntraControlNet.DirectURL
+		return d.ControlNet.URL
 	case cmn.NetIntraData:
-		return d.IntraDataNet.DirectURL
+		return d.DataNet.URL
 	default:
 		cos.Assertf(false, "unknown network %q", network)
 		return ""
 	}
 }
 
-func (d *Snode) Equals(other *Snode) bool {
-	if d == nil || other == nil {
-		return false
+func (d *Snode) Equals(o *Snode) (eq bool) {
+	if d == nil || o == nil {
+		return
 	}
-	return d.ID() == other.ID() && d.DaemonType == other.DaemonType &&
-		d.PublicNet.Equals(other.PublicNet) &&
-		d.IntraControlNet.Equals(other.IntraControlNet) &&
-		d.IntraDataNet.Equals(other.IntraDataNet)
+	eq = d.ID() == o.ID()
+	debug.Func(func() {
+		if !eq {
+			return
+		}
+		eq2 := d.DaeType == o.DaeType && d.PubNet.Equals(o.PubNet) &&
+			d.ControlNet.Equals(o.ControlNet) && d.DataNet.Equals(o.DataNet)
+		debug.Assertf(eq2, "%s(pub: %s, control: %s, data: %s) != %s(pub: %s, control: %s, data: %s)",
+			d.StringEx(), d.PubNet.URL, d.ControlNet.URL, d.DataNet.URL,
+			o.StringEx(), o.PubNet.URL, o.ControlNet.URL, o.DataNet.URL)
+	})
+	return
 }
 
 func (d *Snode) Validate() error {
@@ -195,8 +203,8 @@ func (d *Snode) Validate() error {
 	if d.ID() == "" {
 		return errors.New("invalid Snode: missing node " + d.nameNets())
 	}
-	if d.DaemonType != apc.Proxy && d.DaemonType != apc.Target {
-		cos.Assertf(false, "invalid Snode type %q", d.DaemonType)
+	if d.DaeType != apc.Proxy && d.DaeType != apc.Target {
+		cos.Assertf(false, "invalid Snode type %q", d.DaeType)
 	}
 	return nil
 }
@@ -209,8 +217,8 @@ func (d *Snode) Clone() *Snode {
 
 func (d *Snode) isDuplicate(n *Snode) error {
 	var (
-		du = []string{d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL}
-		nu = []string{n.PublicNet.DirectURL, n.IntraControlNet.DirectURL, n.IntraDataNet.DirectURL}
+		du = []string{d.PubNet.URL, d.ControlNet.URL, d.DataNet.URL}
+		nu = []string{n.PubNet.URL, n.ControlNet.URL, n.DataNet.URL}
 	)
 	for _, ni := range nu {
 		np, err := url.Parse(ni)
@@ -234,8 +242,8 @@ func (d *Snode) isDuplicate(n *Snode) error {
 	return nil
 }
 
-func (d *Snode) IsProxy() bool  { return d.DaemonType == apc.Proxy }
-func (d *Snode) IsTarget() bool { return d.DaemonType == apc.Target }
+func (d *Snode) IsProxy() bool  { return d.DaeType == apc.Proxy }
+func (d *Snode) IsTarget() bool { return d.DaeType == apc.Target }
 
 // node flags
 func (d *Snode) IsAnySet(flags cos.BitFlags) bool { return d.Flags.IsAnySet(flags) }
@@ -249,16 +257,16 @@ func (d *Snode) isIC() bool                       { return d.Flags.IsSet(SnodeIC
 func NewNetInfo(proto, hostname, port string) *NetInfo {
 	tcpEndpoint := fmt.Sprintf("%s:%s", hostname, port)
 	return &NetInfo{
-		NodeHostname: hostname,
-		DaemonPort:   port,
-		DirectURL:    fmt.Sprintf("%s://%s", proto, tcpEndpoint),
-		tcpEndpoint:  tcpEndpoint,
+		Hostname:    hostname,
+		Port:        port,
+		URL:         fmt.Sprintf("%s://%s", proto, tcpEndpoint),
+		tcpEndpoint: tcpEndpoint,
 	}
 }
 
 func (ni *NetInfo) TCPEndpoint() string {
 	if ni.tcpEndpoint == "" {
-		ni.tcpEndpoint = fmt.Sprintf("%s:%s", ni.NodeHostname, ni.DaemonPort)
+		ni.tcpEndpoint = fmt.Sprintf("%s:%s", ni.Hostname, ni.Port)
 	}
 	return ni.tcpEndpoint
 }
@@ -268,9 +276,7 @@ func (ni *NetInfo) String() string {
 }
 
 func (ni *NetInfo) Equals(other NetInfo) bool {
-	return ni.NodeHostname == other.NodeHostname &&
-		ni.DaemonPort == other.DaemonPort &&
-		ni.DirectURL == other.DirectURL
+	return ni.Hostname == other.Hostname && ni.Port == other.Port && ni.URL == other.URL
 }
 
 //===============================================================
@@ -396,7 +402,7 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 			cnt++
 			continue
 		}
-		if !excludePrimary || m.Primary.DaemonID != psi.DaemonID {
+		if !excludePrimary || !m.IsPrimary(psi) {
 			return psi, nil
 		}
 	}
@@ -507,7 +513,7 @@ func (*Smap) DefaultICSize() int { return icGroupSize }
 // NodeMap //
 /////////////
 
-func (m NodeMap) Add(snode *Snode) { debug.Assert(m != nil); m[snode.DaemonID] = snode }
+func (m NodeMap) Add(snode *Snode) { debug.Assert(m != nil); m[snode.DaeID] = snode }
 
 func (m NodeMap) ActiveMap() (clone NodeMap) {
 	clone = make(NodeMap, len(m))

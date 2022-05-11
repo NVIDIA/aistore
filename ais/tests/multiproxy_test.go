@@ -397,7 +397,7 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 	conf := tutils.GetDaemonConfig(t, node)
 
 	// Make sure that the `DaemonID` is different.
-	node.DaemonID = "testing_" + cos.RandString(10)
+	node.DaeID = "testing_" + cos.RandString(10)
 
 	pid := tutils.DeployNode(t, node, conf, nil)
 	t.Cleanup(func() {
@@ -965,9 +965,9 @@ loop:
 }
 
 // smap 	- current Smap
-// directURL	- DirectURL of the proxy that we send the request to
+// directURL	- URL of the proxy that we send the request to
 //           	  (not necessarily the current primary)
-// toID, toURL 	- DaemonID and DirectURL of the proxy that must become the new primary
+// toID, toURL 	- DaemonID and URL of the proxy that must become the new primary
 func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, toID string) (newSmap *cluster.Smap) {
 	if directURL == "" {
 		directURL = smap.Primary.URL(cmn.NetPublic)
@@ -1403,9 +1403,9 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 	// select IC member which is not primary and kill
 	origIC := icFromSmap(smap)
 	cmd, smap := killRandNonPrimaryIC(t, smap)
-	delete(origIC, cmd.Node.DaemonID)
+	delete(origIC, cmd.Node.ID())
 
-	tassert.Errorf(t, !smap.IsIC(cmd.Node), "Killed daemon (%s) must be removed from IC", cmd.Node.DaemonID)
+	tassert.Errorf(t, !smap.IsIC(cmd.Node), "Killed daemon (%s) must be removed from IC", cmd.Node.ID())
 
 	// should have remaining IC nodes
 	for sid := range origIC {

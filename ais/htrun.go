@@ -377,9 +377,9 @@ func (h *htrun) initNetworks() {
 		"ctl/data",
 	)
 	h.si = &cluster.Snode{
-		PublicNet:       pubAddr,
-		IntraControlNet: intraControlAddr,
-		IntraDataNet:    intraDataAddr,
+		PubNet:     pubAddr,
+		ControlNet: intraControlAddr,
+		DataNet:    intraDataAddr,
 	}
 }
 
@@ -387,7 +387,7 @@ func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, 
 	if !use1 || !use2 {
 		return
 	}
-	if ip1.NodeHostname == ip2.NodeHostname && port1 == port2 {
+	if ip1.Hostname == ip2.Hostname && port1 == port2 {
 		cos.ExitLogf("%s: cannot use the same IP:port (%s) for two networks", tag, ip1)
 	}
 }
@@ -470,13 +470,13 @@ func (h *htrun) run() error {
 		}
 		if config.HostNet.UseIntraControl {
 			go func() {
-				addr := h.si.IntraControlNet.TCPEndpoint()
+				addr := h.si.ControlNet.TCPEndpoint()
 				errCh <- h.netServ.control.listenAndServe(addr, h.logger)
 			}()
 		}
 		if config.HostNet.UseIntraData {
 			go func() {
-				addr := h.si.IntraDataNet.TCPEndpoint()
+				addr := h.si.DataNet.TCPEndpoint()
 				errCh <- h.netServ.data.listenAndServe(addr, h.logger)
 			}()
 		}
@@ -499,9 +499,9 @@ func (h *htrun) pubListeningAddr(config *cmn.Config) string {
 		k8sDetected = k8s.Detect() == nil
 	)
 	if testingEnv && !k8sDetected {
-		return h.si.PublicNet.TCPEndpoint()
+		return h.si.PubNet.TCPEndpoint()
 	}
-	return ":" + h.si.PublicNet.DaemonPort
+	return ":" + h.si.PubNet.Port
 }
 
 func (h *htrun) stopHTTPServer() {
@@ -605,7 +605,7 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 
 	debug.Assert(args.si != nil || args.req.Base != "") // either si or base
 	if args.req.Base == "" && args.si != nil {
-		args.req.Base = args.si.IntraControlNet.DirectURL // by default use intra-cluster control network
+		args.req.Base = args.si.ControlNet.URL // by default use intra-cluster control network
 	}
 
 	if args.req.Header == nil {
@@ -1584,7 +1584,7 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 	debug.Assert(pubValid && intraValid)
 	primaryURL, psi := h.getPrimaryURLAndSI(nil)
 	addCandidate(primaryURL)
-	// NOTE: The url above is either config or the primary's IntraControlNet.DirectURL;
+	// NOTE: The url above is either config or the primary's ControlNet.URL;
 	//       Add its public URL as "more static" in various virtualized environments.
 	if psi != nil {
 		addCandidate(psi.URL(cmn.NetPublic))
@@ -1867,7 +1867,7 @@ func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyP
 		return true // intra-control == pub
 	}
 	// NOTE: not checking r.RemoteAddr
-	intraAddr := h.si.IntraControlNet.TCPEndpoint()
+	intraAddr := h.si.ControlNet.TCPEndpoint()
 	srvAddr := r.Context().Value(http.ServerContextKey).(*http.Server).Addr
 	if srvAddr == intraAddr {
 		return true

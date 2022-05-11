@@ -46,8 +46,8 @@ const (
 	SmapHeader = "NODE\t TYPE\t PUBLIC URL" +
 		"{{ if (eq $.ExtendedURLs true) }}\t INTRA CONTROL URL\t INTRA DATA URL{{end}}" +
 		"\n"
-	SmapBody = "{{FormatDaemonID $value.ID $.Smap}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}" +
-		"{{ if (eq $.ExtendedURLs true) }}\t {{$value.IntraControlNet.DirectURL}}\t {{$value.IntraDataNet.DirectURL}}{{end}}" +
+	SmapBody = "{{FormatDaemonID $value.ID $.Smap}}\t {{$value.DaeType}}\t {{$value.PubNet.URL}}" +
+		"{{ if (eq $.ExtendedURLs true) }}\t {{$value.ControlNet.URL}}\t {{$value.DataNet.URL}}{{end}}" +
 		"\n"
 
 	SmapTmpl = SmapHeader +

@@ -225,12 +225,12 @@ func (p *proxy) Run() error {
 	}
 	p.registerNetworkHandlers(networkHandlers)
 
-	glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetPublic, p.si.PublicNet.DirectURL)
-	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {
-		glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraControl, p.si.IntraControlNet.DirectURL)
+	glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetPublic, p.si.PubNet.URL)
+	if p.si.PubNet.URL != p.si.ControlNet.URL {
+		glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraControl, p.si.ControlNet.URL)
 	}
-	if p.si.PublicNet.DirectURL != p.si.IntraDataNet.DirectURL {
-		glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraData, p.si.IntraDataNet.DirectURL)
+	if p.si.PubNet.URL != p.si.DataNet.URL {
+		glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraData, p.si.DataNet.URL)
 	}
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, p.statsT)
@@ -1756,9 +1756,9 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.Actio
 	}
 	primary := &p.rproxy.primary
 	primary.Lock()
-	if primary.url != smap.Primary.PublicNet.DirectURL {
-		primary.url = smap.Primary.PublicNet.DirectURL
-		uparsed, err := url.Parse(smap.Primary.PublicNet.DirectURL)
+	if primary.url != smap.Primary.PubNet.URL {
+		primary.url = smap.Primary.PubNet.URL
+		uparsed, err := url.Parse(smap.Primary.PubNet.URL)
 		cos.AssertNoErr(err)
 		cfg := cmn.GCO.Get()
 		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
@@ -2539,7 +2539,7 @@ func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID str
 		return
 	}
 	if newPrimaryURL == "" {
-		newPrimaryURL = psi.IntraControlNet.DirectURL
+		newPrimaryURL = psi.ControlNet.URL
 	}
 	if newPrimaryURL == "" {
 		err := &errNodeNotFound{"failed to get new primary's direct URL", proxyID, p.si, smap}
@@ -2559,7 +2559,7 @@ func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID str
 
 	p.metasyncer.becomeNonPrimary() // metasync to stop syncing and cancel all pending requests
 	p.owner.smap.put(newSmap)
-	res := p.registerToURL(primary.IntraControlNet.DirectURL, primary, apc.DefaultTimeout, nil, false)
+	res := p.registerToURL(primary.ControlNet.URL, primary, apc.DefaultTimeout, nil, false)
 	if res.err != nil {
 		p.writeErr(w, r, res.toErr())
 	}

@@ -457,7 +457,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	err = tutils.WaitForNodeToTerminate(pid, nodeOffTimeout)
 	tassert.CheckError(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "shutdown node",
-		smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)
+		smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.ID())
 	tassert.CheckError(t, err)
 
 	// 3. Start node again.
@@ -466,12 +466,12 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	smap, err = tutils.WaitForClusterState(proxyURL, "restart node",
 		smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
 	tassert.CheckError(t, err)
-	tassert.Fatalf(t, smap.GetNode(node.DaemonID) != nil, "node %s does not exist in %s", node.DaemonID, smap)
-	tassert.Errorf(t, smap.GetNode(node.DaemonID).Flags.IsSet(cluster.NodeFlagMaint),
+	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s", node.ID(), smap)
+	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(cluster.NodeFlagMaint),
 		"node should be in maintenance after starting")
 
 	// 4. Remove the node from maintenance.
-	_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: node.DaemonID})
+	_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: node.ID()})
 	tassert.CheckError(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "remove node from maintenance",
 		smap.Version, origProxyCnt, origTargetCount)
@@ -530,7 +530,7 @@ func TestShutdownListObjects(t *testing.T) {
 		tassert.CheckError(t, err)
 
 		// Remove the node from maintenance.
-		_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.DaemonID})
+		_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
 		tassert.CheckError(t, err)
 		_, err = tutils.WaitForClusterState(proxyURL, "remove node from maintenance",
 			m.smap.Version, 0, origTargetCount)

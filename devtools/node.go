@@ -37,12 +37,12 @@ func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Du
 func _nextNode(smap *cluster.Smap, idsToIgnore cos.StringSet) (string, string, bool) {
 	for _, d := range smap.Pmap {
 		if !idsToIgnore.Contains(d.ID()) {
-			return d.ID(), d.PublicNet.DirectURL, true
+			return d.ID(), d.PubNet.URL, true
 		}
 	}
 	for _, d := range smap.Tmap {
 		if !idsToIgnore.Contains(d.ID()) {
-			return d.ID(), d.PublicNet.DirectURL, true
+			return d.ID(), d.PubNet.URL, true
 		}
 	}
 

@@ -60,7 +60,7 @@ func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, use
 	extendedURLs := false
 	for _, m := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for _, v := range m {
-			if v.PublicNet != v.IntraControlNet || v.PublicNet != v.IntraDataNet {
+			if v.PubNet != v.ControlNet || v.PubNet != v.DataNet {
 				extendedURLs = true
 			}
 		}

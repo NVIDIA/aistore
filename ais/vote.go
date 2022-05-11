@@ -549,7 +549,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluste
 		cargs.si = nextPrimaryProxy
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodPut,
-			Base:   nextPrimaryProxy.IntraControlNet.DirectURL,
+			Base:   nextPrimaryProxy.ControlNet.URL,
 			Path:   apc.URLPathVoteInit.S,
 			Body:   body,
 		}

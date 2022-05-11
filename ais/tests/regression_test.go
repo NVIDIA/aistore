@@ -565,7 +565,7 @@ func TestGetClusterStats(t *testing.T) {
 	stats := tutils.GetClusterStats(t, proxyURL)
 
 	for k, v := range stats.Target {
-		tdstats := tutils.GetDaemonStats(t, smap.Tmap[k].PublicNet.DirectURL)
+		tdstats := tutils.GetDaemonStats(t, smap.Tmap[k].PubNet.URL)
 		tdcapstats := tdstats["capacity"].(map[string]interface{})
 		dcapstats := v.MPCap
 		for fspath, fstats := range dcapstats {

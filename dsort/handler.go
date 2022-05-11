@@ -210,7 +210,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		allMetrics[resp.si.DaemonID] = metrics
+		allMetrics[resp.si.ID()] = metrics
 	}
 
 	if notFound == len(responses) && notFound > 0 {
@@ -317,7 +317,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 		if r.statusCode == http.StatusOK {
 			continue
 		}
-		failed = append(failed, fmt.Sprintf("%v: (%v) %v", r.si.DaemonID, r.statusCode, string(r.res)))
+		failed = append(failed, fmt.Sprintf("%v: (%v) %v", r.si.ID(), r.statusCode, string(r.res)))
 	}
 	if len(failed) != 0 {
 		err := fmt.Errorf("got errors while broadcasting remove: %v", failed)
@@ -449,7 +449,7 @@ func (m *Manager) startDSort() {
 	}
 
 	glog.Infof("[dsort] %s broadcasting finished ack to other targets", m.ManagerUUID)
-	path := apc.URLPathdSortAck.Join(m.ManagerUUID, m.ctx.node.DaemonID)
+	path := apc.URLPathdSortAck.Join(m.ManagerUUID, m.ctx.node.ID())
 	broadcastTargets(http.MethodPut, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
 }
 

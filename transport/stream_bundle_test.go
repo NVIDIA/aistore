@@ -133,14 +133,14 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 		numCompleted.Inc()
 	}
 
-	err := transport.HandleObjStream(trname, receive) // DirectURL = /v1/transport/10G
+	err := transport.HandleObjStream(trname, receive) // URL = /v1/transport/10G
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 
 	var (
 		httpclient     = transport.NewIntraDataClient()
 		sowner         = &sowner{}
-		lsnode         = cluster.Snode{DaemonID: "local"}
+		lsnode         = cluster.Snode{DaeID: "local"}
 		random         = newRand(mono.NanoTime())
 		wbuf, slab     = mmsa.Alloc()
 		extra          = &transport.Extra{Compression: nvs["compression"], MMSA: mmsa}
@@ -214,7 +214,7 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 }
 
 func addTarget(smap *cluster.Smap, ts *httptest.Server, i int) {
-	netinfo := cluster.NetInfo{DirectURL: ts.URL}
+	netinfo := cluster.NetInfo{URL: ts.URL}
 	tid := "t_" + strconv.FormatInt(int64(i), 10)
-	smap.Tmap[tid] = &cluster.Snode{PublicNet: netinfo, IntraControlNet: netinfo, IntraDataNet: netinfo}
+	smap.Tmap[tid] = &cluster.Snode{PubNet: netinfo, ControlNet: netinfo, DataNet: netinfo}
 }

@@ -81,11 +81,11 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 			if buf.Len() > 0 {
 				buf.WriteByte(',')
 			}
-			buf.WriteString(si.PublicNet.NodeHostname)
+			buf.WriteString(si.PubNet.Hostname)
 			buf.WriteByte(',')
-			buf.WriteString(si.IntraControlNet.NodeHostname)
+			buf.WriteString(si.ControlNet.Hostname)
 			buf.WriteByte(',')
-			buf.WriteString(si.IntraDataNet.NodeHostname)
+			buf.WriteString(si.DataNet.Hostname)
 		}
 		w.Write(buf.Bytes())
 
@@ -299,7 +299,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		nsi = regReq.SI
-		nsi.DaemonID = si.DaemonID
+		nsi.DaeID = si.ID()
 	case apc.SelfJoin: // auto-join at node startup
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
@@ -356,7 +356,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			glog.Errorf("%s: failed to parse %s for non-electability: %v", p, s, err)
 		}
 	}
-	if err := validateHostname(nsi.PublicNet.NodeHostname); err != nil {
+	if err := validateHostname(nsi.PubNet.Hostname); err != nil {
 		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, apiOp, nsi.StringEx(), err)
 		return
 	}
@@ -452,7 +452,7 @@ func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error
 	if err != nil {
 		if cos.IsRetriableConnErr(res.err) {
 			err = fmt.Errorf("%s: failed to reach %s at %s:%s: %w",
-				p.si, nsi.StringEx(), nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort, res.err)
+				p.si, nsi.StringEx(), nsi.PubNet.Hostname, nsi.PubNet.Port, res.err)
 		} else {
 			err = res.errorf("%s: failed to %s %s: %v", p.si, apiOp, nsi.StringEx(), res.err)
 		}
@@ -611,11 +611,11 @@ func (p *proxy) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) bool {
 		if !osi.Equals(nsi) {
 			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
 				glog.Errorf("%s: %s(%s) failed to obtain daemon info, err: %v",
-					p.si, nsi.StringEx(), nsi.PublicNet.DirectURL, err)
+					p.si, nsi.StringEx(), nsi.PubNet.URL, err)
 				return false
 			} else if duplicate {
 				glog.Errorf("%s: %s(%s) is trying to register/keepalive with duplicate ID",
-					p.si, nsi.StringEx(), nsi.PublicNet.DirectURL)
+					p.si, nsi.StringEx(), nsi.PubNet.URL)
 				return false
 			}
 			glog.Warningf("%s: renewing registration %s (info changed!)", p, nsi.StringEx())

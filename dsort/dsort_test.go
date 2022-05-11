@@ -91,7 +91,7 @@ func newTestSmap(targets ...string) *testSmap {
 }
 
 func (tm *testSmap) addTarget(si *cluster.Snode) {
-	tm.Tmap[si.DaemonID] = si
+	tm.Tmap[si.ID()] = si
 }
 
 func (tm *testSmap) Get() *cluster.Smap {
@@ -157,11 +157,11 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 	dsortManager.init(rs)
 	dsortManager.unlock()
 
-	net := smap.GetTarget(daemonID).PublicNet
+	net := smap.GetTarget(daemonID).PubNet
 	return &targetNodeMock{
 		daemonID: daemonID,
 		s: &http.Server{
-			Addr:    fmt.Sprintf("%s:%s", net.NodeHostname, net.DaemonPort),
+			Addr:    fmt.Sprintf("%s:%s", net.Hostname, net.Port),
 			Handler: http.NewServeMux(),
 		},
 		controlCh: make(chan error, 1),
@@ -238,15 +238,15 @@ func (tctx *testContext) setup() {
 	for i := 0; i < tctx.targetCnt; i++ {
 		targetPort := ports[i]
 		ni := cluster.NetInfo{
-			NodeHostname: testIP,
-			DaemonPort:   fmt.Sprintf("%d", targetPort),
-			DirectURL:    fmt.Sprintf("http://%s:%d", testIP, targetPort),
+			Hostname: testIP,
+			Port:     fmt.Sprintf("%d", targetPort),
+			URL:      fmt.Sprintf("http://%s:%d", testIP, targetPort),
 		}
 		di := &cluster.Snode{
-			DaemonID:        genNodeID(i),
-			PublicNet:       ni,
-			IntraControlNet: ni,
-			IntraDataNet:    ni,
+			DaeID:      genNodeID(i),
+			PubNet:     ni,
+			ControlNet: ni,
+			DataNet:    ni,
 		}
 		smap.addTarget(di)
 	}
@@ -321,14 +321,14 @@ var _ = Describe("Distributed Sort", func() {
 							return
 						}
 
-						if target.daemonID == finalTarget.DaemonID {
+						if target.daemonID == finalTarget.ID() {
 							if !isFinal {
-								ctx.errCh <- fmt.Errorf("last target %q is not final", finalTarget.DaemonID)
+								ctx.errCh <- fmt.Errorf("last target %q is not final", finalTarget.ID())
 								return
 							}
 						} else {
 							if isFinal {
-								ctx.errCh <- fmt.Errorf("non-last %q target is final %q", target.daemonID, finalTarget.DaemonID)
+								ctx.errCh <- fmt.Errorf("non-last %q target is final %q", target.daemonID, finalTarget.ID())
 								return
 							}
 						}
