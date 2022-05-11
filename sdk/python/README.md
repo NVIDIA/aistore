@@ -28,7 +28,7 @@ $ pip install aistore
 If you'd like to work with the current upstream (and don't mind the risk), install the latest master directly from GitHub:
 
 ```console
-$ cd cmd/python-sdk
+$ cd sdk/python # If you are not here already.
 $ pip install -e .
 ```
 
@@ -74,12 +74,13 @@ For instance, `list_objects` method is declared as:
 
 ```python
 def list_objects(self,
-				 bck_name: str,
-				 provider: str = ProviderAIS,
-				 prefix: str = "",
-				 props: str = "",
-				 count: int = 0,
-				 page_size: int = 0) -> List[BucketEntry]:
+     bck_name: str,
+     provider: str = ProviderAIS,
+     prefix: str = "",
+     props: str = "",
+     count: int = 0,
+     page_size: int = 0,
+) -> List[BucketEntry]:
 ```
 
 To get first 10 objects of AIS bucket `bck1` which names start with `img-`, execute either with positional arguments:
