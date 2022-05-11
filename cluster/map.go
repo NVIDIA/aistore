@@ -390,26 +390,18 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 }
 
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
-	if excludePrimary {
-		for _, proxy := range m.Pmap {
-			if proxy.IsAnySet(NodeFlagsMaintDecomm) {
-				continue
-			}
-			if m.Primary.DaemonID != proxy.DaemonID {
-				return proxy, nil
-			}
-		}
-		return nil, fmt.Errorf("couldn't find non-primary proxy")
-	}
-	cnt := 0
+	var cnt int
 	for _, psi := range m.Pmap {
 		if psi.IsAnySet(NodeFlagsMaintDecomm) {
 			cnt++
 			continue
 		}
-		return psi, nil
+		if !excludePrimary || m.Primary.DaemonID != psi.DaemonID {
+			return psi, nil
+		}
 	}
-	return nil, fmt.Errorf("couldn't find non-primary or primary proxy (maintenance-count=%d)", cnt)
+	return nil, fmt.Errorf("failed to find a random proxy (num=%d, in-maintenance=%d, exclude-primary=%t)",
+		len(m.Pmap), cnt, excludePrimary)
 }
 
 func (m *Smap) IsDuplicate(nsi *Snode) (osi *Snode, err error) {
