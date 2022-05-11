@@ -55,12 +55,12 @@ func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
 	addrlist = make([]*localIPv4Info, 0, 4)
 	addrs, e := net.InterfaceAddrs()
 	if e != nil {
-		err = fmt.Errorf("failed to get host unicast IPs, err: %v", e)
+		err = fmt.Errorf("failed to get host unicast IPs, err: %w", e)
 		return
 	}
 	iflist, e := net.Interfaces()
 	if e != nil {
-		err = fmt.Errorf("failed to get interface list: %v", e)
+		err = fmt.Errorf("failed to get interface list: %w", e)
 		return
 	}
 

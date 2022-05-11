@@ -6,11 +6,12 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
+
+const ldpact = ".LDP.Reader"
 
 type (
 	// data provider
@@ -24,31 +25,29 @@ type (
 var _ DP = (*LDP)(nil)
 
 func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
-	var lomLoadErr, err error
+	var loadErr error
 
 	lom.Lock(false)
-	if lomLoadErr = lom.Load(false /*cache it*/, true /*locked*/); lomLoadErr == nil {
-		var file *cos.FileHandle
-		if file, err = cos.NewFileHandle(lom.FQN); err != nil {
-			lom.Unlock(false)
-			return nil, nil, cmn.NewErrFailedTo("LDP.Reader", "open", lom.FQN, err)
+	if loadErr = lom.Load(false /*cache it*/, true /*locked*/); loadErr == nil {
+		file, err := cos.NewFileHandle(lom.FQN)
+		if err == nil {
+			// fast path
+			return cos.NewDeferROC(file, func() { lom.Unlock(false) }), lom, nil
 		}
-		return cos.NewDeferROC(file, func() { lom.Unlock(false) }), lom, nil
+
+		lom.Unlock(false)
+		return nil, nil, cmn.NewErrFailedTo(T.String()+ldpact, "open", lom, err)
 	}
 
-	// LOM loading error has occurred
 	defer lom.Unlock(false)
-
-	if !cmn.IsObjNotExist(lomLoadErr) {
-		return nil, nil, fmt.Errorf("%s: err: %v", lom, lomLoadErr)
+	if !cmn.IsObjNotExist(loadErr) {
+		return nil, nil, cmn.NewErrFailedTo(T.String()+ldpact, "load", lom, loadErr)
 	}
-
 	if !lom.Bck().IsRemote() {
-		return nil, nil, lomLoadErr
+		return nil, nil, loadErr
 	}
 
-	// Get object directly from a cloud, as it doesn't exist locally
-	// TODO: revisit versus global rebalancing
+	// Stream the object directly from remote backend
 	reader, _, _, err := T.Backend(lom.Bck()).GetObjReader(context.Background(), lom)
 	return cos.NopOpener(reader), lom, err
 }

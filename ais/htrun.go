@@ -1349,7 +1349,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string) (newSmap *smapX, m
 		return
 	}
 	if !newSmap.isValid() {
-		err = cmn.NewErrFailedTo(h.si, "extract", newSmap, newSmap.validate())
+		err = cmn.NewErrFailedTo(h, "extract", newSmap, newSmap.validate())
 		return
 	}
 	if !newSmap.isPresent(h.si) {

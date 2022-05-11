@@ -2685,7 +2685,7 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 func (p *proxy) ensureConfigPrimaryURL() (config *globalConfig, err error) {
 	config, err = p.owner.config.modify(&configModifier{pre: p._primaryURLPre})
 	if err != nil {
-		err = fmt.Errorf("%s: failed to update primary URL, err: %w", p, err)
+		err = cmn.NewErrFailedTo(p, "update primary URL", config, err)
 	}
 	return
 }
