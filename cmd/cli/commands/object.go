@@ -905,7 +905,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 
 // Multiple object arguments handler
 func multiObjOp(c *cli.Context, command string) error {
-	// stops iterating if it encounters an error
+	// stops iterating if encounters error
 	for _, uri := range c.Args() {
 		bck, objectName, err := parseBckObjectURI(c, uri)
 		if err != nil {
@@ -933,6 +933,19 @@ func multiObjOp(c *cli.Context, command string) error {
 				return err
 			}
 			fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", objectName, bck)
+		}
+	}
+	return nil
+}
+
+func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
+	objList, err := api.ListObjects(defaultAPIParams, bck, nil, 0)
+	if err != nil {
+		return err
+	}
+	for _, entry := range objList.Entries {
+		if err := api.DeleteObject(defaultAPIParams, bck, entry.Name); err == nil {
+			fmt.Fprintf(c.App.Writer, "deleted %q\n", entry.Name)
 		}
 	}
 	return nil

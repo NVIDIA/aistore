@@ -390,14 +390,18 @@ var (
 	// Object
 	offsetFlag      = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
 	lengthFlag      = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
-	checkCachedFlag = cli.BoolFlag{Name: "check-cached", Usage: "check if object from a remote bucket is present (ie., cached) in the cluster"}
-	listCachedFlag  = cli.BoolFlag{
+	checkCachedFlag = cli.BoolFlag{
+		Name:  "check-cached",
+		Usage: "check if object from a remote bucket is present (ie., cached) in the cluster",
+	}
+	listCachedFlag = cli.BoolFlag{
 		Name:  "cached",
 		Usage: "list only those objects from a remote bucket that are present (ie., cached) in the cluster",
 	}
 	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
+	rmRfFlag      = cli.BoolFlag{Name: "all", Usage: "remove all objects (use it with extreme caution!)"}
 
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}

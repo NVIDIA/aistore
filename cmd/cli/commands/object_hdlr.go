@@ -18,7 +18,10 @@ import (
 
 var (
 	objectCmdsFlags = map[string][]cli.Flag{
-		commandRemove: baseLstRngFlags,
+		commandRemove: append(
+			baseLstRngFlags,
+			rmRfFlag,
+		),
 		commandRename: {},
 		commandGet: {
 			offsetFlag,
@@ -215,6 +218,11 @@ func removeObjectHandler(c *cli.Context) (err error) {
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			// List or range operation on a given bucket.
 			return listOrRangeOp(c, commandRemove, bck)
+		}
+		if flagIsSet(c, rmRfFlag) {
+			fmt.Fprintf(c.App.Writer, "Warning: will remove all objects from %q. The operation cannot be undone!\n", bck)
+			time.Sleep(3 * time.Second)
+			return rmRfAllObjects(c, bck)
 		}
 
 		if objName == "" {
