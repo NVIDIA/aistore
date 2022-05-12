@@ -939,14 +939,35 @@ func multiObjOp(c *cli.Context, command string) error {
 }
 
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
-	objList, err := api.ListObjects(defaultAPIParams, bck, nil, 0)
+	var (
+		l, cnt       int
+		objList, err = api.ListObjects(defaultAPIParams, bck, nil, 0)
+	)
 	if err != nil {
 		return err
 	}
+	if l = len(objList.Entries); l == 0 {
+		fmt.Fprintln(c.App.Writer, "The bucket is empty, nothing to do.")
+		return nil
+	}
 	for _, entry := range objList.Entries {
 		if err := api.DeleteObject(defaultAPIParams, bck, entry.Name); err == nil {
-			fmt.Fprintf(c.App.Writer, "deleted %q\n", entry.Name)
+			cnt++
+			if flagIsSet(c, verboseFlag) {
+				fmt.Fprintf(c.App.Writer, "deleted %q\n", entry.Name)
+			}
 		}
+	}
+	if cnt == l {
+		if flagIsSet(c, verboseFlag) {
+			fmt.Fprintln(c.App.Writer, "=====")
+			fmt.Fprintf(c.App.Writer, "Deleted %d object%s from %s\n", cnt, cos.Plural(cnt), bck)
+		} else {
+			fmt.Fprintf(c.App.Writer, "Deleted %d object%s from %s\n", cnt, cos.Plural(cnt), bck)
+		}
+	} else {
+		fmt.Fprintf(c.App.Writer, "Failed to delete %d object%s from %s: (%d total, %d deleted)\n",
+			l-cnt, cos.Plural(l-cnt), bck, l, cnt)
 	}
 	return nil
 }

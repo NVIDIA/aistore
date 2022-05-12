@@ -460,11 +460,19 @@ var (
 	cpBckPrefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix added to every new object's name"}
 
 	// ETL
-	etlExtFlag              = cli.StringFlag{Name: "ext", Usage: "mapping from old to new extensions of transformed objects' names"}
-	etlUUID                 = cli.StringFlag{Name: "name", Usage: "unique ETL name (leaving this field empty will have unique ID auto-generated)", Required: true}
+	etlExtFlag = cli.StringFlag{Name: "ext", Usage: "mapping from old to new extensions of transformed objects' names"}
+	etlUUID    = cli.StringFlag{
+		Name:     "name",
+		Usage:    "unique ETL name (leaving this field empty will have unique ID auto-generated)",
+		Required: true,
+	}
 	etlBucketRequestTimeout = cli.DurationFlag{Name: "request-timeout", Usage: "timeout for a transformation of a single object"}
-	fromFileFlag            = cli.StringFlag{Name: "from-file", Usage: "absolute path to the file with the spec/code for ETL", Required: true}
-	depsFileFlag            = cli.StringFlag{
+	fromFileFlag            = cli.StringFlag{
+		Name:     "from-file",
+		Usage:    "absolute path to the file with the spec/code for ETL",
+		Required: true,
+	}
+	depsFileFlag = cli.StringFlag{
 		Name:  "deps-file",
 		Usage: "absolute path to the file with dependencies that must be installed before running the code",
 	}

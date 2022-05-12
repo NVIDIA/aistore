@@ -76,7 +76,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 			}
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "%q bucket destroyed\n", bck)
+		fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck)
 	}
 	return nil
 }

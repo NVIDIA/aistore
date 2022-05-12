@@ -45,6 +45,7 @@ var (
 			baseLstRngFlags,
 			dryRunFlag,
 			keepMDFlag,
+			verboseFlag,
 		),
 		subcmdSetProps: {
 			forceFlag,
@@ -458,13 +459,15 @@ func evictHandler(c *cli.Context) (err error) {
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			if objName != "" {
-				return incorrectUsageMsg(c, "object name (%q) cannot be used together with --list and/or --template flags", objName)
+				return incorrectUsageMsg(c,
+					"object name (%q) cannot be used together with --list and/or --template flags",
+					objName)
 			}
 			// List or range operation on a given bucket.
 			return listOrRangeOp(c, commandEvict, bck)
 		}
 		if objName == "" {
-			// Operation on a given bucket.
+			// Evict entire bucket.
 			return evictBucket(c, bck)
 		}
 

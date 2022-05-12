@@ -21,6 +21,7 @@ var (
 		commandRemove: append(
 			baseLstRngFlags,
 			rmRfFlag,
+			verboseFlag,
 		),
 		commandRename: {},
 		commandGet: {
@@ -112,7 +113,7 @@ var (
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
 			{
 				Name:      commandRename,
-				Usage:     "move an object in an ais bucket",
+				Usage:     "move/rename object",
 				ArgsUsage: "BUCKET/OBJECT_NAME NEW_OBJECT_NAME",
 				Flags:     objectCmdsFlags[commandRename],
 				Action:    mvObjectHandler,
@@ -121,7 +122,7 @@ var (
 			},
 			{
 				Name:      commandRemove,
-				Usage:     "remove an object from the specified bucket",
+				Usage:     "remove object(s) from the specified bucket",
 				ArgsUsage: optionalObjectsArgument,
 				Flags:     objectCmdsFlags[commandRemove],
 				Action:    removeObjectHandler,
