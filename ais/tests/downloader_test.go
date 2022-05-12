@@ -162,8 +162,10 @@ func downloadObjectRemote(t *testing.T, body downloader.DlBackendBody, expectedF
 
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, resp.FinishedCnt == expectedFinished, "finished objects mismatch (got: %d, expected: %d)", resp.FinishedCnt, expectedFinished)
-	tassert.Errorf(t, resp.SkippedCnt == expectedSkipped, "skipped objects mismatch (got: %d, expected: %d)", resp.SkippedCnt, expectedSkipped)
+	tassert.Errorf(t, resp.FinishedCnt == expectedFinished,
+		"finished objects mismatch (got: %d, expected: %d)", resp.FinishedCnt, expectedFinished)
+	tassert.Errorf(t, resp.SkippedCnt == expectedSkipped,
+		"skipped objects mismatch (got: %d, expected: %d)", resp.SkippedCnt, expectedSkipped)
 }
 
 func abortDownload(t *testing.T, id string) {

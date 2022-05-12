@@ -242,8 +242,18 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 	if bck.IsRemote() && (poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize || poi.owt == cmn.OwtPromote) {
 		errCode, err = poi.putRemote()
 		if err != nil {
-			glog.Errorf("PUT (%s): %v", poi.loghdr(), err)
-			return
+			loghdr := poi.loghdr()
+			glog.Errorf("PUT (%s): %v(%d)", loghdr, err, errCode)
+			if errCode != http.StatusServiceUnavailable {
+				return
+			}
+			// e.g.: "googleapi: Error 503: We encountered an internal error. Please try again."
+			time.Sleep(time.Second)
+			errCode, err = poi.putRemote()
+			if err != nil {
+				return
+			}
+			glog.Infof("PUT (%s): retried OK", loghdr)
 		}
 	}
 	if _, present := bmd.Get(bck); !present {
