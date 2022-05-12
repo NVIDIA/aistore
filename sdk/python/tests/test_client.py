@@ -69,7 +69,7 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
 
             obj = b''
             stream = self.client.get_object(self.bck_name, obj_name)
-            self.assertEqual(stream.contentLength, len(content))
+            self.assertEqual(stream.content_length, len(content))
             self.assertTrue(stream.e_tag != "")
             chunk_size = random.randrange(1, len(content) + 10)
             for chunk in stream.iter_content(chunk_size=chunk_size):

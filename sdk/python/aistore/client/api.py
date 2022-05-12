@@ -29,14 +29,14 @@ Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 # pylint: disable=unused-variable
 class ObjStream:
     def __init__(self, length: int = 0, e_tag: str = "", e_tag_type: str = "", stream: BinaryIO = None):
-        self._contentLength = length
+        self._content_length = length
         self._stream = stream
         self._e_tag = e_tag
         self._e_tag_type = e_tag_type
 
     @property
-    def contentLength(self) -> int:
-        return self._contentLength
+    def content_length(self) -> int:
+        return self._content_length
 
     @property
     def e_tag(self) -> str:
@@ -48,6 +48,12 @@ class ObjStream:
 
     def iter_content(self, chunk_size: int = 1) -> List[bytes]:
         return self._stream.iter_content(chunk_size=chunk_size)
+
+    def read_all(self, chunk_size: int = 1) -> bytes:
+        obj = b''
+        for chunk in self._stream.iter_content(chunk_size=chunk_size):
+            obj += chunk
+        return obj
 
 
 # pylint: disable=unused-variable
