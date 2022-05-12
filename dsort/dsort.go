@@ -289,9 +289,11 @@ func (m *Manager) extractLocalShards() (err error) {
 	metrics.mu.Unlock()
 
 	group, ctx := errgroup.WithContext(context.Background())
-	namesIt := m.rs.InputFormat.Template.Iter()
+	pt := m.rs.InputFormat.Template
+	pt.InitIter()
+
 ExtractAllShards:
-	for name, hasNext := namesIt(); hasNext; name, hasNext = namesIt() {
+	for name, hasNext := pt.Next(); hasNext; name, hasNext = pt.Next() {
 		select {
 		case <-m.listenAborted():
 			group.Wait()
@@ -623,13 +625,14 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, error) {
 	var (
 		n               = m.recManager.Records.Len()
-		names           = m.rs.OutputFormat.Template.Iter()
-		shardCount      = m.rs.OutputFormat.Template.Count()
+		pt              = m.rs.OutputFormat.Template
+		shardCount      = pt.Count()
 		start           int
 		curShardSize    int64
 		shards          = make([]*extract.Shard, 0)
 		numLocalRecords = make(map[string]int, m.smap.CountActiveTargets())
 	)
+	pt.InitIter()
 
 	if maxSize <= 0 {
 		// Heuristic: to count desired size of shard in case when maxSize is not specified.
@@ -643,7 +646,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 			continue
 		}
 
-		name, hasNext := names()
+		name, hasNext := pt.Next()
 		if !hasNext {
 			// no more shard names are available
 			return nil, errors.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)

@@ -97,11 +97,11 @@ type (
 	rangeDlJob struct {
 		baseDlJob
 		t     cluster.Target
-		objs  []dlObj               // objects' metas which are ready to be downloaded
-		iter  func() (string, bool) // links iterator
-		dir   string                // objects directory(prefix) from request
-		count int                   // total number object to download by a target
-		done  bool                  // true when iterator is finished, nothing left to read
+		objs  []dlObj            // objects' metas which are ready to be downloaded
+		pt    cos.ParsedTemplate // range template
+		dir   string             // objects directory(prefix) from request
+		count int                // total number object to download by a target
+		done  bool               // true when iterator is finished, nothing left to read
 	}
 
 	backendDlJob struct {
@@ -280,31 +280,23 @@ func (j *singleDlJob) String() (s string) {
 // rangeDlJob //
 ////////////////
 
-func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Downloader) (*rangeDlJob, error) {
-	var (
-		pt  cos.ParsedTemplate
-		err error
-	)
-	// NOTE: Size of objects to be downloaded by a target will be unknown.
-	//  So proxy won't be able to sum sizes from all targets when calculating total size.
-	//  This should be taken care of somehow, as total is easy to know from range template anyway.
-	if pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
-		return nil, err
+//  NOTE: the sizes of objects to be downloaded will be unknown.
+func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Downloader) (job *rangeDlJob, err error) {
+	job = &rangeDlJob{}
+	if job.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
+		return
 	}
-
+	// TODO: job.Init instead, to avoid copying baseDlJob = *base
 	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
-	cnt, err := countObjects(t, pt, payload.Subdir, base.bck)
+	job.count, err = countObjects(t, job.pt, payload.Subdir, base.bck)
 	if err != nil {
-		return nil, err
+		return
 	}
-	job := &rangeDlJob{
-		baseDlJob: *base,
-		t:         t,
-		iter:      pt.Iter(),
-		dir:       payload.Subdir,
-		count:     cnt,
-	}
-	return job, nil
+	job.pt.InitIter()
+	job.baseDlJob = *base
+	job.t = t
+	job.dir = payload.Subdir
+	return
 }
 
 func (j *rangeDlJob) SrcBck() *cmn.Bck { return j.bck.Bucket() }
@@ -331,7 +323,7 @@ func (j *rangeDlJob) getNextObjs() error {
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {
-		link, ok := j.iter()
+		link, ok := j.pt.Next()
 		if !ok {
 			j.done = true
 			break

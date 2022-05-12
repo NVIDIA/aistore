@@ -133,12 +133,12 @@ func genShardsHandler(c *cli.Context) error {
 
 		concSemaphore = make(chan struct{}, concLimit)
 		group, ctx    = errgroup.WithContext(context.Background())
-		shardIt       = pt.Iter()
 		shardNum      = 0
 	)
+	pt.InitIter()
 
 CreateShards:
-	for shardName, hasNext := shardIt(); hasNext; shardName, hasNext = shardIt() {
+	for shardName, hasNext := pt.Next(); hasNext; shardName, hasNext = pt.Next() {
 		select {
 		case concSemaphore <- struct{}{}:
 		case <-ctx.Done():

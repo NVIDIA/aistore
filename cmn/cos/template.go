@@ -39,6 +39,9 @@ type (
 	ParsedTemplate struct {
 		Prefix string
 		Ranges []TemplateRange
+		// runtime
+		at          []int64
+		rangesCount int
 	}
 	ErrTemplate struct {
 		msg string
@@ -104,44 +107,40 @@ func (pt *ParsedTemplate) ToSlice(maxLen ...int) []string {
 		objs = make([]string, 0, pt.Count())
 	}
 
-	getNext := pt.Iter()
+	pt.InitIter()
 	i := 0
-	for objName, hasNext := getNext(); hasNext && i < max; objName, hasNext = getNext() {
+	for objName, hasNext := pt.Next(); hasNext && i < max; objName, hasNext = pt.Next() {
 		objs = append(objs, objName)
 		i++
 	}
 	return objs
 }
 
-func (pt *ParsedTemplate) Iter() func() (string, bool) {
-	rangesCount := len(pt.Ranges)
-	at := make([]int64, rangesCount)
-
+func (pt *ParsedTemplate) InitIter() {
+	pt.rangesCount = len(pt.Ranges)
+	pt.at = make([]int64, pt.rangesCount)
 	for i, tr := range pt.Ranges {
-		at[i] = tr.Start
+		pt.at[i] = tr.Start
 	}
+}
 
+func (pt *ParsedTemplate) Next() (string, bool) {
 	var buf bytes.Buffer
-	return func() (string, bool) {
-		for i := rangesCount - 1; i >= 0; i-- {
-			if at[i] > pt.Ranges[i].End {
-				if i == 0 {
-					return "", false
-				}
-				at[i] = pt.Ranges[i].Start
-				at[i-1] += pt.Ranges[i-1].Step
+	for i := pt.rangesCount - 1; i >= 0; i-- {
+		if pt.at[i] > pt.Ranges[i].End {
+			if i == 0 {
+				return "", false
 			}
+			pt.at[i] = pt.Ranges[i].Start
+			pt.at[i-1] += pt.Ranges[i-1].Step
 		}
-
-		buf.Reset()
-		buf.WriteString(pt.Prefix)
-		for i, tr := range pt.Ranges {
-			buf.WriteString(fmt.Sprintf("%0*d%s", tr.DigitCount, at[i], tr.Gap))
-		}
-
-		at[rangesCount-1] += pt.Ranges[rangesCount-1].Step
-		return buf.String(), true
 	}
+	buf.WriteString(pt.Prefix)
+	for i, tr := range pt.Ranges {
+		buf.WriteString(fmt.Sprintf("%0*d%s", tr.DigitCount, pt.at[i], tr.Gap))
+	}
+	pt.at[pt.rangesCount-1] += pt.Ranges[pt.rangesCount-1].Step
+	return buf.String(), true
 }
 
 //

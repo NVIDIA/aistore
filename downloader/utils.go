@@ -30,11 +30,10 @@ func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *clus
 	var (
 		smap = t.Sowner().Get()
 		sid  = t.SID()
-		iter = pt.Iter()
 		si   *cluster.Snode
 	)
-
-	for link, ok := iter(); ok; link, ok = iter() {
+	pt.InitIter()
+	for link, ok := pt.Next(); ok; link, ok = pt.Next() {
 		name := path.Join(dir, path.Base(link))
 		name, err = NormalizeObjName(name)
 		if err != nil {

@@ -541,11 +541,9 @@ var _ = Describe("Common file", func() {
 				pt, err := cos.ParseBashTemplate(template)
 				Expect(err).NotTo(HaveOccurred())
 
-				var (
-					i  int
-					it = pt.Iter()
-				)
-				for str, hasNext := it(); hasNext; str, hasNext = it() {
+				var i int
+				pt.InitIter()
+				for str, hasNext := pt.Next(); hasNext; str, hasNext = pt.Next() {
 					Expect(str).To(Equal(expectedStrs[i]))
 					i++
 				}

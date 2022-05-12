@@ -632,8 +632,8 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 
 		matchingObjectNames := make(cos.StringSet)
 
-		linksIt := pt.Iter()
-		for objName, hasNext := linksIt(); hasNext; objName, hasNext = linksIt() {
+		pt.InitIter()
+		for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
 			matchingObjectNames[objName] = struct{}{}
 		}
 		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { _, ok := matchingObjectNames[obj.Name]; return ok })

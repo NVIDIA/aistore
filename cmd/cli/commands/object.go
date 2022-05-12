@@ -379,9 +379,9 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 }
 
 func putRangeObjects(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
-	getNext := pt.Iter()
 	allFiles := make([]fileToObj, 0, pt.Count())
-	for file, hasNext := getNext(); hasNext; file, hasNext = getNext() {
+	pt.InitIter()
+	for file, hasNext := pt.Next(); hasNext; file, hasNext = pt.Next() {
 		files, err := generateFileList(file, trimPrefix, subdirName, flagIsSet(c, recursiveFlag))
 		if err != nil {
 			return err

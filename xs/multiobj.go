@@ -116,8 +116,8 @@ func (r *lriterator) iterateRange(wi lrwi, smap *cluster.Smap) error {
 }
 
 func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
-	getNext := pt.Iter()
-	for objName, hasNext := getNext(); hasNext; objName, hasNext = getNext() {
+	pt.InitIter()
+	for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
 		if r.xctn.IsAborted() || r.xctn.Finished() {
 			return nil
 		}
