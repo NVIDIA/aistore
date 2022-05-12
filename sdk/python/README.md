@@ -48,6 +48,8 @@ Names of the most common operations are also identical, e.g.:
 
 and so on.
 
+For more information and usage examples, please see [Jupyter notebook](/sdk/python/sdk-tutorial.ipynb) tutorial.
+
 ## AIS supports multiple [backends](/docs/providers.md)
 
 AWS works only with one kind of buckets - AWS buckets. AWS SDK functions accept only the bucket name, e.g. `create_bucket(Bucket="bck")`.
