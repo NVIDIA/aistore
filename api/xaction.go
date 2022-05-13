@@ -15,16 +15,20 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 )
 
+const XactPollTime = time.Second
+
+// tunables
 const (
-	XactDefWaitTimeShort = time.Minute
-	XactDefWaitTimeLong  = 7 * 24 * time.Hour // week
-	XactMaxStartPollTime = time.Minute
-	XactMaxPollTime      = time.Hour
-	XactPollTime         = time.Second
+	xactDefWaitTimeShort = time.Minute
+	xactDefWaitTimeLong  = 7 * 24 * time.Hour
+	xactMinProbingFreq   = 30 * time.Second
+	xactMaxPollTime      = time.Hour
+	xactMinPollTime      = 2 * time.Second
 	numConsecutiveIdle   = 3 // number of consecutive 'idle' states
 )
 
@@ -163,20 +167,22 @@ func initPollingTimes(args XactReqArgs) (time.Duration, time.Duration) {
 	total := args.Timeout
 	switch {
 	case args.Timeout == 0:
-		total = XactDefWaitTimeShort
+		total = xactDefWaitTimeShort
 	case args.Timeout < 0:
-		total = XactDefWaitTimeLong
+		total = xactDefWaitTimeLong
 	}
-	return total, cos.MinDuration(XactMaxStartPollTime, cos.ProbingFrequency(total))
+	return total, cos.MinDuration(xactMinProbingFreq, cos.ProbingFrequency(total))
 }
 
 func backoffPoll(dur time.Duration) time.Duration {
 	dur += dur / 2
-	return cos.MinDuration(XactMaxPollTime, dur)
+	return cos.MinDuration(xactMaxPollTime, dur)
 }
 
 func _waitForXaction(baseParams BaseParams, args XactReqArgs, condFn ...XactSnapTestFunc) (status *nl.NotifStatus, err error) {
 	var (
+		elapsed      time.Duration
+		begin        = mono.NanoTime()
 		total, sleep = initPollingTimes(args)
 		ctx, cancel  = context.WithTimeout(context.Background(), total)
 	)
@@ -185,7 +191,7 @@ func _waitForXaction(baseParams BaseParams, args XactReqArgs, condFn ...XactSnap
 		var done bool
 		if len(condFn) == 0 {
 			status, err = GetXactionStatus(baseParams, args)
-			done = err == nil && status.Finished()
+			done = err == nil && status.Finished() && elapsed >= xactMinPollTime
 		} else {
 			var (
 				snaps NodesXactMultiSnap
@@ -199,6 +205,7 @@ func _waitForXaction(baseParams BaseParams, args XactReqArgs, condFn ...XactSnap
 			return
 		}
 		time.Sleep(sleep)
+		elapsed = mono.Since(begin)
 		sleep = backoffPoll(sleep)
 		select {
 		case <-ctx.Done():
