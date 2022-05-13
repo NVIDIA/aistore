@@ -86,9 +86,32 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertNotEqual(smap.version, 0)
         self.assertIsNot(smap.uuid, "")
 
-    def test_list_objects(self):
+    def test_list_object_page(self):
         bucket_size = 110
-        short_list_len = 87
+        tests = [
+            {
+                "page_size": None, "resp_size": bucket_size
+            },
+            {
+                "page_size": 7, "resp_size": 7
+            },
+            {
+                "page_size": bucket_size * 2, "resp_size": bucket_size
+            },
+        ]
+        self.client.create_bucket(self.bck_name)
+        content = "test".encode("utf-8")
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(content)
+            f.flush()
+            for obj_id in range(bucket_size):
+                self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
+        for test in list(tests):
+            resp = self.client.list_objects(self.bck_name, page_size=test["page_size"])
+            self.assertEqual(len(resp.entries), test["resp_size"])
+
+    def test_list_all_objects(self):
+        bucket_size = 110
         short_page_len = 17
         self.client.create_bucket(self.bck_name)
         content = "test".encode("utf-8")
@@ -97,11 +120,9 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
             f.flush()
             for obj_id in range(bucket_size):
                 self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
-        objects = self.client.list_objects(self.bck_name, count=short_list_len)
-        self.assertEqual(len(objects), short_list_len)
-        objects = self.client.list_objects(self.bck_name)
+        objects = self.client.list_all_objects(self.bck_name)
         self.assertEqual(len(objects), bucket_size)
-        objects = self.client.list_objects(self.bck_name, page_size=short_page_len)
+        objects = self.client.list_all_objects(self.bck_name, page_size=short_page_len)
         self.assertEqual(len(objects), bucket_size)
 
     @unittest.skipIf(REMOTE_BUCKET == "" or REMOTE_BUCKET.startswith("ais:"), "Remote bucket is not set")
@@ -143,12 +164,12 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
             for obj_id in range(bucket_size):
                 self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
         objects = self.client.list_objects(self.bck_name)
-        self.assertEqual(len(objects), bucket_size)
+        self.assertEqual(len(objects.entries), bucket_size)
 
         for obj_id in range(delete_cnt):
             self.client.delete_object(self.bck_name, f"obj-{ obj_id + 1 }")
         objects = self.client.list_objects(self.bck_name)
-        self.assertEqual(len(objects), bucket_size - delete_cnt)
+        self.assertEqual(len(objects.entries), bucket_size - delete_cnt)
 
 
 if __name__ == '__main__':

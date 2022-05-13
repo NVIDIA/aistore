@@ -225,15 +225,18 @@ class Client:
             params=params,
         ).headers
 
-    def list_objects(self,
-                     bck_name: str,
-                     provider: str = ProviderAIS,
-                     prefix: str = "",
-                     props: str = "",
-                     count: int = 0,
-                     page_size: int = 0) -> List[BucketEntry]:
+    def list_objects(
+        self,
+        bck_name: str,
+        provider: str = ProviderAIS,
+        prefix: str = "",
+        props: str = "",
+        page_size: int = 0,
+        uuid: str = "",
+        continuation_token: str = ""
+    ) -> BucketList:
         """
-        Returns list of objects in a bucket
+        Returns a structure that contains a page of objects, job UUID, and continuation token to read the next page if it is available
 
         Args:
             bck_name (str): Name of a bucket
@@ -241,11 +244,16 @@ class Client:
                 Defaults to "ais". Empty provider returns buckets of all providers.
             prefix (str, optional): return only objects that start with the prefix
             props (str, optional): comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
-            count (int, optional): return first "count" objects, default is "0" - return all objects in the bucket
-            page_size (int, optional): read by page_size objects at a time
+            page_size (int, optional): return at most "page_size" objects.
+                The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+                NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
+                Defaults to "0" - return maximum number objects.
+            uuid (str, optional): job UUID, required to get the next page of objects
+            continuation_token (str, optional): marks the object to start reading the next page
 
         Returns:
-            List[BucketEntry]: the list of objects in the bucket
+            BucketList: the page of objects in the bucket and the continuation token to get the next page.
+            Empty continuation token marks the final page of the object list.
 
         Raises:
             requests.RequestException: Ambiguous while handling request
@@ -253,36 +261,64 @@ class Client:
             requests.ConnectionTimeout: Timed out while connecting to AIStore server
             requests.ReadTimeout: Timeout receiving response from server
         """
-        page_size = count if page_size == 0 else page_size
-        value = {"prefix": prefix, "pagesize": page_size, "uuid": "", "props": props}
+        value = {"prefix": prefix, "pagesize": page_size, "uuid": uuid, "props": props, "continuation_token": continuation_token}
         params = {QParamProvider: provider}
-        obj_list = None
-        to_read = count
-        list_all = count == 0
+        action = ActionMsg(action="list", value=value).dict()
 
-        while list_all or to_read > 0:
-            action = ActionMsg(action="list", value=value).dict()
-            curr = self._request_deserialize(
-                HTTP_METHOD_GET,
-                path=f"buckets/{ bck_name }",
-                res_model=BucketList,
-                json=action,
-                params=params,
+        return self._request_deserialize(
+            HTTP_METHOD_GET,
+            path=f"buckets/{ bck_name }",
+            res_model=BucketList,
+            json=action,
+            params=params,
+        )
+
+    def list_all_objects(
+        self,
+        bck_name: str,
+        provider: str = ProviderAIS,
+        prefix: str = "",
+        props: str = "",
+        page_size: int = 0,
+    ) -> List[BucketEntry]:
+        """
+        Returns a list of all objects in a bucket
+
+        Args:
+            bck_name (str): Name of a bucket
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+                Defaults to "ais". Empty provider returns buckets of all providers.
+            prefix (str, optional): return only objects that start with the prefix
+            props (str, optional): comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+            page_size (int, optional): return at most "page_size" objects.
+                The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+                NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
+                Defaults to "0" - return maximum number objects.
+
+        Returns:
+            List[BucketEntry]: list of objects in a bucket
+
+        Raises:
+            requests.RequestException: Ambiguous while handling request
+            requests.ConnectionError: A connection error occurred
+            requests.ConnectionTimeout: Timed out while connecting to AIStore server
+            requests.ReadTimeout: Timeout receiving response from server
+        """
+        value = {"prefix": prefix, "uuid": "", "props": props, "continuation_token": "", "pagesize": page_size}
+        obj_list = None
+
+        while True:
+            resp = self.list_objects(
+                bck_name=bck_name, provider=provider, prefix=prefix, props=props, uuid=value["uuid"], continuation_token=value["continuation_token"]
             )
             if obj_list:
-                obj_list.entries = obj_list.entries + curr.entries
-                # TODO: report flags somehow
-                obj_list.flags = obj_list.flags or curr.flags
-            obj_list = obj_list or curr
-            if curr.continuation_token == "":
+                obj_list = obj_list + resp.entries
+            obj_list = obj_list or resp.entries
+            if resp.continuation_token == "":
                 break
-            value["uuid"] = curr.uuid
-            value["continuation_token"] = curr.continuation_token
-            if not list_all:
-                to_read -= len(curr.entries)
-                value["pagesize"] = min(to_read, page_size)
-
-        return obj_list.entries
+            value["continuation_token"] = resp.continuation_token
+            value["uuid"] = resp.uuid
+        return obj_list
 
     def head_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS) -> Header:
         """
