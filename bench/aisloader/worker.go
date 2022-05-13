@@ -20,8 +20,8 @@ import (
 
 func doPut(wo *workOrder) {
 	var sgl *memsys.SGL
-	if runParams.usingSG {
-		sgl = memsys.PageMM().NewSGL(wo.size)
+	if runParams.readerType == readers.ReaderTypeSG {
+		sgl = gmm.NewSGL(wo.size)
 		wo.sgl = sgl
 	}
 

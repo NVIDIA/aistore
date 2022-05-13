@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 const longListTime = 10 * time.Second
@@ -372,7 +371,7 @@ func getConfig(server string) (httpLatencies, error) {
 }
 
 func listObjCallback(ctx *api.ProgressContext) {
-	fmt.Printf("\rFetched %d objects", ctx.Info().Count)
+	fmt.Printf("\rListing %d objects", ctx.Info().Count)
 	// Final message moves output to new line, to keep output tidy
 	if ctx.IsFinished() {
 		fmt.Println()
@@ -416,7 +415,7 @@ func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, 
 		return 0, "", fmt.Errorf("bad status %d from %s, err: %v", r.StatusCode, src, err)
 	}
 
-	buf, slab := memsys.PageMM().Alloc()
+	buf, slab := gmm.Alloc()
 	defer slab.Free(buf)
 
 	n, cksum, err = cos.CopyAndChecksum(w, r.Body, buf, cksumType)

@@ -14,6 +14,7 @@ import (
 	"path"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/archive"
 	"github.com/NVIDIA/aistore/dsort/extract"
@@ -322,9 +323,7 @@ type ParamReader struct {
 func NewReader(p ParamReader, cksumType string) (Reader, error) {
 	switch p.Type {
 	case ReaderTypeSG:
-		if p.SGL == nil {
-			return nil, fmt.Errorf("SGL is empty while reader type is SGL")
-		}
+		debug.Assert(p.SGL != nil)
 		return NewSGReader(p.SGL, p.Size, cksumType)
 	case ReaderTypeRand:
 		return NewRandReader(p.Size, cksumType)
@@ -362,7 +361,7 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand)
 		if cksumType != cos.ChecksumNone {
 			cksum.H.Write(buf[:m])
 		}
-		cos.Assert(m == n)
+		debug.Assert(m == n)
 		rem -= int64(m)
 	}
 	if cksumType != cos.ChecksumNone {

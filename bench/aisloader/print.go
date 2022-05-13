@@ -261,24 +261,34 @@ func writeHumanReadibleFinalStats(to io.Writer, t sts) {
 	pl := prettyLatency
 	pt := prettyTimestamp
 	preWriteStats(to, false)
-	p(to, statsPrintHeader, pt(), "PUT",
-		pn(t.put.Total()),
-		pb(t.put.TotalBytes()),
-		pl(t.put.MinLatency(), t.put.AvgLatency(), t.put.MaxLatency()),
-		ps(t.put.Throughput(t.put.Start(), time.Now())),
-		pn(t.put.TotalErrs()))
-	p(to, statsPrintHeader, pt(), "GET",
-		pn(t.get.Total()),
-		pb(t.get.TotalBytes()),
-		pl(t.get.MinLatency(), t.get.AvgLatency(), t.get.MaxLatency()),
-		ps(t.get.Throughput(t.get.Start(), time.Now())),
-		pn(t.get.TotalErrs()))
-	p(to, statsPrintHeader, pt(), "CFG",
-		pn(t.getConfig.Total()),
-		pb(t.getConfig.TotalBytes()),
-		pl(t.getConfig.MinLatency(), t.getConfig.AvgLatency(), t.getConfig.MaxLatency()),
-		pb(t.getConfig.Throughput(t.getConfig.Start(), time.Now())),
-		pn(t.getConfig.TotalErrs()))
+
+	sput := &t.put
+	if sput.Total() > 0 {
+		p(to, statsPrintHeader, pt(), "PUT",
+			pn(sput.Total()),
+			pb(sput.TotalBytes()),
+			pl(sput.MinLatency(), sput.AvgLatency(), sput.MaxLatency()),
+			ps(sput.Throughput(sput.Start(), time.Now())),
+			pn(sput.TotalErrs()))
+	}
+	sget := &t.get
+	if sget.Total() > 0 {
+		p(to, statsPrintHeader, pt(), "GET",
+			pn(sget.Total()),
+			pb(sget.TotalBytes()),
+			pl(sget.MinLatency(), sget.AvgLatency(), sget.MaxLatency()),
+			ps(sget.Throughput(sget.Start(), time.Now())),
+			pn(sget.TotalErrs()))
+	}
+	sconfig := &t.getConfig
+	if sconfig.Total() > 0 {
+		p(to, statsPrintHeader, pt(), "CFG",
+			pn(sconfig.Total()),
+			pb(sconfig.TotalBytes()),
+			pl(sconfig.MinLatency(), sconfig.AvgLatency(), sconfig.MaxLatency()),
+			pb(sconfig.Throughput(sconfig.Start(), time.Now())),
+			pn(sconfig.TotalErrs()))
+	}
 }
 
 // writeStatus writes stats to the writter.

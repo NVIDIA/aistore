@@ -65,6 +65,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tetl"
 	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/OneOfOne/xxhash"
@@ -143,8 +144,6 @@ type (
 		randomObjName bool
 		uniqueGETs    bool
 		verifyHash    bool // verify xxhash during get
-		usingSG       bool
-		usingFile     bool
 		getConfig     bool // true: load control plane (read proxy config)
 		jsonFormat    bool
 		stoppable     bool // true: terminate by Ctrl-C
@@ -204,6 +203,9 @@ var (
 	suffixID        uint64
 
 	numGets atomic.Int64
+
+	gmm      *memsys.MMSA
+	stopping atomic.Bool
 
 	ip          string
 	port        string
@@ -340,9 +342,6 @@ func parseCmdLine() (params, error) {
 		fmt.Println("      The option must be specified in the command line.")
 		os.Exit(1)
 	}
-
-	p.usingSG = p.readerType == readers.ReaderTypeSG
-	p.usingFile = p.readerType == readers.ReaderTypeFile
 
 	if p.seed == 0 {
 		p.seed = mono.NanoTime()
@@ -724,7 +723,7 @@ func Start(version, build, buildtime string) error {
 		runParams.duration.Val = time.Duration(math.MaxInt64)
 	}
 
-	if runParams.usingFile {
+	if runParams.readerType == readers.ReaderTypeFile {
 		if err := cos.CreateDir(runParams.tmpDir + "/" + myName); err != nil {
 			return fmt.Errorf("failed to create local test directory %q, err = %s", runParams.tmpDir, err.Error())
 		}
@@ -768,6 +767,17 @@ func Start(version, build, buildtime string) error {
 		time.Sleep(time.Second)
 	}
 	defer statsdC.Close()
+
+	// init housekeeper and memsys;
+	// empty config to use memsys constants;
+	// alternatively: "memsys": { "min_free": "2gb", ... }
+	hk.Init(&stopping)
+	go hk.DefaultHK.Run()
+	hk.WaitStarted()
+
+	memsys.Init(prefixC, prefixC, &cmn.Config{})
+	gmm = memsys.PageMM()
+	gmm.RegWithHK()
 
 	if etlInitSpec != nil {
 		fmt.Println(prettyTimestamp() + " Waiting for an ETL to start...")
@@ -1124,6 +1134,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 }
 
 func cleanup() {
+	stopping.Store(true)
 	time.Sleep(time.Second)
 	fmt.Println(prettyTimestamp() + " Cleaning up...")
 	if bucketObjsNames != nil {
@@ -1187,7 +1198,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 		}
 	}
 
-	if runParams.usingFile {
+	if runParams.readerType == readers.ReaderTypeFile {
 		for _, obj := range objs {
 			if err := os.Remove(runParams.tmpDir + "/" + obj); err != nil {
 				fmt.Println("delete local file err ", err)
