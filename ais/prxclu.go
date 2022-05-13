@@ -987,6 +987,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActionMs
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+	glog.Warningf("%s: %s %+v", p, msg.Action, opts)
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
 		err := cmn.NewErrNotFound("%s: node %q", p.si, opts.DaemonID)
@@ -1207,9 +1208,12 @@ rret:
 
 // Callback: remove the node from the cluster if rebalance finished successfully
 func (p *proxy) removeAfterRebalance(nl nl.NotifListener, msg *apc.ActionMsg, si *cluster.Snode) {
-	if err := nl.Err(); err != nil || nl.Aborted() {
-		glog.Errorf("Rebalance(%s) didn't finish successfully, err: %v, aborted: %v",
-			nl.UUID(), err, nl.Aborted())
+	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
+		var s string
+		if abrt {
+			s = " aborted,"
+		}
+		glog.Errorf("x-rebalance[%s]%s err: %v", nl.UUID(), s, err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

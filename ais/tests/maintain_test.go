@@ -415,6 +415,7 @@ func TestNodeShutdown(t *testing.T) {
 	for _, ty := range []string{apc.Proxy, apc.Target} {
 		t.Run(ty, func(t *testing.T) {
 			testNodeShutdown(t, ty)
+			time.Sleep(time.Second)
 		})
 	}
 }
