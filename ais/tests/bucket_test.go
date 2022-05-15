@@ -1609,6 +1609,7 @@ func TestLocalMirror(t *testing.T) {
 }
 
 func testLocalMirror(t *testing.T, numCopies []int) {
+	const xactTimeout = 10 * time.Second
 	m := ioContext{
 		t:               t,
 		num:             10000,
@@ -1646,7 +1647,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 		// Even though the bucket is empty, it can take a short while until the
 		// xaction is propagated and finished.
-		reqArgs := api.XactReqArgs{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: 10 * time.Second}
+		reqArgs := api.XactReqArgs{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: xactTimeout}
 		_, err = api.WaitForXactionIC(baseParams, reqArgs)
 		tassert.CheckFatal(t, err)
 	}
@@ -1661,6 +1662,9 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	}()
 
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
+
+	xactArgs := api.XactReqArgs{Kind: apc.ActPutCopies, Bck: m.bck, Timeout: xactTimeout}
+	_, _ = api.WaitForXactionIC(baseParams, xactArgs)
 
 	for _, copies := range numCopies {
 		makeNCopies(t, baseParams, m.bck, copies)

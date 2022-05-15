@@ -46,18 +46,20 @@ func (m *BMD) String() string {
 	return "BMD v" + strconv.FormatInt(m.Version, 10)
 }
 
-func (m *BMD) numBuckets() (na, nc, nr int) {
+func (m *BMD) numBuckets() (na, nar, nc, no int) {
 	for provider, namespaces := range m.Providers {
 		for nsUname, buckets := range namespaces {
 			ns := cmn.ParseNsUname(nsUname)
 			if provider == apc.ProviderAIS {
 				if ns.IsRemote() {
-					nr += len(buckets)
+					nar += len(buckets)
 				} else {
 					na += len(buckets)
 				}
-			} else {
+			} else if cmn.IsCloudProvider(provider) {
 				nc += len(buckets)
+			} else {
+				no += len(buckets)
 			}
 		}
 	}
@@ -68,20 +70,15 @@ func (m *BMD) StringEx() string {
 	if m == nil {
 		return "BMD <nil>"
 	}
-	var (
-		sna, snc, snr string
-		na, nc, nr    = m.numBuckets()
-	)
-	if na > 0 {
-		sna = fmt.Sprintf(", num ais=%d", na)
+	na, nar, nc, no := m.numBuckets()
+	if na == 0 && nc == 0 && nar == 0 && no == 0 {
+		return fmt.Sprintf("BMD v%d[%s (no buckets)]", m.Version, m.UUID)
 	}
-	if nc > 0 {
-		snc = fmt.Sprintf(", num cloud=%d", nc)
+	if nar == 0 && no == 0 {
+		return fmt.Sprintf("BMD v%d[%s, buckets: ais(%d), cloud(%d)]", m.Version, m.UUID, na, nc)
 	}
-	if nr > 0 {
-		snr = fmt.Sprintf(", num remote=%d", nr)
-	}
-	return fmt.Sprintf("BMD v%d[%s%s%s%s]", m.Version, m.UUID, sna, snc, snr)
+	return fmt.Sprintf("BMD v%d[%s, buckets: ais(%d), cloud(%d), remote-ais(%d), remote(%d)]",
+		m.Version, m.UUID, na, nc, nar, no)
 }
 
 func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
