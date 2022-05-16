@@ -265,34 +265,33 @@ add:
 // recommended for copying between different buckets (compare with lom.Copy() above)
 // NOTE: `lom` source must be w-locked
 func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
+	dst = lom.CloneMD(dstFQN)
+	if err = dst.InitFQN(dstFQN, nil); err == nil {
+		err = lom.copy2fqn(dst, buf)
+	}
+	if err != nil {
+		FreeLOM(dst)
+		dst = nil
+	}
+	return
+}
+
+func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 	var (
 		dstCksum  *cos.CksumHash
+		dstFQN    = dst.FQN
 		srcCksum  = lom.Checksum()
 		cksumType = cos.ChecksumNone
 	)
 	if !srcCksum.IsEmpty() {
 		cksumType = srcCksum.Ty()
 	}
-	dst = lom.CloneMD(dstFQN)
-	if err = dst.InitFQN(dstFQN, nil); err != nil {
-		FreeLOM(dst)
-		dst = nil
-		return
-	}
-	if dst.isMirror(lom) {
-		// caller must take wlock
-		debug.AssertFunc(func() bool {
-			_, exclusive := lom.IsLocked()
-			return exclusive
-		})
-		if lom.md.copies != nil {
-			dst.md.copies = make(fs.MPI, len(lom.md.copies)+1)
-			for fqn, mpi := range lom.md.copies {
-				dst.md.copies[fqn] = mpi
-			}
+	if dst.isMirror(lom) && lom.md.copies != nil {
+		dst.md.copies = make(fs.MPI, len(lom.md.copies)+1)
+		for fqn, mpi := range lom.md.copies {
+			dst.md.copies[fqn] = mpi
 		}
 	}
-
 	if !dst.Bck().Equal(lom.Bck(), true /*same ID*/, true /*same backend*/) {
 		// The copy will be in a new bucket - completely separate object. Hence, we have to set initial version.
 		dst.SetVersion(lomInitialVersion)
@@ -313,7 +312,7 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 
 	if cksumType != cos.ChecksumNone {
 		if !dstCksum.Equal(lom.Checksum()) {
-			return nil, cos.NewBadDataCksumError(&dstCksum.Cksum, lom.Checksum())
+			return cos.NewBadDataCksumError(&dstCksum.Cksum, lom.Checksum())
 		}
 		dst.SetCksum(dstCksum.Clone())
 	}

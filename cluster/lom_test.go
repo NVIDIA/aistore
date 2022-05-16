@@ -337,27 +337,28 @@ var _ = Describe("LOM", func() {
 					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
 
 					lom := NewBasicLom(noneFQN)
-					cksum, err := lom.ComputeCksumIfMissing()
+					cksum, err := lom.ComputeSetCksum()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cksum).To(BeNil())
 				})
 
 				It("should not compute if not missing", func() {
-					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
-
-					lom := NewBasicLom(noneFQN)
+					lom := filePut(localFQN, testFileSize)
 					lom.SetCksum(dummyCksm)
-					cksum, err := lom.ComputeCksumIfMissing()
+					cksum, err := lom.ComputeSetCksum()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(cksum).To(BeEquivalentTo(dummyCksm))
+					Expect(cksum).NotTo(BeEquivalentTo(dummyCksm))
+					Expect(cksum.Value()).NotTo(BeEquivalentTo(""))
+					_, err = lom.ComputeSetCksum()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(lom.Checksum()).To(BeEquivalentTo(cksum))
 				})
 
 				It("should compute missing checksum", func() {
 					lom := filePut(localFQN, testFileSize)
 					expectedChecksum := getTestFileHash(localFQN)
 
-					cksum, err := lom.ComputeCksumIfMissing()
+					cksum, err := lom.ComputeSetCksum()
 					Expect(err).NotTo(HaveOccurred())
 					cksumType, cksumValue := cksum.Get()
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumXXHash))

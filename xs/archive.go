@@ -145,7 +145,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 
 	wi := &archwi{r: r, msg: msg, lom: lom}
 	wi.fqn = fs.CSM.Gen(wi.lom, fs.WorkfileType, fs.WorkfileCreateArch)
-	wi.cksum.Init(lom.CksumConf().Type)
+	wi.cksum.Init(lom.CksumType())
 
 	smap := r.p.T.Sowner().Get()
 	wi.refc.Store(int32(smap.CountTargets() - 1))

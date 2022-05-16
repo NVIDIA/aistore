@@ -719,7 +719,9 @@ func (rj *rebJogger) walkBck(bck *cluster.Bck) bool {
 func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg interface{}, err error) {
 	rj.m.inQueue.Dec()
 	if err != nil {
-		rj.m.delLomAck(arg.(*cluster.LOM))
+		lom, ok := arg.(*cluster.LOM)
+		debug.Assert(ok) // DEBUG
+		rj.m.delLomAck(lom)
 		if bool(glog.FastV(4, glog.SmoduleReb)) || !cos.IsRetriableConnErr(err) {
 			si := rj.m.t.Snode()
 			glog.Errorf("%s: failed to send o[%s]: %v", si, hdr.FullName(), err)
@@ -798,11 +800,12 @@ func _prepSend(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 		err = cmn.ErrSkip
 		goto retErr
 	}
-	if _, err = lom.ComputeCksumIfMissing(); err != nil { // not persisting it locally
-		goto retErr
+	if lom.Checksum() == nil {
+		if _, err = lom.ComputeSetCksum(); err != nil {
+			goto retErr
+		}
 	}
 	if roc, err = cos.NewFileHandle(lom.FQN); err != nil {
-		roc = nil
 		goto retErr
 	}
 	roc = cos.NewDeferROC(roc, func() {
@@ -826,6 +829,7 @@ func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOp
 	o.Hdr.Bck.Copy(lom.Bucket())
 	o.Hdr.ObjName = lom.ObjName
 	o.Hdr.Opaque = opaque
+	debug.AssertMsg(lom.Checksum() != nil, lom.StringEx())
 	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
 	o.Callback, o.CmplArg = rj.objSentCallback, lom
 	rj.m.inQueue.Inc()

@@ -144,16 +144,14 @@ func (reb *Reb) isQuiescent() bool {
 func (reb *Reb) lomAcks() *[cos.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
 
 func (reb *Reb) addLomAck(lom *cluster.LOM) {
-	idx := lom.CacheIdx()
-	lomAck := reb.lomAcks()[idx]
+	lomAck := reb.lomAcks()[lom.CacheIdx()]
 	lomAck.mu.Lock()
 	lomAck.q[lom.Uname()] = lom
 	lomAck.mu.Unlock()
 }
 
 func (reb *Reb) delLomAck(lom *cluster.LOM) {
-	idx := lom.CacheIdx()
-	lomAck := reb.lomAcks()[idx]
+	lomAck := reb.lomAcks()[lom.CacheIdx()]
 	lomAck.mu.Lock()
 	if lomOrig, ok := lomAck.q[lom.Uname()]; ok {
 		delete(lomAck.q, lom.Uname())

@@ -353,18 +353,20 @@ func checksumDataSlices(ctx *encodeCtx, cksmReaders []io.Reader, cksumType strin
 }
 
 // generateSlicesToMemory gets FQN to the original file and encodes it into EC slices
+// writers are slices created by EC encoding process(memory is allocated)
 func generateSlicesToMemory(ctx *encodeCtx) error {
-	// writers are slices created by EC encoding process(memory is allocated)
-	conf := ctx.lom.CksumConf()
-	initSize := cos.MinI64(ctx.sliceSize, cos.MiB)
-	sliceWriters := make([]io.Writer, ctx.paritySlices)
+	var (
+		cksumType    = ctx.lom.CksumType()
+		initSize     = cos.MinI64(ctx.sliceSize, cos.MiB)
+		sliceWriters = make([]io.Writer, ctx.paritySlices)
+	)
 	for i := 0; i < ctx.paritySlices; i++ {
 		writer := mm.NewSGL(initSize)
 		ctx.slices[i+ctx.dataSlices] = &slice{obj: writer}
-		if conf.Type == cos.ChecksumNone {
+		if cksumType == cos.ChecksumNone {
 			sliceWriters[i] = writer
 		} else {
-			ctx.cksums[i] = cos.NewCksumHash(conf.Type)
+			ctx.cksums[i] = cos.NewCksumHash(cksumType)
 			sliceWriters[i] = cos.NewWriterMulti(writer, ctx.cksums[i].H)
 		}
 	}
@@ -396,7 +398,7 @@ func initializeSlices(ctx *encodeCtx) (err error) {
 
 	// We have established readers of data slices, we can already start calculating hashes for them
 	// during calculating parity slices and their hashes
-	if cksumType := ctx.lom.CksumConf().Type; cksumType != cos.ChecksumNone {
+	if cksumType := ctx.lom.CksumType(); cksumType != cos.ChecksumNone {
 		ctx.cksums = make([]*cos.CksumHash, ctx.paritySlices)
 		err = checksumDataSlices(ctx, cksmReaders, cksumType)
 	}
@@ -418,7 +420,7 @@ func finalizeSlices(ctx *encodeCtx, writers []io.Writer) error {
 		return err
 	}
 
-	if cksumType := ctx.lom.CksumConf().Type; cksumType != cos.ChecksumNone {
+	if cksumType := ctx.lom.CksumType(); cksumType != cos.ChecksumNone {
 		for i := range ctx.cksums {
 			ctx.cksums[i].Finalize()
 			ctx.slices[i+ctx.dataSlices].cksum = ctx.cksums[i].Clone()
@@ -443,7 +445,7 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 		}
 	}()
 
-	conf := ctx.lom.CksumConf()
+	cksumType := ctx.lom.CksumType()
 	for i := 0; i < ctx.paritySlices; i++ {
 		workFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
 		writer, err := ctx.lom.CreateFile(workFQN)
@@ -452,10 +454,10 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 		}
 		ctx.slices[i+ctx.dataSlices] = &slice{writer: writer, workFQN: workFQN}
 		writers[i] = writer
-		if conf.Type == cos.ChecksumNone {
+		if cksumType == cos.ChecksumNone {
 			sliceWriters[i] = writer
 		} else {
-			ctx.cksums[i] = cos.NewCksumHash(conf.Type)
+			ctx.cksums[i] = cos.NewCksumHash(cksumType)
 			sliceWriters[i] = cos.NewWriterMulti(writer, ctx.cksums[i].H)
 		}
 	}

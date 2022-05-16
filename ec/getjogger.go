@@ -468,7 +468,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 		writers   = make([]io.Writer, sliceCnt)
 		restored  = make([]*slice, sliceCnt)
 		cksums    = make([]*cos.CksumHash, sliceCnt)
-		conf      = ctx.lom.CksumConf()
+		cksumType = ctx.lom.CksumType()
 	)
 
 	// Allocate resources for reconstructed(missing) slices.
@@ -485,7 +485,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 			}
 		}
 		if sl == nil || sl.writer == nil {
-			err = newSliceWriter(ctx, writers, restored, cksums, conf.Type, i, sliceSize)
+			err = newSliceWriter(ctx, writers, restored, cksums, cksumType, i, sliceSize)
 			if err != nil {
 				break
 			}
@@ -510,7 +510,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 		errCksum := checkSliceChecksum(cksmReader, sl.cksum, sliceSize, ctx.lom.ObjName)
 		if errCksum != nil {
 			glog.Errorf("Slice %d corrupted: %v", i, errCksum)
-			err = newSliceWriter(ctx, writers, restored, cksums, conf.Type, i, sliceSize)
+			err = newSliceWriter(ctx, writers, restored, cksums, cksumType, i, sliceSize)
 			if err != nil {
 				break
 			}
@@ -594,7 +594,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 	args := &WriteArgs{
 		Reader:     src,
 		MD:         mainMeta.NewPack(),
-		Cksum:      cos.NewCksum(conf.Type, ""),
+		Cksum:      cos.NewCksum(cksumType, ""),
 		Generation: mainMeta.Generation,
 		Xact:       c.parent,
 	}

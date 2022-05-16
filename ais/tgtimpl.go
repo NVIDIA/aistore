@@ -235,7 +235,7 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 		var err error
 		workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
 		buf, slab := t.gmm.Alloc()
-		fileSize, cksum, err = cos.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumConf().Type)
+		fileSize, cksum, err = cos.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumType())
 		slab.Free(buf)
 		if err != nil {
 			return 0, err
@@ -256,7 +256,8 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 			lom.SetCksum(params.Cksum) // already computed somewhere else, use it
 		} else {
 			clone := lom.CloneMD(params.SrcFQN)
-			if cksum, err = clone.ComputeCksum(); err != nil {
+			if cksum, err = clone.ComputeCksum(lom.CksumType()); err != nil {
+				cluster.FreeLOM(clone)
 				return 0, err
 			}
 			lom.SetCksum(cksum.Clone())

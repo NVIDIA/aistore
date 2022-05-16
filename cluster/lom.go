@@ -156,6 +156,7 @@ func (lom *LOM) Bprops() *cmn.BucketProps { return lom.bck.Props }
 
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
+func (lom *LOM) CksumType() string            { return lom.bck.CksumConf().Type }
 func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 
 // as fs.PartsFQN
@@ -229,7 +230,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 		md  *lmeta
 		err error
 	)
-	if lom.CksumConf().Type == cos.ChecksumNone {
+	if lom.CksumType() == cos.ChecksumNone {
 		return nil
 	}
 	wmd := lom.WritePolicy()
@@ -261,13 +262,11 @@ func (lom *LOM) ValidateMetaChecksum() error {
 // Use lom.ValidateMetaChecksum() to check lom's checksum vs on-disk metadata.
 func (lom *LOM) ValidateContentChecksum() (err error) {
 	var (
-		cksumType = lom.CksumConf().Type
-
-		cksums = struct {
+		cksumType = lom.CksumType()
+		cksums    = struct {
 			stor *cos.Cksum     // stored with LOM
 			comp *cos.CksumHash // computed
 		}{stor: lom.md.Cksum}
-
 		reloaded bool
 	)
 recomp:
@@ -305,7 +304,7 @@ recomp:
 			}
 		} else { // type changed
 			cksums.stor = lom.md.Cksum
-			cksumType = lom.CksumConf().Type
+			cksumType = lom.CksumType()
 			goto recomp
 		}
 	}
@@ -315,30 +314,23 @@ ex:
 	return
 }
 
-func (lom *LOM) ComputeCksumIfMissing() (cksum *cos.Cksum, err error) {
-	var cksumHash *cos.CksumHash
-	if lom.md.Cksum != nil {
-		cksum = lom.md.Cksum
-		return
+func (lom *LOM) ComputeSetCksum() (*cos.Cksum, error) {
+	var (
+		cksum          *cos.Cksum
+		cksumHash, err = lom.ComputeCksum(lom.CksumType())
+	)
+	if err != nil {
+		return nil, err
 	}
-	cksumHash, err = lom.ComputeCksum()
-	if cksumHash != nil && err == nil {
+	if cksumHash != nil {
 		cksum = cksumHash.Clone()
-		lom.SetCksum(cksum)
 	}
-	return
+	lom.SetCksum(cksum)
+	return cksum, nil
 }
 
-func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cos.CksumHash, err error) {
-	var (
-		file      *os.File
-		cksumType string
-	)
-	if len(cksumTypes) > 0 {
-		cksumType = cksumTypes[0]
-	} else {
-		cksumType = lom.CksumConf().Type
-	}
+func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, err error) {
+	var file *os.File
 	if cksumType == cos.ChecksumNone {
 		return
 	}
