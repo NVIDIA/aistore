@@ -1,9 +1,10 @@
 #
 # Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
-from typing import Any, Mapping, List
+from typing import Any, Mapping, List, Iterator
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StrictInt, StrictStr
+import requests
 from .const import ProviderAIS
 
 
@@ -70,3 +71,28 @@ class BucketList(BaseModel):  # pylint: disable=too-few-public-methods,unused-va
     entries: List[BucketEntry]
     continuation_token: str
     flags: int
+
+
+class ObjStream(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+    class Config:  # pylint: disable=too-few-public-methods,unused-variable
+        validate_assignment = True
+        arbitrary_types_allowed = True
+
+    content_length: StrictInt = Field(default=-1, allow_mutation=False)
+    chunk_size: StrictInt = Field(default=1, allow_mutation=False)
+    e_tag: StrictStr = Field(..., allow_mutation=False)
+    e_tag_type: StrictStr = Field(..., allow_mutation=False)
+    stream: requests.Response
+
+    def read_all(self) -> bytes:
+        obj_arr = bytearray()
+        for chunk in self:
+            obj_arr.extend(chunk)
+        return bytes(obj_arr)
+
+    def __iter__(self) -> Iterator[bytes]:
+        try:
+            for chunk in self.stream.iter_content(chunk_size=self.chunk_size):
+                yield chunk
+        finally:
+            print(self.stream.close())

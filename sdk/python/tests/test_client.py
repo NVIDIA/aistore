@@ -18,6 +18,9 @@ from aistore.client.api import Client
 CLUSTER_ENDPOINT = os.environ.get("AIS_ENDPOINT", "http://localhost:8080")
 REMOTE_BUCKET = os.environ.get("BUCKET", "")
 
+OBJ_READ_TYPE_ALL = "read_all"
+OBJ_READ_TYPE_CHUNK = "chunk"
+
 
 class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
@@ -50,6 +53,19 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
         except requests.exceptions.HTTPError as e:
             self.assertEqual(e.response.status_code, 404)
 
+    def _test_get_obj(self, read_type, obj_name, exp_content):
+        chunk_size = random.randrange(1, len(exp_content) + 10)
+        stream = self.client.get_object(self.bck_name, obj_name, chunk_size=chunk_size)
+        self.assertEqual(stream.content_length, len(exp_content))
+        self.assertTrue(stream.e_tag != "")
+        if read_type == OBJ_READ_TYPE_ALL:
+            obj = stream.read_all()
+        else:
+            obj = b''
+            for chunk in stream:
+                obj += chunk
+        self.assertEqual(obj, exp_content)
+
     def test_put_head_get(self):
         self.client.create_bucket(self.bck_name)
         num_objs = 10
@@ -66,15 +82,8 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
             properties = self.client.head_object(self.bck_name, obj_name)
             self.assertEqual(properties['ais-version'], '1')
             self.assertEqual(properties['content-length'], str(len(content)))
-
-            obj = b''
-            stream = self.client.get_object(self.bck_name, obj_name)
-            self.assertEqual(stream.content_length, len(content))
-            self.assertTrue(stream.e_tag != "")
-            chunk_size = random.randrange(1, len(content) + 10)
-            for chunk in stream.iter_content(chunk_size=chunk_size):
-                obj += chunk
-            self.assertEqual(obj, content)
+            for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
+                self._test_get_obj(option, obj_name, content)
 
     def test_cluster_map(self):
         smap = self.client.get_cluster_info()

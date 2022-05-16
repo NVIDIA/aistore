@@ -2,7 +2,7 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
 #
 
-from typing import TypeVar, Type, List, NewType, BinaryIO
+from typing import TypeVar, Type, List, NewType
 import requests
 from urllib.parse import urljoin
 from pydantic.tools import parse_raw_as
@@ -19,41 +19,11 @@ from .const import (
     QParamWhat,
     QParamKeepBckMD,
 )
-from .msg import ActionMsg, Bck, BucketList, BucketEntry, Smap
+from .types import ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap
 from .errors import InvalidBckProvider
 
 T = TypeVar("T")
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
-
-
-# pylint: disable=unused-variable
-class ObjStream:
-    def __init__(self, length: int = 0, e_tag: str = "", e_tag_type: str = "", stream: BinaryIO = None):
-        self._content_length = length
-        self._stream = stream
-        self._e_tag = e_tag
-        self._e_tag_type = e_tag_type
-
-    @property
-    def content_length(self) -> int:
-        return self._content_length
-
-    @property
-    def e_tag(self) -> str:
-        return self._e_tag
-
-    @property
-    def e_tag_type(self) -> str:
-        return self._e_tag_type
-
-    def iter_content(self, chunk_size: int = 1) -> List[bytes]:
-        return self._stream.iter_content(chunk_size=chunk_size)
-
-    def read_all(self, chunk_size: int = 1) -> bytes:
-        obj = b''
-        for chunk in self._stream.iter_content(chunk_size=chunk_size):
-            obj += chunk
-        return obj
 
 
 # pylint: disable=unused-variable
@@ -347,7 +317,7 @@ class Client:
             params=params,
         ).headers
 
-    def get_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS, archpath: str = "") -> ObjStream:
+    def get_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS, archpath: str = "", chunk_size: int = 1) -> ObjStream:
         """
         Reads an object
 
@@ -356,6 +326,7 @@ class Client:
             obj_name (str): Name of an object in the bucket
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
             archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
+            chunk_size (int, optional): chunk_size to use while reading from stream
 
         Returns:
             The stream of bytes to read an object or a file inside an archive.
@@ -371,7 +342,7 @@ class Client:
         length = int(resp.headers.get("content-length", 0))
         e_tag = resp.headers.get("ais-checksum-value", "")
         e_tag_type = resp.headers.get("ais-checksum-type", "")
-        return ObjStream(length, e_tag, e_tag_type, resp)
+        return ObjStream(content_length=length, e_tag=e_tag, e_tag_type=e_tag_type, stream=resp, chunk_size=chunk_size)
 
     def put_object(self, bck_name: str, obj_name: str, path: str, provider: str = ProviderAIS) -> Header:
         """
