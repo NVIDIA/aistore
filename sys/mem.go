@@ -8,6 +8,7 @@ type MemStat struct {
 	Total      uint64
 	Used       uint64
 	Free       uint64
+	BuffCache  uint64
 	ActualFree uint64
 	ActualUsed uint64
 	SwapTotal  uint64

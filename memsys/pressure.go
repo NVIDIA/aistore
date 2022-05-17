@@ -33,6 +33,17 @@ var memPressureText = map[int]string{
 	OOM:              "OOM",
 }
 
+// NOTE: used instead of mem.Free as a more realistic estimate where
+// mem.BuffCache - kernel buffers and page caches that can be reclaimed -
+// is always included unless the resulting number exceeds mem.ActualFree
+// (which is unlikely)
+func memFree(mem *sys.MemStat) (free uint64) {
+	if free = mem.Free + mem.BuffCache; free > mem.ActualFree {
+		free = mem.ActualFree
+	}
+	return
+}
+
 // update swapping state
 func (r *MMSA) updSwap(mem *sys.MemStat) {
 	var ncrit int32
@@ -57,7 +68,7 @@ func (r *MMSA) Pressure(mems ...*sys.MemStat) (pressure int) {
 		debug.AssertNoErr(err)
 		mem = &memStat
 	}
-
+	free := memFree(mem)
 	ncrit := r.swap.crit.Load()
 	switch {
 	case ncrit > 2:
@@ -66,14 +77,14 @@ func (r *MMSA) Pressure(mems ...*sys.MemStat) (pressure int) {
 		return PressureExtreme
 	case ncrit > 0:
 		return PressureHigh
-	case mem.Free <= r.MinFree:
+	case free <= r.MinFree:
 		return PressureHigh
-	case mem.Free >= r.lowWM:
+	case free > r.lowWM+(r.lowWM>>4):
 		return PressureLow
 	}
 
 	pressure = PressureModerate
-	x := (mem.Free - r.MinFree) * 100 / (r.lowWM - r.MinFree)
+	x := (free - r.MinFree) * 100 / (r.lowWM - r.MinFree)
 	if x < highLowThreshold {
 		pressure = PressureHigh
 	}

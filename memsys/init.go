@@ -119,7 +119,8 @@ func (r *MMSA) isPage() bool { return r.slabIncStep == PageSlabIncStep }
 func (r *MMSA) RegWithHK() {
 	d := r.TimeIval
 	mem, _ := sys.Mem()
-	if mem.Free < r.lowWM || mem.Free < minMemFree {
+	free := memFree(&mem)
+	if free < r.lowWM || free < minMemFree {
 		d >>= 1
 	}
 	hk.Reg(r.Name+hk.NameSuffix, r.hkcb, d)
@@ -133,7 +134,12 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 	}
 
 	// 2. compute min-free (must remain free at all times) and low watermark
-	mem, _ := sys.Mem()
+	mem, errM := sys.Mem()
+	if errM != nil {
+		debug.AssertNoErr(errM)
+		cos.Errorf("%v", errM)
+	}
+	free := memFree(&mem)
 	if r.MinPctTotal > 0 {
 		x := mem.Total * uint64(r.MinPctTotal) / 100
 		if r.MinFree == 0 {
@@ -143,7 +149,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 		}
 	}
 	if r.MinPctFree > 0 {
-		x := mem.Free * uint64(r.MinPctFree) / 100
+		x := free * uint64(r.MinPctFree) / 100
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
@@ -151,16 +157,16 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 		}
 	}
 	if maxUse > 0 {
-		r.MinFree = uint64(cos.MaxI64(int64(r.MinFree), int64(mem.Free)-maxUse))
+		r.MinFree = uint64(cos.MaxI64(int64(r.MinFree), int64(free)-maxUse))
 	}
 	if r.MinFree == 0 {
 		r.MinFree = minMemFree
 	}
-	r.lowWM = (r.MinFree+mem.Free)>>1 - (r.MinFree+mem.Free)>>4 // a quarter of
+	r.lowWM = (r.MinFree+free)>>1 - (r.MinFree+free)>>4 // a quarter of
 	r.lowWM = cos.MaxU64(r.lowWM, r.MinFree+minMemFreeTests)
 
 	// 3. validate min-free & low-wm
-	if mem.Free < cos.MinU64(r.MinFree*2, r.MinFree+minMemFree) {
+	if free < cos.MinU64(r.MinFree*2, r.MinFree+minMemFree) {
 		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&mem), readme)
 		cos.Errorf("%v", err)
 		r.lowWM = cos.MinU64(r.lowWM, r.MinFree+minMemFreeTests)

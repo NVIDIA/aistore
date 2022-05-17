@@ -15,7 +15,6 @@ import (
 
 // HostMem returns memory and swap stats for a host OS
 func HostMem() (MemStat, error) {
-	var caches uint64
 	mem := MemStat{ActualFree: math.MaxUint64}
 
 	setValue := func(name, valStr string) {
@@ -32,7 +31,7 @@ func HostMem() (MemStat, error) {
 		case "MemAvailable":
 			mem.ActualFree = val
 		case "Cached", "Buffers":
-			caches += val
+			mem.BuffCache += val
 		case "SwapTotal":
 			mem.SwapTotal = val
 		case "SwapFree":
@@ -54,8 +53,8 @@ func HostMem() (MemStat, error) {
 		return mem, err
 	}
 
-	if mem.ActualFree == math.MaxUint64 {
-		mem.ActualFree = mem.Free + caches
+	if mem.ActualFree == math.MaxUint64 { // remains unassigned (see above)
+		mem.ActualFree = mem.Free + mem.BuffCache
 	}
 	mem.Used = mem.Total - mem.Free
 	mem.ActualUsed = mem.Total - mem.ActualFree
@@ -82,7 +81,8 @@ func ContainerMem() (MemStat, error) {
 		return mem, nil
 	}
 
-	// this one is approximate value that includes caches
+	// this one is an approximate value that includes buff/cache
+	// (ie., kernel buffers and page caches that can be reclaimed)
 	memUsed, err := cos.ReadOneUint64(contMemUsedPath)
 	if err != nil {
 		return mem, nil
@@ -91,7 +91,7 @@ func ContainerMem() (MemStat, error) {
 	mem.Used = memUsed
 	mem.Free = mem.Total - mem.Used
 
-	// calculate memory used for caches
+	// calculate memory used for buffcache
 	err = cos.ReadLines(contMemStatPath, func(line string) error {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
@@ -101,6 +101,7 @@ func ContainerMem() (MemStat, error) {
 			val, err := strconv.ParseUint(fields[1], 10, 64)
 			if err == nil {
 				memUsed -= val
+				mem.BuffCache += val
 			}
 			return io.EOF
 		}

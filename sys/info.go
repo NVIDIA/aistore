@@ -8,17 +8,19 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 func FetchSysInfo() cos.SysInfo {
-	var (
-		osMem, _ = Mem()
-		proc, _  = ProcessStats(os.Getpid())
-	)
+	mem, err := Mem()
+	debug.AssertNoErr(err)
+	proc, errP := ProcessStats(os.Getpid())
+	debug.AssertNoErr(errP)
+
 	return cos.SysInfo{
-		MemAvail:   osMem.Total,
+		MemAvail:   mem.ActualFree,
 		MemUsed:    proc.Mem.Resident,
-		PctMemUsed: float64(proc.Mem.Resident) * 100 / float64(osMem.Total),
+		PctMemUsed: float64(proc.Mem.Resident) * 100 / float64(mem.Total),
 		PctCPUUsed: proc.CPU.Percent,
 	}
 }
