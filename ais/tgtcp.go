@@ -239,7 +239,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.htrun.httpdaeget(w, r)
 	case apc.GetWhatSysInfo:
 		tsysinfo := apc.TSysInfo{
-			SysInfo:      sys.FetchSysInfo(),
+			MemCPUInfo:   sys.GetMemCPU(),
 			CapacityInfo: fs.CapStatusAux(),
 		}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
@@ -257,7 +257,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := &stats.DaemonStatus{
 			Snode:       t.htrun.si,
 			SmapVersion: t.owner.smap.get().Version,
-			SysInfo:     sys.FetchSysInfo(),
+			MemCPUInfo:  sys.GetMemCPU(),
 			Stats:       t.statsT.CoreStats(),
 			RebSnap:     rebSnap,
 			DeployedOn:  deploymentType(),

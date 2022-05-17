@@ -132,7 +132,7 @@ type (
 		Snode       *cluster.Snode `json:"snode"`
 		Stats       *CoreStats     `json:"daemon_stats"`
 		Capacity    fs.MPCap       `json:"capacity"`
-		SysInfo     cos.SysInfo    `json:"sys_info"`
+		MemCPUInfo  cos.MemCPUInfo `json:"sys_info"`
 		SmapVersion int64          `json:"smap_version,string"`
 		RebSnap     *RebalanceSnap `json:"rebalance_snap,omitempty"`
 		Status      string         `json:"status"`

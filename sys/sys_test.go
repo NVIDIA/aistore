@@ -49,7 +49,8 @@ func TestLimitMaxProc(t *testing.T) {
 }
 
 func TestMemoryStats(t *testing.T) {
-	mem, err := Mem()
+	var mem MemStat
+	err := mem.Get()
 	tassert.CheckFatal(t, err)
 
 	tassert.Errorf(t, mem.Total > 0 && mem.Free > 0 && mem.ActualFree > 0 && mem.ActualUsed > 0,
@@ -63,13 +64,14 @@ func TestMemoryStats(t *testing.T) {
 
 	checkSkipOS(t, "darwin")
 
-	memOS, err := HostMem()
+	var memHost, memCont MemStat
+	err = memHost.host()
 	tassert.CheckFatal(t, err)
-	memCont, err := ContainerMem()
+	err = memCont.container()
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, memOS.Total >= memCont.Total,
-		"Container's memory stats are greater than host's ones.\nOS: %+v\nContainer: %+v", memOS, memCont)
-	if memOS.SwapTotal == 0 && memOS.SwapFree == 0 {
+	tassert.Errorf(t, memHost.Total >= memCont.Total,
+		"Container's memory total is greater than the host one.\nOS: %+v\nContainer: %+v", memHost, memCont)
+	if memHost.SwapTotal == 0 && memHost.SwapFree == 0 {
 		// Not an error(e.g, Jenkins VM has swap off) - just a warning
 		t.Logf("Either swap is off or failed to read its stats")
 	}

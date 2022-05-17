@@ -317,7 +317,7 @@ func (ds *dsorterMem) loadContent() extract.LoadContentFunc {
 
 // createShardsLocally waits until it's given the signal to start creating
 // shards, then creates shards in parallel.
-func (ds *dsorterMem) createShardsLocally() (err error) {
+func (ds *dsorterMem) createShardsLocally() error {
 	phaseInfo := &ds.m.creationPhase
 
 	ds.creationPhase.adjuster.read.start()
@@ -335,17 +335,17 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 	metrics.mu.Unlock()
 
 	var (
+		mem    sys.MemStat
 		wg     = &sync.WaitGroup{}
 		errCh  = make(chan error, 2)
 		stopCh = cos.NewStopCh()
 	)
 	defer stopCh.Close()
 
-	mem, err := sys.Mem()
-	if err != nil {
+	if err := mem.Get(); err != nil {
 		return err
 	}
-	maxMemoryToUse := calcMaxMemoryUsage(ds.m.rs.MaxMemUsage, mem)
+	maxMemoryToUse := calcMaxMemoryUsage(ds.m.rs.MaxMemUsage, &mem)
 	sa := newInmemShardAllocator(maxMemoryToUse - mem.ActualUsed)
 
 	// read

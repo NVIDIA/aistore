@@ -48,7 +48,7 @@ type (
 	StringSet map[string]struct{}
 	SimpleKVs map[string]string
 
-	SysInfo struct {
+	MemCPUInfo struct {
 		MemUsed    uint64  `json:"mem_used"`
 		MemAvail   uint64  `json:"mem_avail"`
 		PctMemUsed float64 `json:"pct_mem_used"`

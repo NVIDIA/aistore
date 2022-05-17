@@ -124,12 +124,12 @@ func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hide
 
 	table := newTemplateTable(headers...)
 	for _, status := range ps {
-		memUsed := fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed)
-		if status.SysInfo.PctMemUsed == 0 {
+		memUsed := fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctMemUsed)
+		if status.MemCPUInfo.PctMemUsed == 0 {
 			memUsed = "-"
 		}
-		memAvail := cos.UnsignedB2S(status.SysInfo.MemAvail, 2)
-		if status.SysInfo.MemAvail == 0 {
+		memAvail := cos.UnsignedB2S(status.MemCPUInfo.MemAvail, 2)
+		if status.MemCPUInfo.MemAvail == 0 {
 			memAvail = "-"
 		}
 		upns := extractStat(status.Stats, "up.ns.time")
@@ -192,11 +192,11 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 	for _, status := range ts {
 		row := []string{
 			status.Snode.ID(),
-			fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed),
-			cos.UnsignedB2S(status.SysInfo.MemAvail, 2),
+			fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctMemUsed),
+			cos.UnsignedB2S(status.MemCPUInfo.MemAvail, 2),
 			fmt.Sprintf("%.2f%%", calcCapPercentage(status)),
 			cos.UnsignedB2S(calcCap(status), 3),
-			fmt.Sprintf("%.2f%%", status.SysInfo.PctCPUUsed),
+			fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctCPUUsed),
 			fmtXactStatus(status.RebSnap),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
 			status.DeployedOn,

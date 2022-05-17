@@ -769,13 +769,12 @@ func (m *Manager) String() string {
 }
 
 func (m *Manager) freeMemory() uint64 {
-	curMem, err := sys.Mem()
-	if err != nil {
+	var mem sys.MemStat
+	if err := mem.Get(); err != nil {
 		return 0
 	}
-
-	maxMemoryToUse := calcMaxMemoryUsage(m.rs.MaxMemUsage, curMem)
-	return maxMemoryToUse - curMem.ActualUsed
+	maxMemoryToUse := calcMaxMemoryUsage(m.rs.MaxMemUsage, &mem)
+	return maxMemoryToUse - mem.ActualUsed
 }
 
 func (m *Manager) react(reaction, msg string) error {
@@ -812,7 +811,7 @@ func (bsi *buildingShardInfo) NewPack(mm *memsys.MMSA) []byte {
 	return packer.Bytes()
 }
 
-func calcMaxMemoryUsage(maxUsage cos.ParsedQuantity, mem sys.MemStat) uint64 {
+func calcMaxMemoryUsage(maxUsage cos.ParsedQuantity, mem *sys.MemStat) uint64 {
 	switch maxUsage.Type {
 	case cos.QuantityPercent:
 		return maxUsage.Value * (mem.Total / 100)

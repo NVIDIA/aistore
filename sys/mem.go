@@ -4,6 +4,17 @@
  */
 package sys
 
+import (
+	"fmt"
+	"math"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
+)
+
+// Memory stats for the host OS or for container, depending on where the app is running.
+// For the host, returns an error if memory cannot be read. If the function fails to read
+// container's stats, it returns host memory. Swap stats, however, are _always_ host stats.
+
 type MemStat struct {
 	Total      uint64
 	Used       uint64
@@ -16,14 +27,21 @@ type MemStat struct {
 	SwapUsed   uint64
 }
 
-// Mem returns memory and swap stats for host OS or for container depending on
-// where the app is running: on hardware or inside any container.
-// Returns and error if memory stats cannot be read. If the function fails to
-// read container's stats, it returns host OS stats
-// NOTE: Swap stats is always host OS ones.
-func Mem() (MemStat, error) {
+var mem0 = MemStat{ActualFree: math.MaxUint64}
+
+func (mem *MemStat) Get() error {
 	if !containerized {
-		return HostMem()
+		return mem.host()
 	}
-	return ContainerMem()
+	return mem.container()
+}
+
+func (mem *MemStat) String() string {
+	var (
+		used      = cos.B2S(int64(mem.Used), 0)
+		free      = cos.B2S(int64(mem.Free), 0)
+		buffcache = cos.B2S(int64(mem.BuffCache), 0)
+		actfree   = cos.B2S(int64(mem.ActualFree), 0)
+	)
+	return fmt.Sprintf("used %s, free %s, buffcache %s, actfree %s", used, free, buffcache, actfree)
 }

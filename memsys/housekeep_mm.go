@@ -78,10 +78,10 @@ func (r *MMSA) hkcb() time.Duration {
 	r.refreshStatsSortIdle()
 
 	// 2. update swapping state and compute mem-pressure ranking
-	mem, err := sys.Mem()
+	err := r.mem.Get()
 	debug.AssertNoErr(err)
-	r.updSwap(&mem)
-	pressure := r.Pressure(&mem)
+	r.updSwap(&r.mem)
+	pressure := r.Pressure(&r.mem)
 
 	// 3. memory is enough, free only those that are idle for a while
 	if pressure == PressureLow {

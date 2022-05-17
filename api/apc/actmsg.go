@@ -55,12 +55,12 @@ type (
 		PctUsed float64 `json:"pct_fs_used"`
 	}
 	TSysInfo struct {
-		cos.SysInfo
+		cos.MemCPUInfo
 		CapacityInfo
 	}
 	ClusterSysInfo struct {
-		Proxy  map[string]*cos.SysInfo `json:"proxy"`
-		Target map[string]*TSysInfo    `json:"target"`
+		Proxy  map[string]*cos.MemCPUInfo `json:"proxy"`
+		Target map[string]*TSysInfo       `json:"target"`
 	}
 	ClusterSysInfoRaw struct {
 		Proxy  cos.JSONRawMsgs `json:"proxy"`

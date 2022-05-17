@@ -821,8 +821,8 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 			return "", err
 		}
 
-		memStat := sys.MemStat{Total: daemonStatus.SysInfo.MemAvail + daemonStatus.SysInfo.MemUsed}
-		dsortAvailMemory := calcMaxMemoryUsage(parsedRS.MaxMemUsage, memStat)
+		memStat := sys.MemStat{Total: daemonStatus.MemCPUInfo.MemAvail + daemonStatus.MemCPUInfo.MemUsed}
+		dsortAvailMemory := calcMaxMemoryUsage(parsedRS.MaxMemUsage, &memStat)
 		totalAvailMemory += dsortAvailMemory
 		moreThanThreshold = moreThanThreshold && dsortAvailMemory > uint64(dsorterMemThreshold)
 	}

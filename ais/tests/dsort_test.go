@@ -969,6 +969,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 			fileInTarballSize: cos.MiB,
 			fileInTarballCnt:  5,
 		}
+		mem sys.MemStat
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -983,7 +984,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// Get current memory
-	mem, err := sys.Mem()
+	err := mem.Get()
 	tassert.CheckFatal(t, err)
 	df.maxMemUsage = cos.UnsignedB2S(mem.ActualUsed+500*cos.MiB, 2)
 
@@ -1029,6 +1030,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 			fileInTarballCnt:  5,
 			extension:         cos.ExtTarTgz,
 		}
+		mem sys.MemStat
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -1043,7 +1045,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// Get current memory
-	mem, err := sys.Mem()
+	err := mem.Get()
 	tassert.CheckFatal(t, err)
 	df.maxMemUsage = cos.UnsignedB2S(mem.ActualUsed+300*cos.MiB, 2)
 
@@ -1645,9 +1647,10 @@ func TestDistributedSortOnOOM(t *testing.T) {
 					fileInTarballSize: 10 * cos.MiB,
 					maxMemUsage:       "80%",
 				}
+				mem sys.MemStat
 			)
 
-			mem, err := sys.Mem()
+			err := mem.Get()
 			tassert.CheckFatal(t, err)
 
 			// Calculate number of shards to cause OOM and overestimate it to make sure

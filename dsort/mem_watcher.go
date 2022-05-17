@@ -59,8 +59,8 @@ func newMemoryWatcher(m *Manager, maxMemoryUsage uint64) *memoryWatcher {
 }
 
 func (mw *memoryWatcher) watch() error {
-	mem, err := sys.Mem()
-	if err != nil {
+	var mem sys.MemStat
+	if err := mem.Get(); err != nil {
 		return err
 	}
 	mw.memoryUsed.Store(mem.ActualUsed)
@@ -92,8 +92,8 @@ func (mw *memoryWatcher) watchReserved() {
 	for {
 		select {
 		case <-mw.reserved.ticker.C:
-			curMem, err := sys.Mem()
-			if err == nil {
+			var curMem sys.MemStat
+			if err := curMem.Get(); err == nil {
 				mw.memoryUsed.Store(curMem.ActualUsed)
 
 				unreserve := true
@@ -133,8 +133,8 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 	for {
 		select {
 		case <-mw.excess.ticker.C:
-			curMem, err := sys.Mem()
-			if err != nil {
+			var curMem sys.MemStat
+			if err := curMem.Get(); err != nil {
 				continue
 			}
 

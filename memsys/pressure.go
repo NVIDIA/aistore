@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -35,7 +34,7 @@ var memPressureText = map[int]string{
 
 // NOTE: used instead of mem.Free as a more realistic estimate where
 // mem.BuffCache - kernel buffers and page caches that can be reclaimed -
-// is always included unless the resulting number exceeds mem.ActualFree
+// is always included _unless_ the resulting number exceeds mem.ActualFree
 // (which is unlikely)
 func memFree(mem *sys.MemStat) (free uint64) {
 	if free = mem.Free + mem.BuffCache; free > mem.ActualFree {
@@ -64,9 +63,8 @@ func (r *MMSA) Pressure(mems ...*sys.MemStat) (pressure int) {
 	if len(mems) > 0 {
 		mem = mems[0]
 	} else {
-		memStat, err := sys.Mem()
-		debug.AssertNoErr(err)
-		mem = &memStat
+		mem = &sys.MemStat{}
+		_ = mem.Get()
 	}
 	free := memFree(mem)
 	ncrit := r.swap.crit.Load()

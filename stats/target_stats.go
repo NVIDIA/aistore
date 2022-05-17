@@ -81,6 +81,7 @@ type (
 		MPCap   fs.MPCap       `json:"capacity"`
 		lines   []string
 		disk    ios.AllDiskStats
+		mem     sys.MemStat
 		standby bool
 	}
 )
@@ -262,11 +263,10 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.logDiskStats()
 
 	// 5. memory pressure
-	memStat, err := sys.Mem()
-	debug.AssertNoErr(err)
+	_ = r.mem.Get()
 	mm := r.T.PageMM()
-	if p := mm.Pressure(&memStat); p >= memsys.PressureHigh {
-		r.lines = append(r.lines, mm.Str(&memStat))
+	if p := mm.Pressure(&r.mem); p >= memsys.PressureHigh {
+		r.lines = append(r.lines, mm.Str(&r.mem))
 	}
 
 	// 5. log

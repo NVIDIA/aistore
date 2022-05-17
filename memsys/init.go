@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/sys"
 )
 
 const (
@@ -118,8 +117,8 @@ func (r *MMSA) isPage() bool { return r.slabIncStep == PageSlabIncStep }
 
 func (r *MMSA) RegWithHK() {
 	d := r.TimeIval
-	mem, _ := sys.Mem()
-	free := memFree(&mem)
+	_ = r.mem.Get()
+	free := memFree(&r.mem)
 	if free < r.lowWM || free < minMemFree {
 		d >>= 1
 	}
@@ -134,14 +133,13 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 	}
 
 	// 2. compute min-free (must remain free at all times) and low watermark
-	mem, errM := sys.Mem()
-	if errM != nil {
-		debug.AssertNoErr(errM)
-		cos.Errorf("%v", errM)
+	err = r.mem.Get()
+	if err != nil {
+		cos.Errorf("%v", err)
 	}
-	free := memFree(&mem)
+	free := memFree(&r.mem)
 	if r.MinPctTotal > 0 {
-		x := mem.Total * uint64(r.MinPctTotal) / 100
+		x := r.mem.Total * uint64(r.MinPctTotal) / 100
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
@@ -167,7 +165,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 
 	// 3. validate min-free & low-wm
 	if free < cos.MinU64(r.MinFree*2, r.MinFree+minMemFree) {
-		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&mem), readme)
+		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&r.mem), readme)
 		cos.Errorf("%v", err)
 		r.lowWM = cos.MinU64(r.lowWM, r.MinFree+minMemFreeTests)
 		r.info = ""
@@ -179,7 +177,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 	}
 
 	// 5. final construction steps
-	r.swap.size.Store(mem.SwapUsed)
+	r.swap.size.Store(r.mem.SwapUsed)
 	r.optDepth.Store(optDepth)
 	r.toGC.Store(0)
 
@@ -212,7 +210,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 	}
 
 	if gmm != nil {
-		cos.Infof("%s started", r.Str(&mem))
+		cos.Infof("%s started", r.Str(&r.mem))
 	}
 	return
 }

@@ -1,6 +1,6 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
 
@@ -11,13 +11,20 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-func FetchSysInfo() cos.SysInfo {
-	mem, err := Mem()
-	debug.AssertNoErr(err)
-	proc, errP := ProcessStats(os.Getpid())
-	debug.AssertNoErr(errP)
+// TODO: add more mem and CPU stats and details
 
-	return cos.SysInfo{
+func GetMemCPU() cos.MemCPUInfo {
+	var (
+		mem MemStat
+		err error
+	)
+	err = mem.Get()
+	debug.AssertNoErr(err)
+
+	proc, err := ProcessStats(os.Getpid())
+	debug.AssertNoErr(err)
+
+	return cos.MemCPUInfo{
 		MemAvail:   mem.ActualFree,
 		MemUsed:    proc.Mem.Resident,
 		PctMemUsed: float64(proc.Mem.Resident) * 100 / float64(mem.Total),

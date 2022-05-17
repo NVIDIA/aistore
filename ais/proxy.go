@@ -2311,7 +2311,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case apc.GetWhatConfig, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats:
 		p.htrun.httpdaeget(w, r)
 	case apc.GetWhatSysInfo:
-		p.writeJSON(w, r, sys.FetchSysInfo(), what)
+		p.writeJSON(w, r, sys.GetMemCPU(), what)
 	case apc.GetWhatSmap:
 		const max = 16
 		var (
@@ -2340,7 +2340,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := &stats.DaemonStatus{
 			Snode:       p.htrun.si,
 			SmapVersion: p.owner.smap.get().Version,
-			SysInfo:     sys.FetchSysInfo(),
+			MemCPUInfo:  sys.GetMemCPU(),
 			Stats:       p.statsT.CoreStats(),
 			DeployedOn:  deploymentType(),
 			Version:     daemon.version,

@@ -158,6 +158,7 @@ type (
 		slabIncStep   int64
 		maxSlabSize   int64
 		defBufSize    int64
+		mem           sys.MemStat
 		numSlabs      int
 		// atomic state
 		toGC     atomic.Int64 // accumulates over time and triggers GC upon reaching spec-ed limit
@@ -190,23 +191,21 @@ type (
 //////////
 
 func (r *MMSA) String() string {
-	mem, err := sys.Mem()
+	var (
+		mem sys.MemStat
+		err error
+	)
+	err = mem.Get()
 	debug.AssertNoErr(err)
 	return r.Str(&mem)
 }
 
 func (r *MMSA) Str(mem *sys.MemStat) string {
-	var (
-		used, free = cos.B2S(int64(mem.Used), 0), cos.B2S(int64(mem.Free), 0)
-		buffcache  = cos.B2S(int64(mem.BuffCache), 0)
-		actfree    = cos.B2S(int64(mem.ActualFree), 0)
-		sp         = r.pressure2S(r.Pressure(mem))
-	)
+	sp := r.pressure2S(r.Pressure(mem))
 	if r.info == "" {
 		r.info = fmt.Sprintf("(min-free %s, low-wm %s)", cos.B2S(int64(r.MinFree), 0), cos.B2S(int64(r.lowWM), 0))
 	}
-	return fmt.Sprintf("%s[(used %s, free %s, buffcache %s, actfree %s), %s, %s]", r.Name, used, free, buffcache, actfree,
-		r.info, sp)
+	return fmt.Sprintf("%s[(%s), %s, %s]", r.Name, mem.String(), r.info, sp)
 }
 
 // allocate SGL

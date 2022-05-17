@@ -81,12 +81,11 @@ type (
 var _ dsorter = (*dsorterGeneral)(nil)
 
 func newDSorterGeneral(m *Manager) (*dsorterGeneral, error) {
-	// Memory watcher
-	mem, err := sys.Mem()
-	if err != nil {
+	var mem sys.MemStat
+	if err := mem.Get(); err != nil {
 		return nil, err
 	}
-	maxMemoryToUse := calcMaxMemoryUsage(m.rs.MaxMemUsage, mem)
+	maxMemoryToUse := calcMaxMemoryUsage(m.rs.MaxMemUsage, &mem)
 	ds := &dsorterGeneral{
 		m:  m,
 		mw: newMemoryWatcher(m, maxMemoryToUse),
