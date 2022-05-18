@@ -105,25 +105,26 @@ func (c *putJogger) freeResources() {
 }
 
 func (c *putJogger) processRequest(req *request) {
-	var memRequired int64
 	lom, err := req.LIF.LOM()
+	if err != nil {
+		return
+	}
+
+	c.parent.IncPending()
 	defer func() {
 		if req.Callback != nil {
 			req.Callback(lom, err)
 		}
 		cluster.FreeLOM(lom)
+		c.parent.DecPending()
 	}()
-	if err != nil {
-		return
-	}
-	c.parent.IncPending()
-	defer c.parent.DecPending()
+
 	if req.Action == ActSplit {
 		if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 			return
 		}
 		ecConf := lom.Bprops().EC
-		memRequired = lom.SizeBytes() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
+		memRequired := lom.SizeBytes() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
 		c.toDisk = useDisk(memRequired)
 	}
 

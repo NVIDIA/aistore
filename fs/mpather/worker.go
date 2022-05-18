@@ -95,10 +95,10 @@ func (w *worker) work() error {
 		select {
 		case lif := <-w.workCh:
 			lom, err := lif.LOM()
-			if err == nil {
-				err = lom.Load(false /*cache it*/, false)
+			if err != nil {
+				break
 			}
-			if err == nil {
+			if err = lom.Load(false /*cache it*/, false); err == nil {
 				w.opts.Callback(lom, buf)
 			} else {
 				cluster.FreeLOM(lom)

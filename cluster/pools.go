@@ -33,13 +33,12 @@ func AllocLOM(objName string) *LOM {
 		return &LOM{ObjName: objName}
 	}
 	lom := v.(*LOM)
-	debug.AssertMsg(lom.ObjName == "" && lom.mpathInfo == nil, lom.ObjName)
 	lom.ObjName = objName
 	return lom
 }
 
 func FreeLOM(lom *LOM) {
-	debug.AssertMsg(lom.ObjName != "" || lom.FQN != "", lom.StringEx())
+	debug.Assertf(lom.ObjName != "" || lom.FQN != "", "%q, %q", lom.ObjName, lom.FQN)
 	*lom = lom0
 	lomPool.Put(lom)
 }

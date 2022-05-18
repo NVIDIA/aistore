@@ -67,6 +67,9 @@ func freeRestoreCtx(ctx *restoreCtx) {
 
 func (*getJogger) newCtx(req *request) (*restoreCtx, error) {
 	lom, err := req.LIF.LOM()
+	if err != nil {
+		return nil, err
+	}
 	ctx := allocRestoreCtx()
 	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/)
 	ctx.lom = lom
@@ -123,6 +126,10 @@ func (*getJogger) finalizeReq(req *request, err error) {
 func (c *getJogger) ec(req *request) {
 	debug.Assert(req.Action == ActRestore)
 	ctx, err := c.newCtx(req)
+	if ctx == nil {
+		debug.Assert(err != nil)
+		return
+	}
 	if err == nil {
 		err = c.restore(ctx)
 		c.parent.stats.updateDecodeTime(time.Since(req.tm), err != nil)

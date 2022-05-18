@@ -96,8 +96,8 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 				lom, err := lif.LOM()
 				if err == nil {
 					lom.flushCold(md, atime)
+					FreeLOM(lom)
 				}
-				FreeLOM(lom)
 			}
 			cache.Delete(hkey)
 			evictedCnt++

@@ -156,12 +156,15 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 	b, objName := cmn.ParseUname(lif.Uname)
 	lom = AllocLOM(objName)
 	if err = lom.InitBck(&b); err != nil {
+		FreeLOM(lom)
 		return
 	}
 	if bprops := lom.Bprops(); bprops == nil {
 		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.BID)
+		FreeLOM(lom)
 	} else if bprops.BID != lif.BID {
 		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.BID)
+		FreeLOM(lom)
 	}
 	return
 }
