@@ -1,7 +1,7 @@
 // Package xs contains eXtended actions (xactions) except storage services
 // (mirror, ec) and extensions (downloader, lru).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -13,9 +13,17 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+)
+
+// tunables
+const (
+	bmvAvgWait  = 2 * time.Minute
+	bmvMaxWait  = 2 * time.Hour
+	bmvMaxSleep = 30 * time.Second
 )
 
 type (
@@ -98,21 +106,32 @@ func (r *bckRename) FromTo() (*cluster.Bck, *cluster.Bck) { return r.bckFrom, r.
 // NOTE: assuming that rebalance takes longer than resilvering
 func (r *bckRename) Run(wg *sync.WaitGroup) {
 	var (
-		onlyRunning bool
-		finished    bool
-		flt         = xreg.XactFilter{ID: r.rebID, Kind: apc.ActRebalance, OnlyRunning: &onlyRunning}
+		total time.Duration
+		flt   = xreg.XactFilter{ID: r.rebID, Kind: apc.ActRebalance}
+		sleep = cos.ProbingFrequency(bmvAvgWait)
 	)
 	glog.Infoln(r.Name())
 	wg.Done()
-	for !finished {
-		time.Sleep(10 * time.Second)
+loop:
+	for total < bmvMaxWait {
+		time.Sleep(sleep)
+		total += sleep
 		rebStats, err := xreg.GetSnap(flt)
 		debug.AssertNoErr(err)
 		for _, stat := range rebStats {
-			finished = finished || stat.Finished()
+			if stat.Finished() || stat.IsAborted() {
+				break loop
+			}
+		}
+		if total > bmvAvgWait {
+			sleep = cos.MinDuration(sleep+sleep/2, bmvMaxSleep)
 		}
 	}
-
+	var err error
+	if total >= bmvMaxWait {
+		err = fmt.Errorf("%s: timeout", r)
+		glog.Error(err)
+	}
 	r.t.BMDVersionFixup(nil, r.bckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
-	r.Finish(nil)
+	r.Finish(err)
 }

@@ -20,14 +20,12 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-const XactPollTime = time.Second
-
 // tunables
 const (
 	xactDefWaitTimeShort = time.Minute
 	xactDefWaitTimeLong  = 7 * 24 * time.Hour
-	xactMinProbingFreq   = 30 * time.Second
-	xactMaxPollTime      = time.Hour
+	xactMaxProbingFreq   = 30 * time.Second
+	xactMaxPollTime      = 2 * time.Minute
 	xactMinPollTime      = 2 * time.Second
 	numConsecutiveIdle   = 3 // number of consecutive 'idle' states
 )
@@ -171,7 +169,7 @@ func initPollingTimes(args XactReqArgs) (time.Duration, time.Duration) {
 	case args.Timeout < 0:
 		total = xactDefWaitTimeLong
 	}
-	return total, cos.MinDuration(xactMinProbingFreq, cos.ProbingFrequency(total))
+	return total, cos.MinDuration(xactMaxProbingFreq, cos.ProbingFrequency(total))
 }
 
 func backoffPoll(dur time.Duration) time.Duration {

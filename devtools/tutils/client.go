@@ -42,9 +42,9 @@ const (
 	waitClusterStartup = 20 * time.Second
 )
 
-const (
-	evictPrefetchTimeout = 2 * time.Minute
-)
+const evictPrefetchTimeout = 2 * time.Minute
+
+const xactPollSleep = time.Second
 
 type PutObjectsArgs struct {
 	ProxyURL  string
@@ -482,7 +482,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 		return
 	}
 
-	waitForRebalanceToStart(baseParams)
+	_waitReToStart(baseParams)
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
@@ -519,14 +519,10 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 }
 
 func WaitForResilver(t *testing.T, baseParams api.BaseParams, timeouts ...time.Duration) {
-	timeout := 10 * api.XactPollTime
+	timeout := cos.MaxDuration(10*xactPollSleep, 10*time.Second)
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-
-	// TODO -- FIXME: concurrency trouble when tests disable multiple mountpaths back to back
-	time.Sleep(5 * time.Second)
-
 	xactArgs := api.XactReqArgs{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
 	for i := 0; i < 10; i++ {
 		_, err := api.WaitForXactionIC(baseParams, xactArgs)
@@ -535,7 +531,7 @@ func WaitForResilver(t *testing.T, baseParams api.BaseParams, timeouts ...time.D
 		}
 		if httpErr, ok := err.(*cmn.ErrHTTP); ok {
 			if httpErr.Status == http.StatusNotFound { // keep waiting for timeout
-				time.Sleep(api.XactPollTime)
+				time.Sleep(xactPollSleep)
 				continue
 			}
 			tassert.CheckFatal(t, httpErr)
@@ -558,19 +554,15 @@ func WaitForRebalanceByID(t *testing.T, origTargetCnt int, baseParams api.BasePa
 	tassert.CheckFatal(t, err)
 }
 
-// waitForRebalanceToStart waits until Rebalance _or_ Resilver starts
-func waitForRebalanceToStart(baseParams api.BaseParams) {
-	const (
-		sleep   = api.XactPollTime
-		waitFor = 10 * sleep
-	)
+func _waitReToStart(baseParams api.BaseParams) {
 	var (
-		now      = time.Now()
-		deadline = now.Add(waitFor)
-		args     = api.XactReqArgs{Timeout: sleep, OnlyRunning: true}
+		kinds   = []string{apc.ActRebalance, apc.ActResilver}
+		timeout = cos.MaxDuration(10*xactPollSleep, 10*time.Second)
+		retries = int(timeout / xactPollSleep)
+		args    = api.XactReqArgs{Timeout: xactPollSleep, OnlyRunning: true}
 	)
-	for now.Before(deadline) {
-		for _, kind := range []string{apc.ActRebalance, apc.ActResilver} {
+	for i := 0; i < retries; i++ {
+		for _, kind := range kinds {
 			args.Kind = kind
 			status, err := api.GetXactionStatus(baseParams, args)
 			if err == nil {
@@ -579,9 +571,9 @@ func waitForRebalanceToStart(baseParams api.BaseParams) {
 				}
 			}
 		}
-		time.Sleep(sleep)
-		now = time.Now()
+		time.Sleep(xactPollSleep)
 	}
+	tlog.Logf("Warning: timed out (%v) waiting for rebalance or resilver to start\n", timeout)
 }
 
 func GetClusterStats(t *testing.T, proxyURL string) stats.ClusterStats {
@@ -599,7 +591,7 @@ func GetNamedStatsVal(ds *stats.DaemonStats, name string) int64 {
 	return v.Value
 }
 
-// TOD -- FIXME: obsolete - remove and reimpl. the test that calls it
+// FIXME: obsolete - remove and reimpl. the test that calls it
 func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	baseParams := BaseAPIParams(u)
 	baseParams.Method = http.MethodGet
