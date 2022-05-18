@@ -104,7 +104,10 @@ func (lom *LOM) StringEx() string { return lom._string(true) }
 func (lom *LOM) _string(verbose bool) string {
 	var a, s string
 	if verbose {
-		s = "o[" + lom.bck.String() + "/" + lom.ObjName + ", " + lom.mpathInfo.String()
+		s = "o[" + lom.bck.String() + "/" + lom.ObjName
+		if lom.mpathInfo != nil {
+			s += ", " + lom.mpathInfo.String()
+		}
 		if lom.md.Size != 0 {
 			s += " size=" + cos.B2S(lom.md.Size, 1)
 		}
