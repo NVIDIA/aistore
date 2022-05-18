@@ -167,28 +167,24 @@ func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxy
 //
 // It returns the smap which satisfies those requirements.
 // NOTE: Upon successful return from this function cluster state might have already changed.
-func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, targetCnt int,
-	syncIgnoreIDs ...string) (*cluster.Smap, error) {
+func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int, ignoreIDs ...string) (*cluster.Smap, error) {
 	var (
 		lastVersion                               int64
 		smapChangeDeadline, timeStart, opDeadline time.Time
 
-		expPrx = nodesCnt(proxyCnt)
-		expTgt = nodesCnt(targetCnt)
+		expPrx = nodesCnt(pcnt)
+		expTgt = nodesCnt(tcnt)
+
+		baseParams = BaseAPIParams(proxyURL)
+		loopCnt    int
+		satisfied  bool
 	)
 
 	timeStart = time.Now()
 	smapChangeDeadline = timeStart.Add(2 * proxyChangeLatency)
 	opDeadline = timeStart.Add(3 * proxyChangeLatency)
 
-	time.Sleep(3 * time.Second) // TODO -- FIXME: remove
-	tlog.Logf("Waiting for %q(p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVersion)
-
-	var (
-		loopCnt    int
-		satisfied  bool
-		baseParams = BaseAPIParams(proxyURL)
-	)
+	tlog.Logf("Waiting for: %q(p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVer)
 
 	// Repeat until success or timeout.
 	for {
@@ -202,14 +198,14 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 		}
 		satisfied = expTgt.satisfied(smap.CountActiveTargets()) &&
 			expPrx.satisfied(smap.CountActiveProxies()) &&
-			smap.Version > origVersion
+			smap.Version > origVer
 		if !satisfied {
 			if d := time.Since(timeStart); d > 7*time.Second {
 				p := "primary"
 				if smap.Primary.PubNet.URL != proxyURL {
 					p = proxyURL
 				}
-				tlog.Logf("Polling %s[%s] for (t=%d, p=%d, Smap > v%d)\n", p, smap, expTgt, expPrx, origVersion)
+				tlog.Logf("Polling %s[%s] for (t=%d, p=%d, Smap > v%d)\n", p, smap, expTgt, expPrx, origVer)
 			}
 		}
 		if smap.Version != lastVersion {
@@ -229,18 +225,18 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			}
 
 			idsToIgnore := cos.NewStringSet(MockDaemonID, proxyID)
-			idsToIgnore.Add(syncIgnoreIDs...)
+			idsToIgnore.Add(ignoreIDs...)
 			err = devtools.WaitMapVersionSync(
 				baseParams,
 				DevtoolsCtx,
 				smapChangeDeadline,
 				syncedSmap,
-				origVersion,
+				origVer,
 				idsToIgnore,
 			)
 			if err != nil {
 				tlog.Logf("Failed waiting for cluster state: %v (%s, %s, %v, %v)\n",
-					err, smap, syncedSmap, origVersion, idsToIgnore)
+					err, smap, syncedSmap, origVer, idsToIgnore)
 				return nil, err
 			}
 

@@ -85,8 +85,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 // 3. Crash the primary proxy and PUT in parallel
 // 4. Failback to the original primary proxy, register target, and GET in parallel
 func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 2, MinProxies: 3})
 	m := ioContext{
 		t:                   t,
 		otherTasksToTrigger: 1,
@@ -94,15 +93,12 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	}
 
 	m.initWithCleanupAndSaveState()
-	m.expectTargets(2)
-	m.expectProxies(3)
 
 	// Step 1.
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 2.
 	target := m.startMaintenanceNoRebalance()
-	defer tutils.WaitForRebalAndResil(t, baseParams, time.Minute)
 
 	// Step 3.
 	_, newPrimaryURL, err := chooseNextProxy(m.smap)
@@ -119,30 +115,32 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		killRestorePrimary(t, m.proxyURL, false, nil)
 	}()
 
-	// PUT phase is timed to ensure it doesn't finish before primaryCrashElectRestart() begins
+	// delay PUTs to ensure they run during primary elections
 	time.Sleep(5 * time.Second)
 	m.puts()
 	wg.Wait()
 
-	// Step 4.
+	// Step 4: (three tasks)
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		m.stopMaintenance(target)
 	}()
-
-	go func() {
-		defer wg.Done()
-		<-m.controlCh
-		primarySetToOriginal(t)
-	}()
-
 	go func() {
 		defer wg.Done()
 		m.gets()
 	}()
+	go func() {
+		defer wg.Done()
+		<-m.controlCh // <-- half GETs
+		primarySetToOriginal(t)
+	}()
 	wg.Wait()
 
+	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: rebalanceTimeout}
+	_, _ = api.WaitForXactionIC(baseParams, xactArgs)
+
+	// Step 5.
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
 }

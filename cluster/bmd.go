@@ -77,7 +77,7 @@ func (m *BMD) StringEx() string {
 	if nar == 0 && no == 0 {
 		return fmt.Sprintf("BMD v%d[%s, buckets: ais(%d), cloud(%d)]", m.Version, m.UUID, na, nc)
 	}
-	return fmt.Sprintf("BMD v%d[%s, buckets: ais(%d), cloud(%d), remote-ais(%d), remote(%d)]",
+	return fmt.Sprintf("BMD v%d[%s, buckets: ais(%d), cloud(%d), remote-ais(%d), remote-other(%d)]",
 		m.Version, m.UUID, na, nc, nar, no)
 }
 

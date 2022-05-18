@@ -79,7 +79,12 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	h, ok := handlers[trname]
 	if !ok {
 		mu.RUnlock()
-		cmn.WriteErr(w, r, fmt.Errorf(cmn.FmtErrUnknown, "transport", "endpoint", trname))
+		err := cmn.NewErrNotFound("unknown transport endpoint %q", trname)
+		if verbose {
+			cmn.WriteErr(w, r, err, 0)
+		} else {
+			cmn.WriteErr(w, r, err, 0, 1 /*silent*/)
+		}
 		return
 	}
 	mu.RUnlock()
