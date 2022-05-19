@@ -762,8 +762,8 @@ func (c *LogConf) Validate() error {
 ////////////////
 
 func (c *ClientConf) Validate() error {
-	if j := c.Timeout.D(); j < time.Second || j > time.Minute {
-		return fmt.Errorf("invalid client.client_timeout=%s (expected range [1s, 1m])", j)
+	if j := c.Timeout.D(); j < time.Second || j > 2*time.Minute {
+		return fmt.Errorf("invalid client.client_timeout=%s (expected range [1s, 2m])", j)
 	}
 	if j := c.TimeoutLong.D(); j < 30*time.Second || j < c.Timeout.D() || j > 30*time.Minute {
 		return fmt.Errorf("invalid client.client_long_timeout=%s (expected range [30s, 30m])", j)
