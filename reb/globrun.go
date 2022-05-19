@@ -632,7 +632,8 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 				continue
 			}
 			// retransmit
-			if roc, err := _prepSend(lom); err != nil {
+			if roc, err := getReader(lom); err != nil {
+				lom.Unlock(false)
 				glog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi.StringEx(), err)
 			} else {
 				rj.doSend(lom, tsi, roc)
@@ -751,9 +752,8 @@ func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) (err error) {
 	return
 }
 
-func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) (err error) {
-	err = lom.InitFQN(fqn, nil)
-	if err != nil {
+func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) error {
+	if err := lom.InitFQN(fqn, nil); err != nil {
 		if cmn.IsErrBucketLevel(err) {
 			return err
 		}
@@ -763,8 +763,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) (err error) {
 	if lom.Bck().Props.EC.Enabled {
 		return filepath.SkipDir
 	}
-	var tsi *cluster.Snode
-	tsi, err = cluster.HrwTarget(lom.Uname(), rj.smap)
+	tsi, err := cluster.HrwTarget(lom.Uname(), rj.smap)
 	if err != nil {
 		return err
 	}
@@ -780,43 +779,36 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) (err error) {
 		return cmn.ErrSkip
 	}
 	// prepare to send
-	var roc cos.ReadOpenCloser
-	if roc, err = _prepSend(lom); err != nil {
-		return
+	roc, err := getReader(lom)
+	if err != nil {
+		lom.Unlock(false)
+		return err
 	}
 	// transmit
 	rj.m.addLomAck(lom)
 	rj.doSend(lom, tsi, roc)
-	return
+	return nil
 }
 
-func _prepSend(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
-	clone := lom.CloneMD(lom.FQN)
+func getReader(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 	lom.Lock(false)
 	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		goto retErr
+		return
 	}
 	if lom.IsCopy() {
 		err = cmn.ErrSkip
-		goto retErr
+		return
 	}
 	if lom.Checksum() == nil {
 		if _, err = lom.ComputeSetCksum(); err != nil {
-			goto retErr
+			return
 		}
 	}
 	if roc, err = cos.NewFileHandle(lom.FQN); err != nil {
-		goto retErr
+		return
 	}
-	roc = cos.NewDeferROC(roc, func() {
-		clone.Unlock(false)
-		cluster.FreeLOM(clone)
-	})
-	return
-
-retErr:
-	lom.Unlock(false)
-	cluster.FreeLOM(clone)
+	lif := lom.LIF()
+	roc = cos.NewDeferROC(roc, func() { lif.Unlock(false) })
 	return
 }
 

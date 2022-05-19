@@ -53,13 +53,6 @@ type (
 		HrwFQN      string            // => main replica (misplaced?)
 		info        string
 	}
-	// LOM In Flight (LIF)
-	LIF struct {
-		Uname string
-		BID   uint64
-	}
-
-	ObjectFilter func(*LOM) bool
 )
 
 var (

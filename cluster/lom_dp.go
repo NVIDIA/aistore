@@ -11,6 +11,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+// NOTE: compare with etl/dp.go
+
 const ldpact = ".LDP.Reader"
 
 type (

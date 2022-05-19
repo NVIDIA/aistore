@@ -20,12 +20,14 @@ import (
 type (
 	ctxKey int
 
+	objFilter func(*cluster.LOM) bool
+
 	// used to traverse local filesystem and collect objects info
 	WalkInfo struct {
 		t            cluster.Target
 		smap         *cluster.Smap
 		postCallback PostCallbackFunc
-		objectFilter cluster.ObjectFilter
+		objectFilter objFilter
 		propNeeded   map[string]bool
 		prefix       string
 		Marker       string
@@ -121,7 +123,7 @@ func (wi *WalkInfo) ProcessDir(fqn string) error {
 	return nil
 }
 
-func (wi *WalkInfo) SetObjectFilter(f cluster.ObjectFilter) {
+func (wi *WalkInfo) SetObjectFilter(f objFilter) {
 	wi.objectFilter = f
 }
 

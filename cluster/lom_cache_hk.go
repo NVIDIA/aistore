@@ -92,7 +92,7 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 			atimefs := md.atimefs & ^lomDirtyMask
 			if md.Atime > 0 && atimefs != uint64(md.Atime) {
 				debug.Assert(isValidAtime(md.Atime))
-				lif := LIF{md.uname, md.bckID}
+				lif := LIF{Uname: md.uname, BID: md.bckID}
 				lom, err := lif.LOM()
 				if err == nil {
 					lom.flushCold(md, atime)

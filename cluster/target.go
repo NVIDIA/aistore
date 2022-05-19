@@ -69,7 +69,7 @@ type (
 		ObjNameTo string
 		Buf       []byte
 		DM        DataMover
-		DP        DP // optional
+		DP        DP // Data Provider (optional)
 		Xact      Xact
 	}
 	// common part that's used in `api.PromoteArgs` and `PromoteParams`(server side), both

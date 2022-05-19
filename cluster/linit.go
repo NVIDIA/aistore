@@ -149,31 +149,3 @@ func (lom *LOM) CloneMD(fqn string) *LOM {
 	dst.FQN = fqn
 	return dst
 }
-
-/////////
-// LIF //
-/////////
-
-// LIF => LOF with a check for bucket existence
-func (lif *LIF) LOM() (lom *LOM, err error) {
-	b, objName := cmn.ParseUname(lif.Uname)
-	lom = AllocLOM(objName)
-	if err = lom.InitBck(&b); err != nil {
-		FreeLOM(lom)
-		return
-	}
-	if bprops := lom.Bprops(); bprops == nil {
-		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.BID)
-		FreeLOM(lom)
-	} else if bprops.BID != lif.BID {
-		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.BID)
-		FreeLOM(lom)
-	}
-	return
-}
-
-func (lom *LOM) LIF() (lif LIF) {
-	debug.Assert(lom.md.uname != "")
-	debug.Assert(lom.Bprops() != nil && lom.Bprops().BID != 0)
-	return LIF{lom.md.uname, lom.Bprops().BID}
-}

@@ -62,11 +62,11 @@ type (
 	}
 	deferRCS struct {
 		ReadCloseSizer
-		c func()
+		cb func()
 	}
 	deferROC struct {
 		ReadOpenCloser
-		c func()
+		cb func()
 	}
 	CallbackROC struct {
 		roc          ReadOpenCloser
@@ -188,7 +188,6 @@ func NewFileHandle(fqn string) (*FileHandle, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return &FileHandle{file, fqn}, nil
 }
 
@@ -210,30 +209,28 @@ func (f *sizedRC) Size() int64                              { return f.size }
 // Defer* //
 ////////////
 
-func NewDeferROC(r ReadOpenCloser, c func()) ReadOpenCloser {
-	if c == nil {
+func NewDeferROC(r ReadOpenCloser, cb func()) ReadOpenCloser {
+	debug.Assert(cb != nil)
+	return &deferROC{r, cb}
+}
+
+func (r *deferROC) Close() (err error) {
+	err = r.ReadOpenCloser.Close()
+	r.cb()
+	return
+}
+
+func NewDeferRCS(r ReadCloseSizer, cb func()) ReadCloseSizer {
+	if cb == nil {
 		return r
 	}
-	return &deferROC{r, c}
+	return &deferRCS{r, cb}
 }
 
-func (r *deferROC) Close() error {
-	err := r.ReadOpenCloser.Close()
-	r.c()
-	return err
-}
-
-func NewDeferRCS(r ReadCloseSizer, c func()) ReadCloseSizer {
-	if c == nil {
-		return r
-	}
-	return &deferRCS{r, c}
-}
-
-func (r *deferRCS) Close() error {
-	err := r.ReadCloseSizer.Close()
-	r.c()
-	return err
+func (r *deferRCS) Close() (err error) {
+	err = r.ReadCloseSizer.Close()
+	r.cb()
+	return
 }
 
 /////////////////
