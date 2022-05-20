@@ -16,61 +16,52 @@ import (
 
 const timedDuration = time.Minute + time.Minute/2
 
-const tag = "global GFN"
+const (
+	gfnT = "gfn-timed"
+	gfnG = "gfn-global"
+)
 
 // get-from-neighbors (GFN) state
 type gfnCtx struct {
-	mtx    sync.Mutex
-	exp    atomic.Int64
-	upd    atomic.Int64
-	lookup atomic.Bool
+	mtx sync.Mutex
+	exp atomic.Int64
+	trc atomic.Int64
+	gon atomic.Bool
 }
 
 var gfn = &gfnCtx{}
 
 func IsActiveGFN() bool {
-	return gfn.lookup.Load() || (gfn.exp.Load() != 0 && gfn.upd.Load() > 0)
+	return gfn.gon.Load() || (gfn.exp.Load() != 0 && gfn.trc.Load() > 0)
 }
 
 func ActivateTimedGFN() {
-	if gfn.lookup.Load() {
+	if gfn.gon.Load() {
 		return
 	}
-	upd := int64(1)
 	gfn.mtx.Lock()
 	now := mono.NanoTime()
 	if gfn.exp.Swap(now+timedDuration.Nanoseconds()) == 0 {
-		gfn.upd.Store(1)
+		gfn.trc.Store(1)
+		hk.Reg(gfnT+hk.NameSuffix, hkTimed, 0 /*time.Duration*/)
 		gfn.mtx.Unlock()
-		hk.Reg("timed-gfn"+hk.NameSuffix, deactivateTimed, 0 /*time.Duration*/)
-		glog.Infoln(tag, "on timed", upd)
+		glog.Infoln(gfnT, 1)
 	} else {
-		upd = gfn.upd.Inc()
+		trc := gfn.trc.Inc()
 		gfn.mtx.Unlock()
-		glog.Infoln(tag, "on timed", upd)
+		glog.Infoln(gfnT, trc)
 	}
 }
 
-// Deactivates timed GFN only if timed GFN has been activated only once before.
-func AbortTimedGFN() {
-	gfn.mtx.Lock()
-	if gfn.upd.Load() > 0 {
-		gfn.upd.Dec()
-	}
-	gfn.mtx.Unlock()
-}
-
-// private
-
-func deactivateTimed() time.Duration {
+func hkTimed() time.Duration {
 	gfn.mtx.Lock()
 	now := mono.NanoTime()
 	exp := gfn.exp.Swap(0)
-	if gfn.lookup.Load() || exp <= now {
-		gfn.upd.Store(0)
+	if gfn.gon.Load() || exp <= now {
+		gfn.trc.Store(0)
 		gfn.mtx.Unlock()
 		if exp > 0 {
-			glog.Infoln(tag, "off timed")
+			glog.Infoln(gfnT, "off")
 		}
 		return hk.UnregInterval
 	}
@@ -79,16 +70,15 @@ func deactivateTimed() time.Duration {
 	return time.Duration(exp - now + 100)
 }
 
-func activateGFN() bool {
-	previous := gfn.lookup.Swap(true)
-	if !previous {
-		gfn.upd.Store(0)
-		glog.Infoln(tag, "on")
+func activateGFN() (prev bool) {
+	if prev = gfn.gon.Swap(true); !prev {
+		gfn.trc.Store(0) // see IsActiveGFN
+		glog.Infoln(gfnG, "on")
 	}
-	return previous
+	return
 }
 
 func deactivateGFN() {
-	gfn.lookup.Store(false)
-	glog.Infoln(tag, "off")
+	gfn.gon.Store(false)
+	glog.Infoln(gfnG, "off")
 }

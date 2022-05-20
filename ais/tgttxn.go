@@ -825,7 +825,8 @@ func (t *target) startMaintenance(c *txnServerCtx) error {
 		}
 		reb.ActivateTimedGFN()
 	case apc.ActAbort:
-		reb.AbortTimedGFN()
+		// letting gfn-timed to self-expire in a serialized way
+		glog.Warningf("%s: aborting %q", t, c.msg.Action)
 	case apc.ActCommit:
 		var opts apc.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
