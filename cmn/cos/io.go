@@ -64,10 +64,6 @@ type (
 		ReadCloseSizer
 		cb func()
 	}
-	deferROC struct {
-		ReadOpenCloser
-		cb func()
-	}
 	CallbackROC struct {
 		roc          ReadOpenCloser
 		readCallback func(int, error)
@@ -205,20 +201,9 @@ func (f *sizedReader) Size() int64                     { return f.size }
 func NewSizedRC(r io.ReadCloser, size int64) ReadCloseSizer { return &sizedRC{r, size} }
 func (f *sizedRC) Size() int64                              { return f.size }
 
-////////////
-// Defer* //
-////////////
-
-func NewDeferROC(r ReadOpenCloser, cb func()) ReadOpenCloser {
-	debug.Assert(cb != nil)
-	return &deferROC{r, cb}
-}
-
-func (r *deferROC) Close() (err error) {
-	err = r.ReadOpenCloser.Close()
-	r.cb()
-	return
-}
+//////////////
+// deferRCS //
+//////////////
 
 func NewDeferRCS(r ReadCloseSizer, cb func()) ReadCloseSizer {
 	if cb == nil {

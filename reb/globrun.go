@@ -804,12 +804,7 @@ func getReader(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 			return
 		}
 	}
-	if roc, err = cos.NewFileHandle(lom.FQN); err != nil {
-		return
-	}
-	lif := lom.LIF()
-	roc = cos.NewDeferROC(roc, func() { lif.Unlock(false) })
-	return
+	return lom.NewDeferROC()
 }
 
 func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOpenCloser) {

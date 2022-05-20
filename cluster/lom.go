@@ -65,6 +65,7 @@ var (
 var (
 	_ cmn.ObjAttrsHolder = (*LOM)(nil)
 	_ fs.PartsFQN        = (*LOM)(nil)
+	_ lifUnlocker        = (*LOM)(nil)
 )
 
 func Init(t Target) {

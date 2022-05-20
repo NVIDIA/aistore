@@ -20,25 +20,42 @@ type (
 	DP interface {
 		Reader(lom *LOM) (reader cos.ReadOpenCloser, objMeta cmn.ObjAttrsHolder, err error)
 	}
+
 	LDP struct{}
+
+	// compare with `deferROC` from cmn/cos/io.go
+	deferROC struct {
+		cos.ReadOpenCloser
+		lif LIF
+	}
 )
 
 // interface guard
 var _ DP = (*LDP)(nil)
 
+func (r *deferROC) Close() (err error) {
+	err = r.ReadOpenCloser.Close()
+	r.lif.Unlock(false)
+	return
+}
+
+// is called under rlock
+func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
+	fh, err := cos.NewFileHandle(lom.FQN)
+	if err == nil {
+		return &deferROC{fh, lom.LIF()}, nil
+	}
+	lom.Unlock(false)
+	return nil, cmn.NewErrFailedTo(T, "open", lom.FQN, err)
+}
+
+// compare with etl/dp.go
 func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
-	var loadErr error
-
 	lom.Lock(false)
-	if loadErr = lom.Load(false /*cache it*/, true /*locked*/); loadErr == nil {
-		file, err := cos.NewFileHandle(lom.FQN)
-		if err == nil {
-			// fast path
-			return cos.NewDeferROC(file, func() { lom.Unlock(false) }), lom, nil
-		}
-
-		lom.Unlock(false)
-		return nil, nil, cmn.NewErrFailedTo(T.String()+ldpact, "open", lom, err)
+	loadErr := lom.Load(false /*cache it*/, true /*locked*/)
+	if loadErr == nil {
+		roc, err := lom.NewDeferROC()
+		return roc, lom, err
 	}
 
 	defer lom.Unlock(false)

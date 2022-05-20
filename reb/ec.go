@@ -106,8 +106,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 		fqn = workFQN[0]
 		action = rebActMoveCT
 	}
-	// FIXME: We should unify acquiring a reader for LOM and CT. Both should be
-	//  locked and handled similarly.
+	// TODO: unify acquiring a reader for LOM and CT
 	if ct.ContentType() == fs.ObjectType {
 		lom = cluster.AllocLOM(ct.ObjectName())
 		if err = lom.InitBck(ct.Bck().Bucket()); err != nil {
@@ -123,20 +122,18 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 	} else {
 		lom = nil // sending slice; TODO: rlock
 	}
+
 	// open
-	if roc, err = cos.NewFileHandle(fqn); err != nil {
-		if lom != nil {
-			lom.Unlock(false)
-			cluster.FreeLOM(lom)
-		}
+	if lom != nil {
+		defer cluster.FreeLOM(lom)
+		roc, err = lom.NewDeferROC()
+	} else {
+		roc, err = cos.NewFileHandle(fqn)
+	}
+	if err != nil {
 		return
 	}
-	if lom != nil {
-		roc = cos.NewDeferROC(roc, func() {
-			lom.Unlock(false)
-			cluster.FreeLOM(lom)
-		})
-	}
+
 	// transmit
 	ntfn := stageNtfn{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: meta, action: action}
 	o := transport.AllocSend()

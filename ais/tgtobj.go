@@ -1307,7 +1307,8 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 		if coi.owt != cmn.OwtPromote {
 			// migrate/replicate
 			lom.Lock(false)
-			if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+			err := lom.Load(false /*cache it*/, true /*locked*/)
+			if err != nil {
 				lom.Unlock(false)
 				return 0, nil
 			}
@@ -1315,13 +1316,10 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 				lom.Unlock(false)
 				return lom.SizeBytes(), nil
 			}
-			fh, err := cos.NewFileHandle(lom.FQN)
-			if err != nil {
-				lom.Unlock(false)
-				return 0, cmn.NewErrFailedTo(coi.t, "open", lom.FQN, err)
+			if reader, err = lom.NewDeferROC(); err != nil {
+				return 0, err
 			}
 			size = lom.SizeBytes()
-			reader = cos.NewDeferROC(fh, func() { lom.Unlock(false) })
 		} else {
 			// promote
 			debug.Assert(!coi.dryRun)

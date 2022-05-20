@@ -11,11 +11,20 @@ import (
 )
 
 // LOM In Flight (LIF)
-type LIF struct {
-	Uname       string
-	BID         uint64
-	mpathDigest uint64
-}
+type (
+	LIF struct {
+		Uname       string
+		BID         uint64
+		mpathDigest uint64
+	}
+	lifUnlocker interface {
+		CacheIdx() int // TODO: lowercase
+		getLocker() *nlc
+	}
+)
+
+// interface guard to make sure that LIF can be used to unlock LOM
+var _ lifUnlocker = (*LIF)(nil)
 
 // constructor
 func (lom *LOM) LIF() (lif LIF) {
@@ -47,8 +56,8 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 }
 
 // deferred unlocking
-func (lif *LIF) cacheIdx() int   { return fs.LcacheIdx(lif.mpathDigest) }
-func (lif *LIF) getLocker() *nlc { return &lomLocker[lif.cacheIdx()] }
+func (lif *LIF) CacheIdx() int   { return fs.LcacheIdx(lif.mpathDigest) }
+func (lif *LIF) getLocker() *nlc { return &lomLocker[lif.CacheIdx()] }
 
 func (lif *LIF) Unlock(exclusive bool) {
 	nlc := lif.getLocker()
