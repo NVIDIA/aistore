@@ -95,7 +95,9 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 				lif := LIF{Uname: md.uname, BID: md.bckID}
 				lom, err := lif.LOM()
 				if err == nil {
+					lom.Lock(true)
 					lom.flushCold(md, atime)
+					lom.Unlock(true)
 					FreeLOM(lom)
 				}
 			}

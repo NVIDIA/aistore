@@ -207,8 +207,6 @@ func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
 
 // NOTE: not clearing dirty flag as the caller will uncache anyway
 func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
-	lom.Lock(true)
-	defer lom.Unlock(true)
 	if err := lom.flushAtime(atime); err != nil {
 		return
 	}
@@ -226,17 +224,13 @@ func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
 	mm.Free(buf)
 }
 
-func (lom *LOM) flushAtime(atime time.Time) (err error) {
-	var finfo os.FileInfo
-	finfo, err = os.Stat(lom.FQN)
+func (lom *LOM) flushAtime(atime time.Time) error {
+	finfo, err := os.Stat(lom.FQN)
 	if err != nil {
-		return
+		return err
 	}
 	mtime := finfo.ModTime()
-	if err = os.Chtimes(lom.FQN, atime, mtime); err != nil {
-		glog.Errorf("%s: flush atime err: %v", lom, err)
-	}
-	return
+	return os.Chtimes(lom.FQN, atime, mtime)
 }
 
 func (lom *LOM) marshal() (buf []byte, mm *memsys.MMSA) {
