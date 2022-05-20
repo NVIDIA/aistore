@@ -228,7 +228,7 @@ func (lom *LOM) Copy(mi *fs.MountpathInfo, buf []byte) (err error) {
 	)
 	// check if the copy destination exists and then skip copying if it's also identical
 	if errExists := cos.Stat(copyFQN); errExists == nil {
-		cplom := AllocLOM("")
+		cplom := AllocLOM(lom.ObjName)
 		defer FreeLOM(cplom)
 		if errExists = cplom.InitFQN(copyFQN, lom.Bucket()); errExists == nil {
 			if errExists = cplom.Load(false /*cache it*/, true /*locked*/); errExists == nil && cplom.Equal(lom) {
