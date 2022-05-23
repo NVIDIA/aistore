@@ -67,7 +67,7 @@ var js = jsoniter.ConfigFastest
 
 func (m *Manager) start() (err error) {
 	defer func() {
-		debug.Infof("[dsort] %s finished and setting progress to false", m.ManagerUUID)
+		debug.Infof("[dsort] %s finished", m.ManagerUUID)
 		m.lock()
 		m.setInProgressTo(false)
 		m.unlock()

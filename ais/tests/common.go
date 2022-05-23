@@ -68,6 +68,7 @@ type ioContext struct {
 	getErrIsFatal       bool
 	silent              bool
 	fixedSize           bool
+	deleteRemoteBckObjs bool
 	ordered             bool // true - object names make sequence, false - names are random
 
 	numGetErrs atomic.Uint64
@@ -139,8 +140,11 @@ func (m *ioContext) initWithCleanup() {
 	m.stopCh = make(chan struct{})
 
 	if m.bck.IsRemote() {
-		// Remove unnecessary local objects.
-		tutils.EvictRemoteBucket(m.t, m.proxyURL, m.bck)
+		if m.deleteRemoteBckObjs {
+			m.del()
+		} else {
+			tutils.EvictRemoteBucket(m.t, m.proxyURL, m.bck) // evict from AIStore
+		}
 	}
 
 	// cleanup m.bck upon exit from the test

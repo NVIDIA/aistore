@@ -1390,7 +1390,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	t.Skipf("skipping %s", t.Name())
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes, phases: dsortPhases},

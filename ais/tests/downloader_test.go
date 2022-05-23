@@ -1077,9 +1077,10 @@ func TestDownloadSync(t *testing.T) {
 			DlBase: downloader.DlBase{Bck: bck},
 		}
 		m = &ioContext{
-			t:   t,
-			num: 10,
-			bck: cliBck,
+			t:                   t,
+			num:                 10,
+			bck:                 cliBck,
+			deleteRemoteBckObjs: true,
 		}
 		objsToDelete = 4
 	)

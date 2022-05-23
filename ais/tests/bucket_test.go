@@ -572,10 +572,11 @@ func TestListObjectsSmoke(t *testing.T) {
 		var (
 			baseParams = tutils.BaseAPIParams()
 			m          = ioContext{
-				t:        t,
-				num:      100,
-				bck:      bck.Clone(),
-				fileSize: 5 * cos.KiB,
+				t:                   t,
+				num:                 100,
+				bck:                 bck.Clone(),
+				deleteRemoteBckObjs: true,
+				fileSize:            5 * cos.KiB,
 			}
 
 			iters = 5
@@ -584,9 +585,6 @@ func TestListObjectsSmoke(t *testing.T) {
 
 		m.initWithCleanup()
 		m.puts()
-		if m.bck.IsRemote() {
-			defer m.del()
-		}
 
 		// Run couple iterations to see that we get deterministic results.
 		tlog.Logf("run %d list objects iterations\n", iters)
@@ -677,10 +675,11 @@ func TestListObjectsRerequestPage(t *testing.T) {
 		var (
 			baseParams = tutils.BaseAPIParams()
 			m          = ioContext{
-				t:        t,
-				bck:      bck.Clone(),
-				num:      500,
-				fileSize: 128,
+				t:                   t,
+				bck:                 bck.Clone(),
+				deleteRemoteBckObjs: true,
+				num:                 500,
+				fileSize:            128,
 			}
 			rerequests = 5
 		)
@@ -2523,6 +2522,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 
 	// Wait for rename to finish
 	tlog.Logf("Waiting for x-%s[%s] to finish\n", apc.ActMoveBck, xactID)
+	time.Sleep(2 * time.Second)
 	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2542,7 +2542,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 
 	list, err := api.ListObjects(baseParams, dst1, nil, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(list.Entries) == m.num, "expected %d to be copied to %s, got %d", m.num, dst1, len(list.Entries))
+	tassert.Errorf(t, len(list.Entries) == m.num, "expected %s to have %d, got %d", dst1, m.num, len(list.Entries))
 
 	m.bck = dst1
 	m.gets()
