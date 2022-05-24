@@ -48,7 +48,7 @@ Names of the most common operations are also identical, e.g.:
 
 and so on.
 
-For more information and usage examples, please see [Jupyter notebook](/sdk/python/sdk-tutorial.ipynb) tutorial.
+For more information and usage examples, please see [SDK tutorial (Jupyter Notebook)](/sdk/python/sdk-tutorial.ipynb).
 
 ## AIS supports multiple [backends](/docs/providers.md)
 
