@@ -2458,10 +2458,7 @@ func (p *proxy) unreg(action string) {
 
 	if action == apc.ActDecommission || action == apc.ActDecommissionNode {
 		// When decommissioning always cleanup all system meta-data.
-		err := cleanupConfigDir()
-		if err != nil {
-			glog.Errorf("%s: failed to cleanup config dir, err: %v", p, err)
-		}
+		cleanupConfigDir(p.Name())
 	}
 	writeShutdownMarker()
 	p.Stop(&errNoUnregister{action})

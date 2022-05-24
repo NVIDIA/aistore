@@ -169,10 +169,10 @@ func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID, daemonI
 func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string, force bool) error {
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
-	{
-		reqParams.BaseParams = baseParams
-		reqParams.Path = apc.URLPathCluProxy.Join(newPrimaryID)
-		reqParams.Query = url.Values{apc.QparamForce: []string{strconv.FormatBool(force)}}
+	reqParams.BaseParams = baseParams
+	reqParams.Path = apc.URLPathCluProxy.Join(newPrimaryID)
+	if force {
+		reqParams.Query = url.Values{apc.QparamForce: []string{"true"}}
 	}
 	err := reqParams.DoHTTPRequest()
 	freeRp(reqParams)
@@ -380,9 +380,12 @@ func ShutdownCluster(baseParams BaseParams) error {
 	return err
 }
 
-// DecommissionCluster decommissions whole cluster
-func DecommissionCluster(baseParams BaseParams) error {
+// DecommissionCluster permanently decommissions entire cluster
+func DecommissionCluster(baseParams BaseParams, rmUserData bool) error {
 	msg := apc.ActionMsg{Action: apc.ActDecommission}
+	if rmUserData {
+		msg.Value = &apc.ActValRmNode{RmUserData: true}
+	}
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
 	{

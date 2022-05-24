@@ -396,12 +396,9 @@ func (t *target) unreg(action string, rmUserData, noShutdown bool) {
 	glog.Infof("%s: decommissioning, (remove-user-data, no-shutdown) = (%t, %t)", t, rmUserData, noShutdown)
 	fs.Decommission(!rmUserData /*ais metadata only*/)
 
-	err := cleanupConfigDir()
-	if err != nil {
-		glog.Errorf("%s: failed to cleanup config dir, err: %v", t, err)
-	}
+	cleanupConfigDir(t.Name())
 	// Delete DB file.
-	err = cos.RemoveFile(filepath.Join(cmn.GCO.Get().ConfigDir, dbName))
+	err := cos.RemoveFile(filepath.Join(cmn.GCO.Get().ConfigDir, dbName))
 	if err != nil {
 		glog.Errorf("failed to delete database, err: %v", err)
 	}

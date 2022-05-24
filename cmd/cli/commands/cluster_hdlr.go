@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -23,6 +24,8 @@ const (
 	roleProxyShort  = "p"
 	roleTargetShort = "t"
 )
+
+const nodeShutDecomm = subcmdNodeDecommission + ".node"
 
 var (
 	clusterCmdsFlags = map[string][]cli.Flag{
@@ -39,9 +42,12 @@ var (
 		subcmdStartMaint: {
 			noRebalanceFlag,
 		},
-		subcmdDecommission: {
+		nodeShutDecomm: {
 			noRebalanceFlag,
 			noShutdownFlag,
+			rmUserDataFlag,
+		},
+		subcmdClusterDecommission: {
 			rmUserDataFlag,
 		},
 		commandStart: {},
@@ -110,8 +116,9 @@ var (
 				Action: clusterShutdownHandler,
 			},
 			{
-				Name:   subcmdDecommission,
+				Name:   subcmdClusterDecommission,
 				Usage:  "decommission entire cluster",
+				Flags:  clusterCmdsFlags[subcmdClusterDecommission],
 				Action: clusterDecommissionHandler,
 			},
 			{
@@ -130,30 +137,30 @@ var (
 						Usage:        "put node under \"maintenance\", temporarily suspend its operation",
 						ArgsUsage:    daemonIDArgument,
 						Flags:        clusterCmdsFlags[subcmdStartMaint],
-						Action:       maintShutDecommHandler,
+						Action:       nodeMaintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
 					{
 						Name:         subcmdStopMaint,
 						Usage:        "activate node by taking it back from \"maintenance\"",
 						ArgsUsage:    daemonIDArgument,
-						Action:       maintShutDecommHandler,
+						Action:       nodeMaintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
 					{
-						Name:         subcmdDecommission,
+						Name:         subcmdNodeDecommission,
 						Usage:        "safely and permanently remove node from the cluster",
 						ArgsUsage:    daemonIDArgument,
-						Flags:        clusterCmdsFlags[subcmdDecommission],
-						Action:       maintShutDecommHandler,
+						Flags:        clusterCmdsFlags[nodeShutDecomm], // same as shutdown node
+						Action:       nodeMaintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
 					{
 						Name:         subcmdShutdown,
 						Usage:        "shutdown a node",
 						ArgsUsage:    daemonIDArgument,
-						Flags:        clusterCmdsFlags[subcmdDecommission],
-						Action:       maintShutDecommHandler,
+						Flags:        clusterCmdsFlags[nodeShutDecomm], // same as decommission node
+						Action:       nodeMaintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
 				},
@@ -195,17 +202,20 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	fmt.Fprint(c.App.Writer, "All nodes in the cluster are being shut down.\n")
+	fmt.Fprint(c.App.Writer, "AIS cluster shut down.\n")
 	return
 }
 
-func clusterDecommissionHandler(c *cli.Context) (err error) {
-	if err := api.DecommissionCluster(defaultAPIParams); err != nil {
+func clusterDecommissionHandler(c *cli.Context) error {
+	fmt.Fprintf(c.App.Writer, "Warning: about to permanently decommission AIS cluster. The operation cannot be undone!\n")
+	time.Sleep(3 * time.Second)
+	rmUserData := flagIsSet(c, rmUserDataFlag)
+	if err := api.DecommissionCluster(defaultAPIParams, rmUserData); err != nil {
 		return err
 	}
 
-	fmt.Fprint(c.App.Writer, "All nodes in the cluster are being decommissioned.\n")
-	return
+	fmt.Fprint(c.App.Writer, "AIS cluster decommissioned.\n")
+	return nil
 }
 
 func joinNodeHandler(c *cli.Context) (err error) {
@@ -258,7 +268,7 @@ func joinNodeHandler(c *cli.Context) (err error) {
 	return
 }
 
-func maintShutDecommHandler(c *cli.Context) (err error) {
+func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "daemon ID")
 	}
@@ -274,8 +284,9 @@ func maintShutDecommHandler(c *cli.Context) (err error) {
 	if node == nil {
 		return fmt.Errorf("node %q does not exist", daemonID)
 	}
+	name := node.StringEx()
 	if smap.IsPrimary(node) {
-		return fmt.Errorf("node %q is primary, cannot %s", daemonID, action)
+		return fmt.Errorf("%s is primary, cannot %s", name, action)
 	}
 	var (
 		xactID        string
@@ -290,24 +301,26 @@ func maintShutDecommHandler(c *cli.Context) (err error) {
 		fmt.Fprintln(c.App.Writer,
 			"To rebalance the cluster manually at a later time, please run: `ais job start rebalance`")
 	}
-	if noShutdown && action != subcmdDecommission {
-		fmt.Fprintf(c.App.Writer, "Warning: option `--%s` is valid only for %q and will be ignored\n",
-			noShutdownFlag.Name, subcmdDecommission)
-	} else {
+	if action == subcmdNodeDecommission {
+		fmt.Fprintf(c.App.Writer, "Warning: about to permanently decommission node %s. The operation cannot be undone!\n", name)
+		time.Sleep(3 * time.Second)
 		actValue.NoShutdown = noShutdown
-	}
-	if rmUserData && action != subcmdDecommission {
-		fmt.Fprintf(c.App.Writer, "Warning: option `--%s` is valid only for %q and will be ignored\n",
-			rmUserDataFlag.Name, subcmdDecommission)
-	} else {
 		actValue.RmUserData = rmUserData
+	} else {
+		const fmterr = "option '--%s' is valid only for decommissioning\n"
+		if noShutdown {
+			return fmt.Errorf(fmterr, noShutdownFlag.Name)
+		}
+		if rmUserData {
+			return fmt.Errorf(fmterr, rmUserDataFlag.Name)
+		}
 	}
 	switch action {
 	case subcmdStartMaint:
 		xactID, err = api.StartMaintenance(defaultAPIParams, actValue)
 	case subcmdStopMaint:
 		xactID, err = api.StopMaintenance(defaultAPIParams, actValue)
-	case subcmdDecommission:
+	case subcmdNodeDecommission:
 		xactID, err = api.DecommissionNode(defaultAPIParams, actValue)
 	case subcmdShutdown:
 		xactID, err = api.ShutdownNode(defaultAPIParams, actValue)
@@ -318,26 +331,37 @@ func maintShutDecommHandler(c *cli.Context) (err error) {
 	if xactID != "" {
 		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xactID, xactID)
 	}
-	if action == subcmdStopMaint {
-		fmt.Fprintf(c.App.Writer, "Node %q is now active (maintenance done)\n", daemonID)
-	} else if action == subcmdDecommission && skipRebalance {
-		fmt.Fprintf(c.App.Writer, "Node %q has been decommissioned - permanently removed from the cluster\n", daemonID)
-	} else if action == subcmdShutdown && skipRebalance {
-		fmt.Fprintf(c.App.Writer, "Node %q has been shutdown\n", daemonID)
-	} else if action == subcmdStartMaint {
-		fmt.Fprintf(c.App.Writer, "Node %q is currently under maintenance\n", daemonID)
+	switch action {
+	case subcmdStopMaint:
+		fmt.Fprintf(c.App.Writer, "%s is now active (maintenance done)\n", name)
+	case subcmdNodeDecommission:
+		if skipRebalance || node.IsProxy() {
+			fmt.Fprintf(c.App.Writer, "%s has been decommissioned (permanently removed from the cluster)\n", name)
+		} else {
+			fmt.Fprintf(c.App.Writer,
+				"%s is being decommissioned, please wait for cluster rebalancing to finish...\n", name)
+		}
+	case subcmdShutdown:
+		if skipRebalance || node.IsProxy() {
+			fmt.Fprintf(c.App.Writer, "%s has been shutdown\n", name)
+		} else {
+			fmt.Fprintf(c.App.Writer,
+				"%s is shutting down, please wait for cluster rebalancing to finish...\n", name)
+		}
+	case subcmdStartMaint:
+		fmt.Fprintf(c.App.Writer, "%s is now in maintenance\n", name)
 	}
 	return nil
 }
 
-func setPrimaryHandler(c *cli.Context) (err error) {
+func setPrimaryHandler(c *cli.Context) error {
 	daemonID := argDaemonID(c)
 	if daemonID == "" {
 		return missingArgumentsError(c, "proxy daemon ID")
 	}
 	primarySmap, err := fillMap()
 	if err != nil {
-		return
+		return err
 	}
 	if _, ok := primarySmap.Pmap[daemonID]; !ok {
 		return incorrectUsageMsg(c, "%s: is not a proxy", daemonID)

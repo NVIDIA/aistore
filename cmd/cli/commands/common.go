@@ -98,10 +98,11 @@ const (
 	subcmdMpathDisable = "disable"
 
 	// Node subcommands
-	subcmdJoin         = "join"
-	subcmdStartMaint   = "start-maintenance"
-	subcmdStopMaint    = "stop-maintenance"
-	subcmdDecommission = "decommission"
+	subcmdJoin                = "join"
+	subcmdStartMaint          = "start-maintenance"
+	subcmdStopMaint           = "stop-maintenance"
+	subcmdNodeDecommission    = "decommission"
+	subcmdClusterDecommission = "decommission"
 
 	// Show subcommands
 	subcmdShowDisk         = subcmdMpath

@@ -251,13 +251,17 @@ func deploymentType() string {
 	return runtime.GOOS
 }
 
-func cleanupConfigDir() (err error) {
+// TODO: optionally, remove plain text config as well (globalConfigPath, localConfigPath)
+// for AIS metadata filenames (constants), see cmn/fname*
+func cleanupConfigDir(name string) {
 	config := cmn.GCO.Get()
-	return filepath.Walk(config.ConfigDir, func(path string, info os.FileInfo, err error) error {
-		if !strings.HasPrefix(info.Name(), ".ais") || info.IsDir() {
-			return nil
+	filepath.Walk(config.ConfigDir, func(path string, finfo os.FileInfo, err error) error {
+		if strings.HasPrefix(finfo.Name(), ".ais.") {
+			if err := cos.RemoveFile(path); err != nil {
+				glog.Errorf("%s: failed to cleanup %q, err: %v", name, path, err)
+			}
 		}
-		return cos.RemoveFile(path)
+		return nil
 	})
 }
 

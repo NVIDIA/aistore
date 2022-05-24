@@ -15,7 +15,7 @@ import (
 // ActionMsg is a JSON-formatted control structures used in a majority of API calls
 type (
 	ActionMsg struct {
-		Action string      `json:"action"` // ActShutdown, ActRebalance, and many more (see api_const.go)
+		Action string      `json:"action"` // ActShutdown, ActRebalance, and many more (see apc/const.go)
 		Name   string      `json:"name"`   // action-specific (e.g., bucket name)
 		Value  interface{} `json:"value"`  // ditto
 	}

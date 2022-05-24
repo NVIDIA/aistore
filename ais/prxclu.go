@@ -291,7 +291,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		nsi = regReq.SI
-		// node ID is obtained from the node itself. An `aisnode` either loads existing or generates a new
+		// node ID is obtained from the node itself: `aisnode` either loads existing or generates a new
 		// unique ID at startup (for details, see `initDaemonID`).
 		si, err := p.getDaemonInfo(nsi)
 		if err != nil {
@@ -726,7 +726,6 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	case apc.ActResetConfig:
 		p.resetCluCfgPersistent(w, r, msg)
 	case apc.ActShutdown, apc.ActDecommission:
-		glog.Infoln("Proxy-controlled cluster decommission/shutdown...")
 		args := allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
 		args.to = cluster.AllNodes
