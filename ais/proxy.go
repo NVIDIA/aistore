@@ -2384,7 +2384,7 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if !p.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		p.unreg(msg.Action)
+		p.unreg(w, r, msg)
 	case apc.ActShutdown:
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)
@@ -2439,29 +2439,38 @@ func (p *proxy) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	_, action, err := p.parseUnregMsg(w, r)
-	if err != nil {
+	var msg apc.ActionMsg
+	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
-	p.unreg(action)
+	p.unreg(w, r, &msg)
 }
 
-func (p *proxy) unreg(action string) {
+func (p *proxy) unreg(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	// Stop keepaliving
 	p.keepalive.ctrl(kaSuspendMsg)
 
 	// In case of maintenance, we only stop the keepalive daemon,
 	// the HTTPServer is still active and accepts requests.
-	if action == apc.ActStartMaintenance {
+	if msg.Action == apc.ActStartMaintenance {
 		return
 	}
-
-	if action == apc.ActDecommission || action == apc.ActDecommissionNode {
-		// When decommissioning always cleanup all system meta-data.
-		cleanupConfigDir(p.Name())
+	if msg.Action == apc.ActDecommission || msg.Action == apc.ActDecommissionNode {
+		var (
+			opts              apc.ActValRmNode
+			keepInitialConfig bool
+		)
+		if msg.Value != nil {
+			if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+			keepInitialConfig = opts.KeepInitialConfig
+		}
+		cleanupConfigDir(p.Name(), keepInitialConfig)
 	}
 	writeShutdownMarker()
-	p.Stop(&errNoUnregister{action})
+	p.Stop(&errNoUnregister{msg.Action})
 }
 
 func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {

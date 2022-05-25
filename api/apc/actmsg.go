@@ -20,10 +20,11 @@ type (
 		Value  interface{} `json:"value"`  // ditto
 	}
 	ActValRmNode struct {
-		DaemonID      string `json:"sid"`
-		SkipRebalance bool   `json:"skip_rebalance"`
-		RmUserData    bool   `json:"rm_user_data"` // remove user data (decommission-only)
-		NoShutdown    bool   `json:"no_shutdown"`
+		DaemonID          string `json:"sid"`
+		SkipRebalance     bool   `json:"skip_rebalance"`
+		RmUserData        bool   `json:"rm_user_data"`        // decommission-only
+		KeepInitialConfig bool   `json:"keep_initial_config"` // ditto (to be able to restart a node from scratch)
+		NoShutdown        bool   `json:"no_shutdown"`
 	}
 )
 

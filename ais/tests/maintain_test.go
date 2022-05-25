@@ -141,7 +141,7 @@ func TestMaintenanceMD(t *testing.T) {
 	})
 
 	cmd := tutils.GetRestoreCmd(dcmTarget)
-	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), SkipRebalance: true}
+	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), SkipRebalance: true, KeepInitialConfig: true}
 	_, err := api.DecommissionNode(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
@@ -197,7 +197,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	}
 
 	cmd := tutils.GetRestoreCmd(dcmTarget)
-	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), RmUserData: true}
+	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), RmUserData: true, KeepInitialConfig: true}
 	rebID, err := api.DecommissionNode(baseParams, msg)
 	tassert.CheckError(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "target decommission",

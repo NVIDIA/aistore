@@ -151,7 +151,7 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.unreg(msg.Action, false /*rm user data*/, false /*no shutdown*/)
+		t.unreg(msg.Action, &apc.ActValRmNode{RmUserData: false, NoShutdown: false})
 	case apc.ActDecommission:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
@@ -161,7 +161,7 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		t.unreg(msg.Action, opts.RmUserData, opts.NoShutdown)
+		t.unreg(msg.Action, &opts)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -346,30 +346,28 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	switch apiItems[0] {
 	case apc.Mountpaths:
 		t.handleMountpathReq(w, r)
-		return
 	case apc.CallbackRmSelf:
 		var (
-			noShutdown, rmUserData bool
-			opts, action, err      = t.parseUnregMsg(w, r)
+			msg  apc.ActionMsg
+			opts apc.ActValRmNode
 		)
-		if err != nil {
+		if err := readJSON(w, r, &msg); err != nil {
 			return
 		}
-		if opts == nil {
-			glog.Warningf("%s: remove from Smap via (%q, action=%s)", t, apiItems[0], action)
-			noShutdown = true
-		} else {
-			noShutdown, rmUserData = opts.NoShutdown, opts.RmUserData
+		if msg.Value == nil {
+			glog.Warningf("%s: remove from Smap via (%q, action=%s)", t, apiItems[0], msg.Action)
+			opts.NoShutdown = true
+		} else if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+			t.writeErr(w, r, err)
+			return
 		}
-		t.unreg(action, rmUserData, noShutdown)
-		return
+		t.unreg(msg.Action, &opts)
 	default:
 		t.writeErrURL(w, r)
-		return
 	}
 }
 
-func (t *target) unreg(action string, rmUserData, noShutdown bool) {
+func (t *target) unreg(action string, opts *apc.ActValRmNode) {
 	// Stop keepalive-ing
 	t.keepalive.ctrl(kaSuspendMsg)
 
@@ -388,21 +386,21 @@ func (t *target) unreg(action string, rmUserData, noShutdown bool) {
 
 	writeShutdownMarker()
 	if action == apc.ActShutdown {
-		debug.Assert(!noShutdown)
+		debug.Assert(!opts.NoShutdown)
 		t.Stop(&errNoUnregister{action})
 		return
 	}
 
-	glog.Infof("%s: decommissioning, (remove-user-data, no-shutdown) = (%t, %t)", t, rmUserData, noShutdown)
-	fs.Decommission(!rmUserData /*ais metadata only*/)
+	glog.Infof("%s: decommissioning %+v", t, opts)
+	fs.Decommission(!opts.RmUserData /*ais metadata only*/)
+	cleanupConfigDir(t.Name(), opts.KeepInitialConfig)
 
-	cleanupConfigDir(t.Name())
 	// Delete DB file.
 	err := cos.RemoveFile(filepath.Join(cmn.GCO.Get().ConfigDir, dbName))
 	if err != nil {
 		glog.Errorf("failed to delete database, err: %v", err)
 	}
-	if !noShutdown {
+	if !opts.NoShutdown {
 		t.Stop(&errNoUnregister{action})
 	}
 }

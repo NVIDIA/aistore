@@ -731,7 +731,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		args.to = cluster.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
-		p.unreg(msg.Action)
+		p.unreg(w, r, msg)
 	case apc.ActXactStart:
 		p.xactStart(w, r, msg)
 	case apc.ActXactStop:

@@ -51,8 +51,9 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 
 func TestDeleteInvalidDaemonID(t *testing.T) {
 	val := &apc.ActValRmNode{
-		DaemonID:      "abcde:abcde",
-		SkipRebalance: true,
+		DaemonID:          "abcde:abcde",
+		SkipRebalance:     true,
+		KeepInitialConfig: true,
 	}
 	if _, err := api.DecommissionNode(tutils.BaseAPIParams(), val); err == nil {
 		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")

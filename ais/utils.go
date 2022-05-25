@@ -251,9 +251,13 @@ func deploymentType() string {
 	return runtime.GOOS
 }
 
-// TODO: optionally, remove plain text config as well (globalConfigPath, localConfigPath)
 // for AIS metadata filenames (constants), see cmn/fname*
-func cleanupConfigDir(name string) {
+func cleanupConfigDir(name string, keepInitialConfig bool) {
+	if !keepInitialConfig {
+		// remove plain-text (initial) config
+		cos.RemoveFile(daemon.cli.globalConfigPath)
+		cos.RemoveFile(daemon.cli.localConfigPath)
+	}
 	config := cmn.GCO.Get()
 	filepath.Walk(config.ConfigDir, func(path string, finfo os.FileInfo, err error) error {
 		if strings.HasPrefix(finfo.Name(), ".ais.") {

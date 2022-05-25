@@ -515,27 +515,6 @@ func (h *htrun) stopHTTPServer() {
 	}
 }
 
-// on success returns `apc.ActValRmNode` options; on failure writes http error
-func (h *htrun) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*apc.ActValRmNode, string, error) {
-	var (
-		msg  apc.ActionMsg
-		opts apc.ActValRmNode
-	)
-	if err := readJSON(w, r, &msg); err != nil {
-		return nil, "", err
-	}
-	// NOTE: `apc.ActValRmNode` options are currently supported only by ais targets
-	//       and only when decommissioning
-	if msg.Action != apc.ActDecommissionNode || h.si.IsProxy() {
-		return nil, msg.Action, nil
-	}
-	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
-		h.writeErr(w, r, err)
-		return nil, msg.Action, err
-	}
-	return &opts, msg.Action, nil
-}
-
 // remove self from Smap (if required), terminate http, and wait (w/ timeout)
 // for running xactions to abort
 func (h *htrun) stop(rmFromSmap bool) {
