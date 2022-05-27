@@ -65,23 +65,33 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 // Destroy ais buckets
 func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 	for _, bck := range buckets {
-		if err = api.DestroyBucket(defaultAPIParams, bck); err != nil {
-			if cmn.IsStatusNotFound(err) {
-				desc := fmt.Sprintf("Bucket %q does not exist", bck)
-				if !flagIsSet(c, ignoreErrorFlag) {
-					return errors.New(desc)
+		var empty bool
+		empty, err = isBucketEmpty(bck)
+		if err == nil && !empty {
+			if !flagIsSet(c, yesFlag) {
+				if ok := confirm(c, fmt.Sprintf("Proceed to destroy %s?", bck)); !ok {
+					continue
 				}
-				fmt.Fprint(c.App.Writer, desc)
-				continue
 			}
-			return err
 		}
-		fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck)
+		if err = api.DestroyBucket(defaultAPIParams, bck); err == nil {
+			fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck)
+			continue
+		}
+		if cmn.IsStatusNotFound(err) {
+			desc := fmt.Sprintf("Bucket %q does not exist", bck)
+			if !flagIsSet(c, ignoreErrorFlag) {
+				return errors.New(desc)
+			}
+			fmt.Fprint(c.App.Writer, desc)
+			continue
+		}
+		return err
 	}
 	return nil
 }
 
-// Mv ais bucket
+// Rename ais bucket
 func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	var xactID string
 

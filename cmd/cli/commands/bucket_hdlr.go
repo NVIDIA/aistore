@@ -25,7 +25,10 @@ const (
 
 var (
 	bucketCmdsFlags = map[string][]cli.Flag{
-		commandRemove: {ignoreErrorFlag},
+		commandRemove: {
+			ignoreErrorFlag,
+			yesFlag,
+		},
 		commandRename: {waitFlag},
 		commandCreate: {
 			ignoreErrorFlag,

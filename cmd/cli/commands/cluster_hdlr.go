@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -24,8 +23,6 @@ const (
 	roleProxyShort  = "p"
 	roleTargetShort = "t"
 )
-
-const nodeShutDecomm = subcmdNodeDecommission + ".node"
 
 var (
 	clusterCmdsFlags = map[string][]cli.Flag{
@@ -42,13 +39,20 @@ var (
 		subcmdStartMaint: {
 			noRebalanceFlag,
 		},
-		nodeShutDecomm: {
+		subcmdShutdown + ".node": {
 			noRebalanceFlag,
 			noShutdownFlag,
 			rmUserDataFlag,
 		},
+		subcmdNodeDecommission + ".node": {
+			noRebalanceFlag,
+			noShutdownFlag,
+			rmUserDataFlag,
+			yesFlag,
+		},
 		subcmdClusterDecommission: {
 			rmUserDataFlag,
+			yesFlag,
 		},
 		commandStart: {},
 		commandStop:  {},
@@ -151,7 +155,7 @@ var (
 						Name:         subcmdNodeDecommission,
 						Usage:        "safely and permanently remove node from the cluster",
 						ArgsUsage:    daemonIDArgument,
-						Flags:        clusterCmdsFlags[nodeShutDecomm], // same as shutdown node
+						Flags:        clusterCmdsFlags[subcmdNodeDecommission+".node"],
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
@@ -159,7 +163,7 @@ var (
 						Name:         subcmdShutdown,
 						Usage:        "shutdown a node",
 						ArgsUsage:    daemonIDArgument,
-						Flags:        clusterCmdsFlags[nodeShutDecomm], // same as decommission node
+						Flags:        clusterCmdsFlags[subcmdShutdown+".node"],
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
@@ -207,13 +211,16 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 }
 
 func clusterDecommissionHandler(c *cli.Context) error {
-	fmt.Fprintf(c.App.Writer, "Warning: about to permanently decommission AIS cluster. The operation cannot be undone!\n")
-	time.Sleep(3 * time.Second)
+	// ask confirmation
+	if !flagIsSet(c, yesFlag) {
+		if ok := confirm(c, "Proceed?", "about to permanently decommission AIS cluster. The operation cannot be undone!"); !ok {
+			return nil
+		}
+	}
 	rmUserData := flagIsSet(c, rmUserDataFlag)
 	if err := api.DecommissionCluster(defaultAPIParams, rmUserData); err != nil {
 		return err
 	}
-
 	fmt.Fprint(c.App.Writer, "AIS cluster decommissioned.\n")
 	return nil
 }
@@ -302,8 +309,12 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 			"To rebalance the cluster manually at a later time, please run: `ais job start rebalance`")
 	}
 	if action == subcmdNodeDecommission {
-		fmt.Fprintf(c.App.Writer, "Warning: about to permanently decommission node %s. The operation cannot be undone!\n", name)
-		time.Sleep(3 * time.Second)
+		if !flagIsSet(c, yesFlag) {
+			warn := fmt.Sprintf("about to permanently decommission node %s. The operation cannot be undone!", name)
+			if ok := confirm(c, "Proceed?", warn); !ok {
+				return nil
+			}
+		}
 		actValue.NoShutdown = noShutdown
 		actValue.RmUserData = rmUserData
 	} else {

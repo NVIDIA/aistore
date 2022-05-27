@@ -22,6 +22,7 @@ var (
 			baseLstRngFlags,
 			rmRfFlag,
 			verboseFlag,
+			yesFlag,
 		),
 		commandRename: {},
 		commandGet: {
@@ -79,7 +80,7 @@ var (
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	objectCmdGet = cli.Command{
 		Name:         commandGet,
-		Usage:        "get object from the specified bucket",
+		Usage:        "get object",
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,
@@ -88,7 +89,7 @@ var (
 
 	objectCmdPut = cli.Command{
 		Name:         commandPut,
-		Usage:        "put object(s) into the specified bucket",
+		Usage:        "put object(s)",
 		ArgsUsage:    putPromoteObjectArgument,
 		Flags:        objectCmdsFlags[commandPut],
 		Action:       putHandler,
@@ -97,7 +98,7 @@ var (
 
 	objectCmdSetCustom = cli.Command{
 		Name:      commandSetCustom,
-		Usage:     "set object custom properties",
+		Usage:     "set object's custom properties",
 		ArgsUsage: objectArgument + " " + jsonSpecArgument + "|" + keyValuePairsArgument,
 		Flags:     objectCmdsFlags[commandSetCustom],
 		Action:    setCustomPropsHandler,
@@ -132,7 +133,7 @@ var (
 			},
 			{
 				Name:         commandPromote,
-				Usage:        "promote files and directories to ais (ie., replicate files and convert them to objects)",
+				Usage:        "promote files and directories (i.e., replicate files and convert them to objects)",
 				ArgsUsage:    putPromoteObjectArgument,
 				Flags:        objectCmdsFlags[commandPromote],
 				Action:       promoteHandler,
@@ -147,7 +148,7 @@ var (
 			},
 			{
 				Name:         commandCat,
-				Usage:        "cat an object - print the contents to STDOUT",
+				Usage:        "cat an object (i.e., print its contents to STDOUT)",
 				ArgsUsage:    objectArgument,
 				Flags:        objectCmdsFlags[commandCat],
 				Action:       catHandler,
@@ -221,8 +222,12 @@ func removeObjectHandler(c *cli.Context) (err error) {
 			return listOrRangeOp(c, commandRemove, bck)
 		}
 		if flagIsSet(c, rmRfFlag) {
-			fmt.Fprintf(c.App.Writer, "Warning: will remove all objects from %q. The operation cannot be undone!\n", bck)
-			time.Sleep(3 * time.Second)
+			if !flagIsSet(c, yesFlag) {
+				warn := fmt.Sprintf("Warning: will remove all objects from %s. The operation cannot be undone!\n", bck)
+				if ok := confirm(c, "Proceed?", warn); !ok {
+					return nil
+				}
+			}
 			return rmRfAllObjects(c, bck)
 		}
 

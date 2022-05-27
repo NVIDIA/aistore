@@ -67,3 +67,5 @@ cd /tmp && ais object put "rdir/*.txt" ais://$BUCKET_5/subdir -y -r // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais object get ais://$BUCKET_5/subdirtest$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
 rm -rf /tmp/rdir // IGNORE
+
+ais bucket rm --yes --ignore-error ais://$BUCKET_1 ais://$BUCKET_2 ais://$BUCKET_3 ais://$BUCKET_4 ais://$BUCKET_5 // IGNORE

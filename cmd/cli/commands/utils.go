@@ -889,6 +889,18 @@ func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
 	}
 }
 
+// (not to confuse with bck.IsEmpty())
+func isBucketEmpty(bck cmn.Bck) (bool, error) {
+	msg := &apc.ListObjsMsg{}
+	msg.SetFlag(apc.LsPresent)
+	msg.SetFlag(apc.LsNameOnly)
+	objList, err := api.ListObjectsPage(defaultAPIParams, bck, msg)
+	if err != nil {
+		return false, err
+	}
+	return len(objList.Entries) == 0, nil
+}
+
 func ensureHasProvider(bck cmn.Bck, cmd string) error {
 	if !cmn.IsNormalizedProvider(bck.Provider) {
 		return fmt.Errorf("missing backend provider in bucket %q for command %q", bck, cmd)

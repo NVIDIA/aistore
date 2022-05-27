@@ -13,7 +13,7 @@ ais object promote /tmp/prm ais://$BUCKET/fifth/ --delete-src=false --target-id 
 ais object promote /tmp/prm/ ais://$BUCKET/sixth/ --target-id $RANDOM_TARGET
 ais bucket ls ais://$BUCKET
 rm -rf /tmp/prm // IGNORE
-ais bucket rm ais://$BUCKET // IGNORE
+ais bucket rm ais://$BUCKET -y // IGNORE
 
 ais bucket create ais://$BUCKET // IGNORE
 mkdir -p /tmp/prm
@@ -44,4 +44,4 @@ ls /tmp/prm/qq // FAIL "such file or directory"
 ais ls ais://$BUCKET -H --regex=qq
 
 rm -rf /tmp/prm > /dev/null
-ais bucket rm ais://$BUCKET > /dev/null
+ais bucket rm ais://$BUCKET --yes > /dev/null
