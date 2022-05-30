@@ -13,6 +13,7 @@ QParamArchpath = "archpath"
 QParamProvider = "provider"
 QParamWhat = "what"
 QParamKeepBckMD = "keep_md"
+QParamBucketTo = "bck_to"
 
 # Bucket providers
 ProviderAIS = "ais"

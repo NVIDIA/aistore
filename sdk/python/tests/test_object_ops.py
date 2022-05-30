@@ -3,26 +3,21 @@
 #
 
 # Default provider is AIS, so all Cloud-related tests are skipped.
-# To run all the test, provide full bucket name in the commad line, e.g.:
-#    BUCKET=gcp://ais-bck python3 tests/test_client.py
 
 import random
 import string
 import unittest
-import os
 import requests
 import tempfile
 
 from aistore.client.api import Client
-
-CLUSTER_ENDPOINT = os.environ.get("AIS_ENDPOINT", "http://localhost:8080")
-REMOTE_BUCKET = os.environ.get("BUCKET", "")
+from . import CLUSTER_ENDPOINT
 
 OBJ_READ_TYPE_ALL = "read_all"
 OBJ_READ_TYPE_CHUNK = "chunk"
 
 
-class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
+class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         letters = string.ascii_lowercase
         self.bck_name = ''.join(random.choice(letters) for _ in range(10))
@@ -35,23 +30,6 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
             self.client.destroy_bucket(self.bck_name)
         except requests.exceptions.HTTPError:
             pass
-
-    def test_bucket(self):
-        res = self.client.list_buckets()
-        count = len(res)
-        self.client.create_bucket(self.bck_name)
-        res = self.client.list_buckets()
-        count_new = len(res)
-        self.assertEqual(count + 1, count_new)
-
-    def test_head_bucket(self):
-        self.client.create_bucket(self.bck_name)
-        self.client.head_bucket(self.bck_name)
-        self.client.destroy_bucket(self.bck_name)
-        try:
-            self.client.head_bucket(self.bck_name)
-        except requests.exceptions.HTTPError as e:
-            self.assertEqual(e.response.status_code, 404)
 
     def _test_get_obj(self, read_type, obj_name, exp_content):
         chunk_size = random.randrange(1, len(exp_content) + 10)
@@ -85,6 +63,7 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
             for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
                 self._test_get_obj(option, obj_name, content)
 
+    # TODO: Move to separate file.
     def test_cluster_map(self):
         smap = self.client.get_cluster_info()
 
@@ -133,34 +112,6 @@ class TestBasicOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(len(objects), bucket_size)
         objects = self.client.list_all_objects(self.bck_name, page_size=short_page_len)
         self.assertEqual(len(objects), bucket_size)
-
-    @unittest.skipIf(REMOTE_BUCKET == "" or REMOTE_BUCKET.startswith("ais:"), "Remote bucket is not set")
-    def test_evict_bucket(self):
-        obj_name = "evict_obj"
-        parts = REMOTE_BUCKET.split("://")  # must be in format '<provider>://<bck>'
-        self.assertTrue(len(parts) > 1)
-        provider, self.bck_name = parts[0], parts[1]
-        content = "test".encode("utf-8")
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(content)
-            f.flush()
-            self.client.put_object(self.bck_name, obj_name, f.name, provider=provider)
-
-        objects = self.client.list_objects(self.bck_name, provider=provider, props="name,cached", prefix=obj_name)
-        self.assertTrue(len(objects) > 0)
-        for obj in objects:
-            if obj.name == obj_name:
-                self.assertTrue(obj.is_ok())
-                self.assertTrue(obj.is_cached())
-
-        self.client.evict_bucket(self.bck_name, provider=provider)
-        objects = self.client.list_objects(self.bck_name, provider=provider, props="name,cached", prefix=obj_name)
-        self.assertTrue(len(objects) > 0)
-        for obj in objects:
-            if obj.name == obj_name:
-                self.assertTrue(obj.is_ok())
-                self.assertFalse(obj.is_cached())
-        self.client.delete_object(self.bck_name, obj_name, provider=provider)
 
     def test_obj_delete(self):
         bucket_size = 10

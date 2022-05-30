@@ -13,11 +13,12 @@ from .const import (
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_HEAD,
+    ProviderAIS,
     QParamArchpath,
     QParamProvider,
-    ProviderAIS,
     QParamWhat,
     QParamKeepBckMD,
+    QParamBucketTo,
 )
 from .types import ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap
 from .errors import InvalidBckProvider
@@ -68,10 +69,10 @@ class Client:
             List[Bck]: A list of buckets
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
         """
         params = {QParamProvider: provider}
         action = ActionMsg(action="list").dict()
@@ -95,10 +96,10 @@ class Client:
             Nothing
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
             requests.exceptions.HTTPError(409): Bucket already exists
         """
         params = {QParamProvider: ProviderAIS}
@@ -122,10 +123,10 @@ class Client:
             Nothing
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
         """
         params = {QParamProvider: ProviderAIS}
         action = ActionMsg(action="destroy-bck").dict()
@@ -136,7 +137,7 @@ class Client:
             params=params,
         )
 
-    def evict_bucket(self, bck_name: str, provider: str, keepMD: bool = True):
+    def evict_bucket(self, bck_name: str, provider: str, keep_md: bool = True):
         """
         Evicts a bucket in AIStore cluster.
         NOTE: only Cloud buckets can be evicted
@@ -144,22 +145,22 @@ class Client:
         Args:
             bck_name (str): Name of the existing bucket
             provider (str): Name of bucket provider, one of "aws", "gcp", "az", "hdfs" or "ht"
-            keepMD (bool, optional): if true, it evicts objects but keeps bucket metadata
+            keep_md (bool, optional): if true, it evicts objects but keeps bucket metadata
 
         Returns:
             Nothing
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
             InvalidBckProvider: Evicting AIS bucket
         """
         if provider == ProviderAIS:
             raise InvalidBckProvider(provider)
         params = {QParamProvider: provider}
-        if keepMD:
+        if keep_md:
             params[QParamKeepBckMD] = "true"
         action = ActionMsg(action="evict-remote-bck").dict()
         self._request(
@@ -182,10 +183,10 @@ class Client:
             Response header with the bucket properties
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
             requests.exeptions.HTTPError(404): The bucket does not exist
         """
         params = {QParamProvider: provider}
@@ -194,6 +195,51 @@ class Client:
             path=f"buckets/{ bck_name }",
             params=params,
         ).headers
+
+    def copy_bucket(
+        self,
+        from_bck_name: str,
+        to_bck_name: str,
+        prefix: str = "",
+        dry_run: bool = False,
+        force: bool = False,
+        from_provider: str = ProviderAIS,
+        to_provider: str = ProviderAIS,
+    ) -> str:
+        """
+        Returns xaction id that can be used later to check the status of the
+        asynchronous operation.
+
+        Args:
+            from_bck_name (str): Name of the source bucket.
+            to_bck_name (str): Name of the destination bucket.
+            prefix (str, optional): If set, only the objects starting with
+                provider prefix will be copied.
+            dry_run (bool, optional): Determines if the copy should actually
+                happen or not.
+            force (bool, optional): Override existing destination bucket.
+            from_provider (str, optional): Name of source bucket provider.
+            to_provider (str, optional): Name of destination bucket provider.
+
+        Returns:
+            Xaction id (as str) that can be used to check the status of the operation.
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out receiving response from AIStore
+        """
+
+        value = {"prefix": prefix, "dry_run": dry_run, "force": force}
+        action = ActionMsg(action="copy-bck", value=value).dict()
+        params = {QParamProvider: from_provider, QParamBucketTo: to_provider + '/@#/' + to_bck_name + '/'}
+        return self._request(
+            HTTP_METHOD_POST,
+            path=f"buckets/{ from_bck_name }",
+            json=action,
+            params=params,
+        ).text
 
     def list_objects(
         self,
@@ -226,10 +272,10 @@ class Client:
             Empty continuation token marks the final page of the object list.
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
         """
         value = {"prefix": prefix, "pagesize": page_size, "uuid": uuid, "props": props, "continuation_token": continuation_token}
         params = {QParamProvider: provider}
@@ -269,10 +315,10 @@ class Client:
             List[BucketEntry]: list of objects in a bucket
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
         """
         value = {"prefix": prefix, "uuid": "", "props": props, "continuation_token": "", "pagesize": page_size}
         obj_list = None
@@ -304,10 +350,10 @@ class Client:
             Response header with the object properties.
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
             requests.exeptions.HTTPError(404): The object does not exist
         """
         params = {QParamProvider: provider}
@@ -332,10 +378,10 @@ class Client:
             The stream of bytes to read an object or a file inside an archive.
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
         """
         params = {QParamProvider: provider, QParamArchpath: archpath}
         resp = self._request(HTTP_METHOD_GET, path=f"objects/{ bck_name }/{ obj_name }", params=params, stream=True)
@@ -358,10 +404,10 @@ class Client:
             Object properties
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
         """
         url = f"/objects/{ bck_name }/{ obj_name }"
         params = {QParamProvider: provider}
@@ -387,8 +433,8 @@ class Client:
             None
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out while connecting to AIStore server
             requests.ReadTimeout: Timeout receiving response from server
             requests.exeptions.HTTPError(404): The object does not exist
@@ -411,10 +457,10 @@ class Client:
             aistore.msg.Smap
 
         Raises:
-            requests.RequestException: Ambiguous while handling request
-            requests.ConnectionError: A connection error occurred
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
         """
         return self._request_deserialize(
             HTTP_METHOD_GET,
