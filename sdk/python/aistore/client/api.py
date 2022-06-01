@@ -4,6 +4,7 @@
 
 from typing import TypeVar, Type, List, NewType
 import requests
+import time
 from urllib.parse import urljoin
 from pydantic.tools import parse_raw_as
 
@@ -20,11 +21,17 @@ from .const import (
     QParamKeepBckMD,
     QParamBucketTo,
 )
-from .types import ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap
-from .errors import InvalidBckProvider
+from .types import ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap, XactStatus
+from .errors import InvalidBckProvider, Timeout
 
 T = TypeVar("T")
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
+
+
+def probing_frequency(dur: int) -> float:
+    freq = min(dur / 8.0, 1.0)
+    freq = max(dur / 64.0, freq)
+    return max(freq, 0.1)
 
 
 # pylint: disable=unused-variable
@@ -33,7 +40,7 @@ class Client:
     AIStore client for managing buckets, objects, ETL jobs
 
     Args:
-        endpoint (str): AIStore server endpoint
+        endpoint (str): AIStore endpoint
     """
     def __init__(self, endpoint: str):
         self._endpoint = endpoint
@@ -435,8 +442,8 @@ class Client:
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out while connecting to AIStore server
-            requests.ReadTimeout: Timeout receiving response from server
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
             requests.exeptions.HTTPError(404): The object does not exist
         """
         params = {QParamProvider: provider}
@@ -468,3 +475,65 @@ class Client:
             res_model=Smap,
             params={QParamWhat: "smap"},
         )
+
+    def xact_status(self, xact_id: str = "", xact_kind: str = "", daemon_id: str = "", only_running: bool = False) -> XactStatus:
+        """
+        Return status of an eXtended Action (xaction)
+
+        Args:
+            xact_id (str, optional): UUID of the xaction. Empty - all xactions
+            xact_kind (str, optional): kind of the xaction. Empty - all kinds
+            daemon_id (str, optional): return xactions only running on the daemon_id
+            only_running (bool, optional): True - return only currently running xactions, False - include in the list also finished and aborted ones
+
+        Returns:
+            The xaction description
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+        """
+        value = {"id": xact_id, "kind": xact_kind, "show_active": only_running, "node": daemon_id}
+        params = {QParamWhat: "status"}
+
+        return self._request_deserialize(
+            HTTP_METHOD_GET,
+            path="cluster",
+            res_model=XactStatus,
+            json=value,
+            params=params,
+        )
+
+    def wait_for_xaction_finished(self, xact_id: str = "", xact_kind: str = "", daemon_id: str = "", timeout: int = 300):
+        """
+        Return status of an eXtended Action (xaction)
+
+        Args:
+            xact_id (str, optional): UUID of the xaction. Empty - all xactions
+            xact_kind (str, optional): kind of the xaction. Empty - all kinds
+            daemon_id (str, optional): return xactions only running on the daemon_id
+            timeout (int, optional): the maximum time to wait for the xaction, in seconds. Default timeout is 5 minutes
+
+        Returns:
+            The xaction description
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+            errors.Timeout: Timeout while waiting for the xaction to finish
+        """
+        passed = 0
+        sleep_time = probing_frequency(timeout)
+        while True:
+            if passed > timeout:
+                raise Timeout("wait for xaction to finish")
+            status = self.xact_status(xact_id=xact_id, xact_kind=xact_kind, daemon_id=daemon_id)
+            if status.end_time != 0:
+                break
+            time.sleep(sleep_time)
+            passed += sleep_time
+            print(status)

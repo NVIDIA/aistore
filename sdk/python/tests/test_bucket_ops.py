@@ -81,7 +81,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
 
         xact_id = self.client.copy_bucket(from_bck, to_bck)
         self.assertNotEqual(xact_id, "")
-        # TODO: Wait for the xaction.
+        self.client.wait_for_xaction_finished(xact_id=xact_id)
 
 
 if __name__ == '__main__':

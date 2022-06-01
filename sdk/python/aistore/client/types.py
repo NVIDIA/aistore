@@ -73,6 +73,13 @@ class BucketList(BaseModel):  # pylint: disable=too-few-public-methods,unused-va
     flags: int
 
 
+class XactStatus(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+    uuid: str = ""
+    err: str = ""
+    end_time: int = 0
+    aborted: bool = False
+
+
 class ObjStream(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
     class Config:  # pylint: disable=too-few-public-methods,unused-variable
         validate_assignment = True
