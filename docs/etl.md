@@ -119,18 +119,18 @@ $ ais etl ls
 
 If you see an empty response (and no errors) - your AIStore cluster is ready to run ETL.
 
-## Defining and initializing ETL
+## Extract, Transform, Load using user-defined functions
 
-This section is going to describe how to define and initialize custom ETL transformations in the AIStore cluster.
+1. Send transform function in the [**init code** request](#init-code-request) to an AIStore endpoint
+2. Upon receiving **init code** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
+3. When an AIS target receives **init code**, it starts the container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
 
-Deploying ETL consists of the following steps:
-1. To start distributed ETL processing, a user either:
-   * needs to send transform function in [**init code** request](#init-code-request) to the AIStore endpoint, or
-   * needs to send documented [**init spec** request](#init-spec-request) to the AIStore endpoint.
+## Extract, Transform, Load using custom containers
 
-     >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
-2. Upon receiving **init spec/code** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
-3. When a target receives **init spec/code**, it starts the container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
+1. execute [**init spec** API](#init-spec-request) to an AIStore endpoint.
+   >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
+2. Upon receiving **init spec** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
+3. When a target receives **init spec**, it starts the user container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
 
 ### *init code* request
 
