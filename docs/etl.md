@@ -13,9 +13,9 @@ redirect_from:
 * **T**ransform - to the unified common format optimized for subsequent computation (e.g., training deep learning model);
 * **L**oad - transformed data into a new destination - e.g., a storage system that supports high-performance computing over large scale datasets.
 
-The latter can be AIStore (AIS). In fact, the system is designed from the ground up to support all 3 stages of the ETL pre (or post) processing. You can easily task AIS cluster with running custom transformations:
+The latter can be AIStore (AIS). The system is designed from the ground up to support all 3 stages of the ETL pre (or post) processing. You can easily task the AIS cluster by running custom transformations:
 
-* *inline* - that is, transforming datasets on the fly by virtue of (randomly) reading them and streaming a resulting transformed output directly to (computing) clients that perform those reads;
+* *inline* - that is, transforming datasets on the fly by (randomly) reading them and streaming a resulting transformed output directly to (computing) clients that perform those reads;
 * *offline* - storing transformed output as a new dataset that AIStore will make available for any number of future computations.
 
 > Implementation-wise, *offline* transformations of any kind, on the one hand, and copying datasets, on the other, are closely related - the latter being, effectively, a *no-op* offline transformation.
@@ -27,7 +27,7 @@ And this is exactly how we have more recently implemented **AIS-ETL** - the ETL 
 
 Technically, the service supports running user-provided ETL containers **and** custom Python scripts *in the* (and *by the*) storage cluster.
 
-Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
+**Note:** AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
 
 ## References
 
@@ -37,8 +37,8 @@ Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
   - [ETL: Using WebDataset to train on a sharded dataset](https://aiatscale.org/blog/2021/10/29/ais-etl-3)
 * For step-by-step tutorials, see:
   - [PyTorch ImageNet preprocessing](/docs/tutorials/etl/etl_imagenet_pytorch.md)
-  - [Compute MD5 of the object](/docs/tutorials/etl/compute_md5.md)
-* For quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)
+  - [Compute the MD5 of the object](/docs/tutorials/etl/compute_md5.md)
+* For a quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)
 
 
 The rest of this text is organized as follows:
@@ -90,7 +90,7 @@ Note that both the container itself and its [YAML specification](https://raw.git
 The example above uses [AIS CLI](/docs/cli.md) to:
 1. **Create** a new AIS bucket;
 2. **PUT** multiple TAR files containing ImageNet images into the created bucket;
-3. **Init** ETL container based only on a simple python function;
+3. **Init** ETL container-based only on a simple python function;
 4. **Transform** offline each TAR from the source bucket by standardizing images from the TAR and putting results in a destination bucket;
 5. **Verify** the transformation output by downloading one of the transformed TARs and checking its content.
 
@@ -98,12 +98,12 @@ The example above uses [AIS CLI](/docs/cli.md) to:
 
 > If you already have a running AIStore cluster deployed on Kubernetes, skip this section and go to the [Initialize ETL](#defining-and-initializing-etl) section.
 
-To deploy ETL-ready AIStore cluster, please refer to [Getting Started](getting_started.md).
+To deploy the ETL-ready AIStore cluster, please refer to [Getting Started](getting_started.md).
 
 > Note that you have to choose one of the deployment types that supports Kubernetes - for example, [Cloud Deployment](getting_started.md#cloud-deployment).
 
-> During the AIStore on Kubernetes deployment, `HOSTNAME` environment variable, set by Kubernetes, **shouldn't** be overwritten - AIS target uses it to discover its Pod and Node name.
-> In some environments (like `minikube`) the `HOSTNAME` is not reliable and in such cases it's required to set `K8S_NODE_NAME` in Pod spec:
+> During the AIStore on Kubernetes deployment, the `HOSTNAME` environment variable, set by Kubernetes, **shouldn't** be overwritten - AIS target uses it to discover its Pod and Node name.
+> In some environments (like `minikube`) the `HOSTNAME` is not reliable and in such cases, it's required to set `K8S_NODE_NAME` in Pod spec:
 > ```yaml
 > env:
 >  - name: K8S_NODE_NAME
@@ -119,33 +119,33 @@ $ ais etl ls
 
 If you see an empty response (and no errors) - your AIStore cluster is ready to run ETL.
 
-## Extract, Transform, Load using user-defined functions
+## Extract, Transform and Load using user-defined functions
 
 1. Send transform function in the [**init code** request](#init-code-request) to an AIStore endpoint
-2. Upon receiving **init code** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
+2. Upon receiving the **init code** request, the AIS proxy broadcasts the request to all AIS targets in the cluster.
 3. When an AIS target receives **init code**, it starts the container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
 
-## Extract, Transform, Load using custom containers
+## Extract, Transform and Load using custom containers
 
 1. execute [**init spec** API](#init-spec-request) to an AIStore endpoint.
    >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
-2. Upon receiving **init spec** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
+2. Upon receiving the **init spec** request, the AIS proxy broadcasts the request to all AIS targets in the cluster.
 3. When a target receives **init spec**, it starts the user container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
 
 ### *init code* request
 
-You can write your own custom `transform` function that takes input object bytes as a parameter and returns output bytes (the transformed object's content).
+You can write your custom `transform` function that takes input object bytes as a parameter and returns output bytes (the transformed object's content).
 You can then use the *init code* request to execute this `transform` on the entire distributed dataset.
 
-In effect, a user can skip the entire step of writing own Dockerfile and building a custom ETL container - the *init code* capability allows the user to skip this step entirely.
+In effect, a user can skip the entire step of writing their Dockerfile and building a custom ETL container - the *init code* capability allows the user to skip this step entirely.
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-For detailed step-by-step tutorial on *init code* request, please see [ImageNet ETL playbook](/docs/tutorials/etl/etl_imagenet_pytorch.md).
+For a detailed step-by-step tutorial on *init code* request, please see [ImageNet ETL playbook](/docs/tutorials/etl/etl_imagenet_pytorch.md).
 
 #### `transform` function
 
-To use *init code* request a user has to provide a Python script with defined `transform` function which has the following signature:
+To use the *init code* request a user has to provide a Python script with a defined `transform` function that has the following signature:
 ```python
 def transform(input_bytes: bytes) -> bytes
 ```
@@ -156,7 +156,7 @@ These requirements will be installed on the machine executing the `transform` fu
 #### Runtimes
 
 AIS-ETL provides several *runtimes* out of the box.
-Each *runtime* determines the programming language of your custom `transform` function, the set of pre-installed packages and tools that your `transform` can utilize.
+Each *runtime* determines the programming language of your custom `transform` function and the set of pre-installed packages and tools that your `transform` can utilize.
 
 Currently, the following runtimes are supported:
 
@@ -168,8 +168,8 @@ Currently, the following runtimes are supported:
 | `python3.8` | `python:3.8` is used to run the code. |
 | `python3.10` | `python:3.10` is used to run the code. |
 
-More *runtimes* will be added in the future, with the plans to support the most popular ETL toolchains.
-Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your own ETL container and deploy it via [*init spec* request](#init-spec-request).
+More *runtimes* will be added in the future, with plans to support the most popular ETL toolchains.
+Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your ETL container and deploy it via [*init spec* request](#init-spec-request).
 
 ### *init spec* request
 
@@ -177,7 +177,7 @@ Still, since the number of supported  *runtimes* will always remain somewhat lim
 It allows running any Docker image that implements certain requirements on communication with the cluster.
 The *init spec* request requires writing a Pod specification following specification requirements.
 
-For detailed step-by-step tutorial on *init spec* request, please see [MD5 ETL playbook](/docs/tutorials/etl/compute_md5.md).
+For a detailed step-by-step tutorial on *init spec* request, please see the [MD5 ETL playbook](/docs/tutorials/etl/compute_md5.md).
 
 #### Requirements
 
@@ -220,13 +220,13 @@ and contain all necessary fields to start the Pod.
 #### Communication Mechanisms
 
 AIS currently supports 3 (three) distinct target ⇔ container communication mechanisms to facilitate the fly or offline transformation.
-User can choose and specify (via YAML spec) any of the following:
+Users  can choose and specify (via YAML spec) any of the following:
 
 | Name | Value | Description |
 |---|---|---|
 | **post** | `hpush://` | A target issues a POST request to its ETL container with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
-| **reverse proxy** | `hrev://` | A target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return the result to the target. |
-| **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
+| **reverse proxy** | `hrev://` | A target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send a (GET) request to a cluster using an ETL container. ETL container should make a GET request to a target, transform bytes, and return the result to the target. |
+| **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send a (GET) request to cluster using an ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
 | **input/output** | `io://` | A target remotely runs the binary or the code and sends the data to standard input and excepts the transformed bytes to be sent on standard output. |
 
 > ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
@@ -237,7 +237,7 @@ User can choose and specify (via YAML spec) any of the following:
 AIStore supports both *inline* transformation of selected objects and *offline* transformation of an entire bucket.
 
 There are two ways to run ETL transformations:
-- HTTP RESTful API described in [API Reference section](#api-reference) of this document,
+- HTTP RESTful APIs are described in [API Reference section](#api-reference) of this document,
 - [ETL CLI](/docs/cli/etl.md),
 - [AIS Loader](/docs/aisloader.md).
 
@@ -283,5 +283,5 @@ $ ais etl init spec --name=etl-md5 --from-file=spec.yaml
 Below are specifications for a valid `ETL_ID`:
 1. Starts with an alphabet 'A' to 'Z' or 'a' to 'z'.
 2. Can contain alphabets, numbers, underscore ('_'), or hyphen ('-').
-3. Should have a length greater that 5 and less than 21.
+3. Should have a length greater than 5 and less than 21.
 4. Shouldn't contain special characters, except for underscore and hyphen.

@@ -14,9 +14,9 @@ Generally, when deciding how to deploy a system like AIS with so many possibilit
 * what's the dataset size, or sizes?
 * what hardware will I use?
 
-For datasets, say, below 50TB a single host may suffice and should, therefore, be considered a viable option. On the other hand, [Cloud deployment](#cloud-deployment) option may sound attractive for its ubiquitous convenience and for  _not_ thinking about the hardwares and the sizes - at least, not right away.
+For datasets, say, below 50TB a single host may suffice and should, therefore, be considered a viable option. On the other hand, the [Cloud deployment](#cloud-deployment) option may sound attractive for its ubiquitous convenience and for  _not_ thinking about the hardware and the sizes - at least, not right away.
 
-> Note as well that **you can always start small**: a single-host deployment, a 3-node cluster in the Cloud or on premises, etc. AIStore supports a number of options to inter-connect existing clusters - the capability called *unified global namespace* - or migrate existing datasets (on demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](overview.md).
+> Note as well that **you can always start small**: a single-host deployment, a 3-node cluster in the Cloud or on-premises, etc. AIStore supports many options to inter-connect existing clusters - the capability called *unified global namespace* - or migrate existing datasets (on-demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](overview.md).
 
 ## Prerequisites
 
@@ -24,22 +24,22 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 
 > It is expected that within a given cluster, all AIS target machines are identical, hardware-wise.
 
-* [Linux](#Linux) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) or [MacOS](#MacOS)
+* [Linux](#Linux) (with `GCC`, `sysstat` and `attr` packages, and kernel 4.15+) or [macOS](#macOS)
 * [Go 1.18 or later](https://golang.org/dl/) (and look for go1.18.1)
 * Extended attributes (`xattrs` - see next section)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 
 ### Linux
 
-Depending on your Linux distribution, you may or may not have `gcc`, `sysstat`, and/or `attr` packages. These packages must be installed.
+Depending on your Linux distribution, you may or may not have `GCC`, `sysstat`, and/or `attr` packages. These packages must be installed.
 
-Speaking of distributions, our current default recommendations is Ubuntu Server 20.04 LTS. But Ubuntu 18.04 and CentOS 8.x (or later) will also work. As well as numerous others.
+Speaking of distributions, our current default recommendation is Ubuntu Server 20.04 LTS. But Ubuntu 18.04 and CentOS 8.x (or later) will also work. As well as numerous others.
 
 For the [local filesystem](performance.md), we currently recommend xfs. But again, this (default) recommendation shall not be interpreted as a limitation of any kind: other fine choices include zfs, ext4, f2fs, and more.
 
 Since AIS itself provides n-way mirroring and erasure coding, hardware RAID would _not_ be recommended. But can be used, and will work.
 
-The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or `xattrs`, is a long time POSIX legacy supported by all mainstream filesystems with no exceptions. Unfortunately, `xattrs` may not always be enabled in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
+The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or `xattrs`, is a long-time POSIX legacy supported by all mainstream filesystems with no exceptions. Unfortunately, `xattrs` may not always be enabled in the Linux kernel configurations - the fact that can be easily found out by running the `setfattr` command.
 
 If disabled, please make sure to enable xattrs in your Linux kernel configuration. To quickly check:
 
@@ -49,14 +49,14 @@ $ setfattr -n user.bar -v ttt foo
 $ getfattr -n user.bar foo
 ```
 
-### MacOS
+### macOS
 
-MacOS/Darwin is also supported, albeit for development only.
-Certain capabilities related to querying the state-and-status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
+macOS/Darwin is also supported, albeit for development only.
+Certain capabilities related to querying the state and status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
 
 ## Make
 
-AIS comes with its own build system that we use in a variety of development and production environments. The very first `make` command to run would be:
+AIS comes with its build system that we use in a variety of development and production environments. The very first `make` command to run would be:
 
 ```console
 $ make help
@@ -76,7 +76,7 @@ Useful commands:
   cli-autocompletions            Add CLI autocompletions
   cli                            Build CLI ('ais' binary)
   deploy                         Build 'aisnode' and deploy the specified numbers of local AIS proxies and targets
-  deploy-docker                  Deploy AIS cluster inside the dockers
+  deploy-docker                  run AIS cluster consisting of one or more `aisnode` containers
 ...
 ...
 
@@ -115,13 +115,13 @@ In particular:
 
 For any Kubernetes deployments (including, of course, production deployments) please use a separate and dedicated [AIS-K8s GitHub](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md) repository. The repo contains [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/master/helm/ais/charts) and detailed [Playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks) that cover a variety of use cases and configurations.
 
-In particular, [AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md) provides a single-line command to deploy Kubernetes cluster and the underlying infrastructure with AIStore cluster running inside (see below). The only requirement is having a few dependencies preinstalled (in particular, `helm`) and a Cloud account.
+In particular, [AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md) provides a single-line command to deploy Kubernetes cluster and the underlying infrastructure with the AIStore cluster running inside (see below). The only requirement is having a few dependencies preinstalled (in particular, `helm`) and a Cloud account.
 
-The following GIF illustrates steps to deploy AIS on Google Cloud Platform (GCP):
+The following GIF illustrates steps to deploy AIS on the Google Cloud Platform (GCP):
 
 ![Kubernetes cloud deployment](images/ais-k8s-deploy.gif)
 
-Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
+Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts the [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
 
 ### Minimal all-in-one-docker Deployment
 
@@ -140,19 +140,19 @@ For Linux:
 * download the latest `go1.18.x.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
 * follow [installation instructions](https://go.dev/doc/install)
 
-Finally, if not done yet, export [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
+Finally, if not done yet, export the [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 
 Here's one [local-playground usage example](/deploy/dev/local/README.md) that can serve as a 5-minute introduction on:
 
-* setting up Go environment
-* provisioniong data drives for AIS deployment, and
+* setting up the Go environment
+* provisioning data drives for AIS deployment, and
 * running a minimal AIS cluster - locally.
 
 Alternatively, or in addition, run it as follows:
 
 ### Steps to run AIS from source
 
-Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
+Assuming that the [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
 
 ```console
 $ cd $GOPATH/src/github.com/NVIDIA
@@ -176,7 +176,7 @@ $ clean_deploy.sh --proxy-cnt 1 --target-cnt 7
 $ clean_deploy.sh --proxy-cnt 1 --target-cnt 7 --gcp
 ```
 
-For more options and detailed description, run `make help` and see: [`clean_deploy.sh`](/docs/development.md#clean-deploy).
+For more options and detailed descriptions, run `make help` and see: [`clean_deploy.sh`](/docs/development.md#clean-deploy).
 
 ### Local Playground Demo
 
@@ -208,12 +208,12 @@ Create loopback devices (note that it may take some time): (y/n) ?
 n
 Building aisnode: version=df24df77 providers=
 ```
-> Notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
+> Notice the "Cloud" prompt above and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
 Further:
 
 * `make kill`    - terminate local AIStore.
-* `make restart` - shut it down and immediately restart using existing configuration.
+* `make restart` - shut it down and immediately restart using the existing configuration.
 * `make help`    - show make options and usage examples.
 
 For more development options and tools, please refer to the [development docs](/docs/development.md).
@@ -253,7 +253,7 @@ The command randomly shuffles existing short tests and then, depending on your p
 
 ## Kubernetes Playground
 
-In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/deploy/dev/k8s/README.md), to run Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](etl.md), for example - can be developed rather efficiently.
+In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/deploy/dev/k8s/README.md), to run the Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](etl.md), for example - can be developed rather efficiently.
 
 * [AIStore on Minikube](/deploy/dev/k8s/README.md)
 
@@ -292,7 +292,7 @@ As noted, the project utilizes GNU `make` to build and run things both locally a
 
 In particular, the `make` provides a growing number of developer-friendly commands to:
 
-* **deploy** AIS cluster on your local development machine;
+* **deploy** the AIS cluster on your local development machine;
 * **run** all or selected tests;
 * **instrument** AIS binary with race detection, CPU and/or memory profiling, and more.
 
@@ -310,6 +310,6 @@ To that end, each AIS node at startup loads and parses [cgroup](https://www.kern
 
 Further, given the container's cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself.
 
-> Limits on memory may affect [dSort](/docs/dsort.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.
+> Memory limits may affect [dSort](/docs/dsort.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding which also requires memory to rebuild objects from slices, etc.
 
 > For technical details on AIS memory management, please see [this readme](/memsys/README.md).
