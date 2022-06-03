@@ -22,7 +22,7 @@ FROM ubuntu:18.04
 RUN apt-get update -yq && apt-get dist-upgrade -y
 RUN apt-get install -y wget sysstat curl nodejs git iputils-ping netcat make coreutils net-tools iproute2 tcptrack
 
-RUN cd /opt && git clone git://github.com/etsy/statsd.git
+RUN cd /opt && git clone https://github.com/etsy/statsd.git
 
 RUN mkdir -p /usr/local/bin
 ENV PATH="/usr/local/bin:${PATH}"
