@@ -65,7 +65,7 @@ func (p *bsummFactory) Start() error {
 	xctn := &bsummXact{t: p.T, msg: p.msg, ctx: p.ctx}
 	xctn.InitBase(p.UUID(), apc.ActSummaryBck, p.Bck)
 	p.xctn = xctn
-	go p.xctn.Run(nil)
+	xact.GoRunW(xctn)
 	return nil
 }
 
@@ -80,25 +80,25 @@ func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
 // bsummXact //
 ///////////////
 
-func (t *bsummXact) Run(*sync.WaitGroup) {
+func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	var (
 		buckets []*cluster.Bck
-		bmd     = t.t.Bowner().Get()
+		bmd     = r.t.Bowner().Get()
 	)
-	if t.Bck().Name != "" {
-		buckets = append(buckets, t.Bck())
+	if r.Bck().Name != "" {
+		buckets = append(buckets, r.Bck())
 	} else {
-		if !t.Bck().HasProvider() || t.Bck().IsAIS() {
+		if !r.Bck().HasProvider() || r.Bck().IsAIS() {
 			provider := apc.ProviderAIS
 			bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 				buckets = append(buckets, bck)
 				return false
 			})
 		}
-		if t.Bck().HasProvider() && !t.Bck().IsAIS() {
+		if r.Bck().HasProvider() && !r.Bck().IsAIS() {
 			var (
-				provider  = t.Bck().Provider
-				namespace = t.Bck().Ns
+				provider  = r.Bck().Provider
+				namespace = r.Bck().Ns
 			)
 			bmd.Range(&provider, &namespace, func(bck *cluster.Bck) bool {
 				buckets = append(buckets, bck)
@@ -106,6 +106,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 			})
 		}
 	}
+	rwg.Done()
 
 	var (
 		mtx       sync.Mutex
@@ -117,25 +118,25 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 
 	totalDisksSize, err := fs.GetTotalDisksSize()
 	if err != nil {
-		t.UpdateResult(nil, err)
+		r.UpdateResult(nil, err)
 		return
 	}
 
-	si, err := cluster.HrwTargetTask(t.msg.UUID, t.t.Sowner().Get())
+	si, err := cluster.HrwTargetTask(r.msg.UUID, r.t.Sowner().Get())
 	if err != nil {
-		t.UpdateResult(nil, err)
+		r.UpdateResult(nil, err)
 		return
 	}
 
 	// Check if we are the target that needs to list cloud bucket (we only want
 	// single target to do it).
-	shouldListCB := t.msg.Cached || (si.ID() == t.t.SID() && !t.msg.Cached)
+	shouldListCB := r.msg.Cached || (si.ID() == r.t.SID() && !r.msg.Cached)
 
 	for _, bck := range buckets {
 		go func(bck *cluster.Bck) {
 			defer wg.Done()
 
-			if err := bck.Init(t.t.Bowner()); err != nil {
+			if err := bck.Init(r.t.Bowner()); err != nil {
 				errCh <- err
 				return
 			}
@@ -147,13 +148,13 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 			summary.Bck.Copy(bck.Bucket())
 
 			// Each bucket should have it's own copy of msg (we may update it).
-			cos.CopyStruct(&msg, t.msg)
+			cos.CopyStruct(&msg, r.msg)
 			if bck.IsHTTP() {
 				msg.Cached = true
 			}
 
 			if msg.Fast && (bck.IsAIS() || msg.Cached) {
-				objCount, size, err := t.doBckSummaryFast(bck)
+				objCount, size, err := r.doBckSummaryFast(bck)
 				if err != nil {
 					errCh <- err
 					return
@@ -177,7 +178,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 					lsmsg.Flags = apc.LsPresent
 				}
 				for {
-					walk := objwalk.NewWalk(context.Background(), t.t, bck, lsmsg)
+					walk := objwalk.NewWalk(context.Background(), r.t, bck, lsmsg)
 					if bck.IsAIS() {
 						list, err = walk.DefaultLocalObjPage()
 					} else {
@@ -191,13 +192,12 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 					for _, v := range list.Entries {
 						summary.Size += uint64(v.Size)
 
-						// We should not include object count for cloud buckets
-						// as other target will do that for us. We just need to
-						// report the size on the disk.
+						// for remote backends, not updating obj-count to avoid double counting
+						// (by other targets).
 						if bck.IsAIS() || (!bck.IsAIS() && shouldListCB) {
 							summary.ObjCount++
 						}
-						t.ObjsAdd(1, v.Size)
+						r.ObjsAdd(1, v.Size)
 					}
 
 					if list.ContinuationToken == "" {
@@ -218,14 +218,14 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 	wg.Wait()
 	close(errCh)
 	for err := range errCh {
-		t.UpdateResult(nil, err)
+		r.UpdateResult(nil, err)
 		return
 	}
 
-	t.UpdateResult(summaries, nil)
+	r.UpdateResult(summaries, nil)
 }
 
-func (t *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {
+func (r *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {
 	var (
 		availablePaths = fs.GetAvail()
 		group, _       = errgroup.WithContext(context.Background())
@@ -252,7 +252,7 @@ func (t *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, e
 
 				gatomic.AddUint64(&objCount, uint64(fileCount))
 				gatomic.AddUint64(&size, dirSize)
-				t.ObjsAdd(fileCount, int64(dirSize))
+				r.ObjsAdd(fileCount, int64(dirSize))
 				return nil
 			}
 		}(mpathInfo))
@@ -260,17 +260,17 @@ func (t *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, e
 	return objCount, size, group.Wait()
 }
 
-func (t *bsummXact) UpdateResult(result interface{}, err error) {
+func (r *bsummXact) UpdateResult(result interface{}, err error) {
 	res := &taskState{Err: err}
 	if err == nil {
 		res.Result = result
 	}
-	t.res.Store(unsafe.Pointer(res))
-	t.Finish(err)
+	r.res.Store(unsafe.Pointer(res))
+	r.Finish(err)
 }
 
-func (t *bsummXact) Result() (interface{}, error) {
-	ts := (*taskState)(t.res.Load())
+func (r *bsummXact) Result() (interface{}, error) {
+	ts := (*taskState)(r.res.Load())
 	if ts == nil {
 		return nil, errors.New("no result to load")
 	}

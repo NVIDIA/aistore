@@ -41,7 +41,7 @@ var (
 				Usage:        "check buckets for misplaced objects and objects that have insufficient numbers of copies or EC slices",
 				ArgsUsage:    listCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgValidate],
-				Action:       showObjectHealth,
+				Action:       showMisplacedAndMore,
 				BashComplete: bucketCompletions(),
 			},
 			mpathCmd,

@@ -457,15 +457,32 @@ In particular, location of each objects stored in the cluster must at any point 
 
 As far as the option `--validate` a non-zero *misplaced* objects in its output would be a direct indication that the cluster requires rebalancing.
 
-Note that `--validate` may take considerable time to execute, depending, of course, on sizes of the datasets and capabilities of the underlying hardware.
+Note:
+
+* `--validate` may take considerable time to execute, depending, of course, on sizes of the datasets and capabilities of the underlying hardware.
+* the same goes for `--fast=false`: by default, bucket summary executes *faster* logic which may have a certain minor speed/accuracy trade-off. To obtain the most presize results, run the command with `--fast=false` (and prepare to wait).
 
 ### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--fast` | `bool` | The option is designed primarily for internal usage. The output may not accurately reflect user-accessible content. | `false` |
+| `--fast` | `bool` | use faster logic to compute the result (default: true) | `true` |
 | `--validate` | `bool` | Check objects for errors: misplacement, insufficient number of copies | `false` |
-| `--cached` | `bool` | For buckets that have remote [backends](/docs/providers.md), list only objects stored in the AIS cluster | `false` |
+| `--verbose` | `bool` | Verbose | `false` |
+| `--cached` | `bool` | For buckets that have remote [backends](/docs/providers.md), list only the objects that are stored in the cluster | `false` |
+
+Examples:
+
+```console
+# 1. show bucket summary for a specified bucket
+$ ais bucket summary ais://abc
+
+# 2. all AIS buckets' summaries:
+$ ais bucket summary
+
+# 3. specific bucket with the `--fast` option disabled (note that a *faster* logic is enabled by default)
+$ ais bucket summary ais://abc --fast=false
+```
 
 ## Start N-way Mirroring
 

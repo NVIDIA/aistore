@@ -322,10 +322,13 @@ var (
 	pageSizeFlag = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}
 	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
-	fastFlag     = cli.BoolFlag{
+
+	fastFlag = cli.BoolTFlag{
 		Name:  "fast",
-		Usage: "use fast algorithm to compute the result (beware: advanced usage only)",
+		Usage: "use faster logic to compute the result (default: true)",
 	}
+	validateSummaryFlag = cli.BoolFlag{Name: "validate", Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts"}
+
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}
@@ -333,7 +336,6 @@ var (
 	dataSlicesFlag    = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
 	paritySlicesFlag  = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
 	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
-	validateFlag      = cli.BoolFlag{Name: "validate", Usage: "check objects health"}
 	compactPropFlag   = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
 	nameOnlyFlag      = cli.BoolFlag{Name: "name-only", Usage: "show only object names"}
 

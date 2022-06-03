@@ -303,7 +303,7 @@ var (
 		Usage:        "show bucket sizes and %% of used capacity on a per-bucket basis",
 		ArgsUsage:    listCommandArgument,
 		Flags:        storageCmdFlags[subcmdStgSummary],
-		Action:       showBucketSizes,
+		Action:       showBucketSummary,
 		BashComplete: bucketCompletions(),
 	}
 	showCmdMpath = cli.Command{

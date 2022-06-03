@@ -74,7 +74,7 @@ var (
 		subcmdSummary: {
 			listCachedFlag,
 			fastFlag,
-			validateFlag,
+			validateSummaryFlag,
 			verboseFlag,
 		},
 		subcmdLRU: {
@@ -285,7 +285,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 	return templates.DisplayOutput(bckSums, c.App.Writer, templates.BucketSummaryValidateTmpl)
 }
 
-func showObjectHealth(c *cli.Context) (err error) {
+func showMisplacedAndMore(c *cli.Context) (err error) {
 	queryBcks, err := parseQueryBckURI(c, c.Args().First())
 	if err != nil {
 		return err
@@ -297,7 +297,7 @@ func showObjectHealth(c *cli.Context) (err error) {
 	return cmn.WaitForFunc(fValidate, longCommandTime)
 }
 
-func showBucketSizes(c *cli.Context) error {
+func showBucketSummary(c *cli.Context) error {
 	queryBcks, err := parseQueryBckURI(c, c.Args().First())
 	if err != nil {
 		return err
@@ -319,11 +319,11 @@ func showBucketSizes(c *cli.Context) error {
 }
 
 func summaryBucketHandler(c *cli.Context) (err error) {
-	if flagIsSet(c, validateFlag) {
-		return showObjectHealth(c)
+	if flagIsSet(c, validateSummaryFlag) {
+		return showMisplacedAndMore(c)
 	}
 
-	return showBucketSizes(c)
+	return showBucketSummary(c)
 }
 
 func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
