@@ -63,17 +63,6 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
                 self._test_get_obj(option, obj_name, content)
 
-    # TODO: Move to separate file.
-    def test_cluster_map(self):
-        smap = self.client.get_cluster_info()
-
-        self.assertIsNotNone(smap)
-        self.assertIsNotNone(smap.proxy_si)
-        self.assertNotEqual(len(smap.pmap), 0)
-        self.assertNotEqual(len(smap.tmap), 0)
-        self.assertNotEqual(smap.version, 0)
-        self.assertIsNot(smap.uuid, "")
-
     def test_list_object_page(self):
         bucket_size = 110
         tests = [
