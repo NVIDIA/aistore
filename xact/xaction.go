@@ -73,7 +73,6 @@ func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {
 	xctn.id, xctn.kind = id, kind
 	xctn.abort.ch = make(chan error, 1)
 	if bck != nil {
-		debug.Assert(!bck.IsEmpty())
 		xctn.bck = *bck
 	}
 	xctn.setStartTime(time.Now())
