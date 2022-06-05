@@ -444,43 +444,44 @@ To check the status, run: ais show job xaction copy-bck ais://bck2
 
 `ais bucket summary [BUCKET]`
 
-Show summary information on a per bucket basis. If `BUCKET` is specified in the command line, the output gets narrowed down to this specific bucket.
+Show summary information on a per bucket basis. If bucket is omitted, the command *applies* to all [AIS buckets](/docs/bucket.md#ais-bucket).
 
-Depending on the command line options (listed below), per-bucket information includes total number of objects, size of the bucket in bytes or megabytes, and percentage of the total capacity used by the bucket.
+The output includes the total number of objects in a bucket, the bucket's size (bytes, megabytes, etc.), and the percentage of the total capacity used by the bucket.
 
-A recently added `--validate` option is intended to analyze integrity of the stored distributed content. The questions that we ask at validation time "cover" location of stored objects and their replicas, the number of replicas (and whether this number agrees with the bucket configuration), etc.
+A few additional words must be said about `--validate`. The option is provided to run integrity checks, namely: locations of objects, replicas, and EC slices in the bucket, the number of replicas (and whether this number agrees with the bucket configuration), and more.
 
-In particular, location of each objects stored in the cluster must at any point in time correspond to the current cluster map and, within each storage target, to the target's *mountpaths* (disks).  A failure to abide by location rules is called "misplacement"; misplaced objects - if any - must be migrated to their proper locations via automated processes called `global rebalance` and `resilver`:
+> Location of each stored object must at any point in time correspond to the current cluster map and, within each storage target, to the target's [mountpaths](/docs/overview.md#terminology). A failure to abide by location rules is called *misplacement*; misplaced objects - if any - must be migrated to their proper locations via automated processes called `global rebalance` and `resilver`:
 
 * [global rebalance and reslver](/docs/rebalance.md)
 * [resilvering selected targets: advanced usage](/docs/resourcesvanced.md)
 
-As far as the option `--validate` a non-zero *misplaced* objects in its output would be a direct indication that the cluster requires rebalancing.
+### Bucket summary: important notes
 
-Note:
-
-* `--validate` may take considerable time to execute, depending, of course, on sizes of the datasets and capabilities of the underlying hardware.
-* the same goes for `--fast=false`: by default, bucket summary executes *faster* logic which may have a certain minor speed/accuracy trade-off. To obtain the most presize results, run the command with `--fast=false` (and prepare to wait).
+1. `--validate` may take considerable time to execute (depending, of course, on sizes of the datasets in question and the capabilities of the underlying hardware);
+2. non-zero *misplaced* objects in the (validated) output is a direct indication that the cluster requires rebalancing and/or resilvering;
+3. `--fast=false` is another command line option that may also significantly increase execution time;
+4. by default, `--fast` is set to `true`, which also means that bucket summary executes a *faster* logic (that may have a certain minor speed/accuracy trade-off);
+5. to obtain the most precise results, run the command with `--fast=false` - and prepare to wait.
 
 ### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--fast` | `bool` | use faster logic to compute the result (default: true) | `true` |
-| `--validate` | `bool` | Check objects for errors: misplacement, insufficient number of copies | `false` |
-| `--verbose` | `bool` | Verbose | `false` |
+| `--fast` | `bool` | Use faster logic to compute the result | `true` |
+| `--validate` | `bool` | Check buckets for errors: misplaced objects, insufficient number of replicas, and more | `false` |
+| `--verbose` | `bool` | Verbose output | `false` |
 | `--cached` | `bool` | For buckets that have remote [backends](/docs/providers.md), list only the objects that are stored in the cluster | `false` |
 
-Examples:
+### Examples
 
 ```console
-# 1. show bucket summary for a specified bucket
+# 1. show summary for a specific bucket
 $ ais bucket summary ais://abc
 
-# 2. all AIS buckets' summaries:
+# 2. "summarize" all AIS buckets
 $ ais bucket summary
 
-# 3. specific bucket with the `--fast` option disabled (note that a *faster* logic is enabled by default)
+# 3. "summarize" ais://abc with `--fast` option disabled
 $ ais bucket summary ais://abc --fast=false
 ```
 

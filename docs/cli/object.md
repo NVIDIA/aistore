@@ -497,7 +497,7 @@ Colocation in context means that the files in question are already located *insi
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--verbose` or `-v` | `bool` | Verbose printout | `false` |
+| `--verbose` or `-v` | `bool` | Verbose output | `false` |
 | `--target-id` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
 | `--recursive` or `-r` | `bool` | Promote nested directories | `false` |
 | `--overwrite-dst` or `-o` | `bool` | Overwrite destination (object) if exists | `false` |
