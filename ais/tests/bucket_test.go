@@ -955,6 +955,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 func TestListObjectsRandPageSize(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
+			totalCnt   int
 			baseParams = tutils.BaseAPIParams()
 			m          = ioContext{
 				t:        t,
@@ -962,9 +963,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 				num:      rand.Intn(5000) + 1000,
 				fileSize: 128,
 			}
-
-			totalCnt = 0
-			msg      = &apc.ListObjsMsg{}
+			msg = &apc.ListObjsMsg{Flags: apc.LsPresent}
 		)
 
 		if !bck.IsAIS() {
@@ -985,9 +984,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 			if objList.ContinuationToken == "" {
 				break
 			}
-			tassert.Errorf(
-				t, uint(len(objList.Entries)) == msg.PageSize,
-				"unexpected size of the page returned (got: %d, expected: %d)",
+			tassert.Errorf(t, uint(len(objList.Entries)) == msg.PageSize, "wrong page size %d (expected %d)",
 				len(objList.Entries), msg.PageSize,
 			)
 		}
