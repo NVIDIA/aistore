@@ -300,11 +300,12 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType string) {
 	var (
 		m = ioContext{
-			t:        t,
-			bck:      bck,
-			num:      15,
-			fileSize: cos.KiB,
-			prefix:   "props/obj-",
+			t:                   t,
+			bck:                 bck,
+			num:                 15,
+			fileSize:            cos.KiB,
+			prefix:              "props/obj-",
+			deleteRemoteBckObjs: true,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
