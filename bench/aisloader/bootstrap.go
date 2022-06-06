@@ -80,8 +80,8 @@ const (
 	myName           = "loader"
 	randomObjNameLen = 32
 
-	wo2FreeSize  = 8192
-	wo2FreeDelay = 3 * time.Second
+	wo2FreeSize  = 4096
+	wo2FreeDelay = 3*time.Second + time.Millisecond
 )
 
 type (
@@ -1099,27 +1099,33 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 			intervalStats.put.AddErr()
 			intervalStats.statsd.Put.AddErr()
 		}
-		if wo.sgl != nil && !terminating {
-			now := time.Now()
-			debug.Assert(!wo.end.IsZero())
-			// NOTE:
-			// due to the critical bug (https://github.com/golang/go/issues/30597)
-			// we are delaying `sgl.Free` for a little while.
-			for i, w := range wo2Free {
-				if now.Sub(w.end) > wo2FreeDelay && w.sgl != nil && !w.sgl.IsNil() {
-					w.sgl.Free()
-					continue
-				}
-				if i == 0 {
-					break
-				}
-				l := len(wo2Free)
-				copy(wo2Free, wo2Free[i:])
-				wo2Free = wo2Free[:l-i]
+		if wo.sgl == nil || terminating {
+			return
+		}
+
+		now, l := time.Now(), len(wo2Free)
+		debug.Assert(!wo.end.IsZero())
+		// free previously executed PUT SGLs
+		for i := 0; i < l; i++ {
+			if terminating {
+				return
+			}
+			w := wo2Free[i]
+			// delaying freeing sgl for `wo2FreeDelay`
+			// (background at https://github.com/golang/go/issues/30597)
+			if now.Sub(w.end) < wo2FreeDelay {
 				break
 			}
-			wo2Free = append(wo2Free, wo)
+			if w.sgl != nil && !w.sgl.IsNil() {
+				w.sgl.Free()
+				copy(wo2Free[i:], wo2Free[i+1:])
+				i--
+				l--
+				wo2Free = wo2Free[:l]
+			}
 		}
+		// append to free later
+		wo2Free = append(wo2Free, wo)
 	case opConfig:
 		if wo.err == nil {
 			intervalStats.getConfig.Add(1, delta)
