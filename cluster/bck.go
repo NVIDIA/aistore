@@ -144,70 +144,65 @@ func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 // - Remote (Cloud or Remote AIS) bucket: caller can type-cast err.(*cmn.ErrRemoteBckNotFound) and proceed
 //
 // NOTE: most of the above applies to a backend bucket, if specified
-func (b *Bck) Init(bowner Bowner) error {
-	if err := b.Validate(); err != nil {
-		return err
+func (b *Bck) Init(bowner Bowner) (err error) {
+	if err = b.Validate(); err != nil {
+		return
 	}
-	if err := b.InitNoBackend(bowner); err != nil {
-		return err
+	bmd := bowner.Get()
+	if err = b.init(bmd); err != nil {
+		return
 	}
 	backend := b.Backend()
 	if backend == nil {
-		return nil
+		return
 	}
-	// init backend
-	if backend.Provider == "" || backend.IsAIS() {
-		return fmt.Errorf("bucket %s: invalid backend %s (must be remote)", b, backend)
+	// backend
+	if err = backend.Validate(); err == nil {
+		err = backend.initBack(bmd)
 	}
-	if err := backend.Validate(); err != nil {
-		return err
-	}
-	backend.Props = nil // always reinitialize
-	return backend.InitNoBackend(bowner)
+	return
 }
 
 // is used to init LOM, skips validations (compare with `Init` above)
-func (b *Bck) initFast(bowner Bowner) error {
-	if err := b.InitNoBackend(bowner); err != nil {
-		return err
+func (b *Bck) initFast(bowner Bowner) (err error) {
+	bmd := bowner.Get()
+	if err = b.init(bmd); err != nil {
+		return
 	}
-	backend := b.Backend()
-	if backend == nil {
-		return nil
+	if backend := b.Backend(); backend != nil {
+		err = backend.initBack(bmd)
 	}
-	backend.Props = nil // ditto
-	return backend.InitNoBackend(bowner)
+	return
 }
 
-func (b *Bck) InitNoBackend(bowner Bowner) error {
-	bmd := bowner.Get()
+// check presence and initialize if need be (backend only)
+func (b *Bck) initBack(bmd *BMD) (err error) {
+	if b.Props == nil {
+		return b.init(bmd)
+	}
+	p, exists := bmd.Get(b)
+	if exists {
+		exists = p.BID == b.Props.BID
+	}
+	if !exists {
+		err = cmn.NewErrRemoteBckNotFound(b.Bucket())
+	}
+	return
+}
+
+func (b *Bck) InitNoBackend(bowner Bowner) error { return b.init(bowner.Get()) }
+
+func (b *Bck) init(bmd *BMD) error {
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
-	} else if b.IsCloud() {
-		debug.Assert(b.Ns == cmn.NsGlobal)
-		bmd.initBckCloudProvider(b)
-	} else if b.IsHTTP() {
-		debug.Assert(b.Ns == cmn.NsGlobal)
-		present := bmd.initBckCloudProvider(b)
-		debug.Func(func() {
-			if present {
-				var (
-					origURL = b.Props.Extra.HTTP.OrigURLBck
-					bckName = cmn.OrigURLBck2Name(origURL)
-				)
-				debug.Assertf(b.Name == bckName, "%s != %s; original_url: %s", b.Name, bckName, origURL)
-			}
-		})
-	} else if b.IsHDFS() {
-		debug.Assert(b.Ns == cmn.NsGlobal)
-		present := bmd.initBckCloudProvider(b)
-		debug.Assert(!present || b.Props.Extra.HDFS.RefDirectory != "")
+	} else if cmn.IsRemoteProvider(b.Provider) {
+		present := bmd.initBck(b)
+		debug.Assert(!b.IsHDFS() || !present || b.Props.Extra.HDFS.RefDirectory != "")
 	} else {
 		b.Props, _ = bmd.Get(b)
 	}
-
 	if b.Props != nil {
-		return nil
+		return nil // ok
 	}
 	if b.IsAIS() {
 		return cmn.NewErrBckNotFound(b.Bucket())

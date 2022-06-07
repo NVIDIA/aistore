@@ -14,7 +14,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type (
@@ -265,13 +264,16 @@ func (b *Bck) Less(other *Bck) bool {
 	return b.Name < other.Name
 }
 
-func (b *Bck) Validate() (err error) {
+func (b *Bck) Validate() error {
 	if err := b.ValidateName(); err != nil {
 		return err
 	}
-	b.Provider, err = NormalizeProvider(b.Provider)
+	provider, err := NormalizeProvider(b.Provider)
 	if err != nil {
 		return err
+	}
+	if b.Provider != provider {
+		b.Provider = provider // (benign)
 	}
 	return b.Ns.Validate()
 }
@@ -315,6 +317,10 @@ func IsCloudProvider(p string) bool {
 	return p == apc.ProviderAmazon || p == apc.ProviderGoogle || p == apc.ProviderAzure
 }
 
+func IsRemoteProvider(p string) bool {
+	return IsCloudProvider(p) || p == apc.ProviderHDFS || p == apc.ProviderHTTP
+}
+
 func (n Ns) IsGlobal() bool    { return n == NsGlobal }
 func (n Ns) IsAnyRemote() bool { return n == NsAnyRemote }
 func (n Ns) IsRemote() bool    { return n.UUID != "" }
@@ -331,13 +337,13 @@ func (b *Bck) Backend() *Bck {
 }
 
 func (b *Bck) RemoteBck() *Bck {
-	if !b.IsRemote() {
-		return nil
-	}
 	if bck := b.Backend(); bck != nil {
 		return bck
 	}
-	return b
+	if IsRemoteProvider(b.Provider) || b.IsRemoteAIS() {
+		return b
+	}
+	return nil
 }
 
 func (b *Bck) IsAIS() bool {
@@ -349,25 +355,21 @@ func (b *Bck) IsHDFS() bool      { return b.Provider == apc.ProviderHDFS }
 func (b *Bck) IsHTTP() bool      { return b.Provider == apc.ProviderHTTP }
 
 func (b *Bck) IsRemote() bool {
-	return b.IsCloud() || b.IsRemoteAIS() || b.IsHDFS() || b.IsHTTP() || b.Backend() != nil
+	return IsRemoteProvider(b.Provider) || b.IsRemoteAIS() || b.Backend() != nil
 }
 
 func (b *Bck) IsCloud() bool {
-	if bck := b.Backend(); bck != nil {
-		debug.Assert(bck.IsCloud()) // Currently, backend bucket is always cloud.
-		return bck.IsCloud()
-	}
-	return IsCloudProvider(b.Provider)
-}
-
-func (b *Bck) HasProvider() bool {
-	if b.Provider != "" {
-		// If the provider is set it must be valid.
-		debug.Assert(IsNormalizedProvider(b.Provider))
+	if IsCloudProvider(b.Provider) {
 		return true
 	}
-	return false
+	backend := b.Backend()
+	if backend == nil {
+		return false
+	}
+	return IsCloudProvider(backend.Provider)
 }
+
+func (b *Bck) HasProvider() bool { return b.Provider != "" }
 
 //
 // useful helpers

@@ -193,7 +193,7 @@ func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 	return
 }
 
-func (m *BMD) initBckAnyProvider(bck *Bck) (present bool) {
+func (m *BMD) initBckAnyProvider(bck *Bck) bool {
 	if namespaces, ok := m.Providers[apc.ProviderAIS]; ok {
 		if buckets, ok := namespaces[cmn.NsGlobal.Uname()]; ok {
 			if p, present := buckets[bck.Name]; present {
@@ -204,32 +204,26 @@ func (m *BMD) initBckAnyProvider(bck *Bck) (present bool) {
 			}
 		}
 	}
-	if m.initBckCloudProvider(bck) {
+	if m.initBck(bck) {
 		return true
 	}
-
 	bck.Provider = apc.ProviderAIS
 	return false
 }
 
-func (m *BMD) initBckCloudProvider(bck *Bck) (present bool) {
+func (m *BMD) initBck(bck *Bck) bool {
 	for provider, namespaces := range m.Providers {
+		if provider != bck.Provider {
+			continue
+		}
 		for nsUname, buckets := range namespaces {
-			var (
-				p  *cmn.BucketProps
-				ns = cmn.ParseNsUname(nsUname)
-				b  = cmn.Bck{Provider: provider, Ns: ns}
-			)
-			if b.IsAIS() { // looking for Cloud bucket
-				continue
-			}
-			if p, present = buckets[bck.Name]; present {
-				bck.Provider = provider
-				bck.Ns = ns
+			if p, present := buckets[bck.Name]; present {
 				bck.Props = p
-				return
+				bck.Provider = provider
+				bck.Ns = cmn.ParseNsUname(nsUname)
+				return true
 			}
 		}
 	}
-	return
+	return false
 }
