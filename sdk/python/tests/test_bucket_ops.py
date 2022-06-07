@@ -20,24 +20,30 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.bck_name = ''.join(random.choice(letters) for _ in range(10))
 
         self.client = Client(CLUSTER_ENDPOINT)
+        self.buckets = []
 
     def tearDown(self) -> None:
-        # Try to destroy bucket if there is one left.
-        try:
-            self.client.destroy_bucket(self.bck_name)
-        except requests.exceptions.HTTPError:
-            pass
+        # Try to destroy all temporary buckets if there are left.
+        for bck_name in self.buckets:
+            try:
+                self.client.destroy_bucket(bck_name)
+            except requests.exceptions.HTTPError:
+                pass
 
     def test_bucket(self):
         res = self.client.list_buckets()
         count = len(res)
-        self.client.create_bucket(self.bck_name)
+        self.create_bucket(self.bck_name)
         res = self.client.list_buckets()
         count_new = len(res)
         self.assertEqual(count + 1, count_new)
 
+    def create_bucket(self, bck_name):
+        self.buckets.append(bck_name)
+        self.client.create_bucket(bck_name)
+
     def test_head_bucket(self):
-        self.client.create_bucket(self.bck_name)
+        self.create_bucket(self.bck_name)
         self.client.head_bucket(self.bck_name)
         self.client.destroy_bucket(self.bck_name)
         try:
@@ -76,8 +82,8 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def test_copy_bucket(self):
         from_bck = self.bck_name + 'from'
         to_bck = self.bck_name + 'to'
-        self.client.create_bucket(from_bck)
-        self.client.create_bucket(to_bck)
+        self.create_bucket(from_bck)
+        self.create_bucket(to_bck)
 
         xact_id = self.client.copy_bucket(from_bck, to_bck)
         self.assertNotEqual(xact_id, "")

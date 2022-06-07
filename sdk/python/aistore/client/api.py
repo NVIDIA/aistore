@@ -259,7 +259,7 @@ class Client:
         continuation_token: str = ""
     ) -> BucketList:
         """
-        Returns a structure that contains a page of objects, job UUID, and continuation token to read the next page if it is available
+        Returns a structure that contains a page of objects, xaction UUID, and continuation token (to read the next page, if available).
 
         Args:
             bck_name (str): Name of a bucket
@@ -508,7 +508,7 @@ class Client:
 
     def wait_for_xaction_finished(self, xact_id: str = "", xact_kind: str = "", daemon_id: str = "", timeout: int = 300):
         """
-        Return status of an eXtended Action (xaction)
+        Wait for an eXtended Action (xaction) to finish
 
         Args:
             xact_id (str, optional): UUID of the xaction. Empty - all xactions
@@ -517,7 +517,7 @@ class Client:
             timeout (int, optional): the maximum time to wait for the xaction, in seconds. Default timeout is 5 minutes
 
         Returns:
-            The xaction description
+            None
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
@@ -537,3 +537,34 @@ class Client:
             time.sleep(sleep_time)
             passed += sleep_time
             print(status)
+
+    def xact_start(self, xact_kind: str = "", daemon_id: str = "", force: bool = False, buckets: List[Bck] = None) -> str:
+        """
+        Start an eXtended Action (xaction) and return its UUID
+
+        Args:
+            xact_kind (str, optional): `kind` of the xaction (for supported kinds, see api/apc/const.go). Empty - all kinds.
+            daemon_id (str, optional): return xactions only running on the daemon_id
+            force (bool, optional): override existing restrictions for a bucket (e.g., run LRU eviction even if the bucket has LRU disabled)
+            buckets (List[Bck], optional): list of one or more buckets; applicable only for xactions that have bucket scope (for details and full enumeration, see xact/table.go)
+
+        Returns:
+            The running xaction UUID
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+        """
+        value = {"kind": xact_kind, "node": daemon_id, "buckets": buckets}
+        if force:
+            value["ext"] = {"force": True}
+        action = {"action": "start", "value": value}
+
+        resp = self._request(
+            HTTP_METHOD_PUT,
+            path="cluster",
+            json=action,
+        )
+        return resp.text
