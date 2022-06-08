@@ -73,18 +73,15 @@ func (b *Bck) Bucket() *cmn.Bck { return (*cmn.Bck)(b) }
 //
 // inline delegations => cmn.Bck
 //
-func (b *Bck) IsAIS() bool         { return (*cmn.Bck)(b).IsAIS() }
-func (b *Bck) HasProvider() bool   { return (*cmn.Bck)(b).HasProvider() }
-func (b *Bck) IsHTTP() bool        { return (*cmn.Bck)(b).IsHTTP() }
-func (b *Bck) IsHDFS() bool        { return (*cmn.Bck)(b).IsHDFS() }
-func (b *Bck) IsCloud() bool       { return (*cmn.Bck)(b).IsCloud() }
-func (b *Bck) IsRemote() bool      { return (*cmn.Bck)(b).IsRemote() }
-func (b *Bck) IsRemoteAIS() bool   { return (*cmn.Bck)(b).IsRemoteAIS() }
-func (b *Bck) RemoteBck() *cmn.Bck { return (*cmn.Bck)(b).RemoteBck() }
-func (b *Bck) Validate() error {
-	debug.Assert(cmn.IsNormalizedProvider(b.Provider)) // TODO -- FIXME: remove
-	return (*cmn.Bck)(b).Validate()
-}
+func (b *Bck) IsAIS() bool                        { return (*cmn.Bck)(b).IsAIS() }
+func (b *Bck) HasProvider() bool                  { return (*cmn.Bck)(b).HasProvider() }
+func (b *Bck) IsHTTP() bool                       { return (*cmn.Bck)(b).IsHTTP() }
+func (b *Bck) IsHDFS() bool                       { return (*cmn.Bck)(b).IsHDFS() }
+func (b *Bck) IsCloud() bool                      { return (*cmn.Bck)(b).IsCloud() }
+func (b *Bck) IsRemote() bool                     { return (*cmn.Bck)(b).IsRemote() }
+func (b *Bck) IsRemoteAIS() bool                  { return (*cmn.Bck)(b).IsRemoteAIS() }
+func (b *Bck) RemoteBck() *cmn.Bck                { return (*cmn.Bck)(b).RemoteBck() }
+func (b *Bck) Validate() error                    { return (*cmn.Bck)(b).Validate() }
 func (b *Bck) MakeUname(name string) string       { return (*cmn.Bck)(b).MakeUname(name) }
 func (b *Bck) IsEmpty() bool                      { return (*cmn.Bck)(b).IsEmpty() }
 func (b *Bck) AddToQuery(q url.Values) url.Values { return (*cmn.Bck)(b).AddToQuery(q) }

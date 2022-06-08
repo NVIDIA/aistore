@@ -917,10 +917,11 @@ func TestListObjectsRandProxy(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			m = ioContext{
-				t:        t,
-				bck:      bck.Clone(),
-				num:      rand.Intn(5000) + 1000,
-				fileSize: 5 * cos.KiB,
+				t:                   t,
+				bck:                 bck.Clone(),
+				num:                 rand.Intn(5000) + 1000,
+				fileSize:            5 * cos.KiB,
+				deleteRemoteBckObjs: true,
 			}
 
 			totalCnt = 0
