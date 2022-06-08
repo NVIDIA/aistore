@@ -1105,7 +1105,7 @@ func TestDownloadSync(t *testing.T) {
 	downloadObjectRemote(t, dlBody, m.num, m.num-objsToDelete)
 	downloadObjectRemote(t, dlBody, m.num-objsToDelete, m.num-objsToDelete)
 
-	tlog.Logln("3. filling removed remote objects...")
+	tlog.Logln("3. syncing from remote bucket (to \"refill\" removed remote objects)...")
 	m.remoteRefill()
 
 	// Check that new objects are correctly downloaded.

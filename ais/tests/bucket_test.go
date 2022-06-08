@@ -767,10 +767,11 @@ func TestListObjectsProps(t *testing.T) {
 		var (
 			baseParams = tutils.BaseAPIParams()
 			m          = ioContext{
-				t:        t,
-				num:      rand.Intn(5000) + 1000,
-				bck:      bck.Clone(),
-				fileSize: 128,
+				t:                   t,
+				num:                 rand.Intn(5000) + 1000,
+				bck:                 bck.Clone(),
+				fileSize:            128,
+				deleteRemoteBckObjs: true,
 			}
 		)
 

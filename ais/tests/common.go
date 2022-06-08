@@ -141,7 +141,7 @@ func (m *ioContext) initWithCleanup() {
 
 	if m.bck.IsRemote() {
 		if m.deleteRemoteBckObjs {
-			m.del()
+			m.del(-1 /*delete all*/, 1 /* including not present*/)
 		} else {
 			tutils.EvictRemoteBucket(m.t, m.proxyURL, m.bck) // evict from AIStore
 		}
@@ -261,7 +261,7 @@ func (m *ioContext) remoteRefill() {
 	}
 
 	leftToFill := m.num - len(objList.Entries)
-	cos.Assert(leftToFill > 0)
+	tassert.Errorf(m.t, leftToFill > 0, "leftToFill %d", leftToFill)
 
 	m._remoteFill(leftToFill, false /*evict*/, false /*override*/)
 }
@@ -352,21 +352,32 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 	wg.Wait()
 }
 
-// NOTE: is also called via deferred t.Cleanup => _cleanup() => del()
-func (m *ioContext) del(cnt ...int) {
+// bucket cleanup
+// is called in a variety of ways including (post-test) t.Cleanup => _cleanup()
+// and (pre-test) via deleteRemoteBckObjs
+func (m *ioContext) del(opts ...int) {
 	const maxErrCount = 100
 	var (
-		httpErr    *cmn.ErrHTTP
-		baseParams = tutils.BaseAPIParams()
-		lsmsg      = &apc.ListObjsMsg{Prefix: m.prefix, Props: apc.GetPropsName}
+		httpErr          *cmn.ErrHTTP
+		optCnt           = -1   // (variadic opts)
+		dontLookupRemote = true // (ditto)
+		baseParams       = tutils.BaseAPIParams()
+		lsmsg            = &apc.ListObjsMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
-
+	// checks, params
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(m.bck))
 	tassert.CheckFatal(m.t, err)
 	if !exists {
 		return
 	}
-	objList, err := api.ListObjectsWithOpts(baseParams, m.bck, lsmsg, 0, nil, true /*dontLookupRemote*/)
+	if len(opts) > 0 {
+		optCnt = opts[0]
+		if len(opts) > 1 {
+			dontLookupRemote = false
+		}
+	}
+	// list
+	objList, err := api.ListObjectsWithOpts(baseParams, m.bck, lsmsg, 0, nil, dontLookupRemote)
 	if err != nil {
 		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
 			return
@@ -379,15 +390,14 @@ func (m *ioContext) del(cnt ...int) {
 	}
 	tassert.CheckFatal(m.t, err)
 
+	// delete
 	toRemove := objList.Entries
-	if len(cnt) > 0 {
-		toRemove = toRemove[:cnt[0]]
+	if optCnt >= 0 {
+		toRemove = toRemove[:optCnt]
 	}
-
 	if len(toRemove) == 0 {
 		return
 	}
-
 	tlog.Logf("deleting %d objects...\n", len(toRemove))
 	var (
 		errCnt atomic.Int64
