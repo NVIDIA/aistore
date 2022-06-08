@@ -1079,6 +1079,13 @@ func (p *proxy) makeNewBckProps(bck *cluster.Bck, propsToUpdate *cmn.BucketProps
 		return
 	}
 
+	if provider := nprops.BackendBck.Provider; nprops.BackendBck.Name != "" {
+		nprops.BackendBck.Provider, err = cmn.NormalizeProvider(provider)
+		if err != nil {
+			return
+		}
+	}
+
 	targetCnt := p.owner.smap.Get().CountActiveTargets()
 	err = nprops.Validate(targetCnt)
 	if cmn.IsErrSoft(err) && propsToUpdate.Force {

@@ -264,18 +264,12 @@ func (b *Bck) Less(other *Bck) bool {
 	return b.Name < other.Name
 }
 
-func (b *Bck) Validate() error {
-	if err := b.ValidateName(); err != nil {
-		return err
+func (b *Bck) Validate() (err error) {
+	err = b.ValidateName()
+	if err == nil {
+		err = b.Ns.Validate()
 	}
-	provider, err := NormalizeProvider(b.Provider)
-	if err != nil {
-		return err
-	}
-	if b.Provider != provider {
-		b.Provider = provider // (benign)
-	}
-	return b.Ns.Validate()
+	return
 }
 
 func (b *Bck) ValidateName() (err error) {

@@ -787,16 +787,20 @@ func selectBMDBuckets(bmd *bucketMD, qbck *cmn.QueryBcks) cmn.Bcks {
 
 func newBckFromQ(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, error) {
 	bck := _bckFromQ(bckName, query, dpq)
-	return bck, bck.Validate()
+	normp, err := cmn.NormalizeProvider(bck.Provider)
+	if err == nil {
+		bck.Provider = normp
+		err = bck.Validate()
+	}
+	return bck, err
 }
 
 func newQbckFromQ(bckName string, query url.Values, dpq *dpq) (*cmn.QueryBcks, error) {
-	b := _bckFromQ(bckName, query, dpq)
-	bck := (*cmn.QueryBcks)(b)
-	return bck, bck.Validate()
+	qbck := (*cmn.QueryBcks)(_bckFromQ(bckName, query, dpq))
+	return qbck, qbck.Validate()
 }
 
-func _bckFromQ(bckName string, query url.Values, dpq *dpq) (bck *cluster.Bck) {
+func _bckFromQ(bckName string, query url.Values, dpq *dpq) *cluster.Bck {
 	var (
 		provider  string
 		namespace cmn.Ns

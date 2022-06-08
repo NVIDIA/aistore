@@ -160,6 +160,9 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	if rs.Bck.Provider == "" {
 		rs.Bck.Provider = apc.ProviderAIS
 	}
+	if _, err := cmn.NormalizeProvider(rs.Bck.Provider); err != nil {
+		return parsedRS, err
+	}
 	if err := rs.Bck.Validate(); err != nil {
 		return parsedRS, err
 	}
@@ -168,6 +171,8 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	parsedRS.OutputBck = rs.OutputBck
 	if parsedRS.OutputBck.IsEmpty() {
 		parsedRS.OutputBck = parsedRS.Bck
+	} else if _, err := cmn.NormalizeProvider(rs.OutputBck.Provider); err != nil {
+		return parsedRS, err
 	} else if err := rs.OutputBck.Validate(); err != nil {
 		return parsedRS, err
 	}
