@@ -226,7 +226,7 @@ func fillMap() (*cluster.Smap, error) {
 	return smap, nil
 }
 
-func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup) {
+func retrieveStatus(nodeMap cluster.NodeMap, daeMap stats.DaemonStatusMap, wg *sync.WaitGroup) {
 	fill := func(node *cluster.Snode) {
 		obj, _ := api.GetDaemonStatus(defaultAPIParams, node)
 		if node.Flags.IsSet(cluster.NodeFlagMaint) {

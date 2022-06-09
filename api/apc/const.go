@@ -419,6 +419,12 @@ const (
 	Target = "target"
 )
 
+// deployment types
+const (
+	DeploymentK8s = "K8s"
+	DeploymentDev = "dev"
+)
+
 // timeouts for intra-cluster requests
 const (
 	DefaultTimeout = time.Duration(-1)

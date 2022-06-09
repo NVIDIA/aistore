@@ -12,11 +12,11 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -27,9 +27,11 @@ import (
 )
 
 const (
-	UnknownVal = "-"
+	unknownVal = "-"
 	NotSetVal  = "-"
 )
+
+const rebalanceExpirationTime = 5 * time.Minute
 
 // Templates for output
 // ** Changing the structure of the objects server side needs to make sure that this will still work **
@@ -64,9 +66,15 @@ const (
 	// Cluster info //
 	//////////////////
 
-	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} unelectable)\n " +
-		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.Primary.ID}}\n Smap Version:\t{{.Smap.Version}}\n " +
-		"Deployment:\t{{ ( Deployments .Status) }}\n"
+	ClusterSummary = "Summary:\n  Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} unelectable)\n  " +
+		"Targets:\t{{len .Smap.Tmap}}\n  " +
+		"Primary:\t{{.Smap.Primary.StringEx}}\n  " +
+		"Smap:\t{{FormatSmapVersion .Smap.Version}}\n  " +
+		"Deployment:\t{{ ( Deployments .Status) }}\n  " +
+		"Status:\t{{ ( OnlineStatus .Status) }}\n  " +
+		"Rebalance:\t{{ ( Rebalance .Status) }}\n  " +
+		"Version:\t{{ ( Versions .Status) }}\n  " +
+		"Build:\t{{ ( BuildTimes .Status) }}\n"
 
 	// Disk Stats
 	DiskStatsHeader = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
@@ -170,8 +178,8 @@ const (
 		"{{$xctn.AbortedX}}\n"
 
 	// Buckets templates
-	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. SIZE\t EST. USED %\n" + bucketsSummariesBody
-	BucketsSummariesTmpl     = "NAME\t OBJECTS\t SIZE \t USED %\n" + bucketsSummariesBody
+	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. SIZE\t USED(%)\n" + bucketsSummariesBody
+	BucketsSummariesTmpl     = "NAME\t OBJECTS\t SIZE \t USED(%)\n" + bucketsSummariesBody
 	bucketsSummariesBody     = "{{range $k, $v := . }}" +
 		"{{$v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUnsigned $v.Size 2}}\t {{FormatFloat $v.UsedPct}}%\n" +
 		"{{end}}"
@@ -320,17 +328,23 @@ var (
 		"FormatObjStatus":     fmtObjStatus,
 		"FormatObjIsCached":   fmtObjIsCached,
 		"FormatDaemonID":      fmtDaemonID,
+		"FormatSmapVersion":   fmtSmapVer,
 		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":          FmtBool,
 		"FormatMilli":         fmtMilli,
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
-		"Deployments":         func(h DaemonStatusTemplateHelper) string { return strings.Join(h.Deployments().ToSlice(), ",") },
 		"FormatACL":           fmtACL,
 		"ExtECGetStats":       extECGetStats,
 		"ExtECPutStats":       extECPutStats,
 		"FormatNameArch":      fmtNameArch,
 		"FormatXactState":     fmtXactState,
+		// daemon status: toSlice(`json tag`)
+		"OnlineStatus": func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("status")) },
+		"Deployments":  func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("deployment")) },
+		"Versions":     func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("ais_version")) },
+		"BuildTimes":   func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("build_time")) },
+		"Rebalance":    func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("rebalance_snap")) },
 	}
 
 	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias := .}}" +
@@ -358,8 +372,8 @@ type (
 		ExtendedURLs bool
 	}
 	DaemonStatusTemplateHelper struct {
-		Pmap map[string]*stats.DaemonStatus `json:"pmap"`
-		Tmap map[string]*stats.DaemonStatus `json:"tmap"`
+		Pmap stats.DaemonStatusMap `json:"pmap"`
+		Tmap stats.DaemonStatusMap `json:"tmap"`
 	}
 	StatusTemplateHelper struct {
 		Smap   *cluster.Smap              `json:"smap"`
@@ -382,15 +396,6 @@ func extractStat(daemon *stats.CoreStats, statName string) int64 {
 	return daemon.Tracker[statName].Value
 }
 
-func allNodesOnline(stats map[string]*stats.DaemonStatus) bool {
-	for _, stat := range stats {
-		if stat.Status != api.StatusOnline {
-			return false
-		}
-	}
-	return true
-}
-
 func calcCapPercentage(daemon *stats.DaemonStatus) (total float64) {
 	for _, fs := range daemon.Capacity {
 		total += float64(fs.PctUsed)
@@ -409,17 +414,20 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 	return total
 }
 
-func fmtXactStatus(rebSnap *stats.RebalanceSnap) string {
+func fmtRebStatus(rebSnap *stats.RebalanceSnap) string {
 	if rebSnap == nil {
-		return UnknownVal
+		return unknownVal
 	}
 	if rebSnap.IsAborted() {
-		return "aborted"
+		return fmt.Sprintf("aborted(%s)", rebSnap.ID)
 	}
 	if rebSnap.EndTime.IsZero() {
-		return "running"
+		return fmt.Sprintf("running(%s)", rebSnap.ID)
 	}
-	return "finished"
+	if time.Since(rebSnap.EndTime) < rebalanceExpirationTime {
+		return fmt.Sprintf("finished(%s)", rebSnap.ID)
+	}
+	return unknownVal
 }
 
 func fmtObjStatus(obj *cmn.BucketEntry) string {
@@ -462,13 +470,13 @@ func FmtChecksum(checksum string) string {
 	if checksum != "" {
 		return checksum
 	}
-	return UnknownVal
+	return unknownVal
 }
 
 // FmtCopies formats an int to a string, where 0 becomes "-"
 func FmtCopies(copies int) string {
 	if copies == 0 {
-		return UnknownVal
+		return unknownVal
 	}
 	return fmt.Sprint(copies)
 }
@@ -477,7 +485,7 @@ func FmtCopies(copies int) string {
 // readable string for CLI, e.g. "1:2[encoded]"
 func FmtEC(gen int64, data, parity int, isCopy bool) string {
 	if data == 0 {
-		return UnknownVal
+		return unknownVal
 	}
 	info := fmt.Sprintf("%d:%d (gen %d)", data, parity, gen)
 	if isCopy {
@@ -500,6 +508,8 @@ func fmtDaemonID(id string, smap cluster.Smap) string {
 	}
 	return id
 }
+
+func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }
 
 // Displays the output in either JSON or tabular form
 // if formatJSON == true, outputTemplate is omitted
@@ -535,7 +545,7 @@ func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, 
 
 func fmtStringList(lst []string) string {
 	if len(lst) == 0 {
-		return UnknownVal
+		return unknownVal
 	}
 	return fmtStringListGeneric(lst, ",")
 }
@@ -551,23 +561,47 @@ func fmtStringListGeneric(lst []string, sep string) string {
 	return s.String()
 }
 
-func daemonsDeployments(ds map[string]*stats.DaemonStatus) cos.StringSet {
-	deployments := cos.NewStringSet()
-	for _, s := range ds {
-		deployments.Add(s.DeployedOn)
+func toString(lst []string) string {
+	switch len(lst) {
+	case 0:
+		return NotSetVal
+	case 1:
+		return lst[0]
+	default:
+		return strings.Join(lst, ", ")
 	}
-	return deployments
 }
 
-func (h *DaemonStatusTemplateHelper) Deployments() cos.StringSet {
-	p := daemonsDeployments(h.Pmap)
-	p.Add(daemonsDeployments(h.Tmap).ToSlice()...)
-	return p
+func (h *DaemonStatusTemplateHelper) toSlice(jtag string) []string {
+	set := cos.NewStringSet()
+	for _, m := range []stats.DaemonStatusMap{h.Pmap, h.Tmap} {
+		for _, s := range m {
+			switch jtag {
+			case "status":
+				set.Add(s.Status)
+			case "deployment":
+				set.Add(s.DeploymentType)
+			case "ais_version":
+				set.Add(s.Version)
+			case "build_time":
+				set.Add(s.BuildTime)
+			case "k8s_pod_name":
+				set.Add(s.K8sPodName)
+			case "rebalance_snap":
+				if s.RebSnap != nil {
+					set.Add(s.RebSnap.ID)
+				}
+			default:
+				debug.AssertMsg(false, jtag)
+			}
+		}
+	}
+	return set.ToSlice()
 }
 
 func fmtACL(acl apc.AccessAttrs) string {
 	if acl == 0 {
-		return UnknownVal
+		return unknownVal
 	}
 	return acl.Describe()
 }

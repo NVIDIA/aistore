@@ -244,9 +244,9 @@ func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 
 func deploymentType() string {
 	if k8s.Detect() == nil {
-		return "k8s"
+		return apc.DeploymentK8s
 	} else if cmn.GCO.Get().TestingEnv() {
-		return "dev"
+		return apc.DeploymentDev
 	}
 	return runtime.GOOS
 }

@@ -41,8 +41,8 @@ type (
 )
 
 var (
-	pmapStatus = make(map[string]*stats.DaemonStatus, 8)
-	tmapStatus = make(map[string]*stats.DaemonStatus, 8)
+	pmapStatus = make(stats.DaemonStatusMap, 8)
+	tmapStatus = make(stats.DaemonStatusMap, 8)
 )
 
 // Gets Smap from a given node (`daemonID`) and displays it
@@ -113,7 +113,7 @@ func getBMD(c *cli.Context) error {
 }
 
 // Displays the status of the cluster or node
-func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader, verbose bool) error {
+func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
 	body := templates.StatusTemplateHelper{
 		Smap: smap,
 		Status: templates.DaemonStatusTemplateHelper{
@@ -126,14 +126,14 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 	} else if res, targetOK := tmapStatus[daemonID]; targetOK {
 		return templates.DisplayOutput(res, c.App.Writer, templates.NewTargetTable(res).Template(hideHeader), useJSON)
 	} else if daemonID == apc.Proxy {
-		template := templates.NewProxiesTable(&body.Status, smap, true, verbose).Template(hideHeader)
+		template := templates.NewProxiesTable(&body.Status, smap).Template(hideHeader)
 		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 	} else if daemonID == apc.Target {
 		return templates.DisplayOutput(body, c.App.Writer,
-			templates.NewTargetsTable(&body.Status, true, verbose).Template(hideHeader), useJSON)
+			templates.NewTargetsTable(&body.Status).Template(hideHeader), useJSON)
 	} else if daemonID == "" {
-		template := templates.NewProxiesTable(&body.Status, smap, false, verbose).Template(false) + "\n" +
-			templates.NewTargetsTable(&body.Status, false, verbose).Template(false) + "\n" +
+		template := templates.NewProxiesTable(&body.Status, smap).Template(false) + "\n" +
+			templates.NewTargetsTable(&body.Status).Template(false) + "\n" +
 			templates.ClusterSummary
 		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 	}
@@ -150,7 +150,7 @@ func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) 
 		return fmt.Errorf("target ID=%q does not exist", daemonID)
 	}
 
-	targets := map[string]*stats.DaemonStatus{daemonID: {}}
+	targets := stats.DaemonStatusMap{daemonID: {}}
 	if daemonID == "" {
 		targets = tmapStatus
 	}
@@ -169,7 +169,7 @@ func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) 
 	return nil
 }
 
-func getDiskStats(targets map[string]*stats.DaemonStatus) ([]templates.DiskStatsTemplateHelper, error) {
+func getDiskStats(targets stats.DaemonStatusMap) ([]templates.DiskStatsTemplateHelper, error) {
 	var (
 		allStats = make([]templates.DiskStatsTemplateHelper, 0, len(targets))
 		wg, _    = errgroup.WithContext(context.Background())

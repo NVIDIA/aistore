@@ -8,27 +8,29 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 )
 
 const (
 	sepa = "\t "
 
-	headerProxy      = "PROXY"
-	headerTarget     = "TARGET"
-	headerDeployment = "DEPLOYMENT"
-	headerMemUsed    = "MEM USED %"
-	headerMemAvail   = "MEM AVAIL"
-	headerCapUsed    = "CAP USED %"
-	headerCapAvail   = "CAP AVAIL"
-	headerCPUUsed    = "CPU USED %"
-	headerRebalance  = "REBALANCE"
-	headerUptime     = "UPTIME"
-	headerStatus     = "STATUS"
-	headerVersion    = "VERSION"
-	headerBuildTime  = "BUILD TIME"
+	headerProxy     = "PROXY"
+	headerTarget    = "TARGET"
+	headerMemUsed   = "MEM USED(%)"
+	headerMemAvail  = "MEM AVAIL"
+	headerCapUsed   = "CAP USED(%)"
+	headerCapAvail  = "CAP AVAIL"
+	headerCPUUsed   = "CPU USED(%)"
+	headerRebalance = "REBALANCE"
+	headerUptime    = "UPTIME"
+	headerStatus    = "STATUS"
+	headerVersion   = "VERSION"
+	headerBuildTime = "BUILD TIME"
+	headerPodName   = "K8s POD"
 )
 
 type (
@@ -97,61 +99,55 @@ func (t *TemplateTable) Template(hideHeader bool) string {
 // Proxies table
 
 func NewProxyTable(proxyStats *stats.DaemonStatus, smap *cluster.Smap) *TemplateTable {
-	return newTableProxies(map[string]*stats.DaemonStatus{proxyStats.Snode.ID(): proxyStats}, smap, false, false, false)
+	return newTableProxies(stats.DaemonStatusMap{proxyStats.Snode.ID(): proxyStats}, smap)
 }
 
-func NewProxiesTable(ds *DaemonStatusTemplateHelper, smap *cluster.Smap, onlyProxies, verbose bool) *TemplateTable {
-	deployments := daemonsDeployments(ds.Pmap)
-	if !onlyProxies {
-		deployments.Add(daemonsDeployments(ds.Tmap).ToSlice()...)
-	}
-	hideDeployments := len(deployments) <= 1
-	hideStatus := len(ds.Pmap) > 1 && allNodesOnline(ds.Pmap)
-	return newTableProxies(ds.Pmap, smap, hideDeployments, hideStatus, verbose)
+func NewProxiesTable(ds *DaemonStatusTemplateHelper, smap *cluster.Smap) *TemplateTable {
+	return newTableProxies(ds.Pmap, smap)
 }
 
-func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hideDeployments, hideStatus, verbose bool) *TemplateTable {
+func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap) *TemplateTable {
+	h := DaemonStatusTemplateHelper{Pmap: ps}
+
+	// TODO -- FIXME: dup string constants
+	pods := h.toSlice("k8s_pod_name")
+	status := h.toSlice("status")
 	headers := []*header{
 		{name: headerProxy},
 		{name: headerMemUsed},
 		{name: headerMemAvail},
 		{name: headerUptime},
-		{name: headerDeployment, hide: !verbose && hideDeployments},
-		{name: headerStatus, hide: !verbose && hideStatus},
-		{name: headerVersion, hide: !verbose},
-		{name: headerBuildTime, hide: !verbose},
+		{name: headerPodName, hide: len(pods) == 1 && pods[0] == ""},
+		{name: headerStatus, hide: len(status) == 1 && status[0] == api.StatusOnline},
+		{name: headerVersion, hide: len(h.toSlice("ais_version")) == 1},
+		{name: headerBuildTime, hide: len(h.toSlice("build_time")) == 1},
 	}
-
 	table := newTemplateTable(headers...)
 	for _, status := range ps {
 		memUsed := fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctMemUsed)
 		if status.MemCPUInfo.PctMemUsed == 0 {
-			memUsed = "-"
+			memUsed = unknownVal
 		}
 		memAvail := cos.UnsignedB2S(status.MemCPUInfo.MemAvail, 2)
 		if status.MemCPUInfo.MemAvail == 0 {
-			memAvail = "-"
+			memAvail = unknownVal
 		}
 		upns := extractStat(status.Stats, "up.ns.time")
 		uptime := fmtDuration(upns)
 		if upns == 0 {
-			uptime = "-"
-		}
-		deployedOn := status.DeployedOn
-		if deployedOn == "" {
-			deployedOn = "-"
+			uptime = unknownVal
 		}
 		row := []string{
 			fmtDaemonID(status.Snode.ID(), *smap),
 			memUsed,
 			memAvail,
 			uptime,
-			deployedOn,
+			status.K8sPodName,
 			status.Status,
 			status.Version,
 			status.BuildTime,
 		}
-		cos.AssertNoErr(table.addRows(row))
+		debug.AssertNoErr(table.addRows(row))
 	}
 	return table
 }
@@ -159,20 +155,19 @@ func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hide
 // Targets table
 
 func NewTargetTable(targetStats *stats.DaemonStatus) *TemplateTable {
-	return newTableTargets(map[string]*stats.DaemonStatus{targetStats.Snode.ID(): targetStats}, false, false, false)
+	return newTableTargets(stats.DaemonStatusMap{targetStats.Snode.ID(): targetStats})
 }
 
-func NewTargetsTable(ds *DaemonStatusTemplateHelper, onlyTargets, verbose bool) *TemplateTable {
-	deployments := daemonsDeployments(ds.Tmap)
-	if !onlyTargets {
-		deployments.Add(daemonsDeployments(ds.Pmap).ToSlice()...)
-	}
-	hideDeployments := len(deployments) <= 1
-	hideStatus := len(ds.Tmap) > 1 && allNodesOnline(ds.Tmap)
-	return newTableTargets(ds.Tmap, hideDeployments, hideStatus, verbose)
+func NewTargetsTable(ds *DaemonStatusTemplateHelper) *TemplateTable {
+	return newTableTargets(ds.Tmap)
 }
 
-func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideStatus, verbose bool) *TemplateTable {
+func newTableTargets(ts stats.DaemonStatusMap) *TemplateTable {
+	h := DaemonStatusTemplateHelper{Tmap: ts}
+
+	// TODO -- FIXME: dup string constants
+	pods := h.toSlice("k8s_pod_name")
+	status := h.toSlice("status")
 	headers := []*header{
 		{name: headerTarget},
 		{name: headerMemUsed},
@@ -180,12 +175,12 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 		{name: headerCapUsed},
 		{name: headerCapAvail},
 		{name: headerCPUUsed},
-		{name: headerRebalance},
+		{name: headerRebalance, hide: len(h.toSlice("rebalance_snap")) == 0},
 		{name: headerUptime},
-		{name: headerDeployment, hide: !verbose && hideDeployments},
-		{name: headerStatus, hide: !verbose && hideStatus},
-		{name: headerVersion, hide: !verbose},
-		{name: headerBuildTime, hide: !verbose},
+		{name: headerPodName, hide: len(pods) == 1 && pods[0] == ""},
+		{name: headerStatus, hide: len(status) == 1 && status[0] == api.StatusOnline},
+		{name: headerVersion, hide: len(h.toSlice("ais_version")) == 1},
+		{name: headerBuildTime, hide: len(h.toSlice("ais_version")) == 1},
 	}
 
 	table := newTemplateTable(headers...)
@@ -197,14 +192,14 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 			fmt.Sprintf("%.2f%%", calcCapPercentage(status)),
 			cos.UnsignedB2S(calcCap(status), 3),
 			fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctCPUUsed),
-			fmtXactStatus(status.RebSnap),
+			fmtRebStatus(status.RebSnap),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
-			status.DeployedOn,
+			status.K8sPodName,
 			status.Status,
 			status.Version,
 			status.BuildTime,
 		}
-		cos.AssertNoErr(table.addRows(row))
+		debug.AssertNoErr(table.addRows(row))
 	}
 	return table
 }

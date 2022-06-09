@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -255,14 +256,15 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		msg := &stats.DaemonStatus{
-			Snode:       t.htrun.si,
-			SmapVersion: t.owner.smap.get().Version,
-			MemCPUInfo:  sys.GetMemCPU(),
-			Stats:       t.statsT.CoreStats(),
-			RebSnap:     rebSnap,
-			DeployedOn:  deploymentType(),
-			Version:     daemon.version,
-			BuildTime:   daemon.buildTime,
+			Snode:          t.htrun.si,
+			SmapVersion:    t.owner.smap.get().Version,
+			MemCPUInfo:     sys.GetMemCPU(),
+			Stats:          t.statsT.CoreStats(),
+			RebSnap:        rebSnap,
+			DeploymentType: deploymentType(),
+			Version:        daemon.version,
+			BuildTime:      daemon.buildTime,
+			K8sPodName:     os.Getenv(cmn.EnvVars.K8sPod),
 		}
 		// capacity
 		tstats := t.statsT.(*stats.Trunner)

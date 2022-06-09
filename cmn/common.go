@@ -35,6 +35,7 @@ var (
 		UseHTTPS           string
 		NumTarget          string
 		NumProxy           string
+		K8sPod             string
 	}{
 		Endpoint:           "AIS_ENDPOINT",
 		IsPrimary:          "AIS_IS_PRIMARY",
@@ -46,6 +47,9 @@ var (
 		// Env variables used for tests or CI
 		NumTarget: "NUM_TARGET",
 		NumProxy:  "NUM_PROXY",
+
+		// via ais-k8s repo (see ais-k8s/operator/pkg/resources/cmn/env.go)
+		K8sPod: "MY_POD",
 	}
 
 	thisNodeName string

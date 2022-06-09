@@ -75,7 +75,6 @@ var (
 			longRunFlags,
 			jsonFlag,
 			noHeaderFlag,
-			verboseFlag,
 		),
 		subcmdSmap: append(
 			longRunFlags,
@@ -362,12 +361,7 @@ func showClusterHandler(c *cli.Context) error {
 	if err := updateLongRunParams(c); err != nil {
 		return err
 	}
-	var (
-		useJSON    = flagIsSet(c, jsonFlag)
-		hideHeader = flagIsSet(c, noHeaderFlag)
-		verbose    = flagIsSet(c, verboseFlag)
-	)
-	return clusterDaemonStatus(c, primarySmap, daemonID, useJSON, hideHeader, verbose)
+	return clusterDaemonStatus(c, primarySmap, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 }
 
 func showStorageHandler(c *cli.Context) (err error) {
