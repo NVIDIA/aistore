@@ -338,13 +338,14 @@ var (
 		"ExtECGetStats":       extECGetStats,
 		"ExtECPutStats":       extECPutStats,
 		"FormatNameArch":      fmtNameArch,
-		"FormatXactState":     fmtXactState,
-		// daemon status: toSlice(`json tag`)
-		"OnlineStatus": func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("status")) },
-		"Deployments":  func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("deployment")) },
-		"Versions":     func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("ais_version")) },
-		"BuildTimes":   func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("build_time")) },
-		"Rebalance":    func(h DaemonStatusTemplateHelper) string { return toString(h.toSlice("rebalance_snap")) },
+		"FormatXactState":     fmtXactStatus,
+		// for all stats.DaemonStatus structs in `h`: select specific field
+		// and make a slice, and then a string out of it
+		"OnlineStatus": func(h DaemonStatusTemplateHelper) string { return toString(h.onlineStatus()) },
+		"Deployments":  func(h DaemonStatusTemplateHelper) string { return toString(h.deployments()) },
+		"Versions":     func(h DaemonStatusTemplateHelper) string { return toString(h.versions()) },
+		"BuildTimes":   func(h DaemonStatusTemplateHelper) string { return toString(h.buildTimes()) },
+		"Rebalance":    func(h DaemonStatusTemplateHelper) string { return toString(h.rebalance()) },
 	}
 
 	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias := .}}" +
@@ -412,22 +413,6 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 		total += fs.Avail
 	}
 	return total
-}
-
-func fmtRebStatus(rebSnap *stats.RebalanceSnap) string {
-	if rebSnap == nil {
-		return unknownVal
-	}
-	if rebSnap.IsAborted() {
-		return fmt.Sprintf("aborted(%s)", rebSnap.ID)
-	}
-	if rebSnap.EndTime.IsZero() {
-		return fmt.Sprintf("running(%s)", rebSnap.ID)
-	}
-	if time.Since(rebSnap.EndTime) < rebalanceExpirationTime {
-		return fmt.Sprintf("finished(%s)", rebSnap.ID)
-	}
-	return unknownVal
 }
 
 func fmtObjStatus(obj *cmn.BucketEntry) string {
@@ -561,17 +546,16 @@ func fmtStringListGeneric(lst []string, sep string) string {
 	return s.String()
 }
 
-func toString(lst []string) string {
-	switch len(lst) {
-	case 0:
-		return NotSetVal
-	case 1:
-		return lst[0]
-	default:
-		return strings.Join(lst, ", ")
-	}
-}
+// for all stats.DaemonStatus structs: select specific field and append to the returned slice
+// (using the corresponding jtags here for no particular reason)
+func (h *DaemonStatusTemplateHelper) onlineStatus() []string { return h.toSlice("status") }
+func (h *DaemonStatusTemplateHelper) deployments() []string  { return h.toSlice("deployment") }
+func (h *DaemonStatusTemplateHelper) versions() []string     { return h.toSlice("ais_version") }
+func (h *DaemonStatusTemplateHelper) buildTimes() []string   { return h.toSlice("build_time") }
+func (h *DaemonStatusTemplateHelper) rebalance() []string    { return h.toSlice("rebalance_snap") }
+func (h *DaemonStatusTemplateHelper) pods() []string         { return h.toSlice("k8s_pod_name") }
 
+// internal helper for the methods above
 func (h *DaemonStatusTemplateHelper) toSlice(jtag string) []string {
 	set := cos.NewStringSet()
 	for _, m := range []stats.DaemonStatusMap{h.Pmap, h.Tmap} {
@@ -589,7 +573,7 @@ func (h *DaemonStatusTemplateHelper) toSlice(jtag string) []string {
 				set.Add(s.K8sPodName)
 			case "rebalance_snap":
 				if s.RebSnap != nil {
-					set.Add(s.RebSnap.ID)
+					set.Add(fmtRebStatus(s.RebSnap))
 				}
 			default:
 				debug.AssertMsg(false, jtag)
@@ -597,6 +581,18 @@ func (h *DaemonStatusTemplateHelper) toSlice(jtag string) []string {
 		}
 	}
 	return set.ToSlice()
+}
+
+// internal helper for the methods above
+func toString(lst []string) string {
+	switch len(lst) {
+	case 0:
+		return NotSetVal
+	case 1:
+		return lst[0]
+	default:
+		return "[" + strings.Join(lst, ", ") + "]"
+	}
 }
 
 func fmtACL(acl apc.AccessAttrs) string {
@@ -633,7 +629,23 @@ func fmtNameArch(val string, flags uint16) string {
 	return "    " + val
 }
 
-func fmtXactState(xctn *xact.SnapExt) string {
+func fmtRebStatus(rebSnap *stats.RebalanceSnap) string {
+	if rebSnap == nil {
+		return unknownVal
+	}
+	if rebSnap.IsAborted() {
+		return fmt.Sprintf("aborted(%s)", rebSnap.ID)
+	}
+	if rebSnap.EndTime.IsZero() {
+		return fmt.Sprintf("running(%s)", rebSnap.ID)
+	}
+	if time.Since(rebSnap.EndTime) < rebalanceExpirationTime {
+		return fmt.Sprintf("finished(%s)", rebSnap.ID)
+	}
+	return unknownVal
+}
+
+func fmtXactStatus(xctn *xact.SnapExt) string {
 	if xctn.AbortedX {
 		return xactStateAborted
 	}

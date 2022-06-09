@@ -107,22 +107,23 @@ func NewProxiesTable(ds *DaemonStatusTemplateHelper, smap *cluster.Smap) *Templa
 }
 
 func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap) *TemplateTable {
-	h := DaemonStatusTemplateHelper{Pmap: ps}
-
-	// TODO -- FIXME: dup string constants
-	pods := h.toSlice("k8s_pod_name")
-	status := h.toSlice("status")
-	headers := []*header{
-		{name: headerProxy},
-		{name: headerMemUsed},
-		{name: headerMemAvail},
-		{name: headerUptime},
-		{name: headerPodName, hide: len(pods) == 1 && pods[0] == ""},
-		{name: headerStatus, hide: len(status) == 1 && status[0] == api.StatusOnline},
-		{name: headerVersion, hide: len(h.toSlice("ais_version")) == 1},
-		{name: headerBuildTime, hide: len(h.toSlice("build_time")) == 1},
-	}
-	table := newTemplateTable(headers...)
+	var (
+		h        = DaemonStatusTemplateHelper{Pmap: ps}
+		pods     = h.pods()
+		status   = h.onlineStatus()
+		versions = h.versions()
+		headers  = []*header{
+			{name: headerProxy},
+			{name: headerMemUsed},
+			{name: headerMemAvail},
+			{name: headerUptime},
+			{name: headerPodName, hide: len(pods) == 1 && pods[0] == ""},
+			{name: headerStatus, hide: len(status) == 1 && status[0] == api.StatusOnline && len(ps) > 1},
+			{name: headerVersion, hide: len(versions) == 1 && len(ps) > 1},
+			{name: headerBuildTime, hide: len(versions) == 1 && len(ps) > 1}, // intended
+		}
+		table = newTemplateTable(headers...)
+	)
 	for _, status := range ps {
 		memUsed := fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctMemUsed)
 		if status.MemCPUInfo.PctMemUsed == 0 {
@@ -163,27 +164,27 @@ func NewTargetsTable(ds *DaemonStatusTemplateHelper) *TemplateTable {
 }
 
 func newTableTargets(ts stats.DaemonStatusMap) *TemplateTable {
-	h := DaemonStatusTemplateHelper{Tmap: ts}
-
-	// TODO -- FIXME: dup string constants
-	pods := h.toSlice("k8s_pod_name")
-	status := h.toSlice("status")
-	headers := []*header{
-		{name: headerTarget},
-		{name: headerMemUsed},
-		{name: headerMemAvail},
-		{name: headerCapUsed},
-		{name: headerCapAvail},
-		{name: headerCPUUsed},
-		{name: headerRebalance, hide: len(h.toSlice("rebalance_snap")) == 0},
-		{name: headerUptime},
-		{name: headerPodName, hide: len(pods) == 1 && pods[0] == ""},
-		{name: headerStatus, hide: len(status) == 1 && status[0] == api.StatusOnline},
-		{name: headerVersion, hide: len(h.toSlice("ais_version")) == 1},
-		{name: headerBuildTime, hide: len(h.toSlice("ais_version")) == 1},
-	}
-
-	table := newTemplateTable(headers...)
+	var (
+		h        = DaemonStatusTemplateHelper{Tmap: ts}
+		pods     = h.pods()
+		status   = h.onlineStatus()
+		versions = h.versions()
+		headers  = []*header{
+			{name: headerTarget},
+			{name: headerMemUsed},
+			{name: headerMemAvail},
+			{name: headerCapUsed},
+			{name: headerCapAvail},
+			{name: headerCPUUsed},
+			{name: headerRebalance, hide: len(h.rebalance()) == 0},
+			{name: headerUptime},
+			{name: headerPodName, hide: len(pods) == 1 && pods[0] == ""},
+			{name: headerStatus, hide: len(status) == 1 && status[0] == api.StatusOnline && len(ts) > 1},
+			{name: headerVersion, hide: len(versions) == 1 && len(ts) > 1},
+			{name: headerBuildTime, hide: len(versions) == 1 && len(ts) > 1}, // intended
+		}
+		table = newTemplateTable(headers...)
+	)
 	for _, status := range ts {
 		row := []string{
 			status.Snode.ID(),
