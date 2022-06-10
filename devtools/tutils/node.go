@@ -589,7 +589,21 @@ func EnsureOrigClusterState(t *testing.T) {
 		tgtCnt         int
 		proxyCnt       int
 		updated        bool
+		retried        bool
 	)
+retry:
+	for _, cmd := range restoreNodes {
+		node := smap.GetNode(cmd.Node.ID())
+		if node == nil && !retried {
+			tlog.Logf("Warning: %s %s not found in %s - retrying...", cmd.Node.Type(), cmd.Node.ID(), smap.StringEx())
+			time.Sleep(4 * time.Second)
+			smap = GetClusterMap(t, proxyURL)
+			// alternatively, could simply compare versions
+			retried = true
+			goto retry
+		}
+	}
+	// restore
 	for _, cmd := range restoreNodes {
 		if cmd.Node.IsProxy() {
 			proxyCnt++
@@ -597,12 +611,12 @@ func EnsureOrigClusterState(t *testing.T) {
 			tgtCnt++
 		}
 		node := smap.GetNode(cmd.Node.ID())
-		tassert.Errorf(t, node != nil, "%s %s changed its ID", cmd.Node.Type(), cmd.Node.ID())
 		if node != nil {
 			tassert.Errorf(t, node.Equals(cmd.Node),
-				"%s %s changed, before = %+v, after = %+v", cmd.Node.Type(), node.ID(), cmd.Node, node)
+				"%s %s changed, before %+v, after %+v", cmd.Node.Type(), node.ID(), cmd.Node, node)
+		} else {
+			tassert.Errorf(t, false, "%s %s not found in %s", cmd.Node.Type(), cmd.Node.ID(), smap.StringEx())
 		}
-
 		if containers.DockerRunning() {
 			if node == nil {
 				err := RestoreNode(cmd, false, cmd.Node.Type())
@@ -624,23 +638,14 @@ func EnsureOrigClusterState(t *testing.T) {
 		}
 	}
 
-	tassert.Errorf(
-		t, afterProxyCnt == proxyCnt,
-		"Some proxies crashed: expected %d, found %d containers",
-		proxyCnt, afterProxyCnt,
-	)
-
-	tassert.Errorf(
-		t, tgtCnt == afterTargetCnt,
-		"Some targets crashed: expected %d, found %d containers",
-		tgtCnt, afterTargetCnt,
-	)
+	tassert.Errorf(t, afterProxyCnt == proxyCnt, "Some proxies crashed(?): expected %d, have %d", proxyCnt, afterProxyCnt)
+	tassert.Errorf(t, tgtCnt == afterTargetCnt, "Some targets crashed(?): expected %d, have %d", tgtCnt, afterTargetCnt)
 
 	if !updated {
 		return
 	}
 
-	_, err := WaitForClusterState(proxyURL, "cluster stabilize", smap.Version, proxyCnt, tgtCnt)
+	_, err := WaitForClusterState(proxyURL, "cluster to stabilize", smap.Version, proxyCnt, tgtCnt)
 	tassert.CheckFatal(t, err)
 
 	if tgtCnt != afterTargetCnt {

@@ -73,12 +73,11 @@ func TestMultiProxy(t *testing.T) {
 
 	proxyURL := tutils.RandomProxyURL(t)
 	smap := tutils.GetClusterMap(t, proxyURL)
-	if smap.CountActiveProxies() < 3 {
-		t.Fatal("Not enough proxies to run proxy tests, must be more than 2")
+	if cnt := smap.CountActiveProxies(); cnt < 3 {
+		t.Fatalf("Not enough proxies (%d) to run tests (must be at least 3)", cnt)
 	}
-
 	if smap.CountActiveTargets() < 1 {
-		t.Fatal("Not enough targets to run proxy tests, must be at least 1")
+		t.Fatalf("No active targets to run tests (%s, num-t-active=0)", smap.StringEx())
 	}
 
 	defer tutils.EnsureOrigClusterState(t)
@@ -1348,8 +1347,8 @@ func TestIC(t *testing.T) {
 
 	proxyURL := tutils.RandomProxyURL(t)
 	smap := tutils.GetClusterMap(t, proxyURL)
-	if smap.CountActiveProxies() < 4 {
-		t.Fatal("Not enough proxies to run proxy tests, must be more than 3")
+	if cnt := smap.CountActiveProxies(); cnt < 4 {
+		t.Fatalf("Not enough proxies (%d) to run tests (must be at least 4)", cnt)
 	}
 
 	defer tutils.EnsureOrigClusterState(t)
@@ -1359,6 +1358,7 @@ func TestIC(t *testing.T) {
 			t.FailNow()
 		}
 	}
+	time.Sleep(time.Second)
 }
 
 func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (tutils.RestoreCmd, *cluster.Smap) {
@@ -1606,9 +1606,8 @@ func icStressMonitorXactMultiICFail(t *testing.T) {
 }
 
 func icStressCachedXactions(t *testing.T) {
-	// TODO: This test doesn't stress test cached xactions as notifications
-	// are temporarily disabled for list-objects. ref. #922
-	t.Skip("IC and notifications are temporarily disabled for list-objects")
+	// TODO -- FIXME: to stress test xactions need list-objects notifications (ref. #922)
+	t.Skipf("skipping %s (currently, list-objects does not generate IC notifications)", t.Name())
 
 	var (
 		m = ioContext{

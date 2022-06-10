@@ -2501,6 +2501,10 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	// Rename as dst1
 	tlog.Logf("Rename %s => %s\n", src, dst1)
 	xactID, err := api.RenameBucket(baseParams, src, dst1)
+	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
+		// retry just once
+		xactID, err = api.RenameBucket(baseParams, src, dst1)
+	}
 	tassert.CheckFatal(t, err)
 	tlog.Logf("x-%s[%s] in progress...\n", apc.ActMoveBck, xactID)
 
