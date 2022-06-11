@@ -109,7 +109,9 @@ func newBucketMD() *bucketMD {
 	namespaces := make(cluster.Namespaces, 1)
 	providers[apc.ProviderAIS] = namespaces
 	buckets := make(cluster.Buckets, 16)
-	namespaces[cmn.NsGlobal.Uname()] = buckets
+	debug.Assert(cmn.NsGlobalUname == cmn.NsGlobal.Uname())
+	namespaces[cmn.NsGlobalUname] = buckets
+
 	return &bucketMD{BMD: cluster.BMD{Providers: providers, UUID: ""}}
 }
 

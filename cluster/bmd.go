@@ -193,36 +193,33 @@ func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 	return
 }
 
-func (m *BMD) initBckAnyProvider(bck *Bck) bool {
-	if namespaces, ok := m.Providers[apc.ProviderAIS]; ok {
-		if buckets, ok := namespaces[cmn.NsGlobal.Uname()]; ok {
-			if p, present := buckets[bck.Name]; present {
-				bck.Provider = apc.ProviderAIS
-				bck.Ns = cmn.NsGlobal
-				bck.Props = p
-				return true
-			}
-		}
+func (m *BMD) initBckGlobalNs(bck *Bck) bool {
+	namespaces, ok := m.Providers[bck.Provider]
+	if !ok {
+		return false
 	}
-	if m.initBck(bck) {
-		return true
+	buckets, ok := namespaces[cmn.NsGlobal.Uname()]
+	if !ok {
+		return false
 	}
-	bck.Provider = apc.ProviderAIS
-	return false
+	p, present := buckets[bck.Name]
+	if present {
+		debug.Assert(bck.Ns.IsGlobal())
+		bck.Props = p
+	}
+	return present
 }
 
 func (m *BMD) initBck(bck *Bck) bool {
-	for provider, namespaces := range m.Providers {
-		if provider != bck.Provider {
-			continue
-		}
-		for nsUname, buckets := range namespaces {
-			if p, present := buckets[bck.Name]; present {
-				bck.Props = p
-				bck.Provider = provider
-				bck.Ns = cmn.ParseNsUname(nsUname)
-				return true
-			}
+	namespaces, ok := m.Providers[bck.Provider]
+	if !ok {
+		return false
+	}
+	for nsUname, buckets := range namespaces {
+		if p, present := buckets[bck.Name]; present {
+			bck.Props = p
+			bck.Ns = cmn.ParseNsUname(nsUname)
+			return true
 		}
 	}
 	return false

@@ -63,6 +63,12 @@ type (
 	}
 )
 
+const (
+	// NsGlobalUname is hardcoded here to avoid allocating it via Uname()
+	// (the most common use case)
+	NsGlobalUname = "@#"
+)
+
 var (
 	// NsGlobal represents *this* cluster's global namespace that is used by default when
 	// no specific namespace was defined or provided by the user.
@@ -166,6 +172,9 @@ func (n Ns) String() string {
 }
 
 func (n Ns) Uname() string {
+	if n.IsGlobal() {
+		return NsGlobalUname
+	}
 	b := make([]byte, 0, 2+len(n.UUID)+len(n.Name))
 	b = append(b, apc.NsUUIDPrefix)
 	b = append(b, n.UUID...)

@@ -8,6 +8,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type BownerMock struct {
@@ -26,7 +27,8 @@ func NewBaseBownerMock(bcks ...*cluster.Bck) *BownerMock {
 		buckets    = make(cluster.Buckets)
 	)
 	providers[apc.ProviderAIS] = namespaces
-	namespaces[cmn.NsGlobal.Uname()] = buckets
+	debug.Assert(cmn.NsGlobalUname == cmn.NsGlobal.Uname())
+	namespaces[cmn.NsGlobalUname] = buckets
 
 	owner := &BownerMock{BMD: cluster.BMD{Version: 1, Providers: providers}}
 	for _, bck := range bcks {

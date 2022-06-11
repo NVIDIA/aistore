@@ -201,7 +201,8 @@ func (b *Bck) InitNoBackend(bowner Bowner) error { return b.init(bowner.Get()) }
 
 func (b *Bck) init(bmd *BMD) error {
 	if b.Provider == "" {
-		bmd.initBckAnyProvider(b)
+		b.Provider = apc.ProviderAIS
+		bmd.initBckGlobalNs(b)
 	} else if cmn.IsRemoteProvider(b.Provider) {
 		present := bmd.initBck(b)
 		debug.Assert(!b.IsHDFS() || !present || b.Props.Extra.HDFS.RefDirectory != "")
