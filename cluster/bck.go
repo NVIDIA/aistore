@@ -144,13 +144,11 @@ func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 	return true
 }
 
-// NOTE: when the specified bucket is not present in the BMD:
+// when the bucket is not present in the BMD:
 // - always returns the corresponding *DoesNotExist error
 // - Cloud bucket: fills in the props with defaults from config
 // - AIS bucket: sets the props to nil
 // - Remote (Cloud or Remote AIS) bucket: caller can type-cast err.(*cmn.ErrRemoteBckNotFound) and proceed
-//
-// NOTE: most of the above applies to a backend bucket, if specified
 func (b *Bck) Init(bowner Bowner) (err error) {
 	if err = b.Validate(); err != nil {
 		return
@@ -159,40 +157,32 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 	if err = b.init(bmd); err != nil {
 		return
 	}
-	backend := b.Backend()
-	if backend == nil {
-		return
-	}
-	// backend
-	if err = backend.Validate(); err == nil {
-		err = backend.initBack(bmd)
+	if backend := b.Backend(); backend != nil {
+		if backend.Props == nil {
+			err = backend.init(bmd)
+		} else {
+			p, exists := bmd.Get(backend)
+			if exists {
+				exists = p.BID == backend.Props.BID
+			}
+			if !exists {
+				err = cmn.NewErrRemoteBckNotFound(backend.Bucket())
+			} else if backend.Props != p {
+				backend.Props = p
+			}
+		}
 	}
 	return
 }
 
-// is used to init LOM, skips validations (compare with `Init` above)
+// part of lom.init (compare with the above)
 func (b *Bck) initFast(bowner Bowner) (err error) {
 	bmd := bowner.Get()
 	if err = b.init(bmd); err != nil {
 		return
 	}
-	if backend := b.Backend(); backend != nil {
-		err = backend.initBack(bmd)
-	}
-	return
-}
-
-// check presence and initialize if need be (backend only)
-func (b *Bck) initBack(bmd *BMD) (err error) {
-	if b.Props == nil {
-		return b.init(bmd)
-	}
-	p, exists := bmd.Get(b)
-	if exists {
-		exists = p.BID == b.Props.BID
-	}
-	if !exists {
-		err = cmn.NewErrRemoteBckNotFound(b.Bucket())
+	if backend := b.Backend(); backend != nil && backend.Props == nil {
+		err = backend.init(bmd)
 	}
 	return
 }

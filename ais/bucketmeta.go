@@ -159,7 +159,16 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 	p.SetProvider(bck.Provider)
 	p.BID = prevProps.BID
 
+	// make sure bck.backend, if exists, references backend's own props in the BMD
+	if p.BackendBck.Name != "" && p.BackendBck.Props == nil {
+		if provider, err := cmn.NormalizeProvider(p.BackendBck.Provider); err == nil {
+			p.BackendBck.Provider = provider
+			p.BackendBck.Props, _ = m.Get((*cluster.Bck)(&p.BackendBck))
+		}
+	}
+
 	m.Set(bck, p)
+
 	m.Version++
 }
 

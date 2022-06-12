@@ -303,12 +303,11 @@ func _mirrorBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 }
 
 // set-bucket-props: { confirm existence -- begin -- apply props -- metasync -- commit }
-func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn.BucketProps) (xactID string, err error) {
+func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn.BucketProps) (string /*xactID*/, error) {
 	// 1. confirm existence
 	bprops, present := p.owner.bmd.get().Get(bck)
 	if !present {
-		err = cmn.NewErrBckNotFound(bck.Bucket())
-		return
+		return "", cmn.NewErrBckNotFound(bck.Bucket())
 	}
 	bck.Props = bprops
 
@@ -317,20 +316,20 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 	case apc.ActSetBprops:
 		// do nothing here (caller's responsible for validation)
 	case apc.ActResetBprops:
-		var remoteBckProps http.Header
+		bargs := bckPropsArgs{bck: bck}
 		if bck.IsRemote() {
 			if backend := bck.Backend(); backend != nil {
-				err = fmt.Errorf("%q has backend %q - detach it prior to resetting the props", bck, backend)
-				return
+				return "", fmt.Errorf("%q has backend %q - detach it prior to resetting the props", bck, backend)
 			}
-			remoteBckProps, _, err = p.headRemoteBck(bck.Bucket(), nil)
+			remoteBckProps, _, err := p.headRemoteBck(bck.Bucket(), nil)
 			if err != nil {
 				return "", err
 			}
+			bargs.hdr = remoteBckProps
 		}
-		nprops = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteBckProps})
+		nprops = defaultBckProps(bargs)
 	default:
-		cos.Assert(false)
+		return "", fmt.Errorf(fmtErrInvaldAction, msg.Action, []string{apc.ActSetBprops, apc.ActResetBprops})
 	}
 	// msg{propsToUpdate} => nmsg{nprops} and prep context(nmsg)
 	nmsg := *msg
@@ -339,8 +338,8 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 		waitmsync = true
 		c         = p.prepTxnClient(&nmsg, bck, waitmsync)
 	)
-	if err = c.begin(bck); err != nil {
-		return
+	if err := c.begin(bck); err != nil {
+		return "", err
 	}
 
 	// 3. update BMD locally & metasync updated BMD
@@ -374,9 +373,7 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 	}
 
 	// 5. commit
-	xactID, err = c.commit(bck, c.cmtTout(waitmsync))
-	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
-	return
+	return c.commit(bck, c.cmtTout(waitmsync))
 }
 
 func (p *proxy) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error) {

@@ -95,30 +95,23 @@ func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, er
 		errCode = http.StatusBadRequest
 		return
 	}
-
 	if args.skipBackend {
-		err = bck.Validate()
-		if err == nil {
-			err = bck.InitNoBackend(args.p.owner.bmd)
-		}
+		err = bck.InitNoBackend(args.p.owner.bmd)
 	} else {
 		err = bck.Init(args.p.owner.bmd)
 	}
-
-	if err != nil && cmn.IsErrBucketNought(err) {
-		errCode = http.StatusNotFound
-		return
-	}
-
 	if err != nil {
 		errCode = http.StatusBadRequest
+		if cmn.IsErrBucketNought(err) {
+			errCode = http.StatusNotFound
+		}
 		return
 	}
 
 	args.bck = bck
 	args.exists = true
 
-	// Check for msg.Action permission if permissions are not explicitly specified
+	// if permissions are not explicitly specified check the default (msg.Action => permissions)
 	if args.perms == 0 && args.msg != nil {
 		xactRecord, ok := xact.Table[args.msg.Action]
 		if !ok || xactRecord.Access == 0 {

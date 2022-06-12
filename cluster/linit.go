@@ -14,6 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
+const fmtErrLinit = "lom-init %s: %s mismatch (%q != %q)"
+
 // Local Object Metadata (LOM) - is cached. Respectively, lifecycle of any given LOM
 // instance includes the following steps:
 // 1) construct LOM instance and initialize its runtime state: lom = LOM{...}.Init()
@@ -45,18 +47,16 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
 	lom.bck = *(*Bck)(&parsedFQN.Bck)
 
 	if expbck != nil {
-		debug.Assert(!expbck.IsEmpty())
 		if expbck.Name != parsedFQN.Bck.Name {
-			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, expbck.String(), parsedFQN.Bck)
+			return fmt.Errorf(fmtErrLinit, lom.FQN, "bucket", expbck.String(), parsedFQN.Bck)
 		}
 		if expbck.Provider != "" && expbck.Provider != lom.bck.Provider {
-			return fmt.Errorf("lom-init %s: provider mismatch (%q != %q)", lom.FQN, lom.bck.Provider, expbck.Provider)
+			return fmt.Errorf(fmtErrLinit, lom.FQN, "provider", lom.bck.Provider, expbck.Provider)
 		}
 		if !expbck.Ns.IsGlobal() && expbck.Ns != parsedFQN.Bck.Ns {
-			return fmt.Errorf("lom-init %s: namespace mismatch (%s != %s)", lom.FQN, expbck.Ns, parsedFQN.Bck.Ns)
+			return fmt.Errorf(fmtErrLinit, lom.FQN, "namespace", expbck.Ns, parsedFQN.Bck.Ns)
 		}
 	}
-
 	if err = lom.bck.initFast(T.Bowner()); err != nil {
 		return
 	}
@@ -77,7 +77,6 @@ func (lom *LOM) InitCT(ct *CT) {
 }
 
 func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
-	debug.Assert(!bck.IsEmpty())
 	lom.bck = *(*Bck)(bck)
 	if err = lom.bck.initFast(T.Bowner()); err != nil {
 		return

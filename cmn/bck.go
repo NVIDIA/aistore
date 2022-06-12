@@ -144,6 +144,9 @@ func NormalizeProvider(provider string) (string, error) {
 // Parses [@uuid][#namespace]. It does a little bit more than just parsing
 // a string from `Uname` so that logic can be reused in different places.
 func ParseNsUname(s string) (n Ns) {
+	if s == NsGlobalUname {
+		return NsGlobal // to speedup the common case (here and elsewhere)
+	}
 	if len(s) > 0 && s[0] == apc.NsUUIDPrefix {
 		s = s[1:]
 	}
@@ -157,18 +160,17 @@ func ParseNsUname(s string) (n Ns) {
 	return
 }
 
-func (n Ns) String() string {
+func (n Ns) String() (res string) {
 	if n.IsGlobal() {
-		return ""
+		return
 	}
-	res := ""
 	if n.UUID != "" {
 		res += string(apc.NsUUIDPrefix) + n.UUID
 	}
 	if n.Name != "" {
 		res += string(apc.NsNamePrefix) + n.Name
 	}
-	return res
+	return
 }
 
 func (n Ns) Uname() string {
@@ -185,7 +187,7 @@ func (n Ns) Uname() string {
 
 func (n Ns) Validate() error {
 	if n.IsGlobal() {
-		return nil // to speedup a bit
+		return nil
 	}
 	if cos.IsAlphaPlus(n.UUID, false /*with period*/) && cos.IsAlphaPlus(n.Name, false) {
 		return nil
