@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 

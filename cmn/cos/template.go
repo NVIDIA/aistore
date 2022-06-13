@@ -42,6 +42,7 @@ type (
 		// runtime
 		at          []int64
 		rangesCount int
+		buf         bytes.Buffer
 	}
 	ErrTemplate struct {
 		msg string
@@ -125,7 +126,7 @@ func (pt *ParsedTemplate) InitIter() {
 }
 
 func (pt *ParsedTemplate) Next() (string, bool) {
-	var buf bytes.Buffer
+	pt.buf.Reset()
 	for i := pt.rangesCount - 1; i >= 0; i-- {
 		if pt.at[i] > pt.Ranges[i].End {
 			if i == 0 {
@@ -135,12 +136,12 @@ func (pt *ParsedTemplate) Next() (string, bool) {
 			pt.at[i-1] += pt.Ranges[i-1].Step
 		}
 	}
-	buf.WriteString(pt.Prefix)
+	pt.buf.WriteString(pt.Prefix)
 	for i, tr := range pt.Ranges {
-		buf.WriteString(fmt.Sprintf("%0*d%s", tr.DigitCount, pt.at[i], tr.Gap))
+		pt.buf.WriteString(fmt.Sprintf("%0*d%s", tr.DigitCount, pt.at[i], tr.Gap))
 	}
 	pt.at[pt.rangesCount-1] += pt.Ranges[pt.rangesCount-1].Step
-	return buf.String(), true
+	return pt.buf.String(), true
 }
 
 //
