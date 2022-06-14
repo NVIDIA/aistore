@@ -120,6 +120,25 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         objects = self.client.list_objects(self.bck_name)
         self.assertEqual(len(objects.entries), bucket_size - delete_cnt)
 
+    def test_empty_bucket(self):
+        self.client.create_bucket(self.bck_name)
+        objects = self.client.list_objects(self.bck_name)
+        self.assertEqual(len(objects.entries), 0)
+
+    def test_bucket_with_no_matching_prefix(self):
+        bucket_size = 10
+        self.client.create_bucket(self.bck_name)
+        objects = self.client.list_objects(self.bck_name)
+        self.assertEqual(len(objects.entries), 0)
+        content = "test".encode("utf-8")
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(content)
+            f.flush()
+            for obj_id in range(bucket_size):
+                self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
+        objects = self.client.list_objects(self.bck_name, prefix="TEMP")
+        self.assertEqual(len(objects.entries), 0)
+
 
 if __name__ == '__main__':
     unittest.main()

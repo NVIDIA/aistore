@@ -1,9 +1,9 @@
 #
 # Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
-from typing import Any, Mapping, List, Iterator
+from typing import Any, Mapping, List, Iterator, Optional
 
-from pydantic import BaseModel, Field, StrictInt, StrictStr
+from pydantic import BaseModel, Field, StrictInt, StrictStr, validator
 import requests
 from .const import ProviderAIS
 
@@ -68,9 +68,15 @@ class BucketEntry(BaseModel):  # pylint: disable=too-few-public-methods,unused-v
 
 class BucketList(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
     uuid: str
-    entries: List[BucketEntry]
+    entries: Optional[List[BucketEntry]] = []
     continuation_token: str
     flags: int
+
+    @validator('entries')
+    def set_entries(cls, entries):  # pylint: disable=no-self-argument
+        if entries is None:
+            entries = []
+        return entries
 
 
 class XactStatus(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
