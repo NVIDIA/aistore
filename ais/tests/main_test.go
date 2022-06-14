@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
@@ -112,7 +111,7 @@ func TestMain(m *testing.M) {
 	}
 
 	if !cliBck.IsAIS() {
-		exists, err = devtools.BckExists(tutils.DevtoolsCtx, tutils.GetPrimaryURL(), cliBck)
+		exists, err = tutils.BckExists(tutils.GetPrimaryURL(), cliBck)
 		if err == nil && !exists {
 			err = fmt.Errorf("bucket %q does not exist, make sure that the cluster is compiled with selected provider", cliBck)
 		}

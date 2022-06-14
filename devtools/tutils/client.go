@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -45,6 +44,11 @@ const (
 const evictPrefetchTimeout = 2 * time.Minute
 
 const xactPollSleep = time.Second
+
+type Ctx struct {
+	Client *http.Client
+	Log    func(format string, a ...interface{})
+}
 
 type PutObjectsArgs struct {
 	ProxyURL  string
@@ -241,7 +245,7 @@ func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.Smap) (*cl
 // Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies.
 // Use `JoinCluster` to attach node back.
 func RemoveNodeFromSmap(proxyURL, sid string) error {
-	return devtools.RemoveNodeFromSmap(DevtoolsCtx, proxyURL, sid, time.Minute)
+	return _removeNodeFromSmap(gctx, proxyURL, sid, time.Minute)
 }
 
 func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName string, timeout time.Duration) error {
@@ -419,8 +423,7 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 	} else {
 		u = RandomProxyURL()
 	}
-
-	return devtools.BaseAPIParams(DevtoolsCtx, u)
+	return api.BaseParams{Client: gctx.Client, URL: u}
 }
 
 // waitForBucket waits until all targets ack having ais bucket created or deleted

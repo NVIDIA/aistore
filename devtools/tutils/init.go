@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
-	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 )
 
@@ -80,7 +79,7 @@ var (
 	}
 	AuthToken string
 
-	DevtoolsCtx *devtools.Ctx
+	gctx *Ctx
 )
 
 func init() {
@@ -92,7 +91,7 @@ func init() {
 	transportArgs.SkipVerify = cos.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt))
 	HTTPClient = cmn.NewClient(transportArgs)
 
-	DevtoolsCtx = &devtools.Ctx{
+	gctx = &Ctx{
 		Client: HTTPClient,
 		Log:    tlog.Logf,
 	}
