@@ -7,6 +7,11 @@ redirect_from:
  - /docs/authn.md/
 ---
 
+
+*June 2022 comment*: this document may be slightly outdated. Please see the corresponding [CLI auth subcommand](cli/auth.md) for user-friendly usage examples and details.
+
+---------------------
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -76,7 +81,7 @@ Note: don't forget to change the default secret key used to sign tokens before s
 To change AuthN settings after deployment, modify the server's configuration file and restart the server.
 If you change the server's secret key, make sure to modify AIStore proxy configuration as well.
 
-At start, AuthN checks the user list. If it is empty, AuthN creates a default user that can access everything:
+Upon startup, AuthN checks the user list. If it is empty, AuthN creates a default user that can access everything:
 user ID is `admin` and password is `admin`. Do not forget to change the user's password for security reasons.
 
 ### Notation

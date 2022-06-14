@@ -109,7 +109,7 @@ Register a user and assign a list of roles to the user.
 
 If the list of roles is not provided, the new user does not have any permissions. 
 
-Bucket access does not necessarily require creating a role. Instead, `admin` can **register a user with an empty role and grant permissions to the required buckets**. 
+Bucket access does not necessarily require creating a role. Instead, `admin` can **register a user with an empty role and grant permissions to the required buckets**.
 
 #### Examples
 
