@@ -76,7 +76,7 @@ The easiest way to pass your credentials to the AIS cluster is to mount a volume
 ```
 $ docker run -d \
     -p 51080:51080 \
-        -v <path_to_aws_config>:/path/to/config \
+    -v <path_to_aws_config>:/path/to/config \
     -e AIS_CONFIG_FILE="/path/to/config" \
     -e AIS_BACKEND_PROVIDERS="aws" \
     -v /disk0:/ais/disk0 \
