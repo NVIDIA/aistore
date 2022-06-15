@@ -1,33 +1,41 @@
-# Production-ready Standalone Docker
+# Minimal Production-Ready Standalone Docker Deployment
 
-That is an absolutely minimal AIStore realization - the cluster consisting of a single storage target and a single proxy/gateway, all in one preconfigured ready-for-usage docker image.
+## Prerequisites
 
-Once `docker run`-deployed, the minimal cluster will be listening on the default AIS port `51080`.
+If not already installed, install [Docker](https://docs.docker.com/engine/install/) on the machine that will be used to run your containerized AIS cluster. Verify that Docker has been correctly installed with the following script:
 
-## Run
+```
+$ docker run hello-world
 
-`aistore/cluster-minimal:latest` Docker image is used to deploy the cluster.
-Docker image can be started with attached volumes which will be used by the target to store the data.
-
-**Important**: Currently assuming that all volumes will be mounted in `/ais/*` directory.
-
-### Examples
-
-#### Minimal setup
-
-```console
-$ docker run -d \
-    -p 51080:51080 \
-    -v $(mktemp -d):/ais/disk0 \
-    aistore/cluster-minimal:latest
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+...
 ```
 
-This starts AIS cluster with 1 disk (at least one disk is required!) that is mounted under temporary directory on the host.
-The command exposes `51080` port, so it's possible to reach the cluster with `http://localhost:51080`.
+The Docker image used to deploy AIS clusters in this guide is `aistore/cluster-minimal:latest`, which can be found [here](https://hub.docker.com/repository/docker/aistore/cluster-minimal) on Docker Hub. `aistore/cluster-minimal:latest` is an all-in-one, custom Docker image with AIS resources pre-installed.
 
-To check the cluster status:
-```console
+## How to Deploy
+
+### Minimal Setup
+
+The following command starts an AIS cluster in a Docker container with a single disk (requires at least one disk) that is mounted under a temporary directory on the host:
+
+```
+$ docker run -d \
+ -p 51080:51080 \
+ -v $(mktemp -d):/ais/disk0 \
+ aistore/cluster-minimal:latest
+```
+
+> Note the command exposes the host `51080` port. It is possible to reach the cluster with `http://localhost:51080` if you are on the host machine.
+
+> The above command, and all subsequent commands, assume that all volumes will be mounted in `/ais/*` directory.
+
+You can check the status of the AIS cluster on the now running Docker instance (using local host endpoint) as follows:
+
+```
 $ AIS_ENDPOINT="http://localhost:51080" ais show cluster
+
 PROXY                   MEM USED %  MEM AVAIL   UPTIME
 proxy-0934deff64b7[P]   0.40%       7.78GiB     3m30s
 
@@ -35,56 +43,78 @@ TARGET              MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  
 target-0934deff64b7 0.41%       7.78GiB     84%         8.950TiB    0.07%       -           3m30s
 
 Summary:
- Proxies:	1 (0 - unelectable)
- Targets:	1
- Primary Proxy:	proxy-0934deff64b7
- Smap Version:	3
+ Proxies:       1 (0 - unelectable)
+ Targets:       1
+ Primary Proxy: proxy-0934deff64b7
+ Smap Version:  3
 ```
 
-#### Multiple (static) disks
+### Multiple Disk Setup
 
-```console
+You can also mount multiple disks to your containerized AIS cluster. The following command launches a local Docker instance of an AIS cluster, but with three disks mounted:
+
+```
+$ docker run -d \
+ -p 51080:51080 \
+ -v /disk0:/ais/disk0 \
+ -v /disk1:/ais/disk1 \
+ -v /some/disk2:/ais/disk2 \
+ aistore/cluster-minimal:latest
+```
+
+> **IMPORTANT**: The mounted disk paths must resolve to _distinct_ and _disjoint_ file systems. Otherwise, the setup may be corrupted.
+
+
+### Backend Provider Setup
+
+> **IMPORTANT**: For both AWS or GCP usage, to ensure the cluster works properly with backend providers, it is _essential_ to pass the environment variable `AIS_BACKEND_PROVIDERS`, a space-separated list of support backend provides to be used, in your `docker run` command.
+
+#### <ins>AWS Backend
+
+The easiest way to pass your credentials to the AIS cluster is to mount a volume prepared with a [`config file`](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html) and provide `AWS_CONFIG_FILE`, the path to `config` in your `docker run` command:
+
+```
 $ docker run -d \
     -p 51080:51080 \
+        -v <path_to_aws_config>:/path/to/config \
+    -e AIS_CONFIG_FILE="/path/to/config" \
+    -e AIS_BACKEND_PROVIDERS="aws" \
     -v /disk0:/ais/disk0 \
-    -v /disk1:/ais/disk1 \
-    -v /some/disk2:/ais/disk2 \
     aistore/cluster-minimal:latest
 ```
 
-This starts AIS cluster with 3 disks (`/disk0`, `/disk1` and `/some/disk2`) with a sample configuration and exposes it on port `51080`.
-Important note is that disk paths must resolve to distinct and disjoint filesystems, otherwise target will complain about the incorrect setup.
+Alternatively, it is possible to explicitly pass the credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`) explicitly as [environment variables](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html) in your `docker run` command:
 
-#### Backend provider
-
-To make the cluster work properly with backend providers it is essential to set the environment variable `AIS_BACKEND_PROVIDERS`, a space separated list of supported provides, and pass the credentials to the docker image.
-The easiest way to pass the credentials is to mount a volume and provide a path to config file as envvar:
- - AWS: `AWS_CONFIG_FILE`
- - GCP: `GOOGLE_APPLICATION_CREDENTIALS`
-
-When using `aws` backend provider it is possible to explicitly pass the credentials with ([envvars](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html)) :
- - `AWS_ACCESS_KEY_ID`
- - `AWS_SECRET_ACCESS_KEY`
- - `AWS_DEFAULT_REGION`
-
-
-Start an AIS docker cluster with single disk and `aws` provider credentials in envvars:
-
-```console
+```
 $ docker run -d \
     -p 51080:51080 \
     -e AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
-    -e AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
+    -e AWS_SECRET_ACCESS_KEY="wJalrXUtfdfUYBjdtEnFxEMEXAMPLE" \
     -e AWS_DEFAULT_REGION="us-west-2" \
     -e AIS_BACKEND_PROVIDERS="aws" \
     -v /disk0:/ais/disk0 \
     aistore/cluster-minimal:latest
 ```
 
+Once the container is running and the cluster is deployed, you can verify that your AWS buckets are accessible by the newly deployed AIS cluster:
 
-Start an AIS docker cluster with single disk and `gcp` provider credentials as a mounted volume:
+```
+$ AIS_ENDPOINT="http://localhost:51080" ais bucket ls
 
-```console
+AWS Buckets (28)
+  aws://sample-bucket-1
+  aws://sample-bucket-2
+  aws://sample-bucket-3
+...
+```
+
+#### <ins>GCP Backend
+
+> **WARNING**: The following section on `gcp` backend use needs _review_ and may be _outdated_.
+
+The following command deploys a containerized AIS cluster with GCP by providing a volume with the `config file` and a path to the `config`:
+
+```
 $ docker run -d \
     -p 51080:51080 \
     -v <path_to_gcp_config>.json:/credentials/gcp.json \
@@ -94,12 +124,11 @@ $ docker run -d \
     aistore/cluster-minimal:latest
 ```
 
+## Build and Upload (Dev)
 
-## (dev) Build and upload
+It is also possible to [build a custom image](https://docs.docker.com/develop/develop-images/baseimages/) locally and upload it to selected registry (i.e. DockerHub, AWS, GitLab Container Registry):
 
-It is possible to locally build an image and upload it to selected registry.
-
-```console
+```
 $ ./build_image.sh <TAG>
 $ ./upload_image.sh <REGISTRY_URL> <TAG>
 ```
