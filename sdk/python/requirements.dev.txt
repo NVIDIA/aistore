@@ -22,3 +22,4 @@ tomli==2.0.1
 typing_extensions==4.1.1
 urllib3==1.26.9
 wrapt==1.14.0
+torchdata==0.3.0

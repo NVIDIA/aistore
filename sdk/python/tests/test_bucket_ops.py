@@ -7,10 +7,11 @@
 import random
 import string
 import unittest
-import requests
+from aistore.client.errors import ErrBckNotFound
 import tempfile
 
 from aistore.client.api import Client
+import requests
 from . import CLUSTER_ENDPOINT, REMOTE_BUCKET
 
 
@@ -27,7 +28,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         for bck_name in self.buckets:
             try:
                 self.client.destroy_bucket(bck_name)
-            except requests.exceptions.HTTPError:
+            except ErrBckNotFound:
                 pass
 
     def test_bucket(self):

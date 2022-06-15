@@ -7,7 +7,7 @@
 import random
 import string
 import unittest
-import requests
+from aistore.client.errors import ErrBckNotFound
 
 from aistore.client.api import Client
 from . import CLUSTER_ENDPOINT
@@ -24,7 +24,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         # Try to destroy bucket if there is one left.
         try:
             self.client.destroy_bucket(self.bck_name)
-        except requests.exceptions.HTTPError:
+        except ErrBckNotFound:
             pass
 
     def test_xaction_start(self):

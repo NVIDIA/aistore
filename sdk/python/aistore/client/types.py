@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 from typing import Any, Mapping, List, Iterator, Optional
 
@@ -108,4 +108,14 @@ class ObjStream(BaseModel):  # pylint: disable=too-few-public-methods,unused-var
             for chunk in self.stream.iter_content(chunk_size=self.chunk_size):
                 yield chunk
         finally:
-            print(self.stream.close())
+            self.stream.close()
+
+
+class HttpError(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+    status: int
+    message: str = ""
+    method: str = ""
+    url_path: str = ""
+    remote_addr: str = ""
+    caller: str = ""
+    node: str = ""

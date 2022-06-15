@@ -7,7 +7,7 @@
 import random
 import string
 import unittest
-import requests
+from aistore.client.errors import AISError, ErrBckNotFound
 import tempfile
 
 from aistore.client.api import Client
@@ -28,7 +28,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         # Try to destroy bucket if there is one left.
         try:
             self.client.destroy_bucket(self.bck_name)
-        except requests.exceptions.HTTPError:
+        except ErrBckNotFound:
             pass
 
     def _test_get_obj(self, read_type, obj_name, exp_content):
@@ -138,6 +138,14 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
                 self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
         objects = self.client.list_objects(self.bck_name, prefix="TEMP")
         self.assertEqual(len(objects.entries), 0)
+
+    def test_invalid_bck_name(self):
+        with self.assertRaises(ErrBckNotFound):
+            self.client.list_objects(bck_name="INVALID_BCK_NAME")
+
+    def test_invalid_bck_name_for_aws(self):
+        with self.assertRaises(AISError):
+            self.client.list_objects(bck_name="INVALID_BCK_NAME", provider="aws")
 
 
 if __name__ == '__main__':

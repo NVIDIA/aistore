@@ -8,7 +8,7 @@ import time
 from urllib.parse import urljoin
 from pydantic.tools import parse_raw_as
 
-from .const import (
+from aistore.client.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
     HTTP_METHOD_PUT,
@@ -21,8 +21,9 @@ from .const import (
     QParamKeepBckMD,
     QParamBucketTo,
 )
-from .types import ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap, XactStatus
-from .errors import InvalidBckProvider, Timeout
+from aistore.client.types import (ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap, XactStatus, HttpError)
+from aistore.client.errors import InvalidBckProvider, Timeout, ErrBckNotFound, ErrRemoteBckNotFound, AISError
+from aistore.client.utils import handle_errors
 
 T = TypeVar("T")
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
@@ -58,10 +59,22 @@ class Client:
         resp = self._request(method, path, **kwargs)
         return parse_raw_as(res_model, resp.text)
 
+    def _raise_error(self, text: str):
+        err = parse_raw_as(HttpError, text)
+        if 400 <= err.status < 500:
+            err = parse_raw_as(HttpError, text)
+            if "does not exist" in err.message:
+                if "cloud bucket" in err.message:
+                    raise ErrRemoteBckNotFound(err.status, err.message)
+                if "bucket" in err.message:
+                    raise ErrBckNotFound(err.status, err.message)
+        raise AISError(err.status, err.message)
+
     def _request(self, method: str, path: str, **kwargs) -> requests.Response:
         url = f"{ self.base_url }/{ path.lstrip('/') }"
         resp = requests.request(method, url, headers={"Accept": "application/json"}, **kwargs)
-        resp.raise_for_status()
+        if resp.status_code < 200 or resp.status_code >= 300:
+            handle_errors(resp)
         return resp
 
     def list_buckets(self, provider: str = ProviderAIS):
@@ -83,6 +96,7 @@ class Client:
         """
         params = {QParamProvider: provider}
         action = ActionMsg(action="list").dict()
+
         return self._request_deserialize(
             HTTP_METHOD_GET,
             path="buckets",
