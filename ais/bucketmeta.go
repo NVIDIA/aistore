@@ -515,7 +515,8 @@ func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.Bucket
 	debug.Assert(len(header) > 0)
 	switch props.Provider {
 	case apc.ProviderAmazon:
-		props.Extra.AWS.CloudRegion = header.Get(apc.HdrCloudRegion)
+		props.Extra.AWS.CloudRegion = header.Get(apc.HdrS3Region)
+		props.Extra.AWS.Endpoint = header.Get(apc.HdrS3Endpoint)
 	case apc.ProviderHTTP:
 		props.Extra.HTTP.OrigURLBck = header.Get(apc.HdrOrigURLBck)
 	}

@@ -617,6 +617,49 @@ Bucket props successfully updated
 "access" set to:"GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS" (was:"<PREV_ACCESS_LIST>")
 ```
 
+#### Configure custom AWS S3 endpoint
+
+When a bucket is hosted by an S3 compliant backend (such as, e.g., minio), we may want to specify an alternative S3 endpoint,
+so that AIS nodes use it when reading, writing, listing, and generally, performing all operations on remote S3 bucket(s).
+
+Globally, S3 endpoint can be overridden for _all_ S3 buckets via "S3_ENDPOINT" environment.
+If you decide to make the change, you may need to restart AIS cluster while making sure that "S3_ENDPOINT" is available for the AIS nodes
+when they are starting up.
+
+But it can be also be done - and will take precedence over global setting - on a per-bucket basis.
+
+Here are some examples:
+
+```console
+# Let's say, s3://abc contains a single object:
+$ ais ls s3://abc
+NAME             SIZE
+README.md        8.96KiB
+
+# First, override empty the endpoint property in the bucket's configuration.
+# Use the default AWS S3 endpoint `https://s3.amazonaws.com` (to see that it *applies* and works).
+$ ais bucket props set s3://abc extra.aws.endpoint=s3.amazonaws.com
+Bucket "aws://abc": property "extra.aws.endpoint=s3.amazonaws.com", nothing to do
+$ ais ls s3://abc
+NAME             SIZE
+README.md        8.96KiB
+
+# Second, set it to invalid value, and observe that the bucket becomes inaccessible:
+$ ais bucket props set s3://abc extra.aws.endpoint=foo
+Bucket props successfully updated
+"extra.aws.endpoint" set to: "foo" (was: "s3.amazonaws.com")
+$ ais ls s3://abc
+RequestError: send request failed: dial tcp: lookup abc.foo: no such host
+
+# Finally, revert the endpoint back to empty and make sure the bucket is visible again:
+$ ais bucket props set s3://abc extra.aws.endpoint=""
+Bucket props successfully updated
+"extra.aws.endpoint" set to: "" (was: "foo")
+$ ais ls s3://abc
+NAME             SIZE
+README.md        8.96KiB
+```
+
 #### Connect/Disconnect AIS bucket to/from cloud bucket
 
 Set backend bucket for AIS bucket `bucket_name` to the GCP cloud bucket `cloud_bucket`.

@@ -108,11 +108,14 @@ const (
 
 	// Bucket props headers.
 	HdrBucketProps      = HeaderPrefix + "bucket-props"
-	HdrOrigURLBck       = HeaderPrefix + "original-url"       // See: BucketProps.Extra.HTTP.OrigURLBck
-	HdrCloudRegion      = HeaderPrefix + "cloud-region"       // See: BucketProps.Extra.AWS.CloudRegion
 	HdrBucketVerEnabled = HeaderPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket.
 	HdrBucketCreated    = HeaderPrefix + "created"            // Bucket creation time.
-	HdrBackendProvider  = HeaderPrefix + "provider"           // ProviderAmazon et al. - see cmn/bucket.go.
+	HdrBackendProvider  = HeaderPrefix + "provider"           // ProviderAmazon et al. - see cmn/bck.go.
+	// including BucketProps.Extra.AWS
+	HdrS3Region   = HeaderPrefix + "cloud_region"
+	HdrS3Endpoint = HeaderPrefix + "endpoint"
+	// including BucketProps.Extra.HTTP
+	HdrOrigURLBck = HeaderPrefix + "original-url"
 
 	HdrRemoteOffline = HeaderPrefix + "remote-offline" // When accessing cached remote bucket with no backend connectivity.
 

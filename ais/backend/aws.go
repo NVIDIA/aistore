@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,6 +36,11 @@ import (
 const (
 	awsChecksumType = "x-amz-meta-ais-cksum-type"
 	awsChecksumVal  = "x-amz-meta-ais-cksum-val"
+
+	// environment variable to globally override the default 'https://s3.amazonaws.com' endpoint
+	// NOTE: the same can be done on a per-bucket basis, via bucket prop `Extra.AWS.Endpoint`
+	//       (and of course, bucket override will take precedence)
+	awsEnvS3Endpoint = "S3_ENDPOINT"
 )
 
 type (
@@ -48,15 +54,17 @@ type (
 )
 
 var (
-	clients map[string]*s3.S3 // one client per AWS region
-	cmu     sync.RWMutex
+	clients    map[string]map[string]*s3.S3 // one client per (region, endpoint)
+	cmu        sync.RWMutex
+	s3Endpoint string
 )
 
 // interface guard
 var _ cluster.BackendProvider = (*awsProvider)(nil)
 
 func NewAWS(t cluster.Target) (cluster.BackendProvider, error) {
-	clients = make(map[string]*s3.S3, 2)
+	clients = make(map[string]map[string]*s3.S3, 2)
+	s3Endpoint = os.Getenv(awsEnvS3Endpoint)
 	return &awsProvider{t: t}, nil
 }
 
@@ -111,7 +119,8 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs,
 	}
 	bckProps = make(cos.SimpleKVs, 4)
 	bckProps[apc.HdrBackendProvider] = apc.ProviderAmazon
-	bckProps[apc.HdrCloudRegion] = region
+	bckProps[apc.HdrS3Region] = region
+	bckProps[apc.HdrS3Endpoint] = ""
 	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(
 		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
 	)
@@ -459,21 +468,29 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 // static helpers
 //
 
-// newClient creates new S3 client that can be used to make requests. It is
-// guaranteed that the client is initialized even in case of errors.
+// newClient creates new S3 client on a per-region basis or, more precisely,
+// per (region, endpoint) pair - and note that s3 endpoint is per-bucket configurable.
+// If the client already exists newClient simply returns it.
 //
-// Quoting S3 SDK:
+// From S3 SDK:
 //     "S3 methods are safe to use concurrently. It is not safe to
 //      modify mutate any of the struct's properties though."
 func newClient(conf sessConf, tag string) (svc *s3.S3, region string, err error) {
+	endpoint := s3Endpoint
 	region = conf.region
-	if region == "" && conf.bck != nil && conf.bck.Props != nil {
-		region = conf.bck.Props.Extra.AWS.CloudRegion
+	if conf.bck != nil && conf.bck.Props != nil {
+		if region == "" {
+			region = conf.bck.Props.Extra.AWS.CloudRegion
+		}
+		if conf.bck.Props.Extra.AWS.Endpoint != "" {
+			endpoint = conf.bck.Props.Extra.AWS.Endpoint
+		}
 	}
+
 	// reuse
 	if region != "" {
 		cmu.RLock()
-		svc = clients[region]
+		svc = clients[region][endpoint]
 		cmu.RUnlock()
 		if svc != nil {
 			return
@@ -481,7 +498,7 @@ func newClient(conf sessConf, tag string) (svc *s3.S3, region string, err error)
 	}
 	// create
 	var (
-		sess    = _session()
+		sess    = _session(endpoint)
 		awsConf = &aws.Config{}
 	)
 	if region == "" {
@@ -497,17 +514,23 @@ func newClient(conf sessConf, tag string) (svc *s3.S3, region string, err error)
 	debug.Assertf(region == *svc.Config.Region, "%s != %s", region, *svc.Config.Region)
 
 	cmu.Lock()
-	clients[region] = svc
+	eps := clients[region]
+	if eps == nil {
+		eps = make(map[string]*s3.S3, 1)
+		clients[region] = eps
+	}
+	eps[endpoint] = svc
 	cmu.Unlock()
 	return
 }
 
 // Create session using default creds from ~/.aws/credentials and environment variables.
-func _session() *session.Session {
-	// TODO: avoid creating sessions for each request
+func _session(endpoint string) *session.Session {
+	config := aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})}
+	config.WithEndpoint(endpoint) // normally empty but could also be `Props.Extra.AWS.Endpoint` or `os.Getenv(awsEnvS3Endpoint)`
 	return session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
-		Config:            aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})},
+		Config:            config,
 	}))
 }
 
