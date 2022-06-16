@@ -102,6 +102,31 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         objects = self.client.list_all_objects(self.bck_name, page_size=short_page_len)
         self.assertEqual(len(objects), bucket_size)
 
+    def test_list_object_iter(self):
+        bucket_size = 110
+        self.client.create_bucket(self.bck_name)
+        content = "test".encode("utf-8")
+        objects = {}
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(content)
+            f.flush()
+            for obj_id in range(bucket_size):
+                obj_name = f"obj-{ obj_id }"
+                self.client.put_object(self.bck_name, obj_name, f.name)
+                objects[obj_name] = 1
+
+        # Read all `bucket_size` objects by prefix.
+        obj_iter = self.client.list_objects_iter(bck_name=self.bck_name, page_size=15, prefix="obj-")
+        for obj in obj_iter:
+            del objects[obj.name]
+        self.assertEqual(len(objects), 0)
+
+        # Empty iterator if there are no objects matching the prefix.
+        obj_iter = self.client.list_objects_iter(bck_name=self.bck_name, prefix="invalid-obj-")
+        for obj in obj_iter:
+            objects[obj.name] = 1
+        self.assertEqual(len(objects), 0)
+
     def test_obj_delete(self):
         bucket_size = 10
         delete_cnt = 7

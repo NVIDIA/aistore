@@ -2,6 +2,8 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
 #
 
+from __future__ import annotations  # pylint: disable=unused-variable
+
 from typing import TypeVar, Type, List, NewType
 import requests
 import time
@@ -21,7 +23,7 @@ from aistore.client.const import (
     QParamKeepBckMD,
     QParamBucketTo,
 )
-from aistore.client.types import (ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap, XactStatus, HttpError)
+from aistore.client.types import (ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap, XactStatus, HttpError, BucketLister)
 from aistore.client.errors import InvalidBckProvider, Timeout, ErrBckNotFound, ErrRemoteBckNotFound, AISError
 from aistore.client.utils import handle_errors
 
@@ -309,6 +311,35 @@ class Client:
             json=action,
             params=params,
         )
+
+    def list_objects_iter(
+        self,
+        bck_name: str,
+        provider: str = ProviderAIS,
+        prefix: str = "",
+        props: str = "",
+        page_size: int = 0,
+    ) -> BucketLister:
+        """
+        Returns an iterator for all objects in a bucket
+
+        Args:
+            bck_name (str): Name of a bucket
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+                Defaults to "ais". Empty provider returns buckets of all providers.
+            prefix (str, optional): return only objects that start with the prefix
+            props (str, optional): comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+
+        Returns:
+            BucketLister: object iterator
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+        """
+        return BucketLister(self, bck_name=bck_name, provider=provider, prefix=prefix, props=props, page_size=page_size)
 
     def list_all_objects(
         self,
