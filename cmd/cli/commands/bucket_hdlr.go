@@ -177,7 +177,7 @@ var (
 						Flags:     bucketCmdsFlags[subcmdSetProps],
 						Action:    setPropsHandler,
 						BashComplete: bucketCompletions(
-							bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}},
+							bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 						),
 					},
 					{
@@ -187,7 +187,7 @@ var (
 						Flags:     bucketCmdsFlags[subcmdResetProps],
 						Action:    resetPropsHandler,
 						BashComplete: bucketCompletions(
-							bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}},
+							bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 						),
 					},
 					makeAlias(showCmdBucket, "", true, commandShow),

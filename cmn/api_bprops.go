@@ -57,7 +57,7 @@ type (
 		// Bucket access attributes - see Allow* above
 		Access apc.AccessAttrs `json:"access,string"`
 
-		// Extra contains additional information which can depend on the provider.
+		// Additional provider-specific bucket props (all providers)
 		Extra ExtraProps `json:"extra,omitempty" list:"omitempty"`
 
 		// Unique bucket ID
@@ -76,18 +76,25 @@ type (
 		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
 		HDFS ExtraPropsHDFS `json:"hdfs,omitempty" list:"omitempty"`
 	}
-	ExtraToUpdate struct {
+	ExtraToUpdate struct { // ref. bpropsFilterExtra
+		AWS  *ExtraPropsAWSToUpdate  `json:"aws"`
+		HTTP *ExtraPropsHTTPToUpdate `json:"http"`
 		HDFS *ExtraPropsHDFSToUpdate `json:"hdfs"`
 	}
 
 	ExtraPropsAWS struct {
-		// Region where AWS bucket is located.
 		CloudRegion string `json:"cloud_region,omitempty" list:"readonly"`
+	}
+	ExtraPropsAWSToUpdate struct {
+		CloudRegion *string `json:"cloud_region"`
 	}
 
 	ExtraPropsHTTP struct {
 		// Original URL prior to hashing.
 		OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
+	}
+	ExtraPropsHTTPToUpdate struct {
+		OrigURLBck *string `json:"original_url"`
 	}
 
 	ExtraPropsHDFS struct {

@@ -372,14 +372,31 @@ func manyBucketsCompletions(additionalCompletions []cli.BashCompleteFunc, firstB
 	}
 }
 
-func propCompletions(c *cli.Context) {
+func bpropCompletions(c *cli.Context) {
 	err := cmn.IterFields(&cmn.BucketPropsToUpdate{}, func(tag string, _ cmn.IterField) (error, bool) {
 		if !cos.AnyHasPrefixInSlice(tag, c.Args()) {
-			fmt.Println(tag)
+			if bpropsFilterExtra(c, tag) {
+				fmt.Println(tag)
+			}
 		}
 		return nil, false
 	})
 	cos.AssertNoErr(err)
+}
+
+func bpropsFilterExtra(c *cli.Context, tag string) bool {
+	if !strings.HasPrefix(tag, "extra.") {
+		return true
+	}
+	switch c.Args().First() {
+	case apc.S3Scheme, apc.ProviderAmazon:
+		return strings.HasPrefix(tag, "extra.aws")
+	case apc.ProviderHTTP:
+		return strings.HasPrefix(tag, "extra.http")
+	case apc.ProviderHDFS:
+		return strings.HasPrefix(tag, "extra.hdfs")
+	}
+	return false
 }
 
 func bucketAndPropsCompletions(c *cli.Context) {
