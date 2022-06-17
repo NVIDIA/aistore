@@ -5,19 +5,12 @@
 package xreg
 
 import (
-	"context"
-
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 )
-
-type BckSummaryArgs struct {
-	Ctx context.Context
-	Msg *apc.BckSummMsg
-}
 
 func RegNonBckXact(entry Renewable) {
 	debug.Assert(xact.Table[entry.Kind()].Scope != xact.ScopeBck)
@@ -65,8 +58,7 @@ func RenewETL(t cluster.Target, msg interface{}) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.BckSummMsg) RenewRes {
-	custom := &BckSummaryArgs{Ctx: ctx, Msg: msg}
-	e := dreg.nonbckXacts[apc.ActSummaryBck].New(Args{T: t, UUID: msg.UUID, Custom: custom}, bck)
+func RenewBckSummary(t cluster.Target, bck *cluster.Bck, msg *apc.BckSummMsg) RenewRes {
+	e := dreg.nonbckXacts[apc.ActSummaryBck].New(Args{T: t, UUID: msg.UUID, Custom: msg}, bck)
 	return dreg.renew(e, bck)
 }

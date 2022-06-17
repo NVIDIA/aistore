@@ -216,9 +216,13 @@ func TestNamespace(t *testing.T) {
 				"number of entries (%d) should be equal to (%d)", len(objects.Entries), m2.num,
 			)
 
-			// Test summary
-			summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, nil)
-			tassert.CheckFatal(t, err)
+			// Test bucket summary
+			var summaries cmn.BckSummaries
+			for _, bck := range locBuckets {
+				summ, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks(bck), nil)
+				tassert.CheckFatal(t, err)
+				summaries = append(summaries, summ[0])
+			}
 			tassert.Errorf(
 				t, len(summaries) == len(locBuckets),
 				"number of summaries (%d) should be equal to %d", len(summaries), len(locBuckets),

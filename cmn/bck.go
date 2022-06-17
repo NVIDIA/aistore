@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -467,6 +468,9 @@ func (qbck QueryBcks) Contains(other *Bck) bool {
 //////////
 // Bcks //
 //////////
+
+// interface guard
+var _ sort.Interface = (*Bcks)(nil)
 
 func (bcks Bcks) Len() int {
 	return len(bcks)

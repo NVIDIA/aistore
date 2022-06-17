@@ -7,6 +7,7 @@ package etl
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -70,7 +71,11 @@ type (
 	}
 )
 
-// interface guard
+////////////////
+// InitMsg*** //
+////////////////
+
+// interface guards
 var (
 	_ InitMsg = (*InitCodeMsg)(nil)
 	_ InitMsg = (*InitSpecMsg)(nil)
@@ -78,6 +83,25 @@ var (
 
 func (m InitMsgBase) CommType() string { return m.CommTypeX }
 func (m InitMsgBase) ID() string       { return m.IDX }
+
+func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
+	var msgInf map[string]json.RawMessage
+	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
+		return
+	}
+	if _, ok := msgInf["code"]; ok {
+		msg = &InitCodeMsg{}
+		err = jsoniter.Unmarshal(b, msg)
+		return
+	}
+	if _, ok := msgInf["spec"]; ok {
+		msg = &InitSpecMsg{}
+		err = jsoniter.Unmarshal(b, msg)
+		return
+	}
+	err = fmt.Errorf("invalid response body: %s", b)
+	return
+}
 
 func (m *InitCodeMsg) Validate() error {
 	if err := cos.ValidateEtlID(m.IDX); err != nil {
@@ -101,13 +125,8 @@ func (m *InitCodeMsg) Validate() error {
 	return nil
 }
 
-func (*InitCodeMsg) InitType() string {
-	return apc.ETLInitCode
-}
-
-func (*InitSpecMsg) InitType() string {
-	return apc.ETLInitSpec
-}
+func (*InitCodeMsg) InitType() string { return apc.ETLInitCode }
+func (*InitSpecMsg) InitType() string { return apc.ETLInitSpec }
 
 func (m *InitSpecMsg) Validate() (err error) {
 	errCtx := &cmn.ETLErrorContext{}
@@ -162,6 +181,10 @@ func (m *InitSpecMsg) Validate() (err error) {
 	return nil
 }
 
+/////////////////
+// PodsLogsMsg //
+/////////////////
+
 func (p PodsLogsMsg) Len() int           { return len(p) }
 func (p PodsLogsMsg) Less(i, j int) bool { return p[i].TargetID < p[j].TargetID }
 func (p PodsLogsMsg) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
@@ -173,7 +196,6 @@ func (p *PodLogsMsg) String(maxLen ...int) string {
 	if len(maxLen) > 0 && maxLen[0] > 0 && maxLen[0] < len(msg) {
 		msg = msg[:maxLen[0]]
 	}
-
 	str := fmt.Sprintf("Target ID: %s; Logs:\n%s", p.TargetID, msg)
 	if len(msg) < orgLen {
 		str += fmt.Sprintf("\nand %d bytes more...", orgLen-len(msg))
@@ -181,25 +203,12 @@ func (p *PodLogsMsg) String(maxLen ...int) string {
 	return str
 }
 
+//////////////
+// InfoList //
+//////////////
+
+var _ sort.Interface = (*InfoList)(nil)
+
 func (il InfoList) Len() int           { return len(il) }
 func (il InfoList) Less(i, j int) bool { return il[i].ID < il[j].ID }
 func (il InfoList) Swap(i, j int)      { il[i], il[j] = il[j], il[i] }
-
-func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
-	var msgInf map[string]json.RawMessage
-	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
-		return
-	}
-	if _, ok := msgInf["code"]; ok {
-		msg = &InitCodeMsg{}
-		err = jsoniter.Unmarshal(b, msg)
-		return
-	}
-	if _, ok := msgInf["spec"]; ok {
-		msg = &InitSpecMsg{}
-		err = jsoniter.Unmarshal(b, msg)
-		return
-	}
-	err = fmt.Errorf("invalid response body: %s", b)
-	return
-}

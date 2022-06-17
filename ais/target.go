@@ -600,7 +600,6 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 		}
 		bck := cluster.CloneBck((*cmn.Bck)(qbck))
 		if bck.Name != "" {
-			// Ensure that the bucket exists.
 			if err := bck.Init(t.owner.bmd); err != nil {
 				if cmn.IsErrRemoteBckNotFound(err) {
 					t.BMDVersionFixup(r)
@@ -680,14 +679,13 @@ func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Val
 	var (
 		taskAction = q.Get(apc.QparamTaskAction)
 		silent     = cos.IsParseBool(q.Get(apc.QparamSilent))
-		ctx        = context.Background()
 	)
 	if taskAction == apc.TaskStart {
 		if action != apc.ActSummaryBck {
 			t.writeErrAct(w, r, action)
 			return
 		}
-		rns := xreg.RenewBckSummary(ctx, t, bck, msg)
+		rns := xreg.RenewBckSummary(t, bck, msg)
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
 			return
@@ -697,7 +695,7 @@ func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Val
 	}
 	xctn := xreg.GetXact(msg.UUID)
 
-	// task never started
+	// never started
 	if xctn == nil {
 		err := cmn.NewErrNotFound("%s: task %q", t.si, msg.UUID)
 		if silent {
@@ -708,12 +706,12 @@ func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Val
 		return
 	}
 
-	// task still running
+	// still running
 	if !xctn.Finished() {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	// task has finished
+	// finished
 	result, err := xctn.Result()
 	if err != nil {
 		if cmn.IsErrBucketNought(err) {
