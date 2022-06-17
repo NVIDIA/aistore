@@ -16,7 +16,7 @@ The Docker image used to deploy AIS clusters in this guide is `aistore/cluster-m
 
 ## How to Deploy
 
-### Minimal Setup
+### <ins>Minimal Setup
 
 The following command starts an AIS cluster in a Docker container with a single disk (requires at least one disk) that is mounted under a temporary directory on the host:
 
@@ -49,7 +49,7 @@ Summary:
  Smap Version:  3
 ```
 
-### Multiple Disk Setup
+### <ins>Multiple Disk Setup
 
 You can also mount multiple disks to your containerized AIS cluster. The following command launches a local Docker instance of an AIS cluster, but with three disks mounted:
 
@@ -65,11 +65,11 @@ $ docker run -d \
 > **IMPORTANT**: The mounted disk paths must resolve to _distinct_ and _disjoint_ file systems. Otherwise, the setup may be corrupted.
 
 
-### Backend Provider Setup
+### <ins>Backend Provider Setup
 
 > **IMPORTANT**: For both AWS or GCP usage, to ensure the cluster works properly with backend providers, it is _essential_ to pass the environment variable `AIS_BACKEND_PROVIDERS`, a space-separated list of support backend provides to be used, in your `docker run` command.
 
-#### <ins>AWS Backend
+**AWS Backend**
 
 The easiest way to pass your credentials to the AIS cluster is to mount a volume prepared with a [`config file`](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html) and provide `AWS_CONFIG_FILE`, the path to `config` in your `docker run` command:
 
@@ -108,7 +108,7 @@ AWS Buckets (28)
 ...
 ```
 
-#### <ins>GCP Backend
+**GCP Backend**
 
 > **WARNING**: The following section on `gcp` backend use needs _review_ and may be _outdated_.
 
@@ -123,6 +123,38 @@ $ docker run -d \
     -v /disk0:/ais/disk0 \
     aistore/cluster-minimal:latest
 ```
+
+### <ins>Cloud Compute Deployment
+
+Minimal deployments of AIS clusters can also be done on cloud compute instances, such as those provided by AWS EC2. Containerized deployment on a cloud compute cluster may be an appealing option for those wishing to continually run an AIS cluster in the background. 
+
+ [`ssh`](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AccessingInstancesLinux.html) into your EC2 instance and deploy an AIS cluster (as shown above). The following command creates a containerized AIS cluster with one mounted volume hosted locally:
+
+```
+docker run -d -p 51080:51080 -v /ais/sdf:/ais/disk0 aistore/cluster-minimal:latest
+```
+
+**Accessing Cluster from EC2 Host Instance**
+
+From the EC2 instance's `bash`, locally access your cluster via the following command:
+
+```
+AIS_ENDPOINT="http://<ip-address>:51080" ais show cluster
+```
+
+> Run `ifconfig` on your EC2 instance to find an available IP address to be used for local host access to the cluster. 
+
+**Accessing Cluster Remotely**
+
+Additionally, any workstation with an IP in the EC2 instance's list of allowed IP addresses *can* remotely access the EC2-hosted AIS cluster using the instance's AWS host name as follows:
+
+```
+AIS_ENDPOINT="http://<ec2-host-name>:51080" ais show cluster
+```
+
+**EC2 Minimal Deployment Benchmarks**
+
+For more information on deployment performance, please refer [here](./ec2-standalone-benchmark.md).
 
 ## Build and Upload (Dev)
 
