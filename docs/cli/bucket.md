@@ -626,32 +626,32 @@ Globally, S3 endpoint can be overridden for _all_ S3 buckets via "S3_ENDPOINT" e
 If you decide to make the change, you may need to restart AIS cluster while making sure that "S3_ENDPOINT" is available for the AIS nodes
 when they are starting up.
 
-But it can be also be done - and will take precedence over global setting - on a per-bucket basis.
+But it can be also be done - and will take precedence over the global setting - on a per-bucket basis.
 
 Here are some examples:
 
 ```console
-# Let's say, s3://abc contains a single object:
+# Let's say, there exists a bucket called s3://abc:
 $ ais ls s3://abc
 NAME             SIZE
 README.md        8.96KiB
 
-# First, override empty the endpoint property in the bucket's configuration.
-# Use the default AWS S3 endpoint `https://s3.amazonaws.com` (to see that it *applies* and works).
+# First, we override empty the endpoint property in the bucket's configuration.
+# To see that a non-empty value *applies* and works, we will use the default AWS S3 endpoint: https://s3.amazonaws.com
 $ ais bucket props set s3://abc extra.aws.endpoint=s3.amazonaws.com
 Bucket "aws://abc": property "extra.aws.endpoint=s3.amazonaws.com", nothing to do
 $ ais ls s3://abc
 NAME             SIZE
 README.md        8.96KiB
 
-# Second, set it to invalid value, and observe that the bucket becomes inaccessible:
+# Second, set the endpoint=foo (or, it could be any other invalid value), and observe that the bucket becomes unreachable:
 $ ais bucket props set s3://abc extra.aws.endpoint=foo
 Bucket props successfully updated
 "extra.aws.endpoint" set to: "foo" (was: "s3.amazonaws.com")
 $ ais ls s3://abc
 RequestError: send request failed: dial tcp: lookup abc.foo: no such host
 
-# Finally, revert the endpoint back to empty and make sure the bucket is visible again:
+# Finally, revert the endpoint back to empty, and check that the bucket is visible again:
 $ ais bucket props set s3://abc extra.aws.endpoint=""
 Bucket props successfully updated
 "extra.aws.endpoint" set to: "" (was: "foo")
@@ -659,6 +659,11 @@ $ ais ls s3://abc
 NAME             SIZE
 README.md        8.96KiB
 ```
+
+> Global `export S3_ENDPOINT=...` override is static and readonly. Use it with extreme caution as it applies to all buckets.
+
+> On the other hand, for any given `s3://bucket` its S3 endpoint can be set, unset, and otherwise changed at any time - at runtime. As shown above.
+
 
 #### Connect/Disconnect AIS bucket to/from cloud bucket
 

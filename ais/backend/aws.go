@@ -121,6 +121,9 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs,
 	bckProps[apc.HdrBackendProvider] = apc.ProviderAmazon
 	bckProps[apc.HdrS3Region] = region
 	bckProps[apc.HdrS3Endpoint] = ""
+	if bck.Props != nil {
+		bckProps[apc.HdrS3Endpoint] = bck.Props.Extra.AWS.Endpoint
+	}
 	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(
 		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
 	)

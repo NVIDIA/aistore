@@ -11,14 +11,14 @@ redirect_from:
 AIS supports Amazon S3 in two distinct and different ways:
 
 1. On the back, via [backend](providers.md) abstraction. Specifically for S3 the corresponding [backend](providers.md) implementation currently utilizes [AWS SDK for Go](https://aws.amazon.com/sdk-for-go);
-2. On the front, AIS provides S3 compatible API, so that existing S3 applications could use AIStore out of the box and without the need to change their (existing) code.
+2. On the (client-facing) front, AIS provides S3 compatible API, so that existing S3 applications could use AIStore out of the box and without the need to change their (existing) code.
 
 This document talks about the latter - about Amazon S3 API compatibility (or simply, S3 compatibility).
 
 For more references and background, see:
 
-* [High-level AIS block diagram](overview.md#at-a-glance) that would maybe give a better meaning to the terms "back" and "front" used above.
-* [Setting custom S3 endpoint](/docs/cli/bucket.md) - can be used e.g., when a bucket is hosted by an S3 compliant backend such as minio.
+* [High-level AIS block diagram](overview.md#at-a-glance) that shows frontend and backend APIs and capabilities.
+* [Setting custom S3 endpoint](/docs/cli/bucket.md) can come in handy when a bucket is hosted by an S3 compliant backend (such as, e.g., minio).
 
 ## Table of Contents
 
