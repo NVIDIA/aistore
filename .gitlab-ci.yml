@@ -152,7 +152,7 @@ test:short:minimal:
 test:short:authn:
   <<: *test_short_optional_def
   variables:
-    AUTH_ENABLED: "true"
+    AIS_AUTH_ENABLED: "true"
     AUTHN_SU_NAME: "admin"
     AUTHN_SU_PASS: "admin"
     AUTHN_URL: "http://localhost:52001"
