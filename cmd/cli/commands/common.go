@@ -300,6 +300,7 @@ var (
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
 	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
+	nonverboseFlag  = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose"}
 	ignoreErrorFlag = cli.BoolFlag{
 		Name:  "ignore-error",
 		Usage: "ignore \"soft\" failures, such as \"bucket already exists\", etc.",

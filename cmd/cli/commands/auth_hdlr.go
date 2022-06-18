@@ -49,8 +49,8 @@ var (
 		subcmdAuthUser:       {passwordFlag},
 		flagsAuthRoleAdd:     {descriptionFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
-		flagsAuthUserShow:    {verboseFlag},
-		flagsAuthRoleShow:    {verboseFlag},
+		flagsAuthUserShow:    {nonverboseFlag},
+		flagsAuthRoleShow:    {nonverboseFlag},
 		flagsAuthConfShow:    {jsonFlag},
 	}
 
@@ -78,7 +78,7 @@ var (
 				Usage:     "show user list or user details",
 				Flags:     authFlags[flagsAuthUserShow],
 				ArgsUsage: showUserListArgument,
-				Action:    wrapAuthN(showUserHandler),
+				Action:    wrapAuthN(showAuthUserHandler),
 			},
 			{
 				Name:   subcmdAuthConfig,
@@ -421,20 +421,17 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 
 		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl)
 	}
-
 	rInfo, err := api.GetRoleAuthN(authParams, roleID)
 	if err != nil {
 		return err
 	}
-
-	if !flagIsSet(c, verboseFlag) {
+	if flagIsSet(c, nonverboseFlag) {
 		return templates.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, templates.AuthNRoleTmpl)
 	}
-
 	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl)
 }
 
-func showUserHandler(c *cli.Context) (err error) {
+func showAuthUserHandler(c *cli.Context) (err error) {
 	userID := c.Args().First()
 	if userID == "" {
 		list, err := api.GetUsersAuthN(authParams)
@@ -444,16 +441,13 @@ func showUserHandler(c *cli.Context) (err error) {
 
 		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl)
 	}
-
 	uInfo, err := api.GetUserAuthN(authParams, userID)
 	if err != nil {
 		return err
 	}
-
-	if !flagIsSet(c, verboseFlag) {
+	if flagIsSet(c, nonverboseFlag) {
 		return templates.DisplayOutput([]*authn.User{uInfo}, c.App.Writer, templates.AuthNUserTmpl)
 	}
-
 	return templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl)
 }
 

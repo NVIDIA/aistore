@@ -63,6 +63,8 @@ var accessOp = map[AccessAttrs]string{
 	AceDestroyBucket: "DESTROY-BUCKET",
 	AceMoveBucket:    "MOVE-BUCKET",
 	AceAdmin:         "ADMIN",
+
+	// NOTE: update Describe() when adding/deleting
 }
 
 // derived (convenience) constants
@@ -72,7 +74,7 @@ const (
 	AllowAllAccess = "su"
 
 	// read-only and read-write access to bucket
-	AccessRO             = AceGET | AceObjHEAD | AceBckHEAD | AceObjLIST
+	AccessRO             = AceGET | AceObjHEAD | AceListBuckets | AceBckHEAD | AceObjLIST
 	AllowReadOnlyAccess  = "ro"
 	AccessRW             = AccessRO | AcePUT | AceAPPEND | AceObjDELETE | AceObjMOVE
 	AllowReadWriteAccess = "rw"
@@ -121,6 +123,9 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AcePromote) {
 		accList = append(accList, accessOp[AcePromote])
 	}
+	if a.Has(AceDisconnectedBackend) {
+		accList = append(accList, accessOp[AceDisconnectedBackend])
+	}
 	//
 	if a.Has(AceBckHEAD) {
 		accList = append(accList, accessOp[AceBckHEAD])
@@ -128,17 +133,24 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AceObjLIST) {
 		accList = append(accList, accessOp[AceObjLIST])
 	}
-	if a.Has(AceMoveBucket) {
-		accList = append(accList, accessOp[AceMoveBucket])
-	}
 	if a.Has(AcePATCH) {
 		accList = append(accList, accessOp[AcePATCH])
+	}
+	if a.Has(AceBckSetACL) {
+		accList = append(accList, accessOp[AceBckSetACL])
+	}
+	//
+	if a.Has(AceListBuckets) {
+		accList = append(accList, accessOp[AceListBuckets])
+	}
+	if a.Has(AceCreateBucket) {
+		accList = append(accList, accessOp[AceCreateBucket])
 	}
 	if a.Has(AceDestroyBucket) {
 		accList = append(accList, accessOp[AceDestroyBucket])
 	}
-	if a.Has(AceBckSetACL) {
-		accList = append(accList, accessOp[AceBckSetACL])
+	if a.Has(AceMoveBucket) {
+		accList = append(accList, accessOp[AceMoveBucket])
 	}
 	if a.Has(AceAdmin) {
 		accList = append(accList, accessOp[AceAdmin])

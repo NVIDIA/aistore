@@ -7,8 +7,9 @@ redirect_from:
  - /docs/cli/auth.md/
 ---
 
-# CLI Reference for the Authentication Server
-For more information and examples, please refer to [the AuthN documentation](/docs/authn.md).
+For quick getting-started (local-playground) session _and_ in-depth overview, please refer to:
+
+* [AIS AuthN documentation](/docs/authn.md).
 
 ## Table of contents
 

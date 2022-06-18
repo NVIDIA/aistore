@@ -52,9 +52,9 @@ var (
 		desc   string
 		perms  apc.AccessAttrs
 	}{
-		{ClusterOwnerRole, "Full access to cluster %s", apc.AccessAll},
-		{BucketOwnerRole, "Full access to buckets of cluster %s", apc.AccessRW},
-		{GuestRole, "Read-only access to buckets of cluster %s", apc.AccessRO},
+		{ClusterOwnerRole, "Admin access to %s", apc.AccessAll},
+		{BucketOwnerRole, "Full access to buckets in %s", apc.AccessRW},
+		{GuestRole, "Read-only access to buckets in %s", apc.AccessRO},
 	}
 )
 

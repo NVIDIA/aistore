@@ -7,15 +7,80 @@ redirect_from:
  - /docs/authn.md/
 ---
 
+## Getting started with AuthN: local-playground session
 
-*June 2022 comment*: this document may be slightly outdated. Please see the corresponding [CLI auth subcommand](cli/auth.md) for user-friendly usage examples and details.
+The following brief and commented sequence assumes that [AIS local playground](getting_started.md#local-playground) is up and running.
+
+```console
+# 1. Login as administrator (and note that admin user and password can be only
+#    provisioned at AuthN deployment time and can never change)
+$ ais auth login admin -p admin
+Token(/root/.config/ais/auth.token):
+...
+
+# 2. Connect AIS cluster to *this* authentication server (note that a single AuthN can be shared my multiple AIS clusters)
+#    List existing pre-defined roles
+$ ais auth show role
+ROLE    DESCRIPTION
+Admin   AuthN administrator
+$ ais auth add cluster myclu http://localhost:8080
+$ ais auth show role
+ROLE                    DESCRIPTION
+Admin                   AuthN administrator
+BucketOwner-myclu       Full access to buckets in WayZWN_f4[myclu]
+ClusterOwner-myclu      Admin access to WayZWN_f4[myclu]
+Guest-myclu             Read-only access to buckets in WayZWN_f4[myclu]
+
+# 3. Create a bucket (to further demonstrate access permissions in action)
+$ ais bucket create ais://nnn
+"ais://nnn" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)
+$ ais object put README.md ais://nnn
+PUT "README.md" to ais://nnn
+
+# 4. Show users. Add a new user (utilize one of the prebuilt roles shows above)
+$ ais auth show user
+NAME    ROLES
+admin   Admin
+$ ais auth add user user-ro -p 12345 Guest-myclu
+$ ais auth show user
+NAME    ROLES
+admin   Admin
+user-ro Guest-myclu
+
+# Not showing here is how to add a new role
+# (that can be further conveniently used to grant subsets of permissions)
+
+# 5. Login as `user-ro` (added above)
+$ ais auth login user-ro -p 12345
+Token(/root/.config/ais/auth.token):
+...
+
+# 6. Perform operations. Note that the `user-ro` has a limited `Guest-myclu` access.
+$ ais ls ais:
+AIS Buckets (1)
+  ais://nnn
+$ ais ls ais://nnn
+NAME             SIZE
+README.md        8.96KiB
+
+# However:
+$ ais bucket create ais://mmm
+Failed to create "ais://mmm": insufficient permissions
+
+$ ais object put LICENSE ais://nnn
+Insufficient permissions
+```
+
+Further references:
+
+* See [CLI auth subcommand](/docs/cli/auth.md) for all supported command line options and usage examples.
 
 ---------------------
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Getting started](#getting-started)
+- [Environment and configuration](#environment-and-configuration)
 	- [Notation](#notation)
 	- [AuthN configuration and log](#authn-configuration-and-log)
 	- [How to enable AuthN server after deployment](#how-to-enable-authn-server-after-deployment)
@@ -27,7 +92,7 @@ redirect_from:
 	- [Roles](#roles)
 	- [Users](#users)
 	- [Configuration](#configuration)
-- [AuthN server typical workflow](#authn-server-typical-workflow)
+- [Typical workflow](#typical-workflow)
 - [Known limitations](#known-limitations)
 
 ## Overview
@@ -58,7 +123,7 @@ AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as an HTT
 If you enable HTTPS access, make sure that the configuration file options `server_crt` and `server_key` point to the correct SSL certificate and key.
 
 
-## Getting started
+## Environment and configuration
 
 Environment variables used by the deployment script to setup AuthN server:
 
@@ -173,20 +238,25 @@ For curl, it is an argument `-H 'Authorization: Bearer token'`.
 
 ### Tokens
 
-AIStore proxies and targets require a valid token in a request header - but only if AuthN is enabled.
-Every token includes all the information needed by a node:
+AIStore gateways and targets require a valid token in a request header - but only if AuthN is enabled.
+
+Every token includes the following information (needed to enforce access permissions):
 
 - User name
 - User ACL
 - Time when the token expires
 
-A proxy validates the token. The token must not be expired and it must not be on the blacklist (the list of revoked tokens).
-AuthN broadcasts the revoked token when it is added to AuthN.
-When AuthN registers a new cluster, it sends to the cluster the entire list of revoked tokens.
-Periodically the list is cleaned up: expired and invalid tokens are removed.
+To pass all the checks, the token must not be expired or blacklisted (revoked).
 
-Generating a token for data access requires correct user name and password.
-Token expiration time is 24 hours by default.
+#### Revoked tokens
+
+AuthN makes sure that all AIS gateways are timely updated with each revoked token.
+When AuthN registers a new cluster, it sends to the cluster the entire list of revoked tokens.
+Periodically the list is cleaned up whereby expired and invalid tokens get removed.
+
+#### Expired tokens
+Generating a token for data access requires user name and user password.
+By default, token expiration time is set to 24 hours.
 Modify `expiration_time` in the configuration file to change default expiration time.
 
 To issue single token with custom expiration time, pass optional expiration duration in the request.
@@ -255,10 +325,10 @@ If a cluster does not have an alias, the role names contain cluster ID.
 | Get AuthN configuration | GET /v1/daemon | curl -X GET AUTHSRV/v1/daemon |
 | Update AuthN configuration | PUT /v1/daemon { "auth": { "secret": "new_secret", "expiration_time": "24h"}}  | curl -X PUT AUTHSRV/v1/daemon -d '{"auth": {"secret": "new_secret"}}' -H 'Content-Type: application/json' |
 
-## AuthN server typical workflow
+## Typical workflow
 
-If the AuthN server is enabled, all requests to buckets and objects must contain a valid token issued by AuthN.
-Requests without a token are rejected.
+When AuthN is enabled all requests to buckets and objects must contain a valid token (issued by the AuthN).
+Requests without a token will be rejected.
 
 Steps to generate and use a token:
 
