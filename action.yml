@@ -1,0 +1,41 @@
+name: 'Run AIStore'
+description: 'Run AIStore'
+inputs:
+  targets:
+    required: true
+    type: string
+    default: '1'
+    description: 'Number of storage targets'
+  proxies:
+    required: true
+    type: string
+    default: '1'
+    description: 'Number of proxies (gateways)'
+  mountpaths:
+    required: true
+    type: string
+    default: '1'
+    description: 'Number of local mountpaths (enter 0 for preconfigured filesystems)'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18.x
+    - name: Setup additional system libraries
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          sudo apt update
+          sudo apt install -y xattr attr
+        fi
+    - name: Build and deploy AIStore locally
+      shell: bash
+      run: |
+        export GOPATH="$(go env GOPATH)"
+        git clone https://github.com/NVIDIA/aistore.git
+        cd aistore
+        ./deploy/scripts/clean_deploy.sh --target-cnt ${{ inputs.targets }} --proxy-cnt ${{ inputs.proxies }} --mountpath-cnt ${{ inputs.mountpaths }}
+        make cli
