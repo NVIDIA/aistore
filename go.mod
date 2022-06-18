@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.13
 	github.com/colinmarc/hdfs/v2 v2.3.0
 	github.com/fatih/color v1.13.0
-	github.com/form3tech-oss/jwt-go v3.2.5+incompatible
+	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f
 	github.com/jacobsa/fuse v0.0.0-20220303083136-48612565d5c8
 	github.com/json-iterator/go v1.1.12
