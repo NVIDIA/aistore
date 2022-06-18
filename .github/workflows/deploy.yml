@@ -1,0 +1,67 @@
+name: Build and deploy AIStore 
+on:
+  push:
+    branches:
+      - master
+    workflow_call:
+      inputs:
+        storage-targets:
+          required: false
+          type: string
+          default: "1"
+          description: "Enter number of storage targets"
+        proxies:
+          required: false
+          type: string
+          default: "1"
+          description: "Enter number of storage targets"
+        mountpaths:
+          required: false
+          type: string
+          default: "1"
+          description: "Number of local mountpaths (enter 0 for preconfigured filesystems)"
+        s3:
+          required: false
+          type: string
+          default: "n"
+          description: "Amazon S3: (y/n) ?"
+        gcp:
+          required: false
+          type: string
+          default: "n"
+          description: "Google Cloud Storage: (y/n) ?"
+        az:
+          required: false
+          type: string
+          default: "n"
+          description: "Azure: (y/n) ?"
+        hdfs:
+          required: false
+          type: string
+          default: "n"
+          description: "HDFS: (y/n) ?"
+        loopback-devices:
+          required: false
+          type: string
+          default: "n"
+          description: "Create loopback devices (note that it may take some time): (y/n) ?"
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: [1.18.x]
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build AIStore
+        run: |
+          export GOPATH="$(go env GOPATH)"
+          make kill deploy <<< $'${github.event.inputs.storage-targets}\n${github.event.inputs.proxies}\n{github.event.inputs.mountpaths}\n{github.event.inputs.s3}\n{github.event.inputs.gcp}\n{github.event.inputs.az}\n{github.event.inputs.hdfs}\n'
+          make aisloader aisfs authn cli
