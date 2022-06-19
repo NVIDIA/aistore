@@ -12,6 +12,7 @@ import (
 	"regexp"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -20,14 +21,19 @@ import (
 )
 
 func initAuthParams() {
-	tokenPath := os.Getenv(authnTokenPath)
-	custom := tokenPath != ""
+	var (
+		tokenPath = os.Getenv(authn.EnvVars.TokenFile)
+		custom    = tokenPath != ""
+	)
 	if tokenPath == "" {
-		tokenPath = filepath.Join(config.ConfigDirPath, tokenFile)
+		tokenPath = filepath.Join(config.ConfigDirPath, cmn.TokenFname)
 	}
-	_, err := jsp.LoadMeta(tokenPath, &loggedUserToken)
-	if err != nil && custom {
-		fmt.Fprintf(os.Stderr, "Failed to read token from %q: %v\n", tokenPath, err)
+	_, err := jsp.LoadMeta(tokenPath, &loggedUserToken) // TODO -- FIXME: unify w/ authn.LoadToken()
+	if err == nil {
+		return
+	}
+	if !os.IsNotExist(err) || custom {
+		fmt.Fprintf(os.Stderr, "Failed to load token from %q: %v\n", tokenPath, err)
 	}
 }
 

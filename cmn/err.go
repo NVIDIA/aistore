@@ -29,6 +29,8 @@ import (
 // the errors that some AIS packages (within a given running AIS node) return
 // and other AIS packages handle.
 
+var thisNodeName string
+
 const (
 	stackTracePrefix = "stack: ["
 

@@ -5,7 +5,9 @@
  */
 package cmn
 
-// file basenames for storing AIS metadata and markers
+// ais metadata and marker filenames (base names)
+// see also env_const.go
+
 const (
 	GlobalConfigFname   = ".ais.conf"
 	OverrideConfigFname = ".ais.override_config"
@@ -17,6 +19,8 @@ const (
 	BmdPreviousFname = BmdFname + ".prev" // bmd previous version
 	VmdFname         = ".ais.vmd"         // vmd persistent file basename
 	EmdFname         = ".ais.emd"         // emd persistent file basename
+
+	TokenFname = "auth.token"
 
 	ShutdownMarker      = ".ais.shutdown"
 	MarkersDirName      = ".ais.markers"

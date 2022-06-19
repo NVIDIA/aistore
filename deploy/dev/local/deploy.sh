@@ -67,9 +67,9 @@ fi
 LOG_ROOT="${LOG_ROOT:-/tmp/ais}${NEXT_TIER}"
 #### Authentication setup #########
 AIS_SECRET_KEY="${AIS_SECRET_KEY:-aBitLongSecretKey}"
-AIS_AUTH_ENABLED="${AIS_AUTH_ENABLED:-false}"
-AUTH_SU_NAME="${AUTH_SU_NAME:-admin}"
-AUTH_SU_PASS="${AUTH_SU_PASS:-admin}"
+AIS_AUTHN_ENABLED="${AIS_AUTHN_ENABLED:-false}"
+AIS_AUTHN_SU_NAME="${AIS_AUTHN_SU_NAME:-admin}"
+AIS_AUTHN_SU_PASS="${AIS_AUTHN_SU_PASS:-admin}"
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0
@@ -207,18 +207,18 @@ for (( c=START; c<=END; c++ )); do
   fi
 done
 
-if [[ $AIS_AUTH_ENABLED == "true" ]]; then
+if [[ $AIS_AUTHN_ENABLED == "true" ]]; then
   # conf file for authn
-  AUTHN_CONF_DIR="$HOME/.authn"
-  mkdir -p "$AUTHN_CONF_DIR"
-  AUTHN_CONF_FILE="$AUTHN_CONF_DIR/authn.json"
-  AUTHN_LOG_DIR="$LOG_ROOT/authn/log"
+  AIS_AUTHN_CONF_DIR="$HOME/.ais/authn"
+  mkdir -p "$AIS_AUTHN_CONF_DIR"
+  AIS_AUTHN_CONF_FILE="$AIS_AUTHN_CONF_DIR/authn.json"
+  AIS_AUTHN_LOG_DIR="$LOG_ROOT/authn/log"
   source "${AISTORE_DIR}/deploy/dev/local/authn_config.sh"
 
   if ! make --no-print-directory -C ${AISTORE_DIR} authn; then
     print_error "failed to compile 'authn' binary"
   fi
-  run_cmd "${GOPATH}/bin/authn -config=${AUTHN_CONF_FILE}"
+  run_cmd "${GOPATH}/bin/authn -config=${AIS_AUTHN_CONF_FILE}"
 fi
 
 if [[ $MODE == "debug" ]]; then

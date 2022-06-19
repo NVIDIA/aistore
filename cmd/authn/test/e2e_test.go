@@ -26,7 +26,7 @@ func TestAuthE2E(t *testing.T) {
 	if err := cmd.Run(); err != nil {
 		t.Skip("'ais' binary not found")
 	}
-	authnURL = os.Getenv("AUTHN_URL")
+	authnURL = os.Getenv("AIS_AUTHN_URL")
 	if authnURL == "" {
 		t.Skip("AuthN URL is undefined")
 	}

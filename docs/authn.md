@@ -41,6 +41,7 @@ PUT "README.md" to ais://nnn
 $ ais auth show user
 NAME    ROLES
 admin   Admin
+
 $ ais auth add user user-ro -p 12345 Guest-myclu
 $ ais auth show user
 NAME    ROLES
@@ -130,7 +131,7 @@ Environment variables used by the deployment script to setup AuthN server:
 | Variable | Default value | Description |
 |---|---|---|
 | AIS_SECRET_KEY | `aBitLongSecretKey` | A secret key to sign tokens |
-| AIS_AUTH_ENABLED | `false` | Set it to `true` to enable AuthN server and token-based access in AIStore proxy |
+| AIS_AUTHN_ENABLED | `false` | Set it to `true` to enable AuthN server and token-based access in AIStore proxy |
 | AIS_AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
 | AIS_AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 which means "no expiration time" |
 
@@ -138,7 +139,7 @@ All variables can be set at AIStore cluster deployment.
 Example of starting a cluster with AuthN enabled:
 
 ```console
-$ AIS_AUTH_ENABLED=true make deploy
+$ AIS_AUTHN_ENABLED=true make deploy
 ```
 
 Note: don't forget to change the default secret key used to sign tokens before starting the deployment process.
@@ -161,8 +162,8 @@ In this README:
 
 | File                 | Location                     |
 |----------------------|------------------------------|
-| Server configuration | `$AUTHN_CONF_DIR/authn.json` |
-| User database        | `$AUTHN_CONF_DIR/authn.db`   |
+| Server configuration | `$AIS_AUTHN_CONF_DIR/authn.json` |
+| User database        | `$AIS_AUTHN_CONF_DIR/authn.db`   |
 | Log directory        | `$AIS_LOG_DIR/authn/log/`    |
 
 ### How to enable AuthN server after deployment
@@ -171,7 +172,7 @@ By default, AIStore deployment currently does not launch the AuthN server.
 To start AuthN manually, perform the following steps:
 
 - Start authn server: <path_to_ais_binaries>/authn -config=<path_to_config_dir>/authn.json. Path to config directory is set at the time of cluster deployment and it is the same as the directory for AIStore proxies and targets
-- Update AIS CLI configuration file: change AuthN URL. Alternatively, prepend AuthN URL to every CLI command that uses `auth` subcommand: `AUTHN_URL=http://10.10.1.190:52001 ais auth COMMAND`
+- Update AIS CLI configuration file: change AuthN URL. Alternatively, prepend AuthN URL to every CLI command that uses `auth` subcommand: `AIS_AUTHN_URL=http://10.10.1.190:52001 ais auth COMMAND`
 - Change AIStore cluster configuration to enable token-based access and use the same secret as AuthN uses:
 
 ```console
@@ -187,7 +188,7 @@ $ ais auth add cluster mainCluster http://10.10.1.70:50001 http://10.10.1.71:500
 
 $ # Calling AuthN without modifying CLI configuration
 $ # Assuming AuthN listens at http://10.10.1.190:52001
-$ AUTHN_URL=http://10.10.1.190:52001 ais auth add cluster mainCluster http://10.10.1.70:50001 http://10.10.1.71:50001
+$ AIS_AUTHN_URL=http://10.10.1.190:52001 ais auth add cluster mainCluster http://10.10.1.70:50001 http://10.10.1.71:50001
 ```
 
 ### Using Kubernetes secrets

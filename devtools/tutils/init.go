@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -20,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 )
@@ -148,7 +146,8 @@ func InitLocalCluster() {
 }
 
 // InitCluster initializes the environment necessary for testing against an AIS cluster.
-// NOTE: the function is also used for testing by NVIDIA/ais-k8s Operator
+// NOTE:
+//      the function is also used for testing by NVIDIA/ais-k8s Operator
 func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 	proxyURLReadOnly = proxyURL
 	testClusterType = clusterType
@@ -156,7 +155,7 @@ func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 		return
 	}
 	initPmap()
-	initAuthToken()
+	AuthToken = authn.LoadToken()
 	return
 }
 
@@ -239,15 +238,4 @@ func initNodeCmd() {
 		}
 		restoreNodes[node.ID()] = GetRestoreCmd(node)
 	}
-}
-
-func initAuthToken() {
-	home, err := os.UserHomeDir()
-	cos.AssertNoErr(err)
-	tokenPath := filepath.Join(home, ".ais", "token")
-
-	var token authn.TokenMsg
-	jsp.LoadMeta(tokenPath, &token)
-
-	AuthToken = token.Token
 }

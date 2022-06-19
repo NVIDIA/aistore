@@ -152,15 +152,15 @@ test:short:minimal:
 test:short:authn:
   <<: *test_short_optional_def
   variables:
-    AIS_AUTH_ENABLED: "true"
-    AUTHN_SU_NAME: "admin"
-    AUTHN_SU_PASS: "admin"
-    AUTHN_URL: "http://localhost:52001"
+    AIS_AUTHN_ENABLED: "true"
+    AIS_AUTHN_SU_NAME: "admin"
+    AIS_AUTHN_SU_PASS: "admin"
+    AIS_AUTHN_URL: "http://localhost:52001"
     BUCKET: "ais://test"
     RE: "TestAuth"
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
-    - ais auth login $AUTHN_SU_NAME -p $AUTHN_SU_PASS
+    - ais auth login $AIS_AUTHN_SU_NAME -p $AIS_AUTHN_SU_PASS
     - make test-run
     - ais auth logout
 

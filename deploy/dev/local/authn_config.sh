@@ -1,9 +1,9 @@
-cat > $AUTHN_CONF_FILE <<EOL
+cat > $AIS_AUTHN_CONF_FILE <<EOL
 {
-	"confdir": "$AUTHN_CONF_DIR",
+	"confdir": "$AIS_AUTHN_CONF_DIR",
 	"log": {
-		"dir":   "$AUTHN_LOG_DIR",
-		"level": "${AUTHN_LOG_LEVEL:-3}"
+		"dir":   "$AIS_AUTHN_LOG_DIR",
+		"level": "${AIS_AUTHN_LOG_LEVEL:-3}"
 	},
 	"net": {
 		"http": {

@@ -1,12 +1,14 @@
 // Package authn - authorization server for AIStore.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -130,7 +132,9 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 	if tk.IsAdmin {
 		return nil
 	}
-	debug.AssertMsg(perms != 0, "Empty permissions requested")
+	if perms == 0 {
+		return errors.New("Empty permissions requested")
+	}
 	cluPerms := perms & apc.AccessCluster
 	objPerms := perms &^ apc.AccessCluster
 	cluACL, cluOk := tk.aclForCluster(clusterID)
@@ -139,7 +143,9 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 		if !cluOk {
 			return ErrNoPermissions
 		}
-		debug.AssertMsg(clusterID != "", "Requested cluster permissions without cluster ID")
+		if clusterID == "" {
+			return errors.New("Requested cluster permissions without cluster ID")
+		}
 		if !cluACL.Has(cluPerms) {
 			return ErrNoPermissions
 		}
@@ -149,7 +155,9 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 	}
 
 	// Check only bucket specific permissions.
-	debug.AssertMsg(bck != nil, "Requested bucket permissions without bucket")
+	if bck == nil {
+		return errors.New("Requested bucket permissions without a bucket")
+	}
 	bckACL, bckOk := tk.aclForBucket(clusterID, bck)
 	if bckOk {
 		if bckACL.Has(objPerms) {
@@ -229,4 +237,23 @@ func DecryptToken(tokenStr, secret string) (*Token, error) {
 		return nil, ErrTokenExpired
 	}
 	return tInfo, nil
+}
+
+func LoadToken() string {
+	var (
+		token     TokenMsg
+		home, err = os.UserHomeDir()
+	)
+	if err != nil {
+		debug.AssertNoErr(err)
+		fmt.Fprintln(os.Stderr, err)
+		return ""
+	}
+	tokenPath := filepath.Join(home, ".config/ais", cmn.TokenFname) // TODO -- FIXME: ".config/ais"
+	_, err = jsp.LoadMeta(tokenPath, &token)
+	if err != nil && !os.IsNotExist(err) {
+		debug.AssertNoErr(err)
+		fmt.Fprintln(os.Stderr, err)
+	}
+	return token.Token
 }

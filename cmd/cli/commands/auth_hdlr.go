@@ -28,11 +28,6 @@ import (
 )
 
 const (
-	tokenFile = "auth.token"
-
-	authnServerURL = "AUTHN_URL"
-	authnTokenPath = "AUTHN_TOKEN_FILE"
-
 	flagsAuthUserLogin   = "user_login"
 	flagsAuthUserShow    = "user_show"
 	flagsAuthRoleAdd     = "role_add"
@@ -212,12 +207,12 @@ var (
 func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		if authnHTTPClient == nil {
-			return errors.New(authnServerURL + " is not set")
+			return errors.New(authn.EnvVars.URL + " is not set")
 		}
 		err := f(c)
 		if err != nil {
 			if msg, unreachable := isUnreachableError(err); unreachable {
-				err = fmt.Errorf(authnUnreachable, authParams.URL+" (detailed error: "+msg+")", authnServerURL)
+				err = fmt.Errorf(authnUnreachable, authParams.URL+" (detailed error: "+msg+")", authn.EnvVars.URL)
 			}
 		}
 		return err
@@ -234,7 +229,7 @@ func readMasked(c *cli.Context, prompt string) string {
 }
 
 func cliAuthnURL(cfg *config.Config) string {
-	authURL := os.Getenv(authnServerURL)
+	authURL := os.Getenv(authn.EnvVars.URL)
 	if authURL == "" {
 		authURL = cfg.Auth.URL
 	}
@@ -301,7 +296,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 	tokenPath := parseStrFlag(c, tokenFileFlag)
 	userPathUsed := tokenPath != ""
 	if tokenPath == "" {
-		tokenPath = filepath.Join(config.ConfigDirPath, tokenFile)
+		tokenPath = filepath.Join(config.ConfigDirPath, cmn.TokenFname)
 	}
 	err = cos.CreateDir(filepath.Dir(config.ConfigDirPath))
 	if err != nil {
@@ -324,7 +319,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 
 func logoutUserHandler(c *cli.Context) (err error) {
 	const logoutFailFmt = "logging out failed: %v"
-	tokenPath := filepath.Join(config.ConfigDirPath, tokenFile)
+	tokenPath := filepath.Join(config.ConfigDirPath, cmn.TokenFname)
 	if err = os.Remove(tokenPath); os.IsNotExist(err) {
 		return fmt.Errorf(logoutFailFmt, err)
 	}

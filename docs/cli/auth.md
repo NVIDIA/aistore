@@ -39,7 +39,7 @@ For quick getting-started (local-playground) session _and_ in-depth overview, pl
 [AuthN](/docs/authn.md) is an AIS authorization server that can be deployed to manage user access to one or more AIS clusters.
 
 All commands (except `logout`) send requests to AuthN URL defined in the AIS CLI configuration file.
-Configuration can be overridden with environment variable `AUTHN_URL`, e.g., `AUTHN_URL=http://10.0.0.20:52001 ais auth add ...`.
+Configuration can be overridden with environment variable `AIS_AUTHN_URL`, e.g., `AIS_AUTHN_URL=http://10.0.0.20:52001 ais auth add ...`.
 
 The CLI provides an easy way to manage users, and to grant and revoke access permissions.
 Only users with `Admin` role can manage the AuthN server.
@@ -85,7 +85,7 @@ $ # Create bucket as a regular user
 $ ais bucket create ais://bck1
 
 $ # Removing a user requires admin's token, pass a path to the token to CLI
-$ AUTHN_TOKEN_FILE=./admin.token ais auth rm user tmpUser1
+$ AIS_AUTHN_TOKEN_FILE=./admin.token ais auth rm user tmpUser1
 ```
 
 ### Revoke a token

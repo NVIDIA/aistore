@@ -222,12 +222,23 @@ func (b Bck) String() string {
 		if b.Provider == "" {
 			return b.Name
 		}
-		return fmt.Sprintf("%s%s%s", b.Provider, apc.BckProviderSeparator, b.Name)
+		return b.Provider + apc.BckProviderSeparator + b.Name
 	}
 	if b.Provider == "" {
 		return fmt.Sprintf("%s/%s", b.Ns, b.Name)
 	}
 	return fmt.Sprintf("%s%s%s/%s", b.Provider, apc.BckProviderSeparator, b.Ns, b.Name)
+}
+
+func (b Bck) StringEx() string {
+	if b.Provider == "" {
+		// ais:// is the default
+		if b.Ns.IsGlobal() {
+			return apc.ProviderAIS + apc.BckProviderSeparator + b.Name
+		}
+		return fmt.Sprintf("%s%s%s/%s", apc.ProviderAIS, apc.BckProviderSeparator, b.Ns, b.Name)
+	}
+	return b.String()
 }
 
 // unique name => Bck (use MakeUname above to perform the reverse translation)
