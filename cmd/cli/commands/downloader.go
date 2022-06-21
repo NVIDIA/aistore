@@ -315,7 +315,7 @@ func downloadJobsList(c *cli.Context, regex string) error {
 	if err != nil {
 		return err
 	}
-	return templates.DisplayOutput(list, c.App.Writer, templates.DownloadListTmpl)
+	return templates.DisplayOutput(list, c.App.Writer, templates.DownloadListTmpl, false)
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {

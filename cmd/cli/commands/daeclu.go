@@ -113,9 +113,10 @@ func getBMD(c *cli.Context) error {
 }
 
 // Displays the status of the cluster or node
-func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
+func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, cluConfig *cmn.ClusterConfig, daemonID string, useJSON, hideHeader bool) error {
 	body := templates.StatusTemplateHelper{
-		Smap: smap,
+		Smap:      smap,
+		CluConfig: cluConfig,
 		Status: templates.DaemonStatusTemplateHelper{
 			Pmap: pmapStatus,
 			Tmap: tmapStatus,

@@ -260,7 +260,7 @@ func etlListHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	return templates.DisplayOutput(list, c.App.Writer, templates.TransformListTmpl)
+	return templates.DisplayOutput(list, c.App.Writer, templates.TransformListTmpl, false)
 }
 
 func etlSourceHandler(c *cli.Context) (err error) {

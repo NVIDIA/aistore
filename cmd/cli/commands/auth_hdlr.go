@@ -403,7 +403,7 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNClusterTmpl)
+	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNClusterTmpl, false)
 }
 
 func showAuthRoleHandler(c *cli.Context) (err error) {
@@ -414,16 +414,16 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 			return err
 		}
 
-		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl)
+		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl, false)
 	}
 	rInfo, err := api.GetRoleAuthN(authParams, roleID)
 	if err != nil {
 		return err
 	}
 	if flagIsSet(c, nonverboseFlag) {
-		return templates.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, templates.AuthNRoleTmpl)
+		return templates.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, templates.AuthNRoleTmpl, false)
 	}
-	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl)
+	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, false)
 }
 
 func showAuthUserHandler(c *cli.Context) (err error) {
@@ -434,16 +434,16 @@ func showAuthUserHandler(c *cli.Context) (err error) {
 			return err
 		}
 
-		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl)
+		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl, false)
 	}
 	uInfo, err := api.GetUserAuthN(authParams, userID)
 	if err != nil {
 		return err
 	}
 	if flagIsSet(c, nonverboseFlag) {
-		return templates.DisplayOutput([]*authn.User{uInfo}, c.App.Writer, templates.AuthNUserTmpl)
+		return templates.DisplayOutput([]*authn.User{uInfo}, c.App.Writer, templates.AuthNUserTmpl, false)
 	}
-	return templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl)
+	return templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl, false)
 }
 
 func addAuthRoleHandler(c *cli.Context) (err error) {

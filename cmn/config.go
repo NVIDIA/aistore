@@ -1777,7 +1777,8 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	// log header
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
-	glog.Infof("config: %q periodic.stats_time: %v", globalFpath, config.Periodic.StatsTime)
+	glog.Infof("config: %q stats_time: %v, authentication: %t",
+		globalFpath, config.Periodic.StatsTime, config.Auth.Enabled)
 	return nil
 }
 

@@ -282,7 +282,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 
 		bckSums = append(bckSums, stats)
 	}
-	return templates.DisplayOutput(bckSums, c.App.Writer, templates.BucketSummaryValidateTmpl)
+	return templates.DisplayOutput(bckSums, c.App.Writer, templates.BucketSummaryValidateTmpl, false)
 }
 
 func showMisplacedAndMore(c *cli.Context) (err error) {
@@ -315,7 +315,7 @@ func showBucketSummary(c *cli.Context) error {
 	if flagIsSet(c, fastFlag) {
 		tmpl = templates.BucketsSummariesFastTmpl
 	}
-	return templates.DisplayOutput(summaries, c.App.Writer, tmpl)
+	return templates.DisplayOutput(summaries, c.App.Writer, tmpl, false)
 }
 
 func summaryBucketHandler(c *cli.Context) (err error) {

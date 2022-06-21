@@ -207,6 +207,10 @@ for (( c=START; c<=END; c++ )); do
   fi
 done
 
+if [[ $AIS_AUTH_ENABLED == "true" ]]; then
+	print_error "env var 'AIS_AUTH_ENABLED' is deprecated (use 'AIS_AUTHN_ENABLED')"
+	exit 1
+fi
 if [[ $AIS_AUTHN_ENABLED == "true" ]]; then
   # conf file for authn
   AIS_AUTHN_CONF_DIR="$HOME/.ais/authn"

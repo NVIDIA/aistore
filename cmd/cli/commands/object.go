@@ -413,7 +413,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 	}
 
 	tmpl := templates.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.B2S(totalSize, 2) + "\n"
-	if err = templates.DisplayOutput(extSizes, c.App.Writer, tmpl); err != nil {
+	if err = templates.DisplayOutput(extSizes, c.App.Writer, tmpl, false); err != nil {
 		return
 	}
 
@@ -781,7 +781,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		selectedProps = propsFlag
 	}
 	props := objectPropList(bck, objProps, selectedProps)
-	return templates.DisplayOutput(props, c.App.Writer, templates.PropsSimpleTmpl)
+	return templates.DisplayOutput(props, c.App.Writer, templates.PropsSimpleTmpl, false)
 }
 
 // This function is needed to print a nice error message for the user

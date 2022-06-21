@@ -423,7 +423,7 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 	} else {
 		u = RandomProxyURL()
 	}
-	return api.BaseParams{Client: gctx.Client, URL: u}
+	return api.BaseParams{Client: gctx.Client, URL: u, Token: AuthToken}
 }
 
 // waitForBucket waits until all targets ack having ais bucket created or deleted

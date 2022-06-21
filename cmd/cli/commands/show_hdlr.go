@@ -353,15 +353,21 @@ func showDsortHandler(c *cli.Context) (err error) {
 }
 
 func showClusterHandler(c *cli.Context) error {
-	daemonID := argDaemonID(c)
-	primarySmap, err := fillMap()
+	var (
+		daemonID         = argDaemonID(c)
+		primarySmap, err = fillMap()
+	)
+	if err != nil {
+		return err
+	}
+	cluConfig, err := api.GetClusterConfig(defaultAPIParams)
 	if err != nil {
 		return err
 	}
 	if err := updateLongRunParams(c); err != nil {
 		return err
 	}
-	return clusterDaemonStatus(c, primarySmap, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+	return clusterDaemonStatus(c, primarySmap, cluConfig, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 }
 
 func showStorageHandler(c *cli.Context) (err error) {

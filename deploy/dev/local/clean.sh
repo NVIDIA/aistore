@@ -16,8 +16,8 @@ if [[ -n ${GOBIN} ]]; then
 	build_dest="${GOBIN}"
 fi
 
-rm -rf ~/.ais* && \
-		rm -rf ~/.authn && \
-		rm -rf /tmp/ais* && \
-		rm -f ${build_dest}/ais* # cleans 'ais' (CLI), 'aisnode' (TARGET/PROXY), 'aisfs' (FUSE), 'aisloader' && \
-		rm -f ${build_dest}/authn
+rm -rf ~/.ais*            # cluster config and metadata
+rm -rf ~/.config/ais      # CLI and AuthN config and token, respectively
+rm -rf /tmp/ais*          # user data and cluster metadata
+rm -f ${build_dest}/ais*  # 'ais' (CLI), 'aisnode', 'aisfs', and 'aisloader' binaries
+rm -f ${build_dest}/authn # AuthN executable

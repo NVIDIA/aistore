@@ -130,7 +130,7 @@ func searchCmdHdlr(c *cli.Context) error {
 		commands = findCmdMultiKey(c.Args())
 	}
 
-	return templates.DisplayOutput(commands, c.App.Writer, templates.SearchTmpl)
+	return templates.DisplayOutput(commands, c.App.Writer, templates.SearchTmpl, false)
 }
 
 func searchBashCmplt(_ *cli.Context) {

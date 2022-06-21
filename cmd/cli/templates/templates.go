@@ -73,6 +73,7 @@ const (
 		"Deployment:\t{{ ( Deployments .Status) }}\n  " +
 		"Status:\t{{ ( OnlineStatus .Status) }}\n  " +
 		"Rebalance:\t{{ ( Rebalance .Status) }}\n  " +
+		"Authentication:\t{{ .CluConfig.Auth.Enabled }}\n  " +
 		"Version:\t{{ ( Versions .Status) }}\n  " +
 		"Build:\t{{ ( BuildTimes .Status) }}\n"
 
@@ -377,8 +378,9 @@ type (
 		Tmap stats.DaemonStatusMap `json:"tmap"`
 	}
 	StatusTemplateHelper struct {
-		Smap   *cluster.Smap              `json:"smap"`
-		Status DaemonStatusTemplateHelper `json:"status"`
+		Smap      *cluster.Smap              `json:"smap"`
+		CluConfig *cmn.ClusterConfig         `json:"config"`
+		Status    DaemonStatusTemplateHelper `json:"status"`
 	}
 )
 
@@ -498,11 +500,7 @@ func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }
 
 // Displays the output in either JSON or tabular form
 // if formatJSON == true, outputTemplate is omitted
-func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, formatJSON ...bool) error {
-	var useJSON bool
-	if len(formatJSON) > 0 {
-		useJSON = formatJSON[0]
-	}
+func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, useJSON bool) error {
 	if useJSON {
 		if o, ok := object.(forMarshaler); ok {
 			object = o.forMarshal()

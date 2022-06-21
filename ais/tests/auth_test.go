@@ -21,8 +21,8 @@ import (
 
 func createBaseParams() (unAuth, auth api.BaseParams) {
 	unAuth = tutils.BaseAPIParams()
+	unAuth.Token = ""
 	auth = tutils.BaseAPIParams()
-	auth.Token = tutils.AuthToken
 	return
 }
 
@@ -40,9 +40,7 @@ func TestAuthObj(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresAuth: true})
 	var (
 		unAuthBP, authBP = createBaseParams()
-		bck              = cmn.Bck{
-			Name: cos.RandString(10),
-		}
+		bck              = cmn.Bck{Name: cos.RandString(10)}
 	)
 	err := api.CreateBucket(authBP, bck, nil)
 	tassert.CheckFatal(t, err)
@@ -80,9 +78,7 @@ func TestAuthBck(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresAuth: true})
 	var (
 		unAuthBP, authBP = createBaseParams()
-		bck              = cmn.Bck{
-			Name: cos.RandString(10),
-		}
+		bck              = cmn.Bck{Name: cos.RandString(10)}
 	)
 	err := api.CreateBucket(unAuthBP, bck, nil)
 	expectUnauthorized(t, err)

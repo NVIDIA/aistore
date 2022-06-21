@@ -452,7 +452,7 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 		}
 	}
 
-	return templates.DisplayOutput(propList, c.App.Writer, templates.PropsSimpleTmpl)
+	return templates.DisplayOutput(propList, c.App.Writer, templates.PropsSimpleTmpl, false)
 }
 
 // Configure bucket as n-way mirror
@@ -567,19 +567,20 @@ func buildOutputTemplate(props string, showHeaders bool) string {
 	return bodySb.String()
 }
 
-func printObjectProps(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string, showUnmatched, showHeaders bool) error {
+func printObjectProps(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string,
+	showUnmatched, showHeaders bool) error {
 	var (
 		outputTemplate        = buildOutputTemplate(props, showHeaders)
 		matchingEntries, rest = objectFilter.filter(entries)
 	)
-	err := templates.DisplayOutput(matchingEntries, c.App.Writer, outputTemplate)
+	err := templates.DisplayOutput(matchingEntries, c.App.Writer, outputTemplate, false)
 	if err != nil {
 		return err
 	}
 
 	if showHeaders && showUnmatched {
 		outputTemplate = "Unmatched objects:\n" + outputTemplate
-		err = templates.DisplayOutput(rest, c.App.Writer, outputTemplate)
+		err = templates.DisplayOutput(rest, c.App.Writer, outputTemplate, false)
 	}
 	return err
 }

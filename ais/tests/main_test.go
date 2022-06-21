@@ -113,7 +113,9 @@ func TestMain(m *testing.M) {
 	if !cliBck.IsAIS() {
 		exists, err = tutils.BckExists(tutils.GetPrimaryURL(), cliBck)
 		if err == nil && !exists {
-			err = fmt.Errorf("bucket %q does not exist, make sure that the cluster is compiled with selected provider", cliBck)
+			s := "%q not found \n(hint: "
+			s += "check whether %q exists and make sure to build aisnode executable with the corresponding build tag)"
+			err = fmt.Errorf(s, cliBck, cliBck)
 		}
 		if err != nil {
 			goto fail
