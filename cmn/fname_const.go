@@ -20,7 +20,8 @@ const (
 	VmdFname         = ".ais.vmd"         // vmd persistent file basename
 	EmdFname         = ".ais.emd"         // emd persistent file basename
 
-	TokenFname = "auth.token"
+	TokenFname     = "auth.token" // see jsp/app.go
+	CliConfigFname = "cli.json"   // ditto
 
 	ShutdownMarker      = ".ais.shutdown"
 	MarkersDirName      = ".ais.markers"

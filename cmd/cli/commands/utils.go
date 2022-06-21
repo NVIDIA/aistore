@@ -679,7 +679,7 @@ func cliAPIParams(proxyURL string) api.BaseParams {
 	return api.BaseParams{
 		Client: defaultHTTPClient,
 		URL:    proxyURL,
-		Token:  loggedUserToken.Token,
+		Token:  loggedUserToken,
 	}
 }
 

@@ -6,9 +6,7 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 
 	"github.com/NVIDIA/aistore/api"
@@ -16,25 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/urfave/cli"
 )
 
+var loggedUserToken string
+
 func initAuthParams() {
-	var (
-		tokenPath = os.Getenv(authn.EnvVars.TokenFile)
-		custom    = tokenPath != ""
-	)
-	if tokenPath == "" {
-		tokenPath = filepath.Join(config.ConfigDirPath, cmn.TokenFname)
-	}
-	_, err := jsp.LoadMeta(tokenPath, &loggedUserToken) // TODO -- FIXME: unify w/ authn.LoadToken()
-	if err == nil {
-		return
-	}
-	if !os.IsNotExist(err) || custom {
-		fmt.Fprintf(os.Stderr, "Failed to load token from %q: %v\n", tokenPath, err)
-	}
+	loggedUserToken = authn.LoadToken()
 }
 
 func initClusterParams() {
@@ -59,14 +45,14 @@ func initClusterParams() {
 		authParams = api.BaseParams{
 			Client: authnHTTPClient,
 			URL:    authnURL,
-			Token:  loggedUserToken.Token,
+			Token:  loggedUserToken,
 		}
 	}
 
 	defaultAPIParams = api.BaseParams{
 		Client: defaultHTTPClient,
 		URL:    clusterURL,
-		Token:  loggedUserToken.Token,
+		Token:  loggedUserToken,
 	}
 }
 

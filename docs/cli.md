@@ -14,11 +14,10 @@ redirect_from:
   - [Installing](#installing)
   - [Uninstalling](#uninstalling)
 - [CLI Reference](#cli-reference)
-- [Using AIS CLI](#using-ais-cli)
-  - [Config](#config)
-  - [First steps](#first-steps)
-  - [Global options](#global-options)
-- [Default flag and argument values via environment variables](#default-flag-and-argument-values-via-environment-variables)
+- [CLI Config](#cli-config)
+- [First steps](#first-steps)
+- [Global options](#global-options)
+- [Backend Provider](#backend-provider)
 
 
 AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle. 
@@ -80,12 +79,14 @@ Other CLI documentation:
 
 > Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 
-## Using AIS CLI
+## CLI Config
 
-### Config
+Notice:
 
-On first use, CLI will create `config.json` file in `$XDG_CONFIG_HOME/ais` (or if `XDG_CONFIG_HOME` is not set, in `~/.config/ais`) directory.
-The content of the file presents as follows:
+* CLI configuration directory: `$HOME/.config/ais`
+* CLI configuration filename: `cli.json`
+
+When used the very first time, *or* if the `$HOME/.config/ais/cli.json` does not exist, the latter will be created with default parameters:
 
 ```json
 {
@@ -111,15 +112,17 @@ The content of the file presents as follows:
 }
 ```
 
-Simply change config file so next time CLI will use updated values.
+If you update config via `ais config cli set` command (or even simply change the config file) the next time CLI will use updated values.
 
-### First steps
+## First steps
 
-To get the list of commands, run following command:
+To get the list of supported commands, run:
 
 ```console
 $ ais --help
 ```
+
+> Alternatively, you could start making use of auto-completions by typing `ais ` and pressing TAB key two times in a row.
 
 To check if the CLI can correctly contact the cluster and to get cluster status, run following command:
 
@@ -127,7 +130,7 @@ To check if the CLI can correctly contact the cluster and to get cluster status,
 $ ais show cluster
 ```
 
-### Global options
+## Global options
 
 Besides a set of options specific for each command, AIS CLI provides global options:
 
@@ -149,9 +152,7 @@ $ # Incorrect usage of a global option.
 $ ais bucket ls ais://bck --props all --no-color
 ```
 
-## Default flag and argument values via environment variables
-
-#### Backend Provider
+## Backend Provider
 
 The syntax `provider://BUCKET_NAME` (referred to as `BUCKET` in help messages) works across all commands.
 For more details, please refer to each specific command's documentation.

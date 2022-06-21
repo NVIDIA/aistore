@@ -7,7 +7,6 @@ package cmn
 
 import (
 	"fmt"
-	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -19,11 +18,6 @@ import (
 )
 
 const GitHubHome = "https://github.com/NVIDIA/aistore"
-
-const (
-	configHomeEnvVar = "XDG_CONFIG_HOME"                // https://wiki.archlinux.org/index.php/XDG_Base_Directory
-	GcsUA            = "gcloud-golang-storage/20151204" // from cloud.google.com/go/storage/storage.go (userAgent).
-)
 
 func init() {
 	GCO = &globalConfigOwner{}
@@ -71,25 +65,6 @@ func BytesHead(b []byte, length ...int) string {
 //////////////////////////////
 // config: path, load, save //
 //////////////////////////////
-
-func homeDir() string {
-	currentUser, err := user.Current()
-	if err != nil {
-		return os.Getenv("HOME")
-	}
-	return currentUser.HomeDir
-}
-
-func AppConfigPath(appName string) (configDir string) {
-	// Determine the location of config directory
-	if cfgHome := os.Getenv(configHomeEnvVar); cfgHome != "" {
-		// $XDG_CONFIG_HOME/appName
-		configDir = filepath.Join(cfgHome, appName)
-	} else {
-		configDir = filepath.Join(homeDir(), ".config", appName)
-	}
-	return
-}
 
 // ExpandPath replaces common abbreviations in file path (eg. `~` with absolute
 // path to the current user home directory) and cleans the path.

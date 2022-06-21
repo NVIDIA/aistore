@@ -23,6 +23,10 @@ import (
 )
 
 const (
+	gcsUA = "gcloud-golang-storage/20151204" // from cloud.google.com/go/storage/storage.go (userAgent).
+)
+
+const (
 	retryCnt         = 10  // number of retries to external resource
 	reqTimeoutFactor = 1.2 // newTimeout = prevTimeout * reqTimeoutFactor
 	internalErrorMsg = "internal server error"
@@ -114,9 +118,9 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	}
 
 	// Set "User-Agent" header when doing requests to Google Cloud Storage.
-	// This should increase number of connections to GCS.
+	// This should increase the number of connections to GCS.
 	if cos.IsGoogleStorageURL(req.URL) {
-		req.Header.Add("User-Agent", cmn.GcsUA)
+		req.Header.Add("User-Agent", gcsUA)
 	}
 
 	resp, err := clientForURL(t.obj.link).Do(req)

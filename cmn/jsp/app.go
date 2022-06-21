@@ -1,7 +1,7 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp
 
@@ -10,13 +10,22 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-////////////////
-// app config //
-////////////////
-
-// configDir := cmn.AppConfigPath(appName)
+// NOTE:
+// The default app config directory is: $HOME/.config/ais
+// e.g.: $HOME/.config/ais/cli.json 			- CLI config
+//       $HOME/.config/ais/auth.token 			- authentication token
+//       $HOME/.config/ais/<bucket>.aisfs.mount.json 	- aisfs mount config
+func DefaultAppConfigDir() (configDir string) {
+	uhome, err := cos.HomeDir()
+	if err != nil {
+		debug.AssertNoErr(err)
+		cos.Errorf("%v", err)
+	}
+	return filepath.Join(uhome, ".config/ais")
+}
 
 // LoadAppConfig loads app config.
 func LoadAppConfig(configDir, configFileName string, v interface{}) (err error) {
@@ -32,8 +41,6 @@ func LoadAppConfig(configDir, configFileName string, v interface{}) (err error) 
 	}
 	return
 }
-
-// configDir := cmn.AppConfigPath(appName)
 
 // SaveAppConfig writes app config.
 func SaveAppConfig(configDir, configFileName string, v interface{}) (err error) {

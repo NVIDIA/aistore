@@ -1,6 +1,6 @@
 // Package config provides types and functions to configure AIS CLI.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package config
 
@@ -17,9 +17,6 @@ import (
 )
 
 const (
-	configDirName  = "ais"
-	configFileName = "config.json"
-
 	urlFmt           = "%s://%s:%d"
 	defaultAISIP     = "127.0.0.1"
 	defaultAISPort   = 8080
@@ -28,7 +25,7 @@ const (
 )
 
 var (
-	ConfigDirPath string
+	ConfigDir     string
 	defaultConfig Config
 
 	DefaultAliasConfig = AliasConfig{
@@ -39,8 +36,7 @@ var (
 )
 
 func init() {
-	ConfigDirPath = cmn.AppConfigPath(configDirName)
-
+	ConfigDir = jsp.DefaultAppConfigDir()
 	proto := "http"
 	if value := os.Getenv(cmn.EnvVars.UseHTTPS); cos.IsParseBool(value) {
 		proto = "https"
@@ -113,7 +109,7 @@ func (c *Config) validate() (err error) {
 
 func Load() (*Config, error) {
 	cfg := &Config{}
-	if err := jsp.LoadAppConfig(ConfigDirPath, configFileName, &cfg); err != nil {
+	if err := jsp.LoadAppConfig(ConfigDir, cmn.CliConfigFname, &cfg); err != nil {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to load config: %v", err)
 		}
@@ -131,7 +127,7 @@ func Load() (*Config, error) {
 }
 
 func Save(cfg *Config) error {
-	err := jsp.SaveAppConfig(ConfigDirPath, configFileName, cfg)
+	err := jsp.SaveAppConfig(ConfigDir, cmn.CliConfigFname, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to save config file: %v", err)
 	}
@@ -139,5 +135,5 @@ func Save(cfg *Config) error {
 }
 
 func Path() string {
-	return filepath.Join(ConfigDirPath, configFileName)
+	return filepath.Join(ConfigDir, cmn.CliConfigFname)
 }

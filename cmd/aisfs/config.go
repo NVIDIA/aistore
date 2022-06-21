@@ -16,8 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
-const configDirName = fs.Name
-
 type (
 	Config struct {
 		Cluster     ClusterConfig  `json:"cluster"`
@@ -117,17 +115,17 @@ func (c *Config) writeTo(srvCfg *fs.ServerConfig) {
 
 func loadConfig(bucket string) (cfg *Config, err error) {
 	var (
-		configFileName = bucket + "_mount.json"
-		configDirPath  = cmn.AppConfigPath(configDirName)
+		configFname = bucket + ".aisfs.mount.json"
+		configDir   = jsp.DefaultAppConfigDir()
 	)
 	cfg = &Config{}
-	if err = jsp.LoadAppConfig(configDirPath, configFileName, &cfg); err != nil {
+	if err = jsp.LoadAppConfig(configDir, configFname, &cfg); err != nil {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to load config: %v", err)
 		}
 
 		cfg = &defaultConfig
-		err = jsp.SaveAppConfig(configDirPath, configFileName, cfg)
+		err = jsp.SaveAppConfig(configDir, configFname, cfg)
 		if err != nil {
 			err = fmt.Errorf("failed to generate config file: %v", err)
 		}

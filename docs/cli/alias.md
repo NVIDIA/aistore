@@ -191,7 +191,7 @@ As with other CLI configurations, aliases are stored in the [CLI config file](/d
 All aliases are stored under `"aliases"` as a map of strings (`ALIAS` to `AIS_COMMAND`).
 
 ```json
-// cat ~/.config/ais/config.json
+// cat ~/.config/ais/cli.json
 {
   "cluster": {
     "url": "http://127.0.0.1:8080",

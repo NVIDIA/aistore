@@ -7,14 +7,11 @@ package authn
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/golang-jwt/jwt/v4"
 )
@@ -237,23 +234,4 @@ func DecryptToken(tokenStr, secret string) (*Token, error) {
 		return nil, ErrTokenExpired
 	}
 	return tInfo, nil
-}
-
-func LoadToken() string {
-	var (
-		token     TokenMsg
-		home, err = os.UserHomeDir()
-	)
-	if err != nil {
-		debug.AssertNoErr(err)
-		fmt.Fprintln(os.Stderr, err)
-		return ""
-	}
-	tokenPath := filepath.Join(home, ".config/ais", cmn.TokenFname) // TODO -- FIXME: ".config/ais"
-	_, err = jsp.LoadMeta(tokenPath, &token)
-	if err != nil && !os.IsNotExist(err) {
-		debug.AssertNoErr(err)
-		fmt.Fprintln(os.Stderr, err)
-	}
-	return token.Token
 }

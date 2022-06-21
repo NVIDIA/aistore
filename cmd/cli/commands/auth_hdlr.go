@@ -197,8 +197,6 @@ var (
 			},
 		},
 	}
-
-	loggedUserToken authn.TokenMsg
 )
 
 // Use the function to wrap every AuthN handler that does API calls.
@@ -296,9 +294,9 @@ func loginUserHandler(c *cli.Context) (err error) {
 	tokenPath := parseStrFlag(c, tokenFileFlag)
 	userPathUsed := tokenPath != ""
 	if tokenPath == "" {
-		tokenPath = filepath.Join(config.ConfigDirPath, cmn.TokenFname)
+		tokenPath = filepath.Join(config.ConfigDir, cmn.TokenFname)
 	}
-	err = cos.CreateDir(filepath.Dir(config.ConfigDirPath))
+	err = cos.CreateDir(filepath.Dir(config.ConfigDir))
 	if err != nil {
 		fmt.Fprintf(c.App.Writer, "Token:\n%s\n", token.Token)
 		return fmt.Errorf(tokenSaveFailFmt, err)
@@ -319,7 +317,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 
 func logoutUserHandler(c *cli.Context) (err error) {
 	const logoutFailFmt = "logging out failed: %v"
-	tokenPath := filepath.Join(config.ConfigDirPath, cmn.TokenFname)
+	tokenPath := filepath.Join(config.ConfigDir, cmn.TokenFname)
 	if err = os.Remove(tokenPath); os.IsNotExist(err) {
 		return fmt.Errorf(logoutFailFmt, err)
 	}
@@ -340,7 +338,7 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 		baseParams := api.BaseParams{
 			Client: defaultHTTPClient,
 			URL:    cluSpec.URLs[0],
-			Token:  loggedUserToken.Token,
+			Token:  loggedUserToken,
 		}
 		smap, err = api.GetClusterMap(baseParams)
 		if err != nil {
