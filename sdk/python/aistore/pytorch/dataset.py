@@ -9,8 +9,8 @@ Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 from typing import List, Union
 from torch.utils.data import Dataset
 
-from ..client import Client
-from .utils import list_objects_info
+from aistore.client import Client
+from aistore.pytorch.utils import list_objects_info
 
 # pylint: disable=too-few-public-methods
 

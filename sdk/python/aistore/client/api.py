@@ -5,9 +5,10 @@
 from __future__ import annotations  # pylint: disable=unused-variable
 
 from typing import TypeVar, Type, List, NewType
-import requests
-import time
 from urllib.parse import urljoin
+import time
+
+import requests
 from pydantic.tools import parse_raw_as
 
 from aistore.client.const import (
@@ -24,17 +25,11 @@ from aistore.client.const import (
     QParamBucketTo,
 )
 from aistore.client.types import (ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap, XactStatus, HttpError, BucketLister)
-from aistore.client.errors import InvalidBckProvider, Timeout, ErrBckNotFound, ErrRemoteBckNotFound, AISError
-from aistore.client.utils import handle_errors
+from aistore.client.errors import (InvalidBckProvider, Timeout, ErrBckNotFound, ErrRemoteBckNotFound, AISError)
+from aistore.client.utils import handle_errors, probing_frequency
 
 T = TypeVar("T")
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
-
-
-def probing_frequency(dur: int) -> float:
-    freq = min(dur / 8.0, 1.0)
-    freq = max(dur / 64.0, freq)
-    return max(freq, 0.1)
 
 
 # pylint: disable=unused-variable

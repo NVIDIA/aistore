@@ -1,11 +1,11 @@
 #
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #
+from pydantic import parse_raw_as
+import requests
 
 from aistore.client.errors import AISError, ErrBckNotFound, ErrRemoteBckNotFound
 from aistore.client.types import HttpError
-from pydantic import parse_raw_as
-import requests
 
 
 def _raise_error(text: str):
@@ -37,3 +37,9 @@ def handle_errors(resp: requests.Response):
     if error_text != "":
         _raise_error(error_text)
     resp.raise_for_status()
+
+
+def probing_frequency(dur: int) -> float:
+    freq = min(dur / 8.0, 1.0)
+    freq = max(dur / 64.0, freq)
+    return max(freq, 0.1)

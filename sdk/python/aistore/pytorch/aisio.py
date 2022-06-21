@@ -6,15 +6,27 @@ Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 from io import BytesIO
 from typing import Iterator, Tuple
 
-from .utils import parse_url, unparse_url
-
 from torchdata.datapipes.iter import IterDataPipe
 from torchdata.datapipes import functional_datapipe
 from torchdata.datapipes.utils import StreamWrapper
 
-from aistore.client import Client
+try:
+    import aistore
+    from aistore.pytorch.utils import parse_url, unparse_url
+    from aistore.client import Client
+except ImportError:
+    aistore = None
 
 # pylint: disable=unused-variable
+
+
+def _assert_aistore() -> None:
+    if aistore is None:
+        raise ModuleNotFoundError(
+            "Package 'aistore' is required to be installed to use this datapipe."
+            "Please run 'pip install aistore' or 'conda install aistore' to install the package"
+            "For more info visit: https://github.com/NVIDIA/aistore/blob/master/sdk/python/"
+        )
 
 
 @functional_datapipe("list_files_by_ais")
@@ -37,28 +49,17 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
         url(str): AIStore endpoint
     """
     def __init__(self, source_datapipe: IterDataPipe[str], url: str, length: int = -1) -> None:
-
+        _assert_aistore()
         self.source_datapipe: IterDataPipe[str] = source_datapipe
         self.length: int = length
         self.client = Client(url)
 
     def __iter__(self) -> Iterator[str]:
         for prefix in self.source_datapipe:
-            url_info = parse_url(prefix)
-            provider, bck_name, prefix = url_info["provider"], url_info["bck_name"], url_info["path"]
-            value = {"uuid": "", "continuation_token": ""}
-
-            while True:
-                resp = self.client.list_objects(
-                    bck_name=bck_name, prefix=prefix, provider=provider, uuid=value["uuid"], continuation_token=value["continuation_token"]
-                )
-                for entry in resp.entries:
-                    yield unparse_url(provider=provider, bck_name=bck_name, obj_name=entry.name)
-
-                if resp.continuation_token == "":
-                    break
-                value["continuation_token"] = resp.continuation_token
-                value["uuid"] = resp.uuid
+            provider, bck_name, prefix = parse_url(prefix)
+            obj_iter = self.client.list_objects_iter(bck_name=bck_name, provider=provider, prefix=prefix)
+            for entry in obj_iter:
+                yield unparse_url(provider=provider, bck_name=bck_name, obj_name=entry.name)
 
     def __len__(self) -> int:
         if self.length == -1:
@@ -85,19 +86,15 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
         url(str): AIStore endpoint
     """
     def __init__(self, source_datapipe: IterDataPipe[str], url: str, length: int = -1) -> None:
-
+        _assert_aistore()
         self.source_datapipe: IterDataPipe[str] = source_datapipe
         self.length = length
         self.client = Client(url)
 
     def __iter__(self) -> Iterator[Tuple[str, StreamWrapper]]:
         for url in self.source_datapipe:
-            url_info = parse_url(url)
-            yield url, StreamWrapper(
-                BytesIO(self.client.get_object(
-                    bck_name=url_info["bck_name"],
-                    provider=url_info["provider"],
-                    obj_name=url_info["path"]).read_all()))
+            provider, bck_name, obj_name = parse_url(url)
+            yield url, StreamWrapper(BytesIO(self.client.get_object(bck_name=bck_name, provider=provider, obj_name=obj_name).read_all()))
 
     def __len__(self) -> int:
         return len(self.source_datapipe)

@@ -8,7 +8,7 @@ from typing import Any, Mapping, List, Iterator, Optional
 
 from pydantic import BaseModel, Field, StrictInt, StrictStr, validator
 import requests
-from .const import ProviderAIS
+from aistore.client.const import ProviderAIS
 
 
 class Namespace(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable

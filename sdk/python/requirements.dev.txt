@@ -19,7 +19,7 @@ pyparsing==3.0.7
 pytest==7.1.1
 requests==2.27.1
 tomli==2.0.1
+torchdata
 typing_extensions==4.1.1
 urllib3==1.26.9
 wrapt==1.14.0
-torchdata==0.3.0

@@ -4,26 +4,28 @@ Utils for AIS PyTorch Plugin
 Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 """
 
-from typing import List, Mapping
+from typing import List, Mapping, Tuple
 from urllib.parse import urlparse, urlunparse
 from aistore.client import Client
 
 
-def parse_url(url: str) -> Mapping[str, str]:
+def parse_url(url: str) -> Tuple[str, str, str]:
     """
     Parse AIS urls for bucket and object names
     Args:
         url (str): Complete URL of the object (eg. "ais://bucket1/file.txt")
     Returns:
-        Mapping[str, str]: Map containing information related to provider, bucket name and object path
+        provider (str): AIS Backend
+        bck_name (str): Bucket name identifier
+        obj_name (str):  Object name with extension
     """
     parsed_url = urlparse(url)
     path = parsed_url.path
     if len(path) > 0 and path.startswith("/"):
         path = path[1:]
 
-    url_info = {"provider": parsed_url.scheme, "bck_name": parsed_url.netloc, "path": path}
-    return url_info
+    # returns provider, bck_name, path
+    return parsed_url.scheme, parsed_url.netloc, path
 
 
 # pylint: disable=unused-variable
@@ -38,9 +40,8 @@ def list_objects_info(client: Client, urls_list: List[str]) -> List[Mapping[str,
     """
     samples = []
     for url in urls_list:
-        url_info = parse_url(url)
-        provider, bck_name = url_info["provider"], url_info["bck_name"]
-        objects = client.list_objects(bck_name=bck_name, prefix=url_info["path"], provider=provider)
+        provider, bck_name, path = parse_url(url)
+        objects = client.list_objects(bck_name=bck_name, prefix=path, provider=provider)
         for obj_info in objects.entries:
             samples.append({"provider": provider, "bck_name": bck_name, "object": obj_info.name})
     return samples
