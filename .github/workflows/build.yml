@@ -4,6 +4,7 @@ on:
     branches:
       - master
   pull_request:
+  workflow_dispatch:
 jobs:
   test:
     strategy:
@@ -12,14 +13,31 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ matrix.go-version }}
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Build binaries
-        run: |
-          export GOPATH="$(go env GOPATH)"
-          AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" make node
-          make aisloader aisfs authn cli
+    - name: Install Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Setup additional system libraries
+      if: startsWith(matrix.os, 'ubuntu')
+      run: |
+        sudo apt update
+        sudo apt install -y xattr attr
+        
+    - name: Build AIStore on ${{ matrix.os }}
+      run: |
+        export GOPATH="$(go env GOPATH)"
+        MODE="" make node # Build node without backends in production mode.
+        MODE="debug" make node # Build node without backends in debug mode.
+        AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" MODE="" make node # Build with all backends (production mode).
+        AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" MODE="debug" make node # Build with all backends (debug mode).
+        MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
+        TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
+        TAGS="s3rproxy" make node # Build with reverse proxy support (redirect is used by default).
+        make authn
+        make aisfs
+        make cli
+        make aisloader

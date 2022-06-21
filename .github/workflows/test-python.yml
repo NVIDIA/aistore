@@ -1,0 +1,45 @@
+name: sdk/python
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        go-version: [1.18.x]
+        os: [ubuntu-latest, macos-latest]
+        python-version: [3.8]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup additional system libraries
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt update
+          sudo apt install -y xattr attr
+      
+      - name: Run AIStore
+        run: |
+          export GOPATH="$(go env GOPATH)"
+          deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1
+      
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Run python tests
+        run: |
+          cd sdk/python
+          make unit_test
