@@ -1,0 +1,37 @@
+name: test-short
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        go-version: [1.18.x]
+        # os: [ubuntu-latest, macos-latest]
+        # TODO: provide support for MacOS (!1169)
+        os: [ubuntu-latest] 
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup additional system libraries
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt update
+          sudo apt install -y xattr attr
+      
+      - name: Run and test AIStore
+        run: |
+          export GOPATH="$(go env GOPATH)"
+          deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 6
+          NUM_PROXY=1 NUM_TARGET=1 BUCKET="ais://test" make test-short
