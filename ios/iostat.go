@@ -124,7 +124,7 @@ func newIostatCache() *cache {
 
 func (ios *ios) AddMpath(mpath, fs string) (fsdisks FsDisks, err error) {
 	config := cmn.GCO.Get()
-	fsdisks = fs2disks(fs)
+	fsdisks = fs2disks(fs, config.TestingEnv())
 	if len(fsdisks) == 0 {
 		return
 	}

@@ -40,7 +40,7 @@ type (
 // fs2disks is used when a mountpath is added to
 // retrieve the disk(s) associated with a filesystem.
 // This returns multiple disks only if the filesystem is RAID.
-func fs2disks(fs string) (disks FsDisks) {
+func fs2disks(fs string, testingEnv bool) (disks FsDisks) {
 	// skip docker union mounts
 	if fs == "overlay" {
 		return
@@ -76,8 +76,13 @@ func fs2disks(fs string) (disks FsDisks) {
 	// log
 	if flag.Parsed() {
 		if len(disks) == 0 {
-			s, _ := jsoniter.MarshalIndent(lsBlkOutput.BlockDevices, "", " ")
-			glog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
+			// skip err logging block devices when running with `test_fspaths` (config.TestingEnv() == true)
+			// e.g.: testing with docker `/dev/root` mount with no disks
+			// see also: `allowSharedDisksAndNoDisks` (TODO unify via `allowSharedDisksAndNoDisks`)
+			if !testingEnv {
+				s, _ := jsoniter.MarshalIndent(lsBlkOutput.BlockDevices, "", " ")
+				glog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
+			}
 		} else {
 			glog.Infof("%s: %v", fs, disks)
 		}
