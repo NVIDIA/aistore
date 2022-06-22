@@ -115,7 +115,7 @@ if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
   if [[ ${deployment} == "all" ]]; then
     echo -e "\n*** Remote cluster ***"
   fi
-  echo -e "1\n1\n3\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${hdfs_provider}\n${loopback}\n" | DEPLOY_AS_NEXT_TIER="true" make deploy
+  echo -e "1\n1\n3\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${hdfs_provider}\n${loopback}\n" | DEPLOY_AS_NEXT_TIER="true" AIS_AUTHN_ENABLED=false make deploy
 
   # Do not try attach remote cluster if the main cluster did not start.
   if [[ ${deployment} == "all" ]]; then
@@ -124,6 +124,11 @@ if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
       tier_endpoint="https://127.0.0.1:11080"
     fi
     sleep 5
+    if [[ ${AIS_AUTHN_ENABLED} == "true" ]]; then
+       tokenfile=$(mktemp -q /tmp/ais.auth.token.XXXXXX)
+       ais auth login admin -p admin -f ${tokenfile}
+       export AIS_AUTHN_TOKEN_FILE=${tokenfile}
+    fi
     retry ais cluster remote-attach "${remote_alias}=${tier_endpoint}"
   fi
 fi
