@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version   = "1.3"
+	version   = "1.5"
 	build     string
 	buildtime string
 )

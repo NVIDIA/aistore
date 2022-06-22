@@ -700,7 +700,7 @@ while503:
 // formerly, devtools
 //
 func _joinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Duration) (rebID string, err error) {
-	baseParams := api.BaseParams{Client: ctx.Client, URL: proxyURL}
+	baseParams := api.BaseParams{Client: ctx.Client, URL: proxyURL, Token: LoggedUserToken}
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
 		return "", err
@@ -789,7 +789,7 @@ func _waitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time,
 // Quick remove node from SMap
 func _removeNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) error {
 	var (
-		baseParams = api.BaseParams{Client: ctx.Client, URL: proxyURL}
+		baseParams = api.BaseParams{Client: ctx.Client, URL: proxyURL, Token: LoggedUserToken}
 		smap, err  = api.GetClusterMap(baseParams)
 		node       = smap.GetNode(sid)
 	)

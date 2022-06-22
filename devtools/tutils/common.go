@@ -68,7 +68,7 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 }
 
 func BckExists(proxyURL string, bck cmn.Bck) (bool, error) {
-	baseParams := api.BaseParams{Client: gctx.Client, URL: proxyURL, Token: AuthToken}
+	baseParams := api.BaseParams{Client: gctx.Client, URL: proxyURL, Token: LoggedUserToken}
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
 	if err != nil {
 		return false, err

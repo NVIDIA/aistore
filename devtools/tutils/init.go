@@ -75,7 +75,7 @@ var (
 		Alias string
 		URL   string
 	}
-	AuthToken string
+	LoggedUserToken string
 
 	gctx *Ctx
 )
@@ -155,7 +155,8 @@ func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 		return
 	}
 	initPmap()
-	AuthToken = authn.LoadToken()
+	tokenFile := os.Getenv(authn.EnvVars.TokenFile)
+	LoggedUserToken = authn.LoadToken(tokenFile)
 	return
 }
 

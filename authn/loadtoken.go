@@ -14,20 +14,20 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
-func LoadToken() string {
+// NOTE: must load when tokenFile != ""
+func LoadToken(tokenFile string) string {
 	var (
-		tokenPath string
-		token     TokenMsg
-		mustLoad  = true
+		token    TokenMsg
+		mustLoad = true
 	)
-	if tokenPath = os.Getenv(EnvVars.TokenFile); tokenPath == "" {
-		tokenPath = filepath.Join(jsp.DefaultAppConfigDir(), cmn.TokenFname)
+	if tokenFile == "" {
+		tokenFile = filepath.Join(jsp.DefaultAppConfigDir(), cmn.TokenFname)
 		mustLoad = false
 	}
-	_, err := jsp.LoadMeta(tokenPath, &token)
+	_, err := jsp.LoadMeta(tokenFile, &token)
 	if err != nil && (mustLoad || !os.IsNotExist(err)) {
 		debug.AssertNoErr(err)
-		cos.Errorf("Failed to load token from %q: %v", tokenPath, err)
+		cos.Errorf("Failed to load token from %q: %v", tokenFile, err)
 	}
 	return token.Token
 }

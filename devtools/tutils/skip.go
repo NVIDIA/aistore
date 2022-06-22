@@ -34,7 +34,7 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	if args.RequiresRemoteCluster && RemoteCluster.UUID == "" {
 		tb.Skipf("%s requires remote cluster", tb.Name())
 	}
-	if args.RequiresAuth && AuthToken == "" {
+	if args.RequiresAuth && LoggedUserToken == "" {
 		tb.Skipf("%s requires authentication token", tb.Name())
 	}
 	if args.Long && testing.Short() {

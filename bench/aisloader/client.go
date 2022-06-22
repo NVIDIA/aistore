@@ -175,6 +175,7 @@ func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader c
 			Client: httpClient,
 			URL:    proxyURL,
 			Method: http.MethodPut,
+			Token:  loggedUserToken,
 		}
 		args = api.PutObjectArgs{
 			BaseParams: baseParams,

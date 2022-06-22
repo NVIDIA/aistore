@@ -89,12 +89,13 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs,
 	var (
 		svc      *s3.S3
 		region   string
+		errC     error
 		cloudBck = bck.RemoteBck()
 	)
+	svc, region, errC = newClient(sessConf{bck: cloudBck}, "")
 	if verbose {
-		glog.Infof("[head_bucket] %s", cloudBck.Name)
+		glog.Infof("[head_bucket] %s (%v)", cloudBck.Name, errC)
 	}
-	svc, region, _ = newClient(sessConf{bck: cloudBck}, "") // nolint:errcheck // on purpose
 	if region == "" {
 		// AWS bucket may not yet exist in the BMD -
 		// get the region manually and recreate S3 client.

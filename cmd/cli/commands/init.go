@@ -6,6 +6,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 
@@ -19,12 +20,9 @@ import (
 
 var loggedUserToken string
 
-func initAuthParams() {
-	loggedUserToken = authn.LoadToken()
-}
-
 func initClusterParams() {
-	initAuthParams()
+	tokenFile := os.Getenv(authn.EnvVars.TokenFile)
+	loggedUserToken = authn.LoadToken(tokenFile)
 
 	clusterURL = determineClusterURL(cfg)
 	defaultHTTPClient = cmn.NewClient(cmn.TransportArgs{

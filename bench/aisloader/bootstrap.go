@@ -56,6 +56,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
@@ -109,11 +110,23 @@ type (
 		loaderCnt         uint64
 		maxputs           uint64
 		putShards         uint64
+		statsdPort        int
+		statsShowInterval int
+		putPct            int // % of puts, rest are gets
+		numWorkers        int
+		batchSize         int // batch is used for bootstraping(list) and delete
+		loaderIDHashLen   uint
+		numEpochs         uint
+
+		duration cos.DurationExt // stop after the run for at least that much
+
+		bp api.BaseParams
+
+		bck    cmn.Bck
+		bProps cmn.BucketProps
 
 		loaderID             string // used with multiple loader instances generating objects in parallel
 		proxyURL             string
-		bp                   api.BaseParams
-		bck                  cmn.Bck
 		readerType           string
 		tmpDir               string // used only when usingFile
 		statsOutput          string
@@ -126,20 +139,14 @@ type (
 		readOffStr           string // read offset
 		readLenStr           string // read length
 		subDir               string
-		duration             cos.DurationExt // stop after the run for at least that much
-		cleanUp              cos.BoolExt
+		tokenFile            string
 
-		bProps cmn.BucketProps
+		etlName     string // name of a ETL to apply to each object. Omitted when etlSpecPath specified.
+		etlSpecPath string // Path to a ETL spec to apply to each object.
 
-		statsdPort        int
-		statsdProbe       bool
-		statsShowInterval int
-		putPct            int // % of puts, rest are gets
-		numWorkers        int
-		batchSize         int // batch is used for bootstraping(list) and delete
-		loaderIDHashLen   uint
-		numEpochs         uint
+		cleanUp cos.BoolExt // cleanup i.e. remove and destroy everything created during bench
 
+		statsdProbe   bool
 		getLoaderID   bool
 		randomObjName bool
 		uniqueGETs    bool
@@ -149,9 +156,6 @@ type (
 		stoppable     bool // true: terminate by Ctrl-C
 		dryRun        bool // true: print configuration and parameters that aisloader will use at runtime
 		traceHTTP     bool // true: trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
-
-		etlName     string // name of a ETL to apply to each object. Omitted when etlSpecPath specified.
-		etlSpecPath string // Path to a ETL spec to apply to each object.
 	}
 
 	// sts records accumulated puts/gets information.
@@ -210,7 +214,9 @@ var (
 	ip          string
 	port        string
 	aisEndpoint string
-	envEndpoint = os.Getenv(cmn.EnvVars.Endpoint)
+	envEndpoint string
+
+	loggedUserToken string
 )
 
 var _version, _build, _buildtime string
@@ -277,6 +283,7 @@ func parseCmdLine() (params, error) {
 		fmt.Sprintf("Type of reader: %s(default) | %s | %s | %s", readers.ReaderTypeSG, readers.ReaderTypeFile, readers.ReaderTypeRand, readers.ReaderTypeTar))
 	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
 	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname")
+	f.StringVar(&p.tokenFile, "tokenfile", "", "authentication token (FQN)") // see also: AIS_AUTHN_TOKEN_FILE
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port")
 	f.BoolVar(&p.statsdProbe, "test-probe StatsD server prior to benchmarks", false, "when enabled probes StatsD server prior to running")
 	f.IntVar(&p.batchSize, "batchsize", 100, "Batch size to list and delete")
@@ -545,6 +552,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	aisEndpoint = "http://" + ip + ":" + port
+	envEndpoint = os.Getenv(cmn.EnvVars.Endpoint)
 	if envEndpoint != "" {
 		aisEndpoint = envEndpoint
 	}
@@ -562,13 +570,10 @@ func parseCmdLine() (params, error) {
 	p.proxyURL = scheme + "://" + address
 
 	transportArgs.UseHTTPS = scheme == "https"
-	// if the primary proxy uses HTTPS, create a secure HTTP client with
-	// disabled certificate check.
 	httpClient = cmn.NewClient(transportArgs)
-	p.bp = api.BaseParams{
-		Client: httpClient,
-		URL:    p.proxyURL,
-	}
+
+	// NOTE: auth token is assigned below when we execute the very first API call
+	p.bp = api.BaseParams{Client: httpClient, URL: p.proxyURL}
 
 	// Don't print arguments when just getting loaderID
 	if !p.getLoaderID {
@@ -619,7 +624,6 @@ func setupBucket(runParams *params) error {
 	if runParams.bck.Provider != apc.ProviderAIS || runParams.getConfig {
 		return nil
 	}
-
 	if runParams.bck.Name == "" {
 		runParams.bck.Name = cos.RandString(8)
 		fmt.Printf("New bucket name %q\n", runParams.bck.Name)
@@ -634,22 +638,18 @@ func setupBucket(runParams *params) error {
 		}
 		runParams.bck = bck
 	}
-
 	exists, err := api.DoesBucketExist(runParams.bp, cmn.QueryBcks(runParams.bck))
 	if err != nil {
-		return fmt.Errorf("failed to get ais bucket lists to check for %s, err = %v", runParams.bck, err)
+		return fmt.Errorf("%s not found: %v", runParams.bck, err)
 	}
-
 	if !exists {
 		if err := api.CreateBucket(runParams.bp, runParams.bck, nil); err != nil {
-			return fmt.Errorf("failed to create ais bucket %s, err = %s", runParams.bck, err)
+			return fmt.Errorf("failed to create %s: %v", runParams.bck, err)
 		}
 	}
-
 	if runParams.bPropsStr == "" {
 		return nil
 	}
-
 	propsToUpdate := cmn.BucketPropsToUpdate{}
 	// update bucket props if bPropsStr is set
 	oldProps, err := api.HeadBucket(runParams.bp, runParams.bck)
@@ -690,11 +690,8 @@ func getIDFromString(val string, hashLen uint) uint64 {
 	return hash
 }
 
-func Start(version, build, buildtime string) error {
-	var (
-		wg  = &sync.WaitGroup{}
-		err error
-	)
+func Start(version, build, buildtime string) (err error) {
+	wg := &sync.WaitGroup{}
 	_version, _build, _buildtime = version, build, buildtime
 	runParams, err = parseCmdLine()
 	if err != nil {
@@ -729,6 +726,8 @@ func Start(version, build, buildtime string) error {
 		}
 	}
 
+	loggedUserToken = authn.LoadToken(runParams.tokenFile)
+	runParams.bp.Token = loggedUserToken
 	if err := setupBucket(&runParams); err != nil {
 		return err
 	}
@@ -941,14 +940,10 @@ func newPutWorkOrder() (*workOrder, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var size int64
-	if runParams.maxSize == runParams.minSize {
-		size = runParams.minSize
-	} else {
+	size := runParams.minSize
+	if runParams.maxSize != runParams.minSize {
 		size = rnd.Int63n(runParams.maxSize-runParams.minSize) + runParams.minSize
 	}
-
 	putPending++
 	return &workOrder{
 		proxyURL:  runParams.proxyURL,
