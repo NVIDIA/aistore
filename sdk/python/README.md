@@ -2,10 +2,10 @@
 
 AIS Python SDK provides a (growing) set of client-side APIs to access and utilize AIS clusters.
 
-The project is, essentially, a Python port of the [AIS Go APIs](/api), with additional objectives that include:
+The project is, essentially, a Python port of the [AIS Go APIs](https://aiatscale.org/docs/http-api), with additional objectives that include:
 
 * utmost convenience for Python developers;
-* minimal, or no changes whatsoever, to apps that already use [S3](/docs/s3compat.md).
+* minimal, or no changes whatsoever, to apps that already use [S3](https://aiatscale.org/docs/s3compat).
 
 Note that only Python 3.x (version 3.6 or later) is currently supported.
 
@@ -48,15 +48,15 @@ Names of the most common operations are also identical, e.g.:
 
 and so on.
 
-For more information and usage examples, please see [SDK tutorial (Jupyter Notebook)](/sdk/python/sdk-tutorial.ipynb).
+For more information and usage examples, please see [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/master/sdk/python/sdk-tutorial.ipynb).
 
-## AIS supports multiple [backends](/docs/providers.md)
+## AIS supports multiple [backends](https://aiatscale.org/docs/providers)
 
 AWS works only with one kind of buckets - AWS buckets. AWS SDK functions accept only the bucket name, e.g. `create_bucket(Bucket="bck")`.
 
-AIS, on the other hand, supports a number of different [backend providers](/docs/providers.md) or, simply, backends.
+AIS, on the other hand, supports a number of different [backend providers](https://aiatscale.org/docs/providers) or, simply, backends.
 
-> For exact definitions and related capabilities, please see [terminology](/docs/overview.md#terminology)
+> For exact definitions and related capabilities, please see [terminology](https://aiatscale.org//docs/overview#terminology)
 
 And so, for AIS a bucket name, strictly speaking, does not define the bucket.
 
