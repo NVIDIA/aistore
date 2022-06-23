@@ -73,7 +73,7 @@ var (
 				Name:      subcmdAuthUser,
 				Usage:     "show user list and details",
 				Flags:     authFlags[flagsAuthUserShow],
-				ArgsUsage: showUserListArgument,
+				ArgsUsage: showAuthUserListArgument,
 				Action:    wrapAuthN(showAuthUserHandler),
 			},
 			{
@@ -99,14 +99,14 @@ var (
 					{
 						Name:         subcmdAuthUser,
 						Usage:        "add a new user",
-						ArgsUsage:    addUserArgument,
+						ArgsUsage:    addAuthUserArgument,
 						Flags:        authFlags[subcmdAuthUser],
-						Action:       wrapAuthN(addUserHandler),
+						Action:       wrapAuthN(addAuthUserHandler),
 						BashComplete: oneRoleCompletions,
 					},
 					{
 						Name:      subcmdAuthCluster,
-						Usage:     "add AIS cluster (to authenticate access)",
+						Usage:     "add AIS cluster (to authenticate access to buckets and to the cluster)",
 						ArgsUsage: addAuthClusterArgument,
 						Action:    wrapAuthN(addAuthClusterHandler),
 					},
@@ -128,7 +128,7 @@ var (
 					{
 						Name:         subcmdAuthUser,
 						Usage:        "remove an existing user",
-						ArgsUsage:    deleteUserArgument,
+						ArgsUsage:    deleteAuthUserArgument,
 						Action:       wrapAuthN(deleteUserHandler),
 						BashComplete: oneUserCompletions,
 					},
@@ -142,7 +142,7 @@ var (
 					{
 						Name:         subcmdAuthRole,
 						Usage:        "remove an existing role",
-						ArgsUsage:    deleteRoleArgument,
+						ArgsUsage:    deleteAuthRoleArgument,
 						Action:       wrapAuthN(deleteRoleHandler),
 						BashComplete: oneRoleCompletions,
 					},
@@ -150,7 +150,7 @@ var (
 						Name:      subcmdAuthToken,
 						Usage:     "revoke AuthN token",
 						Flags:     authFlags[flagsAuthRevokeToken],
-						ArgsUsage: deleteTokenArgument,
+						ArgsUsage: deleteAuthTokenArgument,
 						Action:    wrapAuthN(revokeTokenHandler),
 					},
 				},
@@ -158,7 +158,7 @@ var (
 			// set
 			{
 				Name:  subcmdAuthSet,
-				Usage: "update AuthN configuration and entities: users, roles, AIS clusters",
+				Usage: "update AuthN configuration and its entities: users, roles, and AIS clusters",
 				Subcommands: []cli.Command{
 					{
 						Name:         subcmdAuthConfig,
@@ -176,10 +176,18 @@ var (
 					{
 						Name:         subcmdAuthUser,
 						Usage:        "update an existing user",
-						ArgsUsage:    addUserArgument,
+						ArgsUsage:    addAuthUserArgument,
 						Flags:        authFlags[subcmdAuthUser],
-						Action:       wrapAuthN(updateUserHandler),
+						Action:       wrapAuthN(updateAuthUserHandler),
 						BashComplete: oneUserCompletionsWithRoles,
+					},
+					{
+						Name:         subcmdAuthRole,
+						Usage:        "update an existing role for all users that have it",
+						ArgsUsage:    addAuthRoleArgument,
+						Flags:        authFlags[subcmdAuthRole],
+						Action:       wrapAuthN(updateAuthRoleHandler),
+						BashComplete: roleCluPermCompletions,
 					},
 				},
 			},
@@ -251,12 +259,12 @@ func cliAuthnUserPassword(c *cli.Context, omitEmpty bool) string {
 	return pass
 }
 
-func updateUserHandler(c *cli.Context) (err error) {
+func updateAuthUserHandler(c *cli.Context) (err error) {
 	user := userFromArgsOrStdin(c, true)
-	return api.UpdateUser(authParams, user)
+	return api.UpdateUserAuthN(authParams, user)
 }
 
-func addUserHandler(c *cli.Context) (err error) {
+func addAuthUserHandler(c *cli.Context) (err error) {
 	user := userFromArgsOrStdin(c, false /*omitEmpty*/)
 	list, err := api.GetAllUsersAuthN(authParams)
 	if err != nil {
@@ -268,7 +276,7 @@ func addUserHandler(c *cli.Context) (err error) {
 		}
 	}
 	fmt.Fprintln(c.App.Writer)
-	return api.AddUser(authParams, user)
+	return api.AddUserAuthN(authParams, user)
 }
 
 func deleteUserHandler(c *cli.Context) (err error) {
@@ -276,7 +284,7 @@ func deleteUserHandler(c *cli.Context) (err error) {
 	if userName == "" {
 		return missingArgumentsError(c, "user name")
 	}
-	return api.DeleteUser(authParams, userName)
+	return api.DeleteUserAuthN(authParams, userName)
 }
 
 func deleteRoleHandler(c *cli.Context) (err error) {
@@ -297,7 +305,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, expireFlag) {
 		expireIn = api.Duration(parseDurationFlag(c, expireFlag))
 	}
-	token, err := api.LoginUser(authParams, name, password, expireIn)
+	token, err := api.LoginUserAuthN(authParams, name, password, expireIn)
 	if err != nil {
 		return err
 	}
@@ -484,23 +492,30 @@ func showAuthUserHandler(c *cli.Context) (err error) {
 	return templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl, false)
 }
 
-func addAuthRoleHandler(c *cli.Context) (err error) {
-	args := c.Args()
-	role := args.First()
-	if role == "" {
-		return missingArgumentsError(c, "role name")
+func addAuthRoleHandler(c *cli.Context) error {
+	rInfo, err := addOrUpdateRole(c)
+	if err != nil {
+		return err
 	}
-	if c.NArg() < 2 {
-		return missingArgumentsError(c, "cluster ID")
-	} else if c.NArg() < 3 {
-		return missingArgumentsError(c, "permissions")
-	}
+	return api.AddRoleAuthN(authParams, rInfo)
+}
 
-	cluster := args.Get(1)
+func updateAuthRoleHandler(c *cli.Context) error {
+	rInfo, err := addOrUpdateRole(c)
+	if err != nil {
+		return err
+	}
+	return api.UpdateRoleAuthN(authParams, rInfo)
+}
+
+func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
+	args := c.Args()
+	cluster := args.Get(0)
+	role := args.Get(1)
 	alias := ""
 	cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
 	if err != nil {
-		return
+		return nil, err
 	}
 	found := false
 	for _, clu := range cluList {
@@ -516,18 +531,17 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 		}
 	}
 	if !found {
-		return fmt.Errorf("cluster %q not found", cluster)
+		return nil, fmt.Errorf("cluster %q not found", cluster)
 	}
 
 	perms := apc.AccessNone
 	for i := 2; i < c.NArg(); i++ {
 		p, err := apc.StrToAccess(args.Get(i))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		perms |= p
 	}
-
 	cluPerms := []*authn.Cluster{
 		{
 			ID:     cluster,
@@ -535,12 +549,11 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 			Access: perms,
 		},
 	}
-	rInfo := &authn.Role{
+	return &authn.Role{
 		ID:       role,
 		Desc:     parseStrFlag(c, descRoleFlag),
 		Clusters: cluPerms,
-	}
-	return api.AddRoleAuthN(authParams, rInfo)
+	}, nil
 }
 
 func userFromArgsOrStdin(c *cli.Context, omitEmpty bool) *authn.User {
@@ -589,11 +602,11 @@ func revokeTokenHandler(c *cli.Context) (err error) {
 	if token == "" {
 		return missingArgumentsError(c, "token or token filename")
 	}
-	return api.RevokeToken(authParams, token)
+	return api.RevokeTokenAuthN(authParams, token)
 }
 
 func showAuthConfigHandler(c *cli.Context) (err error) {
-	conf, err := api.GetAuthNConfig(authParams)
+	conf, err := api.GetConfigAuthN(authParams)
 	if err != nil {
 		return err
 	}
@@ -636,5 +649,5 @@ func setAuthConfigHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	return api.SetAuthNConfig(authParams, conf)
+	return api.SetConfigAuthN(authParams, conf)
 }

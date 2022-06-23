@@ -247,17 +247,18 @@ const (
 	listCommandArgument = "[PROVIDER://][BUCKET_NAME]"
 
 	// Auth
-	addUserArgument           = "USER_NAME [ROLE...]"
-	deleteUserArgument        = "USER_NAME"
-	userLoginArgument         = "USER_NAME"
+	userLoginArgument = "USER_NAME"
+
+	addAuthUserArgument       = "USER_NAME [ROLE...]"
+	deleteAuthUserArgument    = "USER_NAME"
 	addAuthClusterArgument    = "CLUSTER_ID [ALIAS] URL [URL...]"
 	deleteAuthClusterArgument = "CLUSTER_ID"
 	showAuthClusterArgument   = "[CLUSTER_ID]"
 	showAuthRoleArgument      = "[ROLE]"
-	showUserListArgument      = "[USER_NAME]"
+	showAuthUserListArgument  = "[USER_NAME]"
 	addAuthRoleArgument       = "ROLE [CLUSTER_ID PERMISSION ...]"
-	deleteRoleArgument        = "ROLE"
-	deleteTokenArgument       = "TOKEN | TOKEN_FILE"
+	deleteAuthRoleArgument    = "ROLE"
+	deleteAuthTokenArgument   = "TOKEN | TOKEN_FILE"
 
 	// Alias
 	aliasCmdArgument    = "AIS_COMMAND"

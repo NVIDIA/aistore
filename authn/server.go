@@ -189,7 +189,7 @@ func (a *Server) httpUserPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("PUT user %s", userID)
+		glog.Infof("PUT user %q", userID)
 	}
 	if err := a.users.updateUser(userID, updateReq); err != nil {
 		cmn.WriteErr(w, r, err)
@@ -211,7 +211,7 @@ func (a *Server) userAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("Add user %s", info.ID)
+		glog.Infof("Add user %q", info.ID)
 	}
 }
 
@@ -303,7 +303,7 @@ func (a *Server) userLogin(w http.ResponseWriter, r *http.Request) {
 	userID := apiItems[0]
 	pass := msg.Password
 	if glog.V(4) {
-		glog.Infof("User: %s, pass: %s\n", userID, pass)
+		glog.Infof("Login user %q", userID)
 	}
 
 	tokenString, err := a.users.issueToken(userID, pass, msg.ExpiresIn)
@@ -526,9 +526,8 @@ func (a *Server) httpRolePut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
-
 	if glog.V(4) {
-		glog.Infof("Update role %s\n", role)
+		glog.Infof("PUT role %q\n", role)
 	}
 	if err := a.users.updateRole(role, updateReq); err != nil {
 		if cmn.IsErrNotFound(err) {

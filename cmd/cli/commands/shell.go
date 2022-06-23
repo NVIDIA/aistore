@@ -552,10 +552,6 @@ func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 }
 
 func roleCluPermCompletions(c *cli.Context) {
-	if c.NArg() == 0 {
-		return
-	}
-
 	cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
 	if err != nil {
 		return

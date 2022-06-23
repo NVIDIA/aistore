@@ -22,7 +22,7 @@ type AuthnSpec struct {
 	AdminPassword string
 }
 
-func AddUser(baseParams BaseParams, newUser *authn.User) error {
+func AddUserAuthN(baseParams BaseParams, newUser *authn.User) error {
 	msg, err := jsoniter.Marshal(newUser)
 	if err != nil {
 		return err
@@ -39,7 +39,7 @@ func AddUser(baseParams BaseParams, newUser *authn.User) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UpdateUser(baseParams BaseParams, user *authn.User) error {
+func UpdateUserAuthN(baseParams BaseParams, user *authn.User) error {
 	msg := cos.MustMarshal(user)
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
@@ -53,7 +53,7 @@ func UpdateUser(baseParams BaseParams, user *authn.User) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func DeleteUser(baseParams BaseParams, userID string) error {
+func DeleteUserAuthN(baseParams BaseParams, userID string) error {
 	baseParams.Method = http.MethodDelete
 	reqParams := allocRp()
 	defer freeRp(reqParams)
@@ -67,7 +67,7 @@ func DeleteUser(baseParams BaseParams, userID string) error {
 // Authorize a user and return a user token in case of success.
 // The token expires in `expire` time. If `expire` is `nil` the expiration
 // time is set by AuthN (default AuthN expiration time is 24 hours)
-func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration) (token *authn.TokenMsg, err error) {
+func LoginUserAuthN(baseParams BaseParams, userID, pass string, expire *time.Duration) (token *authn.TokenMsg, err error) {
 	baseParams.Method = http.MethodPost
 	rec := authn.LoginMsg{Password: pass, ExpiresIn: expire}
 	reqParams := allocRp()
@@ -237,6 +237,20 @@ func AddRoleAuthN(baseParams BaseParams, roleSpec *authn.Role) error {
 	return reqParams.DoHTTPRequest()
 }
 
+func UpdateRoleAuthN(baseParams BaseParams, roleSpec *authn.Role) error {
+	msg := cos.MustMarshal(roleSpec)
+	baseParams.Method = http.MethodPut
+	reqParams := allocRp()
+	defer freeRp(reqParams)
+	{
+		reqParams.BaseParams = baseParams
+		reqParams.Path = apc.URLPathRoles.Join(roleSpec.ID)
+		reqParams.Body = msg
+		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+	}
+	return reqParams.DoHTTPRequest()
+}
+
 func DeleteRoleAuthN(baseParams BaseParams, role string) error {
 	baseParams.Method = http.MethodDelete
 	reqParams := allocRp()
@@ -248,7 +262,7 @@ func DeleteRoleAuthN(baseParams BaseParams, role string) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func RevokeToken(baseParams BaseParams, token string) error {
+func RevokeTokenAuthN(baseParams BaseParams, token string) error {
 	baseParams.Method = http.MethodDelete
 	msg := &authn.TokenMsg{Token: token}
 	reqParams := allocRp()
@@ -262,7 +276,7 @@ func RevokeToken(baseParams BaseParams, token string) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func GetAuthNConfig(baseParams BaseParams) (*authn.Config, error) {
+func GetConfigAuthN(baseParams BaseParams) (*authn.Config, error) {
 	conf := &authn.Config{}
 	baseParams.Method = http.MethodGet
 	reqParams := allocRp()
@@ -275,7 +289,7 @@ func GetAuthNConfig(baseParams BaseParams) (*authn.Config, error) {
 	return conf, err
 }
 
-func SetAuthNConfig(baseParams BaseParams, conf *authn.ConfigToUpdate) error {
+func SetConfigAuthN(baseParams BaseParams, conf *authn.ConfigToUpdate) error {
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
 	defer freeRp(reqParams)
