@@ -95,6 +95,25 @@ var (
 	ErrTokenExpired  = errors.New("token expired")
 )
 
+///////////
+// Token //
+///////////
+
+func (tk *Token) String() string {
+	return fmt.Sprintf("user %s, %s", tk.UserID, expiresIn(tk.Expires))
+}
+
+func expiresIn(tm time.Time) string {
+	now := time.Now()
+	if !now.Before(tm) {
+		return "TOKEN EXPIRED"
+	}
+	// round up
+	d := tm.Sub(now) / time.Second
+	d *= time.Second
+	return "token expires in " + d.String()
+}
+
 func (tk *Token) aclForCluster(clusterID string) (perms apc.AccessAttrs, ok bool) {
 	for _, pm := range tk.Clusters {
 		if pm.ID == clusterID {
@@ -144,7 +163,7 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 			return errors.New("Requested cluster permissions without cluster ID")
 		}
 		if !cluACL.Has(cluPerms) {
-			return ErrNoPermissions
+			return fmt.Errorf("%v: [cluster %s, %s, access(%s)]", ErrNoPermissions, clusterID, tk, cluACL.Describe())
 		}
 	}
 	if objPerms == 0 {
@@ -160,13 +179,17 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 		if bckACL.Has(objPerms) {
 			return nil
 		}
-		return ErrNoPermissions
+		return fmt.Errorf("%v: [%s, bucket %s, access(%s)]", ErrNoPermissions, tk, bck.String(), bckACL.Describe())
 	}
 	if !cluOk || !cluACL.Has(objPerms) {
 		return ErrNoPermissions
 	}
 	return nil
 }
+
+//////////
+// User //
+//////////
 
 func (uInfo *User) IsAdmin() bool {
 	for _, r := range uInfo.Roles {
@@ -176,6 +199,10 @@ func (uInfo *User) IsAdmin() bool {
 	}
 	return false
 }
+
+//
+// utils
+//
 
 func MergeBckACLs(oldACLs, newACLs []*Bucket) []*Bucket {
 	for _, n := range newACLs {

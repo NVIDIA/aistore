@@ -37,7 +37,7 @@ var (
 		subcmdStartXaction: {},
 		subcmdStartDownload: {
 			timeoutFlag,
-			descriptionFlag,
+			descJobFlag,
 			limitConnectionsFlag,
 			objectsListFlag,
 			progressIntervalFlag,
@@ -180,7 +180,7 @@ func isResilverNode(c *cli.Context, xactKind string) (sid string, err error) {
 
 func startDownloadHandler(c *cli.Context) error {
 	var (
-		description      = parseStrFlag(c, descriptionFlag)
+		description      = parseStrFlag(c, descJobFlag)
 		timeout          = parseStrFlag(c, timeoutFlag)
 		objectsListPath  = parseStrFlag(c, objectsListFlag)
 		progressInterval = parseStrFlag(c, progressIntervalFlag)

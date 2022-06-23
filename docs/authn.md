@@ -37,38 +37,57 @@ $ ais bucket create ais://nnn
 $ ais object put README.md ais://nnn
 PUT "README.md" to ais://nnn
 
-# 4. Show users. Add a new user (utilize one of the prebuilt roles shows above)
+4. Create a new role. A named role is, ultimately, a combination of access permissions
+#  and a (user-friendly) description. A given role can be assigned to multiple users.
+$ ais auth add role new-role myclu <TAB-TAB>
+ADMIN                  DESTROY-BUCKET         HEAD-OBJECT            MOVE-OBJECT            ro
+APPEND                 DISCONNECTED-BACKEND   LIST-BUCKETS           PATCH                  rw
+CREATE-BUCKET          GET                    LIST-OBJECTS           PROMOTE                SET-BUCKET-ACL
+DELETE-OBJECT          HEAD-BUCKET            MOVE-BUCKET            PUT                    su
+
+# Notice that <TAB-TAB> can be used to both list existing access permissions
+# and
+# complete those that you started to type.
+$ ais auth add role new-role myclu --desc "this is description" LIST-BUCKETS LIST-OBJECTS GET HEAD-BUCKET HEAD-OBJECT ... <TAB-TAB>
+
+# 5. Show users. Add a new user.
+#    We can always utilize one of the prebuilt roles, e.g. `Guest-myclu` for read-only access.
+#    But in this example we will use the newly added `new-role`:
 $ ais auth show user
 NAME    ROLES
 admin   Admin
 
-$ ais auth add user user-ro -p 12345 Guest-myclu
+$ ais auth add user new-user -p 12345 new-role
 $ ais auth show user
 NAME    ROLES
 admin   Admin
-user-ro Guest-myclu
+new-user Guest-myclu
 
 # Not showing here is how to add a new role
 # (that can be further conveniently used to grant subsets of permissions)
 
-# 5. Login as `user-ro` (added above)
-$ ais auth login user-ro -p 12345
-Token(/root/.config/ais/auth.token):
+# 5. Login as `new-user` (added above) and save the token separately as `/tmp/new-user.token`
+#    Note that by default the token for a logged-in user will be saved in the
+#    $HOME/.config/ais directory
+#    (which is always checked if `AIS_AUTHN_TOKEN_FILE` environment is not specified)
+
+$ ais auth login new-user -p 12345 -f /tmp/new-user.token
+Token(/tmp/new-user.token):
 ...
 
-# 6. Perform operations. Note that the `user-ro` has a limited `Guest-myclu` access.
-$ ais ls ais:
+# 6. Perform operations. Note that the `new-user` has a limited `Guest-myclu` access.
+$ AIS_AUTHN_TOKEN_FILE=/tmp/new-user.token ais ls ais:
 AIS Buckets (1)
   ais://nnn
-$ ais ls ais://nnn
+$ AIS_AUTHN_TOKEN_FILE=/tmp/new-user.token ais ls ais://nnn
 NAME             SIZE
 README.md        8.96KiB
 
 # However:
-$ ais bucket create ais://mmm
+$ AIS_AUTHN_TOKEN_FILE=/tmp/new-user.token ais bucket create ais://mmm
 Failed to create "ais://mmm": insufficient permissions
 
-$ ais object put LICENSE ais://nnn
+$ AIS_AUTHN_TOKEN_FILE=/tmp/new-user.token ais object put LICENSE ais://nnn
 Insufficient permissions
 ```
 

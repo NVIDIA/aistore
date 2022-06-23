@@ -350,10 +350,7 @@ var (
 	countFlag = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
 
 	// Download
-	descriptionFlag = cli.StringFlag{
-		Name:  "description,desc",
-		Usage: "description of the job (useful when listing all downloads)",
-	}
+	descJobFlag          = cli.StringFlag{Name: "description,desc", Usage: "job description"}
 	timeoutFlag          = cli.StringFlag{Name: "timeout", Usage: "timeout, e.g. '30m'"}
 	limitConnectionsFlag = cli.IntFlag{
 		Name:  "limit-connections,conns",
@@ -427,6 +424,9 @@ var (
 	skipVerCksumFlag = cli.BoolFlag{Name: "skip-vc", Usage: "skip loading object metadata (and the associated checksum & version related processing)"}
 
 	supportedCksumFlags = initSupportedCksumFlags()
+
+	// auth
+	descRoleFlag = cli.StringFlag{Name: "description,desc", Usage: "role description"}
 
 	// begin archive
 	listArchFlag             = cli.BoolFlag{Name: "archive", Usage: "list archived content"}

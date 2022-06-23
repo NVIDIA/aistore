@@ -42,7 +42,7 @@ var (
 	authFlags = map[string][]cli.Flag{
 		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag, expireFlag},
 		subcmdAuthUser:       {passwordFlag},
-		flagsAuthRoleAdd:     {descriptionFlag},
+		flagsAuthRoleAdd:     {descRoleFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
 		flagsAuthUserShow:    {nonverboseFlag},
 		flagsAuthRoleShow:    {nonverboseFlag},
@@ -421,6 +421,7 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, nonverboseFlag) {
 		return templates.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, templates.AuthNRoleTmpl, false)
 	}
+	fmt.Fprintf(c.App.Writer, "%v\n", rInfo.Roles) // DEBUG
 	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, false)
 }
 
@@ -497,7 +498,7 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 	}
 	rInfo := &authn.Role{
 		Name:     role,
-		Desc:     parseStrFlag(c, descriptionFlag),
+		Desc:     parseStrFlag(c, descRoleFlag),
 		Clusters: cluPerms,
 	}
 	return api.AddRoleAuthN(authParams, rInfo)
