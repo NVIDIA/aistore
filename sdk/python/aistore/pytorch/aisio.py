@@ -29,7 +29,7 @@ def _assert_aistore() -> None:
         )
 
 
-@functional_datapipe("list_files_by_ais")
+@functional_datapipe("ais_list_files")
 class AISFileListerIterDataPipe(IterDataPipe[str]):
     """
     Iterable Datapipe that lists files from the AIS backends with the given URL prefixes.
@@ -68,7 +68,7 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
 
 
 # pylint: disable=unused-variable
-@functional_datapipe("load_files_by_ais")
+# @functional_datapipe("ais_load_files")
 class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
     """
     Iterable Datapipe that loads files from the AIS backends with the given

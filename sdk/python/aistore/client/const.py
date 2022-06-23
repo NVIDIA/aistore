@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-22, NVIDIA CORPORATION. All rights reserved.
 #
 
 #pylint: disable=unused-variable
@@ -14,6 +14,7 @@ QParamProvider = "provider"
 QParamWhat = "what"
 QParamKeepBckMD = "keep_md"
 QParamBucketTo = "bck_to"
+QparamPrimaryReadyReb = "prr"
 
 # Bucket providers
 ProviderAIS = "ais"

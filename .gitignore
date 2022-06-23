@@ -88,3 +88,6 @@ bench/aisloader/aisloader.exe
 .netlify/
 _site/
 .sass-cache/
+
+# VSCode
+.vscode

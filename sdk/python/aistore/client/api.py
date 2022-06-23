@@ -21,9 +21,10 @@ from aistore.client.const import (
     QParamWhat,
     QParamKeepBckMD,
     QParamBucketTo,
+    QparamPrimaryReadyReb
 )
-from aistore.client.types import (ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap, XactStatus, HttpError, BucketLister)
-from aistore.client.errors import (InvalidBckProvider, Timeout, ErrBckNotFound, ErrRemoteBckNotFound, AISError)
+from aistore.client.types import (ActionMsg, Bck, BucketList, BucketEntry, ObjStream, Smap, XactStatus, BucketLister)
+from aistore.client.errors import (InvalidBckProvider, Timeout)
 from aistore.client.utils import handle_errors, probing_frequency
 
 T = TypeVar("T")
@@ -53,17 +54,6 @@ class Client:
     def _request_deserialize(self, method: str, path: str, res_model: Type[T], **kwargs) -> T:
         resp = self._request(method, path, **kwargs)
         return parse_raw_as(res_model, resp.text)
-
-    def _raise_error(self, text: str):
-        err = parse_raw_as(HttpError, text)
-        if 400 <= err.status < 500:
-            err = parse_raw_as(HttpError, text)
-            if "does not exist" in err.message:
-                if "cloud bucket" in err.message:
-                    raise ErrRemoteBckNotFound(err.status, err.message)
-                if "bucket" in err.message:
-                    raise ErrBckNotFound(err.status, err.message)
-        raise AISError(err.status, err.message)
 
     def _request(self, method: str, path: str, **kwargs) -> requests.Response:
         url = f"{ self.base_url }/{ path.lstrip('/') }"
@@ -100,17 +90,17 @@ class Client:
             params=params,
         )
 
-    def health(self) -> bool:
+    def is_aistore_running(self) -> bool:
         """
         Returns True if cluster is running and ready. Returns False if cluster is still setting up.
         """
+
+        # compare with AIS Go API (api/cluster.go) for additional supported options
+        params = {QparamPrimaryReadyReb: "true"}
         try:
-            resp = self._request(
-                HTTP_METHOD_GET,
-                path="health",
-            )
-            return resp.status_code == requests.codes.ok
-        except requests.exceptions.HTTPError:
+            resp = self._request(HTTP_METHOD_GET, path="health", params=params)
+            return resp.ok
+        except Exception:
             return False
 
     def create_bucket(self, bck_name: str):
