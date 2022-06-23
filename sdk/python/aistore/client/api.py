@@ -3,12 +3,10 @@
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
-
 from typing import TypeVar, Type, List, NewType
-from urllib.parse import urljoin
-import time
-
 import requests
+import time
+from urllib.parse import urljoin
 from pydantic.tools import parse_raw_as
 
 from aistore.client.const import (
@@ -101,6 +99,19 @@ class Client:
             json=action,
             params=params,
         )
+
+    def health(self) -> bool:
+        """
+        Returns True if cluster is running and ready. Returns False if cluster is still setting up.
+        """
+        try:
+            resp = self._request(
+                HTTP_METHOD_GET,
+                path="health",
+            )
+            return resp.status_code == requests.codes.ok
+        except requests.exceptions.HTTPError:
+            return False
 
     def create_bucket(self, bck_name: str):
         """
