@@ -1,0 +1,17 @@
+// RUN authn
+ais auth login admin -p admin -f /tmp/auth-token.adm // IGNORE
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.adm ais auth add user u1 -p tt // IGNORE
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.adm ais auth add cluster http://localhost:8080 cluster-test // IGNORE
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.adm ais auth add role cluster-test r1 ro // IGNORE
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.adm ais auth set user u1 r1 // IGNORE
+ais auth login u1 -p tt -f /tmp/auth-token.usr // IGNORE
+
+
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.adm ais bucket create ais://$BUCKET_1 // IGNORE
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.usr ais bucket rm ais://$BUCKET_1 // FAIL ermis
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.usr ais bucket create ais://$BUCKET_2 // FAIL ermis
+
+
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.adm ais auth rm user u1 // IGNORE
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.adm ais auth rm role r1 // IGNORE
+AIS_AUTHN_TOKEN_FILE=/tmp/auth-token.adm ais auth rm cluster cluster-test // IGNORE

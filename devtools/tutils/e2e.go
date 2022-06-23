@@ -194,17 +194,30 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			}
 		} else if strings.HasPrefix(scmd, "// RUN") {
 			comment := strings.TrimSpace(strings.TrimPrefix(scmd, "// RUN"))
-			cos.Assert(comment == "local-deployment")
 
-			// Skip running test if requires local deployment and the cluster
-			// is not in testing env.
-			config, err := getClusterConfig()
-			cos.AssertNoErr(err)
-			if !config.TestingEnv() {
-				return
+			switch comment {
+			case "local-deployment":
+				// Skip running test if requires local deployment and the cluster
+				// is not in testing env.
+				config, err := getClusterConfig()
+				cos.AssertNoErr(err)
+				if !config.TestingEnv() {
+					ginkgo.Skip("requires local deployment")
+					return
+				}
+
+				continue
+			case "authn":
+				// Skip running test if requires AuthN server running and the
+				// AuthN server URL is not set.
+				if authURL := os.Getenv("AIS_AUTHN_URL"); authURL == "" {
+					ginkgo.Skip("requires AuthN server running")
+					return
+				}
+				continue
+			default:
+				cos.AssertMsg(false, "invalid run mode: "+comment)
 			}
-
-			continue
 		} else if strings.HasPrefix(scmd, "// SKIP") {
 			message := strings.TrimSpace(strings.TrimPrefix(scmd, "// SKIP"))
 			message = strings.Trim(message, `"`)
