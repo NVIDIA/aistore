@@ -221,7 +221,7 @@ const (
 
 	AuthNRoleTmpl = "ROLE\tDESCRIPTION\n" +
 		"{{ range $role := . }}" +
-		"{{ $role.Name }}\t{{ $role.Desc }}\n" +
+		"{{ $role.ID }}\t{{ $role.Desc }}\n" +
 		"{{end}}"
 
 	AuthNUserTmpl = "NAME\tROLES\n" +
@@ -242,7 +242,7 @@ const (
 		"{{ $bck }}\t{{ FormatACL $bck.Access }}\n" +
 		"{{end}}{{end}}"
 
-	AuthNRoleVerboseTmpl = "Role\t{{ .Name }}\n" +
+	AuthNRoleVerboseTmpl = "Role\t{{ .ID }}\n" +
 		"Description\t{{ .Desc }}\n" +
 		"{{ if ne (len .Roles) 0 }}" +
 		"Roles\t{{ JoinList .Roles }}\n" +

@@ -39,14 +39,14 @@ func AddUser(baseParams BaseParams, newUser *authn.User) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UpdateUser(baseParams BaseParams, newUser *authn.User) error {
-	msg := cos.MustMarshal(newUser)
+func UpdateUser(baseParams BaseParams, user *authn.User) error {
+	msg := cos.MustMarshal(user)
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
 	defer freeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
-		reqParams.Path = apc.URLPathUsers.Join(newUser.ID)
+		reqParams.Path = apc.URLPathUsers.Join(user.ID)
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
@@ -168,7 +168,7 @@ func GetRoleAuthN(baseParams BaseParams, roleID string) (*authn.Role, error) {
 	return rInfo, err
 }
 
-func GetRolesAuthN(baseParams BaseParams) ([]*authn.Role, error) {
+func GetAllRolesAuthN(baseParams BaseParams) ([]*authn.Role, error) {
 	baseParams.Method = http.MethodGet
 	path := apc.URLPathRoles.S
 	roles := make([]*authn.Role, 0)
@@ -180,12 +180,12 @@ func GetRolesAuthN(baseParams BaseParams) ([]*authn.Role, error) {
 	}
 	err := reqParams.DoHTTPReqResp(&roles)
 
-	less := func(i, j int) bool { return roles[i].Name < roles[j].Name }
+	less := func(i, j int) bool { return roles[i].ID < roles[j].ID }
 	sort.Slice(roles, less)
 	return roles, err
 }
 
-func GetUsersAuthN(baseParams BaseParams) ([]*authn.User, error) {
+func GetAllUsersAuthN(baseParams BaseParams) ([]*authn.User, error) {
 	baseParams.Method = http.MethodGet
 	users := make(map[string]*authn.User, 4)
 	reqParams := allocRp()

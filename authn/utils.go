@@ -16,13 +16,6 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-const (
-	AdminRole        = "Admin"
-	ClusterOwnerRole = "ClusterOwner"
-	BucketOwnerRole  = "BucketOwner"
-	GuestRole        = "Guest"
-)
-
 type (
 	// A registered user
 	User struct {
@@ -45,7 +38,7 @@ type (
 		Access apc.AccessAttrs `json:"perm,string"`
 	}
 	Role struct {
-		Name     string     `json:"name"`
+		ID       string     `json:"name"`
 		Desc     string     `json:"desc"`
 		Roles    []string   `json:"roles"`
 		Clusters []*Cluster `json:"clusters"`

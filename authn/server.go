@@ -188,9 +188,8 @@ func (a *Server) httpUserPut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
-
 	if glog.V(4) {
-		glog.Infof("Received credentials for %s\n", userID)
+		glog.Infof("PUT user %s", userID)
 	}
 	if err := a.users.updateUser(userID, updateReq); err != nil {
 		cmn.WriteErr(w, r, err)
@@ -212,7 +211,7 @@ func (a *Server) userAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("Added a user %s\n", info.ID)
+		glog.Infof("Add user %s", info.ID)
 	}
 }
 

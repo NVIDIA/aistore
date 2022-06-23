@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"golang.org/x/term"
@@ -44,8 +45,8 @@ var (
 		subcmdAuthUser:       {passwordFlag},
 		flagsAuthRoleAdd:     {descRoleFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
-		flagsAuthUserShow:    {nonverboseFlag},
-		flagsAuthRoleShow:    {nonverboseFlag},
+		flagsAuthUserShow:    {nonverboseFlag, verboseFlag},
+		flagsAuthRoleShow:    {nonverboseFlag, verboseFlag},
 		flagsAuthConfShow:    {jsonFlag},
 	}
 
@@ -56,13 +57,13 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:      subcmdAuthCluster,
-				Usage:     "show registered clusters",
+				Usage:     "show AIS clusters managed by this AuthN instance",
 				ArgsUsage: showAuthClusterArgument,
 				Action:    wrapAuthN(showAuthClusterHandler),
 			},
 			{
 				Name:         subcmdAuthRole,
-				Usage:        "show existing user roles",
+				Usage:        "show existing AuthN roles",
 				ArgsUsage:    showAuthRoleArgument,
 				Flags:        authFlags[flagsAuthRoleShow],
 				Action:       wrapAuthN(showAuthRoleHandler),
@@ -70,7 +71,7 @@ var (
 			},
 			{
 				Name:      subcmdAuthUser,
-				Usage:     "show user list or user details",
+				Usage:     "show user list and details",
 				Flags:     authFlags[flagsAuthUserShow],
 				ArgsUsage: showUserListArgument,
 				Action:    wrapAuthN(showAuthUserHandler),
@@ -86,12 +87,14 @@ var (
 
 	authCmd = cli.Command{
 		Name:  commandAuth,
-		Usage: "add/remove/show users, manage user roles, manage access to remote clusters",
+		Usage: "add/remove/show users, manage user roles, manage access to AIS clusters",
 		Subcommands: []cli.Command{
+			// show
 			authCmdShow,
+			// add
 			{
 				Name:  subcmdAuthAdd,
-				Usage: "add entity to auth",
+				Usage: "add AuthN entity: user, role, AIS cluster",
 				Subcommands: []cli.Command{
 					{
 						Name:         subcmdAuthUser,
@@ -99,11 +102,11 @@ var (
 						ArgsUsage:    addUserArgument,
 						Flags:        authFlags[subcmdAuthUser],
 						Action:       wrapAuthN(addUserHandler),
-						BashComplete: multiRoleCompletions,
+						BashComplete: oneRoleCompletions,
 					},
 					{
 						Name:      subcmdAuthCluster,
-						Usage:     "register a new cluster",
+						Usage:     "add AIS cluster (to authenticate access)",
 						ArgsUsage: addAuthClusterArgument,
 						Action:    wrapAuthN(addAuthClusterHandler),
 					},
@@ -117,9 +120,10 @@ var (
 					},
 				},
 			},
+			// rm
 			{
 				Name:  subcmdAuthRemove,
-				Usage: "remove entity from auth",
+				Usage: "remove an entity from AuthN",
 				Subcommands: []cli.Command{
 					{
 						Name:         subcmdAuthUser,
@@ -130,7 +134,7 @@ var (
 					},
 					{
 						Name:         subcmdAuthCluster,
-						Usage:        "unregister a cluster",
+						Usage:        "remove AIS cluster",
 						ArgsUsage:    deleteAuthClusterArgument,
 						Action:       wrapAuthN(deleteAuthClusterHandler),
 						BashComplete: oneClusterCompletions,
@@ -144,22 +148,30 @@ var (
 					},
 					{
 						Name:      subcmdAuthToken,
-						Usage:     "revoke an authorization token",
+						Usage:     "revoke AuthN token",
 						Flags:     authFlags[flagsAuthRevokeToken],
 						ArgsUsage: deleteTokenArgument,
 						Action:    wrapAuthN(revokeTokenHandler),
 					},
 				},
 			},
+			// set
 			{
-				Name:  subcmdAuthUpdate,
-				Usage: "update users and cluster configurations",
+				Name:  subcmdAuthSet,
+				Usage: "update AuthN configuration and entities: users, roles, AIS clusters",
 				Subcommands: []cli.Command{
 					{
-						Name:      subcmdAuthCluster,
-						Usage:     "update registered cluster configuration",
-						ArgsUsage: addAuthClusterArgument,
-						Action:    wrapAuthN(updateAuthClusterHandler),
+						Name:         subcmdAuthConfig,
+						Usage:        "update AuthN server configuration",
+						Action:       wrapAuthN(setAuthConfigHandler),
+						BashComplete: suggestUpdatableAuthNConfig,
+					},
+					{
+						Name:         subcmdAuthCluster,
+						Usage:        "update AIS cluster configuration (the cluster must be previously added to AuthN)",
+						ArgsUsage:    addAuthClusterArgument,
+						Action:       wrapAuthN(updateAuthClusterHandler),
+						BashComplete: oneClusterCompletions,
 					},
 					{
 						Name:         subcmdAuthUser,
@@ -167,13 +179,14 @@ var (
 						ArgsUsage:    addUserArgument,
 						Flags:        authFlags[subcmdAuthUser],
 						Action:       wrapAuthN(updateUserHandler),
-						BashComplete: multiRoleCompletions,
+						BashComplete: oneUserCompletionsWithRoles,
 					},
 				},
 			},
+			// login, logout
 			{
 				Name:      subcmdAuthLogin,
-				Usage:     "log in with existing user credentials",
+				Usage:     "log in with existing user ID and password",
 				Flags:     authFlags[flagsAuthUserLogin],
 				ArgsUsage: userLoginArgument,
 				Action:    wrapAuthN(loginUserHandler),
@@ -182,18 +195,6 @@ var (
 				Name:   subcmdAuthLogout,
 				Usage:  "log out",
 				Action: wrapAuthN(logoutUserHandler),
-			},
-			{
-				Name:  subcmdAuthSet,
-				Usage: "set entity properties",
-				Subcommands: []cli.Command{
-					{
-						Name:         subcmdAuthConfig,
-						Usage:        "set AuthN server configuration",
-						Action:       wrapAuthN(setAuthConfigHandler),
-						BashComplete: suggestUpdatableAuthNConfig,
-					},
-				},
 			},
 		},
 	}
@@ -251,12 +252,22 @@ func cliAuthnUserPassword(c *cli.Context, omitEmpty bool) string {
 }
 
 func updateUserHandler(c *cli.Context) (err error) {
-	user := parseAuthUser(c, true)
+	user := userFromArgsOrStdin(c, true)
 	return api.UpdateUser(authParams, user)
 }
 
 func addUserHandler(c *cli.Context) (err error) {
-	user := parseAuthUser(c, false)
+	user := userFromArgsOrStdin(c, false /*omitEmpty*/)
+	list, err := api.GetAllUsersAuthN(authParams)
+	if err != nil {
+		return err
+	}
+	for _, uInfo := range list {
+		if uInfo.ID == user.ID {
+			return fmt.Errorf("user %q already exists", uInfo.ID)
+		}
+	}
+	fmt.Fprintln(c.App.Writer)
 	return api.AddUser(authParams, user)
 }
 
@@ -407,38 +418,66 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 func showAuthRoleHandler(c *cli.Context) (err error) {
 	roleID := c.Args().First()
 	if roleID == "" {
-		list, err := api.GetRolesAuthN(authParams)
+		list, err := api.GetAllRolesAuthN(authParams)
 		if err != nil {
 			return err
 		}
-
+		// non-verbose is the implicit default when showing all
+		if flagIsSet(c, verboseFlag) {
+			for i, role := range list {
+				rInfo, err := api.GetRoleAuthN(authParams, role.ID)
+				if err != nil {
+					color.New(color.FgRed).Fprintf(c.App.Writer, "%s: %v\n", role.ID, err)
+				} else {
+					if i > 0 {
+						fmt.Fprintln(c.App.Writer)
+					}
+					templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, false)
+				}
+			}
+			return nil
+		}
 		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl, false)
 	}
 	rInfo, err := api.GetRoleAuthN(authParams, roleID)
 	if err != nil {
 		return err
 	}
+	// verbose is the implicit default when showing one
 	if flagIsSet(c, nonverboseFlag) {
 		return templates.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, templates.AuthNRoleTmpl, false)
 	}
-	fmt.Fprintf(c.App.Writer, "%v\n", rInfo.Roles) // DEBUG
 	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, false)
 }
 
 func showAuthUserHandler(c *cli.Context) (err error) {
 	userID := c.Args().First()
 	if userID == "" {
-		list, err := api.GetUsersAuthN(authParams)
+		list, err := api.GetAllUsersAuthN(authParams)
 		if err != nil {
 			return err
 		}
-
+		// non-verbose is the implicit default when showing all
+		if flagIsSet(c, verboseFlag) {
+			for i, user := range list {
+				if uInfo, err := api.GetUserAuthN(authParams, user.ID); err != nil {
+					color.New(color.FgRed).Fprintf(c.App.Writer, "%s: %v\n", user.ID, err)
+				} else {
+					if i > 0 {
+						fmt.Fprintln(c.App.Writer)
+					}
+					templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl, false)
+				}
+			}
+			return nil
+		}
 		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl, false)
 	}
 	uInfo, err := api.GetUserAuthN(authParams, userID)
 	if err != nil {
 		return err
 	}
+	// verbose is the implicit default when showing one
 	if flagIsSet(c, nonverboseFlag) {
 		return templates.DisplayOutput([]*authn.User{uInfo}, c.App.Writer, templates.AuthNUserTmpl, false)
 	}
@@ -497,23 +536,20 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 		},
 	}
 	rInfo := &authn.Role{
-		Name:     role,
+		ID:       role,
 		Desc:     parseStrFlag(c, descRoleFlag),
 		Clusters: cluPerms,
 	}
 	return api.AddRoleAuthN(authParams, rInfo)
 }
 
-func parseAuthUser(c *cli.Context, omitEmpty bool) *authn.User {
-	username := cliAuthnUserName(c)
-	userpass := cliAuthnUserPassword(c, omitEmpty)
-	roles := c.Args().Tail()
-	user := &authn.User{
-		ID:       username,
-		Password: userpass,
-		Roles:    roles,
-	}
-	return user
+func userFromArgsOrStdin(c *cli.Context, omitEmpty bool) *authn.User {
+	var (
+		username = cliAuthnUserName(c)
+		userpass = cliAuthnUserPassword(c, omitEmpty)
+		roles    = c.Args().Tail()
+	)
+	return &authn.User{ID: username, Password: userpass, Roles: roles}
 }
 
 func parseClusterSpecs(c *cli.Context) (cluSpec authn.Cluster, err error) {

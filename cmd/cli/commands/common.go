@@ -159,13 +159,12 @@ const (
 	subcmdAuthAdd     = "add"
 	subcmdAuthShow    = "show"
 	subcmdAuthSet     = commandSet
-	subcmdAuthUpdate  = "update"
 	subcmdAuthRemove  = commandRemove
 	subcmdAuthLogin   = "login"
 	subcmdAuthLogout  = "logout"
 	subcmdAuthUser    = "user"
 	subcmdAuthRole    = "role"
-	subcmdAuthCluster = "cluster"
+	subcmdAuthCluster = subcmdCluster
 	subcmdAuthToken   = "token"
 	subcmdAuthConfig  = subcmdConfig
 

@@ -22,20 +22,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	usersCollection    = "user"
-	rolesCollection    = "role"
-	revokedCollection  = "revoked"
-	clustersCollection = "cluster"
-
-	adminID   = "admin"
-	adminPass = "admin"
-
-	proxyTimeout     = 2 * time.Minute           // maximum time for syncing Authn data with primary proxy
-	proxyRetryTime   = 5 * time.Second           // an interval between primary proxy detection attempts
-	foreverTokenTime = 24 * 365 * 20 * time.Hour // kind of never-expired token
-)
-
 type (
 	UserManager struct {
 		clientHTTP  *http.Client
@@ -81,7 +67,7 @@ func initializeDB(driver dbdriver.Driver) error {
 	}
 
 	role := &Role{
-		Name:    AdminRole,
+		ID:      AdminRole,
 		Desc:    "AuthN administrator",
 		IsAdmin: true,
 	}
@@ -90,11 +76,11 @@ func initializeDB(driver dbdriver.Driver) error {
 	}
 
 	su := &User{
-		ID:       adminID,
-		Password: encryptPassword(adminPass),
+		ID:       adminUserID,
+		Password: encryptPassword(adminUserPass),
 		Roles:    []string{AdminRole},
 	}
-	return driver.Set(usersCollection, adminID, su)
+	return driver.Set(usersCollection, adminUserID, su)
 }
 
 // Creates a new user manager. If user DB exists, it loads the data from the
@@ -134,18 +120,18 @@ func (m *UserManager) addUser(info *User) error {
 
 // Registers a new role
 func (m *UserManager) addRole(info *Role) error {
-	if info.Name == "" {
+	if info.ID == "" {
 		return errors.New("role name is undefined")
 	}
 	if info.IsAdmin {
-		return errors.New("only built-in roles can have administrator permissions")
+		return fmt.Errorf("only built-in roles can have %q permissions", adminUserID)
 	}
 
-	_, err := m.db.GetString(rolesCollection, info.Name)
+	_, err := m.db.GetString(rolesCollection, info.ID)
 	if err == nil {
-		return fmt.Errorf("role %q already exists", info.Name)
+		return fmt.Errorf("role %q already exists", info.ID)
 	}
-	return m.db.Set(rolesCollection, info.Name, info)
+	return m.db.Set(rolesCollection, info.ID, info)
 }
 
 func (m *UserManager) clusterList() (map[string]*Cluster, error) {
@@ -217,8 +203,8 @@ func (m *UserManager) addCluster(info *Cluster) error {
 
 // Deletes an existing user
 func (m *UserManager) delUser(userID string) error {
-	if userID == adminID {
-		return errors.New("cannot remove built-in administrator account")
+	if userID == adminUserID {
+		return fmt.Errorf("cannot remove built-in %q account", adminUserID)
 	}
 	return m.db.Delete(usersCollection, userID)
 }
@@ -235,7 +221,7 @@ func (m *UserManager) delCluster(cluID string) error {
 // Deletes an existing role
 func (m *UserManager) delRole(role string) error {
 	if role == AdminRole {
-		return errors.New("cannot remove built-in administrator role")
+		return fmt.Errorf("cannot remove built-in %q role", AdminRole)
 	}
 	return m.db.Delete(rolesCollection, role)
 }
@@ -248,7 +234,7 @@ func (m *UserManager) updateUser(userID string, updateReq *User) error {
 	if err != nil {
 		return cmn.NewErrNotFound("user-manager: %s user %q", svcName, userID)
 	}
-	if userID == adminID && len(updateReq.Roles) != 0 {
+	if userID == adminUserID && len(updateReq.Roles) != 0 {
 		return errors.New("cannot change administrator's role")
 	}
 
@@ -267,7 +253,7 @@ func (m *UserManager) updateUser(userID string, updateReq *User) error {
 // Updates an existing role
 func (m *UserManager) updateRole(role string, updateReq *Role) error {
 	if role == AdminRole {
-		return errors.New("cannot modify built-in administrator role")
+		return fmt.Errorf("cannot modify built-in %q role", AdminRole)
 	}
 	rInfo := &Role{}
 	err := m.db.Get(rolesCollection, role, rInfo)
@@ -515,7 +501,7 @@ func (m *UserManager) createRolesForCluster(clu *Cluster) {
 		if err := m.db.Get(rolesCollection, uid, rInfo); err == nil {
 			continue
 		}
-		rInfo.Name = uid
+		rInfo.ID = uid
 		cluName := clu.ID
 		if clu.Alias != "" {
 			cluName += "[" + clu.Alias + "]"

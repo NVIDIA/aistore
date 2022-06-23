@@ -575,36 +575,31 @@ func roleCluPermCompletions(c *cli.Context) {
 }
 
 func oneRoleCompletions(c *cli.Context) {
-	if c.NArg() > 0 {
-		return
-	}
-
-	roleList, err := api.GetRolesAuthN(authParams)
+	roleList, err := api.GetAllRolesAuthN(authParams)
 	if err != nil {
 		return
 	}
-
 	for _, role := range roleList {
-		fmt.Println(role.Name)
+		if role.ID == c.Args().First() {
+			return
+		}
+	}
+	for _, role := range roleList {
+		fmt.Println(role.ID)
 	}
 }
 
 func multiRoleCompletions(c *cli.Context) {
-	if c.NArg() < 2 {
-		return
-	}
-
-	roleList, err := api.GetRolesAuthN(authParams)
+	roleList, err := api.GetAllRolesAuthN(authParams)
 	if err != nil {
 		return
 	}
-
-	args := c.Args()[2:]
+	args := c.Args()
 	for _, role := range roleList {
-		if cos.StringInSlice(role.Name, args) {
+		if cos.StringInSlice(role.ID, args) {
 			continue
 		}
-		fmt.Println(role.Name)
+		fmt.Println(role.ID)
 	}
 }
 
@@ -612,10 +607,30 @@ func oneUserCompletions(c *cli.Context) {
 	if c.NArg() > 0 {
 		return
 	}
-
-	userList, err := api.GetUsersAuthN(authParams)
+	userList, err := api.GetAllUsersAuthN(authParams)
 	if err != nil {
 		return
+	}
+	for _, user := range userList {
+		fmt.Println(user.ID)
+	}
+}
+
+func oneUserCompletionsWithRoles(c *cli.Context) {
+	if c.NArg() == 0 {
+		oneUserCompletions(c)
+		return
+	}
+	userList, err := api.GetAllUsersAuthN(authParams)
+	if err != nil {
+		return
+	}
+
+	for _, user := range userList {
+		if user.ID == c.Args().First() {
+			multiRoleCompletions(c)
+			return
+		}
 	}
 
 	for _, user := range userList {
@@ -627,12 +642,10 @@ func oneClusterCompletions(c *cli.Context) {
 	if c.NArg() > 0 {
 		return
 	}
-
 	cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
 	if err != nil {
 		return
 	}
-
 	for _, clu := range cluList {
 		fmt.Println(cos.Either(clu.Alias, clu.ID))
 	}
