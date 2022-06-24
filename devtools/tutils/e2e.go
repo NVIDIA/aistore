@@ -208,13 +208,13 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 
 				continue
 			case "authn":
-				// Skip running test if requires AuthN server running and the
-				// AuthN server URL is not set.
-				if authURL := os.Getenv("AIS_AUTHN_URL"); authURL == "" {
-					ginkgo.Skip("requires AuthN server running")
-					return
+				// Skip running AuthN e2e tests if the former is not enabled
+				// (compare w/ `SkipTestArgs.RequiresAuth`)
+				if config, err := getClusterConfig(); err == nil && config.Auth.Enabled {
+					continue
 				}
-				continue
+				ginkgo.Skip("AuthN not enabled - skipping")
+				return
 			default:
 				cos.AssertMsg(false, "invalid run mode: "+comment)
 			}
