@@ -25,14 +25,14 @@ type (
 		Clusters []*Cluster `json:"clusters"`
 		Buckets  []*Bucket  `json:"buckets"` // list of buckets with special permissions
 	}
-	// Default permissions for a cluster
+	// Cluster permissions
 	Cluster struct {
 		ID     string          `json:"id"`
 		Alias  string          `json:"alias,omitempty"`
 		Access apc.AccessAttrs `json:"perm,string,omitempty"`
 		URLs   []string        `json:"urls,omitempty"`
 	}
-	// Permissions for a single bucket
+	// Bucket permissions
 	Bucket struct {
 		Bck    cmn.Bck         `json:"bck"`
 		Access apc.AccessAttrs `json:"perm,string"`

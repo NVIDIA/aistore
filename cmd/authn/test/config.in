@@ -1,6 +1,0 @@
-ais auth login admin -p admin // IGNORE
-ais auth show config auth.e
-ais auth set config auth.expiration_time 30m
-ais auth show config auth.e
-ais auth set config auth.expiration_time 24h
-ais auth show config auth.e

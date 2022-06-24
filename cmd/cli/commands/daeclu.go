@@ -21,9 +21,11 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
 )
@@ -318,15 +320,20 @@ func cluConfig(c *cli.Context) error {
 			return err
 		}
 
-		fmt.Fprintf(c.App.Writer, "config successfully updated\n")
+		s, err := jsoniter.MarshalIndent(nvs, "", "    ")
+		debug.AssertNoErr(err)
+		fmt.Fprintf(c.App.Writer, "%s\n", string(s))
+		fmt.Fprintln(c.App.Writer, "\ncluster config updated")
 		return nil
 	}
 
 	if err := api.SetDaemonConfig(defaultAPIParams, daemonID, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
-
-	fmt.Fprintf(c.App.Writer, "config for node %q successfully updated\n", daemonID)
+	s, err := jsoniter.MarshalIndent(nvs, "", "    ")
+	debug.AssertNoErr(err)
+	fmt.Fprintf(c.App.Writer, "%s\n", string(s))
+	fmt.Fprintf(c.App.Writer, "\nnode %q config updated\n", daemonID)
 	return nil
 }
 

@@ -1,0 +1,10 @@
+// RUN authn
+echo "/tmp/auth-token.$RANDOM.adm" > /tmp/e2e.admin.rand
+tf=`cat /tmp/e2e.admin.rand`; ais auth login admin -p admin -f $tf // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth show config auth.e
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth set config auth.expiration_time 30m
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth show config auth.e
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth set config auth.expiration_time 24h
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth show config auth.e
+
+rm /tmp/e2e.admin.rand

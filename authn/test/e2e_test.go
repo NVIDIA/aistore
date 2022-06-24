@@ -5,7 +5,6 @@
 package test
 
 import (
-	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -18,17 +17,15 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var authnURL string
-
 func TestAuthE2E(t *testing.T) {
 	tutils.InitLocalCluster()
 	cmd := exec.Command("which", "ais")
 	if err := cmd.Run(); err != nil {
-		t.Skip("'ais' binary not found")
+		t.Skipf("skipping %s: 'ais' binary not found", t.Name())
 	}
-	authnURL = os.Getenv("AIS_AUTHN_URL")
-	if authnURL == "" {
-		t.Skip("AuthN URL is undefined")
+	cluConfig := tutils.GetClusterConfig(t)
+	if !cluConfig.Auth.Enabled {
+		t.Skipf("skipping %s: AuthN is not enabled", t.Name())
 	}
 
 	config.DefaultReporterConfig.SlowSpecThreshold = 15 * time.Second.Seconds()

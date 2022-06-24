@@ -256,7 +256,7 @@ const (
 	showAuthClusterArgument   = "[CLUSTER_ID]"
 	showAuthRoleArgument      = "[ROLE]"
 	showAuthUserListArgument  = "[USER_NAME]"
-	addAuthRoleArgument       = "ROLE [CLUSTER_ID PERMISSION ...]"
+	addSetAuthRoleArgument    = "ROLE [PERMISSION ...]"
 	deleteAuthRoleArgument    = "ROLE"
 	deleteAuthTokenArgument   = "TOKEN | TOKEN_FILE"
 
@@ -426,7 +426,8 @@ var (
 	supportedCksumFlags = initSupportedCksumFlags()
 
 	// auth
-	descRoleFlag = cli.StringFlag{Name: "description,desc", Usage: "role description"}
+	descRoleFlag    = cli.StringFlag{Name: "description,desc", Usage: "role description"}
+	clusterRoleFlag = cli.StringFlag{Name: "cluster", Usage: "associate role with the specified AIS cluster"}
 
 	// begin archive
 	listArchFlag             = cli.BoolFlag{Name: "archive", Usage: "list archived content"}

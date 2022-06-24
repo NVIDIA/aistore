@@ -551,23 +551,18 @@ func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 	}
 }
 
-func roleCluPermCompletions(c *cli.Context) {
-	cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
-	if err != nil {
-		return
-	}
-
-	args := c.Args()
-	if c.NArg() > 1 {
+func addRoleCompletions(c *cli.Context) {
+	if c.NArg() > 0 {
 		accessCompletions(c)
+	}
+}
+
+func setRoleCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		oneRoleCompletions(c)
 		return
 	}
-	for _, clu := range cluList {
-		if cos.StringInSlice(clu.ID, args) || cos.StringInSlice(clu.Alias, args) {
-			continue
-		}
-		fmt.Println(cos.Either(clu.Alias, clu.ID))
-	}
+	accessCompletions(c)
 }
 
 func oneRoleCompletions(c *cli.Context) {

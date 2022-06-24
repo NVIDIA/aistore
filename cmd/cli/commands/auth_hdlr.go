@@ -31,7 +31,7 @@ import (
 const (
 	flagsAuthUserLogin   = "user_login"
 	flagsAuthUserShow    = "user_show"
-	flagsAuthRoleAdd     = "role_add"
+	flagsAuthRoleAddSet  = "role_add_set"
 	flagsAuthRevokeToken = "revoke_token"
 	flagsAuthRoleShow    = "role_show"
 	flagsAuthConfShow    = "conf_show"
@@ -43,7 +43,7 @@ var (
 	authFlags = map[string][]cli.Flag{
 		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag, expireFlag},
 		subcmdAuthUser:       {passwordFlag},
-		flagsAuthRoleAdd:     {descRoleFlag},
+		flagsAuthRoleAddSet:  {descRoleFlag, clusterRoleFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
 		flagsAuthUserShow:    {nonverboseFlag, verboseFlag},
 		flagsAuthRoleShow:    {nonverboseFlag, verboseFlag},
@@ -113,10 +113,10 @@ var (
 					{
 						Name:         subcmdAuthRole,
 						Usage:        "create a new role",
-						ArgsUsage:    addAuthRoleArgument,
-						Flags:        authFlags[flagsAuthRoleAdd],
+						ArgsUsage:    addSetAuthRoleArgument,
+						Flags:        authFlags[flagsAuthRoleAddSet],
 						Action:       wrapAuthN(addAuthRoleHandler),
-						BashComplete: roleCluPermCompletions,
+						BashComplete: addRoleCompletions,
 					},
 				},
 			},
@@ -184,10 +184,10 @@ var (
 					{
 						Name:         subcmdAuthRole,
 						Usage:        "update an existing role for all users that have it",
-						ArgsUsage:    addAuthRoleArgument,
-						Flags:        authFlags[subcmdAuthRole],
+						ArgsUsage:    addSetAuthRoleArgument,
+						Flags:        authFlags[flagsAuthRoleAddSet],
 						Action:       wrapAuthN(updateAuthRoleHandler),
-						BashComplete: roleCluPermCompletions,
+						BashComplete: setRoleCompletions,
 					},
 				},
 			},
@@ -508,34 +508,39 @@ func updateAuthRoleHandler(c *cli.Context) error {
 	return api.UpdateRoleAuthN(authParams, rInfo)
 }
 
+// TODO: bucket permissions
 func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
-	args := c.Args()
-	cluster := args.Get(0)
-	role := args.Get(1)
-	alias := ""
-	cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
-	if err != nil {
-		return nil, err
-	}
-	found := false
-	for _, clu := range cluList {
-		if cluster == clu.Alias {
-			alias = cluster
-			cluster = clu.ID
-			found = true
-			break
+	var (
+		alias   string
+		args    = c.Args()
+		cluster = parseStrFlag(c, clusterRoleFlag)
+		role    = args.Get(0)
+	)
+	if cluster != "" {
+		cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
+		if err != nil {
+			return nil, err
 		}
-		if cluster == clu.ID {
-			found = true
-			break
+		var found bool
+		for _, clu := range cluList {
+			if cluster == clu.Alias {
+				alias = cluster
+				cluster = clu.ID
+				found = true
+				break
+			}
+			if cluster == clu.ID {
+				found = true
+				break
+			}
 		}
-	}
-	if !found {
-		return nil, fmt.Errorf("cluster %q not found", cluster)
+		if !found {
+			return nil, fmt.Errorf("cluster %q not found", cluster)
+		}
 	}
 
 	perms := apc.AccessNone
-	for i := 2; i < c.NArg(); i++ {
+	for i := 1; i < c.NArg(); i++ {
 		p, err := apc.StrToAccess(args.Get(i))
 		if err != nil {
 			return nil, err
