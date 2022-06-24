@@ -26,7 +26,7 @@ with open(os.path.join(cwd, "README.md"), encoding="utf-8") as f:
 
 setup(
     name="aistore",
-    version="0.9.1",
+    version="0.9.2",
     description="Client and convenient connectors for PyTorch and TensorFlow to AIStore cluster",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -52,6 +52,6 @@ setup(
     packages=find_packages(exclude=("tests", "tests.*")),
     install_requires=['requests', 'cloudpickle==2.0.0', 'pydantic==1.9.0'],
     extras_require={
-        'pytorch': ['torch', 'torchvision', 'torchdata'],
+        'pytorch': ['torch', 'torchdata'],
     },
 )

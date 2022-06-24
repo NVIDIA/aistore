@@ -6,37 +6,38 @@ Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 from io import BytesIO
 from typing import Iterator, Tuple
 
-from torchdata.datapipes.iter import IterDataPipe
 from torchdata.datapipes import functional_datapipe
+
+from torchdata.datapipes.iter import IterDataPipe
 from torchdata.datapipes.utils import StreamWrapper
 
 try:
-    import aistore
-    from aistore.pytorch.utils import parse_url, unparse_url
     from aistore.client import Client
-except ImportError:
-    aistore = None
+    from aistore.pytorch.utils import parse_url, unparse_url
 
-# pylint: disable=unused-variable
+    HAS_AIS = True
+except ImportError:
+    HAS_AIS = False
 
 
 def _assert_aistore() -> None:
-    if aistore is None:
+    if not HAS_AIS:
         raise ModuleNotFoundError(
-            "Package 'aistore' is required to be installed to use this datapipe."
-            "Please run 'pip install aistore' or 'conda install aistore' to install the package"
+            "Package `aistore` is required to be installed to use this datapipe."
+            "Please run `pip install aistore` or `conda install aistore` to install the package"
             "For more info visit: https://github.com/NVIDIA/aistore/blob/master/sdk/python/"
         )
 
 
+# pylint: disable=unused-variable
 @functional_datapipe("ais_list_files")
 class AISFileListerIterDataPipe(IterDataPipe[str]):
     """
-    Iterable Datapipe that lists files from the AIS backends with the given URL prefixes.
-    Acceptable prefixes include but not limited to - ais://bucket-name, ais://bucket-name/,
-    ais://bucket-name/folder, ais://bucket-name/folder/, ais://bucket-name/prefix.
+    Iterable Datapipe that lists files from the AIStore backends with the given URL prefixes. (functional name: ``list_files_by_ais``).
+    Acceptable prefixes include but not limited to - `ais://bucket-name`, `ais://bucket-name/`
+
     Note:
-    -   This function also supports files from multiple backends (aws://.., gcp://.., etc)
+    -   This function also supports files from multiple backends (`aws://..`, `gcp://..`, `hdfs://..`, etc)
     -   Input must be a list and direct URLs are not supported.
     -   length is -1 by default, all calls to len() are invalid as
         not all items are iterated at the start.
@@ -47,6 +48,17 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
                                             prefixes to objects on AIS
         length(int): length of the datapipe
         url(str): AIStore endpoint
+
+    Example:
+        >>> from torchdata.datapipes.iter import IterableWrapper, AISFileLister
+        >>> ais_prefixes = IterableWrapper(['ais://bucket-name/folder/', 'aws:bucket-name/folder/', ...])
+        >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=prefix)
+        >>> for d in dp_ais_urls:
+        ...     pass
+        >>> # Functional API
+        >>> dp_ais_urls = dp_ais_urls.list_files_by_ais(url='localhost:8080')
+        >>> for d in dp_ais_urls:
+        ...     pass
     """
     def __init__(self, source_datapipe: IterDataPipe[str], url: str, length: int = -1) -> None:
         _assert_aistore()
@@ -68,15 +80,14 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
 
 
 # pylint: disable=unused-variable
-# @functional_datapipe("ais_load_files")
+@functional_datapipe("ais_load_files")
 class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
     """
-    Iterable Datapipe that loads files from the AIS backends with the given
-    list of URLs (no prefixes allowed). Iterates all files in BytesIO format
-    and returns a tuple (url, BytesIO).
+    Iterable DataPipe that loads files from AIStore with the given URLs (functional name: ``load_files_by_ais``).
+    Iterates all files in BytesIO format and returns a tuple (url, BytesIO).
 
     Note:
-    -   This function also supports files from multiple backends (aws://.., gcp://.., etc)
+    -   This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
     -   Input must be a list and direct URLs are not supported.
     -   This internally uses AIStore Python SDK.
 
@@ -84,6 +95,18 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
         source_datapipe(IterDataPipe[str]): a DataPipe that contains URLs/URL prefixes to objects
         length(int): length of the datapipe
         url(str): AIStore endpoint
+
+    Example:
+        >>> from torchdata.datapipes.iter import IterableWrapper, AISFileLister,AISFileLoader
+        >>> ais_prefixes = IterableWrapper(['ais://bucket-name/folder/', 'aws:bucket-name/folder/', ...])
+        >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=prefix)
+        >>> dp_s3_files = AISFileLoader(url='localhost:8080', source_datapipe=dp_ais_urls)
+        >>> for url, file in dp_ais_urls:
+        ...     pass
+        >>> # Functional API
+        >>> dp_ais_urls = dp_ais_urls.load_files_by_ais(url='localhost:8080')
+        >>> for url, file in dp_ais_urls:
+        ...     pass
     """
     def __init__(self, source_datapipe: IterDataPipe[str], url: str, length: int = -1) -> None:
         _assert_aistore()
