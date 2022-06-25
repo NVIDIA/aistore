@@ -82,7 +82,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg i
 		err = fmt.Errorf("invalid action %q", action)
 		return
 	}
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
@@ -91,6 +91,6 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg i
 		reqParams.Query = q
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return
 }

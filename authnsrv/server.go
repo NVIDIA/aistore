@@ -1,8 +1,8 @@
-// Package authn - authorization server for AIStore. See README.md for more info.
+// Package authnsrv provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package authn
+package authnsrv
 
 import (
 	"errors"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -36,7 +37,7 @@ type Server struct {
 
 var (
 	svcName = "AuthN"
-	Conf    = &Config{}
+	Conf    = &authn.Config{}
 )
 
 func NewServer(mgr *UserManager) *Server {
@@ -129,7 +130,7 @@ func (a *Server) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 	if _, err := checkRESTItems(w, r, 0, apc.URLPathTokens.L); err != nil {
 		return
 	}
-	msg := &TokenMsg{}
+	msg := &authn.TokenMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
@@ -182,7 +183,7 @@ func (a *Server) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := apiItems[0]
-	updateReq := &User{}
+	updateReq := &authn.User{}
 	err = jsoniter.NewDecoder(r.Body).Decode(updateReq)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, "Invalid request")
@@ -202,7 +203,7 @@ func (a *Server) userAdd(w http.ResponseWriter, r *http.Request) {
 	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
-	info := &User{}
+	info := &authn.User{}
 	if err := cmn.ReadJSON(w, r, info); err != nil {
 		return
 	}
@@ -227,7 +228,7 @@ func (a *Server) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var users map[string]*User
+	var users map[string]*authn.User
 	if len(items) == 0 {
 		if users, err = a.users.userList(); err != nil {
 			cmn.WriteErr(w, r, err)
@@ -292,7 +293,7 @@ func (a *Server) userLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	msg := &LoginMsg{}
+	msg := &authn.LoginMsg{}
 	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
@@ -344,7 +345,7 @@ func (a *Server) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
-	cluConf := &CluACL{}
+	cluConf := &authn.CluACL{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		return
 	}
@@ -362,7 +363,7 @@ func (a *Server) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
-	cluConf := &CluACL{}
+	cluConf := &authn.CluACL{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		return
 	}
@@ -399,7 +400,7 @@ func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	var cluList *RegisteredClusters
+	var cluList *authn.RegisteredClusters
 	if len(apiItems) != 0 {
 		cid := apiItems[0]
 		clu, err := a.users.getCluster(cid)
@@ -411,8 +412,8 @@ func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		cluList = &RegisteredClusters{
-			M: map[string]*CluACL{clu.ID: clu},
+		cluList = &authn.RegisteredClusters{
+			M: map[string]*authn.CluACL{clu.ID: clu},
 		}
 	} else {
 		clusters, err := a.users.clusterList()
@@ -420,7 +421,7 @@ func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		cluList = &RegisteredClusters{M: clusters}
+		cluList = &authn.RegisteredClusters{M: clusters}
 	}
 	writeJSON(w, cluList, "auth")
 }
@@ -501,7 +502,7 @@ func (a *Server) httpRolePost(w http.ResponseWriter, r *http.Request) {
 	if err = checkAuthorization(w, r); err != nil {
 		return
 	}
-	info := &Role{}
+	info := &authn.Role{}
 	if err := cmn.ReadJSON(w, r, info); err != nil {
 		return
 	}
@@ -520,7 +521,7 @@ func (a *Server) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	role := apiItems[0]
-	updateReq := &Role{}
+	updateReq := &authn.Role{}
 	err = jsoniter.NewDecoder(r.Body).Decode(updateReq)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, "Invalid request")
@@ -562,7 +563,7 @@ func httpConfigPut(w http.ResponseWriter, r *http.Request) {
 	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
-	updateCfg := &ConfigToUpdate{}
+	updateCfg := &authn.ConfigToUpdate{}
 	if err := jsoniter.NewDecoder(r.Body).Decode(updateCfg); err != nil {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return

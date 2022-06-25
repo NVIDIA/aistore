@@ -77,7 +77,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 
 	msg := apc.ActionMsg{Action: apc.ActXactStart, Value: xactMsg}
 	baseParams.Method = http.MethodPut
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
@@ -86,7 +86,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
 	err = reqParams.DoHTTPReqResp(&id)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return id, err
 }
 
@@ -97,7 +97,7 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 		Value:  xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
 	}
 	baseParams.Method = http.MethodPut
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
@@ -106,7 +106,7 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
@@ -127,7 +127,7 @@ func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMul
 		msg.OnlyRunning = Bool(true)
 	}
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
@@ -136,7 +136,7 @@ func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMul
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatQueryXactStats}}
 	}
 	err = reqParams.DoHTTPReqResp(&xs)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return xs, err
 }
 
@@ -148,7 +148,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 		msg.OnlyRunning = Bool(true)
 	}
 	status = &nl.NotifStatus{}
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
@@ -157,7 +157,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStatus}}
 	}
 	err = reqParams.DoHTTPReqResp(status)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return
 }
 

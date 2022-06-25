@@ -1,9 +1,8 @@
-// Package authn - authorization server for AIStore.
+// Package authnsrv provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
- *
  */
-package authn
+package authnsrv
 
 import (
 	"encoding/hex"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
@@ -66,19 +66,19 @@ func initializeDB(driver dbdriver.Driver) error {
 		return err
 	}
 
-	role := &Role{
-		ID:      AdminRole,
+	role := &authn.Role{
+		ID:      authn.AdminRole,
 		Desc:    "AuthN administrator",
 		IsAdmin: true,
 	}
-	if err := driver.Set(rolesCollection, AdminRole, role); err != nil {
+	if err := driver.Set(rolesCollection, authn.AdminRole, role); err != nil {
 		return err
 	}
 
-	su := &User{
+	su := &authn.User{
 		ID:       adminUserID,
 		Password: encryptPassword(adminUserPass),
-		Roles:    []string{AdminRole},
+		Roles:    []string{authn.AdminRole},
 	}
 	return driver.Set(usersCollection, adminUserID, su)
 }
@@ -105,7 +105,7 @@ func NewUserManager(driver dbdriver.Driver) (*UserManager, error) {
 
 // Registers a new user. It is info from a user, so the password
 // is not encrypted and a few fields are not filled(e.g, Access).
-func (m *UserManager) addUser(info *User) error {
+func (m *UserManager) addUser(info *authn.User) error {
 	if info.ID == "" || info.Password == "" {
 		return errInvalidCredentials
 	}
@@ -119,7 +119,7 @@ func (m *UserManager) addUser(info *User) error {
 }
 
 // Registers a new role
-func (m *UserManager) addRole(info *Role) error {
+func (m *UserManager) addRole(info *authn.Role) error {
 	if info.ID == "" {
 		return errors.New("role name is undefined")
 	}
@@ -134,14 +134,14 @@ func (m *UserManager) addRole(info *Role) error {
 	return m.db.Set(rolesCollection, info.ID, info)
 }
 
-func (m *UserManager) clusterList() (map[string]*CluACL, error) {
+func (m *UserManager) clusterList() (map[string]*authn.CluACL, error) {
 	clusters, err := m.db.GetAll(clustersCollection, "")
 	if err != nil {
 		return nil, err
 	}
-	cluList := make(map[string]*CluACL, len(clusters))
+	cluList := make(map[string]*authn.CluACL, len(clusters))
 	for cid, s := range clusters {
-		cInfo := &CluACL{}
+		cInfo := &authn.CluACL{}
 		if err := jsoniter.Unmarshal([]byte(s), cInfo); err != nil {
 			glog.Errorf("Failed to parse cluster %s info: %v", cid, err)
 			continue
@@ -172,18 +172,18 @@ func (m *UserManager) cluLookup(cluID, cluAlias string) string {
 }
 
 // Get an existing cluster
-func (m *UserManager) getCluster(cluID string) (*CluACL, error) {
+func (m *UserManager) getCluster(cluID string) (*authn.CluACL, error) {
 	cid := m.cluLookup(cluID, cluID)
 	if cid == "" {
 		return nil, cmn.NewErrNotFound("user-manager: %s cluster %q", svcName, cluID)
 	}
-	clu := &CluACL{}
+	clu := &authn.CluACL{}
 	err := m.db.Get(clustersCollection, cid, clu)
 	return clu, err
 }
 
 // Registers a new cluster
-func (m *UserManager) addCluster(info *CluACL) error {
+func (m *UserManager) addCluster(info *authn.CluACL) error {
 	if info.ID == "" {
 		return errors.New("cluster UUID is undefined")
 	}
@@ -220,16 +220,16 @@ func (m *UserManager) delCluster(cluID string) error {
 
 // Deletes an existing role
 func (m *UserManager) delRole(role string) error {
-	if role == AdminRole {
-		return fmt.Errorf("cannot remove built-in %q role", AdminRole)
+	if role == authn.AdminRole {
+		return fmt.Errorf("cannot remove built-in %q role", authn.AdminRole)
 	}
 	return m.db.Delete(rolesCollection, role)
 }
 
 // Updates an existing user. The function invalidates user tokens after
 // successful update.
-func (m *UserManager) updateUser(userID string, updateReq *User) error {
-	uInfo := &User{}
+func (m *UserManager) updateUser(userID string, updateReq *authn.User) error {
+	uInfo := &authn.User{}
 	err := m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
 		return cmn.NewErrNotFound("user-manager: %s user %q", svcName, userID)
@@ -251,11 +251,11 @@ func (m *UserManager) updateUser(userID string, updateReq *User) error {
 }
 
 // Updates an existing role
-func (m *UserManager) updateRole(role string, updateReq *Role) error {
-	if role == AdminRole {
-		return fmt.Errorf("cannot modify built-in %q role", AdminRole)
+func (m *UserManager) updateRole(role string, updateReq *authn.Role) error {
+	if role == authn.AdminRole {
+		return fmt.Errorf("cannot modify built-in %q role", authn.AdminRole)
 	}
-	rInfo := &Role{}
+	rInfo := &authn.Role{}
 	err := m.db.Get(rolesCollection, role, rInfo)
 	if err != nil {
 		return cmn.NewErrNotFound("user-manager: %s role %q", svcName, role)
@@ -273,8 +273,8 @@ func (m *UserManager) updateRole(role string, updateReq *Role) error {
 	return m.db.Set(rolesCollection, role, rInfo)
 }
 
-func (m *UserManager) lookupRole(roleID string) (*Role, error) {
-	rInfo := &Role{}
+func (m *UserManager) lookupRole(roleID string) (*authn.Role, error) {
+	rInfo := &authn.Role{}
 	err := m.db.Get(rolesCollection, roleID, rInfo)
 	if err != nil {
 		return nil, err
@@ -282,11 +282,11 @@ func (m *UserManager) lookupRole(roleID string) (*Role, error) {
 	return rInfo, nil
 }
 
-func (m *UserManager) updateCluster(cluID string, info *CluACL) error {
+func (m *UserManager) updateCluster(cluID string, info *authn.CluACL) error {
 	if info.ID == "" {
 		return errors.New("cluster ID is undefined")
 	}
-	clu := &CluACL{}
+	clu := &authn.CluACL{}
 	err := m.db.Get(clustersCollection, cluID, clu)
 	if err != nil {
 		return err
@@ -306,7 +306,7 @@ func (m *UserManager) updateCluster(cluID string, info *CluACL) error {
 
 // Before putting a list of cluster permissions to a token, cluster aliases
 // must be replaced with their IDs.
-func (m *UserManager) fixClusterIDs(lst []*CluACL) {
+func (m *UserManager) fixClusterIDs(lst []*authn.CluACL) {
 	cluList, err := m.clusterList()
 	if err != nil {
 		return
@@ -333,7 +333,7 @@ func (m *UserManager) issueToken(userID, pwd string, ttl *time.Duration) (string
 		expires time.Time
 	)
 
-	uInfo := &User{}
+	uInfo := &authn.User{}
 	err = m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
 		glog.Error(err)
@@ -345,7 +345,7 @@ func (m *UserManager) issueToken(userID, pwd string, ttl *time.Duration) (string
 
 	// update ACLs with roles's ones
 	for _, role := range uInfo.Roles {
-		rInfo := &Role{}
+		rInfo := &authn.Role{}
 		err := m.db.Get(rolesCollection, role, rInfo)
 		if err != nil {
 			continue
@@ -438,8 +438,8 @@ func (m *UserManager) generateRevokedTokenList() ([]string, error) {
 	return revokeList, nil
 }
 
-func (m *UserManager) lookupUser(userID string) (*User, error) {
-	uInfo := &User{}
+func (m *UserManager) lookupUser(userID string) (*authn.User, error) {
+	uInfo := &authn.User{}
 	err := m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
 		return nil, err
@@ -447,7 +447,7 @@ func (m *UserManager) lookupUser(userID string) (*User, error) {
 
 	// update ACLs with roles's ones
 	for _, role := range uInfo.Roles {
-		rInfo := &Role{}
+		rInfo := &authn.Role{}
 		err := m.db.Get(rolesCollection, role, rInfo)
 		if err != nil {
 			continue
@@ -459,14 +459,14 @@ func (m *UserManager) lookupUser(userID string) (*User, error) {
 	return uInfo, nil
 }
 
-func (m *UserManager) userList() (map[string]*User, error) {
+func (m *UserManager) userList() (map[string]*authn.User, error) {
 	recs, err := m.db.GetAll(usersCollection, "")
 	if err != nil {
 		return nil, err
 	}
-	users := make(map[string]*User, 4)
+	users := make(map[string]*authn.User, 4)
 	for _, str := range recs {
-		uInfo := &User{}
+		uInfo := &authn.User{}
 		err := jsoniter.Unmarshal([]byte(str), uInfo)
 		cos.AssertNoErr(err)
 		users[uInfo.ID] = uInfo
@@ -474,14 +474,14 @@ func (m *UserManager) userList() (map[string]*User, error) {
 	return users, nil
 }
 
-func (m *UserManager) roleList() ([]*Role, error) {
+func (m *UserManager) roleList() ([]*authn.Role, error) {
 	recs, err := m.db.GetAll(rolesCollection, "")
 	if err != nil {
 		return nil, err
 	}
-	roles := make([]*Role, 0, len(recs))
+	roles := make([]*authn.Role, 0, len(recs))
 	for _, str := range recs {
-		role := &Role{}
+		role := &authn.Role{}
 		err := jsoniter.Unmarshal([]byte(str), role)
 		if err != nil {
 			return nil, err
@@ -493,11 +493,11 @@ func (m *UserManager) roleList() ([]*Role, error) {
 
 // Creates predefined roles for just added clusters. Errors are logged and
 // are not returned to a caller as it is not crucial.
-func (m *UserManager) createRolesForCluster(clu *CluACL) {
+func (m *UserManager) createRolesForCluster(clu *authn.CluACL) {
 	for _, pr := range predefinedRoles {
 		suffix := cos.Either(clu.Alias, clu.ID)
 		uid := pr.prefix + "-" + suffix
-		rInfo := &Role{}
+		rInfo := &authn.Role{}
 		if err := m.db.Get(rolesCollection, uid, rInfo); err == nil {
 			continue
 		}
@@ -507,7 +507,7 @@ func (m *UserManager) createRolesForCluster(clu *CluACL) {
 			cluName += "[" + clu.Alias + "]"
 		}
 		rInfo.Desc = fmt.Sprintf(pr.desc, cluName)
-		rInfo.ClusterACLs = []*CluACL{
+		rInfo.ClusterACLs = []*authn.CluACL{
 			{ID: clu.ID, Access: pr.perms},
 		}
 		if err := m.db.Set(rolesCollection, uid, rInfo); err != nil {

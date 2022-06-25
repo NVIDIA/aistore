@@ -1,8 +1,8 @@
-// Package api provides AIStore API over HTTP(S)
+// Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package api
+package authn
 
 import (
 	"errors"
@@ -10,26 +10,21 @@ import (
 	"sort"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
-type AuthnSpec struct {
-	AdminName     string
-	AdminPassword string
-}
-
-func AddUserAuthN(baseParams BaseParams, newUser *authn.User) error {
+func AddUser(baseParams api.BaseParams, newUser *User) error {
 	msg, err := jsoniter.Marshal(newUser)
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodPost
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathUsers.S
@@ -39,11 +34,11 @@ func AddUserAuthN(baseParams BaseParams, newUser *authn.User) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UpdateUserAuthN(baseParams BaseParams, user *authn.User) error {
+func UpdateUser(baseParams api.BaseParams, user *User) error {
 	msg := cos.MustMarshal(user)
 	baseParams.Method = http.MethodPut
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathUsers.Join(user.ID)
@@ -53,10 +48,10 @@ func UpdateUserAuthN(baseParams BaseParams, user *authn.User) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func DeleteUserAuthN(baseParams BaseParams, userID string) error {
+func DeleteUser(baseParams api.BaseParams, userID string) error {
 	baseParams.Method = http.MethodDelete
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathUsers.Join(userID)
@@ -67,11 +62,11 @@ func DeleteUserAuthN(baseParams BaseParams, userID string) error {
 // Authorize a user and return a user token in case of success.
 // The token expires in `expire` time. If `expire` is `nil` the expiration
 // time is set by AuthN (default AuthN expiration time is 24 hours)
-func LoginUserAuthN(baseParams BaseParams, userID, pass string, expire *time.Duration) (token *authn.TokenMsg, err error) {
+func LoginUser(baseParams api.BaseParams, userID, pass string, expire *time.Duration) (token *TokenMsg, err error) {
 	baseParams.Method = http.MethodPost
-	rec := authn.LoginMsg{Password: pass, ExpiresIn: expire}
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	rec := LoginMsg{Password: pass, ExpiresIn: expire}
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathUsers.Join(userID)
@@ -89,11 +84,11 @@ func LoginUserAuthN(baseParams BaseParams, userID, pass string, expire *time.Dur
 	return token, nil
 }
 
-func RegisterClusterAuthN(baseParams BaseParams, cluSpec authn.CluACL) error {
+func RegisterCluster(baseParams api.BaseParams, cluSpec CluACL) error {
 	msg := cos.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPost
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClusters.S
@@ -103,11 +98,11 @@ func RegisterClusterAuthN(baseParams BaseParams, cluSpec authn.CluACL) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UpdateClusterAuthN(baseParams BaseParams, cluSpec authn.CluACL) error {
+func UpdateCluster(baseParams api.BaseParams, cluSpec CluACL) error {
 	msg := cos.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPut
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClusters.Join(cluSpec.ID)
@@ -117,10 +112,10 @@ func UpdateClusterAuthN(baseParams BaseParams, cluSpec authn.CluACL) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UnregisterClusterAuthN(baseParams BaseParams, spec authn.CluACL) error {
+func UnregisterCluster(baseParams api.BaseParams, spec CluACL) error {
 	baseParams.Method = http.MethodDelete
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClusters.Join(spec.ID)
@@ -128,22 +123,22 @@ func UnregisterClusterAuthN(baseParams BaseParams, spec authn.CluACL) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func GetRegisteredClustersAuthN(baseParams BaseParams, spec authn.CluACL) ([]*authn.CluACL, error) {
+func GetRegisteredClusters(baseParams api.BaseParams, spec CluACL) ([]*CluACL, error) {
 	baseParams.Method = http.MethodGet
 	path := apc.URLPathClusters.S
 	if spec.ID != "" {
 		path = cos.JoinWords(path, spec.ID)
 	}
-	clusters := &authn.RegisteredClusters{}
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	clusters := &RegisteredClusters{}
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = path
 	}
 	err := reqParams.DoHTTPReqResp(clusters)
 
-	rec := make([]*authn.CluACL, 0, len(clusters.M))
+	rec := make([]*CluACL, 0, len(clusters.M))
 	for _, clu := range clusters.M {
 		rec = append(rec, clu)
 	}
@@ -152,14 +147,14 @@ func GetRegisteredClustersAuthN(baseParams BaseParams, spec authn.CluACL) ([]*au
 	return rec, err
 }
 
-func GetRoleAuthN(baseParams BaseParams, roleID string) (*authn.Role, error) {
+func GetRole(baseParams api.BaseParams, roleID string) (*Role, error) {
 	if roleID == "" {
 		return nil, errors.New("missing role ID")
 	}
-	rInfo := &authn.Role{}
+	rInfo := &Role{}
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cos.JoinWords(apc.URLPathRoles.S, roleID)
@@ -168,12 +163,12 @@ func GetRoleAuthN(baseParams BaseParams, roleID string) (*authn.Role, error) {
 	return rInfo, err
 }
 
-func GetAllRolesAuthN(baseParams BaseParams) ([]*authn.Role, error) {
+func GetAllRoles(baseParams api.BaseParams) ([]*Role, error) {
 	baseParams.Method = http.MethodGet
 	path := apc.URLPathRoles.S
-	roles := make([]*authn.Role, 0)
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	roles := make([]*Role, 0)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = path
@@ -185,18 +180,18 @@ func GetAllRolesAuthN(baseParams BaseParams) ([]*authn.Role, error) {
 	return roles, err
 }
 
-func GetAllUsersAuthN(baseParams BaseParams) ([]*authn.User, error) {
+func GetAllUsers(baseParams api.BaseParams) ([]*User, error) {
 	baseParams.Method = http.MethodGet
-	users := make(map[string]*authn.User, 4)
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	users := make(map[string]*User, 4)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathUsers.S
 	}
 	err := reqParams.DoHTTPReqResp(&users)
 
-	list := make([]*authn.User, 0, len(users))
+	list := make([]*User, 0, len(users))
 	for _, info := range users {
 		list = append(list, info)
 	}
@@ -207,14 +202,14 @@ func GetAllUsersAuthN(baseParams BaseParams) ([]*authn.User, error) {
 	return list, err
 }
 
-func GetUserAuthN(baseParams BaseParams, userID string) (*authn.User, error) {
+func GetUser(baseParams api.BaseParams, userID string) (*User, error) {
 	if userID == "" {
 		return nil, errors.New("missing user ID")
 	}
-	uInfo := &authn.User{}
+	uInfo := &User{}
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = cos.JoinWords(apc.URLPathUsers.S, userID)
@@ -223,11 +218,11 @@ func GetUserAuthN(baseParams BaseParams, userID string) (*authn.User, error) {
 	return uInfo, err
 }
 
-func AddRoleAuthN(baseParams BaseParams, roleSpec *authn.Role) error {
+func AddRole(baseParams api.BaseParams, roleSpec *Role) error {
 	msg := cos.MustMarshal(roleSpec)
 	baseParams.Method = http.MethodPost
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathRoles.S
@@ -237,11 +232,11 @@ func AddRoleAuthN(baseParams BaseParams, roleSpec *authn.Role) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UpdateRoleAuthN(baseParams BaseParams, roleSpec *authn.Role) error {
+func UpdateRole(baseParams api.BaseParams, roleSpec *Role) error {
 	msg := cos.MustMarshal(roleSpec)
 	baseParams.Method = http.MethodPut
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathRoles.Join(roleSpec.ID)
@@ -251,10 +246,10 @@ func UpdateRoleAuthN(baseParams BaseParams, roleSpec *authn.Role) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func DeleteRoleAuthN(baseParams BaseParams, role string) error {
+func DeleteRole(baseParams api.BaseParams, role string) error {
 	baseParams.Method = http.MethodDelete
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathRoles.Join(role)
@@ -262,11 +257,11 @@ func DeleteRoleAuthN(baseParams BaseParams, role string) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func RevokeTokenAuthN(baseParams BaseParams, token string) error {
+func RevokeToken(baseParams api.BaseParams, token string) error {
 	baseParams.Method = http.MethodDelete
-	msg := &authn.TokenMsg{Token: token}
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	msg := &TokenMsg{Token: token}
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.BaseParams = baseParams
@@ -276,11 +271,11 @@ func RevokeTokenAuthN(baseParams BaseParams, token string) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func GetConfigAuthN(baseParams BaseParams) (*authn.Config, error) {
-	conf := &authn.Config{}
+func GetConfig(baseParams api.BaseParams) (*Config, error) {
+	conf := &Config{}
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDae.S
@@ -289,10 +284,10 @@ func GetConfigAuthN(baseParams BaseParams) (*authn.Config, error) {
 	return conf, err
 }
 
-func SetConfigAuthN(baseParams BaseParams, conf *authn.ConfigToUpdate) error {
+func SetConfig(baseParams api.BaseParams, conf *ConfigToUpdate) error {
 	baseParams.Method = http.MethodPut
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
 	{
 		reqParams.Body = cos.MustMarshal(conf)
 		reqParams.BaseParams = baseParams

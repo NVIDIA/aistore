@@ -1,14 +1,14 @@
-// Package authn - authorization server for AIStore.
+// Package authnsrv provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
- *
  */
-package authn
+package authnsrv
 
 import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
@@ -32,7 +32,7 @@ func init() {
 
 func createUsers(mgr *UserManager, t *testing.T) {
 	for idx := range users {
-		user := &User{ID: users[idx], Password: passs[idx], Roles: []string{GuestRole}}
+		user := &authn.User{ID: users[idx], Password: passs[idx], Roles: []string{GuestRole}}
 		err := mgr.addUser(user)
 		if err != nil {
 			t.Errorf("Failed to create a user %s: %v", users[idx], err)
@@ -65,7 +65,7 @@ func deleteUsers(mgr *UserManager, skipNotExist bool, t *testing.T) {
 }
 
 func testInvalidUser(mgr *UserManager, t *testing.T) {
-	user := &User{ID: users[0], Password: passs[1], Roles: []string{GuestRole}}
+	user := &authn.User{ID: users[0], Password: passs[1], Roles: []string{GuestRole}}
 	err := mgr.addUser(user)
 	if err == nil {
 		t.Errorf("User with the existing name %s was created: %v", users[0], err)
@@ -83,7 +83,7 @@ func testUserDelete(mgr *UserManager, t *testing.T) {
 		username = "newuser"
 		userpass = "newpass"
 	)
-	user := &User{ID: username, Password: userpass, Roles: []string{GuestRole}}
+	user := &authn.User{ID: username, Password: userpass, Roles: []string{GuestRole}}
 	err := mgr.addUser(user)
 	if err != nil {
 		t.Errorf("Failed to create a user %s: %v", username, err)

@@ -20,26 +20,26 @@ import (
 
 func ETLInit(baseParams BaseParams, msg etl.InitMsg) (id string, err error) {
 	baseParams.Method = http.MethodPut
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathETL.S
 		reqParams.Body = cos.MustMarshal(msg)
 	}
 	err = reqParams.DoHTTPReqResp(&id)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return id, err
 }
 
 func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathETL.S
 	}
 	err = reqParams.DoHTTPReqResp(&list)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return list, err
 }
 
@@ -51,52 +51,52 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 	} else {
 		path = apc.URLPathETL.Join(id, apc.ETLLogs)
 	}
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = path
 	}
 	err = reqParams.DoHTTPReqResp(&logs)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return logs, err
 }
 
 func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err error) {
 	params.Method = http.MethodGet
 	path := apc.URLPathETL.Join(id, apc.ETLHealth)
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = params
 		reqParams.Path = path
 	}
 	err = reqParams.DoHTTPReqResp(&healths)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return healths, err
 }
 
 func ETLDelete(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
 	path := apc.URLPathETL.Join(id)
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = path
 	}
 	err = reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return
 }
 
 func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error) {
 	params.Method = http.MethodGet
 	path := apc.URLPathETL.Join(id)
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = params
 		reqParams.Path = path
 	}
 	r, err := reqParams.doReader()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	if err != nil {
 		return nil, err
 	}
@@ -136,13 +136,13 @@ func ETLStart(baseParams BaseParams, id string) (err error) {
 
 func etlPostAction(baseParams BaseParams, id, action string) (err error) {
 	baseParams.Method = http.MethodPost
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathETL.Join(id, action)
 	}
 	err = reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
@@ -163,7 +163,7 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg
 	baseParams.Method = http.MethodPost
 	q := fromBck.AddToQuery(nil)
 	_ = toBck.AddUnameToQuery(q, apc.QparamBucketTo)
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathBuckets.Join(fromBck.Name)
@@ -172,6 +172,6 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg
 		reqParams.Query = q
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return
 }

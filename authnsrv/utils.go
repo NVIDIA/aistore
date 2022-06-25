@@ -1,8 +1,8 @@
-// Package authn - authorization server for AIStore.
+// Package authnsrv provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package authn
+package authnsrv
 
 import (
 	"errors"
@@ -10,71 +10,22 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/golang-jwt/jwt/v4"
 )
 
 type (
-	User struct {
-		ID          string    `json:"id"`
-		Password    string    `json:"pass,omitempty"`
-		Roles       []string  `json:"roles"`
-		ClusterACLs []*CluACL `json:"clusters"`
-		BucketACLs  []*BckACL `json:"buckets"` // list of buckets with special permissions
-	}
-	CluACL struct {
-		ID     string          `json:"id"`
-		Alias  string          `json:"alias,omitempty"`
-		Access apc.AccessAttrs `json:"perm,string,omitempty"`
-		URLs   []string        `json:"urls,omitempty"`
-	}
-	BckACL struct {
-		Bck    cmn.Bck         `json:"bck"`
-		Access apc.AccessAttrs `json:"perm,string"`
-	}
-	Role struct {
-		ID          string    `json:"name"`
-		Desc        string    `json:"desc"`
-		Roles       []string  `json:"roles"`
-		ClusterACLs []*CluACL `json:"clusters"`
-		BucketACLs  []*BckACL `json:"buckets"`
-		IsAdmin     bool      `json:"admin"`
-	}
 	Token struct {
-		UserID      string    `json:"username"`
-		Expires     time.Time `json:"expires"`
-		Token       string    `json:"token"`
-		ClusterACLs []*CluACL `json:"clusters"`
-		BucketACLs  []*BckACL `json:"buckets,omitempty"`
-		IsAdmin     bool      `json:"admin"`
-	}
-	RegisteredClusters struct {
-		M map[string]*CluACL `json:"clusters,omitempty"`
-	}
-	LoginMsg struct {
-		Password  string         `json:"password"`
-		ExpiresIn *time.Duration `json:"expires_in"`
-	}
-	TokenMsg struct {
-		Token string `json:"token"`
+		UserID      string          `json:"username"`
+		Expires     time.Time       `json:"expires"`
+		Token       string          `json:"token"`
+		ClusterACLs []*authn.CluACL `json:"clusters"`
+		BucketACLs  []*authn.BckACL `json:"buckets,omitempty"`
+		IsAdmin     bool            `json:"admin"`
 	}
 )
-
-/////////////////////
-// authn jsp stuff //
-/////////////////////
-var (
-	_ jsp.Opts = (*Config)(nil)
-	_ jsp.Opts = (*TokenMsg)(nil)
-
-	authcfgJspOpts = jsp.Plain() // TODO: use CCSign(MetaverAuthNConfig)
-	authtokJspOpts = jsp.Plain() // ditto MetaverTokens
-)
-
-func (*Config) JspOpts() jsp.Options   { return authcfgJspOpts }
-func (*TokenMsg) JspOpts() jsp.Options { return authtokJspOpts }
 
 // authn api helpers and errors
 
@@ -105,7 +56,7 @@ func expiresIn(tm time.Time) string {
 }
 
 func (tk *Token) aclForCluster(clusterID string) (perms apc.AccessAttrs, ok bool) {
-	var defaultCluster *CluACL
+	var defaultCluster *authn.CluACL
 	for _, pm := range tk.ClusterACLs {
 		if pm.ID == clusterID {
 			return pm.Access, true
@@ -169,7 +120,7 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 			return errors.New("Requested cluster permissions without cluster ID")
 		}
 		if !cluACL.Has(cluPerms) {
-			return fmt.Errorf("%v: [cluster %s, %s, access(%s)]", ErrNoPermissions, clusterID, tk, cluACL.Describe())
+			return fmt.Errorf("%v: [cluster %s, %s, granted(%s)]", ErrNoPermissions, clusterID, tk, cluACL.Describe())
 		}
 	}
 	if objPerms == 0 {
@@ -185,32 +136,19 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 		if bckACL.Has(objPerms) {
 			return nil
 		}
-		return fmt.Errorf("%v: [%s, bucket %s, access(%s)]", ErrNoPermissions, tk, bck.String(), bckACL.Describe())
+		return fmt.Errorf("%v: [%s, bucket %s, granted(%s)]", ErrNoPermissions, tk, bck.String(), bckACL.Describe())
 	}
 	if !cluOk || !cluACL.Has(objPerms) {
-		return ErrNoPermissions
+		return fmt.Errorf("%v: [%s, granted(%s)]", ErrNoPermissions, tk, cluACL.Describe())
 	}
 	return nil
-}
-
-//////////
-// User //
-//////////
-
-func (uInfo *User) IsAdmin() bool {
-	for _, r := range uInfo.Roles {
-		if r == AdminRole {
-			return true
-		}
-	}
-	return false
 }
 
 //
 // utils
 //
 
-func MergeBckACLs(oldACLs, newACLs []*BckACL) []*BckACL {
+func MergeBckACLs(oldACLs, newACLs []*authn.BckACL) []*authn.BckACL {
 	for _, n := range newACLs {
 		found := false
 		for _, o := range oldACLs {
@@ -227,7 +165,7 @@ func MergeBckACLs(oldACLs, newACLs []*BckACL) []*BckACL {
 	return oldACLs
 }
 
-func MergeClusterACLs(oldACLs, newACLs []*CluACL) []*CluACL {
+func MergeClusterACLs(oldACLs, newACLs []*authn.CluACL) []*authn.CluACL {
 	for _, n := range newACLs {
 		found := false
 		for _, o := range oldACLs {

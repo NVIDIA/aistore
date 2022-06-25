@@ -44,7 +44,7 @@ func DownloadRange(baseParams BaseParams, description string, bck cmn.Bck, templ
 func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interface{}) (id string, err error) {
 	baseParams.Method = http.MethodPost
 	msg := cos.MustMarshal(body)
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownload.S
@@ -52,7 +52,7 @@ func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interf
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	id, err = reqParams.doDlDownloadRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return
 }
 
@@ -85,7 +85,7 @@ func DownloadStatus(baseParams BaseParams, id string, onlyActiveTasks ...bool) (
 		dlBody.OnlyActiveTasks = onlyActiveTasks[0]
 	}
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownload.S
@@ -93,14 +93,14 @@ func DownloadStatus(baseParams BaseParams, id string, onlyActiveTasks ...bool) (
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	resp, err = reqParams.doDlStatusRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return
 }
 
 func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJobInfos, err error) {
 	dlBody := downloader.DlAdminBody{Regex: regex}
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownload.S
@@ -108,7 +108,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJ
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&dlList)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	sort.Sort(dlList)
 	return
 }
@@ -116,7 +116,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJ
 func AbortDownload(baseParams BaseParams, id string) error {
 	dlBody := downloader.DlAdminBody{ID: id}
 	baseParams.Method = http.MethodDelete
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownloadAbort.S
@@ -124,14 +124,14 @@ func AbortDownload(baseParams BaseParams, id string) error {
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
 func RemoveDownload(baseParams BaseParams, id string) error {
 	dlBody := downloader.DlAdminBody{ID: id}
 	baseParams.Method = http.MethodDelete
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownloadRemove.S
@@ -139,7 +139,7 @@ func RemoveDownload(baseParams BaseParams, id string) error {
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 

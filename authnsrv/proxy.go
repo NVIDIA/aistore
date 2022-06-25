@@ -1,8 +1,8 @@
-// Package authn - authorization server for AIStore.
+// Package authnsrv provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package authn
+package authnsrv
 
 import (
 	"bytes"
@@ -13,13 +13,14 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // update list of revoked token on all clusters
 func (m *UserManager) broadcastRevoked(token string) {
-	tokenList := TokenList{Tokens: []string{token}}
+	tokenList := authn.TokenList{Tokens: []string{token}}
 	body := cos.MustMarshal(tokenList)
 	m.broadcast(http.MethodDelete, apc.Tokens, body)
 }
@@ -35,7 +36,7 @@ func (m *UserManager) broadcast(method, path string, body []byte) {
 	wg := &sync.WaitGroup{}
 	for _, clu := range cluList {
 		wg.Add(1)
-		go func(clu *CluACL) {
+		go func(clu *authn.CluACL) {
 			defer wg.Done()
 			var err error
 			for _, u := range clu.URLs {
@@ -52,7 +53,7 @@ func (m *UserManager) broadcast(method, path string, body []byte) {
 }
 
 // Send valid and non-expired revoked token list to a cluster.
-func (m *UserManager) syncTokenList(cluster *CluACL) {
+func (m *UserManager) syncTokenList(cluster *authn.CluACL) {
 	tokenList, err := m.generateRevokedTokenList()
 	if err != nil {
 		glog.Errorf("failed to sync token list with %q: %v", cluster.ID, err)
@@ -61,7 +62,7 @@ func (m *UserManager) syncTokenList(cluster *CluACL) {
 	if len(tokenList) == 0 {
 		return
 	}
-	body := cos.MustMarshal(TokenList{Tokens: tokenList})
+	body := cos.MustMarshal(authn.TokenList{Tokens: tokenList})
 	for _, u := range cluster.URLs {
 		if err = m.proxyRequest(http.MethodDelete, u, apc.Tokens, body); err == nil {
 			break

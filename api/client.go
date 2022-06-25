@@ -107,14 +107,14 @@ var (
 	reqParams0   ReqParams
 )
 
-func allocRp() *ReqParams {
+func AllocRp() *ReqParams {
 	if v := reqParamPool.Get(); v != nil {
 		return v.(*ReqParams)
 	}
 	return &ReqParams{}
 }
 
-func freeRp(reqParams *ReqParams) {
+func FreeRp(reqParams *ReqParams) {
 	*reqParams = reqParams0
 	reqParamPool.Put(reqParams)
 }

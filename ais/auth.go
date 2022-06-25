@@ -22,7 +22,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/authn"
+	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/authnsrv"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
@@ -34,7 +35,7 @@ type (
 		authn.TokenList
 	}
 
-	authList map[string]*authn.Token
+	authList map[string]*authnsrv.Token
 
 	authManager struct {
 		sync.Mutex
@@ -52,9 +53,9 @@ var _ revs = (*tokenList)(nil)
 
 // Decrypts JWT token and returns all encrypted information.
 // Used by proxy and by AuthN.
-func decryptToken(tokenStr string) (*authn.Token, error) {
+func decryptToken(tokenStr string) (*authnsrv.Token, error) {
 	secret := cmn.GCO.Get().Auth.Secret
-	return authn.DecryptToken(tokenStr, secret)
+	return authnsrv.DecryptToken(tokenStr, secret)
 }
 
 // Add tokens to list of invalid ones. After that it cleans up the list
@@ -96,11 +97,11 @@ func (a *authManager) updateRevokedList(tokens *tokenList) {
 //   - must not be expired
 //   - must have all mandatory fields: userID, creds, issued, expires
 // Returns decrypted token information if it is valid
-func (a *authManager) validateToken(token string) (ar *authn.Token, err error) {
+func (a *authManager) validateToken(token string) (ar *authnsrv.Token, err error) {
 	a.Lock()
 
 	if _, ok := a.revokedTokens[token]; ok {
-		ar, err = nil, authn.ErrTokenExpired
+		ar, err = nil, authnsrv.ErrTokenExpired
 		a.Unlock()
 		return
 	}
@@ -114,26 +115,26 @@ func (a *authManager) validateToken(token string) (ar *authn.Token, err error) {
 // was issued. Return error is the token expired or does not include all
 // mandatory fields
 // It is internal service function, so it does not lock anything
-func (a *authManager) extractTokenData(token string) (*authn.Token, error) {
+func (a *authManager) extractTokenData(token string) (*authnsrv.Token, error) {
 	var err error
 
 	auth, ok := a.tokens[token]
 	if !ok || auth == nil {
 		if auth, err = decryptToken(token); err != nil {
 			glog.Errorf("Invalid token was received: %s", token)
-			return nil, authn.ErrInvalidToken
+			return nil, authnsrv.ErrInvalidToken
 		}
 		a.tokens[token] = auth
 	}
 
 	if auth == nil {
-		return nil, authn.ErrInvalidToken
+		return nil, authnsrv.ErrInvalidToken
 	}
 
 	if auth.Expires.Before(time.Now()) {
 		glog.Errorf("Expired token was used: %s", token)
 		delete(a.tokens, token)
-		return nil, authn.ErrTokenExpired
+		return nil, authnsrv.ErrTokenExpired
 	}
 
 	return auth, nil

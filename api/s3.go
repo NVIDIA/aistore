@@ -25,7 +25,7 @@ func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options 
 	}
 	q = bck.AddToQuery(q)
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathS3.Join(bck.Name, objectName)
@@ -33,7 +33,7 @@ func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options 
 		reqParams.Header = hdr
 	}
 	resp, err := reqParams.doResp(w)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	if err != nil {
 		return 0, err
 	}

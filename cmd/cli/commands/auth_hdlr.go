@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/authn"
+	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
@@ -219,7 +219,8 @@ func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 		err := f(c)
 		if err != nil {
 			if msg, unreachable := isUnreachableError(err); unreachable {
-				err = fmt.Errorf(authnUnreachable, authParams.URL+" (detailed error: "+msg+")", authn.EnvVars.URL)
+				err = fmt.Errorf(authnUnreachable, authParams.URL+" (detailed error: "+msg+")",
+					authn.EnvVars.URL)
 			}
 		}
 		return err
@@ -261,12 +262,12 @@ func cliAuthnUserPassword(c *cli.Context, omitEmpty bool) string {
 
 func updateAuthUserHandler(c *cli.Context) (err error) {
 	user := userFromArgsOrStdin(c, true)
-	return api.UpdateUserAuthN(authParams, user)
+	return authn.UpdateUser(authParams, user)
 }
 
 func addAuthUserHandler(c *cli.Context) (err error) {
 	user := userFromArgsOrStdin(c, false /*omitEmpty*/)
-	list, err := api.GetAllUsersAuthN(authParams)
+	list, err := authn.GetAllUsers(authParams)
 	if err != nil {
 		return err
 	}
@@ -276,7 +277,7 @@ func addAuthUserHandler(c *cli.Context) (err error) {
 		}
 	}
 	fmt.Fprintln(c.App.Writer)
-	return api.AddUserAuthN(authParams, user)
+	return authn.AddUser(authParams, user)
 }
 
 func deleteUserHandler(c *cli.Context) (err error) {
@@ -284,7 +285,7 @@ func deleteUserHandler(c *cli.Context) (err error) {
 	if userName == "" {
 		return missingArgumentsError(c, "user name")
 	}
-	return api.DeleteUserAuthN(authParams, userName)
+	return authn.DeleteUser(authParams, userName)
 }
 
 func deleteRoleHandler(c *cli.Context) (err error) {
@@ -292,7 +293,7 @@ func deleteRoleHandler(c *cli.Context) (err error) {
 	if role == "" {
 		return missingArgumentsError(c, "role")
 	}
-	return api.DeleteRoleAuthN(authParams, role)
+	return authn.DeleteRole(authParams, role)
 }
 
 func loginUserHandler(c *cli.Context) (err error) {
@@ -305,7 +306,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, expireFlag) {
 		expireIn = api.Duration(parseDurationFlag(c, expireFlag))
 	}
-	token, err := api.LoginUserAuthN(authParams, name, password, expireIn)
+	token, err := authn.LoginUser(authParams, name, password, expireIn)
 	if err != nil {
 		return err
 	}
@@ -368,7 +369,7 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 		return err
 	}
 	cluSpec.ID = smap.UUID
-	return api.RegisterClusterAuthN(authParams, cluSpec)
+	return authn.RegisterCluster(authParams, cluSpec)
 }
 
 func updateAuthClusterHandler(c *cli.Context) (err error) {
@@ -379,7 +380,7 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 	if cluSpec.Alias == "" && cluSpec.ID == "" {
 		return missingArgumentsError(c, "cluster ID")
 	}
-	list, err := api.GetRegisteredClustersAuthN(authParams, cluSpec)
+	list, err := authn.GetRegisteredClusters(authParams, cluSpec)
 	if err != nil {
 		return err
 	}
@@ -399,7 +400,7 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("cluster %q not found", cluSpec.Alias)
 	}
 
-	return api.UpdateClusterAuthN(authParams, cluSpec)
+	return authn.UpdateCluster(authParams, cluSpec)
 }
 
 func deleteAuthClusterHandler(c *cli.Context) (err error) {
@@ -408,14 +409,14 @@ func deleteAuthClusterHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "cluster id")
 	}
 	cluSpec := authn.CluACL{ID: cid}
-	return api.UnregisterClusterAuthN(authParams, cluSpec)
+	return authn.UnregisterCluster(authParams, cluSpec)
 }
 
 func showAuthClusterHandler(c *cli.Context) (err error) {
 	cluSpec := authn.CluACL{
 		ID: c.Args().Get(0),
 	}
-	list, err := api.GetRegisteredClustersAuthN(authParams, cluSpec)
+	list, err := authn.GetRegisteredClusters(authParams, cluSpec)
 	if err != nil {
 		return err
 	}
@@ -426,14 +427,14 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 func showAuthRoleHandler(c *cli.Context) (err error) {
 	roleID := c.Args().First()
 	if roleID == "" {
-		list, err := api.GetAllRolesAuthN(authParams)
+		list, err := authn.GetAllRoles(authParams)
 		if err != nil {
 			return err
 		}
 		// non-verbose is the implicit default when showing all
 		if flagIsSet(c, verboseFlag) {
 			for i, role := range list {
-				rInfo, err := api.GetRoleAuthN(authParams, role.ID)
+				rInfo, err := authn.GetRole(authParams, role.ID)
 				if err != nil {
 					color.New(color.FgRed).Fprintf(c.App.Writer, "%s: %v\n", role.ID, err)
 				} else {
@@ -447,7 +448,7 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 		}
 		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl, false)
 	}
-	rInfo, err := api.GetRoleAuthN(authParams, roleID)
+	rInfo, err := authn.GetRole(authParams, roleID)
 	if err != nil {
 		return err
 	}
@@ -461,14 +462,14 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 func showAuthUserHandler(c *cli.Context) (err error) {
 	userID := c.Args().First()
 	if userID == "" {
-		list, err := api.GetAllUsersAuthN(authParams)
+		list, err := authn.GetAllUsers(authParams)
 		if err != nil {
 			return err
 		}
 		// non-verbose is the implicit default when showing all
 		if flagIsSet(c, verboseFlag) {
 			for i, user := range list {
-				if uInfo, err := api.GetUserAuthN(authParams, user.ID); err != nil {
+				if uInfo, err := authn.GetUser(authParams, user.ID); err != nil {
 					color.New(color.FgRed).Fprintf(c.App.Writer, "%s: %v\n", user.ID, err)
 				} else {
 					if i > 0 {
@@ -481,7 +482,7 @@ func showAuthUserHandler(c *cli.Context) (err error) {
 		}
 		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl, false)
 	}
-	uInfo, err := api.GetUserAuthN(authParams, userID)
+	uInfo, err := authn.GetUser(authParams, userID)
 	if err != nil {
 		return err
 	}
@@ -497,7 +498,7 @@ func addAuthRoleHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return api.AddRoleAuthN(authParams, rInfo)
+	return authn.AddRole(authParams, rInfo)
 }
 
 func updateAuthRoleHandler(c *cli.Context) error {
@@ -505,7 +506,7 @@ func updateAuthRoleHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return api.UpdateRoleAuthN(authParams, rInfo)
+	return authn.UpdateRole(authParams, rInfo)
 }
 
 // TODO: bucket permissions
@@ -517,7 +518,7 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		role    = args.Get(0)
 	)
 	if cluster != "" {
-		cluList, err := api.GetRegisteredClustersAuthN(authParams, authn.CluACL{})
+		cluList, err := authn.GetRegisteredClusters(authParams, authn.CluACL{})
 		if err != nil {
 			return nil, err
 		}
@@ -607,11 +608,11 @@ func revokeTokenHandler(c *cli.Context) (err error) {
 	if token == "" {
 		return missingArgumentsError(c, "token or token filename")
 	}
-	return api.RevokeTokenAuthN(authParams, token)
+	return authn.RevokeToken(authParams, token)
 }
 
 func showAuthConfigHandler(c *cli.Context) (err error) {
-	conf, err := api.GetConfigAuthN(authParams)
+	conf, err := authn.GetConfig(authParams)
 	if err != nil {
 		return err
 	}
@@ -654,5 +655,5 @@ func setAuthConfigHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	return api.SetConfigAuthN(authParams, conf)
+	return authn.SetConfig(authParams, conf)
 }

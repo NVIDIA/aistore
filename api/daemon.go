@@ -34,7 +34,7 @@ type GetLogInput struct {
 // GetMountpaths given the direct public URL of the target, returns the target's mountpaths or error.
 func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *apc.MountpathList, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.S
@@ -45,14 +45,14 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *apc.Mountpa
 		}
 	}
 	err = reqParams.DoHTTPReqResp(&mpl)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return mpl, err
 }
 
 // TODO: rewrite tests that come here with `force`
 func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, force bool) error {
 	baseParams.Method = http.MethodPut
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
@@ -65,13 +65,13 @@ func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		reqParams.Query = url.Values{apc.QparamForce: []string{strconv.FormatBool(force)}}
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
 func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
 	baseParams.Method = http.MethodPost
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
@@ -83,7 +83,7 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		}
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
@@ -93,7 +93,7 @@ func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		q = url.Values{apc.QparamDontResilver: []string{"true"}}
 	}
 	baseParams.Method = http.MethodDelete
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
@@ -105,7 +105,7 @@ func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		reqParams.Query = q
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
@@ -115,7 +115,7 @@ func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath stri
 		q = url.Values{apc.QparamDontResilver: []string{"true"}}
 	}
 	baseParams.Method = http.MethodPost
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
@@ -127,14 +127,14 @@ func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath stri
 		reqParams.Query = q
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
 // GetDaemonConfig returns the configuration of a specific daemon in a cluster.
 func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Config, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.S
@@ -142,7 +142,7 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
 	err = reqParams.DoHTTPReqResp(&config)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 
 func GetDaemonStats(baseParams BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.S
@@ -164,7 +164,7 @@ func GetDaemonStats(baseParams BaseParams, node *cluster.Snode) (ds *stats.Daemo
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
 	err = reqParams.DoHTTPReqResp(&ds)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return ds, err
 }
 
@@ -177,7 +177,7 @@ func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) 
 		q.Set(apc.QparamSev, args.Severity)
 	}
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.S
@@ -185,14 +185,14 @@ func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) 
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
 	err := reqParams.DoHTTPReqResp(w)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
 // GetDaemonStatus returns information about specific node in a cluster.
 func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonStatus, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.S
@@ -200,7 +200,7 @@ func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
 	err = reqParams.DoHTTPReqResp(&daeInfo)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	if err == nil {
 		daeInfo.Status = StatusOnline
 	} else {
@@ -224,7 +224,7 @@ func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs, tr
 	if len(transient) > 0 {
 		query.Add(apc.ActTransient, strconv.FormatBool(transient[0]))
 	}
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.ActSetConfig)
@@ -232,14 +232,14 @@ func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs, tr
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{nodeID}}
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
 // ResetDaemonConfig resets the configuration for a specific node to the cluster configuration.
 func ResetDaemonConfig(baseParams BaseParams, nodeID string) error {
 	baseParams.Method = http.MethodPut
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathReverseDaemon.S
@@ -250,6 +250,6 @@ func ResetDaemonConfig(baseParams BaseParams, nodeID string) error {
 		}
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }

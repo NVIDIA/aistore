@@ -23,7 +23,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/authn"
+	"github.com/NVIDIA/aistore/authnsrv"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -178,7 +178,7 @@ func (p *proxy) Run() error {
 	p.bootstrap()
 
 	p.authn = &authManager{
-		tokens:        make(map[string]*authn.Token),
+		tokens:        make(map[string]*authnsrv.Token),
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}

@@ -17,7 +17,7 @@ import (
 func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
 	var id string
 	baseParams.Method = http.MethodPost
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathdSort.S
@@ -25,58 +25,58 @@ func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
 		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 	}
 	err := reqParams.DoHTTPReqResp(&id)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return id, err
 }
 
 func AbortDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathdSortAbort.S
 		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
 func MetricsDSort(baseParams BaseParams, managerUUID string) (metrics map[string]*dsort.Metrics, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
 	err = reqParams.DoHTTPReqResp(&metrics)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return metrics, err
 }
 
 func RemoveDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
 func ListDSort(baseParams BaseParams, regex string) (jobsInfos []*dsort.JobInfo, err error) {
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Query = url.Values{apc.QparamRegex: []string{regex}}
 	}
 	err = reqParams.DoHTTPReqResp(&jobsInfos)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return jobsInfos, err
 }

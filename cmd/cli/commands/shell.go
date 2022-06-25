@@ -12,7 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/authn"
+	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -566,7 +566,7 @@ func setRoleCompletions(c *cli.Context) {
 }
 
 func oneRoleCompletions(c *cli.Context) {
-	roleList, err := api.GetAllRolesAuthN(authParams)
+	roleList, err := authn.GetAllRoles(authParams)
 	if err != nil {
 		return
 	}
@@ -581,7 +581,7 @@ func oneRoleCompletions(c *cli.Context) {
 }
 
 func multiRoleCompletions(c *cli.Context) {
-	roleList, err := api.GetAllRolesAuthN(authParams)
+	roleList, err := authn.GetAllRoles(authParams)
 	if err != nil {
 		return
 	}
@@ -598,7 +598,7 @@ func oneUserCompletions(c *cli.Context) {
 	if c.NArg() > 0 {
 		return
 	}
-	userList, err := api.GetAllUsersAuthN(authParams)
+	userList, err := authn.GetAllUsers(authParams)
 	if err != nil {
 		return
 	}
@@ -612,7 +612,7 @@ func oneUserCompletionsWithRoles(c *cli.Context) {
 		oneUserCompletions(c)
 		return
 	}
-	userList, err := api.GetAllUsersAuthN(authParams)
+	userList, err := authn.GetAllUsers(authParams)
 	if err != nil {
 		return
 	}
@@ -633,7 +633,7 @@ func oneClusterCompletions(c *cli.Context) {
 	if c.NArg() > 0 {
 		return
 	}
-	cluList, err := api.GetRegisteredClustersAuthN(authParams, authn.CluACL{})
+	cluList, err := authn.GetRegisteredClusters(authParams, authn.CluACL{})
 	if err != nil {
 		return
 	}

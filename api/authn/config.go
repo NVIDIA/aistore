@@ -1,7 +1,6 @@
-// Package authn - authorization server for AIStore.
+// Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 type (
@@ -57,6 +57,15 @@ type (
 		Version int64    `json:"version,string"`
 	}
 )
+
+var (
+	_ jsp.Opts = (*Config)(nil)
+
+	authcfgJspOpts = jsp.Plain() // TODO: use CCSign(MetaverAuthNConfig)
+	authtokJspOpts = jsp.Plain() // ditto MetaverTokens
+)
+
+func (*Config) JspOpts() jsp.Options { return authcfgJspOpts }
 
 func (c *Config) Secret() (secret string) {
 	c.RLock()

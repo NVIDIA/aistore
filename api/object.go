@@ -158,8 +158,8 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 		q = bck.AddToQuery(nil)
 	}
 
-	reqParams := allocRp()
-	defer freeRp(reqParams)
+	reqParams := AllocRp()
+	defer FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
@@ -210,7 +210,7 @@ func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, cus
 		q = bck.AddToQuery(q)
 	}
 	baseParams.Method = http.MethodPatch
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
@@ -219,21 +219,21 @@ func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, cus
 		reqParams.Query = q
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
 // DeleteObject deletes an object specified by bucket/object.
 func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	baseParams.Method = http.MethodDelete
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = bck.AddToQuery(nil)
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
@@ -241,7 +241,7 @@ func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	baseParams.Method = http.MethodDelete
 	actMsg := apc.ActionMsg{Action: apc.ActEvictObjects, Name: cos.JoinWords(bck.Name, object)}
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
@@ -250,7 +250,7 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 		reqParams.Query = bck.AddToQuery(nil)
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
@@ -271,7 +271,7 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 		w, q, hdr = getObjectOptParams(options[0])
 	}
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
@@ -279,7 +279,7 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 		reqParams.Header = hdr
 	}
 	resp, err := reqParams.doResp(w)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	if err != nil {
 		return 0, err
 	}
@@ -300,7 +300,7 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 	}
 	q = bck.AddToQuery(q)
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
@@ -308,7 +308,7 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 		reqParams.Header = hdr
 	}
 	r, err = reqParams.doReader()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return
 }
 
@@ -333,7 +333,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 	}
 	baseParams.Method = http.MethodGet
 
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
@@ -342,7 +342,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 		reqParams.Validate = true
 	}
 	resp, err := reqParams.doResp(w)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	if err != nil {
 		return 0, err
 	}
@@ -372,7 +372,7 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 	}
 	q = bck.AddToQuery(q)
 	baseParams.Method = http.MethodGet
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
@@ -380,7 +380,7 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 		reqParams.Header = hdr
 	}
 	resp, err := reqParams.doResp(w)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -485,7 +485,7 @@ func FlushObject(args FlushArgs) error {
 		header.Set(apc.HdrObjCksumVal, args.Cksum.Val())
 	}
 	args.BaseParams.Method = http.MethodPut
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = args.BaseParams
 		reqParams.Path = apc.URLPathObjects.Join(args.Bck.Name, args.Object)
@@ -493,7 +493,7 @@ func FlushObject(args FlushArgs) error {
 		reqParams.Header = header
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
@@ -501,7 +501,7 @@ func FlushObject(args FlushArgs) error {
 // across single, specified bucket.
 func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) error {
 	baseParams.Method = http.MethodPost
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, oldName)
@@ -510,7 +510,7 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 		reqParams.Query = bck.AddToQuery(nil)
 	}
 	err := reqParams.DoHTTPRequest()
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return err
 }
 
@@ -519,7 +519,7 @@ func Promote(args *PromoteArgs) (xactID string, err error) {
 	actMsg := apc.ActionMsg{Action: apc.ActPromote, Name: args.SrcFQN}
 	actMsg.Value = &args.PromoteArgs
 	args.BaseParams.Method = http.MethodPost
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = args.BaseParams
 		reqParams.Path = apc.URLPathObjects.Join(args.Bck.Name)
@@ -528,7 +528,7 @@ func Promote(args *PromoteArgs) (xactID string, err error) {
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return
 }
 
@@ -592,9 +592,9 @@ exit:
 	if err != nil {
 		return nil, fmt.Errorf("failed to %s, err: %v", reqArgs.Method, err)
 	}
-	reqParams := allocRp()
+	reqParams := AllocRp()
 	_, err = reqParams.readResp(resp, nil)
-	freeRp(reqParams)
+	FreeRp(reqParams)
 	return
 }
 

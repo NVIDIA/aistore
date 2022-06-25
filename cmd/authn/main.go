@@ -14,7 +14,7 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/authn"
+	"github.com/NVIDIA/aistore/authnsrv"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/dbdriver"
@@ -26,8 +26,9 @@ const (
 )
 
 var (
-	version, build string
-	configPath     string
+	version    = "1.0"
+	build      string
+	configPath string
 )
 
 func init() {
@@ -37,18 +38,18 @@ func init() {
 
 // Set up glog with options from configuration file
 func updateLogOptions() error {
-	if err := cos.CreateDir(authn.Conf.Log.Dir); err != nil {
-		return fmt.Errorf("failed to create log dir %q, err: %v", authn.Conf.Log.Dir, err)
+	if err := cos.CreateDir(authnsrv.Conf.Log.Dir); err != nil {
+		return fmt.Errorf("failed to create log dir %q, err: %v", authnsrv.Conf.Log.Dir, err)
 	}
-	glog.SetLogDir(authn.Conf.Log.Dir)
+	glog.SetLogDir(authnsrv.Conf.Log.Dir)
 
-	if authn.Conf.Log.Level != "" {
+	if authnsrv.Conf.Log.Level != "" {
 		v := flag.Lookup("v").Value
 		if v == nil {
 			return fmt.Errorf("nil -v Value")
 		}
-		if err := v.Set(authn.Conf.Log.Level); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", authn.Conf.Log.Level, err)
+		if err := v.Set(authnsrv.Conf.Log.Level); err != nil {
+			return fmt.Errorf("failed to set log level = %s, err: %v", authnsrv.Conf.Log.Level, err)
 		}
 	}
 	return nil
@@ -64,7 +65,7 @@ func installSignalHandler() {
 }
 
 func main() {
-	fmt.Printf("version: %s | build_time: %s\n", version, build)
+	fmt.Printf("version: %s | build: %s\n", version, build)
 
 	installSignalHandler()
 
@@ -83,29 +84,29 @@ func main() {
 	if glog.V(4) {
 		glog.Infof("Reading configuration from %s", configPath)
 	}
-	if _, err = jsp.LoadMeta(configPath, authn.Conf); err != nil {
+	if _, err = jsp.LoadMeta(configPath, authnsrv.Conf); err != nil {
 		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
-	authn.Conf.Path = configPath
+	authnsrv.Conf.Path = configPath
 	if val := os.Getenv(secretKeyEnvVar); val != "" {
-		authn.Conf.Server.Secret = val
+		authnsrv.Conf.Server.Secret = val
 	}
 
 	if err = updateLogOptions(); err != nil {
 		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
 
-	dbPath := filepath.Join(authn.Conf.ConfDir, authDB)
+	dbPath := filepath.Join(authnsrv.Conf.ConfDir, authDB)
 	driver, err := dbdriver.NewBuntDB(dbPath)
 	if err != nil {
 		cos.ExitLogf("Failed to init local database: %v", err)
 	}
-	mgr, err := authn.NewUserManager(driver)
+	mgr, err := authnsrv.NewUserManager(driver)
 	if err != nil {
 		cos.ExitLogf("Failed to init user manager: %v", err)
 	}
 
-	srv := authn.NewServer(mgr)
+	srv := authnsrv.NewServer(mgr)
 	if err := srv.Run(); err != nil {
 		cos.ExitLogf("Server failed: %v", err)
 	}

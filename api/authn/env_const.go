@@ -1,6 +1,6 @@
-// Package authn - authorization server for AIStore. See README.md for more info.
+// Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 

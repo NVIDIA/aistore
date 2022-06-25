@@ -1,13 +1,12 @@
-// Package authn - authorization server for AIStore.
+// Package authnsrv provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package authn
+package authnsrv
 
 import "time"
 
 const (
-	AdminRole        = "Admin"
 	ClusterOwnerRole = "ClusterOwner"
 	BucketOwnerRole  = "BucketOwner"
 	GuestRole        = "Guest"

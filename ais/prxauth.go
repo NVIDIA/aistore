@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/authn"
+	"github.com/NVIDIA/aistore/authnsrv"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -37,14 +37,14 @@ func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 // Header format:
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
-func (p *proxy) validateToken(hdr http.Header) (*authn.Token, error) {
+func (p *proxy) validateToken(hdr http.Header) (*authnsrv.Token, error) {
 	authToken := hdr.Get(apc.HdrAuthorization)
 	if authToken == "" {
-		return nil, authn.ErrNoToken
+		return nil, authnsrv.ErrNoToken
 	}
 	idx := strings.Index(authToken, " ")
 	if idx == -1 || authToken[:idx] != apc.AuthenticationTypeBearer {
-		return nil, authn.ErrNoToken
+		return nil, authnsrv.ErrNoToken
 	}
 
 	auth, err := p.authn.validateToken(authToken[idx+1:])
@@ -77,7 +77,7 @@ func (*proxy) aclErrToCode(err error) int {
 	switch err {
 	case nil:
 		return http.StatusOK
-	case authn.ErrNoToken:
+	case authnsrv.ErrNoToken:
 		return http.StatusUnauthorized
 	default:
 		return http.StatusForbidden
@@ -89,7 +89,7 @@ func (p *proxy) _checkACL(hdr http.Header, bck *cluster.Bck, ace apc.AccessAttrs
 		return nil
 	}
 	var (
-		token  *authn.Token
+		token  *authnsrv.Token
 		cfg    = cmn.GCO.Get()
 		bucket *cmn.Bck
 		err    error
