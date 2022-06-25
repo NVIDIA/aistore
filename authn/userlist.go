@@ -134,14 +134,14 @@ func (m *UserManager) addRole(info *Role) error {
 	return m.db.Set(rolesCollection, info.ID, info)
 }
 
-func (m *UserManager) clusterList() (map[string]*Cluster, error) {
+func (m *UserManager) clusterList() (map[string]*CluACL, error) {
 	clusters, err := m.db.GetAll(clustersCollection, "")
 	if err != nil {
 		return nil, err
 	}
-	cluList := make(map[string]*Cluster, len(clusters))
+	cluList := make(map[string]*CluACL, len(clusters))
 	for cid, s := range clusters {
-		cInfo := &Cluster{}
+		cInfo := &CluACL{}
 		if err := jsoniter.Unmarshal([]byte(s), cInfo); err != nil {
 			glog.Errorf("Failed to parse cluster %s info: %v", cid, err)
 			continue
@@ -172,18 +172,18 @@ func (m *UserManager) cluLookup(cluID, cluAlias string) string {
 }
 
 // Get an existing cluster
-func (m *UserManager) getCluster(cluID string) (*Cluster, error) {
+func (m *UserManager) getCluster(cluID string) (*CluACL, error) {
 	cid := m.cluLookup(cluID, cluID)
 	if cid == "" {
 		return nil, cmn.NewErrNotFound("user-manager: %s cluster %q", svcName, cluID)
 	}
-	clu := &Cluster{}
+	clu := &CluACL{}
 	err := m.db.Get(clustersCollection, cid, clu)
 	return clu, err
 }
 
 // Registers a new cluster
-func (m *UserManager) addCluster(info *Cluster) error {
+func (m *UserManager) addCluster(info *CluACL) error {
 	if info.ID == "" {
 		return errors.New("cluster UUID is undefined")
 	}
@@ -244,8 +244,8 @@ func (m *UserManager) updateUser(userID string, updateReq *User) error {
 	if len(updateReq.Roles) != 0 {
 		uInfo.Roles = updateReq.Roles
 	}
-	uInfo.Clusters = MergeClusterACLs(uInfo.Clusters, updateReq.Clusters)
-	uInfo.Buckets = MergeBckACLs(uInfo.Buckets, updateReq.Buckets)
+	uInfo.ClusterACLs = MergeClusterACLs(uInfo.ClusterACLs, updateReq.ClusterACLs)
+	uInfo.BucketACLs = MergeBckACLs(uInfo.BucketACLs, updateReq.BucketACLs)
 
 	return m.db.Set(usersCollection, userID, uInfo)
 }
@@ -267,8 +267,8 @@ func (m *UserManager) updateRole(role string, updateReq *Role) error {
 	if len(updateReq.Roles) != 0 {
 		rInfo.Roles = updateReq.Roles
 	}
-	rInfo.Clusters = MergeClusterACLs(rInfo.Clusters, updateReq.Clusters)
-	rInfo.Buckets = MergeBckACLs(rInfo.Buckets, updateReq.Buckets)
+	rInfo.ClusterACLs = MergeClusterACLs(rInfo.ClusterACLs, updateReq.ClusterACLs)
+	rInfo.BucketACLs = MergeBckACLs(rInfo.BucketACLs, updateReq.BucketACLs)
 
 	return m.db.Set(rolesCollection, role, rInfo)
 }
@@ -282,11 +282,11 @@ func (m *UserManager) lookupRole(roleID string) (*Role, error) {
 	return rInfo, nil
 }
 
-func (m *UserManager) updateCluster(cluID string, info *Cluster) error {
+func (m *UserManager) updateCluster(cluID string, info *CluACL) error {
 	if info.ID == "" {
 		return errors.New("cluster ID is undefined")
 	}
-	clu := &Cluster{}
+	clu := &CluACL{}
 	err := m.db.Get(clustersCollection, cluID, clu)
 	if err != nil {
 		return err
@@ -306,7 +306,7 @@ func (m *UserManager) updateCluster(cluID string, info *Cluster) error {
 
 // Before putting a list of cluster permissions to a token, cluster aliases
 // must be replaced with their IDs.
-func (m *UserManager) fixClusterIDs(lst []*Cluster) {
+func (m *UserManager) fixClusterIDs(lst []*CluACL) {
 	cluList, err := m.clusterList()
 	if err != nil {
 		return
@@ -350,8 +350,8 @@ func (m *UserManager) issueToken(userID, pwd string, ttl *time.Duration) (string
 		if err != nil {
 			continue
 		}
-		uInfo.Clusters = MergeClusterACLs(uInfo.Clusters, rInfo.Clusters)
-		uInfo.Buckets = MergeBckACLs(uInfo.Buckets, rInfo.Buckets)
+		uInfo.ClusterACLs = MergeClusterACLs(uInfo.ClusterACLs, rInfo.ClusterACLs)
+		uInfo.BucketACLs = MergeBckACLs(uInfo.BucketACLs, rInfo.BucketACLs)
 	}
 
 	// generate token
@@ -378,12 +378,12 @@ func (m *UserManager) issueToken(userID, pwd string, ttl *time.Duration) (string
 			"admin":    true,
 		})
 	} else {
-		m.fixClusterIDs(uInfo.Clusters)
+		m.fixClusterIDs(uInfo.ClusterACLs)
 		t = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"expires":  expires,
 			"username": userID,
-			"buckets":  uInfo.Buckets,
-			"clusters": uInfo.Clusters,
+			"buckets":  uInfo.BucketACLs,
+			"clusters": uInfo.ClusterACLs,
 		})
 	}
 	tokenString, err := t.SignedString([]byte(Conf.Server.Secret))
@@ -452,8 +452,8 @@ func (m *UserManager) lookupUser(userID string) (*User, error) {
 		if err != nil {
 			continue
 		}
-		uInfo.Clusters = MergeClusterACLs(uInfo.Clusters, rInfo.Clusters)
-		uInfo.Buckets = MergeBckACLs(uInfo.Buckets, rInfo.Buckets)
+		uInfo.ClusterACLs = MergeClusterACLs(uInfo.ClusterACLs, rInfo.ClusterACLs)
+		uInfo.BucketACLs = MergeBckACLs(uInfo.BucketACLs, rInfo.BucketACLs)
 	}
 
 	return uInfo, nil
@@ -493,7 +493,7 @@ func (m *UserManager) roleList() ([]*Role, error) {
 
 // Creates predefined roles for just added clusters. Errors are logged and
 // are not returned to a caller as it is not crucial.
-func (m *UserManager) createRolesForCluster(clu *Cluster) {
+func (m *UserManager) createRolesForCluster(clu *CluACL) {
 	for _, pr := range predefinedRoles {
 		suffix := cos.Either(clu.Alias, clu.ID)
 		uid := pr.prefix + "-" + suffix
@@ -507,7 +507,7 @@ func (m *UserManager) createRolesForCluster(clu *Cluster) {
 			cluName += "[" + clu.Alias + "]"
 		}
 		rInfo.Desc = fmt.Sprintf(pr.desc, cluName)
-		rInfo.Clusters = []*Cluster{
+		rInfo.ClusterACLs = []*CluACL{
 			{ID: clu.ID, Access: pr.perms},
 		}
 		if err := m.db.Set(rolesCollection, uid, rInfo); err != nil {

@@ -17,44 +17,41 @@ import (
 )
 
 type (
-	// A registered user
 	User struct {
-		ID       string     `json:"id"`
-		Password string     `json:"pass,omitempty"`
-		Roles    []string   `json:"roles"`
-		Clusters []*Cluster `json:"clusters"`
-		Buckets  []*Bucket  `json:"buckets"` // list of buckets with special permissions
+		ID          string    `json:"id"`
+		Password    string    `json:"pass,omitempty"`
+		Roles       []string  `json:"roles"`
+		ClusterACLs []*CluACL `json:"clusters"`
+		BucketACLs  []*BckACL `json:"buckets"` // list of buckets with special permissions
 	}
-	// Cluster permissions
-	Cluster struct {
+	CluACL struct {
 		ID     string          `json:"id"`
 		Alias  string          `json:"alias,omitempty"`
 		Access apc.AccessAttrs `json:"perm,string,omitempty"`
 		URLs   []string        `json:"urls,omitempty"`
 	}
-	// Bucket permissions
-	Bucket struct {
+	BckACL struct {
 		Bck    cmn.Bck         `json:"bck"`
 		Access apc.AccessAttrs `json:"perm,string"`
 	}
 	Role struct {
-		ID       string     `json:"name"`
-		Desc     string     `json:"desc"`
-		Roles    []string   `json:"roles"`
-		Clusters []*Cluster `json:"clusters"`
-		Buckets  []*Bucket  `json:"buckets"`
-		IsAdmin  bool       `json:"admin"`
+		ID          string    `json:"name"`
+		Desc        string    `json:"desc"`
+		Roles       []string  `json:"roles"`
+		ClusterACLs []*CluACL `json:"clusters"`
+		BucketACLs  []*BckACL `json:"buckets"`
+		IsAdmin     bool      `json:"admin"`
 	}
 	Token struct {
-		UserID   string     `json:"username"`
-		Expires  time.Time  `json:"expires"`
-		Token    string     `json:"token"`
-		Clusters []*Cluster `json:"clusters"`
-		Buckets  []*Bucket  `json:"buckets,omitempty"`
-		IsAdmin  bool       `json:"admin"`
+		UserID      string    `json:"username"`
+		Expires     time.Time `json:"expires"`
+		Token       string    `json:"token"`
+		ClusterACLs []*CluACL `json:"clusters"`
+		BucketACLs  []*BckACL `json:"buckets,omitempty"`
+		IsAdmin     bool      `json:"admin"`
 	}
-	ClusterList struct {
-		Clusters map[string]*Cluster `json:"clusters,omitempty"`
+	RegisteredClusters struct {
+		M map[string]*CluACL `json:"clusters,omitempty"`
 	}
 	LoginMsg struct {
 		Password  string         `json:"password"`
@@ -108,8 +105,8 @@ func expiresIn(tm time.Time) string {
 }
 
 func (tk *Token) aclForCluster(clusterID string) (perms apc.AccessAttrs, ok bool) {
-	var defaultCluster *Cluster
-	for _, pm := range tk.Clusters {
+	var defaultCluster *CluACL
+	for _, pm := range tk.ClusterACLs {
 		if pm.ID == clusterID {
 			return pm.Access, true
 		}
@@ -124,7 +121,7 @@ func (tk *Token) aclForCluster(clusterID string) (perms apc.AccessAttrs, ok bool
 }
 
 func (tk *Token) aclForBucket(clusterID string, bck *cmn.Bck) (perms apc.AccessAttrs, ok bool) {
-	for _, b := range tk.Buckets {
+	for _, b := range tk.BucketACLs {
 		tbBck := b.Bck
 		if tbBck.Ns.UUID != clusterID {
 			continue
@@ -213,7 +210,7 @@ func (uInfo *User) IsAdmin() bool {
 // utils
 //
 
-func MergeBckACLs(oldACLs, newACLs []*Bucket) []*Bucket {
+func MergeBckACLs(oldACLs, newACLs []*BckACL) []*BckACL {
 	for _, n := range newACLs {
 		found := false
 		for _, o := range oldACLs {
@@ -230,7 +227,7 @@ func MergeBckACLs(oldACLs, newACLs []*Bucket) []*Bucket {
 	return oldACLs
 }
 
-func MergeClusterACLs(oldACLs, newACLs []*Cluster) []*Cluster {
+func MergeClusterACLs(oldACLs, newACLs []*CluACL) []*CluACL {
 	for _, n := range newACLs {
 		found := false
 		for _, o := range oldACLs {

@@ -89,7 +89,7 @@ func LoginUserAuthN(baseParams BaseParams, userID, pass string, expire *time.Dur
 	return token, nil
 }
 
-func RegisterClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
+func RegisterClusterAuthN(baseParams BaseParams, cluSpec authn.CluACL) error {
 	msg := cos.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPost
 	reqParams := allocRp()
@@ -103,7 +103,7 @@ func RegisterClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UpdateClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
+func UpdateClusterAuthN(baseParams BaseParams, cluSpec authn.CluACL) error {
 	msg := cos.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPut
 	reqParams := allocRp()
@@ -117,7 +117,7 @@ func UpdateClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UnregisterClusterAuthN(baseParams BaseParams, spec authn.Cluster) error {
+func UnregisterClusterAuthN(baseParams BaseParams, spec authn.CluACL) error {
 	baseParams.Method = http.MethodDelete
 	reqParams := allocRp()
 	defer freeRp(reqParams)
@@ -128,13 +128,13 @@ func UnregisterClusterAuthN(baseParams BaseParams, spec authn.Cluster) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func GetClusterAuthN(baseParams BaseParams, spec authn.Cluster) ([]*authn.Cluster, error) {
+func GetRegisteredClustersAuthN(baseParams BaseParams, spec authn.CluACL) ([]*authn.CluACL, error) {
 	baseParams.Method = http.MethodGet
 	path := apc.URLPathClusters.S
 	if spec.ID != "" {
 		path = cos.JoinWords(path, spec.ID)
 	}
-	clusters := &authn.ClusterList{}
+	clusters := &authn.RegisteredClusters{}
 	reqParams := allocRp()
 	defer freeRp(reqParams)
 	{
@@ -143,8 +143,8 @@ func GetClusterAuthN(baseParams BaseParams, spec authn.Cluster) ([]*authn.Cluste
 	}
 	err := reqParams.DoHTTPReqResp(clusters)
 
-	rec := make([]*authn.Cluster, 0, len(clusters.Clusters))
-	for _, clu := range clusters.Clusters {
+	rec := make([]*authn.CluACL, 0, len(clusters.M))
+	for _, clu := range clusters.M {
 		rec = append(rec, clu)
 	}
 	less := func(i, j int) bool { return rec[i].ID < rec[j].ID }

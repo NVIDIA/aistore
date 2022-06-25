@@ -633,7 +633,7 @@ func oneClusterCompletions(c *cli.Context) {
 	if c.NArg() > 0 {
 		return
 	}
-	cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
+	cluList, err := api.GetRegisteredClustersAuthN(authParams, authn.CluACL{})
 	if err != nil {
 		return
 	}

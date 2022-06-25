@@ -379,7 +379,7 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 	if cluSpec.Alias == "" && cluSpec.ID == "" {
 		return missingArgumentsError(c, "cluster ID")
 	}
-	list, err := api.GetClusterAuthN(authParams, cluSpec)
+	list, err := api.GetRegisteredClustersAuthN(authParams, cluSpec)
 	if err != nil {
 		return err
 	}
@@ -407,15 +407,15 @@ func deleteAuthClusterHandler(c *cli.Context) (err error) {
 	if cid == "" {
 		return missingArgumentsError(c, "cluster id")
 	}
-	cluSpec := authn.Cluster{ID: cid}
+	cluSpec := authn.CluACL{ID: cid}
 	return api.UnregisterClusterAuthN(authParams, cluSpec)
 }
 
 func showAuthClusterHandler(c *cli.Context) (err error) {
-	cluSpec := authn.Cluster{
+	cluSpec := authn.CluACL{
 		ID: c.Args().Get(0),
 	}
-	list, err := api.GetClusterAuthN(authParams, cluSpec)
+	list, err := api.GetRegisteredClustersAuthN(authParams, cluSpec)
 	if err != nil {
 		return err
 	}
@@ -517,7 +517,7 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		role    = args.Get(0)
 	)
 	if cluster != "" {
-		cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
+		cluList, err := api.GetRegisteredClustersAuthN(authParams, authn.CluACL{})
 		if err != nil {
 			return nil, err
 		}
@@ -547,7 +547,7 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		}
 		perms |= p
 	}
-	cluPerms := []*authn.Cluster{
+	cluPerms := []*authn.CluACL{
 		{
 			ID:     cluster,
 			Alias:  alias,
@@ -555,9 +555,9 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		},
 	}
 	return &authn.Role{
-		ID:       role,
-		Desc:     parseStrFlag(c, descRoleFlag),
-		Clusters: cluPerms,
+		ID:          role,
+		Desc:        parseStrFlag(c, descRoleFlag),
+		ClusterACLs: cluPerms,
 	}, nil
 }
 
@@ -570,7 +570,7 @@ func userFromArgsOrStdin(c *cli.Context, omitEmpty bool) *authn.User {
 	return &authn.User{ID: username, Password: userpass, Roles: roles}
 }
 
-func parseClusterSpecs(c *cli.Context) (cluSpec authn.Cluster, err error) {
+func parseClusterSpecs(c *cli.Context) (cluSpec authn.CluACL, err error) {
 	cluSpec.URLs = make([]string, 0, 1)
 	for idx := 0; idx < c.NArg(); idx++ {
 		arg := c.Args().Get(idx)

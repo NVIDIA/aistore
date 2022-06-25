@@ -35,7 +35,7 @@ func (m *UserManager) broadcast(method, path string, body []byte) {
 	wg := &sync.WaitGroup{}
 	for _, clu := range cluList {
 		wg.Add(1)
-		go func(clu *Cluster) {
+		go func(clu *CluACL) {
 			defer wg.Done()
 			var err error
 			for _, u := range clu.URLs {
@@ -52,7 +52,7 @@ func (m *UserManager) broadcast(method, path string, body []byte) {
 }
 
 // Send valid and non-expired revoked token list to a cluster.
-func (m *UserManager) syncTokenList(cluster *Cluster) {
+func (m *UserManager) syncTokenList(cluster *CluACL) {
 	tokenList, err := m.generateRevokedTokenList()
 	if err != nil {
 		glog.Errorf("failed to sync token list with %q: %v", cluster.ID, err)

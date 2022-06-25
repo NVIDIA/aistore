@@ -251,7 +251,7 @@ func (a *Server) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	for _, clu := range uInfo.Clusters {
+	for _, clu := range uInfo.ClusterACLs {
 		if cInfo, ok := clusters[clu.ID]; ok {
 			clu.Alias = cInfo.Alias
 		}
@@ -344,7 +344,7 @@ func (a *Server) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
-	cluConf := &Cluster{}
+	cluConf := &CluACL{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		return
 	}
@@ -362,7 +362,7 @@ func (a *Server) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
-	cluConf := &Cluster{}
+	cluConf := &CluACL{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		return
 	}
@@ -399,7 +399,7 @@ func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	var cluList *ClusterList
+	var cluList *RegisteredClusters
 	if len(apiItems) != 0 {
 		cid := apiItems[0]
 		clu, err := a.users.getCluster(cid)
@@ -411,8 +411,8 @@ func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		cluList = &ClusterList{
-			Clusters: map[string]*Cluster{clu.ID: clu},
+		cluList = &RegisteredClusters{
+			M: map[string]*CluACL{clu.ID: clu},
 		}
 	} else {
 		clusters, err := a.users.clusterList()
@@ -420,7 +420,7 @@ func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		cluList = &ClusterList{Clusters: clusters}
+		cluList = &RegisteredClusters{M: clusters}
 	}
 	writeJSON(w, cluList, "auth")
 }
@@ -470,7 +470,7 @@ func (a *Server) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	for _, clu := range role.Clusters {
+	for _, clu := range role.ClusterACLs {
 		if cInfo, ok := clusters[clu.ID]; ok {
 			clu.Alias = cInfo.Alias
 		}
