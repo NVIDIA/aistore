@@ -92,6 +92,7 @@ var _ = Describe("IterFields", func() {
 					"lru.capacity_upd_time": cos.Duration(0),
 
 					"extra.aws.cloud_region": "us-central",
+					"extra.aws.endpoint":     "",
 
 					"access":  apc.AccessAttrs(0),
 					"created": int64(0),
@@ -150,6 +151,9 @@ var _ = Describe("IterFields", func() {
 					"write_policy.md":   api.WritePolicy(apc.WriteDelayed),
 
 					"extra.hdfs.ref_directory": (*string)(nil),
+					"extra.aws.cloud_region":   (*string)(nil),
+					"extra.aws.endpoint":       (*string)(nil),
+					"extra.http.original_url":  (*string)(nil),
 				},
 			),
 			Entry("check for omit tag",
