@@ -594,10 +594,9 @@ func (p *proxy) _updFinal(ctx *smapModifier, clone *smapX) {
 		cos.Assert(ctx.rmd != nil)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
-	if len(tokens.Tokens) > 0 {
+	if tokens != nil {
 		pairs = append(pairs, revsPair{tokens, aisMsg})
 	}
-	debug.Assert(clone._sgl != nil)
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
 }

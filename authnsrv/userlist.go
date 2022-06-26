@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/golang-jwt/jwt/v4"
 	jsoniter "github.com/json-iterator/go"
@@ -412,28 +413,26 @@ func (m *UserManager) revokeToken(token string) error {
 func (m *UserManager) generateRevokedTokenList() ([]string, error) {
 	tokens, err := m.db.List(revokedCollection, "")
 	if err != nil {
+		debug.AssertNoErr(err)
 		return nil, err
 	}
+
 	now := time.Now()
-	revokeList := make([]string, 0)
+	revokeList := make([]string, 0, len(tokens))
 	secret := Conf.Secret()
-	for _, t := range tokens {
-		token, err := DecryptToken(t, secret)
-		shortInfo := t
-		if len(t) > 32 {
-			shortInfo = t[len(t)-32:]
-		}
+	for _, token := range tokens {
+		tk, err := DecryptToken(token, secret)
 		if err != nil {
-			glog.Infof("removing invalid token: %s", shortInfo)
-			m.db.Delete(revokedCollection, t)
+			debug.AssertNoErr(err)
+			m.db.Delete(revokedCollection, token)
 			continue
 		}
-		if token.Expires.Before(now) {
-			glog.Infof("removing expired token: %s", shortInfo)
-			m.db.Delete(revokedCollection, t)
+		if tk.Expires.Before(now) {
+			glog.Infof("removing %s", tk)
+			m.db.Delete(revokedCollection, token)
 			continue
 		}
-		revokeList = append(revokeList, t)
+		revokeList = append(revokeList, token)
 	}
 	return revokeList, nil
 }

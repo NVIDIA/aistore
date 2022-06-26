@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -260,27 +261,31 @@ func (a *Server) httpUserGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, uInfo, "user info")
 }
 
-// Checks if the request header contains super-user credentials and they are
-// valid. Super-user is a user created at deployment time that cannot be
-// deleted/created via REST API
+// Checks if the request header contains valid admin credentials.
+// (admin is created at deployment time and cannot be modified via API)
 func checkAuthorization(w http.ResponseWriter, r *http.Request) error {
 	s := strings.SplitN(r.Header.Get(apc.HdrAuthorization), " ", 2)
 	if len(s) != 2 {
-		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
-		return fmt.Errorf("invalid header")
-	}
-	secret := Conf.Secret()
-	token, err := DecryptToken(s[1], secret)
-	if err != nil {
-		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		err := errors.New("not authorized: invalid header")
+		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
 		return err
 	}
-	if !token.IsAdmin {
-		msg := "insufficient permissions"
-		cmn.WriteErrMsg(w, r, msg, http.StatusUnauthorized)
-		return errors.New(msg)
+	secret := Conf.Secret()
+	tk, err := DecryptToken(s[1], secret)
+	if err != nil {
+		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
+		return err
 	}
-
+	if tk.Expires.Before(time.Now()) {
+		err := fmt.Errorf("not authorized: %s", tk)
+		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
+		return err
+	}
+	if !tk.IsAdmin {
+		err := fmt.Errorf("not authorized: requires admin (%s)", tk)
+		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
+		return err
+	}
 	return nil
 }
 

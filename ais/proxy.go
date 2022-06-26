@@ -23,7 +23,6 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/authnsrv"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -177,11 +176,7 @@ func (p *proxy) Run() error {
 	// startup sequence - see earlystart.go for the steps and commentary
 	p.bootstrap()
 
-	p.authn = &authManager{
-		tokens:        make(map[string]*authnsrv.Token),
-		revokedTokens: make(map[string]bool),
-		version:       1,
-	}
+	p.authn = newAuthManager()
 
 	p.rproxy.init()
 
@@ -838,7 +833,7 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		errEtlMD = p.receiveEtlMD(newEtlMD, msgEtlMD, payload, caller, nil)
 	}
 	if errTokens == nil && revokedTokens != nil {
-		p.authn.updateRevokedList(revokedTokens)
+		_ = p.authn.updateRevokedList(revokedTokens)
 	}
 	// 3. respond
 	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil && errEtlMD == nil {

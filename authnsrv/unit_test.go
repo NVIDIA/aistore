@@ -138,7 +138,7 @@ func TestToken(t *testing.T) {
 
 	driver := mock.NewDBDriver()
 	mgr, err := NewUserManager(driver)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)
 
@@ -164,11 +164,9 @@ func TestToken(t *testing.T) {
 
 	// expired token test
 	time.Sleep(shortExpiration)
-	_, err = DecryptToken(token, secret)
-	if err == nil {
+	tk, err := DecryptToken(token, secret)
+	tassert.CheckFatal(t, err)
+	if !tk.Expires.Before(time.Now()) {
 		t.Fatalf("Token must be expired: %s", token)
-	}
-	if err != ErrTokenExpired {
-		t.Errorf("Invalid error(must be 'token expired'): %v", err)
 	}
 }

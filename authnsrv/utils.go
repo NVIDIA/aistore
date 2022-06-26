@@ -34,6 +34,7 @@ var (
 	ErrInvalidToken  = errors.New("invalid token")
 	ErrNoToken       = errors.New("token required")
 	ErrTokenExpired  = errors.New("token expired")
+	ErrTokenRevoked  = errors.New("token revoked")
 )
 
 ///////////
@@ -183,7 +184,7 @@ func MergeClusterACLs(oldACLs, newACLs []*authn.CluACL) []*authn.CluACL {
 }
 
 func DecryptToken(tokenStr, secret string) (*Token, error) {
-	token, err := jwt.Parse(tokenStr, func(tk *jwt.Token) (interface{}, error) {
+	jwtToken, err := jwt.Parse(tokenStr, func(tk *jwt.Token) (interface{}, error) {
 		if _, ok := tk.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", tk.Header["alg"])
 		}
@@ -192,17 +193,13 @@ func DecryptToken(tokenStr, secret string) (*Token, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
+	claims, ok := jwtToken.Claims.(jwt.MapClaims)
+	if !ok || !jwtToken.Valid {
 		return nil, ErrInvalidToken
 	}
-	tInfo := &Token{}
-	if err := cos.MorphMarshal(claims, tInfo); err != nil {
+	tk := &Token{}
+	if err := cos.MorphMarshal(claims, tk); err != nil {
 		return nil, ErrInvalidToken
 	}
-	if tInfo.Expires.Before(time.Now()) {
-		return nil, ErrTokenExpired
-	}
-	return tInfo, nil
+	return tk, nil
 }
