@@ -1,8 +1,8 @@
-// Package authnsrv provides AuthN server for AIStore.
+// Package authn provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package authnsrv
+package main
 
 import "time"
 

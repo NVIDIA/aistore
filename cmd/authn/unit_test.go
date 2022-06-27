@@ -1,8 +1,8 @@
-// Package authnsrv provides AuthN server for AIStore.
+// Package authn provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package authnsrv
+package main
 
 import (
 	"testing"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cluster/mock"
+	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -148,7 +149,7 @@ func TestToken(t *testing.T) {
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
-	info, err := DecryptToken(token, secret)
+	info, err := tok.DecryptToken(token, secret)
 	if err != nil {
 		t.Fatalf("Failed to decript token %v: %v", token, err)
 	}
@@ -164,7 +165,7 @@ func TestToken(t *testing.T) {
 
 	// expired token test
 	time.Sleep(shortExpiration)
-	tk, err := DecryptToken(token, secret)
+	tk, err := tok.DecryptToken(token, secret)
 	tassert.CheckFatal(t, err)
 	if !tk.Expires.Before(time.Now()) {
 		t.Fatalf("Token must be expired: %s", token)

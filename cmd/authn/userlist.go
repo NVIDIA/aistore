@@ -1,8 +1,8 @@
-// Package authnsrv provides AuthN server for AIStore.
+// Package authn provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package authnsrv
+package main
 
 import (
 	"encoding/hex"
@@ -14,11 +14,11 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dbdriver"
-	"github.com/golang-jwt/jwt/v4"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -332,9 +332,9 @@ func (m *UserManager) issueToken(userID, pwd string, ttl *time.Duration) (string
 	var (
 		err     error
 		expires time.Time
+		token   string
+		uInfo   = &authn.User{}
 	)
-
-	uInfo := &authn.User{}
 	err = m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
 		glog.Error(err)
@@ -371,27 +371,13 @@ func (m *UserManager) issueToken(userID, pwd string, ttl *time.Duration) (string
 	// put all useful info into token: who owns the token, when it was issued,
 	// when it expires and credentials to log in AWS, GCP etc.
 	// If a user is a super user, it is enough to pass only isAdmin marker
-	var t *jwt.Token
 	if uInfo.IsAdmin() {
-		t = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"expires":  expires,
-			"username": userID,
-			"admin":    true,
-		})
+		token, err = tok.IssueAdminJWT(expires, userID, Conf.Server.Secret)
 	} else {
 		m.fixClusterIDs(uInfo.ClusterACLs)
-		t = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"expires":  expires,
-			"username": userID,
-			"buckets":  uInfo.BucketACLs,
-			"clusters": uInfo.ClusterACLs,
-		})
+		token, err = tok.IssueJWT(expires, userID, uInfo.BucketACLs, uInfo.ClusterACLs, Conf.Server.Secret)
 	}
-	tokenString, err := t.SignedString([]byte(Conf.Server.Secret))
-	if err != nil {
-		return "", fmt.Errorf("failed to generate token: %v", err)
-	}
-	return tokenString, err
+	return token, err
 }
 
 // Delete existing token, a.k.a log out
@@ -421,7 +407,7 @@ func (m *UserManager) generateRevokedTokenList() ([]string, error) {
 	revokeList := make([]string, 0, len(tokens))
 	secret := Conf.Secret()
 	for _, token := range tokens {
-		tk, err := DecryptToken(token, secret)
+		tk, err := tok.DecryptToken(token, secret)
 		if err != nil {
 			debug.AssertNoErr(err)
 			m.db.Delete(revokedCollection, token)

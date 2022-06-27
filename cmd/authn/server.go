@@ -1,8 +1,8 @@
-// Package authnsrv provides AuthN server for AIStore.
+// Package authn provides AuthN server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package authnsrv
+package main
 
 import (
 	"errors"
@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -140,7 +141,7 @@ func (a *Server) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret := Conf.Secret()
-	_, err := DecryptToken(msg.Token, secret)
+	_, err := tok.DecryptToken(msg.Token, secret)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
@@ -271,7 +272,7 @@ func checkAuthorization(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	secret := Conf.Secret()
-	tk, err := DecryptToken(s[1], secret)
+	tk, err := tok.DecryptToken(s[1], secret)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
 		return err
@@ -323,7 +324,6 @@ func (a *Server) userLogin(w http.ResponseWriter, r *http.Request) {
 	writeBytes(w, []byte(repl), "auth")
 }
 
-// Borrowed from ais (modified cmn.InvalidHandler calls)
 func writeJSON(w http.ResponseWriter, val interface{}, tag string) {
 	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	var err error
@@ -333,7 +333,6 @@ func writeJSON(w http.ResponseWriter, val interface{}, tag string) {
 	glog.Errorf("%s: failed to write json, err: %v", tag, err)
 }
 
-// Borrowed from ais (modified cmn.InvalidHandler calls)
 func writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
 	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	var err error

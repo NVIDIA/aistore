@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -14,8 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
-	"github.com/NVIDIA/aistore/authnsrv"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -23,8 +23,8 @@ import (
 )
 
 type (
-	tokenList   authn.TokenList            // token strings
-	tkList      map[string]*authnsrv.Token // tk structs
+	tokenList   authn.TokenList       // token strings
+	tkList      map[string]*tok.Token // tk structs
 	authManager struct {
 		sync.Mutex
 		// cache of decrypted tokens
@@ -72,7 +72,7 @@ func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *toke
 		secret = cmn.GCO.Get().Auth.Secret
 	)
 	for token := range a.revokedTokens {
-		tk, err := authnsrv.DecryptToken(token, secret)
+		tk, err := tok.DecryptToken(token, secret)
 		debug.AssertNoErr(err)
 		if tk.Expires.Before(now) {
 			delete(a.revokedTokens, token)
@@ -107,10 +107,10 @@ func (a *authManager) revokedTokenList() (allRevoked *tokenList) {
 //   - must not be expired
 //   - must have all mandatory fields: userID, creds, issued, expires
 // Returns decrypted token information if it is valid
-func (a *authManager) validateToken(token string) (tk *authnsrv.Token, err error) {
+func (a *authManager) validateToken(token string) (tk *tok.Token, err error) {
 	a.Lock()
 	if _, ok := a.revokedTokens[token]; ok {
-		tk, err = nil, fmt.Errorf("%v: %s", authnsrv.ErrTokenRevoked, tk)
+		tk, err = nil, fmt.Errorf("%v: %s", tok.ErrTokenRevoked, tk)
 	} else {
 		tk, err = a.validateAddRm(token, time.Now())
 	}
@@ -120,15 +120,15 @@ func (a *authManager) validateToken(token string) (tk *authnsrv.Token, err error
 
 // Decrypts and validates token. Adds it to authManager.token if not found. Removes if expired.
 // Must be called under lock.
-func (a *authManager) validateAddRm(token string, now time.Time) (*authnsrv.Token, error) {
+func (a *authManager) validateAddRm(token string, now time.Time) (*tok.Token, error) {
 	tk, ok := a.tkList[token]
 	if !ok || tk == nil {
 		var (
 			err    error
 			secret = cmn.GCO.Get().Auth.Secret
 		)
-		if tk, err = authnsrv.DecryptToken(token, secret); err != nil {
-			err = fmt.Errorf("%v: %v", authnsrv.ErrInvalidToken, err)
+		if tk, err = tok.DecryptToken(token, secret); err != nil {
+			err = fmt.Errorf("%v: %v", tok.ErrInvalidToken, err)
 			return nil, err
 		}
 		a.tkList[token] = tk
@@ -136,7 +136,7 @@ func (a *authManager) validateAddRm(token string, now time.Time) (*authnsrv.Toke
 	debug.Assert(tk != nil)
 	if tk.Expires.Before(now) {
 		delete(a.tkList, token)
-		return nil, fmt.Errorf("%v: %s", authnsrv.ErrTokenExpired, tk)
+		return nil, fmt.Errorf("%v: %s", tok.ErrTokenExpired, tk)
 	}
 	return tk, nil
 }
@@ -181,14 +181,14 @@ func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 // Header format:
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
-func (p *proxy) validateToken(hdr http.Header) (*authnsrv.Token, error) {
+func (p *proxy) validateToken(hdr http.Header) (*tok.Token, error) {
 	authToken := hdr.Get(apc.HdrAuthorization)
 	if authToken == "" {
-		return nil, authnsrv.ErrNoToken
+		return nil, tok.ErrNoToken
 	}
 	idx := strings.Index(authToken, " ")
 	if idx == -1 || authToken[:idx] != apc.AuthenticationTypeBearer {
-		return nil, authnsrv.ErrNoToken
+		return nil, tok.ErrNoToken
 	}
 
 	auth, err := p.authn.validateToken(authToken[idx+1:])
@@ -221,7 +221,7 @@ func (*proxy) aclErrToCode(err error) int {
 	switch err {
 	case nil:
 		return http.StatusOK
-	case authnsrv.ErrNoToken:
+	case tok.ErrNoToken:
 		return http.StatusUnauthorized
 	default:
 		return http.StatusForbidden
@@ -230,7 +230,7 @@ func (*proxy) aclErrToCode(err error) int {
 
 func (p *proxy) _checkACL(hdr http.Header, bck *cluster.Bck, ace apc.AccessAttrs) error {
 	var (
-		tk     *authnsrv.Token
+		tk     *tok.Token
 		bucket *cmn.Bck
 		err    error
 		cfg    = cmn.GCO.Get()
