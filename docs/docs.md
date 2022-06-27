@@ -21,6 +21,7 @@ redirect_from:
   - [Native RESTful API](/docs/http_api.md)
   - [S3 compatibility](/docs/s3compat.md)
   - [Go API/SDK](/docs/http_api.md)
+  - [Python API](/docs/python_api.md)
 - [CLI](/docs/cli.md)
   - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/docs/cli/object.md)

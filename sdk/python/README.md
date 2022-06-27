@@ -128,8 +128,10 @@ obj_props = client.put_object(bck_name="bck", obj_name="obj1", path="/tmp/obj1_c
 client.destroy_bucket("bck")
 ```
 
+> For more information on API usage and client methods, refer to the [API reference documentation](https://aiatscale.org/docs/python_api.md).
+
 ## References
 
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
 * [Documentation](https://aiatscale.org/docs)
-* [Videos and demos](https://github.com/NVIDIA/aistore/blob/master/docs/videos.md)
+* [Videos and Demos](https://github.com/NVIDIA/aistore/blob/master/docs/videos.md)

@@ -92,7 +92,13 @@ class Client:
 
     def is_aistore_running(self) -> bool:
         """
-        Returns True if cluster is running and ready. Returns False if cluster is still setting up.
+        Returns True if cluster is ready and false if cluster is still setting up
+        
+        Args:
+            None
+        
+        Returns: 
+            bool: True if cluster is ready and false if cluster is still setting up
         """
 
         # compare with AIS Go API (api/cluster.go) for additional supported options
