@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -19,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
-	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 const (
@@ -215,32 +213,6 @@ func validateHostname(hostname string) (err error) {
 /////////////
 // helpers //
 /////////////
-
-func reMirror(bprops, nprops *cmn.BucketProps) bool {
-	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
-		return true
-	}
-	if bprops.Mirror.Enabled && nprops.Mirror.Enabled {
-		return bprops.Mirror.Copies != nprops.Mirror.Copies
-	}
-	return false
-}
-
-func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
-	if !nprops.EC.Enabled {
-		if bprops.EC.Enabled {
-			// abort running ec-encode xaction, if exists
-			flt := xreg.XactFilter{Kind: apc.ActECEncode, Bck: bck}
-			xreg.DoAbort(flt, errors.New("ec-disabled"))
-		}
-		return false
-	}
-	if !bprops.EC.Enabled {
-		return true
-	}
-	return bprops.EC.DataSlices != nprops.EC.DataSlices ||
-		bprops.EC.ParitySlices != nprops.EC.ParitySlices
-}
 
 func deploymentType() string {
 	if k8s.Detect() == nil {

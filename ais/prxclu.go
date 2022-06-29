@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
+	jsoniter "github.com/json-iterator/go"
 )
 
 ////////////////////////////
@@ -754,9 +755,29 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		toUpdate: toUpdate,
 		wait:     true,
 	}
+
+	// NOTE: critical cluster-wide config updates requiring restart (of the cluster)
+	if toUpdate.Net != nil && toUpdate.Net.HTTP != nil {
+		from, _ := jsoniter.Marshal(cmn.GCO.Get().Net.HTTP)
+		to, _ := jsoniter.Marshal(toUpdate.Net.HTTP)
+		whingeToUpdate("net.http", string(from), string(to))
+	}
+	if toUpdate.Auth != nil {
+		from, _ := jsoniter.Marshal(cmn.GCO.Get().Auth)
+		to, _ := jsoniter.Marshal(toUpdate.Auth)
+		whingeToUpdate("config.auth", string(from), string(to))
+	}
+
+	// do
 	if _, err := p.owner.config.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
+}
+
+func whingeToUpdate(what, from, to string) {
+	glog.Warningf("Updating cluster %s configuration: setting %s", what, to)
+	glog.Warningf("Prior-to-update %s values: %s", what, from)
+	glog.Errorln("Warning: this update MAY require cluster restart")
 }
 
 func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {

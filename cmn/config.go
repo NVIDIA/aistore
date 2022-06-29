@@ -410,10 +410,10 @@ type (
 	}
 	HTTPConfToUpdate struct {
 		Certificate     *string `json:"server_crt,omitempty"`
-		Key             *string `json:"server_key,omitempty" list:"readonly"`
+		Key             *string `json:"server_key,omitempty"`
 		WriteBufferSize *int    `json:"write_buffer_size,omitempty" list:"readonly"`
 		ReadBufferSize  *int    `json:"read_buffer_size,omitempty" list:"readonly"`
-		UseHTTPS        *bool   `json:"use_https,omitempty" list:"readonly"`
+		UseHTTPS        *bool   `json:"use_https,omitempty"`
 		SkipVerify      *bool   `json:"skip_verify,omitempty"`
 		Chunked         *bool   `json:"chunked_transfer,omitempty"`
 	}

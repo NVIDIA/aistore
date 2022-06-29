@@ -319,12 +319,13 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 			return "", err
 		}
 		txnSetBprops := txn.(*txnSetBucketProps)
+		bprops, nprops := txnSetBprops.bprops, txnSetBprops.nprops
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
-		if reMirror(txnSetBprops.bprops, txnSetBprops.nprops) {
-			n := int(txnSetBprops.nprops.Mirror.Copies)
+		if _reMirror(bprops, nprops) {
+			n := int(nprops.Mirror.Copies)
 			rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, "mnc-setprops", n)
 			if rns.Err != nil {
 				return "", fmt.Errorf("%s %s: %v", t, txn, rns.Err)
@@ -336,7 +337,7 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 			xact.GoRunW(xctn)
 			xactID = xctn.ID()
 		}
-		if reEC(txnSetBprops.bprops, txnSetBprops.nprops, c.bck) {
+		if _, reec := _reEC(bprops, nprops, c.bck, nil /*smap*/); reec {
 			flt := xreg.XactFilter{Kind: apc.ActECEncode, Bck: c.bck}
 			xreg.DoAbort(flt, errors.New("re-ec"))
 			rns := xreg.RenewECEncode(t, c.bck, c.uuid, apc.ActCommit)

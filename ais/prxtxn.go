@@ -378,19 +378,17 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 
 func (p *proxy) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error) {
 	var (
+		targetCnt       int
 		bck             = ctx.bcks[0]
-		bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
+		bprops, present = clone.Get(bck)
 	)
-	cos.Assert(present)
+	debug.Assert(present)
 	if ctx.msg.Action == apc.ActSetBprops {
 		bck.Props = bprops
-	} else {
-		targetCnt := p.owner.smap.Get().CountActiveTargets()
-		debug.Assert(ctx.setProps != nil)
-		debug.AssertNoErr(ctx.setProps.Validate(targetCnt))
 	}
-	ctx.needReMirror = reMirror(bprops, ctx.setProps)
-	ctx.needReEC = reEC(bprops, ctx.setProps, bck)
+	ctx.needReMirror = _reMirror(bprops, ctx.setProps)
+	targetCnt, ctx.needReEC = _reEC(bprops, ctx.setProps, bck, p.owner.smap.get())
+	debug.Assert(!ctx.needReEC || ctx.setProps.Validate(targetCnt) == nil)
 	clone.set(bck, ctx.setProps)
 	return nil
 }
@@ -1067,23 +1065,19 @@ func (p *proxy) makeNewBckProps(bck *cluster.Bck, propsToUpdate *cmn.BucketProps
 	} else if nprops.Mirror.Copies == 1 {
 		nprops.Mirror.Enabled = false
 	}
-
-	// cannot run make-n-copies and EC on the same bucket at the same time
-	remirror := reMirror(bprops, nprops)
-	reec := reEC(bprops, nprops, bck)
-	if len(creating) == 0 && remirror && reec {
-		err = cmn.NewErrBckIsBusy(bck.Bucket())
-		return
-	}
-
 	if provider := nprops.BackendBck.Provider; nprops.BackendBck.Name != "" {
 		nprops.BackendBck.Provider, err = cmn.NormalizeProvider(provider)
 		if err != nil {
 			return
 		}
 	}
-
-	targetCnt := p.owner.smap.Get().CountActiveTargets()
+	// cannot have re-mirroring and erasure coding on the same bucket at the same time
+	remirror := _reMirror(bprops, nprops)
+	targetCnt, reec := _reEC(bprops, nprops, bck, p.owner.smap.get())
+	if len(creating) == 0 && remirror && reec {
+		err = cmn.NewErrBckIsBusy(bck.Bucket())
+		return
+	}
 	err = nprops.Validate(targetCnt)
 	if cmn.IsErrSoft(err) && propsToUpdate.Force {
 		glog.Warningf("Ignoring soft error: %v", err)
