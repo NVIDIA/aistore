@@ -1,11 +1,11 @@
-```
+---
 layout: post
 title: PYTHON API
 permalink: /docs/python-api
 redirect_from:
- - /python_api.md
- - /docs/python_api.md
-```
+ - /python_api.md/
+ - /docs/python_api.md/
+---
 
 # Python AIStore Client API
 
