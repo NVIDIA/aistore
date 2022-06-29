@@ -118,7 +118,7 @@ lint:linux:
   script:
     - make lint
     - make fmt-check
-      # - make spell-check NOTE: it started failing 06/29/22 w/ index out of range
+    - make spell-check
 
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
 test:short:

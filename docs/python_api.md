@@ -7,8 +7,6 @@ redirect_from:
  - /docs/python_api.md/
 ---
 
-# Python AIStore Client API
-
 AIStore Python SDK is a growing set of client-side APIs to access and utilize AIS clusters.
 
 * [api](#api)
