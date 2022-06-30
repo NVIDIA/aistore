@@ -467,7 +467,7 @@ A few additional words must be said about `--validate`. The option is provided t
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--fast` | `bool` | Use faster logic to compute the result | `true` |
+| `--fast` | `bool` | Use faster logic to count objects and report disk usage (default: true) | `true` |
 | `--validate` | `bool` | Check buckets for errors: misplaced objects, insufficient number of replicas, and more | `false` |
 | `--verbose` | `bool` | Verbose output | `false` |
 | `--cached` | `bool` | For buckets that have remote [backends](/docs/providers.md), list only the objects that are stored in the cluster | `false` |
@@ -477,12 +477,27 @@ A few additional words must be said about `--validate`. The option is provided t
 ```console
 # 1. show summary for a specific bucket
 $ ais bucket summary ais://abc
+NAME             OBJECTS         SIZE ON DISK    USAGE(%)
+ais://abc        10902           5.38GiB         1%
 
-# 2. "summarize" all AIS buckets
+(For min/avg/max object sizes and _apparent_ bucket sizes, run with `--fast=false`.)
+```
+
+```console
+# 2. _summarize_ all buckets(*)
 $ ais bucket summary
+NAME             OBJECTS         SIZE ON DISK    USAGE(%)
+ais://abc        10902           5.38GiB         1%
+ais://nnn        49873           200.00MiB       0%
+```
 
-# 3. "summarize" ais://abc with `--fast` option disabled
+```console
+# 3. _summarize_ ais://abc to show min/avg/max object sizes and _apparent_ bucket sizes
+###   Note: _apparent_ bucket size = sum(sizes of all objects in the bucket) will always
+###   be smaller than the actual disk usage.
 $ ais bucket summary ais://abc --fast=false
+NAME             OBJECTS         OBJECT SIZE (min, avg, max)             APPARENT BUCKET SIZE    USAGE(%)
+ais://abc        10902           1.07KiB    515.01KiB  1023.51KiB        5.35GiB                 1%
 ```
 
 ## Start N-way Mirroring
