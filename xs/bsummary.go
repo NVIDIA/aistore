@@ -88,11 +88,11 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	)
 	rwg.Done()
 	if r.totalDisksSize, err = fs.GetTotalDisksSize(); err != nil {
-		r.UpdateResult(err)
+		r.updRes(err)
 		return
 	}
 	if si, err = cluster.HrwTargetTask(r.msg.UUID, r.t.Sowner().Get()); err != nil {
-		r.UpdateResult(err)
+		r.updRes(err)
 		return
 	}
 	// (we only want a single target listing remote bucket)
@@ -101,22 +101,23 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 		r.summaries = make(cmn.BckSummaries, 0, 1)
 		err = r.runBck(r.Bck(), shouldListCB)
 	} else {
-		r.summaries = make(cmn.BckSummaries, 0, 8)
 		var (
-			pq  *string
-			bmd = r.t.Bowner().Get()
+			pq   *string
+			qbck = (*cmn.QueryBcks)(r.Bck())
+			bmd  = r.t.Bowner().Get()
 		)
-		if provider := r.Bck().Provider; provider != "" {
+		if provider := qbck.Provider; provider != "" {
 			pq = &provider
 		}
-		bmd.Range(pq, nil, func(bck *cluster.Bck) bool {
+		r.summaries = make(cmn.BckSummaries, 0, 8)
+		bmd.Range(pq, nil, func(bck *cluster.Bck) bool { // TODO: add bmd.Range(qbck, func(...))
 			if err := r.runBck(bck, shouldListCB); err != nil {
 				glog.Error(err)
 			}
 			return false // keep going
 		})
 	}
-	r.UpdateResult(err)
+	r.updRes(err)
 }
 
 func (r *bsummXact) runBck(bck *cluster.Bck, shouldListCB bool) (err error) {
@@ -137,19 +138,22 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool)
 		msg.Cached = true
 	}
 
-	// fast path
+	// fast path, estimated sizes
 	if msg.Fast && (bck.IsAIS() || msg.Cached) {
-		objCount, size, err := r.doBckSummaryFast(bck)
+		objCount, size, err := r.fast(bck)
 		summ.ObjCount = objCount
 		summ.Size = size
 		return err
 	}
 
-	// slow path
+	// slow path, exact sizes
 	var (
 		list *cmn.BucketList
 		err  error
 	)
+	if msg.Fast {
+		glog.Warningf("%s: remote bucket w/ `--cached=false`: executing slow and presize version (`--fast=false`)", r)
+	}
 	if !shouldListCB {
 		msg.Cached = true
 	}
@@ -193,7 +197,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool)
 	return nil
 }
 
-func (r *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {
+func (r *bsummXact) fast(bck *cluster.Bck) (objCount, size uint64, err error) {
 	var (
 		availablePaths = fs.GetAvail()
 		group, _       = errgroup.WithContext(context.Background())
@@ -227,7 +231,7 @@ func (r *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, e
 	return objCount, size, group.Wait()
 }
 
-func (r *bsummXact) UpdateResult(err error) {
+func (r *bsummXact) updRes(err error) {
 	res := &taskState{Err: err}
 	if err == nil {
 		res.Result = r.summaries

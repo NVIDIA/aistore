@@ -326,10 +326,12 @@ var (
 
 	fastFlag = cli.BoolTFlag{
 		Name:  "fast",
-		Usage: "use faster logic to compute the result (default: true)",
+		Usage: "use faster logic to count objects and report disk usage (default: true)",
 	}
-	validateSummaryFlag = cli.BoolFlag{Name: "validate", Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts"}
-
+	validateSummaryFlag = cli.BoolFlag{
+		Name:  "validate",
+		Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts",
+	}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}

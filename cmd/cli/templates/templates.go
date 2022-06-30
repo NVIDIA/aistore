@@ -1,6 +1,6 @@
 // Package templates provides the set of templates used to format output for the CLI.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package templates
 
@@ -179,11 +179,11 @@ const (
 		"{{$xctn.AbortedX}}\n"
 
 	// Bucket summary templates
-	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. BUCKET SIZE\t USED(%)\n" + bucketsSummariesFastBody
+	BucketsSummariesFastTmpl = "NAME\t OBJECTS\t SIZE ON DISK\t USAGE(%)\n" + bucketsSummariesFastBody
 	bucketsSummariesFastBody = "{{range $k, $v := . }}" +
 		"{{$v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUns $v.Size 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
-	BucketsSummariesTmpl = "NAME\t OBJECTS\t OBJECT SIZE (min, avg, max)\t BUCKET SIZE\t USED(%)\n" +
+	BucketsSummariesTmpl = "NAME\t OBJECTS\t OBJECT SIZE (min, avg, max)\t APPARENT BUCKET SIZE\t USAGE(%)\n" +
 		bucketsSummariesBody
 	bucketsSummariesBody = "{{range $k, $v := . }}" +
 		"{{$v.Bck}}\t {{$v.ObjCount}}\t " +
@@ -326,7 +326,7 @@ var (
 	funcMap = template.FuncMap{
 		"FormatBytesSig":    cos.B2S,
 		"FormatBytesUns":    cos.UnsignedB2S,
-		"FormatMAM":         func(u int64) string { return cos.B2S(u, 2) + "  " },
+		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", cos.B2S(u, 2)) },
 		"IsUnsetTime":       isUnsetTime,
 		"FormatTime":        fmtTime,
 		"FormatUnixNano":    func(t int64) string { return cos.FormatUnixNano(t, "") },

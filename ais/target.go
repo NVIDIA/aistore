@@ -602,13 +602,13 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		bck := (*cluster.Bck)(qbck)
 		if err := cos.MorphMarshal(msg.Value, &bsumMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
-		// if in fact is a specific bucket
-		if !bck.IsQuery() {
+		// if in fact it is a specific named bucket
+		bck := (*cluster.Bck)(qbck)
+		if qbck.IsBucket() {
 			if err := bck.Init(t.owner.bmd); err != nil {
 				if cmn.IsErrRemoteBckNotFound(err) {
 					t.BMDVersionFixup(r)

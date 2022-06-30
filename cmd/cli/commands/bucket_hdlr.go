@@ -310,11 +310,16 @@ func showBucketSummary(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	tmpl := templates.BucketsSummariesTmpl
 	if fast {
-		tmpl = templates.BucketsSummariesFastTmpl
+		err := templates.DisplayOutput(summaries, c.App.Writer, templates.BucketsSummariesFastTmpl, false)
+		if err == nil {
+			// as in: `du --apparent-size`
+			fmt.Fprintf(c.App.Writer,
+				"\n(For min/avg/max object sizes and _apparent_ bucket sizes, run with `--fast=false`.)\n")
+		}
+		return err
 	}
-	return templates.DisplayOutput(summaries, c.App.Writer, tmpl, false)
+	return templates.DisplayOutput(summaries, c.App.Writer, templates.BucketsSummariesTmpl, false)
 }
 
 func summaryBucketHandler(c *cli.Context) (err error) {
