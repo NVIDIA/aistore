@@ -1438,8 +1438,8 @@ func (p *proxy) bsumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.B
 			dsize[tid] = summ.TotalDisksSize
 			summaries = summaries.Aggregate(summ)
 		}
-		summaries.Finalize(dsize, config.TestingEnv())
 	}
+	summaries.Finalize(dsize, config.TestingEnv())
 	freeBcastRes(results)
 	return summaries, "", nil
 }

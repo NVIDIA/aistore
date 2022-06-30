@@ -53,9 +53,6 @@ func (s BckSummaries) Aggregate(from *BckSumm) BckSummaries {
 			return s
 		}
 	}
-	if from.ObjCount > 0 {
-		from.ObjSize.Avg = int64(cos.DivRoundU64(from.Size, from.ObjCount))
-	}
 	s = append(s, from)
 	return s
 }
