@@ -236,14 +236,14 @@ const (
 
 	AuthNUserVerboseTmpl = "Name\t{{ .ID }}\n" +
 		"Roles\t{{ JoinList .Roles }}\n" +
-		"{{ if ne (len .Clusters) 0 }}" +
+		"{{ if ne (len .ClusterACLs) 0 }}" +
 		"CLUSTER ID\tALIAS\tPERMISSIONS\n" +
-		"{{ range $clu := .Clusters}}" +
+		"{{ range $clu := .ClusterACLs}}" +
 		"{{ $clu.ID}}\t{{ $clu.Alias }}\t{{ FormatACL $clu.Access }}\n" +
 		"{{end}}{{end}}" +
-		"{{ if ne (len .Buckets) 0 }}" +
+		"{{ if ne (len .BucketACLs) 0 }}" +
 		"BUCKET\tPERMISSIONS\n" +
-		"{{ range $bck := .Buckets}}" +
+		"{{ range $bck := .BucketACLs}}" +
 		"{{ $bck }}\t{{ FormatACL $bck.Access }}\n" +
 		"{{end}}{{end}}"
 
@@ -252,14 +252,14 @@ const (
 		"{{ if ne (len .Roles) 0 }}" +
 		"Roles\t{{ JoinList .Roles }}\n" +
 		"{{ end }}" +
-		"{{ if ne (len .Clusters) 0 }}" +
+		"{{ if ne (len .ClusterACLs) 0 }}" +
 		"CLUSTER ID\tALIAS\tPERMISSIONS\n" +
-		"{{ range $clu := .Clusters}}" +
+		"{{ range $clu := .ClusterACLs}}" +
 		"{{ $clu.ID}}\t{{ $clu.Alias }}\t{{ FormatACL $clu.Access }}\n" +
 		"{{end}}{{end}}" +
-		"{{ if ne (len .Buckets) 0 }}" +
+		"{{ if ne (len .BucketACLs) 0 }}" +
 		"BUCKET\tPERMISSIONS\n" +
-		"{{ range $bck := .Buckets}}" +
+		"{{ range $bck := .BucketACLs}}" +
 		"{{ $bck }}\t{{ FormatACL $bck.Access }}\n" +
 		"{{end}}{{end}}"
 

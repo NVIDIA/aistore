@@ -430,6 +430,7 @@ var (
 	// auth
 	descRoleFlag    = cli.StringFlag{Name: "description,desc", Usage: "role description"}
 	clusterRoleFlag = cli.StringFlag{Name: "cluster", Usage: "associate role with the specified AIS cluster"}
+	bucketRoleFlag  = cli.StringFlag{Name: "bucket", Usage: "associate role with the specified bucket"}
 
 	// begin archive
 	listArchFlag             = cli.BoolFlag{Name: "archive", Usage: "list archived content"}

@@ -108,7 +108,7 @@ $ ais auth rm token -f /home/user/user.token
 
 Register a user and assign a list of roles to the user.
 
-If the list of roles is not provided, the new user does not have any permissions. 
+If the list of roles is not provided, the new user does not have any permissions.
 
 Bucket access does not necessarily require creating a role. Instead, `admin` can **register a user with an empty role and grant permissions to the required buckets**.
 
@@ -169,22 +169,34 @@ k5zAzdhbr       clu     GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS
 
 ### Add a new role
 
-`ais auth add role CLUSTER_ID PERMISSION [PERMISSION...]`
+`ais auth add role ROLE_ID PERMISSION [PERMISSION...] [--flags]`
 
-Creates a role and grants the list of permissions to the cluster.
-`CLUSTER_ID` is either cluster ID or cluster alias.
-`PERMISSION` can be a single compound permission(one of `ro`, `rw`, `su`) or a specific access permission.
+Creates a role and grants the list of permissions to the role.
+
+| Flag | Description | Argument |
+| --- | --- | --- |
+| `--cluster` | Grants permissions to access and operate on a cluster (scope: cluster) | Cluster ID or alias |
+| `--bucket` | Grants permissions to access and operate on a specific bucket (scope: bucket) | Bucket URI (provider and bucket name), e.g. `ais://imagenet` |
+
+If only `--cluster` is defined, the permissions are used as default ones to access *every* bucket in the cluster.
+
+**Note**:
+
+* Flag `--bucket` always requires `--cluster` to be defined.
+* `PERMISSION` can be a single compound permission (one of `ro`, `rw`, `su`) or a specific access permission.
+
+Examples:
 
 ```console
-$ # Create a role with read-write access to cluster data
-$ ais auth add role rwRole clusterOne rw
+# Create a role with read-write access to all buckets in the cluster
+$ ais auth add role rwRole --cluster clusterOne rw
 $ ais auth show role rwRole -v
 Role            rwRole
 Description
 CLUSTER ID      ALIAS        PERMISSIONS
 k5zAzdhbr       clusterOne   GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,HEAD-BUCKET,LIST-OBJECTS
 
-$ # Grant specific permission to a role
+# Grant specific permission to a cluster-level role
 $ ais auth add role specRole clusterOne GET HEAD-BUCKET LIST-OBJECT
 $ ais auth show role specRole -v
 Role            specRole

@@ -43,7 +43,7 @@ var (
 	authFlags = map[string][]cli.Flag{
 		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag, expireFlag},
 		subcmdAuthUser:       {passwordFlag},
-		flagsAuthRoleAddSet:  {descRoleFlag, clusterRoleFlag},
+		flagsAuthRoleAddSet:  {descRoleFlag, clusterRoleFlag, bucketRoleFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
 		flagsAuthUserShow:    {nonverboseFlag, verboseFlag},
 		flagsAuthRoleShow:    {nonverboseFlag, verboseFlag},
@@ -515,8 +515,13 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		alias   string
 		args    = c.Args()
 		cluster = parseStrFlag(c, clusterRoleFlag)
+		bucket  = parseStrFlag(c, bucketRoleFlag)
 		role    = args.Get(0)
 	)
+	if bucket != "" && cluster == "" {
+		return nil, fmt.Errorf("flag %q requires flag %q to be set", bucketRoleFlag.Name, clusterRoleFlag.Name)
+	}
+
 	if cluster != "" {
 		cluList, err := authn.GetRegisteredClusters(authParams, authn.CluACL{})
 		if err != nil {
@@ -548,18 +553,32 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		}
 		perms |= p
 	}
-	cluPerms := []*authn.CluACL{
-		{
-			ID:     cluster,
-			Alias:  alias,
-			Access: perms,
-		},
+	roleACL := &authn.Role{
+		ID:   role,
+		Desc: parseStrFlag(c, descRoleFlag),
 	}
-	return &authn.Role{
-		ID:          role,
-		Desc:        parseStrFlag(c, descRoleFlag),
-		ClusterACLs: cluPerms,
-	}, nil
+	if bucket != "" {
+		bck, err := parseBckURI(c, bucket)
+		if err != nil {
+			return nil, err
+		}
+		bck.Ns.UUID = cluster
+		roleACL.BucketACLs = []*authn.BckACL{
+			{
+				Bck:    bck,
+				Access: perms,
+			},
+		}
+	} else {
+		roleACL.ClusterACLs = []*authn.CluACL{
+			{
+				ID:     cluster,
+				Alias:  alias,
+				Access: perms,
+			},
+		}
+	}
+	return roleACL, nil
 }
 
 func userFromArgsOrStdin(c *cli.Context, omitEmpty bool) *authn.User {

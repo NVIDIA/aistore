@@ -17,9 +17,9 @@ func MergeBckACLs(oldACLs, newACLs []*authn.BckACL) []*authn.BckACL {
 				o.Access = n.Access
 				break
 			}
-			if !found {
-				oldACLs = append(oldACLs, n)
-			}
+		}
+		if !found {
+			oldACLs = append(oldACLs, n)
 		}
 	}
 	return oldACLs

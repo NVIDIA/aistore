@@ -177,10 +177,10 @@ func (tk *Token) aclForBucket(clusterID string, bck *cmn.Bck) (perms apc.AccessA
 		if tbBck.Ns.UUID != clusterID {
 			continue
 		}
-		// For AuthN all buckets are external, so they have UUIDs. To correctly
-		// compare with local bucket, token's bucket should be fixed.
-		tbBck.Ns.UUID = ""
-		if b.Bck.Equal(bck) {
+		// For AuthN all buckets are external: they have UUIDs of the respective AIS clusters.
+		// To correctly compare with the caller's `bck` we construct tokenBck from the token.
+		tokenBck := cmn.Bck{Name: tbBck.Name, Provider: tbBck.Provider}
+		if tokenBck.Equal(bck) {
 			return b.Access, true
 		}
 	}
