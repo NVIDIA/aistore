@@ -498,7 +498,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	case apc.ActList:
 		// list buckets if `qbck` is indeed a bucket-query
 		if !qbck.IsBucket() {
-			if err := p.checkACL(w, r, nil, apc.AceListBuckets); err == nil {
+			if err := p.checkAccess(w, r, nil, apc.AceListBuckets); err == nil {
 				p.listBuckets(w, r, qbck, msg)
 			}
 			return
@@ -1157,7 +1157,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 		w.Write([]byte(xactID))
 	case apc.ActAddRemoteBck:
 		// TODO: choose the best permission
-		if err := p.checkACL(w, r, nil, apc.AceCreateBucket); err != nil {
+		if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 			return
 		}
 		if err := p.createBucket(msg, bck); err != nil {
@@ -1203,11 +1203,10 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 
 func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActionMsg, bck *cluster.Bck) {
 	bucket := bck.Name
-	err := p.checkACL(w, r, nil, apc.AceCreateBucket)
-	if err != nil {
+	if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 		return
 	}
-	if err = bck.Validate(); err != nil {
+	if err := bck.Validate(); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -1230,12 +1229,12 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query 
 		}
 		// Make and validate new bucket props.
 		bck.Props = defaultBckProps(bckPropsArgs{bck: bck})
-		bck.Props, err = p.makeNewBckProps(bck, &propsToUpdate, true /*creating*/)
+		nprops, err := p.makeNewBckProps(bck, &propsToUpdate, true /*creating*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-
+		bck.Props = nprops
 		if backend := bck.Backend(); backend != nil {
 			if err := backend.Validate(); err != nil {
 				p.writeErrf(w, r, "cannot create %s: invalid backend %s, err: %v", bck, backend, err)
@@ -1256,7 +1255,6 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query 
 				}
 			}
 		}
-
 		// Send full props to the target. Required for HDFS provider.
 		msg.Value = bck.Props
 	}
@@ -1467,7 +1465,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case apc.ActRenameObject:
-		if err := p.checkACL(w, r, bck, apc.AceObjMOVE); err != nil {
+		if err := p.checkAccess(w, r, bck, apc.AceObjMOVE); err != nil {
 			return
 		}
 		if bck.IsRemote() {
@@ -1481,7 +1479,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		p.objMv(w, r, bck, apireq.items[1], msg)
 		return
 	case apc.ActPromote:
-		if err := p.checkACL(w, r, bck, apc.AcePromote); err != nil {
+		if err := p.checkAccess(w, r, bck, apc.AcePromote); err != nil {
 			return
 		}
 		// ActionMsg.Name is the source
@@ -2357,7 +2355,7 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := p.checkACL(w, r, nil, apc.AceAdmin); err != nil {
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
 	// urlpath-based actions
@@ -2721,7 +2719,7 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if err := p.checkACL(w, r, nil, apc.AceAdmin); err != nil {
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
 

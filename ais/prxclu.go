@@ -689,7 +689,7 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := p.checkACL(w, r, nil, apc.AceAdmin); err != nil {
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
 	if len(apiItems) == 0 {
@@ -999,7 +999,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActionMs
 		opts apc.ActValRmNode
 		smap = p.owner.smap.get()
 	)
-	if err := p.checkACL(w, r, nil, apc.AceAdmin); err != nil {
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {

@@ -119,7 +119,7 @@ func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, er
 		}
 		args.perms = xactRecord.Access
 	}
-	errCode, err = args._checkACL(bck)
+	errCode, err = args.access(bck)
 	return
 }
 
@@ -163,9 +163,10 @@ func (args *bckInitArgs) _requiresPermission(perm apc.AccessAttrs) bool {
 	return (args.perms & perm) == perm
 }
 
-func (args *bckInitArgs) _checkACL(bck *cluster.Bck) (errCode int, err error) {
-	err = args.p._checkACL(args.r.Header, bck, args.perms)
-	return args.p.aclErrToCode(err), err
+func (args *bckInitArgs) access(bck *cluster.Bck) (errCode int, err error) {
+	err = args.p.access(args.r.Header, bck, args.perms)
+	errCode = aceErrToCode(err)
+	return
 }
 
 // initAndTry initializes bucket and then _tries_ to add it if it doesn't exist.

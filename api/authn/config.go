@@ -75,11 +75,11 @@ func (c *Config) Secret() (secret string) {
 }
 
 func (c *Config) ApplyUpdate(cu *ConfigToUpdate) error {
-	c.Lock()
-	defer c.Unlock()
 	if cu.Server == nil {
 		return errors.New("configuration is empty")
 	}
+	c.Lock()
+	defer c.Unlock()
 	if cu.Server.Secret != nil {
 		if *cu.Server.Secret == "" {
 			return errors.New("secret not defined")

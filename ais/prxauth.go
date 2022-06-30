@@ -128,12 +128,11 @@ func (a *authManager) validateAddRm(token string, now time.Time) (*tok.Token, er
 			secret = cmn.GCO.Get().Auth.Secret
 		)
 		if tk, err = tok.DecryptToken(token, secret); err != nil {
-			err = fmt.Errorf("%v: %v", tok.ErrInvalidToken, err)
-			return nil, err
+			glog.Error(err)
+			return nil, tok.ErrInvalidToken
 		}
 		a.tkList[token] = tk
 	}
-	debug.Assert(tk != nil)
 	if tk.Expires.Before(now) {
 		delete(a.tkList, token)
 		return nil, fmt.Errorf("%v: %s", tok.ErrTokenExpired, tk)
@@ -208,27 +207,25 @@ func (p *proxy) validateToken(hdr http.Header) (*tok.Token, error) {
 //   Exceptions:
 //   - read-only access to a bucket is always granted
 //   - PATCH cannot be forbidden
-func (p *proxy) checkACL(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, ace apc.AccessAttrs) error {
-	err := p._checkACL(r.Header, bck, ace)
-	if err == nil {
-		return nil
+func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, ace apc.AccessAttrs) (err error) {
+	if err = p.access(r.Header, bck, ace); err != nil {
+		p.writeErr(w, r, err, aceErrToCode(err))
 	}
-	p.writeErr(w, r, err, p.aclErrToCode(err))
-	return err
+	return
 }
 
-func (*proxy) aclErrToCode(err error) int {
+func aceErrToCode(err error) (status int) {
 	switch err {
 	case nil:
-		return http.StatusOK
-	case tok.ErrNoToken:
-		return http.StatusUnauthorized
+	case tok.ErrNoToken, tok.ErrInvalidToken:
+		status = http.StatusUnauthorized
 	default:
-		return http.StatusForbidden
+		status = http.StatusForbidden
 	}
+	return
 }
 
-func (p *proxy) _checkACL(hdr http.Header, bck *cluster.Bck, ace apc.AccessAttrs) error {
+func (p *proxy) access(hdr http.Header, bck *cluster.Bck, ace apc.AccessAttrs) error {
 	var (
 		tk     *tok.Token
 		bucket *cmn.Bck

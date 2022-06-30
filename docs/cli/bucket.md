@@ -484,7 +484,7 @@ ais://abc        10902           5.38GiB         1%
 ```
 
 ```console
-# 2. _summarize_ all buckets(*)
+# 2. "summarize" all buckets(*)
 $ ais bucket summary
 NAME             OBJECTS         SIZE ON DISK    USAGE(%)
 ais://abc        10902           5.38GiB         1%
@@ -492,9 +492,11 @@ ais://nnn        49873           200.00MiB       0%
 ```
 
 ```console
-# 3. _summarize_ ais://abc to show min/avg/max object sizes and _apparent_ bucket sizes
-###   Note: _apparent_ bucket size = sum(sizes of all objects in the bucket) will always
-###   be smaller than the actual disk usage.
+# 3. summarize ais://abc to show min/avg/max object sizes and _apparent_ bucket sizes
+###
+###   Note: apparent bucket size is the sum(sizes of all objects in the bucket) - will
+###   always be smaller than the actual disk usage (see e.g. above).
+###
 $ ais bucket summary ais://abc --fast=false
 NAME             OBJECTS         OBJECT SIZE (min, avg, max)             APPARENT BUCKET SIZE    USAGE(%)
 ais://abc        10902           1.07KiB    515.01KiB  1023.51KiB        5.35GiB                 1%

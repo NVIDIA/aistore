@@ -141,8 +141,7 @@ func (a *Server) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret := Conf.Secret()
-	_, err := tok.DecryptToken(msg.Token, secret)
-	if err != nil {
+	if _, err := tok.DecryptToken(msg.Token, secret); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}

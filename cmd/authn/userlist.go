@@ -409,7 +409,6 @@ func (m *UserManager) generateRevokedTokenList() ([]string, error) {
 	for _, token := range tokens {
 		tk, err := tok.DecryptToken(token, secret)
 		if err != nil {
-			debug.AssertNoErr(err)
 			m.db.Delete(revokedCollection, token)
 			continue
 		}
