@@ -309,6 +309,8 @@ func (b *Bck) IsEmpty() bool {
 	return b == nil || (b.Name == "" && b.Provider == "" && b.Ns == NsGlobal)
 }
 
+func (b *Bck) IsQuery() bool { return b.Name == "" } // the opposite of QueryBcks.IsBucket()
+
 // Bck => unique name (use ParseUname below to translate back)
 func (b *Bck) MakeUname(objName string) string {
 	var (
@@ -433,6 +435,8 @@ func (qbck *QueryBcks) IsAIS() bool       { b := (*Bck)(qbck); return b.IsAIS() 
 func (qbck *QueryBcks) IsHDFS() bool      { b := (*Bck)(qbck); return b.IsHDFS() }
 func (qbck *QueryBcks) IsRemoteAIS() bool { b := (*Bck)(qbck); return b.IsRemoteAIS() }
 func (qbck *QueryBcks) IsCloud() bool     { return IsCloudProvider(qbck.Provider) }
+
+func (qbck *QueryBcks) IsBucket() bool { return !(*Bck)(qbck).IsQuery() }
 
 func (qbck *QueryBcks) AddToQuery(query url.Values) url.Values {
 	bck := (*Bck)(qbck)

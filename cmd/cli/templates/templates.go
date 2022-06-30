@@ -83,8 +83,8 @@ const (
 	DiskStatsBody = "{{ $value.TargetID }}\t " +
 		"{{ $value.DiskName }}\t " +
 		"{{ $stat := $value.Stat }}" +
-		"{{ FormatBytesSigned $stat.RBps 2 }}/s\t " +
-		"{{ FormatBytesSigned $stat.WBps 2 }}/s\t " +
+		"{{ FormatBytesSig $stat.RBps 2 }}/s\t " +
+		"{{ FormatBytesSig $stat.WBps 2 }}/s\t " +
 		"{{ $stat.Util }}%\n"
 
 	DiskStatBodyTmpl  = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
@@ -134,7 +134,7 @@ const (
 		"{{$xctn.Kind}}\t " +
 		"{{if $xctn.Bck.Name}}{{$xctn.Bck.Name}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
-		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xctn.Stats.Bytes 2}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatTime $xctn.StartTime}}\t " +
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{FormatXactState $xctn}}\n"
@@ -147,7 +147,7 @@ const (
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{if $xctn.Bck.Name}}{{$xctn.Bck.Name}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
-		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xctn.Stats.Bytes 2}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 
 		"{{ $ext := ExtECGetStats $xctn }}" +
 		"{{if (eq $ext.ErrCount 0) }}-{{else}}{{$ext.ErrCount}}{{end}}\t " +
@@ -166,7 +166,7 @@ const (
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{if $xctn.Bck.Name}}{{$xctn.Bck.Name}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
-		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xctn.Stats.Bytes 2}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 
 		"{{ $ext := ExtECPutStats $xctn }}" +
 		"{{if (eq $ext.EncodeErrCount 0) }}-{{else}}{{$ext.EncodeErrCount}}{{end}}\t " +
@@ -178,14 +178,19 @@ const (
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
-	// Buckets templates
-	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. SIZE\t USED(%)\n" + bucketsSummariesBody
-	BucketsSummariesTmpl     = "NAME\t OBJECTS\t SIZE \t USED(%)\n" + bucketsSummariesBody
-	bucketsSummariesBody     = "{{range $k, $v := . }}" +
-		"{{$v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUnsigned $v.Size 2}}\t {{FormatFloat $v.UsedPct}}%\n" +
+	// Bucket summary templates
+	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. BUCKET SIZE\t USED(%)\n" + bucketsSummariesFastBody
+	bucketsSummariesFastBody = "{{range $k, $v := . }}" +
+		"{{$v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUns $v.Size 2}}\t {{$v.UsedPct}}%\n" +
+		"{{end}}"
+	BucketsSummariesTmpl = "NAME\t OBJECTS\t OBJECT SIZE (min, avg, max)\t BUCKET SIZE\t USED(%)\n" +
+		bucketsSummariesBody
+	bucketsSummariesBody = "{{range $k, $v := . }}" +
+		"{{$v.Bck}}\t {{$v.ObjCount}}\t " +
+		"{{FormatMAM $v.ObjSize.Min}} {{FormatMAM $v.ObjSize.Avg}} {{FormatMAM $v.ObjSize.Max}}\t " +
+		"{{FormatBytesUns $v.Size 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
 
-	// Bucket summary validate templates
 	BucketSummaryValidateTmpl = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\n" + bucketSummaryValidateBody
 	bucketSummaryValidateBody = "{{range $v := . }}" +
 		"{{$v.Name}}\t {{$v.ObjectCnt}}\t {{$v.Misplaced}}\t {{$v.MissingCopies}}\n" +
@@ -195,7 +200,7 @@ const (
 	// total count and size. That is why the template ends with \t
 	ExtensionTmpl = "Files to upload:\nEXTENSION\t COUNT\t SIZE\n" +
 		"{{range $k, $v := . }}" +
-		"{{$k}}\t {{$v.Cnt}}\t {{FormatBytesSigned $v.Size 2}}\n" +
+		"{{$k}}\t {{$v.Cnt}}\t {{FormatBytesSig $v.Size 2}}\n" +
 		"{{end}}" +
 		"TOTAL\t"
 
@@ -295,7 +300,7 @@ var (
 	// ObjectPropsMap matches BucketEntry field
 	ObjectPropsMap = map[string]string{
 		"name":       "{{FormatNameArch $obj.Name $obj.Flags}}",
-		"size":       "{{FormatBytesSigned $obj.Size 2}}",
+		"size":       "{{FormatBytesSig $obj.Size 2}}",
 		"checksum":   "{{$obj.Checksum}}",
 		"type":       "{{$obj.Type}}",
 		"atime":      "{{$obj.Atime}}",
@@ -309,7 +314,7 @@ var (
 	ObjStatMap = map[string]string{
 		"name":     "{{.Bck.String}}/{{.Name}}",
 		"cached":   "{{FormatBool .Present}}",
-		"size":     "{{FormatBytesSigned .Size 2}}",
+		"size":     "{{FormatBytesSig .Size 2}}",
 		"version":  "{{.Version}}",
 		"custom":   "{{.Custom}}",
 		"atime":    "{{if (eq .Atime 0)}}-{{else}}{{FormatUnixNano .Atime}}{{end}}",
@@ -319,27 +324,28 @@ var (
 	}
 
 	funcMap = template.FuncMap{
-		"FormatBytesSigned":   cos.B2S,
-		"FormatBytesUnsigned": cos.UnsignedB2S,
-		"IsUnsetTime":         isUnsetTime,
-		"FormatTime":          fmtTime,
-		"FormatUnixNano":      func(t int64) string { return cos.FormatUnixNano(t, "") },
-		"FormatEC":            FmtEC,
-		"FormatDur":           fmtDuration,
-		"FormatObjStatus":     fmtObjStatus,
-		"FormatObjIsCached":   fmtObjIsCached,
-		"FormatDaemonID":      fmtDaemonID,
-		"FormatSmapVersion":   fmtSmapVer,
-		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
-		"FormatBool":          FmtBool,
-		"FormatMilli":         fmtMilli,
-		"JoinList":            fmtStringList,
-		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
-		"FormatACL":           fmtACL,
-		"ExtECGetStats":       extECGetStats,
-		"ExtECPutStats":       extECPutStats,
-		"FormatNameArch":      fmtNameArch,
-		"FormatXactState":     fmtXactStatus,
+		"FormatBytesSig":    cos.B2S,
+		"FormatBytesUns":    cos.UnsignedB2S,
+		"FormatMAM":         func(u int64) string { return cos.B2S(u, 2) + "  " },
+		"IsUnsetTime":       isUnsetTime,
+		"FormatTime":        fmtTime,
+		"FormatUnixNano":    func(t int64) string { return cos.FormatUnixNano(t, "") },
+		"FormatEC":          FmtEC,
+		"FormatDur":         fmtDuration,
+		"FormatObjStatus":   fmtObjStatus,
+		"FormatObjIsCached": fmtObjIsCached,
+		"FormatDaemonID":    fmtDaemonID,
+		"FormatSmapVersion": fmtSmapVer,
+		"FormatFloat":       func(f float64) string { return fmt.Sprintf("%.2f", f) },
+		"FormatBool":        FmtBool,
+		"FormatMilli":       fmtMilli,
+		"JoinList":          fmtStringList,
+		"JoinListNL":        func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
+		"FormatACL":         fmtACL,
+		"ExtECGetStats":     extECGetStats,
+		"ExtECPutStats":     extECPutStats,
+		"FormatNameArch":    fmtNameArch,
+		"FormatXactState":   fmtXactStatus,
 		// for all stats.DaemonStatus structs in `h`: select specific field
 		// and make a slice, and then a string out of it
 		"OnlineStatus": func(h DaemonStatusTemplateHelper) string { return toString(h.onlineStatus()) },

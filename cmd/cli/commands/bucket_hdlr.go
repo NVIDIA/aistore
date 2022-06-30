@@ -298,21 +298,20 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 }
 
 func showBucketSummary(c *cli.Context) error {
+	fast := flagIsSet(c, fastFlag)
 	queryBcks, err := parseQueryBckURI(c, c.Args().First())
 	if err != nil {
 		return err
 	}
-
 	if err := updateLongRunParams(c); err != nil {
 		return err
 	}
-
-	summaries, err := fetchSummaries(queryBcks, flagIsSet(c, fastFlag), flagIsSet(c, listCachedFlag))
+	summaries, err := fetchSummaries(queryBcks, fast, flagIsSet(c, listCachedFlag))
 	if err != nil {
 		return err
 	}
 	tmpl := templates.BucketsSummariesTmpl
-	if flagIsSet(c, fastFlag) {
+	if fast {
 		tmpl = templates.BucketsSummariesFastTmpl
 	}
 	return templates.DisplayOutput(summaries, c.App.Writer, tmpl, false)

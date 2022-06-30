@@ -13,11 +13,11 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
@@ -38,9 +38,11 @@ type (
 	}
 	bsummXact struct {
 		xact.Base
-		t   cluster.Target
-		msg *apc.BckSummMsg
-		res atomic.Pointer
+		t              cluster.Target
+		msg            *apc.BckSummMsg
+		res            atomic.Pointer
+		summaries      cmn.BckSummaries
+		totalDisksSize uint64
 	}
 )
 
@@ -80,35 +82,52 @@ func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
 ///////////////
 
 func (r *bsummXact) Run(rwg *sync.WaitGroup) {
-	debug.AssertNoErr(r.Bck().Validate())
+	var (
+		err error
+		si  *cluster.Snode
+	)
 	rwg.Done()
-
-	totalDisksSize, err := fs.GetTotalDisksSize()
-	if err != nil {
-		r.UpdateResult(nil, err)
+	if r.totalDisksSize, err = fs.GetTotalDisksSize(); err != nil {
+		r.UpdateResult(err)
 		return
 	}
-	si, err := cluster.HrwTargetTask(r.msg.UUID, r.t.Sowner().Get())
-	if err != nil {
-		r.UpdateResult(nil, err)
+	if si, err = cluster.HrwTargetTask(r.msg.UUID, r.t.Sowner().Get()); err != nil {
+		r.UpdateResult(err)
 		return
 	}
-
-	// Check if we are the target that needs to list remote bucket
-	// (we only want a single target doing it).
+	// (we only want a single target listing remote bucket)
 	shouldListCB := r.msg.Cached || (si.ID() == r.t.SID() && !r.msg.Cached)
-
-	if err := r.Bck().Init(r.t.Bowner()); err != nil {
-		r.UpdateResult(nil, err)
-		return
+	if !r.Bck().IsQuery() {
+		r.summaries = make(cmn.BckSummaries, 0, 1)
+		err = r.runBck(r.Bck(), shouldListCB)
+	} else {
+		r.summaries = make(cmn.BckSummaries, 0, 8)
+		var (
+			pq  *string
+			bmd = r.t.Bowner().Get()
+		)
+		if provider := r.Bck().Provider; provider != "" {
+			pq = &provider
+		}
+		bmd.Range(pq, nil, func(bck *cluster.Bck) bool {
+			if err := r.runBck(bck, shouldListCB); err != nil {
+				glog.Error(err)
+			}
+			return false // keep going
+		})
 	}
-	summaries := make(cmn.BckSummaries, 1)
-	summaries[0].TotalDisksSize = totalDisksSize
-	err = r.runBck(r.Bck(), &summaries[0], shouldListCB)
-	r.UpdateResult(summaries, err)
+	r.UpdateResult(err)
 }
 
-func (r *bsummXact) runBck(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool) error {
+func (r *bsummXact) runBck(bck *cluster.Bck, shouldListCB bool) (err error) {
+	summ := cmn.NewBckSumm(bck.Bucket(), r.totalDisksSize)
+	if err = r._run(bck, summ, shouldListCB); err == nil {
+		r.summaries = append(r.summaries, summ)
+	}
+	return
+}
+
+func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool) error {
 	msg := apc.BckSummMsg{}
 	summ.Bck.Copy(bck.Bucket())
 
@@ -150,12 +169,19 @@ func (r *bsummXact) runBck(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB boo
 		}
 		for _, v := range list.Entries {
 			summ.Size += uint64(v.Size)
+			if v.Size < summ.ObjSize.Min {
+				summ.ObjSize.Min = v.Size
+			}
+			if v.Size > summ.ObjSize.Max {
+				summ.ObjSize.Max = v.Size
+			}
 
 			// for remote backends, not updating obj-count to avoid double counting
 			// (by other targets).
-			if bck.IsAIS() || (!bck.IsAIS() && shouldListCB) {
+			if bck.IsAIS() || shouldListCB {
 				summ.ObjCount++
 			}
+			// generic x stats
 			r.ObjsAdd(1, v.Size)
 		}
 		if list.ContinuationToken == "" {
@@ -172,7 +198,6 @@ func (r *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, e
 		availablePaths = fs.GetAvail()
 		group, _       = errgroup.WithContext(context.Background())
 	)
-
 	for _, mpathInfo := range availablePaths {
 		group.Go(func(mpathInfo *fs.MountpathInfo) func() error {
 			return func() error {
@@ -202,10 +227,10 @@ func (r *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, e
 	return objCount, size, group.Wait()
 }
 
-func (r *bsummXact) UpdateResult(result interface{}, err error) {
+func (r *bsummXact) UpdateResult(err error) {
 	res := &taskState{Err: err}
 	if err == nil {
-		res.Result = result
+		res.Result = r.summaries
 	}
 	r.res.Store(unsafe.Pointer(res))
 	r.Finish(err)

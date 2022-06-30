@@ -1,8 +1,8 @@
 "ais://$BUCKET_1" created
 "ais://$BUCKET_2" created
-NAME	 OBJECTS	 SIZE	 USED(%)
-ais://$BUCKET_1	 0	 0B	 0.00%
-NAME	 OBJECTS	 SIZE	 USED(%)
-ais://$BUCKET_1	 150  375.00KiB	 0.00%
-NAME	 OBJECTS	 SIZE	 USED(%)
-ais://$BUCKET_2	 20  320.00KiB	 0.00%
+NAME             OBJECTS         OBJECT SIZE (min, avg, max)     BUCKET SIZE     USED(%)
+ais://$BUCKET_1	 0	 	 0B	 0B 	0B		 0B		 0%
+NAME             OBJECTS         OBJECT SIZE (min, avg, max)     BUCKET SIZE     USED(%)
+ais://$BUCKET_1	 150  	         2.50KiB  2.50KiB   2.50KiB      375.00KiB	 0%
+NAME             OBJECTS         OBJECT SIZE (min, avg, max)     BUCKET SIZE     USED(%)
+ais://$BUCKET_2	 20	   	 16.00KiB  16.00KiB  16.00KiB	 320.00KiB	 0%

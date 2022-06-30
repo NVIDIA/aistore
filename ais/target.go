@@ -567,7 +567,8 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		if qbck.Name == "" {
+		// list buckets if `qbck` is indeed a bucket-query
+		if !qbck.IsBucket() {
 			t.listBuckets(w, r, qbck)
 			return
 		}
@@ -592,14 +593,22 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			cos.NamedVal64{Name: stats.ListLatency, Value: delta},
 		)
 	case apc.ActSummaryBck:
-		query := r.URL.Query()
+		var (
+			bsumMsg apc.BckSummMsg
+			query   = r.URL.Query()
+		)
 		qbck, err := newQbckFromQ(bckName, query, nil)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
-		bck := cluster.CloneBck((*cmn.Bck)(qbck))
-		if bck.Name != "" {
+		bck := (*cluster.Bck)(qbck)
+		if err := cos.MorphMarshal(msg.Value, &bsumMsg); err != nil {
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+			return
+		}
+		// if in fact is a specific bucket
+		if !bck.IsQuery() {
 			if err := bck.Init(t.owner.bmd); err != nil {
 				if cmn.IsErrRemoteBckNotFound(err) {
 					t.BMDVersionFixup(r)
@@ -611,12 +620,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		var bsumMsg apc.BckSummMsg
-		if err := cos.MorphMarshal(msg.Value, &bsumMsg); err != nil {
-			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-			return
-		}
-		t.bucketSummary(w, r, query, msg.Action, bck, &bsumMsg)
+		t.bsumm(w, r, query, msg.Action, bck, &bsumMsg)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -674,8 +678,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
 }
 
-func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck,
-	msg *apc.BckSummMsg) {
+func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck, msg *apc.BckSummMsg) {
 	var (
 		taskAction = q.Get(apc.QparamTaskAction)
 		silent     = cos.IsParseBool(q.Get(apc.QparamSilent))
@@ -1290,9 +1293,8 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		}
 		name := cmn.PropToHeader(tag)
 		debug.Func(func() {
-			if vv := hdr.Get(name); vv != "" {
-				debug.Assertf(false, "not expecting duplications: %s=(%q, %q)", name, v, vv)
-			}
+			vv := hdr.Get(name)
+			debug.Assertf(vv == "", "not expecting duplications: %s=(%q, %q)", name, v, vv)
 		})
 		hdr.Set(name, v)
 		return nil, false

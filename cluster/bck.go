@@ -80,6 +80,7 @@ func (b *Bck) IsHDFS() bool                       { return (*cmn.Bck)(b).IsHDFS(
 func (b *Bck) IsCloud() bool                      { return (*cmn.Bck)(b).IsCloud() }
 func (b *Bck) IsRemote() bool                     { return (*cmn.Bck)(b).IsRemote() }
 func (b *Bck) IsRemoteAIS() bool                  { return (*cmn.Bck)(b).IsRemoteAIS() }
+func (b *Bck) IsQuery() bool                      { return (*cmn.Bck)(b).IsQuery() }
 func (b *Bck) RemoteBck() *cmn.Bck                { return (*cmn.Bck)(b).RemoteBck() }
 func (b *Bck) Validate() error                    { return (*cmn.Bck)(b).Validate() }
 func (b *Bck) MakeUname(name string) string       { return (*cmn.Bck)(b).MakeUname(name) }

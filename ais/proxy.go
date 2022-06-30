@@ -496,14 +496,14 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case apc.ActList:
-		// list buckets
-		if qbck.Name == "" {
+		// list buckets if `qbck` is indeed a bucket-query
+		if !qbck.IsBucket() {
 			if err := p.checkACL(w, r, nil, apc.AceListBuckets); err == nil {
 				p.listBuckets(w, r, qbck, msg)
 			}
 			return
 		}
-		// list objects
+		// otherwise, list objects
 		var (
 			err error
 			bck = cluster.CloneBck((*cmn.Bck)(qbck))
@@ -1352,14 +1352,13 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	)
 }
 
-// bucket == "": all buckets for a given provider
 func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, amsg *apc.ActionMsg, dpq *dpq) {
 	var lsmsg apc.BckSummMsg
 	if err := cos.MorphMarshal(amsg.Value, &lsmsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
 	}
-	if qbck.Name != "" {
+	if qbck.IsBucket() {
 		bck := cluster.CloneBck((*cmn.Bck)(qbck))
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
@@ -1371,7 +1370,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 	if dpq.uuid != "" { // apc.QparamUUID
 		lsmsg.UUID = dpq.uuid
 	}
-	summaries, uuid, err := p.gatherBckSumm(qbck, &lsmsg)
+	summaries, uuid, err := p.bsumm(qbck, &lsmsg)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1388,7 +1387,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 	p.writeJSON(w, r, summaries, "bucket_summary")
 }
 
-func (p *proxy) gatherBckSumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, uuid string, err error) {
+func (p *proxy) bsumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, uuid string, err error) {
 	var (
 		isNew, q = initAsyncQuery((*cmn.Bck)(qbck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
@@ -1416,26 +1415,30 @@ func (p *proxy) gatherBckSumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summari
 		return nil, msg.UUID, nil
 	}
 
-	// all targets are ready, prepare the final result
+	// all targets are ready: collect the result
 	q = url.Values{}
 	q = qbck.AddToQuery(q)
 	q.Set(apc.QparamTaskAction, apc.TaskResult)
 	q.Set(apc.QparamSilent, "true")
 	args.req.Query = q
 	args.cresv = cresBsumm{} // -> cmn.BckSummaries
-	summaries = make(cmn.BckSummaries, 0)
 	results = p.bcastGroup(args)
 	freeBcArgs(args)
+
+	summaries = make(cmn.BckSummaries, 0, 8)
+	dsize := make(map[string]uint64, len(results))
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
 			freeBcastRes(results)
 			return nil, "", err
 		}
-		targetSummary := res.v.(*cmn.BckSummaries)
-		for _, bckSummary := range *targetSummary {
-			summaries = summaries.Aggregate(bckSummary)
+		targetSumm, tid := res.v.(*cmn.BckSummaries), res.si.ID()
+		for _, summ := range *targetSumm {
+			dsize[tid] = summ.TotalDisksSize
+			summaries = summaries.Aggregate(summ)
 		}
+		summaries.Finalize(dsize, config.TestingEnv())
 	}
 	freeBcastRes(results)
 	return summaries, "", nil
