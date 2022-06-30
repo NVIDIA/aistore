@@ -32,6 +32,7 @@ Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
 
 # pylint: disable=unused-variable
+# pylint: disable=R0904
 class Client:
     """
     AIStore client for managing buckets, objects, ETL jobs
@@ -161,6 +162,29 @@ class Client:
             json=action,
             params=params,
         )
+
+    def rename_bucket(self, from_bck: str, to_bck: str) -> str:
+        """
+        Renames/moves from_bck to to_bck. Only works on AIS buckets. Returns xaction id that can be used later to check the status of the
+        asynchronous operation.
+
+        Args:
+            from_bck (str): Bucket to be renamed/moved
+            to_bck (str): New bucket name
+        
+        Returns:
+            Xaction id (as str) that can be used to check the status of the operation.
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out receiving response from AIStore
+        """
+        params = {QParamProvider: ProviderAIS, QParamBucketTo: ProviderAIS + '/@#/' + to_bck + '/'}
+        action = ActionMsg(action="move-bck").dict()
+        resp = self._request(HTTP_METHOD_POST, path=f"buckets/{ from_bck }", json=action, params=params)
+        return resp.text
 
     def evict_bucket(self, bck_name: str, provider: str, keep_md: bool = True):
         """

@@ -52,6 +52,28 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         except requests.exceptions.HTTPError as e:
             self.assertEqual(e.response.status_code, 404)
 
+    def test_rename_bucket(self):
+        from_bck_n = self.bck_name + 'from'
+        to_bck_n = self.bck_name + 'to'
+        self.create_bucket(from_bck_n)
+        res = self.client.list_buckets()
+        count = len(res)
+        # wait for rename to finish
+        xact_id = self.client.rename_bucket(from_bck=from_bck_n, to_bck=to_bck_n)
+        self.assertNotEqual(xact_id, "")
+        self.client.wait_for_xaction_finished(xact_id=xact_id)
+        # new bucket should be created and accessible
+        self.client.head_bucket(to_bck_n)
+        # old bucket should be inaccessible
+        try:
+            self.client.head_bucket(from_bck_n)
+        except requests.exceptions.HTTPError as e:
+            self.assertEqual(e.response.status_code, 404)
+        # length of buckets before and after rename should be same
+        res = self.client.list_buckets()
+        count_new = len(res)
+        self.assertEqual(count, count_new)
+
     @unittest.skipIf(REMOTE_BUCKET == "" or REMOTE_BUCKET.startswith("ais:"), "Remote bucket is not set")
     def test_evict_bucket(self):
         obj_name = "evict_obj"
