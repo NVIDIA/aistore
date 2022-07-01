@@ -11,7 +11,7 @@ redirect_from:
 
 The following brief and commented sequence assumes that [AIS local playground](getting_started.md#local-playground) is up and running.
 
-Examples below use AuthN specific environment vairables. Note that all of them are enumerated in
+Examples below use AuthN specific environment variables. Note that all of them are enumerated in
 
 * [`api/authn/env_const.go`](https://github.com/NVIDIA/aistore/blob/master/api/authn/env_const.go)
 

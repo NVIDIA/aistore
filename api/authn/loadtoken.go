@@ -21,6 +21,10 @@ func LoadToken(tokenFile string) string {
 		mustLoad = true
 	)
 	if tokenFile == "" {
+		tokenFile = os.Getenv(EnvVars.TokenFile)
+	}
+	if tokenFile == "" {
+		// default config location
 		tokenFile = filepath.Join(jsp.DefaultAppConfigDir(), cmn.TokenFname)
 		mustLoad = false
 	}
