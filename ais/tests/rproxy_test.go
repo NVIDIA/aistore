@@ -194,6 +194,8 @@ func TestRProxyInvalidURL(t *testing.T) {
 
 		req, err := http.NewRequest(http.MethodGet, test.url, http.NoBody)
 		tassert.CheckFatal(t, err)
+		api.SetAuthToken(req, baseParams.Token)
+
 		if test.doAndCheck {
 			// case 1: bad response on GET followed by a failure to HEAD
 			tassert.DoAndCheckResp(t, client, req, test.statusCode, http.StatusForbidden)
@@ -202,7 +204,9 @@ func TestRProxyInvalidURL(t *testing.T) {
 		} else {
 			// case 2: cannot GET but can still do a HEAD (even though ETag is not provided)
 			resp, err := client.Do(req)
-			resp.Body.Close()
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
 			tassert.Errorf(t, err != nil, "expecting error executing GET %q", test.url)
 			_, err = api.HeadBucket(baseParams, hbo.Bck)
 			tassert.CheckError(t, err)

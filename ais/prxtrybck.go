@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -128,21 +128,17 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 	if !args.bck.IsRemote() {
 		return
 	}
-
 	if args._requiresPermission(apc.AceMoveBucket) {
 		goto retErr
 	}
-
 	// HDFS buckets are allowed to be deleted.
 	if args.bck.IsHDFS() {
 		return
 	}
-
 	// HTTP buckets should fail on PUT and bucket rename operations
 	if args.bck.IsHTTP() && args._requiresPermission(apc.AcePUT) {
 		goto retErr
 	}
-
 	// Destroy and Rename/Move are not permitted.
 	if args.bck.IsCloud() && args._requiresPermission(apc.AceDestroyBucket) &&
 		args.msg.Action == apc.ActDestroyBck {

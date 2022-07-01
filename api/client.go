@@ -80,14 +80,10 @@ func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr 
 	return
 }
 
-func setAuthToken(r *http.Request, baseParams BaseParams) {
-	if baseParams.Token != "" {
-		r.Header.Set(apc.HdrAuthorization, makeHeaderAuthnToken(baseParams.Token))
+func SetAuthToken(r *http.Request, token string) {
+	if token != "" {
+		r.Header.Set(apc.HdrAuthorization, apc.AuthenticationTypeBearer+" "+token)
 	}
-}
-
-func makeHeaderAuthnToken(token string) string {
-	return apc.AuthenticationTypeBearer + " " + token
 }
 
 func GetWhatRawQuery(getWhat, getProps string) string {
@@ -177,7 +173,7 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 		return nil, fmt.Errorf("failed to create http request: %w", errR)
 	}
 	reqParams.setRequestOptParams(req)
-	setAuthToken(req, reqParams.BaseParams)
+	SetAuthToken(req, reqParams.BaseParams.Token)
 
 	call := func() (status int, err error) {
 		resp, err = reqParams.BaseParams.Client.Do(req) // nolint:bodyclose // closed by a caller

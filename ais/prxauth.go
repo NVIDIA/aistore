@@ -181,22 +181,20 @@ func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
 func (p *proxy) validateToken(hdr http.Header) (*tok.Token, error) {
-	authToken := hdr.Get(apc.HdrAuthorization)
-	if authToken == "" {
+	token := hdr.Get(apc.HdrAuthorization)
+	if token == "" {
 		return nil, tok.ErrNoToken
 	}
-	idx := strings.Index(authToken, " ")
-	if idx == -1 || authToken[:idx] != apc.AuthenticationTypeBearer {
+	idx := strings.Index(token, " ")
+	if idx == -1 || token[:idx] != apc.AuthenticationTypeBearer {
 		return nil, tok.ErrNoToken
 	}
-
-	auth, err := p.authn.validateToken(authToken[idx+1:])
+	tk, err := p.authn.validateToken(token[idx+1:])
 	if err != nil {
 		glog.Errorf("invalid token: %v", err)
 		return nil, err
 	}
-
-	return auth, nil
+	return tk, nil
 }
 
 // When AuthN is on, accessing a bucket requires two permissions:
@@ -238,19 +236,22 @@ func (p *proxy) access(hdr http.Header, bck *cluster.Bck, ace apc.AccessAttrs) e
 	if cfg.Auth.Enabled {
 		tk, err = p.validateToken(hdr)
 		if err != nil {
+			// NOTE: making exception to allow 3rd party clients read remote ht://bucket
+			if err == tok.ErrNoToken && bck != nil && bck.IsHTTP() {
+				err = nil
+			}
 			return err
 		}
 		uid := p.owner.smap.Get().UUID
-
 		if bck != nil {
-			bucket = (*cmn.Bck)(bck)
+			bucket = bck.Bucket()
 		}
 		if err := tk.CheckPermissions(uid, bucket, ace); err != nil {
 			return err
 		}
 	}
 	if bck == nil {
-		// cluster ACL like create/list buckets, node management etc
+		// cluster ACL: create/list buckets, node management, etc.
 		return nil
 	}
 	if !cfg.Auth.Enabled || tk.IsAdmin {
