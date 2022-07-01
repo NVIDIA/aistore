@@ -11,12 +11,13 @@ var (
 		Enabled   string
 		URL       string
 		ConfFile  string
+		TokenFile string
 		ConfDir   string
 		LogDir    string
 		LogLevel  string
 		Port      string
 		TTL       string
-		TokenFile string
+		UseHTTPS  string
 	}{
 		Enabled:   "AIS_AUTHN_ENABLED",
 		URL:       "AIS_AUTHN_URL",
@@ -27,5 +28,6 @@ var (
 		LogLevel:  "AIS_AUTHN_LOG_LEVEL",
 		Port:      "AIS_AUTHN_PORT",
 		TTL:       "AIS_AUTHN_TTL",
+		UseHTTPS:  "AIS_AUTHN_USE_HTTPS",
 	}
 )

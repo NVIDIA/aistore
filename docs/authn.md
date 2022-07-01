@@ -11,6 +11,10 @@ redirect_from:
 
 The following brief and commented sequence assumes that [AIS local playground](getting_started.md#local-playground) is up and running.
 
+Examples below use AuthN specific environment vairables. Note that all of them are enumerated in
+
+* [`api/authn/env_const.go`](https://github.com/NVIDIA/aistore/blob/master/api/authn/env_const.go)
+
 ```console
 # 1. Login as administrator (and note that admin user and password can be only
 #    provisioned at AuthN deployment time and can never change)
@@ -153,6 +157,9 @@ Environment variables used by the deployment script to setup AuthN server:
 | AIS_AUTHN_ENABLED | `false` | Set it to `true` to enable AuthN server and token-based access in AIStore proxy |
 | AIS_AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
 | AIS_AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 which means "no expiration time" |
+| AIS_AUTHN_USE_HTTPS | `false` | Enable secure HTTP for AuthN server. If `true`, AuthN server requires also `AIS_SERVER_CRT` and `AIS_SERVER_KEY` to be set |
+| AIS_SERVER_CRT | ` ` | OpenSSL certificate. Optional: set it only when secure HTTP is enabled |
+| AIS_SERVER_KEY | ` ` | OpenSSL key. Optional: set it only when secure HTTP is enabled |
 
 All variables can be set at AIStore cluster deployment.
 Example of starting a cluster with AuthN enabled:
@@ -184,6 +191,8 @@ In this README:
 | Server configuration | `$AIS_AUTHN_CONF_DIR/authn.json` |
 | User database        | `$AIS_AUTHN_CONF_DIR/authn.db`   |
 | Log directory        | `$AIS_LOG_DIR/authn/log/`    |
+
+Note: when AuthN is running, execute `ais auth show config` to find out the current location of all AuthN files.
 
 ### How to enable AuthN server after deployment
 
@@ -380,7 +389,3 @@ $ curl -L  http://PROXY/v1/buckets/* -X GET \
   "gcp": [ "image-net-set-1" ],
 }
 ```
-
-## Known limitations
-
-- **Per-bucket authentication**. It is currently impossible to limit user access to only a certain bucket, or buckets. Once users with read-write access log in, they have full access to all cluster's buckets.

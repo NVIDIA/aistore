@@ -8,7 +8,7 @@ cat > $AIS_AUTHN_CONF_FILE <<EOL
 	"net": {
 		"http": {
 			"port":	${AIS_AUTHN_PORT:-52001},
-			"use_https": ${AIS_USE_HTTPS:-false},
+			"use_https": ${AIS_AUTHN_USE_HTTPS:-false},
 			"server_crt": "${AIS_SERVER_CRT:-server.crt}",
 			"server_key": "${AIS_SERVER_KEY:-server.key}"
 		}

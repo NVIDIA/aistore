@@ -7,6 +7,10 @@
 # To deploy AIStore as a next tier cluster to the *already running*
 # AIStore cluster set DEPLOY_AS_NEXT_TIER=1.
 #
+# NOTE: all environment vairables are enumerated in the following two sources:
+# 1) cmn/env_const.go
+# 2) api/authn/env_const.go
+#
 ############################################
 
 if ! command -v go &> /dev/null; then
