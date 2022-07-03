@@ -207,8 +207,9 @@ type (
 		StatsTime *cos.Duration `json:"stats_time,omitempty"`
 	}
 
+	// NOTE: StatsTime is a one important timer
 	PeriodConf struct {
-		StatsTime     cos.Duration `json:"stats_time"`      // collect and publish stats (NOTE: this is one important timer)
+		StatsTime     cos.Duration `json:"stats_time"`      // collect and publish stats; other house-keeping
 		RetrySyncTime cos.Duration `json:"retry_sync_time"` // metasync retry
 		NotifTime     cos.Duration `json:"notif_time"`      // (IC notifications)
 	}
@@ -583,6 +584,7 @@ var (
 	_ Validator = (*BackendConf)(nil)
 	_ Validator = (*CksumConf)(nil)
 	_ Validator = (*LogConf)(nil)
+	_ Validator = (*LRUConf)(nil)
 	_ Validator = (*SpaceConf)(nil)
 	_ Validator = (*MirrorConf)(nil)
 	_ Validator = (*ECConf)(nil)
@@ -952,7 +954,14 @@ func (c *LRUConf) String() string {
 	if !c.Enabled {
 		return "Disabled"
 	}
-	return fmt.Sprintf("LRU don't evict: %v", c.DontEvictTime)
+	return fmt.Sprintf("lru.dont_evict_time=%v, lru.capacity_upd_time=%v", c.DontEvictTime, c.CapacityUpdTime)
+}
+
+func (c *LRUConf) Validate() (err error) {
+	if c.CapacityUpdTime.D() < 10*time.Second {
+		err = fmt.Errorf("invalid %s (expecting: lru.capacity_upd_time >= 10s)", c)
+	}
+	return
 }
 
 ///////////////

@@ -34,7 +34,7 @@ func (t *target) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 		}
 	}
 	if cs.Err != nil {
-		glog.Warningf("%s: %s", t, cs)
+		glog.Warningf("%s: %s", t, cs.String())
 	}
 	// run serially, cleanup first and LRU iff out-of-space persists
 	go func() {

@@ -7,7 +7,6 @@ package commands
 import (
 	"fmt"
 	"os/exec"
-	"regexp"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/authn"
@@ -59,7 +58,6 @@ func detectK8s() bool {
 }
 
 func Init() (err error) {
-	unreachableRegex = regexp.MustCompile("dial.*(timeout|refused)")
 	cfg, err = config.Load()
 	if err != nil {
 		return err

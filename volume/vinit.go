@@ -178,19 +178,14 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 				return
 			}
 			if mi.FsID != fsMpathMD.FsID {
-				err = &fs.ErrStorageIntegrity{
-					Code: fs.SieFsDiffers,
-					Msg: fmt.Sprintf("Warning: filesystem under mountpath %q has changed its ID: %+v vs %+v (benign?)",
-						mpath, mi.FilesystemInfo, *fsMpathMD),
-				}
-				// NOTE: there's the potential to conflate:
-				// a) filesystem ID change upon reboot vs. b) missing filesystem (and mountpath).
-				// In the latter case, we may end up trying to use a different filesystem
-				// (with a different ID, of course) and then still failing with
-				// "filesystem sharing is not allowed" error.
+				// There's the potential to conflate: a) filesystem ID change upon reboot vs.
+				// b) missing filesystem (and mountpath).
+				// In the latter case, we may end up trying to use a different filesystem (with
+				// a different ID) and still failing with "filesystem sharing is not allowed".
+				//
 				// See also: `allowSharedDisksAndNoDisks` and `startWithLostMountpath`
-				glog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
-				err = nil
+				glog.Warningf("detected FS ID change: mp=%q, curr=%+v, prev=%+v, pass=%d, ignore-missing=%t",
+					mpath, mi.FilesystemInfo, *fsMpathMD, pass, ignoreMissingMountpath)
 			}
 			if pass == 1 {
 				if v, old, errLoad := loadOneVMD(tid, vmd, mi.Path, len(vmd.Mountpaths)); v != nil {

@@ -129,7 +129,7 @@ func (r *Trunner) InitCapacity() error {
 		return err
 	}
 	if cs.Err != nil {
-		glog.Errorf("%s: %s", r.T, cs)
+		glog.Errorf("%s: %s", r.T, cs.String())
 	}
 	return nil
 }
@@ -234,8 +234,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime})
 	r.Core.promUnlock()
 	if now >= r.nextLogTime && !idle {
-		ln, err := cos.MarshalToString(r.ctracker)
-		debug.AssertNoErr(err)
+		ln := cos.MustMarshalToString(r.ctracker)
 		r.lines = append(r.lines, ln)
 		i := int64(config.Log.StatsTime)
 		if i == 0 {
@@ -245,14 +244,13 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 3. capacity
-	cs, updated, errfs := fs.CapPeriodic(r.MPCap)
+	cs, updated, errfs := fs.CapPeriodic(now, config, r.MPCap)
 	if updated {
 		if cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
 			r.T.OOS(&cs)
 		}
 		for mpath, fsCapacity := range r.MPCap {
-			ln, err := cos.MarshalToString(fsCapacity)
-			debug.AssertNoErr(err)
+			ln := cos.MustMarshalToString(fsCapacity)
 			r.lines = append(r.lines, mpath+": "+ln)
 		}
 	} else if errfs != nil {

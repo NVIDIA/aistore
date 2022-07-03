@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -236,13 +236,11 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(apc.QparamWhat)
 	httpdaeWhat := "httpdaeget-" + getWhat
 	switch getWhat {
-	case apc.GetWhatConfig, apc.GetWhatSmap, apc.GetWhatBMD, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats:
+	case apc.GetWhatConfig, apc.GetWhatSmap, apc.GetWhatBMD, apc.GetWhatSmapVote,
+		apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats:
 		t.htrun.httpdaeget(w, r)
 	case apc.GetWhatSysInfo:
-		tsysinfo := apc.TSysInfo{
-			MemCPUInfo:   sys.GetMemCPU(),
-			CapacityInfo: fs.CapStatusAux(),
-		}
+		tsysinfo := apc.TSysInfo{MemCPUInfo: sys.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
 	case apc.GetWhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)

@@ -98,7 +98,7 @@ rm:
 		err = errRm
 	}
 	if cs.OOS {
-		glog.Errorf("%s %s: OOS (%v)", mi, cs, err)
+		glog.Errorf("%s %s: OOS (%v)", mi, cs.String(), err)
 	}
 	return err
 }

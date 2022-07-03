@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
@@ -31,10 +32,11 @@ const (
 )
 
 var (
-	// Global config object
-	cfg              *config.Config
-	unreachableRegex = regexp.MustCompile("dial.*(timeout|refused)")
-	k8sDetected      bool
+	cfg *config.Config // AIS config
+
+	buildTime string
+
+	k8sDetected bool
 )
 
 // AISCLI represents an instance of an AIS command line interface
@@ -48,14 +50,15 @@ type AISCLI struct {
 }
 
 // New returns a new, initialized AISCLI instance
-func New(build, version string) *AISCLI {
+func New(version, buildtime string) *AISCLI {
 	aisCLI := AISCLI{
 		app:           cli.NewApp(),
 		outWriter:     os.Stdout,
 		errWriter:     os.Stderr,
 		longRunParams: defaultLongRunParams(),
 	}
-	aisCLI.init(build, version)
+	buildTime = buildtime
+	aisCLI.init(version)
 	return &aisCLI
 }
 
@@ -114,7 +117,12 @@ func isUnreachableError(err error) (msg string, unreachable bool) {
 		return "", false
 	default:
 		msg = err.Error()
-		unreachable = unreachableRegex.MatchString(msg)
+		regx := regexp.MustCompile("dial.*(timeout|refused)")
+		if unreachable = regx.MatchString(msg); unreachable {
+			i := strings.Index(msg, "dial")
+			debug.Assert(i >= 0)
+			msg = msg[i:]
+		}
 	}
 	return
 }
@@ -139,11 +147,12 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 
 	detailedErr, unreachable := isUnreachableError(err)
 	if unreachable {
-		errmsg := red(fmt.Sprintf("AIStore cannot be reached at %s.\n", clusterURL))
-		return fmt.Errorf("%sDetailed Error: %s\n"+
-			"(Hint: make sure to set environment %s=<http/https address of any AIS gateway/proxy>;\n"+
-			"for default settings, see CLI config at %s or run 'show config cli')",
-			errmsg, detailedErr, cmn.EnvVars.Endpoint, config.Path())
+		errmsg := fmt.Sprintf("AIStore cannot be reached at %s\n", clusterURL)
+		errmsg += fmt.Sprintf("Error: %s\n"+
+			"Make sure that environment variable %s points to an AIS gateway (any AIS gateway in the cluster)\n"+
+			"For default settings, see CLI config at %s (or run `ais show config cli`)",
+			detailedErr, cmn.EnvVars.Endpoint, config.Path())
+		return errors.New(red(errmsg))
 	}
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
@@ -170,12 +179,12 @@ func onBeforeCommand(c *cli.Context) error {
 	return nil
 }
 
-func (aisCLI *AISCLI) init(build, version string) {
+func (aisCLI *AISCLI) init(version string) {
 	app := aisCLI.app
 
 	app.Name = cliName
-	app.Usage = "AIS CLI: command-line management utility for AIStore(tm)"
-	app.Version = fmt.Sprintf("%s (build %s)", version, build)
+	app.Usage = "AIS CLI: command-line management utility for AIStore"
+	app.Version = version
 	app.EnableBashCompletion = true
 	app.HideHelp = true
 	app.Flags = []cli.Flag{cli.HelpFlag, noColorFlag}
@@ -286,6 +295,10 @@ var helpCommand = cli.Command{
 
 // Print error and terminate
 func commandNotFoundHandler(c *cli.Context, cmd string) {
+	if cmd == "version" {
+		fmt.Fprintf(c.App.Writer, "version %s (build %s)\n", c.App.Version, buildTime)
+		return
+	}
 	err := commandNotFoundError(c, cmd)
 	fmt.Fprint(c.App.ErrWriter, err.Error())
 	os.Exit(1)

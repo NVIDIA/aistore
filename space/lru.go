@@ -169,7 +169,7 @@ func RunLRU(ini *IniLRU) {
 		go j.run(providers)
 	}
 	cs := fs.GetCapStatus()
-	glog.Infof("%s started, dont-evict-time %v, %s", xlru, config.LRU.DontEvictTime, cs)
+	glog.Infof("%s started, dont-evict-time %v, %s", xlru, config.LRU.DontEvictTime, cs.String())
 	if ini.WG != nil {
 		ini.WG.Done()
 		ini.WG = nil
@@ -181,7 +181,7 @@ func RunLRU(ini *IniLRU) {
 	}
 	xlru.Finish(nil)
 	cs = fs.GetCapStatus()
-	glog.Infof("%s finished, %s", xlru, cs)
+	glog.Infof("%s finished, %s", xlru, cs.String())
 }
 
 func (*XactLRU) Run(*sync.WaitGroup) { debug.Assert(false) }

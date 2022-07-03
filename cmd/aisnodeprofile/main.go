@@ -48,7 +48,7 @@ func run() int {
 		defer pprof.StopCPUProfile()
 	}
 
-	exitCode := ais.Run(cmn.AIStoreSoftwareVersion+"."+build, buildtime)
+	exitCode := ais.Run(cmn.VersionAIStore+"."+build, buildtime)
 
 	if s := *memProfile; s != "" {
 		*memProfile = s + "." + strconv.Itoa(syscall.Getpid())

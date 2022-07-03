@@ -663,7 +663,7 @@ func TestLRU(t *testing.T) {
 		"space.lowwm":           lowWMStr,
 		"space.highwm":          highWMStr,
 		"lru.dont_evict_time":   "0s",
-		"lru.capacity_upd_time": "2s",
+		"lru.capacity_upd_time": "10s",
 	})
 
 	tlog.Logln("starting LRU...")

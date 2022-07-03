@@ -1707,7 +1707,7 @@ func (t *target) fsErr(err error, filepath string) {
 	}
 	if cos.IsErrOOS(err) {
 		cs := t.OOS(nil)
-		glog.Errorf("%s: %s", t, cs)
+		glog.Errorf("%s: %s", t, cs.String())
 		return
 	}
 	glog.Errorf("%s: waking up FSHC to check %q for err %v", t, filepath, err)

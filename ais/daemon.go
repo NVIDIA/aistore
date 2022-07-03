@@ -110,11 +110,16 @@ func initDaemon(version, buildTime string) cos.Runner {
 		err    error
 	)
 	flag.Parse()
-	if daemon.cli.usage || len(os.Args[1:]) == 0 {
+	if daemon.cli.usage || len(os.Args) == 1 {
 		fmt.Fprintln(os.Stderr, "  Usage: "+os.Args[0]+usecli+"\n")
 		flag.PrintDefaults()
-		fmt.Fprintln(os.Stderr, "\n  Usage:\n\t"+os.Args[0]+usecli)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "\n  Version %s (build: %s)\n", version, buildTime)
+		fmt.Fprintln(os.Stderr, "  Usage:\n\t"+os.Args[0]+usecli)
+		os.Exit(0)
+	}
+	if len(os.Args) == 2 && os.Args[1] == "version" {
+		fmt.Fprintf(os.Stderr, "version %s (build: %s)\n", version, buildTime)
+		os.Exit(0)
 	}
 	if daemon.cli.role != apc.Proxy && daemon.cli.role != apc.Target {
 		cos.ExitLogf("Invalid daemon's role %q, expecting %q or %q", daemon.cli.role, apc.Proxy, apc.Target)

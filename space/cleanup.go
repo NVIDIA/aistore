@@ -151,9 +151,9 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 
 	parent.cs.a = fs.GetCapStatus()
 	if parent.cs.a.Err != nil {
-		glog.Warningf("%s started, %s", xcln, parent.cs.a)
+		glog.Warningf("%s started, %s", xcln, parent.cs.a.String())
 	} else {
-		glog.Infof("%s started, %s", xcln, parent.cs.a)
+		glog.Infof("%s started, %s", xcln, parent.cs.a.String())
 	}
 	if ini.WG != nil {
 		ini.WG.Done()
@@ -167,9 +167,9 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	xcln.Finish(nil)
 	parent.cs.c, _ = fs.RefreshCapStatus(nil, nil)
 	if parent.cs.c.Err != nil {
-		glog.Warningf("%s finished, %s", xcln, parent.cs.c)
+		glog.Warningf("%s finished, %s", xcln, parent.cs.c.String())
 	} else {
-		glog.Infof("%s finished, %s", xcln, parent.cs.c)
+		glog.Infof("%s finished, %s", xcln, parent.cs.c.String())
 	}
 	return parent.cs.c
 }
@@ -297,9 +297,9 @@ func (j *clnJ) removeDeleted() (err error) {
 		glog.Errorf("%s: %v", j, errCap)
 	} else {
 		if j.p.cs.b.Err != nil {
-			glog.Warningf("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b)
+			glog.Warningf("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b.String())
 		} else {
-			glog.Infof("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b)
+			glog.Infof("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b.String())
 		}
 	}
 	return

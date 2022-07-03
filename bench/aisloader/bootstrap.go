@@ -219,7 +219,7 @@ var (
 	loggedUserToken string
 )
 
-var _version, _build, _buildtime string
+var _version, _buildtime string
 
 func (wo *workOrder) String() string {
 	var errstr, opName string
@@ -341,7 +341,7 @@ func parseCmdLine() (params, error) {
 		os.Exit(0)
 	}
 	if flagVersion || f.NArg() != 0 && f.Arg(0) == "version" {
-		fmt.Printf("version %s, build %s (build-time: %s)\n", _version, _build, _buildtime)
+		fmt.Printf("version %s (build %s)\n", _version, _buildtime)
 		os.Exit(0)
 	}
 	if !p.cleanUp.IsSet && p.bck.Name != "" {
@@ -690,9 +690,9 @@ func getIDFromString(val string, hashLen uint) uint64 {
 	return hash
 }
 
-func Start(version, build, buildtime string) (err error) {
+func Start(version, buildtime string) (err error) {
 	wg := &sync.WaitGroup{}
-	_version, _build, _buildtime = version, build, buildtime
+	_version, _buildtime = version, buildtime
 	runParams, err = parseCmdLine()
 	if err != nil {
 		return err

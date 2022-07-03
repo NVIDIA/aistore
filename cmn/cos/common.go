@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -11,7 +11,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
-	"runtime/debug"
+	rdebug "runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +19,7 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -31,7 +32,7 @@ const (
 	TiB = 1024 * GiB
 )
 
-// misc common constants
+// assorted common constants
 const (
 	SizeofI64 = int(unsafe.Sizeof(uint64(0)))
 	SizeofI32 = int(unsafe.Sizeof(uint32(0)))
@@ -42,6 +43,8 @@ const (
 	PermRWR       os.FileMode = 0o640 // POSIX perms
 	PermRWXRX     os.FileMode = 0o750
 	configDirMode             = PermRWXRX | os.ModeDir
+
+	hexPrefix = "0x"
 )
 
 type (
@@ -89,15 +92,13 @@ func init() {
 	JSON = jsonConf.Froze()
 }
 
-//////////////////////
-// JSON & JSONLocal //
-//////////////////////
-
-func MarshalToString(v interface{}) (string, error) { return JSON.MarshalToString(v) }
+//
+// JSON & JSONLocal
+//
 
 func MustMarshalToString(v interface{}) string {
 	s, err := JSON.MarshalToString(v)
-	AssertNoErr(err)
+	debug.AssertNoErr(err)
 	return s
 }
 
@@ -121,9 +122,9 @@ func MustMorphMarshal(data, v interface{}) {
 	AssertNoErr(err)
 }
 
-/////////////
-// PARSING //
-/////////////
+//
+// PARSING
+//
 
 func IsParseBool(s string) bool {
 	yes, err := ParseBool(s)
@@ -178,7 +179,6 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 }
 
 func ParseHexOrUint(s string) (uint64, error) {
-	const hexPrefix = "0x"
 	if strings.HasPrefix(s, hexPrefix) {
 		return strconv.ParseUint(s[len(hexPrefix):], 16, 64)
 	}
@@ -285,7 +285,7 @@ func (ss StringSet) All(xs ...string) bool {
 // shallow copy
 func CopyStruct(dst, src interface{}) {
 	x := reflect.ValueOf(src)
-	Assert(x.Kind() == reflect.Ptr)
+	debug.Assert(x.Kind() == reflect.Ptr)
 	starX := x.Elem()
 	y := reflect.New(starX.Type())
 	starY := y.Elem()
@@ -320,7 +320,7 @@ func FreeMemToOS(d ...time.Duration) {
 		time.Sleep(d[0])
 	}
 	runtime.GC()
-	debug.FreeOSMemory()
+	rdebug.FreeOSMemory()
 }
 
 // (common use)

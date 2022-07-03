@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/OneOfOne/xxhash"
 )
@@ -90,11 +89,9 @@ type (
 		ios ios.IOStater
 
 		// capacity
-		cmu     sync.RWMutex
-		capTime struct {
-			curr, next int64
-		}
-		capStatus CapStatus
+		cmu       sync.RWMutex
+		csExpires atomic.Int64
+		cs        CapStatus
 
 		// allow disk sharing by multiple mountpaths and mountpaths with no disks whatsoever
 		// (default = false)
@@ -1038,101 +1035,6 @@ func moveMarkers(available MPI, from *MountpathInfo) {
 	from.ClearMDs()
 }
 
-// capacity management
-
-func GetCapStatus() (cs CapStatus) {
-	mfs.cmu.RLock()
-	cs = mfs.capStatus
-	mfs.cmu.RUnlock()
-	return
-}
-
-func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error) {
-	var (
-		c              Capacity
-		availablePaths = GetAvail()
-	)
-	if len(availablePaths) == 0 {
-		err = cmn.ErrNoMountpaths
-		return
-	}
-	if config == nil {
-		config = cmn.GCO.Get()
-	}
-	high, oos := config.Space.HighWM, config.Space.OOS
-	for path, mi := range availablePaths {
-		if c, err = mi.getCapacity(config, true); err != nil {
-			glog.Error(err)
-			return
-		}
-		cs.TotalUsed += c.Used
-		cs.TotalAvail += c.Avail
-		cs.PctMax = cos.MaxI32(cs.PctMax, c.PctUsed)
-		cs.PctAvg += c.PctUsed
-		if mpcap != nil {
-			mpcap[path] = c
-		}
-	}
-	cs.PctAvg /= int32(len(availablePaths))
-	cs.OOS = int64(cs.PctMax) > oos
-	if cs.OOS || int64(cs.PctMax) > high {
-		cs.Err = cmn.NewErrCapacityExceeded(high, cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.PctMax, cs.OOS)
-	}
-	// cached cap state
-	mfs.cmu.Lock()
-	mfs.capStatus = cs
-	mfs.capTime.curr = mono.NanoTime()
-	mfs.capTime.next = mfs.capTime.curr + int64(nextRefresh(config))
-	mfs.cmu.Unlock()
-	return
-}
-
-// recompute next time to refresh cached capacity stats (mfs.capStatus)
-func nextRefresh(config *cmn.Config) time.Duration {
-	var (
-		util = int64(mfs.capStatus.PctMax)
-		umin = cos.MinI64(config.Space.HighWM-10, config.Space.LowWM)
-		umax = config.Space.OOS
-		tmax = config.LRU.CapacityUpdTime.D()
-		tmin = config.Periodic.StatsTime.D()
-	)
-	umin = cos.MinI64(umin, config.Space.CleanupWM) // calibrate potentially further down
-	if util <= umin {
-		return tmax
-	}
-	if util >= umax {
-		return tmin
-	}
-	debug.Assert(umin < umax)
-	debug.Assertf(tmin < tmax, "min %d > max %d", tmin, tmax)
-	ratio := (util - umin) * 100 / (umax - umin)
-	return time.Duration(ratio)*(tmax-tmin)/100 + tmin
-}
-
-// NOTE: Is called only and exclusively by `stats.Trunner` providing
-//        `config.Periodic.StatsTime` tick.
-func CapPeriodic(mpcap MPCap) (cs CapStatus, updated bool, err error) {
-	config := cmn.GCO.Get()
-	mfs.cmu.RLock()
-	mfs.capTime.curr += int64(config.Periodic.StatsTime)
-	if mfs.capTime.curr < mfs.capTime.next {
-		mfs.cmu.RUnlock()
-		return
-	}
-	mfs.cmu.RUnlock()
-	cs, err = RefreshCapStatus(config, mpcap)
-	updated = err == nil
-	return
-}
-
-func CapStatusAux() (fsInfo apc.CapacityInfo) {
-	cs := GetCapStatus()
-	fsInfo.Used = cs.TotalUsed
-	fsInfo.Total = cs.TotalUsed + cs.TotalAvail
-	fsInfo.PctUsed = float64(cs.PctAvg)
-	return
-}
-
 // load node ID
 
 // traverses all mountpaths to load and validate node ID
@@ -1191,11 +1093,82 @@ func (mpi MPI) toSlice() []string {
 	return paths
 }
 
+//
+// capacity management
+//
+
+func GetCapStatus() (cs CapStatus) {
+	mfs.cmu.RLock()
+	cs = mfs.cs
+	mfs.cmu.RUnlock()
+	return
+}
+
+func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error) {
+	var (
+		c              Capacity
+		availablePaths = GetAvail()
+	)
+	if len(availablePaths) == 0 {
+		err = cmn.ErrNoMountpaths
+		return
+	}
+	if config == nil {
+		config = cmn.GCO.Get()
+	}
+	high, oos := config.Space.HighWM, config.Space.OOS
+	for path, mi := range availablePaths {
+		if c, err = mi.getCapacity(config, true); err != nil {
+			glog.Error(err)
+			return
+		}
+		cs.TotalUsed += c.Used
+		cs.TotalAvail += c.Avail
+		cs.PctMax = cos.MaxI32(cs.PctMax, c.PctUsed)
+		cs.PctAvg += c.PctUsed
+		if mpcap != nil {
+			mpcap[path] = c
+		}
+	}
+	cs.PctAvg /= int32(len(availablePaths))
+	cs.OOS = int64(cs.PctMax) > oos
+	if cs.OOS || int64(cs.PctMax) > high {
+		cs.Err = cmn.NewErrCapacityExceeded(high, cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.PctMax, cs.OOS)
+	}
+	// cached cap state
+	mfs.cmu.Lock()
+	mfs.cs = cs
+	mfs.cmu.Unlock()
+	return
+}
+
+// NOTE: Is called only and exclusively by `stats.Trunner` providing
+//        `config.Periodic.StatsTime` tick.
+func CapPeriodic(now int64, config *cmn.Config, mpcap MPCap) (cs CapStatus, updated bool, err error) {
+	if now < mfs.csExpires.Load() {
+		return
+	}
+	cs, err = RefreshCapStatus(config, mpcap)
+	updated = err == nil
+	mfs.csExpires.Store(now + int64(cs._next(config)))
+	return
+}
+
+func CapStatusGetWhat() (fsInfo apc.CapacityInfo) {
+	cs := GetCapStatus()
+	fsInfo.Used = cs.TotalUsed
+	fsInfo.Total = cs.TotalUsed + cs.TotalAvail
+	fsInfo.PctUsed = float64(cs.PctAvg)
+	return
+}
+
 ///////////////
 // CapStatus //
 ///////////////
 
-func (cs CapStatus) String() (str string) {
+func (cs *CapStatus) IsNil() bool { return cs.TotalUsed == 0 && cs.TotalAvail == 0 }
+
+func (cs *CapStatus) String() (str string) {
 	var (
 		totalUsed  = cos.B2S(int64(cs.TotalUsed), 1)
 		totalAvail = cos.B2S(int64(cs.TotalAvail), 1)
@@ -1212,6 +1185,22 @@ func (cs CapStatus) String() (str string) {
 	return
 }
 
-func (cs CapStatus) IsNil() bool {
-	return cs.TotalUsed == 0 && cs.TotalAvail == 0
+// next time to RefreshCapStatus()
+func (cs *CapStatus) _next(config *cmn.Config) time.Duration {
+	var (
+		util = int64(cs.PctMax)
+		umin = cos.MinI64(config.Space.HighWM-10, config.Space.LowWM)
+		umax = config.Space.OOS
+		tmax = config.LRU.CapacityUpdTime.D()
+		tmin = config.Periodic.StatsTime.D()
+	)
+	umin = cos.MinI64(umin, config.Space.CleanupWM)
+	if util <= umin {
+		return tmax
+	}
+	if util >= umax-1 {
+		return tmin
+	}
+	ratio := (util - umin) * 100 / (umax - umin)
+	return time.Duration(100-ratio)*(tmax-tmin)/100 + tmin
 }
