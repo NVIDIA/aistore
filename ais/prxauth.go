@@ -158,14 +158,43 @@ func (t *tokenList) String() string    { return fmt.Sprintf("TokenList v%d", t.V
 // proxy cont-ed
 //
 
+// [METHOD] /v1/tokens
+func (p *proxy) tokenHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		p.validateSecret(w, r)
+	case http.MethodDelete:
+		p.httpTokenDelete(w, r)
+	default:
+		cmn.WriteErr405(w, r, http.MethodDelete)
+	}
+}
+
+func (p *proxy) validateSecret(w http.ResponseWriter, r *http.Request) {
+	if _, err := p.checkRESTItems(w, r, 0, false, apc.URLPathTokens.L); err != nil {
+		return
+	}
+	cksum := cos.NewCksumHash(cos.ChecksumSHA256)
+	cksum.H.Write([]byte(cmn.GCO.Get().Auth.Secret))
+	cksum.Finalize()
+
+	cluConf := &authn.ServerConf{}
+	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
+		return
+	}
+	if cksum.Val() != cluConf.Secret {
+		p.writeErrf(w, r, "%s: invalid secret sha256(%q)", p, cluConf.Secret)
+	}
+}
+
 func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
-	tokenList := &tokenList{}
 	if _, err := p.checkRESTItems(w, r, 0, false, apc.URLPathTokens.L); err != nil {
 		return
 	}
 	if p.forwardCP(w, r, nil, "revoke token") {
 		return
 	}
+	tokenList := &tokenList{}
 	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
 		return
 	}

@@ -2703,16 +2703,6 @@ func (p *proxy) _primaryURLPre(_ *configModifier, clone *globalConfig) (updated 
 	return
 }
 
-// [METHOD] /v1/tokens
-func (p *proxy) tokenHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodDelete:
-		p.httpTokenDelete(w, r)
-	default:
-		cmn.WriteErr405(w, r, http.MethodDelete)
-	}
-}
-
 // [METHOD] /v1/dsort
 func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStartedWithRetry() {
