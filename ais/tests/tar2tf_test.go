@@ -160,7 +160,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 
 		// Request only a subset of bytes
 		header := http.Header{}
-		header.Set(cmn.HdrRange, fmt.Sprintf("bytes=%d-%d", tc.start, tc.end))
+		header.Set(cos.HdrRange, fmt.Sprintf("bytes=%d-%d", tc.start, tc.end))
 		_, err = api.GetObjectS3(baseParams, bck, tarObjName+"%3fuuid="+uuid, api.GetObjectInput{Writer: rangeBytesBuff, Header: header})
 		tassert.CheckFatal(t, err)
 

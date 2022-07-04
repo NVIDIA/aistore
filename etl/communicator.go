@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -226,7 +226,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.R
 		req.URL.RawQuery = q.Encode()
 	}
 	req.ContentLength = size
-	req.Header.Set(cmn.HdrContentType, cmn.ContentBinary)
+	req.Header.Set(cos.HdrContentType, cos.ContentBinary)
 	resp, err = pc.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
 finish:
 	if err != nil {

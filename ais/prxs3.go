@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -145,7 +145,7 @@ func (p *proxy) bckNamesToS3(w http.ResponseWriter) {
 	})
 	sgl := memsys.PageMM().NewSGL(0)
 	resp.MustMarshal(sgl)
-	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
+	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
 	sgl.Free()
 }
@@ -296,7 +296,7 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 	resp.FillFromAisBckList(objList, &lsmsg)
 	sgl := memsys.PageMM().NewSGL(0)
 	resp.MustMarshal(sgl)
-	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
+	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
 	sgl.Free()
 }
@@ -501,7 +501,7 @@ func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	resp := s3compat.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
 	sgl := memsys.PageMM().NewSGL(0)
 	resp.MustMarshal(sgl)
-	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
+	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
 	sgl.Free()
 }

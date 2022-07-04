@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -786,10 +786,10 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 		glog.Errorln(s)
 	}
 	// Make sure that the caller is aware that we return JSON error.
-	w.Header().Set(HdrContentType, ContentJSON)
+	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if r.Method == http.MethodHead {
-		w.Header().Set(HdrError, e.Error())
+		w.Header().Set(cos.HdrError, e.Error())
 		w.WriteHeader(e.Status)
 	} else {
 		w.WriteHeader(e.Status)

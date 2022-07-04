@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -639,7 +639,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 			BaseParams: baseParams,
 			Path:       apc.URLPathDae.Join(apc.SyncSmap),
 			Body:       jsonMap,
-			Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+			Header:     http.Header{cos.HdrContentType: []string{cos.ContentJSON}},
 		}
 		err = reqParams.DoHTTPRequest()
 		tassert.CheckFatal(t, err)

@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -94,7 +93,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 		BaseParams: baseParams,
 		Path:       apc.URLPathCluAutoReg.S,
 		Body:       jsonDaemonInfo,
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+		Header:     http.Header{cos.HdrContentType: []string{cos.ContentJSON}},
 	}
 	return reqParams.DoHTTPRequest()
 }

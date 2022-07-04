@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -251,7 +251,7 @@ func (reqParams *ReqParams) readResp(resp *http.Response, v interface{}) (*wrapp
 			*t = string(b)
 		default:
 			if resp.StatusCode == http.StatusOK {
-				if resp.Header.Get(cmn.HdrContentType) == cmn.ContentMsgPack {
+				if resp.Header.Get(cos.HdrContentType) == cos.ContentMsgPack {
 					r := msgp.NewReaderSize(resp.Body, 10*cos.KiB)
 					err = v.(msgp.Decodable).DecodeMsg(r)
 				} else {
@@ -271,7 +271,7 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 		return nil
 	}
 	if reqParams.BaseParams.Method == http.MethodHead {
-		if msg := resp.Header.Get(cmn.HdrError); msg != "" {
+		if msg := resp.Header.Get(cos.HdrError); msg != "" {
 			httpErr := cmn.NewErrHTTP(nil, msg, resp.StatusCode)
 			httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 			return httpErr

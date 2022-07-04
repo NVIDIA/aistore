@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -60,7 +60,7 @@ func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			apc.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
-			cmn.HdrContentType: []string{cmn.ContentJSON},
+			cos.HdrContentType: []string{cos.ContentJSON},
 		}
 		reqParams.Query = url.Values{apc.QparamForce: []string{strconv.FormatBool(force)}}
 	}
@@ -79,7 +79,7 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			apc.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
-			cmn.HdrContentType: []string{cmn.ContentJSON},
+			cos.HdrContentType: []string{cos.ContentJSON},
 		}
 	}
 	err := reqParams.DoHTTPRequest()
@@ -100,7 +100,7 @@ func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathDetach, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
-			cmn.HdrContentType: []string{cmn.ContentJSON},
+			cos.HdrContentType: []string{cos.ContentJSON},
 		}
 		reqParams.Query = q
 	}
@@ -122,7 +122,7 @@ func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath stri
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathDisable, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
-			cmn.HdrContentType: []string{cmn.ContentJSON},
+			cos.HdrContentType: []string{cos.ContentJSON},
 		}
 		reqParams.Query = q
 	}
@@ -246,7 +246,7 @@ func ResetDaemonConfig(baseParams BaseParams, nodeID string) error {
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActResetConfig})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{nodeID},
-			cmn.HdrContentType: []string{cmn.ContentJSON},
+			cos.HdrContentType: []string{cos.ContentJSON},
 		}
 	}
 	err := reqParams.DoHTTPRequest()

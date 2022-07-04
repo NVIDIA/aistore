@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -90,9 +90,9 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 		return nil, resp.StatusCode, err
 	}
 
-	if resp.Header.Get(cmn.HdrETag) == "" {
+	if resp.Header.Get(cos.HdrETag) == "" {
 		// TODO: improve validation
-		glog.Errorf("Warning: missing header %s (response header: %+v)", cmn.HdrETag, resp.Header)
+		glog.Errorf("Warning: missing header %s (response header: %+v)", cos.HdrETag, resp.Header)
 	}
 
 	bckProps = make(cos.SimpleKVs)
@@ -149,7 +149,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.
 	if resp.ContentLength >= 0 {
 		oa.Size = resp.ContentLength
 	}
-	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
+	if v, ok := h.EncodeVersion(resp.Header.Get(cos.HdrETag)); ok {
 		oa.SetCustomKey(cmn.ETag, v)
 	}
 	if verbose {
@@ -209,7 +209,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 
 	lom.SetCustomKey(cmn.SourceObjMD, apc.ProviderHTTP)
 	lom.SetCustomKey(cmn.OrigURLObjMD, origURL)
-	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
+	if v, ok := h.EncodeVersion(resp.Header.Get(cos.HdrETag)); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 	}
 	setSize(ctx, resp.ContentLength)

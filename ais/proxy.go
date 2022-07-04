@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -478,7 +478,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	if len(apiItems) > 0 {
 		bckName = apiItems[0]
 	}
-	if r.ContentLength == 0 && r.Header.Get(cmn.HdrContentType) != cmn.ContentJSON {
+	if r.ContentLength == 0 && r.Header.Get(cos.HdrContentType) != cos.ContentJSON {
 		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
 		msg = &apc.ActionMsg{Action: apc.ActList, Value: &apc.ListObjsMsg{}}
 	} else if msg, err = p.readActionMsg(w, r); err != nil {
@@ -1330,7 +1330,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 
 	cos.Assert(bckList != nil)
 
-	if strings.Contains(r.Header.Get(cmn.HdrAccept), cmn.ContentMsgPack) {
+	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
 		if !p.writeMsgPack(w, r, bckList, "list_objects") {
 			return
 		}

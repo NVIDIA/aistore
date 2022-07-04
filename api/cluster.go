@@ -157,7 +157,7 @@ func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID, daemonI
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathCluUserReg.S
 		reqParams.Body = cos.MustMarshal(nodeInfo)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&info)
 	FreeRp(reqParams)
@@ -219,7 +219,7 @@ func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigT
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
 	err := reqParams.DoHTTPRequest()
@@ -235,7 +235,7 @@ func ResetClusterConfig(baseParams BaseParams) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActResetConfig})
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoHTTPRequest()
 	FreeRp(reqParams)
@@ -321,7 +321,7 @@ func StartMaintenance(baseParams BaseParams, actValue *apc.ActValRmNode) (id str
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&id)
 	FreeRp(reqParams)
@@ -339,7 +339,7 @@ func DecommissionNode(baseParams BaseParams, actValue *apc.ActValRmNode) (id str
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&id)
 	FreeRp(reqParams)
@@ -357,7 +357,7 @@ func StopMaintenance(baseParams BaseParams, actValue *apc.ActValRmNode) (id stri
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&id)
 	FreeRp(reqParams)
@@ -373,7 +373,7 @@ func ShutdownCluster(baseParams BaseParams) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoHTTPRequest()
 	FreeRp(reqParams)
@@ -392,7 +392,7 @@ func DecommissionCluster(baseParams BaseParams, rmUserData bool) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoHTTPRequest()
 	FreeRp(reqParams)
@@ -414,7 +414,7 @@ func ShutdownNode(baseParams BaseParams, actValue *apc.ActValRmNode) (id string,
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&id)
 	FreeRp(reqParams)

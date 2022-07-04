@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -649,7 +649,7 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 	// err == nil && bad status: resp.Body contains the error message
 	if res.status >= http.StatusBadRequest {
 		if args.req.Method == http.MethodHead {
-			msg := resp.Header.Get(cmn.HdrError)
+			msg := resp.Header.Get(cos.HdrError)
 			res.err = cmn.S2HTTPErr(req, msg, res.status)
 		} else {
 			var b bytes.Buffer
@@ -892,7 +892,7 @@ func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v msgp.Enco
 		buf, slab = h.gmm.AllocSize(msgpObjListBufSize) // max size
 		mw        = msgp.NewWriterBuf(w, buf)
 	)
-	w.Header().Set(cmn.HdrContentType, cmn.ContentMsgPack)
+	w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
 	if err = v.EncodeMsg(mw); err == nil {
 		err = mw.Flush()
 	}
@@ -908,7 +908,7 @@ func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v interface{},
 	_, isByteArray := v.([]byte)
 	debug.Assert(!isByteArray)
 	ok = true
-	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
+	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	if err := jsoniter.NewEncoder(w).Encode(v); err != nil {
 		h.handleWriteError(r, tag, err)
 		ok = false

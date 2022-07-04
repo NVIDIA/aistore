@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -87,7 +86,7 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte) error {
 		if cos.IsHTTPS(proxyURL) {
 			client = m.clientHTTPS
 		}
-		request.Header.Set(cmn.HdrContentType, cmn.ContentJSON)
+		request.Header.Set(cos.HdrContentType, cos.ContentJSON)
 		response, err := client.Do(request)
 		var respCode int
 		if response != nil {

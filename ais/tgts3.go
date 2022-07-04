@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -105,7 +105,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	}
 	sgl := memsys.PageMM().NewSGL(0)
 	result.MustMarshal(sgl)
-	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
+	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
 	sgl.Free()
 }

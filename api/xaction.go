@@ -82,7 +82,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
 	err = reqParams.DoHTTPReqResp(&id)
@@ -102,7 +102,7 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
 	err := reqParams.DoHTTPRequest()
@@ -132,7 +132,7 @@ func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMul
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatQueryXactStats}}
 	}
 	err = reqParams.DoHTTPReqResp(&xs)
@@ -153,7 +153,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStatus}}
 	}
 	err = reqParams.DoHTTPReqResp(status)

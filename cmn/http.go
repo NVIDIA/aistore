@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -23,28 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
-)
-
-const (
-	HdrRange                 = "Range" // Ref: https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35
-	HdrRangeValPrefix        = "bytes="
-	HdrContentRange          = "Content-Range"
-	HdrContentRangeValPrefix = "bytes " // Ref: https://tools.ietf.org/html/rfc7233#section-4.2
-	HdrAcceptRanges          = "Accept-Ranges"
-	HdrContentType           = "Content-Type"
-	HdrContentLength         = "Content-Length"
-	HdrAccept                = "Accept"
-	HdrLocation              = "Location"
-	HdrETag                  = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/ETag
-	HdrError                 = "Hdr-Error"
-)
-
-// Ref: https://www.iana.org/assignments/media-types/media-types.xhtml
-const (
-	ContentJSON    = "application/json"
-	ContentMsgPack = "application/msgpack"
-	ContentXML     = "application/xml"
-	ContentBinary  = "application/octet-stream"
 )
 
 type (
@@ -208,7 +186,7 @@ func WriteErrJSON(w http.ResponseWriter, r *http.Request, out interface{}, err e
 // In other cases, `v` is encoded to JSON and then passed.
 // The function returns an error if writing to the response fails.
 func WriteJSON(w http.ResponseWriter, v interface{}) error {
-	w.Header().Set(HdrContentType, ContentJSON)
+	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	if b, ok := v.([]byte); ok {
 		_, err := w.Write(b)
 		return err
@@ -227,17 +205,17 @@ func copyHeaders(src http.Header, dst *http.Header) {
 }
 
 func (r HTTPRange) ContentRange(size int64) string {
-	return fmt.Sprintf("%s%d-%d/%d", HdrContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
+	return fmt.Sprintf("%s%d-%d/%d", cos.HdrContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
 }
 
 // ParseMultiRange parses a Range Header string as per RFC 7233.
 // ErrNoOverlap is returned if none of the ranges overlap with the [0, size) content.
 func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
 	var noOverlap bool
-	if !strings.HasPrefix(s, HdrRangeValPrefix) {
+	if !strings.HasPrefix(s, cos.HdrRangeValPrefix) {
 		return nil, fmt.Errorf("read range %q is invalid (prefix)", s)
 	}
-	allRanges := strings.Split(s[len(HdrRangeValPrefix):], ",")
+	allRanges := strings.Split(s[len(cos.HdrRangeValPrefix):], ",")
 	for _, ra := range allRanges {
 		ra = strings.TrimSpace(ra)
 		if ra == "" {
@@ -306,7 +284,7 @@ func RangeHdr(start, length int64) (hdr http.Header) {
 		return hdr
 	}
 	hdr = make(http.Header, 1)
-	hdr.Add(HdrRange, fmt.Sprintf("%s%d-%d", HdrRangeValPrefix, start, start+length-1))
+	hdr.Add(cos.HdrRange, fmt.Sprintf("%s%d-%d", cos.HdrRangeValPrefix, start, start+length-1))
 	return
 }
 
@@ -425,7 +403,7 @@ func (u *HreqArgs) ReqWithCancel() (*http.Request, context.Context, context.Canc
 		return nil, nil, nil, err
 	}
 	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set(HdrContentType, ContentJSON)
+		req.Header.Set(cos.HdrContentType, cos.ContentJSON)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	req = req.WithContext(ctx)
@@ -438,7 +416,7 @@ func (u *HreqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context
 		return nil, nil, nil, err
 	}
 	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set(HdrContentType, ContentJSON)
+		req.Header.Set(cos.HdrContentType, cos.ContentJSON)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	req = req.WithContext(ctx)

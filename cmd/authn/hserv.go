@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -309,7 +310,7 @@ func (h *hserv) userLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeJSON(w http.ResponseWriter, val interface{}, tag string) {
-	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
+	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	var err error
 	if err = jsoniter.NewEncoder(w).Encode(val); err == nil {
 		return
@@ -318,7 +319,7 @@ func writeJSON(w http.ResponseWriter, val interface{}, tag string) {
 }
 
 func writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
-	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
+	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	var err error
 	if _, err = w.Write(jsbytes); err == nil {
 		return

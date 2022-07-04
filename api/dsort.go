@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -9,7 +9,6 @@ import (
 	"net/url"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort"
 )
@@ -22,7 +21,7 @@ func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Body = cos.MustMarshal(rs)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoHTTPReqResp(&id)
 	FreeRp(reqParams)

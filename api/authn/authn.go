@@ -12,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -29,7 +28,7 @@ func AddUser(baseParams api.BaseParams, newUser *User) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathUsers.S
 		reqParams.Body = msg
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
 }
@@ -43,7 +42,7 @@ func UpdateUser(baseParams api.BaseParams, user *User) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathUsers.Join(user.ID)
 		reqParams.Body = msg
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
 }
@@ -71,7 +70,7 @@ func LoginUser(baseParams api.BaseParams, userID, pass string, expire *time.Dura
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathUsers.Join(userID)
 		reqParams.Body = cos.MustMarshal(rec)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&token)
 	if err != nil {
@@ -93,7 +92,7 @@ func RegisterCluster(baseParams api.BaseParams, cluSpec CluACL) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClusters.S
 		reqParams.Body = msg
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
 }
@@ -107,7 +106,7 @@ func UpdateCluster(baseParams api.BaseParams, cluSpec CluACL) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathClusters.Join(cluSpec.ID)
 		reqParams.Body = msg
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
 }
@@ -227,7 +226,7 @@ func AddRole(baseParams api.BaseParams, roleSpec *Role) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathRoles.S
 		reqParams.Body = msg
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
 }
@@ -241,7 +240,7 @@ func UpdateRole(baseParams api.BaseParams, roleSpec *Role) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathRoles.Join(roleSpec.ID)
 		reqParams.Body = msg
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
 }
@@ -266,7 +265,7 @@ func RevokeToken(baseParams api.BaseParams, token string) error {
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathTokens.S
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
 }
@@ -292,7 +291,7 @@ func SetConfig(baseParams api.BaseParams, conf *ConfigToUpdate) error {
 		reqParams.Body = cos.MustMarshal(conf)
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDae.S
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
 }

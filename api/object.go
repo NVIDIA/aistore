@@ -215,7 +215,7 @@ func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, cus
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Body = cos.MustMarshal(actMsg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
 	err := reqParams.DoHTTPRequest()
@@ -246,7 +246,7 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Body = cos.MustMarshal(actMsg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
 	err := reqParams.DoHTTPRequest()
@@ -506,7 +506,7 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, oldName)
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActRenameObject, Name: newName})
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
 	err := reqParams.DoHTTPRequest()
@@ -524,7 +524,7 @@ func Promote(args *PromoteArgs) (xactID string, err error) {
 		reqParams.BaseParams = args.BaseParams
 		reqParams.Path = apc.URLPathObjects.Join(args.Bck.Name)
 		reqParams.Body = cos.MustMarshal(actMsg)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
 	err = reqParams.DoHTTPReqResp(&xactID)

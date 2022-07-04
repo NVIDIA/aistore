@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -49,7 +49,7 @@ func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interf
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownload.S
 		reqParams.Body = cos.MustMarshal(downloader.DlBody{Type: dlt, RawMessage: msg})
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	id, err = reqParams.doDlDownloadRequest()
 	FreeRp(reqParams)
@@ -90,7 +90,7 @@ func DownloadStatus(baseParams BaseParams, id string, onlyActiveTasks ...bool) (
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownload.S
 		reqParams.Body = cos.MustMarshal(dlBody)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	resp, err = reqParams.doDlStatusRequest()
 	FreeRp(reqParams)
@@ -105,7 +105,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJ
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownload.S
 		reqParams.Body = cos.MustMarshal(dlBody)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err = reqParams.DoHTTPReqResp(&dlList)
 	FreeRp(reqParams)
@@ -121,7 +121,7 @@ func AbortDownload(baseParams BaseParams, id string) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownloadAbort.S
 		reqParams.Body = cos.MustMarshal(dlBody)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoHTTPRequest()
 	FreeRp(reqParams)
@@ -136,7 +136,7 @@ func RemoveDownload(baseParams BaseParams, id string) error {
 		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathDownloadRemove.S
 		reqParams.Body = cos.MustMarshal(dlBody)
-		reqParams.Header = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoHTTPRequest()
 	FreeRp(reqParams)

@@ -991,7 +991,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.lom = lom
 		goi.w = w
 		goi.ctx = context.Background()
-		goi.ranges = byteRanges{Range: r.Header.Get(cmn.HdrRange), Size: 0}
+		goi.ranges = byteRanges{Range: r.Header.Get(cos.HdrRange), Size: 0}
 		goi.archive = archiveQuery{
 			filename: filename,
 			mime:     dpq.archmime, // query.Get(apc.QparamArchmime)
@@ -1422,7 +1422,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.B
 		return
 	}
 
-	w.Header().Set(cmn.HdrContentLength, strconv.FormatInt(finfo.Size(), 10))
+	w.Header().Set(cos.HdrContentLength, strconv.FormatInt(finfo.Size(), 10))
 	_, err = io.Copy(w, file) // No need for `io.CopyBuffer` as `sendfile` syscall will be used.
 	cos.Close(file)
 	if err != nil {
@@ -1505,7 +1505,7 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 	var (
 		cksumValue    = r.Header.Get(apc.HdrObjCksumVal)
 		cksumType     = r.Header.Get(apc.HdrObjCksumType)
-		contentLength = r.Header.Get(cmn.HdrContentLength)
+		contentLength = r.Header.Get(cos.HdrContentLength)
 		handle        = dpq.appendHdl // apc.QparamAppendHandle
 	)
 
@@ -1535,7 +1535,7 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 
 func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (errCode int, err error) {
 	var (
-		sizeStr  = r.Header.Get(cmn.HdrContentLength)
+		sizeStr  = r.Header.Get(cos.HdrContentLength)
 		mime     = dpq.archmime // apc.QparamArchmime
 		filename = dpq.archpath // apc.QparamArchpath
 	)

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -146,7 +146,7 @@ func (poi *putObjInfo) do(r *http.Request, dpq *dpq) (int, error) {
 			poi.xctn = xctn
 		}
 	}
-	if sizeStr := r.Header.Get(cmn.HdrContentLength); sizeStr != "" {
+	if sizeStr := r.Header.Get(cos.HdrContentLength); sizeStr != "" {
 		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
 			poi.size = size
 		}
@@ -908,7 +908,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	}
 	// set Content-Length
 	if hdr != nil {
-		hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
+		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 	}
 
 	// transmit
@@ -956,7 +956,7 @@ func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTP
 	if err != nil {
 		if _, ok := err.(*cmn.ErrRangeNoOverlap); ok {
 			// https://datatracker.ietf.org/doc/html/rfc7233#section-4.2
-			hdr.Set(cmn.HdrContentRange, fmt.Sprintf("%s*/%d", cmn.HdrContentRangeValPrefix, size))
+			hdr.Set(cos.HdrContentRange, fmt.Sprintf("%s*/%d", cos.HdrContentRangeValPrefix, size))
 		}
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return
@@ -975,8 +975,8 @@ func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTP
 		return
 	}
 	rrange = &ranges[0]
-	hdr.Set(cmn.HdrAcceptRanges, "bytes")
-	hdr.Set(cmn.HdrContentRange, rrange.ContentRange(size))
+	hdr.Set(cos.HdrAcceptRanges, "bytes")
+	hdr.Set(cos.HdrContentRange, rrange.ContentRange(size))
 	return
 }
 

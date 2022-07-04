@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -153,7 +153,7 @@ func ToHeader(oah ObjAttrsHolder, hdr http.Header) {
 		hdr.Set(apc.HdrObjAtime, cos.UnixNano2S(at))
 	}
 	if n := oah.SizeBytes(true); n > 0 {
-		hdr.Set(HdrContentLength, strconv.FormatInt(n, 10))
+		hdr.Set(cos.HdrContentLength, strconv.FormatInt(n, 10))
 	}
 	if v := oah.Version(true); v != "" {
 		hdr.Set(apc.HdrObjVersion, v)
@@ -177,7 +177,7 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 		debug.AssertNoErr(err)
 		oa.Atime = atime
 	}
-	if sz := hdr.Get(HdrContentLength); sz != "" {
+	if sz := hdr.Get(cos.HdrContentLength); sz != "" {
 		size, err := strconv.ParseInt(sz, 10, 64)
 		debug.AssertNoErr(err)
 		oa.Size = size

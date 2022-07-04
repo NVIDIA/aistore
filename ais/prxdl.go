@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -288,7 +288,7 @@ func (p *proxy) validateStartDownloadRequest(w http.ResponseWriter, r *http.Requ
 }
 
 func _respWithID(w http.ResponseWriter, id string) {
-	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
+	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	b := cos.MustMarshal(downloader.DlPostResp{ID: id})
 	_, err := w.Write(b)
 	debug.AssertNoErr(err)
