@@ -19,7 +19,7 @@ import (
 )
 
 // update list of revoked token on all clusters
-func (m *UserManager) broadcastRevoked(token string) {
+func (m *mgr) broadcastRevoked(token string) {
 	tokenList := authn.TokenList{Tokens: []string{token}}
 	body := cos.MustMarshal(tokenList)
 	m.broadcast(http.MethodDelete, apc.Tokens, body)
@@ -27,7 +27,7 @@ func (m *UserManager) broadcastRevoked(token string) {
 
 // broadcast the request to all clusters. If a cluster has a few URLS,
 // it sends to the first working one. Clusters are processed in parallel.
-func (m *UserManager) broadcast(method, path string, body []byte) {
+func (m *mgr) broadcast(method, path string, body []byte) {
 	cluList, err := m.clusterList()
 	if err != nil {
 		glog.Errorf("Failed to read cluster list: %v", err)
@@ -40,7 +40,7 @@ func (m *UserManager) broadcast(method, path string, body []byte) {
 			defer wg.Done()
 			var err error
 			for _, u := range clu.URLs {
-				if err = m.proxyRequest(method, u, path, body); err == nil {
+				if err = m.call(method, u, path, body); err == nil {
 					break
 				}
 			}
@@ -53,7 +53,7 @@ func (m *UserManager) broadcast(method, path string, body []byte) {
 }
 
 // Send valid and non-expired revoked token list to a cluster.
-func (m *UserManager) syncTokenList(cluster *authn.CluACL) {
+func (m *mgr) syncTokenList(cluster *authn.CluACL) {
 	tokenList, err := m.generateRevokedTokenList()
 	if err != nil {
 		glog.Errorf("failed to sync token list with %q: %v", cluster.ID, err)
@@ -64,7 +64,7 @@ func (m *UserManager) syncTokenList(cluster *authn.CluACL) {
 	}
 	body := cos.MustMarshal(authn.TokenList{Tokens: tokenList})
 	for _, u := range cluster.URLs {
-		if err = m.proxyRequest(http.MethodDelete, u, apc.Tokens, body); err == nil {
+		if err = m.call(http.MethodDelete, u, apc.Tokens, body); err == nil {
 			break
 		}
 		err = fmt.Errorf("failed to sync revoked tokens with %q: %v", cluster.ID, err)
@@ -74,8 +74,7 @@ func (m *UserManager) syncTokenList(cluster *authn.CluACL) {
 	}
 }
 
-// Generic function to send everything to a proxy
-func (m *UserManager) proxyRequest(method, proxyURL, path string, injson []byte) error {
+func (m *mgr) call(method, proxyURL, path string, injson []byte) error {
 	startRequest := time.Now()
 	for {
 		url := proxyURL + cos.JoinWords(apc.Version, path)
@@ -105,7 +104,7 @@ func (m *UserManager) proxyRequest(method, proxyURL, path string, injson []byte)
 			return err
 		}
 		if time.Since(startRequest) > proxyTimeout {
-			return fmt.Errorf("timed out sending data to primary at %s", proxyURL)
+			return fmt.Errorf("timed out sending data to ais cluster at %s", proxyURL)
 		}
 
 		glog.Warningf("failed to execute \"%s %s\": %v", method, url, err)

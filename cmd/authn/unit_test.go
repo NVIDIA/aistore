@@ -16,9 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
-// NOTE: when a fresh user manager is created, it initailized users DB and
-// adds a default user with role Guest, so all length checks must add 1
-
 var (
 	users = []string{"user1", "user2", "user3"}
 	passs = []string{"pass2", "pass1", "passs"}
@@ -31,7 +28,7 @@ func init() {
 	}
 }
 
-func createUsers(mgr *UserManager, t *testing.T) {
+func createUsers(mgr *mgr, t *testing.T) {
 	for idx := range users {
 		user := &authn.User{ID: users[idx], Password: passs[idx], Roles: []string{GuestRole}}
 		err := mgr.addUser(user)
@@ -53,7 +50,7 @@ func createUsers(mgr *UserManager, t *testing.T) {
 	}
 }
 
-func deleteUsers(mgr *UserManager, skipNotExist bool, t *testing.T) {
+func deleteUsers(mgr *mgr, skipNotExist bool, t *testing.T) {
 	var err error
 	for _, username := range users {
 		err = mgr.delUser(username)
@@ -65,7 +62,7 @@ func deleteUsers(mgr *UserManager, skipNotExist bool, t *testing.T) {
 	}
 }
 
-func testInvalidUser(mgr *UserManager, t *testing.T) {
+func testInvalidUser(mgr *mgr, t *testing.T) {
 	user := &authn.User{ID: users[0], Password: passs[1], Roles: []string{GuestRole}}
 	err := mgr.addUser(user)
 	if err == nil {
@@ -79,7 +76,7 @@ func testInvalidUser(mgr *UserManager, t *testing.T) {
 	}
 }
 
-func testUserDelete(mgr *UserManager, t *testing.T) {
+func testUserDelete(mgr *mgr, t *testing.T) {
 	const (
 		username = "newuser"
 		userpass = "newpass"
@@ -119,7 +116,8 @@ func testUserDelete(mgr *UserManager, t *testing.T) {
 
 func TestManager(t *testing.T) {
 	driver := mock.NewDBDriver()
-	mgr, err := NewUserManager(driver)
+	// NOTE: new manager initailizes users DB and adds a default user as a Guest
+	mgr, err := newMgr(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
 	testInvalidUser(mgr, t)
@@ -138,7 +136,7 @@ func TestToken(t *testing.T) {
 	)
 
 	driver := mock.NewDBDriver()
-	mgr, err := NewUserManager(driver)
+	mgr, err := newMgr(driver)
 	tassert.CheckFatal(t, err)
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)

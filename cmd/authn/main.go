@@ -64,47 +64,39 @@ func installSignalHandler() {
 
 func main() {
 	fmt.Printf("version: %s | build: %s\n", version, build)
-
 	installSignalHandler()
-
-	var err error
-
 	flag.Parse()
+
 	confFlag := flag.Lookup("config")
 	if confFlag != nil {
 		configPath = confFlag.Value.String()
 	}
-
 	if configPath == "" {
 		cos.ExitLogf("Missing configuration file")
 	}
-
 	if glog.V(4) {
 		glog.Infof("Reading configuration from %s", configPath)
 	}
-	if _, err = jsp.LoadMeta(configPath, Conf); err != nil {
+	if _, err := jsp.LoadMeta(configPath, Conf); err != nil {
 		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
 	Conf.Path = configPath
 	if val := os.Getenv(secretKeyEnvVar); val != "" {
 		Conf.Server.Secret = val
 	}
-
-	if err = updateLogOptions(); err != nil {
+	if err := updateLogOptions(); err != nil {
 		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
-
 	dbPath := filepath.Join(Conf.ConfDir, authDB)
 	driver, err := dbdriver.NewBuntDB(dbPath)
 	if err != nil {
 		cos.ExitLogf("Failed to init local database: %v", err)
 	}
-	mgr, err := NewUserManager(driver)
+	mgr, err := newMgr(driver)
 	if err != nil {
-		cos.ExitLogf("Failed to init user manager: %v", err)
+		cos.ExitLogf("Failed to init manager: %v", err)
 	}
-
-	srv := NewServer(mgr)
+	srv := newServer(mgr)
 	if err := srv.Run(); err != nil {
 		cos.ExitLogf("Server failed: %v", err)
 	}
