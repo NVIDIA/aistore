@@ -7,7 +7,6 @@ package cmn
 
 import (
 	"fmt"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
@@ -50,38 +49,9 @@ loop:
 	return err
 }
 
-// BytesHead returns first `length` bytes from the slice as a string
-func BytesHead(b []byte, length ...int) string {
-	maxLength := 16
-	if len(length) != 0 {
-		maxLength = length[0]
-	}
-	if len(b) < maxLength {
-		return string(b)
-	}
-	return string(b[:maxLength]) + "..."
-}
-
 //////////////////////////////
 // config: path, load, save //
 //////////////////////////////
-
-// ExpandPath replaces common abbreviations in file path (eg. `~` with absolute
-// path to the current user home directory) and cleans the path.
-func ExpandPath(path string) string {
-	if path == "" || path[0] != '~' {
-		return filepath.Clean(path)
-	}
-	if len(path) > 1 && path[1] != '/' {
-		return filepath.Clean(path)
-	}
-
-	currentUser, err := user.Current()
-	if err != nil {
-		return filepath.Clean(path)
-	}
-	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
-}
 
 // PropToHeader converts a property full name to an HTTP header tag name
 func PropToHeader(prop string) string {

@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file handles object operations.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -439,7 +439,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 // base + fileName = path
 // if fileName is already absolute path, base is empty
 func getPathFromFileName(fileName string) (path string, err error) {
-	path = cmn.ExpandPath(fileName)
+	path = cos.ExpandPath(fileName)
 	if path, err = filepath.Abs(path); err != nil {
 		return "", err
 	}

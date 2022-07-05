@@ -368,7 +368,7 @@ func (t *target) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.Buck
 	)
 	nprops = &cmn.BucketProps{}
 	if err = jsoniter.Unmarshal(body, nprops); err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "new bucket props", cmn.BytesHead(body), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "new bucket props", cos.BHead(body), err)
 		return
 	}
 	if nprops.Mirror.Enabled {

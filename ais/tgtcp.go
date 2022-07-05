@@ -61,7 +61,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) (er
 	var cm cluMeta
 	err = jsoniter.Unmarshal(body, &cm)
 	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "reg-meta", cmn.BytesHead(body), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "reg-meta", cos.BHead(body), err)
 		return
 	}
 	msg := t.newAmsgStr(action, cm.BMD)

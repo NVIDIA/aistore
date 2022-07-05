@@ -1248,12 +1248,12 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *glob
 	confValue := payload[revsConfTag]
 	reader := bytes.NewBuffer(confValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Config", cmn.BytesHead(confValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Config", cos.BHead(confValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsConfTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1278,12 +1278,12 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, ms
 	etlMDValue := payload[revsEtlMDTag]
 	reader := bytes.NewBuffer(etlMDValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newMD, newMD.JspOpts(), "extractEtlMD"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new EtlMD", cmn.BytesHead(etlMDValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new EtlMD", cos.BHead(etlMDValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsEtlMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1309,12 +1309,12 @@ func (h *htrun) extractSmap(payload msPayload, caller string) (newSmap *smapX, m
 	smapValue := payload[revsSmapTag]
 	reader := bytes.NewBuffer(smapValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newSmap, newSmap.JspOpts(), "extractSmap"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cmn.BytesHead(smapValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cos.BHead(smapValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsSmapTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1361,12 +1361,12 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 	newRMD, msg = &rebMD{}, &aisMsg{}
 	rmdValue := payload[revsRMDTag]
 	if err1 := jsoniter.Unmarshal(rmdValue, newRMD); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new RMD", cmn.BytesHead(rmdValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new RMD", cos.BHead(rmdValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsRMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1391,12 +1391,12 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, 
 	bmdValue := payload[revsBMDTag]
 	reader := bytes.NewBuffer(bmdValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new BMD", cmn.BytesHead(bmdValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new BMD", cos.BHead(bmdValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1497,13 +1497,13 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 	}
 	if msgValue, ok := payload[revsTokenTag+revsActionTag]; ok {
 		if err := jsoniter.Unmarshal(msgValue, &msg); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err)
 			return nil, err
 		}
 	}
 	tokenList := &tokenList{}
 	if err := jsoniter.Unmarshal(bytes, tokenList); err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "blocked token list", cmn.BytesHead(bytes), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "blocked token list", cos.BHead(bytes), err)
 		return nil, err
 	}
 	glog.Infof("extract token list from %q (count: %d, action: %q, uuid: %q)", caller,

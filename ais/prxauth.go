@@ -183,7 +183,7 @@ func (p *proxy) validateSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cksum.Val() != cluConf.Secret {
-		p.writeErrf(w, r, "%s: invalid secret sha256(%q)", p, cluConf.Secret)
+		p.writeErrf(w, r, "%s: invalid secret sha256(%q)", p, cos.SHead(cluConf.Secret))
 	}
 }
 

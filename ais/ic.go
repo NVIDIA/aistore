@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -406,7 +406,7 @@ func (ic *ic) syncICBundle() error {
 		return nil
 	}
 	if err := jsoniter.Unmarshal(bundle.OwnershipTbl, &ic.p.notifs); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p, "ownership table", cmn.BytesHead(bundle.OwnershipTbl), err)
+		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p, "ownership table", cos.BHead(bundle.OwnershipTbl), err)
 	}
 	return nil
 }

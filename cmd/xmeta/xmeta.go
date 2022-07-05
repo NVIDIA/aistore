@@ -1,7 +1,7 @@
 // Package xmeta provides low-level tools to format or extract
 // into plain text some of the AIS control structures.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -123,9 +123,9 @@ func main() {
 		os.Exit(0)
 	}
 
-	flags.in = cmn.ExpandPath(flags.in)
+	flags.in = cos.ExpandPath(flags.in)
 	if flags.out != "" {
-		flags.out = cmn.ExpandPath(flags.out)
+		flags.out = cos.ExpandPath(flags.out)
 	}
 	in := strings.ToLower(flags.in)
 	f, what := detectFormat(in)

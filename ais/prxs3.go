@@ -233,7 +233,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		bt   = cos.MustMarshal(&msg)
 	)
 	if err := jsoniter.Unmarshal(bt, &msg2); err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "list-range action message", cmn.BytesHead(bt), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "list-range action message", cos.BHead(bt), err)
 		p.writeErr(w, r, err)
 		return
 	}

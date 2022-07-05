@@ -257,7 +257,7 @@ func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, e
 func (p *proxy) recvCluMetaBytes(action string, body []byte, caller string) error {
 	var cm cluMeta
 	if err := jsoniter.Unmarshal(body, &cm); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, p, "reg-meta", cmn.BytesHead(body), err)
+		return fmt.Errorf(cmn.FmtErrUnmarshal, p, "reg-meta", cos.BHead(body), err)
 	}
 	return p.recvCluMeta(&cm, action, caller)
 }

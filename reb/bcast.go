@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -206,7 +206,7 @@ func (reb *Reb) checkStage(tsi *cluster.Snode, rargs *rebArgs, desiredStage uint
 	status = &Status{}
 	err = jsoniter.Unmarshal(body, status)
 	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, logHdr, "reb status from "+tsi.StringEx(), cmn.BytesHead(body), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, logHdr, "reb status from "+tsi.StringEx(), cos.BHead(body), err)
 		reb.abortAndBroadcast(err)
 		return
 	}

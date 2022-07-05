@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strconv"
 
@@ -385,6 +386,23 @@ func (mw *WriterMulti) Write(b []byte) (n int, err error) {
 ///////////////////////
 // misc file and dir //
 ///////////////////////
+
+// ExpandPath replaces common abbreviations in file path (eg. `~` with absolute
+// path to the current user home directory) and cleans the path.
+func ExpandPath(path string) string {
+	if path == "" || path[0] != '~' {
+		return filepath.Clean(path)
+	}
+	if len(path) > 1 && path[1] != '/' {
+		return filepath.Clean(path)
+	}
+
+	currentUser, err := user.Current()
+	if err != nil {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
+}
 
 // CreateDir creates directory if does not exist. Does not return error when
 // directory already exists.

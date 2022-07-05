@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 
@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -329,25 +328,25 @@ var _ = Describe("Common file", func() {
 	Context("ExpandPath", func() {
 		It("should expand short path with current home", func() {
 			shortPath := "~"
-			path := cmn.ExpandPath(shortPath)
+			path := cos.ExpandPath(shortPath)
 			Expect(path).ToNot(Equal(shortPath))
 		})
 
 		It("should expand long path with current home", func() {
 			longPath := "~/tmp"
-			path := cmn.ExpandPath(longPath)
+			path := cos.ExpandPath(longPath)
 			Expect(path).ToNot(Equal(longPath))
 		})
 
 		It("should not expand path when prefixed with more than one tilde", func() {
 			shortPath := "~~.tmp"
-			path := cmn.ExpandPath(shortPath)
+			path := cos.ExpandPath(shortPath)
 			Expect(path).To(Equal(shortPath))
 		})
 
 		It("should expand empty path to current directory (dot)", func() {
 			emptyPath := ""
-			path := cmn.ExpandPath(emptyPath)
+			path := cos.ExpandPath(emptyPath)
 			Expect(path).To(Equal("."))
 		})
 	})

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -61,7 +61,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		dlBodyBase := downloader.DlBase{}
 		if err := jsoniter.Unmarshal(dlb.RawMessage, &dlBodyBase); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "download message", cmn.BytesHead(dlb.RawMessage), err)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "download message", cos.BHead(dlb.RawMessage), err)
 			t.writeErr(w, r, err)
 			return
 		}

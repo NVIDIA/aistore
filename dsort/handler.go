@@ -1,7 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -378,7 +377,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = js.Unmarshal(b, &rs); err != nil {
-		err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "ParsedRequestSpec", cmn.BytesHead(b), err)
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "ParsedRequestSpec", cos.BHead(b), err)
 		cmn.WriteErr(w, r, err)
 		return
 	}

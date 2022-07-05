@@ -265,14 +265,14 @@ func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 func (p *proxy) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request,
 	body []byte) (dlb downloader.DlBody, dlBase downloader.DlBase, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "download request", cmn.BytesHead(body), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "download request", cos.BHead(body), err)
 		p.writeErr(w, r, err)
 		return
 	}
 
 	err := jsoniter.Unmarshal(dlb.RawMessage, &dlBase)
 	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "download message", cmn.BytesHead(dlb.RawMessage), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "download message", cos.BHead(dlb.RawMessage), err)
 		p.writeErr(w, r, err)
 		return
 	}
