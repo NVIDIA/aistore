@@ -684,6 +684,11 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	if err != nil {
 		return nil, err
 	}
+	// is intra-call
+	tsi := m.ctx.t.Snode()
+	req.Header.Set(apc.HdrCallerID, tsi.ID())
+	req.Header.Set(apc.HdrCallerName, tsi.String())
+
 	resp, err := m.client.Do(req) // nolint:bodyclose // closed inside cos.Close
 	if err != nil {
 		return nil, err
