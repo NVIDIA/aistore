@@ -1,12 +1,17 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
-// ais metadata and marker filenames (base names)
-// see also env_const.go
+// Filename Constants:
+//    - AIS metadata
+//    - CLI and AuthN configuration files (defaults)
+//    - Authentication Token (default)
+//    - persistent markers
+
+// See also: env/* for common environment variables
 
 const (
 	GlobalConfigFname   = ".ais.conf"
@@ -20,8 +25,9 @@ const (
 	VmdFname         = ".ais.vmd"         // vmd persistent file basename
 	EmdFname         = ".ais.emd"         // emd persistent file basename
 
-	TokenFname     = "auth.token" // see jsp/app.go
-	CliConfigFname = "cli.json"   // ditto
+	CliConfigFname   = "cli.json" // see jsp/app.go
+	AuthNConfigFname = "authn.json"
+	TokenFname       = "auth.token"
 
 	ShutdownMarker      = ".ais.shutdown"
 	MarkersDirName      = ".ais.markers"

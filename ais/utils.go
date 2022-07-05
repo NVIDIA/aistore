@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -242,7 +243,7 @@ func cleanupConfigDir(name string, keepInitialConfig bool) {
 }
 
 func writeShutdownMarker() {
-	markerDir := os.Getenv(cmn.EnvVars.ShutdownMarkerPath)
+	markerDir := os.Getenv(env.AIS.ShutdownMarkerPath)
 	if markerDir == "" {
 		if k8s.Detect() == nil {
 			glog.Warningf("marker directory not specified, skipping writing shutdown marker")
@@ -259,7 +260,7 @@ func writeShutdownMarker() {
 }
 
 func deleteShutdownMarker() {
-	markerDir := os.Getenv(cmn.EnvVars.ShutdownMarkerPath)
+	markerDir := os.Getenv(env.AIS.ShutdownMarkerPath)
 	if markerDir != "" {
 		cos.RemoveFile(filepath.Join(markerDir, cmn.ShutdownMarker))
 	}

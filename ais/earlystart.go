@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -115,14 +116,14 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 		pid     string
 		primary bool
 	}{
-		pid:     os.Getenv(cmn.EnvVars.PrimaryID),
-		primary: cos.IsParseBool(os.Getenv(cmn.EnvVars.IsPrimary)),
+		pid:     os.Getenv(env.AIS.PrimaryID),
+		primary: cos.IsParseBool(os.Getenv(env.AIS.IsPrimary)),
 	}
 
 	if envP.pid != "" && envP.primary && p.si.ID() != envP.pid {
 		cos.ExitLogf(
 			"FATAL: %s: invalid combination of %s=true & %s=%s",
-			p.si, cmn.EnvVars.IsPrimary, cmn.EnvVars.PrimaryID, envP.pid,
+			p.si, env.AIS.IsPrimary, env.AIS.PrimaryID, envP.pid,
 		)
 	}
 	glog.Infof("%s: %sprimary-env=%+v", p.si.StringEx(), tag, envP)
@@ -132,13 +133,13 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 		if primary == nil {
 			glog.Errorf(
 				"%s: ignoring %s=%s - not found in the loaded %s",
-				p.si, cmn.EnvVars.IsPrimary, envP.pid, loadedSmap,
+				p.si, env.AIS.IsPrimary, envP.pid, loadedSmap,
 			)
 			envP.pid = ""
 		} else if loadedSmap.Primary.ID() != envP.pid {
 			glog.Warningf(
 				"%s: new %s=%s, previous %s",
-				p.si, cmn.EnvVars.PrimaryID, envP.pid, loadedSmap.Primary,
+				p.si, env.AIS.PrimaryID, envP.pid, loadedSmap.Primary,
 			)
 			loadedSmap.Primary = primary
 		}

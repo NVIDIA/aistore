@@ -1,4 +1,4 @@
-// Package authn provides AuthN server for AIStore.
+// Package authn is authentication server for AIStore.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
@@ -10,28 +10,30 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/dbdriver"
 )
 
-const (
-	authDB          = "authn.db"
-	secretKeyEnvVar = "SECRETKEY"
-)
+const authDB = "authn.db"
+
+const secretKeyPodEnv = "SECRETKEY" // via https://kubernetes.io/docs/concepts/configuration/secret
 
 var (
-	version    = "1.0"
-	build      string
+	build     string
+	buildtime string
+
 	configPath string
 )
 
 func init() {
-	flag.StringVar(&configPath, "config", "",
-		"config filename: local file that stores the global cluster configuration")
+	flag.StringVar(&configPath, "config", "", svcName+" configuration")
 }
 
 // Set up glog with options from configuration file
@@ -62,8 +64,20 @@ func installSignalHandler() {
 	}()
 }
 
+func printVer() {
+	fmt.Printf("version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)
+}
+
 func main() {
-	fmt.Printf("version: %s | build: %s\n", version, build)
+	if len(os.Args) == 2 && os.Args[1] == "version" {
+		printVer()
+		os.Exit(0)
+	}
+	if len(os.Args) == 1 || (len(os.Args) == 2 && strings.Contains(os.Args[1], "help")) {
+		printVer()
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
 	installSignalHandler()
 	flag.Parse()
 
@@ -72,16 +86,20 @@ func main() {
 		configPath = confFlag.Value.String()
 	}
 	if configPath == "" {
-		cos.ExitLogf("Missing configuration file")
+		configPath = os.Getenv(env.AuthN.ConfFile)
+	}
+	if configPath == "" {
+		cos.ExitLogf("Missing %s configuration file (to specify, use '-%s' option or '%s' environment)",
+			svcName, confFlag.Name, env.AuthN.ConfFile)
 	}
 	if glog.V(4) {
-		glog.Infof("Reading configuration from %s", configPath)
+		glog.Infof("Loading configuration from %s", configPath)
 	}
 	if _, err := jsp.LoadMeta(configPath, Conf); err != nil {
 		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
 	Conf.Path = configPath
-	if val := os.Getenv(secretKeyEnvVar); val != "" {
+	if val := os.Getenv(secretKeyPodEnv); val != "" {
 		Conf.Server.Secret = val
 	}
 	if err := updateLogOptions(); err != nil {
@@ -96,6 +114,8 @@ func main() {
 	if err != nil {
 		cos.ExitLogf("Failed to init manager: %v", err)
 	}
+
+	printVer()
 	srv := newServer(mgr)
 	if err := srv.Run(); err != nil {
 		cos.ExitLogf("Server failed: %v", err)

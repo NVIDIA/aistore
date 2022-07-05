@@ -1,6 +1,6 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
@@ -151,7 +152,7 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 		errmsg += fmt.Sprintf("Error: %s\n"+
 			"Make sure that environment variable %s points to an AIS gateway (any AIS gateway in the cluster)\n"+
 			"For default settings, see CLI config at %s (or run `ais show config cli`)",
-			detailedErr, cmn.EnvVars.Endpoint, config.Path())
+			detailedErr, env.AIS.Endpoint, config.Path())
 		return errors.New(red(errmsg))
 	}
 	switch err := err.(type) {

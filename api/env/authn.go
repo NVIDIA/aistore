@@ -1,13 +1,13 @@
-// Package authn provides AuthN API over HTTP(S)
+// Package env contains environment variables
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package authn
+package env
 
-// authn environment variable names (see also cmn/env_const.go)
+// authn environment variables
 
 var (
-	EnvVars = struct {
+	AuthN = struct {
 		Enabled   string
 		URL       string
 		ConfFile  string

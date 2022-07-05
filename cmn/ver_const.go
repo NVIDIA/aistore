@@ -27,6 +27,7 @@ const (
 	VersionAIStore = "3.10"
 	VersionCLI     = "0.92"
 	VersionLoader  = "1.5"
+	VersionAuthN   = "1.0"
 )
 
 const (

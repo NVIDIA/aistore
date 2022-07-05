@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -262,7 +263,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			DeploymentType: deploymentType(),
 			Version:        daemon.version,
 			BuildTime:      daemon.buildTime,
-			K8sPodName:     os.Getenv(cmn.EnvVars.K8sPod),
+			K8sPodName:     os.Getenv(env.AIS.K8sPod),
 		}
 		// capacity
 		tstats := t.statsT.(*stats.Trunner)

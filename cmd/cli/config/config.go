@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -38,7 +39,7 @@ var (
 func init() {
 	ConfigDir = jsp.DefaultAppConfigDir()
 	proto := "http"
-	if value := os.Getenv(cmn.EnvVars.UseHTTPS); cos.IsParseBool(value) {
+	if value := os.Getenv(env.AIS.UseHTTPS); cos.IsParseBool(value) {
 		proto = "https"
 	}
 	aisURL := fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAISPort)
@@ -47,7 +48,7 @@ func init() {
 			URL:               aisURL,
 			DefaultAISHost:    aisURL,
 			DefaultDockerHost: fmt.Sprintf(urlFmt, proto, defaultDockerIP, defaultAISPort),
-			SkipVerifyCrt:     cos.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt)),
+			SkipVerifyCrt:     cos.IsParseBool(os.Getenv(env.AIS.SkipVerifyCrt)),
 		},
 		Timeout: TimeoutConfig{
 			TCPTimeoutStr:  "60s",

@@ -1,6 +1,6 @@
 // Package tutils provides common low-level utilities for all aistore unit and integration tests
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tutils
 
@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -81,12 +82,12 @@ var (
 )
 
 func init() {
-	envURL := os.Getenv(cmn.EnvVars.Endpoint)
+	envURL := os.Getenv(env.AIS.Endpoint)
 	// Since tests do not have access to cluster configuration, the tests
 	// detect client type by the primary proxy URL passed by a user.
 	// Certificate check is always disabled.
 	transportArgs.UseHTTPS = cos.IsHTTPS(envURL)
-	transportArgs.SkipVerify = cos.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt))
+	transportArgs.SkipVerify = cos.IsParseBool(os.Getenv(env.AIS.SkipVerifyCrt))
 	HTTPClient = cmn.NewClient(transportArgs)
 
 	gctx = &Ctx{
@@ -118,7 +119,7 @@ func InitLocalCluster() {
 
 	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'
 	// Many of the other packages do not accept the 'url' flag
-	if cliAISURL := os.Getenv(cmn.EnvVars.Endpoint); cliAISURL != "" {
+	if cliAISURL := os.Getenv(env.AIS.Endpoint); cliAISURL != "" {
 		if !strings.HasPrefix(cliAISURL, "http") {
 			cliAISURL = "http://" + cliAISURL
 		}
@@ -132,10 +133,10 @@ func InitLocalCluster() {
 	}
 	fmt.Printf("Error: %s\n", strings.TrimSuffix(err.Error(), "\n"))
 	fmt.Println("Environment variables:")
-	fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.Endpoint, os.Getenv(cmn.EnvVars.Endpoint))
-	fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.PrimaryID, os.Getenv(cmn.EnvVars.PrimaryID))
-	fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.SkipVerifyCrt, os.Getenv(cmn.EnvVars.SkipVerifyCrt))
-	fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.UseHTTPS, os.Getenv(cmn.EnvVars.UseHTTPS))
+	fmt.Printf("\t%s:\t%s\n", env.AIS.Endpoint, os.Getenv(env.AIS.Endpoint))
+	fmt.Printf("\t%s:\t%s\n", env.AIS.PrimaryID, os.Getenv(env.AIS.PrimaryID))
+	fmt.Printf("\t%s:\t%s\n", env.AIS.SkipVerifyCrt, os.Getenv(env.AIS.SkipVerifyCrt))
+	fmt.Printf("\t%s:\t%s\n", env.AIS.UseHTTPS, os.Getenv(env.AIS.UseHTTPS))
 	if len(envVars) > 0 {
 		fmt.Println("Docker Environment:")
 		for k, v := range envVars {

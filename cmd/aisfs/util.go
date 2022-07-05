@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/aisfs/fs"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -60,9 +61,9 @@ func discoverClusterURL(c *cli.Context) string {
 		defaultAISDockerURL = "http://172.50.0.2:8080"
 		dockerErrMsgFmt     = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
 	)
-	setURLMsg := fmt.Sprintf("Set URL with: export %s=`url`.", cmn.EnvVars.Endpoint)
+	setURLMsg := fmt.Sprintf("Set URL with: export %s=`url`.", env.AIS.Endpoint)
 
-	if envURL := os.Getenv(cmn.EnvVars.Endpoint); envURL != "" {
+	if envURL := os.Getenv(env.AIS.Endpoint); envURL != "" {
 		return envURL
 	}
 

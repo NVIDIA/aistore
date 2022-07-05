@@ -7,9 +7,9 @@
 # To deploy AIStore as a next tier cluster to the *already running*
 # AIStore cluster set DEPLOY_AS_NEXT_TIER=1.
 #
-# NOTE: all environment variables are enumerated in the following two sources:
-# 1) cmn/env_const.go
-# 2) api/authn/env_const.go
+# NOTE: all environment variables are listed in the `env` package.
+# Please see https://github.com/NVIDIA/aistore/blob/master/api/env
+# for the most recently updated (AIS + AuthN) environment.
 #
 ############################################
 

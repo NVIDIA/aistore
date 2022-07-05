@@ -57,6 +57,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
@@ -552,7 +553,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	aisEndpoint = "http://" + ip + ":" + port
-	envEndpoint = os.Getenv(cmn.EnvVars.Endpoint)
+	envEndpoint = os.Getenv(env.AIS.Endpoint)
 	if envEndpoint != "" {
 		aisEndpoint = envEndpoint
 	}

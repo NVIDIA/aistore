@@ -1,6 +1,6 @@
 // Package aisfs - command-line mounting utility for aisfs.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/aisfs/fs"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
@@ -51,7 +51,7 @@ type (
 var defaultConfig = Config{
 	Cluster: ClusterConfig{
 		URL:           "http://127.0.0.1:8080",
-		SkipVerifyCrt: cos.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt)),
+		SkipVerifyCrt: cos.IsParseBool(os.Getenv(env.AIS.SkipVerifyCrt)),
 	},
 	Timeout: TimeoutConfig{
 		TCPTimeoutStr:  "60s",

@@ -13,7 +13,7 @@ The following brief and commented sequence assumes that [AIS local playground](g
 
 Examples below use AuthN specific environment variables. Note that all of them are enumerated in
 
-* [`api/authn/env_const.go`](https://github.com/NVIDIA/aistore/blob/master/api/authn/env_const.go)
+* [`api/env/authn.go`](https://github.com/NVIDIA/aistore/blob/master/api/env/authn.go)
 
 ```console
 # 1. Login as administrator (and note that admin user and password can be only

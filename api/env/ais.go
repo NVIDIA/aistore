@@ -1,14 +1,13 @@
-// Package cmn provides common constants, types, and utilities for AIS clients
-// and AIStore.
+// Package env contains environment variables
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package env
 
 // ais environment variable names (see also fname_const.go)
 
 var (
-	EnvVars = struct {
+	AIS = struct {
 		Endpoint           string
 		ShutdownMarkerPath string
 		IsPrimary          string

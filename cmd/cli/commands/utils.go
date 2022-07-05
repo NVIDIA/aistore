@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
@@ -711,7 +712,7 @@ func headBucket(bck cmn.Bck) (p *cmn.BucketProps, err error) {
 // 3. Docker default; if not present:
 // 4. Default as cfg.Cluster.DefaultAISHost
 func determineClusterURL(cfg *config.Config) string {
-	if envURL := os.Getenv(cmn.EnvVars.Endpoint); envURL != "" {
+	if envURL := os.Getenv(env.AIS.Endpoint); envURL != "" {
 		return envURL
 	}
 	if cfg.Cluster.URL != "" {

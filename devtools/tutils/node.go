@@ -1,6 +1,6 @@
 // Package tutils provides common low-level utilities for all aistore unit and integration tests
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tutils
 
@@ -20,6 +20,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -397,9 +398,9 @@ func startNode(cmd string, args []string, asPrimary bool) (pid int, err error) {
 	}
 	if asPrimary {
 		// Sets the environment variable to start as primary proxy to true
-		env := os.Environ()
-		env = append(env, fmt.Sprintf("%s=true", cmn.EnvVars.IsPrimary))
-		ncmd.Env = env
+		environ := os.Environ()
+		environ = append(environ, fmt.Sprintf("%s=true", env.AIS.IsPrimary))
+		ncmd.Env = environ
 	}
 
 	if err = ncmd.Start(); err != nil {

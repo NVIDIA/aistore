@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file handles commands that create entities in the cluster.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
@@ -214,13 +215,13 @@ var (
 func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		if authnHTTPClient == nil {
-			return errors.New(authn.EnvVars.URL + " is not set")
+			return errors.New(env.AuthN.URL + " is not set")
 		}
 		err := f(c)
 		if err != nil {
 			if msg, unreachable := isUnreachableError(err); unreachable {
 				err = fmt.Errorf(authnUnreachable, authParams.URL+" (detailed error: "+msg+")",
-					authn.EnvVars.URL)
+					env.AuthN.URL)
 			}
 		}
 		return err
@@ -237,7 +238,7 @@ func readMasked(c *cli.Context, prompt string) string {
 }
 
 func cliAuthnURL(cfg *config.Config) string {
-	authURL := os.Getenv(authn.EnvVars.URL)
+	authURL := os.Getenv(env.AuthN.URL)
 	if authURL == "" {
 		authURL = cfg.Auth.URL
 	}

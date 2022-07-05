@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -21,7 +22,7 @@ func LoadToken(tokenFile string) string {
 		mustLoad = true
 	)
 	if tokenFile == "" {
-		tokenFile = os.Getenv(EnvVars.TokenFile)
+		tokenFile = os.Getenv(env.AuthN.TokenFile)
 	}
 	if tokenFile == "" {
 		// default config location

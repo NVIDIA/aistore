@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -50,16 +51,16 @@ func waitForCluster() error {
 		err                        error
 		proxyCnt, targetCnt, retry int
 	)
-	pc := os.Getenv(cmn.EnvVars.NumProxy)
-	tc := os.Getenv(cmn.EnvVars.NumTarget)
+	pc := os.Getenv(env.AIS.NumProxy)
+	tc := os.Getenv(env.AIS.NumTarget)
 	if pc != "" || tc != "" {
 		proxyCnt, err = strconv.Atoi(pc)
 		if err != nil {
-			return fmt.Errorf("error EnvVars: %s. err: %v", cmn.EnvVars.NumProxy, err)
+			return fmt.Errorf("error EnvVars: %s. err: %v", env.AIS.NumProxy, err)
 		}
 		targetCnt, err = strconv.Atoi(tc)
 		if err != nil {
-			return fmt.Errorf("error EnvVars: %s. err: %v", cmn.EnvVars.NumTarget, err)
+			return fmt.Errorf("error EnvVars: %s. err: %v", env.AIS.NumTarget, err)
 		}
 	}
 	_, err = tutils.WaitForClusterState(tutils.GetPrimaryURL(), "startup", -1, proxyCnt, targetCnt)
