@@ -209,7 +209,6 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	if len(items) > 1 {
 		cmn.WriteErrMsg(w, r, "invalid request")
 		return

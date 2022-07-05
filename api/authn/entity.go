@@ -57,7 +57,6 @@ type (
 //////////
 // User //
 //////////
-
 func (uInfo *User) IsAdmin() bool {
 	for _, r := range uInfo.Roles {
 		if r == AdminRole {
@@ -67,12 +66,23 @@ func (uInfo *User) IsAdmin() bool {
 	return false
 }
 
+////////////
+// CluACL //
+////////////
+func (clu *CluACL) String() string {
+	uuid := "[" + clu.ID + "]"
+	if clu.Alias != "" && clu.Alias != clu.ID {
+		return clu.Alias + uuid
+	}
+	if len(clu.URLs) > 0 {
+		return clu.URLs[0] + uuid
+	}
+	return uuid
+}
+
 //////////////
 // TokenMsg //
 //////////////
-
-var (
-	_ jsp.Opts = (*TokenMsg)(nil)
-)
+var _ jsp.Opts = (*TokenMsg)(nil)
 
 func (*TokenMsg) JspOpts() jsp.Options { return authtokJspOpts }
