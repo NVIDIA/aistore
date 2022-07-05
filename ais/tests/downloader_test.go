@@ -982,9 +982,10 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 			DlBase: downloader.DlBase{Bck: bck},
 		}
 		m = &ioContext{
-			t:   t,
-			num: 10,
-			bck: cliBck,
+			t:                   t,
+			num:                 10,
+			bck:                 cliBck,
+			deleteRemoteBckObjs: true,
 		}
 	)
 
@@ -1041,9 +1042,10 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 			DlBase: downloader.DlBase{Bck: bck},
 		}
 		m = &ioContext{
-			t:   t,
-			num: 10,
-			bck: cliBck,
+			t:                   t,
+			num:                 10,
+			bck:                 cliBck,
+			deleteRemoteBckObjs: true,
 		}
 	)
 
