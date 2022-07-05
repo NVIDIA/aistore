@@ -63,12 +63,18 @@ func Either(lhs, rhs string) string {
 	return rhs
 }
 
+const maxl = 16
+
 func BHead(b []byte) string {
-	l := Min(16, len(b))
-	return string(b[:l]) + "..."
+	if len(b) > maxl {
+		return string(b[:maxl]) + "..."
+	}
+	return string(b)
 }
 
 func SHead(s string) string {
-	l := Min(16, len(s))
-	return s[:l] + "..."
+	if len(s) > maxl {
+		return s[:maxl] + "..."
+	}
+	return s
 }
