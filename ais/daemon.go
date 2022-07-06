@@ -60,6 +60,8 @@ type (
 			allowSharedDisksAndNoDisks bool
 			// force starting up with a lost or missing mountpath
 			startWithLostMountpath bool
+			// use loopback devices
+			useLoopbackDevs bool
 		}
 		usage bool // show usage and exit
 	}
@@ -95,6 +97,7 @@ func init() {
 	// target-only
 	flag.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")
 	flag.BoolVar(&daemon.cli.target.allowSharedDisksAndNoDisks, "allow_shared_no_disks", false, "disk sharing by multiple mountpaths and mountpaths with no disks whatsoever (target-only)")
+	flag.BoolVar(&daemon.cli.target.useLoopbackDevs, "loopback", false, "use loopback devices (local playground, target-only)")
 	flag.BoolVar(&daemon.cli.target.startWithLostMountpath, "start_with_lost_mountpath", false, "force starting up with a lost or missing mountpath (target-only)")
 
 	// primary-only:

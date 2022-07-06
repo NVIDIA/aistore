@@ -1,25 +1,25 @@
 #!/bin/bash
 
-print_error() {
+exit_error() {
   echo "Error: $1."
   exit 1
 }
 
 is_number() {
   if ! [[ "$1" =~ ^[0-9]+$ ]] ; then
-    print_error "'$1' is not a number"
+    exit_error "'$1' is not a number"
   fi
 }
 
 is_boolean() {
   if ! [[ "$1" =~ ^[yn]+$ ]] ; then
-    print_error "input is not a 'y' or 'n'"
+    exit_error "input is not a 'y' or 'n'"
   fi
 }
 
 is_command_available() {
   if [[ -z $(command -v "$1") ]]; then
-    print_error "command '$1' not available"
+    exit_error "command '$1' not available"
   fi
 }
 
@@ -60,36 +60,49 @@ parse_backend_providers() {
   fi
 }
 
-create_loopback_paths() {
-  echo "Create loopback devices (note that it may take some time): (y/n) ?"
-  read -r create_mount_points
-  if [[ "$create_mount_points" == "y" ]] ; then
-    for ((i=1; i<=TEST_FSPATH_COUNT; i++)); do
-      dir=${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}mp${i}
-      mkdir -p "${dir}"
-
-      if mount | grep "${dir}" > /dev/null; then
-        continue
-      fi
-
-      sudo dd if=/dev/zero of="${dir}.img" bs=100M count=50
-      sudo losetup -fP "${dir}.img"
-      sudo mkfs.ext4 "${dir}.img"
-
-      device=$(sudo losetup -l | grep "${dir}.img" | awk '{print $1}')
-      sudo mount -o loop "${device}" "${dir}"
-      sudo chown -R ${USER}: "${dir}"
-    done
+create_loopbacks() {
+  echo "Loopback device size, e.g. 10G, 100M. Note that creating loopbacks may take time, press Enter to skip: "
+  read -r loopback_size
+  if [[ "$loopback_size" == "" || "$loopback_size" == "0" ]] ; then
+    return
   fi
+  if ! command -v numfmt &> /dev/null; then
+    exit_error "numfmt not found (check GNU coreutils)"
+  fi
+  if ! command -v losetup &> /dev/null; then
+	  exit_error "losetup not found (install mount or klibc-utils)"
+  fi
+  size=`numfmt --from=iec ${loopback_size}` || exit_error $?
+  let mbcount=$size/1048576 # IEC mebibytes
+  if [ $mbcount -lt 100 ] ; then
+    exit_error "the minimum loopback size is 100M (got ${loopback_size})"
+  fi
+  for ((i=1; i<=TEST_FSPATH_COUNT; i++)); do
+    dir=${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}mp${i}
+    mkdir -p "${dir}"
+
+    if mount | grep "${dir}" > /dev/null; then
+      continue
+    fi
+
+    sudo dd if=/dev/zero of="${dir}.img" bs=1M count=$mbcount
+    sudo losetup -fP "${dir}.img"
+    sudo mkfs.ext4 "${dir}.img" > /dev/null
+
+    device=$(sudo losetup -l | grep "${dir}.img" | awk '{print $1}')
+    sudo mount -o loop "${device}" "${dir}"
+    sudo chown -R ${USER}: "${dir}"
+  done
+  TEST_LOOPBACK_COUNT=$TEST_FSPATH_COUNT
 }
 
-clean_loopback_paths() {
-  for mpath in $(df -h | grep /tmp/ais/mp | awk '{print $1}'); do
+rm_loopbacks() {
+  for mpath in $(df -h | grep "/tmp/ais${NEXT_TIER}/mp" | awk '{print $1}'); do
     sudo umount "${mpath}"
   done
 
   if [[ -x "$(command -v losetup)" ]]; then
-    for mpath in $(losetup -l | grep /tmp/ais/mp | awk '{print $1}'); do
+    for mpath in $(losetup -l | grep "/tmp/ais${NEXT_TIER}/mp" | awk '{print $1}'); do
       sudo losetup -d "${mpath}"
     done
   fi

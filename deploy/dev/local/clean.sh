@@ -9,7 +9,10 @@
 source "$(dirname "$0")/../utils.sh"
 
 # Unmount and clears all virtual block disks.
-clean_loopback_paths
+NEXT_TIER=
+rm_loopbacks
+NEXT_TIER="_next"
+rm_loopbacks
 
 build_dest="${GOPATH}/bin"
 if [[ -n ${GOBIN} ]]; then

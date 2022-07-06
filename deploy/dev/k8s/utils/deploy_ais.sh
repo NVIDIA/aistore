@@ -12,7 +12,7 @@ echo "Enter number of proxies (gateway):"
 read -r PROXY_CNT
 is_number ${PROXY_CNT}
 if [[ ${PROXY_CNT} -lt 1 ]]; then
-  print_error "${PROXY_CNT} is less than 1"
+  exit_error "${PROXY_CNT} is less than 1"
 fi
 
 source utils/parse_fsparams.sh

@@ -283,10 +283,11 @@ help:
 	@printf "  $(cyan)%s$(term-reset)\n    %s\n\n" \
 		"make deploy" "Deploy cluster locally" \
 		"make kill clean" "Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)" \
-		"make kill deploy <<< $$'7\n4\n4\ny\ny\nn\nn\n'"  "Shutdown and then (non-interactively) generate local configs and deploy a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build 'aisnode' executable with the support for GCP and AWS backends" \
-		"make restart <<< $$'7\n4\n4\ny\ny\nn\nn\n'"  "Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations" \
-		"RUN_ARGS=-override_backends MODE=debug make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n'"  "Redeploy (4 targets + 1 proxy) cluster; build executable for debug without any backend-supporting libraries; use RUN_ARGS to pass additional command-line option ('-override_backends=true') to each running node"\
-		"RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n'"  "Same as above, but additionally run all 4 targets in a standby mode"\
+		"make kill deploy <<< $$'7\n2\n4\ny\ny\nn\nn\n0\n'"  "Shutdown and then (non-interactively) generate local configs and deploy a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build 'aisnode' executable with the support for GCP and AWS backends" \
+		"make restart <<< $$'7\n2\n4\ny\ny\nn\nn\n0\n'"  "Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations" \
+		"RUN_ARGS=-override_backends MODE=debug make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n0\n'"  "Redeploy (4 targets + 1 proxy) cluster; build executable for debug without any backend-supporting libraries; use RUN_ARGS to pass additional command-line option ('-override_backends=true') to each running node"\
+		"RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n0\n'"  "Same as above, but additionally run all 4 targets in a standby mode"\
+		"make kill clean cli deploy <<< $$'7\n2\n4\ny\ny\nn\nn\n1G\n'"  "Shutdown, cleanup, build CLI, and redeploy from scratch; create 4 loopback devices (size = 1G, one loopback per mountpath)" \
 		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster with race detector, write reports to /tmp/race.<PID>" \
 		"MODE=debug make deploy" "Deploy cluster with 'aisnode' (AIS target and proxy) executable built with debug symbols and debug asserts enabled" \
 		"BUCKET=tmp make test-short" "Run all short tests" \

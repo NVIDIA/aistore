@@ -182,8 +182,8 @@ func (t *target) init(config *cmn.Config) {
 
 	memsys.Init(t.si.ID(), t.si.ID(), config)
 
-	newVol := volume.Init(t, config,
-		daemon.cli.target.allowSharedDisksAndNoDisks, daemon.cli.target.startWithLostMountpath)
+	newVol := volume.Init(t, config, daemon.cli.target.allowSharedDisksAndNoDisks,
+		daemon.cli.target.useLoopbackDevs, daemon.cli.target.startWithLostMountpath)
 
 	t.initHostIP()
 	daemon.rg.add(t)

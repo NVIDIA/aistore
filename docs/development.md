@@ -42,7 +42,7 @@ $ make help
 ### Clean deploy
 
 ```
-./clean_deploy.sh [--target-cnt TARGET_CNT] [--proxy-cnt PROXY_CNT] [--mountpath-cnt MOUNTPATH_CNT] [--https] [--deployment local|remote|all] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
+./clean_deploy.sh [--target-cnt TARGET_CNT] [--proxy-cnt PROXY_CNT] [--mountpath-cnt MOUNTPATH_CNT] [--https] [--deployment local|remote|all] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]] [--loopback SIZE]
 ```
 
 Performs cleanup and then deploys a new instance of an AIS cluster.
@@ -68,7 +68,15 @@ and attach one cluster to another, thus forming a [global namespace](providers.m
 $ deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 4 --deployment all --remote-alias remais
 ```
 
-From here, one can create and destroy buckets, read and write data, show buckets, objects and their respective properties -
+Here's another example that illustrates multi-node (6 + 6) cluster with storage targets utilizing loopback devices to simulate actual non-shared storage disks (one disk per target mountpath):
+
+```console
+$ deploy/scripts/clean_deploy.sh --target-cnt 6 --proxy-cnt 6 --mountpath-cnt 4 --deployment all --loopback 123M --remote-alias remais --gcp --aws
+```
+
+> Overall, this line above will create 4 loopbacks of total size 123M * 4 = 0.5GiB. It'll take maybe a few extra seconds but only at the very first run - subsequent cluster restarts will utilize already provisioned devices and other persistent configuration.
+
+From here, you can create and destroy buckets, read and write data, show buckets, objects and their respective properties -
 in short, perform all supported operations on the remote cluster - either directly, via `AIS_ENDPOINT` or indirectly,
 via the (attached) local cluster. For example:
 
@@ -116,7 +124,7 @@ $ bash ./deploy/scripts/clean-deploy --deployment all --remote-alias remoteAIS -
 | `--proxy-cnt` | Number of proxies to start (default: 5) |
 | `--mountpath-cnt` | Number of mountpaths to use (default: 5) |
 | `--PROVIDER` | Specifies the backend provider(s). Can be: `--aws`, `--azure`, `--gcp`, `--hdfs` |
-| `--loopback` | Provision loopback devices |
+| `--loopback` | Loopback device size, e.g. 10G, 100M (default: 0). Zero size means: no loopbacks. The minimum size is 100M. |
 | `--deployment` | Choose which AIS cluster to deploy. `local` to deploy only one AIS cluster, `remote` to only start an AIS-behind-AIS cluster, and `all` to deploy both the local and remote clusters. |
 | `--remote-alias` | Alias to assign to the remote cluster |
 | `--https` | Start cluster with HTTPS enabled (*) |

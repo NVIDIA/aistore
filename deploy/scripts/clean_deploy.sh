@@ -27,7 +27,7 @@ aws_provider="n"
 azure_provider="n"
 gcp_provider="n"
 hdfs_provider="n"
-loopback="n"
+loopback=0
 target_cnt=5
 proxy_cnt=5
 mountpath_cnt=5
@@ -52,7 +52,7 @@ OPTIONS:
   --azure         Builds support for azure as a backend provider
   --gcp           Builds support for gcp as a backend provider
   --hdfs          Builds support for hdfs as a backend provider
-  --loopback      Provision loopback devices
+  --loopback      Loopback device size, e.g. 10G, 100M (default: 0). Zero size means: no loopbacks.
   --dir           The root directory of the aistore repository
   --debug         Change the logging level of particular package(s)
   --https         Start cluster with HTTPS enabled
@@ -69,7 +69,7 @@ while (( "$#" )); do
     --azure) azure_provider="y"; shift;;
     --gcp)   gcp_provider="y";   shift;;
     --hdfs)  hdfs_provider="y";  shift;;
-    --loopback) loopback="y";  shift;;
+    --loopback) loopback=$2;  shift; shift;;
     --dir) root_dir=$2; shift; shift;;
     --debug) export AIS_DEBUG=$2; shift; shift;;
     --deployment) deployment=$2; shift; shift;;

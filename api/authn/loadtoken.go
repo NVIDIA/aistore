@@ -31,7 +31,7 @@ func LoadToken(tokenFile string) string {
 	}
 	_, err := jsp.LoadMeta(tokenFile, &token)
 	if err != nil && (mustLoad || !os.IsNotExist(err)) {
-		debug.AssertNoErr(err)
+		debug.AssertMsg(mustLoad && os.IsNotExist(err), err.Error())
 		cos.Errorf("Failed to load token from %q: %v", tokenFile, err)
 	}
 	return token.Token

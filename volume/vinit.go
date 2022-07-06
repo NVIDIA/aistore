@@ -18,12 +18,13 @@ import (
 )
 
 // initializes mountpaths and volume; on SIE (storage integrity error) terminates and exits
-func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks, ignoreMissingMountpath bool) (created bool) {
+func Init(t cluster.Target, config *cmn.Config,
+	allowSharedDisksAndNoDisks, useLoopbackDevs, ignoreMissingMountpath bool) (created bool) {
 	var (
 		vmd *VMD
 		tid = t.SID()
 	)
-	fs.New(allowSharedDisksAndNoDisks || config.TestingEnv()) // new and empty
+	fs.New(allowSharedDisksAndNoDisks || (config.TestingEnv() && !useLoopbackDevs)) // new and empty
 
 	// bootstrap from a local-config referenced location; two points:
 	// a) local-config is kept in-sync with mountpath changes (see ais/fspathgrp)

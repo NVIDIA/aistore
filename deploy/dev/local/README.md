@@ -50,13 +50,13 @@ Therefore: remove the previously generated configuration (if any) and redeploy f
 $ deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 0 --deployment local --remote-alias remais --gcp --aws
 
 # or, same:
-$ make kill clean cli deploy <<< $'1\n1\n0\ny\ny\nn\nn\n'
+$ make kill clean cli deploy <<< $'1\n1\n0\ny\ny\nn\nn\n0\n'
 ```
 
 The result will looks something like:
 
 ```console
-# make kill clean cli deploy <<< $'1\n1\n0\ny\ny\nn\nn\n'
+$ make kill clean cli deploy <<< $'1\n1\n0\ny\ny\nn\nn\n0\n'
 Warning: missing CLI (ais) executable for proper graceful shutdown
 Cleaning... done.
 Enter number of storage targets:
@@ -67,7 +67,7 @@ Amazon S3: (y/n) ?
 Google Cloud Storage: (y/n) ?
 Azure: (y/n) ?
 HDFS: (y/n) ?
-Create loopback devices (note that it may take some time): (y/n) ?
+Loopback device size, e.g. 10G, 100M. Note that creating loopbacks may take time, press Enter to skip:
 Building aisnode: version=100676b29 providers= aws gcp tags= aws gcp debug mono
 done.
 Listening on port: 8080

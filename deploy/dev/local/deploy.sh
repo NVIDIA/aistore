@@ -84,7 +84,7 @@ AIS_CONF_DIR="$HOME/.ais$NEXT_TIER"
 TEST_FSPATH_COUNT=1
 
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
-  print_error "TCP port $PORT is not open (check if AIStore is already running)"
+  exit_error "TCP port $PORT is not open (check if AIStore is already running)"
 fi
 TMPF=$(mktemp /tmp/ais$NEXT_TIER.XXXXXXXXX)
 touch $TMPF;
@@ -103,12 +103,12 @@ case $OS in
     ;;
   *)
     rm $TMPF 2>/dev/null
-    print_error "'${OS}' is not supported"
+    exit_error "'${OS}' is not supported"
     ;;
 esac
 if [ $? -ne 0 ]; then
   rm $TMPF 2>/dev/null
-  print_error "bad kernel configuration: extended attributes are not enabled"
+  exit_error "bad kernel configuration: extended attributes are not enabled"
 fi
 rm $TMPF 2>/dev/null
 
@@ -122,7 +122,7 @@ echo "Enter number of proxies (gateways):"
 read -r PROXY_CNT
 is_number ${PROXY_CNT}
 if  [[ ${PROXY_CNT} -lt 1 ]] ; then
-  print_error "${PROXY_CNT} must be at least 1"
+  exit_error "${PROXY_CNT} must be at least 1"
 fi
 if [[ ${PROXY_CNT} -gt 1 ]] ; then
   AIS_DISCOVERY_PORT=$((PORT + 1))
@@ -140,16 +140,17 @@ read test_fspath_cnt
 is_number ${test_fspath_cnt}
 TEST_FSPATH_COUNT=${test_fspath_cnt}
 
+TEST_LOOPBACK_COUNT=0
+
 # If not specified, AIS_BACKEND_PROVIDERS will remain empty (or `0`) and
 # aisnode build will include neither AWS ("aws") nor GCP ("gcp").
 
-
 parse_backend_providers
 
-create_loopback_paths
+create_loopbacks
 
 if ! AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}  make --no-print-directory -C ${AISTORE_DIR} node; then
-  print_error "failed to compile 'aisnode' binary"
+  exit_error "failed to compile 'aisnode' binary"
 fi
 
 mkdir -p $AIS_CONF_DIR
@@ -183,7 +184,11 @@ fi
 CMD="${GOPATH}/bin/aisnode"
 listening_on="Proxies are listening on ports: "
 if [ $PROXY_CNT -eq 1 ]; then
-   listening_on="Proxy is listening on port: "
+  listening_on="Proxy is listening on port: "
+fi
+loopback=""
+if [[ "$TEST_LOOPBACK_COUNT" != "0" ]] ; then
+  loopback="-loopback"
 fi
 for (( c=START; c<=END; c++ )); do
   AIS_CONF_DIR="$HOME/.ais${NEXT_TIER}$c"
@@ -191,7 +196,7 @@ for (( c=START; c<=END; c++ )); do
   AIS_LOCAL_CONF_FILE="$AIS_CONF_DIR/ais_local.json"
 
   PROXY_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=proxy -ntargets=${TARGET_CNT} ${RUN_ARGS}"
-  TARGET_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=target ${RUN_ARGS}"
+  TARGET_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=target ${RUN_ARGS} $loopback"
 
   pub_port=$(grep "\"port\":" ${AIS_LOCAL_CONF_FILE} | awk '{ print $2 }')
   pub_port=${pub_port:1:$((${#pub_port} - 3))}
@@ -212,7 +217,7 @@ for (( c=START; c<=END; c++ )); do
 done
 
 if [[ $AIS_AUTH_ENABLED == "true" ]]; then
-	print_error "env var 'AIS_AUTH_ENABLED' is deprecated (use 'AIS_AUTHN_ENABLED')"
+	exit_error "env var 'AIS_AUTH_ENABLED' is deprecated (use 'AIS_AUTHN_ENABLED')"
 	exit 1
 fi
 if [[ $AIS_AUTHN_ENABLED == "true" ]]; then
@@ -224,7 +229,7 @@ if [[ $AIS_AUTHN_ENABLED == "true" ]]; then
   source "${AISTORE_DIR}/deploy/dev/local/authn_config.sh"
 
   if ! make --no-print-directory -C ${AISTORE_DIR} authn; then
-    print_error "failed to compile 'authn' binary"
+    exit_error "failed to compile 'authn' binary"
   fi
   run_cmd "${GOPATH}/bin/authn -config=${AIS_AUTHN_CONF_FILE}"
 fi

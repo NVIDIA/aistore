@@ -88,19 +88,16 @@ $ make deploy
 $ make kill clean
 
 # Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with the support for GCP and AWS backends
-$ make kill deploy <<< $'7\n4\n4\ny\ny\nn\nn\n'
-
-# Shutdown and then (non-interactively) generate local configs and deploy a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build executable with the support for GCP and AWS backends
-$ make kill deploy <<< $'7\n4\n4\ny\ny\nn\nn\n'
+$ make kill deploy <<< $'7\n2\n4\ny\ny\nn\nn\n0\n'
 
 # Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations
-$ make restart <<< $'7\n4\n4\ny\ny\nn\nn\n'
+$ make restart <<< $'7\n2\n4\ny\ny\nn\nn\n0\n'
 
-# Redeploy (4 targets, 1 proxy) cluster; build executable for debug without any backend-supporting libraries; use RUN_ARGS to pass an additional command-line option ('-override_backends=true') to each running node
-$ RUN_ARGS=-override_backends MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n'
+# Redeploy the cluster (4 targets, 1 proxyi, 4 mountoaths); build `aisnode` executable for debug without any backend-supporting libraries; use RUN_ARGS to pass an additional command-line option ('-override_backends=true') to each running node
+$ RUN_ARGS=-override_backends MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n0\n'
 
 # Same as above, but additionally run all 4 targets in a standby mode
-$ RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n'
+$ RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n0\n'
 ...
 ...
 ```
@@ -270,7 +267,7 @@ $ openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 10
 2. Deploy cluster (4 targets, 1 gateway, 6 mountpaths, Google Cloud):
 
 ```console
-$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\ny\nn\nn\nn\n'
+$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\ny\nn\nn\n0\n'
 ```
 
 3. Run tests (both examples below list the names of buckets accessible for you in Google Cloud):
