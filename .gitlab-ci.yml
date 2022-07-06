@@ -129,6 +129,9 @@ test:short:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - make test-short
     - FLAGS="--duration=10s" make test-aisloader
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/
 
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
 test:short:python:
@@ -148,6 +151,9 @@ test:short:minimal:
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt $FS_CNT --deployment all
     - NUM_PROXY=1 NUM_TARGET=1 make test-short
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/
 
 test:short:authn:
   <<: *test_short_optional_def
@@ -268,6 +274,7 @@ test:short:k8s:
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+      - $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/
   script:
     - export NUM_TARGET=3
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"

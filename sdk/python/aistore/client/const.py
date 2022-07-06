@@ -29,3 +29,11 @@ HTTP_METHOD_POST = "post"
 HTTP_METHOD_DELETE = "delete"
 HTTP_METHOD_PUT = "put"
 HTTP_METHOD_HEAD = "head"
+
+# Actions
+ACT_COPY_BCK = "copy-bck"
+ACT_CREATE_BCK = "create-bck"
+ACT_DESTROY_BCK = "destroy-bck"
+ACT_EVICT_REMOTE_BCK = "evict-remote-bck"
+ACT_LIST = "list"
+ACT_MOVE_BCK = "move-bck"

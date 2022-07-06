@@ -27,7 +27,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         # Try to destroy all temporary buckets if there are left.
         for bck_name in self.buckets:
             try:
-                self.client.destroy_bucket(bck_name)
+                self.client.bucket(bck_name).delete()
             except ErrBckNotFound:
                 pass
 
@@ -41,14 +41,14 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def create_bucket(self, bck_name):
         self.buckets.append(bck_name)
-        self.client.create_bucket(bck_name)
+        self.client.bucket(bck_name).create()
 
     def test_head_bucket(self):
         self.create_bucket(self.bck_name)
-        self.client.head_bucket(self.bck_name)
-        self.client.destroy_bucket(self.bck_name)
+        self.client.bucket(self.bck_name).head()
+        self.client.bucket(self.bck_name).delete()
         try:
-            self.client.head_bucket(self.bck_name)
+            self.client.bucket(self.bck_name).head()
         except requests.exceptions.HTTPError as e:
             self.assertEqual(e.response.status_code, 404)
 
@@ -59,14 +59,14 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         res = self.client.list_buckets()
         count = len(res)
         # wait for rename to finish
-        xact_id = self.client.rename_bucket(from_bck=from_bck_n, to_bck=to_bck_n)
+        xact_id = self.client.bucket(from_bck_n).rename(to_bck=to_bck_n)
         self.assertNotEqual(xact_id, "")
         self.client.wait_for_xaction_finished(xact_id=xact_id)
         # new bucket should be created and accessible
-        self.client.head_bucket(to_bck_n)
+        self.client.bucket(to_bck_n).head()
         # old bucket should be inaccessible
         try:
-            self.client.head_bucket(from_bck_n)
+            self.client.bucket(from_bck_n).head()
         except requests.exceptions.HTTPError as e:
             self.assertEqual(e.response.status_code, 404)
         # length of buckets before and after rename should be same
@@ -86,15 +86,15 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             f.flush()
             self.client.put_object(self.bck_name, obj_name, f.name, provider=provider)
 
-        objects = self.client.list_objects(self.bck_name, provider=provider, props="name,cached", prefix=obj_name)
+        objects = self.client.bucket(self.bck_name, provider=provider).list_objects(props="name,cached", prefix=obj_name)
         self.assertTrue(len(objects) > 0)
         for obj in objects:
             if obj.name == obj_name:
                 self.assertTrue(obj.is_ok())
                 self.assertTrue(obj.is_cached())
 
-        self.client.evict_bucket(self.bck_name, provider=provider)
-        objects = self.client.list_objects(self.bck_name, provider=provider, props="name,cached", prefix=obj_name)
+        self.client.bucket(self.bck_name, provider=provider).evict()
+        objects = self.client.bucket(self.bck_name, provider=provider).list_objects(props="name,cached", prefix=obj_name)
         self.assertTrue(len(objects) > 0)
         for obj in objects:
             if obj.name == obj_name:
@@ -108,7 +108,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.create_bucket(from_bck)
         self.create_bucket(to_bck)
 
-        xact_id = self.client.copy_bucket(from_bck, to_bck)
+        xact_id = self.client.bucket(from_bck).copy(to_bck)
         self.assertNotEqual(xact_id, "")
         self.client.wait_for_xaction_finished(xact_id=xact_id)
 

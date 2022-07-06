@@ -69,7 +69,7 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
     def __iter__(self) -> Iterator[str]:
         for prefix in self.source_datapipe:
             provider, bck_name, prefix = parse_url(prefix)
-            obj_iter = self.client.list_objects_iter(bck_name=bck_name, provider=provider, prefix=prefix)
+            obj_iter = self.client.bucket(bck_name, provider).list_objects_iter(prefix=prefix)
             for entry in obj_iter:
                 yield unparse_url(provider=provider, bck_name=bck_name, obj_name=entry.name)
 

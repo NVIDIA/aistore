@@ -8,7 +8,8 @@ from typing import Any, Mapping, List, Iterator, Optional
 
 from pydantic import BaseModel, Field, StrictInt, StrictStr, validator
 import requests
-from aistore.client.const import ProviderAIS
+from aistore.client.const import ProviderAIS, ProviderAmazon, ProviderAzure, ProviderGoogle, ProviderHDFS, ProviderHTTP
+from aistore.client.errors import InvalidBckProvider
 
 
 class Namespace(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
@@ -20,6 +21,12 @@ class Bck(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
     name: str
     provider: str = ProviderAIS
     ns: Namespace = None
+
+    @validator('provider')
+    def is_valid_provider(cls, provider):  # pylint: disable=no-self-argument
+        if provider not in [ProviderAIS, ProviderAmazon, ProviderAzure, ProviderGoogle, ProviderHDFS, ProviderHTTP]:
+            raise InvalidBckProvider(provider)
+        return provider
 
 
 class ActionMsg(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
@@ -159,14 +166,8 @@ class BucketLister:
                 "continuation_token": self._token,
                 "pagesize": self._page_size,
             }
-            resp = self._client.list_objects(
-                bck_name=self._bck_name,
-                provider=self._provider,
-                prefix=self._prefix,
-                props=self._props,
-                uuid=self._uuid,
-                continuation_token=self._token,
-                page_size=self._page_size
+            resp = self._client.bucket(self._bck_name, self._provider).list_objects(
+                prefix=self._prefix, props=self._props, uuid=self._uuid, continuation_token=self._token, page_size=self._page_size
             )
             self._fetched = resp.entries
             self._uuid = resp.uuid

@@ -19,12 +19,12 @@ class TestPytorchPlugin(unittest.TestCase):
         letters = string.ascii_lowercase
         self.bck_name = ''.join(random.choice(letters) for _ in range(10))
         self.client = Client(CLUSTER_ENDPOINT)
-        self.client.create_bucket(self.bck_name)
+        self.client.bucket(self.bck_name).create()
 
     def tearDown(self) -> None:
         # Try to destroy bucket if there is one left.
         try:
-            self.client.destroy_bucket(self.bck_name)
+            self.client.bucket(self.bck_name).delete()
         except ErrBckNotFound:
             pass
 

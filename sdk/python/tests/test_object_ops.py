@@ -27,7 +27,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def tearDown(self) -> None:
         # Try to destroy bucket if there is one left.
         try:
-            self.client.destroy_bucket(self.bck_name)
+            self.client.bucket(self.bck_name).delete()
         except ErrBckNotFound:
             pass
 
@@ -45,7 +45,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(obj, exp_content)
 
     def test_put_head_get(self):
-        self.client.create_bucket(self.bck_name)
+        self.client.bucket(self.bck_name).create()
         num_objs = 10
 
         for i in range(num_objs):
@@ -76,7 +76,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
                 "page_size": bucket_size * 2, "resp_size": bucket_size
             },
         ]
-        self.client.create_bucket(self.bck_name)
+        self.client.bucket(self.bck_name).create()
         content = "test".encode("utf-8")
         with tempfile.NamedTemporaryFile() as f:
             f.write(content)
@@ -84,27 +84,27 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             for obj_id in range(bucket_size):
                 self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
         for test in list(tests):
-            resp = self.client.list_objects(self.bck_name, page_size=test["page_size"])
+            resp = self.client.bucket(self.bck_name).list_objects(page_size=test["page_size"])
             self.assertEqual(len(resp.entries), test["resp_size"])
 
     def test_list_all_objects(self):
         bucket_size = 110
         short_page_len = 17
-        self.client.create_bucket(self.bck_name)
+        self.client.bucket(self.bck_name).create()
         content = "test".encode("utf-8")
         with tempfile.NamedTemporaryFile() as f:
             f.write(content)
             f.flush()
             for obj_id in range(bucket_size):
                 self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
-        objects = self.client.list_all_objects(self.bck_name)
+        objects = self.client.bucket(self.bck_name).list_all_objects()
         self.assertEqual(len(objects), bucket_size)
-        objects = self.client.list_all_objects(self.bck_name, page_size=short_page_len)
+        objects = self.client.bucket(self.bck_name).list_all_objects(page_size=short_page_len)
         self.assertEqual(len(objects), bucket_size)
 
     def test_list_object_iter(self):
         bucket_size = 110
-        self.client.create_bucket(self.bck_name)
+        self.client.bucket(self.bck_name).create()
         content = "test".encode("utf-8")
         objects = {}
         with tempfile.NamedTemporaryFile() as f:
@@ -116,13 +116,13 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
                 objects[obj_name] = 1
 
         # Read all `bucket_size` objects by prefix.
-        obj_iter = self.client.list_objects_iter(bck_name=self.bck_name, page_size=15, prefix="obj-")
+        obj_iter = self.client.bucket(self.bck_name).list_objects_iter(page_size=15, prefix="obj-")
         for obj in obj_iter:
             del objects[obj.name]
         self.assertEqual(len(objects), 0)
 
         # Empty iterator if there are no objects matching the prefix.
-        obj_iter = self.client.list_objects_iter(bck_name=self.bck_name, prefix="invalid-obj-")
+        obj_iter = self.client.bucket(self.bck_name).list_objects_iter(prefix="invalid-obj-")
         for obj in obj_iter:
             objects[obj.name] = 1
         self.assertEqual(len(objects), 0)
@@ -130,30 +130,30 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def test_obj_delete(self):
         bucket_size = 10
         delete_cnt = 7
-        self.client.create_bucket(self.bck_name)
+        self.client.bucket(self.bck_name).create()
         content = "test".encode("utf-8")
         with tempfile.NamedTemporaryFile() as f:
             f.write(content)
             f.flush()
             for obj_id in range(bucket_size):
                 self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
-        objects = self.client.list_objects(self.bck_name)
+        objects = self.client.bucket(self.bck_name).list_objects()
         self.assertEqual(len(objects.entries), bucket_size)
 
         for obj_id in range(delete_cnt):
             self.client.delete_object(self.bck_name, f"obj-{ obj_id + 1 }")
-        objects = self.client.list_objects(self.bck_name)
+        objects = self.client.bucket(self.bck_name).list_objects()
         self.assertEqual(len(objects.entries), bucket_size - delete_cnt)
 
     def test_empty_bucket(self):
-        self.client.create_bucket(self.bck_name)
-        objects = self.client.list_objects(self.bck_name)
+        self.client.bucket(self.bck_name).create()
+        objects = self.client.bucket(self.bck_name).list_objects()
         self.assertEqual(len(objects.entries), 0)
 
     def test_bucket_with_no_matching_prefix(self):
         bucket_size = 10
-        self.client.create_bucket(self.bck_name)
-        objects = self.client.list_objects(self.bck_name)
+        self.client.bucket(self.bck_name).create()
+        objects = self.client.bucket(self.bck_name).list_objects()
         self.assertEqual(len(objects.entries), 0)
         content = "test".encode("utf-8")
         with tempfile.NamedTemporaryFile() as f:
@@ -161,16 +161,16 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             f.flush()
             for obj_id in range(bucket_size):
                 self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
-        objects = self.client.list_objects(self.bck_name, prefix="TEMP")
+        objects = self.client.bucket(self.bck_name).list_objects(prefix="TEMP")
         self.assertEqual(len(objects.entries), 0)
 
     def test_invalid_bck_name(self):
         with self.assertRaises(ErrBckNotFound):
-            self.client.list_objects(bck_name="INVALID_BCK_NAME")
+            self.client.bucket("INVALID_BCK_NAME").list_objects()
 
     def test_invalid_bck_name_for_aws(self):
         with self.assertRaises(AISError):
-            self.client.list_objects(bck_name="INVALID_BCK_NAME", provider="aws")
+            self.client.bucket("INVALID_BCK_NAME", "aws").list_objects()
 
 
 if __name__ == '__main__':

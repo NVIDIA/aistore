@@ -23,12 +23,12 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def tearDown(self) -> None:
         # Try to destroy bucket if there is one left.
         try:
-            self.client.destroy_bucket(self.bck_name)
+            self.client.bucket(self.bck_name).delete()
         except ErrBckNotFound:
             pass
 
     def test_xaction_start(self):
-        self.client.create_bucket(self.bck_name)
+        self.client.bucket(self.bck_name).create()
         xact_id = self.client.xact_start(xact_kind="lru")
         self.client.wait_for_xaction_finished(xact_id=xact_id)
 
