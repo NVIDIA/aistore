@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -88,6 +89,8 @@ func TestRProxyGCS(t *testing.T) {
 		proxyURL   = tutils.GetPrimaryURL()
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		baseParams = tutils.BaseAPIParams(proxyURL)
+
+		retried bool
 	)
 
 	if cos.IsHTTPS(proxyURL) {
@@ -100,11 +103,25 @@ func TestRProxyGCS(t *testing.T) {
 	bckList, err := api.ListBuckets(baseParams, queryBck)
 	tassert.CheckFatal(t, err)
 
+retry:
 	cmdline := genCURLCmdLine(t, resURL, proxyURL, smap.Tmap)
 	tlog.Logf("First time download via XML API: %s\n", cmdline)
 	out, err := exec.Command("curl", cmdline...).CombinedOutput()
-	tlog.Logln(string(out))
+	tlog.Logln("\n" + string(out))
 	tassert.CheckFatal(t, err)
+
+	speedCold := extractSpeed(out)
+	tlog.Logf("Cold download speed:   %s\n", cos.B2S(speedCold, 1))
+	tassert.Fatalf(t, speedCold != 0, "Failed to detect speed for cold download")
+
+	// at less than 100KBps we likely failed to download
+	if speedCold < 100*1024 && !retried {
+		tlog.Logln("Warning: will retry once...")
+		time.Sleep(15 * time.Second)
+		tlog.Logln("Warning: retrying...")
+		retried = true
+		goto retry
+	}
 
 	bckListNew, err := api.ListBuckets(baseParams, queryBck)
 	tassert.CheckFatal(t, err)
@@ -113,11 +130,8 @@ func TestRProxyGCS(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	pathCached := findObjOnDisk(bck, gcsFilename)
-	tassert.Fatalf(t, pathCached != "", "object was not cached")
-
-	tlog.Logf("Cached at: %q\n", pathCached)
-	speedCold := extractSpeed(out)
-	tassert.Fatalf(t, speedCold != 0, "Failed to detect speed for cold download")
+	tassert.Fatalf(t, pathCached != "", "object was not downloaded")
+	tlog.Logf("Downloaded as %q\n", pathCached)
 
 	tlog.Logf("HTTP download\n")
 	cmdline = genCURLCmdLine(t, resURL, proxyURL, smap.Tmap)
