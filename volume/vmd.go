@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -75,7 +76,7 @@ func (vmd *VMD) addMountpath(mi *fs.MountpathInfo, enabled bool) {
 }
 
 func (vmd *VMD) load(mpath string) (err error) {
-	fpath := filepath.Join(mpath, cmn.VmdFname)
+	fpath := filepath.Join(mpath, fname.Vmd)
 	if vmd.cksum, err = jsp.LoadMeta(fpath, vmd); err != nil {
 		return
 	}
@@ -87,7 +88,7 @@ func (vmd *VMD) load(mpath string) (err error) {
 }
 
 func (vmd *VMD) persist() (err error) {
-	cnt, availCnt := fs.PersistOnMpaths(cmn.VmdFname, "", vmd, vmdCopies, nil, nil /*wto*/)
+	cnt, availCnt := fs.PersistOnMpaths(fname.Vmd, "", vmd, vmdCopies, nil, nil /*wto*/)
 	if cnt > 0 {
 		return
 	}

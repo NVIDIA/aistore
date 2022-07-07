@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
@@ -285,19 +286,19 @@ func TestMoveMarkers(t *testing.T) {
 
 			mpath := createMountpath(t)
 
-			fatalErr, writeErr := fs.PersistMarker(cmn.RebalanceMarker)
+			fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker)
 			tassert.CheckFatal(t, fatalErr)
 			tassert.CheckFatal(t, writeErr)
 
 			createMountpath(t)
 
-			exists := fs.MarkerExists(cmn.RebalanceMarker)
+			exists := fs.MarkerExists(fname.RebalanceMarker)
 			tassert.Fatalf(t, exists, "marker does not exist")
 
 			_, err := test.f(mpath.Path)
 			tassert.CheckFatal(t, err)
 
-			exists = fs.MarkerExists(cmn.RebalanceMarker)
+			exists = fs.MarkerExists(fname.RebalanceMarker)
 			tassert.Fatalf(t, exists, "marker does not exist")
 		})
 	}

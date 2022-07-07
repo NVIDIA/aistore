@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
@@ -82,7 +83,7 @@ func (res *Res) _end() {
 func (res *Res) RunResilver(args Args) {
 	res._begin()
 	defer res._end()
-	if fatalErr, writeErr := fs.PersistMarker(cmn.ResilverMarker); fatalErr != nil || writeErr != nil {
+	if fatalErr, writeErr := fs.PersistMarker(fname.ResilverMarker); fatalErr != nil || writeErr != nil {
 		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
 		return
 	}
@@ -152,7 +153,7 @@ func (res *Res) wait(jg *mpather.JoggerGroup, xres *xs.Resilver) (err error) {
 			}
 			return cmn.NewErrAborted(xres.Name(), "", errCause)
 		case <-jg.ListenFinished():
-			if err = fs.RemoveMarker(cmn.ResilverMarker); err == nil {
+			if err = fs.RemoveMarker(fname.ResilverMarker); err == nil {
 				glog.Infof("%s: %s removed marker ok", tsi, xres)
 			}
 			return

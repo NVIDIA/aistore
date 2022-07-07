@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
@@ -315,7 +316,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 	tokenPath := parseStrFlag(c, tokenFileFlag)
 	userPathUsed := tokenPath != ""
 	if tokenPath == "" {
-		tokenPath = filepath.Join(config.ConfigDir, cmn.TokenFname)
+		tokenPath = filepath.Join(config.ConfigDir, fname.Token)
 	}
 	err = cos.CreateDir(filepath.Dir(config.ConfigDir))
 	if err != nil {
@@ -338,7 +339,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 
 func logoutUserHandler(c *cli.Context) (err error) {
 	const logoutFailFmt = "logging out failed: %v"
-	tokenPath := filepath.Join(config.ConfigDir, cmn.TokenFname)
+	tokenPath := filepath.Join(config.ConfigDir, fname.Token)
 	if err = os.Remove(tokenPath); os.IsNotExist(err) {
 		return fmt.Errorf(logoutFailFmt, err)
 	}

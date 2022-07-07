@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/filter"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
@@ -198,7 +199,7 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 		reb.stages.stage.Store(rebStageDone)
 		reb.unregRecv()
 		reb.semaCh.Release()
-		fs.RemoveMarker(cmn.RebalanceMarker)
+		fs.RemoveMarker(fname.RebalanceMarker)
 		reb.xctn().Finish(nil)
 		return
 	}
@@ -411,7 +412,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	}
 
 	// 4. create persistent mark
-	if fatalErr, writeErr := fs.PersistMarker(cmn.RebalanceMarker); fatalErr != nil || writeErr != nil {
+	if fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker); fatalErr != nil || writeErr != nil {
 		err := writeErr
 		if fatalErr != nil {
 			err = fatalErr
@@ -660,7 +661,7 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 	}
 	// prior to closing the streams
 	if q := reb.quiesce(rargs, rargs.config.Transport.QuiesceTime.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
-		if errM := fs.RemoveMarker(cmn.RebalanceMarker); errM == nil {
+		if errM := fs.RemoveMarker(fname.RebalanceMarker); errM == nil {
 			glog.Infof("%s: %s removed marker ok", reb.t, reb.xctn())
 		}
 	}

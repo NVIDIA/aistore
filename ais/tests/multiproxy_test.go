@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/readers"
@@ -188,7 +189,7 @@ killRestore:
 	tassert.CheckFatal(t, err)
 
 	// Update local config ports.
-	localConfPath := filepath.Join(cfg.ConfigDir, "ais_local.json")
+	localConfPath := filepath.Join(cfg.ConfigDir, fname.PlaintextInitialConfig)
 	localConf := &cmn.LocalConfig{}
 	_, err = jsp.LoadMeta(localConfPath, localConf)
 	tassert.CheckFatal(t, err)

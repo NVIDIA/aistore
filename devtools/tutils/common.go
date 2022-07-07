@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
@@ -160,7 +161,7 @@ func isClusterLocal() (isLocal bool, err error) {
 	if config, err = api.GetDaemonConfig(baseParams, smap.Primary); err != nil {
 		return
 	}
-	fileData, err = os.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname))
+	fileData, err = os.ReadFile(filepath.Join(config.ConfigDir, fname.ProxyID))
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = nil

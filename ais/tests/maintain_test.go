@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -254,7 +255,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 func countVMDTargets(tsMpaths map[*cluster.Snode][]string) (total int) {
 	for _, mpaths := range tsMpaths {
 		for _, mpath := range mpaths {
-			if err := cos.Stat(filepath.Join(mpath, cmn.VmdFname)); err == nil {
+			if err := cos.Stat(filepath.Join(mpath, fname.Vmd)); err == nil {
 				total++
 				break
 			}

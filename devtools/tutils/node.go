@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -425,7 +426,7 @@ func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *
 		localConf.HostNet.PortIntraData = conf.HostNet.PortIntraData
 	}
 
-	localConfFile := filepath.Join(conf.ConfigDir, "ais_local.json")
+	localConfFile := filepath.Join(conf.ConfigDir, fname.PlaintextInitialConfig)
 	err := jsp.SaveMeta(localConfFile, localConf, nil)
 	tassert.CheckFatal(t, err)
 

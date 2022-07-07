@@ -6,7 +6,7 @@ package xreg
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -18,7 +18,7 @@ func GetRebMarked() (out xact.Marked) {
 	if entry != nil {
 		out.Xact = entry.Get()
 	}
-	out.Interrupted = fs.MarkerExists(cmn.RebalanceMarker) && entry == nil
+	out.Interrupted = fs.MarkerExists(fname.RebalanceMarker) && entry == nil
 	return
 }
 
@@ -29,6 +29,6 @@ func GetResilverMarked() (out xact.Marked) {
 	if entry != nil {
 		out.Xact = entry.Get()
 	}
-	out.Interrupted = fs.MarkerExists(cmn.ResilverMarker) && entry == nil
+	out.Interrupted = fs.MarkerExists(fname.ResilverMarker) && entry == nil
 	return
 }

@@ -30,6 +30,10 @@ run_cmd() {
 #  { set +x; } 2>/dev/null
 }
 
+# NOTE: `AIS_BACKEND_PROVIDERS` and all other system environment variables
+# are listed in the `env` package:
+# https://github.com/NVIDIA/aistore/blob/master/api/env/README.md
+
 parse_backend_providers() {
   AIS_BACKEND_PROVIDERS=""
   echo "Select backend providers:"

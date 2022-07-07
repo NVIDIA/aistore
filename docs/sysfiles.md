@@ -11,7 +11,7 @@ redirect_from:
 
 AIStore stores, maintains, and utilizes a number of system files that serve a variety of different purposes.
 
-> For the most recently updated list of system filenames, please see `cmn/fname_const.go` source.
+> For the most recently updated list of system filenames, please see [`fname/fname.go`](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go) source.
 
 This section tries to enumerate the *system files* and briefly describe their respective usages.
 

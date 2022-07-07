@@ -59,6 +59,10 @@ OPTIONS:
   -h, --help      Show this help text
 "
 
+# NOTE: `AIS_USE_HTTPS`, and all other system environment variables
+# are listed in the `env` package:
+# https://github.com/NVIDIA/aistore/blob/master/api/env/README.md
+
 export MODE="debug" # By default start in debug mode
 
 while (( "$#" )); do

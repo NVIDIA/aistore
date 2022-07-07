@@ -1,6 +1,5 @@
-cat > $AIS_AUTHN_CONF_FILE <<EOL
+cat > "$AIS_AUTHN_CONF_DIR/authn.json" <<EOL
 {
-	"confdir": "$AIS_AUTHN_CONF_DIR",
 	"log": {
 		"dir":   "$AIS_AUTHN_LOG_DIR",
 		"level": "${AIS_AUTHN_LOG_LEVEL:-3}"

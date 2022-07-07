@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/OneOfOne/xxhash"
 )
@@ -998,7 +999,7 @@ func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo *cmn.Bck) (err error) {
 
 func moveMarkers(available MPI, from *MountpathInfo) {
 	var (
-		fromPath    = filepath.Join(from.Path, cmn.MarkersDirName)
+		fromPath    = filepath.Join(from.Path, fname.MarkersDir)
 		finfos, err = os.ReadDir(fromPath)
 	)
 	if err != nil {
@@ -1017,10 +1018,10 @@ func moveMarkers(available MPI, from *MountpathInfo) {
 	for _, mpath := range available {
 		ok = true
 		for _, fi := range finfos {
-			debug.AssertMsg(!fi.IsDir(), cmn.MarkersDirName+"/"+fi.Name()) // marker is file
+			debug.AssertMsg(!fi.IsDir(), fname.MarkersDir+"/"+fi.Name()) // marker is file
 			var (
-				fromPath = filepath.Join(from.Path, cmn.MarkersDirName, fi.Name())
-				toPath   = filepath.Join(mpath.Path, cmn.MarkersDirName, fi.Name())
+				fromPath = filepath.Join(from.Path, fname.MarkersDir, fi.Name())
+				toPath   = filepath.Join(mpath.Path, fname.MarkersDir, fi.Name())
 			)
 			_, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone)
 			if err != nil && os.IsNotExist(err) {

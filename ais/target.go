@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort"
@@ -408,7 +409,7 @@ func (t *target) Run() error {
 	err = t.htrun.run()
 
 	// do it after the `run()` to retain `restarted` marker on panic
-	fs.RemoveMarker(cmn.NodeRestartedMarker)
+	fs.RemoveMarker(fname.NodeRestartedMarker)
 	return err
 }
 
@@ -473,10 +474,10 @@ func (t *target) Stop(err error) {
 }
 
 func (t *target) checkRestarted() (fatalErr, writeErr error) {
-	if fs.MarkerExists(cmn.NodeRestartedMarker) {
+	if fs.MarkerExists(fname.NodeRestartedMarker) {
 		t.statsT.Add(stats.RestartCount, 1)
 	} else {
-		fatalErr, writeErr = fs.PersistMarker(cmn.NodeRestartedMarker)
+		fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)
 	}
 	return
 }
@@ -671,7 +672,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 	debug.Assert(resp.Status == http.StatusOK)
 	debug.Assert(resp.BckList.UUID != "")
 
-	if fs.MarkerExists(cmn.RebalanceMarker) || reb.IsActiveGFN() {
+	if fs.MarkerExists(fname.RebalanceMarker) || reb.IsActiveGFN() {
 		resp.BckList.Flags |= cmn.BckListFlagRebalance
 	}
 

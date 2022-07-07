@@ -17,11 +17,10 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/dbdriver"
 )
-
-const authDB = "authn.db"
 
 const secretKeyPodEnv = "SECRETKEY" // via https://kubernetes.io/docs/concepts/configuration/secret
 
@@ -69,6 +68,7 @@ func printVer() {
 }
 
 func main() {
+	var configDir string
 	if len(os.Args) == 2 && os.Args[1] == "version" {
 		printVer()
 		os.Exit(0)
@@ -81,31 +81,31 @@ func main() {
 	installSignalHandler()
 	flag.Parse()
 
-	confFlag := flag.Lookup("config")
-	if confFlag != nil {
-		configPath = confFlag.Value.String()
+	confDirFlag := flag.Lookup("config")
+	if confDirFlag != nil {
+		configDir = confDirFlag.Value.String()
 	}
-	if configPath == "" {
-		configPath = os.Getenv(env.AuthN.ConfFile)
+	if configDir == "" {
+		configDir = os.Getenv(env.AuthN.ConfDir)
 	}
-	if configPath == "" {
+	if configDir == "" {
 		cos.ExitLogf("Missing %s configuration file (to specify, use '-%s' option or '%s' environment)",
-			svcName, confFlag.Name, env.AuthN.ConfFile)
+			svcName, confDirFlag.Name, env.AuthN.ConfDir)
 	}
+	configPath := filepath.Join(configDir, fname.AuthNConfig)
 	if glog.V(4) {
 		glog.Infof("Loading configuration from %s", configPath)
 	}
 	if _, err := jsp.LoadMeta(configPath, Conf); err != nil {
 		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
-	Conf.Path = configPath
 	if val := os.Getenv(secretKeyPodEnv); val != "" {
 		Conf.Server.Secret = val
 	}
 	if err := updateLogOptions(); err != nil {
 		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
-	dbPath := filepath.Join(Conf.ConfDir, authDB)
+	dbPath := filepath.Join(configDir, fname.AuthDB)
 	driver, err := dbdriver.NewBuntDB(dbPath)
 	if err != nil {
 		cos.ExitLogf("Failed to init local database: %v", err)

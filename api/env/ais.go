@@ -4,26 +4,24 @@
  */
 package env
 
-// ais environment variable names (see also fname_const.go)
-
 var (
 	AIS = struct {
-		Endpoint           string
-		ShutdownMarkerPath string
-		IsPrimary          string
-		PrimaryID          string
-		SkipVerifyCrt      string
-		UseHTTPS           string
-		NumTarget          string
-		NumProxy           string
-		K8sPod             string
+		Endpoint          string
+		ShutdownMarkerDir string
+		IsPrimary         string
+		PrimaryID         string
+		SkipVerifyCrt     string
+		UseHTTPS          string
+		NumTarget         string
+		NumProxy          string
+		K8sPod            string
 	}{
-		Endpoint:           "AIS_ENDPOINT",
-		IsPrimary:          "AIS_IS_PRIMARY",
-		PrimaryID:          "AIS_PRIMARY_ID",
-		SkipVerifyCrt:      "AIS_SKIP_VERIFY_CRT",
-		UseHTTPS:           "AIS_USE_HTTPS",
-		ShutdownMarkerPath: "AIS_SHUTDOWN_MARKER_PATH",
+		Endpoint:          "AIS_ENDPOINT",
+		IsPrimary:         "AIS_IS_PRIMARY",
+		PrimaryID:         "AIS_PRIMARY_ID",
+		SkipVerifyCrt:     "AIS_SKIP_VERIFY_CRT",
+		UseHTTPS:          "AIS_USE_HTTPS",
+		ShutdownMarkerDir: "AIS_SHUTDOWN_MARKER_DIR",
 
 		// Env variables used for tests or CI
 		NumTarget: "NUM_TARGET",

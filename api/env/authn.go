@@ -10,7 +10,6 @@ var (
 	AuthN = struct {
 		Enabled   string
 		URL       string
-		ConfFile  string
 		TokenFile string
 		ConfDir   string
 		LogDir    string
@@ -21,9 +20,8 @@ var (
 	}{
 		Enabled:   "AIS_AUTHN_ENABLED",
 		URL:       "AIS_AUTHN_URL",
-		ConfFile:  "AIS_AUTHN_CONF_FILE",  // fully qualified
-		TokenFile: "AIS_AUTHN_TOKEN_FILE", // ditto
-		ConfDir:   "AIS_AUTHN_CONF_DIR",
+		TokenFile: "AIS_AUTHN_TOKEN_FILE", // fully qualified
+		ConfDir:   "AIS_AUTHN_CONF_DIR",   // contains AuthN config and tokens DB
 		LogDir:    "AIS_AUTHN_LOG_DIR",
 		LogLevel:  "AIS_AUTHN_LOG_LEVEL",
 		Port:      "AIS_AUTHN_PORT",

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -23,23 +24,23 @@ const numMarkers = 1
 
 // List of AIS metadata files and directories (basenames only)
 var mdFilesDirs = []string{
-	cmn.MarkersDirName,
+	fname.MarkersDir,
 
-	cmn.BmdFname,
-	cmn.BmdPreviousFname,
+	fname.Bmd,
+	fname.BmdPrevious,
 
-	cmn.VmdFname,
+	fname.Vmd,
 }
 
 func MarkerExists(marker string) bool {
-	markerPath := filepath.Join(cmn.MarkersDirName, marker)
+	markerPath := filepath.Join(fname.MarkersDir, marker)
 	return CountPersisted(markerPath) > 0
 }
 
 func PersistMarker(marker string) (fatalErr, writeErr error) {
 	var (
 		cnt             int
-		relname         = filepath.Join(cmn.MarkersDirName, marker)
+		relname         = filepath.Join(fname.MarkersDir, marker)
 		availableMpaths = GetAvail()
 	)
 	if len(availableMpaths) == 0 {
@@ -79,7 +80,7 @@ func PersistMarker(marker string) (fatalErr, writeErr error) {
 func RemoveMarker(marker string) (err error) {
 	var (
 		availableMpaths = GetAvail()
-		relname         = filepath.Join(cmn.MarkersDirName, marker)
+		relname         = filepath.Join(fname.MarkersDir, marker)
 	)
 	for _, mi := range availableMpaths {
 		if er1 := cos.RemoveFile(filepath.Join(mi.Path, relname)); er1 != nil {

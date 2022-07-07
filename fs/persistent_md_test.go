@@ -7,7 +7,7 @@ package fs_test
 import (
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
@@ -31,40 +31,40 @@ func TestMarkers(t *testing.T) {
 	defer tutils.RemoveMpaths(t, mpaths)
 
 	checkMarkersExist(t,
-		markerEntry{marker: cmn.RebalanceMarker, exists: false},
-		markerEntry{marker: cmn.ResilverMarker, exists: false},
+		markerEntry{marker: fname.RebalanceMarker, exists: false},
+		markerEntry{marker: fname.ResilverMarker, exists: false},
 	)
 
-	fatalErr, writeErr := fs.PersistMarker(cmn.RebalanceMarker)
+	fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker)
 	tassert.CheckFatal(t, fatalErr)
 	tassert.CheckFatal(t, writeErr)
 
 	checkMarkersExist(t,
-		markerEntry{marker: cmn.RebalanceMarker, exists: true},
-		markerEntry{marker: cmn.ResilverMarker, exists: false},
+		markerEntry{marker: fname.RebalanceMarker, exists: true},
+		markerEntry{marker: fname.ResilverMarker, exists: false},
 	)
 
-	fatalErr, writeErr = fs.PersistMarker(cmn.ResilverMarker)
+	fatalErr, writeErr = fs.PersistMarker(fname.ResilverMarker)
 	tassert.CheckFatal(t, fatalErr)
 	tassert.CheckFatal(t, writeErr)
 
 	checkMarkersExist(t,
-		markerEntry{marker: cmn.RebalanceMarker, exists: true},
-		markerEntry{marker: cmn.ResilverMarker, exists: true},
+		markerEntry{marker: fname.RebalanceMarker, exists: true},
+		markerEntry{marker: fname.ResilverMarker, exists: true},
 	)
 
-	fs.RemoveMarker(cmn.RebalanceMarker)
+	fs.RemoveMarker(fname.RebalanceMarker)
 
 	checkMarkersExist(t,
-		markerEntry{marker: cmn.RebalanceMarker, exists: false},
-		markerEntry{marker: cmn.ResilverMarker, exists: true},
+		markerEntry{marker: fname.RebalanceMarker, exists: false},
+		markerEntry{marker: fname.ResilverMarker, exists: true},
 	)
 
-	fs.RemoveMarker(cmn.ResilverMarker)
+	fs.RemoveMarker(fname.ResilverMarker)
 
 	checkMarkersExist(t,
-		markerEntry{marker: cmn.RebalanceMarker, exists: false},
-		markerEntry{marker: cmn.ResilverMarker, exists: false},
+		markerEntry{marker: fname.RebalanceMarker, exists: false},
+		markerEntry{marker: fname.ResilverMarker, exists: false},
 	)
 }
 
@@ -74,21 +74,21 @@ func TestMarkersClear(t *testing.T) {
 	defer tutils.RemoveMpaths(t, mpaths)
 
 	checkMarkersExist(t,
-		markerEntry{marker: cmn.RebalanceMarker, exists: false},
-		markerEntry{marker: cmn.ResilverMarker, exists: false},
+		markerEntry{marker: fname.RebalanceMarker, exists: false},
+		markerEntry{marker: fname.ResilverMarker, exists: false},
 	)
 
-	fatalErr, writeErr := fs.PersistMarker(cmn.RebalanceMarker)
+	fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker)
 	tassert.CheckFatal(t, fatalErr)
 	tassert.CheckFatal(t, writeErr)
 
-	fatalErr, writeErr = fs.PersistMarker(cmn.ResilverMarker)
+	fatalErr, writeErr = fs.PersistMarker(fname.ResilverMarker)
 	tassert.CheckFatal(t, fatalErr)
 	tassert.CheckFatal(t, writeErr)
 
 	checkMarkersExist(t,
-		markerEntry{marker: cmn.RebalanceMarker, exists: true},
-		markerEntry{marker: cmn.ResilverMarker, exists: true},
+		markerEntry{marker: fname.RebalanceMarker, exists: true},
+		markerEntry{marker: fname.ResilverMarker, exists: true},
 	)
 
 	for _, mpath := range mpaths {
@@ -96,7 +96,7 @@ func TestMarkersClear(t *testing.T) {
 	}
 
 	checkMarkersExist(t,
-		markerEntry{marker: cmn.RebalanceMarker, exists: false},
-		markerEntry{marker: cmn.ResilverMarker, exists: false},
+		markerEntry{marker: fname.RebalanceMarker, exists: false},
+		markerEntry{marker: fname.ResilverMarker, exists: false},
 	)
 }

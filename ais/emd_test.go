@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/etl"
 	. "github.com/onsi/ginkgo"
@@ -153,7 +154,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 			})
 
 			It(fmt.Sprintf("should correctly detect etlMD corruption %s", node), func() {
-				etlMDFullPath := filepath.Join(mpath, cmn.EmdFname)
+				etlMDFullPath := filepath.Join(mpath, fname.Emd)
 				f, err := os.OpenFile(etlMDFullPath, os.O_RDWR, 0)
 				Expect(err).NotTo(HaveOccurred())
 				_, err = f.WriteAt([]byte("xxxxxxxxxxxx"), 10)

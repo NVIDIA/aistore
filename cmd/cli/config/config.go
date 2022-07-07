@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -110,7 +111,7 @@ func (c *Config) validate() (err error) {
 
 func Load() (*Config, error) {
 	cfg := &Config{}
-	if err := jsp.LoadAppConfig(ConfigDir, cmn.CliConfigFname, &cfg); err != nil {
+	if err := jsp.LoadAppConfig(ConfigDir, fname.CliConfig, &cfg); err != nil {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to load config: %v", err)
 		}
@@ -128,7 +129,7 @@ func Load() (*Config, error) {
 }
 
 func Save(cfg *Config) error {
-	err := jsp.SaveAppConfig(ConfigDir, cmn.CliConfigFname, cfg)
+	err := jsp.SaveAppConfig(ConfigDir, fname.CliConfig, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to save config file: %v", err)
 	}
@@ -136,5 +137,5 @@ func Save(cfg *Config) error {
 }
 
 func Path() string {
-	return filepath.Join(ConfigDir, cmn.CliConfigFname)
+	return filepath.Join(ConfigDir, fname.CliConfig)
 }

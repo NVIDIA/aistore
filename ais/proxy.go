@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
@@ -136,7 +137,7 @@ func initPID(config *cmn.Config) (pid string) {
 	}
 	// try to read ID
 	if pid = readProxyID(config); pid != "" {
-		glog.Infof("p[%s] from %q", pid, cmn.ProxyIDFname)
+		glog.Infof("p[%s] from %q", pid, fname.ProxyID)
 		return
 	}
 	pid = genDaemonID(apc.Proxy, config)
@@ -144,14 +145,14 @@ func initPID(config *cmn.Config) (pid string) {
 	debug.AssertNoErr(err)
 
 	// store ID on disk
-	err = os.WriteFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname), []byte(pid), cos.PermRWR)
+	err = os.WriteFile(filepath.Join(config.ConfigDir, fname.ProxyID), []byte(pid), cos.PermRWR)
 	debug.AssertNoErr(err)
 	glog.Infof("p[%s] ID randomly generated", pid)
 	return
 }
 
 func readProxyID(config *cmn.Config) (id string) {
-	if b, err := os.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname)); err == nil {
+	if b, err := os.ReadFile(filepath.Join(config.ConfigDir, fname.ProxyID)); err == nil {
 		id = string(b)
 	} else if !os.IsNotExist(err) {
 		glog.Error(err)

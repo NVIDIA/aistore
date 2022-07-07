@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -281,7 +282,7 @@ func (*bmdOwnerBase) persistBytes(payload msPayload, fpath string) (done bool) {
 /////////////////
 
 func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
-	return &bmdOwnerPrx{fpath: filepath.Join(config.ConfigDir, cmn.BmdFname)}
+	return &bmdOwnerPrx{fpath: filepath.Join(config.ConfigDir, fname.Bmd)}
 }
 
 func (bo *bmdOwnerPrx) init() {
@@ -355,12 +356,12 @@ func (bo *bmdOwnerTgt) init() {
 		bmd       *bucketMD
 		available = fs.GetAvail()
 	)
-	if bmd = loadBMD(available, cmn.BmdFname); bmd != nil {
+	if bmd = loadBMD(available, fname.Bmd); bmd != nil {
 		glog.Infof("loaded %s", bmd)
 		goto finalize
 	}
-	if bmd = loadBMD(available, cmn.BmdPreviousFname); bmd != nil {
-		glog.Errorf("loaded previous version of the %s (%q)", bmd, cmn.BmdPreviousFname)
+	if bmd = loadBMD(available, fname.BmdPrevious); bmd != nil {
+		glog.Errorf("loaded previous version of the %s (%q)", bmd, fname.BmdPrevious)
 		goto finalize
 	}
 	bmd = newBucketMD()
@@ -391,7 +392,7 @@ func (*bmdOwnerTgt) persist(clone *bucketMD, payload msPayload) (err error) {
 		sgl = clone._encode()
 		defer sgl.Free()
 	}
-	cnt, availCnt := fs.PersistOnMpaths(cmn.BmdFname, cmn.BmdPreviousFname, clone, bmdCopies, b, sgl)
+	cnt, availCnt := fs.PersistOnMpaths(fname.Bmd, fname.BmdPrevious, clone, bmdCopies, b, sgl)
 	if cnt > 0 {
 		return
 	}
@@ -466,7 +467,7 @@ func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 	return nil
 }
 
-func hasEnoughBMDCopies() bool { return fs.CountPersisted(cmn.BmdFname) >= bmdCopies }
+func hasEnoughBMDCopies() bool { return fs.CountPersisted(fname.Bmd) >= bmdCopies }
 
 //////////////////////////
 // default bucket props //

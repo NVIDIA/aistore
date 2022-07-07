@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -1717,7 +1718,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	// specified `globalConfPath`.
 	// Once started, the node then always relies on the last updated version stored in a binary
 	// form (in accordance with the associated ClusterConfig.JspOpts()).
-	globalFpath := filepath.Join(config.ConfigDir, GlobalConfigFname)
+	globalFpath := filepath.Join(config.ConfigDir, fname.GlobalConfig)
 	if _, err := jsp.LoadMeta(globalFpath, &config.ClusterConfig); err != nil {
 		const txt = "load global config"
 		if os.IsNotExist(err) {
@@ -1810,12 +1811,12 @@ func handleOverrideConfig(config *Config) error {
 }
 
 func SaveOverrideConfig(configDir string, toUpdate *ConfigToUpdate) error {
-	return jsp.SaveMeta(path.Join(configDir, OverrideConfigFname), toUpdate, nil)
+	return jsp.SaveMeta(path.Join(configDir, fname.OverrideConfig), toUpdate, nil)
 }
 
 func loadOverrideConfig(configDir string) (toUpdate *ConfigToUpdate, err error) {
 	toUpdate = &ConfigToUpdate{}
-	_, err = jsp.LoadMeta(path.Join(configDir, OverrideConfigFname), toUpdate)
+	_, err = jsp.LoadMeta(path.Join(configDir, fname.OverrideConfig), toUpdate)
 	if os.IsNotExist(err) {
 		err = nil
 	}

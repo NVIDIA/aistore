@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
@@ -445,7 +446,7 @@ func (m *smapX) clearNodeFlags(id string, flags cos.BitFlags) {
 func newSmapOwner(config *cmn.Config) *smapOwner {
 	return &smapOwner{
 		listeners: newSmapListeners(),
-		fpath:     filepath.Join(config.ConfigDir, cmn.SmapFname),
+		fpath:     filepath.Join(config.ConfigDir, fname.Smap),
 	}
 }
 

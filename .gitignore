@@ -3,9 +3,6 @@
 *.csv
 *.svg
 .*.swp
-tags
-FlameGraph/
-openapi-generator-cli.jar
 
 ## PYTHON ##
 
@@ -65,24 +62,10 @@ coverage.xml
 # Environments
 .env
 .venv
-env/
 venv/
 ENV/
 env.bak/
 venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Goland IntelliJ IDE
-.idea
-
-# Rope project settings
-.ropeproject
-
-# Bench
-bench/aisloader/aisloader.exe
 
 # Website related stuff
 .netlify/

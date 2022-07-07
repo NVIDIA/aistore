@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -86,13 +87,13 @@ func newRMDOwner() *rmdOwner {
 }
 
 func (*rmdOwner) persist(rmd *rebMD) error {
-	rmdPathName := filepath.Join(cmn.GCO.Get().ConfigDir, cmn.RmdFname)
+	rmdPathName := filepath.Join(cmn.GCO.Get().ConfigDir, fname.Rmd)
 	return jsp.SaveMeta(rmdPathName, rmd, nil /*wto*/)
 }
 
 func (r *rmdOwner) load() {
 	rmd := &rebMD{}
-	_, err := jsp.LoadMeta(filepath.Join(cmn.GCO.Get().ConfigDir, cmn.RmdFname), rmd)
+	_, err := jsp.LoadMeta(filepath.Join(cmn.GCO.Get().ConfigDir, fname.Rmd), rmd)
 	if err == nil {
 		r.put(rmd)
 		return

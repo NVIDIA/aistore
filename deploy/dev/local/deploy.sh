@@ -7,9 +7,8 @@
 # To deploy AIStore as a next tier cluster to the *already running*
 # AIStore cluster set DEPLOY_AS_NEXT_TIER=1.
 #
-# NOTE: all environment variables are listed in the `env` package.
-# Please see https://github.com/NVIDIA/aistore/blob/master/api/env
-# for the most recently updated (AIS + AuthN) environment.
+# NOTE: system environment variables are listed in the `env` package,
+# see https://github.com/NVIDIA/aistore/blob/master/api/env/README.md
 #
 ############################################
 
@@ -224,14 +223,13 @@ if [[ $AIS_AUTHN_ENABLED == "true" ]]; then
   # conf file for authn
   AIS_AUTHN_CONF_DIR="$HOME/.ais/authn"
   mkdir -p "$AIS_AUTHN_CONF_DIR"
-  AIS_AUTHN_CONF_FILE="$AIS_AUTHN_CONF_DIR/authn.json"
   AIS_AUTHN_LOG_DIR="$LOG_ROOT/authn/log"
   source "${AISTORE_DIR}/deploy/dev/local/authn_config.sh"
 
   if ! make --no-print-directory -C ${AISTORE_DIR} authn; then
     exit_error "failed to compile 'authn' binary"
   fi
-  run_cmd "${GOPATH}/bin/authn -config=${AIS_AUTHN_CONF_FILE}"
+  run_cmd "${GOPATH}/bin/authn -config=${AIS_AUTHN_CONF_DIR}"
 fi
 
 if [[ $MODE == "debug" ]]; then

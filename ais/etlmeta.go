@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
@@ -151,7 +152,7 @@ func (*etlMDOwnerBase) persistBytes(payload msPayload, fpath string) (done bool)
 /////////////////
 
 func newEtlMDOwnerPrx(config *cmn.Config) *etlMDOwnerPrx {
-	return &etlMDOwnerPrx{fpath: filepath.Join(config.ConfigDir, cmn.EmdFname)}
+	return &etlMDOwnerPrx{fpath: filepath.Join(config.ConfigDir, fname.Emd)}
 }
 
 func (eo *etlMDOwnerPrx) init() {
@@ -218,7 +219,7 @@ func (eo *etlMDOwnerTgt) init() {
 		etlMD     *etlMD
 		available = fs.GetAvail()
 	)
-	if etlMD = loadEtlMD(available, cmn.EmdFname); etlMD != nil {
+	if etlMD = loadEtlMD(available, fname.Emd); etlMD != nil {
 		glog.Infof("loaded %s", etlMD)
 		goto finalize
 	}
@@ -246,7 +247,7 @@ func (*etlMDOwnerTgt) persist(clone *etlMD, payload msPayload) (err error) {
 	if b == nil {
 		b = clone.marshal()
 	}
-	cnt, availCnt := fs.PersistOnMpaths(cmn.EmdFname, "" /*backup*/, clone, etlMDCopies, b, nil /*sgl*/)
+	cnt, availCnt := fs.PersistOnMpaths(fname.Emd, "" /*backup*/, clone, etlMDCopies, b, nil /*sgl*/)
 	if cnt > 0 {
 		return
 	}
@@ -308,4 +309,4 @@ func loadEtlMDFromMpath(mpath *fs.MountpathInfo, path string) (etlMD *etlMD) {
 	return nil
 }
 
-func hasEnoughEtlMDCopies() bool { return fs.CountPersisted(cmn.EmdFname) >= etlMDCopies }
+func hasEnoughEtlMDCopies() bool { return fs.CountPersisted(fname.Emd) >= etlMDCopies }

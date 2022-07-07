@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -26,7 +26,7 @@ func LoadToken(tokenFile string) string {
 	}
 	if tokenFile == "" {
 		// default config location
-		tokenFile = filepath.Join(jsp.DefaultAppConfigDir(), cmn.TokenFname)
+		tokenFile = filepath.Join(jsp.DefaultAppConfigDir(), fname.Token)
 		mustLoad = false
 	}
 	_, err := jsp.LoadMeta(tokenFile, &token)

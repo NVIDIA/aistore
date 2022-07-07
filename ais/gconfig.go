@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -79,7 +80,7 @@ func (config *globalConfig) _encode(immSize int64) (sgl *memsys.SGL) {
 
 func newConfigOwner(config *cmn.Config) (co *configOwner) {
 	co = &configOwner{}
-	co.globalFpath = filepath.Join(config.ConfigDir, cmn.GlobalConfigFname)
+	co.globalFpath = filepath.Join(config.ConfigDir, fname.GlobalConfig)
 	return
 }
 
@@ -230,7 +231,7 @@ func (co *configOwner) resetDaemonConfig() (err error) {
 		return err
 	}
 	cmn.GCO.PutOverrideConfig(nil)
-	err = cos.RemoveFile(filepath.Join(oldConfig.ConfigDir, cmn.OverrideConfigFname))
+	err = cos.RemoveFile(filepath.Join(oldConfig.ConfigDir, fname.OverrideConfig))
 	if err != nil {
 		co.Unlock()
 		return

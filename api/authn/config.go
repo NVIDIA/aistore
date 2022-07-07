@@ -17,8 +17,6 @@ import (
 type (
 	Config struct {
 		sync.RWMutex `list:"omit"` // for cmn.IterFields
-		Path         string        `json:"path"`
-		ConfDir      string        `json:"confdir"`
 		Log          LogConf       `json:"log"`
 		Net          NetConf       `json:"net"`
 		Server       ServerConf    `json:"auth"`
