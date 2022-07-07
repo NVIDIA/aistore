@@ -38,7 +38,8 @@ var (
 )
 
 func init() {
-	ConfigDir = jsp.DefaultAppConfigDir()
+	// $HOME/.config/ais/cli
+	ConfigDir = cos.HomeConfigDir(fname.HomeCLI)
 	proto := "http"
 	if value := os.Getenv(env.AIS.UseHTTPS); cos.IsParseBool(value) {
 		proto = "https"

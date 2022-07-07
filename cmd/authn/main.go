@@ -35,38 +35,6 @@ func init() {
 	flag.StringVar(&configPath, "config", "", svcName+" configuration")
 }
 
-// Set up glog with options from configuration file
-func updateLogOptions() error {
-	if err := cos.CreateDir(Conf.Log.Dir); err != nil {
-		return fmt.Errorf("failed to create log dir %q, err: %v", Conf.Log.Dir, err)
-	}
-	glog.SetLogDir(Conf.Log.Dir)
-
-	if Conf.Log.Level != "" {
-		v := flag.Lookup("v").Value
-		if v == nil {
-			return fmt.Errorf("nil -v Value")
-		}
-		if err := v.Set(Conf.Log.Level); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", Conf.Log.Level, err)
-		}
-	}
-	return nil
-}
-
-func installSignalHandler() {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-c
-		os.Exit(0)
-	}()
-}
-
-func printVer() {
-	fmt.Printf("version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)
-}
-
 func main() {
 	var configDir string
 	if len(os.Args) == 2 && os.Args[1] == "version" {
@@ -120,4 +88,36 @@ func main() {
 	if err := srv.Run(); err != nil {
 		cos.ExitLogf("Server failed: %v", err)
 	}
+}
+
+// Set up glog with options from configuration file
+func updateLogOptions() error {
+	if err := cos.CreateDir(Conf.Log.Dir); err != nil {
+		return fmt.Errorf("failed to create log dir %q, err: %v", Conf.Log.Dir, err)
+	}
+	glog.SetLogDir(Conf.Log.Dir)
+
+	if Conf.Log.Level != "" {
+		v := flag.Lookup("v").Value
+		if v == nil {
+			return fmt.Errorf("nil -v Value")
+		}
+		if err := v.Set(Conf.Log.Level); err != nil {
+			return fmt.Errorf("failed to set log level = %s, err: %v", Conf.Log.Level, err)
+		}
+	}
+	return nil
+}
+
+func installSignalHandler() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-c
+		os.Exit(0)
+	}()
+}
+
+func printVer() {
+	fmt.Printf("version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)
 }

@@ -7,19 +7,29 @@ redirect_from:
  - /docs/authn.md/
 ---
 
+## AuthN Config
+
+Notice:
+
+* AuthN configuration directory: `$HOME/.config/ais/authn`
+
+The directory usually contains plain-text config `authn.json` and also tokens DB `authn.db`
+
+> For the most updated system filenames and configuration directories, please see [`fname/fname.go`](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go) source.
+
+Examples below use AuthN specific environment variables. Note that all of them are enumerated in:
+
+* [`api/env/authn.go`](https://github.com/NVIDIA/aistore/blob/master/api/env/authn.go)
+
 ## Getting started with AuthN: local-playground session
 
 The following brief and commented sequence assumes that [AIS local playground](getting_started.md#local-playground) is up and running.
-
-Examples below use AuthN specific environment variables. Note that all of them are enumerated in
-
-* [`api/env/authn.go`](https://github.com/NVIDIA/aistore/blob/master/api/env/authn.go)
 
 ```console
 # 1. Login as administrator (and note that admin user and password can be only
 #    provisioned at AuthN deployment time and can never change)
 $ ais auth login admin -p admin
-Token(/root/.config/ais/auth.token):
+Token(/root/.config/ais/cli/auth.token):
 ...
 
 # 2. Connect AIS cluster to *this* authentication server (note that a single AuthN can be shared my multiple AIS clusters)
@@ -72,7 +82,7 @@ new-user Guest-myclu
 
 # 5. Login as `new-user` (added above) and save the token separately as `/tmp/new-user.token`
 #    Note that by default the token for a logged-in user will be saved in the
-#    $HOME/.config/ais directory
+#    $HOME/.config/ais/cli directory
 #    (which is always checked if `AIS_AUTHN_TOKEN_FILE` environment is not specified)
 
 $ ais auth login new-user -p 12345 -f /tmp/new-user.token

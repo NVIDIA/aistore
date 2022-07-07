@@ -59,8 +59,7 @@ For convenience, the CLI prints out the generated token so it can be copied and 
 
 ```console
 $ ais auth login -p admin admin
-Token(/home/ubuntu/.config/ais/auth.token):
-eyJhbGciOiJIUuI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiZThwaXJlcyI6IjIwMjAtMDYtMTFUMTY6MzU6MDAuODQyNzMzNjU1LTA3OjAwIiwidXNlcm5hbWUiOiJhZG1pbiJ9.ppyMR8EE37M9O9Kl9ybyB7CE0fq6hIwL3Sa-5OUea8I
+Token(/home/ubuntu/.config/ais/cli/auth.token):
 ```
 
 ### Generate a token to a file
@@ -78,8 +77,7 @@ Token saved to ./admin.token
 
 $ # Log in as a regular user
 $ ais auth login -p pass user
-Token(/home/ubuntu/.config/ais/auth.token):
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1Z...
+Token(/home/ubuntu/.config/ais/cli/auth.token)
 
 $ # Create bucket as a regular user
 $ ais bucket create ais://bck1
@@ -240,7 +238,8 @@ k5zAzdhbr       local   GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS
 `ais auth login [-p USER_PASS] USER_NAME [--expire EXPIRATION_TIME]`
 
 Issue a token for a user.
-After successful login, the user's token is saved to CLI configuration directory (typically `~/.config/ais/`) with a filename `auth.token`.
+After successful login, the user's token is saved to CLI configuration directory (typically `~/.config/ais/cli/`) under `auth.token` filename.
+
 Subsequent `ais` commands automatically load and use the token for requests to the AIS cluster.
 The saved token can be used by other applications, like `curl`.
 Please see [AuthN documentation](/docs/authn.md) for how to use AuthN API directly.

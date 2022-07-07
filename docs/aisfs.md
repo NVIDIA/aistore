@@ -170,9 +170,9 @@ allowing for multiple buckets to be mounted with different configurations.
 If the corresponding JSON file is not found during startup, one will be generated with
 the default parameter values.
 
-Notice the **configuration location**: `$HOME/.config/ais`.
+Notice the default **configuration location**: `$HOME/.config/ais/aisfs`.
 
-There in the `$HOME/.config/ais` directory you will find all the `<bucket>.aisfs.mount.json` files
+There in the `$HOME/.config/ais/aisfs` directory you will find all the `<bucket>.aisfs.mount.json` files
 as well as:
 * other AIS apps' configs (e.g., CLI)
 * the current (logged-in) user authentication token.

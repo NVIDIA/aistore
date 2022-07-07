@@ -320,7 +320,6 @@ func loginUserHandler(c *cli.Context) (err error) {
 	}
 
 	tokenPath := parseStrFlag(c, tokenFileFlag)
-	userPathUsed := tokenPath != ""
 	if tokenPath == "" {
 		tokenPath = filepath.Join(config.ConfigDir, fname.Token)
 	}
@@ -334,12 +333,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 		fmt.Fprintf(c.App.Writer, "Token:\n%s\n", token.Token)
 		return fmt.Errorf(tokenSaveFailFmt, err)
 	}
-
-	if userPathUsed {
-		fmt.Fprintf(c.App.Writer, "Token saved to %s\n", tokenPath)
-	} else {
-		fmt.Fprintf(c.App.Writer, "Token(%s):\n%s\n", tokenPath, token.Token)
-	}
+	fmt.Fprintf(c.App.Writer, "Token saved to %s\n", tokenPath)
 	return nil
 }
 

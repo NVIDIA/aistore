@@ -83,10 +83,13 @@ Other CLI documentation:
 
 Notice:
 
-* CLI configuration directory: `$HOME/.config/ais`
+* CLI configuration directory: `$HOME/.config/ais/cli`
 * CLI configuration filename: `cli.json`
 
-When used the very first time, *or* if the `$HOME/.config/ais/cli.json` does not exist, the latter will be created with default parameters:
+> For the most updated system filenames and configuration directories, please see [`fname/fname.go`](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go) source.
+
+
+When used the very first time, *or* if the `$HOME/.config/ais/cli/cli.json` does not exist, the latter will be created with default parameters:
 
 ```json
 {

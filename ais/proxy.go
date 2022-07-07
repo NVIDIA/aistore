@@ -315,6 +315,7 @@ func (p *proxy) recvCluMeta(cluMeta *cluMeta, action, caller string) (err error)
 }
 
 // stop proxy runner and return => rungroup.run
+// TODO: write shutdown-marker
 func (p *proxy) Stop(err error) {
 	var (
 		s         string
@@ -2391,7 +2392,6 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if !p.ensureIntraControl(w, r, true /* from primary */) {
 				return
 			}
-			writeShutdownMarker()
 			p.Stop(&errNoUnregister{msg.Action})
 			return
 		}
@@ -2468,7 +2468,6 @@ func (p *proxy) unreg(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg
 		}
 		cleanupConfigDir(p.Name(), keepInitialConfig)
 	}
-	writeShutdownMarker()
 	p.Stop(&errNoUnregister{msg.Action})
 }
 

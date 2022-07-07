@@ -458,6 +458,7 @@ func (t *target) initRecvHandlers() {
 }
 
 // stop gracefully
+// TODO: write shutdown-marker
 func (t *target) Stop(err error) {
 	// NOTE: vs metasync
 	t.regstate.Lock()

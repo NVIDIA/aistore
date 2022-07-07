@@ -6,22 +6,20 @@ package env
 
 var (
 	AIS = struct {
-		Endpoint          string
-		ShutdownMarkerDir string
-		IsPrimary         string
-		PrimaryID         string
-		SkipVerifyCrt     string
-		UseHTTPS          string
-		NumTarget         string
-		NumProxy          string
-		K8sPod            string
+		Endpoint      string
+		IsPrimary     string
+		PrimaryID     string
+		SkipVerifyCrt string
+		UseHTTPS      string
+		NumTarget     string
+		NumProxy      string
+		K8sPod        string
 	}{
-		Endpoint:          "AIS_ENDPOINT",
-		IsPrimary:         "AIS_IS_PRIMARY",
-		PrimaryID:         "AIS_PRIMARY_ID",
-		SkipVerifyCrt:     "AIS_SKIP_VERIFY_CRT",
-		UseHTTPS:          "AIS_USE_HTTPS",
-		ShutdownMarkerDir: "AIS_SHUTDOWN_MARKER_DIR",
+		Endpoint:      "AIS_ENDPOINT",
+		IsPrimary:     "AIS_IS_PRIMARY",
+		PrimaryID:     "AIS_PRIMARY_ID",
+		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
+		UseHTTPS:      "AIS_USE_HTTPS",
 
 		// Env variables used for tests or CI
 		NumTarget: "NUM_TARGET",

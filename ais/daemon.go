@@ -134,8 +134,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		cos.ExitLogf(erfm, "local-config")
 	}
 
-	// Cleanup shutdown marker if exists.
-	deleteShutdownMarker()
+	// TODO: detect graceful shutdown, delete shutdown marker
 
 	config = &cmn.Config{}
 	err = cmn.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)

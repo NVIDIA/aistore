@@ -11,7 +11,7 @@ redirect_from:
 
 AIStore stores, maintains, and utilizes a number of system files that serve a variety of different purposes.
 
-> For the most recently updated list of system filenames, please see [`fname/fname.go`](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go) source.
+> For the most recently updated system filenames and configuration directories, please see [`fname/fname.go`](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go) source.
 
 This section tries to enumerate the *system files* and briefly describe their respective usages.
 
@@ -37,7 +37,7 @@ Thirdly, there are also AIS components and tools, such as [AIS authentication se
 | `authn.json` | AuthN server configuration |
 | `authn.db` | Registered clusters, a token blacklist, user roles, user credentials and permissions |
 
-And on the machine where you run AIS CLI expect to see the following two files (by default, under  `~/.config/ais/`):
+And on the machine where you run AIS CLI expect to see the following two files (by default, under  `~/.config/ais/cli/`):
 
 | Name | Description |
 | --- | --- |

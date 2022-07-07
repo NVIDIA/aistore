@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/aisfs/fs"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -116,7 +117,7 @@ func (c *Config) writeTo(srvCfg *fs.ServerConfig) {
 func loadConfig(bucket string) (cfg *Config, err error) {
 	var (
 		configFname = bucket + ".aisfs.mount.json"
-		configDir   = jsp.DefaultAppConfigDir()
+		configDir   = cos.HomeConfigDir(fname.HomeAisFS) // $HOME/.config/ais/aisfs
 	)
 	cfg = &Config{}
 	if err = jsp.LoadAppConfig(configDir, configFname, &cfg); err != nil {

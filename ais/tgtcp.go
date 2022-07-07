@@ -385,7 +385,6 @@ func (t *target) unreg(action string, opts *apc.ActValRmNode) {
 	daemon.stopping.Store(true)
 	t.regstate.Unlock()
 
-	writeShutdownMarker()
 	if action == apc.ActShutdown {
 		debug.Assert(!opts.NoShutdown)
 		t.Stop(&errNoUnregister{action})

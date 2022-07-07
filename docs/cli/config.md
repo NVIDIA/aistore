@@ -225,7 +225,7 @@ timeout.http_timeout             0s
 timeout.tcp_timeout              60s
 
 $ ais config cli show --path
-/home/user/.config/ais/cli.json
+/home/user/.ais/cli/cli.json
 ```
 
 ### Change CLI configuration

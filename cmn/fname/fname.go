@@ -1,10 +1,18 @@
-// Package fname contains filename constants
+// Package fname contains filename constants and common system directories
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package fname
 
-// See also: env/* for common environment variables
+// See also: api/env for common environment variables
+
+const (
+	HomeConfigsDir = ".config" // join(cos.HomeDir(), HomeConfigsDir)
+	HomeAIS        = ".ais"    // join(cos.HomeDir(), HomeConfigsDir, HomeAisDir)
+	HomeCLI        = "cli"     // ditto
+	HomeAuthN      = "authn"
+	HomeAisFS      = "aisfs"
+)
 
 const (
 	// aisnode config
@@ -26,17 +34,14 @@ const (
 	// CLI config
 	CliConfig = "cli.json" // see jsp/app.go
 
-	// AuthN config and DB
+	// AuthN: config and DB
 	AuthNConfig = "authn.json"
 	AuthDB      = "authn.db"
 
 	// Token
 	Token = "auth.token"
 
-	// Markers
-
-	ShutdownMarker = ".ais.shutdown"
-
+	// Markers: per mountpath
 	MarkersDir          = ".ais.markers"
 	ResilverMarker      = "resilver"
 	RebalanceMarker     = "rebalance"

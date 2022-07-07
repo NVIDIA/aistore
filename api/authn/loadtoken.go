@@ -25,8 +25,9 @@ func LoadToken(tokenFile string) string {
 		tokenFile = os.Getenv(env.AuthN.TokenFile)
 	}
 	if tokenFile == "" {
-		// default config location
-		tokenFile = filepath.Join(jsp.DefaultAppConfigDir(), fname.Token)
+		// when generated via CLI (and without the `-f` option) - the location:
+		// $HOME/.config/ais/cli/<fname.Token>
+		tokenFile = filepath.Join(cos.HomeConfigDir(fname.HomeCLI), fname.Token)
 		mustLoad = false
 	}
 	_, err := jsp.LoadMeta(tokenFile, &token)
