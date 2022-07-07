@@ -8,7 +8,7 @@ package fname
 
 const (
 	HomeConfigsDir = ".config" // join(cos.HomeDir(), HomeConfigsDir)
-	HomeAIS        = ".ais"    // join(cos.HomeDir(), HomeConfigsDir, HomeAisDir)
+	HomeAIS        = "ais"     // join(cos.HomeDir(), HomeConfigsDir, HomeAisDir)
 	HomeCLI        = "cli"     // ditto
 	HomeAuthN      = "authn"
 	HomeAisFS      = "aisfs"
