@@ -293,14 +293,11 @@ func (h *hserv) userLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	userID := apiItems[0]
 	pass := msg.Password
-	if glog.V(4) {
-		glog.Infof("Login user %q", userID)
-	}
 
-	tokenString, err := h.mgr.issueToken(userID, pass, msg.ExpiresIn)
+	tokenString, err := h.mgr.issueToken(userID, pass, msg)
 	if err != nil {
-		glog.Errorf("Failed to generate token: %v\n", err)
-		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		glog.Errorf("Failed to generate token for user %q: %v\n", userID, err)
+		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
 

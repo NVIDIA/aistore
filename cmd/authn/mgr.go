@@ -106,8 +106,8 @@ func (m *mgr) updateUser(userID string, updateReq *authn.User) error {
 	if len(updateReq.Roles) != 0 {
 		uInfo.Roles = updateReq.Roles
 	}
-	uInfo.ClusterACLs = MergeClusterACLs(uInfo.ClusterACLs, updateReq.ClusterACLs)
-	uInfo.BucketACLs = MergeBckACLs(uInfo.BucketACLs, updateReq.BucketACLs)
+	uInfo.ClusterACLs = mergeClusterACLs(uInfo.ClusterACLs, updateReq.ClusterACLs, "")
+	uInfo.BucketACLs = mergeBckACLs(uInfo.BucketACLs, updateReq.BucketACLs, "")
 
 	return m.db.Set(usersCollection, userID, uInfo)
 }
@@ -126,8 +126,8 @@ func (m *mgr) lookupUser(userID string) (*authn.User, error) {
 		if err != nil {
 			continue
 		}
-		uInfo.ClusterACLs = MergeClusterACLs(uInfo.ClusterACLs, rInfo.ClusterACLs)
-		uInfo.BucketACLs = MergeBckACLs(uInfo.BucketACLs, rInfo.BucketACLs)
+		uInfo.ClusterACLs = mergeClusterACLs(uInfo.ClusterACLs, rInfo.ClusterACLs, "")
+		uInfo.BucketACLs = mergeBckACLs(uInfo.BucketACLs, rInfo.BucketACLs, "")
 	}
 
 	return uInfo, nil
@@ -193,8 +193,8 @@ func (m *mgr) updateRole(role string, updateReq *authn.Role) error {
 	if len(updateReq.Roles) != 0 {
 		rInfo.Roles = updateReq.Roles
 	}
-	rInfo.ClusterACLs = MergeClusterACLs(rInfo.ClusterACLs, updateReq.ClusterACLs)
-	rInfo.BucketACLs = MergeBckACLs(rInfo.BucketACLs, updateReq.BucketACLs)
+	rInfo.ClusterACLs = mergeClusterACLs(rInfo.ClusterACLs, updateReq.ClusterACLs, "")
+	rInfo.BucketACLs = mergeBckACLs(rInfo.BucketACLs, updateReq.BucketACLs, "")
 
 	return m.db.Set(rolesCollection, role, rInfo)
 }
@@ -278,7 +278,7 @@ func (m *mgr) cluLookup(cluID, cluAlias string) string {
 		return ""
 	}
 	for cid, cInfo := range clus {
-		if cid == cluID || cid == cluAlias {
+		if cid != "" && (cid == cluID || cid == cluAlias) {
 			return cid
 		}
 		if cluAlias == "" {
@@ -371,13 +371,15 @@ func (m *mgr) delCluster(cluID string) error {
 // already generated and is not expired yet the existing token is returned.
 // Token includes user ID, permissions, and token expiration time.
 // If a new token was generated then it sends the proxy a new valid token list
-func (m *mgr) issueToken(userID, pwd string, ttl *time.Duration) (string, error) {
+func (m *mgr) issueToken(userID, pwd string, msg *authn.LoginMsg) (string, error) {
 	var (
 		err     error
 		expires time.Time
 		token   string
 		uInfo   = &authn.User{}
+		cid     string
 	)
+
 	err = m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
 		glog.Error(err)
@@ -385,6 +387,17 @@ func (m *mgr) issueToken(userID, pwd string, ttl *time.Duration) (string, error)
 	}
 	if !isSamePassword(pwd, uInfo.Password) {
 		return "", errInvalidCredentials
+	}
+	if !uInfo.IsAdmin() {
+		if msg.ClusterID == "" {
+			return "", fmt.Errorf("Couldn't issue toke for %q: cluster ID is not set", userID)
+		}
+		cid = m.cluLookup(msg.ClusterID, msg.ClusterID)
+		if cid == "" {
+			return "", cmn.NewErrNotFound("%s: cluster %q", svcName, msg.ClusterID)
+		}
+		uInfo.ClusterACLs = mergeClusterACLs(make([]*authn.CluACL, 0, len(uInfo.ClusterACLs)), uInfo.ClusterACLs, cid)
+		uInfo.BucketACLs = mergeBckACLs(make([]*authn.BckACL, 0, len(uInfo.BucketACLs)), uInfo.BucketACLs, cid)
 	}
 
 	// update ACLs with roles's ones
@@ -394,8 +407,8 @@ func (m *mgr) issueToken(userID, pwd string, ttl *time.Duration) (string, error)
 		if err != nil {
 			continue
 		}
-		uInfo.ClusterACLs = MergeClusterACLs(uInfo.ClusterACLs, rInfo.ClusterACLs)
-		uInfo.BucketACLs = MergeBckACLs(uInfo.BucketACLs, rInfo.BucketACLs)
+		uInfo.ClusterACLs = mergeClusterACLs(uInfo.ClusterACLs, rInfo.ClusterACLs, cid)
+		uInfo.BucketACLs = mergeBckACLs(uInfo.BucketACLs, rInfo.BucketACLs, cid)
 	}
 
 	// generate token
@@ -403,8 +416,8 @@ func (m *mgr) issueToken(userID, pwd string, ttl *time.Duration) (string, error)
 	defer Conf.RUnlock()
 	issued := time.Now()
 	expDelta := time.Duration(Conf.Server.ExpirePeriod)
-	if ttl != nil {
-		expDelta = *ttl
+	if msg.ExpiresIn != nil {
+		expDelta = *msg.ExpiresIn
 	}
 	if expDelta == 0 {
 		expDelta = foreverTokenTime

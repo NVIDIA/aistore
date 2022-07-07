@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -92,7 +93,18 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 		t.Errorf("Expected %d users but found %d", len(users)+2, len(srvUsers))
 	}
 
-	token, err := mgr.issueToken(username, userpass, nil)
+	clu := authn.CluACL{
+		ID:    "ABCD",
+		Alias: "cluster-test",
+		URLs:  []string{"http://localhost:8080"},
+	}
+	if err := mgr.db.Set(clustersCollection, clu.ID, clu); err != nil {
+		t.Error(err)
+	}
+	defer mgr.delCluster(clu.ID)
+
+	loginMsg := &authn.LoginMsg{ClusterID: clu.Alias}
+	token, err := mgr.issueToken(username, userpass, loginMsg)
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", username, err)
 	}
@@ -106,7 +118,7 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 	if len(srvUsers) != len(users)+1 {
 		t.Errorf("Expected %d users but found %d", len(users)+1, len(srvUsers))
 	}
-	token, err = mgr.issueToken(username, userpass, nil)
+	token, err = mgr.issueToken(username, userpass, loginMsg)
 	if err == nil {
 		t.Errorf("Token issued for deleted user  %s: %v", username, token)
 	} else if err != errInvalidCredentials {
@@ -141,9 +153,20 @@ func TestToken(t *testing.T) {
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)
 
+	clu := authn.CluACL{
+		ID:    "ABCD",
+		Alias: "cluster-test",
+		URLs:  []string{"http://localhost:8080"},
+	}
+	if err := mgr.db.Set(clustersCollection, clu.ID, clu); err != nil {
+		t.Error(err)
+	}
+	defer mgr.delCluster(clu.ID)
+
 	// correct user creds
 	shortExpiration := 2 * time.Second
-	token, err = mgr.issueToken(users[1], passs[1], &shortExpiration)
+	loginMsg := &authn.LoginMsg{ClusterID: clu.Alias, ExpiresIn: &shortExpiration}
+	token, err = mgr.issueToken(users[1], passs[1], loginMsg)
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
@@ -156,7 +179,8 @@ func TestToken(t *testing.T) {
 	}
 
 	// incorrect user creds
-	tokenInval, err := mgr.issueToken(users[1], passs[0], nil)
+	loginMsg = &authn.LoginMsg{}
+	tokenInval, err := mgr.issueToken(users[1], passs[0], loginMsg)
 	if tokenInval != "" || err == nil {
 		t.Errorf("Some token generated for incorrect user creds: %v", tokenInval)
 	}
@@ -167,5 +191,439 @@ func TestToken(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	if !tk.Expires.Before(time.Now()) {
 		t.Fatalf("Token must be expired: %s", token)
+	}
+}
+
+func TestMergeCluACLS(t *testing.T) {
+	tests := []struct {
+		title    string
+		cluFlt   string
+		toACLs   cluACLList
+		fromACLs cluACLList
+		resACLs  cluACLList
+	}{
+		{
+			title: "The same lists",
+			toACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 20,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 20,
+				},
+			},
+			resACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 20,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+			},
+		},
+		{
+			title: "Update permissions only",
+			toACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 20,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 40,
+				},
+			},
+			resACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 40,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+			},
+		},
+		{
+			title: "Append new cluster",
+			toACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 20,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.CluACL{
+				{
+					ID:     "abcde",
+					Alias:  "third",
+					Access: 40,
+				},
+				{
+					ID:     "hijk",
+					Alias:  "fourth",
+					Access: 40,
+				},
+			},
+			resACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 20,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+				{
+					ID:     "abcde",
+					Alias:  "third",
+					Access: 40,
+				},
+				{
+					ID:     "hijk",
+					Alias:  "fourth",
+					Access: 40,
+				},
+			},
+		},
+		{
+			title: "Update permissions for existing cluster and apend new ones",
+			toACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 20,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 40,
+				},
+				{
+					ID:     "abcde",
+					Alias:  "third",
+					Access: 60,
+				},
+			},
+			resACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 40,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+				{
+					ID:     "abcde",
+					Alias:  "third",
+					Access: 60,
+				},
+			},
+		},
+		{
+			title:  "Append only 'abcde' cluster",
+			cluFlt: "abcde",
+			toACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 20,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.CluACL{
+				{
+					ID:     "abcde",
+					Alias:  "third",
+					Access: 40,
+				},
+				{
+					ID:     "hijk",
+					Alias:  "fourth",
+					Access: 40,
+				},
+			},
+			resACLs: []*authn.CluACL{
+				{
+					ID:     "1234",
+					Alias:  "one",
+					Access: 20,
+				},
+				{
+					ID:     "5678",
+					Alias:  "second",
+					Access: 20,
+				},
+				{
+					ID:     "abcde",
+					Alias:  "third",
+					Access: 40,
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		res := mergeClusterACLs(test.toACLs, test.fromACLs, test.cluFlt)
+		for i, r := range res {
+			if r.String() != test.resACLs[i].String() || r.Access != test.resACLs[i].Access {
+				t.Errorf("%s[filter: %s]: %v[%v] != %v[%v]", test.title, test.cluFlt, r, r.Access, test.resACLs[i], test.resACLs[i].Access)
+			}
+		}
+	}
+}
+
+func newBck(name, provider, uuid string) cmn.Bck {
+	return cmn.Bck{
+		Name:     name,
+		Provider: provider,
+		Ns:       cmn.Ns{UUID: uuid},
+	}
+}
+
+func TestMergeBckACLS(t *testing.T) {
+	tests := []struct {
+		title    string
+		cluFlt   string
+		toACLs   bckACLList
+		fromACLs bckACLList
+		resACLs  bckACLList
+	}{
+		{
+			title: "Nothing to update",
+			toACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+			},
+			resACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 20,
+				},
+			},
+		},
+		{
+			title: "Update permissions only",
+			toACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 40,
+				},
+			},
+			resACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 40,
+				},
+			},
+		},
+		{
+			title: "Append new buckets",
+			toACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 30,
+				},
+				{
+					Bck:    newBck("bck", "aws", "5678"),
+					Access: 40,
+				},
+				{
+					Bck:    newBck("bck1", "ais", "1234"),
+					Access: 50,
+				},
+			},
+			resACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 30,
+				},
+				{
+					Bck:    newBck("bck", "aws", "5678"),
+					Access: 40,
+				},
+				{
+					Bck:    newBck("bck1", "ais", "1234"),
+					Access: 50,
+				},
+			},
+		},
+		{
+			title: "Update permissions for existing buckets and apend new ones",
+			toACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck2", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 70,
+				},
+			},
+			resACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 70,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck2", "ais", "1234"),
+					Access: 20,
+				},
+			},
+		},
+		{
+			title:  "Append and update buckets of '5678' cluster only",
+			cluFlt: "5678",
+			toACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 20,
+				},
+			},
+			fromACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck2", "ais", "5678"),
+					Access: 60,
+				},
+				{
+					Bck:    newBck("bck2", "ais", "1234"),
+					Access: 70,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 90,
+				},
+			},
+			resACLs: []*authn.BckACL{
+				{
+					Bck:    newBck("bck", "ais", "1234"),
+					Access: 20,
+				},
+				{
+					Bck:    newBck("bck", "ais", "5678"),
+					Access: 90,
+				},
+				{
+					Bck:    newBck("bck2", "ais", "5678"),
+					Access: 60,
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		res := mergeBckACLs(test.toACLs, test.fromACLs, test.cluFlt)
+		for i, r := range res {
+			if !r.Bck.Equal(&test.resACLs[i].Bck) || r.Access != test.resACLs[i].Access {
+				t.Errorf("%s[filter: %s]: %v[%v] != %v[%v]", test.title, test.cluFlt, r.Bck, r.Access, test.resACLs[i], test.resACLs[i].Access)
+			}
+		}
 	}
 }

@@ -7,7 +7,7 @@ AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth add role r1 ro --cluster
 AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth set user u1 r1 // IGNORE
 
 echo "/tmp/auth-token.$RANDOM.usr" > /tmp/e2e.user.rand
-tf=`cat /tmp/e2e.user.rand`; ais auth login u1 -p tt -f $tf // IGNORE
+tf=`cat /tmp/e2e.user.rand`; ais auth login u1 -p tt -f $tf --cluster cluster-test // IGNORE
 
 
 AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais bucket create ais://$BUCKET_1 // IGNORE

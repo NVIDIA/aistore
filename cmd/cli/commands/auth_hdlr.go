@@ -43,7 +43,7 @@ const authnUnreachable = `AuthN unreachable at %s. You may need to update AIS CL
 
 var (
 	authFlags = map[string][]cli.Flag{
-		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag, expireFlag},
+		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag, expireFlag, clusterTokenFlag},
 		subcmdAuthUser:       {passwordFlag},
 		flagsAuthRoleAddSet:  {descRoleFlag, clusterRoleFlag, bucketRoleFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
@@ -304,11 +304,17 @@ func loginUserHandler(c *cli.Context) (err error) {
 		expireIn *time.Duration
 		name     = cliAuthnUserName(c)
 		password = cliAuthnUserPassword(c, false)
+		cluID    = parseStrFlag(c, clusterTokenFlag)
 	)
 	if flagIsSet(c, expireFlag) {
 		expireIn = api.Duration(parseDurationFlag(c, expireFlag))
 	}
-	token, err := authn.LoginUser(authParams, name, password, expireIn)
+	if cluID != "" {
+		if _, err := authn.GetRegisteredClusters(authParams, authn.CluACL{ID: cluID}); err != nil {
+			return err
+		}
+	}
+	token, err := authn.LoginUser(authParams, name, password, cluID, expireIn)
 	if err != nil {
 		return err
 	}

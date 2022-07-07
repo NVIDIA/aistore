@@ -61,9 +61,9 @@ func DeleteUser(baseParams api.BaseParams, userID string) error {
 // Authorize a user and return a user token in case of success.
 // The token expires in `expire` time. If `expire` is `nil` the expiration
 // time is set by AuthN (default AuthN expiration time is 24 hours)
-func LoginUser(baseParams api.BaseParams, userID, pass string, expire *time.Duration) (token *TokenMsg, err error) {
+func LoginUser(baseParams api.BaseParams, userID, pass, clusterID string, expire *time.Duration) (token *TokenMsg, err error) {
 	baseParams.Method = http.MethodPost
-	rec := LoginMsg{Password: pass, ExpiresIn: expire}
+	rec := LoginMsg{Password: pass, ExpiresIn: expire, ClusterID: clusterID}
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{

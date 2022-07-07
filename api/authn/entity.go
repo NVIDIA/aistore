@@ -40,6 +40,7 @@ type (
 	LoginMsg struct {
 		Password  string         `json:"password"`
 		ExpiresIn *time.Duration `json:"expires_in"`
+		ClusterID string         `json:"cluster_id"`
 	}
 	RegisteredClusters struct {
 		M map[string]*CluACL `json:"clusters,omitempty"`
@@ -57,6 +58,9 @@ type (
 //////////
 // User //
 //////////
+
+// IsAdmin returns true if the user is an admin or super-user,
+// i.e. the user has the full access to everything.
 func (uInfo *User) IsAdmin() bool {
 	for _, r := range uInfo.Roles {
 		if r == AdminRole {
