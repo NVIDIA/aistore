@@ -74,3 +74,4 @@ _site/
 
 # VSCode
 .vscode
+sdk/python/examples/.ipynb_checkpoints/aisio_pytorch_example-checkpoint.ipynb

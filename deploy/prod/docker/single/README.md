@@ -110,8 +110,6 @@ AWS Buckets (28)
 
 **GCP Backend**
 
-> **WARNING**: The following section on `gcp` backend use needs _review_ and may be _outdated_.
-
 The following command deploys a containerized AIS cluster with GCP by providing a volume with the `config file` and a path to the `config`:
 
 ```
