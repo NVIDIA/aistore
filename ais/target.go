@@ -896,8 +896,12 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 				err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
 				t.writeErrSilent(w, r, err, code)
 			} else {
-				err = cmn.NewErrFailedTo(t, "locate remote", apireq.bck, err, code)
-				t.writeErr(w, r, err, code)
+				err = cmn.NewErrFailedTo(t, "HEAD remote", apireq.bck, err, code)
+				if cos.IsParseBool(apireq.query.Get(apc.QparamSilent)) {
+					t.writeErrSilent(w, r, err, code)
+				} else {
+					t.writeErr(w, r, err, code)
+				}
 			}
 			return
 		}
@@ -1634,7 +1638,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 				return 0, aisErr
 			}
 		} else if evict {
-			cos.Assert(lom.Bck().IsRemote())
+			debug.Assert(lom.Bck().IsRemote())
 			t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.LruEvictCount, Value: 1},
 				cos.NamedVal64{Name: stats.LruEvictSize, Value: size},

@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/xact"
@@ -36,9 +35,11 @@ type bckInitArgs struct {
 	bck        *cluster.Bck
 	msg        *apc.ActionMsg
 
-	skipBackend  bool // initialize bucket via `bck.InitNoBackend`
-	createAIS    bool // create ais bucket on the fly
-	lookupRemote bool // handle ErrRemoteBckNotFound to discover _remote_ bucket on the fly (and add to BMD)
+	skipBackend bool // initialize bucket via `bck.InitNoBackend`
+	createAIS   bool // create ais bucket on the fly
+
+	lookupRemote           bool // handle ErrRemoteBckNotFound to discover _remote_ bucket on the fly (and add to BMD)
+	lsDontHeadRemoteBucket bool // when listing objects anonymously (via ListObjsMsg.Flags LsDontHeadRemoteBucket)
 
 	exists bool // true if bucket already exists
 }
@@ -65,19 +66,12 @@ func freeInitBckArgs(a *bckInitArgs) {
 	ibargsPool.Put(a)
 }
 
-/////////////////////////////////////////////
-// lookup and add bucket on the fly        //
-/////////////////////////////////////////////
+//
+// lookup and add buckets on the fly
+//
 
-func lookupRemoteBck(query url.Values, dpq *dpq) bool {
-	if cmn.GCO.Get().Features.IsSet(feat.DontLookupRemoteBck) {
-		return false
-	}
-	if query != nil {
-		debug.Assert(dpq == nil)
-		return !cos.IsParseBool(query.Get(apc.QparamDontLookupRemoteBck))
-	}
-	return !cos.IsParseBool(dpq.dontLookupRemoteBck)
+func shouldLookupRB() bool {
+	return !cmn.GCO.Get().Features.IsSet(feat.DontLookupRemoteBck)
 }
 
 // args.init initializes bucket and checks access permissions.
@@ -298,11 +292,24 @@ func (args *bckInitArgs) getOrigURL() (ourl string) {
 	return
 }
 
-func (args *bckInitArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCode int, err error) {
+// NOTE: alternatively, skip HEAD altogether when lsDontHeadRemoteBucket
+func (args *bckInitArgs) _lookup(bck *cluster.Bck) (hdr http.Header, code int, err error) {
 	q := url.Values{}
 	if bck.IsHTTP() {
 		origURL := args.getOrigURL()
 		q.Set(apc.QparamOrigURL, origURL)
 	}
-	return args.p.headRemoteBck(bck.Bucket(), q)
+	if args.lsDontHeadRemoteBucket {
+		q.Set(apc.QparamSilent, "true")
+	}
+	hdr, code, err = args.p.headRemoteBck(bck.Bucket(), q)
+	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && args.lsDontHeadRemoteBucket {
+		glog.Warningf("proceeding to add cloud bucket %s to the BMD after having failed HEAD request", bck)
+		glog.Warningf("%s properties: using all defaults", bck)
+		hdr = make(http.Header, 2)
+		hdr.Set(apc.HdrBackendProvider, bck.Provider)
+		hdr.Set(apc.HdrBucketVerEnabled, "false")
+		err = nil
+	}
+	return
 }

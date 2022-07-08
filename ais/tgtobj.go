@@ -1003,7 +1003,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 				errCode = http.StatusInternalServerError
 				return
 			}
-			cos.Assert(aoi.hi.partialCksum != nil)
+			debug.Assert(aoi.hi.partialCksum != nil)
 		}
 
 		var (
@@ -1033,7 +1033,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			errCode = http.StatusBadRequest
 			return
 		}
-		cos.Assert(aoi.hi.partialCksum != nil)
+		debug.Assert(aoi.hi.partialCksum != nil)
 		aoi.hi.partialCksum.Finalize()
 		partialCksum := aoi.hi.partialCksum.Clone()
 		if !aoi.cksum.IsEmpty() && !partialCksum.Equal(aoi.cksum) {

@@ -159,8 +159,10 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHeader 
 		cloudProps, present := bmd.Get(backend)
 		debug.Assert(present)
 		bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
-	} else if bck.IsCloud() || bck.IsHTTP() {
-		return fmt.Errorf("creating a bucket for any of the cloud or HTTP providers is not supported")
+	} else if bck.IsHTTP() {
+		return errors.New("creating bucket for HTTP provider is not supported")
+	} else if bck.IsCloud() {
+		return fmt.Errorf("creating bucket for %q (cloud) provider is not supported", bck.Provider)
 	} else if bucketProps == nil {
 		bucketProps = defaultBckProps(bckPropsArgs{bck: bck})
 	}
@@ -1004,7 +1006,7 @@ func (p *proxy) undoCreateBucket(msg *apc.ActionMsg, bck *cluster.Bck) {
 		bcks:  []*cluster.Bck{bck},
 	}
 	if _, err := p.owner.bmd.modify(ctx); err != nil {
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 	}
 }
 
@@ -1018,7 +1020,7 @@ func (p *proxy) undoUpdateCopies(msg *apc.ActionMsg, bck *cluster.Bck, propsToUp
 		bcks:          []*cluster.Bck{bck},
 	}
 	if _, err := p.owner.bmd.modify(ctx); err != nil {
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 	}
 }
 

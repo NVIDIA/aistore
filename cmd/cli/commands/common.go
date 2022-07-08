@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file contains common constants and variables used in other files.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -400,6 +400,10 @@ var (
 	listCachedFlag = cli.BoolFlag{
 		Name:  "cached",
 		Usage: "list only those objects from a remote bucket that are present (ie., cached) in the cluster",
+	}
+	listAnonymousFlag = cli.BoolFlag{
+		Name:  "anonymous",
+		Usage: "list anonymously public-access Cloud buckets that may disallow certain operations (e.g., HEAD)",
 	}
 	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}

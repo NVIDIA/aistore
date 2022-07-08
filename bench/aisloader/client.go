@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 
 package aisloader
@@ -383,7 +383,7 @@ func listObjCallback(ctx *api.ProgressContext) {
 func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]string, error) {
 	msg := &apc.ListObjsMsg{Prefix: prefix, PageSize: apc.DefaultListPageSizeAIS}
 	ctx := api.NewProgressContext(listObjCallback, longListTime)
-	objList, err := api.ListObjectsWithOpts(baseParams, bck, msg, 0, ctx, false)
+	objList, err := api.ListObjectsWithOpts(baseParams, bck, msg, 0, ctx)
 	if err != nil {
 		return nil, err
 	}

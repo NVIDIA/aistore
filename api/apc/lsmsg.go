@@ -1,6 +1,6 @@
 // Package apc: API constants and message types
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -18,6 +18,24 @@ const (
 	LsDeleted               // include obj-s marked for deletion (TODO)
 	LsArchDir               // expand archives as directories
 	LsNameOnly              // return only object names and statuses (for faster listing)
+
+	//
+	// advanced usage
+	//
+	LsDontLookupRemoteBucket // e.g. handy when evicting objects from AIS
+
+	// Skip HEAD(remote bucket) when listing objects in buckets that aren't
+	// (yet) present in the BMD. Done primarily to support GCP buckets with
+	// ACL policies that allow public anonymous access.
+	//
+	// It appears that sometimes those policies do respond to the HEAD,
+	// while other times they simply don't (failing with 401 or 403 status).
+	// Note that we normally try HEAD() to confirm the bucket's existence
+	// and, secondly, to obtain its properties - versioning, in particular.
+	//
+	// See also:
+	// * at https://cloud.google.com/storage/docs/access-control/making-data-public
+	LsDontHeadRemoteBucket
 
 	// cache list-objects results and use this cache to speed-up
 	UseListObjsCache

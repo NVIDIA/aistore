@@ -356,14 +356,12 @@ func (reqParams *ReqParams) waitForAsyncReqComplete(action string, msg *apc.BckS
 // See also: `api.ListObjectsInvalidateCache`
 // See also: `api.ListObjectsPage`
 func ListObjects(baseParams BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObjects uint) (*cmn.BucketList, error) {
-	return ListObjectsWithOpts(baseParams, bck, lsmsg, numObjects, nil, false)
+	return ListObjectsWithOpts(baseParams, bck, lsmsg, numObjects, nil)
 }
 
-// additional (advance-usage) arguments include:
-// - "progress-bar" context
-// - option to override the system default and _not_ try to lookup remote bucket
+// additional argument may include "progress-bar" context
 func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObjects uint,
-	progress *ProgressContext, dontLookupRemote bool) (bckList *cmn.BucketList, err error) {
+	progress *ProgressContext) (bckList *cmn.BucketList, err error) {
 	var (
 		q    url.Values
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -378,9 +376,6 @@ func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, lsmsg *apc.ListObjs
 	baseParams.Method = http.MethodGet
 	if lsmsg == nil {
 		lsmsg = &apc.ListObjsMsg{}
-	}
-	if dontLookupRemote {
-		q = url.Values{apc.QparamDontLookupRemoteBck: []string{"true"}}
 	}
 	q = bck.AddToQuery(q)
 	bckList = &cmn.BucketList{}

@@ -250,8 +250,7 @@ const (
 	// or errors (e.g., attach invalid mountpath)
 	QparamForce = "frc"
 
-	QparamDontLookupRemoteBck = "dntlrb" // true: do not try to lookup remote buckets on the fly (overrides the default)
-	QparamDontResilver        = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
+	QparamDontResilver = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
 
 	// dsort
 	QparamTotalCompressedSize       = "tcs"

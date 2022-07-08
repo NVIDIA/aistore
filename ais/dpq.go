@@ -24,7 +24,6 @@ type dpq struct {
 	origURL             string // ht://url->
 	appendTy, appendHdl string // APPEND { apc.AppendOp, ... }
 	owt                 string // object write transaction { OwtPut, ... }
-	dontLookupRemoteBck string // (as the name implies)
 }
 
 var (
@@ -99,8 +98,6 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 			}
 		case apc.QparamOWT:
 			dpq.owt = value
-		case apc.QparamDontLookupRemoteBck:
-			dpq.dontLookupRemoteBck = value
 		default:
 			err = errors.New("failed to fast-parse [" + rawQuery + "]")
 			return

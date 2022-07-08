@@ -68,6 +68,7 @@ var (
 			maxPagesFlag,
 			startAfterFlag,
 			listCachedFlag,
+			listAnonymousFlag,
 			listArchFlag,
 			nameOnlyFlag,
 		},

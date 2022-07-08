@@ -282,9 +282,9 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 		err     error
 	)
 	if locationIsAIS {
-		objList, err = p.listObjectsAIS(bck, lsmsg)
+		objList, err = p.listObjectsAIS(bck, &lsmsg)
 	} else {
-		objList, err = p.listObjectsRemote(bck, lsmsg)
+		objList, err = p.listObjectsRemote(bck, &lsmsg)
 	}
 	if err != nil {
 		p.writeErr(w, r, err)

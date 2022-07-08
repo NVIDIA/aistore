@@ -358,11 +358,14 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 func (m *ioContext) del(opts ...int) {
 	const maxErrCount = 100
 	var (
-		httpErr          *cmn.ErrHTTP
-		optCnt           = -1   // (variadic opts)
-		dontLookupRemote = true // (ditto)
-		baseParams       = tutils.BaseAPIParams()
-		lsmsg            = &apc.ListObjsMsg{Prefix: m.prefix, Props: apc.GetPropsName}
+		httpErr    *cmn.ErrHTTP
+		optCnt     = -1 // (variadic opts)
+		baseParams = tutils.BaseAPIParams()
+		lsmsg      = &apc.ListObjsMsg{
+			Prefix: m.prefix,
+			Props:  apc.GetPropsName,
+			Flags:  apc.LsDontLookupRemoteBucket, // don't lookup unless overridden via variadic (see below)
+		}
 	)
 	// checks, params
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(m.bck))
@@ -373,11 +376,11 @@ func (m *ioContext) del(opts ...int) {
 	if len(opts) > 0 {
 		optCnt = opts[0]
 		if len(opts) > 1 {
-			dontLookupRemote = false
+			lsmsg.Flags = 0
 		}
 	}
 	// list
-	objList, err := api.ListObjectsWithOpts(baseParams, m.bck, lsmsg, 0, nil, dontLookupRemote)
+	objList, err := api.ListObjects(baseParams, m.bck, lsmsg, 0)
 	if err != nil {
 		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
 			return

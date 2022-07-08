@@ -201,6 +201,9 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 	if flagIsSet(c, listCachedFlag) {
 		msg.SetFlag(apc.LsPresent)
 	}
+	if flagIsSet(c, listAnonymousFlag) {
+		msg.SetFlag(apc.LsDontHeadRemoteBucket)
+	}
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
 	}
@@ -295,14 +298,13 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 			fmt.Fprintln(c.App.Writer)
 		}
 	}
-	ctx := api.NewProgressContext(cb, longCommandTime)
 
-	// retrieve the entire bucket list and print it
-	objList, err := api.ListObjectsWithOpts(defaultAPIParams, bck, msg, uint(limit), ctx, false /*don't-lookup-remote*/)
+	// list all pages up to a limit, show progress
+	ctx := api.NewProgressContext(cb, longCommandTime)
+	objList, err := api.ListObjectsWithOpts(defaultAPIParams, bck, msg, uint(limit), ctx)
 	if err != nil {
 		return err
 	}
-
 	return printObjectProps(c, objList.Entries, objectListFilter, msg.Props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 

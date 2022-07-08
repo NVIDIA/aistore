@@ -280,7 +280,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		clusterConf, ok := conf.(cmn.BackendConfAIS)
-		cos.Assert(ok)
+		debug.Assert(ok)
 		aisCloud := t.backend[apc.ProviderAIS].(*backend.AISBackendProvider)
 		t.writeJSON(w, r, aisCloud.GetInfo(clusterConf), httpdaeWhat)
 	default:
@@ -866,7 +866,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 	if msg.Action == apc.ActAttachRemote || msg.Action == apc.ActDetachRemote {
 		// NOTE: apply the entire config: add new and _refresh_ existing
 		aisConf, ok := newConfig.Backend.ProviderConf(apc.ProviderAIS)
-		cos.Assert(ok)
+		debug.Assert(ok)
 		aisCloud := t.backend[apc.ProviderAIS].(*backend.AISBackendProvider)
 		err = aisCloud.Apply(aisConf, msg.Action)
 		if err != nil {
