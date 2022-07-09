@@ -24,7 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/docker"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -228,7 +228,7 @@ killRestore:
 // primaryAndTargetCrash kills the primary p[roxy and one random target, verifies the next in
 // line proxy becomes the new primary, restore the target and proxy, restore original primary.
 func primaryAndTargetCrash(t *testing.T) {
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		t.Skip("Skipped because setting new primary URL in command line for docker is not supported")
 	}
 
@@ -549,7 +549,7 @@ func crashAndFastRestore(t *testing.T) {
 }
 
 func joinWhileVoteInProgress(t *testing.T) {
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		t.Skipf("skipping %s (docker is not supported)", t.Name())
 	}
 	var (
@@ -1122,7 +1122,7 @@ func networkFailureTarget(t *testing.T) {
 	targetID := target.ID()
 
 	tlog.Logf("Disconnecting target: %s\n", targetID)
-	oldNetworks, err := containers.DisconnectContainer(targetID)
+	oldNetworks, err := docker.Disconnect(targetID)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForClusterState(
@@ -1135,7 +1135,7 @@ func networkFailureTarget(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Connecting target %s to networks again\n", targetID)
-	err = containers.ConnectContainer(targetID, oldNetworks)
+	err = docker.Connect(targetID, oldNetworks)
 	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForClusterState(
@@ -1159,7 +1159,7 @@ func networkFailureProxy(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Disconnecting proxy: %s\n", proxyID)
-	oldNetworks, err := containers.DisconnectContainer(proxyID)
+	oldNetworks, err := docker.Disconnect(proxyID)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForClusterState(
@@ -1172,7 +1172,7 @@ func networkFailureProxy(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Connecting proxy %s to networks again\n", proxyID)
-	err = containers.ConnectContainer(proxyID, oldNetworks)
+	err = docker.Connect(proxyID, oldNetworks)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForClusterState(
@@ -1204,7 +1204,7 @@ func networkFailurePrimary(t *testing.T) {
 
 	// Disconnect primary
 	tlog.Logf("Disconnecting primary %s from all networks\n", oldPrimaryID)
-	oldNetworks, err := containers.DisconnectContainer(oldPrimaryID)
+	oldNetworks, err := docker.Disconnect(oldPrimaryID)
 	tassert.CheckFatal(t, err)
 
 	// Check smap
@@ -1224,7 +1224,7 @@ func networkFailurePrimary(t *testing.T) {
 
 	// Connect again
 	tlog.Logf("Connecting primary %s to networks again\n", oldPrimaryID)
-	err = containers.ConnectContainer(oldPrimaryID, oldNetworks)
+	err = docker.Connect(oldPrimaryID, oldNetworks)
 	tassert.CheckFatal(t, err)
 
 	// give a little time to original primary, so it picks up the network

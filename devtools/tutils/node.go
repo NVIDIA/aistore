@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/docker"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 )
@@ -307,9 +307,9 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 		pid      int
 	)
 	cmd.Node = node
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		tlog.Logf("Stopping container %s\n", daemonID)
-		err := containers.StopContainer(daemonID)
+		err := docker.Stop(daemonID)
 		return cmd, err
 	}
 
@@ -358,9 +358,9 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 	)
 	tlog.Logf("Shutting down %s\n", node.StringEx())
 	cmd.Node = node
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		tlog.Logf("Stopping container %s\n", daemonID)
-		err = containers.StopContainer(daemonID)
+		err = docker.Stop(daemonID)
 		return
 	}
 
@@ -375,9 +375,9 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 }
 
 func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		tlog.Logf("Restarting %s container %s\n", tag, cmd)
-		return containers.RestartContainer(cmd.Node.ID())
+		return docker.Restart(cmd.Node.ID())
 	}
 
 	if !cos.AnyHasPrefixInSlice("-daemon_id", cmd.Args) {
@@ -560,7 +560,7 @@ func GetRestoreCmd(si *cluster.Snode) RestoreCmd {
 		err error
 		cmd = RestoreCmd{Node: si}
 	)
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		return cmd
 	}
 	cmd.PID, cmd.Cmd, cmd.Args, err = getProcess(si.PubNet.Port)
@@ -611,7 +611,7 @@ retry:
 		} else {
 			tassert.Errorf(t, false, "%s %s not found in %s", cmd.Node.Type(), cmd.Node.ID(), smap.StringEx())
 		}
-		if containers.DockerRunning() {
+		if docker.IsRunning() {
 			if node == nil {
 				err := RestoreNode(cmd, false, cmd.Node.Type())
 				tassert.CheckError(t, err)

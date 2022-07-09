@@ -1,6 +1,6 @@
 // Package aisfs - command-line mounting utility for aisfs.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/aisfs/fs"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/docker"
 	"github.com/urfave/cli"
 )
 
@@ -67,8 +67,8 @@ func discoverClusterURL(c *cli.Context) string {
 		return envURL
 	}
 
-	if containers.DockerRunning() {
-		clustersIDs, err := containers.ClusterIDs()
+	if docker.IsRunning() {
+		clustersIDs, err := docker.ClusterIDs()
 		if err != nil {
 			fmt.Fprintf(c.App.ErrWriter, dockerErrMsgFmt, err, defaultAISDockerURL)
 			fmt.Fprintln(c.App.ErrWriter, setURLMsg)
@@ -76,7 +76,7 @@ func discoverClusterURL(c *cli.Context) string {
 		}
 
 		cos.AssertMsg(len(clustersIDs) > 0, "there should be at least one cluster running when docker is detected")
-		proxyGateway, err := containers.ClusterProxyURL(clustersIDs[0])
+		proxyGateway, err := docker.ClusterEndpoint(clustersIDs[0])
 		if err != nil {
 			fmt.Fprintf(c.App.ErrWriter, dockerErrMsgFmt, err, defaultAISDockerURL)
 			fmt.Fprintln(c.App.ErrWriter, setURLMsg)
@@ -84,7 +84,8 @@ func discoverClusterURL(c *cli.Context) string {
 		}
 
 		if len(clustersIDs) > 1 {
-			fmt.Fprintf(c.App.ErrWriter, "Multiple docker clusters running. Connected to %d via %s.\n", clustersIDs[0], proxyGateway)
+			fmt.Fprintf(c.App.ErrWriter, "Multiple docker clusters running. Connected to %d via %s.\n",
+				clustersIDs[0], proxyGateway)
 			fmt.Fprintln(c.App.ErrWriter, setURLMsg)
 		}
 

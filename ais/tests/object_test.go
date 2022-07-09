@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -25,7 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/docker"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -749,7 +749,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
 	}
 
@@ -962,7 +962,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 
 	m.initWithCleanup()
 
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		t.Skipf("test %q requires write access to xattrs, doesn't work with docker", t.Name())
 	}
 

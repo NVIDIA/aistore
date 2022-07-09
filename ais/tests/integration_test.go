@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/docker"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -878,8 +878,8 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
-	if containers.DockerRunning() {
-		err := containers.DockerCreateMpathDir(0, testMpath)
+	if docker.IsRunning() {
+		err := docker.CreateMpathDir(0, testMpath)
 		tassert.CheckFatal(t, err)
 	} else {
 		err := cos.CreateDir(testMpath)
@@ -887,7 +887,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	}
 
 	defer func() {
-		if !containers.DockerRunning() {
+		if !docker.IsRunning() {
 			os.RemoveAll(testMpath)
 		}
 	}()
@@ -905,7 +905,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 
 	// Remove new mountpath from target
 	tlog.Logf("detach %q from target %s\n", testMpath, target.StringEx())
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		if err := api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/); err != nil {
 			t.Error(err.Error())
 		}
@@ -941,7 +941,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	defer func() {
-		if !containers.DockerRunning() {
+		if !docker.IsRunning() {
 			os.RemoveAll(testMpath)
 		}
 	}()
@@ -949,8 +949,8 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 	// PUT random objects
 	m.puts()
 
-	if containers.DockerRunning() {
-		err := containers.DockerCreateMpathDir(0, testMpath)
+	if docker.IsRunning() {
+		err := docker.CreateMpathDir(0, testMpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
 			mpList, err := api.GetMountpaths(baseParams, target)
@@ -980,8 +980,8 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 	m.gets()
 
 	// Remove new mountpath from all targets
-	if containers.DockerRunning() {
-		err := containers.DockerRemoveMpathDir(0, testMpath)
+	if docker.IsRunning() {
+		err := docker.RemoveMpathDir(0, testMpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
 			if err := api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/); err != nil {

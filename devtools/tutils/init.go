@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/docker"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 )
 
@@ -112,7 +112,7 @@ func InitLocalCluster() {
 		proxyURL    = defaultProxyURL
 	)
 
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		clusterType = ClusterTypeDocker
 		proxyURL = "http://" + primaryHostIP + ":" + port
 	}

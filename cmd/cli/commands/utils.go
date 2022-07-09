@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file contains util functions and types.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -33,7 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/docker"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
@@ -719,8 +719,8 @@ func determineClusterURL(cfg *config.Config) string {
 		return cfg.Cluster.URL
 	}
 
-	if containers.DockerRunning() {
-		clustersIDs, err := containers.ClusterIDs()
+	if docker.IsRunning() {
+		clustersIDs, err := docker.ClusterIDs()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, cfg.Cluster.DefaultDockerHost)
 			return cfg.Cluster.DefaultDockerHost
@@ -728,7 +728,7 @@ func determineClusterURL(cfg *config.Config) string {
 
 		cos.AssertMsg(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
 
-		proxyGateway, err := containers.ClusterProxyURL(clustersIDs[0])
+		proxyGateway, err := docker.ClusterEndpoint(clustersIDs[0])
 		if err != nil {
 			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, cfg.Cluster.DefaultDockerHost)
 			return cfg.Cluster.DefaultDockerHost

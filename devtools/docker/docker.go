@@ -1,8 +1,8 @@
-// Package containers provides common utilities for managing containerized deployments of AIS
+// Packager docker provides common utilities for managing containerized AIS deployments
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package containers
+package docker
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// For container naming
+// naming
 const (
 	prefixStr = "ais"
 	proxyStr  = "_proxy_"
@@ -46,35 +46,8 @@ func init() {
 }
 
 // DockerRunning returns true if docker-based AIStore cluster is detected
-func DockerRunning() bool {
+func IsRunning() bool {
 	return dockerRunning
-}
-
-// ContainerCount is used by clusterHealthCheck to test if any container crashed after
-// a test completes
-func ContainerCount(clusterNumber ...int) (proxyCnt, targetCnt int) {
-	cmd := exec.Command("docker", "ps")
-	bytes, err := cmd.Output()
-	if err != nil {
-		return
-	}
-	var cluster int
-	if len(clusterNumber) != 0 {
-		cluster = clusterNumber[0]
-	}
-
-	lines := strings.Split(string(bytes), "\n")
-	proxyPrefix := prefixStr + strconv.Itoa(cluster) + proxyStr
-	targetPrefix := prefixStr + strconv.Itoa(cluster) + targetStr
-	for _, line := range lines {
-		if strings.Contains(line, proxyPrefix) {
-			proxyCnt++
-		} else if strings.Contains(line, targetPrefix) {
-			targetCnt++
-		}
-	}
-
-	return
 }
 
 func clustersMap() (map[int]int, error) {
@@ -145,11 +118,11 @@ func nodesInCluster(i int, prefix string) (ans []string) {
 	return
 }
 
-// DockerCreateMpathDir creates a directory that will be used as a mountpath for each target in cluster c
-func DockerCreateMpathDir(c int, mpathFQN string) (err error) {
+// CreateMpathDir creates a directory that will be used as a mountpath for each target in cluster c
+func CreateMpathDir(c int, mpathFQN string) (err error) {
 	targetNames := TargetsInCluster(c)
 	for _, target := range targetNames {
-		err = ContainerExec(target, "mkdir", "-p", mpathFQN)
+		err = _exec(target, "mkdir", "-p", mpathFQN)
 		if err != nil {
 			return err
 		}
@@ -157,11 +130,11 @@ func DockerCreateMpathDir(c int, mpathFQN string) (err error) {
 	return nil
 }
 
-// DockerRemoveMpathDir removes a directory named mpathFQN for each target in cluster c
-func DockerRemoveMpathDir(c int, mpathFQN string) (err error) {
+// RemoveMpathDir removes a directory named mpathFQN for each target in cluster c
+func RemoveMpathDir(c int, mpathFQN string) (err error) {
 	targetNames := TargetsInCluster(c)
 	for _, target := range targetNames {
-		err = ContainerExec(target, "rm", "-rf", mpathFQN)
+		err = _exec(target, "rm", "-rf", mpathFQN)
 		if err != nil {
 			return err
 		}
@@ -169,8 +142,7 @@ func DockerRemoveMpathDir(c int, mpathFQN string) (err error) {
 	return nil
 }
 
-// ContainerExec executes a docker exec command for containerName
-func ContainerExec(containerName string, args ...string) error {
+func _exec(containerName string, args ...string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("not enough arguments to execute a command")
 	}
@@ -185,21 +157,21 @@ func ContainerExec(containerName string, args ...string) error {
 	return nil
 }
 
-// StopContainer simulates killing a target or proxy (by given container id)
-func StopContainer(cid string) error {
+// Stop simulates killing a target or proxy (by given container id)
+func Stop(cid string) error {
 	cmd := exec.Command("docker", "stop", cid)
 	return cmd.Run()
 }
 
-// RestartContainer restores previously killed target or proxy with given container id
-func RestartContainer(cid string) error {
+// Restart restores previously killed target or proxy with given container id
+func Restart(cid string) error {
 	cmd := exec.Command("docker", "restart", cid)
 	return cmd.Run()
 }
 
-// DisconnectContainer disconnects specific containerID from all networks.
+// Disconnect disconnects specific containerID from all networks.
 // Returns networks from which the container has been disconnected.
-func DisconnectContainer(containerID string) ([]string, error) {
+func Disconnect(containerID string) ([]string, error) {
 	networks, err := containerNetworkList(containerID)
 	if err != nil {
 		return nil, err
@@ -215,8 +187,8 @@ func DisconnectContainer(containerID string) ([]string, error) {
 	return networks, nil
 }
 
-// ConnectContainer connects specific containerID to all provided networks.
-func ConnectContainer(containerID string, networks []string) error {
+// Connect connects specific containerID to all provided networks.
+func Connect(containerID string, networks []string) error {
 	for _, network := range networks {
 		cmd := exec.Command("docker", "network", "connect", network, containerID)
 		if err := cmd.Run(); err != nil {
@@ -227,7 +199,7 @@ func ConnectContainer(containerID string, networks []string) error {
 	return nil
 }
 
-func ClusterProxyURL(i int) (string, error) {
+func ClusterEndpoint(i int) (string, error) {
 	proxies := ProxiesInCluster(i)
 
 	if len(proxies) == 0 {

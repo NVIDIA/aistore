@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -23,7 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/docker"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -955,7 +955,7 @@ func createECFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objName 
 // Checks that after corrupting one slice it is still possible to recover an object
 // Checks that after corrupting all slices it is not possible to recover an object
 func TestECChecksum(t *testing.T) {
-	if containers.DockerRunning() {
+	if docker.IsRunning() {
 		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
 	}
 

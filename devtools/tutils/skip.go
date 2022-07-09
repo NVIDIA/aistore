@@ -10,7 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/docker"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
@@ -70,7 +70,7 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 			tb.Skipf("%s requires local deployment", tb.Name())
 		}
 	case ClusterTypeDocker:
-		if !containers.DockerRunning() {
+		if !docker.IsRunning() {
 			tb.Skipf("%s requires docker deployment", tb.Name())
 		}
 	}
