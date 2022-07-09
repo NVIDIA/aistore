@@ -123,6 +123,7 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck) (p *cmn.BucketProps, err err
 }
 
 // ListBuckets returns buckets for provided query.
+// (not to confuse with `ListObjects()` and friends below)
 func ListBuckets(baseParams BaseParams, qbck cmn.QueryBcks) (cmn.Bcks, error) {
 	var (
 		bcks  = cmn.Bcks{}
@@ -347,14 +348,21 @@ func (reqParams *ReqParams) waitForAsyncReqComplete(action string, msg *apc.BckS
 
 // ListObjects returns list of objects in a bucket. `numObjects` is the
 // maximum number of objects to be returned (0 - return all objects in a bucket).
+//
 // This API supports numerous options and flags. In particular, `apc.ListObjsMsg`
 // supports "opening" objects formatted as one of the supported
 // archival types and include contents of archived directories in generated
 // result sets.
-// See also: CLI and CLI usage examples
-// See also: `apc.ListObjsMsg`
-// See also: `api.ListObjectsInvalidateCache`
-// See also: `api.ListObjectsPage`
+// In addition, `apc.ListObjsMsg` provides options (flags) to optimize ListObjects
+// performance, to list anonymous public-access Cloud buckets, and more.
+// For detals, see: `api/apc/lsmsg.go` source.
+//
+// AIS fully supports listing buckets that may have millions of objects.
+// For large and very large buckets, it is strongly recommended to use ListObjectsPage
+// that will return the very first (listed) page and a so called "continuation token".
+// See ListObjectsPage for details.
+//
+// For usage examples, see CLI docs under docs/cli.
 func ListObjects(baseParams BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObjects uint) (*cmn.BucketList, error) {
 	return ListObjectsWithOpts(baseParams, bck, lsmsg, numObjects, nil)
 }

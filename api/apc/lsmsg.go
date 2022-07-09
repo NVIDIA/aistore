@@ -19,30 +19,44 @@ const (
 	LsArchDir               // expand archives as directories
 	LsNameOnly              // return only object names and statuses (for faster listing)
 
+	// The following two flags have to do with listing objects in those remote
+	// buckets that we don't yet have in the cluster's BMD. As far as AIS is concerned,
+	// this is equivalent to creating remote buckets *on the fly*.
 	//
-	// advanced usage
+	// For this, we need or, more exactly, we would like to execute HEAD request
+	// against the remote backend in question, in order to:
+	//    1) confirm the bucket's existence, and
+	//    2) obtain its properties (e.g., versioning - for Cloud backends)
 	//
-	LsDontLookupRemoteBucket // e.g. handy when evicting objects from AIS
+	// Note: this is done only once.
+	//
+	// There are scenarios and cases, however, when HEAD(remote bucket) when
+	// would rather be avoided or, alternatively, when an error it returns
+	// (if it returns one) can be disregarded.
 
-	// Skip HEAD(remote bucket) when listing objects in buckets that aren't
-	// (yet) present in the BMD. Done primarily to support GCP buckets with
+	// LsNoHeadRemB tells AIS not to execute HEAD request, for the reasons that
+	// may include cleanup and eviction of any kind, and/or when the bucket simply
+	// must exist in AIS.
+	// See also:
+	// * `cmn/feat/feat.go` source, and the (configurable) capability
+	//    to disable on-the-fly creation of remote buckets altogether.
+	LsNoHeadRemB
+
+	// LsTryHeadRemB is introduced primarily to support GCP buckets with
 	// ACL policies that allow public anonymous access.
 	//
-	// It appears that sometimes those policies do respond to the HEAD,
-	// while other times they simply don't (failing with 401 or 403 status).
-	// Note that we normally try HEAD() to confirm the bucket's existence
-	// and, secondly, to obtain its properties - versioning, in particular.
-	//
+	// It appears that sometimes those policies do honor HEAD(bucket),
+	// while other times they don't failing the request with 401 or 403 status.
 	// See also:
 	// * at https://cloud.google.com/storage/docs/access-control/making-data-public
-	LsDontHeadRemoteBucket
+	LsTryHeadRemB
 
 	// cache list-objects results and use this cache to speed-up
 	UseListObjsCache
 )
 
 // ListObjsMsg and HEAD(object) enum
-// NOTE: compare with `ObjectProps` below and popular lists of selected props (below as well)
+// Compare with `ObjectProps` and popular (i.e., most often used) selections of props (below)
 const (
 	GetPropsName     = "name"
 	GetPropsSize     = "size"
@@ -79,7 +93,8 @@ var (
 	GetPropsDefault = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
 	// all
 	GetPropsAll = append(GetPropsDefault,
-		GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsNode,
+		GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC,
+		GetPropsCustom, GetPropsNode,
 	)
 )
 

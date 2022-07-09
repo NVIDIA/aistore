@@ -269,9 +269,7 @@ func (p *proxy) validateStartDownloadRequest(w http.ResponseWriter, r *http.Requ
 		p.writeErr(w, r, err)
 		return
 	}
-
-	err := jsoniter.Unmarshal(dlb.RawMessage, &dlBase)
-	if err != nil {
+	if err := jsoniter.Unmarshal(dlb.RawMessage, &dlBase); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "download message", cos.BHead(dlb.RawMessage), err)
 		p.writeErr(w, r, err)
 		return
@@ -279,11 +277,10 @@ func (p *proxy) validateStartDownloadRequest(w http.ResponseWriter, r *http.Requ
 	bck := cluster.CloneBck(&dlBase.Bck)
 	args := bckInitArgs{p: p, w: w, r: r, reqBody: body, bck: bck, perms: apc.AccessRW}
 	args.createAIS = true
-	args.lookupRemote = true
-	if _, err = args.initAndTry(bck.Name); err != nil {
-		return
+	args.headRemB = true
+	if _, err := args.initAndTry(bck.Name); err == nil {
+		ok = true
 	}
-	ok = true
 	return
 }
 

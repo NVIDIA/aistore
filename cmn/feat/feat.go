@@ -12,9 +12,9 @@ type Flags uint64
 
 const (
 	EnforceIntraClusterAccess Flags = 1 << iota
-	DontLookupRemoteBck
-	SkipVC // (skip loading existing object's metadata, Version and Checksum in particular)
-	DontAutoDetectFshare
+	NoHeadRemB                      // see also api/apc/lsmsg.go, and in particular `LsNoHeadRemB`
+	SkipVC                          // skip loading existing object's metadata, Version and Checksum in particular
+	DontAutoDetectFshare            // when promoting NFS shares to AIS
 )
 
 var all = []struct {
@@ -22,7 +22,7 @@ var all = []struct {
 	value Flags
 }{
 	{name: "EnforceIntraClusterAccess", value: EnforceIntraClusterAccess},
-	{name: "DontLookupRemoteBck", value: DontLookupRemoteBck},
+	{name: "NoHeadRemB", value: NoHeadRemB},
 	{name: "SkipVC", value: SkipVC},
 	{name: "DontAutoDetectFshare", value: DontAutoDetectFshare},
 }

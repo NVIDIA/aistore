@@ -38,8 +38,8 @@ type bckInitArgs struct {
 	skipBackend bool // initialize bucket via `bck.InitNoBackend`
 	createAIS   bool // create ais bucket on the fly
 
-	lookupRemote           bool // handle ErrRemoteBckNotFound to discover _remote_ bucket on the fly (and add to BMD)
-	lsDontHeadRemoteBucket bool // when listing objects anonymously (via ListObjsMsg.Flags LsDontHeadRemoteBucket)
+	headRemB    bool // handle ErrRemoteBckNotFound to discover _remote_ bucket on the fly (and add to BMD)
+	tryHeadRemB bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemB)
 
 	exists bool // true if bucket already exists
 }
@@ -70,8 +70,8 @@ func freeInitBckArgs(a *bckInitArgs) {
 // lookup and add buckets on the fly
 //
 
-func shouldLookupRB() bool {
-	return !cmn.GCO.Get().Features.IsSet(feat.DontLookupRemoteBck)
+func shouldHeadRemB() bool {
+	return !cmn.GCO.Get().Features.IsSet(feat.NoHeadRemB)
 }
 
 // args.init initializes bucket and checks access permissions.
@@ -181,8 +181,7 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 		return
 	}
 	// create remote bucket on the fly?  (creation with respect to BMD, that is)
-	if cmn.IsErrRemoteBckNotFound(err) && !args.lookupRemote {
-		// QparamDontLookupRemoteBck: proceed silently, glog-wise
+	if cmn.IsErrRemoteBckNotFound(err) && !args.headRemB {
 		args.p.writeErrSilent(args.w, args.r, err, errCode)
 		return
 	}
@@ -299,11 +298,11 @@ func (args *bckInitArgs) _lookup(bck *cluster.Bck) (hdr http.Header, code int, e
 		origURL := args.getOrigURL()
 		q.Set(apc.QparamOrigURL, origURL)
 	}
-	if args.lsDontHeadRemoteBucket {
+	if args.tryHeadRemB {
 		q.Set(apc.QparamSilent, "true")
 	}
 	hdr, code, err = args.p.headRemoteBck(bck.Bucket(), q)
-	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && args.lsDontHeadRemoteBucket {
+	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && args.tryHeadRemB {
 		glog.Warningf("proceeding to add cloud bucket %s to the BMD after having failed HEAD request", bck)
 		glog.Warningf("%s properties: using all defaults", bck)
 		hdr = make(http.Header, 2)

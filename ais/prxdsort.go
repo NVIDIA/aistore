@@ -26,13 +26,13 @@ func (p *proxy) proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bck := cluster.CloneBck(&parsedRS.Bck)
-	args := bckInitArgs{p: p, w: w, r: r, bck: bck, lookupRemote: true, perms: apc.AceObjLIST | apc.AceGET}
+	args := bckInitArgs{p: p, w: w, r: r, bck: bck, headRemB: true, perms: apc.AceObjLIST | apc.AceGET}
 	if _, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
 
 	bck = cluster.CloneBck(&parsedRS.OutputBck)
-	args = bckInitArgs{p: p, w: w, r: r, bck: bck, lookupRemote: true, perms: apc.AcePUT}
+	args = bckInitArgs{p: p, w: w, r: r, bck: bck, headRemB: true, perms: apc.AcePUT}
 	if _, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}

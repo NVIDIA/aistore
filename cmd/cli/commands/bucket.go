@@ -202,7 +202,7 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 		msg.SetFlag(apc.LsPresent)
 	}
 	if flagIsSet(c, listAnonymousFlag) {
-		msg.SetFlag(apc.LsDontHeadRemoteBucket)
+		msg.SetFlag(apc.LsTryHeadRemB)
 	}
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
