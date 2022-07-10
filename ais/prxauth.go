@@ -7,7 +7,6 @@ package ais
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -205,20 +204,13 @@ func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Read a token from request header and validates it
-// Header format:
-//		'Authorization: Bearer <token>'
-// Returns: is auth enabled, decoded token, error
+// Validates a token from the request header
 func (p *proxy) validateToken(hdr http.Header) (*tok.Token, error) {
-	token := hdr.Get(apc.HdrAuthorization)
-	if token == "" {
-		return nil, tok.ErrNoToken
+	token, err := tok.ExtractToken(hdr)
+	if err != nil {
+		return nil, err
 	}
-	idx := strings.Index(token, " ")
-	if idx == -1 || token[:idx] != apc.AuthenticationTypeBearer {
-		return nil, tok.ErrNoToken
-	}
-	tk, err := p.authn.validateToken(token[idx+1:])
+	tk, err := p.authn.validateToken(token)
 	if err != nil {
 		glog.Errorf("invalid token: %v", err)
 		return nil, err

@@ -7,8 +7,13 @@
 # To deploy AIStore as a next tier cluster to the *already running*
 # AIStore cluster set DEPLOY_AS_NEXT_TIER=1.
 #
-# NOTE: system environment variables are listed in the `env` package,
-# see https://github.com/NVIDIA/aistore/blob/master/api/env/README.md
+# NOTE: system environment variables are listed in the `env` package.
+# See https://github.com/NVIDIA/aistore/blob/master/api/env/README.md
+#
+# NOTE: by default, configuration files are stored under $HOME/.config/ais/<app-name>
+# E.g., $HOME/.config/ais/authn - AuthN config, $HOME/.config/ais/cli - CLI config
+# and so on. This rule holds for all AIS "applications" except `aisnode` itself.
+# See https://github.com/NVIDIA/aistore/tree/master/cmn/fname for the most updated locations.
 #
 ############################################
 
@@ -80,6 +85,7 @@ AIS_AUTHN_SU_PASS="${AIS_AUTHN_SU_PASS:-admin}"
 #
 ###################################
 
+# NOTE:
 # for system-wide conventions on locations of these and other configs,
 # see: `cmn/fname`
 AIS_CONF_DIR="$HOME/.ais$NEXT_TIER"
@@ -227,7 +233,7 @@ if [[ $AIS_AUTH_ENABLED == "true" ]]; then
 fi
 if [[ $AIS_AUTHN_ENABLED == "true" ]]; then
   # conf file for authn
-  AIS_AUTHN_CONF_DIR="$HOME/.ais/authn"
+  AIS_AUTHN_CONF_DIR="${APP_CONF_DIR}/authn"
   mkdir -p "$AIS_AUTHN_CONF_DIR"
   AIS_AUTHN_LOG_DIR="$LOG_ROOT/authn/log"
   source "${AISTORE_DIR}/deploy/dev/local/authn_config.sh"

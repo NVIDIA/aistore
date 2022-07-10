@@ -8,6 +8,8 @@ package tok
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -30,6 +32,7 @@ var (
 	ErrNoPermissions = errors.New("insufficient permissions")
 	ErrInvalidToken  = errors.New("invalid token")
 	ErrNoToken       = errors.New("token required")
+	ErrNoBearerToken = errors.New("invalid token: no bearer")
 	ErrTokenExpired  = errors.New("token expired")
 	ErrTokenRevoked  = errors.New("token revoked")
 )
@@ -52,6 +55,19 @@ func IssueJWT(expires time.Time, userID string, bucketACLs []*authn.BckACL, clus
 		"clusters": clusterACLs,
 	})
 	return t.SignedString([]byte(secret))
+}
+
+// Header format: 'Authorization: Bearer <token>'
+func ExtractToken(hdr http.Header) (string, error) {
+	s := hdr.Get(apc.HdrAuthorization)
+	if s == "" {
+		return "", ErrNoToken
+	}
+	idx := strings.Index(s, " ")
+	if idx == -1 || s[:idx] != apc.AuthenticationTypeBearer {
+		return "", ErrNoBearerToken
+	}
+	return s[idx+1:], nil
 }
 
 func DecryptToken(tokenStr, secret string) (*Token, error) {

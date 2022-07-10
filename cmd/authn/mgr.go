@@ -390,7 +390,7 @@ func (m *mgr) issueToken(userID, pwd string, msg *authn.LoginMsg) (string, error
 	}
 	if !uInfo.IsAdmin() {
 		if msg.ClusterID == "" {
-			return "", fmt.Errorf("Couldn't issue toke for %q: cluster ID is not set", userID)
+			return "", fmt.Errorf("Couldn't issue token for %q: cluster ID not set", userID)
 		}
 		cid = m.cluLookup(msg.ClusterID, msg.ClusterID)
 		if cid == "" {

@@ -90,7 +90,7 @@ func TestRProxyGCS(t *testing.T) {
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		retried bool
+		maxRetries = 2
 	)
 
 	if cos.IsHTTPS(proxyURL) {
@@ -112,15 +112,19 @@ retry:
 
 	speedCold := extractSpeed(out)
 	tlog.Logf("Cold download speed:   %s\n", cos.B2S(speedCold, 1))
-	tassert.Fatalf(t, speedCold != 0, "Failed to detect speed for cold download")
+	tassert.Fatalf(t, speedCold != 0, "Failed to detect cold download speed")
 
 	// at less than 100KBps we likely failed to download
-	if speedCold < 100*1024 && !retried {
-		tlog.Logln("Warning: will retry once...")
-		time.Sleep(15 * time.Second)
-		tlog.Logln("Warning: retrying...")
-		retried = true
-		goto retry
+	if speedCold < 100*1024 {
+		if maxRetries > 0 {
+			tlog.Logf("Warning: will retry (%d)\n", maxRetries)
+			time.Sleep(15 * time.Second)
+			tlog.Logln("Warning: retrying...")
+			maxRetries--
+			goto retry
+		}
+		t.Skipf("Warning: cold download speed %s is way too low indicating potential timeout\n",
+			cos.B2S(speedCold, 1))
 	}
 
 	bckListNew, err := api.ListBuckets(baseParams, queryBck)

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/env"
@@ -33,6 +34,13 @@ var (
 
 func init() {
 	flag.StringVar(&configPath, "config", "", svcName+" configuration")
+}
+
+func glogFlush() {
+	for {
+		time.Sleep(30 * time.Second)
+		glog.Flush()
+	}
 }
 
 func main() {
@@ -60,7 +68,7 @@ func main() {
 		cos.ExitLogf("Missing %s configuration file (to specify, use '-%s' option or '%s' environment)",
 			svcName, confDirFlag.Name, env.AuthN.ConfDir)
 	}
-	configPath := filepath.Join(configDir, fname.AuthNConfig)
+	configPath = filepath.Join(configDir, fname.AuthNConfig)
 	if glog.V(4) {
 		glog.Infof("Loading configuration from %s", configPath)
 	}
@@ -73,7 +81,7 @@ func main() {
 	if err := updateLogOptions(); err != nil {
 		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
-	dbPath := filepath.Join(configDir, fname.AuthDB)
+	dbPath := filepath.Join(configDir, fname.AuthNDB)
 	driver, err := dbdriver.NewBuntDB(dbPath)
 	if err != nil {
 		cos.ExitLogf("Failed to init local database: %v", err)
@@ -83,7 +91,10 @@ func main() {
 		cos.ExitLogf("Failed to init manager: %v", err)
 	}
 
-	printVer()
+	glog.Infof("Version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)
+
+	go glogFlush()
+
 	srv := newServer(mgr)
 	if err := srv.Run(); err != nil {
 		cos.ExitLogf("Server failed: %v", err)

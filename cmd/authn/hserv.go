@@ -5,7 +5,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -38,7 +37,7 @@ func newServer(mgr *mgr) *hserv {
 // Run public server to manage users and generate tokens
 func (h *hserv) Run() (err error) {
 	portstring := fmt.Sprintf(":%d", Conf.Net.HTTP.Port)
-	glog.Infof("Launching public server at %s", portstring)
+	glog.Infof("Listening on *:%s", portstring)
 
 	h.registerPublicHandlers()
 	h.s = &http.Server{Addr: portstring, Handler: h.mux}
@@ -139,8 +138,7 @@ func (h *hserv) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
-	if err = checkAuthorization(w, r); err != nil {
+	if err = validateAdminPerms(w, r); err != nil {
 		return
 	}
 	if err := h.mgr.delUser(apiItems[0]); err != nil {
@@ -165,7 +163,7 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = checkAuthorization(w, r); err != nil {
+	if err = validateAdminPerms(w, r); err != nil {
 		return
 	}
 
@@ -187,7 +185,7 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 
 // Adds h new user to user list
 func (h *hserv) userAdd(w http.ResponseWriter, r *http.Request) {
-	if err := checkAuthorization(w, r); err != nil {
+	if err := validateAdminPerms(w, r); err != nil {
 		return
 	}
 	info := &authn.User{}
@@ -248,15 +246,14 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 
 // Checks if the request header contains valid admin credentials.
 // (admin is created at deployment time and cannot be modified via API)
-func checkAuthorization(w http.ResponseWriter, r *http.Request) error {
-	s := strings.SplitN(r.Header.Get(apc.HdrAuthorization), " ", 2)
-	if len(s) != 2 {
-		err := errors.New("not authorized: invalid header")
+func validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
+	token, err := tok.ExtractToken(r.Header)
+	if err != nil {
 		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
 		return err
 	}
 	secret := Conf.Secret()
-	tk, err := tok.DecryptToken(s[1], secret)
+	tk, err := tok.DecryptToken(token, secret)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
 		return err
@@ -327,7 +324,7 @@ func (h *hserv) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if _, err := checkRESTItems(w, r, 0, apc.URLPathClusters.L); err != nil {
 		return
 	}
-	if err := checkAuthorization(w, r); err != nil {
+	if err := validateAdminPerms(w, r); err != nil {
 		return
 	}
 	cluConf := &authn.CluACL{}
@@ -344,7 +341,7 @@ func (h *hserv) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := checkAuthorization(w, r); err != nil {
+	if err := validateAdminPerms(w, r); err != nil {
 		return
 	}
 	cluConf := &authn.CluACL{}
@@ -362,7 +359,7 @@ func (h *hserv) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = checkAuthorization(w, r); err != nil {
+	if err = validateAdminPerms(w, r); err != nil {
 		return
 	}
 
@@ -468,7 +465,7 @@ func (h *hserv) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = checkAuthorization(w, r); err != nil {
+	if err = validateAdminPerms(w, r); err != nil {
 		return
 	}
 
@@ -483,7 +480,7 @@ func (h *hserv) httpRolePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = checkAuthorization(w, r); err != nil {
+	if err = validateAdminPerms(w, r); err != nil {
 		return
 	}
 	info := &authn.Role{}
@@ -500,7 +497,7 @@ func (h *hserv) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = checkAuthorization(w, r); err != nil {
+	if err = validateAdminPerms(w, r); err != nil {
 		return
 	}
 

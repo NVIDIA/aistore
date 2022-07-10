@@ -655,14 +655,20 @@ func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error)
 	for i := 0; i < len(items); {
 		name, value := items.Get(i), items.Get(i+1)
 		if idx := strings.Index(name, "="); idx > 0 {
-			name = name[:idx]
-			value = name[idx+1:]
+			value = strings.TrimSpace(name[idx+1:])
+			name = strings.TrimSpace(name[:idx])
+			if value == "" {
+				return nil, fmt.Errorf("'auth set config %q': missing value in %q", name, items.Get(i))
+			}
+			if name == "" {
+				return nil, fmt.Errorf("'auth set config %q': empty name in %q", name, items.Get(i))
+			}
 			i++
 		} else {
 			i += 2
-		}
-		if value == "" {
-			return nil, fmt.Errorf("no value for %q", name)
+			if value == "" {
+				return nil, fmt.Errorf("'auth set config %q': missing value", name)
+			}
 		}
 		if err := cmn.UpdateFieldValue(conf, name, value); err != nil {
 			return nil, err

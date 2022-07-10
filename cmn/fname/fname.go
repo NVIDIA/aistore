@@ -36,7 +36,7 @@ const (
 
 	// AuthN: config and DB
 	AuthNConfig = "authn.json"
-	AuthDB      = "authn.db"
+	AuthNDB     = "authn.db"
 
 	// Token
 	Token = "auth.token"

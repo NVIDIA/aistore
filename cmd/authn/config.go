@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -26,7 +27,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpConfigGet(w http.ResponseWriter, r *http.Request) {
-	if err := checkAuthorization(w, r); err != nil {
+	if err := validateAdminPerms(w, r); err != nil {
 		return
 	}
 	Conf.RLock()
@@ -35,7 +36,7 @@ func httpConfigGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpConfigPut(w http.ResponseWriter, r *http.Request) {
-	if err := checkAuthorization(w, r); err != nil {
+	if err := validateAdminPerms(w, r); err != nil {
 		return
 	}
 	updateCfg := &authn.ConfigToUpdate{}
@@ -44,6 +45,10 @@ func httpConfigPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := Conf.ApplyUpdate(updateCfg); err != nil {
+		cmn.WriteErr(w, r, err)
+		return
+	}
+	if err := jsp.SaveMeta(configPath, Conf, nil); err != nil {
 		cmn.WriteErr(w, r, err)
 	}
 }
