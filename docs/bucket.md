@@ -462,7 +462,7 @@ For example:
 ```console
 $ ais bucket create abc
 "abc" bucket created
-$ ais bucket props ais://abc backend_bck=gcp://xyz
+$ ais bucket props set ais://abc backend_bck=gcp://xyz
 Bucket props successfully updated
 ```
 
@@ -484,7 +484,7 @@ $ ais object get ais://abc/shard-0.tar /dev/null # cache/prefetch cloud object
 $ ais bucket ls ais://abc --cached
 NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
-$ ais bucket props ais://abc backend_bck=none # disconnect backend bucket
+$ ais bucket props set ais://abc backend_bck=none # disconnect backend bucket
 Bucket props successfully updated
 $ ais bucket ls ais://abc
 NAME		 SIZE		 VERSION
