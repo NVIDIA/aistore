@@ -214,6 +214,18 @@ func (kv SimpleKVs) Contains(key string) (ok bool) {
 	return
 }
 
+func (kv SimpleKVs) ContainsAnyMatch(in []string) string {
+	for _, k := range in {
+		debug.Assert(k != "")
+		for kk := range kv {
+			if strings.Contains(kk, k) {
+				return kk
+			}
+		}
+	}
+	return ""
+}
+
 ///////////////
 // StringSet //
 ///////////////

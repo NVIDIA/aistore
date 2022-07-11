@@ -70,9 +70,7 @@ func freeInitBckArgs(a *bckInitArgs) {
 // lookup and add buckets on the fly
 //
 
-func shouldHeadRemB() bool {
-	return !cmn.GCO.Get().Features.IsSet(feat.NoHeadRemB)
-}
+func shouldHeadRemB() bool { return !cmn.Features.IsSet(feat.NoHeadRemB) }
 
 // args.init initializes bucket and checks access permissions.
 func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, err error) {

@@ -28,7 +28,7 @@ var (
 				Usage:        "configure cluster",
 				ArgsUsage:    keyValuePairsArgument,
 				Flags:        configCmdsFlags[subcmdCluster],
-				Action:       cluConfigHandler,
+				Action:       setConfigHandler,
 				BashComplete: suggestUpdatableConfig,
 			},
 			{
@@ -36,14 +36,14 @@ var (
 				Usage:        "configure a specific node",
 				ArgsUsage:    nodeConfigArgument,
 				Flags:        configCmdsFlags[subcmdNode],
-				Action:       cluConfigHandler,
+				Action:       setConfigHandler,
 				BashComplete: cluConfigCompletions,
 			},
 			{
 				Name:         subcmdReset,
 				Usage:        "reset to cluster configuration on all nodes or a specific node",
 				ArgsUsage:    optionalDaemonIDArgument,
-				Action:       cluResetConfigHandler,
+				Action:       resetConfigHandler,
 				BashComplete: daemonCompletions(completeAllDaemons),
 			},
 			settingsCmd,
@@ -51,14 +51,14 @@ var (
 	}
 )
 
-func cluConfigHandler(c *cli.Context) (err error) {
+func setConfigHandler(c *cli.Context) (err error) {
 	if _, err = fillMap(); err != nil {
 		return
 	}
-	return cluConfig(c)
+	return setConfig(c)
 }
 
-func cluResetConfigHandler(c *cli.Context) (err error) {
+func resetConfigHandler(c *cli.Context) (err error) {
 	daemonID := argDaemonID(c)
 	if daemonID == "" {
 		if err := api.ResetClusterConfig(defaultAPIParams); err != nil {

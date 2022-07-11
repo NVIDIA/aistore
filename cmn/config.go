@@ -75,9 +75,9 @@ type (
 		DSort       DSortConf       `json:"distributed_sort"`
 		Transport   TransportConf   `json:"transport"`
 		Memsys      MemsysConf      `json:"memsys"`
-		TCB         TCBConf         `json:"tcb"` // transform/copy bucket
-		WritePolicy WritePolicyConf `json:"write_policy"`
-		Features    feat.Flags      `json:"features,string" allow:"cluster"` // feature flags (to flip assorted defaults)
+		TCB         TCBConf         `json:"tcb"`                             // transform/copy bucket
+		WritePolicy WritePolicyConf `json:"write_policy"`                    // write {immediate, delayed, never}
+		Features    feat.Flags      `json:"features,string" allow:"cluster"` // (to flip assorted defaults)
 		// read-only
 		LastUpdated string `json:"lastupdate_time"`       // timestamp
 		UUID        string `json:"uuid"`                  // UUID
@@ -140,8 +140,8 @@ type (
 	}
 
 	BackendConf struct {
-		Conf map[string]interface{} `json:"conf,omitempty"` // implementation depends on backend provider
-
+		// provider implementation-dependent
+		Conf map[string]interface{} `json:"conf,omitempty"`
 		// 3rd party Cloud(s) -- set during validation
 		Providers map[string]Ns `json:"-"`
 	}
@@ -222,16 +222,16 @@ type (
 
 	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
-		CplaneOperation cos.Duration `json:"cplane_operation"`
-		MaxKeepalive    cos.Duration `json:"max_keepalive"`
+		CplaneOperation cos.Duration `json:"cplane_operation"` // readonly - change requires restart
+		MaxKeepalive    cos.Duration `json:"max_keepalive"`    // ditto (see `timeout struct` below)
 		MaxHostBusy     cos.Duration `json:"max_host_busy"`
 		Startup         cos.Duration `json:"startup_time"`
 		JoinAtStartup   cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout
 		SendFile        cos.Duration `json:"send_file_time"`
 	}
 	TimeoutConfToUpdate struct {
-		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty" list:"readonly"`
-		MaxKeepalive    *cos.Duration `json:"max_keepalive,omitempty" list:"readonly"`
+		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
+		MaxKeepalive    *cos.Duration `json:"max_keepalive,omitempty"`
 		MaxHostBusy     *cos.Duration `json:"max_host_busy,omitempty"`
 		Startup         *cos.Duration `json:"startup_time,omitempty"`
 		JoinAtStartup   *cos.Duration `json:"join_startup_time,omitempty"`
@@ -479,8 +479,8 @@ type (
 		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
 		CallTimeout         cos.Duration `json:"call_timeout"`
 		DSorterMemThreshold string       `json:"dsorter_mem_threshold"`
-		Compression         string       `json:"compression"`       // enum { CompressAlways, ... } in api/apc/compression.go
-		SbundleMult         int          `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
+		Compression         string       `json:"compression"`       // {CompressAlways,...} in api/apc/compression.go
+		SbundleMult         int          `json:"bundle_multiplier"` // stream-bundle multiplier: num to destination
 	}
 	DSortConfToUpdate struct {
 		DuplicatedRecords   *string       `json:"duplicated_records,omitempty"`
@@ -495,7 +495,7 @@ type (
 	}
 
 	FSPConf struct {
-		Paths cos.StringSet `json:"paths,omitempty"`
+		Paths cos.StringSet `json:"paths,omitempty" list:"readonly"`
 	}
 
 	TransportConf struct {
@@ -507,8 +507,10 @@ type (
 		IdleTeardown cos.Duration `json:"idle_teardown"`
 		QuiesceTime  cos.Duration `json:"quiescent"`
 		// lz4
-		LZ4BlockMaxSize  cos.Size `json:"lz4_block"`          // max uncompressed block size, one of [64K, 256K(*), 1M, 4M]
-		LZ4FrameChecksum bool     `json:"lz4_frame_checksum"` // fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
+		// max uncompressed block size, one of [64K, 256K(*), 1M, 4M]
+		// fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
+		LZ4BlockMaxSize  cos.Size `json:"lz4_block"`
+		LZ4FrameChecksum bool     `json:"lz4_frame_checksum"`
 	}
 	TransportConfToUpdate struct {
 		MaxHeaderSize    *int          `json:"max_header,omitempty" list:"readonly"`
@@ -555,6 +557,24 @@ type (
 	}
 )
 
+// most often used timeouts: assign at startup to reduce the number of GCO.Get() calls
+type timeout struct {
+	cplane    time.Duration // Config.Timeout.CplaneOperation
+	keepalive time.Duration // ditto MaxKeepalive
+}
+
+var Timeout = &timeout{
+	cplane:    time.Second + time.Millisecond,
+	keepalive: 2*time.Second + time.Millisecond,
+}
+
+// read-only feature flags
+var Features feat.Flags
+
+// assorted named fields that'll require (cluster | node) restart for the change to take an effect
+var ConfigRestartRequired = []string{"cplane_operation", "max_keepalive", "features", "auth", "memsys", "net"}
+
+// dsort
 const (
 	IgnoreReaction = "ignore"
 	WarnReaction   = "warn"
@@ -563,11 +583,10 @@ const (
 
 var SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
 
-////////////////////////////////////////////
-// config meta-versioning & serialization //
-////////////////////////////////////////////
+//
+// config meta-versioning & serialization
+//
 
-// interface guards
 var (
 	_ jsp.Opts = (*ClusterConfig)(nil)
 	_ jsp.Opts = (*LocalConfig)(nil)
@@ -642,14 +661,16 @@ func (c *Config) Validate() error {
 	}
 
 	opts := IterOpts{VisitAll: true}
-	return IterFields(c, func(tag string, field IterField) (err error, b bool) {
-		if v, ok := field.Value().(Validator); ok {
-			if err := v.Validate(); err != nil {
-				return err, false
-			}
+	return IterFields(c, vdate, opts)
+}
+
+func vdate(_ string, field IterField) (error, bool) {
+	if v, ok := field.Value().(Validator); ok {
+		if err := v.Validate(); err != nil {
+			return err, false
 		}
-		return nil, false
-	}, opts)
+	}
+	return nil, false
 }
 
 func (c *Config) SetRole(role string) {
@@ -1204,15 +1225,15 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	c.HostnameIntraControl = strings.ReplaceAll(c.HostnameIntraControl, " ", "")
 	c.HostnameIntraData = strings.ReplaceAll(c.HostnameIntraData, " ", "")
 
-	if overlap, addr := hostnameListsOverlap(c.Hostname, c.HostnameIntraControl); overlap {
+	if overlap, addr := hostnamesOverlap(c.Hostname, c.HostnameIntraControl); overlap {
 		return fmt.Errorf("public (%s) and intra-cluster control (%s) Hostname lists overlap: %s",
 			c.Hostname, c.HostnameIntraControl, addr)
 	}
-	if overlap, addr := hostnameListsOverlap(c.Hostname, c.HostnameIntraData); overlap {
+	if overlap, addr := hostnamesOverlap(c.Hostname, c.HostnameIntraData); overlap {
 		return fmt.Errorf("public (%s) and intra-cluster data (%s) Hostname lists overlap: %s",
 			c.Hostname, c.HostnameIntraData, addr)
 	}
-	if overlap, addr := hostnameListsOverlap(c.HostnameIntraControl, c.HostnameIntraData); overlap {
+	if overlap, addr := hostnamesOverlap(c.HostnameIntraControl, c.HostnameIntraData); overlap {
 		if ipv4ListsEqual(c.HostnameIntraControl, c.HostnameIntraData) {
 			glog.Warningf("control and data share one intra-cluster network (%s)", c.HostnameIntraData)
 		} else {
@@ -1500,23 +1521,13 @@ func (c *TCBConf) Validate() error {
 // TimeoutConf //
 /////////////////
 
-// most often used timeouts: assign at startup to reduce the number of GCO.Get() calls
-type timeout struct {
-	cplane    time.Duration // Config.Timeout.CplaneOperation
-	keepalive time.Duration // ditto MaxKeepalive
-}
-
-var Timeout = &timeout{
-	cplane:    time.Second + time.Millisecond,
-	keepalive: 2*time.Second + time.Millisecond,
-}
-
 func (c *TimeoutConf) Validate() error {
 	if c.CplaneOperation.D() < 10*time.Millisecond {
 		return fmt.Errorf("invalid timeout.cplane_operation=%s", c.CplaneOperation)
 	}
 	if c.MaxKeepalive < 2*c.CplaneOperation {
-		return fmt.Errorf("invalid timeout.max_keepalive=%s, must be >= 2*(cplane_operation=%s)", c.MaxKeepalive, c.CplaneOperation)
+		return fmt.Errorf("invalid timeout.max_keepalive=%s, must be >= 2*(cplane_operation=%s)",
+			c.MaxKeepalive, c.CplaneOperation)
 	}
 	if c.MaxHostBusy.D() < 10*time.Second {
 		return fmt.Errorf("invalid timeout.max_host_busy=%s (cannot be less than 10s)", c.MaxHostBusy)
@@ -1645,23 +1656,8 @@ func SetLogLevel(loglevel string) (err error) {
 	return
 }
 
-func ConfigPropList(scopes ...string) []string {
-	scope := apc.Cluster
-	if len(scopes) > 0 {
-		scope = scopes[0]
-	}
-	propList := make([]string, 0, 48)
-	err := IterFields(Config{}, func(tag string, _ IterField) (err error, b bool) {
-		propList = append(propList, tag)
-		return
-	}, IterOpts{Allowed: scope})
-	debug.AssertNoErr(err)
-	return propList
-}
-
-// hostnameListsOverlap checks if two comma-separated ipv4 address lists
-// contain at least one common ipv4 address
-func hostnameListsOverlap(alist, blist string) (overlap bool, addr string) {
+// checks if the two comma-separated IPv4 address lists contain at least one common IPv4
+func hostnamesOverlap(alist, blist string) (overlap bool, addr string) {
 	if alist == "" || blist == "" {
 		return
 	}
@@ -1753,7 +1749,11 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 		debug.Assert(config.Version > 0 && config.UUID != "")
 	}
 
+	// readonly config which can be updated but
+	// for the change to take an effect the cluster (or the node) must be restarted
+	Features = config.Features
 	Timeout.setReadOnly(config)
+
 	config.SetRole(daeRole)
 
 	// override config - locally updated global defaults

@@ -151,13 +151,12 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.writeErr(w, r, err)
 		return
 	}
-	features := cmn.GCO.Get().Features
 	poi := allocPutObjInfo()
 	{
 		poi.atime = started
 		poi.t = t
 		poi.lom = lom
-		poi.skipVC = features.IsSet(feat.SkipVC) || cos.IsParseBool(dpq.skipVC) // apc.QparamSkipVC
+		poi.skipVC = cmn.Features.IsSet(feat.SkipVC) || cos.IsParseBool(dpq.skipVC) // apc.QparamSkipVC
 		poi.restful = true
 	}
 	errCode, err := poi.do(r, dpq)

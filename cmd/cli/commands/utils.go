@@ -266,7 +266,7 @@ func getRandTargetConfig() (*cmn.Config, error) {
 }
 
 func isConfigProp(s string) bool {
-	props := cmn.ConfigPropList()
+	props := configPropList()
 	for _, p := range props {
 		if p == s || strings.HasPrefix(p, s+".") {
 			return true
@@ -1294,4 +1294,18 @@ func flattenXactStats(snap *xact.SnapExt) []*prop {
 		return props[i].Name < props[j].Name
 	})
 	return props
+}
+
+func configPropList(scopes ...string) []string {
+	scope := apc.Cluster
+	if len(scopes) > 0 {
+		scope = scopes[0]
+	}
+	propList := make([]string, 0, 48)
+	err := cmn.IterFields(cmn.Config{}, func(tag string, _ cmn.IterField) (err error, b bool) {
+		propList = append(propList, tag)
+		return
+	}, cmn.IterOpts{Allowed: scope})
+	debug.AssertNoErr(err)
+	return propList
 }

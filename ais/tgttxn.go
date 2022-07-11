@@ -960,7 +960,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
 	var (
 		cksum      *cos.CksumHash
-		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.GCO.Get().Features.IsSet(feat.DontAutoDetectFshare)
+		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.Features.IsSet(feat.DontAutoDetectFshare)
 	)
 	cb := func(fqn string, de fs.DirEntry) (err error) {
 		if de.IsDir() {

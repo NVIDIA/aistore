@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
+	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
@@ -285,7 +286,7 @@ func getDaemonConfig(c *cli.Context) error {
 }
 
 // Sets config of specific daemon or cluster
-func cluConfig(c *cli.Context) error {
+func setConfig(c *cli.Context) error {
 	daemonID, nvs, err := daemonKeyValueArgs(c)
 	if err != nil {
 		tail := c.Args().Tail()
@@ -315,6 +316,15 @@ func cluConfig(c *cli.Context) error {
 		return err
 	}
 
+	// assorted named fields that'll require (cluster | node) restart
+	// for the change to take an effect
+	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
+		cyan := color.New(color.FgHiCyan).SprintFunc()
+		msg := fmt.Sprintf("Warning: restart required for the change %s=%s to take an effect\n",
+			name, nvs[name])
+		fmt.Fprintln(c.App.Writer, cyan(msg))
+	}
+
 	if daemonID == "" {
 		if err := api.SetClusterConfig(defaultAPIParams, nvs, flagIsSet(c, transientFlag)); err != nil {
 			return err
@@ -341,11 +351,10 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 	if c.NArg() == 0 {
 		return "", nil, missingKeyValueError(c)
 	}
-
 	var (
 		args            = c.Args()
 		kvs             = args.Tail()
-		propList        = cmn.ConfigPropList()
+		propList        = configPropList()
 		daemonOnlyProps []string
 	)
 	daemonID = argDaemonID(c)
@@ -363,8 +372,8 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 		if smap.GetNode(daemonID) == nil {
 			var err error
 			if c.NArg()%2 == 0 {
-				// Even - updating cluster configuration (a few key/value pairs)
-				err = fmt.Errorf("option %q does not exist (hint: run 'show config DAEMON_ID --json' to show list of options)", daemonID)
+				err = fmt.Errorf("option %q does not exist (hint: run 'show config DAEMON_ID --json')",
+					daemonID)
 			} else {
 				if daemonID == c.Args().First() {
 					err = fmt.Errorf("expecting [DAEMON_ID] key=value pair(s), got %q", daemonID)
@@ -374,17 +383,15 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 			}
 			return daemonID, nil, err
 		}
-		daemonOnlyProps = cmn.ConfigPropList(apc.Daemon)
+		daemonOnlyProps = configPropList(apc.Daemon)
 	}
 
 	if len(kvs) == 0 {
 		return daemonID, nil, missingKeyValueError(c)
 	}
-
 	if nvs, err = makePairs(kvs); err != nil {
 		return daemonID, nil, err
 	}
-
 	for k := range nvs {
 		if !cos.StringInSlice(k, propList) {
 			return daemonID, nil, fmt.Errorf("invalid property name %q", k)
@@ -393,7 +400,6 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 			return daemonID, nil, fmt.Errorf("setting daemon configuration %q not allowed", k)
 		}
 	}
-
 	return daemonID, nvs, nil
 }
 
