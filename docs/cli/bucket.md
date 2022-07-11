@@ -184,45 +184,47 @@ List all buckets for the `ais` provider and `uuid#namespace` namespace.
 | `--regex` | `string` | Pattern for matching bucket names | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
-## List object names
+## List objects
 
-`ais bucket ls BUCKET`
+`ais ls BUCKET` (or, same, `ais bucket ls BUCKET`)
 
 List all objects contained in `BUCKET` bucket.
 
 ### Options
 
+comma-separated list of object properties including name, size, version, ##copies, EC data and parity info, custom props (default: "name,size")
+
 | Name | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--regex` | `string` | Pattern for matching object names | `""` |
-| `--template` | `string` | Template for matching object names | `""` |
+| `--template` | `string` | Template for matching object names, e.g.: 'shard-{900..999}.tar' | `""` |
 | `--prefix` | `string` | Prefix for matching object names | `""` |
 | `--paged` | `bool` | Fetch and print objects page by page | `false` |
 | `--max-pages` | `int` | Max. number of pages to list | `0` |
 | `--page-size` | `int` | Max. number of object names per page | `1000` |
-| `--props` | `string` | Comma-separated properties to return with object names | `"size,version"`
+| `--props` | `string` | Comma-separated list of object properties including: name, size, version, copies, EC data and parity info, custom props (to include all properties, use `--props all`) | `"name,size"` |
 | `--limit` | `int` | Max. number of object names to list | `0` |
-| `--show-unmatched` | `bool` | List objects unmatched by regex and template as well, after the matched ones | `false` |
+| `--show-unmatched` | `bool` | List objects that were not matched by regex and template | `false` |
 | `--all` | `bool` | Show all objects, including misplaced, duplicated, etc. | `false` |
 | `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
-| `--cached` | `bool` | For a remote bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
-| `--use-cache` | `bool` | Use proxy cache to speed up list object request | `false` |
 | `--start-after` | `string` | Object name (marker) after which the listing should start | `""` |
-| `--list-archive` | `bool` | List contents of archives (ie., objects formatted as TAR, TGZ, ZIP archives) | `false` |
+| `--cached` | `bool` | List only those objects from a remote bucket that are present (ie., cached) in the cluster | `false` |
+| `--anonymous` | `bool` | List public-access Cloud buckets that may disallow certain operations (e.g., `HEAD(bucket)`) | `false` |
+| `--archive` | `bool` | List archived content | `false` |
 | `--name-only` | `bool` | Lightweight and fast request to retrieve only the names of objects in the bucket. If defined, all comma-separated fields in the `--props` flag are ignored with only two exceptions: `name` and `status` | `false` |
 
 ### Examples
 
-#### From the specific bucket
+#### List AIS and Cloud buckets with all defaults
 
 List objects in the AIS bucket `bucket_name`.
 
 ```console
 $ ais bucket ls ais://bucket_name
-NAME		SIZE		VERSION
-shard-0.tar	16.00KiB	1
-shard-1.tar	16.00KiB	1
+NAME		SIZE
+shard-0.tar	16.00KiB
+shard-1.tar	16.00KiB
 ...
 ```
 
@@ -230,13 +232,26 @@ List objects in the remote bucket `bucket_name`.
 
 ```console
 ais bucket ls aws://bucket_name
-NAME		SIZE		VERSION
-shard-0.tar	16.00KiB	1
-shard-1.tar	16.00KiB	1
+NAME		SIZE
+shard-0.tar	16.00KiB
+shard-1.tar	16.00KiB
 ...
 ```
 
-#### From AIS remote cluster with specific namespace
+#### Include all properties
+
+```console
+# ais ls gs://webdataset-abc --anonymous --props all
+NAME                             SIZE          CHECKSUM                           ATIME   VERSION                 CACHED  TARGET URL            STATUS  COPIES
+coco-train2014-seg-000000.tar    958.48MiB     bdb89d1b854040b6050319e80ef44dde           1657297128665686        no      http://aistore:8081   ok      0
+coco-train2014-seg-000001.tar    958.47MiB     8b94939b7d166114498e794859fb472c           1657297129387272        no      http://aistore:8081   ok      0
+coco-train2014-seg-000002.tar    958.47MiB     142a8e81f965f9bcafc8b04eda65a0ce           1657297129904067        no      http://aistore:8081   ok      0
+coco-train2014-seg-000003.tar    958.22MiB     113024d5def81365cbb6c404c908efb1           1657297130555590        no      http://aistore:8081   ok      0
+...
+```
+
+
+#### List bucket from AIS remote cluster
 
 List objects in the bucket `bucket_name` and `ml` namespace contained on AIS remote cluster with `Bghort1l` UUID.
 
@@ -278,16 +293,17 @@ log.tar.gz                                       3.11KiB
     log2.tar.gz/t_2021-07-27_14-15-15.log        1.90KiB
 ```
 
-#### [experimental] Using proxy cache
-
-Experimental support for the proxy's cache can be enabled with `--use-cache` option.
-In such case the proxy will cache list object request, so the subsequent calls will be faster.
+#### List anonymously (i.e., list public-access Cloud bucket)
 
 ```console
-$ ais bucket ls ais://bucket_name --use-cache
-NAME		SIZE		VERSION
-shard-0.tar	16.00KiB	1
-shard-1.tar	16.00KiB	1
+$ ais ls gs://webdataset-abc --anonymous
+NAME                             SIZE
+coco-train2014-seg-000000.tar    958.48MiB
+coco-train2014-seg-000001.tar    958.47MiB
+coco-train2014-seg-000002.tar    958.47MiB
+coco-train2014-seg-000003.tar    958.22MiB
+coco-train2014-seg-000004.tar    958.56MiB
+coco-train2014-seg-000005.tar    958.19MiB
 ...
 ```
 

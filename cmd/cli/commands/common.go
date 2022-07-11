@@ -279,7 +279,7 @@ var (
 	// Common
 	objPropsFlag = cli.StringFlag{
 		Name:  "props",
-		Usage: "comma-separated list of object properties including name, size, version, ##copies, EC data and parity info, custom props",
+		Usage: "comma-separated list of object properties including name, size, version, copies, EC data and parity info, custom props (to include all properties, use '--props all')",
 		Value: strings.Join(apc.GetPropsDefault, ","),
 	}
 	objPropsLsFlag = cli.StringFlag{
@@ -320,7 +320,10 @@ var (
 		Usage: "list bucket's content alphabetically starting with the first name *after* the specified",
 	}
 	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0} // TODO: specify default as unlimited
-	pageSizeFlag = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}
+	pageSizeFlag = cli.IntFlag{Name: "page-size",
+		Usage: "maximum number of object names per page",
+		Value: 1000,
+	}
 	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
 
@@ -340,7 +343,7 @@ var (
 	paritySlicesFlag  = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
 	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
 	compactPropFlag   = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
-	nameOnlyFlag      = cli.BoolFlag{Name: "name-only", Usage: "show only object names"}
+	nameOnlyFlag      = cli.BoolFlag{Name: "name-only", Usage: "show only object names (for best performance)"}
 
 	// Config
 	configTypeFlag = cli.StringFlag{Name: "type", Usage: "show the specified configuration, one of: 'all','cluster','local'"}
@@ -403,7 +406,7 @@ var (
 	}
 	listAnonymousFlag = cli.BoolFlag{
 		Name:  "anonymous",
-		Usage: "list anonymously public-access Cloud buckets that may disallow certain operations (e.g., HEAD)",
+		Usage: "list public-access Cloud buckets that may disallow certain operations (e.g., 'HEAD(bucket)')",
 	}
 	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
@@ -438,7 +441,7 @@ var (
 	bucketRoleFlag   = cli.StringFlag{Name: "bucket", Usage: "associate role with the specified bucket"}
 
 	// begin archive
-	listArchFlag             = cli.BoolFlag{Name: "archive", Usage: "list archived content"}
+	listArchFlag             = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
 	createArchFlag           = cli.BoolFlag{Name: "archive", Usage: "archive a list or a range of objects"}
 	archpathFlag             = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}
 	includeSrcBucketNameFlag = cli.BoolFlag{
