@@ -10,20 +10,12 @@ from urllib.parse import urljoin
 from pydantic.tools import parse_raw_as
 
 from aistore.client.const import (
-    ACT_LIST,
-    HTTP_METHOD_DELETE,
-    HTTP_METHOD_GET,
-    HTTP_METHOD_HEAD,
-    HTTP_METHOD_PUT,
-    ProviderAIS,
-    QParamArchpath,
-    QparamPrimaryReadyReb,
-    QParamProvider,
-    QParamWhat
+    HTTP_METHOD_DELETE, HTTP_METHOD_GET, HTTP_METHOD_HEAD, HTTP_METHOD_PUT, ProviderAIS, QParamArchpath, QParamProvider, QParamWhat
 )
 from aistore.client.bucket import Bucket
+from aistore.client.cluster import Cluster
 from aistore.client.errors import Timeout
-from aistore.client.types import (ActionMsg, Bck, ObjStream, Smap, XactStatus)
+from aistore.client.types import (Bck, ObjStream, XactStatus)
 from aistore.client.utils import handle_errors, probing_frequency
 
 T = TypeVar("T")
@@ -61,53 +53,6 @@ class Client:
         if resp.status_code < 200 or resp.status_code >= 300:
             handle_errors(resp)
         return resp
-
-    def list_buckets(self, provider: str = ProviderAIS):
-        """
-        Returns list of buckets in AIStore cluster.
-
-        Args:
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-            Defaults to "ais". Empty provider returns buckets of all providers.
-
-        Returns:
-            List[Bck]: A list of buckets
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-        """
-        params = {QParamProvider: provider}
-        action = ActionMsg(action=ACT_LIST).dict()
-
-        return self.request_deserialize(
-            HTTP_METHOD_GET,
-            path="buckets",
-            res_model=List[Bck],
-            json=action,
-            params=params,
-        )
-
-    def is_aistore_running(self) -> bool:
-        """
-        Returns cluster status.
-        
-        Args:
-            None
-        
-        Returns: 
-            True if cluster is ready or False if cluster is still setting up.
-        """
-
-        # compare with AIS Go API (api/cluster.go) for additional supported options
-        params = {QparamPrimaryReadyReb: "true"}
-        try:
-            resp = self.request(HTTP_METHOD_GET, path="health", params=params)
-            return resp.ok
-        except Exception:
-            return False
 
     def head_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS) -> Header:
         """
@@ -219,29 +164,6 @@ class Client:
             params=params,
         )
 
-    def get_cluster_info(self) -> Smap:
-        """
-        Returns state of AIS cluster, including the detailed information about its nodes
-
-        Args:
-            None
-
-        Returns:
-            aistore.msg.Smap representing cluster information.
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-        """
-        return self.request_deserialize(
-            HTTP_METHOD_GET,
-            path="daemon",
-            res_model=Smap,
-            params={QParamWhat: "smap"},
-        )
-
     def xact_status(self, xact_id: str = "", xact_kind: str = "", daemon_id: str = "", only_running: bool = False) -> XactStatus:
         """
         Return status of an eXtended Action (xaction)
@@ -348,3 +270,16 @@ class Client:
             The bucket object created.
         """
         return Bucket(client=self, bck_name=bck_name, provider=provider, ns=ns)
+
+    def cluster(self):
+        """
+        Factory constructor for cluster object. 
+        Does not make any HTTP request, only instantiates a cluster object owned by the client.
+
+        Args:
+            None
+        
+        Returns:
+            The cluster object created.
+        """
+        return Cluster(client=self)

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #
 
 # Default provider is AIS, so all Cloud-related tests are skipped.
@@ -15,14 +15,14 @@ class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client = Client(CLUSTER_ENDPOINT)
 
     def test_health_success(self):
-        self.assertEqual(Client(CLUSTER_ENDPOINT).is_aistore_running(), True)
+        self.assertEqual(Client(CLUSTER_ENDPOINT).cluster().is_aistore_running(), True)
 
     def test_health_failure(self):
         # url not exisiting or URL down
-        self.assertEqual(Client("http://localhost:1234").is_aistore_running(), False)
+        self.assertEqual(Client("http://localhost:1234").cluster().is_aistore_running(), False)
 
     def test_cluster_map(self):
-        smap = self.client.get_cluster_info()
+        smap = self.client.cluster().get_info()
 
         self.assertIsNotNone(smap)
         self.assertIsNotNone(smap.proxy_si)

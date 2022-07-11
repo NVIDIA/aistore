@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable

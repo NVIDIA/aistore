@@ -32,10 +32,10 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
                 pass
 
     def test_bucket(self):
-        res = self.client.list_buckets()
+        res = self.client.cluster().list_buckets()
         count = len(res)
         self.create_bucket(self.bck_name)
-        res = self.client.list_buckets()
+        res = self.client.cluster().list_buckets()
         count_new = len(res)
         self.assertEqual(count + 1, count_new)
 
@@ -56,7 +56,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         from_bck_n = self.bck_name + 'from'
         to_bck_n = self.bck_name + 'to'
         self.create_bucket(from_bck_n)
-        res = self.client.list_buckets()
+        res = self.client.cluster().list_buckets()
         count = len(res)
         # wait for rename to finish
         xact_id = self.client.bucket(from_bck_n).rename(to_bck=to_bck_n)
@@ -70,7 +70,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         except requests.exceptions.HTTPError as e:
             self.assertEqual(e.response.status_code, 404)
         # length of buckets before and after rename should be same
-        res = self.client.list_buckets()
+        res = self.client.cluster().list_buckets()
         count_new = len(res)
         self.assertEqual(count, count_new)
 
