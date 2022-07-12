@@ -34,6 +34,7 @@ class Client:
     def __init__(self, endpoint: str):
         self._endpoint = endpoint
         self._base_url = urljoin(self._endpoint, "v1")
+        self._session = requests.session()
 
     @property
     def base_url(self):
@@ -43,13 +44,17 @@ class Client:
     def endpoint(self):
         return self._endpoint
 
+    @property
+    def session(self):
+        return self._session
+
     def request_deserialize(self, method: str, path: str, res_model: Type[T], **kwargs) -> T:
         resp = self.request(method, path, **kwargs)
         return parse_raw_as(res_model, resp.text)
 
     def request(self, method: str, path: str, **kwargs) -> requests.Response:
         url = f"{ self.base_url }/{ path.lstrip('/') }"
-        resp = requests.request(method, url, headers={"Accept": "application/json"}, **kwargs)
+        resp = self.session.request(method, url, headers={"Accept": "application/json"}, **kwargs)
         if resp.status_code < 200 or resp.status_code >= 300:
             handle_errors(resp)
         return resp
