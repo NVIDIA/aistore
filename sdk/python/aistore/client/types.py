@@ -102,7 +102,7 @@ class ObjStream(BaseModel):  # pylint: disable=too-few-public-methods,unused-var
         arbitrary_types_allowed = True
 
     content_length: StrictInt = Field(default=-1, allow_mutation=False)
-    chunk_size: StrictInt = Field(default=1, allow_mutation=False)
+    chunk_size: StrictInt = Field(default=32768, allow_mutation=False)
     e_tag: StrictStr = Field(..., allow_mutation=False)
     e_tag_type: StrictStr = Field(..., allow_mutation=False)
     stream: requests.Response

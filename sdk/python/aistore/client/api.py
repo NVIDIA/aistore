@@ -81,7 +81,7 @@ class Client:
             params=params,
         ).headers
 
-    def get_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS, archpath: str = "", chunk_size: int = 1) -> ObjStream:
+    def get_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS, archpath: str = "", chunk_size: int = 32768) -> ObjStream:
         """
         Reads an object.
 
