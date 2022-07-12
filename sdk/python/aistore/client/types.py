@@ -108,10 +108,7 @@ class ObjStream(BaseModel):  # pylint: disable=too-few-public-methods,unused-var
     stream: requests.Response
 
     def read_all(self) -> bytes:
-        obj_arr = bytearray()
-        for chunk in self:
-            obj_arr.extend(chunk)
-        return bytes(obj_arr)
+        return bytes(self.stream.content)
 
     def __iter__(self) -> Iterator[bytes]:
         try:
