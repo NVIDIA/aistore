@@ -1,5 +1,5 @@
-ais job start dsort // FAIL "incorrect usage of "ais job start dsort": missing arguments "job specification""
-ais job start dsort '{}' -f "path" // FAIL "incorrect usage of "ais job start dsort": multiple job specifications provided, expected one"
+ais job start dsort // FAIL "incorrect 'ais job start dsort' usage: missing arguments "job specification""
+ais job start dsort '{}' -f "path" // FAIL "incorrect 'ais job start dsort' usage: multiple job specifications provided, expected one"
 ais job start dsort -f /path/to/file.json // FAIL "open /path/to/file.json: no such file or directory"
 ais job start dsort '{extension: .tar' // FAIL "failed to determine the type of the job specification"
 

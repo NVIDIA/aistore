@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -98,7 +97,6 @@ var (
 			compactPropFlag,
 		},
 		subcmdShowConfig: {
-			configTypeFlag,
 			jsonFlag,
 		},
 		subcmdShowRemoteAIS: {
@@ -221,11 +219,11 @@ var (
 	}
 	showCmdConfig = cli.Command{
 		Name:         subcmdShowConfig,
-		Usage:        "show cluster, node, or CLI configuration",
+		Usage:        "show CLI, cluster, or node configurations (nodes inherit cluster and have local)",
 		ArgsUsage:    showConfigArgument,
 		Flags:        showCmdsFlags[subcmdShowConfig],
-		Action:       showClusterOrDaemonOrCLIConfigHandler,
-		BashComplete: daemonConfigSectionCompletions,
+		Action:       showConfigHandler,
+		BashComplete: showConfigCompletions,
 	}
 	showCmdRemoteAIS = cli.Command{
 		Name:         subcmdShowRemoteAIS,
@@ -528,28 +526,91 @@ func showClusterConfigHandler(c *cli.Context) (err error) {
 	if _, err = fillMap(); err != nil {
 		return
 	}
-	return getClusterConfig(c, c.Args().First())
+	return showClusterConfig(c, c.Args().First())
 }
 
-func showClusterOrDaemonOrCLIConfigHandler(c *cli.Context) (err error) {
+func showConfigHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "'cluster' or <DAEMON_ID>")
-	}
-	filter := parseStrFlag(c, configTypeFlag)
-	if !cos.NewStringSet("all", subcmdCluster, subcmdCLI, "local", "").Contains(filter) {
-		return fmt.Errorf("invalid value provided for --type, expected one of: 'all','%s','%s','local'",
-			subcmdCluster, subcmdCLI)
+		return incorrectUsageMsg(c, "missing arguments (hint: press <TAB-TAB>)")
 	}
 	if c.Args().First() == subcmdCLI {
 		return showCLIConfigHandler(c)
 	}
-	if _, err = fillMap(); err != nil {
-		return
-	}
 	if c.Args().First() == subcmdCluster {
-		return getClusterConfig(c, c.Args().Get(1))
+		return showClusterConfig(c, c.Args().Get(1))
 	}
-	return getDaemonConfig(c)
+	return showNodeConfig(c)
+}
+
+func showClusterConfig(c *cli.Context, section string) error {
+	useJSON := flagIsSet(c, jsonFlag)
+	cluConfig, err := api.GetClusterConfig(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	if useJSON {
+		return templates.DisplayOutput(cluConfig, c.App.Writer, "", useJSON)
+	}
+	flat := flattenConfig(cluConfig, section)
+	return templates.DisplayOutput(flat, c.App.Writer, templates.ConfigTmpl, false)
+}
+
+func showNodeConfig(c *cli.Context) error {
+	var (
+		section, scope string
+		daemonID       = argDaemonID(c)
+		useJSON        = flagIsSet(c, jsonFlag)
+		node           *cluster.Snode
+	)
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	if node = smap.GetNode(daemonID); node == nil {
+		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
+	}
+	config, err := api.GetDaemonConfig(defaultAPIParams, node)
+	if err != nil {
+		return err
+	}
+
+	data := struct {
+		ClusterConfig []propDiff
+		LocalConfig   []prop
+	}{}
+	for _, a := range c.Args().Tail() {
+		if a == scopeAll || a == scopeCluster || a == scopeLocal {
+			if scope != "" {
+				return incorrectUsageMsg(c, "... %s %s ...", scope, a)
+			}
+			scope = a
+		} else {
+			if scope == "" {
+				return incorrectUsageMsg(c, "... %s ...", section)
+			}
+			if section != "" {
+				return incorrectUsageMsg(c, "... %s %s ...", section, a)
+			}
+			section = a
+		}
+	}
+	if scope == "" {
+		scope = "all"
+	}
+	if scope == scopeAll || scope == scopeLocal {
+		data.LocalConfig = flattenConfig(config.LocalConfig, section)
+	}
+	if scope == "all" || scope == subcmdCluster {
+		cluConf, err := api.GetClusterConfig(defaultAPIParams)
+		if err != nil {
+			return err
+		}
+		flatDaemon := flattenConfig(config.ClusterConfig, section)
+		flatCluster := flattenConfig(cluConf, section)
+		data.ClusterConfig = diffConfigs(flatDaemon, flatCluster)
+	}
+
+	return templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, useJSON)
 }
 
 func showDaemonLogHandler(c *cli.Context) (err error) {

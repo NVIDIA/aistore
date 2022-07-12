@@ -1,1 +1,1 @@
-ais show config $RANDOM_TARGET --type all // IGNORE
+ais show config $RANDOM_TARGET all // IGNORE

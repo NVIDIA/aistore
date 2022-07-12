@@ -220,71 +220,6 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]templates.DiskStatsTemplateH
 	return allStats, nil
 }
 
-func getClusterConfig(c *cli.Context, section string) error {
-	useJSON := flagIsSet(c, jsonFlag)
-	cluConfig, err := api.GetClusterConfig(defaultAPIParams)
-	if err != nil {
-		return err
-	}
-	if useJSON {
-		return templates.DisplayOutput(cluConfig, c.App.Writer, "", useJSON)
-	}
-	flat := flattenConfig(cluConfig, section)
-	return templates.DisplayOutput(flat, c.App.Writer, templates.ConfigTmpl, false)
-}
-
-// Displays the config of a daemon
-func getDaemonConfig(c *cli.Context) error {
-	var (
-		daemonID = argDaemonID(c)
-		section  = c.Args().Get(1)
-		useJSON  = flagIsSet(c, jsonFlag)
-		node     *cluster.Snode
-		hint     bool
-	)
-	smap, err := api.GetClusterMap(defaultAPIParams)
-	if err != nil {
-		return err
-	}
-	if node = smap.GetNode(daemonID); node == nil {
-		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
-	}
-
-	body, err := api.GetDaemonConfig(defaultAPIParams, node)
-	if err != nil {
-		return err
-	}
-
-	filter := parseStrFlag(c, configTypeFlag)
-	data := struct {
-		ClusterConfig []propDiff
-		LocalConfig   []prop
-	}{}
-	if filter == "" {
-		hint = true
-		filter = "all"
-	}
-	if filter == "all" || filter == "local" {
-		data.LocalConfig = flattenConfig(body.LocalConfig, section)
-	}
-	if filter == "all" || filter == "cluster" {
-		cluConf, err := api.GetClusterConfig(defaultAPIParams)
-		if err != nil {
-			return err
-		}
-		flatDaemon := flattenConfig(body.ClusterConfig, section)
-		flatCluster := flattenConfig(cluConf, section)
-		data.ClusterConfig = diffConfigs(flatDaemon, flatCluster)
-	}
-
-	err = templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, useJSON)
-	if err == nil && hint && !useJSON {
-		fmt.Fprintf(c.App.Writer,
-			"(Hint: use `--type` to select the node config's type to show: 'cluster', 'local', 'all'.)\n")
-	}
-	return err
-}
-
 // Sets config of specific daemon or cluster
 func setConfig(c *cli.Context) error {
 	daemonID, nvs, err := daemonKeyValueArgs(c)
@@ -305,7 +240,7 @@ func setConfig(c *cli.Context) error {
 			// show what we can and still return err
 			var errShow error
 			if daemonID != "" && daemonID != c.Args().First() {
-				errShow = showClusterOrDaemonOrCLIConfigHandler(c)
+				errShow = showConfigHandler(c)
 			} else {
 				errShow = showClusterConfigHandler(c)
 			}

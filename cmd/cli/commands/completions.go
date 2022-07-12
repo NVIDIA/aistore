@@ -72,7 +72,7 @@ func lastValueIsAccess(c *cli.Context) bool {
 	if c.NArg() == 0 {
 		return false
 	}
-	lastArg := c.Args()[c.NArg()-1]
+	lastArg := argLast(c)
 	for _, access := range propCmpls[apc.PropBucketAccessAttrs] {
 		if access == lastArg {
 			return true
@@ -108,7 +108,7 @@ func propValueCompletion(c *cli.Context) bool {
 	if lastIsAccess {
 		return accessCompletions(c)
 	}
-	list, ok := propCmpls[c.Args()[c.NArg()-1]]
+	list, ok := propCmpls[argLast(c)]
 	if !ok {
 		return false
 	}
@@ -130,23 +130,29 @@ func daemonCompletions(what daemonKindCompletion) cli.BashCompleteFunc {
 	}
 }
 
-func daemonConfigSectionCompletions(c *cli.Context) {
-	// Daemon and config already given as arguments
-	if c.NArg() >= 2 {
+func showConfigCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		fmt.Println(subcmdCluster)
+		fmt.Println(subcmdCLI)
+		suggestDaemon(completeAllDaemons)
 		return
 	}
 	if c.Args().First() == subcmdCLI {
 		return
 	}
-	if c.NArg() == 1 {
-		suggestConfigSection(c)
+	if c.Args().First() == subcmdCluster {
+		if c.NArg() == 1 {
+			suggestConfigSection(c)
+		}
 		return
 	}
-
-	// No arguments given
-	fmt.Println(subcmdCluster)
-	fmt.Println(subcmdCLI)
-	suggestDaemon(completeAllDaemons)
+	if c.NArg() == 1 { // daemon id only
+		fmt.Println(scopeCluster)
+		fmt.Println(scopeLocal)
+		fmt.Println(scopeAll)
+		return
+	}
+	suggestConfigSection(c)
 }
 
 func suggestConfigSection(c *cli.Context) {
@@ -159,7 +165,7 @@ func suggestConfigSection(c *cli.Context) {
 	})
 	cos.AssertNoErr(err)
 
-	if c.Args().Get(c.NArg()-1) != subcmdCluster {
+	if argLast(c) != subcmdCluster {
 		// add node's local config: fspath, network, etc.
 		err := cmn.IterFields(cmn.LocalConfig{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 			section := strings.Split(uniqueTag, ".")[0]
@@ -335,7 +341,8 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 }
 
 // The function lists bucket names for commands that require old and new bucket name
-func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, separator bool, provider ...string) cli.BashCompleteFunc {
+func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, separator bool,
+	provider ...string) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		if c.NArg() >= 2 {
 			for _, f := range additionalCompletions {
@@ -656,7 +663,7 @@ func suggestUpdatableAuthNConfig(c *cli.Context) {
 	props := authNConfigPropList()
 	lastIsProp := c.NArg() != 0
 	if c.NArg() != 0 {
-		lastVal := c.Args().Get(c.NArg() - 1)
+		lastVal := argLast(c)
 		lastIsProp = cos.StringInSlice(lastVal, props)
 	}
 	if lastIsProp {

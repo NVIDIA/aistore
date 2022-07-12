@@ -24,8 +24,8 @@ import "github.com/NVIDIA/aistore/cmn/jsp"
 //   `jsp` formats its *signature* and other implementation details.
 
 const (
-	VersionAIStore = "3.10"
-	VersionCLI     = "0.92"
+	VersionAIStore = "3.11.rc1"
+	VersionCLI     = "0.93"
 	VersionLoader  = "1.5"
 	VersionAuthN   = "1.0"
 )

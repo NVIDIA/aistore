@@ -95,6 +95,8 @@ func argDaemonID(c *cli.Context) string {
 	return cluster.N2ID(daemonID)
 }
 
+func argLast(c *cli.Context) string { return c.Args().Get(c.NArg() - 1) }
+
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
 
 func helpMessage(template string, data interface{}) string {

@@ -195,6 +195,12 @@ const (
 	countDefault       = 1
 )
 
+const (
+	scopeAll     = "all"
+	scopeLocal   = "local"
+	scopeCluster = subcmdCluster
+)
+
 const sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"
 
 // Argument placeholders in help messages
@@ -227,10 +233,11 @@ const (
 	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
 
 	// Daemons
-	daemonIDArgument          = "DAEMON_ID"
-	optionalDaemonIDArgument  = "[DAEMON_ID]"
-	optionalTargetIDArgument  = "[TARGET_ID]"
-	showConfigArgument        = "cluster|DAEMON_ID [CONFIG_PREFIX]"
+	daemonIDArgument         = "DAEMON_ID"
+	optionalDaemonIDArgument = "[DAEMON_ID]"
+	optionalTargetIDArgument = "[TARGET_ID]"
+	showConfigArgument       = "cli | cluster [CONFIG SECTION OR PREFIX] |\n" +
+		"      DAEMON_ID [ cluster | local | all [CONFIG SECTION OR PREFIX ] ]"
 	showClusterConfigArgument = "[CONFIG_SECTION]"
 	nodeConfigArgument        = daemonIDArgument + " " + keyValuePairsArgument
 	attachRemoteAISArgument   = aliasURLPairArgument
@@ -287,7 +294,7 @@ var (
 		Usage: objPropsFlag.Usage,
 		Value: strings.Join(apc.GetPropsMinimal, ","),
 	}
-	allPropsFlag = cli.BoolFlag{Name: "all", Usage: "show all object properties"}
+	allPropsFlag = cli.BoolFlag{Name: scopeAll, Usage: "show all object properties"}
 	prefixFlag   = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}
 	refreshFlag  = cli.DurationFlag{
 		Name:  "refresh",
@@ -309,10 +316,10 @@ var (
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
 	rawFlag         = cli.BoolFlag{Name: "raw", Usage: "display exact values instead of human-readable ones"}
 
-	allXactionsFlag = cli.BoolFlag{Name: "all", Usage: "show all xactions, including finished"}
-	allItemsFlag    = cli.BoolFlag{Name: "all", Usage: "list all items"} // TODO: differentiate bucket names vs objects
-	allJobsFlag     = cli.BoolFlag{Name: "all", Usage: "remove all finished jobs"}
-	allETLStopFlag  = cli.BoolFlag{Name: "all", Usage: "stop all ETLs"}
+	allXactionsFlag = cli.BoolFlag{Name: scopeAll, Usage: "show all xactions, including finished"}
+	allItemsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "list all items"} // TODO: differentiate bucket names vs objects
+	allJobsFlag     = cli.BoolFlag{Name: scopeAll, Usage: "remove all finished jobs"}
+	allETLStopFlag  = cli.BoolFlag{Name: scopeAll, Usage: "stop all ETLs"}
 
 	// Bucket
 	startAfterFlag = cli.StringFlag{
@@ -344,9 +351,6 @@ var (
 	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
 	compactPropFlag   = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
 	nameOnlyFlag      = cli.BoolFlag{Name: "name-only", Usage: "show only object names (for best performance)"}
-
-	// Config
-	configTypeFlag = cli.StringFlag{Name: "type", Usage: "show the specified configuration, one of: 'all','cluster','local'"}
 
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}
@@ -411,7 +415,7 @@ var (
 	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
-	rmRfFlag      = cli.BoolFlag{Name: "all", Usage: "remove all objects (use it with extreme caution!)"}
+	rmRfFlag      = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
 
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
