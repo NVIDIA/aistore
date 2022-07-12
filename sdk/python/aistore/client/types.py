@@ -8,8 +8,7 @@ from typing import Any, Mapping, List, Iterator, Optional
 
 from pydantic import BaseModel, Field, StrictInt, StrictStr, validator
 import requests
-from aistore.client.const import ProviderAIS, ProviderAmazon, ProviderAzure, ProviderGoogle, ProviderHDFS, ProviderHTTP
-from aistore.client.errors import InvalidBckProvider
+from aistore.client.const import ProviderAIS
 
 
 class Namespace(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
@@ -21,12 +20,6 @@ class Bck(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
     name: str
     provider: str = ProviderAIS
     ns: Namespace = None
-
-    @validator('provider')
-    def is_valid_provider(cls, provider):  # pylint: disable=no-self-argument
-        if provider not in [ProviderAIS, ProviderAmazon, ProviderAzure, ProviderGoogle, ProviderHDFS, ProviderHTTP]:
-            raise InvalidBckProvider(provider)
-        return provider
 
 
 class ActionMsg(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable

@@ -33,7 +33,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def _test_get_obj(self, read_type, obj_name, exp_content):
         chunk_size = random.randrange(1, len(exp_content) + 10)
-        stream = self.client.get_object(self.bck_name, obj_name, chunk_size=chunk_size)
+        stream = self.client.bucket(self.bck_name).object(obj_name).get_object(chunk_size=chunk_size)
         self.assertEqual(stream.content_length, len(exp_content))
         self.assertTrue(stream.e_tag != "")
         if read_type == OBJ_READ_TYPE_ALL:
@@ -55,9 +55,9 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             with tempfile.NamedTemporaryFile() as f:
                 f.write(content)
                 f.flush()
-                self.client.put_object(self.bck_name, obj_name, f.name)
+                self.client.bucket(self.bck_name).object(obj_name).put_object(f.name)
 
-            properties = self.client.head_object(self.bck_name, obj_name)
+            properties = self.client.bucket(self.bck_name).object(obj_name).head_object()
             self.assertEqual(properties['ais-version'], '1')
             self.assertEqual(properties['content-length'], str(len(content)))
             for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
@@ -82,7 +82,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             f.write(content)
             f.flush()
             for obj_id in range(bucket_size):
-                self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
+                self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put_object(f.name)
         for test in list(tests):
             resp = self.client.bucket(self.bck_name).list_objects(page_size=test["page_size"])
             self.assertEqual(len(resp.entries), test["resp_size"])
@@ -96,7 +96,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             f.write(content)
             f.flush()
             for obj_id in range(bucket_size):
-                self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
+                self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put_object(f.name)
         objects = self.client.bucket(self.bck_name).list_all_objects()
         self.assertEqual(len(objects), bucket_size)
         objects = self.client.bucket(self.bck_name).list_all_objects(page_size=short_page_len)
@@ -112,7 +112,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             f.flush()
             for obj_id in range(bucket_size):
                 obj_name = f"obj-{ obj_id }"
-                self.client.put_object(self.bck_name, obj_name, f.name)
+                self.client.bucket(self.bck_name).object(obj_name).put_object(f.name)
                 objects[obj_name] = 1
 
         # Read all `bucket_size` objects by prefix.
@@ -136,12 +136,12 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             f.write(content)
             f.flush()
             for obj_id in range(bucket_size):
-                self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
+                self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put_object(f.name)
         objects = self.client.bucket(self.bck_name).list_objects()
         self.assertEqual(len(objects.entries), bucket_size)
 
         for obj_id in range(delete_cnt):
-            self.client.delete_object(self.bck_name, f"obj-{ obj_id + 1 }")
+            self.client.bucket(self.bck_name).object(f"obj-{ obj_id + 1 }").delete_object()
         objects = self.client.bucket(self.bck_name).list_objects()
         self.assertEqual(len(objects.entries), bucket_size - delete_cnt)
 
@@ -160,7 +160,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             f.write(content)
             f.flush()
             for obj_id in range(bucket_size):
-                self.client.put_object(self.bck_name, f"obj-{ obj_id }", f.name)
+                self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put_object(f.name)
         objects = self.client.bucket(self.bck_name).list_objects(prefix="TEMP")
         self.assertEqual(len(objects.entries), 0)
 

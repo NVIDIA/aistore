@@ -40,7 +40,7 @@ class TestPytorchPlugin(unittest.TestCase):
             with tempfile.NamedTemporaryFile() as file:
                 file.write(content)
                 file.flush()
-                self.client.put_object(self.bck_name, obj_name, file.name)
+                self.client.bucket(self.bck_name).object(obj_name).put_object(file.name)
 
         # create 10 objects in the / dir
         for i in range(num_objs):
@@ -50,7 +50,7 @@ class TestPytorchPlugin(unittest.TestCase):
             with tempfile.NamedTemporaryFile() as file:
                 file.write(content)
                 file.flush()
-                self.client.put_object(self.bck_name, obj_name, file.name)
+                self.client.bucket(self.bck_name).object(obj_name).put_object(file.name)
 
         prefixes = [['ais://' + self.bck_name], ['ais://' + self.bck_name + "/"],
                     ['ais://' + self.bck_name + "/temp/", 'ais://' + self.bck_name + "/obj"]]

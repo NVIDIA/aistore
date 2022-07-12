@@ -3,23 +3,20 @@
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
-from typing import TypeVar, Type, List, NewType
+from typing import TypeVar, Type, List
 import requests
 import time
 from urllib.parse import urljoin
 from pydantic.tools import parse_raw_as
 
-from aistore.client.const import (
-    HTTP_METHOD_DELETE, HTTP_METHOD_GET, HTTP_METHOD_HEAD, HTTP_METHOD_PUT, ProviderAIS, QParamArchpath, QParamProvider, QParamWhat
-)
+from aistore.client.const import (HTTP_METHOD_GET, HTTP_METHOD_PUT, ProviderAIS, QParamWhat)
 from aistore.client.bucket import Bucket
 from aistore.client.cluster import Cluster
 from aistore.client.errors import Timeout
-from aistore.client.types import (Bck, ObjStream, XactStatus)
+from aistore.client.types import (Bck, XactStatus)
 from aistore.client.utils import handle_errors, probing_frequency
 
 T = TypeVar("T")
-Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
 
 # pylint: disable=unused-variable
@@ -58,116 +55,6 @@ class Client:
         if resp.status_code < 200 or resp.status_code >= 300:
             handle_errors(resp)
         return resp
-
-    def head_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS) -> Header:
-        """
-        Requests object properties.
-
-        Args:
-            bck_name (str): Name of the new bucket.
-            obj_name (str): Name of an object in the bucket.
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-                Defaults to "ais". Empty provider returns buckets of all providers.
-
-        Returns:
-            Response header with the object properties.
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-            requests.exeptions.HTTPError(404): The object does not exist
-        """
-        params = {QParamProvider: provider}
-        return self.request(
-            HTTP_METHOD_HEAD,
-            path=f"objects/{ bck_name }/{ obj_name }",
-            params=params,
-        ).headers
-
-    def get_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS, archpath: str = "", chunk_size: int = 32768) -> ObjStream:
-        """
-        Reads an object.
-
-        Args:
-            bck_name (str): Name of a bucket.
-            obj_name (str): Name of an object in the bucket.
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-            archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive.
-            chunk_size (int, optional): Chunk size to use while reading from stream.
-
-        Returns:
-            The stream of bytes to read an object or a file inside an archive.
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-        """
-        params = {QParamProvider: provider, QParamArchpath: archpath}
-        resp = self.request(HTTP_METHOD_GET, path=f"objects/{ bck_name }/{ obj_name }", params=params, stream=True)
-        length = int(resp.headers.get("content-length", 0))
-        e_tag = resp.headers.get("ais-checksum-value", "")
-        e_tag_type = resp.headers.get("ais-checksum-type", "")
-        return ObjStream(content_length=length, e_tag=e_tag, e_tag_type=e_tag_type, stream=resp, chunk_size=chunk_size)
-
-    def put_object(self, bck_name: str, obj_name: str, path: str, provider: str = ProviderAIS) -> Header:
-        """
-        Puts a local file as an object to a bucket in AIS storage.
-
-        Args:
-            bck_name (str): Name of a bucket.
-            obj_name (str): Name of an object in the bucket.
-            path (str): path to local file.
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-
-        Returns:
-            Object properties
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-        """
-        url = f"/objects/{ bck_name }/{ obj_name }"
-        params = {QParamProvider: provider}
-        with open(path, "rb") as data:
-            return self.request(
-                HTTP_METHOD_PUT,
-                path=url,
-                params=params,
-                data=data,
-            ).headers
-
-    def delete_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS):
-        """
-        Delete an object from a bucket.
-
-        Args:
-            bck_name (str): Name of the new bucket.
-            obj_name (str): Name of an object in the bucket.
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-                Defaults to "ais".
-
-        Returns:
-            None
-
-        Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-            requests.exeptions.HTTPError(404): The object does not exist
-        """
-        params = {QParamProvider: provider}
-        self.request(
-            HTTP_METHOD_DELETE,
-            path=f"objects/{ bck_name }/{ obj_name }",
-            params=params,
-        )
 
     def xact_status(self, xact_id: str = "", xact_kind: str = "", daemon_id: str = "", only_running: bool = False) -> XactStatus:
         """

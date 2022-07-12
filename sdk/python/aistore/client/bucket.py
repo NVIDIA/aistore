@@ -24,6 +24,7 @@ from aistore.client.const import (
 )
 
 from aistore.client.errors import InvalidBckProvider
+from aistore.client.object import Object
 from aistore.client.types import (ActionMsg, Bck, BucketEntry, BucketList, BucketLister)
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
@@ -363,3 +364,16 @@ class Bucket:
             value["continuation_token"] = resp.continuation_token
             value["uuid"] = resp.uuid
         return obj_list
+
+    def object(self, obj_name: str):
+        """
+        Factory constructor for object bound to bucket. 
+        Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
+
+        Args:
+            obj_name (str): Name of object
+        
+        Returns:
+            The object created.
+        """
+        return Object(bck=self, obj_name=obj_name)
