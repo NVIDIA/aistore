@@ -2707,7 +2707,7 @@ func (p *proxy) _primaryURLPre(_ *configModifier, clone *globalConfig) (updated 
 	return
 }
 
-// [METHOD] /v1/dsort
+// [METHOD] /v1/sort
 func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)

@@ -73,9 +73,11 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | `buckets` | create, destroy, rename, copy, transform (entire) buckets; list objects in a given bucket; get bucket names for a given provider (or all providers); get bucket properties |
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 | `download` | download external datasets and/or selected files from remote buckets, HDFS, or even specific HTTP locations |
-| `dsort` | user-defined distributed shuffle |
+| `sort` | user-defined distributed shuffle |
 
 and more.
+
+> For the most updated **URL paths**, please see [`api/apc/urlpaths.go`](https://github.com/NVIDIA/aistore/blob/master/api/apc/urlpaths.go) source.
 
 5. **URL query**, e. g., `?what=config`.
 
