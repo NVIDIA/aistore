@@ -50,6 +50,6 @@ class AISDataset(AISBaseClass, Dataset):
 
     def __getitem__(self, index: int):
         object_name = self._object_info[index]["object"]
-        obj = self.client.bucket(name=self._object_info[index]["bck_name"],
-                                 provider=self._object_info[index]["provider"]).object(name=object_name).get().read_all()
+        obj = self.client.bucket(bck_name=self._object_info[index]["bck_name"],
+                                 provider=self._object_info[index]["provider"]).object(obj_name=object_name).get().read_all()
         return object_name, obj

@@ -149,7 +149,7 @@ class Client:
         )
         return resp.text
 
-    def bucket(self, name: str, provider: str = ProviderAIS, ns: str = ""):
+    def bucket(self, bck_name: str, provider: str = ProviderAIS, ns: str = ""):
         """
         Factory constructor for bucket object. 
         Does not make any HTTP request, only instantiates a bucket object owned by the client.
@@ -161,7 +161,7 @@ class Client:
         Returns:
             The bucket object created.
         """
-        return Bucket(client=self, bck_name=name, provider=provider, ns=ns)
+        return Bucket(client=self, bck_name=bck_name, provider=provider, ns=ns)
 
     def cluster(self):
         """

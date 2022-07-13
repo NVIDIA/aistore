@@ -365,7 +365,7 @@ class Bucket:
             value["uuid"] = resp.uuid
         return obj_list
 
-    def object(self, name: str):
+    def object(self, obj_name: str):
         """
         Factory constructor for object bound to bucket. 
         Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
@@ -376,4 +376,4 @@ class Bucket:
         Returns:
             The object created.
         """
-        return Object(bck=self, obj_name=name)
+        return Object(bck=self, obj_name=obj_name)
