@@ -6,7 +6,7 @@ Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import random
 import string
 import unittest
-from aistore.client.api import Client
+from aistore.client import Client
 from aistore.client.errors import AISError, ErrBckNotFound
 import tempfile
 from tests import CLUSTER_ENDPOINT

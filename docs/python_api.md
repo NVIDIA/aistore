@@ -11,28 +11,47 @@ AIStore Python SDK is a growing set of client-side APIs to access and utilize AI
 
 * [api](#api)
   * [Client](#api.Client)
-    * [list\_buckets](#api.Client.list_buckets)
-    * [is\_aistore\_running](#api.Client.is_aistore_running)
-    * [create\_bucket](#api.Client.create_bucket)
-    * [destroy\_bucket](#api.Client.destroy_bucket)
-    * [evict\_bucket](#api.Client.evict_bucket)
-    * [head\_bucket](#api.Client.head_bucket)
-    * [copy\_bucket](#api.Client.copy_bucket)
-    * [list\_objects](#api.Client.list_objects)
-    * [list\_objects\_iter](#api.Client.list_objects_iter)
-    * [list\_all\_objects](#api.Client.list_all_objects)
-    * [head\_object](#api.Client.head_object)
-    * [get\_object](#api.Client.get_object)
-    * [put\_object](#api.Client.put_object)
-    * [delete\_object](#api.Client.delete_object)
-    * [get\_cluster\_info](#api.Client.get_cluster_info)
     * [xact\_status](#api.Client.xact_status)
     * [wait\_for\_xaction\_finished](#api.Client.wait_for_xaction_finished)
     * [xact\_start](#api.Client.xact_start)
+    * [bucket](#api.Client.bucket)
+    * [cluster](#api.Client.cluster)
+* [cluster](#cluster)
+  * [Cluster](#cluster.Cluster)
+    * [client](#cluster.Cluster.client)
+    * [get\_info](#cluster.Cluster.get_info)
+    * [list\_buckets](#cluster.Cluster.list_buckets)
+    * [is\_aistore\_running](#cluster.Cluster.is_aistore_running)
+* [bucket](#bucket)
+  * [Bucket](#bucket.Bucket)
+    * [client](#bucket.Bucket.client)
+    * [bck](#bucket.Bucket.bck)
+    * [qparam](#bucket.Bucket.qparam)
+    * [provider](#bucket.Bucket.provider)
+    * [name](#bucket.Bucket.name)
+    * [namespace](#bucket.Bucket.namespace)
+    * [create](#bucket.Bucket.create)
+    * [delete](#bucket.Bucket.delete)
+    * [rename](#bucket.Bucket.rename)
+    * [evict](#bucket.Bucket.evict)
+    * [head](#bucket.Bucket.head)
+    * [copy](#bucket.Bucket.copy)
+    * [list\_objects](#bucket.Bucket.list_objects)
+    * [list\_objects\_iter](#bucket.Bucket.list_objects_iter)
+    * [list\_all\_objects](#bucket.Bucket.list_all_objects)
+    * [object](#bucket.Bucket.object)
+* [object](#object)
+  * [Object](#object.Object)
+    * [bck](#object.Object.bck)
+    * [obj\_name](#object.Object.obj_name)
+    * [head](#object.Object.head)
+    * [get](#object.Object.get)
+    * [put](#object.Object.put)
+    * [delete](#object.Object.delete)
 
 <a id="api.Client"></a>
 
-## Client
+## Class: Client
 
 ```python
 class Client()
@@ -43,490 +62,6 @@ AIStore client for managing buckets, objects, ETL jobs
 **Arguments**:
 
 - `endpoint` _str_ - AIStore endpoint
-
-<a id="api.Client.list_buckets"></a>
-
-### list\_buckets
-
-```python
-def list_buckets(provider: str = ProviderAIS)
-```
-
-Returns list of buckets in AIStore cluster
-
-**Arguments**:
-
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-  Defaults to "ais". Empty provider returns buckets of all providers.
-  
-
-**Returns**:
-
-- `List[Bck]` - A list of buckets
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="api.Client.is_aistore_running"></a>
-
-### is\_aistore\_running
-
-```python
-def is_aistore_running() -> bool
-```
-
-Returns True if cluster is ready and false if cluster is still setting up
-
-**Arguments**:
-
-  None
-  
-
-**Returns**:
-
-- `bool` - True if cluster is ready and false if cluster is still setting up
-
-<a id="api.Client.create_bucket"></a>
-
-### create\_bucket
-
-```python
-def create_bucket(bck_name: str)
-```
-
-Creates a bucket in AIStore cluster.
-Always creates a bucket for AIS provider. Other providers do not support bucket creation.
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of the new bucket.
-  
-
-**Returns**:
-
-  Nothing
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `requests.exceptions.HTTPError(409)` - Bucket already exists
-
-<a id="api.Client.destroy_bucket"></a>
-
-### destroy\_bucket
-
-```python
-def destroy_bucket(bck_name: str)
-```
-
-Destroys a bucket in AIStore cluster.
-Can delete only AIS buckets. Other providers do not support bucket deletion.
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of the existing bucket
-  
-
-**Returns**:
-
-  Nothing
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="api.Client.evict_bucket"></a>
-
-### evict\_bucket
-
-```python
-def evict_bucket(bck_name: str, provider: str, keep_md: bool = True)
-```
-
-Evicts a bucket in AIStore cluster.
-NOTE: only Cloud buckets can be evicted
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of the existing bucket
-- `provider` _str_ - Name of bucket provider, one of "aws", "gcp", "az", "hdfs" or "ht"
-- `keep_md` _bool, optional_ - if true, it evicts objects but keeps bucket metadata
-  
-
-**Returns**:
-
-  Nothing
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `InvalidBckProvider` - Evicting AIS bucket
-
-<a id="api.Client.head_bucket"></a>
-
-### head\_bucket
-
-```python
-def head_bucket(bck_name: str, provider: str = ProviderAIS) -> Header
-```
-
-Requests bucket properties.
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of the new bucket
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-  Defaults to "ais". Empty provider returns buckets of all providers.
-  
-
-**Returns**:
-
-  Response header with the bucket properties
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `requests.exeptions.HTTPError(404)` - The bucket does not exist
-
-<a id="api.Client.copy_bucket"></a>
-
-### copy\_bucket
-
-```python
-def copy_bucket(from_bck_name: str,
-                to_bck_name: str,
-                prefix: str = "",
-                dry_run: bool = False,
-                force: bool = False,
-                from_provider: str = ProviderAIS,
-                to_provider: str = ProviderAIS) -> str
-```
-
-Returns xaction id that can be used later to check the status of the
-asynchronous operation.
-
-**Arguments**:
-
-- `from_bck_name` _str_ - Name of the source bucket.
-- `to_bck_name` _str_ - Name of the destination bucket.
-- `prefix` _str, optional_ - If set, only the objects starting with
-  provider prefix will be copied.
-- `dry_run` _bool, optional_ - Determines if the copy should actually
-  happen or not.
-- `force` _bool, optional_ - Override existing destination bucket.
-- `from_provider` _str, optional_ - Name of source bucket provider.
-- `to_provider` _str, optional_ - Name of destination bucket provider.
-  
-
-**Returns**:
-
-  Xaction id (as str) that can be used to check the status of the operation.
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out receiving response from AIStore
-
-<a id="api.Client.list_objects"></a>
-
-### list\_objects
-
-```python
-def list_objects(bck_name: str,
-                 provider: str = ProviderAIS,
-                 prefix: str = "",
-                 props: str = "",
-                 page_size: int = 0,
-                 uuid: str = "",
-                 continuation_token: str = "") -> BucketList
-```
-
-Returns a structure that contains a page of objects, xaction UUID, and continuation token (to read the next page, if available).
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of a bucket
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-  Defaults to "ais". Empty provider returns buckets of all providers.
-- `prefix` _str, optional_ - return only objects that start with the prefix
-- `props` _str, optional_ - comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
-- `page_size` _int, optional_ - return at most "page_size" objects.
-  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
-- `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
-  Defaults to "0" - return maximum number objects.
-- `uuid` _str, optional_ - job UUID, required to get the next page of objects
-- `continuation_token` _str, optional_ - marks the object to start reading the next page
-  
-
-**Returns**:
-
-- `BucketList` - the page of objects in the bucket and the continuation token to get the next page.
-  Empty continuation token marks the final page of the object list.
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="api.Client.list_objects_iter"></a>
-
-### list\_objects\_iter
-
-```python
-def list_objects_iter(bck_name: str,
-                      provider: str = ProviderAIS,
-                      prefix: str = "",
-                      props: str = "",
-                      page_size: int = 0) -> BucketLister
-```
-
-Returns an iterator for all objects in a bucket
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of a bucket
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-  Defaults to "ais". Empty provider returns buckets of all providers.
-- `prefix` _str, optional_ - return only objects that start with the prefix
-- `props` _str, optional_ - comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
-  
-
-**Returns**:
-
-- `BucketLister` - object iterator
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="api.Client.list_all_objects"></a>
-
-### list\_all\_objects
-
-```python
-def list_all_objects(bck_name: str,
-                     provider: str = ProviderAIS,
-                     prefix: str = "",
-                     props: str = "",
-                     page_size: int = 0) -> List[BucketEntry]
-```
-
-Returns a list of all objects in a bucket
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of a bucket
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-  Defaults to "ais". Empty provider returns buckets of all providers.
-- `prefix` _str, optional_ - return only objects that start with the prefix
-- `props` _str, optional_ - comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
-- `page_size` _int, optional_ - return at most "page_size" objects.
-  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
-- `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
-  Defaults to "0" - return maximum number objects.
-  
-
-**Returns**:
-
-- `List[BucketEntry]` - list of objects in a bucket
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="api.Client.head_object"></a>
-
-### head\_object
-
-```python
-def head_object(bck_name: str,
-                obj_name: str,
-                provider: str = ProviderAIS) -> Header
-```
-
-Requests object properties.
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of the new bucket
-- `obj_name` _str_ - Name of an object in the bucket
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-  Defaults to "ais". Empty provider returns buckets of all providers.
-  
-
-**Returns**:
-
-  Response header with the object properties.
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `requests.exeptions.HTTPError(404)` - The object does not exist
-
-<a id="api.Client.get_object"></a>
-
-### get\_object
-
-```python
-def get_object(bck_name: str,
-               obj_name: str,
-               provider: str = ProviderAIS,
-               archpath: str = "",
-               chunk_size: int = 1) -> ObjStream
-```
-
-Reads an object
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of a bucket
-- `obj_name` _str_ - Name of an object in the bucket
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-- `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file from the archive
-- `chunk_size` _int, optional_ - chunk_size to use while reading from stream
-  
-
-**Returns**:
-
-  The stream of bytes to read an object or a file inside an archive.
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="api.Client.put_object"></a>
-
-### put\_object
-
-```python
-def put_object(bck_name: str,
-               obj_name: str,
-               path: str,
-               provider: str = ProviderAIS) -> Header
-```
-
-Puts a local file as an object to a bucket in AIS storage
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of a bucket
-- `obj_name` _str_ - Name of an object in the bucket
-- `path` _str_ - path to local file
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-  
-
-**Returns**:
-
-  Object properties
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="api.Client.delete_object"></a>
-
-### delete\_object
-
-```python
-def delete_object(bck_name: str, obj_name: str, provider: str = ProviderAIS)
-```
-
-Delete an object from a bucket.
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of the new bucket
-- `obj_name` _str_ - Name of an object in the bucket
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-  Defaults to "ais".
-  
-
-**Returns**:
-
-  None
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `requests.exeptions.HTTPError(404)` - The object does not exist
-
-<a id="api.Client.get_cluster_info"></a>
-
-### get\_cluster\_info
-
-```python
-def get_cluster_info() -> Smap
-```
-
-Returns state of AIS cluster, including the detailed information about its nodes
-
-**Arguments**:
-
-  No arguments
-  
-
-**Returns**:
-
-  aistore.msg.Smap
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
 
 <a id="api.Client.xact_status"></a>
 
@@ -543,15 +78,15 @@ Return status of an eXtended Action (xaction)
 
 **Arguments**:
 
-- `xact_id` _str, optional_ - UUID of the xaction. Empty - all xactions
-- `xact_kind` _str, optional_ - kind of the xaction. Empty - all kinds
-- `daemon_id` _str, optional_ - return xactions only running on the daemon_id
-- `only_running` _bool, optional_ - True - return only currently running xactions, False - include in the list also finished and aborted ones
+- `xact_id` _str, optional_ - UUID of the xaction. Empty - all xactions.
+- `xact_kind` _str, optional_ - Kind of the xaction. Empty - all kinds.
+- `daemon_id` _str, optional_ - Return xactions only running on the daemon_id.
+- `only_running` _bool, optional_ - True - return only currently running xactions, False - include in the list also finished and aborted ones.
   
 
 **Returns**:
 
-  The xaction description
+  The xaction description.
   
 
 **Raises**:
@@ -576,10 +111,10 @@ Wait for an eXtended Action (xaction) to finish
 
 **Arguments**:
 
-- `xact_id` _str, optional_ - UUID of the xaction. Empty - all xactions
-- `xact_kind` _str, optional_ - kind of the xaction. Empty - all kinds
-- `daemon_id` _str, optional_ - return xactions only running on the daemon_id
-- `timeout` _int, optional_ - the maximum time to wait for the xaction, in seconds. Default timeout is 5 minutes
+- `xact_id` _str, optional_ - UUID of the xaction. Empty - all xactions.
+- `xact_kind` _str, optional_ - Kind of the xaction. Empty - all kinds.
+- `daemon_id` _str, optional_ - Return xactions only running on the daemon_id.
+- `timeout` _int, optional_ - The maximum time to wait for the xaction, in seconds. Default timeout is 5 minutes.
   
 
 **Returns**:
@@ -606,19 +141,19 @@ def xact_start(xact_kind: str = "",
                buckets: List[Bck] = None) -> str
 ```
 
-Start an eXtended Action (xaction) and return its UUID
+Start an eXtended Action (xaction) and return its UUID.
 
 **Arguments**:
 
-- `xact_kind` _str, optional_ - `kind` of the xaction (for supported kinds, see api/apc/const.go). Empty - all kinds.
-- `daemon_id` _str, optional_ - return xactions only running on the daemon_id
-- `force` _bool, optional_ - override existing restrictions for a bucket (e.g., run LRU eviction even if the bucket has LRU disabled)
-- `buckets` _List[Bck], optional_ - list of one or more buckets; applicable only for xactions that have bucket scope (for details and full enumeration, see xact/table.go)
+- `xact_kind` _str, optional_ - Kind of the xaction (for supported kinds, see api/apc/const.go). Empty - all kinds.
+- `daemon_id` _str, optional_ - Return xactions only running on the daemon_id.
+- `force` _bool, optional_ - Override existing restrictions for a bucket (e.g., run LRU eviction even if the bucket has LRU disabled).
+- `buckets` _List[Bck], optional_ - List of one or more buckets; applicable only for xactions that have bucket scope (for details and full enumeration, see xact/table.go).
   
 
 **Returns**:
 
-  The running xaction UUID
+  The running xaction UUID.
   
 
 **Raises**:
@@ -627,4 +162,698 @@ Start an eXtended Action (xaction) and return its UUID
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="api.Client.bucket"></a>
+
+### bucket
+
+```python
+def bucket(bck_name: str, provider: str = ProviderAIS, ns: str = "")
+```
+
+Factory constructor for bucket object.
+Does not make any HTTP request, only instantiates a bucket object owned by the client.
+
+**Arguments**:
+
+- `bck_name` _str_ - Name of bucket (optional, defaults to "ais").
+- `provider` _str_ - Provider of bucket (one of "ais", "aws", "gcp", ...).
+  
+
+**Returns**:
+
+  The bucket object created.
+
+<a id="api.Client.cluster"></a>
+
+### cluster
+
+```python
+def cluster()
+```
+
+Factory constructor for cluster object.
+Does not make any HTTP request, only instantiates a cluster object owned by the client.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+  The cluster object created.
+
+<a id="cluster.Cluster"></a>
+
+## Class: Cluster
+
+```python
+class Cluster()
+```
+
+A class representing a cluster bound to an AIS client.
+
+**Arguments**:
+
+  None
+
+<a id="cluster.Cluster.client"></a>
+
+### client
+
+```python
+@property
+def client()
+```
+
+The client object bound to this cluster.
+
+<a id="cluster.Cluster.get_info"></a>
+
+### get\_info
+
+```python
+def get_info() -> Smap
+```
+
+Returns state of AIS cluster, including the detailed information about its nodes.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+- `aistore.msg.Smap` - Smap containing cluster information
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="cluster.Cluster.list_buckets"></a>
+
+### list\_buckets
+
+```python
+def list_buckets(provider: str = ProviderAIS)
+```
+
+Returns list of buckets in AIStore cluster.
+
+**Arguments**:
+
+- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+  Defaults to "ais". Empty provider returns buckets of all providers.
+  
+
+**Returns**:
+
+- `List[Bck]` - A list of buckets
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="cluster.Cluster.is_aistore_running"></a>
+
+### is\_aistore\_running
+
+```python
+def is_aistore_running() -> bool
+```
+
+Returns True if cluster is ready, or false if cluster is still setting up.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+- `bool` - True if cluster is ready, or false if cluster is still setting up
+
+<a id="bucket.Bucket"></a>
+
+## Class: Bucket
+
+```python
+class Bucket()
+```
+
+A class representing a bucket that contains user data.
+
+**Arguments**:
+
+- `bck_name` _str_ - name of bucket
+- `provider` _str, optional_ - provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
+- `ns` _str, optional_ - namespace of bucket, defaults to ""
+
+<a id="bucket.Bucket.client"></a>
+
+### client
+
+```python
+@property
+def client()
+```
+
+The client bound to this bucket.
+
+<a id="bucket.Bucket.bck"></a>
+
+### bck
+
+```python
+@property
+def bck()
+```
+
+The custom type [Bck] corresponding to this bucket.
+
+<a id="bucket.Bucket.qparam"></a>
+
+### qparam
+
+```python
+@property
+def qparam()
+```
+
+The QParamProvider of this bucket.
+
+<a id="bucket.Bucket.provider"></a>
+
+### provider
+
+```python
+@property
+def provider()
+```
+
+The provider for this bucket.
+
+<a id="bucket.Bucket.name"></a>
+
+### name
+
+```python
+@property
+def name()
+```
+
+The name of this bucket.
+
+<a id="bucket.Bucket.namespace"></a>
+
+### namespace
+
+```python
+@property
+def namespace()
+```
+
+The namespace for this bucket.
+
+<a id="bucket.Bucket.create"></a>
+
+### create
+
+```python
+def create()
+```
+
+Creates a bucket in AIStore cluster.
+Can only create a bucket for AIS provider on localized cluster. Remote cloud buckets do not support creation.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+  None
+  
+
+**Raises**:
+
+- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `aistore.client.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.delete"></a>
+
+### delete
+
+```python
+def delete()
+```
+
+Destroys bucket in AIStore cluster.
+Can only delete AIS buckets. Other remote cloud bucket providers do not support bucket deletion.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+  None
+  
+
+**Raises**:
+
+- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `aistore.client.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.rename"></a>
+
+### rename
+
+```python
+def rename(to_bck: str) -> str
+```
+
+Renames bucket in AIStore cluster.
+Only works on AIS buckets. Returns xaction id that can be used later to check the status of the asynchronous operation.
+
+**Arguments**:
+
+- `to_bck` _str_ - New bucket name for bucket to be renamed as
+  
+
+**Returns**:
+
+  xaction id (as str) that can be used to check the status of the operation
+  
+
+**Raises**:
+
+- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `aistore.client.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.evict"></a>
+
+### evict
+
+```python
+def evict(keep_md: bool = True)
+```
+
+Evicts bucket in AIStore cluster.
+NOTE: only Cloud buckets can be evicted.
+
+**Arguments**:
+
+- `keep_md` _bool, optional_ - If true, it evicts objects but keeps bucket metadata
+  
+
+**Returns**:
+
+  None
+  
+
+**Raises**:
+
+- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `aistore.client.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.head"></a>
+
+### head
+
+```python
+def head() -> Header
+```
+
+Requests bucket properties.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+  Response header with the bucket properties
+  
+
+**Raises**:
+
+- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.copy"></a>
+
+### copy
+
+```python
+def copy(to_bck_name: str,
+         prefix: str = "",
+         dry_run: bool = False,
+         force: bool = False,
+         to_provider: str = ProviderAIS) -> str
+```
+
+Returns xaction id that can be used later to check the status of the asynchronous operation.
+
+**Arguments**:
+
+- `to_bck_name` _str_ - Name of the destination bucket
+- `prefix` _str, optional_ - If set, only the objects starting with
+  provider prefix will be copied
+- `dry_run` _bool, optional_ - Determines if the copy should actually
+  happen or not
+- `force` _bool, optional_ - Override existing destination bucket
+- `to_provider` _str, optional_ - Name of destination bucket provider
+  
+
+**Returns**:
+
+  Xaction id (as str) that can be used to check the status of the operation
+  
+
+**Raises**:
+
+- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.list_objects"></a>
+
+### list\_objects
+
+```python
+def list_objects(prefix: str = "",
+                 props: str = "",
+                 page_size: int = 0,
+                 uuid: str = "",
+                 continuation_token: str = "") -> BucketList
+```
+
+Returns a structure that contains a page of objects, xaction UUID, and continuation token (to read the next page, if available).
+
+**Arguments**:
+
+- `prefix` _str, optional_ - Return only objects that start with the prefix
+- `props` _str, optional_ - Comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+- `page_size` _int, optional_ - Return at most "page_size" objects.
+  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+- `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
+  Defaults to "0" - return maximum number objects.
+- `uuid` _str, optional_ - Job UUID, required to get the next page of objects
+- `continuation_token` _str, optional_ - Marks the object to start reading the next page
+  
+
+**Returns**:
+
+- `BucketList` - the page of objects in the bucket and the continuation token to get the next page
+  Empty continuation token marks the final page of the object list
+  
+
+**Raises**:
+
+- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.list_objects_iter"></a>
+
+### list\_objects\_iter
+
+```python
+def list_objects_iter(prefix: str = "",
+                      props: str = "",
+                      page_size: int = 0) -> BucketLister
+```
+
+Returns an iterator for all objects in bucket
+
+**Arguments**:
+
+- `prefix` _str, optional_ - Return only objects that start with the prefix
+- `props` _str, optional_ - Comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+- `page_size` _int, optional_ - return at most "page_size" objects
+  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+- `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
+  Defaults to "0" - return maximum number objects
+  
+
+**Returns**:
+
+- `BucketLister` - object iterator
+  
+
+**Raises**:
+
+- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.list_all_objects"></a>
+
+### list\_all\_objects
+
+```python
+def list_all_objects(prefix: str = "",
+                     props: str = "",
+                     page_size: int = 0) -> List[BucketEntry]
+```
+
+Returns a list of all objects in bucket
+
+**Arguments**:
+
+- `prefix` _str, optional_ - return only objects that start with the prefix
+- `props` _str, optional_ - comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+- `page_size` _int, optional_ - return at most "page_size" objects
+  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+- `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
+  Defaults to "0" - return maximum number objects
+  
+
+**Returns**:
+
+- `List[BucketEntry]` - list of objects in bucket
+  
+
+**Raises**:
+
+- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.object"></a>
+
+### object
+
+```python
+def object(obj_name: str)
+```
+
+Factory constructor for object bound to bucket.
+Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
+
+**Arguments**:
+
+- `obj_name` _str_ - Name of object
+  
+
+**Returns**:
+
+  The object created.
+
+<a id="object.Object"></a>
+
+## Class: Object
+
+```python
+class Object()
+```
+
+A class representing an object of a bucket bound to a client.
+
+**Arguments**:
+
+- `obj_name` _str_ - name of object
+
+<a id="object.Object.bck"></a>
+
+### bck
+
+```python
+@property
+def bck()
+```
+
+The custom type [Bck] bound to this object.
+
+<a id="object.Object.obj_name"></a>
+
+### obj\_name
+
+```python
+@property
+def obj_name()
+```
+
+The name of this object.
+
+<a id="object.Object.head"></a>
+
+### head
+
+```python
+def head() -> Header
+```
+
+Requests object properties.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+  Response header with the object properties.
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `requests.exeptions.HTTPError(404)` - The object does not exist
+
+<a id="object.Object.get"></a>
+
+### get
+
+```python
+def get(archpath: str = "", chunk_size: int = DEFAULT_CHUNK_SIZE) -> ObjStream
+```
+
+Reads an object
+
+**Arguments**:
+
+- `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file from the archive
+- `chunk_size` _int, optional_ - chunk_size to use while reading from stream
+  
+
+**Returns**:
+
+  The stream of bytes to read an object or a file inside an archive.
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="object.Object.put"></a>
+
+### put
+
+```python
+def put(path: str) -> Header
+```
+
+Puts a local file as an object to a bucket in AIS storage.
+
+**Arguments**:
+
+- `path` _str_ - path to local file.
+  
+
+**Returns**:
+
+  Object properties
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="object.Object.delete"></a>
+
+### delete
+
+```python
+def delete()
+```
+
+Delete an object from a bucket.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+  None
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `requests.exeptions.HTTPError(404)` - The object does not exist
 

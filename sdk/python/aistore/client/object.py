@@ -34,12 +34,12 @@ class Object:
 
     @property
     def bck(self):
-        """The bucket object bound to this object."""
+        """The custom type [Bck] bound to this object."""
         return self._bck
 
     @property
     def obj_name(self):
-        """The name of the object."""
+        """The name of this object."""
         return self._obj_name
 
     def head(self) -> Header:

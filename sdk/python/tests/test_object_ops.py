@@ -10,7 +10,7 @@ import unittest
 from aistore.client.errors import AISError, ErrBckNotFound
 import tempfile
 
-from aistore.client.api import Client
+from aistore.client import Client
 from . import CLUSTER_ENDPOINT
 
 OBJ_READ_TYPE_ALL = "read_all"
@@ -85,7 +85,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
                 self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put(f.name)
         for test in list(tests):
             resp = self.client.bucket(self.bck_name).list_objects(page_size=test["page_size"])
-            self.assertEqual(len(resp.entries), test["resp_size"])
+            self.assertEqual(len(resp.get_entries()), test["resp_size"])
 
     def test_list_all_objects(self):
         bucket_size = 110
@@ -138,23 +138,23 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             for obj_id in range(bucket_size):
                 self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put(f.name)
         objects = self.client.bucket(self.bck_name).list_objects()
-        self.assertEqual(len(objects.entries), bucket_size)
+        self.assertEqual(len(objects.get_entries()), bucket_size)
 
         for obj_id in range(delete_cnt):
             self.client.bucket(self.bck_name).object(f"obj-{ obj_id + 1 }").delete()
         objects = self.client.bucket(self.bck_name).list_objects()
-        self.assertEqual(len(objects.entries), bucket_size - delete_cnt)
+        self.assertEqual(len(objects.get_entries()), bucket_size - delete_cnt)
 
     def test_empty_bucket(self):
         self.client.bucket(self.bck_name).create()
         objects = self.client.bucket(self.bck_name).list_objects()
-        self.assertEqual(len(objects.entries), 0)
+        self.assertEqual(len(objects.get_entries()), 0)
 
     def test_bucket_with_no_matching_prefix(self):
         bucket_size = 10
         self.client.bucket(self.bck_name).create()
         objects = self.client.bucket(self.bck_name).list_objects()
-        self.assertEqual(len(objects.entries), 0)
+        self.assertEqual(len(objects.get_entries()), 0)
         content = "test".encode("utf-8")
         with tempfile.NamedTemporaryFile() as f:
             f.write(content)
@@ -162,7 +162,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             for obj_id in range(bucket_size):
                 self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put(f.name)
         objects = self.client.bucket(self.bck_name).list_objects(prefix="TEMP")
-        self.assertEqual(len(objects.entries), 0)
+        self.assertEqual(len(objects.get_entries()), 0)
 
     def test_invalid_bck_name(self):
         with self.assertRaises(ErrBckNotFound):

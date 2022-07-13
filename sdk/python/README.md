@@ -1,19 +1,18 @@
 ## AIS Python SDK
 
-AIS Python SDK provides a (growing) set of client-side APIs to access and utilize AIS clusters.
+AIS Python SDK provides a (growing) set of client-side APIs to access and utilize AIS clusters, buckets, and objects.
 
-The project is, essentially, a Python port of the [AIS Go APIs](https://aiatscale.org/docs/http-api), with additional objectives that include:
-
-* utmost convenience for Python developers;
-* minimal, or no changes whatsoever, to apps that already use [S3](https://aiatscale.org/docs/s3compat).
+The project is, essentially, a Python port of the [AIS Go APIs](https://aiatscale.org/docs/http-api), with additional objectives that prioritize *utmost convenience for Python developers*.
 
 Note that only Python 3.x (version 3.6 or later) is currently supported.
 
+
 ## Installation
+ 
 
-### Install from a package
+### Install as a Package
 
-The latest AIS release can be easily installed either with Anaconda (recommended) or `pip`:
+The latest AIS release can be easily installed either with Anaconda or `pip`:
 
 ```console
 $ conda install aistore
@@ -23,115 +22,114 @@ $ conda install aistore
 $ pip install aistore
 ```
 
-### Install from the sources
+
+### Install From Source
 
 If you'd like to work with the current upstream (and don't mind the risk), install the latest master directly from GitHub:
 
 ```console
-$ cd sdk/python # If you are not here already.
+$ git clone https://github.com/NVIDIA/aistore.git
+
+$ cd aistore/sdk/python
+
 $ pip install -e .
+
 ```
 
-## Quick start
 
-If you've already used Python SDK library for AWS (aka `Boto3`), AIS SDK should be very familiar.
+## Quick Start
 
-Similar to `Boto3`, the steps include:
-
-1. First, initialize the connection to storage by **creating a client**.
-2. Second, call client methods with assorted (and explicitly enumerated) **named arguments**.
-
-Names of the most common operations are also identical, e.g.:
-
-* `create_bucket` - create a new empty bucket
-* `put_object` - upload an object to a bucket
-
-and so on.
-
-For more information and usage examples, please see [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/master/sdk/python/sdk-tutorial.ipynb).
-
-## AIS supports multiple [backends](https://aiatscale.org/docs/providers)
-
-AWS works only with one kind of buckets - AWS buckets. AWS SDK functions accept only the bucket name, e.g. `create_bucket(Bucket="bck")`.
-
-AIS, on the other hand, supports a number of different [backend providers](https://aiatscale.org/docs/providers) or, simply, backends.
-
-> For exact definitions and related capabilities, please see [terminology](https://aiatscale.org//docs/overview#terminology)
-
-And so, for AIS a bucket name, strictly speaking, does not define the bucket.
-
-That is why majority of the SDK functions accept two arguments:
-
-* `bck_name` - for bucket name, and
-* optional `provider` - for backend provider.
-
-The default `provider` is `ProviderAIS` (see `const.py` for this and other system constants).
-
-If you only work with AIS buckets, in most cases you can simply omit the `provider`.
-
-### Calling Client methods
-
-Every Client method can be called in two ways: with named arguments in arbitrary order and with positional arguments.
-For instance, `list_objects` method is declared as:
+In order to interact with your running AIS instance, you will need to create a client object:
 
 ```python
-def list_objects(self,
-     bck_name: str,
-     provider: str = ProviderAIS,
-     prefix: str = "",
-     props: str = "",
-     count: int = 0,
-     page_size: int = 0,
-) -> List[BucketEntry]:
-```
+from aistore.client import Client
 
-To get first 10 objects of AIS bucket `bck1` which names start with `img-`, execute either with positional arguments:
-
-```python
-objects = client.list_objects("bck1", ProviderAIS, "img-", "", 10)
-```
-
-or with named ones:
-
-```python
-# ProviderAIS is omitted because it is default value for a provider argument
-objects = client.list_objects(bck_name="bck1", prefix="img-", count=10)
-```
-
-### Example
-
-```python
-from aistore.client.api import Client
-from aistore.client.const import ProviderAIS
-
-# Assuming that AIStore server is running on the same machine
 client = Client("http://localhost:8080")
-
-# Create a new AIS bucket.
-# Note: this function does not accept 'provider' because AIStore SDK supports creating of AIS buckets only.
-client.create_bucket("bck")
-
-# List the buckets.
-# By default, it returns only AIS buckets. If you want to get all buckets including Cloud ones,
-# pass empty string as a provider:
-#   bucket_list = client.list_buckets(provider = "")
-# The call below is the same as 'bucket_list = client.list_buckets(provider = ProviderAIS)'
-bucket_list = client.list_buckets()
-
-# Put an object to the new bucket. The object content is read from a local file '/tmp/obj1_content'
-# The method returns properties of the new object like 'ETag'.
-# Argument 'provider' is optional and can be omitted in this example. It is added for clarity.
-obj_props = client.put_object(bck_name="bck", obj_name="obj1", path="/tmp/obj1_content", provider=ProviderAIS)
-
-# Destroy the bucket and its content.
-# Note: this function also does not accept 'provider' because AIStore SDK supports destroying of AIS buckets only.
-client.destroy_bucket("bck")
 ```
 
-> For more information on API usage and client methods, refer to the [API reference documentation](https://aiatscale.org/docs/python_api.md).
+Now, you can interact with your AIS cluster, buckets, and objects using the newly created `client` object. Here are a few ways you can interact with the `client` object:
+
+```python
+# Check if AIS is deployed and running
+client.cluster().is_aistore_running()
+```
+
+```python
+# Get cluster information
+client.cluster().get_info()
+```
+
+```python
+# Create a bucket named "my-ais-bucket"
+client.bucket("my-ais-bucket").create()
+```
+
+```python
+# Delete bucket named "my-ais-bucket"
+client.bucket("my-ais-bucket").delete()
+```
+
+```python
+# Head bucket
+client.bucket("my-ais-bucket").head()
+```
+
+```python
+# Head object
+client.bucket("my-ais-bucket").object("my-object").head()
+```
+
+```python
+# Put Object
+client.bucket("my-ais-bucket").object("my-new-object").put("path-to-object")
+```
+
+> If you are using AIS buckets, you can simply omit the provider argument (defaults to ProviderAIS) when instantiating a bucket object (`client.bucket("my-ais-bucket").create()` is equivalent to `client.bucket("my-ais-bucket", provider="ais").create()`).
+
+**External Cloud Storage Buckets**  
+
+AIS supports a number of different [backend providers](https://aiatscale.org/docs/providers) or, simply, backends. 
+
+> For exact definitions and related capabilities, please see [terminology](https://aiatscale.org//docs/overview#terminology).
+
+Many bucket/object operations support remote cloud buckets (third-party backend-based cloud buckets), including a few of the operations shown above. To interact with remote cloud buckets, you need to *specify the provider* of choice when instantiating your bucket object as follows:
+
+```python
+# Head AWS bucket
+client.bucket("my-aws-bucket", provider="aws").head()
+```
+
+```python
+# Evict GCP bucket
+client.bucket("my-gcp-bucket", provider="gcp").evict()
+```
+
+```python
+# Get object from Azure bucket
+client.bucket("my-azure-bucket", provider="azure").object("filename.ext").get()
+```
+
+```python
+# List objects in AWS bucket'
+client.bucket("my-aws-bucket", provider="aws").list_objects()
+```
+
+Please note that certain operations do **not** support external cloud storage buckets. Please refer to the [API reference documentation](https://aiatscale.org/docs/python_api.md) for more information on which bucket/object operations support remote cloud buckets, as well as general information on class and method usage.
+
+
+### More Examples
+
+For more in-depth examples, please see [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/master/sdk/python/sdk-tutorial.ipynb).
+
+
+### API Documentation
+
+For more information on API usage, refer to the [API reference documentation](https://aiatscale.org/docs/python_api.md).
+
 
 ## References
 
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
 * [Documentation](https://aiatscale.org/docs)
+* [Official AIStore PIP Package](https://pypi.org/project/aistore/)
 * [Videos and Demos](https://github.com/NVIDIA/aistore/blob/master/docs/videos.md)

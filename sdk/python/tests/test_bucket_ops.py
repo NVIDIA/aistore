@@ -10,7 +10,7 @@ import unittest
 from aistore.client.errors import ErrBckNotFound
 import tempfile
 
-from aistore.client.api import Client
+from aistore.client import Client
 import requests
 from . import CLUSTER_ENDPOINT, REMOTE_BUCKET
 

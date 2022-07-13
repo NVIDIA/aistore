@@ -10,31 +10,33 @@ from pydantic import BaseModel, Field, StrictInt, StrictStr, validator
 import requests
 from aistore.client.const import DEFAULT_CHUNK_SIZE, ProviderAIS
 
+# pylint: disable=too-few-public-methods,unused-variable
 
-class Namespace(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+
+class Namespace(BaseModel):
     uuid: str = ""
     name: str = ""
 
 
-class Bck(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class Bck(BaseModel):
     name: str
     provider: str = ProviderAIS
     ns: Namespace = None
 
 
-class ActionMsg(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class ActionMsg(BaseModel):
     action: str
     name: str = ""
     value: Any = None
 
 
-class NetInfo(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class NetInfo(BaseModel):
     node_hostname: str = ""
     daemon_port: str = ""
     direct_url: str = ""
 
 
-class Snode(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class Snode(BaseModel):
     daemon_id: str
     daemon_type: str
     public_net: NetInfo = None
@@ -43,7 +45,7 @@ class Snode(BaseModel):  # pylint: disable=too-few-public-methods,unused-variabl
     flags: int = 0
 
 
-class Smap(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class Smap(BaseModel):
     tmap: Mapping[str, Snode]
     pmap: Mapping[str, Snode]
     proxy_si: Snode
@@ -52,7 +54,7 @@ class Smap(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
     creation_time: str = ""
 
 
-class BucketEntry(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class BucketEntry(BaseModel):
     name: str
     size: int = 0
     checksum: str = ""
@@ -69,11 +71,14 @@ class BucketEntry(BaseModel):  # pylint: disable=too-few-public-methods,unused-v
         return (self.flags & ((1 << 5) - 1)) == 0
 
 
-class BucketList(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class BucketList(BaseModel):
     uuid: str
     entries: Optional[List[BucketEntry]] = []
     continuation_token: str
     flags: int
+
+    def get_entries(self):
+        return self.entries
 
     @validator('entries')
     def set_entries(cls, entries):  # pylint: disable=no-self-argument
@@ -82,15 +87,15 @@ class BucketList(BaseModel):  # pylint: disable=too-few-public-methods,unused-va
         return entries
 
 
-class XactStatus(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class XactStatus(BaseModel):
     uuid: str = ""
     err: str = ""
     end_time: int = 0
     aborted: bool = False
 
 
-class ObjStream(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
-    class Config:  # pylint: disable=too-few-public-methods,unused-variable
+class ObjStream(BaseModel):
+    class Config:
         validate_assignment = True
         arbitrary_types_allowed = True
 
@@ -118,7 +123,7 @@ class ObjStream(BaseModel):  # pylint: disable=too-few-public-methods,unused-var
             self.stream.close()
 
 
-class HttpError(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class HttpError(BaseModel):
     status: int
     message: str = ""
     method: str = ""
@@ -128,7 +133,6 @@ class HttpError(BaseModel):  # pylint: disable=too-few-public-methods,unused-var
     node: str = ""
 
 
-# pylint: disable=unused-variable
 class BucketLister:
     _fetched: Optional[List[BucketEntry]] = []
     _token: str = ""
@@ -166,7 +170,7 @@ class BucketLister:
             resp = self._client.bucket(self._bck_name, self._provider).list_objects(
                 prefix=self._prefix, props=self._props, uuid=self._uuid, continuation_token=self._token, page_size=self._page_size
             )
-            self._fetched = resp.entries
+            self._fetched = resp.get_entries()
             self._uuid = resp.uuid
             self._token = resp.continuation_token
             # Empty page and token mean no more objects left.

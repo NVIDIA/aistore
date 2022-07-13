@@ -33,7 +33,7 @@ Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 # pylint: disable=unused-variable
 class Bucket:
     """
-    A class representing a bucket bound to an AIS client.
+    A class representing a bucket that contains user data.
     
     Args:
         bck_name (str): name of bucket
@@ -52,7 +52,7 @@ class Bucket:
 
     @property
     def bck(self):
-        """The Bck object of this bucket."""
+        """The custom type [Bck] corresponding to this bucket."""
         return self._bck
 
     @property
@@ -78,8 +78,7 @@ class Bucket:
     def create(self):
         """
         Creates a bucket in AIStore cluster.
-        Always creates a bucket for AIS provider. Other providers do not support bucket creation.
-
+        Can only create a bucket for AIS provider on localized cluster. Remote cloud buckets do not support creation.
         Args:
             None
 
@@ -366,8 +365,8 @@ class Bucket:
         while True:
             resp = self.list_objects(prefix=prefix, props=props, uuid=value["uuid"], continuation_token=value["continuation_token"])
             if obj_list:
-                obj_list = obj_list + resp.entries
-            obj_list = obj_list or resp.entries
+                obj_list = obj_list + resp.get_entries()
+            obj_list = obj_list or resp.get_entries()
             if resp.continuation_token == "":
                 break
             value["continuation_token"] = resp.continuation_token
