@@ -117,7 +117,7 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
     def __iter__(self) -> Iterator[Tuple[str, StreamWrapper]]:
         for url in self.source_datapipe:
             provider, bck_name, obj_name = parse_url(url)
-            yield url, StreamWrapper(BytesIO(self.client.bucket(bck_name=bck_name, provider=provider).object(obj_name=obj_name).get_object().read_all()))
+            yield url, StreamWrapper(BytesIO(self.client.bucket(bck_name=bck_name, provider=provider).object(obj_name=obj_name).get().read_all()))
 
     def __len__(self) -> int:
         return len(self.source_datapipe)

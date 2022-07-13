@@ -84,7 +84,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         with tempfile.NamedTemporaryFile() as f:
             f.write(content)
             f.flush()
-            self.client.bucket(self.bck_name, provider=provider).object(obj_name).put_object(f.name)
+            self.client.bucket(self.bck_name, provider=provider).object(obj_name).put(f.name)
 
         objects = self.client.bucket(self.bck_name, provider=provider).list_objects(props="name,cached", prefix=obj_name)
         self.assertTrue(len(objects) > 0)
@@ -100,7 +100,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             if obj.name == obj_name:
                 self.assertTrue(obj.is_ok())
                 self.assertFalse(obj.is_cached())
-        self.client.bucket(self.bck_name, provider=provider).object(obj_name).delete_object()
+        self.client.bucket(self.bck_name, provider=provider).object(obj_name).delete()
 
     def test_copy_bucket(self):
         from_bck = self.bck_name + 'from'

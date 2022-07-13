@@ -41,7 +41,7 @@ class Object:
         """The name of the object."""
         return self._obj_name
 
-    def head_object(self) -> Header:
+    def head(self) -> Header:
         """
         Requests object properties.
 
@@ -67,7 +67,7 @@ class Object:
             params=self.bck.qparam,
         ).headers
 
-    def get_object(self, archpath: str = "", chunk_size: int = 1) -> ObjStream:
+    def get(self, archpath: str = "", chunk_size: int = 1) -> ObjStream:
         """
         Reads an object
 
@@ -95,7 +95,7 @@ class Object:
         e_tag_type = resp.headers.get("ais-checksum-type", "")
         return ObjStream(content_length=length, e_tag=e_tag, e_tag_type=e_tag_type, stream=resp, chunk_size=chunk_size)
 
-    def put_object(self, path: str) -> Header:
+    def put(self, path: str) -> Header:
         """
         Puts a local file as an object to a bucket in AIS storage.
 
@@ -123,7 +123,7 @@ class Object:
                 data=data,
             ).headers
 
-    def delete_object(self):
+    def delete(self):
         """
         Delete an object from a bucket.
 
