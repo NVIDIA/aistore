@@ -126,12 +126,13 @@ dp_files = AISFileLoader(url="http://localhost:51080", source_datapipe=dp_urls)
 url, img = next(iter(dp_files))
 
 print(f"image url: {url}")
-Image(data=img.read())
+
+# view the image
+# Image(data=img.read())
 ```
 
 >OUTPUT:<br>
     image url: ais://caltech256/002.american-flag/002_0001.jpg
-    ![ais://caltech256/002.american-flag/002_0001.jpg](/assets/aisio_pytorch_example/002_0001.jpg)
 
 ``` {.python}
 def collate_sample(data):
