@@ -371,7 +371,7 @@ class Bucket:
         Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
 
         Args:
-            name (str): Name of object
+            obj_name (str): Name of object
         
         Returns:
             The object created.

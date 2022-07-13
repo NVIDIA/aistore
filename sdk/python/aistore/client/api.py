@@ -155,7 +155,7 @@ class Client:
         Does not make any HTTP request, only instantiates a bucket object owned by the client.
 
         Args:
-            name (str): Name of bucket (optional, defaults to "ais").
+            bck_name (str): Name of bucket (optional, defaults to "ais").
             provider (str): Provider of bucket (one of "ais", "aws", "gcp", ...).
         
         Returns:
