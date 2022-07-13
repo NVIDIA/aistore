@@ -46,8 +46,6 @@ class Object:
         Requests object properties.
 
         Args:
-            bck_name (str): Name of the new bucket.
-            obj_name (str): Name of an object in the bucket.
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
                 Defaults to "ais". Empty provider returns buckets of all providers.
 
@@ -72,8 +70,6 @@ class Object:
         Reads an object
 
         Args:
-            bck_name (str): Name of a bucket
-            obj_name (str): Name of an object in the bucket
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
             archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
             chunk_size (int, optional): chunk_size to use while reading from stream
@@ -100,8 +96,6 @@ class Object:
         Puts a local file as an object to a bucket in AIS storage.
 
         Args:
-            bck_name (str): Name of a bucket.
-            obj_name (str): Name of an object in the bucket.
             path (str): path to local file.
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
 
@@ -128,8 +122,6 @@ class Object:
         Delete an object from a bucket.
 
         Args:
-            bck_name (str): Name of the new bucket.
-            obj_name (str): Name of an object in the bucket.
             provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
                 Defaults to "ais".
 
