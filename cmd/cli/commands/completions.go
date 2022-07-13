@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file handles bash completions for the CLI.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xact"
@@ -142,49 +143,71 @@ func showConfigCompletions(c *cli.Context) {
 	}
 	if c.Args().First() == subcmdCluster {
 		if c.NArg() == 1 {
-			suggestConfigSection(c)
+			configSectionCompletions(c, subcmdCluster)
 		}
 		return
 	}
 	if c.NArg() == 1 { // daemon id only
-		fmt.Println(scopeCluster)
-		fmt.Println(scopeLocal)
-		fmt.Println(scopeAll)
+		fmt.Println(cfgScopeInherited)
+		fmt.Println(cfgScopeLocal)
 		return
 	}
-	suggestConfigSection(c)
+	configSectionCompletions(c, argLast(c))
 }
 
-func suggestConfigSection(c *cli.Context) {
-	// Daemon already given as argument; suggest only config
-	props := cos.NewStringSet()
-	err := cmn.IterFields(cmn.ClusterConfig{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
+func configSectionCompletions(_ *cli.Context, cfgScope string) {
+	var (
+		err    error
+		config             = &cmn.Config{}
+		v      interface{} = &config.ClusterConfig
+		props              = cos.NewStringSet()
+	)
+	if cfgScope == cfgScopeLocal {
+		v = &config.LocalConfig
+	}
+	err = cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 		section := strings.Split(uniqueTag, ".")[0]
 		props.Add(section)
 		return nil, false
 	})
-	cos.AssertNoErr(err)
-
-	if argLast(c) != subcmdCluster {
-		// add node's local config: fspath, network, etc.
-		err := cmn.IterFields(cmn.LocalConfig{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
-			section := strings.Split(uniqueTag, ".")[0]
-			props.Add(section)
-			return nil, false
-		})
-		cos.AssertNoErr(err)
-	}
+	debug.AssertNoErr(err)
 	for prop := range props {
 		fmt.Println(prop)
 	}
 }
 
-func cluConfigCompletions(c *cli.Context) {
+func setConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
 		suggestDaemon(completeAllDaemons)
-	} else {
-		suggestUpdatableConfig(c)
+		return
 	}
+	if c.NArg() == 1 { // daemon id only
+		fmt.Println(cfgScopeInherited)
+		fmt.Println(cfgScopeLocal)
+		return
+	}
+	var (
+		config             = &cmn.Config{}
+		v      interface{} = &config.ClusterConfig
+		props              = cos.NewStringSet()
+	)
+	if c.NArg() == 2 { // daemon id and scope
+		if argLast(c) == cfgScopeLocal {
+			v = &config.LocalConfig
+		}
+		err := cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
+			props.Add(uniqueTag)
+			return nil, false
+		})
+		debug.AssertNoErr(err)
+		for prop := range props {
+			if !cos.AnyHasPrefixInSlice(prop, c.Args()) {
+				fmt.Println(prop)
+			}
+		}
+		return
+	}
+	suggestUpdatableConfig(c)
 }
 
 func suggestDaemon(what daemonKindCompletion) {
@@ -200,6 +223,27 @@ func suggestDaemon(what daemonKindCompletion) {
 	if what != completeProxies {
 		for dae := range smap.Tmap {
 			fmt.Println(cluster.Tname(dae))
+		}
+	}
+}
+
+func setCluConfigCompletions(c *cli.Context) {
+	var (
+		config   cmn.Config
+		propList = make([]string, 0, 48)
+	)
+	err := cmn.IterFields(&config.ClusterConfig, func(tag string, _ cmn.IterField) (err error, b bool) {
+		propList = append(propList, tag)
+		return
+	}, cmn.IterOpts{Allowed: apc.Cluster})
+	debug.AssertNoErr(err)
+
+	if propValueCompletion(c) {
+		return
+	}
+	for _, prop := range propList {
+		if !cos.AnyHasPrefixInSlice(prop, c.Args()) {
+			fmt.Println(prop)
 		}
 	}
 }
@@ -388,7 +432,7 @@ func bpropCompletions(c *cli.Context) {
 		}
 		return nil, false
 	})
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }
 
 func bpropsFilterExtra(c *cli.Context, tag string) bool {
@@ -420,7 +464,7 @@ func bucketAndPropsCompletions(c *cli.Context) {
 			}
 			return nil, false
 		})
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 		sort.Strings(props)
 		for _, prop := range props {
 			fmt.Println(prop)
@@ -697,5 +741,5 @@ func cliPropCompletions(c *cli.Context) {
 		}
 		return nil, false
 	})
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }

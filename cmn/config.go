@@ -768,15 +768,8 @@ func (c *LogConf) Validate() error {
 	if c.FlushTime.D() > time.Hour {
 		return fmt.Errorf("invalid log.flush_time=%s (expected range [0, 1h)", c.FlushTime)
 	}
-	if c.StatsTime != 0 {
-		if c.StatsTime < c.FlushTime {
-			return fmt.Errorf("invalid log.stats_time=%s (must be a multiple of log.flush_time=%s)",
-				c.StatsTime, c.FlushTime)
-		}
-		if c.StatsTime.D() > 10*time.Minute {
-			return fmt.Errorf("invalid log.stats_time=%s (expected range [log.stats_time, 10m])",
-				c.StatsTime)
-		}
+	if c.StatsTime.D() > 10*time.Minute {
+		return fmt.Errorf("invalid log.stats_time=%s (expected range [log.stats_time, 10m])", c.StatsTime)
 	}
 	return nil
 }

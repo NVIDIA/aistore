@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file contains implementation of the top-level `show` command.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xact"
+	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
 
@@ -516,16 +517,10 @@ func showSmapHandler(c *cli.Context) (err error) {
 }
 
 func showBMDHandler(c *cli.Context) (err error) {
-	if _, err = fillMap(); err != nil {
-		return
-	}
 	return getBMD(c)
 }
 
 func showClusterConfigHandler(c *cli.Context) (err error) {
-	if _, err = fillMap(); err != nil {
-		return
-	}
 	return showClusterConfig(c, c.Args().First())
 }
 
@@ -548,6 +543,13 @@ func showClusterConfig(c *cli.Context, section string) error {
 	if err != nil {
 		return err
 	}
+	if useJSON && section != "" {
+		// TODO: extract section != ""
+		cyan := color.New(color.FgHiCyan).SprintFunc()
+		msg := fmt.Sprintf("Warning: cannot show %q selection in JSON - not implemented yet\n", section)
+		fmt.Fprintln(c.App.Writer, cyan(msg))
+		useJSON = false
+	}
 	if useJSON {
 		return templates.DisplayOutput(cluConfig, c.App.Writer, "", useJSON)
 	}
@@ -557,10 +559,10 @@ func showClusterConfig(c *cli.Context, section string) error {
 
 func showNodeConfig(c *cli.Context) error {
 	var (
+		node           *cluster.Snode
 		section, scope string
 		daemonID       = argDaemonID(c)
 		useJSON        = flagIsSet(c, jsonFlag)
-		node           *cluster.Snode
 	)
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
@@ -579,7 +581,7 @@ func showNodeConfig(c *cli.Context) error {
 		LocalConfig   []prop
 	}{}
 	for _, a := range c.Args().Tail() {
-		if a == scopeAll || a == scopeCluster || a == scopeLocal {
+		if a == scopeAll || a == cfgScopeInherited || a == cfgScopeLocal {
 			if scope != "" {
 				return incorrectUsageMsg(c, "... %s %s ...", scope, a)
 			}
@@ -595,12 +597,12 @@ func showNodeConfig(c *cli.Context) error {
 		}
 	}
 	if scope == "" {
-		scope = "all"
+		scope = cfgScopeAll
 	}
-	if scope == scopeAll || scope == scopeLocal {
+	if scope == cfgScopeAll || scope == cfgScopeLocal {
 		data.LocalConfig = flattenConfig(config.LocalConfig, section)
 	}
-	if scope == "all" || scope == subcmdCluster {
+	if scope == cfgScopeAll || scope == cfgScopeInherited {
 		cluConf, err := api.GetClusterConfig(defaultAPIParams)
 		if err != nil {
 			return err
@@ -610,6 +612,13 @@ func showNodeConfig(c *cli.Context) error {
 		data.ClusterConfig = diffConfigs(flatDaemon, flatCluster)
 	}
 
+	if useJSON && section != "" {
+		// TODO: extract section != ""
+		cyan := color.New(color.FgHiCyan).SprintFunc()
+		msg := fmt.Sprintf("Warning: cannot show %q selection in JSON - not implemented yet\n", section)
+		fmt.Fprintln(c.App.Writer, cyan(msg))
+		useJSON = false
+	}
 	return templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, useJSON)
 }
 

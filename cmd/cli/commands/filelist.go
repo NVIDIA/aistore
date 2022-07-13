@@ -1,6 +1,6 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -110,7 +109,7 @@ func fileTreeByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj, e
 // object names, and recursive flag, returns the list of files that matches
 // criteria (file path, object name, size for every file)
 func generateFileList(path, trimPrefix, appendPrefix string, recursive bool) ([]fileToObj, error) {
-	cos.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
+	debug.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
 
 	mask := ""
 	info, err := os.Stat(path)

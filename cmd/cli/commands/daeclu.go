@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file handles cluster and daemon operations.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -21,12 +21,9 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
-	"github.com/fatih/color"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
 )
@@ -218,124 +215,6 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]templates.DiskStatsTemplateH
 	})
 
 	return allStats, nil
-}
-
-// Sets config of specific daemon or cluster
-func setConfig(c *cli.Context) error {
-	daemonID, nvs, err := daemonKeyValueArgs(c)
-	if err != nil {
-		tail := c.Args().Tail()
-		if len(tail) > 0 && tail[0] == commandShow {
-			return &errUsage{
-				context: c,
-				message: "expecting key=value pair(s)",
-				bottomMessage: fmt.Sprintf("(Hint: to show %q config, run 'ais show config %s'.)",
-					daemonID, daemonID),
-				helpData:     c.Command,
-				helpTemplate: templates.ShortUsageTmpl,
-			}
-		}
-		// check whether user is trying to show it, not set
-		if strings.Contains(err.Error(), "key=value pair") {
-			// show what we can and still return err
-			var errShow error
-			if daemonID != "" && daemonID != c.Args().First() {
-				errShow = showConfigHandler(c)
-			} else {
-				errShow = showClusterConfigHandler(c)
-			}
-			if errShow == nil {
-				return nil
-			}
-		}
-		return err
-	}
-
-	// assorted named fields that'll require (cluster | node) restart
-	// for the change to take an effect
-	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
-		cyan := color.New(color.FgHiCyan).SprintFunc()
-		msg := fmt.Sprintf("Warning: restart required for the change %s=%s to take an effect\n",
-			name, nvs[name])
-		fmt.Fprintln(c.App.Writer, cyan(msg))
-	}
-
-	if daemonID == "" {
-		if err := api.SetClusterConfig(defaultAPIParams, nvs, flagIsSet(c, transientFlag)); err != nil {
-			return err
-		}
-
-		s, err := jsoniter.MarshalIndent(nvs, "", "    ")
-		debug.AssertNoErr(err)
-		fmt.Fprintf(c.App.Writer, "%s\n", string(s))
-		fmt.Fprintln(c.App.Writer, "\ncluster config updated")
-		return nil
-	}
-
-	if err := api.SetDaemonConfig(defaultAPIParams, daemonID, nvs, flagIsSet(c, transientFlag)); err != nil {
-		return err
-	}
-	s, err := jsoniter.MarshalIndent(nvs, "", "    ")
-	debug.AssertNoErr(err)
-	fmt.Fprintf(c.App.Writer, "%s\n", string(s))
-	fmt.Fprintf(c.App.Writer, "\nnode %q config updated\n", daemonID)
-	return nil
-}
-
-func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err error) {
-	if c.NArg() == 0 {
-		return "", nil, missingKeyValueError(c)
-	}
-	var (
-		args            = c.Args()
-		kvs             = args.Tail()
-		propList        = configPropList()
-		daemonOnlyProps []string
-	)
-	daemonID = argDaemonID(c)
-
-	// separated with '=' `log.level=5` or space `log.level 5`
-	if cos.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
-		daemonID = ""
-		kvs = args
-	} else {
-		var smap *cluster.Smap
-		smap, err = api.GetClusterMap(defaultAPIParams)
-		if err != nil {
-			return "", nil, err
-		}
-		if smap.GetNode(daemonID) == nil {
-			var err error
-			if c.NArg()%2 == 0 {
-				err = fmt.Errorf("option %q does not exist (hint: run 'show config DAEMON_ID --json')",
-					daemonID)
-			} else {
-				if daemonID == c.Args().First() {
-					err = fmt.Errorf("expecting [DAEMON_ID] key=value pair(s), got %q", daemonID)
-				} else {
-					err = fmt.Errorf("node ID %q does not exist (hint: run 'show cluster')", daemonID)
-				}
-			}
-			return daemonID, nil, err
-		}
-		daemonOnlyProps = configPropList(apc.Daemon)
-	}
-
-	if len(kvs) == 0 {
-		return daemonID, nil, missingKeyValueError(c)
-	}
-	if nvs, err = makePairs(kvs); err != nil {
-		return daemonID, nil, err
-	}
-	for k := range nvs {
-		if !cos.StringInSlice(k, propList) {
-			return daemonID, nil, fmt.Errorf("invalid property name %q", k)
-		}
-		if daemonOnlyProps != nil && !cos.StringInSlice(k, daemonOnlyProps) {
-			return daemonID, nil, fmt.Errorf("setting daemon configuration %q not allowed", k)
-		}
-	}
-	return daemonID, nvs, nil
 }
 
 func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duration) error {

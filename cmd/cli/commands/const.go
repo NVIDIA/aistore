@@ -195,10 +195,12 @@ const (
 	countDefault       = 1
 )
 
+const scopeAll = "all"
+
 const (
-	scopeAll     = "all"
-	scopeLocal   = "local"
-	scopeCluster = subcmdCluster
+	cfgScopeAll       = scopeAll
+	cfgScopeLocal     = "local"
+	cfgScopeInherited = "inherited" // formerly, "cluster"
 )
 
 const sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"

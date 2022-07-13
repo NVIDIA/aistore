@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -452,7 +453,7 @@ func getPathFromFileName(fileName string) (path string, err error) {
 // /path/to/prefix-@00001-gap-@100-suffix => /path/to
 func rangeTrimPrefix(pt cos.ParsedTemplate) string {
 	sepaIndex := strings.LastIndex(pt.Prefix, string(os.PathSeparator))
-	cos.Assert(sepaIndex >= 0)
+	debug.Assert(sepaIndex >= 0)
 	return pt.Prefix[:sepaIndex+1]
 }
 

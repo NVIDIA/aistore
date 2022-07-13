@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file handles commands that control running jobs in the cluster.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xact"
@@ -331,7 +332,7 @@ func startDownloadHandler(c *cli.Context) error {
 		}
 		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 
 	if err != nil {

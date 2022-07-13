@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file contains error handlers and utilities.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -49,7 +50,7 @@ func (e *errUsage) Error() string {
 ///////////////////////
 
 func newAdditionalInfoError(err error, info string) error {
-	cos.Assert(err != nil)
+	debug.Assert(err != nil)
 	return &errAdditionalInfo{
 		baseErr:        err,
 		additionalInfo: info,

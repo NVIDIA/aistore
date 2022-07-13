@@ -728,7 +728,7 @@ func determineClusterURL(cfg *config.Config) string {
 			return cfg.Cluster.DefaultDockerHost
 		}
 
-		cos.AssertMsg(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
+		debug.AssertMsg(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
 
 		proxyGateway, err := docker.ClusterEndpoint(clustersIDs[0])
 		if err != nil {
@@ -811,7 +811,7 @@ func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
 				decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidth),
 			}
 		default:
-			cos.Assertf(false, "invalid argument: %s", a.barType)
+			debug.Assertf(false, "invalid argument: %s", a.barType)
 		}
 		options := make([]mpb.BarOption, 0, len(a.options)+2)
 		options = append(options, a.options...)
