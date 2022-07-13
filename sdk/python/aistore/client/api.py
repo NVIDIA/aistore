@@ -20,7 +20,6 @@ T = TypeVar("T")
 
 
 # pylint: disable=unused-variable
-# pylint: disable=R0904
 class Client:
     """
     AIStore client for managing buckets, objects, ETL jobs

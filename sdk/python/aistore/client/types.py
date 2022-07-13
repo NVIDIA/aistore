@@ -8,7 +8,7 @@ from typing import Any, Mapping, List, Iterator, Optional
 
 from pydantic import BaseModel, Field, StrictInt, StrictStr, validator
 import requests
-from aistore.client.const import ProviderAIS
+from aistore.client.const import DEFAULT_CHUNK_SIZE, ProviderAIS
 
 
 class Namespace(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
@@ -95,13 +95,16 @@ class ObjStream(BaseModel):  # pylint: disable=too-few-public-methods,unused-var
         arbitrary_types_allowed = True
 
     content_length: StrictInt = Field(default=-1, allow_mutation=False)
-    chunk_size: StrictInt = Field(default=32768, allow_mutation=False)
+    chunk_size: StrictInt = Field(default=DEFAULT_CHUNK_SIZE, allow_mutation=False)
     e_tag: StrictStr = Field(..., allow_mutation=False)
     e_tag_type: StrictStr = Field(..., allow_mutation=False)
     stream: requests.Response
 
     def read_all(self) -> bytes:
         return bytes(self.stream.content)
+
+    def raw(self) -> bytes:
+        return self.stream.raw
 
     def __iter__(self) -> Iterator[bytes]:
         try:

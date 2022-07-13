@@ -157,9 +157,10 @@ class Bucket:
         """
         if self.provider is not ProviderAIS:
             raise InvalidBckProvider(self.provider)
-        self.qparam.update({QParamBucketTo: ProviderAIS + '/@#/' + to_bck + '/'})
+        params = self.qparam
+        params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
         action = ActionMsg(action=ACT_MOVE_BCK).dict()
-        resp = self.client.request(HTTP_METHOD_POST, path=f"buckets/{ self.name }", json=action, params=self.qparam)
+        resp = self.client.request(HTTP_METHOD_POST, path=f"buckets/{ self.name }", json=action, params=params)
         return resp.text
 
     def evict(self, keep_md: bool = True):
@@ -309,7 +310,11 @@ class Bucket:
         Args:
             prefix (str, optional): Return only objects that start with the prefix
             props (str, optional): Comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
-
+            page_size (int, optional): return at most "page_size" objects
+                The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+                NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
+                Defaults to "0" - return maximum number objects
+                
         Returns:
             BucketLister: object iterator
 

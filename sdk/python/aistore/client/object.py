@@ -7,6 +7,7 @@ from typing import NewType
 import requests
 
 from aistore.client.const import (
+    DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
@@ -46,8 +47,7 @@ class Object:
         Requests object properties.
 
         Args:
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-                Defaults to "ais". Empty provider returns buckets of all providers.
+            None
 
         Returns:
             Response header with the object properties.
@@ -65,12 +65,11 @@ class Object:
             params=self.bck.qparam,
         ).headers
 
-    def get(self, archpath: str = "", chunk_size: int = 1) -> ObjStream:
+    def get(self, archpath: str = "", chunk_size: int = DEFAULT_CHUNK_SIZE) -> ObjStream:
         """
         Reads an object
 
         Args:
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
             archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
             chunk_size (int, optional): chunk_size to use while reading from stream
 
@@ -83,8 +82,8 @@ class Object:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-
-        params = self.bck.qparam.update({QParamArchpath: archpath})
+        params = self.bck.qparam
+        params[QParamArchpath] = archpath
         resp = self.bck.client.request(HTTP_METHOD_GET, path=f"objects/{ self.bck.name }/{ self.obj_name }", params=params, stream=True)
         length = int(resp.headers.get("content-length", 0))
         e_tag = resp.headers.get("ais-checksum-value", "")
@@ -97,7 +96,6 @@ class Object:
 
         Args:
             path (str): path to local file.
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
 
         Returns:
             Object properties
@@ -122,8 +120,7 @@ class Object:
         Delete an object from a bucket.
 
         Args:
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-                Defaults to "ais".
+            None
 
         Returns:
             None
