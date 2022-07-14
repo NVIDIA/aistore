@@ -100,8 +100,12 @@ class ObjStream(BaseModel):  # pylint: disable=too-few-public-methods,unused-var
     e_tag_type: StrictStr = Field(..., allow_mutation=False)
     stream: requests.Response
 
+    # read_all uses a bytes cast which makes it slightly slower
     def read_all(self) -> bytes:
-        return bytes(self.stream.content)
+        obj_arr = bytearray()
+        for chunk in self:
+            obj_arr.extend(chunk)
+        return bytes(obj_arr)
 
     def raw(self) -> bytes:
         return self.stream.raw
