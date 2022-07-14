@@ -58,17 +58,27 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.create_bucket(from_bck_n)
         res = self.client.cluster().list_buckets()
         count = len(res)
-        # wait for rename to finish
-        xact_id = self.client.bucket(from_bck_n).rename(to_bck=to_bck_n)
+
+        bck_obj = self.client.bucket(from_bck_n)
+        self.assertEqual(bck_obj.name, from_bck_n)
+        xact_id = bck_obj.rename(to_bck=to_bck_n)
         self.assertNotEqual(xact_id, "")
+
+        # wait for rename to finish
         self.client.wait_for_xaction_finished(xact_id=xact_id)
-        # new bucket should be created and accessible
+
+        # check if objects name has changed
         self.client.bucket(to_bck_n).head()
+
+        # new bucket should be created and accessible
+        self.assertEqual(bck_obj.name, to_bck_n)
+
         # old bucket should be inaccessible
         try:
             self.client.bucket(from_bck_n).head()
         except requests.exceptions.HTTPError as e:
             self.assertEqual(e.response.status_code, 404)
+
         # length of buckets before and after rename should be same
         res = self.client.cluster().list_buckets()
         count_new = len(res)

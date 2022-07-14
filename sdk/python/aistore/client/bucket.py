@@ -108,7 +108,9 @@ class Bucket:
     def delete(self):
         """
         Destroys bucket in AIStore cluster.
-        Can delete only AIS buckets. Other providers do not support bucket deletion.
+        In all cases removes both the bucket's content _and_ the bucket's metadata from the cluster. 
+        Note: AIS will _not_ call the remote backend provider to delete the corresponding Cloud bucket 
+        (iff the bucket in question is, in fact, a Cloud bucket).
 
         Args:
             None
@@ -157,19 +159,20 @@ class Bucket:
         """
         if self.provider is not ProviderAIS:
             raise InvalidBckProvider(self.provider)
-        params = self.qparam
+        params = self.qparam.copy()
         params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
         action = ActionMsg(action=ACT_MOVE_BCK).dict()
         resp = self.client.request(HTTP_METHOD_POST, path=f"buckets/{ self.name }", json=action, params=params)
+        self.bck.name = to_bck
         return resp.text
 
-    def evict(self, keep_md: bool = True):
+    def evict(self, keep_md: bool = False):
         """
         Evicts bucket in AIStore cluster.
         NOTE: only Cloud buckets can be evicted.
 
         Args:
-            keep_md (bool, optional): If true, it evicts objects but keeps bucket metadata
+            keep_md (bool, optional): If true, evicts objects but keeps the bucket's metadata (i.e., the bucket's name and its properties)
 
         Returns:
             None
@@ -185,14 +188,14 @@ class Bucket:
         """
         if self.provider is ProviderAIS:
             raise InvalidBckProvider(self.provider)
-        if keep_md:
-            self.qparam[QParamKeepBckMD] = "true"
+        params = self.qparam.copy()
+        params[QParamKeepBckMD] = keep_md
         action = ActionMsg(action=ACT_EVICT_REMOTE_BCK).dict()
         self.client.request(
             HTTP_METHOD_DELETE,
             path=f"buckets/{ self.name }",
             json=action,
-            params=self.qparam,
+            params=params,
         )
 
     def head(self) -> Header:
@@ -253,12 +256,13 @@ class Bucket:
 
         value = {"prefix": prefix, "dry_run": dry_run, "force": force}
         action = ActionMsg(action=ACT_COPY_BCK, value=value).dict()
-        self.qparam.update({QParamBucketTo: to_provider + '/@#/' + to_bck_name + '/'})
+        params = self.qparam.copy()
+        params[QParamBucketTo] = f"{ to_provider }/@#/{ to_bck_name }/"
         return self.client.request(
             HTTP_METHOD_POST,
             path=f"buckets/{ self.name }",
             json=action,
-            params=self.qparam,
+            params=params,
         ).text
 
     def list_objects(self, prefix: str = "", props: str = "", page_size: int = 0, uuid: str = "", continuation_token: str = "") -> BucketList:
