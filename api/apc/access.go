@@ -33,6 +33,7 @@ const (
 	AceBckSetACL // set bucket permissions
 	// cluster level
 	AceListBuckets
+	AceShowCluster
 	AceCreateBucket
 	AceDestroyBucket
 	AceMoveBucket
@@ -59,6 +60,7 @@ var accessOp = map[AccessAttrs]string{
 	AceBckSetACL: "SET-BUCKET-ACL",
 	// cluster
 	AceListBuckets:   "LIST-BUCKETS",
+	AceShowCluster:   "SHOW-CLUSTER",
 	AceCreateBucket:  "CREATE-BUCKET",
 	AceDestroyBucket: "DESTROY-BUCKET",
 	AceMoveBucket:    "MOVE-BUCKET",
@@ -142,6 +144,9 @@ func (a AccessAttrs) Describe() string {
 	//
 	if a.Has(AceListBuckets) {
 		accList = append(accList, accessOp[AceListBuckets])
+	}
+	if a.Has(AceShowCluster) {
+		accList = append(accList, accessOp[AceShowCluster])
 	}
 	if a.Has(AceCreateBucket) {
 		accList = append(accList, accessOp[AceCreateBucket])

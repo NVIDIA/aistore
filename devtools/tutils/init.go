@@ -150,13 +150,13 @@ func InitLocalCluster() {
 // NOTE:
 //      the function is also used for testing by NVIDIA/ais-k8s Operator
 func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
+	LoggedUserToken = authn.LoadToken("")
 	proxyURLReadOnly = proxyURL
 	testClusterType = clusterType
 	if err = initProxyURL(); err != nil {
 		return
 	}
 	initPmap()
-	LoggedUserToken = authn.LoadToken("")
 	return
 }
 

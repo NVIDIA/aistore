@@ -44,11 +44,14 @@ func (p *proxy) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//////////////////////////////////////////////////////
-// GET /v1/cluster - query cluster states and stats //
-//////////////////////////////////////////////////////
+//
+// GET /v1/cluster - query cluster states and stats
+//
 
 func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
+	if err := p.checkAccess(w, r, nil, apc.AceShowCluster); err != nil {
+		return
+	}
 	var (
 		query = r.URL.Query()
 		what  = query.Get(apc.QparamWhat)
@@ -282,6 +285,9 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.forwardCP(w, r, nil, "httpclupost") {
+		return
+	}
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
 
@@ -1449,6 +1455,9 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.forwardCP(w, r, nil, sid) {
+		return
+	}
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
 	var errCode int

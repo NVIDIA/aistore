@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -76,7 +76,8 @@ func TestMaintenanceListObjects(t *testing.T) {
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsSize)
 	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
+	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d",
+		m.num, len(bckList.Entries))
 	for _, entry := range bckList.Entries {
 		origEntries[entry.Name] = entry
 	}
@@ -110,7 +111,8 @@ func TestMaintenanceListObjects(t *testing.T) {
 	// 3. Check if we can list all the objects
 	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
+	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d",
+		m.num, len(bckList.Entries))
 	for _, entry := range bckList.Entries {
 		origEntry, ok := origEntries[entry.Name]
 		tassert.Fatalf(t, ok, "object %s missing in original entries", entry.Name)
@@ -157,7 +159,8 @@ func TestMaintenanceMD(t *testing.T) {
 	time.Sleep(time.Second)
 	err = tutils.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "target joined back", smap.Version, smap.CountActiveProxies(), smap.CountTargets())
+	_, err = tutils.WaitForClusterState(proxyURL, "target joined back", smap.Version, smap.CountActiveProxies(),
+		smap.CountTargets())
 	tassert.CheckFatal(t, err)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
@@ -513,7 +516,8 @@ func TestShutdownListObjects(t *testing.T) {
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsCopies, apc.GetPropsSize)
 	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
+	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d",
+		m.num, len(bckList.Entries))
 	for _, entry := range bckList.Entries {
 		origEntries[entry.Name] = entry
 	}
@@ -558,7 +562,8 @@ func TestShutdownListObjects(t *testing.T) {
 	tlog.Logln("Listing objects")
 	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
+	tassert.Errorf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d",
+		m.num, len(bckList.Entries))
 	for _, entry := range bckList.Entries {
 		origEntry, ok := origEntries[entry.Name]
 		tassert.Errorf(t, ok, "object %s missing in original entries", entry.Name)

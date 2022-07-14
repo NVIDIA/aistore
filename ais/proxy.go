@@ -2224,22 +2224,39 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	smap := p.owner.smap.get()
 	si := smap.GetNode(nodeID)
+
+	// access control
+	switch r.Method {
+	case http.MethodGet:
+		// must be consistent with httpdaeget, httpcluget
+		err = p.checkAccess(w, r, nil, apc.AceShowCluster)
+	case http.MethodPost:
+		// (ditto) httpdaepost, httpclupost
+		err = p.checkAccess(w, r, nil, apc.AceAdmin)
+	case http.MethodPut, http.MethodDelete:
+		// (ditto) httpdaeput/delete and httpcluput/delete
+		err = p.checkAccess(w, r, nil, apc.AceAdmin)
+	default:
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
+		return
+	}
+	if err != nil {
+		return
+	}
+
+	// do
 	if si != nil {
 		p.reverseNodeRequest(w, r, si)
 		return
 	}
-
-	// Node not found but maybe we could contact it directly. This is for
-	// special case where we need to contact target which is not part of the
-	// cluster eg. mountpaths: when target is not part of the cluster after
-	// removing all mountpaths.
+	// special case when the target self-removed itself from cluster map
+	// after having lost all mountpaths.
 	nodeURL := r.Header.Get(apc.HdrNodeURL)
 	if nodeURL == "" {
 		err = &errNodeNotFound{"cannot rproxy", nodeID, p.si, smap}
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-
 	parsedURL, err := url.Parse(nodeURL)
 	if err != nil {
 		p.writeErrf(w, r, "%s: invalid URL %q for node %s", p.si, nodeURL, nodeID)
@@ -2304,6 +2321,9 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.Query()
 		what  = query.Get(apc.QparamWhat)
 	)
+	if err := p.checkAccess(w, r, nil, apc.AceShowCluster); err != nil {
+		return
+	}
 	switch what {
 	case apc.GetWhatBMD:
 		if renamedBucket := query.Get(whatRenamedLB); renamedBucket != "" {
@@ -2441,6 +2461,9 @@ func (p *proxy) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+		return
+	}
 	var msg apc.ActionMsg
 	if err := readJSON(w, r, &msg); err != nil {
 		return
@@ -2481,6 +2504,9 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(apiItems) == 0 || apiItems[0] != apc.AdminJoin {
 		p.writeErrURL(w, r)
+		return
+	}
+	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
 	if !p.keepalive.paused() {
