@@ -32,6 +32,7 @@ import (
 
 const (
 	flagsAuthUserLogin   = "user_login"
+	flagsAuthUserLogout  = "user_logout"
 	flagsAuthUserShow    = "user_show"
 	flagsAuthRoleAddSet  = "role_add_set"
 	flagsAuthRevokeToken = "revoke_token"
@@ -44,6 +45,7 @@ const authnUnreachable = `AuthN unreachable at %s. You may need to update AIS CL
 var (
 	authFlags = map[string][]cli.Flag{
 		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag, expireFlag, clusterTokenFlag},
+		flagsAuthUserLogout:  {tokenFileFlag},
 		subcmdAuthUser:       {passwordFlag},
 		flagsAuthRoleAddSet:  {descRoleFlag, clusterRoleFlag, bucketRoleFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
@@ -204,6 +206,7 @@ var (
 			{
 				Name:   subcmdAuthLogout,
 				Usage:  "log out",
+				Flags:  authFlags[flagsAuthUserLogout],
 				Action: wrapAuthN(logoutUserHandler),
 			},
 		},
@@ -259,7 +262,7 @@ func lookupClusterID(cluID string) (string, error) {
 			return clu.ID, nil
 		}
 	}
-	return "", fmt.Errorf("Cluster %s is not registered", cluID)
+	return "", fmt.Errorf("cluster %q not found", cluID)
 }
 
 func filterRolesByCluster(roles []*authn.Role, clusters []string) ([]*authn.Role, error) {
@@ -347,7 +350,6 @@ func deleteRoleHandler(c *cli.Context) (err error) {
 }
 
 func loginUserHandler(c *cli.Context) (err error) {
-	const tokenSaveFailFmt = "successfully logged in, but failed to save token: %v"
 	var (
 		expireIn *time.Duration
 		name     = cliAuthnUserName(c)
@@ -366,32 +368,33 @@ func loginUserHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	tokenPath := parseStrFlag(c, tokenFileFlag)
-	if tokenPath == "" {
-		tokenPath = filepath.Join(config.ConfigDir, fname.Token)
+	tokenFile, err := tokfile(c)
+	if err == nil {
+		cyan := color.New(color.FgHiCyan).SprintFunc()
+		msg := fmt.Sprintf("Warning: token %q exists - overwriting\n", tokenFile)
+		fmt.Fprintln(c.App.Writer, cyan(msg))
+	} else if !os.IsNotExist(err) {
+		return err
 	}
-	err = cos.CreateDir(filepath.Dir(config.ConfigDir))
-	if err != nil {
-		fmt.Fprintf(c.App.Writer, "Token:\n%s\n", token.Token)
-		return fmt.Errorf(tokenSaveFailFmt, err)
+	if err := jsp.Save(tokenFile, token, jsp.Plain(), nil); err != nil {
+		return fmt.Errorf("failed to write token %q: %v", tokenFile, err)
 	}
-	err = jsp.Save(tokenPath, token, jsp.Plain(), nil)
-	if err != nil {
-		fmt.Fprintf(c.App.Writer, "Token:\n%s\n", token.Token)
-		return fmt.Errorf(tokenSaveFailFmt, err)
-	}
-	fmt.Fprintf(c.App.Writer, "Token saved to %s\n", tokenPath)
+	fmt.Fprintf(c.App.Writer, "Logged in (%s)\n", tokenFile)
 	return nil
 }
 
 func logoutUserHandler(c *cli.Context) (err error) {
-	const logoutFailFmt = "logging out failed: %v"
-	tokenPath := filepath.Join(config.ConfigDir, fname.Token)
-	if err = os.Remove(tokenPath); os.IsNotExist(err) {
-		return fmt.Errorf(logoutFailFmt, err)
+	tokenFile, err := tokfile(c)
+	if err != nil {
+		return err
 	}
-	fmt.Fprintln(c.App.Writer, "Logged out")
+	if err := revokeTokenHandler(c); err != nil {
+		return err
+	}
+	if err := os.Remove(tokenFile); err != nil {
+		return fmt.Errorf("failed to logout %q: %v", tokenFile, err)
+	}
+	fmt.Fprintf(c.App.Writer, "Logged out (removed/revoked %q)\n", tokenFile)
 	return nil
 }
 
@@ -412,7 +415,8 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 		}
 		smap, err = api.GetClusterMap(baseParams)
 		if err != nil {
-			err = fmt.Errorf("could not connect cluster %q", cluSpec.URLs[0])
+			err = fmt.Errorf("failed to add cluster %q(%q, %s): %v",
+				cluSpec.ID, cluSpec.Alias, cluSpec.URLs[0], err)
 		}
 	}
 	if err != nil {
@@ -671,26 +675,19 @@ func parseClusterSpecs(c *cli.Context) (cluSpec authn.CluACL, err error) {
 }
 
 func revokeTokenHandler(c *cli.Context) (err error) {
-	token := c.Args().Get(0)
-	tokenFile := parseStrFlag(c, tokenFileFlag)
-	if token != "" && tokenFile != "" {
-		return fmt.Errorf("defined either a token or token filename")
+	tokenFile, err := tokfile(c)
+	if err != nil {
+		return err
 	}
-	if tokenFile != "" {
-		bt, err := os.ReadFile(tokenFile)
-		if err != nil {
-			return err
-		}
-		creds := &authn.TokenMsg{}
-		if err = jsoniter.Unmarshal(bt, creds); err != nil {
-			return fmt.Errorf("invalid token file format")
-		}
-		token = creds.Token
+	b, err := os.ReadFile(tokenFile)
+	if err != nil {
+		return err
 	}
-	if token == "" {
-		return missingArgumentsError(c, "token or token filename")
+	msg := &authn.TokenMsg{}
+	if err := jsoniter.Unmarshal(b, msg); err != nil {
+		return fmt.Errorf("invalid token format: %v", err)
 	}
-	return authn.RevokeToken(authParams, token)
+	return authn.RevokeToken(authParams, msg.Token)
 }
 
 func showAuthConfigHandler(c *cli.Context) (err error) {
@@ -744,4 +741,15 @@ func setAuthConfigHandler(c *cli.Context) (err error) {
 		return err
 	}
 	return authn.SetConfig(authParams, conf)
+}
+
+func tokfile(c *cli.Context) (string, error) {
+	tokenFile := parseStrFlag(c, tokenFileFlag)
+	if tokenFile == "" {
+		tokenFile = filepath.Join(config.ConfigDir, fname.Token)
+	}
+	if tokenFile == "" {
+		return "", errors.New("missing token filename")
+	}
+	return tokenFile, cos.Stat(tokenFile)
 }
