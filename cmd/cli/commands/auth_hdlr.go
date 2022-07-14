@@ -48,7 +48,7 @@ var (
 		flagsAuthRoleAddSet:  {descRoleFlag, clusterRoleFlag, bucketRoleFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
 		flagsAuthUserShow:    {nonverboseFlag, verboseFlag},
-		flagsAuthRoleShow:    {nonverboseFlag, verboseFlag},
+		flagsAuthRoleShow:    {nonverboseFlag, verboseFlag, clusterFilterFlag},
 		flagsAuthConfShow:    {jsonFlag},
 	}
 
@@ -246,6 +246,54 @@ func cliAuthnURL(cfg *config.Config) string {
 	return authURL
 }
 
+func lookupClusterID(cluID string) (string, error) {
+	cluList, err := authn.GetRegisteredClusters(authParams, authn.CluACL{})
+	if err != nil {
+		return "", err
+	}
+	for _, clu := range cluList {
+		if clu.ID == cluID {
+			return cluID, nil
+		}
+		if clu.Alias == cluID {
+			return clu.ID, nil
+		}
+	}
+	return "", fmt.Errorf("Cluster %s is not registered", cluID)
+}
+
+func filterRolesByCluster(roles []*authn.Role, clusters []string) ([]*authn.Role, error) {
+	cluIDs := clusters[:0]
+	for _, clu := range clusters {
+		// Empty ID is a special case: the role is applied to all clusters.
+		if clu == "" {
+			cluIDs = append(cluIDs, clu)
+			continue
+		}
+		cluID, err := lookupClusterID(clu)
+		if err != nil {
+			return nil, err
+		}
+		cluIDs = append(cluIDs, cluID)
+	}
+	filtered := roles[:0]
+	for _, role := range roles {
+		for _, clu := range role.ClusterACLs {
+			if cos.StringInSlice(clu.ID, cluIDs) {
+				filtered = append(filtered, role)
+				break
+			}
+		}
+		for _, bck := range role.BucketACLs {
+			if cos.StringInSlice(bck.Bck.Ns.UUID, cluIDs) {
+				filtered = append(filtered, role)
+				break
+			}
+		}
+	}
+	return filtered, nil
+}
+
 func cliAuthnUserName(c *cli.Context) string {
 	name := c.Args().First()
 	if name == "" {
@@ -426,30 +474,7 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNClusterTmpl, false)
 }
 
-func showAuthRoleHandler(c *cli.Context) (err error) {
-	roleID := c.Args().First()
-	if roleID == "" {
-		list, err := authn.GetAllRoles(authParams)
-		if err != nil {
-			return err
-		}
-		// non-verbose is the implicit default when showing all
-		if flagIsSet(c, verboseFlag) {
-			for i, role := range list {
-				rInfo, err := authn.GetRole(authParams, role.ID)
-				if err != nil {
-					color.New(color.FgRed).Fprintf(c.App.Writer, "%s: %v\n", role.ID, err)
-				} else {
-					if i > 0 {
-						fmt.Fprintln(c.App.Writer)
-					}
-					templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, false)
-				}
-			}
-			return nil
-		}
-		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl, false)
-	}
+func showAuthSingleRole(c *cli.Context, roleID string) error {
 	rInfo, err := authn.GetRole(authParams, roleID)
 	if err != nil {
 		return err
@@ -459,6 +484,42 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 		return templates.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, templates.AuthNRoleTmpl, false)
 	}
 	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, false)
+}
+func showAuthAllRoles(c *cli.Context) error {
+	list, err := authn.GetAllRoles(authParams)
+	if err != nil {
+		return err
+	}
+	cluID := parseStrFlag(c, clusterFilterFlag)
+	if cluID != "" {
+		if list, err = filterRolesByCluster(list, strings.Split(cluID, ",")); err != nil {
+			return err
+		}
+	}
+	// non-verbose is the implicit default when showing all
+	if flagIsSet(c, verboseFlag) {
+		for i, role := range list {
+			rInfo, err := authn.GetRole(authParams, role.ID)
+			if err != nil {
+				color.New(color.FgRed).Fprintf(c.App.Writer, "%s: %v\n", role.ID, err)
+			} else {
+				if i > 0 {
+					fmt.Fprintln(c.App.Writer)
+				}
+				templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, false)
+			}
+		}
+		return nil
+	}
+	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl, false)
+}
+
+func showAuthRoleHandler(c *cli.Context) (err error) {
+	roleID := c.Args().First()
+	if roleID != "" {
+		return showAuthSingleRole(c, roleID)
+	}
+	return showAuthAllRoles(c)
 }
 
 func showAuthUserHandler(c *cli.Context) (err error) {

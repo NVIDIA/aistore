@@ -205,9 +205,21 @@ k5zAzdhbr       clusterOne   GET,HEAD-BUCKET,LIST-OBJECTS
 
 ### List existing roles
 
-`ais auth show role [ROLE [-v]]`
+`ais auth show role [ROLE]`
 
 Displays existing roles in alphabetical order.
+
+Flags:
+
+| Flag | Type | Description |
+| --- | --- | --- |
+| `-v` | `bool` | Enables verbose mode. In short mode only role names and their descriptions are displayed. In verbose mode, details about cluster and bucket permissions are shown as well. When `ROLE` is set, verbose mode enables automatically |
+| `--cluster` | `string` | Comman-separated list of cluster IDs. Only roles that grants permissions to these clusters or buckets of these clusters are shown |
+
+Note: some roles include "global" permissions - it is roles which are not bound to all clusters.
+You can create such role by omitting `--cluster` flag while adding or updating a role.
+To list "global" roles, pass a **list** which contains an empty cluster ID.
+List that contains olny "global" cluster ID is `","`. E.g, `ais auth show role --cluster=,`.
 
 ```console
 $ ais auth show role
@@ -222,15 +234,47 @@ By default, the role is displayed in short mode.
 Option `-v` prints detailed info:
 
 ```console
-$ ais auth show role Guest-clu
+$ ais auth show role
 ROLE            DESCRIPTION
 Guest-clu       Read-only access to buckets of cluster k5zAzdhbr[local]
 
-$ ais auth show role Guest-clu -v
+$ ais auth show role -v
 Role            Guest-local
 Description     Read-only access to buckets of cluster k5zAzdhbr[local]
 CLUSTER ID      ALIAS   PERMISSIONS
 k5zAzdhbr       local   GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS
+```
+
+Show all, global, and a single cluster roles:
+
+```console
+$ ais auth show role -v
+Role              Admin
+Description       AuthN administrator
+
+Role              role1
+Description
+CLUSTER ID        ALIAS    PERMISSIONS
+                           GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS,LIST-BUCKETS
+
+Role              role2
+Description
+CLUSTER ID        ALIAS    PERMISSIONS
+wRF7CDVbN         clu-tst  GET,HEAD-OBJECT,HEAD-BUCKET,LIST- OBJECTS,LIST-BUCKETS
+
+Role              role3
+Description
+CLUSTER ID        ALIAS    PERMISSIONS
+wRF7CDVbN         clu-tst  GET,HEAD-OBJECT,LIST-OBJECTS
+
+$ ais auth show role --cluster=clu-tst
+ROLE      DESCRIPTION
+role2
+role3
+
+$ ais auth show role --cluster=,
+ROLE      DESCRIPTION
+role1
 ```
 
 ### Log in to AIS cluster

@@ -441,10 +441,11 @@ var (
 	supportedCksumFlags = initSupportedCksumFlags()
 
 	// auth
-	descRoleFlag     = cli.StringFlag{Name: "description,desc", Usage: "role description"}
-	clusterRoleFlag  = cli.StringFlag{Name: "cluster", Usage: "associate role with the specified AIS cluster"}
-	clusterTokenFlag = cli.StringFlag{Name: "cluster", Usage: "issue token for the cluster"}
-	bucketRoleFlag   = cli.StringFlag{Name: "bucket", Usage: "associate role with the specified bucket"}
+	descRoleFlag      = cli.StringFlag{Name: "description,desc", Usage: "role description"}
+	clusterRoleFlag   = cli.StringFlag{Name: "cluster", Usage: "associate role with the specified AIS cluster"}
+	clusterTokenFlag  = cli.StringFlag{Name: "cluster", Usage: "issue token for the cluster"}
+	bucketRoleFlag    = cli.StringFlag{Name: "bucket", Usage: "associate role with the specified bucket"}
+	clusterFilterFlag = cli.StringFlag{Name: "cluster", Usage: "comma-separated list of AIS cluster IDs, pass ',' for empty cluster ID"}
 
 	// begin archive
 	listArchFlag             = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
