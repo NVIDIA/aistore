@@ -386,7 +386,10 @@ func loginUserHandler(c *cli.Context) (err error) {
 func logoutUserHandler(c *cli.Context) (err error) {
 	tokenFile, err := tokfile(c)
 	if err != nil {
-		return err
+		if tokenFile == "" {
+			return err
+		}
+		return fmt.Errorf("cannot logout %q: %v", tokenFile, err)
 	}
 	if err := revokeTokenHandler(c); err != nil {
 		return err
@@ -681,11 +684,11 @@ func revokeTokenHandler(c *cli.Context) (err error) {
 	}
 	b, err := os.ReadFile(tokenFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read token %q: %v", tokenFile, err)
 	}
 	msg := &authn.TokenMsg{}
 	if err := jsoniter.Unmarshal(b, msg); err != nil {
-		return fmt.Errorf("invalid token format: %v", err)
+		return fmt.Errorf("invalid token %q format: %v", tokenFile, err)
 	}
 	return authn.RevokeToken(authParams, msg.Token)
 }
@@ -743,8 +746,12 @@ func setAuthConfigHandler(c *cli.Context) (err error) {
 	return authn.SetConfig(authParams, conf)
 }
 
+// compare with: api/authn/loadtoken.go
 func tokfile(c *cli.Context) (string, error) {
 	tokenFile := parseStrFlag(c, tokenFileFlag)
+	if tokenFile == "" {
+		tokenFile = os.Getenv(env.AuthN.TokenFile)
+	}
 	if tokenFile == "" {
 		tokenFile = filepath.Join(config.ConfigDir, fname.Token)
 	}

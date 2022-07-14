@@ -10,7 +10,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
@@ -32,8 +31,7 @@ func LoadToken(tokenFile string) string {
 	}
 	_, err := jsp.LoadMeta(tokenFile, &token)
 	if err != nil && (mustLoad || !os.IsNotExist(err)) {
-		debug.AssertMsg(mustLoad && os.IsNotExist(err), err.Error())
-		cos.Errorf("Failed to load token from %q: %v", tokenFile, err)
+		cos.Errorf("Failed to load token %q: %v", tokenFile, err)
 	}
 	return token.Token
 }
