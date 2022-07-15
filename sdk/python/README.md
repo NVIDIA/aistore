@@ -47,7 +47,7 @@ from aistore.client import Client
 client = Client("http://localhost:8080")
 ```
 
-Now, you can interact with your AIS cluster, buckets, and objects using the newly created `client` object. Here are a few ways you can interact with the `client` object:
+The newly created client object can be used to interact with your AIS cluster, buckets, and objects. Here are a few ways to do so:
 
 ```python
 # Check if AIS is deployed and running
@@ -123,6 +123,14 @@ For more in-depth examples, please see [SDK tutorial (Jupyter Notebook)](https:/
 
 
 ### API Documentation
+
+|Module|Summary|
+|--|--|
+|api.py|Contains `Client` class, which contains methods for making HTTP requests to an AIStore client. Includes factory constructors for `Bucket`, `Cluster`, and `Xaction` classes.|
+|cluster.py|Contains `Cluster` class that represents a cluster bound to a client and contains all cluster-related operations, including checking the cluster's health and retrieving vital cluster information.|
+|Cluster.py|Contains `Bucket` class that represents a bucket in an AIS cluster and contains all bucket-related operations, including (but not limited to) creating, deleting, evicting, renaming, copying.|
+|object.py|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) getting, putting, deleting.|
+|xaction.py|Contains class `Xaction` and all xaction-related operations.|
 
 For more information on API usage, refer to the [API reference documentation](https://aiatscale.org/docs/python_api.md).
 
