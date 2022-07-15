@@ -65,7 +65,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertNotEqual(xact_id, "")
 
         # wait for rename to finish
-        self.client.wait_for_xaction_finished(xact_id=xact_id)
+        self.client.xaction().wait_for_xaction_finished(xact_id=xact_id)
 
         # check if objects name has changed
         self.client.bucket(to_bck_n).head()
@@ -120,7 +120,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
 
         xact_id = self.client.bucket(from_bck).copy(to_bck)
         self.assertNotEqual(xact_id, "")
-        self.client.wait_for_xaction_finished(xact_id=xact_id)
+        self.client.xaction().wait_for_xaction_finished(xact_id=xact_id)
 
 
 if __name__ == '__main__':
