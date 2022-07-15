@@ -10,7 +10,7 @@ import unittest
 from aistore.client.errors import AISError, ErrBckNotFound
 import tempfile
 
-from aistore.client import Client
+from aistore import Client
 from . import CLUSTER_ENDPOINT
 
 OBJ_READ_TYPE_ALL = "read_all"

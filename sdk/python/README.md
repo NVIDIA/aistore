@@ -41,7 +41,7 @@ $ pip install -e .
 In order to interact with your running AIS instance, you will need to create a `client` object:
 
 ```python
-from aistore.client import Client
+from aistore import Client
 
 client = Client("http://localhost:8080")
 ```

@@ -11,7 +11,7 @@ from torchdata.datapipes.iter import IterDataPipe
 from torchdata.datapipes.utils import StreamWrapper
 
 try:
-    from aistore.client import Client
+    from aistore import Client
     from aistore.pytorch.utils import parse_url, unparse_url
 
     HAS_AIS = True
@@ -29,6 +29,7 @@ def _assert_aistore() -> None:
 
 
 # pylint: disable=unused-variable
+# pylint: disable=W0223
 @functional_datapipe("ais_list_files")
 class AISFileListerIterDataPipe(IterDataPipe[str]):
     """
@@ -79,6 +80,7 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
 
 
 # pylint: disable=unused-variable
+# pylint: disable=W0223
 @functional_datapipe("ais_load_files")
 class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
     """

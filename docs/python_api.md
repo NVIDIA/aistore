@@ -11,11 +11,11 @@ AIStore Python SDK is a growing set of client-side APIs to access and utilize AI
 
 * [api](#api)
   * [Client](#api.Client)
-    * [xact\_status](#api.Client.xact_status)
-    * [wait\_for\_xaction\_finished](#api.Client.wait_for_xaction_finished)
-    * [xact\_start](#api.Client.xact_start)
     * [bucket](#api.Client.bucket)
     * [cluster](#api.Client.cluster)
+    * [xaction](#api.Client.xaction)
+    * [list\_objects\_iter](#api.Client.list_objects_iter)
+    * [get\_object](#api.Client.get_object)
 * [cluster](#cluster)
   * [Cluster](#cluster.Cluster)
     * [client](#cluster.Cluster.client)
@@ -63,106 +63,6 @@ AIStore client for managing buckets, objects, ETL jobs
 
 - `endpoint` _str_ - AIStore endpoint
 
-<a id="api.Client.xact_status"></a>
-
-### xact\_status
-
-```python
-def xact_status(xact_id: str = "",
-                xact_kind: str = "",
-                daemon_id: str = "",
-                only_running: bool = False) -> XactStatus
-```
-
-Return status of an eXtended Action (xaction)
-
-**Arguments**:
-
-- `xact_id` _str, optional_ - UUID of the xaction. Empty - all xactions.
-- `xact_kind` _str, optional_ - Kind of the xaction. Empty - all kinds.
-- `daemon_id` _str, optional_ - Return xactions only running on the daemon_id.
-- `only_running` _bool, optional_ - True - return only currently running xactions, False - include in the list also finished and aborted ones.
-  
-
-**Returns**:
-
-  The xaction description.
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="api.Client.wait_for_xaction_finished"></a>
-
-### wait\_for\_xaction\_finished
-
-```python
-def wait_for_xaction_finished(xact_id: str = "",
-                              xact_kind: str = "",
-                              daemon_id: str = "",
-                              timeout: int = 300)
-```
-
-Wait for an eXtended Action (xaction) to finish
-
-**Arguments**:
-
-- `xact_id` _str, optional_ - UUID of the xaction. Empty - all xactions.
-- `xact_kind` _str, optional_ - Kind of the xaction. Empty - all kinds.
-- `daemon_id` _str, optional_ - Return xactions only running on the daemon_id.
-- `timeout` _int, optional_ - The maximum time to wait for the xaction, in seconds. Default timeout is 5 minutes.
-  
-
-**Returns**:
-
-  None
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `errors.Timeout` - Timeout while waiting for the xaction to finish
-
-<a id="api.Client.xact_start"></a>
-
-### xact\_start
-
-```python
-def xact_start(xact_kind: str = "",
-               daemon_id: str = "",
-               force: bool = False,
-               buckets: List[Bck] = None) -> str
-```
-
-Start an eXtended Action (xaction) and return its UUID.
-
-**Arguments**:
-
-- `xact_kind` _str, optional_ - Kind of the xaction (for supported kinds, see api/apc/const.go). Empty - all kinds.
-- `daemon_id` _str, optional_ - Return xactions only running on the daemon_id.
-- `force` _bool, optional_ - Override existing restrictions for a bucket (e.g., run LRU eviction even if the bucket has LRU disabled).
-- `buckets` _List[Bck], optional_ - List of one or more buckets; applicable only for xactions that have bucket scope (for details and full enumeration, see xact/table.go).
-  
-
-**Returns**:
-
-  The running xaction UUID.
-  
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
 <a id="api.Client.bucket"></a>
 
 ### bucket
@@ -203,6 +103,92 @@ Does not make any HTTP request, only instantiates a cluster object owned by the 
 **Returns**:
 
   The cluster object created.
+
+<a id="api.Client.xaction"></a>
+
+### xaction
+
+```python
+def xaction()
+```
+
+Factory constructor for xaction object, which contains xaction-related functions.
+Does not make any HTTP request, only instantiates an xaction object bound to the client.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+  The xaction object created.
+
+<a id="api.Client.list_objects_iter"></a>
+
+### list\_objects\_iter
+
+```python
+def list_objects_iter(bck_name: str,
+                      provider: str = ProviderAIS,
+                      prefix: str = "",
+                      props: str = "",
+                      page_size: int = 0) -> BucketLister
+```
+
+Returns an iterator for all objects in a bucket
+
+**Arguments**:
+
+- `bck_name` _str_ - Name of a bucket
+- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+  Defaults to "ais". Empty provider returns buckets of all providers.
+- `prefix` _str, optional_ - return only objects that start with the prefix
+- `props` _str, optional_ - comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+
+**Returns**:
+
+- `BucketLister` - object iterator
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="api.Client.get_object"></a>
+
+### get\_object
+
+```python
+def get_object(bck_name: str,
+               obj_name: str,
+               provider: str = ProviderAIS,
+               archpath: str = "",
+               chunk_size: int = 1) -> ObjStream
+```
+
+Reads an object
+
+**Arguments**:
+
+- `bck_name` _str_ - Name of a bucket
+- `obj_name` _str_ - Name of an object in the bucket
+- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+- `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file from the archive
+- `chunk_size` _int, optional_ - chunk_size to use while reading from stream
+
+**Returns**:
+
+  The stream of bytes to read an object or a file inside an archive.
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
 
 <a id="cluster.Cluster"></a>
 
@@ -425,7 +411,9 @@ def delete()
 ```
 
 Destroys bucket in AIStore cluster.
-Can only delete AIS buckets. Other remote cloud bucket providers do not support bucket deletion.
+In all cases removes both the bucket's content _and_ the bucket's metadata from the cluster.
+Note: AIS will _not_ call the remote backend provider to delete the corresponding Cloud bucket
+(iff the bucket in question is, in fact, a Cloud bucket).
 
 **Arguments**:
 
@@ -483,7 +471,7 @@ Only works on AIS buckets. Returns xaction id that can be used later to check th
 ### evict
 
 ```python
-def evict(keep_md: bool = True)
+def evict(keep_md: bool = False)
 ```
 
 Evicts bucket in AIStore cluster.
@@ -491,7 +479,7 @@ NOTE: only Cloud buckets can be evicted.
 
 **Arguments**:
 
-- `keep_md` _bool, optional_ - If true, it evicts objects but keeps bucket metadata
+- `keep_md` _bool, optional_ - If true, evicts objects but keeps the bucket's metadata (i.e., the bucket's name and its properties)
   
 
 **Returns**:

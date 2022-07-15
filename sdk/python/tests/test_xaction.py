@@ -9,7 +9,7 @@ import string
 import unittest
 from aistore.client.errors import ErrBckNotFound
 
-from aistore.client import Client
+from aistore import Client
 from . import CLUSTER_ENDPOINT
 
 

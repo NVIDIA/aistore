@@ -6,7 +6,7 @@
 
 import unittest
 
-from aistore.client import Client
+from aistore import Client
 from . import CLUSTER_ENDPOINT
 
 
