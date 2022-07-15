@@ -33,13 +33,12 @@ $ git clone https://github.com/NVIDIA/aistore.git
 $ cd aistore/sdk/python
 
 $ pip install -e .
-
 ```
 
 
 ## Quick Start
 
-In order to interact with your running AIS instance, you will need to create a client object:
+In order to interact with your running AIS instance, you will need to create a `client` object:
 
 ```python
 from aistore.client import Client
@@ -47,7 +46,7 @@ from aistore.client import Client
 client = Client("http://localhost:8080")
 ```
 
-The newly created client object can be used to interact with your AIS cluster, buckets, and objects. Here are a few ways to do so:
+The newly created `client` object can be used to interact with your AIS cluster, buckets, and objects. Here are a few ways to do so:
 
 ```python
 # Check if AIS is deployed and running
@@ -126,14 +125,37 @@ For more in-depth examples, please see [SDK tutorial (Jupyter Notebook)](https:/
 
 |Module|Summary|
 |--|--|
-|api.py|Contains `Client` class, which contains methods for making HTTP requests to an AIStore client. Includes factory constructors for `Bucket`, `Cluster`, and `Xaction` classes.|
-|cluster.py|Contains `Cluster` class that represents a cluster bound to a client and contains all cluster-related operations, including checking the cluster's health and retrieving vital cluster information.|
-|Cluster.py|Contains `Bucket` class that represents a bucket in an AIS cluster and contains all bucket-related operations, including (but not limited to) creating, deleting, evicting, renaming, copying.|
-|object.py|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) getting, putting, deleting.|
-|xaction.py|Contains class `Xaction` and all xaction-related operations.|
+|[api.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/api.py)|Contains `Client` class, which has methods for making HTTP requests to an AIStore server. Includes factory constructors for `Bucket`, `Cluster`, and `Xaction` classes.|
+|[cluster.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/cluster.py)|Contains `Cluster` class that represents a cluster bound to a client and contains all cluster-related operations, including checking the cluster's health and retrieving vital cluster information.|
+|[bucket.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/bucket.py)|Contains `Bucket` class that represents a bucket in an AIS cluster and contains all bucket-related operations, including (but not limited to) creating, deleting, evicting, renaming, copying.|
+|[object.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/object.py)|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) retreiving, adding and deleting objects.|
+|[xaction.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/xaction.py)|Contains class `Xaction` and all xaction-related operations.|
 
 For more information on API usage, refer to the [API reference documentation](https://aiatscale.org/docs/python_api.md).
 
+### PyTorch Integration
+
+You can list and load data from AIS buckets (buckets that are not 3rd party backend-based) and remote cloud buckets (3rd party backend-based cloud buckets) in PyTorch using [AISFileLister](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLister.html#aisfilelister) and [AISFileLoader](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLoader.html#torchdata.datapipes.iter.AISFileLoader).
+
+`AISFileLister` and `AISFileLoader` are now available as a part of official [pytorch/data](https://github.com/pytorch/data/blob/main/torchdata/datapipes/iter/load/aisio.py) project. 
+
+```
+from torchdata.datapipes.iter import AISFileLister, AISFileLoader
+
+# provide list of prefixes to load and list data from
+ais_prefixes = ['gcp://bucket-name/folder/', 'aws:bucket-name/folder/', 'ais://bucket-name/folder/', ...]
+
+# List all files for these prefixes using AISFileLister
+dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=ais_prefixes)
+
+# print(list(dp_ais_urls))
+
+# Load files using AISFileLoader
+dp_files = AISFileLoader(url='localhost:8080', source_datapipe=dp_ais_urls)
+
+for url, file in dp_files:
+    pass
+```
 
 ## References
 
