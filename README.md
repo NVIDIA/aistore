@@ -40,14 +40,22 @@ Also, AIStore:
 
 * can be deployed as LRU-based fast cache for remote buckets; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;
-* includes MapReduce extension for massively parallel resharding of very large datasets;
-* supports existing [PyTorch](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf) and [TensorFlow](https://www.youtube.com/watch?v=r9uw1BNt2x8&feature=youtu.be)-based training models.
+* includes [MapReduce extension](/docs/cli/dsort.md) for massively parallel resharding of very large datasets;
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
+For developers and data scientists, there's also:
+* native [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
+* native [Python API](/docs/python_api.md), and [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) that also contains PyTorch integration and usage examples.
+
+For security and fine-grained (OAuth 2.0 compliant) access control to cluster resources and stored datasets, AIStore includes:
+* [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance, currently at v1.0, can provide security/authentication for multiple AIStore clusters.
+
+For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 
 Finally, [getting started](/docs/getting_started.md) with AIS takes only a few minutes.
+
+---------------------
 
 ## Deployment options
 
@@ -83,8 +91,9 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
 - API
   - [Native RESTful API](/docs/http_api.md)
   - [S3 compatibility](/docs/s3compat.md)
-  - [Go API/SDK](/docs/http_api.md)
-  - [Python API](/docs/python_api.md)
+  - [HTTP API](/docs/http_api.md)
+  - [Go API](https://github.com/NVIDIA/aistore/tree/master/api)
+  - [Python API reference](/docs/python_api.md) and [SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python)
 - [CLI](/docs/cli.md)
   - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/docs/cli/object.md)

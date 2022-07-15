@@ -7,13 +7,15 @@ redirect_from:
  - /docs/authn.md/
 ---
 
+AIStore Authentication Server (**AuthN**) provides OAuth 2.0 compliant [JSON Web Tokens](https://datatracker.ietf.org/doc/html/rfc7519) based secure access to AIStore.
+
 ## AuthN Config
 
-Notice:
+Note:
 
 * AuthN configuration directory: `$HOME/.config/ais/authn`
 
-The directory usually contains plain-text config `authn.json` and also tokens DB `authn.db`
+The directory usually contains plain-text `authn.json` configuration and tokens DB `authn.db`
 
 > For the most updated system filenames and configuration directories, please see [`fname/fname.go`](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go) source.
 
@@ -115,25 +117,27 @@ Further references:
 
 - [Overview](#overview)
 - [Environment and configuration](#environment-and-configuration)
-	- [Notation](#notation)
-	- [AuthN configuration and log](#authn-configuration-and-log)
-	- [How to enable AuthN server after deployment](#how-to-enable-authn-server-after-deployment)
-	- [Using Kubernetes secrets](#using-kubernetes-secrets)
+  - [Notation](#notation)
+  - [AuthN configuration and log](#authn-configuration-and-log)
+  - [How to enable AuthN server after deployment](#how-to-enable-authn-server-after-deployment)
+  - [Using Kubernetes secrets](#using-kubernetes-secrets)
 - [REST API](#rest-api)
-	- [Authorization](#authorization)
-	- [Tokens](#tokens)
-	- [Clusters](#clusters)
-	- [Roles](#roles)
-	- [Users](#users)
-	- [Configuration](#configuration)
+  - [Authorization](#authorization)
+  - [Tokens](#tokens)
+  - [Clusters](#clusters)
+  - [Roles](#roles)
+  - [Users](#users)
+  - [Configuration](#configuration)
 - [Typical workflow](#typical-workflow)
 - [Known limitations](#known-limitations)
 
 ## Overview
 
-AIStore Authentication Server (AuthN) provides token-based secure access to AIStore.
-It employs the [JSON Web Tokens](https://github.com/form3tech-oss/jwt-go) framework to grant access to resources: buckets and objects.
-Please read a short [introduction to JWT](https://jwt.io/introduction/) for details.
+AIStore Authentication Server (AuthN) provides OAuth 2.0 compliant [JSON Web Tokens](https://datatracker.ietf.org/doc/html/rfc7519) based secure access to AIStore.
+
+* [Brief introduction to JWT](https://jwt.io/introduction/)
+* [Go (language) implementation of JSON Web Tokens](https://github.com/golang-jwt/jwt) that we utilize for AuthN.
+
 Currently, we only support hash-based message authentication (HMAC) using SHA256 hash.
 
 AuthN is a standalone server that manages users and tokens. If AuthN is enabled on a cluster,
@@ -155,7 +159,6 @@ A workflow for the case when a token is revoked and only one cluster is register
 
 AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as an HTTP server listening on port 52001.
 If you enable HTTPS access, make sure that the configuration file options `server_crt` and `server_key` point to the correct SSL certificate and key.
-
 
 ## Environment and configuration
 
