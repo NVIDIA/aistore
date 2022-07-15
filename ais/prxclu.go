@@ -49,13 +49,17 @@ func (p *proxy) clusterHandler(w http.ResponseWriter, r *http.Request) {
 //
 
 func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
+	what := r.URL.Query().Get(apc.QparamWhat)
+	// always allow as the flow involves intra-cluster redirect
+	// (ref 1377 for more context)
+	if what == apc.GetWhatXactStatus {
+		p.ic.writeStatus(w, r)
+		return
+	}
+
 	if err := p.checkAccess(w, r, nil, apc.AceShowCluster); err != nil {
 		return
 	}
-	var (
-		query = r.URL.Query()
-		what  = query.Get(apc.QparamWhat)
-	)
 	switch what {
 	case apc.GetWhatStats:
 		p.queryClusterStats(w, r, what)
@@ -63,8 +67,6 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.queryClusterSysinfo(w, r, what)
 	case apc.GetWhatQueryXactStats:
 		p.queryXaction(w, r, what)
-	case apc.GetWhatStatus:
-		p.ic.writeStatus(w, r)
 	case apc.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
 	case apc.GetWhatRemoteAIS:

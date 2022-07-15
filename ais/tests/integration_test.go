@@ -1586,7 +1586,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
-	m.ensureNumCopies(copies, false)
+	m.ensureNumCopies(baseParams, copies, false)
 
 	// Step 4: Remove a mountpath
 	mpath := mpList.Available[0]
@@ -1599,7 +1599,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	// Step 5: GET objects from the bucket
 	m.gets()
 
-	m.ensureNumCopies(copies, true /*greaterOk*/)
+	m.ensureNumCopies(baseParams, copies, true /*greaterOk*/)
 
 	// Step 6: Add previously removed mountpath
 	tlog.Logf("Add mountpath %s on target %s\n", mpath, target.ID())
@@ -1608,7 +1608,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 
 	tutils.WaitForResilvering(t, baseParams, target)
 
-	m.ensureNumCopies(copies, true)
+	m.ensureNumCopies(baseParams, copies, true)
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, mpList)
 }
@@ -1648,7 +1648,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 
 	// PUT
 	m.puts()
-	m.ensureNumCopies(mpathCount, false /*greaterOk*/)
+	m.ensureNumCopies(baseParams, mpathCount, false /*greaterOk*/)
 
 	// Remove all mountpaths except one
 	tlog.Logf("Remove all except one (%q) mountpath on target %s\n", mpList.Available[0], target.StringEx())
@@ -1683,7 +1683,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 
 	tutils.WaitForResilvering(t, baseParams, nil)
 
-	m.ensureNumCopies(mpathCount, true /*greaterOk*/)
+	m.ensureNumCopies(baseParams, mpathCount, true /*greaterOk*/)
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, mpList)
 }

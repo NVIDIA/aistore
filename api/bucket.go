@@ -11,34 +11,11 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
-)
-
-const (
-	initialPollInterval = 50 * time.Millisecond
-	maxPollInterval     = 10 * time.Second
-)
-
-// "progress bar" control structures and context
-type (
-	// negative values indicate that progress information is unavailable
-	ProgressInfo struct {
-		Percent float64
-		Count   int
-		Total   int
-	}
-	ProgressContext struct {
-		startTime time.Time // time when operation started
-		callAfter time.Time // call the callback only after
-		callback  ProgressCallback
-		info      ProgressInfo
-	}
-	ProgressCallback = func(pi *ProgressContext)
 )
 
 // SetBucketProps sets the properties of a bucket.
@@ -164,7 +141,7 @@ func GetBucketsSummaries(baseParams BaseParams, qbck cmn.QueryBcks, msg *apc.Bck
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = qbck.AddToQuery(nil)
 	}
-	if err := reqParams.waitForAsyncReqComplete(apc.ActSummaryBck, msg, &summaries); err != nil {
+	if err := reqParams.waitSummary(msg, &summaries); err != nil {
 		return nil, err
 	}
 	sort.Sort(summaries)
@@ -291,58 +268,6 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 	}
 	err := reqParams.DoHTTPRequest()
 	FreeRp(reqParams)
-	return err
-}
-
-// Polling:
-// 1. The function sends the requests as is (lsmsg.UUID should be empty) to initiate
-//    asynchronous task. The destination returns ID of a newly created task
-// 2. Starts polling: request destination with received UUID in a loop while
-//    the destination returns StatusAccepted=task is still running
-//	  Time between requests is dynamic: it starts at 200ms and increases
-//	  by half after every "not-StatusOK" request. It is limited with 10 seconds
-// 3. Breaks loop on error
-// 4. If the destination returns status code StatusOK, it means the response
-//    contains the real data and the function returns the response to the caller
-func (reqParams *ReqParams) waitForAsyncReqComplete(action string, msg *apc.BckSummMsg, v interface{}) error {
-	var (
-		uuid   string
-		sleep  = initialPollInterval
-		actMsg = apc.ActionMsg{Action: action, Value: msg}
-	)
-	if reqParams.Query == nil {
-		reqParams.Query = url.Values{}
-	}
-	reqParams.Body = cos.MustMarshal(actMsg)
-	resp, err := reqParams.doResp(&uuid)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusAccepted {
-		if resp.StatusCode == http.StatusOK {
-			return errors.New("expected 202 response code on first call, got 200")
-		}
-		return fmt.Errorf("invalid response code: %d", resp.StatusCode)
-	}
-	if msg.UUID == "" {
-		msg.UUID = uuid
-	}
-
-	// Poll async task for http.StatusOK completion
-	for {
-		reqParams.Body = cos.MustMarshal(actMsg)
-		resp, err = reqParams.doResp(v)
-		if err != nil {
-			return err
-		}
-		if resp.StatusCode == http.StatusOK {
-			break
-		}
-		time.Sleep(sleep)
-		if sleep < maxPollInterval {
-			sleep += sleep / 2
-		}
-	}
 	return err
 }
 
@@ -557,41 +482,4 @@ func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactI
 	err = reqParams.DoHTTPReqResp(&xactID)
 	FreeRp(reqParams)
 	return
-}
-
-func NewProgressContext(cb ProgressCallback, after time.Duration) *ProgressContext {
-	ctx := &ProgressContext{
-		info:      ProgressInfo{Count: -1, Total: -1, Percent: -1.0},
-		startTime: time.Now(),
-		callback:  cb,
-	}
-	if after != 0 {
-		ctx.callAfter = ctx.startTime.Add(after)
-	}
-	return ctx
-}
-
-func (ctx *ProgressContext) finish() {
-	ctx.info.Percent = 100.0
-	if ctx.info.Total > 0 {
-		ctx.info.Count = ctx.info.Total
-	}
-}
-
-func (ctx *ProgressContext) IsFinished() bool {
-	return ctx.info.Percent >= 100.0 ||
-		(ctx.info.Total != 0 && ctx.info.Total == ctx.info.Count)
-}
-
-func (ctx *ProgressContext) Elapsed() time.Duration {
-	return time.Since(ctx.startTime)
-}
-
-func (ctx *ProgressContext) mustFire() bool {
-	return ctx.callAfter.IsZero() ||
-		ctx.callAfter.Before(time.Now())
-}
-
-func (ctx *ProgressContext) Info() ProgressInfo {
-	return ctx.info
 }

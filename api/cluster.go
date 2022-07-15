@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -20,12 +20,12 @@ import (
 
 // to be used by external watchdogs (Kubernetes, etc.)
 // (compare with api.Health below)
-func GetProxyReadiness(params BaseParams) error {
-	params.Method = http.MethodGet
+func GetProxyReadiness(baseParams BaseParams) error {
+	baseParams.Method = http.MethodGet
 	q := url.Values{apc.QparamHealthReadiness: []string{"true"}}
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = params
+		reqParams.BaseParams = baseParams
 		reqParams.Path = apc.URLPathHealth.S
 		reqParams.Query = q
 	}

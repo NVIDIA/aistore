@@ -1,11 +1,12 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -154,7 +155,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStatus}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatXactStatus}}
 	}
 	err = reqParams.DoHTTPReqResp(status)
 	FreeRp(reqParams)
@@ -306,6 +307,59 @@ func (nxs NodesXactSnap) TotalRunningTime() time.Duration {
 		end = time.Now()
 	}
 	return end.Sub(start)
+}
+
+// Wait for bucket summary:
+// 1. The function sends the requests as is (lsmsg.UUID should be empty) to initiate
+//    asynchronous task. The destination returns ID of a newly created task
+// 2. Starts polling: request destination with received UUID in a loop while
+//    the destination returns StatusAccepted=task is still running
+//	  Time between requests is dynamic: it starts at 200ms and increases
+//	  by half after every "not-StatusOK" request. It is limited with 10 seconds
+// 3. Breaks loop on error
+// 4. If the destination returns status code StatusOK, it means the response
+//    contains the real data and the function returns the response to the caller
+func (reqParams *ReqParams) waitSummary(msg *apc.BckSummMsg, v interface{}) error {
+	var (
+		uuid   string
+		action = apc.ActSummaryBck
+		sleep  = xactMinPollTime
+		actMsg = apc.ActionMsg{Action: action, Value: msg}
+	)
+	if reqParams.Query == nil {
+		reqParams.Query = url.Values{}
+	}
+	reqParams.Body = cos.MustMarshal(actMsg)
+	resp, err := reqParams.doResp(&uuid)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		if resp.StatusCode == http.StatusOK {
+			return errors.New("expected 202 response code on first call, got 200")
+		}
+		return fmt.Errorf("invalid response code: %d", resp.StatusCode)
+	}
+	if msg.UUID == "" {
+		msg.UUID = uuid
+	}
+
+	// Poll async task for http.StatusOK completion
+	for {
+		reqParams.Body = cos.MustMarshal(actMsg)
+		resp, err = reqParams.doResp(v)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+		time.Sleep(sleep)
+		if sleep < xactMaxProbingFreq {
+			sleep += sleep / 2
+		}
+	}
+	return err
 }
 
 ////////////////////////

@@ -527,12 +527,8 @@ func (m *ioContext) stopGets() {
 	m.stopCh <- struct{}{}
 }
 
-func (m *ioContext) ensureNumCopies(expectedCopies int, greaterOk bool) {
+func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies int, greaterOk bool) {
 	m.t.Helper()
-	var (
-		baseParams = tutils.BaseAPIParams()
-		total      int
-	)
 	time.Sleep(time.Second)
 	xactArgs := api.XactReqArgs{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, xactArgs)
@@ -544,6 +540,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int, greaterOk bool) {
 	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
+	total := 0
 	copiesToNumObjects := make(map[int]int)
 	for _, entry := range objectList.Entries {
 		if entry.Atime == "" {

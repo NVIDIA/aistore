@@ -1671,7 +1671,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	// wait for all GETs to complete
 	wg.Wait()
 
-	m.ensureNumCopies(numCopies[len(numCopies)-1], false /*greaterOk*/)
+	m.ensureNumCopies(baseParams, numCopies[len(numCopies)-1], false /*greaterOk*/)
 }
 
 func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies int) {
@@ -1727,12 +1727,12 @@ func TestRemoteBucketMirror(t *testing.T) {
 
 	// cold GET - causes local mirroring
 	m.remotePrefetch(m.num)
-	m.ensureNumCopies(2, false /*greaterOk*/)
+	m.ensureNumCopies(baseParams, 2, false /*greaterOk*/)
 	time.Sleep(3 * time.Second)
 
 	// Increase number of copies
 	makeNCopies(t, baseParams, m.bck, 3)
-	m.ensureNumCopies(3, false /*greaterOk*/)
+	m.ensureNumCopies(baseParams, 3, false /*greaterOk*/)
 }
 
 func TestBucketReadOnly(t *testing.T) {
@@ -2873,7 +2873,8 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	if mirrored {
 		args := api.XactReqArgs{Kind: apc.ActPutCopies, Bck: m.bck, Timeout: xactTimeout}
 		api.WaitForXactionIdle(baseParams, args)
-		m.ensureNumCopies(copyCnt, false /*greaterOk*/)
+		// NOTE: ref 1377
+		m.ensureNumCopies(baseParams, copyCnt, false /*greaterOk*/)
 	}
 	// wait for erasure-coding
 	if eced {

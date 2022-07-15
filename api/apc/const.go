@@ -298,7 +298,7 @@ const (
 	GetWhatSmapVote      = "smapvote"
 	GetWhatSnode         = "snode"
 	GetWhatStats         = "stats"
-	GetWhatStatus        = "status" // IC status by uuid.
+	GetWhatXactStatus    = "status" // IC status by uuid.
 	GetWhatSysInfo       = "sysinfo"
 	GetWhatTargetIPs     = "target_ips"
 	GetWhatLog           = "log"

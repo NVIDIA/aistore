@@ -131,19 +131,24 @@ func InitLocalCluster() {
 		initRemoteCluster() // remote AIS that optionally may be run locally as well and used for testing
 		return
 	}
-	fmt.Printf("Error: %s\n", strings.TrimSuffix(err.Error(), "\n"))
-	fmt.Println("Environment variables:")
-	fmt.Printf("\t%s:\t%s\n", env.AIS.Endpoint, os.Getenv(env.AIS.Endpoint))
-	fmt.Printf("\t%s:\t%s\n", env.AIS.PrimaryID, os.Getenv(env.AIS.PrimaryID))
-	fmt.Printf("\t%s:\t%s\n", env.AIS.SkipVerifyCrt, os.Getenv(env.AIS.SkipVerifyCrt))
-	fmt.Printf("\t%s:\t%s\n", env.AIS.UseHTTPS, os.Getenv(env.AIS.UseHTTPS))
-	if len(envVars) > 0 {
-		fmt.Println("Docker Environment:")
-		for k, v := range envVars {
-			fmt.Printf("\t%s:\t%s\n", k, v)
+	fmt.Printf("Error: %s\n\n", strings.TrimSuffix(err.Error(), "\n"))
+	if strings.Contains(err.Error(), "token") {
+		fmt.Printf("Hint: make sure to provide access token via %s environment or the default config location\n",
+			env.AuthN.TokenFile)
+	} else if strings.Contains(err.Error(), "unreachable") {
+		fmt.Printf("Hint: make sure that cluster is running and/or specify its endpoint via %s environment\n",
+			env.AIS.Endpoint)
+	} else {
+		fmt.Printf("Hint: check api/env/*.go environment and, in particular, %s, %s, and more\n",
+			env.AIS.Endpoint, env.AIS.PrimaryID)
+		if len(envVars) > 0 {
+			fmt.Println("Docker Environment:")
+			for k, v := range envVars {
+				fmt.Printf("\t%s:\t%s\n", k, v)
+			}
 		}
 	}
-	cos.Exitf("")
+	os.Exit(1)
 }
 
 // InitCluster initializes the environment necessary for testing against an AIS cluster.
@@ -167,12 +172,11 @@ func initProxyURL() (err error) {
 		SoftErr:  5,
 		HardErr:  5,
 		Sleep:    5 * time.Second,
-		Action:   fmt.Sprintf("check proxy readiness at %s", proxyURLReadOnly),
+		Action:   fmt.Sprintf("reach AIS at %s", proxyURLReadOnly),
 		IsClient: true,
 	})
 	if err != nil {
-		err = fmt.Errorf("failed to successfully check readiness of a proxy at %s; err %v", proxyURLReadOnly, err)
-		return
+		return fmt.Errorf("AIS is unreachable at %s", proxyURLReadOnly)
 	}
 
 	if testClusterType == ClusterTypeK8s {
