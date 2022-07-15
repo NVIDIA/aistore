@@ -26,11 +26,12 @@ with open(os.path.join(cwd, "README.md"), encoding="utf-8") as f:
 
 setup(
     name="aistore",
-    version="0.9.2",
-    description="Client and convenient connectors for PyTorch and TensorFlow to AIStore cluster",
+    version="1.0.0",
+    description="A (growing) set of client-side APIs to access and utilize clusters, buckets, and objects on AIStore.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url='https://aiatscale.org',
+    download_url='https://github.com/NVIDIA/aistore/tags',
     author='AIStore Team',
     author_email='aistore@exchange.nvidia.com',
     keywords=[
@@ -43,10 +44,15 @@ setup(
         "Intended Audience :: Developers",
         "Intended Audience :: Education",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: BSD License",
+        "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3 :: Only",
         "Topic :: Scientific/Engineering",
     ],
+    project_urls={
+        "Documentation": "https://aiatscale.org/docs/",
+        "Release notes": "https://github.com/NVIDIA/aistore/releases/",
+        "Source": "https://github.com/NVIDIA/aistore/"
+    },
     license="MIT",
     python_requires='>=3.6',
     packages=find_packages(exclude=("tests", "tests.*", "examples", "examples.*")),

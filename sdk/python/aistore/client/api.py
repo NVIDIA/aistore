@@ -8,9 +8,10 @@ import requests
 from urllib.parse import urljoin
 from pydantic.tools import parse_raw_as
 
-from aistore.client.const import ProviderAIS
 from aistore.client.bucket import Bucket
+from aistore.client.const import HTTP_METHOD_GET, ProviderAIS, QParamArchpath, QParamProvider
 from aistore.client.cluster import Cluster
+from aistore.client.types import BucketLister, ObjStream
 from aistore.client.utils import handle_errors
 from aistore.client.xaction import Xaction
 
@@ -92,3 +93,55 @@ class Client:
             The xaction object created.
         """
         return Xaction(client=self)
+
+    # TODO: Remove once pytorch/data dependency on previous version is resolved
+    def list_objects_iter(
+        self,
+        bck_name: str,
+        provider: str = ProviderAIS,
+        prefix: str = "",
+        props: str = "",
+        page_size: int = 0,
+    ) -> BucketLister:
+        """
+        Returns an iterator for all objects in a bucket
+        Args:
+            bck_name (str): Name of a bucket
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+                Defaults to "ais". Empty provider returns buckets of all providers.
+            prefix (str, optional): return only objects that start with the prefix
+            props (str, optional): comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+        Returns:
+            BucketLister: object iterator
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+        """
+        return BucketLister(self, bck_name=bck_name, provider=provider, prefix=prefix, props=props, page_size=page_size)
+
+    # TODO: Remove once pytorch/data dependency on previous version is resolved
+    def get_object(self, bck_name: str, obj_name: str, provider: str = ProviderAIS, archpath: str = "", chunk_size: int = 1) -> ObjStream:
+        """
+        Reads an object
+        Args:
+            bck_name (str): Name of a bucket
+            obj_name (str): Name of an object in the bucket
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+            archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
+            chunk_size (int, optional): chunk_size to use while reading from stream
+        Returns:
+            The stream of bytes to read an object or a file inside an archive.
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+        """
+        params = {QParamProvider: provider, QParamArchpath: archpath}
+        resp = self.request(HTTP_METHOD_GET, path=f"objects/{ bck_name }/{ obj_name }", params=params, stream=True)
+        length = int(resp.headers.get("content-length", 0))
+        e_tag = resp.headers.get("ais-checksum-value", "")
+        e_tag_type = resp.headers.get("ais-checksum-type", "")
+        return ObjStream(content_length=length, e_tag=e_tag, e_tag_type=e_tag_type, stream=resp, chunk_size=chunk_size)

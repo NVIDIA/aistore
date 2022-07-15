@@ -3,7 +3,6 @@ AIS IO Datapipe
 Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 """
 
-from io import BytesIO
 from typing import Iterator, Tuple
 
 from torchdata.datapipes import functional_datapipe
@@ -51,13 +50,13 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
 
     Example:
         >>> from torchdata.datapipes.iter import IterableWrapper, AISFileLister
-        >>> ais_prefixes = IterableWrapper(['ais://bucket-name/folder/', 'aws:bucket-name/folder/', ...])
-        >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=prefix)
-        >>> for d in dp_ais_urls:
+        >>> ais_prefixes = IterableWrapper(['gcp://bucket-name/folder/', 'aws:bucket-name/folder/', 'ais://bucket-name/folder/', ...])
+        >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=ais_prefixes)
+        >>> for url in dp_ais_urls:
         ...     pass
         >>> # Functional API
-        >>> dp_ais_urls = dp_ais_urls.list_files_by_ais(url='localhost:8080')
-        >>> for d in dp_ais_urls:
+        >>> dp_ais_urls = ais_prefixes.list_files_by_ais(url='localhost:8080')
+        >>> for url in dp_ais_urls:
         ...     pass
     """
     def __init__(self, source_datapipe: IterDataPipe[str], url: str, length: int = -1) -> None:
@@ -98,14 +97,14 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
 
     Example:
         >>> from torchdata.datapipes.iter import IterableWrapper, AISFileLister,AISFileLoader
-        >>> ais_prefixes = IterableWrapper(['ais://bucket-name/folder/', 'aws:bucket-name/folder/', ...])
-        >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=prefix)
-        >>> dp_s3_files = AISFileLoader(url='localhost:8080', source_datapipe=dp_ais_urls)
-        >>> for url, file in dp_ais_urls:
+        >>> ais_prefixes = IterableWrapper(['gcp://bucket-name/folder/', 'aws:bucket-name/folder/', 'ais://bucket-name/folder/', ...])
+        >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=ais_prefixes)
+        >>> dp_cloud_files = AISFileLoader(url='localhost:8080', source_datapipe=dp_ais_urls)
+        >>> for url, file in dp_cloud_files:
         ...     pass
         >>> # Functional API
-        >>> dp_ais_urls = dp_ais_urls.load_files_by_ais(url='localhost:8080')
-        >>> for url, file in dp_ais_urls:
+        >>> dp_cloud_files = dp_ais_urls.load_files_by_ais(url='localhost:8080')
+        >>> for url, file in dp_cloud_files:
         ...     pass
     """
     def __init__(self, source_datapipe: IterDataPipe[str], url: str, length: int = -1) -> None:
@@ -117,7 +116,7 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
     def __iter__(self) -> Iterator[Tuple[str, StreamWrapper]]:
         for url in self.source_datapipe:
             provider, bck_name, obj_name = parse_url(url)
-            yield url, StreamWrapper(BytesIO(self.client.bucket(bck_name=bck_name, provider=provider).object(obj_name=obj_name).get().read_all()))
+            yield url, StreamWrapper(self.client.bucket(bck_name=bck_name, provider=provider).object(obj_name=obj_name).get().raw())
 
     def __len__(self) -> int:
         return len(self.source_datapipe)
