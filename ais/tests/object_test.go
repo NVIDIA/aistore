@@ -223,7 +223,7 @@ func TestAppendObject(t *testing.T) {
 				proxyURL   = tutils.RandomProxyURL(t)
 				baseParams = tutils.BaseAPIParams(proxyURL)
 				bck        = cmn.Bck{
-					Name:     testBucketName,
+					Name:     cos.RandString(10),
 					Provider: apc.ProviderAIS,
 				}
 				objName = "test/obj1"
