@@ -347,7 +347,7 @@ Configuration option `fspaths` specifies the list of local mountpath directories
 
 > In regards **non-sharing of disks** between mountpaths: for development we make an exception, such that multiple mountpaths are actually allowed to share a disk and coexist within a single filesystem. This is done strictly for development convenience, though.
 
-AIStore [HTTP API](http_api.md) makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to [FSHC readme](/health/fshc.md).
+AIStore [REST API](http_api.md) makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to [FSHC readme](/health/fshc.md).
 
 ## Disabling extended attributes
 

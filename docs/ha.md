@@ -17,7 +17,7 @@ redirect_from:
 ## Highly Available Control Plane
 
 AIStore cluster will survive a loss of any storage target and any gateway including the primary gateway (leader). New gateways and targets can join at any time – including the time of electing a new leader. Each new node joining a running cluster will get updated with the most current cluster-level metadata.
-Failover – that is, the election of a new leader – is carried out automatically on failure of the current/previous leader. Failback on the hand – that is, administrative selection of the leading (likely, an originally designated) gateway – is done manually via AIStore [HTTP API](http_api.md).
+Failover – that is, the election of a new leader – is carried out automatically on failure of the current/previous leader. Failback on the hand – that is, administrative selection of the leading (likely, an originally designated) gateway – is done manually via AIStore [REST API](http_api.md).
 
 It is, therefore, recommended that AIStore cluster is deployed with multiple proxies aka gateways (the terms that are interchangeably used throughout the source code and this README).
 

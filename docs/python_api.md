@@ -7,7 +7,9 @@ redirect_from:
  - /docs/python_api.md/
 ---
 
-AIStore Python SDK is a growing set of client-side APIs to access and utilize AIS clusters.
+AIStore Python API is a growing set of client-side objects and methods to access and utilize AIS clusters.
+
+> For PyTorch integration and usage examples, please refer to [AIS Python SDK](https://pypi.org/project/aistore) available via Python Package Index (PyPI), or see https://github.com/NVIDIA/aistore/tree/master/sdk/python.
 
 * [api](#api)
   * [Client](#api.Client)

@@ -46,7 +46,7 @@ AIS runs natively on Kubernetes and features open format - thus, the freedom to 
 
 For developers and data scientists, there's also:
 * native [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
-* native [Python API](/docs/python_api.md), and [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) that also contains PyTorch integration and usage examples.
+* native [Python API](/docs/python_api.md), and [Python SDK](https://pypi.org/project/aistore) that also contains PyTorch integration and usage examples.
 
 For security and fine-grained (OAuth 2.0 compliant) access control to cluster resources and stored datasets, AIStore includes:
 * [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance, currently at v1.0, can provide security/authentication for multiple AIStore clusters.
@@ -88,12 +88,11 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
 
 - [Getting Started](/docs/getting_started.md)
 - [Technical Blog](https://aiatscale.org/blog)
-- API
-  - [Native RESTful API](/docs/http_api.md)
+- API and SDK
+  - [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api)
+  - [Python SDK](https://pypi.org/project/aistore) via Python Package Index (PyPI)
+  - [REST API](/docs/http_api.md)
   - [S3 compatibility](/docs/s3compat.md)
-  - [HTTP API](/docs/http_api.md)
-  - [Go API](https://github.com/NVIDIA/aistore/tree/master/api)
-  - [Python API reference](/docs/python_api.md) and [SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python)
 - [CLI](/docs/cli.md)
   - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/docs/cli/object.md)
@@ -149,7 +148,7 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
   - [`aisnode` command line](/docs/command_line.md)
   - [Traffic patterns](/docs/traffic_patterns.md)
   - [Highly available control plane](/docs/ha.md)
-  - [File access](/docs/aisfs.md)
+  - [File access (experimental)](/docs/aisfs.md)
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
   - [AIS Buckets: definition, operations, properties](/docs/bucket.md#bucket)

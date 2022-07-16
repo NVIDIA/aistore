@@ -17,11 +17,11 @@ redirect_from:
 
 ### Guides and References
 
-- API
-  - [Native RESTful API](/docs/http_api.md)
+- API and SDK
+  - [Go (language) API](/docs/http_api.md)
+  - [Python API reference](/docs/python_api.md)
+  - [REST API](/docs/http_api.md)
   - [S3 compatibility](/docs/s3compat.md)
-  - [Go API/SDK](/docs/http_api.md)
-  - [Python API](/docs/python_api.md)
 - [CLI](/docs/cli.md)
   - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/docs/cli/object.md)
@@ -77,7 +77,7 @@ redirect_from:
   - [`aisnode` command line](/docs/command_line.md)
   - [Traffic patterns](/docs/traffic_patterns.md)
   - [Highly available control plane](/docs/ha.md)
-  - [File access](/docs/aisfs.md)
+  - [File access (experimental)](/docs/aisfs.md)
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
   - [AIS Buckets: definition, operations, properties](/docs/bucket.md#bucket)

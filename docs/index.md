@@ -44,22 +44,30 @@ Also, AIStore:
 
 * can be deployed as LRU-based fast cache for remote buckets; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;
-* includes MapReduce extension for massively parallel resharding of very large datasets;
-* supports existing [PyTorch](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf) and [TensorFlow](https://www.youtube.com/watch?v=r9uw1BNt2x8&feature=youtu.be)-based training models.
+* includes [MapReduce extension](/docs/cli/dsort.md) for massively parallel resharding of very large datasets;
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
+For developers and data scientists, there's also:
+* native [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
+* native [Python API](/docs/python_api.md), and [Python SDK](https://pypi.org/project/aistore) that also contains PyTorch integration and usage examples.
+
+For security and fine-grained (OAuth 2.0 compliant) access control to cluster resources and stored datasets, AIStore includes:
+* [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance, currently at v1.0, can provide security/authentication for multiple AIStore clusters.
+
+For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 
 Finally, [getting started](/docs/getting_started.md) with AIS takes only a few minutes.
 
+---------------------
+
 ## Deployment options
 
-The prerequisites boil down to having Linux with a disk. The result is a practically unlimited set of deployment options ranging from [all-in-one container](/docs/videos.md#minimal-all-in-one-standalone-docker) to a petascale bare-metal cluster of any size, from a single VM to multiple racks of high-end servers.
+AIS deployment options, as well as intended (development vs. production vs. first-time) usages, are all [summarized here](deploy/README.md).
 
-Use cases include:
+Since prerequisites boil down to, essentially, having Linux with a disk the deployment options range from [all-in-one container](/docs/videos.md#minimal-all-in-one-standalone-docker) to a petascale bare-metal cluster of any size, and from a single VM to multiple racks of high-end servers. But practical use cases require, of course, further consideration and may include:
 
-| Deployment option | Targeted audience and objective |
+| Option | Objective |
 | --- | ---|
 | [Local playground](/docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
@@ -69,6 +77,8 @@ Use cases include:
 Further, there's the capability referred to as [global namespace](/docs/providers.md#remote-ais-cluster): given HTTP(S) connectivity, AIS clusters can be easily interconnected to "see" each other's datasets. Hence, the idea to start "small" to gradually and incrementally build high-performance shared capacity.
 
 > For detailed discussion on supported deployments, please refer to [Getting Started](/docs/getting_started.md).
+
+> For performance tuning and preparing AIS nodes for bare-metal deployment, see [performance](/docs/performance.md).
 
 ## Related Software
 
@@ -82,11 +92,11 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
 
 - [Getting Started](/docs/getting_started.md)
 - [Technical Blog](https://aiatscale.org/blog)
-- API
-  - [Native RESTful API](/docs/http_api.md)
+- API and SDK
+  - [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api)
+  - [Python SDK](https://pypi.org/project/aistore) via Python Package Index (PyPI)
+  - [REST API](/docs/http_api.md)
   - [S3 compatibility](/docs/s3compat.md)
-  - [Go API/SDK](/docs/http_api.md)
-  - [Python API](/docs/python_api.md)
 - [CLI](/docs/cli.md)
   - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/docs/cli/object.md)
@@ -142,7 +152,7 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
   - [`aisnode` command line](/docs/command_line.md)
   - [Traffic patterns](/docs/traffic_patterns.md)
   - [Highly available control plane](/docs/ha.md)
-  - [File access](/docs/aisfs.md)
+  - [File access (experimental)](/docs/aisfs.md)
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
   - [AIS Buckets: definition, operations, properties](/docs/bucket.md#bucket)
