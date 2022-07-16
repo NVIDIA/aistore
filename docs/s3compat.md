@@ -103,7 +103,7 @@ With `s3cmd` client configuration saved in `$HOME/.s3cfg`, the next immediate st
 
 The endpoint consists of the cluster's gateway hostname and its port followed by `/s3`.
 
-> AIS clusters usually run multiple gateways all of which is equivalent in terms of providing access (to their respective clusters).
+> AIS clusters usually run multiple gateways all of which are equivalent in terms of providing access (to their respective clusters).
 
 For example: given IP = `10.10.0.1` and AIS gateway service port `51080`, AIS endpoint would be `10.10.0.1:51080/s3`:
 
