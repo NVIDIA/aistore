@@ -11,9 +11,9 @@ redirect_from:
 AIS supports Amazon S3 in two distinct and different ways:
 
 1. On the back, via [backend](providers.md) abstraction. Specifically for S3 the corresponding [backend](providers.md) implementation currently utilizes [AWS SDK for Go](https://aws.amazon.com/sdk-for-go);
-2. On the (client-facing) front, AIS provides S3 compatible API, so that existing S3 applications could use AIStore out of the box and without the need to change their (existing) code.
+2. On the client-facing front, AIS provides S3 compatible API, so that existing S3 applications could use AIStore out of the box and without the need to change their (existing) code.
 
-This document talks about the latter - about Amazon S3 API compatibility (or simply, S3 compatibility).
+This document talks about the latter - about AIS providing S3 compatible API.
 
 For more references and background, see:
 
@@ -22,15 +22,274 @@ For more references and background, see:
 
 ## Table of Contents
 
-- [S3 Compatibility](#s3-compatibility)
-- [Client Configuration](#client-configuration)
-- [Object Checksum](#object-checksum)
+- [`s3cmd` Configuration](#s3cmd-configuration)
+- [Getting Started with `s3cmd`](#getting-started-with-s3cmd)
+- [ETag and MD5](#etag-and-md5)
 - [Last Modification Time](#last-modification-time)
-- [More Examples](#more-examples)
+- [More Usage Examples](#more-usage-examples)
   - [Create bucket](#create-bucket)
   - [Remove bucket](#remove-bucket)
 - [TensorFlow Demo](#tensorflow-demo)
+- [S3 Compatibility](#s3-compatibility)
 - [Boto3 Compatibility](#boto3-compatibility)
+
+## `s3cmd` Configuration
+
+When using `s3cmd` the very first time, **or** if your AWS access credentials have changed, **or** if you'd want to change certain `s3cmd` defaults (also shown below) - in each one and all of those cases run `s3cmd --configure`.
+
+**NOTE:** it is important to have `s3cmd` client properly configured.
+
+For example:
+
+```console
+# s3cmd --configure
+
+Enter new values or accept defaults in brackets with Enter.
+Refer to user manual for detailed description of all options.
+
+Access key and Secret key are your identifiers for Amazon S3. Leave them empty for using the env variables.
+Access Key [ABCDABCDABCDABCDABCD]: EFGHEFGHEFGHEFGHEFGH
+Secret Key [abcdabcdABCDabcd/abcde/abcdABCDabc/ABCDe]: efghEFGHefghEFGHe/ghEFGHe/ghEFghef/hEFGH
+Default Region [us-east-2]:
+
+Use "s3.amazonaws.com" for S3 Endpoint and not modify it to the target Amazon S3.
+S3 Endpoint [s3.amazonaws.com]:
+
+Use "%(bucket)s.s3.amazonaws.com" to the target Amazon S3. "%(bucket)s" and "%(location)s" vars can be used
+if the target S3 system supports dns based buckets.
+DNS-style bucket+hostname:port template for accessing a bucket [%(bucket)s.s3.amazonaws.com]:
+
+Encryption password is used to protect your files from reading
+by unauthorized persons while in transfer to S3
+Encryption password:
+Path to GPG program [/usr/bin/gpg]:
+
+When using secure HTTPS protocol all communication with Amazon S3
+servers is protected from 3rd party eavesdropping. This method is
+slower than plain HTTP, and can only be proxied with Python 2.7 or newer
+Use HTTPS protocol [Yes]:
+
+On some networks all internet access must go through a HTTP proxy.
+Try setting it here if you can't connect to S3 directly
+HTTP Proxy server name:
+
+New settings:
+  Access Key: EFGHEFGHEFGHEFGHEFGH
+  Secret Key: efghEFGHefghEFGHe/ghEFGHe/ghEFghef/hEFGH
+  Default Region: us-east-2
+  S3 Endpoint: s3.amazonaws.com
+  DNS-style bucket+hostname:port template for accessing a bucket: %(bucket)s.s3.amazonaws.com
+  Encryption password:
+  Path to GPG program: /usr/bin/gpg
+  Use HTTPS protocol: True
+  HTTP Proxy server name:
+  HTTP Proxy server port: 0
+
+Test access with supplied credentials? [Y/n] n
+Save settings? [y/N] y
+Configuration saved to '/home/.s3cfg'
+```
+
+> It is maybe a good idea to also notice the version of the `s3cmd` you are using, e.g.:
+
+```console
+$ s3cmd --version
+s3cmd version 2.0.1
+```
+
+## Getting Started with `s3cmd`
+
+With `s3cmd` client configuration saved in `$HOME/.s3cfg`, the next immediate step would be to figure out the AIS endpoint (AIS cluster must be running, of course).
+
+The endpoint consists of the cluster's gateway hostname and its port followed by `/s3`.
+
+> AIS clusters usually run multiple gateways all of which is equivalent in terms of providing access (to their respective clusters).
+
+For example: given IP = `10.10.0.1` and AIS gateway service port `51080`, AIS endpoint would be `10.10.0.1:51080/s3`:
+
+```console
+$ s3cmd ls --host=10.10.0.1:51080/s3
+```
+
+If AIS cluster is deployed with HTTP (the default) and not HTTPS, turn off HTTPS in the `s3cmd` client:
+
+```console
+$ ais config cluster net.http
+PROPERTY                         VALUE
+net.http.server_crt              server.crt
+net.http.server_key              server.key
+net.http.write_buffer_size       65536
+net.http.read_buffer_size        65536
+net.http.use_https               false # <<<<<<<<< (NOTE) <<<<<<<<<<<<<<<<<<
+net.http.skip_verify             false
+net.http.chunked_transfer        true
+```
+
+we then need turn off HTTPS in the `s3cmd` client, as follows:
+
+```console
+$ s3cmd ls --host=10.10.0.1:51080/s3 --no-ssl
+```
+
+On the other hand, if the cluster has been deployed with HTTPS but it uses a self-signed (or otherwise invalid) certificate, we need disable the certificate check:
+
+```console
+$ s3cmd ls --host=10.10.0.1.51080/s3 --no-check-certificate
+```
+
+Once all of the above is set and done, we should be able to execute a simple HEAD request on an s3 bucket. Meaning, check the bucket's existence and get its properties.
+
+For instance:
+
+```console
+$ s3cmd info s3://my-s3-bucket --host=10.10.0.1:51080/s3 --no-ssl
+s3://ais-aa/ (bucket):
+   Location:  us-east-2
+   Payer:     BucketOwner
+   Expiration Rule: none
+   Policy:    none
+   CORS:      none
+   ACL:       3bcb8baa034ab2166cd7d6a5b7ac1264d613c5e9fbdf120bc9f0ae91bda54347: FULL_CONTROL
+```
+
+and then immediately list it:
+
+```console
+$ s3cmd ls s3://my-s3-bucket --host=10.10.0.1:51080/s3 --no-ssl
+2022-07-15 23:36      9892   s3://my-s3-bucket/README.md
+2022-07-14 18:18      5284   s3://my-s3-bucket/temp-00
+2022-07-14 18:18      7215   s3://my-s3-bucket/temp-01
+2022-07-14 18:18      9200   s3://my-s3-bucket/temp-02
+2022-07-14 18:18      4037   s3://my-s3-bucket/temp-03
+2022-07-14 18:18      1263   s3://my-s3-bucket/temp-04
+2022-07-14 18:18      1210   s3://my-s3-bucket/temp-05
+```
+
+If `s3cmd` complains about empty S3 region, you could rerun `scmd --configure` (see previous section) or, alternatively, specify any valid region in the command line:
+
+```console
+$ s3cmd ls --host=10.10.0.1.51080/s3 --region us-west-1
+```
+
+That's all. The steps above will make all top-level commands to work.
+
+The following table enumerates some of the `s3cmd` options that may appear to be useful:
+
+| Options | Usage | Example |
+| --- | --- | --- |
+| `--host` | Define an AIS cluster endpoint | `--host=10.10.0.1:51080/s3` |
+| `--host-bucket` | Define URL path to access a bucket of an AIS cluster | `--host-bucket="10.10.0.1:51080/s3/%(bucket)"` |
+| `--no-ssl` | Use HTTP instead of HTTPS | |
+| `--no-check-certificate` | Disable checking server's certificate in case of self-signed ones | |
+| `--region` | Define a bucket region | `--region=us-west-1` |
+
+## ETag and MD5
+
+When you are reading an object from Amazon S3, the response will contain [ETag](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag).
+
+Amazon S3 ETag is the object's checksum. Amazon computes those checksums using `md5`.
+
+On the other hand, the default checksum type that AIS uses is [xxhash](http://cyan4973.github.io/xxHash/).
+
+Therefore, it is advisable to:
+
+1. keep in mind this dichotomy, and
+2. possibly, configure AIS bucket in question with `md5`.
+
+Here's a simple scenario:
+
+Say, an S3-based client performs a GET or a PUT operation and calculates `md5` of an object that's being GET (or PUT). When the operation finishes, the client then compares the checksum with the `ETag` value in the response header. If checksums differ, the client raises the error "MD5 sum mismatch."
+
+To enable MD5 checksum at bucket creation time:
+
+```console
+$ ais bucket create ais://bck --bucket-props="checksum.type=md5"
+"ais://bck2" bucket created
+
+$ ais show bucket ais://bck | grep checksum
+checksum         Type: md5 | Validate: ColdGET
+```
+
+Or, you can change bucket's checksum type at any later time:
+
+```console
+$ ais bucket props ais://bck checksum.type=md5
+Bucket props successfully updated
+"checksum.type" set to:"md5" (was:"xxhash")
+```
+
+Please note that changing the bucket's checksum does not trigger updating (existing) checksums of *existing* objects - only new writes will be checksummed with the newly configured checksum.
+
+## Last Modification Time
+
+AIS tracks object last *access* time and returns it as `LastModified` for S3 clients. If an object has never been accessed, which can happen when AIS bucket uses a Cloud bucket as a backend one, zero Unix time is returned.
+
+Example when access time is undefined (not set):
+
+```console
+# create AIS bucket with AWS backend bucket (for supported backends and details see docs/providers.md)
+$ ais bucket create ais://bck
+$ ais bucket props ais://bck backend_bck=aws://bckaws
+$ ais bucket props ais://bck checksum.type=md5
+
+# put an object using native ais API and note access time (same as creation time in this case)
+$ ais object put object.txt ais://bck/obj-ais
+
+# put object with s3cmd - the request bypasses ais, so no access time in the `ls` results
+$ s3cmd put object.txt s3://bck/obj-aws --host=localhost:51080 --host-bucket="localhost:51080/s3/%(bucket)"
+
+$ ais bucket ls ais://bck --props checksum,size,atime
+NAME            CHECKSUM                                SIZE            ATIME
+obj-ais         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB        08 Dec 20 11:25 PST
+obj-aws         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB
+
+$ s3cmd ls s3://bck --host=localhost:51080 --host-bucket="localhost:51080/s3/%(bucket)"
+2020-12-08 11:25     71671   s3://test/obj-ais
+1969-12-31 16:00     71671   s3://test/obj-aws
+```
+
+## More Usage Examples
+
+Use any S3 client to access an AIS bucket. Examples below use standard AWS CLI. To access an AIS bucket, one has to pass the correct `endpoint` to the client. The endpoint is the primary proxy URL and `/s3` path, e.g, `http://10.0.0.20:51080/s3`.
+
+### Create bucket
+
+```shell
+# check that AIS cluster has no buckets, and create a new one
+$ ais bucket ls ais://
+AIS Buckets (0)
+$ s3cmd --host http://localhost:51080/s3 s3 mb s3://bck1
+make_bucket: bck1
+
+# list buckets via native CLI
+$ ais bucket ls ais://
+AIS Buckets (1)
+```
+
+### Remove bucket
+
+```shell
+$ s3cmd --host http://localhost:51080/s3 s3 ls s3://
+2020-04-21 16:21:08 bck1
+
+$ s3cmd --host http://localhost:51080/s3 s3 mb s3://bck1
+remove_bucket: aws1
+$ s3cmd --host http://localhost:51080/s3 s3 ls s3://
+```
+
+## TensorFlow Demo
+
+Setup `S3_ENDPOINT` and `S3_USE_HTTPS` environment variables prior to running a TensorFlow job. `S3_ENDPOINT` must be primary proxy hostname:port and URL path `/s3` (e.g., `S3_ENDPOINT=10.0.0.20:51080/s3`). Secure HTTP is disabled by default, so `S3_USE_HTTPS` must be `0`.
+
+Example running a training task:
+
+```
+S3_ENDPOINT=10.0.0.20:51080/s3 S3_USE_HTTPS=0 python mnist.py
+```
+
+TensorFlow on AIS training screencast:
+
+![TF training in action](images/ais-s3-tf.gif)
 
 ## S3 Compatibility
 
@@ -78,152 +337,6 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 | Website endpoints | **Not supported** | - | - |
 | CloudFront CDN | **Not supported** | - | - |
 
-
-## Client Configuration
-
-The section explains how to configure `s3cmd` client to connect to AIStore.
-
-You can run `s3cmd configure`, apply the simple rules listed below, and then use `s3cmd` **without repeating the same for each** `s3cmd` command.
-
-To connect an AIS server, specify the correct AIS endpoint. The endpoint consists of a cluster gateway (aka proxy) hostname and its port followed by `/s3`. For example: given IP = `10.10.0.1` and AIS service port `51080` AIS endpoint would be `10.10.0.1:51080/s3`:
-
-```console
-$ s3cmd ls --host=10.10.0.1:51080/s3
-```
-
-If AIS cluster uses HTTP (default) and not HTTPS, turn off HTTPS in the client:
-
-```console
-$ s3cmd ls --host=10.10.0.1:51080/s3 --no-ssl
-```
-
-On the other hand, if the cluster has been deployed with HTTPS but it uses a self-signed certificate, the client may refuse the server certificate. In this case disable certificate check:
-
-```console
-$ s3cmd ls --host=10.10.0.1.51080/s3 --no-check-certificate
-```
-
-If the client complains about empty S3 region, you could specify any valid region as follows:
-
-```console
-$ s3cmd ls --host=10.10.0.1.51080/s3 --region us-west-1
-```
-
-That's all. The steps above will make all top-level commands to work.
-Note, however, that accessing bucket's objects requires defining the path format for a bucket:
-
-```console
-$ s3cmd ls s3://buckename --host=10.10.0.1.51080/s3 --host-bucket="10.10.0.1:51080/s3/%(bucket)"
-```
-
-The following table summarizes all the options shown in the examples above:
-
-| Options | Usage | Example |
-| --- | --- | --- |
-| `--host` | Define an AIS cluster endpoint | `--host=10.10.0.1:51080/s3` |
-| `--host-bucket` | Define URL path to access a bucket of an AIS cluster | `--host-bucket="10.10.0.1:51080/s3/%(bucket)"` |
-| `--no-ssl` | Use HTTP instead of HTTPS | |
-| `--no-check-certificate` | Disable checking server's certificate in case of self-signed ones | |
-| `--region` | Define a bucket region | `--region=us-west-1` |
-
-## Object Checksum
-
-S3 API provides `ETag` in the response header that is object's checksum.
-Amazon S3 computes those checksums using `md5`. Note that the default checksum type that AIS uses is [xxhash](http://cyan4973.github.io/xxHash/).
-
-Therefore, it is advisable to a) keep in mind this dichotomy and b) possibly, configure AIS bucket in question with `md5`. Here's a simple scenario when you may want to do the b):
-
-Say, an S3-based client performs a GET or a PUT operation and calculates `md5` of an object that's being GET (or PUT). When the operation finishes, the client then compares the checksum with the `ETag` value in the response header. If checksums differ, the client raises the error "MD5 sum mismatch."
-
-To enable MD5 checksum at bucket creation time:
-
-```console
-$ ais bucket create ais://bck --bucket-props="checksum.type=md5"
-"ais://bck2" bucket created
-$ ais show bucket ais://bck | grep checksum
-checksum         Type: md5 | Validate: ColdGET
-```
-
-Or, you can change bucket's checksum type at any later time:
-
-```console
-$ ais bucket props ais://bck checksum.type=md5
-Bucket props successfully updated
-"checksum.type" set to:"md5" (was:"xxhash")
-```
-
-Please note that changing the bucket's checksum does not trigger updating (existing) checksums of *existing* objects - only new writes will be checksummed with the newly configured checksum.
-
-## Last Modification Time
-
-AIS tracks object last *access* time and returns it as `LastModified` for S3 clients. If an object has never been accessed, which can happen when AIS bucket uses a Cloud bucket as a backend one, zero Unix time is returned.
-
-Example when access time is undefined (not set):
-
-```console
-# create AIS bucket with AWS backend bucket (for supported backends and details see docs/providers.md)
-$ ais bucket create ais://bck
-$ ais bucket props ais://bck backend_bck=aws://bckaws
-$ ais bucket props ais://bck checksum.type=md5
-
-# put an object using native ais API and note access time (same as creation time in this case)
-$ ais object put object.txt ais://bck/obj-ais
-
-# put object with s3cmd - the request bypasses ais, so no access time in the `ls` results
-$ s3cmd put object.txt s3://bck/obj-aws --host=localhost:51080 --host-bucket="localhost:51080/s3/%(bucket)"
-
-$ ais bucket ls ais://bck --props checksum,size,atime
-NAME            CHECKSUM                                SIZE            ATIME
-obj-ais         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB        08 Dec 20 11:25 PST
-obj-aws         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB
-
-$ s3cmd ls s3://bck --host=localhost:51080 --host-bucket="localhost:51080/s3/%(bucket)"
-2020-12-08 11:25     71671   s3://test/obj-ais
-1969-12-31 16:00     71671   s3://test/obj-aws
-```
-
-## More Examples
-
-Use any S3 client to access an AIS bucket. Examples below use standard AWS CLI. To access an AIS bucket, one has to pass the correct `endpoint` to the client. The endpoint is the primary proxy URL and `/s3` path, e.g, `http://10.0.0.20:51080/s3`.
-
-### Create bucket
-
-```shell
-# check that AIS cluster has no buckets, and create a new one
-$ ais bucket ls ais://
-AIS Buckets (0)
-$ s3cmd --host http://localhost:51080/s3 s3 mb s3://bck1
-make_bucket: bck1
-
-# list buckets via native CLI
-$ ais bucket ls ais://
-AIS Buckets (1)
-```
-
-### Remove bucket
-
-```shell
-$ s3cmd --host http://localhost:51080/s3 s3 ls s3://
-2020-04-21 16:21:08 bck1
-
-$ s3cmd --host http://localhost:51080/s3 s3 mb s3://bck1
-remove_bucket: aws1
-$ s3cmd --host http://localhost:51080/s3 s3 ls s3://
-```
-
-## TensorFlow Demo
-
-Setup `S3_ENDPOINT` and `S3_USE_HTTPS` environment variables prior to running a TensorFlow job. `S3_ENDPOINT` must be primary proxy hostname:port and URL path `/s3` (e.g., `S3_ENDPOINT=10.0.0.20:51080/s3`). Secure HTTP is disabled by default, so `S3_USE_HTTPS` must be `0`.
-
-Example running a training task:
-
-```
-S3_ENDPOINT=10.0.0.20:51080/s3 S3_USE_HTTPS=0 python mnist.py
-```
-
-TensorFlow on AIS training screencast:
-
-![TF training in action](images/ais-s3-tf.gif)
 
 ## Boto3 Compatibility
 
