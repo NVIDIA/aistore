@@ -26,7 +26,7 @@ with open(os.path.join(cwd, "README.md"), encoding="utf-8") as f:
 
 setup(
     name="aistore",
-    version="1.0.0",
+    version="1.0.1",
     description="A (growing) set of client-side APIs to access and utilize clusters, buckets, and objects on AIStore.",
     long_description=long_description,
     long_description_content_type="text/markdown",
