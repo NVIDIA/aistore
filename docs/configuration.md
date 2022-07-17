@@ -25,6 +25,14 @@ Local config includes:
 
 Majority of the configuration knobs can be changed at runtime (and at any time). A few read-only variables are explicitly [marked](https://github.com/NVIDIA/aistore/blob/master/cmn/config.go) in the source; any attempt to modify those at runtime will return "read-only" error message.
 
+## CLI
+
+For AIStore configuration management using AIS CLI, please see:
+
+* [Commands to view and update configs](/docs/cli/config.md)
+
+The document also contains brief theory of operation and many usage examples.
+
 ## Configuring for production
 
 Configuring AIS cluster for production requires a careful consideration. First and foremost, there are assorted [performance](performance.md) related recommendations.
