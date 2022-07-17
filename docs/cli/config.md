@@ -14,11 +14,11 @@ Generally, there are two main commands, each having multiple subcommands and sub
 1. `ais config`		- show and update configuration
 2. `ais show config`	- show configuration
 
-> As always, the subcommands of the `ais config` and, respectively, `ais show config` will reveal themselves as completions (upon <TAB-TAB>).
+> As always, the subcommands of the `ais config` and, respectively, `ais show config` will reveal themselves as completions (upon `<TAB-TAB>`).
 
 Further, as far as configuration, AIS supports **inheritance** and **local override**.
 
-Here's how it works.
+Here's how it works:
 
 At any point in time there is a single, protected and replicated, version of the cluster configuration. When a new cluster gets deployed, all clustered nodes inherit the same (initial) version - identical default values.
 
@@ -36,7 +36,7 @@ Finally, note that all configuration updates are, by default, persistent. Use th
 
 See also:
 
-* [Configuration](/docs/configuration.md)
+* [AIStore Configuration](/docs/configuration.md)
 
 ## Table of Contents
 
@@ -265,7 +265,7 @@ or
 
 Usually, the steps:
 
-1. Select a node or use <TAB-TAB> to complete the selection.
+1. Select a node or use `<TAB-TAB>` to complete the selection.
 2. Next, select `inherited` to update cluster-level values. Alternatively, type or select `local`.
 3. Update selected value. Name and value can be separated either with `=` character or with a space.
 

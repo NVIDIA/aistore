@@ -176,7 +176,7 @@ func configSectionCompletions(_ *cli.Context, cfgScope string) {
 	}
 }
 
-func setConfigCompletions(c *cli.Context) {
+func setNodeConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
 		suggestDaemon(completeAllDaemons)
 		return
@@ -194,6 +194,8 @@ func setConfigCompletions(c *cli.Context) {
 	if c.NArg() == 2 { // daemon id and scope
 		if argLast(c) == cfgScopeLocal {
 			v = &config.LocalConfig
+		} else if argLast(c) == cfgScopeInherited {
+			fmt.Println(subcmdReset)
 		}
 		err := cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 			props.Add(uniqueTag)

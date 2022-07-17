@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -50,13 +51,13 @@ var (
 				ArgsUsage:    nodeConfigArgument,
 				Flags:        configCmdsFlags[subcmdNode],
 				Action:       setNodeConfigHandler,
-				BashComplete: setConfigCompletions,
+				BashComplete: setNodeConfigCompletions,
 			},
 			{
 				Name:         subcmdReset,
-				Usage:        "reset to cluster configuration on all nodes or a specific node",
+				Usage:        "reset all nodes to cluster configuration (i.e., discard all local overrides)",
 				ArgsUsage:    optionalDaemonIDArgument,
-				Action:       resetConfigHandler,
+				Action:       resetCluConfigHandler,
 				BashComplete: daemonCompletions(completeAllDaemons),
 			},
 			settingsCmd,
@@ -145,6 +146,10 @@ func setNodeConfigHandler(c *cli.Context) error {
 	if kvs[0] == cfgScopeLocal || kvs[0] == cfgScopeInherited {
 		kvs = kvs[1:]
 	}
+	if kvs[0] == subcmdReset {
+		return resetNodeConfigHandler(c)
+	}
+
 	if nvs, err = makePairs(kvs); err != nil {
 		if strings.Contains(err.Error(), "key=value pair") {
 			return showNodeConfig(c)
@@ -176,21 +181,23 @@ func setNodeConfigHandler(c *cli.Context) error {
 	return nil
 }
 
-func resetConfigHandler(c *cli.Context) (err error) {
-	daemonID := argDaemonID(c)
-	if daemonID == "" {
-		if err := api.ResetClusterConfig(defaultAPIParams); err != nil {
-			return err
-		}
-
-		fmt.Fprintf(c.App.Writer, "config successfully reset for all nodes\n")
-		return nil
+func resetCluConfigHandler(c *cli.Context) (err error) {
+	if err := api.ResetClusterConfig(defaultAPIParams); err != nil {
+		return err
 	}
+	fmt.Fprintf(c.App.Writer, "inherited config successfully reset for all nodes\n")
+	return nil
+}
 
+func resetNodeConfigHandler(c *cli.Context) (err error) {
+	var (
+		sname    = c.Args().First()
+		daemonID = argDaemonID(c)
+	)
+	debug.Assert(cluster.N2ID(sname) == daemonID)
 	if err := api.ResetDaemonConfig(defaultAPIParams, daemonID); err != nil {
 		return err
 	}
-
-	fmt.Fprintf(c.App.Writer, "config for node %q successfully reset\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "%s: inherited config successfully reset to the current cluster-wide defaults\n", sname)
 	return nil
 }
