@@ -27,7 +27,9 @@ jobs:
           
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
-  
+        with:
+          version: v1.46.2
+            
       - name: Lint linux
         run: |
           export GOPATH="$(go env GOPATH)"
