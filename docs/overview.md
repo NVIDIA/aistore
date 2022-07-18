@@ -72,9 +72,9 @@ For background and further references, see:
 
 ## Recently Added
 
+- [v3.11](https://github.com/NVIDIA/aistore/releases/tag/3.11)
 - [v3.10](https://github.com/NVIDIA/aistore/releases/tag/3.10)
 - [v3.9](https://github.com/NVIDIA/aistore/releases/tag/3.9)
-- [v3.8](https://aiatscale.org/blog/2021/12/15/whats-new-in-v3.8)
 
 ## Design Philosophy
 
