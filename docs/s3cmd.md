@@ -7,7 +7,7 @@ redirect_from:
  - /docs/s3cmd.md/
 ---
 
-While the preferred and recommended management client for AIStore is its own [CLI](/docs/cli.md), Amazon's [`s3cmd`](https://s3tools.org/s3cmd) client can also be used with AIStore, with certain minor limitations.
+While the preferred and recommended management client for AIStore is its own [CLI](/docs/cli.md), Amazon's [`s3cmd`](https://s3tools.org/s3cmd) client can also be used, with certain minor limitations.
 
 ## Table of Contents
 
@@ -245,8 +245,6 @@ PUT:
 ```console
 $ s3cmd put README.md s3://mmm/saved-readme.md --no-ssl
 ```
-
-> Notice the difference:
 
 GET:
 
