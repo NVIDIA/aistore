@@ -67,7 +67,10 @@ class Object:
         ).headers
 
     def get(
-        self, archpath: str = "", chunk_size: int = DEFAULT_CHUNK_SIZE
+        self,
+        archpath: str = "",
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        etl_id: str = None,
     ) -> ObjStream:
         """
         Reads an object
@@ -75,6 +78,7 @@ class Object:
         Args:
             archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
             chunk_size (int, optional): chunk_size to use while reading from stream
+            etl_id(str, optional): Transforms an object based on ETL with etl_id
 
         Returns:
             The stream of bytes to read an object or a file inside an archive.
@@ -87,6 +91,8 @@ class Object:
         """
         params = self.bck.qparam
         params[QParamArchpath] = archpath
+        if etl_id:
+            params["uuid"] = etl_id
         resp = self.bck.client.request(
             HTTP_METHOD_GET,
             path=f"objects/{ self.bck.name }/{ self.obj_name }",

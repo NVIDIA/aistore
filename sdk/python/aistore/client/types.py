@@ -3,6 +3,7 @@
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
+import base64
 
 from typing import Any, Mapping, List, Iterator, Optional
 
@@ -189,3 +190,32 @@ class BucketLister:
             if len(self._fetched) == 0 and self._token == "":
                 raise StopIteration
         return self._fetched.pop(0)
+
+
+class ETL(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+    id: str = ""
+    obj_count: int = 0
+    in_bytes: int = 0
+    out_bytes: int = 0
+
+
+class ETLDetails(BaseModel):
+    id: str
+    communication: str
+    timeout: str
+    code: Optional[bytes]
+    spec: Optional[str]
+    dependencies: Optional[str]
+    runtime: str = "python3"
+
+    @validator("code")
+    def set_code(cls, code):  # pylint: disable=no-self-argument
+        if code is not None:
+            code = base64.b64decode(code)
+        return code
+
+    @validator("spec")
+    def set_spec(cls, spec):  # pylint: disable=no-self-argument
+        if spec is not None:
+            spec = base64.b64decode(spec)
+        return spec

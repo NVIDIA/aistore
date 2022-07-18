@@ -40,3 +40,11 @@ ACT_MOVE_BCK = "move-bck"
 
 # Defaults
 DEFAULT_CHUNK_SIZE = 32768
+
+# templates for ETL
+CODE_TEMPLATE = """
+import pickle
+import base64
+_base64code = base64.b64decode('{}')
+transform = pickle.loads(_base64code)
+"""

@@ -3,21 +3,17 @@ Test class for AIStore PyTorch Plugin
 Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 """
 
-import random
-import string
 import unittest
 from aistore import Client
 from aistore.client.errors import AISError, ErrBckNotFound
-import tempfile
 from tests import CLUSTER_ENDPOINT
 from aistore.pytorch import AISFileLister, AISFileLoader
-
+from tests.utils import create_and_put_object, random_name
 
 # pylint: disable=unused-variable
 class TestPytorchPlugin(unittest.TestCase):
     def setUp(self) -> None:
-        letters = string.ascii_lowercase
-        self.bck_name = "".join(random.choice(letters) for _ in range(10))
+        self.bck_name = random_name()
         self.client = Client(CLUSTER_ENDPOINT)
         self.client.bucket(self.bck_name).create()
 
@@ -34,23 +30,16 @@ class TestPytorchPlugin(unittest.TestCase):
 
         # create 10 objects in the /temp dir
         for i in range(num_objs):
-            object_body = "test string" * random.randrange(1, 10)
-            content = object_body.encode("utf-8")
-            obj_name = f"temp/obj{ i }"
-            with tempfile.NamedTemporaryFile() as file:
-                file.write(content)
-                file.flush()
-                self.client.bucket(self.bck_name).object(obj_name).put(file.name)
+            create_and_put_object(
+                self.client, bck_name=self.bck_name, obj_name=f"temp/obj{ i }"
+            )
 
         # create 10 objects in the / dir
         for i in range(num_objs):
-            object_body = "test string" * random.randrange(1, 10)
-            content = object_body.encode("utf-8")
             obj_name = f"obj{ i }"
-            with tempfile.NamedTemporaryFile() as file:
-                file.write(content)
-                file.flush()
-                self.client.bucket(self.bck_name).object(obj_name).put(file.name)
+            create_and_put_object(
+                self.client, bck_name=self.bck_name, obj_name=obj_name
+            )
 
         prefixes = [
             ["ais://" + self.bck_name],

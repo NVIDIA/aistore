@@ -139,7 +139,7 @@ test:short:python:
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - cd sdk/python
-    - make unit_test
+    - make python_tests
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
@@ -279,6 +279,20 @@ test:short:k8s:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-short
     - status=$? make kill && exit $status
+
+test:short:python:etl:
+  stage: test-short
+  <<: *test_k8s_def
+  timeout: 20m
+  only:
+    - merge_requests
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+  script:
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - cd sdk/python
+    - make python_etl_tests
 
 test:long:k8s:
   stage: test-long

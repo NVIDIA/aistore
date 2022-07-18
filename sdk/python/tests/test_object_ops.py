@@ -5,12 +5,11 @@
 # Default provider is AIS, so all Cloud-related tests are skipped.
 
 import random
-import string
 import unittest
 from aistore.client.errors import AISError, ErrBckNotFound
-import tempfile
 
 from aistore import Client
+from tests.utils import create_and_put_object, random_name
 from . import CLUSTER_ENDPOINT
 
 OBJ_READ_TYPE_ALL = "read_all"
@@ -19,8 +18,7 @@ OBJ_READ_TYPE_CHUNK = "chunk"
 
 class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        letters = string.ascii_lowercase
-        self.bck_name = "".join(random.choice(letters) for _ in range(10))
+        self.bck_name = random_name()
 
         self.client = Client(CLUSTER_ENDPOINT)
 
@@ -56,11 +54,9 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             s = "test string" * random.randrange(1, 10)
             content = s.encode("utf-8")
             obj_name = f"obj{ i }"
-            with tempfile.NamedTemporaryFile() as f:
-                f.write(content)
-                f.flush()
-                self.client.bucket(self.bck_name).object(obj_name).put(f.name)
-
+            content = create_and_put_object(
+                client=self.client, bck_name=self.bck_name, obj_name=obj_name
+            )
             properties = self.client.bucket(self.bck_name).object(obj_name).head()
             self.assertEqual(properties["ais-version"], "1")
             self.assertEqual(properties["content-length"], str(len(content)))
@@ -75,12 +71,11 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             {"page_size": bucket_size * 2, "resp_size": bucket_size},
         ]
         self.client.bucket(self.bck_name).create()
-        content = "test".encode("utf-8")
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(content)
-            f.flush()
-            for obj_id in range(bucket_size):
-                self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put(f.name)
+        for obj_id in range(bucket_size):
+            create_and_put_object(
+                self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
+            )
+
         for test in list(tests):
             resp = self.client.bucket(self.bck_name).list_objects(
                 page_size=test["page_size"]
@@ -91,12 +86,10 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         bucket_size = 110
         short_page_len = 17
         self.client.bucket(self.bck_name).create()
-        content = "test".encode("utf-8")
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(content)
-            f.flush()
-            for obj_id in range(bucket_size):
-                self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put(f.name)
+        for obj_id in range(bucket_size):
+            create_and_put_object(
+                self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
+            )
         objects = self.client.bucket(self.bck_name).list_all_objects()
         self.assertEqual(len(objects), bucket_size)
         objects = self.client.bucket(self.bck_name).list_all_objects(
@@ -107,15 +100,12 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def test_list_object_iter(self):
         bucket_size = 110
         self.client.bucket(self.bck_name).create()
-        content = "test".encode("utf-8")
         objects = {}
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(content)
-            f.flush()
-            for obj_id in range(bucket_size):
-                obj_name = f"obj-{ obj_id }"
-                self.client.bucket(self.bck_name).object(obj_name).put(f.name)
-                objects[obj_name] = 1
+        for obj_id in range(bucket_size):
+            create_and_put_object(
+                self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
+            )
+            objects[f"obj-{ obj_id }"] = 1
 
         # Read all `bucket_size` objects by prefix.
         obj_iter = self.client.bucket(self.bck_name).list_objects_iter(
@@ -137,12 +127,12 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         bucket_size = 10
         delete_cnt = 7
         self.client.bucket(self.bck_name).create()
-        content = "test".encode("utf-8")
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(content)
-            f.flush()
-            for obj_id in range(bucket_size):
-                self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put(f.name)
+
+        for obj_id in range(bucket_size):
+            create_and_put_object(
+                self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
+            )
+
         objects = self.client.bucket(self.bck_name).list_objects()
         self.assertEqual(len(objects.get_entries()), bucket_size)
 
@@ -161,12 +151,11 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client.bucket(self.bck_name).create()
         objects = self.client.bucket(self.bck_name).list_objects()
         self.assertEqual(len(objects.get_entries()), 0)
-        content = "test".encode("utf-8")
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(content)
-            f.flush()
-            for obj_id in range(bucket_size):
-                self.client.bucket(self.bck_name).object(f"obj-{ obj_id }").put(f.name)
+        for obj_id in range(bucket_size):
+            create_and_put_object(
+                self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
+            )
+
         objects = self.client.bucket(self.bck_name).list_objects(prefix="TEMP")
         self.assertEqual(len(objects.get_entries()), 0)
 

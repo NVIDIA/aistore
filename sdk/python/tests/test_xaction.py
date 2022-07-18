@@ -4,19 +4,17 @@
 
 # Default provider is AIS, so all Cloud-related tests are skipped.
 
-import random
-import string
 import unittest
 from aistore.client.errors import ErrBckNotFound
 
 from aistore import Client
+from tests.utils import random_name
 from . import CLUSTER_ENDPOINT
 
 
 class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        letters = string.ascii_lowercase
-        self.bck_name = "".join(random.choice(letters) for _ in range(10))
+        self.bck_name = random_name()
 
         self.client = Client(CLUSTER_ENDPOINT)
 

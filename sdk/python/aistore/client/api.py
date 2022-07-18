@@ -19,6 +19,7 @@ from aistore.client.cluster import Cluster
 from aistore.client.types import BucketLister, ObjStream
 from aistore.client.utils import handle_errors
 from aistore.client.xaction import Xaction
+from aistore.client.etl import Etl
 
 T = TypeVar("T")
 
@@ -103,6 +104,20 @@ class Client:
             The xaction object created.
         """
         return Xaction(client=self)
+
+    def etl(self):
+        """
+        Factory constructor for ETL object.
+        Contains APIs related to AIStore ETL operations.
+        Does not make any HTTP request, only instantiates an xaction object bound to the client.
+
+        Args:
+            None
+
+        Returns:
+            The xaction object created.
+        """
+        return Etl(client=self)
 
     # TODO: Remove once pytorch/data dependency on previous version is resolved
     def list_objects_iter(

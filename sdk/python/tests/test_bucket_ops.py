@@ -4,21 +4,19 @@
 
 # Default provider is AIS, so all Cloud-related tests are skipped.
 
-import random
-import string
+
 import unittest
 from aistore.client.errors import ErrBckNotFound
-import tempfile
 
 from aistore import Client
 import requests
+from tests.utils import create_and_put_object, random_name
 from . import CLUSTER_ENDPOINT, REMOTE_BUCKET
 
 
 class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        letters = string.ascii_lowercase
-        self.bck_name = "".join(random.choice(letters) for _ in range(10))
+        self.bck_name = random_name()
 
         self.client = Client(CLUSTER_ENDPOINT)
         self.buckets = []
@@ -93,13 +91,9 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         parts = REMOTE_BUCKET.split("://")  # must be in the format '<provider>://<bck>'
         self.assertTrue(len(parts) > 1)
         provider, self.bck_name = parts[0], parts[1]
-        content = "test".encode("utf-8")
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(content)
-            f.flush()
-            self.client.bucket(self.bck_name, provider=provider).object(obj_name).put(
-                f.name
-            )
+        create_and_put_object(
+            self.client, bck_name=self.bck_name, provider=provider, obj_name=obj_name
+        )
 
         objects = self.client.bucket(self.bck_name, provider=provider).list_objects(
             props="name,cached", prefix=obj_name

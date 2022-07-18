@@ -42,4 +42,4 @@ jobs:
       - name: Run python tests
         run: |
           cd sdk/python
-          make unit_test
+          make python_tests

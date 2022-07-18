@@ -8,9 +8,14 @@ DOCFILE := ../../docs/python_api.md
 deps:
 	$(PIP) install -r requirements.dev.txt
 
-.PHONY: unit_test
-unit_test: deps
-	pytest -vv
+.PHONY: python_tests
+python_tests: deps
+	pytest -v tests --ignore=tests/test_etl_ops.py
+
+.PHONY: python_etl_tests
+python_etl_tests: deps
+	pytest -v tests/test_etl_ops.py
+
 
 .PHONY: lint
 lint: deps
