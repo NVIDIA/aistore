@@ -7,7 +7,6 @@ redirect_from:
  - /docs/s3compat.md/
 ---
 
-
 AIS supports Amazon S3 in two distinct and different ways:
 
 1. On the back, via [backend](providers.md) abstraction. Specifically for S3 the corresponding [backend](providers.md) implementation currently utilizes [AWS SDK for Go](https://aws.amazon.com/sdk-for-go);
@@ -15,15 +14,18 @@ AIS supports Amazon S3 in two distinct and different ways:
 
 This document talks about the latter - about AIS providing S3 compatible API.
 
-For more references and background, see:
+There's a separate, albeit closely related, [document](/docs/s3cmd.md) that explains how to configure `s3cmd` and then maybe tweak AIStore configuration to work with it:
+
+* [Getting Started with `s3cmd`](/docs/s3cmd.md) - also contains configuration, tips, usage examples, and more.
+
+For additional background, see:
 
 * [High-level AIS block diagram](overview.md#at-a-glance) that shows frontend and backend APIs and capabilities.
 * [Setting custom S3 endpoint](/docs/cli/bucket.md) can come in handy when a bucket is hosted by an S3 compliant backend (such as, e.g., minio).
 
 ## Table of Contents
 
-- [`s3cmd` Configuration](#s3cmd-configuration)
-- [Getting Started with `s3cmd`](#getting-started-with-s3cmd)
+- [`s3cmd` command line](s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
 - [Last Modification Time](#last-modification-time)
 - [More Usage Examples](#more-usage-examples)
@@ -33,145 +35,7 @@ For more references and background, see:
 - [S3 Compatibility](#s3-compatibility)
 - [Boto3 Compatibility](#boto3-compatibility)
 
-## `s3cmd` Configuration
-
-When using `s3cmd` the very first time, **or** if your AWS access credentials have changed, **or** if you'd want to change certain `s3cmd` defaults (also shown below) - in each one and all of those cases run `s3cmd --configure`.
-
-**NOTE:** it is important to have `s3cmd` client properly configured.
-
-For example:
-
-```console
-# s3cmd --configure
-
-Enter new values or accept defaults in brackets with Enter.
-Refer to user manual for detailed description of all options.
-
-Access key and Secret key are your identifiers for Amazon S3. Leave them empty for using the env variables.
-Access Key [ABCDABCDABCDABCDABCD]: EFGHEFGHEFGHEFGHEFGH
-Secret Key [abcdabcdABCDabcd/abcde/abcdABCDabc/ABCDe]: efghEFGHefghEFGHe/ghEFGHe/ghEFghef/hEFGH
-Default Region [us-east-2]:
-
-Use "s3.amazonaws.com" for S3 Endpoint and not modify it to the target Amazon S3.
-S3 Endpoint [s3.amazonaws.com]:
-
-Use "%(bucket)s.s3.amazonaws.com" to the target Amazon S3. "%(bucket)s" and "%(location)s" vars can be used
-if the target S3 system supports dns based buckets.
-DNS-style bucket+hostname:port template for accessing a bucket [%(bucket)s.s3.amazonaws.com]:
-
-Encryption password is used to protect your files from reading
-by unauthorized persons while in transfer to S3
-Encryption password:
-Path to GPG program [/usr/bin/gpg]:
-
-When using secure HTTPS protocol all communication with Amazon S3
-servers is protected from 3rd party eavesdropping. This method is
-slower than plain HTTP, and can only be proxied with Python 2.7 or newer
-Use HTTPS protocol [Yes]:
-
-On some networks all internet access must go through a HTTP proxy.
-Try setting it here if you can't connect to S3 directly
-HTTP Proxy server name:
-
-New settings:
-  Access Key: EFGHEFGHEFGHEFGHEFGH
-  Secret Key: efghEFGHefghEFGHe/ghEFGHe/ghEFghef/hEFGH
-  Default Region: us-east-2
-  S3 Endpoint: s3.amazonaws.com
-  DNS-style bucket+hostname:port template for accessing a bucket: %(bucket)s.s3.amazonaws.com
-  Encryption password:
-  Path to GPG program: /usr/bin/gpg
-  Use HTTPS protocol: True
-  HTTP Proxy server name:
-  HTTP Proxy server port: 0
-
-Test access with supplied credentials? [Y/n] n
-Save settings? [y/N] y
-Configuration saved to '/home/.s3cfg'
-```
-
-> It is maybe a good idea to also notice the version of the `s3cmd` you are using, e.g.:
-
-```console
-$ s3cmd --version
-s3cmd version 2.0.1
-```
-
-## Getting Started with `s3cmd`
-
-With `s3cmd` client configuration saved in `$HOME/.s3cfg`, the next immediate step would be to figure out the AIS endpoint (AIS cluster must be running, of course).
-
-The endpoint consists of the cluster's gateway hostname and its port followed by `/s3`.
-
-> AIS clusters usually run multiple gateways all of which are equivalent in terms of providing access (to their respective clusters).
-
-For example: given IP = `10.10.0.1` and AIS gateway service port `51080`, AIS endpoint would be `10.10.0.1:51080/s3`:
-
-```console
-$ s3cmd ls --host=10.10.0.1:51080/s3
-```
-
-If AIS cluster is deployed with HTTP (the default) and not HTTPS, turn off HTTPS in the `s3cmd` client:
-
-```console
-$ ais config cluster net.http
-PROPERTY                         VALUE
-net.http.server_crt              server.crt
-net.http.server_key              server.key
-net.http.write_buffer_size       65536
-net.http.read_buffer_size        65536
-net.http.use_https               false # <<<<<<<<< (NOTE) <<<<<<<<<<<<<<<<<<
-net.http.skip_verify             false
-net.http.chunked_transfer        true
-```
-
-we then need turn off HTTPS in the `s3cmd` client, as follows:
-
-```console
-$ s3cmd ls --host=10.10.0.1:51080/s3 --no-ssl
-```
-
-On the other hand, if the cluster has been deployed with HTTPS but it uses a self-signed (or otherwise invalid) certificate, we need disable the certificate check:
-
-```console
-$ s3cmd ls --host=10.10.0.1.51080/s3 --no-check-certificate
-```
-
-Once all of the above is set and done, we should be able to execute a simple HEAD request on an s3 bucket. Meaning, check the bucket's existence and get its properties.
-
-For instance:
-
-```console
-$ s3cmd info s3://my-s3-bucket --host=10.10.0.1:51080/s3 --no-ssl
-s3://ais-aa/ (bucket):
-   Location:  us-east-2
-   Payer:     BucketOwner
-   Expiration Rule: none
-   Policy:    none
-   CORS:      none
-   ACL:       3bcb8baa034ab2166cd7d6a5b7ac1264d613c5e9fbdf120bc9f0ae91bda54347: FULL_CONTROL
-```
-
-and then immediately list it:
-
-```console
-$ s3cmd ls s3://my-s3-bucket --host=10.10.0.1:51080/s3 --no-ssl
-2022-07-15 23:36      9892   s3://my-s3-bucket/README.md
-2022-07-14 18:18      5284   s3://my-s3-bucket/temp-00
-2022-07-14 18:18      7215   s3://my-s3-bucket/temp-01
-2022-07-14 18:18      9200   s3://my-s3-bucket/temp-02
-2022-07-14 18:18      4037   s3://my-s3-bucket/temp-03
-2022-07-14 18:18      1263   s3://my-s3-bucket/temp-04
-2022-07-14 18:18      1210   s3://my-s3-bucket/temp-05
-```
-
-If `s3cmd` complains about empty S3 region, you could rerun `scmd --configure` (see previous section) or, alternatively, specify any valid region in the command line:
-
-```console
-$ s3cmd ls --host=10.10.0.1.51080/s3 --region us-west-1
-```
-
-That's all. The steps above will make all top-level commands to work.
+## `s3cmd` command line
 
 The following table enumerates some of the `s3cmd` options that may appear to be useful:
 
