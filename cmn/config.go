@@ -530,12 +530,12 @@ type (
 		MinPctFree     int          `json:"min_pct_free"`
 	}
 	MemsysConfToUpdate struct {
-		MinFree        *cos.Size     `json:"min_free,omitempty" list:"readonly"`
+		MinFree        *cos.Size     `json:"min_free,omitempty"`
 		DefaultBufSize *cos.Size     `json:"default_buf,omitempty"`
 		SizeToGC       *cos.Size     `json:"to_gc,omitempty"`
 		HousekeepTime  *cos.Duration `json:"hk_time,omitempty"`
-		MinPctTotal    *int          `json:"min_pct_total,omitempty" list:"readonly"`
-		MinPctFree     *int          `json:"min_pct_free,omitempty" list:"readonly"`
+		MinPctTotal    *int          `json:"min_pct_total,omitempty"`
+		MinPctFree     *int          `json:"min_pct_free,omitempty"`
 	}
 
 	TCBConf struct {

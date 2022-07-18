@@ -1821,7 +1821,9 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		}
 		// we still trust the request when the sender's Smap is more current
 		if callerVer > smap.version() {
-			glog.Errorf("%s: %s < %s-Smap(v%s) - proceeding anyway...", h.si, smap, callerName, callerSver)
+			if h.ClusterStarted() {
+				glog.Errorf("%s: %s < %s-Smap(v%s) - proceeding anyway...", h.si, smap, callerName, callerSver)
+			}
 			runtime.Gosched()
 			return
 		}
