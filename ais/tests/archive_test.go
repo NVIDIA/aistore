@@ -161,7 +161,6 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			prefix:  "archive/",
 			ordered: true,
 		}
-		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		numArchs   = 15
@@ -243,9 +242,8 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			if m.bck.IsRemote() {
 				defer m.del()
 			}
-			if !toBck.Equal(&m.bck) && toBck.IsAIS() {
-				tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
-			}
+			toBck := cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
+			tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 
 			if test.list {
 				tlog.Logf("Archive %d lists %s => %s\n", numArchs, m.bck, toBck)
@@ -288,9 +286,9 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				}
 			}
 
-			time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
 			flt := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
 			if test.abrt {
+				time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
 				tlog.Logln("Aborting...")
 				api.AbortXaction(baseParams, flt)
 			}
