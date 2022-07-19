@@ -9,7 +9,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.18.3]
+        go-version: [1.18.x]
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -26,7 +26,7 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y xattr attr
-        
+
     - name: Build AIStore on ${{ matrix.os }}
       run: |
         export GOPATH="$(go env GOPATH)"

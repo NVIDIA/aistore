@@ -306,7 +306,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 
 	// NOTE: not waiting here for apc.ActPutCopies
 
-	tlog.Logf("List %q\n", m.bck)
+	tlog.Logf("List %s\n", m.bck)
 	msg := &apc.ListObjsMsg{Props: apc.GetPropsName}
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)

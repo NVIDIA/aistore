@@ -10,10 +10,10 @@ jobs:
   build:
     strategy:
       matrix:
-        go-version: [1.18.3]
+        go-version: [1.18.x]
         # os: [ubuntu-latest, macos-latest]
         # TODO: provide support for MacOS (!1169)
-        os: [ubuntu-latest] 
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Go
@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y xattr attr
-      
+
       - name: Run and test AIStore
         run: |
           export GOPATH="$(go env GOPATH)"

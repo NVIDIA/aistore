@@ -248,6 +248,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			}
 
 			if test.list {
+				tlog.Logf("Archive %d lists %s => %s\n", numArchs, m.bck, toBck)
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 					list := make([]string, 0, numInArch)
@@ -272,6 +273,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 					}(archName, list)
 				}
 			} else {
+				tlog.Logf("Archive %d ranges %s => %s\n", numArchs, m.bck, toBck)
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
 					start := rand.Intn(m.num - numInArch)
@@ -286,16 +288,16 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				}
 			}
 
+			time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
 			flt := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
 			if test.abrt {
-				time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
 				tlog.Logln("Aborting...")
 				api.AbortXaction(baseParams, flt)
 			}
 
 			api.WaitForXactionIdle(baseParams, flt)
 
-			tlog.Logf("List %q\n", toBck)
+			tlog.Logf("List %s\n", toBck)
 			msg := &apc.ListObjsMsg{Prefix: "test_"}
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, toBck, msg, 0)

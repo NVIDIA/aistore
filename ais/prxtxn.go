@@ -69,7 +69,7 @@ func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xactID 
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
-			glog.Errorf("Failed to commit %q %s: %v (msg=%s)", c.msg.Action, what, err, c.msg)
+			glog.Errorf("Failed to commit %q %s: %v %s", c.msg.Action, what, err, c.msg)
 			break
 		}
 		if globalID {
@@ -115,7 +115,7 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results slice
 }
 
 func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
-	glog.Errorf("Abort %q %s: %v (msg=%s)", c.msg.Action, what, err, c.msg)
+	glog.Errorf("Abort %q %s: %v %s", c.msg.Action, what, err, c.msg)
 	results := c.bcast(apc.ActAbort, 0)
 	freeBcastRes(results)
 	return err

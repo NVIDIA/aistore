@@ -687,7 +687,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err erro
 		t.owner.rmd.put(newRMD)
 		// TODO: move and refactor
 	} else if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.si.ID() {
-		glog.Warningf("%s: standby => join (msg=%s)", t, msg)
+		glog.Warningf("%s: standby => join %s", t, msg)
 		if _, err = t.joinCluster(msg.Action); err == nil {
 			err = t.endStartupStandby()
 		}
@@ -699,11 +699,11 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err erro
 func (t *target) ensureLatestBMD(msg *aisMsg, r *http.Request) {
 	bmd, bmdVersion := t.owner.bmd.Get(), msg.BMDVersion
 	if bmd.Version < bmdVersion {
-		glog.Errorf("%s: local %s < v%d (msg=%s) - fetching latest...", t, bmd, bmdVersion, msg)
+		glog.Errorf("%s: local %s < v%d %s - running fixup...", t, bmd, bmdVersion, msg)
 		t.BMDVersionFixup(r)
 	} else if bmd.Version > bmdVersion {
 		// If metasync outraces the request, we end up here, just log it and continue.
-		glog.Warningf("%s: local %s > v%d (msg=%s)", t, bmd, bmdVersion, msg)
+		glog.Warningf("%s: local %s > v%d %s", t, bmd, bmdVersion, msg)
 	}
 }
 
