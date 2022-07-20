@@ -84,6 +84,12 @@ When it comes to PyTorch, [WebDataset](https://github.com/webdataset/webdataset)
 
 Further references include technical blog titled [AIStore & ETL: Using WebDataset to train on a sharded dataset](https://aiatscale.org/blog/2021/10/29/ais-etl-3) where you can also find easy step-by-step instruction.
 
+## Reuse
+
+This repo includes [SGL and Slab allocator](/memsys) intended to optimize memory usage, [Streams and Stream Bundles](/transport) to multiplex messages over long-lived HTTP connections, and a few other sub-packages providing rather generic functionality.
+
+With a little effort, they all could be extracted and used outside.
+
 ## Guides and References
 
 - [Getting Started](/docs/getting_started.md)
