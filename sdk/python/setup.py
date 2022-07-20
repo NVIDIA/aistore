@@ -2,11 +2,31 @@
 
 import os
 import sys
+from pathlib import Path
 
 from setuptools import setup, find_packages
 
 REQUIRED_MAJOR = 3
 REQUIRED_MINOR = 6
+
+ROOT_DIR = Path(__file__).parent.resolve()
+
+VERSION = "1.0.2"
+
+
+def _get_version() -> str:
+    # TODO: read from file
+    # with open(os.path.join(ROOT_DIR, "version.txt"), encoding='UTF-8') as file:
+    #     version = file.readline().strip()
+    # return version
+    return VERSION
+
+
+def _export_version(version):
+    version_path = ROOT_DIR / "aistore" / "version.py"
+    with open(version_path, "w", encoding='UTF-8') as file:
+        file.write(f"__version__ = '{version}'\n")
+
 
 # Check for python version
 if sys.version_info < (REQUIRED_MAJOR, REQUIRED_MINOR):
@@ -19,14 +39,16 @@ if sys.version_info < (REQUIRED_MAJOR, REQUIRED_MINOR):
              )
     sys.exit(error)
 
-cwd = os.path.dirname(os.path.abspath(__file__))
 # Read in README.md for our long_description
-with open(os.path.join(cwd, "README.md"), encoding="utf-8") as f:
+with open(os.path.join(ROOT_DIR, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
+
+VERSION = _get_version()
+_export_version(VERSION)
 
 setup(
     name="aistore",
-    version="1.0.1",
+    version=VERSION,
     description="A (growing) set of client-side APIs to access and utilize clusters, buckets, and objects on AIStore.",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -56,7 +78,7 @@ setup(
     license="MIT",
     python_requires='>=3.6',
     packages=find_packages(exclude=("tests", "tests.*", "examples", "examples.*")),
-    install_requires=['requests', 'pydantic==1.9.0'],
+    install_requires=['requests', 'packaging', 'pydantic==1.9.0'],
     extras_require={
         'pytorch': ['torch', 'torchdata'],
     },
