@@ -3,53 +3,32 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
-AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered servers, producing performance charts that look as follows:
+AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size.
 
-<img src="/docs/images/ais-disk-throughput-flat.png" alt="I/O distribution" width="600">
-
-> The picture above *comprises* 120 HDDs.
-
-The ability to scale linearly with each added disk was, and remains, one of the main incentives behind AIStore. Much of the development is also driven by the ideas to [offload dataset transformations](https://aiatscale.org/blog/2021/10/21/ais-etl-1) to AIS clusters.
+AIS consistently shows balanced I/O distribution and **linear scalability** across arbitrary numbers of clustered nodes. The ability to scale linearly with each added disk was, and remains, one of the main incentives. Much of the development is also driven by the ideas to [offload dataset transformations](https://aiatscale.org/blog/2021/10/21/ais-etl-1).
 
 ## Features
 
-* scale out with no downtime and no limitation;
-* arbitrary number of extremely lightweight access points;
-* highly-available control and data planes, end-to-end data protection, self-healing, n-way mirroring, k/m erasure coding;
-* comprehensive native HTTP-based (S3-like) API, as well as
-  * compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps;
-* automated cluster rebalancing upon any changes in cluster membership, drive failures and attachments, bucket renames;
-* [ETL offload](/docs/etl.md) via offline (dataset to dataset) or inline (on-the-fly) transformations.
-
-Also, AIStore:
-
-* can be deployed on any commodity hardware - effectively, on any Linux machine(s);
-* can be immediately populated - i.e., hydrated - from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch);
-* provides for easy Kubernetes deployment via a separate GitHub repo with
-  * step-by-step [deployment playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks), and
-  * [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator);
-* contains integrated [CLI](/docs/cli.md) for easy management and monitoring;
-* can ad-hoc attach remote AIS clusters, thus gaining immediate access to the respective hosted datasets
-  * (referred to as [global namespace](/docs/providers.md#remote-ais-cluster) capability);
-* natively reads, writes, and lists [popular archives](/docs/cli/archive.md) including tar, tar.gz, zip, and [MessagePack](https://msgpack.org);
-  * [distributed shuffle](/docs/dsort.md) of those archival formats is also supported;
-* fully supports Amazon S3, Google Cloud, and Microsoft Azure backends
-  * providing [unified global namespace](/docs/bucket.md) simultaneously across multiple backends:
-
-<img src="docs/images/backends.png" alt="Supported Backends" width="360">
-
-* can be deployed as LRU-based fast cache for remote buckets; can be populated on-demand and/or via `prefetch` and `download` APIs;
-* can be used as a standalone highly-available protected storage;
-* includes [MapReduce extension](/docs/cli/dsort.md) for massively parallel resharding of very large datasets;
+* **Deploys anywhere**. AIS clusters are immediately deployable on any commodity hardware, on any Linux machine(s).
+* **Highly available** control and data planes, end-to-end data protection, self-healing, n-way mirroring, erasure coding, and arbitrary number of extremely lightweight access points.
+* **REST API**. Comprehensive native HTTP-based API, as well as compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps.
+* **Unified namespace** across multiple [remote backends](/docs/providers.md) including Amazon S3, Google Cloud, and Microsoft Azure.
+* **Network of clusters**. Any AIS cluster can attach any other AIS cluster thus gaining immediate visibility and fast access to the respective hosted datasets.
+* **Turn-key cache**. Can be used as a standalone highly-available protected storage and/or LRU-based fast cache. Eviction watermarks, as well as numerous other management policies, are per-bucket configurable.
+* **ETL offload**. The capability to run I/O intensive custom data transformations *close to data*, offline (dataset to dataset) and inline (on-the-fly).
+* **File datasets**. AIS can be immediately populated from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch);
+* **Small files. Sharding.** To serialize small files, AIS supports TAR, TAR.GZ, ZIP, and [MessagePack](https://msgpack.org) formats, and provides the entire spectrum of operations to make the corresponding sharding transparent to the apps.
+* **Kubernetes**. Provides for easy Kubernetes deployment via a separate GitHub [repo](https://github.com/NVIDIA/ais-k8s) and [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator).
+* **Command line management**. Integrated powerful [CLI](/docs/cli.md) for easy management and monitoring.
+* **Access control**. For security and fine-grained access control, AIS includes OAuth 2.0 compliant [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance executes CLI requests over HTTPS and can serve multiple clusters.
+* **Distributed shuffle** extension for massively parallel resharding of very large datasets;
+* **Batch jobs**. APIs and CLI to start, stop, and monitor documented [batch operations](/docs/batch.md), such as `prefetch`, `download`, copy or transform datasets, and many more.
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
 For developers and data scientists, there's also:
 * native [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
 * native [Python API](/docs/python_api.md), and [Python SDK](https://pypi.org/project/aistore) that also contains PyTorch integration and usage examples.
-
-For security and fine-grained (OAuth 2.0 compliant) access control to cluster resources and stored datasets, AIStore includes:
-* [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance, currently at v1.0, can provide security/authentication for multiple AIStore clusters.
 
 For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 

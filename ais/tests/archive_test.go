@@ -244,7 +244,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			}
 			toBck := cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
 			tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
-
+			time.Sleep(time.Second)
 			if test.list {
 				tlog.Logf("Archive %d lists %s => %s\n", numArchs, m.bck, toBck)
 				for i := 0; i < numArchs; i++ {
