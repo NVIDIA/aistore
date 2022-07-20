@@ -20,7 +20,10 @@ redirect_from:
 - API and SDK
   - [Go (language) API](/docs/http_api.md)
   - [Python API reference](/docs/python_api.md)
+  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) and [PIP Package](https://pypi.org/project/aistore/)
   - [REST API](/docs/http_api.md)
+- Amazon S3
+  - [`s3cmd` client](/docs/s3cmd.md)
   - [S3 compatibility](/docs/s3compat.md)
 - [CLI](/docs/cli.md)
   - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
@@ -32,6 +35,8 @@ redirect_from:
   - [Distributed shuffle](/docs/cli/dsort.md)
   - [User account and access management](/docs/cli/auth.md)
   - [Job (aka `xaction`) management](/docs/cli/job.md)
+- Security and Access Control
+  - [Authentication Server (AuthN)](/docs/authn.md)
 - Tutorials
   - [Tutorials](/docs/tutorials/README.md)
   - [Videos](/docs/videos.md)
@@ -65,6 +70,7 @@ redirect_from:
   - [Prometheus](/docs/prometheus.md)
 - For developers
   - [Getting started](/docs/getting_started.md)
+  - [Go (language) API](/docs/http_api.md)
   - [Docker](/docs/docker_main.md)
   - [Useful scripts](/docs/development.md)
   - Profiling, race-detecting, and more

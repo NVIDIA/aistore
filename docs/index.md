@@ -36,7 +36,7 @@ AIS runs natively on Kubernetes and features open format - thus, the freedom to 
 
 For developers and data scientists, there's also:
 * native [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
-* native [Python API](/docs/python_api.md), and [Python SDK](https://pypi.org/project/aistore) that also contains PyTorch integration and usage examples.
+* native [Python API](/docs/python_api.md), and [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) that also contains PyTorch integration and usage examples.
 
 For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 
@@ -77,8 +77,10 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
 - [Technical Blog](https://aiatscale.org/blog)
 - API and SDK
   - [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api)
-  - [Python SDK](https://pypi.org/project/aistore) via Python Package Index (PyPI)
+  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) and [PIP Package](https://pypi.org/project/aistore/)
   - [REST API](/docs/http_api.md)
+- Amazon S3
+  - [`s3cmd` client](/docs/s3cmd.md)
   - [S3 compatibility](/docs/s3compat.md)
 - [CLI](/docs/cli.md)
   - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
@@ -90,6 +92,8 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
   - [Distributed shuffle](/docs/cli/dsort.md)
   - [User account and access management](/docs/cli/auth.md)
   - [Job (aka `xaction`) management](/docs/cli/job.md)
+- Security and Access Control
+  - [Authentication Server (AuthN)](/docs/authn.md)
 - Tutorials
   - [Tutorials](/docs/tutorials/README.md)
   - [Videos](/docs/videos.md)

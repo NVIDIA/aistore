@@ -12,7 +12,7 @@ Python has grounded itself as a popular language of choice among data scientists
 
 [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) is a project which includes a growing library of client-side APIs to easily access and utilize AIStore clusters, objects, and buckets, as well as a number of tools for AIStore usage/integration with PyTorch.
 
-The [AIStore Python API](https://aiatscale.org/docs/python-api) is essentially a Python port of AIStore's [Go APIs](https://github.com/NVIDIA/aistore/tree/master/api). In terms of functionality, the AIStore Python and Go APIs are quite similar, both of which essentially make simple [HTTP requests](https://aiatscale.org/docs/http-api#api-reference) to an AIStore endpoint. The HTTP requests allow the APIs to interact (reads and writes) with an AIStore instance's metadata. The API provides convenient and flexible ways (similar to those provided by the [CLI](https://aiatscale.org/docs/cli)) to move data (as objects) in and out of buckets on AIStore, manage AIStore clusters, and much more. 
+The [AIStore Python API](https://aiatscale.org/docs/python-api) is essentially a Python port of AIStore's [Go APIs](https://github.com/NVIDIA/aistore/tree/master/api). In terms of functionality, the AIStore Python and Go APIs are quite similar, both of which essentially make simple [HTTP requests](https://aiatscale.org/docs/http-api#api-reference) to an AIStore endpoint. The HTTP requests allow the APIs to interact (reads and writes) with an AIStore instance's metadata. The API provides convenient and flexible ways (similar to those provided by the [CLI](https://aiatscale.org/docs/cli)) to move data (as objects) in and out of buckets on AIStore, manage AIStore clusters, and much more.
 
 This technical blog will demonstrate a few potential ways the Python API provided in the [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) could be used with a running AIStore instance to manage and utilize data.
 
@@ -32,7 +32,7 @@ $ pip install aistore
 
 > Note that only Python 3.x (version 3.6 or later) is currently supported for AIStore.
 
-While there are a number of options available for deploying AIStore - as is demonstrated [here](https://github.com/NVIDIA/aistore/blob/master/docs/getting_started.md) - for the sake of simplicity, we will be using AIStore's [minimal standalone docker deployment](https://github.com/NVIDIA/aistore/blob/master/deploy/prod/docker/single/README.md): 
+While there are a number of options available for deploying AIStore - as is demonstrated [here](https://github.com/NVIDIA/aistore/blob/master/docs/getting_started.md) - for the sake of simplicity, we will be using AIStore's [minimal standalone docker deployment](https://github.com/NVIDIA/aistore/blob/master/deploy/prod/docker/single/README.md):
 
 ```console
 # Deploying the AIStore cluster in a container on port 51080
@@ -82,7 +82,7 @@ client.bucket(BUCKET_NAME).list_objects().get_entries()
 
 Say we now want to instead move an *uncompressed* version of TinyImageNet to AIStore. The uncompressed format of TinyImageNet is comprised of several sub-directories which divide the dataset's many image samples into separate sets (train, validation, test) as well as separate classes (based on numbers mapped to image labels).
 
-As opposed to traditional file storage systems which operate on the concept of multi-level directories and sub-directories, object storage systems, such as AIStore, maintain a *strict* two-level hierarchy of *buckets* and *objects*. However, we can still maintain a "symbolic" directory by manipulating how we name the data. 
+As opposed to traditional file storage systems which operate on the concept of multi-level directories and sub-directories, object storage systems, such as AIStore, maintain a *strict* two-level hierarchy of *buckets* and *objects*. However, we can still maintain a "symbolic" directory by manipulating how we name the data.
 
 We can move the dataset to an AIStore bucket while preserving the directory-based structure of the dataset with a few extra imports and a bit of extra Python programming:
 
@@ -118,7 +118,7 @@ OBJECT_NAME = "tinyimagenet-compressed.zip"
 client.bucket(BUCKET_NAME).object(OBJECT_NAME).get()
 ```
 
-If we want to get the *uncompressed* TinyImageNet from AIStore bucket `ais://tinyimagenet_uncompressed`, we can easily do that with [Bucket.list_objects()](https://aiatscale.org/docs/python-api#bucket.Bucket.list_objects) and [Object.get()](https://aiatscale.org/docs/python-api#object.Object.get). 
+If we want to get the *uncompressed* TinyImageNet from AIStore bucket `ais://tinyimagenet_uncompressed`, we can easily do that with [Bucket.list_objects()](https://aiatscale.org/docs/python-api#bucket.Bucket.list_objects) and [Object.get()](https://aiatscale.org/docs/python-api#object.Object.get).
 
 ```python
 BUCKET_NAME = "tinyimagenet_uncompressed"
