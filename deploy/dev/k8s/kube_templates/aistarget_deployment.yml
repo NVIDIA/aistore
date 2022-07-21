@@ -65,6 +65,7 @@ spec:
     - name: aws-credentials
       secret:
         secretName: aws-credentials
+        optional: true
     - name: ais-fs
       hostPath:
         path: /tmp/ais-k8s
