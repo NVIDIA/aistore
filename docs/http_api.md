@@ -301,6 +301,31 @@ $ file /tmp/567.jpg
 /tmp/567.jpg: JPEG image data, JFIF standard 1.01, aspect ratio, density 1x1, segment length 16, baseline, precision 8, 294x312, frames 3
 ```
 
+And here's another (somewhat more involved) example that ties an existing AIS bucket `ais://nnn` to a remote backend called (in this case) `gs://cloud_bucket`:
+
+```console
+$ curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"set-bprops", "value": {"backend_bck":{"name":"cloud_bucket", "provider":"gcp"}}}' 'http://G/v1/buckets/nnn'
+HTTP/1.1 200 OK
+Date: Thu, 21 Jul 2022 17:42:47 GMT
+Content-Length: 0
+
+# Next, we PUT directly into gs://cloud_bucket and then check the result via ais://nnn
+$ ais ls gs://cloud_bucket -H | wc -l
+0
+$ ais put README.md gs://cloud_bucket
+PUT "README.md" to gcp://cloud_bucket
+
+$ ais ls ais://nnn
+NAME             SIZE
+README.md        9.97KiB
+
+# List with Google version and checksum:
+$ ais ls ais://nnn --props name,size,checksum,version
+NAME             SIZE            CHECKSUM                                VERSION
+README.md        9.97KiB         a56d5e9f313480b7bbe41256012fb7b0        1658425395717602
+```
+
+
 ## Querying information
 
 AIStore provides an extensive list of RESTful operations to retrieve cluster current state:
