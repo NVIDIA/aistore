@@ -56,8 +56,10 @@ fmt)
   --fix)
     echo "Running style fixing..." >&2
 
-    gofumpt -s -w ${AISTORE_DIR}
-    python_yapf_fix
+    echo ${AISTORE_DIR}
+
+    gofmt -s -w ${AISTORE_DIR}
+    python_black_fix
     ;;
   *)
     echo "Running style check..." >&2

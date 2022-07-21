@@ -60,7 +60,10 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
         >>> for url in dp_ais_urls:
         ...     pass
     """
-    def __init__(self, source_datapipe: IterDataPipe[str], url: str, length: int = -1) -> None:
+
+    def __init__(
+        self, source_datapipe: IterDataPipe[str], url: str, length: int = -1
+    ) -> None:
         _assert_aistore()
         self.source_datapipe: IterDataPipe[str] = source_datapipe
         self.length: int = length
@@ -69,9 +72,13 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
     def __iter__(self) -> Iterator[str]:
         for prefix in self.source_datapipe:
             provider, bck_name, prefix = parse_url(prefix)
-            obj_iter = self.client.bucket(bck_name, provider).list_objects_iter(prefix=prefix)
+            obj_iter = self.client.bucket(bck_name, provider).list_objects_iter(
+                prefix=prefix
+            )
             for entry in obj_iter:
-                yield unparse_url(provider=provider, bck_name=bck_name, obj_name=entry.name)
+                yield unparse_url(
+                    provider=provider, bck_name=bck_name, obj_name=entry.name
+                )
 
     def __len__(self) -> int:
         if self.length == -1:
@@ -109,7 +116,10 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
         >>> for url, file in dp_cloud_files:
         ...     pass
     """
-    def __init__(self, source_datapipe: IterDataPipe[str], url: str, length: int = -1) -> None:
+
+    def __init__(
+        self, source_datapipe: IterDataPipe[str], url: str, length: int = -1
+    ) -> None:
         _assert_aistore()
         self.source_datapipe: IterDataPipe[str] = source_datapipe
         self.length = length
@@ -118,7 +128,12 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
     def __iter__(self) -> Iterator[Tuple[str, StreamWrapper]]:
         for url in self.source_datapipe:
             provider, bck_name, obj_name = parse_url(url)
-            yield url, StreamWrapper(self.client.bucket(bck_name=bck_name, provider=provider).object(obj_name=obj_name).get().raw())
+            yield url, StreamWrapper(
+                self.client.bucket(bck_name=bck_name, provider=provider)
+                .object(obj_name=obj_name)
+                .get()
+                .raw()
+            )
 
     def __len__(self) -> int:
         return len(self.source_datapipe)

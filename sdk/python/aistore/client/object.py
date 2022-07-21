@@ -24,10 +24,11 @@ Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 class Object:
     """
     A class representing an object of a bucket bound to a client.
-    
+
     Args:
         obj_name (str): name of object
     """
+
     def __init__(self, bck, obj_name: str):
         self._bck = bck
         self._obj_name = obj_name
@@ -65,7 +66,9 @@ class Object:
             params=self.bck.qparam,
         ).headers
 
-    def get(self, archpath: str = "", chunk_size: int = DEFAULT_CHUNK_SIZE) -> ObjStream:
+    def get(
+        self, archpath: str = "", chunk_size: int = DEFAULT_CHUNK_SIZE
+    ) -> ObjStream:
         """
         Reads an object
 
@@ -84,11 +87,22 @@ class Object:
         """
         params = self.bck.qparam
         params[QParamArchpath] = archpath
-        resp = self.bck.client.request(HTTP_METHOD_GET, path=f"objects/{ self.bck.name }/{ self.obj_name }", params=params, stream=True)
+        resp = self.bck.client.request(
+            HTTP_METHOD_GET,
+            path=f"objects/{ self.bck.name }/{ self.obj_name }",
+            params=params,
+            stream=True,
+        )
         length = int(resp.headers.get("content-length", 0))
         e_tag = resp.headers.get("ais-checksum-value", "")
         e_tag_type = resp.headers.get("ais-checksum-type", "")
-        return ObjStream(content_length=length, e_tag=e_tag, e_tag_type=e_tag_type, stream=resp, chunk_size=chunk_size)
+        return ObjStream(
+            content_length=length,
+            e_tag=e_tag,
+            e_tag_type=e_tag_type,
+            stream=resp,
+            chunk_size=chunk_size,
+        )
 
     def put(self, path: str) -> Header:
         """

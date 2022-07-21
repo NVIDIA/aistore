@@ -237,12 +237,12 @@ lint: ## Run linter on whole project
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
 
 fmt-check: ## Check code formatting
-	@ [[ $$(yapf --help) ]] || pip3 install yapf
+	@ [[ $$(black --help) ]] || pip3 install black[jupyter]
 	@ [[ $$(pylint --help) ]] || pip3 install pylint
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" fmt
 
 fmt-fix: ## Fix code formatting
-	@ [[ $$(yapf --help) ]] || pip3 install yapf
+	@ [[ $$(black --help) ]] || pip3 install black[jupyter]
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" fmt --fix
 
 spell-check: ## Run spell checker on the project

@@ -16,7 +16,7 @@ from . import CLUSTER_ENDPOINT
 class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         letters = string.ascii_lowercase
-        self.bck_name = ''.join(random.choice(letters) for _ in range(10))
+        self.bck_name = "".join(random.choice(letters) for _ in range(10))
 
         self.client = Client(CLUSTER_ENDPOINT)
 
@@ -33,5 +33,5 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client.xaction().wait_for_xaction_finished(xact_id=xact_id)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

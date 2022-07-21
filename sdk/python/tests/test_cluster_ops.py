@@ -19,7 +19,9 @@ class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_health_failure(self):
         # url not exisiting or URL down
-        self.assertEqual(Client("http://localhost:1234").cluster().is_aistore_running(), False)
+        self.assertEqual(
+            Client("http://localhost:1234").cluster().is_aistore_running(), False
+        )
 
     def test_cluster_map(self):
         smap = self.client.cluster().get_info()

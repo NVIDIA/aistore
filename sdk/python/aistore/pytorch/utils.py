@@ -41,9 +41,13 @@ def list_objects_info(client: Client, urls_list: List[str]) -> List[Mapping[str,
     samples = []
     for url in urls_list:
         provider, bck_name, path = parse_url(url)
-        objects = client.bucket(bck_name=bck_name, provider=provider).list_objects(prefix=path)
+        objects = client.bucket(bck_name=bck_name, provider=provider).list_objects(
+            prefix=path
+        )
         for obj_info in objects.get_entries():
-            samples.append({"provider": provider, "bck_name": bck_name, "object": obj_info.name})
+            samples.append(
+                {"provider": provider, "bck_name": bck_name, "object": obj_info.name}
+            )
     return samples
 
 
@@ -57,4 +61,4 @@ def unparse_url(provider: str, bck_name: str, obj_name: str) -> str:
     Returns:
         unparsed_url(str): Unparsed url (complete url)
     """
-    return urlunparse([provider, bck_name, obj_name, '', '', ''])
+    return urlunparse([provider, bck_name, obj_name, "", "", ""])

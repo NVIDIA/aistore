@@ -17,7 +17,7 @@ from aistore.pytorch import AISFileLister, AISFileLoader
 class TestPytorchPlugin(unittest.TestCase):
     def setUp(self) -> None:
         letters = string.ascii_lowercase
-        self.bck_name = ''.join(random.choice(letters) for _ in range(10))
+        self.bck_name = "".join(random.choice(letters) for _ in range(10))
         self.client = Client(CLUSTER_ENDPOINT)
         self.client.bucket(self.bck_name).create()
 
@@ -35,7 +35,7 @@ class TestPytorchPlugin(unittest.TestCase):
         # create 10 objects in the /temp dir
         for i in range(num_objs):
             object_body = "test string" * random.randrange(1, 10)
-            content = object_body.encode('utf-8')
+            content = object_body.encode("utf-8")
             obj_name = f"temp/obj{ i }"
             with tempfile.NamedTemporaryFile() as file:
                 file.write(content)
@@ -45,15 +45,18 @@ class TestPytorchPlugin(unittest.TestCase):
         # create 10 objects in the / dir
         for i in range(num_objs):
             object_body = "test string" * random.randrange(1, 10)
-            content = object_body.encode('utf-8')
+            content = object_body.encode("utf-8")
             obj_name = f"obj{ i }"
             with tempfile.NamedTemporaryFile() as file:
                 file.write(content)
                 file.flush()
                 self.client.bucket(self.bck_name).object(obj_name).put(file.name)
 
-        prefixes = [['ais://' + self.bck_name], ['ais://' + self.bck_name + "/"],
-                    ['ais://' + self.bck_name + "/temp/", 'ais://' + self.bck_name + "/obj"]]
+        prefixes = [
+            ["ais://" + self.bck_name],
+            ["ais://" + self.bck_name + "/"],
+            ["ais://" + self.bck_name + "/temp/", "ais://" + self.bck_name + "/obj"],
+        ]
         for prefix in prefixes:
             urls = AISFileLister(url=CLUSTER_ENDPOINT, source_datapipe=prefix)
             ais_loader = AISFileLoader(url=CLUSTER_ENDPOINT, source_datapipe=urls)
@@ -63,7 +66,7 @@ class TestPytorchPlugin(unittest.TestCase):
             self.assertEqual(sum(1 for _ in ais_loader), 20)
 
     def test_incorrect_inputs(self):
-        prefixes = ['ais://asdasd']
+        prefixes = ["ais://asdasd"]
 
         # AISFileLister: Bucket not found
         try:
@@ -81,5 +84,5 @@ class TestPytorchPlugin(unittest.TestCase):
                     pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

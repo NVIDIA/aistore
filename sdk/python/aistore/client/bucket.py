@@ -20,12 +20,12 @@ from aistore.client.const import (
     ProviderAIS,
     QParamBucketTo,
     QParamKeepBckMD,
-    QParamProvider
+    QParamProvider,
 )
 
 from aistore.client.errors import InvalidBckProvider
 from aistore.client.object import Object
-from aistore.client.types import (ActionMsg, Bck, BucketEntry, BucketList, BucketLister)
+from aistore.client.types import ActionMsg, Bck, BucketEntry, BucketList, BucketLister
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
@@ -34,13 +34,16 @@ Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 class Bucket:
     """
     A class representing a bucket that contains user data.
-    
+
     Args:
         bck_name (str): name of bucket
         provider (str, optional): provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
         ns (str, optional): namespace of bucket, defaults to ""
     """
-    def __init__(self, client, bck_name: str, provider: str = ProviderAIS, ns: str = ""):
+
+    def __init__(
+        self, client, bck_name: str, provider: str = ProviderAIS, ns: str = ""
+    ):
         self._client = client
         self._bck = Bck(name=bck_name, provider=provider, ns=ns)
         self._qparam = {QParamProvider: provider}
@@ -90,7 +93,7 @@ class Bucket:
             aistore.client.errors.InvalidBckProvider: Invalid bucket provider for requested operation
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.exceptions.HTTPError: Service unavailable 
+            requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
@@ -107,8 +110,8 @@ class Bucket:
     def delete(self):
         """
         Destroys bucket in AIStore cluster.
-        In all cases removes both the bucket's content _and_ the bucket's metadata from the cluster. 
-        Note: AIS will _not_ call the remote backend provider to delete the corresponding Cloud bucket 
+        In all cases removes both the bucket's content _and_ the bucket's metadata from the cluster.
+        Note: AIS will _not_ call the remote backend provider to delete the corresponding Cloud bucket
         (iff the bucket in question is, in fact, a Cloud bucket).
 
         Args:
@@ -122,7 +125,7 @@ class Bucket:
             aistore.client.errors.InvalidBckProvider: Invalid bucket provider for requested operation
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.exceptions.HTTPError: Service unavailable 
+            requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
@@ -138,12 +141,12 @@ class Bucket:
 
     def rename(self, to_bck: str) -> str:
         """
-        Renames bucket in AIStore cluster. 
+        Renames bucket in AIStore cluster.
         Only works on AIS buckets. Returns xaction id that can be used later to check the status of the asynchronous operation.
 
         Args:
             to_bck (str): New bucket name for bucket to be renamed as
-        
+
         Returns:
             xaction id (as str) that can be used to check the status of the operation
 
@@ -152,7 +155,7 @@ class Bucket:
             aistore.client.errors.InvalidBckProvider: Invalid bucket provider for requested operation
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.exceptions.HTTPError: Service unavailable 
+            requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
@@ -161,7 +164,9 @@ class Bucket:
         params = self.qparam.copy()
         params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
         action = ActionMsg(action=ACT_MOVE_BCK).dict()
-        resp = self.client.request(HTTP_METHOD_POST, path=f"buckets/{ self.name }", json=action, params=params)
+        resp = self.client.request(
+            HTTP_METHOD_POST, path=f"buckets/{ self.name }", json=action, params=params
+        )
         self.bck.name = to_bck
         return resp.text
 
@@ -181,7 +186,7 @@ class Bucket:
             aistore.client.errors.InvalidBckProvider: Invalid bucket provider for requested operation
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.exceptions.HTTPError: Service unavailable 
+            requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
@@ -211,7 +216,7 @@ class Bucket:
             aistore.client.errors.AISError: All other types of errors with AIStore
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.exceptions.HTTPError: Service unavailable 
+            requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
@@ -248,7 +253,7 @@ class Bucket:
             aistore.client.errors.AISError: All other types of errors with AIStore
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.exceptions.HTTPError: Service unavailable 
+            requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
@@ -264,7 +269,14 @@ class Bucket:
             params=params,
         ).text
 
-    def list_objects(self, prefix: str = "", props: str = "", page_size: int = 0, uuid: str = "", continuation_token: str = "") -> BucketList:
+    def list_objects(
+        self,
+        prefix: str = "",
+        props: str = "",
+        page_size: int = 0,
+        uuid: str = "",
+        continuation_token: str = "",
+    ) -> BucketList:
         """
         Returns a structure that contains a page of objects, xaction UUID, and continuation token (to read the next page, if available).
 
@@ -286,11 +298,17 @@ class Bucket:
             aistore.client.errors.AISError: All other types of errors with AIStore
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.exceptions.HTTPError: Service unavailable 
+            requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        value = {"prefix": prefix, "pagesize": page_size, "uuid": uuid, "props": props, "continuation_token": continuation_token}
+        value = {
+            "prefix": prefix,
+            "pagesize": page_size,
+            "uuid": uuid,
+            "props": props,
+            "continuation_token": continuation_token,
+        }
         action = ActionMsg(action=ACT_LIST, value=value).dict()
 
         return self.client.request_deserialize(
@@ -317,7 +335,7 @@ class Bucket:
                 The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
                 Defaults to "0" - return maximum number objects
-                
+
         Returns:
             BucketLister: object iterator
 
@@ -325,11 +343,18 @@ class Bucket:
             aistore.client.errors.AISError: All other types of errors with AIStore
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.exceptions.HTTPError: Service unavailable 
+            requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        return BucketLister(self.client, bck_name=self.name, provider=self.provider, prefix=prefix, props=props, page_size=page_size)
+        return BucketLister(
+            self.client,
+            bck_name=self.name,
+            provider=self.provider,
+            prefix=prefix,
+            props=props,
+            page_size=page_size,
+        )
 
     def list_all_objects(
         self,
@@ -355,15 +380,26 @@ class Bucket:
             aistore.client.errors.AISError: All other types of errors with AIStore
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.exceptions.HTTPError: Service unavailable 
+            requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        value = {"prefix": prefix, "uuid": "", "props": props, "continuation_token": "", "pagesize": page_size}
+        value = {
+            "prefix": prefix,
+            "uuid": "",
+            "props": props,
+            "continuation_token": "",
+            "pagesize": page_size,
+        }
         obj_list = None
 
         while True:
-            resp = self.list_objects(prefix=prefix, props=props, uuid=value["uuid"], continuation_token=value["continuation_token"])
+            resp = self.list_objects(
+                prefix=prefix,
+                props=props,
+                uuid=value["uuid"],
+                continuation_token=value["continuation_token"],
+            )
             if obj_list:
                 obj_list = obj_list + resp.get_entries()
             obj_list = obj_list or resp.get_entries()
@@ -375,12 +411,12 @@ class Bucket:
 
     def object(self, obj_name: str):
         """
-        Factory constructor for object bound to bucket. 
+        Factory constructor for object bound to bucket.
         Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
 
         Args:
             obj_name (str): Name of object
-        
+
         Returns:
             The object created.
         """

@@ -75,19 +75,15 @@ function check_python_formatting {
   fi
 
   i=0
-  for f in $(find . -type f -name "*.py" ! -regex $EXTERNAL_SRC_REGEX ! -path '*/docs/examples/*'); do
-     yapf -d --style=$YAPF_STYLE $f
-     if [[ $? -gt 0 ]]; then i=$((i+1)); fi
-  done
-
-  if [[ $i -ne 0 ]]; then
+  black . --check --diff --quiet --exclude "/docs/examples/"
+  if [[ $? -ne 0 ]]; then
     printf "\nIncorrect python formatting. Run make fmt-fix to fix it.\n\n" >&2
     exit 1
   fi
 }
 
-function python_yapf_fix {
-  find . -type f -name "*.py" ! -regex $EXTERNAL_SRC_REGEX -exec yapf -i --style=$YAPF_STYLE {} ";"
+function python_black_fix {
+  black . --quiet --exclude "/docs/examples/"
 }
 
 function perror {

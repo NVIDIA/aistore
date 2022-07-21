@@ -31,9 +31,9 @@ def handle_errors(resp: requests.Response):
     error_text = resp.text
     if isinstance(resp.text, bytes):
         try:
-            error_text = error_text.decode('utf-8')
+            error_text = error_text.decode("utf-8")
         except UnicodeDecodeError:
-            error_text = error_text.decode('iso-8859-1')
+            error_text = error_text.decode("iso-8859-1")
     if error_text != "":
         _raise_error(error_text)
     resp.raise_for_status()

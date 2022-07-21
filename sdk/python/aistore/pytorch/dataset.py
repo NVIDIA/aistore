@@ -15,7 +15,7 @@ from aistore.pytorch.utils import list_objects_info
 # pylint: disable=too-few-public-methods
 
 
-class AISBaseClass():
+class AISBaseClass:
     """
     A base class for creating AIS Datasets for PyTorch
 
@@ -23,6 +23,7 @@ class AISBaseClass():
         client_url(str): AIS endpoint URL
         urls_list(str or List[str]): single or list of url prefixes to load data
     """
+
     def __init__(self, client_url: str, urls_list: Union[str, List[str]]) -> None:
         self.client = Client(client_url)
         if isinstance(urls_list, str):
@@ -42,6 +43,7 @@ class AISDataset(AISBaseClass, Dataset):
         client_url(str): AIS endpoint URL
         urls_list(str or List[str]): single or list of url prefixes to load data
     """
+
     def __init__(self, client_url: str, urls_list: Union[str, List[str]]):
         AISBaseClass.__init__(self, client_url, urls_list)
 
@@ -50,6 +52,13 @@ class AISDataset(AISBaseClass, Dataset):
 
     def __getitem__(self, index: int):
         object_name = self._object_info[index]["object"]
-        obj = self.client.bucket(bck_name=self._object_info[index]["bck_name"],
-                                 provider=self._object_info[index]["provider"]).object(obj_name=object_name).get().read_all()
+        obj = (
+            self.client.bucket(
+                bck_name=self._object_info[index]["bck_name"],
+                provider=self._object_info[index]["provider"],
+            )
+            .object(obj_name=object_name)
+            .get()
+            .read_all()
+        )
         return object_name, obj

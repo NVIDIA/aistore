@@ -2,7 +2,7 @@
 # Copyright (c) 2021-22, NVIDIA CORPORATION. All rights reserved.
 #
 
-#pylint: disable=unused-variable
+# pylint: disable=unused-variable
 
 TAR2TF = "tar2tf"
 OBJECTS = "objects"
@@ -38,5 +38,5 @@ ACT_EVICT_REMOTE_BCK = "evict-remote-bck"
 ACT_LIST = "list"
 ACT_MOVE_BCK = "move-bck"
 
-#Defaults
+# Defaults
 DEFAULT_CHUNK_SIZE = 32768

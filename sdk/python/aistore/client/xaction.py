@@ -6,7 +6,7 @@ from __future__ import annotations  # pylint: disable=unused-variable
 from typing import List
 import time
 
-from aistore.client.const import (HTTP_METHOD_GET, HTTP_METHOD_PUT, QParamWhat)
+from aistore.client.const import HTTP_METHOD_GET, HTTP_METHOD_PUT, QParamWhat
 from aistore.client.errors import Timeout
 from aistore.client.types import Bck, XactStatus
 from aistore.client.utils import probing_frequency
@@ -20,6 +20,7 @@ class Xaction:
     Args:
         None
     """
+
     def __init__(self, client):
         self._client = client
 
@@ -28,7 +29,13 @@ class Xaction:
         """The client bound to this xaction object."""
         return self._client
 
-    def xact_status(self, xact_id: str = "", xact_kind: str = "", daemon_id: str = "", only_running: bool = False) -> XactStatus:
+    def xact_status(
+        self,
+        xact_id: str = "",
+        xact_kind: str = "",
+        daemon_id: str = "",
+        only_running: bool = False,
+    ) -> XactStatus:
         """
         Return status of an eXtended Action (xaction)
 
@@ -47,7 +54,12 @@ class Xaction:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        value = {"id": xact_id, "kind": xact_kind, "show_active": only_running, "node": daemon_id}
+        value = {
+            "id": xact_id,
+            "kind": xact_kind,
+            "show_active": only_running,
+            "node": daemon_id,
+        }
         params = {QParamWhat: "status"}
 
         return self.client.request_deserialize(
@@ -58,7 +70,13 @@ class Xaction:
             params=params,
         )
 
-    def wait_for_xaction_finished(self, xact_id: str = "", xact_kind: str = "", daemon_id: str = "", timeout: int = 300):
+    def wait_for_xaction_finished(
+        self,
+        xact_id: str = "",
+        xact_kind: str = "",
+        daemon_id: str = "",
+        timeout: int = 300,
+    ):
         """
         Wait for an eXtended Action (xaction) to finish
 
@@ -83,14 +101,22 @@ class Xaction:
         while True:
             if passed > timeout:
                 raise Timeout("wait for xaction to finish")
-            status = self.xact_status(xact_id=xact_id, xact_kind=xact_kind, daemon_id=daemon_id)
+            status = self.xact_status(
+                xact_id=xact_id, xact_kind=xact_kind, daemon_id=daemon_id
+            )
             if status.end_time != 0:
                 break
             time.sleep(sleep_time)
             passed += sleep_time
             print(status)
 
-    def xact_start(self, xact_kind: str = "", daemon_id: str = "", force: bool = False, buckets: List[Bck] = None) -> str:
+    def xact_start(
+        self,
+        xact_kind: str = "",
+        daemon_id: str = "",
+        force: bool = False,
+        buckets: List[Bck] = None,
+    ) -> str:
         """
         Start an eXtended Action (xaction) and return its UUID.
 

@@ -18,7 +18,7 @@ from . import CLUSTER_ENDPOINT, REMOTE_BUCKET
 class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         letters = string.ascii_lowercase
-        self.bck_name = ''.join(random.choice(letters) for _ in range(10))
+        self.bck_name = "".join(random.choice(letters) for _ in range(10))
 
         self.client = Client(CLUSTER_ENDPOINT)
         self.buckets = []
@@ -53,8 +53,8 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             self.assertEqual(e.response.status_code, 404)
 
     def test_rename_bucket(self):
-        from_bck_n = self.bck_name + 'from'
-        to_bck_n = self.bck_name + 'to'
+        from_bck_n = self.bck_name + "from"
+        to_bck_n = self.bck_name + "to"
         self.create_bucket(from_bck_n)
         res = self.client.cluster().list_buckets()
         count = len(res)
@@ -84,7 +84,10 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         count_new = len(res)
         self.assertEqual(count, count_new)
 
-    @unittest.skipIf(REMOTE_BUCKET == "" or REMOTE_BUCKET.startswith("ais:"), "Remote bucket is not set")
+    @unittest.skipIf(
+        REMOTE_BUCKET == "" or REMOTE_BUCKET.startswith("ais:"),
+        "Remote bucket is not set",
+    )
     def test_evict_bucket(self):
         obj_name = "evict_obj"
         parts = REMOTE_BUCKET.split("://")  # must be in the format '<provider>://<bck>'
@@ -94,9 +97,13 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         with tempfile.NamedTemporaryFile() as f:
             f.write(content)
             f.flush()
-            self.client.bucket(self.bck_name, provider=provider).object(obj_name).put(f.name)
+            self.client.bucket(self.bck_name, provider=provider).object(obj_name).put(
+                f.name
+            )
 
-        objects = self.client.bucket(self.bck_name, provider=provider).list_objects(props="name,cached", prefix=obj_name)
+        objects = self.client.bucket(self.bck_name, provider=provider).list_objects(
+            props="name,cached", prefix=obj_name
+        )
         self.assertTrue(len(objects) > 0)
         for obj in objects:
             if obj.name == obj_name:
@@ -104,7 +111,9 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
                 self.assertTrue(obj.is_cached())
 
         self.client.bucket(self.bck_name, provider=provider).evict()
-        objects = self.client.bucket(self.bck_name, provider=provider).list_objects(props="name,cached", prefix=obj_name)
+        objects = self.client.bucket(self.bck_name, provider=provider).list_objects(
+            props="name,cached", prefix=obj_name
+        )
         self.assertTrue(len(objects) > 0)
         for obj in objects:
             if obj.name == obj_name:
@@ -113,8 +122,8 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client.bucket(self.bck_name, provider=provider).object(obj_name).delete()
 
     def test_copy_bucket(self):
-        from_bck = self.bck_name + 'from'
-        to_bck = self.bck_name + 'to'
+        from_bck = self.bck_name + "from"
+        to_bck = self.bck_name + "to"
         self.create_bucket(from_bck)
         self.create_bucket(to_bck)
 
@@ -123,5 +132,5 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client.xaction().wait_for_xaction_finished(xact_id=xact_id)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

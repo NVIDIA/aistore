@@ -39,7 +39,10 @@ def display_shard_images(client, bucket, tar_name, objects=2, etl_id=""):
         wds.WebDataset(
             client.object_url(bucket, tar_name, transform_id=etl_id),
             handler=wds.handlers.warn_and_continue,
-        ).decode("rgb").to_tuple("jpg;png;jpeg;npy cls", handler=wds.handlers.warn_and_continue).map_tuple(to_tensor, lambda x: x)
+        )
+        .decode("rgb")
+        .to_tuple("jpg;png;jpeg;npy cls", handler=wds.handlers.warn_and_continue)
+        .map_tuple(to_tensor, lambda x: x)
     )
 
     test_loader = wds.WebLoader(

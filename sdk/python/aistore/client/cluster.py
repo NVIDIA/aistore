@@ -5,7 +5,14 @@
 from __future__ import annotations  # pylint: disable=unused-variable
 from typing import List
 
-from aistore.client.const import (HTTP_METHOD_GET, ACT_LIST, ProviderAIS, QParamWhat, QparamPrimaryReadyReb, QParamProvider)
+from aistore.client.const import (
+    HTTP_METHOD_GET,
+    ACT_LIST,
+    ProviderAIS,
+    QParamWhat,
+    QparamPrimaryReadyReb,
+    QParamProvider,
+)
 
 from aistore.client.types import ActionMsg, Bck, Smap
 
@@ -18,6 +25,7 @@ class Cluster:
     Args:
         None
     """
+
     def __init__(self, client):
         self._client = client
 
@@ -80,11 +88,11 @@ class Cluster:
     def is_aistore_running(self) -> bool:
         """
         Returns True if cluster is ready, or false if cluster is still setting up.
-        
+
         Args:
             None
-        
-        Returns: 
+
+        Returns:
             bool: True if cluster is ready, or false if cluster is still setting up
         """
 

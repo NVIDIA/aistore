@@ -24,6 +24,7 @@ def timeout(timeout_in_seconds=300):
     :param timeout_in_seconds: Time after which a TimeoutException is raised (defaults to 300)
     :return: The decorated function
     """
+
     def decorator(fn):
         def f(*args, **kwargs):
             prev_sig_handler = signal.signal(signal.SIGALRM, raise_timeout_exception)
@@ -48,6 +49,7 @@ def object_variable_timeout(timeout_variable):
     :param: timeout_variable: name of the object member variable specifying timeout duration
     :return: The decorated function
     """
+
     def decorator(fn):
         def f(self, *args, **kwargs):
             prev_sig_handler = signal.signal(signal.SIGALRM, raise_timeout_exception)

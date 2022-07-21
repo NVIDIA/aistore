@@ -80,7 +80,7 @@ class BucketList(BaseModel):
     def get_entries(self):
         return self.entries
 
-    @validator('entries')
+    @validator("entries")
     def set_entries(cls, entries):  # pylint: disable=no-self-argument
         if entries is None:
             entries = []
@@ -141,9 +141,17 @@ class BucketLister:
     _props: str = ""
     _provider: str = ProviderAIS
     _bck_name: str = ""
-    _client: 'Client'
+    _client: "Client"
 
-    def __init__(self, client: 'Client', bck_name: str = "", provider: str = ProviderAIS, prefix: str = "", props: str = "", page_size: int = 0):
+    def __init__(
+        self,
+        client: "Client",
+        bck_name: str = "",
+        provider: str = ProviderAIS,
+        prefix: str = "",
+        props: str = "",
+        page_size: int = 0,
+    ):
         self._client = client
         self._prefix = prefix
         self._props = props
@@ -168,7 +176,11 @@ class BucketLister:
                 "pagesize": self._page_size,
             }
             resp = self._client.bucket(self._bck_name, self._provider).list_objects(
-                prefix=self._prefix, props=self._props, uuid=self._uuid, continuation_token=self._token, page_size=self._page_size
+                prefix=self._prefix,
+                props=self._props,
+                uuid=self._uuid,
+                continuation_token=self._token,
+                page_size=self._page_size,
             )
             self._fetched = resp.get_entries()
             self._uuid = resp.uuid
