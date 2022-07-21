@@ -20,7 +20,7 @@ redirect_from:
 - API and SDK
   - [Go (language) API](/docs/http_api.md)
   - [Python API reference](/docs/python_api.md)
-  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) and [PIP Package](https://pypi.org/project/aistore/)
+  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) (and [pip package](https://pypi.org/project/aistore/))
   - [REST API](/docs/http_api.md)
 - Amazon S3
   - [`s3cmd` client](/docs/s3cmd.md)

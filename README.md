@@ -75,7 +75,7 @@ With a little effort, they all could be extracted and used outside.
 - [Technical Blog](https://aiatscale.org/blog)
 - API and SDK
   - [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api)
-  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) and [PIP Package](https://pypi.org/project/aistore/)
+  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) (and [pip package](https://pypi.org/project/aistore/))
   - [REST API](/docs/http_api.md)
 - Amazon S3
   - [`s3cmd` client](/docs/s3cmd.md)

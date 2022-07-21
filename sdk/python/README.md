@@ -137,7 +137,7 @@ For more information on API usage, refer to the [API reference documentation](ht
 
 You can list and load data from AIS buckets (buckets that are not 3rd party backend-based) and remote cloud buckets (3rd party backend-based cloud buckets) in PyTorch using [AISFileLister](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLister.html#aisfilelister) and [AISFileLoader](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLoader.html#torchdata.datapipes.iter.AISFileLoader).
 
-`AISFileLister` and `AISFileLoader` are now available as a part of official [pytorch/data](https://github.com/pytorch/data/blob/main/torchdata/datapipes/iter/load/aisio.py) project. 
+`AISFileLister` and `AISFileLoader` are now available as a part of official [pytorch/data](https://github.com/pytorch/data/blob/main/torchdata/datapipes/iter/load/aisio.py) project.
 
 ```
 from torchdata.datapipes.iter import AISFileLister, AISFileLoader
@@ -161,5 +161,5 @@ for url, file in dp_files:
 
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
 * [Documentation](https://aiatscale.org/docs)
-* [Official AIStore PIP Package](https://pypi.org/project/aistore/)
-* [Videos and Demos](https://github.com/NVIDIA/aistore/blob/master/docs/videos.md)
+* [AIStore pip package](https://pypi.org/project/aistore/)
+* [Videos and demos](https://github.com/NVIDIA/aistore/blob/master/docs/videos.md)
