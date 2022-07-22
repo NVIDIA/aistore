@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xs"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 func (reb *Reb) RebID() int64           { return reb.rebID.Load() }

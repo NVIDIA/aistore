@@ -28,7 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	"github.com/NVIDIA/aistore/xs"
+	"github.com/NVIDIA/aistore/xact/xs"
 	jsoniter "github.com/json-iterator/go"
 )
 

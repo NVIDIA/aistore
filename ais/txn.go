@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/mirror"
-	"github.com/NVIDIA/aistore/xs"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 // GC

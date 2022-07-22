@@ -47,7 +47,7 @@ import (
 	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	"github.com/NVIDIA/aistore/xs"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 const dbName = "ais.db"

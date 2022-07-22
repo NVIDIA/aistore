@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	"github.com/NVIDIA/aistore/xs"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 func init() {

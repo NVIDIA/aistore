@@ -1,9 +1,13 @@
-## Table of Contents
+This is the top eXtended Action (`xaction`) directory containing much of the common functionality and interfaces used by the rest of the code.
 
-- [Extended Actions (xactions)](#extended-actions-xactions)
-    - [Start and Stop](#start-and-stop)
-	- [Stats](#stats)
-- [References](#references)
+In addition, it contains subdirectories:
+
+* `xreg` - xaction registry
+* `xs` - concrete named xactions, e.g. `apc.ActRebalance`, `apc.ActPromote`, `apc.ActSummaryBck` and other enumerated *kinds*.
+
+> For all supported xactions, their *kinds* and static properties, see `xact.Table`.
+
+> Xaction *kinds* are generally consistent with the API constants from `api/apc/const.go`.
 
 ## Extended Actions (xactions)
 
