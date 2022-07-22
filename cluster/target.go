@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -130,9 +129,6 @@ type Target interface {
 	// File-system related functions.
 	FSHC(err error, path string)
 	OOS(*fs.CapStatus) fs.CapStatus
-
-	// Getting other interfaces.
-	DB() dbdriver.Driver
 
 	// Other.
 	BMDVersionFixup(r *http.Request, bck ...cmn.Bck)

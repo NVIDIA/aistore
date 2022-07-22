@@ -46,7 +46,7 @@ type (
 )
 
 func newDispatcher(parent *Downloader) *dispatcher {
-	initInfoStore(parent.t.DB()) // it will be initialized only once
+	initInfoStore(db) // it will be initialized only once
 
 	return &dispatcher{
 		parent: parent,

@@ -1,6 +1,6 @@
 // Package downloader implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package downloader
 
@@ -181,7 +181,7 @@ var (
 	_ io.ReadCloser  = (*progressReader)(nil)
 )
 
-func Init() {
+func Xreg() {
 	xreg.RegNonBckXact(&dowFactory{})
 }
 

@@ -12,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -50,7 +49,6 @@ func (*TargetMock) FinalizeObj(*cluster.LOM, string, cluster.Xact) (int, error) 
 func (*TargetMock) EvictObject(*cluster.LOM) (int, error)                       { return 0, nil }
 func (*TargetMock) DeleteObject(*cluster.LOM, bool) (int, error)                { return 0, nil }
 func (*TargetMock) Promote(cluster.PromoteParams) (int, error)                  { return 0, nil }
-func (*TargetMock) DB() dbdriver.Driver                                         { return nil }
 func (*TargetMock) Backend(*cluster.Bck) cluster.BackendProvider                { return nil }
 func (*TargetMock) HeadObjT2T(*cluster.LOM, *cluster.Snode) bool                { return false }
 func (*TargetMock) RebalanceNamespace(*cluster.Snode) ([]byte, int, error)      { return nil, 0, nil }

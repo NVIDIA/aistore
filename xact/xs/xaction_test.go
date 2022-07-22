@@ -24,7 +24,7 @@ import (
 
 func init() {
 	xreg.Init()
-	xs.Init()
+	xs.Xreg()
 
 	config := cmn.GCO.BeginUpdate()
 	config.ConfigDir = "/tmp/ais-tests"

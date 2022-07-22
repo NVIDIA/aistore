@@ -16,6 +16,7 @@ import (
 
 var (
 	// global downloader info store
+	db          dbdriver.Driver
 	dlStore     *infoStore
 	dlStoreOnce sync.Once
 )
@@ -30,6 +31,8 @@ type (
 		sync.RWMutex
 	}
 )
+
+func SetDB(dbdrv dbdriver.Driver) { db = dbdrv }
 
 func initInfoStore(db dbdriver.Driver) {
 	dlStoreOnce.Do(func() {

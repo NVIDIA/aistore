@@ -32,6 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dbdriver"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/etl"
@@ -68,7 +69,6 @@ type (
 		fsprg        fsprungroup
 		reb          *reb.Reb
 		res          *res.Res
-		db           dbdriver.Driver
 		transactions transactions
 		regstate     regstate // the state of being registered with the primary, can be (en/dis)abled via API
 	}
@@ -372,8 +372,9 @@ func (t *target) Run() error {
 		glog.Errorf("Failed to initialize DB: %v", err)
 		return err
 	}
-	t.db = db
 	defer cos.Close(db)
+
+	downloader.SetDB(db)
 
 	// transactions
 	t.transactions.init(t)

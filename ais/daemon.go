@@ -189,11 +189,9 @@ func initDaemon(version, buildTime string) cos.Runner {
 	hk.Init(&daemon.stopping)
 	daemon.rg.add(hk.DefaultHK)
 
-	// reg xaction factories in an orderly fashion
+	// reg xaction factories
 	xreg.Init()
-	xs.Init()
-	space.Init()
-	downloader.Init()
+	xs.Xreg()
 
 	// fork (proxy | target)
 	co := newConfigOwner(config)
@@ -204,6 +202,11 @@ func initDaemon(version, buildTime string) cos.Runner {
 		cmn.SetNodeName(p.si.Name())
 		return p
 	}
+
+	// reg more xaction factories
+	space.Xreg()
+	downloader.Xreg()
+
 	t := newTarget(co)
 	t.init(config)
 	cmn.AppGloghdr("Node: " + t.si.Name() + ", " + loghdr)

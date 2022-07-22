@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -30,7 +29,6 @@ var _ cluster.Target = (*target)(nil)
 func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *target) PageMM() *memsys.MMSA        { return t.gmm }
 func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
-func (t *target) DB() dbdriver.Driver         { return t.db }
 
 func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.IsRemoteAIS() {

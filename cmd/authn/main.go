@@ -96,7 +96,9 @@ func main() {
 	go glogFlush()
 
 	srv := newServer(mgr)
-	if err := srv.Run(); err != nil {
+	err = srv.Run()
+	cos.Close(mgr.db)
+	if err != nil {
 		cos.ExitLogf("Server failed: %v", err)
 	}
 }
