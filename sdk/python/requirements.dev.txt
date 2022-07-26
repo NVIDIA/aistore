@@ -1,8 +1,0 @@
-packaging
-cloudpickle==2.0.0
-pydantic==1.9.0
-pylint==2.13.4
-pytest==7.1.1
-requests==2.27.1
-torchdata
-typing_extensions==4.1.1
