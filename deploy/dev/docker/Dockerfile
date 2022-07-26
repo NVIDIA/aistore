@@ -21,9 +21,6 @@ RUN apt-get clean && apt-get update &&\
       iputils-ping &&\
   apt-get -y clean all
 
-RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
-RUN apt-get install -y nodejs
-
 RUN wget https://bootstrap.pypa.io/get-pip.py &&\
   python3 get-pip.py &&\
   pip install awscli s3cmd
@@ -55,6 +52,7 @@ ENV MOUNTPATH /tmp/ais
 
 COPY aisnode_config.sh aisnode_config.sh
 COPY entrypoint/entrypoint.sh entrypoint.sh
+COPY limits.conf /etc/security/limits.conf
 
 RUN mkdir -p $GOPATH/src/github.com/NVIDIA && \
     cd $GOPATH/src/github.com/NVIDIA && \

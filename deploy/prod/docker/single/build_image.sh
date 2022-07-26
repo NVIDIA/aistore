@@ -7,10 +7,12 @@ AISTORE_PATH=$(git rev-parse --show-toplevel)
 
 function cleanup {
   rm -rf aisnode*
+  rm -rf limits.conf
 }
 trap cleanup INT TERM EXIT
 
 cp ${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh aisnode_config.sh
+cp ${AISTORE_PATH}/deploy/conf/limits.conf limits.conf
 
 docker image build \
     --tag ${TAG} \

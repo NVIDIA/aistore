@@ -27,6 +27,7 @@ RUN apk upgrade --no-cache && \
 WORKDIR /build
 COPY entrypoint entrypoint/
 COPY aisnode_config.sh ./
+COPY limits.conf /etc/security/limits.conf
 COPY --from=0 /go/bin/aisnode bin/
 
 EXPOSE 51080/tcp

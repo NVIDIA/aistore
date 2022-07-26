@@ -120,6 +120,7 @@ deploy_mode() {
 
 deploy_quickstart() {
     cp $DIR/../local/aisnode_config.sh aisnode_config.sh
+    cp $DIR/../../conf/limits.conf limits.conf
 
     QS_AWSDIR=${1:-'~/.aws/'}
     QS_AWSDIR="${QS_AWSDIR/#\~/$HOME}"
@@ -142,6 +143,7 @@ deploy_quickstart() {
     docker exec -it $container_id /bin/bash -c "echo 'Hello from AIS!'; /bin/bash;"
 
     rm -rf aisnode_config.sh
+    rm -rf limits.conf
 }
 
 
