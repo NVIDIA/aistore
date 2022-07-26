@@ -5,8 +5,7 @@ set -e
 source utils/ais_minikube_setup.sh
 export AIS_FS_PATHS=""
 export TEST_FSPATH_COUNT=1
-# TODO: replace with official docker aisnode:minikube once released 
-export DOCKER_IMAGE="gaikwadabhishek/aisnode:minikube"
+export DOCKER_IMAGE="aistore/aisnode:minikube"
 
 PRIMARY_PORT=8080
 HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"

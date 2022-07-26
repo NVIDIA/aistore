@@ -14,23 +14,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: setup-minikube
         uses: medyagh/setup-minikube@v0.0.8
         with:
           driver: docker
           container-runtime: docker
-          cpus: max 
-          memory: max 
+          cpus: max
+          memory: max
 
       - name: Run AIStore in Minikube
         run: |
           cd $GITHUB_WORKSPACE/deploy/dev/k8s/
           ./minimal.sh
-          
+
       - name: Python ETL Tests
         run: |
           cd $GITHUB_WORKSPACE/sdk/python/
           export AIS_ENDPOINT="http://$(minikube ip):8080"
           make python_etl_tests
-          
+
