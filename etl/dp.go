@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type OfflineDataProvider struct {
@@ -38,6 +39,7 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 		r   cos.ReadCloseSizer
 		err error
 	)
+	debug.Assert(dp.tcbMsg != nil)
 	call := func() (int, error) {
 		r, err = dp.comm.OfflineTransform(lom.Bck(), lom.ObjName, dp.requestTimeout)
 		return 0, err
@@ -45,7 +47,7 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).
 	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      call,
-		Action:    "etl-obj-" + lom.Uname(),
+		Action:    "read [" + dp.tcbMsg.ID + "]-transformed " + lom.FullName(),
 		SoftErr:   5,
 		HardErr:   2,
 		Sleep:     50 * time.Millisecond,

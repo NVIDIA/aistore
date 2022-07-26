@@ -292,7 +292,7 @@ func (b *etlBootstraper) checkETLConnection(socketAddr string) error {
 		SoftErr: 10,
 		HardErr: 2,
 		Sleep:   3 * time.Second,
-		Action:  fmt.Sprintf("dial POD %q at %s", b.pod.Name, socketAddr),
+		Action:  "dial POD " + b.pod.Name + " at " + socketAddr,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to wait for ETL Service/Pod %q to respond, err: %v", b.pod.Name, err)

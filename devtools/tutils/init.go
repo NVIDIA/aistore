@@ -172,11 +172,11 @@ func initProxyURL() (err error) {
 		SoftErr:  5,
 		HardErr:  5,
 		Sleep:    5 * time.Second,
-		Action:   fmt.Sprintf("reach AIS at %s", proxyURLReadOnly),
+		Action:   "reach AIS at " + proxyURLReadOnly,
 		IsClient: true,
 	})
 	if err != nil {
-		return fmt.Errorf("AIS is unreachable at %s", proxyURLReadOnly)
+		return errors.New("AIS is unreachable at " + proxyURLReadOnly)
 	}
 
 	if testClusterType == ClusterTypeK8s {
