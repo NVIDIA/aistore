@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 ARG MODE
 RUN apt-get clean && apt-get update &&\
@@ -6,9 +6,11 @@ RUN apt-get clean && apt-get update &&\
   apt-get --no-install-recommends -y install \
       curl \
       git \
-      ca-certificates \
       sysstat \
       attr \
+      ca-certificates \
+      util-linux \
+      coreutils \
       make &&\
   apt-get -y clean all
 

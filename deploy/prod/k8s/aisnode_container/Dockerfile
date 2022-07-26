@@ -17,10 +17,10 @@ COPY . .
 
 RUN MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} make node cli xmeta
 
-FROM ubuntu:18.04
+FROM ubuntu:22.04
 
 RUN apt-get update -yq && apt-get dist-upgrade -y
-RUN apt-get install -y wget sysstat curl nodejs git iputils-ping netcat make coreutils net-tools iproute2 tcptrack
+RUN apt-get install -y --no-install-recommends sysstat attr git make coreutils util-linux bash ca-certificates
 
 RUN cd /opt && git clone https://github.com/etsy/statsd.git
 
