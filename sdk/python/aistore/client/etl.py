@@ -7,6 +7,7 @@ from typing import List
 import cloudpickle
 from aistore.client.const import (
     CODE_TEMPLATE,
+    HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
     HTTP_METHOD_PUT,
@@ -119,6 +120,8 @@ class Etl:
         """
         Lists all running ETLs.
 
+        Note: Does not list ETLs that have been stopped.
+
         Args:
             Nothing
         Returns:
@@ -143,9 +146,20 @@ class Etl:
         )
         return resp
 
+    def start(self, etl_id: str):
+        """
+        Starts a stopped ETL with given ETL_ID.
+
+        Args:
+            etl_id (str): id of ETL
+        Returns:
+            Nothing
+        """
+        self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_id }/start")
+
     def stop(self, etl_id: str):
         """
-        Stops ETL with given ETL_ID. Stops and deletes all the pods created by kubernetes for this ETL.
+        Stops ETL with given ETL_ID. Stops all the pods created by kubernetes for this ETL.
 
         Args:
             etl_id (str): id of ETL
@@ -153,3 +167,14 @@ class Etl:
             Nothing
         """
         self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_id }/stop")
+
+    def delete(self, etl_id: str):
+        """
+        Delete ETL with given ETL_ID. Deletes all pods created by kubernetes for this ETL. Can only a delete a stopped ETL.
+
+        Args:
+            etl_id (str): id of ETL
+        Returns:
+            Nothing
+        """
+        self.client.request(HTTP_METHOD_DELETE, path=f"etl/{ etl_id }")

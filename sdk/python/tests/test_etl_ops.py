@@ -6,7 +6,7 @@ import unittest
 import hashlib
 
 from aistore.client import Client
-from aistore.client.errors import ErrBckNotFound
+from aistore.client.errors import AISError, ErrBckNotFound
 from aistore.client.etl_templates import MD5
 from tests import CLUSTER_ENDPOINT
 from tests.utils import create_and_put_object, random_name
@@ -78,6 +78,22 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client.etl().stop(etl_id=self.etl_id_code)
         self.client.etl().stop(etl_id=self.etl_id_spec)
         self.assertEqual(len(self.client.etl().list_etls()), self.current_etl_count)
+
+        # start stopped ETL
+        self.client.etl().start(etl_id=self.etl_id_code)
+        self.client.etl().start(etl_id=self.etl_id_spec)
+        self.assertEqual(len(self.client.etl().list_etls()), self.current_etl_count + 2)
+
+        self.client.etl().stop(etl_id=self.etl_id_code)
+        self.client.etl().stop(etl_id=self.etl_id_spec)
+
+        self.client.etl().delete(etl_id=self.etl_id_code)
+        self.client.etl().delete(etl_id=self.etl_id_spec)
+
+        with self.assertRaises(AISError):
+            self.client.etl().start(etl_id=self.etl_id_code)
+        with self.assertRaises(AISError):
+            self.client.etl().start(etl_id=self.etl_id_spec)
 
 
 if __name__ == "__main__":
