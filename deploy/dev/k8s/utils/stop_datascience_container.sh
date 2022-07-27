@@ -1,12 +1,8 @@
 #!/bin/bash
 set -e
-if command -v minikube &> /dev/null; then
-  echo "Stopping AIS Clusters, deleting minikube"
-  minikube delete
-fi
 
 # Kill the data science container
-if [[  "$(docker ps -q -f name=ais_datascience)" || true ]]; then
+if [[ "$(docker ps -q -f name=ais_datascience)" ]]; then
   docker container rm -f ais_datascience  || true
   echo "Would you like to cleanup the local volume? [y/n]"
   read -r delete_vol

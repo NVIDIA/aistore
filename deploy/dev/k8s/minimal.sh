@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 source utils/ais_minikube_setup.sh
 export AIS_FS_PATHS=""
 export TEST_FSPATH_COUNT=1
@@ -46,5 +44,7 @@ kubectl get pods -o wide
 
 echo "Done."
 echo ""
+echo "Set the \"AIS_ENDPOINT\" for use of CLI:"
+echo "export AIS_ENDPOINT=\"http://$(minikube ip):8080\""
 
 export AIS_ENDPOINT="http://$(minikube ip):8080"

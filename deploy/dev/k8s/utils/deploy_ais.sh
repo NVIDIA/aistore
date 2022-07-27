@@ -2,6 +2,8 @@
 
 set -e
 
+export MODE="debug"
+
 source ../utils.sh
 
 echo "Enter number of storage targets:"
