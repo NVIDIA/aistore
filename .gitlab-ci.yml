@@ -247,7 +247,8 @@ test:long:aisloader:
 
 # Kubernetes stages
 
-.test_k8s_template: &test_k8s_def
+.test_k8s_short_template: &test_k8s_short_def
+  stage: test-short
   tags:
     - ais-k8s
   variables:
@@ -263,9 +264,13 @@ test:long:aisloader:
     - git clone https://github.com/prometheus-operator/kube-prometheus.git
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
 
+.test_k8s_long_template: &test_k8s_long_def
+  extends: .test_k8s_short_template
+  stage: test-long
+
 test:short:k8s:
   stage: test-short
-  <<: *test_k8s_def
+  <<: *test_k8s_short_def
   timeout: 30m
   only:
     - merge_requests
@@ -282,7 +287,7 @@ test:short:k8s:
 
 test:short:python:etl:
   stage: test-short
-  <<: *test_k8s_def
+  <<: *test_k8s_short_def
   timeout: 20m
   only:
     - merge_requests
@@ -296,7 +301,7 @@ test:short:python:etl:
 
 test:long:k8s:
   stage: test-long
-  <<: *test_k8s_def
+  <<: *test_k8s_long_def
   timeout: 3h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -314,7 +319,7 @@ test:long:k8s:
 
 test:long:k8s:single-target:
   stage: test-long
-  <<: *test_k8s_def
+  <<: *test_k8s_long_def
   timeout: 3h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -332,7 +337,7 @@ test:long:k8s:single-target:
 
 test:long:k8s:aisloader:
   stage: test-long
-  <<: *test_k8s_def
+  <<: *test_k8s_long_def
   timeout: 15m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -383,4 +388,3 @@ test:long:k8s:all:
       done
     - make kill && exit $result
   <<: *k8s_long_exit_def
-
