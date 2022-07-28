@@ -26,7 +26,7 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
             client=self.client, bck_name=self.bck_name, obj_name=self.obj_name
         )
 
-        self.current_etl_count = len(self.client.etl().list_etls())
+        self.current_etl_count = len(self.client.etl().list())
 
     def tearDown(self) -> None:
         # Try to destroy all temporary buckets if there are left.
@@ -36,7 +36,7 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
             pass
 
         # delete all the etls
-        for etl in self.client.etl().list_etls():
+        for etl in self.client.etl().list():
             self.client.etl().stop(etl_id=etl.id)
 
     def test_etl_apis(self):
@@ -56,7 +56,7 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
             .read_all()
         )
         self.assertEqual(obj, transform(bytes(self.content)))
-        self.assertEqual(self.current_etl_count + 1, len(self.client.etl().list_etls()))
+        self.assertEqual(self.current_etl_count + 1, len(self.client.etl().list()))
 
         # spec
         template = MD5.format(communication_type="hpush")
@@ -70,19 +70,19 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         )
         self.assertEqual(obj, transform(bytes(self.content)))
 
-        self.assertEqual(self.current_etl_count + 2, len(self.client.etl().list_etls()))
+        self.assertEqual(self.current_etl_count + 2, len(self.client.etl().list()))
 
         self.assertIsNotNone(self.client.etl().view(etl_id=self.etl_id_code))
         self.assertIsNotNone(self.client.etl().view(etl_id=self.etl_id_spec))
 
         self.client.etl().stop(etl_id=self.etl_id_code)
         self.client.etl().stop(etl_id=self.etl_id_spec)
-        self.assertEqual(len(self.client.etl().list_etls()), self.current_etl_count)
+        self.assertEqual(len(self.client.etl().list()), self.current_etl_count)
 
         # start stopped ETL
         self.client.etl().start(etl_id=self.etl_id_code)
         self.client.etl().start(etl_id=self.etl_id_spec)
-        self.assertEqual(len(self.client.etl().list_etls()), self.current_etl_count + 2)
+        self.assertEqual(len(self.client.etl().list()), self.current_etl_count + 2)
 
         self.client.etl().stop(etl_id=self.etl_id_code)
         self.client.etl().stop(etl_id=self.etl_id_spec)

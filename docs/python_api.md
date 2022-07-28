@@ -16,6 +16,7 @@ AIStore Python API is a growing set of client-side objects and methods to access
     * [bucket](#api.Client.bucket)
     * [cluster](#api.Client.cluster)
     * [xaction](#api.Client.xaction)
+    * [etl](#api.Client.etl)
     * [list\_objects\_iter](#api.Client.list_objects_iter)
     * [get\_object](#api.Client.get_object)
 * [cluster](#cluster)
@@ -50,6 +51,16 @@ AIStore Python API is a growing set of client-side objects and methods to access
     * [get](#object.Object.get)
     * [put](#object.Object.put)
     * [delete](#object.Object.delete)
+* [etl](#etl)
+  * [Etl](#etl.Etl)
+    * [client](#etl.Etl.client)
+    * [init\_spec](#etl.Etl.init_spec)
+    * [init\_code](#etl.Etl.init_code)
+    * [list](#etl.Etl.list)
+    * [view](#etl.Etl.view)
+    * [start](#etl.Etl.start)
+    * [stop](#etl.Etl.stop)
+    * [delete](#etl.Etl.delete)
 
 <a id="api.Client"></a>
 
@@ -115,6 +126,27 @@ def xaction()
 ```
 
 Factory constructor for xaction object, which contains xaction-related functions.
+Does not make any HTTP request, only instantiates an xaction object bound to the client.
+
+**Arguments**:
+
+  None
+  
+
+**Returns**:
+
+  The xaction object created.
+
+<a id="api.Client.etl"></a>
+
+### etl
+
+```python
+def etl()
+```
+
+Factory constructor for ETL object.
+Contains APIs related to AIStore ETL operations.
 Does not make any HTTP request, only instantiates an xaction object bound to the client.
 
 **Arguments**:
@@ -769,7 +801,9 @@ Requests object properties.
 ### get
 
 ```python
-def get(archpath: str = "", chunk_size: int = DEFAULT_CHUNK_SIZE) -> ObjStream
+def get(archpath: str = "",
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        etl_id: str = None) -> ObjStream
 ```
 
 Reads an object
@@ -778,6 +812,7 @@ Reads an object
 
 - `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file from the archive
 - `chunk_size` _int, optional_ - chunk_size to use while reading from stream
+  etl_id(str, optional): Transforms an object based on ETL with etl_id
   
 
 **Returns**:
@@ -846,4 +881,175 @@ Delete an object from a bucket.
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `requests.exeptions.HTTPError(404)` - The object does not exist
+
+<a id="etl.Etl"></a>
+
+## Class: Etl
+
+```python
+class Etl()
+```
+
+A class containing ETL-related functions.
+
+**Arguments**:
+
+  None
+
+<a id="etl.Etl.client"></a>
+
+### client
+
+```python
+@property
+def client()
+```
+
+The client bound to this ETL object.
+
+<a id="etl.Etl.init_spec"></a>
+
+### init\_spec
+
+```python
+def init_spec(template: str,
+              etl_id: str,
+              communication_type: str = "hpush",
+              timeout: str = "5m")
+```
+
+Initializes ETL based on POD spec template. Returns ETL_ID.
+Existing templates can be found at `aistore.client.etl_templates`
+For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
+
+**Arguments**:
+
+- `docker_image` _str_ - docker image name looks like: <hub-user>/<repo-name>:<tag>
+- `etl_id` _str_ - id of new ETL
+- `communication_type` _str_ - Communication type of the ETL (options: hpull, hrev, hpush)
+- `timeout` _str_ - timeout of the ETL (eg. 5m for 5 minutes)
+
+**Returns**:
+
+- `etl_id` _str_ - ETL ID
+
+<a id="etl.Etl.init_code"></a>
+
+### init\_code
+
+```python
+def init_code(code: object,
+              etl_id: str,
+              dependencies: List[str] = None,
+              runtime: str = "python3",
+              communication_type: str = "hpush",
+              timeout: str = "5m")
+```
+
+Initializes ETL based on the provided source code. Returns ETL_ID.
+
+**Arguments**:
+
+- `code` _object_ - code function of the new ETL
+- `etl_id` _str_ - id of new ETL
+- `dependencies` _List[str]_ - list of the necessary dependencies with version (eg. aistore>1.0.0)
+- `runtime` _str_ - Runtime environment of the ETL [choose from: python2, python3, python3.6, python3.8, python3.10]
+- `communication_type` _str_ - Communication type of the ETL (options: hpull, hrev, hpush)
+- `timeout` _str_ - timeout of the ETL (eg. 5m for 5 minutes)
+
+**Returns**:
+
+- `etl_id` _str_ - ETL ID
+
+<a id="etl.Etl.list"></a>
+
+### list
+
+```python
+def list() -> List[ETLDetails]
+```
+
+Lists all running ETLs.
+
+Note: Does not list ETLs that have been stopped.
+
+**Arguments**:
+
+  Nothing
+
+**Returns**:
+
+- `List[ETL]` - A list of running ETLs
+
+<a id="etl.Etl.view"></a>
+
+### view
+
+```python
+def view(etl_id: str) -> ETLDetails
+```
+
+View ETLs Init spec/code
+
+**Arguments**:
+
+- `etl_id` _str_ - id of ETL
+
+**Returns**:
+
+- `ETLDetails` - details of the ETL
+
+<a id="etl.Etl.start"></a>
+
+### start
+
+```python
+def start(etl_id: str)
+```
+
+Starts a stopped ETL with given ETL_ID.
+
+**Arguments**:
+
+- `etl_id` _str_ - id of ETL
+
+**Returns**:
+
+  Nothing
+
+<a id="etl.Etl.stop"></a>
+
+### stop
+
+```python
+def stop(etl_id: str)
+```
+
+Stops ETL with given ETL_ID. Stops all the pods created by kubernetes for this ETL.
+
+**Arguments**:
+
+- `etl_id` _str_ - id of ETL
+
+**Returns**:
+
+  Nothing
+
+<a id="etl.Etl.delete"></a>
+
+### delete
+
+```python
+def delete(etl_id: str)
+```
+
+Delete ETL with given ETL_ID. Deletes all pods created by kubernetes for this ETL. Can only a delete a stopped ETL.
+
+**Arguments**:
+
+- `etl_id` _str_ - id of ETL
+
+**Returns**:
+
+  Nothing
 

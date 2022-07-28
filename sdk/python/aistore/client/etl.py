@@ -116,7 +116,7 @@ class Etl:
         )
         return resp.text
 
-    def list_etls(self) -> List[ETLDetails]:
+    def list(self) -> List[ETLDetails]:
         """
         Lists all running ETLs.
 
