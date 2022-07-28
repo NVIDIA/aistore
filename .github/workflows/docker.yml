@@ -1,0 +1,46 @@
+name: Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      admin_image:
+        description: 'Enter name of admin image'
+        required: true
+        default: 'aistore/admin'
+      image_tag:
+        description: 'Tag of all the images'
+        required: true
+        default: 'latest'
+      aisnode_image:
+        description: 'Enter name of aisnode image'
+        required: true
+        default: 'aistore/aisnode'
+      cluster_minimal:
+        description: 'Enter name of cluster minimal image'
+        required: true
+        default: 'aistore/cluster-minimal'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v3
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Docker build and push
+      run: |
+        pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisadmin_container
+        IMAGE_REPO="${{ github.event.inputs.admin_image }}" IMAGE_TAG="${{ github.event.inputs.image_tag }}" make -e all
+        popd
+        pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
+        IMAGE_REPO="${{ github.event.inputs.aisnode_image }}" IMAGE_TAG="${{ github.event.inputs.image_tag }}" make -e all
+        popd
+        pushd $GITHUB_WORKSPACE/deploy/prod/docker/single
+        IMAGE_REPO="${{ github.event.inputs.cluster_minimal }}" IMAGE_TAG="${{ github.event.inputs.image_tag }}" make -e all
+        popd

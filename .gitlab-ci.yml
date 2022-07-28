@@ -4,7 +4,6 @@ stages:
   - build
   - test-short
   - test-long
-  - build-push-docker-images
 
 variables:
   MODE: debug # run tests with debug asserts
@@ -385,29 +384,3 @@ test:long:k8s:all:
     - make kill && exit $result
   <<: *k8s_long_exit_def
 
-build:push:docker:all:
-  stage: build-push-docker-images
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: manual
-      allow_failure: true
-  variables:
-    IMAGE_TAG: "latest"
-    ADMIN_IMAGE: "aistore/admin"
-    AISNODE_IMAGE: "aistore/aisnode"
-    CLUSTER_MINIMAL: "aistore/cluster-minimal"
-  script:
-    - apt-get update -y --allow-releaseinfo-change && apt install -y docker.io build-essential
-    - |
-      echo '{"storage-driver": "vfs"}' >> /etc/docker/daemon.json
-    - nohup dockerd >/dev/null 2>&1 & sleep 10
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
-    - pushd deploy/prod/k8s/aisadmin_container
-    - env IMAGE_REPO="${ADMIN_IMAGE}" IMAGE_TAG="${IMAGE_TAG}" make -e all
-    - popd
-    - pushd deploy/prod/k8s/aisnode_container
-    - IMAGE_REPO="${AISNODE_IMAGE}" IMAGE_TAG="${IMAGE_TAG}" make -e all
-    - popd
-    - pushd deploy/prod/docker/single
-    - IMAGE_REPO="${CLUSTER_MINIMAL}" IMAGE_TAG="${IMAGE_TAG}" make -e all
-    - popd
