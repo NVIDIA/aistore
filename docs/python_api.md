@@ -42,6 +42,7 @@ AIStore Python API is a growing set of client-side objects and methods to access
     * [list\_objects](#bucket.Bucket.list_objects)
     * [list\_objects\_iter](#bucket.Bucket.list_objects_iter)
     * [list\_all\_objects](#bucket.Bucket.list_all_objects)
+    * [transform](#bucket.Bucket.transform)
     * [object](#bucket.Bucket.object)
 * [object](#object)
   * [Object](#object.Object)
@@ -711,6 +712,33 @@ Returns a list of all objects in bucket
 - `requests.exceptions.HTTPError` - Service unavailable
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
 - `requests.ReadTimeout` - Timed out receiving response from AIStore
+
+<a id="bucket.Bucket.transform"></a>
+
+### transform
+
+```python
+def transform(etl_id: str,
+              to_bck: str,
+              prefix: str = "",
+              force: bool = False,
+              dry_run: bool = False)
+```
+
+Transforms all objects in a bucket and puts them to destination bucket.
+
+**Arguments**:
+
+- `etl_id` _str_ - id of etl to be used for transformations
+- `to_bck` _str_ - destination bucket for transformations
+- `prefix` _str_ - prefix to be added to resulting transformed objects
+- `dry_run` _bool, optional_ - Determines if the copy should actually happen or not
+- `force` _bool, optional_ - Override existing destination bucket
+  
+
+**Returns**:
+
+  Xaction id (as str) that can be used to check the status of the operation
 
 <a id="bucket.Bucket.object"></a>
 

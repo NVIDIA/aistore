@@ -37,6 +37,7 @@ ACT_DESTROY_BCK = "destroy-bck"
 ACT_EVICT_REMOTE_BCK = "evict-remote-bck"
 ACT_LIST = "list"
 ACT_MOVE_BCK = "move-bck"
+ACT_ETL_BCK = "etl-bck"
 
 # Defaults
 DEFAULT_CHUNK_SIZE = 32768

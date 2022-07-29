@@ -7,7 +7,7 @@ import hashlib
 
 from aistore.client import Client
 from aistore.client.errors import AISError, ErrBckNotFound
-from aistore.client.etl_templates import MD5
+from aistore.client.etl_templates import MD5, ECHO
 from tests import CLUSTER_ENDPOINT
 from tests.utils import create_and_put_object, random_name
 
@@ -17,6 +17,7 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.bck_name = random_name()
         self.etl_id_code = "etl-" + random_name(5)
         self.etl_id_spec = "etl-" + random_name(5)
+        self.etl_id_spec_comp = "etl-" + random_name(5)
         print("URL END PT ", CLUSTER_ENDPOINT)
         self.client = Client(CLUSTER_ENDPOINT)
 
@@ -75,11 +76,55 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertIsNotNone(self.client.etl().view(etl_id=self.etl_id_code))
         self.assertIsNotNone(self.client.etl().view(etl_id=self.etl_id_spec))
 
+        temp_bck1 = random_name()
+
+        # Transform Bucket with MD5 Template
+        self.client.bucket(self.bck_name).transform(
+            etl_id=self.etl_id_spec, to_bck=temp_bck1
+        )
+
+        # Verify object counts of the original and transformed bucket are the same
+        self.assertEqual(
+            len(self.client.bucket(self.bck_name).list_objects().get_entries()),
+            len(self.client.bucket(temp_bck1).list_objects().get_entries()),
+        )
+
+        md5_obj = self.client.bucket(temp_bck1).object(self.obj_name).get().read_all()
+
+        # Verify bucket-level transformation and object-level transformation are the same
+        self.assertEqual(obj, md5_obj)
+
+        # Start ETL with ECHO template
+        template = ECHO.format(communication_type="hpush")
+        self.client.etl().init_spec(template=template, etl_id=self.etl_id_spec_comp)
+
+        temp_bck2 = random_name()
+
+        # Transform bucket with ECHO template
+        self.client.bucket(self.bck_name).transform(
+            etl_id=self.etl_id_spec_comp, to_bck=temp_bck2, force=True
+        )
+
+        echo_obj = self.client.bucket(temp_bck2).object(self.obj_name).get().read_all()
+
+        # Verify different bucket-level transformations are not the same (compare ECHO transformation and MD5 transformation)
+        self.assertNotEqual(md5_obj, echo_obj)
+
+        self.client.etl().stop(etl_id=self.etl_id_spec_comp)
+        self.client.etl().delete(etl_id=self.etl_id_spec_comp)
+
+        # Transform w/ non-existent ETL ID raises exception
+        with self.assertRaises(AISError):
+            self.client.bucket(self.bck_name).transform(
+                etl_id="faulty-name", to_bck=random_name()
+            )
+
+        # Stop ETLs
         self.client.etl().stop(etl_id=self.etl_id_code)
         self.client.etl().stop(etl_id=self.etl_id_spec)
         self.assertEqual(len(self.client.etl().list()), self.current_etl_count)
 
-        # start stopped ETL
+        # Start stopped ETLs
         self.client.etl().start(etl_id=self.etl_id_code)
         self.client.etl().start(etl_id=self.etl_id_spec)
         self.assertEqual(len(self.client.etl().list()), self.current_etl_count + 2)
@@ -87,9 +132,11 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client.etl().stop(etl_id=self.etl_id_code)
         self.client.etl().stop(etl_id=self.etl_id_spec)
 
+        # Delete stopped ETLs
         self.client.etl().delete(etl_id=self.etl_id_code)
         self.client.etl().delete(etl_id=self.etl_id_spec)
 
+        # Starting deleted ETLs raises error
         with self.assertRaises(AISError):
             self.client.etl().start(etl_id=self.etl_id_code)
         with self.assertRaises(AISError):

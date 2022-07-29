@@ -10,6 +10,7 @@ from aistore.client.const import (
     ACT_COPY_BCK,
     ACT_CREATE_BCK,
     ACT_DESTROY_BCK,
+    ACT_ETL_BCK,
     ACT_EVICT_REMOTE_BCK,
     ACT_LIST,
     ACT_MOVE_BCK,
@@ -408,6 +409,43 @@ class Bucket:
             value["continuation_token"] = resp.continuation_token
             value["uuid"] = resp.uuid
         return obj_list
+
+    def transform(
+        self,
+        etl_id: str,
+        to_bck: str,
+        prefix: str = "",
+        force: bool = False,
+        dry_run: bool = False,
+    ):
+        """
+        Transforms all objects in a bucket and puts them to destination bucket.
+
+        Args:
+            etl_id (str): id of etl to be used for transformations
+            to_bck (str): destination bucket for transformations
+            prefix (str): prefix to be added to resulting transformed objects
+            dry_run (bool, optional): Determines if the copy should actually happen or not
+            force (bool, optional): Override existing destination bucket
+
+        Returns:
+            Xaction id (as str) that can be used to check the status of the operation
+
+        """
+        value = {"id": etl_id, "prefix": prefix, "force": force, "dry_run": dry_run}
+        action = ActionMsg(action=ACT_ETL_BCK, value=value).dict()
+
+        params = self.qparam.copy()
+        params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
+
+        resp = self.client.request(
+            HTTP_METHOD_POST,
+            path=f"buckets/{ self.name }",
+            json=action,
+            params=params,
+        )
+
+        return resp.text
 
     def object(self, obj_name: str):
         """
