@@ -26,7 +26,7 @@ read -r build
 if [[ "$build" == "y" ]]; then
   echo "Building image with mode=${MODE}..."
   export DOCKER_IMAGE="localhost:5000/aisnode:minikube"
-  docker build ./../../../ --force-rm -t ${DOCKER_IMAGE} --build-arg MODE="${MODE}" -f Dockerfile-aisnode-ubuntu
+  docker build ./../../../ --force-rm -t ${DOCKER_IMAGE} --build-arg MODE="${MODE}" -f Dockerfile
   docker push ${DOCKER_IMAGE}
 fi
 
