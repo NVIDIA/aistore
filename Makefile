@@ -114,15 +114,6 @@ build-%:
 	@go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 	@echo "done."
 
-## Build the development version of the 'aisnode' docker image
-## using alpine/ubuntu as the base
-docker-image-dev-aisnode-%:
-	@echo "Building docker-image-aisnode $*... "
-	@docker build . --force-rm -t aistore/aisnode:latest-$* -f deploy/dev/k8s/Dockerfile-aisnode-$*
-	@echo
-	@echo "*** Run the following to push (e.g.):"
-	@echo "*** docker push aistore/aisnode:latest-"$*
-
 client-bindings:
 	$(SCRIPTS_DIR)/generate-python-api-client.sh
 

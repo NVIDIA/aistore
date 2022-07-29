@@ -75,21 +75,6 @@ done
 echo "Waiting for the targets to be ready..."
 kubectl wait --for="condition=ready" --timeout=2m pods -l type=aistarget
 
-echo "Would you like to deploy datascience stack? (y/n) ?"
-read -r ds_stack
-if  [[ "$ds_stack" == "y" ]]; then
-  echo "Deploying datascience stack..."
-  docker_image="aistore/datascience:latest"
-  jupyter_port=${JUPYTER_PORT:-8888}
-  jupyter_local_dir=${JUPYTER_LOCAL_DIR:-"$(pwd)/ais_datascience"}
-  mkdir -p ${jupyter_local_dir}
-  if [[ "${JUPYTER_TOKEN}" == "" ]]; then
-    echo "Enter token to access jupyter notebook:"
-    read -s -r JUPYTER_TOKEN
-  fi
-  docker run -p ${jupyter_port}:8888 --name ais_datascience -v ${jupyter_local_dir}:/home/jovyan/work -e AIS_ENDPOINT=${AIS_PRIMARY_URL} --entrypoint='/bin/bash' -d ${docker_image} -c "cd work && start-notebook.sh --NotebookApp.token='${JUPYTER_TOKEN}'"
-fi
-
 echo "List of running pods"
 kubectl get pods -o wide
 

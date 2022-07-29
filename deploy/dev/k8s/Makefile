@@ -35,7 +35,6 @@ stop-ais:
 	@ kubectl delete pod -l type=aisproxy
 	@ kubectl delete pod -l type=aistarget
 
-# Stops AIS cluster as well as Minikube (and also the datascience stack if its running)
+# Stops AIS cluster as well as Minikube
 stop: 
 	@ minikube delete
-	@ ./utils/stop_datascience_container.sh

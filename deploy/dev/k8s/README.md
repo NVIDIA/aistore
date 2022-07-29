@@ -45,9 +45,7 @@ All commands below are running from the same directory i.e `${AISTORE_ROOT}/depl
 ## Files
 | File | Description |
 | --- | --- |
-| [Dockerfile-aisnode-ubuntu](Dockerfile-aisnode-ubuntu) | build AIStore node docker image on `Ubuntu 22.04` |
-| [Dockerfile-aisnode-alphine](Dockerfile-aisnode-alphine) | build AIStore node docker image on `alphine` |
-| [Dockerfile-datascience](Dockerfile-datascience) | build docker image for data science - jupyter notebook, pandas, pytorch, etc. |
+| [Dockerfile](/deploy/dev/k8s/Dockerfile) | build AIStore node docker image on `Ubuntu 22.04` |
 
 ## Trying AIStore on Minikube
 
@@ -91,29 +89,6 @@ To update the aisnode images, or to redeploy AIStore, execute the `make ais-rede
 $ ./dev.sh redeploy
 ```
 
-### Data science stack
-
-In addition to deploying an AIStore cluster, the `dev` target of [Makefile](/deploy/dev/k8s/Makefile) also provides an option to run data science stack. Developers can utilize it to run and test simple ML/DL pipelines against the AIStore cluster.
-
-The data science stack comprises of utilities to interact with AIStore cluster, interactive jupyter notebook, `python3.8` environment with commonly used data science libraries, such as `scipy`, `matplotlib`, `numpy`, `pytorch`, etc.
-
-Non-interactive command for deploying AIStore cluster with datas cience stack:
-
-```console
-$ JUPYTER_TOKEN="aistoretoken" make dev
-```
-
-In the above command, `JUPYTER_TOKEN` is the token used to access the jupyter notebook. By default, the jupyter notebook can be accessed over [http://localhost:8888] using the `JUPYTER_TOKEN`. However, the default port can be overwritten using the `JUPYTER_PORT` variable, as shown below:
-
-```console
-$ JUPYTER_PORT=8899 JUPYTER_TOKEN="aistoretoken" make dev
-```
-
-To prevent losing progress made on jupyter notebooks, a local directory (by default `./ais_datascience`) is mounted onto the docker container running jupyter notebooks where all the notebooks are persisted. The default local directory can be overwritten using the `JUPYTER_LOCAL_DIR` variable, as shown below:
-```console
-$ JUPYTER_LOCAL_DIR="/home/ubuntu/ais_datascience" JUPYTER_TOKEN="aistoretoken" make dev
-``` 
-
 ### Stopping and cleanup
 
 The `stop-ais` target stops the AIStore cluster while keeping Minikube still running.
@@ -145,7 +120,6 @@ minikube delete
 🔥  Deleting container "minikube" ...
 🔥  Removing /home/abhgaikwad/.minikube/machines/minikube ...
 💀  Removed all traces of the "minikube" cluster.
-./utils/stop_datascience_container.sh
 minikube config set cpus 4
 ❗  These changes will take effect upon a minikube delete and then a minikube start
 minikube config set memory 12000
