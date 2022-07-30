@@ -55,13 +55,21 @@ Further, there's the capability referred to as [global namespace](/docs/provider
 
 > For performance tuning and preparing AIS nodes for bare-metal deployment, see [performance](/docs/performance.md).
 
-## Related Software
+## PyTorch integration
 
-When it comes to PyTorch, [WebDataset](https://github.com/webdataset/webdataset) is the preferred AIStore client.
+AIS is one of the PyTorch [Iterable Datapipes](https://github.com/pytorch/data/tree/main/torchdata/datapipes/iter/load#iterable-datapipes).
 
-> WebDataset is a PyTorch Dataset (IterableDataset) implementation providing efficient access to datasets stored in POSIX tar archives.
+Specifically, [TorchData](https://github.com/pytorch/data) library provides:
+* [AISFileLister](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLister.html#aisfilelister)
+* [AISFileLoader](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLoader.html#aisfileloader)
 
-Further references include technical blog titled [AIStore & ETL: Using WebDataset to train on a sharded dataset](https://aiatscale.org/blog/2021/10/29/ais-etl-3) where you can also find easy step-by-step instruction.
+to list and, respectively, load data from AIStore.
+
+Further references and usage examples - in our technical blog at https://aiatscale.org/blog:
+* [PyTorch: Loading Data from AIStore](https://aiatscale.org/blog/2022/07/12/aisio-pytorch)
+* [Python SDK: Getting Started](https://aiatscale.org/blog/2022/07/20/python-sdk)
+
+Since AIS natively supports a number of [remote backends](/docs/providers.md), you can also use (PyTorch + AIS) to iterate over Amazon S3 and Google Cloud buckets, and more.
 
 ## Reuse
 
