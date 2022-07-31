@@ -9,6 +9,10 @@ redirect_from:
 
 ## Introduction
 
+Terminology first:
+
+**Backend Provider** is a designed-in [abstraction](https://github.com/NVIDIA/aistore/blob/master/cluster/target.go) and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+
 AIStore natively integrates with multiple backend providers:
 
 | Backend | Schema(s) | Description |
@@ -19,6 +23,22 @@ AIStore natively integrates with multiple backend providers:
 | `gcp` | `gcp://`, `gs://` | [Google Cloud Storage](#cloud-object-storage) |
 | `hdfs` | `hdfs://` | [Hadoop Distributed File System](#hdfs-provider) |
 | `ht` | `ht://` | [HTTP(S) based dataset](#https-based-dataset) |
+
+**Native integration**, in turn, implies:
+* utilizing vendor's SDK libraries to operate on the respective remote backends;
+* providing unified namespace (where, e.g., two same-name buckets from different backends can co-exist with no conflicts);
+* on-the-fly populating AIS own bucket metadata with the properties of remote buckets.
+
+The last bullet deserves a little more explanation. First, there's a piece of cluster-wide metadata that we call BMD. Like every other type of metadata, BMD is versioned, checksummed, and replicated - the process that is carried out by the currently elected *primary*.
+
+BMD contains all bucket definitions and per-bucket configurable management policies - local and remote.
+
+Here's what happens upon the very first (read or write or list, etc.) access to a remote bucket that is *not* yet in the BMD:
+1. Behind the scenes, AIS will try to confirm the bucket's existence and accessibility.
+2. If confirmed, AIS will atomically add the bucket to the BMD (along with its remote properties).
+3. Once all of the above is set and done, AIS will go ahead to perform that original (read or write or list, etc.) operation
+
+> There are advanced-usage type options to skip Steps 1. and 2. above - see e.g. [`LisObjsMsg flags`](https://github.com/NVIDIA/aistore/blob/master/api/apc/lsmsg.go#L15-L56)
 
 The full taxonomy of the supported backends is shown below (and note that AIS supports itself on the back as well):
 
