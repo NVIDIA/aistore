@@ -79,9 +79,10 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         temp_bck1 = random_name()
 
         # Transform Bucket with MD5 Template
-        self.client.bucket(self.bck_name).transform(
+        xaction_id = self.client.bucket(self.bck_name).transform(
             etl_id=self.etl_id_spec, to_bck=temp_bck1
         )
+        self.client.xaction().wait_for_xaction_finished(xaction_id)
 
         # Verify object counts of the original and transformed bucket are the same
         self.assertEqual(
@@ -101,9 +102,10 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         temp_bck2 = random_name()
 
         # Transform bucket with ECHO template
-        self.client.bucket(self.bck_name).transform(
+        xaction_id = self.client.bucket(self.bck_name).transform(
             etl_id=self.etl_id_spec_comp, to_bck=temp_bck2, force=True
         )
+        self.client.xaction().wait_for_xaction_finished(xaction_id)
 
         echo_obj = self.client.bucket(temp_bck2).object(self.obj_name).get().read_all()
 
