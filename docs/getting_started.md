@@ -29,6 +29,8 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 * Extended attributes (`xattrs` - see next section)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 
+> See also: `CROSS_COMPILE` comment below.
+
 ### Linux
 
 Depending on your Linux distribution, you may or may not have `GCC`, `sysstat`, and/or `attr` packages. These packages must be installed.
@@ -56,30 +58,15 @@ Certain capabilities related to querying the state and status of local hardware 
 
 ## Make
 
-AIS comes with its build system that we use in a variety of development and production environments. The very first `make` command to run would be:
+AIS comes with its build system that we use in a variety of development and production environments. The very first `make` command you may want to run could be:
 
 ```console
 $ make help
 ```
 
-The output - truncated below for the sake of brevity - includes supported subcommands, environment variables, and usage examples:
+This shows supported subcommands, environment variables, and numerous usage examples, including:
 
 ```console
-Useful commands:
-  aisfs                          Build 'aisfs' binary
-  aisloader                      Build 'aisloader' binary
-  all                            Build all main binaries
-  authn                          Build 'authn' binary
-  ci                             Run CI related checkers and linters (requires BUCKET variable to be set)
-  clean-client-bindings          Remove all generated client binding files
-  clean                          Remove all AIS related files and binaries
-  cli-autocompletions            Add CLI autocompletions
-  cli                            Build CLI ('ais' binary)
-  deploy                         Build 'aisnode' and deploy the specified numbers of local AIS proxies and targets
-  deploy-docker                  run AIS cluster consisting of one or more `aisnode` containers
-...
-...
-
 Examples:
 # Deploy cluster locally
 $ make deploy
@@ -99,8 +86,13 @@ $ RUN_ARGS=-override_backends MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn
 # Same as above, but additionally run all 4 targets in a standby mode
 $ RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n0\n'
 ...
-...
 ```
+
+**NOTE:**
+
+* All [containerized deployments](/deploy/README.md) have their own separate `Makefiles`. With the exception of [local playground](#local-playground), each specific build-able development (`dev/`) and production (`prod/`) option under the `deploy` folder has a pair: {`Dockerfile`, `Makefile`}.
+* The latter is typically small in size and easily readable/maintainable.
+* Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](Makefile).
 
 ## Multiple deployment options
 

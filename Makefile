@@ -1,5 +1,5 @@
 #
-# for usage: make help
+# For usage: `make help`
 #
 SHELL := /bin/bash
 DEPLOY_DIR = ./deploy/dev/local
@@ -9,6 +9,9 @@ BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
 
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
+
+# Uncomment this line to cross-compile:
+# CROSS_COMPILE = docker run --rm -v $(shell pwd):/go/src/github.com/NVIDIA/aistore -w /go/src/github.com/NVIDIA/aistore golang:1.18
 
 # Build version, flags, and tags
 VERSION = $(shell git rev-parse --short HEAD)
@@ -22,6 +25,16 @@ ifdef TAGS
 	BUILD_TAGS = $(AIS_BACKEND_PROVIDERS) $(TAGS)
 else
 	BUILD_TAGS = $(AIS_BACKEND_PROVIDERS)
+endif
+
+# Race detection
+ifneq ($(strip $(GORACE)),)
+	WRD = GORACE=$(GORACE)
+ifneq ($(findstring log_path,$(GORACE)),log_path)
+	@echo
+	@echo "Expecting GORACE='log_path=...', run 'make help' for usage examples"
+	@exit 1
+endif
 endif
 
 # Profiling
@@ -78,16 +91,15 @@ all: node cli aisfs authn aisloader ## Build all main binaries
 
 node: ## Build 'aisnode' binary
 	@echo "Building aisnode: build=$(VERSION) providers=$(AIS_BACKEND_PROVIDERS) tags=$(BUILD_TAGS)"
-ifneq ($(strip $(GORACE)),)
-ifneq ($(findstring log_path,$(GORACE)),log_path)
-	@echo
-	@echo "Expecting GORACE='log_path=...', run 'make help' for usage examples"
-	@exit 1
-endif
+ifdef WRD
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
-	@GORACE=$(GORACE) \
-		go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+ifdef CROSS_COMPILE
+	@$(CROSS_COMPILE) go build -o ./aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+	@mv ./aisnode $(BUILD_DEST)/aisnode
+else
+	@$(WRD) go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+endif
 	@echo "done."
 
 aisfs-pre:
@@ -96,7 +108,12 @@ aisfs: aisfs-pre build-aisfs ## Build 'aisfs' binary
 
 cli: ## Build CLI ('ais' binary)
 	@echo "Building ais (CLI) => $(BUILD_DEST)/ais"
+ifdef CROSS_COMPILE
+	@$(CROSS_COMPILE) go build -o ./cli $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/cli/*.go
+	@mv ./cli $(BUILD_DEST)/ais
+else
 	@go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/cli/*.go
+endif
 	@echo "*** To enable autocompletions in your current shell, run:"
 	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/bash or"
 	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/zsh"
@@ -111,7 +128,12 @@ xmeta: build-xmeta ## Build 'xmeta' binary
 
 build-%:
 	@echo -n "Building $*... "
+ifdef CROSS_COMPILE
+	@$(CROSS_COMPILE) go build -o ./$* $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
+	@mv ./$* $(BUILD_DEST)/.
+else
 	@go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
+endif
 	@echo "done."
 
 client-bindings:
