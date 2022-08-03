@@ -470,11 +470,10 @@ def transform(input_bytes):
 import hashlib
 import sys
 
-def main():
-    md5 = hashlib.md5()
-    for chunk in sys.stdin.buffer.read():
-        md5.update(chunk)
-    sys.stdout.buffer.write(md5.hexdigest().encode())
+md5 = hashlib.md5()
+chunk = sys.stdin.buffer.read()
+md5.update(chunk)
+sys.stdout.buffer.write(md5.hexdigest().encode())
 `
 
 		numpy = `
