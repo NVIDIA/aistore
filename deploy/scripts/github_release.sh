@@ -2,19 +2,27 @@
 set -ex
 
 function upload() {
-  filename=$1
+  bin_name=$1
   upload_name=$2
   cksum="/tmp/${upload_name}.sha256"
 
+  pushd $GOPATH/bin
+
   echo "Computing checksum..."
-  sha256sum $filename > ${cksum}
+  sha256sum $bin_name > ${cksum} || exit 1
+
+  echo "Building ${upload_name}.tar.gz..."
+  tar -czvf "/tmp/${upload_name}.tar.gz" $bin_name || exit 1
+
+  popd
 
   echo "Uploading release asset: ${upload_name}"
-  GH_ASSET="https://uploads.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/${GITHUB_RELEASE_ID}/assets?name=$upload_name"
-  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_ASSET -T "$filename" | jq
+  GH_ASSET="https://uploads.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/${GITHUB_RELEASE_ID}/assets?name=${upload_name}.tar.gz"
+  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_ASSET -T "/tmp/${upload_name}}.tar.gz" | jq
 
-  echo "Uploading asset checskum: ${upload_name}.sha256"
-  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" "${GH_ASSET}.sha256" -T "$cksum" | jq
+  echo "Uploading asset's checksum: ${upload_name}.sha256"
+  GH_CHECKSUM="https://uploads.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/${GITHUB_RELEASE_ID}/assets?name=${upload_name}.sha256"
+  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_CHECKSUM -T $cksum | jq
 }
 
 GITHUB_OWNER="NVIDIA"
@@ -29,8 +37,8 @@ arch="amd64"
 echo "Building binaries"
 pushd ../../
 make cli
-make aisfs
 make aisloader
+make authn
 popd
 
 echo "Checking if jq is installed"
@@ -44,7 +52,6 @@ if ! command -v sha256sum 2>&1 /dev/null; then
 fi
 
 
-upload "${GOPATH}/bin/ais" "ais-${os}-${arch}"
-upload "${GOPATH}/bin/aisfs" "aisfs-${os}-${arch}"
-upload "${GOPATH}/bin/aisloader" "aisloader-${os}-${arch}"
-
+upload ais "ais-${os}-${arch}"
+upload authn "authn-${os}-${arch}"
+upload aisloader "aisloader-${os}-${arch}"
