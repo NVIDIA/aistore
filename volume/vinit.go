@@ -1,7 +1,7 @@
 // Package volume provides the volume abstraction and methods to configLoadVMD, store with redundancy,
 // and validate the corresponding metadata. AIS volume is built on top of mountpaths (fs package).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package volume
 
@@ -153,20 +153,40 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 	for mpath, fsMpathMD := range vmd.Mountpaths {
 		var mi *fs.MountpathInfo
 		mi, err = fs.NewMountpath(mpath)
-		if fsMpathMD.Enabled {
-			if err != nil {
-				err = &fs.ErrStorageIntegrity{Code: fs.SieMpathNotFound, Msg: err.Error()}
-				if pass == 1 || ignoreMissingMountpath {
-					glog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
-					err = nil
-					continue
-				}
-				return
+		if !fsMpathMD.Enabled {
+			if pass == 2 {
+				mi.Fs = fsMpathMD.Fs
+				mi.FsType = fsMpathMD.FsType
+				mi.FsID = fsMpathMD.FsID
+				mi.AddDisabled(disabledPaths)
 			}
-			if mi.Path != mpath {
-				glog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
+			continue
+		}
+		// enabled
+		if err != nil {
+			err = &fs.ErrStorageIntegrity{Code: fs.SieMpathNotFound, Msg: err.Error()}
+			if pass == 1 || ignoreMissingMountpath {
+				glog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
+				err = nil
+				continue
 			}
-			if mi.Fs != fsMpathMD.Fs || mi.FsType != fsMpathMD.FsType {
+			return
+		}
+		if mi.Path != mpath {
+			glog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
+		}
+
+		// The (mountpath => filesystem) relationship is persistent and must _not_ change upon reboot.
+		// There are associated false positives, though, namely:
+		// 1. FS ID change. Reason: certain filesystems simply do not maintain persistence (of their IDs).
+		// 2. `Fs` (usually, device name) change. Reason: OS block-level subsystem enumerated devices
+		//    in a different order.
+		// Currently, there's no workaround if both (1) and (2) happen simultaneously. Must be extremely
+		// unlikely, however.
+		//
+		// See also: `allowSharedDisksAndNoDisks` and `startWithLostMountpath`
+		if mi.FsType != fsMpathMD.FsType || mi.Fs != fsMpathMD.Fs || mi.FsID != fsMpathMD.FsID {
+			if mi.FsType != fsMpathMD.FsType || (mi.Fs != fsMpathMD.Fs && mi.FsID != fsMpathMD.FsID) {
 				err = &fs.ErrStorageIntegrity{
 					Code: fs.SieFsDiffers,
 					Msg:  fmt.Sprintf("lost or missing mountpath %q (%+v vs %+v)", mpath, mi.FilesystemInfo, *fsMpathMD),
@@ -178,40 +198,32 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 				}
 				return
 			}
-			if mi.FsID != fsMpathMD.FsID {
-				// There's the potential to conflate: a) filesystem ID change upon reboot vs.
-				// b) missing filesystem (and mountpath).
-				// In the latter case, we may end up trying to use a different filesystem (with
-				// a different ID) and still failing with "filesystem sharing is not allowed".
-				//
-				// See also: `allowSharedDisksAndNoDisks` and `startWithLostMountpath`
-				glog.Warningf("detected FS ID change: mp=%q, curr=%+v, prev=%+v, pass=%d, ignore-missing=%t",
-					mpath, mi.FilesystemInfo, *fsMpathMD, pass, ignoreMissingMountpath)
+			if mi.Fs == fsMpathMD.Fs && mi.FsID != fsMpathMD.FsID {
+				glog.Warningf("detected FS ID change: mp=%q, curr=%+v, prev=%+v (pass %d)",
+					mpath, mi.FilesystemInfo, *fsMpathMD, pass)
+			} else if mi.Fs != fsMpathMD.Fs && mi.FsID == fsMpathMD.FsID {
+				glog.Warningf("detected device name change for the same FS ID: mp=%q, curr=%+v, prev=%+v (pass %d)",
+					mpath, mi.FilesystemInfo, *fsMpathMD, pass)
 			}
-			if pass == 1 {
-				if v, old, errLoad := loadOneVMD(tid, vmd, mi.Path, len(vmd.Mountpaths)); v != nil {
-					debug.Assert(v.Version > vmd.Version)
-					maxVerVMD = v
-				} else if old {
-					debug.AssertNoErr(errLoad)
-					haveOld = true
-				} else if errLoad != nil {
-					glog.Warningf("%s: %v", mi, errLoad)
-				}
-			} else {
-				debug.Assert(pass == 2)
-				if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
-					return
-				}
-				if err = mi.CheckDisks(); err != nil {
-					glog.Errorf("Warning: %v", err)
-				}
+		}
+
+		if pass == 1 {
+			if v, old, errLoad := loadOneVMD(tid, vmd, mi.Path, len(vmd.Mountpaths)); v != nil {
+				debug.Assert(v.Version > vmd.Version)
+				maxVerVMD = v
+			} else if old {
+				debug.AssertNoErr(errLoad)
+				haveOld = true
+			} else if errLoad != nil {
+				glog.Warningf("%s: %v", mi, errLoad)
 			}
-		} else if pass == 2 {
-			mi.Fs = fsMpathMD.Fs
-			mi.FsType = fsMpathMD.FsType
-			mi.FsID = fsMpathMD.FsID
-			mi.AddDisabled(disabledPaths)
+		} else {
+			if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
+				return
+			}
+			if err = mi.CheckDisks(); err != nil {
+				glog.Errorf("Warning: %v", err)
+			}
 		}
 	}
 
