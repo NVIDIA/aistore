@@ -88,8 +88,8 @@ func (*etlMD) sgl() *memsys.SGL  { return nil }
 
 // always remarshal (TODO: unify and optimize across all cluster-level metadata types)
 func (e *etlMD) marshal() []byte {
-	if e._sgl != nil {
-		e._sgl.Free()
+	if prev := e._sgl; prev != nil {
+		defer prev.Free()
 	}
 	e._sgl = memsys.PageMM().NewSGL(etlMDImmSize)
 	err := jsp.Encode(e._sgl, e, jsp.CCSign(cmn.MetaverEtlMD))
@@ -184,9 +184,9 @@ func (eo *etlMDOwnerPrx) _pre(ctx *etlMDModifier) (clone *etlMD, err error) {
 	eo.Lock()
 	defer eo.Unlock()
 	etlMD := eo.get()
-	if etlMD._sgl != nil {
-		etlMD._sgl.Free()
+	if prev := etlMD._sgl; prev != nil {
 		etlMD._sgl = nil
+		defer prev.Free()
 	}
 	clone = etlMD.clone()
 	if err = ctx.pre(ctx, clone); err != nil {
