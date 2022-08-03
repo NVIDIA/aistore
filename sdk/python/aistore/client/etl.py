@@ -83,14 +83,21 @@ class Etl:
             etl_id (str): id of new ETL
             dependencies (List[str]): list of the necessary dependencies with version (eg. aistore>1.0.0)
             runtime (str): Runtime environment of the ETL [choose from: python2, python3, python3.6, python3.8, python3.10]
-            communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush)
+            communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush, io)
             timeout (str): timeout of the ETL (eg. 5m for 5 minutes)
         Returns:
             etl_id (str): ETL ID
         """
+
+        if communication_type not in ["io", "hpush", "hrev", "hpull"]:
+            raise ValueError("communication_type should be in: hpull, hrev, hpush, io")
+
         # code
         func = base64.b64encode(cloudpickle.dumps(code)).decode("utf-8")
-        template = CODE_TEMPLATE.format(func).encode("utf-8")
+        if communication_type == "io":
+            template = CODE_TEMPLATE.format(func, "transform()").encode("utf-8")
+        else:
+            template = CODE_TEMPLATE.format(func, "").encode("utf-8")
         code = base64.b64encode(template).decode("utf-8")
 
         # dependencies

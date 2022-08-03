@@ -4,6 +4,7 @@
 
 import unittest
 import hashlib
+import sys
 
 from aistore.client import Client
 from aistore.client.errors import AISError, ErrBckNotFound
@@ -16,6 +17,7 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.bck_name = random_name()
         self.etl_id_code = "etl-" + random_name(5)
+        self.etl_id_code_io = "etl-" + random_name(5)
         self.etl_id_spec = "etl-" + random_name(5)
         self.etl_id_spec_comp = "etl-" + random_name(5)
         print("URL END PT ", CLUSTER_ENDPOINT)
@@ -58,6 +60,28 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         )
         self.assertEqual(obj, transform(bytes(self.content)))
         self.assertEqual(self.current_etl_count + 1, len(self.client.etl().list()))
+
+        # code (io comm)
+        def main():
+            md5 = hashlib.md5()
+            chunk = sys.stdin.buffer.read()
+            md5.update(chunk)
+            sys.stdout.buffer.write(md5.hexdigest().encode())
+
+        self.client.etl().init_code(
+            code=main, etl_id=self.etl_id_code_io, communication_type="io"
+        )
+
+        obj_io = (
+            self.client.bucket(self.bck_name)
+            .object(self.obj_name)
+            .get(etl_id=self.etl_id_code_io)
+            .read_all()
+        )
+        self.assertEqual(obj_io, transform(bytes(self.content)))
+
+        self.client.etl().stop(etl_id=self.etl_id_code_io)
+        self.client.etl().delete(etl_id=self.etl_id_code_io)
 
         # spec
         template = MD5.format(communication_type="hpush")
