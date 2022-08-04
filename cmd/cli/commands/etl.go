@@ -434,7 +434,19 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		mapStr := parseStrFlag(c, etlExtFlag)
 		extMap := make(cos.SimpleKVs, 1)
 		if err = jsoniter.UnmarshalFromString(mapStr, &extMap); err != nil {
-			return fmt.Errorf("couldn't parse ext flag: %s", err.Error())
+			// add quotation marks and reparse
+			tmp := strings.ReplaceAll(mapStr, " ", "")
+			tmp = strings.ReplaceAll(tmp, "{", "{\"")
+			tmp = strings.ReplaceAll(tmp, "}", "\"}")
+			tmp = strings.ReplaceAll(tmp, ":", "\":\"")
+			tmp = strings.ReplaceAll(tmp, ",", "\",\"")
+			if jsoniter.UnmarshalFromString(tmp, &extMap) == nil {
+				err = nil
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("Invalid format --%s=%q. Usage examples: {jpg:txt}, \"{in1:out1,in2:out2}\"",
+				etlExtFlag.GetName(), mapStr)
 		}
 		msg.Ext = extMap
 	}

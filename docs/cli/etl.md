@@ -150,7 +150,7 @@ Transform all or selected objects and put them into another bucket.
 | --- | --- | --- |
 | `--list` | `string` | Comma-separated list of object names, e.g., 'obj1,obj2' |
 | `--template` | `string` | Template for matching object names, e.g, 'obj-{000..100}.tar' |
-| `--ext` | `string` | Mapping from old to new extensions of transformed objects |
+| `--ext` | `string` | Mapping from old to new extensions of transformed objects, e.g. {jpg:txt}, "{ in1 : out1, in2 : out2 }"|
 | `--prefix` | `string` | Prefix added to every new object name |
 | `--wait` | `bool` | Wait until operation is finished |
 | `--requests-timeout` | `duration` | Timeout for a single object transformation |
@@ -196,7 +196,7 @@ NAME
 obj1.in1
 obj2.in2
 (...)
-$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --ext="{'in1':'out1', 'in2':'out2'}" --prefix="etl-" --wait
+$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --ext="{in1:out1, in2:out2}" --prefix="etl-" --wait
 $ ais bucket ls ais://dst_bucket --props=name
 NAME
 etl-obj1.out1
