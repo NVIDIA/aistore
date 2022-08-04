@@ -5,6 +5,7 @@
 import unittest
 import hashlib
 import sys
+import time
 
 from aistore.client import Client
 from aistore.client.errors import AISError, ErrBckNotFound
@@ -34,13 +35,15 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
     def tearDown(self) -> None:
         # Try to destroy all temporary buckets if there are left.
         try:
-            self.client.bucket(self.bck_name).delete()
+            for bucket in self.client.cluster().list_buckets():
+                self.client.bucket(bucket.name).delete()
         except ErrBckNotFound:
             pass
 
         # delete all the etls
         for etl in self.client.etl().list():
             self.client.etl().stop(etl_id=etl.id)
+            self.client.etl().delete(etl_id=etl.id)
 
     def test_etl_apis(self):
 
@@ -167,6 +170,65 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
             self.client.etl().start(etl_id=self.etl_id_code)
         with self.assertRaises(AISError):
             self.client.etl().start(etl_id=self.etl_id_spec)
+
+    def test_etl_apis_stress(self):
+        num_objs = 200
+        content = {}
+        for i in range(num_objs):
+            obj_name = f"obj{ i }"
+            content[obj_name] = create_and_put_object(
+                client=self.client, bck_name=self.bck_name, obj_name=obj_name
+            )
+
+        # code (hpush)
+        def transform(input_bytes):
+            md5 = hashlib.md5()
+            md5.update(input_bytes)
+            return md5.hexdigest().encode()
+
+        self.client.etl().init_code(code=transform, etl_id=self.etl_id_code)
+
+        # code (io comm)
+        def main():
+            md5 = hashlib.md5()
+            chunk = sys.stdin.buffer.read()
+            md5.update(chunk)
+            sys.stdout.buffer.write(md5.hexdigest().encode())
+
+        self.client.etl().init_code(
+            code=main, etl_id=self.etl_id_code_io, communication_type="io"
+        )
+
+        start_time = time.time()
+        xaction_id = self.client.bucket(self.bck_name).transform(
+            etl_id=self.etl_id_code, to_bck="transformed-etl-hpush"
+        )
+        self.client.xaction().wait_for_xaction_finished(xaction_id)
+        print("Transform bucket using HPUSH took ", time.time() - start_time)
+
+        start_time = time.time()
+        xaction_id = self.client.bucket(self.bck_name).transform(
+            etl_id=self.etl_id_code_io, to_bck="transformed-etl-io"
+        )
+        self.client.xaction().wait_for_xaction_finished(xaction_id)
+        print("Transform bucket using IO took ", time.time() - start_time)
+
+        for key, value in content.items():
+            transformed_obj_hpush = (
+                self.client.bucket(self.bck_name)
+                .object(key)
+                .get(etl_id=self.etl_id_code)
+                .read_all()
+            )
+            transformed_obj_io = (
+                self.client.bucket(self.bck_name)
+                .object(key)
+                .get(etl_id=self.etl_id_code_io)
+                .read_all()
+            )
+
+            self.assertEqual(transform(bytes(value)), transformed_obj_hpush)
+            self.assertEqual(transform(bytes(value)), transformed_obj_io)
 
 
 if __name__ == "__main__":

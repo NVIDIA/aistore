@@ -41,7 +41,7 @@ python_tests: common_deps dev_deps
 
 .PHONY: python_etl_tests
 python_etl_tests: common_deps 
-	pytest -v tests/test_etl_ops.py
+	pytest -v -s tests/test_etl_ops.py
 
 .PHONY: lint
 lint: common_deps
