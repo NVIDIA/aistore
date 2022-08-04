@@ -49,7 +49,7 @@ func (msg *TCBMsg) Validate() error {
 func (msg *TCBMsg) ToName(name string) string {
 	if msg.Ext != nil {
 		if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
-			ext := name[:idx]
+			ext := name[idx+1:]
 			if replacement, exists := msg.Ext[ext]; exists {
 				name = name[:idx+1] + strings.TrimLeft(replacement, ".")
 			}
