@@ -57,7 +57,7 @@ variables:
   stage: test-short
   tags:
     - ais
-  timeout: 27m
+  timeout: 23m
   <<: *default_only_def
   except:
     variables:
@@ -69,7 +69,7 @@ variables:
   stage: test-short
   tags:
     - ais
-  timeout: 27m
+  timeout: 23m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
@@ -288,7 +288,7 @@ test:short:k8s:
 test:short:python:etl:
   stage: test-short
   <<: *test_k8s_short_def
-  timeout: 27m
+  timeout: 23m
   only:
     - merge_requests
   except:

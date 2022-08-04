@@ -109,7 +109,8 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 	if bck.IsCloud() {
 		// NOTE: filtering out some test permutations to save time
 		if testing.Short() {
-			t.Skipf("skipping %s for cloud bucket in short mode", t.Name())
+			fmt := "%s is cloud bucket"
+			tutils.ShortSkipf(t, fmt, bck)
 		}
 		if strings.Contains(t.Name(), "few-files") ||
 			strings.Contains(t.Name(), "single-target") ||

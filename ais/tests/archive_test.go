@@ -362,8 +362,8 @@ func TestAppendToArch(t *testing.T) {
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		numArchs   = 10
-		numAdd     = 10
+		numArchs   = m.num
+		numAdd     = m.num
 		numInArch  = cos.Min(m.num/2, 7)
 		objPattern = "test_lst_%04d%s"
 		archPath   = "extra/newfile%04d"
@@ -379,10 +379,6 @@ func TestAppendToArch(t *testing.T) {
 			},
 		}
 	)
-	if testing.Short() {
-		numArchs = 1
-		numAdd = 2
-	}
 	for _, test := range subtests {
 		tname := fmt.Sprintf("%s/multi=%t", test.ext, test.multi)
 		t.Run(tname, func(t *testing.T) {
@@ -390,6 +386,14 @@ func TestAppendToArch(t *testing.T) {
 			tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 			m.initWithCleanup()
 			m.puts()
+
+			if testing.Short() {
+				if test.multi {
+					tutils.ShortSkipf(t)
+				}
+				numArchs = 2
+				numAdd = 3
+			}
 
 			for i := 0; i < numArchs; i++ {
 				archName := fmt.Sprintf(objPattern, i, test.ext)

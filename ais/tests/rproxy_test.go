@@ -115,7 +115,11 @@ retry:
 	tassert.Fatalf(t, speedCold != 0, "Failed to detect cold download speed")
 
 	// at less than 100KBps we likely failed to download
-	if speedCold < 100*1024 {
+	if speedCold < 100*cos.KiB {
+		if testing.Short() {
+			fmt := "cold download speed %s is way too low indicating potential timeout"
+			tutils.ShortSkipf(t, fmt, cos.B2S(speedCold, 1))
+		}
 		if maxRetries > 0 {
 			tlog.Logf("Warning: will retry (%d)\n", maxRetries)
 			time.Sleep(15 * time.Second)
@@ -123,8 +127,6 @@ retry:
 			maxRetries--
 			goto retry
 		}
-		t.Skipf("Warning: cold download speed %s is way too low indicating potential timeout\n",
-			cos.B2S(speedCold, 1))
 	}
 
 	bckListNew, err := api.ListBuckets(baseParams, queryBck)

@@ -181,8 +181,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 		// 1. FS ID change. Reason: certain filesystems simply do not maintain persistence (of their IDs).
 		// 2. `Fs` (usually, device name) change. Reason: OS block-level subsystem enumerated devices
 		//    in a different order.
-		// Currently, there's no workaround if both (1) and (2) happen simultaneously. Must be extremely
-		// unlikely, however.
+		// NOTE: no workaround if (1) and (2) happen simultaneously (must be extremely unlikely).
 		//
 		// See also: `allowSharedDisksAndNoDisks` and `startWithLostMountpath`
 		if mi.FsType != fsMpathMD.FsType || mi.Fs != fsMpathMD.Fs || mi.FsID != fsMpathMD.FsID {

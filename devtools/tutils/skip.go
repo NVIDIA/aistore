@@ -5,6 +5,7 @@
 package tutils
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
@@ -29,6 +30,17 @@ type SkipTestArgs struct {
 	Local                 bool
 }
 
+const fmtSkippingShort = "skipping %s in short mode"
+
+func ShortSkipf(tb testing.TB, a ...interface{}) {
+	var msg string
+	if len(a) > 0 {
+		msg = fmt.Sprint(a...) + ": "
+	}
+	msg += fmt.Sprintf(fmtSkippingShort, tb.Name())
+	tb.Skip(msg)
+}
+
 func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	var smap *cluster.Smap
 	if args.RequiresRemoteCluster && RemoteCluster.UUID == "" {
@@ -38,7 +50,7 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 		tb.Skipf("%s requires authentication token", tb.Name())
 	}
 	if args.Long && testing.Short() {
-		tb.Skipf("skipping %s in short mode", tb.Name())
+		tb.Skipf(fmtSkippingShort, tb.Name())
 	}
 	if args.RemoteBck {
 		proxyURL := GetPrimaryURL()
