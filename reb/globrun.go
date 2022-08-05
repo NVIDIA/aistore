@@ -394,6 +394,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	reb.stages.stage.Store(rebStageInit)
 	xreb := xctn.(*xs.Rebalance)
 	reb.setXact(xreb)
+	reb.rebID.Store(rargs.id)
 
 	// 3. init streams and data structures
 	if haveStreams {
@@ -425,7 +426,6 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 
 	// 5. ready - can receive objects
 	reb.smap.Store(unsafe.Pointer(rargs.smap))
-	reb.rebID.Store(rargs.id)
 	reb.stages.cleanup()
 
 	reb.mu.Unlock()
@@ -722,7 +722,7 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 	if err != nil {
 		lom, ok := arg.(*cluster.LOM)
 		debug.Assert(ok) // DEBUG
-		rj.m.delLomAck(lom)
+		rj.m.delLomAck(lom, 0)
 		if bool(glog.FastV(4, glog.SmoduleReb)) || !cos.IsRetriableConnErr(err) {
 			si := rj.m.t.Snode()
 			glog.Errorf("%s: failed to send o[%s]: %v", si, hdr.FullName(), err)

@@ -224,7 +224,7 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) e
 	}
 	// No immediate file deletion: let LRU cleanup the "misplaced" object
 	// TODO: mark the object "Deleted"
-	reb.delLomAck(lom)
+	reb.delLomAck(lom, ack.rebID)
 	return nil
 }
 
