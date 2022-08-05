@@ -438,7 +438,6 @@ class Bucket:
             "prefix": prefix,
             "force": force,
             "dry_run": dry_run,
-            "ext": ext,
         }
 
         if ext:

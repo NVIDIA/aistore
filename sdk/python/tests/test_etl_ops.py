@@ -133,19 +133,15 @@ class TestETLOps(unittest.TestCase):
             etl_id=self.etl_id_spec_comp,
             to_bck=temp_bck2,
             ext={"jpg": "txt"},
-            force=True,
         )
         self.client.xaction().wait_for_xaction_finished(xaction_id)
 
         # Verify extension rename
-        for obj in self.client.bucket(temp_bck2).list_objects().get_entries():
-            self.assertEqual(obj.name.split(".")[1], "txt")
+        for obj_iter in self.client.bucket(temp_bck2).list_objects().get_entries():
+            self.assertEqual(obj_iter.name.split(".")[1], "txt")
 
         echo_obj = (
-            self.client.bucket(temp_bck2)
-            .object(obj.name.split(".")[0] + ".txt")
-            .get()
-            .read_all()
+            self.client.bucket(temp_bck2).object("temp-obj1.txt").get().read_all()
         )
 
         # Verify different bucket-level transformations are not the same (compare ECHO transformation and MD5 transformation)
