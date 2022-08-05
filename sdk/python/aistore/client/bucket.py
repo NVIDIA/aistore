@@ -3,7 +3,7 @@
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
-from typing import List, NewType
+from typing import Dict, List, NewType
 import requests
 
 from aistore.client.const import (
@@ -415,6 +415,7 @@ class Bucket:
         etl_id: str,
         to_bck: str,
         prefix: str = "",
+        ext: Dict[str, str] = None,
         force: bool = False,
         dry_run: bool = False,
     ):
@@ -424,15 +425,25 @@ class Bucket:
         Args:
             etl_id (str): id of etl to be used for transformations
             to_bck (str): destination bucket for transformations
-            prefix (str): prefix to be added to resulting transformed objects
-            dry_run (bool, optional): Determines if the copy should actually happen or not
-            force (bool, optional): Override existing destination bucket
+            prefix (str, optional): prefix to be added to resulting transformed objects
+            ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced (i.e. {"jpg": "txt"})
+            dry_run (bool, optional): determines if the copy should actually happen or not
+            force (bool, optional): override existing destination bucket
 
         Returns:
             Xaction id (as str) that can be used to check the status of the operation
-
         """
-        value = {"id": etl_id, "prefix": prefix, "force": force, "dry_run": dry_run}
+        value = {
+            "id": etl_id,
+            "prefix": prefix,
+            "force": force,
+            "dry_run": dry_run,
+            "ext": ext,
+        }
+
+        if ext:
+            value["ext"] = ext
+
         action = ActionMsg(action=ACT_ETL_BCK, value=value).dict()
 
         params = self.qparam.copy()

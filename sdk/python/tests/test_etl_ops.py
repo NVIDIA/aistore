@@ -13,8 +13,8 @@ from aistore.client.etl_templates import MD5, ECHO
 from tests import CLUSTER_ENDPOINT
 from tests.utils import create_and_put_object, random_name
 
-
-class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
+# pylint: disable=unused-variable
+class TestETLOps(unittest.TestCase):
     def setUp(self) -> None:
         self.bck_name = random_name()
         self.etl_id_code = "etl-" + random_name(5)
@@ -25,7 +25,7 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client = Client(CLUSTER_ENDPOINT)
 
         self.client.bucket(bck_name=self.bck_name).create()
-        self.obj_name = "temp-obj1"
+        self.obj_name = "temp-obj1.jpg"
         self.content = create_and_put_object(
             client=self.client, bck_name=self.bck_name, obj_name=self.obj_name
         )
@@ -130,11 +130,23 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
 
         # Transform bucket with ECHO template
         xaction_id = self.client.bucket(self.bck_name).transform(
-            etl_id=self.etl_id_spec_comp, to_bck=temp_bck2, force=True
+            etl_id=self.etl_id_spec_comp,
+            to_bck=temp_bck2,
+            ext={"jpg": "txt"},
+            force=True,
         )
         self.client.xaction().wait_for_xaction_finished(xaction_id)
 
-        echo_obj = self.client.bucket(temp_bck2).object(self.obj_name).get().read_all()
+        # Verify extension rename
+        for obj in self.client.bucket(temp_bck2).list_objects().get_entries():
+            self.assertEqual(obj.name.split(".")[1], "txt")
+
+        echo_obj = (
+            self.client.bucket(temp_bck2)
+            .object(obj.name.split(".")[0] + ".txt")
+            .get()
+            .read_all()
+        )
 
         # Verify different bucket-level transformations are not the same (compare ECHO transformation and MD5 transformation)
         self.assertNotEqual(md5_obj, echo_obj)
@@ -158,10 +170,9 @@ class TestETLOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client.etl().start(etl_id=self.etl_id_spec)
         self.assertEqual(len(self.client.etl().list()), self.current_etl_count + 2)
 
+        # Delete stopped ETLs
         self.client.etl().stop(etl_id=self.etl_id_code)
         self.client.etl().stop(etl_id=self.etl_id_spec)
-
-        # Delete stopped ETLs
         self.client.etl().delete(etl_id=self.etl_id_code)
         self.client.etl().delete(etl_id=self.etl_id_spec)
 

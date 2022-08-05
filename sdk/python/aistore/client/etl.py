@@ -127,7 +127,7 @@ class Etl:
         """
         Lists all running ETLs.
 
-        Note: Does not list ETLs that have been stopped.
+        Note: Does not list ETLs that have been stopped or deleted.
 
         Args:
             Nothing
@@ -155,7 +155,9 @@ class Etl:
 
     def start(self, etl_id: str):
         """
-        Starts a stopped ETL with given ETL_ID.
+        Resumes a stopped ETL with given ETL_ID.
+
+        Note: Deleted ETLs cannot be started.
 
         Args:
             etl_id (str): id of ETL
@@ -166,7 +168,7 @@ class Etl:
 
     def stop(self, etl_id: str):
         """
-        Stops ETL with given ETL_ID. Stops all the pods created by kubernetes for this ETL.
+        Stops ETL with given ETL_ID. Stops (but does not delete) all the pods created by Kubernetes for this ETL and terminates any transforms.
 
         Args:
             etl_id (str): id of ETL
@@ -177,7 +179,9 @@ class Etl:
 
     def delete(self, etl_id: str):
         """
-        Delete ETL with given ETL_ID. Deletes all pods created by kubernetes for this ETL. Can only a delete a stopped ETL.
+        Delete ETL with given ETL_ID. Deletes pods created by Kubernetes for this ETL and specifications for this ETL in Kubernetes.
+
+        Note: Running ETLs cannot be deleted.
 
         Args:
             etl_id (str): id of ETL

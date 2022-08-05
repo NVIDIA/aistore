@@ -721,6 +721,7 @@ Returns a list of all objects in bucket
 def transform(etl_id: str,
               to_bck: str,
               prefix: str = "",
+              ext: Dict[str, str] = None,
               force: bool = False,
               dry_run: bool = False)
 ```
@@ -731,9 +732,10 @@ Transforms all objects in a bucket and puts them to destination bucket.
 
 - `etl_id` _str_ - id of etl to be used for transformations
 - `to_bck` _str_ - destination bucket for transformations
-- `prefix` _str_ - prefix to be added to resulting transformed objects
-- `dry_run` _bool, optional_ - Determines if the copy should actually happen or not
-- `force` _bool, optional_ - Override existing destination bucket
+- `prefix` _str, optional_ - prefix to be added to resulting transformed objects
+- `ext` _Dict[str, str], optional_ - dict of new extension followed by extension to be replaced (i.e. {"jpg": "txt"})
+- `dry_run` _bool, optional_ - determines if the copy should actually happen or not
+- `force` _bool, optional_ - override existing destination bucket
   
 
 **Returns**:
@@ -982,7 +984,7 @@ Initializes ETL based on the provided source code. Returns ETL_ID.
 - `etl_id` _str_ - id of new ETL
 - `dependencies` _List[str]_ - list of the necessary dependencies with version (eg. aistore>1.0.0)
 - `runtime` _str_ - Runtime environment of the ETL [choose from: python2, python3, python3.6, python3.8, python3.10]
-- `communication_type` _str_ - Communication type of the ETL (options: hpull, hrev, hpush)
+- `communication_type` _str_ - Communication type of the ETL (options: hpull, hrev, hpush, io)
 - `timeout` _str_ - timeout of the ETL (eg. 5m for 5 minutes)
 
 **Returns**:
@@ -999,7 +1001,7 @@ def list() -> List[ETLDetails]
 
 Lists all running ETLs.
 
-Note: Does not list ETLs that have been stopped.
+Note: Does not list ETLs that have been stopped or deleted.
 
 **Arguments**:
 
@@ -1035,7 +1037,9 @@ View ETLs Init spec/code
 def start(etl_id: str)
 ```
 
-Starts a stopped ETL with given ETL_ID.
+Resumes a stopped ETL with given ETL_ID.
+
+Note: Deleted ETLs cannot be started.
 
 **Arguments**:
 
@@ -1053,7 +1057,7 @@ Starts a stopped ETL with given ETL_ID.
 def stop(etl_id: str)
 ```
 
-Stops ETL with given ETL_ID. Stops all the pods created by kubernetes for this ETL.
+Stops ETL with given ETL_ID. Stops (but does not delete) all the pods created by Kubernetes for this ETL and terminates any transforms.
 
 **Arguments**:
 
@@ -1071,7 +1075,9 @@ Stops ETL with given ETL_ID. Stops all the pods created by kubernetes for this E
 def delete(etl_id: str)
 ```
 
-Delete ETL with given ETL_ID. Deletes all pods created by kubernetes for this ETL. Can only a delete a stopped ETL.
+Delete ETL with given ETL_ID. Deletes pods created by Kubernetes for this ETL and specifications for this ETL in Kubernetes.
+
+Note: Running ETLs cannot be deleted.
 
 **Arguments**:
 

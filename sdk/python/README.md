@@ -169,6 +169,26 @@ obj1 = client.bucket("bucket-demo").object("object-demo").get(etl_id="etl-code")
 obj2 = client.bucket("bucket-demo").object("object-demo").get(etl_id="etl-spec").read_all()
 ```
 
+Alternatively, we can transform an entire bucket's contents as follows:
+
+```python
+# Transform bucket w/ ETL code transformation
+client.bucket("bucket-demo").transform(etl_id="etl-code", to_bck="bucket-transformed")
+
+# Transform bucket w/ ETL spec transformation
+client.bucket("bucket-demo").transform(etl_id="etl-spec", to_bck="bucket-transformed")
+```
+
+Transform also allows for *on-the-fly* rename operations for objects:
+
+```python
+# Add a prefix to the resulting transformed files:
+client.bucket("bucket-demo").transform(etl_id="etl-code", to_bck="bucket-transformed", prefix="transformed-")
+
+# Replace existing filename extensions
+client.bucket("bucket-demo").transform(etl_id="etl-spec", to_bck="bucket-transformed", ext={"jpg":"txt"})
+```
+
 We can stop the ETLs if desired with method `stop()`:
 
 ```python
@@ -180,7 +200,7 @@ client.etl().stop(etl_id="etl-spec")
 client.etl().list()
 ```
 
-Stopped ETLs can be resumed with method `start()`:
+If an ETL is stopped, any Kubernetes pods created for the ETL are *stopped*, but *not deleted*. Any transforms by the stopped ETL are terminated. Stopped ETLs can be resumed for use with method `start()`:
 
 ```python
 # Stop ETLs
@@ -191,7 +211,7 @@ client.etl().start(etl_id="etl-spec")
 client.etl().list()
 ```
 
-Finally, once finished with the ETLs, we cleanup by stopping the ETLs with `stop` and substenquently deleting the ETLs with `delete()`:
+Once completely finished with the ETLs, we cleanup (for storage) by stopping the ETLs with `stop` and substenquently deleting the ETLs with `delete`:
 
 ```python
 # Stop ETLs
@@ -204,7 +224,7 @@ client.etl().delete(etl_id="etl-spec")
 
 ```
 
-Deleting an ETL deletes all pods created by Kuberenetes for the ETL. Consequently, deleted ETLs cannot be started again.
+Deleting an ETL deletes all pods created by Kuberenetes for the ETL as well as any specifications for the ETL on Kubernetes. Consequently, deleted ETLs cannot be started again and will need to be re-initialized.
 
 > For an interactive demo, refer [here](https://github.com/NVIDIA/aistore/blob/master/sdk/python/sdk-etl-tutorial.ipynb).
 
