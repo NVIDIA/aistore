@@ -794,8 +794,7 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/metasync
 // (compare w/ p.metasyncHandler - minor differences around receiving Smap
-//
-//	and rmd - code reduction must be doable)
+//  and rmd - code reduction must be doable)
 func (t *target) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	var (
 		err = &errMsync{}
@@ -1037,9 +1036,8 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 }
 
 // headObjBcast broadcasts to all targets to find out if anyone has the specified object.
-// NOTE:
-//  1. apc.QparamCheckExistsAny to make an extra effort
-//  2. `ignoreMaintenance`
+// NOTE: 1) apc.QparamCheckExistsAny to make an extra effort
+//       2) `ignoreMaintenance`
 func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	q := lom.Bck().AddToQuery(nil)
 	q.Set(apc.QparamSilent, "true")

@@ -60,10 +60,9 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (err error) {
 
 // returns xaction UUID or empty
 // NOTE: global ID can be further reinforced by _not_ ignoring empty returns,
-//
-//	i.e., requiring that each responding target returns a valid ID
-//	and all IDs are equal. Likely, an additional condition that a caller
-//	must be able to ask for.
+//       i.e., requiring that each responding target returns a valid ID
+//       and all IDs are equal. Likely, an additional condition that a caller
+//       must be able to ask for.
 func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xactID string, err error) {
 	globalID := true // cluster-wide xaction ID
 	results := c.bcast(apc.ActCommit, timeout)
