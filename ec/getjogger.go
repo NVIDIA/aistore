@@ -73,11 +73,9 @@ func (*getJogger) newCtx(req *request) (*restoreCtx, error) {
 	ctx := allocRestoreCtx()
 	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/)
 	ctx.lom = lom
-	if err == nil {
-		err = lom.Load(true /*cache it*/, false /*locked*/)
-		if os.IsNotExist(err) {
-			err = nil
-		}
+	err = lom.Load(true /*cache it*/, false /*locked*/)
+	if os.IsNotExist(err) {
+		err = nil
 	}
 	return ctx, err
 }

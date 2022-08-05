@@ -1,26 +1,22 @@
 #!/bin/bash
-set -ex
-
 function upload() {
   bin_name=$1
   upload_name=$2
-  cksum="/tmp/${upload_name}.sha256"
 
+  echo "Building ${upload_name}..."
   pushd $GOPATH/bin
-
-  echo "Computing checksum..."
-  sha256sum $bin_name > ${cksum} || exit 1
-
-  echo "Building ${upload_name}.tar.gz..."
-  tar -czvf "/tmp/${upload_name}.tar.gz" $bin_name || exit 1
-
+  tar -czvf "/tmp/${upload_name}" $bin_name || exit 1
   popd
 
-  echo "Uploading release asset: ${upload_name}"
-  GH_ASSET="https://uploads.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/${GITHUB_RELEASE_ID}/assets?name=${upload_name}.tar.gz"
-  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_ASSET -T "/tmp/${upload_name}}.tar.gz" | jq
+  echo "Computing checksum..."
+  cksum="/tmp/${upload_name}.sha256"
+  sha256sum  "/tmp/${upload_name}" > ${cksum} || exit 1
 
-  echo "Uploading asset's checksum: ${upload_name}.sha256"
+  echo "Uploading release asset: ${upload_name}"
+  GH_ASSET="https://uploads.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/${GITHUB_RELEASE_ID}/assets?name=${upload_name}"
+  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_ASSET -T "/tmp/${upload_name}}" | jq
+
+  echo "Uploading the asset's checksum: ${upload_name}.sha256"
   GH_CHECKSUM="https://uploads.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/${GITHUB_RELEASE_ID}/assets?name=${upload_name}.sha256"
   curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_CHECKSUM -T $cksum | jq
 }
@@ -52,6 +48,6 @@ if ! command -v sha256sum 2>&1 /dev/null; then
 fi
 
 
-upload ais "ais-${os}-${arch}"
-upload authn "authn-${os}-${arch}"
-upload aisloader "aisloader-${os}-${arch}"
+upload ais "ais-${os}-${arch}.tar.gz"
+upload authn "authn-${os}-${arch}.tar.gz"
+upload aisloader "aisloader-${os}-${arch}.tar.gz"
