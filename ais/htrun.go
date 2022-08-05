@@ -1583,7 +1583,7 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 			}
 			if resPrev != nil {
 				freeCR(resPrev)
-				resPrev = nil // nolint:ineffassign // readability
+				resPrev = nil //nolint:ineffassign // readability
 			}
 			res = h.registerToURL(candidateURL, nil, apc.DefaultTimeout, query, false)
 			if res.err == nil {

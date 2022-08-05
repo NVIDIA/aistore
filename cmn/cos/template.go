@@ -97,7 +97,7 @@ func (pt *ParsedTemplate) Count() int64 {
 
 // maxLen specifies maximum objects to be returned
 func (pt *ParsedTemplate) ToSlice(maxLen ...int) []string {
-	var ( // nolint:prealloc // objs is preallocated farther down
+	var ( //nolint:prealloc // objs is preallocated farther down
 		max  = math.MaxInt64
 		objs []string
 	)

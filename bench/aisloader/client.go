@@ -201,7 +201,7 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum,
 		cksum:  cksum,
 		reader: reader,
 	}
-	_, err := api.DoWithRetry(putter.tctx.tracedClient, putter.do, reqArgs) // nolint:bodyclose // it's closed inside
+	_, err := api.DoWithRetry(putter.tctx.tracedClient, putter.do, reqArgs) //nolint:bodyclose // it's closed inside
 	cmn.FreeHra(reqArgs)
 	if err != nil {
 		return httpLatencies{}, err

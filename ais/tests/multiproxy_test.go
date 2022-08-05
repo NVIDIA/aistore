@@ -1642,7 +1642,7 @@ func icStressCachedXactions(t *testing.T) {
 	wg.Wait()
 }
 
-// nolint:unused // will be used when icStressCachedXaction test is enabled
+//nolint:unused // will be used when icStressCachedXaction test is enabled
 //
 // Expects objects to be numbered as {%04d}; BaseParams of primary proxy
 func startListObjRange(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, numJobs, numObjs, rangeSize int,

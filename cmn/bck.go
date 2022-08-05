@@ -474,7 +474,7 @@ func (qbck QueryBcks) Contains(other *Bck) bool {
 		}
 		if qbck.Provider == "" {
 			// If qbck's provider not set, we should match the expected bucket
-			qbck.Provider = other.Provider // nolint:revive // temp change to compare
+			qbck.Provider = other.Provider //nolint:revive // temp change to compare
 		}
 		return qbck.Equal(other)
 	}

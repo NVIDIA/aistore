@@ -1205,7 +1205,7 @@ func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName,
 		hdr        = http.Header{cos.HdrRange: {rangeQuery}}
 		options    = api.GetObjectInput{Header: hdr}
 	)
-	resp, n, err := api.GetObjectWithResp(baseParams, bck, objName, options) // nolint:bodyclose // it's closed inside
+	resp, n, err := api.GetObjectWithResp(baseParams, bck, objName, options) //nolint:bodyclose // it's closed inside
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
 		t, resp.ContentLength == expectedLength,

@@ -232,7 +232,7 @@ func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo
 		tr = tar.NewReader(&buffer)
 	}
 
-	var files []os.FileInfo // nolint:prealloc // cannot determine the size
+	var files []os.FileInfo //nolint:prealloc // cannot determine the size
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -254,7 +254,7 @@ func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo
 func GetFilesFromTarBuffer(buffer bytes.Buffer, extension string) ([]FileContent, error) {
 	tr := tar.NewReader(&buffer)
 
-	var files []FileContent // nolint:prealloc // cannot determine the size
+	var files []FileContent //nolint:prealloc // cannot determine the size
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {

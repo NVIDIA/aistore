@@ -404,7 +404,7 @@ func PutObject(args PutObjectArgs) (err error) {
 		reqArgs.Query = query
 		reqArgs.BodyR = args.Reader
 	}
-	_, err = DoWithRetry(args.BaseParams.Client, args.put, reqArgs) // nolint:bodyclose // is closed inside
+	_, err = DoWithRetry(args.BaseParams.Client, args.put, reqArgs) //nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)
 	return
 }
@@ -434,7 +434,7 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 		reqArgs.BodyR = args.Reader
 	}
 	putArgs := &args.PutObjectArgs
-	_, err = DoWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) // nolint:bodyclose // is closed inside
+	_, err = DoWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) //nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)
 	return
 }
@@ -459,7 +459,7 @@ func AppendObject(args AppendArgs) (string /*handle*/, error) {
 		reqArgs.Query = q
 		reqArgs.BodyR = args.Reader
 	}
-	resp, err := DoWithRetry(args.BaseParams.Client, args._append, reqArgs) // nolint:bodyclose // it's closed inside
+	resp, err := DoWithRetry(args.BaseParams.Client, args._append, reqArgs) //nolint:bodyclose // it's closed inside
 	cmn.FreeHra(reqArgs)
 	if err != nil {
 		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)

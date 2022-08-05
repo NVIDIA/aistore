@@ -76,7 +76,7 @@ func GetTransformYaml(name string) ([]byte, error) {
 	// Retry in case github in unavailable to fulfill the request for a moment.
 	err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call: func() (code int, err error) {
-			resp, err = client.Get(links[name]) // nolint:bodyclose // closed after returning from NetworkCallWithRetry().
+			resp, err = client.Get(links[name]) //nolint:bodyclose // closed after returning from NetworkCallWithRetry().
 			return
 		},
 		Action:   "get transform yaml for ETL " + name,

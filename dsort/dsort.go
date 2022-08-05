@@ -689,7 +689,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	req.Header.Set(apc.HdrCallerID, tsi.ID())
 	req.Header.Set(apc.HdrCallerName, tsi.String())
 
-	resp, err := m.client.Do(req) // nolint:bodyclose // closed inside cos.Close
+	resp, err := m.client.Do(req) //nolint:bodyclose // closed inside cos.Close
 	if err != nil {
 		return nil, err
 	}
@@ -930,7 +930,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 //  1. Locality of shard source files, and in a tie situation,
 //  2. Number of shard creation requests previously sent to the target.
 //
-// nolint:deadcode,unused // has TODO to fix it
+//nolint:deadcode,unused // has TODO to fix it
 func nodeForShardRequest(shardsToTarget map[string][]*extract.Shard, numLocalRecords map[string]int) string {
 	var max int
 	var id string

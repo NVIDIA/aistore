@@ -363,7 +363,7 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *cluster.Snode, client *http
 		return nil, err
 	}
 	rq.URL.RawQuery = query.Encode()
-	resp, err := client.Do(rq) // nolint:bodyclose // closed inside cos.Close
+	resp, err := client.Do(rq) //nolint:bodyclose // closed inside cos.Close
 	if err != nil {
 		return nil, err
 	}

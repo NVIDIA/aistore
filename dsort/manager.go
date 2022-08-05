@@ -715,7 +715,7 @@ func (m *Manager) doWithAbort(reqArgs *cmn.HreqArgs) error {
 		defer func() {
 			doneCh <- struct{}{}
 		}()
-		resp, err := m.client.Do(req) // nolint:bodyclose // closed inside cos.Close
+		resp, err := m.client.Do(req) //nolint:bodyclose // closed inside cos.Close
 		if err != nil {
 			errCh <- err
 			return

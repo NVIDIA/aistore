@@ -768,7 +768,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) boo
 	}
 	defer cancel()
 
-	resp, err := goi.t.client.data.Do(req) // nolint:bodyclose // closed by `poi.putObject`
+	resp, err := goi.t.client.data.Do(req) //nolint:bodyclose // closed by `poi.putObject`
 	cmn.FreeHra(reqArgs)
 	if err != nil {
 		glog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t, tsi, lom, err)

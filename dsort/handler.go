@@ -311,7 +311,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	// Next, broadcast the remove once we've checked that all targets have run cleanup
 	path = apc.URLPathdSortRemove.Join(managerUUID)
 	responses = broadcastTargets(http.MethodDelete, path, nil, nil, smap)
-	var failed []string // nolint:prealloc // will remain not allocated when no errors
+	var failed []string //nolint:prealloc // will remain not allocated when no errors
 	for _, r := range responses {
 		if r.statusCode == http.StatusOK {
 			continue
@@ -729,7 +729,7 @@ func broadcastTargets(method, path string, urlParams url.Values, body []byte, sm
 			return
 		}
 
-		resp, err := ctx.client.Do(req) // nolint:bodyclose // Closed inside `cos.Close`.
+		resp, err := ctx.client.Do(req) //nolint:bodyclose // Closed inside `cos.Close`.
 		if err != nil {
 			responses[idx] = response{
 				si:         node,

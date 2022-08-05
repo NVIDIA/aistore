@@ -176,7 +176,7 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 	SetAuthToken(req, reqParams.BaseParams.Token)
 
 	call := func() (status int, err error) {
-		resp, err = reqParams.BaseParams.Client.Do(req) // nolint:bodyclose // closed by a caller
+		resp, err = reqParams.BaseParams.Client.Do(req) //nolint:bodyclose // closed by a caller
 		if resp != nil {
 			status = resp.StatusCode
 		}

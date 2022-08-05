@@ -67,7 +67,7 @@ type ecOptions struct {
 // Initializes the EC options, validates the number of targets.
 // If initial dataCnt value is negative, it sets the number of data and
 // parity slices to maximum possible for the cluster.
-// nolint:revive // modifying value-receiver on purpose
+//nolint:revive // modifying value-receiver on purpose
 func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 	o.smap = tutils.GetClusterMap(t, proxyURL)
 	if cnt := o.smap.CountActiveTargets(); cnt < o.minTargets {

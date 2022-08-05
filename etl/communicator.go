@@ -227,7 +227,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.R
 	}
 	req.ContentLength = size
 	req.Header.Set(cos.HdrContentType, cos.ContentBinary)
-	resp, err = pc.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
+	resp, err = pc.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 finish:
 	if err != nil {
 		if cancel != nil {
@@ -384,7 +384,7 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 	if err != nil {
 		goto finish
 	}
-	resp, err = c.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
+	resp, err = c.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 finish:
 	if err != nil {
 		if cancel != nil {

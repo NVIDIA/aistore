@@ -238,7 +238,9 @@ ci: spell-check fmt-check lint test-short ## Run CI related checkers and linters
 # Target for linters
 .PHONY: lint-update lint fmt-check fmt-fix spell-check spell-fix cyclo msgp-update
 
-lint-update: ## Update the linter version (removes previous one and downloads a new one)
+## Upgrade golangci-lint to the latest (removes the previous one and downloads the latest)
+## NOTE: to install a specific version, run (e.g.): ... | sh -s -- -b $(GOPATH)/bin v1.47.3
+lint-update:
 	@rm -f $(GOPATH)/bin/golangci-lint
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin latest
 

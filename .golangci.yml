@@ -21,7 +21,7 @@ linters:
     - importas
     - ineffassign
     - misspell
-    # - nolintlint # FIXME: This should be uncommented when `golangci-lint` will fully support Go1.18.
+      # - nolintlint - NOTE: uncomment after rebuilding CI docker image (and uprading golangci-lint)
     - prealloc
     - rowserrcheck
     - sqlclosecheck

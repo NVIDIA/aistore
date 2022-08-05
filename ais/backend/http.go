@@ -195,7 +195,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		glog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
 	}
 
-	resp, err := hp.client(origURL).Get(origURL) // nolint:bodyclose // is closed by the caller
+	resp, err := hp.client(origURL).Get(origURL) //nolint:bodyclose // is closed by the caller
 	if err != nil {
 		return nil, nil, http.StatusInternalServerError, err
 	}

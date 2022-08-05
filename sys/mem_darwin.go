@@ -7,7 +7,7 @@ package sys
 /*
 #include <mach/mach_host.h>
 */
-import "C" // nolint:gci,gocritic // super weird case
+import "C" //nolint:gci,gocritic // super weird case
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"syscall"
-	"unsafe" // nolint:gci,gocritic // super weird case
+	"unsafe" //nolint:gci,gocritic // super weird case
 )
 
 type (
