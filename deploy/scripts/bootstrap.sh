@@ -37,7 +37,6 @@ run_tests() {
 }
 
 AISTORE_DIR="$(cd "$(dirname "$0")/../../"; pwd -P)"
-YAPF_STYLE="$(dirname ${0})/config/.style.yapf"
 PYLINT_STYLE="$(dirname ${0})/config/.pylintrc"
 EXTERNAL_SRC_REGEX=".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"
 # This script is used by Makefile to run commands.

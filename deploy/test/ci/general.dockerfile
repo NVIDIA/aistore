@@ -5,7 +5,7 @@ ENV PATH="${GOPATH}/bin:${PATH}"
 
 RUN apt-get update -yq
 RUN apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse coreutils python3-pip python3-setuptools s3cmd
-RUN pip3 install yapf pylint awscli
+RUN pip3 install pylint awscli black[jupyter]
 
 # Install `kubectl`.
 RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
