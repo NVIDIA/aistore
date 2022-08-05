@@ -78,10 +78,11 @@ func byMime(mime string) (string, error) {
 // (padding bytes including).
 //
 // Background:
-//    TAR file is padded with one or more 512-byte blocks of zero bytes.
-//    The blocks must be overwritten, otherwise newly added files won't be
-//    accessible. Different TAR formats (such as `ustar`, `pax` and `GNU`)
-//    write different number of zero blocks.
+//
+//	TAR file is padded with one or more 512-byte blocks of zero bytes.
+//	The blocks must be overwritten, otherwise newly added files won't be
+//	accessible. Different TAR formats (such as `ustar`, `pax` and `GNU`)
+//	write different number of zero blocks.
 func OpenTarForAppend(objName, workFQN string) (*os.File, error) {
 	fh, err := os.OpenFile(workFQN, os.O_RDWR, os.ModePerm)
 	if err != nil {

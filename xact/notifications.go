@@ -74,9 +74,6 @@ func (nxb *NotifXactListener) AbortArgs() cmn.HreqArgs {
 	return args
 }
 
-//
-// NotifXact
-//
 func (nx *NotifXact) ToNotifMsg() cluster.NotifMsg {
 	return cluster.NotifMsg{
 		UUID: nx.Xact.ID(),

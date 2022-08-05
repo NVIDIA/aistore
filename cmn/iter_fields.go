@@ -59,9 +59,10 @@ var _ IterField = (*field)(nil)
 // IterFields walks the struct and calls `updf` callback at every leaf field that it
 // encounters. The (nested) names are created by joining the json tag with dot.
 // Iteration supports reading another, custom tag `list` with values:
-//   * `tagOmitempty` - omit empty fields (only for read run)
-//   * `tagOmit` - omit field
-//   * `tagReadonly` - field cannot be updated (returns error on `SetValue`)
+//   - `tagOmitempty` - omit empty fields (only for read run)
+//   - `tagOmit` - omit field
+//   - `tagReadonly` - field cannot be updated (returns error on `SetValue`)
+//
 // Examples of usages for tags can be found in `BucketProps` or `Config` structs.
 //
 // Passing additional options with `IterOpts` can for example call callback

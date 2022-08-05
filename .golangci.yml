@@ -168,10 +168,10 @@ issues:
     - linters: gocritic
       text: "builtinShadow: shadowing of predeclared identifier: new"
 
-    - linters: gocritic
+    - linters: [gocritic, gofmt, goimports]
       source: "///" # commentFormatting
 
-    - linters: gocritic
+    - linters: [gocritic, gofmt, goimports]
       source: "//==" # commentFormatting
 
     - linters: staticcheck
@@ -194,7 +194,6 @@ issues:
   max-per-linter: 0
 
 run:
-  go: '1.18'
   tests: true # enable linting test files
 
   build-tags:

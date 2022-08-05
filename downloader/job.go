@@ -280,7 +280,7 @@ func (j *singleDlJob) String() (s string) {
 // rangeDlJob //
 ////////////////
 
-//  NOTE: the sizes of objects to be downloaded will be unknown.
+// NOTE: the sizes of objects to be downloaded will be unknown.
 func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Downloader) (job *rangeDlJob, err error) {
 	job = &rangeDlJob{}
 	if job.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {

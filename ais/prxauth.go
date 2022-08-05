@@ -105,6 +105,7 @@ func (a *authManager) revokedTokenList() (allRevoked *tokenList) {
 //   - must not be revoked one
 //   - must not be expired
 //   - must have all mandatory fields: userID, creds, issued, expires
+//
 // Returns decrypted token information if it is valid
 func (a *authManager) validateToken(token string) (tk *tok.Token, err error) {
 	a.Lock()
@@ -221,11 +222,13 @@ func (p *proxy) validateToken(hdr http.Header) (*tok.Token, error) {
 // When AuthN is on, accessing a bucket requires two permissions:
 //   - access to the bucket is granted to a user
 //   - bucket ACL allows the required operation
-//   Exception: a superuser can always PATCH the bucket/Set ACL
+//     Exception: a superuser can always PATCH the bucket/Set ACL
+//
 // If AuthN is off, only bucket permissions are checked.
-//   Exceptions:
-//   - read-only access to a bucket is always granted
-//   - PATCH cannot be forbidden
+//
+//	Exceptions:
+//	- read-only access to a bucket is always granted
+//	- PATCH cannot be forbidden
 func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, ace apc.AccessAttrs) (err error) {
 	if err = p.access(r.Header, bck, ace); err != nil {
 		p.writeErr(w, r, err, aceErrToCode(err))

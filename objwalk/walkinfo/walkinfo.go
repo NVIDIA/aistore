@@ -100,9 +100,9 @@ func (wi *WalkInfo) needTargetURL() bool { return wi.propNeeded[apc.GetTargetURL
 
 // Checks if the directory should be processed by cache list call
 // Does checks:
-//  - Object name must start with prefix (if it is set)
-//  - Object name is not in early processed directories by the previous call:
-//    paging support
+//   - Object name must start with prefix (if it is set)
+//   - Object name is not in early processed directories by the previous call:
+//     paging support
 func (wi *WalkInfo) ProcessDir(fqn string) error {
 	ct, err := cluster.NewCTFromFQN(fqn, nil)
 	if err != nil {
@@ -143,12 +143,14 @@ func (wi *WalkInfo) matchObj(lom *cluster.LOM) bool {
 }
 
 // Adds an info about cached object to the list if:
-//  - its name starts with prefix (if prefix is set)
-//  - it has not been already returned by previous page request
-//  - this target responses getobj request for the object
+//   - its name starts with prefix (if prefix is set)
+//   - it has not been already returned by previous page request
+//   - this target responses getobj request for the object
+//
 // NOTE: When only object names are requested, objectFilter and postCallback
-//       are not called because there will be no metadata to look at (see
-//       WalkInfo.Callback() for details)
+//
+//	are not called because there will be no metadata to look at (see
+//	WalkInfo.Callback() for details)
 func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntry {
 	if !wi.matchObj(lom) {
 		return nil
@@ -189,8 +191,9 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 
 // By default, Callback performs a number of syscalls to load object metadata.
 // A note in re cmn.LsNameOnly (usage below):
-//    the flag cmn.LsNameOnly optimizes-out loading object metadata. If defined,
-//    the function returns (only the) name and status.
+//
+//	the flag cmn.LsNameOnly optimizes-out loading object metadata. If defined,
+//	the function returns (only the) name and status.
 func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.BucketEntry, err error) {
 	if de.IsDir() {
 		return

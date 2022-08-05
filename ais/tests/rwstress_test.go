@@ -187,14 +187,15 @@ func multiOpStress(opNames ...string) func(t *testing.T) {
 }
 
 // All sub-tests are skipped for GCP as GCP is flaky as most operations require backoff:
-// 1. More than only 1(one) PUT per second for a single object ends with:
-//    429 - backoff starts at `1 second` and increases up to `64s`
-// 2. Too many requests may end with:
-//    502 & 503 - backoff starts at `1 minute`
-// 3. Too quick GET(HEAD) after PUT may return 404:
-//    PUTGETDELETE failed {"status":404,"message":"storage: object doesn't exist","method":"GET"
-//    Reason: PUT needs some time to update object version and if GET comes
-//    in the middle, GET returns 404 because the new version is still processing
+//  1. More than only 1(one) PUT per second for a single object ends with:
+//     429 - backoff starts at `1 second` and increases up to `64s`
+//  2. Too many requests may end with:
+//     502 & 503 - backoff starts at `1 minute`
+//  3. Too quick GET(HEAD) after PUT may return 404:
+//     PUTGETDELETE failed {"status":404,"message":"storage: object doesn't exist","method":"GET"
+//     Reason: PUT needs some time to update object version and if GET comes
+//     in the middle, GET returns 404 because the new version is still processing
+//
 // Summing up: GCP is not suitable for any stress test, so it is skipped
 func rwstress(t *testing.T) {
 	generateRandomNames(numFiles)

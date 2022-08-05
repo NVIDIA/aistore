@@ -28,7 +28,8 @@ func Assert(cond bool) {
 }
 
 // NOTE: `if (!cond) { AssertMsg(false, msg) }` is preferable usage.
-//  Otherwise the message (e.g. `fmt.Sprintf`) may get evaluated every time.
+//
+//	Otherwise the message (e.g. `fmt.Sprintf`) may get evaluated every time.
 func AssertMsg(cond bool, msg string) {
 	if !cond {
 		glog.Flush()

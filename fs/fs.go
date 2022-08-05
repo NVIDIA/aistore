@@ -1144,7 +1144,8 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 }
 
 // NOTE: Is called only and exclusively by `stats.Trunner` providing
-//        `config.Periodic.StatsTime` tick.
+//
+//	`config.Periodic.StatsTime` tick.
 func CapPeriodic(now int64, config *cmn.Config, mpcap MPCap) (cs CapStatus, updated bool, err error) {
 	if now < mfs.csExpires.Load() {
 		return

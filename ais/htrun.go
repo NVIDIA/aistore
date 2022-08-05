@@ -546,6 +546,7 @@ func (h *htrun) stop(rmFromSmap bool) {
 // intra-cluster IPC, control plane
 // call another target or a proxy; optionally, include a json-encoded body
 //
+
 func (h *htrun) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastResults) {
 	cargs := allocCargs()
 	{
@@ -1531,14 +1532,14 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 // The added "discovery_url" is precisely intended to address this scenario.
 //
 // Here's how a node joins a AIStore cluster:
-// - first, there's the primary proxy/gateway referenced by the current cluster map
-//   or - during the cluster deployment time - by the the configured "primary_url"
-//   (see /deploy/dev/local/aisnode_config.sh)
-// - if that one fails, the new node goes ahead and tries the alternatives:
-//  * config.Proxy.PrimaryURL   ("primary_url")
-//  * config.Proxy.DiscoveryURL ("discovery_url")
-//  * config.Proxy.OriginalURL  ("original_url")
-// - if these fails we try the candidates provided by the caller.
+//   - first, there's the primary proxy/gateway referenced by the current cluster map
+//     or - during the cluster deployment time - by the the configured "primary_url"
+//     (see /deploy/dev/local/aisnode_config.sh)
+//   - if that one fails, the new node goes ahead and tries the alternatives:
+//   - config.Proxy.PrimaryURL   ("primary_url")
+//   - config.Proxy.DiscoveryURL ("discovery_url")
+//   - config.Proxy.OriginalURL  ("original_url")
+//   - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
 func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) {
@@ -1921,9 +1922,7 @@ func (h *htrun) newAmsg(actionMsg *apc.ActionMsg, bmd *bucketMD, uuid ...string)
 	return msg
 }
 
-//
 // apc.ActionMsg c-tor and reader
-//
 func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.ActionMsg, err error) {
 	msg = &apc.ActionMsg{}
 	err = cmn.ReadJSON(w, r, msg)

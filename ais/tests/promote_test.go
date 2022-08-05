@@ -37,9 +37,7 @@ type prmTests struct {
 	notFshare    bool
 }
 
-//
 // flow: TestPromote (tests) => runProvider x (provider tests) => test.do(bck)
-//
 func TestPromote(t *testing.T) {
 	tests := []prmTests{
 		// short and long

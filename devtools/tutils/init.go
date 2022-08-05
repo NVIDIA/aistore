@@ -100,6 +100,7 @@ func init() {
 //  1. the cluster must be deployed locally using `make deploy` command and accessible @ localhost:8080, or
 //  2. cluster deployed on local docker environment, or
 //  3. provided via `AIS_ENDPOINT` environment variable
+//
 // In addition, try to query remote AIS cluster that may or may not be locally deployed as well.
 func InitLocalCluster() {
 	var (
@@ -153,7 +154,8 @@ func InitLocalCluster() {
 
 // InitCluster initializes the environment necessary for testing against an AIS cluster.
 // NOTE:
-//      the function is also used for testing by NVIDIA/ais-k8s Operator
+//
+//	the function is also used for testing by NVIDIA/ais-k8s Operator
 func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 	LoggedUserToken = authn.LoadToken("")
 	proxyURLReadOnly = proxyURL

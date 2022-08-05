@@ -590,11 +590,11 @@ func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string, oth
 	return
 }
 
-// - assorted admin-requested actions, in turn, trigger global rebalance
-//    e.g.: if copy-bucket or ETL is currently running we cannot start
-//          transitioning storage targets to maintenance
-// - all supported xactions define "limited coexistence" via their respecive
-//   descriptors in xact.Table
+//   - assorted admin-requested actions, in turn, trigger global rebalance
+//     e.g.: if copy-bucket or ETL is currently running we cannot start
+//     transitioning storage targets to maintenance
+//   - all supported xactions define "limited coexistence" via their respecive
+//     descriptors in xact.Table
 func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, otherBck ...*cluster.Bck) error {
 	var (
 		nd          *xact.Descriptor // the one that wants to run

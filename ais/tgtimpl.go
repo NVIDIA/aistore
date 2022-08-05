@@ -91,17 +91,18 @@ func (t *target) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 }
 
 // CopyObject creates either a full replica of an object (the `lom` argument)
-//     - or -
+//   - or -
+//
 // transforms the object and places it at the destination, in accordance with the `params`.
 //
 // The destination _may_ have a different name and _may_ be located in a different bucket.
 // Scenarios include (but are not limited to):
-// - if both src and dst LOMs are from local buckets the copying then takes place between AIS targets
-//   (of this same cluster);
-// - if the src is located in a remote bucket, we always first make sure it is also present in
-//   the AIS cluster (by performing a cold GET if need be).
-// - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
-//   replica gets created in the cloud bucket of _this_ AIS cluster.
+//   - if both src and dst LOMs are from local buckets the copying then takes place between AIS targets
+//     (of this same cluster);
+//   - if the src is located in a remote bucket, we always first make sure it is also present in
+//     the AIS cluster (by performing a cold GET if need be).
+//   - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
+//     replica gets created in the cloud bucket of _this_ AIS cluster.
 func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, dryRun bool) (size int64, err error) {
 	objNameTo := lom.ObjName
 	coi := allocCopyObjInfo()

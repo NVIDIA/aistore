@@ -310,15 +310,15 @@ func (nxs NodesXactSnap) TotalRunningTime() time.Duration {
 }
 
 // Wait for bucket summary:
-// 1. The function sends the requests as is (lsmsg.UUID should be empty) to initiate
-//    asynchronous task. The destination returns ID of a newly created task
-// 2. Starts polling: request destination with received UUID in a loop while
-//    the destination returns StatusAccepted=task is still running
-//	  Time between requests is dynamic: it starts at 200ms and increases
-//	  by half after every "not-StatusOK" request. It is limited with 10 seconds
-// 3. Breaks loop on error
-// 4. If the destination returns status code StatusOK, it means the response
-//    contains the real data and the function returns the response to the caller
+//  1. The function sends the requests as is (lsmsg.UUID should be empty) to initiate
+//     asynchronous task. The destination returns ID of a newly created task
+//  2. Starts polling: request destination with received UUID in a loop while
+//     the destination returns StatusAccepted=task is still running
+//     Time between requests is dynamic: it starts at 200ms and increases
+//     by half after every "not-StatusOK" request. It is limited with 10 seconds
+//  3. Breaks loop on error
+//  4. If the destination returns status code StatusOK, it means the response
+//     contains the real data and the function returns the response to the caller
 func (reqParams *ReqParams) waitSummary(msg *apc.BckSummMsg, v interface{}) error {
 	var (
 		uuid   string

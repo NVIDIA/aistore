@@ -479,9 +479,9 @@ type bckPropsArgs struct {
 }
 
 // See also:
-//    * github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
-//    * cmn.BucketPropsToUpdate
-//    * cmn.Bck.DefaultProps
+//   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
+//   - cmn.BucketPropsToUpdate
+//   - cmn.Bck.DefaultProps
 func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
 	props = args.bck.Bucket().DefaultProps()
 	props.SetProvider(args.bck.Provider)

@@ -209,10 +209,10 @@ func (r *MMSA) Str(mem *sys.MemStat) string {
 }
 
 // allocate SGL
-// - immediateSize: known size, OR minimum expected size, OR size to preallocate
-//   immediateSize == 0 translates as DefaultBufSize - for page MMSA,
-//   and DefaultSmallBufSize - for small-size MMSA
-// - sbufSize: slab buffer size (optional)
+//   - immediateSize: known size, OR minimum expected size, OR size to preallocate
+//     immediateSize == 0 translates as DefaultBufSize - for page MMSA,
+//     and DefaultSmallBufSize - for small-size MMSA
+//   - sbufSize: slab buffer size (optional)
 func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	var (
 		slab *Slab

@@ -201,7 +201,9 @@ func ParseFmtTemplate(template string) (pt ParsedTemplate, err error) {
 }
 
 // e.g. single-range template: "prefix{0001..0010}suffix"
-//      multi-range:           "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
+//
+//	multi-range:           "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
+//
 // (both prefix and suffix are optional, here and elsewhere)
 func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 	left := strings.IndexByte(template, '{')
@@ -283,7 +285,8 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 }
 
 // e.g. multi-range template: "prefix-@00001-gap-@100-suffix"
-//      single range:         "prefix@00100suffix"
+//
+//	single range:         "prefix@00100suffix"
 func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
 	left := strings.IndexByte(template, '@')
 	if left == -1 {

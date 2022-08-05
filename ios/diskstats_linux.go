@@ -20,7 +20,8 @@ import (
 const sectorSize = int64(512)
 
 // based on https://www.kernel.org/doc/Documentation/iostats.txt
-//   and https://www.kernel.org/doc/Documentation/block/stat.txt
+//
+//	and https://www.kernel.org/doc/Documentation/block/stat.txt
 type dblockStat struct {
 	readComplete  int64 // 1 - # of reads completed
 	readMerged    int64 // 2 - # of reads merged

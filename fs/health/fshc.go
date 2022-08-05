@@ -182,12 +182,14 @@ func tryWriteFile(mpath string, fileSize int64) error {
 }
 
 // the core testing function: reads existing and writes temporary files on mountpath
-//   1. If the filepath points to existing file, it reads this file
-//   2. Reads up to maxReads files selected at random
-//   3. Creates up to maxWrites temporary files
+//  1. If the filepath points to existing file, it reads this file
+//  2. Reads up to maxReads files selected at random
+//  3. Creates up to maxWrites temporary files
+//
 // The function returns the number of read/write errors, and if the mountpath
-//   is accessible. When the specified local directory is inaccessible the
-//   function returns immediately without any read/write operations
+//
+//	is accessible. When the specified local directory is inaccessible the
+//	function returns immediately without any read/write operations
 func testMountpath(filePath, mountpath string,
 	maxTestFiles, fileSize int) (readFails, writeFails int, accessible bool) {
 	if glog.V(4) {

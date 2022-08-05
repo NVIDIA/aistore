@@ -148,10 +148,8 @@ func (r *XactTCB) TxnAbort() {
 	r.Base.Finish(err)
 }
 
-//
 // XactTCB copies one bucket _into_ another with or without transformation.
 // args.DP.Reader() is the reader to receive transformed bytes; when nil we do a plain bucket copy.
-//
 func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 	var parallel int
 	r = &XactTCB{t: e.T, args: *e.args}

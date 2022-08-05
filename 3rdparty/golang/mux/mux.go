@@ -180,7 +180,7 @@ func (mux *ServeMux) shouldRedirectRLocked(host, path string) bool {
 // the pattern that will match after following the redirect.
 //
 // If there is no registered handler that applies to the request,
-// Handler returns a ``page not found'' handler and an empty pattern.
+// Handler returns a “page not found” handler and an empty pattern.
 func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
 	// CONNECT requests are not canonicalized.
 	if r.Method == http.MethodConnect {

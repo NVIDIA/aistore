@@ -158,17 +158,16 @@ func (reb *Reb) unregRecv() {
 	debug.AssertNoErr(err)
 }
 
-//
 // run sequence: non-EC and EC global
 //
 // main method: serialized to run one at a time and goes through controlled enumerated stages
 // A note on stage management:
-// 1. Non-EC and EC rebalances run in parallel
-// 2. Execution starts after the `Reb` sets the current stage to rebStageTraverse
-// 3. Only EC rebalance changes the current stage
-// 4. Global rebalance performs checks such as `stage > rebStageTraverse` or
-//    `stage < rebStageWaitAck`. Since all EC stages are between
-//    `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
+//  1. Non-EC and EC rebalances run in parallel
+//  2. Execution starts after the `Reb` sets the current stage to rebStageTraverse
+//  3. Only EC rebalance changes the current stage
+//  4. Global rebalance performs checks such as `stage > rebStageTraverse` or
+//     `stage < rebStageWaitAck`. Since all EC stages are between
+//     `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
 func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact) {
 	if reb.nxtID.Load() >= id {
 		return
@@ -230,10 +229,10 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 }
 
 // To optimize goroutine creation:
-// 1. One bucket case just calls a single rebalance worker depending on
-//    whether a bucket is erasure coded (goroutine is not used).
-// 2. Multi-bucket rebalance may start both non-EC and EC in parallel.
-//    It then waits until everything finishes.
+//  1. One bucket case just calls a single rebalance worker depending on
+//     whether a bucket is erasure coded (goroutine is not used).
+//  2. Multi-bucket rebalance may start both non-EC and EC in parallel.
+//     It then waits until everything finishes.
 func (reb *Reb) run(rargs *rebArgs) error {
 	// 6. Capture stats, start mpath joggers
 	reb.stages.stage.Store(rebStageTraverse)

@@ -152,8 +152,8 @@ func GetBucketsSummaries(baseParams BaseParams, qbck cmn.QueryBcks, msg *apc.Bck
 // optionally, specific non-default properties (via cmn.BucketPropsToUpdate).
 //
 // See also:
-//    * github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
-//    * cmn.BucketPropsToUpdate (cmn/api.go)
+//   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
+//   - cmn.BucketPropsToUpdate (cmn/api.go)
 //
 // Bucket properties can be also changed at any time via SetBucketProps (above).
 func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) error {
@@ -202,13 +202,13 @@ func DoesBucketExist(baseParams BaseParams, qbck cmn.QueryBcks) (bool, error) {
 
 // CopyBucket copies existing `fromBck` bucket to the destination `toBck` thus,
 // effectively, creating a copy of the `fromBck`.
-// * AIS will create `toBck` on the fly but only if the destination bucket does not
-//   exist and _is_ provided by AIStore; 3rd party backend destination must exist -
-//   otherwise the copy operation won't be successful.
-// * There are no limitations on copying buckets across Backend providers:
-//   you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
-//   bucket, etc.
-// * Copying multiple buckets to the same destination bucket is also permitted.
+//   - AIS will create `toBck` on the fly but only if the destination bucket does not
+//     exist and _is_ provided by AIStore; 3rd party backend destination must exist -
+//     otherwise the copy operation won't be successful.
+//   - There are no limitations on copying buckets across Backend providers:
+//     you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
+//     bucket, etc.
+//   - Copying multiple buckets to the same destination bucket is also permitted.
 func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xactID string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return

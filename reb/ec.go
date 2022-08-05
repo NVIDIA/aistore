@@ -162,9 +162,9 @@ func (reb *Reb) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}
 }
 
 // Saves received CT to a local drive if needed:
-//   1. Full object/replica is received
-//   2. A CT is received and this target is not the default target (it
-//      means that the CTs came from default target after EC had been rebuilt)
+//  1. Full object/replica is received
+//  2. A CT is received and this target is not the default target (it
+//     means that the CTs came from default target after EC had been rebuilt)
 func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Reader) error {
 	cos.Assert(ntfn.md != nil)
 	var (

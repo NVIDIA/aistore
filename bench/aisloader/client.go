@@ -166,9 +166,6 @@ func (putter *tracePutter) do(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	return req.WithContext(httptrace.WithClientTrace(req.Context(), putter.tctx.trace)), nil
 }
 
-//
-// Put executes PUT
-//
 func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader cos.ReadOpenCloser) error {
 	var (
 		baseParams = api.BaseParams{

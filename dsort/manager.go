@@ -249,8 +249,9 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 }
 
 // TODO: Currently we create streams for each dSort job but maybe we should
-//  create streams once and have them available for all the dSort jobs so they
-//  would share the resource rather than competing for it.
+//
+//	create streams once and have them available for all the dSort jobs so they
+//	would share the resource rather than competing for it.
 func (m *Manager) initStreams() error {
 	config := cmn.GCO.Get()
 

@@ -101,8 +101,8 @@ const (
 )
 
 // Header Key conventions:
-//  - starts with a prefix "ais-",
-//  - all words separated with "-": no dots and underscores.
+//   - starts with a prefix "ais-",
+//   - all words separated with "-": no dots and underscores.
 const (
 	HeaderPrefix = "ais-"
 

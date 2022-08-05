@@ -240,7 +240,7 @@ ci: spell-check fmt-check lint test-short ## Run CI related checkers and linters
 
 lint-update: ## Update the linter version (removes previous one and downloads a new one)
 	@rm -f $(GOPATH)/bin/golangci-lint
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin latest
 
 lint: ## Run linter on whole project
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true

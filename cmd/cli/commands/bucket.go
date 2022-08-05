@@ -320,9 +320,9 @@ func fetchSummaries(qbck cmn.QueryBcks, fast, cached bool) (summaries cmn.BckSum
 
 // If both backend_bck.name and backend_bck.provider are present, use them.
 // Otherwise, replace as follows:
-//  * e.g., `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
-//    `backend_bck.provider=gcp` to match expected fields.
-//  * `backend_bck=none` with `backend_bck.name=""` and `backend_bck.provider=""`.
+//   - e.g., `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
+//     `backend_bck.provider=gcp` to match expected fields.
+//   - `backend_bck=none` with `backend_bck.name=""` and `backend_bck.provider=""`.
 func reformatBackendProps(c *cli.Context, nvs cos.SimpleKVs) (err error) {
 	var (
 		originBck cmn.Bck

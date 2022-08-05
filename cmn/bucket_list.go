@@ -18,7 +18,9 @@ import (
 // contains file and directory metadata as per the ListObjsMsg
 // Flags is a bit field:
 // 0-2: objects status, all statuses are mutually exclusive, so it can hold up
-//      to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
+//
+//	to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
+//
 // 3:   CheckExists (for remote bucket it shows if the object in present in AIS)
 type BucketEntry struct {
 	Name      string `json:"name" msg:"n"`                            // name of the object - NOTE: Does not include the bucket name.

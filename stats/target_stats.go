@@ -24,11 +24,12 @@ import (
 )
 
 // Naming Convention:
-//  -> "*.n" - counter
-//  -> "*.ns" - latency (nanoseconds)
-//  -> "*.size" - size (bytes)
-//  -> "*.bps" - throughput (in byte/s)
-//  -> "*.id" - ID
+//
+//	-> "*.n" - counter
+//	-> "*.ns" - latency (nanoseconds)
+//	-> "*.size" - size (bytes)
+//	-> "*.bps" - throughput (in byte/s)
+//	-> "*.id" - ID
 const (
 	// KindCounter - QPS and byte counts (always incremented, never reset)
 	GetColdCount      = "get.cold.n"
@@ -274,7 +275,9 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 }
 
 // log formatted disk stats:
-//       [ disk: read throughput, average read size, write throughput, average write size, disk utilization ]
+//
+//	[ disk: read throughput, average read size, write throughput, average write size, disk utilization ]
+//
 // e.g.: [ sda: 94MiB/s, 68KiB, 25MiB/s, 21KiB, 82% ]
 func (r *Trunner) logDiskStats() {
 	for disk, stats := range r.disk {

@@ -45,6 +45,7 @@ var (
 //
 // MISC FUNCTIONS
 //
+
 func getFreePorts(count int) ([]int, error) {
 	ports := make([]int, 0, count)
 	for i := 0; i < count; i++ {
@@ -66,6 +67,7 @@ func getFreePorts(count int) ([]int, error) {
 //
 // TEST SMAP
 //
+
 type testSmapListeners struct {
 	sync.RWMutex
 }
@@ -105,6 +107,7 @@ func (tm *testSmap) Listeners() cluster.SmapListeners {
 //
 // MOCKS
 //
+
 type extractCreatorMock struct {
 	useCompression bool
 	createShard    func(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) // func to hijack CreateShard function

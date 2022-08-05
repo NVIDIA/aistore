@@ -227,7 +227,8 @@ func (r *remAISCluster) init(alias string, confURLs []string, cfg *cmn.Config) (
 }
 
 // NOTE: supporting remote attachments both by alias and by UUID interchangeably,
-//       with mappings: 1(uuid) to 1(cluster) and 1(alias) to 1(cluster)
+//
+//	with mappings: 1(uuid) to 1(cluster) and 1(alias) to 1(cluster)
 func (m *AISBackendProvider) add(newAis *remAISCluster, newAlias string) (err error) {
 	if remAis, ok := m.remote[newAlias]; ok {
 		return fmt.Errorf("cannot attach %s: alias %q is already in use as uuid for %s",

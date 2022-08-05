@@ -93,6 +93,7 @@ func (xctn *Base) Running() (yes bool) {
 //
 // aborting
 //
+
 func (xctn *Base) ChanAbort() <-chan error { return xctn.abort.ch }
 
 func (xctn *Base) IsAborted() bool { return xctn.abort.done.Load() }

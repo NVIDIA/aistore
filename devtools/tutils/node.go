@@ -698,9 +698,6 @@ while503:
 	goto while503
 }
 
-//
-// formerly, devtools
-//
 func _joinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Duration) (rebID string, err error) {
 	baseParams := api.BaseParams{Client: ctx.Client, URL: proxyURL, Token: LoggedUserToken}
 	smap, err := api.GetClusterMap(baseParams)

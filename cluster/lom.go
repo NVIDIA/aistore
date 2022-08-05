@@ -340,8 +340,8 @@ func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, err error)
 	return
 }
 
-// * locked: is locked by the immediate caller (or otherwise is known to be locked);
-//   if false, try Rlock temporarily *if and only when* reading from FS
+//   - locked: is locked by the immediate caller (or otherwise is known to be locked);
+//     if false, try Rlock temporarily *if and only when* reading from FS
 func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	var (
 		lcache, lmd = lom.fromCache()
@@ -390,6 +390,7 @@ func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
 //
 // lom cache
 //
+
 func (lom *LOM) ReCache(store bool) {
 	debug.Assert(!lom.IsCopy()) // not caching copies
 	lcache, lmd := lom.fromCache()
@@ -496,6 +497,7 @@ func (lom *LOM) Remove(force ...bool) (err error) {
 //
 // evict lom cache
 //
+
 func EvictLomCache(b *Bck) {
 	var (
 		caches = lomCaches()

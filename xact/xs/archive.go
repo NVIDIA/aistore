@@ -602,11 +602,10 @@ func (mpw *msgpackWriter) fini() {
 // The format we are supporting for msgpack archiving is the most generic, simplified
 // to the point where there's no need for any schema-specific code on the client side.
 // Inter-operating with existing clients comes at a cost, though:
-// 1. `map[string][]byte` (aka `cmn.GenShard`) has no per-file headers where we could
-//    store the attributes of packed files.
-// 2. `map[string][]byte` certainly does not allow for same-name duplicates - in a given
-//    shard the names of packed files must be unique.
-//
+//  1. `map[string][]byte` (aka `cmn.GenShard`) has no per-file headers where we could
+//     store the attributes of packed files.
+//  2. `map[string][]byte` certainly does not allow for same-name duplicates - in a given
+//     shard the names of packed files must be unique.
 func (mpw *msgpackWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
 	// allocate max-size slab buffer to increase the chances
 	// of _not_ allocating heap via `sgl.Bytes` (above)

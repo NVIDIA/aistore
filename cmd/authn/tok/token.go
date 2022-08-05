@@ -108,10 +108,11 @@ func (tk *Token) String() string {
 // a user do not have permissions for the given `clusterID`.
 //
 // ACL rules are checked in the following order (from highest to the lowest priority):
-//   1. A user's role is an admin.
-//   2. User's permissions for the given bucket
-//   3. User's permissions for the given cluster
-//   4. User's default cluster permissions (ACL for a cluster with empty clusterID)
+//  1. A user's role is an admin.
+//  2. User's permissions for the given bucket
+//  3. User's permissions for the given cluster
+//  4. User's default cluster permissions (ACL for a cluster with empty clusterID)
+//
 // If there are no defined ACL found at any step, any access is denied.
 func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.AccessAttrs) error {
 	if tk.IsAdmin {

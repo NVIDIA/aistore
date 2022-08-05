@@ -482,9 +482,7 @@ func listArchive(fqn string) ([]*archEntry, error) {
 	return archList, nil
 }
 
-//
 // list: tar, tgz, zip, msgpack
-//
 func listTar(reader io.Reader) ([]*archEntry, error) {
 	fileList := make([]*archEntry, 0, 8)
 	tr := tar.NewReader(reader)

@@ -140,7 +140,8 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 }
 
 // NOTE: `UpgradeLock` correctly synchronizes threads waiting for **the same** operation
-//       (e.g., get object from a remote backend)
+//
+//	(e.g., get object from a remote backend)
 func (nlc *nlc) UpgradeLock(uname string) (upgraded bool) {
 	nlc.mu.Lock()
 	li, found := nlc.m[uname]

@@ -850,11 +850,11 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 }
 
 // Quick check that EC can restore a damaged object and a missing slice
-//  - PUTs an object to the bucket
-//  - filepath.Walk checks that the number of metafiles and slices are correct
-//  - Either original object or original object and a random slice are deleted
-//  - GET should detect that original object is gone
-//  - The target restores the original object from slices and missing slices
+//   - PUTs an object to the bucket
+//   - filepath.Walk checks that the number of metafiles and slices are correct
+//   - Either original object or original object and a random slice are deleted
+//   - GET should detect that original object is gone
+//   - The target restores the original object from slices and missing slices
 func TestECRestoreObjAndSlice(t *testing.T) {
 	var (
 		bck = cmn.Bck{
@@ -1216,15 +1216,15 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 }
 
 // Stress test to check that EC works as expected.
-//  - Changes bucket props to use EC
-//  - Generates `objCount` objects, size between `ecObjMinSize` and `ecObjMinSize`+ecObjMaxSize`
-//  - Objects smaller `ecObjLimit` must be copies, while others must be EC'ed
-//  - PUTs objects to the bucket
-//  - filepath.Walk checks that the number of metafiles and slices are correct
-//  - The original object is deleted
-//  - GET should detect that original object is gone and that there are EC slices
-//  - The target restores the original object from slices/copies and returns it
-//  - No errors must occur
+//   - Changes bucket props to use EC
+//   - Generates `objCount` objects, size between `ecObjMinSize` and `ecObjMinSize`+ecObjMaxSize`
+//   - Objects smaller `ecObjLimit` must be copies, while others must be EC'ed
+//   - PUTs objects to the bucket
+//   - filepath.Walk checks that the number of metafiles and slices are correct
+//   - The original object is deleted
+//   - GET should detect that original object is gone and that there are EC slices
+//   - The target restores the original object from slices/copies and returns it
+//   - No errors must occur
 func TestECStress(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
@@ -1327,12 +1327,12 @@ func TestECStressManyBuckets(t *testing.T) {
 }
 
 // ExtraStress test to check that EC works as expected
-//  - Changes bucket props to use EC
-//  - Generates `objCount` objects, size between `ecObjMinSize` and `ecObjMinSize`+ecObjMaxSize`
-//  - Objects smaller `ecObjLimit` must be copies, while others must be EC'ed
-//  - PUTs ALL objects to the bucket stressing both EC and transport
-//  - filepath.Walk checks that the number of metafiles at the end is correct
-//  - No errors must occur
+//   - Changes bucket props to use EC
+//   - Generates `objCount` objects, size between `ecObjMinSize` and `ecObjMinSize`+ecObjMaxSize`
+//   - Objects smaller `ecObjLimit` must be copies, while others must be EC'ed
+//   - PUTs ALL objects to the bucket stressing both EC and transport
+//   - filepath.Walk checks that the number of metafiles at the end is correct
+//   - No errors must occur
 func TestECExtraStress(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
@@ -2343,16 +2343,16 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 }
 
 // Simple resilver for EC bucket
-// 1. Create a bucket
-// 2. Remove mpath from one target
-// 3. Creates enough objects to have at least one per mpath
-//    So, minimal is <target count>*<mpath count>*2.
-//    For tests 100 looks good
-// 4. Attach removed mpath
-// 5. Wait for rebalance to finish
-// 6. Check that all objects returns the non-zero number of Data and Parity
-//    slices in HEAD response
-// 7. Extra check: the number of objects after rebalance equals initial number
+//  1. Create a bucket
+//  2. Remove mpath from one target
+//  3. Creates enough objects to have at least one per mpath
+//     So, minimal is <target count>*<mpath count>*2.
+//     For tests 100 looks good
+//  4. Attach removed mpath
+//  5. Wait for rebalance to finish
+//  6. Check that all objects returns the non-zero number of Data and Parity
+//     slices in HEAD response
+//  7. Extra check: the number of objects after rebalance equals initial number
 func TestECResilver(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 

@@ -216,9 +216,9 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 // * reader - a data to send
 // * cb - optional callback to be called when the transfer completes
 // * isRequest - defines the type of request:
-//		- true - send lightweight request to all targets (usually reader is nil
-//			in this case)
-//	    - false - send a slice/replica/metadata to targets
+//   - true - send lightweight request to all targets (usually reader is nil
+//     in this case)
+//   - false - send a slice/replica/metadata to targets
 func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, reader cos.ReadOpenCloser,
 	cb transport.ObjSentCB, isRequest bool) error {
 	nodes := cluster.AllocNodes(len(daemonIDs))
@@ -246,14 +246,14 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, re
 }
 
 // send request to a target, wait for its response, read the data into writer.
-// * daemonID - target to send a request
-// * bucket/objName - what to request
-// * uname - unique name for the operation: the name is built from daemonID,
-//		bucket and object names. HTTP data receiving handler generates a name
-//		when receiving data and if it finds a writer registered with the same
-//		name, it puts the data to its writer and notifies when download is done
-// * request - request to send
-// * writer - an opened writer that will receive the replica/slice/meta
+//   - daemonID - target to send a request
+//   - bucket/objName - what to request
+//   - uname - unique name for the operation: the name is built from daemonID,
+//     bucket and object names. HTTP data receiving handler generates a name
+//     when receiving data and if it finds a writer registered with the same
+//     name, it puts the data to its writer and notifies when download is done
+//   - request - request to send
+//   - writer - an opened writer that will receive the replica/slice/meta
 func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
 	hdr := transport.ObjHdr{ObjName: lom.ObjName, Opaque: request, Opcode: reqGet}
 	hdr.Bck.Copy(lom.Bucket())
@@ -316,21 +316,21 @@ func (r *xactECBase) unregWriter(uname string) {
 
 // Used to copy replicas/slices after the object is encoded after PUT/restored
 // after GET, or to respond to meta/slice/replica request.
-// * daemonIDs - receivers of the data
-// * bucket/objName - object path
-// * reader - object/slice/meta data
-// * src - extra information about the data to send
-// * cb - a caller may set its own callback to execute when the transfer is done.
-//		A special case:
-//		if a caller does not define its own callback, and it sets the `obj` in
-//		`src` it means that the caller wants to automatically free the memory
-//		allocated for the `obj` SGL after the object is transferred. The caller
-//		may set optional counter in `obj` - the default callback decreases the
-//		counter each time the callback is called and when the value drops below 1,
-//		`writeRemote` callback frees the SGL
-//      The counter is used for sending slices of one big SGL to a few nodes. In
-//		this case every slice must be sent to only one target, and transport bundle
-//		cannot help to track automatically when SGL should be freed.
+//   - daemonIDs - receivers of the data
+//   - bucket/objName - object path
+//   - reader - object/slice/meta data
+//   - src - extra information about the data to send
+//   - cb - a caller may set its own callback to execute when the transfer is done.
+//     A special case:
+//     if a caller does not define its own callback, and it sets the `obj` in
+//     `src` it means that the caller wants to automatically free the memory
+//     allocated for the `obj` SGL after the object is transferred. The caller
+//     may set optional counter in `obj` - the default callback decreases the
+//     counter each time the callback is called and when the value drops below 1,
+//     `writeRemote` callback frees the SGL
+//     The counter is used for sending slices of one big SGL to a few nodes. In
+//     this case every slice must be sent to only one target, and transport bundle
+//     cannot help to track automatically when SGL should be freed.
 func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSource, cb transport.ObjSentCB) error {
 	if src.metadata != nil && src.metadata.ObjVersion == "" {
 		src.metadata.ObjVersion = lom.Version()

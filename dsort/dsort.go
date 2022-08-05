@@ -775,15 +775,16 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 // itself. The strategy used to determine the appropriate target differs
 // depending on whether compression is used.
 //
-// 1) By HRW (not using compression)
-// 2) By locality (using compression),
-//  using two maps:
-//      i) shardsToTarget - tracks the total number of shards creation requests sent to each target URL
-//      ii) numLocalRecords - tracks the number of records in the current shardMeta each target has locally
+//  1. By HRW (not using compression)
 //
-//      The appropriate target is determined firstly by locality (i.e. the target with the most local records)
-//      and secondly (if there is a tie), by least load
-//      (i.e. the target with the least number of shard creation requests sent to it already).
+//  2. By locality (using compression),
+//     using two maps:
+//     i) shardsToTarget - tracks the total number of shards creation requests sent to each target URL
+//     ii) numLocalRecords - tracks the number of records in the current shardMeta each target has locally
+//
+//     The appropriate target is determined firstly by locality (i.e. the target with the most local records)
+//     and secondly (if there is a tie), by least load
+//     (i.e. the target with the least number of shard creation requests sent to it already).
 func (m *Manager) distributeShardRecords(maxSize int64) error {
 	var (
 		shards []*extract.Shard
@@ -926,8 +927,8 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 
 // nodeForShardRequest returns the optimal daemon id for a shard
 // creation request. The target chosen is determined based on:
-//  1) Locality of shard source files, and in a tie situation,
-//  2) Number of shard creation requests previously sent to the target.
+//  1. Locality of shard source files, and in a tie situation,
+//  2. Number of shard creation requests previously sent to the target.
 //
 // nolint:deadcode,unused // has TODO to fix it
 func nodeForShardRequest(shardsToTarget map[string][]*extract.Shard, numLocalRecords map[string]int) string {

@@ -9,9 +9,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-//
-// resolve and validate fqn
-//
 func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 	var digest uint64
 	parsedFQN, err = fs.ParseFQN(fqn)

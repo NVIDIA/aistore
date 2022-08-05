@@ -33,10 +33,10 @@ type (
 )
 
 // Background:
-// 	- Each proxy/gateway stores a local copy of the cluster map (Smap)
-// 	- Each Smap instance is versioned; the versioning is monotonic (increasing)
-// 	- Only the primary (leader) proxy distributes Smap updates to all other clustered nodes
-// 	- Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
+//   - Each proxy/gateway stores a local copy of the cluster map (Smap)
+//   - Each Smap instance is versioned; the versioning is monotonic (increasing)
+//   - Only the primary (leader) proxy distributes Smap updates to all other clustered nodes
+//   - Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
 func (p *proxy) bootstrap() {
 	var (
 		config          = cmn.GCO.Get()
@@ -101,10 +101,10 @@ func (p *proxy) bootstrap() {
 	}
 }
 
-// - make the *primary* decision taking into account both environment and
-//   loaded Smap, if exists
-// - handle AIS_PRIMARY_ID (TODO: target)
-// - see also "change of mind"
+//   - make the *primary* decision taking into account both environment and
+//     loaded Smap, if exists
+//   - handle AIS_PRIMARY_ID (TODO: target)
+//   - see also "change of mind"
 func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 	tag := "no Smap, "
 	if loadedSmap != nil {

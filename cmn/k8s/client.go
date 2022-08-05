@@ -288,9 +288,9 @@ func _initMetricsClient() {
 
 // Retrieve pod namespace
 // See:
-//  * https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/client-go/tools/clientcmd/client_config.go
-//  * https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
-//  * https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod.
+//   - https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/client-go/tools/clientcmd/client_config.go
+//   - https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+//   - https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod.
 func _namespace() (namespace string) {
 	if namespace = os.Getenv("POD_NAMESPACE"); namespace != "" {
 		return

@@ -966,7 +966,9 @@ loop:
 
 // smap 	- current Smap
 // directURL	- URL of the proxy that we send the request to
-//           	  (not necessarily the current primary)
+//
+//	(not necessarily the current primary)
+//
 // toID, toURL 	- DaemonID and URL of the proxy that must become the new primary
 func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, toID string) (newSmap *cluster.Smap) {
 	if directURL == "" {

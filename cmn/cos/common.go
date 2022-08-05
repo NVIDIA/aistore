@@ -133,11 +133,14 @@ func IsParseBool(s string) bool {
 }
 
 // ParseBool converts string to bool (case-insensitive):
-//   y, yes, on -> true
-//   n, no, off, <empty value> -> false
+//
+//	y, yes, on -> true
+//	n, no, off, <empty value> -> false
+//
 // strconv handles the following:
-//   1, true, t -> true
-//   0, false, f -> false
+//
+//	1, true, t -> true
+//	0, false, f -> false
 func ParseBool(s string) (value bool, err error) {
 	if s == "" {
 		return
@@ -326,6 +329,7 @@ func Errorf(format string, a ...interface{}) {
 // Use to clean up memory after a huge amount of memory becomes "free" to
 // return it to OS immediately without waiting for GC does it automatically
 // Params:
+//
 //	d - a delay before starting memory cleanup
 func FreeMemToOS(d ...time.Duration) {
 	if len(d) != 0 && d[0] != 0 {

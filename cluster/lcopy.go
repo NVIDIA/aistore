@@ -355,7 +355,8 @@ func (lom *LOM) LBGet() (fqn string) {
 }
 
 // NOTE: reconsider counting GETs (and the associated overhead)
-//       vs ios.refreshIostatCache() (and the associated delay)
+//
+//	vs ios.refreshIostatCache() (and the associated delay)
 func (lom *LOM) leastUtilCopy() (fqn string) {
 	var (
 		mpathUtils = fs.GetAllMpathUtils()

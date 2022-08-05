@@ -308,8 +308,10 @@ func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 	return err
 }
 
+//
 // Maintenance API
 //
+
 func StartMaintenance(baseParams BaseParams, actValue *apc.ActValRmNode) (id string, err error) {
 	msg := apc.ActionMsg{
 		Action: apc.ActStartMaintenance,

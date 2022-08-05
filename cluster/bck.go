@@ -73,6 +73,7 @@ func (b *Bck) Bucket() *cmn.Bck { return (*cmn.Bck)(b) }
 //
 // inline delegations => cmn.Bck
 //
+
 func (b *Bck) IsAIS() bool                        { return (*cmn.Bck)(b).IsAIS() }
 func (b *Bck) HasProvider() bool                  { return (*cmn.Bck)(b).HasProvider() }
 func (b *Bck) IsHTTP() bool                       { return (*cmn.Bck)(b).IsHTTP() }
@@ -223,6 +224,7 @@ func (b *Bck) VersionConf() cmn.VersionConf {
 //
 // access perms
 //
+
 func (b *Bck) Allow(bit apc.AccessAttrs) error { return b.checkAccess(bit) }
 
 func (b *Bck) checkAccess(bit apc.AccessAttrs) (err error) {

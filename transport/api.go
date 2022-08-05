@@ -131,19 +131,19 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 // queue realized as workCh, and the latter is a send completion queue (cmplCh).
 // Together SQ and SCQ form a FIFO.
 //
-// * header-only objects are supported; when there's no data to send (that is,
-//   when the header's Dsize field is set to zero), the reader is not required and the
-//   corresponding argument in Send() can be set to nil.
-// * object reader is *always* closed irrespectively of whether the Send() succeeds
-//   or fails. On success, if send-completion (ObjSentCB) callback is provided
-//   (i.e., non-nil), the closing is done by doCmpl().
-// * Optional reference counting is also done by (and in) the doCmpl, so that the
-//   ObjSentCB gets called if and only when the refcount (if provided i.e., non-nil)
-//   reaches zero.
-// * For every transmission of every object there's always an doCmpl() completion
-//   (with its refcounting and reader-closing). This holds true in all cases including
-//   network errors that may cause sudden and instant termination of the underlying
-//   stream(s).
+//   - header-only objects are supported; when there's no data to send (that is,
+//     when the header's Dsize field is set to zero), the reader is not required and the
+//     corresponding argument in Send() can be set to nil.
+//   - object reader is *always* closed irrespectively of whether the Send() succeeds
+//     or fails. On success, if send-completion (ObjSentCB) callback is provided
+//     (i.e., non-nil), the closing is done by doCmpl().
+//   - Optional reference counting is also done by (and in) the doCmpl, so that the
+//     ObjSentCB gets called if and only when the refcount (if provided i.e., non-nil)
+//     reaches zero.
+//   - For every transmission of every object there's always an doCmpl() completion
+//     (with its refcounting and reader-closing). This holds true in all cases including
+//     network errors that may cause sudden and instant termination of the underlying
+//     stream(s).
 func (s *Stream) Send(obj *Obj) (err error) {
 	debug.Assert(len(obj.Hdr.Opaque) < len(s.maxheader)-int(unsafe.Sizeof(Obj{}))) // must fit
 

@@ -928,10 +928,11 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, objN
 	}
 }
 
-// 1.	PUT file
-// 2.	Change contents of the file or change XXHash
-// 3.	GET file (first GET should fail with Internal Server Error and the
-// 		second should fail with not found).
+//  1. PUT file
+//  2. Change contents of the file or change XXHash
+//  3. GET file (first GET should fail with Internal Server Error and the
+//     second should fail with not found).
+//
 // Note: The following test can only work when running on a local setup
 // (targets are co-located with where this test is running from, because
 // it searches a local file system)

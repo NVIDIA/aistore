@@ -142,9 +142,9 @@ type (
 // * By default, LRU is disabled for AIS (`ais://`) buckets.
 //
 // See also:
-//    * github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
-//    * BucketPropsToUpdate (above)
-//    * ais.defaultBckProps()
+//   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
+//   - BucketPropsToUpdate (above)
+//   - ais.defaultBckProps()
 func (bck *Bck) DefaultProps(cs ...*Config) *BucketProps {
 	var c *Config
 	if len(cs) > 0 {

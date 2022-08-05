@@ -100,13 +100,16 @@ func isAzureDevMode(user string) bool {
 }
 
 // URL is empty:
-//    Dev -> http://127.0.0.1:1000/devstoreaccount1
-//    Prod -> http://<account_name>.blob.core.windows.net
+//
+//	Dev -> http://127.0.0.1:1000/devstoreaccount1
+//	Prod -> http://<account_name>.blob.core.windows.net
+//
 // URL is not empty
-//    URL starts with protocol
-//		-> URL
-//    URL does not contain protocol
-//		-> http://<account_name>URL/
+//
+//	   URL starts with protocol
+//			-> URL
+//	   URL does not contain protocol
+//			-> http://<account_name>URL/
 func azureURL() string {
 	url := os.Getenv(azureURLEnvVar)
 	if url != "" {
