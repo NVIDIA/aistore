@@ -3,22 +3,48 @@ name: Docker Images
 on:
   workflow_dispatch:
     inputs:
-      admin_image:
-        description: 'Enter name of admin image'
+      build_admin_image:
+        description: 'Build admin image (aistore/admin)'
         required: true
-        default: 'aistore/admin'
+        type: boolean
+        default: true
+     
+      build_aisnode_image:
+        description: 'Build aisnode image (aistore/aisnode)'
+        required: true
+        type: boolean
+        default: true
+
+      build_cluster_minimal_image:
+        description: 'Build cluster-minimal image (aistore/cluster-minimal)'
+        required: true
+        type: boolean
+        default: true
+
+      build_gitlab_ci_image:
+        description: 'Build GitLab CI image (aistore/ci)'
+        required: true
+        type: boolean
+        default: true
+
+      build_aisnode_minikube_image:
+        description: 'Build aisnode-minikube image (aistore/aisnode-minikube)'
+        required: true
+        type: boolean
+        default: true
+
       image_tag:
-        description: 'Tag of all the images'
+        description: 'Tag of all the selected images'
         required: true
         default: 'latest'
-      aisnode_image:
-        description: 'Enter name of aisnode image'
-        required: true
-        default: 'aistore/aisnode'
-      cluster_minimal:
-        description: 'Enter name of cluster minimal image'
-        required: true
-        default: 'aistore/cluster-minimal'
+
+env:
+  ADMIN_IMAGE: 'aistore/admin'
+  AISNODE_IMAGE: 'aistore/aisnode'
+  CLUSTER_MINIMAL_IMAGE: 'aistore/cluster-minimal'
+  CI_IMAGE: 'aistore/ci'
+  AISNODE_MINIKUBE_IMAGE: 'aistore/aisnode-minikube'
+
 
 jobs:
   docker:
@@ -33,14 +59,39 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Docker build and push
+    - name: aisadmin image
+      if: ${{ inputs.build_admin_image }}
       run: |
         pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisadmin_container
-        IMAGE_REPO="${{ github.event.inputs.admin_image }}" IMAGE_TAG="${{ github.event.inputs.image_tag }}" make -e all
+        IMAGE_REPO="${{ env.ADMIN_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
         popd
+
+    - name: aisnode image
+      if: ${{ inputs.build_aisnode_image }}
+      run: |
         pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
-        IMAGE_REPO="${{ github.event.inputs.aisnode_image }}" IMAGE_TAG="${{ github.event.inputs.image_tag }}" make -e all
+        IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
         popd
+
+    - name: cluster-minimal image
+      if: ${{ inputs.build_cluster_minimal_image }}
+      run: |
         pushd $GITHUB_WORKSPACE/deploy/prod/docker/single
-        IMAGE_REPO="${{ github.event.inputs.cluster_minimal }}" IMAGE_TAG="${{ github.event.inputs.image_tag }}" make -e all
+        IMAGE_REPO="${{ env.CLUSTER_MINIMAL_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
+        popd
+
+    - name: ci image
+      if: ${{ inputs.build_gitlab_ci_image }}
+      run: |
+        
+        pushd $GITHUB_WORKSPACE/deploy/test/ci
+        IMAGE_REPO="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
+        popd
+
+    - name: aisnode-minikube image
+      if: ${{ inputs.build_aisnode_minikube_image }}
+      run: |
+        
+        pushd $GITHUB_WORKSPACE/deploy/dev/k8s
+        IMAGE_REPO="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e docker-all
         popd

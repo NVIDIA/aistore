@@ -5,6 +5,10 @@
 
 CPU=4
 MEMORY=7000
+MODE="debug"
+REGISTRY_URL ?= docker.io
+IMAGE_REPO=aistore/aisnode-minikube
+IMAGE_TAG=latest
 
 # Run AIStore with 1 proxy 1 target on already running Minikube
 minimal: 
@@ -38,3 +42,11 @@ stop-ais:
 # Stops AIS cluster as well as Minikube
 stop: 
 	@ minikube delete
+
+docker-build:
+	@ docker build ./../../../ --force-rm -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) --build-arg MODE="$(MODE)" -f Dockerfile
+
+docker-push:
+	@ docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)
+
+docker-all: docker-build docker-push

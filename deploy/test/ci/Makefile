@@ -1,12 +1,13 @@
 REGISTRY_URL ?= docker.io
 IMAGE_REPO=aistore/ci
+IMAGE_TAG=latest
 
 all: build push
 
 build:
-	docker build --no-cache -t $(REGISTRY_URL)/$(IMAGE_REPO):1.18 -f general.dockerfile .
-	docker build --no-cache -t $(REGISTRY_URL)/$(IMAGE_REPO):5.0-hdfs -f hdfs.dockerfile .
+	docker build --no-cache -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f general.dockerfile .
+	docker build --no-cache -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f hdfs.dockerfile .
 
 push:
-	docker push $(REGISTRY_URL)/$(IMAGE_REPO):1.18
-	docker push $(REGISTRY_URL)/$(IMAGE_REPO):5.0-hdfs
+	docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)
+	docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)
