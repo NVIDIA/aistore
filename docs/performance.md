@@ -109,15 +109,19 @@ $ iperf -P 20 -l 128K -i 1 -t 30 -w 512K -c <IP-address>
 
 ## Maximum number of open files
 
-This must be done before you decide to run benchmarks, let alone deploy AIS inproduction: you absolutely need to increase the maximum number of open file descriptors.
+This must be done before running benchmarks, let alone deploying AIS inproduction - the maximum number of open file descriptors must be increased.
 
-To check the current settings, use `ulimit -n`.
+The corresponding system configuration file is `/etc/security/limits.conf`.
 
-> It is strongly recommended to raise ulimit to at least `100,000`.
+> In Linux, the default per-process maximum is 1024. It is **strongly recommended** to raise it to at least `100,000`.
 
-Here're the (example) settings that we use for development:
+Here's a full replica of [/etc/security/limits.conf](https://github.com/NVIDIA/aistore/blob/master/deploy/conf/limits.conf) that we use for development _and_ production.
 
-```
+To check your current settings, run `ulimit -n` or `tail /etc/security/limits.conf`.
+
+To increase the limits, copy the following 5 lines into `/etc/security/limits.conf`:
+
+```console
 $ tail /etc/security/limits.conf
 #ftp             hard    nproc           0
 #ftp             -       chroot          /ftp
@@ -125,13 +129,25 @@ $ tail /etc/security/limits.conf
 
 root             hard    nofile          999999
 root             soft    nofile          999999
-ubuntu           hard    nofile          999999
-ubuntu           soft    nofile          999999
+*                hard    nofile          999999
+*                soft    nofile          999999
 
 # End of file
 ```
 
-> If the change in the ` /etc/security/limits.conf` (above) does not cause `ulimit -n` to show expected numbers, try then modifying `/etc/systemd/user.conf` and `/etc/systemd/system.conf`. In both configurations files, look for the line `#DefaultLimitNOFILE=` and uncomment it as `DefaultLimitNOFILE=999999`. A brief discussion of the topic can be found [here](https://superuser.com/questions/1200539/cannot-increase-open-file-limit-past-4096-ubuntu).
+Once done, re-login and double-check that both *soft* and *hard* limits have indeed changed:
+
+```console
+$ ulimit -n
+999999
+$ ulimit -Hn
+999999
+```
+
+For further references, google:
+
+* `docker run --ulimit`
+* `DefaultLimitNOFILE`
 
 ## Storage
 
