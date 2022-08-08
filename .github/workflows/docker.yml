@@ -8,7 +8,7 @@ on:
         required: true
         type: boolean
         default: true
-     
+
       build_aisnode_image:
         description: 'Build aisnode image (aistore/aisnode)'
         required: true
@@ -83,7 +83,7 @@ jobs:
     - name: ci image
       if: ${{ inputs.build_gitlab_ci_image }}
       run: |
-        
+
         pushd $GITHUB_WORKSPACE/deploy/test/ci
         IMAGE_REPO="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
         popd
@@ -91,7 +91,7 @@ jobs:
     - name: aisnode-minikube image
       if: ${{ inputs.build_aisnode_minikube_image }}
       run: |
-        
+
         pushd $GITHUB_WORKSPACE/deploy/dev/k8s
         IMAGE_REPO="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e docker-all
         popd

@@ -30,19 +30,18 @@ import (
 
 type (
 	TemplateRange struct {
+		Gap        string // characters after the range (to the next range or end of the string)
 		Start      int64
 		End        int64
 		Step       int64
 		DigitCount int
-		Gap        string // characters after range (either to next range or end of string)
 	}
 	ParsedTemplate struct {
-		Prefix string
-		Ranges []TemplateRange
-		// runtime
+		Prefix      string
+		Ranges      []TemplateRange
 		at          []int64
-		rangesCount int
 		buf         bytes.Buffer
+		rangesCount int
 	}
 	ErrTemplate struct {
 		msg string

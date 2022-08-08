@@ -77,9 +77,9 @@ type (
 	}
 	ReaderArgs struct {
 		R       io.Reader
-		Size    int64
 		ReadCb  func(int, error)
 		DeferCb func()
+		Size    int64
 	}
 	ReaderWithArgs struct {
 		args ReaderArgs
@@ -107,8 +107,8 @@ type (
 	// ByteHandle is a byte buffer(made from []byte) that implements
 	// ReadOpenCloser interface
 	ByteHandle struct {
-		b []byte
 		*bytes.Reader
+		b []byte
 	}
 
 	nopOpener   struct{ io.ReadCloser }
@@ -165,7 +165,7 @@ func (r *nopReader) Read(b []byte) (int, error) {
 // ByteHandle //
 ////////////////
 
-func NewByteHandle(bt []byte) *ByteHandle           { return &ByteHandle{bt, bytes.NewReader(bt)} }
+func NewByteHandle(bt []byte) *ByteHandle           { return &ByteHandle{bytes.NewReader(bt), bt} }
 func (*ByteHandle) Close() error                    { return nil }
 func (b *ByteHandle) Open() (ReadOpenCloser, error) { return NewByteHandle(b.b), nil }
 

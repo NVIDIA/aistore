@@ -62,13 +62,13 @@ import (
 
 type (
 	BytePack struct {
-		off int
 		b   []byte
+		off int
 	}
 
 	ByteUnpack struct {
-		off int
 		b   []byte
+		off int
 	}
 
 	MapStrUint16 map[string]uint16

@@ -30,15 +30,15 @@ type (
 	// designed for that and bugs can be expected, especially when previous
 	// group was not called with successful (without timeout) WaitTimeout.
 	TimeoutGroup struct {
-		jobsLeft  atomic.Int32 // counter for jobs left to be done
-		postedFin atomic.Int32 // determines if we have already posted fin signal
 		fin       chan struct{}
+		jobsLeft  atomic.Int32
+		postedFin atomic.Int32
 	}
 
 	// StopCh is specialized channel for stopping things.
 	StopCh struct {
-		once sync.Once
 		ch   chan struct{}
+		once sync.Once
 	}
 
 	// Semaphore implements sempahore which is just a nice wrapper on `chan struct{}`.
@@ -48,9 +48,9 @@ type (
 
 	// DynSemaphore implements sempahore which can change its size during usage.
 	DynSemaphore struct {
+		c    *sync.Cond
 		size int
 		cur  int
-		c    *sync.Cond
 		mu   sync.Mutex
 	}
 
