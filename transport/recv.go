@@ -34,27 +34,27 @@ const hkOld = time.Hour
 // private types
 type (
 	iterator struct {
-		handler *handler
 		body    io.Reader
-		hbuf    []byte
+		handler *handler
 		pdu     *rpdu
 		stats   *Stats
+		hbuf    []byte
 	}
 	objReader struct {
 		body   io.Reader
-		off    int64
-		hdr    ObjHdr
 		pdu    *rpdu
 		loghdr string
+		hdr    ObjHdr
+		off    int64
 	}
 	handler struct {
-		trname      string
+		mm          *memsys.MMSA
 		rxObj       ReceiveObj
 		rxMsg       ReceiveMsg
-		sessions    sync.Map // map[uint64]*Stats
-		oldSessions sync.Map // map[uint64]time.Time
-		hkName      string   // house-keeping name
-		mm          *memsys.MMSA
+		sessions    sync.Map
+		oldSessions sync.Map
+		hkName      string
+		trname      string
 	}
 
 	ErrDuplicateTrname struct {

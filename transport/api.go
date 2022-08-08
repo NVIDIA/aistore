@@ -45,32 +45,32 @@ const (
 type (
 	// advanced usage: additional stream control
 	Extra struct {
-		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
 		Callback     ObjSentCB     // typical usage: to free SGLs, close files, etc.
-		Compression  string        // see CompressAlways, etc. enum
 		MMSA         *memsys.MMSA  // compression-related buffering
-		Config       *cmn.Config   // config
-		SenderID     string        // optional send ID (e.g., xaction ID)
-		SizePDU      int32         // 0(zero): no PDUs; must be below MaxSizePDU; unknown size _requires_ PDUs
+		Config       *cmn.Config   // (to optimize-out GCO.Get())
+		Compression  string        // see CompressAlways, etc. enum
+		SenderID     string        // e.g., xaction ID (optional)
+		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
+		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be below MaxSizePDU; unknown size _requires_ PDUs
 	}
 	EndpointStats map[uint64]*Stats // all stats for a given (network, trname) endpoint indexed by session ID
 
 	// object header
 	ObjHdr struct {
 		Bck      cmn.Bck
+		ObjAttrs cmn.ObjAttrs // attributes/metadata of the object that's being transmitted
 		ObjName  string
-		ObjAttrs cmn.ObjAttrs // attributes/metadata of the sent object
-		Opaque   []byte       // custom control (optional)
-		SID      string       // sender node ID
-		Opcode   int          // (see reserved range above)
+		SID      string // sender node ID
+		Opaque   []byte // custom control (optional)
+		Opcode   int    // (see reserved range above)
 	}
 	// object to transmit
 	Obj struct {
-		Hdr      ObjHdr        // object header
-		Reader   io.ReadCloser // reader, to read the object, and close when done
-		Callback ObjSentCB     // fired when sending is done OR when the stream terminates (see term.reason)
-		CmplArg  interface{}   // Additional parameter which will be passed to the callback.
-		prc      *atomic.Int64 // private; if present, ref-counts to call ObjSentCB only once
+		Reader   io.ReadCloser // reader (to read the object, and close when done)
+		CmplArg  interface{}   // optional context passed to the ObjSentCB callback
+		Callback ObjSentCB     // called when the last byte is sent _or_ when the stream terminates (see term.reason)
+		prc      *atomic.Int64 // private; if present, ref-counts so that we call ObjSentCB only once
+		Hdr      ObjHdr
 	}
 
 	// object-sent callback that has the following signature can optionally be defined on a:
@@ -82,9 +82,9 @@ type (
 	ObjSentCB func(ObjHdr, io.ReadCloser, interface{}, error)
 
 	Msg struct {
-		SID    string // sender node ID
-		Opcode int    // (see reserved range above)
+		SID    string
 		Body   []byte
+		Opcode int
 	}
 
 	// stream collector

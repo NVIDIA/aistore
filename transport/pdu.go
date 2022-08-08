@@ -26,10 +26,10 @@ type (
 		pdu
 	}
 	rpdu struct {
-		flags uint64
-		body  io.Reader
-		plen  int
+		body io.Reader
 		pdu
+		flags uint64
+		plen  int
 	}
 )
 

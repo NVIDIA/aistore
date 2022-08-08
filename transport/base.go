@@ -63,37 +63,37 @@ type (
 		idleTick()
 	}
 	streamBase struct {
-		streamer streamer
-		client   Client // http client this send-stream will use
-
-		// user-defined & queryable
-		dstURL, dstID, trname string       // http endpoint
-		sessID                int64        // stream session ID
-		sessST                atomic.Int64 // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
-		stats                 Stats        // stream stats
-		Numcur, Sizecur       int64        // gets reset to zero upon each timeout
-		// internals
-		lid    string        // log prefix
-		lastCh *cos.StopCh   // end of stream
-		stopCh *cos.StopCh   // stop/abort stream
-		postCh chan struct{} // to indicate that workCh has work
-		time   struct {
+		streamer  streamer
+		client    Client      // stream's http client
+		stopCh    *cos.StopCh // stop/abort stream
+		lastCh    *cos.StopCh // end-of-stream
+		pdu       *spdu       // PDU buffer
+		mm        *memsys.MMSA
+		postCh    chan struct{} // to indicate that workCh has work
+		trname    string        // http endpoint: (trname, dstURL, dstID)
+		dstURL    string
+		dstID     string
+		lid       string // log prefix
+		maxheader []byte // max header buffer
+		header    []byte // object header (slice of the maxheader with bucket/objName, etc. fields packed/serialized)
+		term      struct {
+			err    error
+			reason string
+			mu     sync.Mutex
+			done   atomic.Bool
+		}
+		stats Stats // stream stats
+		time  struct {
 			idleTeardown time.Duration // idle timeout
 			inSend       atomic.Bool   // true upon Send() or Read() - info for Collector to delay cleanup
 			ticks        int           // num 1s ticks until idle timeout
 			index        int           // heap stuff
 		}
-		wg        sync.WaitGroup
-		mm        *memsys.MMSA
-		pdu       *spdu  // PDU buffer
-		maxheader []byte // max header buffer
-		header    []byte // object header - slice of the maxheader with bucket/objName, etc. fields
-		term      struct {
-			mu     sync.Mutex
-			err    error
-			reason string
-			done   atomic.Bool
-		}
+		wg      sync.WaitGroup
+		sessST  atomic.Int64 // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
+		sessID  int64        // stream session ID
+		Numcur  int64        // gets reset to zero upon each timeout
+		Sizecur int64        // ditto
 	}
 )
 

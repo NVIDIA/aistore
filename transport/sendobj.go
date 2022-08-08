@@ -39,9 +39,9 @@ type (
 		off int64
 		ins int // in-send enum
 	}
-	cmpl struct { // send completions => SCQ
-		obj Obj
+	cmpl struct {
 		err error
+		obj Obj
 	}
 )
 
@@ -66,7 +66,7 @@ func (s *Stream) terminate(err error, reason string) (actReason string, actErr e
 	s.Stop()
 	err = s.term.err
 	actReason, actErr = s.term.reason, s.term.err
-	s.cmplCh <- cmpl{Obj{Hdr: ObjHdr{Opcode: opcFin}}, err}
+	s.cmplCh <- cmpl{err, Obj{Hdr: ObjHdr{Opcode: opcFin}}}
 	s.term.mu.Unlock()
 
 	// Remove stream after lock because we could deadlock between `do()`
@@ -330,7 +330,7 @@ exit:
 	}
 
 	// next completion => SCQ
-	s.cmplCh <- cmpl{s.sendoff.obj, err}
+	s.cmplCh <- cmpl{err, s.sendoff.obj}
 	s.sendoff = sendoff{ins: inEOB}
 }
 
@@ -362,7 +362,7 @@ func (s *Stream) dryrun() {
 
 func (s *Stream) errCmpl(err error) {
 	if s.inSend() {
-		s.cmplCh <- cmpl{s.sendoff.obj, err}
+		s.cmplCh <- cmpl{err, s.sendoff.obj}
 	}
 }
 
