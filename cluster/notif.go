@@ -45,11 +45,11 @@ type (
 	// intra-cluster notification base
 
 	NotifMsg struct {
-		UUID   string `json:"uuid"`    // uuid
-		NodeID string `json:"node_id"` // notifier node id
-		Kind   string `json:"kind"`    // kind of xaction
-		Data   []byte `json:"message"` // typed message
+		UUID   string `json:"uuid"`    // xaction UUID
+		NodeID string `json:"node_id"` // notifier node ID
+		Kind   string `json:"kind"`    // xaction `Kind`
 		ErrMsg string `json:"err"`     // error.Error()
+		Data   []byte `json:"message"` // typed message
 	}
 )
 

@@ -64,12 +64,12 @@ type (
 		SkipEncode bool // don't run erasure-code when finalizing
 	}
 	CopyObjectParams struct {
+		DM        DataMover
+		DP        DP // Data Provider (optional; see Transform/Copy Bucket (TCB))
+		Xact      Xact
 		BckTo     *Bck
 		ObjNameTo string
 		Buf       []byte
-		DM        DataMover
-		DP        DP // Data Provider (optional)
-		Xact      Xact
 	}
 	// common part that's used in `api.PromoteArgs` and `PromoteParams`(server side), both
 	PromoteArgs struct {

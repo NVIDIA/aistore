@@ -58,29 +58,28 @@ type (
 
 	// Snode - a node (gateway or target) in a cluster
 	Snode struct {
-		DaeID      string       `json:"daemon_id"`
-		DaeType    string       `json:"daemon_type"`       // enum: "target" or "proxy"
-		PubNet     NetInfo      `json:"public_net"`        // cmn.NetPublic
-		ControlNet NetInfo      `json:"intra_control_net"` // cmn.NetIntraControl
-		DataNet    NetInfo      `json:"intra_data_net"`    // cmn.NetIntraData
-		Flags      cos.BitFlags `json:"flags"`             // enum { SnodeNonElectable, SnodeIC, ... } - see above
-		Ext        interface{}  `json:"ext,omitempty"`     // within meta-version extensions
-		// runtime
-		idDigest uint64
-		name     string
-		LocalNet *net.IPNet `json:"-"`
+		Ext        interface{} `json:"ext,omitempty"` // within meta-version extensions
+		LocalNet   *net.IPNet  `json:"-"`
+		PubNet     NetInfo     `json:"public_net"`        // cmn.NetPublic
+		DataNet    NetInfo     `json:"intra_data_net"`    // cmn.NetIntraData
+		ControlNet NetInfo     `json:"intra_control_net"` // cmn.NetIntraControl
+		DaeType    string      `json:"daemon_type"`       // "target" or "proxy"
+		DaeID      string      `json:"daemon_id"`
+		name       string
+		Flags      cos.BitFlags `json:"flags"` // enum { SnodeNonElectable, SnodeIC, ... }
+		idDigest   uint64
 	}
 	Nodes   []*Snode          // slice of Snodes
 	NodeMap map[string]*Snode // map of Snodes: DaeID => Snodes
 
 	Smap struct {
-		Tmap         NodeMap     `json:"tmap"`           // targetID -> targetInfo
-		Pmap         NodeMap     `json:"pmap"`           // proxyID -> proxyInfo
-		Primary      *Snode      `json:"proxy_si"`       // (json tag preserved for back. compat.)
-		Version      int64       `json:"version,string"` // version
-		UUID         string      `json:"uuid"`           // UUID (assigned once at creation time)
-		CreationTime string      `json:"creation_time"`  // creation time
-		Ext          interface{} `json:"ext,omitempty"`  // within meta-version extensions
+		Ext          interface{} `json:"ext,omitempty"`
+		Pmap         NodeMap     `json:"pmap"` // [pid => Snode]
+		Primary      *Snode      `json:"proxy_si"`
+		Tmap         NodeMap     `json:"tmap"`          // [tid => Snode]
+		UUID         string      `json:"uuid"`          // assigned once at creation time and never change
+		CreationTime string      `json:"creation_time"` // creation timestamp
+		Version      int64       `json:"version,string"`
 	}
 
 	// Smap on-change listeners

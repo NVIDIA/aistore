@@ -28,8 +28,8 @@ type (
 	noCopy       struct{}
 	NameLockPair struct {
 		_         noCopy
-		uname     string
 		nlc       *nlc
+		uname     string
 		exclusive bool
 	}
 )

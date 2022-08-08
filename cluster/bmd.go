@@ -30,10 +30,10 @@ type (
 	// - BMD is immutable and versioned
 	// - BMD versioning is monotonic and incremental
 	BMD struct {
-		Version   int64       `json:"version,string"` // version - gets incremented on every update
-		UUID      string      `json:"uuid"`           // immutable
-		Providers Providers   `json:"providers"`      // (provider, namespace, bucket) hierarchy
 		Ext       interface{} `json:"ext,omitempty"`  // within meta-version extensions
+		Providers Providers   `json:"providers"`      // (provider, namespace, bucket) hierarchy
+		UUID      string      `json:"uuid"`           // unique & immutable
+		Version   int64       `json:"version,string"` // gets incremented on every update
 	}
 )
 

@@ -38,20 +38,20 @@ const (
 type (
 	lmeta struct {
 		cmn.ObjAttrs
+		copies  fs.MPI
 		uname   string
-		atimefs uint64 // high bit is reserved for `dirty`
-		bckID   uint64 // see ais/bucketmeta
-		copies  fs.MPI // ditto
+		atimefs uint64 // NOTE: high bit is reserved for `dirty`
+		bckID   uint64
 	}
 	LOM struct {
-		md          lmeta             // local persistent metadata
-		bck         Bck               // bucket
-		mpathInfo   *fs.MountpathInfo // object's mountpath
-		mpathDigest uint64            // mountpath's digest
-		FQN         string            // fqn
-		ObjName     string            // object name in the bucket
-		HrwFQN      string            // => main replica (misplaced?)
+		bck         Bck
+		ObjName     string
+		mpathInfo   *fs.MountpathInfo
+		FQN         string
+		HrwFQN      string // (=> main replica)
 		info        string
+		md          lmeta  // on-disk metadata
+		mpathDigest uint64 // mountpath's digest
 	}
 )
 

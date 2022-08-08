@@ -20,8 +20,8 @@ import (
 type (
 	nameLocker []nlc
 	nlc        struct {
-		mu sync.Mutex
 		m  map[string]*lockInfo
+		mu sync.Mutex
 	}
 	lockInfo struct {
 		wcond     *sync.Cond // to synchronize "waiting room" upgrade logic
