@@ -29,9 +29,9 @@ var (
 type (
 	// implements io.ReadWriteCloser + Reset
 	SGL struct {
-		sgl  [][]byte
 		slab *Slab
-		woff int64 // stream
+		sgl  [][]byte
+		woff int64
 		roff int64
 	}
 	// uses the underlying SGL to implement io.ReadWriteCloser + io.Seeker
