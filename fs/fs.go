@@ -45,25 +45,19 @@ const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
 
 type (
 	MountpathInfo struct {
-		Path           string   // cleaned up
-		FilesystemInfo          // name of the underlying filesystem, its ID and other info
-		PathDigest     uint64   // used for HRW
+		lomCaches      cos.MultiSyncMap // LOM caches
+		info           string
+		Path           string   // clean path
+		FilesystemInfo          // underlying filesystem
 		Disks          []string // owned disks (ios.FsDisks map => slice)
-
-		// bit flags (atomic)
-		flags uint64
-		// LOM caches
-		lomCaches cos.MultiSyncMap
-		// bucket path cache
-		bpc struct {
-			sync.RWMutex
+		bpc            struct {
 			m map[uint64]string
+			sync.RWMutex
 		}
-		// capacity
-		cmu      sync.RWMutex
-		capacity Capacity
-		// String
-		info string
+		capacity   Capacity
+		flags      uint64 // bit flags (set/get atomic)
+		PathDigest uint64 // (HRW logic)
+		cmu        sync.RWMutex
 	}
 	MPI map[string]*MountpathInfo
 
@@ -76,7 +70,8 @@ type (
 
 	// MountedFS holds all mountpaths for the target.
 	MountedFS struct {
-		mu sync.RWMutex
+		// Iostats for the available mountpaths
+		ios ios.IOStater
 		// fsIDs is set in which we store fsids of mountpaths. This allows for
 		// determining if there are any duplications of file system - we allow
 		// only one mountpath per file system.
@@ -86,24 +81,24 @@ type (
 		// Disabled mountpaths - mountpaths which for some reason did not pass
 		// the health check and cannot be used for a moment.
 		disabled atomic.Pointer
-		// Iostats for the available mountpaths
-		ios ios.IOStater
 
 		// capacity
-		cmu       sync.RWMutex
-		csExpires atomic.Int64
 		cs        CapStatus
+		csExpires atomic.Int64
+		cmu       sync.RWMutex
+
+		mu sync.RWMutex
 
 		// allow disk sharing by multiple mountpaths and mountpaths with no disks whatsoever
 		// (default = false)
 		allowSharedDisksAndNoDisks bool
 	}
 	CapStatus struct {
+		Err        error
 		TotalUsed  uint64 // bytes
 		TotalAvail uint64 // bytes
 		PctAvg     int32  // used average (%)
 		PctMax     int32  // max used (%)
-		Err        error
 		OOS        bool
 	}
 )

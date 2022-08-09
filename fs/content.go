@@ -65,10 +65,10 @@ type (
 	}
 
 	ContentInfo struct {
-		Dir  string // Original directory
-		Base string // Original base name of the file
-		Old  bool   // Determines if the file is old or not
-		Type string // Type of the workfile
+		Dir  string // original directory
+		Base string // original basename
+		Type string // content type
+		Old  bool   // true if old (subj. to space cleanup)
 	}
 
 	contentSpecMgr struct {

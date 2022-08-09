@@ -17,8 +17,8 @@ import (
 // for those (very few) clients that don't have their own custom implementation
 
 type WalkBckOpts struct {
-	WalkOpts
 	ValidateCallback walkFunc // should return filepath.SkipDir to skip directory without an error
+	WalkOpts
 }
 
 // internals
@@ -31,14 +31,14 @@ type (
 		opts     WalkOpts
 	}
 	wbe struct { // walk bck entry
-		fqn      string
 		dirEntry DirEntry
+		fqn      string
 	}
 	wbeInfo struct {
-		mpathIdx int
+		dirEntry DirEntry
 		fqn      string
 		objName  string
-		dirEntry DirEntry
+		mpathIdx int
 	}
 	wbeHeap []wbeInfo
 )
@@ -127,7 +127,7 @@ func (jg *joggerBck) cb(fqn string, de DirEntry) error {
 	select {
 	case <-jg.ctx.Done():
 		return cmn.NewErrAborted(jg.mi.String(), tag, nil)
-	case jg.workCh <- &wbe{fqn, de}:
+	case jg.workCh <- &wbe{de, fqn}:
 		return nil
 	}
 }

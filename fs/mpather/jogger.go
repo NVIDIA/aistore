@@ -42,49 +42,41 @@ const (
 
 type (
 	JoggerGroupOpts struct {
-		T        cluster.Target
-		Bck      cmn.Bck
-		CTs      []string
-		VisitObj func(lom *cluster.LOM, buf []byte) error
-		VisitCT  func(ct *cluster.CT, buf []byte) error
-		Slab     *memsys.Slab
-
-		DoLoad   LoadType // Loads the LOM and if specified takes requested lock.
-		Parallel int      // How many parallel calls each jogger should execute.
-
-		// Additional function which should be set by JoggerGroup and called
-		// by each of the jogger if they finish.
-		onFinish func()
-
-		IncludeCopy           bool // Traverses LOMs that are copies.
-		SkipGloballyMisplaced bool // Skips content types that are globally misplaced.
-		Throttle              bool // Determines if the jogger should throttle itself.
+		T                     cluster.Target
+		onFinish              func()
+		VisitObj              func(lom *cluster.LOM, buf []byte) error
+		VisitCT               func(ct *cluster.CT, buf []byte) error
+		Slab                  *memsys.Slab
+		Bck                   cmn.Bck
+		CTs                   []string
+		DoLoad                LoadType // if specified, lom.Load(lock type)
+		Parallel              int      // num parallel calls
+		IncludeCopy           bool     // visit copies (aka replicas)
+		SkipGloballyMisplaced bool     // skip globally misplaced
+		Throttle              bool     // true: pace itself depending on disk utilization
 	}
 
 	// JoggerGroup runs jogger per mountpath which walk the entire bucket and
 	// call callback on each of the encountered object. When jogger encounters
 	// error it stops and informs other joggers about the error (so they stop too).
 	JoggerGroup struct {
-		wg      *errgroup.Group
-		joggers map[string]*jogger
-
+		wg          *errgroup.Group
+		joggers     map[string]*jogger
+		finishedCh  *cos.StopCh // when all joggers are done
 		finishedCnt atomic.Uint32
-		finishedCh  *cos.StopCh // Informs when all joggers have finished.
 	}
 
 	// jogger is being run on each mountpath and executes fs.Walk which call
 	// provided callback.
 	jogger struct {
-		bufs [][]byte
-
 		ctx       context.Context
+		syncGroup *joggerSyncGroup
 		opts      *JoggerGroupOpts
 		mi        *fs.MountpathInfo
 		config    *cmn.Config
 		stopCh    *cos.StopCh
-		syncGroup *joggerSyncGroup
-
-		num int64
+		bufs      [][]byte
+		num       int64
 	}
 
 	joggerSyncGroup struct {

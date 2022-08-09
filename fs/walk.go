@@ -36,11 +36,11 @@ type (
 	walkFunc func(fqn string, de DirEntry) error
 
 	WalkOpts struct {
-		Dir      string
 		Mi       *MountpathInfo
-		Bck      cmn.Bck
-		CTs      []string
 		Callback walkFunc
+		Bck      cmn.Bck
+		Dir      string
+		CTs      []string
 		Sorted   bool
 	}
 
@@ -49,9 +49,9 @@ type (
 	}
 
 	walkDirWrapper struct {
-		errCallbackWrapper
-		dir string                       // root pathname
 		ucb func(string, DirEntry) error // user-provided callback
+		dir string                       // root pathname
+		errCallbackWrapper
 	}
 )
 
