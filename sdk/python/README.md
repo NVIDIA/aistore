@@ -226,11 +226,11 @@ client.etl().delete(etl_id="etl-spec")
 
 Deleting an ETL deletes all pods created by Kuberenetes for the ETL as well as any specifications for the ETL on Kubernetes. Consequently, deleted ETLs cannot be started again and will need to be re-initialized.
 
-> For an interactive demo, refer [here](https://github.com/NVIDIA/aistore/blob/master/sdk/python/sdk-etl-tutorial.ipynb).
+> For an interactive demo, refer [here](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/sdk/sdk-etl-tutorial.ipynb).
 
 ### More Examples
 
-For more in-depth examples, please see [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/master/sdk/python/sdk-tutorial.ipynb).
+For more in-depth examples, please see [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/sdk/sdk-tutorial.ipynb).
 
 
 ### API Documentation
