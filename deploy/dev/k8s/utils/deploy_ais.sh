@@ -20,12 +20,12 @@ fi
 source utils/parse_fsparams.sh
 source utils/parse_cld.sh
 
-export DOCKER_IMAGE="aistore/aisnode:minikube"
+export DOCKER_IMAGE="aistore/aisnode-minikube:latest"
 echo "Build and push to local registry: (y/n) ?"
 read -r build
 if [[ "$build" == "y" ]]; then
   echo "Building image with mode=${MODE}..."
-  export DOCKER_IMAGE="localhost:5000/aisnode:minikube"
+  export DOCKER_IMAGE="localhost:5000/aisnode-minikube:latest"
   docker build ./../../../ --force-rm -t ${DOCKER_IMAGE} --build-arg MODE="${MODE}" -f Dockerfile
   docker push ${DOCKER_IMAGE}
 fi

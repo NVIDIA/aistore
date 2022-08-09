@@ -44,6 +44,7 @@ env:
   CLUSTER_MINIMAL_IMAGE: 'aistore/cluster-minimal'
   CI_IMAGE: 'aistore/ci'
   AISNODE_MINIKUBE_IMAGE: 'aistore/aisnode-minikube'
+  HDFS_CI_IMAGE: 'aistore/hdfs-ci'
 
 
 jobs:
@@ -85,7 +86,7 @@ jobs:
       run: |
 
         pushd $GITHUB_WORKSPACE/deploy/test/ci
-        IMAGE_REPO="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
+        CI_IMAGE="${{ env.CI_IMAGE }}" HDFS_CI_IMAGE=${{ env.HDFS_CI_IMAGE }} IMAGE_TAG="${{ inputs.image_tag }}" make -e all
         popd
 
     - name: aisnode-minikube image
@@ -93,5 +94,5 @@ jobs:
       run: |
 
         pushd $GITHUB_WORKSPACE/deploy/dev/k8s
-        IMAGE_REPO="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e docker-all
+        IMAGE_REPO="${{ env.AISNODE_MINIKUBE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e docker-all
         popd
