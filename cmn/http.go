@@ -33,17 +33,13 @@ type (
 
 	// HreqArgs specifies HTTP request that we want to send.
 	HreqArgs struct {
-		Method string      // GET, POST, ...
+		BodyR  io.Reader   // to optimize-out allocations; if non-nil and implements `io.Closer`, will always be closed by `client.Do`
 		Header http.Header // request headers
-		Base   string      // base URL: http://xyz.abc
-		Path   string      // path URL: /x/y/z
-		Query  url.Values  // query: ?a=x&b=y
-		Body   []byte      // body for [POST, PUT, ...]
-		// BodyR is an alternative to `Body` to avoid unnecessary allocations
-		// when body for [POST, PUT, ...] is in stored `io.Reader`.
-		// If non-nil and implements `io.Closer`, it will be closed by `client.Do`,
-		// even on errors.
-		BodyR io.Reader
+		Query  url.Values  // query, e.g. ?a=x&b=y&c=z
+		Method string
+		Base   string // base URL, e.g. http://xyz.abc
+		Path   string // path URL, e.g. /x/y/z
+		Body   []byte
 	}
 
 	RetryArgs struct {

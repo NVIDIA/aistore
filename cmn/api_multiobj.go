@@ -15,21 +15,20 @@ import (
 type (
 	// List of object names _or_ a template specifying { Prefix, Regex, and/or Range }
 	SelectObjsMsg struct {
-		ObjNames []string `json:"objnames"`
 		Template string   `json:"template"`
+		ObjNames []string `json:"objnames"`
 	}
 
 	// ArchiveMsg is used in CreateArchMultiObj operations; the message contains parameters
 	// for archiving mutiple (source) objects as one of the supported cos.ArchExtensions types
 	// at the specified (bucket) destination
 	ArchiveMsg struct {
+		ToBck       Bck    `json:"tobck"`
 		TxnUUID     string `json:"-"`
 		FromBckName string `json:"-"`
+		ArchName    string `json:"archname"` // must have one of the cos.ArchExtensions
+		Mime        string `json:"mime"`     // user-specified mime type takes precedence if defined
 		SelectObjsMsg
-		ToBck    Bck    `json:"tobck"`
-		ArchName string `json:"archname"` // must have one of the cos.ArchExtensions
-		Mime     string `json:"mime"`     // user-specified mime type takes precedence if defined
-		// flags
 		InclSrcBname          bool `json:"isbn"` // include source bucket name into the names of archived objects
 		AllowAppendToExisting bool `json:"aate"` // allow adding a list or a range of objects to an existing archive
 		ContinueOnError       bool `json:"coer"` // keep running archiving xaction in presence of errors in a any given multi-object transaction
@@ -37,12 +36,11 @@ type (
 
 	//  Multi-object copy & transform (see also: TCBMsg)
 	TCObjsMsg struct {
-		TxnUUID string `json:"-"`
-		SelectObjsMsg
-		apc.TCBMsg
 		ToBck Bck `json:"tobck"`
-		// flags
-		ContinueOnError bool `json:"coer"` // keep running in presence of errors in a any given multi-object transaction
+		SelectObjsMsg
+		TxnUUID string `json:"-"`
+		apc.TCBMsg
+		ContinueOnError bool `json:"coer"` // ditto
 	}
 )
 

@@ -28,47 +28,19 @@ type (
 	// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
 	// one would need to write `ec.enabled`. For more info refer to `IterFields`.
 	BucketProps struct {
-		// Provider of the bucket. The value contains explicit provider
-		// meaning that `` or `cloud` values are forbidden.
-		Provider string `json:"provider" list:"readonly"`
-
-		// if specified, creates association between an ais bucket and a given Cloud backend
-		// in effect, making a Cloud bucket out of existing (and differently named) ais bucket.
-		BackendBck Bck `json:"backend_bck,omitempty"`
-
-		// Versioning can be enabled or disabled on a per-bucket basis
-		Versioning VersionConf `json:"versioning"`
-
-		// checksum that's used for this bucket
-		Cksum CksumConf `json:"checksum"`
-
-		// LRU config for the bucket
-		LRU LRUConf `json:"lru"`
-
-		// Mirror defines local-mirroring policy for the bucket
-		Mirror MirrorConf `json:"mirror"`
-
-		// Metadata write policy
+		BackendBck  Bck             `json:"backend_bck,omitempty"` // makes remote bucket out of a given ais bucket
+		Extra       ExtraProps      `json:"extra,omitempty" list:"omitempty"`
 		WritePolicy WritePolicyConf `json:"write_policy"`
-
-		// EC defines erasure coding setting for the bucket
-		EC ECConf `json:"ec"`
-
-		// Bucket access attributes - see Allow* above
-		Access apc.AccessAttrs `json:"access,string"`
-
-		// Additional provider-specific bucket props (all providers)
-		Extra ExtraProps `json:"extra,omitempty" list:"omitempty"`
-
-		// Unique bucket ID
-		BID uint64 `json:"bid,string" list:"omit"`
-
-		// Bucket creation time
-		Created int64 `json:"created,string" list:"readonly"`
-
-		// Non-empty when the bucket has been renamed.
-		// TODO: Could be used for delayed deletion.
-		Renamed string `list:"omit"`
+		Provider    string          `json:"provider" list:"readonly"`       // backend provider
+		Renamed     string          `list:"omit"`                           // non-empty if the bucket has been renamed
+		Cksum       CksumConf       `json:"checksum"`                       // the bucket's checksum
+		EC          ECConf          `json:"ec"`                             // erasure coding
+		LRU         LRUConf         `json:"lru"`                            // LRU (watermarks and enabled/disabled)
+		Mirror      MirrorConf      `json:"mirror"`                         // mirroring
+		Access      apc.AccessAttrs `json:"access,string"`                  // access permissions
+		BID         uint64          `json:"bid,string" list:"omit"`         // unique ID
+		Created     int64           `json:"created,string" list:"readonly"` // creation timestamp
+		Versioning  VersionConf     `json:"versioning"`                     // versioning (see "inherit" here and elsewhere)
 	}
 
 	ExtraProps struct {

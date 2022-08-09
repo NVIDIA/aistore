@@ -23,14 +23,14 @@ import (
 //
 // 3:   CheckExists (for remote bucket it shows if the object in present in AIS)
 type BucketEntry struct {
-	Name      string `json:"name" msg:"n"`                            // name of the object - NOTE: Does not include the bucket name.
+	Name      string `json:"name" msg:"n"`                            // name of the object (NOTE: does not include the bucket name)
+	Checksum  string `json:"checksum,omitempty" msg:"cs,omitempty"`   // object's checksum
+	Atime     string `json:"atime,omitempty" msg:"a,omitempty"`       // last access time; formatted as per ListObjsMsg.TimeFormat
+	Version   string `json:"version,omitempty" msg:"v,omitempty"`     // GCP int64 generation, AWS version (string), etc.
+	TargetURL string `json:"target_url,omitempty" msg:"t,omitempty"`  // (advanced usage)
 	Size      int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes
-	Checksum  string `json:"checksum,omitempty" msg:"cs,omitempty"`   // checksum
-	Atime     string `json:"atime,omitempty" msg:"a,omitempty"`       // formatted as per ListObjsMsg.TimeFormat
-	Version   string `json:"version,omitempty" msg:"v,omitempty"`     // version/generation ID. In GCP it is int64, in AWS it is a string
-	TargetURL string `json:"target_url,omitempty" msg:"t,omitempty"`  // URL of target which has the entry
-	Copies    int16  `json:"copies,omitempty" msg:"c,omitempty"`      // ## copies (non-replicated = 1)
-	Flags     uint16 `json:"flags,omitempty" msg:"f,omitempty"`       // object flags, like CheckExists, IsMoved etc
+	Copies    int16  `json:"copies,omitempty" msg:"c,omitempty"`      // ## copies (NOTE: non-replicated = 1)
+	Flags     uint16 `json:"flags,omitempty" msg:"f,omitempty"`
 }
 
 func (be *BucketEntry) CheckExists() bool  { return be.Flags&apc.EntryIsCached != 0 }
@@ -69,9 +69,8 @@ const (
 
 // BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'
 type BucketList struct {
-	UUID    string         `json:"uuid"`
-	Entries []*BucketEntry `json:"entries"`
-	// TODO: merge `UUID` into `ContinuationToken`
-	ContinuationToken string `json:"continuation_token"`
-	Flags             uint32 `json:"flags"` // extra information for a client, see BckListFlag*
+	UUID              string         `json:"uuid"`
+	ContinuationToken string         `json:"continuation_token"`
+	Entries           []*BucketEntry `json:"entries"`
+	Flags             uint32         `json:"flags"`
 }

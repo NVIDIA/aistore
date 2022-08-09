@@ -52,12 +52,13 @@ const (
 
 // object properties (NOTE: embeds system `ObjAttrs` that in turn includes custom user-defined)
 type ObjectProps struct {
+	Bck Bck `json:"bucket"`
 	ObjAttrs
-	Name   string `json:"name"`
-	Bck    Bck    `json:"bucket"`
-	Mirror struct {
-		Copies int      `json:"copies,omitempty"`
+	Name     string `json:"name"`
+	DaemonID string `json:"daemon_id"`
+	Mirror   struct {
 		Paths  []string `json:"paths,omitempty"`
+		Copies int      `json:"copies,omitempty"`
 	} `json:"mirror"`
 	EC struct {
 		Generation   int64 `json:"generation"`
@@ -65,8 +66,7 @@ type ObjectProps struct {
 		ParitySlices int   `json:"parity"`
 		IsECCopy     bool  `json:"replicated"`
 	} `json:"ec"`
-	DaemonID string `json:"daemon_id"`
-	Present  bool   `json:"present"`
+	Present bool `json:"present"`
 }
 
 type (
@@ -82,11 +82,11 @@ type (
 	}
 	// see also apc.HdrObjAtime et al. @ api/apc/const.go (and note that naming must be consistent)
 	ObjAttrs struct {
-		Atime    int64         `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
-		Size     int64         `json:"size,omitempty"`      // object size (bytes)
-		Ver      string        `json:"version,omitempty"`   // object version
 		Cksum    *cos.Cksum    `json:"checksum,omitempty"`  // object checksum (cloned)
 		CustomMD cos.SimpleKVs `json:"custom-md,omitempty"` // custom metadata: ETag, MD5, CRC, user-defined ...
+		Ver      string        `json:"version,omitempty"`   // object version
+		Atime    int64         `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
+		Size     int64         `json:"size,omitempty"`      // object size (bytes)
 	}
 )
 

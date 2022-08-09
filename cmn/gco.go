@@ -15,10 +15,10 @@ import (
 )
 
 type globalConfigOwner struct {
-	mtx      sync.Mutex     // mutex for protecting updates of config
 	c        atomic.Pointer // pointer to `Config` (cluster + local + override config)
 	oc       atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
-	confPath atomic.Pointer // initial global config path
+	confPath atomic.Pointer // pointer to initial global config path
+	mtx      sync.Mutex
 }
 
 // GCO (Global Config Owner) is responsible for updating and notifying
