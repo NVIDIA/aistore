@@ -1,6 +1,6 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
@@ -11,9 +11,9 @@ import (
 )
 
 type BckJog struct {
-	Base
 	t       cluster.Target
 	joggers *mpather.JoggerGroup
+	Base
 }
 
 func (r *BckJog) Init(id, kind string, bck *cluster.Bck, opts *mpather.JoggerGroupOpts) {

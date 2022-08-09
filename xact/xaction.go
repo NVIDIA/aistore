@@ -26,25 +26,25 @@ const abortErrWait = time.Second
 
 type (
 	Base struct {
+		notif  *NotifXact
+		bck    cluster.Bck
 		id     string
 		kind   string
-		bck    cluster.Bck
 		sutime atomic.Int64
 		eutime atomic.Int64
-		stats  struct {
+		abort  struct {
+			ch   chan error
+			err  error
+			mu   sync.Mutex
+			done atomic.Bool
+		}
+		stats struct {
 			objs     atomic.Int64 // locally processed
 			bytes    atomic.Int64
 			outobjs  atomic.Int64 // transmit
 			outbytes atomic.Int64
 			inobjs   atomic.Int64 // receive
 			inbytes  atomic.Int64
-		}
-		notif *NotifXact
-		abort struct {
-			mu   sync.Mutex
-			ch   chan error
-			err  error
-			done atomic.Bool
 		}
 	}
 	Marked struct {

@@ -22,8 +22,8 @@ type (
 	}
 
 	NotifXact struct {
-		nl.NotifBase
 		Xact cluster.Xact
+		nl.NotifBase
 	}
 )
 

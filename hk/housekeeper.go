@@ -33,14 +33,14 @@ type (
 		Housekeep() time.Duration
 	}
 	request struct {
-		name            string
 		f               CleanupFunc
+		name            string
 		initialInterval time.Duration
 		registering     bool
 	}
 	timedAction struct {
-		name       string
 		f          CleanupFunc
+		name       string
 		updateTime int64
 	}
 	timedActions []timedAction
@@ -51,8 +51,8 @@ type (
 		actions  *timedActions
 		timer    *time.Timer
 		workCh   chan request
-		running  atomic.Bool
 		stopping *atomic.Bool
+		running  atomic.Bool
 	}
 
 	CleanupFunc = func() time.Duration

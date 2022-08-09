@@ -35,9 +35,6 @@ type (
 	MpathUtil sync.Map
 
 	cache struct {
-		expireTime int64
-		timestamp  int64
-
 		ioms   map[string]int64 // IO millis
 		util   map[string]int64 // utilization
 		rms    map[string]int64 // read millis
@@ -53,16 +50,19 @@ type (
 
 		mpathUtil   map[string]int64 // Average utilization of the disks, range [0, 100].
 		mpathUtilRO MpathUtil        // Read-only copy of `mpathUtil`.
+
+		expireTime int64
+		timestamp  int64
 	}
 	ios struct {
-		sync.RWMutex
 		mpath2disks map[string]FsDisks
 		disk2mpath  cos.SimpleKVs
 		disk2sysfn  cos.SimpleKVs
 		cache       atomic.Pointer
 		cacheHst    [16]*cache
 		cacheIdx    int
-		busy        atomic.Bool
+		sync.RWMutex
+		busy atomic.Bool
 	}
 )
 

@@ -132,14 +132,14 @@ type (
 		Snode          *cluster.Snode `json:"snode"`
 		Stats          *CoreStats     `json:"daemon_stats"`
 		Capacity       fs.MPCap       `json:"capacity"`
-		MemCPUInfo     cos.MemCPUInfo `json:"sys_info"`
-		SmapVersion    int64          `json:"smap_version,string"`
 		RebSnap        *RebalanceSnap `json:"rebalance_snap,omitempty"`
 		Status         string         `json:"status"`
 		DeploymentType string         `json:"deployment"`
 		Version        string         `json:"ais_version"`  // major.minor.build
 		BuildTime      string         `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
 		K8sPodName     string         `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
+		MemCPUInfo     cos.MemCPUInfo `json:"sys_info"`
+		SmapVersion    int64          `json:"smap_version,string"`
 	}
 	DaemonStatusMap map[string]*DaemonStatus // by SID (aka DaemonID)
 
@@ -196,17 +196,21 @@ type (
 	// There are two main types of stats: counter and latency declared
 	// using the the kind field. Only latency stats have numSamples used to compute latency.
 	statsValue struct {
-		sync.RWMutex
-		Value int64 `json:"v,string"`
 		kind  string
 		label struct {
 			comm string // common part of the metric label (as in: <prefix> . comm . <suffix>)
 			stsd string // StatsD label
 			prom string // Prometheus label
 		}
+
+		Value int64 `json:"v,string"`
+
 		numSamples int64
 		cumulative int64
-		isCommon   bool // optional, common to the proxy and target
+
+		sync.RWMutex
+
+		isCommon bool // optional, common to the proxy and target
 	}
 	copyValue struct {
 		Value int64 `json:"v,string"`

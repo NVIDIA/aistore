@@ -1,6 +1,6 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
@@ -33,17 +33,19 @@ type (
 		SubPending(n int)
 	}
 	DemandBase struct {
-		Base
-		mu      sync.RWMutex
-		pending int64
-		active  int64
-		hkName  string
-		idle    struct {
-			d     time.Duration
+		hkName string
+		idle   struct {
 			ticks *cos.StopCh
+			d     time.Duration
 			last  int64 // mono.NanoTime
 		}
-		hkReg atomic.Bool
+
+		Base
+
+		pending int64
+		active  int64
+		mu      sync.RWMutex
+		hkReg   atomic.Bool // mono.NanoTime
 	}
 )
 

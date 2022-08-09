@@ -14,12 +14,12 @@ import (
 
 type (
 	Snap struct {
-		ID        string    `json:"id"`
-		Kind      string    `json:"kind"`
-		Bck       cmn.Bck   `json:"bck"`
 		StartTime time.Time `json:"start-time"`
 		EndTime   time.Time `json:"end-time"`
-		Stats     Stats     `json:"stats"` // common stats counters (see below)
+		Bck       cmn.Bck   `json:"bck"`
+		ID        string    `json:"id"`
+		Kind      string    `json:"kind"`
+		Stats     Stats     `json:"stats"` // common stats counters (below)
 		AbortedX  bool      `json:"aborted"`
 	}
 
@@ -33,8 +33,8 @@ type (
 	}
 
 	SnapExt struct {
-		Snap
 		Ext interface{} `json:"ext"`
+		Snap
 	}
 	BaseDemandStatsExt struct {
 		IsIdle bool `json:"is_idle"`
@@ -43,13 +43,13 @@ type (
 	// NOTE: see closely related `api.XactReqArgs` and comments
 	// TODO: apc package, here and elsewhere
 	QueryMsg struct {
+		OnlyRunning *bool       `json:"show_active"`
+		Ext         interface{} `json:"ext"`
+		Bck         cmn.Bck     `json:"bck"`
 		ID          string      `json:"id"`
 		Kind        string      `json:"kind"`
-		Bck         cmn.Bck     `json:"bck"`
-		OnlyRunning *bool       `json:"show_active"`
-		Buckets     []cmn.Bck   `json:"buckets,omitempty"`
 		DaemonID    string      `json:"node,omitempty"`
-		Ext         interface{} `json:"ext"`
+		Buckets     []cmn.Bck   `json:"buckets,omitempty"`
 	}
 
 	QueryMsgLRU struct {
