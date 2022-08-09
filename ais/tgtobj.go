@@ -43,86 +43,86 @@ const fmtNested = "%s: nested (%v): failed to %s %q: %v"
 
 type (
 	putObjInfo struct {
-		atime      time.Time
+		atime time.Time
+		r     io.ReadCloser // reader that has the content
+		xctn  cluster.Xact  // xaction that puts
+
 		t          *target
 		lom        *cluster.LOM
-		r          io.ReadCloser // reader that has the content
-		cksumToUse *cos.Cksum    // if available (not `none`), can be validated and will be stored
-		size       int64         // object size aka Content-Length
-		workFQN    string        // temp fqn to be renamed
-		xctn       cluster.Xact  // xaction that puts
-		owt        cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
-		restful    bool          // being invoked via RESTful API
-		t2t        bool          // by another target
-		skipEC     bool          // do not erasure-encode when finalizing
-		skipVC     bool          // skip loading existing Version and skip comparing Checksums (skip VC)
+		cksumToUse *cos.Cksum // if available (not `none`), can be validated and will be stored
+
+		workFQN string // temp fqn to be renamed
+
+		size    int64   // Content-Length
+		owt     cmn.OWT // object write transaction enum { OwtPut, ..., OwtGet* }
+		restful bool    // being invoked via RESTful API
+		t2t     bool    // by another target
+		skipEC  bool    // do not erasure-encode when finalizing
+		skipVC  bool    // skip loading existing Version and skip comparing Checksums (skip VC)
 	}
 
 	getObjInfo struct {
+		w   io.Writer       // not necessarily http.ResponseWriter
+		ctx context.Context // context used when getting object from remote backend (access creds)
+
+		t   *target
+		lom *cluster.LOM
+
+		archive archiveQuery // archive query
+		ranges  byteRanges   // range read (see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)
+
 		atime    int64
 		nanotim  int64
-		t        *target
-		lom      *cluster.LOM
-		w        io.Writer       // not necessarily http.ResponseWriter
-		ctx      context.Context // context used when getting object from remote backend (access creds)
-		ranges   byteRanges      // range read (see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)
-		archive  archiveQuery    // archive query
-		isGFN    bool            // is GFN request
-		chunked  bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
+		isGFN    bool // is GFN request
+		chunked  bool // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
 		unlocked bool
 	}
 
 	// Contains information packed in append handle.
 	handleInfo struct {
+		partialCksum *cos.CksumHash
 		nodeID       string
 		filePath     string
-		partialCksum *cos.CksumHash
 	}
 
 	appendObjInfo struct {
-		started time.Time // started time of receiving - used to calculate the recv duration
-		t       *target
-		lom     *cluster.LOM
+		started time.Time     // started time of receiving - used to calculate the recv duration
+		r       io.ReadCloser // reader with the content of the object.
 
-		// Reader with the content of the object.
-		r io.ReadCloser
-		// Object size aka Content-Length.
-		size int64
-		// Append/Flush operation.
-		op string
-		hi handleInfo // Information contained in handle.
+		t   *target
+		lom *cluster.LOM
 
-		cksum *cos.Cksum // Expected checksum of the final object.
+		cksum *cos.Cksum // expected checksum of the final object.
+		hi    handleInfo // packed
+		op    string     // operation (Append | Flush)
+		size  int64      // Content-Length
 	}
 
 	copyObjInfo struct {
+		t *target
 		cluster.CopyObjectParams
-		t        *target
 		owt      cmn.OWT
 		finalize bool // copies and EC (as in poi.finalize())
 		dryRun   bool
 	}
 	sendArgs struct {
 		reader    cos.ReadOpenCloser
-		bckTo     *cluster.Bck
-		objNameTo string
-		tsi       *cluster.Snode
 		dm        cluster.DataMover
 		objAttrs  cmn.ObjAttrsHolder
+		tsi       *cluster.Snode
+		bckTo     *cluster.Bck
+		objNameTo string
 		owt       cmn.OWT
 	}
 
 	appendArchObjInfo struct {
-		started time.Time // started time of receiving - used to calculate the recv duration
-		t       *target
-		lom     *cluster.LOM
-
-		// Reader with the content of the object.
-		r io.ReadCloser
-		// Object size aka Content-Length.
-		size     int64
+		started  time.Time     // started time of receiving - used to calculate the recv duration
+		r        io.ReadCloser // reader with the content of the object
+		t        *target
+		lom      *cluster.LOM
 		filename string // path inside an archive
 		mime     string // archive type
+		size     int64  // Content-Length
 	}
 )
 

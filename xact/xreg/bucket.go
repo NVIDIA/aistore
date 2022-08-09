@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -14,11 +14,11 @@ import (
 
 type (
 	TCBArgs struct {
-		Phase   string
+		DP      cluster.DP
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
-		DP      cluster.DP
 		Msg     *apc.TCBMsg
+		Phase   string
 	}
 
 	TCObjsArgs struct {
@@ -32,10 +32,10 @@ type (
 	}
 
 	BckRenameArgs struct {
-		RebID   string
-		Phase   string
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
+		RebID   string
+		Phase   string
 	}
 
 	MNCArgs struct {
@@ -67,7 +67,7 @@ func RenewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
 }
 
 func RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) RenewRes {
-	return RenewBucketXact(apc.ActECEncode, bck, Args{t, uuid, &ECEncodeArgs{Phase: phase}})
+	return RenewBucketXact(apc.ActECEncode, bck, Args{T: t, Custom: &ECEncodeArgs{Phase: phase}, UUID: uuid})
 }
 
 func RenewMakeNCopies(t cluster.Target, uuid, tag string) {
@@ -100,12 +100,12 @@ func RenewMakeNCopies(t cluster.Target, uuid, tag string) {
 }
 
 func RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, copies int) (res RenewRes) {
-	e := dreg.bckXacts[apc.ActMakeNCopies].New(Args{t, uuid, &MNCArgs{tag, copies}}, bck)
+	e := dreg.bckXacts[apc.ActMakeNCopies].New(Args{T: t, Custom: &MNCArgs{tag, copies}, UUID: uuid}, bck)
 	return dreg.renew(e, bck)
 }
 
 func RenewPromote(t cluster.Target, uuid string, bck *cluster.Bck, args *cluster.PromoteArgs) RenewRes {
-	return RenewBucketXact(apc.ActPromote, bck, Args{t, uuid, args})
+	return RenewBucketXact(apc.ActPromote, bck, Args{T: t, Custom: args, UUID: uuid})
 }
 
 func RenewBckLoadLomCache(t cluster.Target, uuid string, bck *cluster.Bck) RenewRes {
@@ -117,11 +117,11 @@ func RenewPutMirror(t cluster.Target, lom *cluster.LOM) RenewRes {
 }
 
 func RenewTCB(t cluster.Target, uuid, kind string, custom *TCBArgs) RenewRes {
-	return RenewBucketXact(kind, custom.BckTo /*NOTE: to not from*/, Args{t, uuid, custom})
+	return RenewBucketXact(kind, custom.BckTo /*NOTE: to not from*/, Args{T: t, Custom: custom, UUID: uuid})
 }
 
 func RenewTCObjs(t cluster.Target, uuid, kind string, custom *TCObjsArgs) RenewRes {
-	return RenewBucketXact(kind, custom.BckFrom, Args{t, uuid, custom})
+	return RenewBucketXact(kind, custom.BckFrom, Args{T: t, Custom: custom, UUID: uuid})
 }
 
 func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {
@@ -131,7 +131,7 @@ func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, 
 		BckFrom: bckFrom,
 		BckTo:   bckTo,
 	}
-	return RenewBucketXact(apc.ActMoveBck, bckTo, Args{t, uuid, custom})
+	return RenewBucketXact(apc.ActMoveBck, bckTo, Args{T: t, Custom: custom, UUID: uuid})
 }
 
 func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *apc.ListObjsMsg) RenewRes {

@@ -30,15 +30,18 @@ type (
 	// ReqParams is used in constructing client-side API requests to the AIStore.
 	// Stores Query and Headers for providing arguments that are not used commonly in API requests
 	ReqParams struct {
+		Query  url.Values
+		Header http.Header
+
 		BaseParams BaseParams
-		Path       string
-		Body       []byte
-		Query      url.Values
-		Header     http.Header
+
+		Path string
 
 		// Authentication
 		User     string
 		Password string
+
+		Body []byte
 
 		// Determines if the response should be validated with the checksum
 		Validate bool
@@ -46,8 +49,8 @@ type (
 
 	wrappedResp struct {
 		*http.Response
-		n          int64  // number bytes read from `resp.Body`
 		cksumValue string // checksum value of the response
+		n          int64  // number bytes read from `resp.Body`
 	}
 )
 

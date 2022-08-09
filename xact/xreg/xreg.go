@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -54,8 +54,8 @@ type (
 	// used in constructions
 	Args struct {
 		T      cluster.Target
-		UUID   string
 		Custom interface{} // Additional arguments that are specific for a given xact.
+		UUID   string
 	}
 	RenewBase struct {
 		Args
@@ -63,10 +63,10 @@ type (
 	}
 
 	XactFilter struct {
-		ID          string
-		Kind        string
 		Bck         *cluster.Bck
 		OnlyRunning *bool
+		ID          string
+		Kind        string
 	}
 
 	// Represents result of renewing given xact.
@@ -85,9 +85,9 @@ type (
 	}
 
 	entries struct {
-		mtx    sync.RWMutex
 		active []Renewable // running entries - finished entries are gradually removed
 		all    []Renewable
+		mtx    sync.RWMutex
 	}
 	// All entries in the registry. The entries are periodically cleaned up
 	// to make sure that we don't keep old entries forever.

@@ -15,12 +15,13 @@ import (
 
 type (
 	NotifBase struct {
+		F func(n cluster.Notif, err error) // notification callback
+		P func(n cluster.Notif)            // on progress notification callback
+
+		Dsts []string // node IDs to notify
+
 		When     cluster.Upon  // see the enum below
 		Interval time.Duration // interval at which progress needs to be updated
-
-		Dsts []string                         // node IDs to notify
-		F    func(n cluster.Notif, err error) // notification callback
-		P    func(n cluster.Notif)            // on progress notification callback
 
 		lastNotified atomic.Int64 // time when last notified
 	}

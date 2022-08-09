@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -46,35 +46,35 @@ type (
 		String() string
 	}
 	rndzvs struct { // rendezvous records
-		callerName string
-		err        *txnError
 		timestamp  time.Time
+		err        *txnError
+		callerName string
 	}
 	transactions struct {
-		sync.RWMutex
 		t          *target
 		m          map[string]txn    // by txn.uuid
 		rendezvous map[string]rndzvs // ditto
+		sync.RWMutex
 	}
 	txnBase struct { // generic base
-		sync.RWMutex
-		uid   string
 		phase struct {
 			begin  time.Time
 			commit time.Time
 		}
 		xctn       cluster.Xact
-		smapVer    int64
-		bmdVer     int64
+		err        *txnError
 		action     string
 		callerName string
 		callerID   string
-		err        *txnError
+		uid        string
+		smapVer    int64
+		bmdVer     int64
+		sync.RWMutex
 	}
 	txnBckBase struct {
-		txnBase
 		bck  cluster.Bck
 		nlps []cmn.NLP
+		txnBase
 	}
 	txnError struct {
 		err error
@@ -91,38 +91,38 @@ type (
 		newCopies int64
 	}
 	txnSetBucketProps struct {
-		txnBckBase
 		bprops *cmn.BucketProps
 		nprops *cmn.BucketProps
+		txnBckBase
 	}
 	txnRenameBucket struct {
-		txnBckBase
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
+		txnBckBase
 	}
 	txnTCB struct {
-		txnBckBase
 		xtcb *mirror.XactTCB
+		txnBckBase
 	}
 	txnTCObjs struct {
-		txnBckBase
 		xtco *xs.XactTCObjs
 		msg  *cmn.TCObjsMsg
+		txnBckBase
 	}
 	txnECEncode struct {
 		txnBckBase
 	}
 	txnArchMultiObj struct {
-		txnBckBase
 		xarch *xs.XactCreateArchMultiObj
 		msg   *cmn.ArchiveMsg
+		txnBckBase
 	}
 	txnPromote struct {
-		txnBckBase
 		msg    *cluster.PromoteArgs
-		fqns   []string
-		dirFQN string
 		xprm   *xs.XactDirPromote
+		dirFQN string
+		fqns   []string
+		txnBckBase
 		totalN int
 		fshare bool
 	}

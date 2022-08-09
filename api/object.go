@@ -41,12 +41,15 @@ type (
 		Header http.Header
 	}
 	PutObjectArgs struct {
+		Reader cos.ReadOpenCloser
+		Cksum  *cos.Cksum
+
 		BaseParams BaseParams
 		Bck        cmn.Bck
-		Object     string
-		Cksum      *cos.Cksum
-		Reader     cos.ReadOpenCloser
-		Size       uint64 // optional
+
+		Object string
+		Size   uint64 // optional
+
 		// Skip loading existing object's metadata in order to
 		// compare its Checksum and update its existing Version (if exists);
 		// can be used to reduce PUT latency when:
@@ -55,8 +58,8 @@ type (
 		SkipVC bool
 	}
 	AppendToArchArgs struct {
-		PutObjectArgs
 		ArchPath string
+		PutObjectArgs
 	}
 	PromoteArgs struct {
 		BaseParams BaseParams
@@ -64,19 +67,19 @@ type (
 		cluster.PromoteArgs
 	}
 	AppendArgs struct {
+		Reader     cos.ReadOpenCloser
 		BaseParams BaseParams
 		Bck        cmn.Bck
 		Object     string
 		Handle     string
-		Reader     cos.ReadOpenCloser
 		Size       int64
 	}
 	FlushArgs struct {
+		Cksum      *cos.Cksum
 		BaseParams BaseParams
 		Bck        cmn.Bck
 		Object     string
 		Handle     string
-		Cksum      *cos.Cksum
 	}
 )
 

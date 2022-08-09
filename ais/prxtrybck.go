@@ -20,11 +20,13 @@ import (
 )
 
 type bckInitArgs struct {
-	p       *proxy
-	w       http.ResponseWriter
-	r       *http.Request
-	perms   apc.AccessAttrs // apc.AceGET, apc.AcePATCH etc.
-	reqBody []byte          // request body of original request
+	w http.ResponseWriter
+	r *http.Request
+
+	p *proxy
+
+	bck *cluster.Bck
+	msg *apc.ActionMsg
 
 	// URL query: the conventional/slow and
 	// the fast alternative tailored exclusively for the datapath
@@ -32,16 +34,16 @@ type bckInitArgs struct {
 	dpq   *dpq
 
 	origURLBck string
-	bck        *cluster.Bck
-	msg        *apc.ActionMsg
+
+	reqBody []byte          // request body of original request
+	perms   apc.AccessAttrs // apc.AceGET, apc.AcePATCH etc.
 
 	skipBackend bool // initialize bucket via `bck.InitNoBackend`
 	createAIS   bool // create ais bucket on the fly
 
 	headRemB    bool // handle ErrRemoteBckNotFound to discover _remote_ bucket on the fly (and add to BMD)
 	tryHeadRemB bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemB)
-
-	exists bool // true if bucket already exists
+	exists      bool // true if bucket already exists
 }
 
 ////////////////

@@ -37,9 +37,9 @@ const (
 
 type (
 	lmeta struct {
+		copies fs.MPI
+		uname  string
 		cmn.ObjAttrs
-		copies  fs.MPI
-		uname   string
 		atimefs uint64 // NOTE: high bit is reserved for `dirty`
 		bckID   uint64
 	}
