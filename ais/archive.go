@@ -43,9 +43,9 @@ type (
 	}
 
 	detect struct {
-		offset int
-		sig    []byte
 		mime   string // '.' + IANA mime
+		sig    []byte
+		offset int
 	}
 )
 

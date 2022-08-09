@@ -59,19 +59,19 @@ type (
 
 	// callResult contains HTTP response.
 	callResult struct {
-		si      *cluster.Snode
-		bytes   []byte      // Raw bytes from response.
 		v       interface{} // Unmarshalled value (set only when requested, see: `callArgs.v`).
-		header  http.Header
 		err     error
+		si      *cluster.Snode
+		header  http.Header
 		details string
+		bytes   []byte // Raw bytes from response.
 		status  int
 	}
 
 	sliceResults []*callResult
 	bcastResults struct {
-		mu sync.Mutex
 		s  sliceResults
+		mu sync.Mutex
 	}
 
 	// cresv: call result value factory and result-type specific decoder
@@ -83,21 +83,21 @@ type (
 
 	// callArgs: unicast control-plane call arguments
 	callArgs struct {
+		cresv   cresv
+		si      *cluster.Snode
 		req     cmn.HreqArgs
 		timeout time.Duration
-		si      *cluster.Snode
-		cresv   cresv
 	}
 
 	// bcastArgs: intra-cluster broadcast call args
 	bcastArgs struct {
-		req               cmn.HreqArgs      // h.call args
-		network           string            // one of the cmn.KnownNetworks
-		timeout           time.Duration     // call timeout
 		cresv             cresv             // call result value (comment above)
+		smap              *smapX            // Smap to use
+		network           string            // one of the cmn.KnownNetworks
+		req               cmn.HreqArgs      // h.call args
 		nodes             []cluster.NodeMap // broadcast destinations - map(s)
 		selected          cluster.Nodes     // broadcast destinations - slice of selected few
-		smap              *smapX            // Smap to use
+		timeout           time.Duration     // call timeout
 		to                int               // (all targets, all proxies, all nodes) enum
 		nodeCount         int               // m.b. greater or equal destination count
 		ignoreMaintenance bool              // do not skip nodes under maintenance
@@ -166,11 +166,11 @@ type (
 	}
 	getMaxCii struct {
 		h          *htrun
-		mu         sync.Mutex
 		maxCii     *clusterInfo
+		query      url.Values
 		maxConfVer int64
 		timeout    time.Duration
-		query      url.Values
+		mu         sync.Mutex
 		cnt        int
 		checkAll   bool
 	}
@@ -182,9 +182,9 @@ type (
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
 	aisMsg struct {
 		apc.ActionMsg
+		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 		BMDVersion int64  `json:"bmdversion,string"`
 		RMDVersion int64  `json:"rmdversion,string"`
-		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 	}
 
 	httpMuxers map[string]*mux.ServeMux // by http.Method
@@ -228,16 +228,18 @@ type (
 		detail string
 	}
 	apiRequest struct {
-		prefix []string     // in: URL must start with these items
-		after  int          // in: the number of items after the prefix
-		bckIdx int          // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
-		items  []string     // out: URL items after the prefix
-		bck    *cluster.Bck // out: initialized bucket
+		bck *cluster.Bck // out: initialized bucket
 
 		// URL query: the conventional/slow and
 		// the fast alternative tailored exclusively for the datapath (either/or)
-		query url.Values
 		dpq   *dpq
+		query url.Values
+
+		prefix []string // in: URL must start with these items
+		items  []string // out: URL items after the prefix
+
+		after  int // in: the number of items after the prefix
+		bckIdx int // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
 	}
 )
 

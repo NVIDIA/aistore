@@ -107,9 +107,9 @@ type (
 		msg  *aisMsg
 	}
 	revsReq struct {
-		pairs     []revsPair
 		wg        *sync.WaitGroup
 		failedCnt *atomic.Int32
+		pairs     []revsPair
 		reqType   int // enum: revsReqSync, etc.
 	}
 	msPayload map[string][]byte     // tag => revs' body
