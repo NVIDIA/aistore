@@ -5,7 +5,7 @@ metadata:
 spec:
   containers:
     - name: server
-      image: aistore/runtime_python:<VERSION>
+      image: aistore/runtime_python:<TAG>
       imagePullPolicy: IfNotPresent
       ports:
         - name: default
@@ -14,10 +14,14 @@ spec:
       env:
         - name: MOD_NAME
           value: code
-        - name: FUNC_HANDLER
+        - name: FUNC_BEFORE
+          value: before
+        - name: FUNC_TRANSFORM
           value: transform
-        - name: PYTHONPATH
-          value: /runtime
+        - name: FUNC_AFTER
+          value: after
+        - name: COMM_TYPE
+          value: <COMM_TYPE>
       readinessProbe:
         httpGet:
           path: /health
@@ -29,7 +33,7 @@ spec:
           mountPath: "/runtime"
   initContainers:
     - name: server-deps
-      image: aistore/runtime_python:<VERSION>
+      image: aistore/runtime_python:<TAG>
       imagePullPolicy: IfNotPresent
       command:
         - 'sh'

@@ -113,7 +113,7 @@ func (m *InitCodeMsg) Validate() error {
 	if m.Runtime == "" {
 		return fmt.Errorf("runtime is not specified (communication type %q)", m.CommTypeX)
 	}
-	if _, ok := runtime.Runtimes[m.Runtime]; !ok {
+	if _, ok := runtime.Get(m.Runtime); !ok {
 		return fmt.Errorf("unsupported runtime %q (communication type %q)", m.Runtime, m.CommTypeX)
 	}
 	if m.CommTypeX == "" {

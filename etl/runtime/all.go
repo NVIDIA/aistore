@@ -5,6 +5,7 @@
 package runtime
 
 import (
+	_ "embed"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -18,7 +19,7 @@ const (
 
 type (
 	runtime interface {
-		Type() string
+		Tag() string // container images "aistore/runtime_python:<TAG>"
 		PodSpec() string
 		CodeEnvName() string
 		DepsEnvName() string
@@ -36,16 +37,25 @@ type (
 	}
 )
 
-var Runtimes map[string]runtime
+var (
+	//go:embed podspec.yaml
+	pyPodSpec string
+
+	all map[string]runtime
+)
+
+func Get(runtime string) (r runtime, ok bool) {
+	r, ok = all[runtime]
+	return
+}
 
 func init() {
-	Runtimes = make(map[string]runtime, 3)
-
+	all = make(map[string]runtime, 3)
 	for _, r := range []runtime{py38{}, py310{}, py310s{}} {
-		if _, ok := Runtimes[r.Type()]; ok {
-			debug.AssertMsg(false, "duplicate type "+r.Type())
+		if _, ok := all[r.Tag()]; ok {
+			debug.AssertMsg(false, "duplicate type "+r.Tag())
 		} else {
-			Runtimes[r.Type()] = r
+			all[r.Tag()] = r
 		}
 	}
 }
@@ -53,11 +63,11 @@ func init() {
 func (runbase) CodeEnvName() string { return "AISTORE_CODE" }
 func (runbase) DepsEnvName() string { return "AISTORE_DEPS" }
 
-func (py38) Type() string    { return Py38 }
-func (py38) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<VERSION>", "3.8") }
+func (py38) Tag() string     { return Py38 }
+func (py38) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.8") }
 
-func (py310) Type() string    { return Py310 }
-func (py310) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<VERSION>", "3.10") }
+func (py310) Tag() string     { return Py310 }
+func (py310) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.10") }
 
-func (py310s) Type() string    { return Py310s }
-func (py310s) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<VERSION>", "3.10") }
+func (py310s) Tag() string     { return Py310s }
+func (py310s) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.10") }

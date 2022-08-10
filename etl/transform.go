@@ -160,7 +160,7 @@ func InitSpec(t cluster.Target, msg InitSpecMsg, opts StartOpts) (err error) {
 
 func InitCode(t cluster.Target, msg InitCodeMsg) error {
 	// Initialize runtime.
-	r, exists := runtime.Runtimes[msg.Runtime]
+	r, exists := runtime.Get(msg.Runtime)
 	cos.Assert(exists) // Runtime should be checked in proxy during validation.
 
 	var (
@@ -170,6 +170,9 @@ func InitCode(t cluster.Target, msg InitCodeMsg) error {
 		podSpec = r.PodSpec()
 	)
 
+	// Make assorted substitutions in the etl/runtime/podspec.yaml pod spec
+	// prior to running it.
+	podSpec = strings.ReplaceAll(podSpec, "<COMM_TYPE>", msg.CommTypeX)
 	podSpec = strings.ReplaceAll(podSpec, "<NAME>", name)
 	switch msg.CommTypeX {
 	case PushCommType, RedirectCommType, RevProxyCommType:
