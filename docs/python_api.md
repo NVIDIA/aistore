@@ -862,14 +862,15 @@ Reads an object
 ### put
 
 ```python
-def put(path: str) -> Header
+def put(path: str = None, content: bytes = None) -> Header
 ```
 
-Puts a local file as an object to a bucket in AIS storage.
+Puts a local file or bytes as an object to a bucket in AIS storage.
 
 **Arguments**:
 
-- `path` _str_ - path to local file.
+- `path` _str_ - path to local file or bytes.
+- `content` _bytes_ - bytes to put as an object.
   
 
 **Returns**:
@@ -883,6 +884,7 @@ Puts a local file as an object to a bucket in AIS storage.
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `ValueError` - Path and content are mutually exclusive
 
 <a id="object.Object.delete"></a>
 
@@ -968,24 +970,32 @@ For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transf
 ### init\_code
 
 ```python
-def init_code(code: object,
+def init_code(transform: Callable,
               etl_id: str,
+              before: Callable = None,
+              after: Callable = None,
               dependencies: List[str] = None,
-              runtime: str = "python3",
+              runtime: str = "python3.8v2",
               communication_type: str = "hpush",
-              timeout: str = "5m")
+              timeout: str = "5m",
+              chunk_size: int = None)
 ```
 
 Initializes ETL based on the provided source code. Returns ETL_ID.
 
+Note: Either both before and after functions should be provided or none.
+
 **Arguments**:
 
-- `code` _object_ - code function of the new ETL
-- `etl_id` _str_ - id of new ETL
-- `dependencies` _List[str]_ - list of the necessary dependencies with version (eg. aistore>1.0.0)
-- `runtime` _str_ - Runtime environment of the ETL [choose from: python2, python3, python3.6, python3.8, python3.10]
-- `communication_type` _str_ - Communication type of the ETL (options: hpull, hrev, hpush, io)
-- `timeout` _str_ - timeout of the ETL (eg. 5m for 5 minutes)
+- `transform` _Callable_ - Transform function of the ETL
+- `etl_id` _str_ - Id of new ETL
+- `before` _Callable_ - Code function to be executed before transform function, will initialize and return objects used in transform function
+- `after` _Callable_ - Code function to be executed after transform function, will return results
+- `dependencies` _List[str]_ - [optional] List of the necessary dependencies with version (eg. aistore>1.0.0)
+- `runtime` _str_ - [optional, default="python3.8v2"] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2] (see etl/runtime/all.go)
+- `communication_type` _str_ - [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev, hpush, io)
+- `timeout` _str_ - [optional, default="5m"] Timeout of the ETL (eg. 5m for 5 minutes)
+- `chunk_size` _int_ - Chunk size in bytes if transform function in streaming data. (whole object is read by default)
 
 **Returns**:
 

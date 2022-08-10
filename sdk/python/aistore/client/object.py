@@ -21,6 +21,7 @@ Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
 
 # pylint: disable=unused-variable
+# pylint: disable=consider-using-with
 class Object:
     """
     A class representing an object of a bucket bound to a client.
@@ -110,12 +111,13 @@ class Object:
             chunk_size=chunk_size,
         )
 
-    def put(self, path: str) -> Header:
+    def put(self, path: str = None, content: bytes = None) -> Header:
         """
-        Puts a local file as an object to a bucket in AIS storage.
+        Puts a local file or bytes as an object to a bucket in AIS storage.
 
         Args:
-            path (str): path to local file.
+            path (str): path to local file or bytes.
+            content (bytes): bytes to put as an object.
 
         Returns:
             Object properties
@@ -125,15 +127,22 @@ class Object:
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
+            ValueError: Path and content are mutually exclusive
         """
+        if path and content:
+            raise ValueError("path and content are mutually exclusive")
+
         url = f"/objects/{ self.bck.name }/{ self.obj_name }"
-        with open(path, "rb") as data:
-            return self.bck.client.request(
-                HTTP_METHOD_PUT,
-                path=url,
-                params=self.bck.qparam,
-                data=data,
-            ).headers
+        if path:
+            data = open(path, "rb")
+        else:
+            data = content
+        return self.bck.client.request(
+            HTTP_METHOD_PUT,
+            path=url,
+            params=self.bck.qparam,
+            data=data,
+        ).headers
 
     def delete(self):
         """
