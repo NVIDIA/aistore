@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -506,11 +506,9 @@ def transform(input_bytes: bytes) -> bytes:
 			commType string
 			onlyLong bool
 		}{
-			{name: "simple_python2", code: md5, deps: "", runtime: runtime.Python2, onlyLong: false},
-			{name: "simple_python3", code: md5, deps: "", runtime: runtime.Python3, onlyLong: false},
-			{name: "with_deps_python3", code: numpy, deps: numpyDeps, runtime: runtime.Python3, onlyLong: true},
-
-			{name: "simple_python3_io", code: md5IO, deps: "", runtime: runtime.Python38, commType: etl.IOCommType, onlyLong: false},
+			{name: "simple_py38", code: md5, deps: "", runtime: runtime.Py38, onlyLong: false},
+			{name: "with_deps_py38", code: numpy, deps: numpyDeps, runtime: runtime.Py38, onlyLong: false},
+			{name: "simple_py310_io", code: md5IO, deps: "", runtime: runtime.Py310, commType: etl.IOCommType, onlyLong: false},
 		}
 	)
 

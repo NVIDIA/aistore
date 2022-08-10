@@ -105,22 +105,22 @@ func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 
 func (m *InitCodeMsg) Validate() error {
 	if err := cos.ValidateEtlID(m.IDX); err != nil {
-		return fmt.Errorf("invalid etl ID: %v", err)
+		return fmt.Errorf("invalid etl ID: %v (runtime %q, communication type %q)", err, m.Runtime, m.CommTypeX)
 	}
 	if len(m.Code) == 0 {
-		return fmt.Errorf("source code is empty")
+		return fmt.Errorf("source code is empty (runtime %q)", m.Runtime)
 	}
 	if m.Runtime == "" {
-		return fmt.Errorf("runtime is not specified")
+		return fmt.Errorf("runtime is not specified (communication type %q)", m.CommTypeX)
 	}
 	if _, ok := runtime.Runtimes[m.Runtime]; !ok {
-		return fmt.Errorf("unsupported runtime provided: %s", m.Runtime)
+		return fmt.Errorf("unsupported runtime %q (communication type %q)", m.Runtime, m.CommTypeX)
 	}
 	if m.CommTypeX == "" {
 		m.CommTypeX = PushCommType
 	}
 	if !cos.StringInSlice(m.CommTypeX, commTypes) {
-		return fmt.Errorf("unsupported communication type provided: %s", m.CommTypeX)
+		return fmt.Errorf("unsupported communication type %q (runtime %q)", m.CommTypeX, m.Runtime)
 	}
 	return nil
 }

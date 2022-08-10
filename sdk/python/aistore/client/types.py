@@ -206,7 +206,7 @@ class ETLDetails(BaseModel):
     code: Optional[bytes]
     spec: Optional[str]
     dependencies: Optional[str]
-    runtime: str = "python3"
+    runtime: str = "python3.8"  # see etl/runtime/all.go
 
     @validator("code")
     def set_code(cls, code):  # pylint: disable=no-self-argument

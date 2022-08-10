@@ -61,7 +61,7 @@ def transform(input_bytes):
 			WaitTimeout: cos.Duration(5 * time.Minute),
 		},
 		Code:    []byte(timeoutFunc),
-		Runtime: runtime.Python3,
+		Runtime: runtime.Py38,
 	})
 	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
 }
@@ -162,23 +162,23 @@ def transform(input_bytes):
 			initDesc  string
 			buildDesc etl.InitCodeMsg
 		}{
-			{name: "init-echo-python", ty: apc.ETLInitSpec, initDesc: tetl.Echo},
-			{name: "init-echo-golang", ty: apc.ETLInitSpec, initDesc: tetl.EchoGolang},
+			{name: "spec-echo-python", ty: apc.ETLInitSpec, initDesc: tetl.Echo},
+			{name: "spec-echo-golang", ty: apc.ETLInitSpec, initDesc: tetl.EchoGolang},
 
 			{
-				name: "build-echo-python2",
+				name: "code-echo-py38",
 				ty:   apc.ETLInitCode,
 				buildDesc: etl.InitCodeMsg{
 					Code:    []byte(echoPythonTransform),
-					Runtime: runtime.Python2,
+					Runtime: runtime.Py38,
 				},
 			},
 			{
-				name: "build-echo-python3",
+				name: "code-echo-py310",
 				ty:   apc.ETLInitCode,
 				buildDesc: etl.InitCodeMsg{
 					Code:    []byte(echoPythonTransform),
-					Runtime: runtime.Python3,
+					Runtime: runtime.Py310,
 				},
 			},
 		}
