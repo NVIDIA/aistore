@@ -30,9 +30,10 @@ type (
 
 	InitCodeMsg struct {
 		InitMsgBase
-		Code    []byte `json:"code"`
-		Deps    []byte `json:"dependencies"`
-		Runtime string `json:"runtime"`
+		Code      []byte `json:"code"`
+		Deps      []byte `json:"dependencies"`
+		Runtime   string `json:"runtime"`
+		ChunkSize int64  `json:"chunk_size"`
 	}
 
 	InfoList []Info
@@ -117,7 +118,7 @@ func (m *InitCodeMsg) Validate() error {
 		return fmt.Errorf("unsupported runtime %q (communication type %q)", m.Runtime, m.CommTypeX)
 	}
 	if m.CommTypeX == "" {
-		m.CommTypeX = PushCommType
+		m.CommTypeX = Hpush
 	}
 	if !cos.StringInSlice(m.CommTypeX, commTypes) {
 		return fmt.Errorf("unsupported communication type %q (runtime %q)", m.CommTypeX, m.Runtime)
@@ -144,7 +145,7 @@ func (m *InitSpecMsg) Validate() (err error) {
 		return cmn.NewErrETL(errCtx, err.Error())
 	}
 	if m.CommType() == "" {
-		m.CommTypeX = PushCommType
+		m.CommTypeX = Hpush
 	}
 
 	// Check pod specification constraints.

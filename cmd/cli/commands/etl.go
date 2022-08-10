@@ -31,6 +31,7 @@ var (
 			depsFileFlag,
 			runtimeFlag,
 			commTypeFlag,
+			chunkSizeFlag,
 			waitTimeoutFlag,
 			etlUUID,
 		},
@@ -231,6 +232,12 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
 	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
+
+	msg.ChunkSize, err = parseByteFlagToInt(c, chunkSizeFlag)
+	if err != nil {
+		return err
+	}
+
 	if msg.CommTypeX != "" {
 		// Missing `/` at the end, eg. `hpush:/` (should be `hpush://`)
 		if strings.HasSuffix(msg.CommTypeX, ":/") {

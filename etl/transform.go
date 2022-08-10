@@ -7,6 +7,7 @@ package etl
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -158,32 +159,38 @@ func InitSpec(t cluster.Target, msg InitSpecMsg, opts StartOpts) (err error) {
 	return err
 }
 
+// Given user message `InitCodeMsg`, make the corresponding assorted substitutions
+// in the etl/runtime/podspec.yaml spec and run the container.
+// See also: etl/runtime/podspec.yaml
 func InitCode(t cluster.Target, msg InitCodeMsg) error {
-	// Initialize runtime.
 	r, exists := runtime.Get(msg.Runtime)
-	cos.Assert(exists) // Runtime should be checked in proxy during validation.
+	cos.AssertMsg(exists, msg.Runtime) // must've been checked by proxy
 
 	var (
-		// We clean up the `msg.ID` as K8s doesn't allow `_` and uppercase
-		// letters in the names.
-		name    = k8s.CleanName(msg.IDX)
+		chunk   string
+		name    = k8s.CleanName(msg.IDX) // cleanup the `msg.ID` as K8s doesn't allow `_` and uppercase
 		podSpec = r.PodSpec()
 	)
-
-	// Make assorted substitutions in the etl/runtime/podspec.yaml pod spec
-	// prior to running it.
-	podSpec = strings.ReplaceAll(podSpec, "<COMM_TYPE>", msg.CommTypeX)
 	podSpec = strings.ReplaceAll(podSpec, "<NAME>", name)
+	podSpec = strings.ReplaceAll(podSpec, "<COMM_TYPE>", msg.CommTypeX)
+
+	// chunk == 0 means no chunks (and no streaming) - in other words,
+	// reading the entire payload in memory, and then transforming in one shot
+	if msg.ChunkSize > 0 {
+		chunk = strconv.FormatInt(msg.ChunkSize, 10)
+	}
+	podSpec = strings.ReplaceAll(podSpec, "<CHUNK_SIZE>", chunk)
+
 	switch msg.CommTypeX {
-	case PushCommType, RedirectCommType, RevProxyCommType:
+	case Hpush, Hpull, Hrev:
 		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['sh', '-c', 'python /server.py']")
-	case IOCommType:
+	case HpushStdin:
 		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['python /code/code.py']")
 	default:
 		cos.AssertMsg(false, msg.CommTypeX)
 	}
 
-	// Finally, start the ETL with declared Pod specification.
+	// Start the ETL
 	return InitSpec(t, InitSpecMsg{
 		InitMsgBase: InitMsgBase{
 			IDX:         msg.IDX,

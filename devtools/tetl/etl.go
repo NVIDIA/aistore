@@ -102,7 +102,7 @@ func GetTransformYaml(name string) ([]byte, error) {
 		// Hack: Neither os.Expand, nor os.ExpandEnv supports bash env variable default-value
 		// syntax. The whole ${VAR:-default} is matched as v.
 		if strings.Contains(v, "COMMUNICATION_TYPE") {
-			return etl.RedirectCommType
+			return etl.Hpull
 		}
 		if strings.Contains(v, "DOCKER_REGISTRY_URL") {
 			return "aistore"
@@ -331,8 +331,8 @@ func SpecToInitMsg(spec []byte /*yaml*/) (msg *etl.InitSpecMsg, err error) {
 
 func podTransformCommType(pod *corev1.Pod) string {
 	if pod.Annotations == nil || pod.Annotations[commTypeAnnotation] == "" {
-		// By default assume `PushCommType`.
-		return etl.PushCommType
+		// By default assume `Hpush`.
+		return etl.Hpush
 	}
 	return pod.Annotations[commTypeAnnotation]
 }

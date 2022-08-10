@@ -26,7 +26,7 @@ func TestEtlMDDeepCopy(t *testing.T) {
 	etlMD.Add(&etl.InitCodeMsg{
 		InitMsgBase: etl.InitMsgBase{
 			IDX:       "init-code",
-			CommTypeX: etl.PushCommType,
+			CommTypeX: etl.Hpush,
 		},
 		Code: []byte("print('hello')"),
 	})
@@ -73,7 +73,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 					msg = &etl.InitCodeMsg{
 						InitMsgBase: etl.InitMsgBase{
 							IDX:       fmt.Sprintf("init-code-%d", i),
-							CommTypeX: etl.PushCommType,
+							CommTypeX: etl.Hpush,
 						},
 						Code: []byte(fmt.Sprintf("print('hello-%d')", i)),
 					}
@@ -81,7 +81,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 					msg = &etl.InitSpecMsg{
 						InitMsgBase: etl.InitMsgBase{
 							IDX:       fmt.Sprintf("init-spec-%d", i),
-							CommTypeX: etl.PushCommType,
+							CommTypeX: etl.Hpush,
 						},
 						Spec: []byte(fmt.Sprintf("test spec - %d", i)),
 					}
@@ -131,7 +131,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 							msg := &etl.InitCodeMsg{
 								InitMsgBase: etl.InitMsgBase{
 									IDX:       "init-code-" + cos.GenTie(),
-									CommTypeX: etl.PushCommType,
+									CommTypeX: etl.Hpush,
 								},
 								Code: []byte("print('hello')"),
 							}

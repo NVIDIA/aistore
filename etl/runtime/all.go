@@ -12,29 +12,20 @@ import (
 )
 
 const (
-	Py38   = "python3.8"
-	Py310  = "python3.10"
-	Py310s = "python3.10.streaming"
+	Py38  = "python3.8v2"
+	Py310 = "python3.10v2"
 )
 
 type (
 	runtime interface {
-		Tag() string // container images "aistore/runtime_python:<TAG>"
+		Name() string
 		PodSpec() string
 		CodeEnvName() string
 		DepsEnvName() string
 	}
-	runbase struct {
-	}
-	py38 struct {
-		runbase
-	}
-	py310 struct {
-		runbase
-	}
-	py310s struct {
-		runbase
-	}
+	runbase struct{}
+	py38    struct{ runbase }
+	py310   struct{ runbase }
 )
 
 var (
@@ -50,12 +41,12 @@ func Get(runtime string) (r runtime, ok bool) {
 }
 
 func init() {
-	all = make(map[string]runtime, 3)
-	for _, r := range []runtime{py38{}, py310{}, py310s{}} {
-		if _, ok := all[r.Tag()]; ok {
-			debug.AssertMsg(false, "duplicate type "+r.Tag())
+	all = make(map[string]runtime, 2)
+	for _, r := range []runtime{py38{}, py310{}} {
+		if _, ok := all[r.Name()]; ok {
+			debug.AssertMsg(false, "duplicate type "+r.Name())
 		} else {
-			all[r.Tag()] = r
+			all[r.Name()] = r
 		}
 	}
 }
@@ -63,11 +54,8 @@ func init() {
 func (runbase) CodeEnvName() string { return "AISTORE_CODE" }
 func (runbase) DepsEnvName() string { return "AISTORE_DEPS" }
 
-func (py38) Tag() string     { return Py38 }
-func (py38) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.8") }
+func (py38) Name() string    { return Py38 }
+func (py38) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.8v2") } // container images "aistore/runtime_python:<TAG>"
 
-func (py310) Tag() string     { return Py310 }
-func (py310) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.10") }
-
-func (py310s) Tag() string     { return Py310s }
-func (py310s) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.10") }
+func (py310) Name() string    { return Py310 }
+func (py310) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.10v2") } // ditto

@@ -78,7 +78,7 @@ func (b *etlBootstraper) preparePodSpec() (err error) {
 }
 
 func (b *etlBootstraper) updatePodCommand() {
-	if b.msg.CommTypeX != IOCommType {
+	if b.msg.CommTypeX != HpushStdin {
 		return
 	}
 

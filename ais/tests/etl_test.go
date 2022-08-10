@@ -260,15 +260,15 @@ func TestETLObject(t *testing.T) {
 
 	noopTransform := func(r io.Reader) io.Reader { return r }
 	tests := []testObjConfig{
-		{transformer: tetl.Echo, comm: etl.RedirectCommType, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
-		{transformer: tetl.Echo, comm: etl.RevProxyCommType, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
-		{transformer: tetl.Echo, comm: etl.PushCommType, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
-		{tetl.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
-		{tetl.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
-		{tetl.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
-		{tetl.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
-		{tetl.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
-		{tetl.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
+		{transformer: tetl.Echo, comm: etl.Hpull, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
+		{transformer: tetl.Echo, comm: etl.Hrev, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
+		{transformer: tetl.Echo, comm: etl.Hpush, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
+		{tetl.Tar2TF, etl.Hpull, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
+		{tetl.Tar2TF, etl.Hrev, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
+		{tetl.Tar2TF, etl.Hpush, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
+		{tetl.Tar2tfFilters, etl.Hpull, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
+		{tetl.Tar2tfFilters, etl.Hrev, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
+		{tetl.Tar2tfFilters, etl.Hpush, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
 	}
 
 	for _, test := range tests {
@@ -289,15 +289,15 @@ func TestETLObjectCloud(t *testing.T) {
 
 	// TODO: When a test is stable, make part of test cases onlyLong: true.
 	tcs := map[string][]*testCloudObjConfig{
-		etl.RedirectCommType: {
+		etl.Hpull: {
 			{cached: true, onlyLong: false},
 			{cached: false, onlyLong: false},
 		},
-		etl.RevProxyCommType: {
+		etl.Hrev: {
 			{cached: true, onlyLong: false},
 			{cached: false, onlyLong: false},
 		},
-		etl.PushCommType: {
+		etl.Hpush: {
 			{cached: true, onlyLong: false},
 			{cached: false, onlyLong: false},
 		},
@@ -329,7 +329,7 @@ func TestETLInline(t *testing.T) {
 		bck = cmn.Bck{Provider: apc.ProviderAIS, Name: "etl-test"}
 
 		tests = []testObjConfig{
-			{transformer: tetl.MD5, comm: etl.PushCommType},
+			{transformer: tetl.MD5, comm: etl.Hpush},
 		}
 	)
 
@@ -373,7 +373,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 
 		bck         = cmn.Bck{Provider: apc.ProviderAIS, Name: "etl-test"}
 		transformer = tetl.MD5
-		comm        = etl.PushCommType
+		comm        = etl.Hpush
 	)
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
@@ -430,9 +430,9 @@ func TestETLBucket(t *testing.T) {
 		}
 
 		tests = []testObjConfig{
-			{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
-			{transformer: tetl.MD5, comm: etl.RevProxyCommType},
-			{transformer: tetl.MD5, comm: etl.PushCommType, onlyLong: true},
+			{transformer: tetl.Echo, comm: etl.Hpull, onlyLong: true},
+			{transformer: tetl.MD5, comm: etl.Hrev},
+			{transformer: tetl.MD5, comm: etl.Hpush, onlyLong: true},
 		}
 	)
 
@@ -508,7 +508,7 @@ def transform(input_bytes: bytes) -> bytes:
 		}{
 			{name: "simple_py38", code: md5, deps: "", runtime: runtime.Py38, onlyLong: false},
 			{name: "with_deps_py38", code: numpy, deps: numpyDeps, runtime: runtime.Py38, onlyLong: false},
-			{name: "simple_py310_io", code: md5IO, deps: "", runtime: runtime.Py310, commType: etl.IOCommType, onlyLong: false},
+			{name: "simple_py310_io", code: md5IO, deps: "", runtime: runtime.Py310, commType: etl.HpushStdin, onlyLong: false},
 		}
 	)
 
@@ -530,9 +530,10 @@ def transform(input_bytes: bytes) -> bytes:
 						CommTypeX:   test.commType,
 						WaitTimeout: cos.Duration(5 * time.Minute),
 					},
-					Code:    []byte(test.code),
-					Deps:    []byte(test.deps),
-					Runtime: test.runtime,
+					Code:      []byte(test.code),
+					Deps:      []byte(test.deps),
+					Runtime:   test.runtime,
+					ChunkSize: 0,
 				})
 
 				switch testType {
@@ -581,7 +582,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tlog.Logf("PUT %d objects", m.num)
 	m.puts()
 
-	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
+	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	tlog.Logf("Start offline ETL %q\n", uuid)
@@ -609,7 +610,7 @@ func TestETLStopAndRestartETL(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
+	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	// 1. Check ETL is in running state
@@ -642,10 +643,10 @@ func TestETLMultipleTransformersAtATime(t *testing.T) {
 		t.Skip("Requires a single-node single-target deployment")
 	}
 
-	uuid1 := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
+	uuid1 := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid1) })
 
-	uuid2 := tetl.Init(t, baseParams, tetl.MD5, etl.RevProxyCommType)
+	uuid2 := tetl.Init(t, baseParams, tetl.MD5, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid2) })
 }
 
@@ -659,7 +660,7 @@ func TestETLHealth(t *testing.T) {
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	tlog.Logln("Starting ETL")
-	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RedirectCommType)
+	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hpull)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	var (
@@ -705,7 +706,7 @@ func TestETLList(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 
-	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.RevProxyCommType)
+	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	list, err := api.ETLList(baseParams)

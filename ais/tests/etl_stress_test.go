@@ -60,8 +60,9 @@ def transform(input_bytes):
 			IDX:         "etl-build-conn-err",
 			WaitTimeout: cos.Duration(5 * time.Minute),
 		},
-		Code:    []byte(timeoutFunc),
-		Runtime: runtime.Py38,
+		Code:      []byte(timeoutFunc),
+		Runtime:   runtime.Py38,
+		ChunkSize: 0,
 	})
 	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
 }
@@ -77,7 +78,7 @@ func TestETLBucketAbort(t *testing.T) {
 		fixedSize: true,
 	}
 
-	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
+	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 	args := api.XactReqArgs{ID: xactID, Kind: apc.ActETLBck}
 	time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 
@@ -109,7 +110,7 @@ func TestETLTargetDown(t *testing.T) {
 		t.Skipf("skipping %s long test (kill-node vs maintenance vs ETL)", t.Name())
 	}
 	m.initWithCleanupAndSaveState()
-	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
+	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
 	tlog.Logln("Waiting for ETL to process a few objects...")
 	time.Sleep(5 * time.Second)
@@ -169,16 +170,18 @@ def transform(input_bytes):
 				name: "code-echo-py38",
 				ty:   apc.ETLInitCode,
 				buildDesc: etl.InitCodeMsg{
-					Code:    []byte(echoPythonTransform),
-					Runtime: runtime.Py38,
+					Code:      []byte(echoPythonTransform),
+					Runtime:   runtime.Py38,
+					ChunkSize: 0,
 				},
 			},
 			{
 				name: "code-echo-py310",
 				ty:   apc.ETLInitCode,
 				buildDesc: etl.InitCodeMsg{
-					Code:    []byte(echoPythonTransform),
-					Runtime: runtime.Py310,
+					Code:      []byte(echoPythonTransform),
+					Runtime:   runtime.Py310,
+					ChunkSize: 0,
 				},
 			},
 		}
@@ -202,7 +205,7 @@ def transform(input_bytes):
 			)
 			switch test.ty {
 			case apc.ETLInitSpec:
-				uuid = tetl.Init(t, baseParams, test.initDesc, etl.RedirectCommType)
+				uuid = tetl.Init(t, baseParams, test.initDesc, etl.Hpull)
 			case apc.ETLInitCode:
 				test.buildDesc.IDX = test.name
 				test.buildDesc.WaitTimeout = cos.Duration(10 * time.Minute)

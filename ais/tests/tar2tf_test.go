@@ -30,7 +30,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 
 	msg := &etl.InitSpecMsg{}
 	msg.IDX = tetl.Tar2TF
-	msg.CommTypeX = etl.RedirectCommType
+	msg.CommTypeX = etl.Hpull
 	msg.Spec = spec
 
 	tassert.CheckError(t, msg.Validate())

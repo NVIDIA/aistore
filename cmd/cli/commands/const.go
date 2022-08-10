@@ -328,7 +328,7 @@ var (
 		Name:  "start-after",
 		Usage: "list bucket's content alphabetically starting with the first name *after* the specified",
 	}
-	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0} // TODO: specify default as unlimited
+	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count (0 - unlimited)", Value: 0}
 	pageSizeFlag = cli.IntFlag{Name: "page-size",
 		Usage: "maximum number of object names per page",
 		Value: 1000,
@@ -428,10 +428,11 @@ var (
 		Usage: "each target must act autonomously skipping file-share auto-detection and promoting the entire source (as seen from _the_ target)",
 	}
 
-	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
+	yesFlag = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
+
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
-		Usage: "chunk size used for each request " + sizeUnits, Value: "10MB",
+		Usage: "chunk size " + sizeUnits, Value: "10MB",
 	}
 
 	cksumFlag        = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}

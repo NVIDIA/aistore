@@ -16,18 +16,18 @@ const (
 	// The ETL container receives POST request from target with the data. It
 	// must read the data and return response to the target which then will be
 	// transferred to the client.
-	PushCommType = "hpush://"
+	Hpush = "hpush://"
 	// Target redirects the GET request to the ETL container. Then ETL container
 	// contacts the target via `AIS_TARGET_URL` env variable to get the data.
 	// The data is then transformed and returned to the client.
-	RedirectCommType = "hpull://"
+	Hpull = "hpull://"
 	// Similar to redirection strategy but with usage of reverse proxy.
-	RevProxyCommType = "hrev://"
+	Hrev = "hrev://"
 	// Stdin/stdout communication.
-	IOCommType = "io://"
+	HpushStdin = "io://"
 )
 
-var commTypes = []string{PushCommType, RedirectCommType, RevProxyCommType, IOCommType}
+var commTypes = []string{Hpush, Hpull, Hrev, HpushStdin}
 
 type (
 	registry struct {

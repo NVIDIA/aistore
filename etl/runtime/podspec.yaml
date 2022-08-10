@@ -22,6 +22,8 @@ spec:
           value: after
         - name: COMM_TYPE
           value: <COMM_TYPE>
+        - name: CHUNK_SIZE
+          value: <CHUNK_SIZE>
       readinessProbe:
         httpGet:
           path: /health

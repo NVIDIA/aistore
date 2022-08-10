@@ -113,15 +113,15 @@ func makeCommunicator(args commArgs) Communicator {
 	}
 
 	switch args.bootstraper.msg.CommTypeX {
-	case PushCommType:
+	case Hpush:
 		return &pushComm{
 			baseComm: baseComm,
 			mem:      args.bootstraper.t.PageMM(),
 			uri:      args.bootstraper.uri,
 		}
-	case RedirectCommType:
+	case Hpull:
 		return &redirectComm{baseComm: baseComm, uri: args.bootstraper.uri}
-	case RevProxyCommType:
+	case Hrev:
 		transformerURL, err := url.Parse(args.bootstraper.uri)
 		cos.AssertNoErr(err)
 		rp := &httputil.ReverseProxy{
@@ -137,7 +137,7 @@ func makeCommunicator(args commArgs) Communicator {
 			},
 		}
 		return &revProxyComm{baseComm: baseComm, rp: rp, uri: args.bootstraper.uri}
-	case IOCommType:
+	case HpushStdin:
 		return &pushComm{
 			baseComm: baseComm,
 			mem:      args.bootstraper.t.PageMM(),

@@ -179,7 +179,7 @@ func TestETLMultiObj(t *testing.T) {
 		copyCnt     = 20
 		rangeStart  = 10
 		transformer = tetl.MD5
-		etlCommType = etl.PushCommType
+		etlCommType = etl.Hpush
 		objSize     = cos.KiB
 		cksumType   = cos.ChecksumMD5
 	)

@@ -99,9 +99,9 @@ var _ = Describe("CommunicatorTest", func() {
 	})
 
 	tests := []string{
-		PushCommType,
-		RedirectCommType,
-		RevProxyCommType,
+		Hpush,
+		Hpull,
+		Hrev,
 	}
 
 	for _, commType := range tests {
