@@ -24,6 +24,8 @@ spec:
           value: <COMM_TYPE>
         - name: CHUNK_SIZE
           value: <CHUNK_SIZE>
+        - name: PYTHONPATH
+          value: /runtime
       readinessProbe:
         httpGet:
           path: /health

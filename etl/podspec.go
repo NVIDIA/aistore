@@ -6,7 +6,9 @@ package etl
 
 import (
 	"fmt"
+	rdebug "runtime/debug" // DEBUG
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -40,6 +42,12 @@ type etlBootstraper struct {
 func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
 	if err != nil {
+		// DEBUG: remove when done
+		glog.Errorf("failed to parse pod spec: %v", err)
+		glog.Errorln(string(spec))
+		rdebug.PrintStack()
+		// end of DEBUG
+
 		return nil, cmn.NewErrETL(errCtx, "failed to parse pod spec: %v", err)
 	}
 
