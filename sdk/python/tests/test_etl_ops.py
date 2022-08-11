@@ -19,6 +19,7 @@ class TestETLOps(unittest.TestCase):
         self.bck_name = random_name()
         self.etl_id_code = "etl-" + random_name(5)
         self.etl_id_code_io = "etl-" + random_name(5)
+        self.etl_id_code_stream = "etl-" + random_name(5)
         self.etl_id_spec = "etl-" + random_name(5)
         self.etl_id_spec_comp = "etl-" + random_name(5)
         print("URL END PT ", CLUSTER_ENDPOINT)
@@ -53,7 +54,7 @@ class TestETLOps(unittest.TestCase):
             md5.update(input_bytes)
             return md5.hexdigest().encode()
 
-        self.client.etl().init_code(code=transform, etl_id=self.etl_id_code)
+        self.client.etl().init_code(transform=transform, etl_id=self.etl_id_code)
 
         obj = (
             self.client.bucket(self.bck_name)
@@ -72,7 +73,7 @@ class TestETLOps(unittest.TestCase):
             sys.stdout.buffer.write(md5.hexdigest().encode())
 
         self.client.etl().init_code(
-            code=main, etl_id=self.etl_id_code_io, communication_type="io"
+            transform=main, etl_id=self.etl_id_code_io, communication_type="io"
         )
 
         obj_io = (
@@ -193,7 +194,7 @@ class TestETLOps(unittest.TestCase):
             md5.update(input_bytes)
             return md5.hexdigest().encode()
 
-        self.client.etl().init_code(code=transform, etl_id=self.etl_id_code)
+        self.client.etl().init_code(transform=transform, etl_id=self.etl_id_code)
 
         # code (io comm)
         def main():
@@ -203,7 +204,7 @@ class TestETLOps(unittest.TestCase):
             sys.stdout.buffer.write(md5.hexdigest().encode())
 
         self.client.etl().init_code(
-            code=main, etl_id=self.etl_id_code_io, communication_type="io"
+            transform=main, etl_id=self.etl_id_code_io, communication_type="io"
         )
 
         start_time = time.time()
@@ -236,6 +237,33 @@ class TestETLOps(unittest.TestCase):
 
             self.assertEqual(transform(bytes(value)), transformed_obj_hpush)
             self.assertEqual(transform(bytes(value)), transformed_obj_io)
+
+    def test_etl_apis_stream(self):
+        def before():
+            return hashlib.md5()
+
+        def transform(input_bytes, md5):
+            md5.update(input_bytes)
+
+        def after(md5):
+            return md5.hexdigest().encode()
+
+        self.client.etl().init_code(
+            transform=transform,
+            before=before,
+            after=after,
+            etl_id=self.etl_id_code_stream,
+            chunk_size=32768,
+        )
+        obj = (
+            self.client.bucket(self.bck_name)
+            .object(self.obj_name)
+            .get(etl_id=self.etl_id_code_stream)
+            .read_all()
+        )
+        md5 = hashlib.md5()
+        md5.update(self.content)
+        self.assertEqual(obj, md5.hexdigest().encode())
 
 
 if __name__ == "__main__":

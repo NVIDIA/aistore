@@ -3,17 +3,17 @@
 #
 
 import base64
-from typing import List
+from typing import Callable, List
 import cloudpickle
 from aistore.client.const import (
     CODE_TEMPLATE,
+    CODE_TEMPLATE_STREAM,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
     HTTP_METHOD_PUT,
 )
 from aistore.client.types import ETL, ETLDetails
-
 
 # pylint: disable=unused-variable
 class Etl:
@@ -68,36 +68,56 @@ class Etl:
 
     def init_code(
         self,
-        code: object,
+        transform: Callable,
         etl_id: str,
+        before: Callable = None,
+        after: Callable = None,
         dependencies: List[str] = None,
         runtime: str = "python3.8v2",
         communication_type: str = "hpush",
         timeout: str = "5m",
+        chunk_size: int = None,
     ):
         """
         Initializes ETL based on the provided source code. Returns ETL_ID.
 
+        Note: Either both before and after functions should be provided or none.
         Args:
-            code (object): code function of the new ETL
-            etl_id (str): id of new ETL
-            dependencies (List[str]): list of the necessary dependencies with version (eg. aistore>1.0.0)
-            runtime (str): Runtime environment of the ETL [choose from: python3.8v2, python3.10v2] (see etl/runtime/all.go)
-            communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush, io)
-            timeout (str): timeout of the ETL (eg. 5m for 5 minutes)
+            transform (Callable): Transform function of the ETL
+            etl_id (str): Id of new ETL
+            before (Callable): Code function to be executed before transform function, will initialize and return objects used in transform function
+            after (Callable): Code function to be executed after transform function, will return results
+            dependencies (List[str]): [optional] List of the necessary dependencies with version (eg. aistore>1.0.0)
+            runtime (str): [optional, default="python3.8v2"] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2] (see etl/runtime/all.go)
+            communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev, hpush, io)
+            timeout (str): [optional, default="5m"] Timeout of the ETL (eg. 5m for 5 minutes)
+            chunk_size (int): Chunk size in bytes if transform function in streaming data. (whole object is read by default)
         Returns:
             etl_id (str): ETL ID
         """
+
+        if before and after:
+            before = base64.b64encode(cloudpickle.dumps(before)).decode("utf-8")
+            after = base64.b64encode(cloudpickle.dumps(after)).decode("utf-8")
+            BEFORE_AND_AFTER_EXISTS = True
+        else:
+            BEFORE_AND_AFTER_EXISTS = False
 
         if communication_type not in ["io", "hpush", "hrev", "hpull"]:
             raise ValueError("communication_type should be in: hpull, hrev, hpush, io")
 
         # code
-        func = base64.b64encode(cloudpickle.dumps(code)).decode("utf-8")
+        transform = base64.b64encode(cloudpickle.dumps(transform)).decode("utf-8")
+
         if communication_type == "io":
-            template = CODE_TEMPLATE.format(func, "transform()").encode("utf-8")
+            template = CODE_TEMPLATE.format(transform, "transform()").encode("utf-8")
         else:
-            template = CODE_TEMPLATE.format(func, "").encode("utf-8")
+            if BEFORE_AND_AFTER_EXISTS:
+                template = CODE_TEMPLATE_STREAM.format(
+                    before, transform, after, ""
+                ).encode("utf-8")
+            else:
+                template = CODE_TEMPLATE.format(transform, "").encode("utf-8")
         code = base64.b64encode(template).decode("utf-8")
 
         # dependencies
@@ -115,7 +135,8 @@ class Etl:
             "communication": f"{communication_type}://",
             "timeout": timeout,
         }
-
+        if chunk_size:
+            action["chunk_size"] = chunk_size
         resp = self.client.request(
             HTTP_METHOD_PUT,
             path="etl",

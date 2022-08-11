@@ -138,7 +138,7 @@ def transform(input_bytes):
     return md5.hexdigest().encode()
 
 # Initializing ETL  with transform()
-client.etl().init_code(code=transform, etl_id="etl-code")
+client.etl().init_code(transform=transform, etl_id="etl-code")
 ```
 
 We initialize another ETL w/ [spec](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#init-spec-request):

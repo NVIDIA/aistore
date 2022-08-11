@@ -46,7 +46,18 @@ DEFAULT_CHUNK_SIZE = 32768
 CODE_TEMPLATE = """
 import pickle
 import base64
+
 _base64code = base64.b64decode('{}')
 transform = pickle.loads(_base64code)
+{}
+"""
+
+CODE_TEMPLATE_STREAM = """
+import pickle
+import base64
+
+before = pickle.loads(base64.b64decode('{}'))
+transform = pickle.loads(base64.b64decode('{}'))
+after = pickle.loads(base64.b64decode('{}'))
 {}
 """
