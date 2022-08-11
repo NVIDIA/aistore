@@ -71,7 +71,7 @@ class Etl:
         code: object,
         etl_id: str,
         dependencies: List[str] = None,
-        runtime: str = "python3.8",
+        runtime: str = "python3.8v2",
         communication_type: str = "hpush",
         timeout: str = "5m",
     ):
@@ -82,7 +82,7 @@ class Etl:
             code (object): code function of the new ETL
             etl_id (str): id of new ETL
             dependencies (List[str]): list of the necessary dependencies with version (eg. aistore>1.0.0)
-            runtime (str): Runtime environment of the ETL [choose from: python3.8, python3.10] (see etl/runtime/all.go)
+            runtime (str): Runtime environment of the ETL [choose from: python3.8v2, python3.10v2] (see etl/runtime/all.go)
             communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush, io)
             timeout (str): timeout of the ETL (eg. 5m for 5 minutes)
         Returns:
