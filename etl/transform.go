@@ -177,7 +177,7 @@ func InitCode(t cluster.Target, msg InitCodeMsg) error {
 	// chunk == 0 means no chunks (and no streaming) - in other words,
 	// reading the entire payload in memory, and then transforming in one shot
 	if msg.ChunkSize > 0 {
-		chunk = strconv.FormatInt(msg.ChunkSize, 10)
+		chunk = "\"" + strconv.FormatInt(msg.ChunkSize, 10) + "\""
 	}
 	podSpec = strings.ReplaceAll(podSpec, "<CHUNK_SIZE>", chunk)
 
