@@ -95,20 +95,35 @@ class Etl:
         Returns:
             etl_id (str): ETL ID
         """
+        if communication_type not in ["io", "hpush", "hrev", "hpull"]:
+            raise ValueError("communication_type should be in: hpull, hrev, hpush, io")
+
+        functions = {
+            "transform": "transform",
+        }
+
+        action = {
+            "id": etl_id,
+            "runtime": runtime,
+            "communication": f"{communication_type}://",
+            "timeout": timeout,
+            "funcs": functions,
+        }
 
         if before and after:
             before = base64.b64encode(cloudpickle.dumps(before)).decode("utf-8")
             after = base64.b64encode(cloudpickle.dumps(after)).decode("utf-8")
+            functions["before"] = "before"
+            functions["after"] = "after"
             BEFORE_AND_AFTER_EXISTS = True
         else:
             BEFORE_AND_AFTER_EXISTS = False
 
-        if communication_type not in ["io", "hpush", "hrev", "hpull"]:
-            raise ValueError("communication_type should be in: hpull, hrev, hpush, io")
+        if chunk_size:
+            action["chunk_size"] = chunk_size
 
         # code
         transform = base64.b64encode(cloudpickle.dumps(transform)).decode("utf-8")
-
         if communication_type == "io":
             template = CODE_TEMPLATE.format(transform, "transform()").encode("utf-8")
         else:
@@ -118,25 +133,15 @@ class Etl:
                 ).encode("utf-8")
             else:
                 template = CODE_TEMPLATE.format(transform, "").encode("utf-8")
-        code = base64.b64encode(template).decode("utf-8")
+        action["code"] = base64.b64encode(template).decode("utf-8")
 
         # dependencies
         if dependencies is None:
             dependencies = []
         dependencies.append("cloudpickle==2.0.0")
         deps = "\n".join(dependencies).encode("utf-8")
-        deps_encoded = base64.b64encode(deps).decode("utf-8")
+        action["dependencies"] = base64.b64encode(deps).decode("utf-8")
 
-        action = {
-            "code": code,
-            "dependencies": deps_encoded,
-            "id": etl_id,
-            "runtime": runtime,
-            "communication": f"{communication_type}://",
-            "timeout": timeout,
-        }
-        if chunk_size:
-            action["chunk_size"] = chunk_size
         resp = self.client.request(
             HTTP_METHOD_PUT,
             path="etl",
