@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -71,6 +71,23 @@ type (
 		Ext string `json:"ext"`
 	}
 )
+
+const (
+	// ETL container receives POST request from target with the data. It
+	// must read the data and return response to the target which then will be
+	// transferred to the client.
+	Hpush = "hpush://"
+	// Target redirects the GET request to the ETL container. Then ETL container
+	// contacts the target via `AIS_TARGET_URL` env variable to get the data.
+	// The data is then transformed and returned to the client.
+	Hpull = "hpull://"
+	// Similar to redirection strategy but with usage of reverse proxy.
+	Hrev = "hrev://"
+	// Stdin/stdout communication.
+	HpushStdin = "io://"
+)
+
+var commTypes = []string{Hpush, Hpull, Hrev, HpushStdin} // NOTE: must contain all
 
 ////////////////
 // InitMsg*** //

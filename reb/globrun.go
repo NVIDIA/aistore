@@ -721,7 +721,7 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 	rj.m.inQueue.Dec()
 	if err != nil {
 		lom, ok := arg.(*cluster.LOM)
-		debug.Assert(ok) // DEBUG
+		debug.Assert(ok)
 		rj.m.delLomAck(lom, 0)
 		if bool(glog.FastV(4, glog.SmoduleReb)) || !cos.IsRetriableConnErr(err) {
 			si := rj.m.t.Snode()
