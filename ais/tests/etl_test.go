@@ -524,7 +524,7 @@ def transform(input_bytes: bytes) -> bytes:
 			t.Run(testType+"__"+test.name, func(t *testing.T) {
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: test.onlyLong})
 
-				msg := &etl.InitCodeMsg{
+				msg := etl.InitCodeMsg{
 					InitMsgBase: etl.InitMsgBase{
 						IDX:       test.name,
 						CommTypeX: test.commType,

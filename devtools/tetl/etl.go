@@ -252,8 +252,8 @@ func Init(t *testing.T, baseParams api.BaseParams, name, comm string) string {
 	return uuid
 }
 
-func InitCode(t *testing.T, baseParams api.BaseParams, msg *etl.InitCodeMsg) string {
-	uuid, err := api.ETLInit(baseParams, msg)
+func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) string {
+	uuid, err := api.ETLInit(baseParams, &msg)
 	tassert.CheckFatal(t, err)
 
 	etlMsg, err := api.ETLGetInitMsg(baseParams, uuid)

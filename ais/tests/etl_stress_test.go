@@ -55,7 +55,7 @@ def transform(input_bytes):
 	m.initWithCleanup()
 	m.puts()
 
-	msg := &etl.InitCodeMsg{
+	msg := etl.InitCodeMsg{
 		InitMsgBase: etl.InitMsgBase{IDX: "etl-build-conn-err", Timeout: cos.Duration(5 * time.Minute)},
 		Code:        []byte(timeoutFunc),
 		Runtime:     runtime.Py38,
@@ -211,7 +211,7 @@ def transform(input_bytes):
 				test.buildDesc.IDX = test.name
 				test.buildDesc.Timeout = cos.Duration(10 * time.Minute)
 				test.buildDesc.Funcs.Transform = "transform"
-				uuid = tetl.InitCode(t, baseParams, &test.buildDesc)
+				uuid = tetl.InitCode(t, baseParams, test.buildDesc)
 			default:
 				panic(test.ty)
 			}

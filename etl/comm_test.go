@@ -113,7 +113,7 @@ var _ = Describe("CommunicatorTest", func() {
 			comm = makeCommunicator(commArgs{
 				bootstraper: &etlBootstraper{
 					t: tMock,
-					msg: &InitSpecMsg{
+					msg: InitSpecMsg{
 						InitMsgBase: InitMsgBase{
 							CommTypeX: commType,
 						},

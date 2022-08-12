@@ -147,7 +147,7 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-func InitSpec(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (err error) {
+func InitSpec(t cluster.Target, msg InitSpecMsg, opts StartOpts) (err error) {
 	errCtx, podName, svcName, err := tryStart(t, msg, opts)
 	if err != nil {
 		glog.Warning(cmn.NewErrETL(errCtx, "Performing cleanup after unsuccessful Start"))
@@ -162,9 +162,9 @@ func InitSpec(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (err error) {
 // Given user message `InitCodeMsg`, make the corresponding assorted substitutions
 // in the etl/runtime/podspec.yaml spec and run the container.
 // See also: etl/runtime/podspec.yaml
-func InitCode(t cluster.Target, msg *InitCodeMsg) error {
+func InitCode(t cluster.Target, msg InitCodeMsg) error {
 	var (
-		ftp      = fromToPairs(msg)
+		ftp      = fromToPairs(&msg)
 		replacer = strings.NewReplacer(ftp...)
 	)
 	r, exists := runtime.Get(msg.Runtime)
@@ -174,7 +174,7 @@ func InitCode(t cluster.Target, msg *InitCodeMsg) error {
 
 	// Start ETL
 	return InitSpec(t,
-		&InitSpecMsg{msg.InitMsgBase, []byte(podSpec)},
+		InitSpecMsg{msg.InitMsgBase, []byte(podSpec)},
 		StartOpts{Env: map[string]string{
 			r.CodeEnvName(): string(msg.Code),
 			r.DepsEnvName(): string(msg.Deps),
@@ -239,7 +239,7 @@ func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err 
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
-func tryStart(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
+func tryStart(t cluster.Target, msg InitSpecMsg, opts StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
 	cos.Assert(k8s.NodeName != "") // checked above
 
 	errCtx = &cmn.ETLErrorContext{TID: t.SID(), UUID: msg.IDX}
