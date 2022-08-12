@@ -63,9 +63,9 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 
 	switch msg := initMsg.(type) {
 	case *etl.InitSpecMsg:
-		err = etl.InitSpec(t, *msg, etl.StartOpts{})
+		err = etl.InitSpec(t, msg, etl.StartOpts{})
 	case *etl.InitCodeMsg:
-		err = etl.InitCode(t, *msg)
+		err = etl.InitCode(t, msg)
 	}
 	if err != nil {
 		t.writeErr(w, r, err)

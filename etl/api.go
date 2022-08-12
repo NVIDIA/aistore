@@ -19,9 +19,9 @@ import (
 
 type (
 	InitMsgBase struct {
-		IDX         string       `json:"id"`
-		CommTypeX   string       `json:"communication"`
-		WaitTimeout cos.Duration `json:"timeout"`
+		IDX       string       `json:"id"`
+		CommTypeX string       `json:"communication"`
+		Timeout   cos.Duration `json:"timeout"`
 	}
 	InitSpecMsg struct {
 		InitMsgBase
@@ -30,10 +30,27 @@ type (
 
 	InitCodeMsg struct {
 		InitMsgBase
-		Code      []byte `json:"code"`
-		Deps      []byte `json:"dependencies"`
-		Runtime   string `json:"runtime"`
-		ChunkSize int64  `json:"chunk_size"`
+		Code    []byte `json:"code"`
+		Deps    []byte `json:"dependencies"`
+		Runtime string `json:"runtime"`
+		// ========================================================================================
+		// `InitCodeMsg` carries the names of the transforming and, optionally, other functions;
+		// - only the `Transform` function is mandatory and cannot be "" (empty) - it _will_ be called
+		//   by the `Runtime` container (see etl/runtime/all.go for all supported pre-built runtimes);
+		// - `Filter` receives object-name (string) and a MIN(4KB, Content-Length) bytes of the payload;
+		//   returns true (to go ahead and transform) or false (to skip);
+		// - if specified, `Before` and `After` are called only once - before and, respectively,
+		//   after each transforming transaction.
+		// =========================================================================================
+		Funcs struct {
+			Filter    string `json:"filter,omitempty"`
+			Before    string `json:"before,omitempty"`
+			After     string `json:"after,omitempty"`
+			Transform string `json:"transform"` // cannot be omitted
+		}
+		// 0 (zero) - read the entire payload in memory and then transform it in one shot;
+		// > 0 - use chunk-size buffering and transform incrementally, one chunk at a time
+		ChunkSize int64 `json:"chunk_size"`
 	}
 
 	InfoList []Info
@@ -52,8 +69,7 @@ type (
 	}
 
 	PodsHealthMsg []*PodHealthMsg
-	// TODO: Extend with additional fields like Status.
-	PodHealthMsg struct {
+	PodHealthMsg  struct {
 		TargetID string  `json:"target_id"`
 		CPU      float64 `json:"cpu"`
 		Mem      int64   `json:"mem"`
@@ -123,22 +139,29 @@ func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 
 func (m *InitCodeMsg) Validate() error {
 	if err := cos.ValidateEtlID(m.IDX); err != nil {
-		return fmt.Errorf("invalid etl ID: %v (runtime %q, communication type %q)", err, m.Runtime, m.CommTypeX)
+		return fmt.Errorf("invalid etl ID: %v (%q, comm-type %q)", err, m.Runtime, m.CommTypeX)
 	}
 	if len(m.Code) == 0 {
-		return fmt.Errorf("source code is empty (runtime %q)", m.Runtime)
+		return fmt.Errorf("source code is empty (%q)", m.Runtime)
 	}
 	if m.Runtime == "" {
-		return fmt.Errorf("runtime is not specified (communication type %q)", m.CommTypeX)
+		return fmt.Errorf("runtime is not specified (comm-type %q)", m.CommTypeX)
 	}
 	if _, ok := runtime.Get(m.Runtime); !ok {
-		return fmt.Errorf("unsupported runtime %q (communication type %q)", m.Runtime, m.CommTypeX)
+		return fmt.Errorf("unsupported runtime %q (comm-type %q)", m.Runtime, m.CommTypeX)
 	}
 	if m.CommTypeX == "" {
+		cos.Warningf("empty comm-type, defaulting to %q (%q)", Hpush, m.Runtime)
 		m.CommTypeX = Hpush
+	} else if !cos.StringInSlice(m.CommTypeX, commTypes) {
+		return fmt.Errorf("unsupported comm-type %q (%q)", m.CommTypeX, m.Runtime)
 	}
-	if !cos.StringInSlice(m.CommTypeX, commTypes) {
-		return fmt.Errorf("unsupported communication type %q (runtime %q)", m.CommTypeX, m.Runtime)
+	if m.Funcs.Transform == "" {
+		return fmt.Errorf("transform function cannot be empty (comm-type %q, funcs %+v)", m.CommTypeX, m.Funcs)
+	}
+	if m.ChunkSize < 0 || m.ChunkSize > cos.MiB {
+		return fmt.Errorf("chunk-size %d is invalid, expecting 0 <= chunk-size <= MiB (%q, comm-type %q)",
+			m.ChunkSize, m.CommTypeX, m.Runtime)
 	}
 	return nil
 }

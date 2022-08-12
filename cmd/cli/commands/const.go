@@ -508,6 +508,25 @@ var (
 		Name:  "comm-type",
 		Usage: "communication type which should be used when running the provided code",
 	}
+	funcFilterFlag = cli.StringFlag{
+		Name: "filter",
+		Usage: "receives object-name (string) and a MIN(4KB, Content-Length) bytes of the payload;\n" +
+			"returns true (to go ahead and transform) or false (to skip)",
+	}
+	funcBeforeFlag = cli.StringFlag{
+		Name:  "before",
+		Usage: "if specified, is called before each transforming transaction",
+	}
+	funcAfterFlag = cli.StringFlag{
+		Name:  "after",
+		Usage: "if specified, is called after each transforming transaction",
+	}
+	funcTransformFlag = cli.StringFlag{
+		Name:  "transform",
+		Value: "transform", // NOTE: default name of the transform() function
+		Usage: "receives and _transforms_ the payload",
+	}
+
 	waitTimeoutFlag = cli.DurationFlag{
 		Name:  "wait-timeout",
 		Usage: "determines how long ais target should wait for pod to become ready",

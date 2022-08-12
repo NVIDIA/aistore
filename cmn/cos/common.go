@@ -316,6 +316,14 @@ func Infof(format string, a ...interface{}) {
 	}
 }
 
+func Warningf(format string, a ...interface{}) {
+	if flag.Parsed() {
+		glog.WarningDepth(1, fmt.Sprintf(format, a...))
+	} else {
+		fmt.Printf(format+"\n", a...)
+	}
+}
+
 func Errorf(format string, a ...interface{}) {
 	if flag.Parsed() {
 		glog.ErrorDepth(1, fmt.Sprintf(format, a...))

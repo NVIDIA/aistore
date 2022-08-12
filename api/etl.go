@@ -107,10 +107,12 @@ func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error
 		return nil, fmt.Errorf("failed to read response, err: %w", err)
 	}
 
+	// TODO -- FIXME: optmize out
 	var msgInf map[string]json.RawMessage
 	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
 		return
 	}
+
 	if _, ok := msgInf["code"]; ok {
 		initMsg = &etl.InitCodeMsg{}
 		err = jsoniter.Unmarshal(b, initMsg)
@@ -118,7 +120,7 @@ func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error
 	}
 
 	if _, ok := msgInf["spec"]; !ok {
-		err = fmt.Errorf("invalid response body: %s", b)
+		err = fmt.Errorf("invalid response body: %+v", msgInf)
 		return
 	}
 	initMsg = &etl.InitSpecMsg{}

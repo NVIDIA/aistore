@@ -55,15 +55,16 @@ def transform(input_bytes):
 	m.initWithCleanup()
 	m.puts()
 
-	uuid := tetl.InitCode(t, baseParams, etl.InitCodeMsg{
-		InitMsgBase: etl.InitMsgBase{
-			IDX:         "etl-build-conn-err",
-			WaitTimeout: cos.Duration(5 * time.Minute),
-		},
-		Code:      []byte(timeoutFunc),
-		Runtime:   runtime.Py38,
-		ChunkSize: 0,
-	})
+	msg := &etl.InitCodeMsg{
+		InitMsgBase: etl.InitMsgBase{IDX: "etl-build-conn-err", Timeout: cos.Duration(5 * time.Minute)},
+		Code:        []byte(timeoutFunc),
+		Runtime:     runtime.Py38,
+		ChunkSize:   0,
+	}
+	msg.Funcs.Transform = "transform"
+
+	uuid := tetl.InitCode(t, baseParams, msg)
+
 	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
 }
 
@@ -208,8 +209,9 @@ def transform(input_bytes):
 				uuid = tetl.Init(t, baseParams, test.initDesc, etl.Hpull)
 			case apc.ETLInitCode:
 				test.buildDesc.IDX = test.name
-				test.buildDesc.WaitTimeout = cos.Duration(10 * time.Minute)
-				uuid = tetl.InitCode(t, baseParams, test.buildDesc)
+				test.buildDesc.Timeout = cos.Duration(10 * time.Minute)
+				test.buildDesc.Funcs.Transform = "transform"
+				uuid = tetl.InitCode(t, baseParams, &test.buildDesc)
 			default:
 				panic(test.ty)
 			}

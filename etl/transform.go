@@ -147,7 +147,7 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-func InitSpec(t cluster.Target, msg InitSpecMsg, opts StartOpts) (err error) {
+func InitSpec(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (err error) {
 	errCtx, podName, svcName, err := tryStart(t, msg, opts)
 	if err != nil {
 		glog.Warning(cmn.NewErrETL(errCtx, "Performing cleanup after unsuccessful Start"))
@@ -162,46 +162,58 @@ func InitSpec(t cluster.Target, msg InitSpecMsg, opts StartOpts) (err error) {
 // Given user message `InitCodeMsg`, make the corresponding assorted substitutions
 // in the etl/runtime/podspec.yaml spec and run the container.
 // See also: etl/runtime/podspec.yaml
-func InitCode(t cluster.Target, msg InitCodeMsg) error {
-	r, exists := runtime.Get(msg.Runtime)
-	cos.AssertMsg(exists, msg.Runtime) // must've been checked by proxy
-
+func InitCode(t cluster.Target, msg *InitCodeMsg) error {
 	var (
-		chunk   string
-		name    = k8s.CleanName(msg.IDX) // cleanup the `msg.ID` as K8s doesn't allow `_` and uppercase
-		podSpec = r.PodSpec()
+		ftp      = fromToPairs(msg)
+		replacer = strings.NewReplacer(ftp...)
 	)
-	podSpec = strings.ReplaceAll(podSpec, "<NAME>", name)
-	podSpec = strings.ReplaceAll(podSpec, "<COMM_TYPE>", msg.CommTypeX)
+	r, exists := runtime.Get(msg.Runtime)
+	debug.AssertMsg(exists, msg.Runtime) // must've been checked by proxy
+
+	podSpec := replacer.Replace(r.PodSpec())
+
+	// Start ETL
+	return InitSpec(t,
+		&InitSpecMsg{msg.InitMsgBase, []byte(podSpec)},
+		StartOpts{Env: map[string]string{
+			r.CodeEnvName(): string(msg.Code),
+			r.DepsEnvName(): string(msg.Deps),
+		}})
+}
+
+// generate (from => to) replacements
+//nolint:gocritic // appendCombine vs readability
+func fromToPairs(msg *InitCodeMsg) (ftp []string) {
+	var (
+		chunk string
+		name  = k8s.CleanName(msg.IDX) // cleanup the `msg.ID` as K8s doesn't allow `_` and uppercase
+	)
+	ftp = make([]string, 0, 16)
+	ftp = append(ftp, "<NAME>", name)
+	ftp = append(ftp, "<COMM_TYPE>", msg.CommTypeX)
 
 	// chunk == 0 means no chunks (and no streaming) - in other words,
 	// reading the entire payload in memory, and then transforming in one shot
 	if msg.ChunkSize > 0 {
 		chunk = "\"" + strconv.FormatInt(msg.ChunkSize, 10) + "\""
 	}
-	podSpec = strings.ReplaceAll(podSpec, "<CHUNK_SIZE>", chunk)
+	ftp = append(ftp, "<CHUNK_SIZE>", chunk)
+
+	// functions
+	ftp = append(ftp, "<FUNC_FILTER>", msg.Funcs.Filter)
+	ftp = append(ftp, "<FUNC_BEFORE>", msg.Funcs.Before)
+	ftp = append(ftp, "<FUNC_TRANSFORM>", msg.Funcs.Transform)
+	ftp = append(ftp, "<FUNC_AFTER>", msg.Funcs.After)
 
 	switch msg.CommTypeX {
 	case Hpush, Hpull, Hrev:
-		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['sh', '-c', 'python /server.py']")
+		ftp = append(ftp, "<COMMAND>", "['sh', '-c', 'python /server.py']")
 	case HpushStdin:
-		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['python /code/code.py']")
+		ftp = append(ftp, "<COMMAND>", "['python /code/code.py']")
 	default:
 		cos.AssertMsg(false, msg.CommTypeX)
 	}
-
-	// Start the ETL
-	return InitSpec(t, InitSpecMsg{
-		InitMsgBase: InitMsgBase{
-			IDX:         msg.IDX,
-			CommTypeX:   msg.CommTypeX,
-			WaitTimeout: msg.WaitTimeout,
-		},
-		Spec: []byte(podSpec),
-	}, StartOpts{Env: map[string]string{
-		r.CodeEnvName(): string(msg.Code),
-		r.DepsEnvName(): string(msg.Deps),
-	}})
+	return
 }
 
 // cleanupEntities removes provided entities. It tries its best to remove all
@@ -227,21 +239,11 @@ func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err 
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
-func tryStart(t cluster.Target, msg InitSpecMsg, opts StartOpts) (errCtx *cmn.ETLErrorContext,
-	podName, svcName string, err error) {
-	cos.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
+func tryStart(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
+	cos.Assert(k8s.NodeName != "") // checked above
 
-	errCtx = &cmn.ETLErrorContext{
-		TID:  t.SID(),
-		UUID: msg.IDX,
-	}
-
-	b := &etlBootstraper{
-		errCtx: errCtx,
-		t:      t,
-		msg:    msg,
-		env:    opts.Env,
-	}
+	errCtx = &cmn.ETLErrorContext{TID: t.SID(), UUID: msg.IDX}
+	b := &etlBootstraper{errCtx: errCtx, t: t, msg: msg, env: opts.Env}
 
 	// Parse spec template and fill Pod object with necessary fields.
 	if err = b.createPodSpec(); err != nil {
@@ -259,17 +261,14 @@ func tryStart(t cluster.Target, msg InitSpecMsg, opts StartOpts) (errCtx *cmn.ET
 	if err = b.createEntity(k8s.Svc); err != nil {
 		return
 	}
-
 	// 3. Creating pod.
 	podName = b.pod.GetName()
 	if err = b.createEntity(k8s.Pod); err != nil {
 		return
 	}
-
 	if err = b.waitPodReady(); err != nil {
 		return
 	}
-
 	if err = b.setupConnection(); err != nil {
 		return
 	}
@@ -590,14 +589,15 @@ func (b *etlBootstraper) setPodEnvVariables() {
 // only after the Pod's containers will have started and the Pod's `readinessProbe`
 // request (made by the Kubernetes itself) returns OK. If the Pod doesn't have
 // `readinessProbe` config specified the last step gets skipped.
-// NOTE: However, currently, we do require readinessProbe config in the ETL spec.
+//
+// NOTE: currently, we do require readinessProbe config in the ETL spec.
 func (b *etlBootstraper) waitPodReady() error {
 	client, err := k8s.GetClient()
 	if err != nil {
 		return cmn.NewErrETL(b.errCtx, "%v", err)
 	}
 
-	err = wait.PollImmediate(time.Second, time.Duration(b.msg.WaitTimeout), func() (ready bool, err error) {
+	err = wait.PollImmediate(time.Second, time.Duration(b.msg.Timeout), func() (ready bool, err error) {
 		ready, err = checkPodReady(client, b.pod.Name)
 		return ready, err
 	})

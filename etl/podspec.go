@@ -24,7 +24,7 @@ type etlBootstraper struct {
 
 	errCtx *cmn.ETLErrorContext
 	t      cluster.Target
-	msg    InitSpecMsg
+	msg    *InitSpecMsg
 	env    map[string]string
 
 	// These fields are set during bootstrap.

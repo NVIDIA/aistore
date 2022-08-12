@@ -252,8 +252,8 @@ func Init(t *testing.T, baseParams api.BaseParams, name, comm string) string {
 	return uuid
 }
 
-func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) string {
-	uuid, err := api.ETLInit(baseParams, &msg)
+func InitCode(t *testing.T, baseParams api.BaseParams, msg *etl.InitCodeMsg) string {
+	uuid, err := api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
 	etlMsg, err := api.ETLGetInitMsg(baseParams, uuid)
@@ -322,7 +322,7 @@ func SpecToInitMsg(spec []byte /*yaml*/) (msg *etl.InitSpecMsg, err error) {
 	}
 	// Check annotations.
 	msg.CommTypeX = podTransformCommType(pod)
-	if msg.WaitTimeout, err = podTransformTimeout(errCtx, pod); err != nil {
+	if msg.Timeout, err = podTransformTimeout(errCtx, pod); err != nil {
 		return msg, err
 	}
 

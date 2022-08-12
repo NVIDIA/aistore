@@ -524,17 +524,20 @@ def transform(input_bytes: bytes) -> bytes:
 			t.Run(testType+"__"+test.name, func(t *testing.T) {
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: test.onlyLong})
 
-				uuid := tetl.InitCode(t, baseParams, etl.InitCodeMsg{
+				msg := &etl.InitCodeMsg{
 					InitMsgBase: etl.InitMsgBase{
-						IDX:         test.name,
-						CommTypeX:   test.commType,
-						WaitTimeout: cos.Duration(5 * time.Minute),
+						IDX:       test.name,
+						CommTypeX: test.commType,
+						Timeout:   cos.Duration(5 * time.Minute),
 					},
 					Code:      []byte(test.code),
 					Deps:      []byte(test.deps),
 					Runtime:   test.runtime,
 					ChunkSize: 0,
-				})
+				}
+				msg.Funcs.Transform = "transform"
+
+				uuid := tetl.InitCode(t, baseParams, msg)
 
 				switch testType {
 				case "etl_object":

@@ -280,6 +280,7 @@ test:short:k8s:
       - $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/
   script:
     - export NUM_TARGET=3
+    - export NUM_PROXY=3
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-short
