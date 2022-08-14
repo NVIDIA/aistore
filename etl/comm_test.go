@@ -111,7 +111,7 @@ var _ = Describe("CommunicatorTest", func() {
 
 			xctn := mock.NewXact(apc.ActETLInline)
 			comm = makeCommunicator(commArgs{
-				bootstraper: &etlBootstraper{
+				bootstrapper: &etlBootstrapper{
 					t: tMock,
 					msg: InitSpecMsg{
 						InitMsgBase: InitMsgBase{

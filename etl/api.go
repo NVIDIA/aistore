@@ -15,6 +15,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl/runtime"
 	jsoniter "github.com/json-iterator/go"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 type (
@@ -168,6 +170,20 @@ func (m *InitCodeMsg) Validate() error {
 
 func (*InitCodeMsg) InitType() string { return apc.ETLInitCode }
 func (*InitSpecMsg) InitType() string { return apc.ETLInitSpec }
+
+func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error) {
+	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
+	if err != nil {
+		return nil, cmn.NewErrETL(errCtx, "failed to parse pod spec: %v\n%q", err, string(spec))
+	}
+
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		kind := obj.GetObjectKind().GroupVersionKind().Kind
+		return nil, cmn.NewErrETL(errCtx, "expected pod spec, got: %s", kind)
+	}
+	return pod, nil
+}
 
 func (m *InitSpecMsg) Validate() (err error) {
 	errCtx := &cmn.ETLErrorContext{}

@@ -53,8 +53,8 @@ type (
 	}
 
 	commArgs struct {
-		listener    cluster.Slistener
-		bootstraper *etlBootstraper
+		listener     cluster.Slistener
+		bootstrapper *etlBootstrapper
 	}
 
 	baseComm struct {
@@ -106,23 +106,23 @@ var (
 func makeCommunicator(args commArgs) Communicator {
 	baseComm := baseComm{
 		Slistener: args.listener,
-		t:         args.bootstraper.t,
-		name:      args.bootstraper.originalPodName,
-		podName:   args.bootstraper.pod.Name,
-		xctn:      args.bootstraper.xctn,
+		t:         args.bootstrapper.t,
+		name:      args.bootstrapper.originalPodName,
+		podName:   args.bootstrapper.pod.Name,
+		xctn:      args.bootstrapper.xctn,
 	}
 
-	switch args.bootstraper.msg.CommTypeX {
+	switch args.bootstrapper.msg.CommTypeX {
 	case Hpush:
 		return &pushComm{
 			baseComm: baseComm,
-			mem:      args.bootstraper.t.PageMM(),
-			uri:      args.bootstraper.uri,
+			mem:      args.bootstrapper.t.PageMM(),
+			uri:      args.bootstrapper.uri,
 		}
 	case Hpull:
-		return &redirectComm{baseComm: baseComm, uri: args.bootstraper.uri}
+		return &redirectComm{baseComm: baseComm, uri: args.bootstrapper.uri}
 	case Hrev:
-		transformerURL, err := url.Parse(args.bootstraper.uri)
+		transformerURL, err := url.Parse(args.bootstrapper.uri)
 		cos.AssertNoErr(err)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
@@ -136,16 +136,16 @@ func makeCommunicator(args commArgs) Communicator {
 				}
 			},
 		}
-		return &revProxyComm{baseComm: baseComm, rp: rp, uri: args.bootstraper.uri}
+		return &revProxyComm{baseComm: baseComm, rp: rp, uri: args.bootstrapper.uri}
 	case HpushStdin:
 		return &pushComm{
 			baseComm: baseComm,
-			mem:      args.bootstraper.t.PageMM(),
-			uri:      args.bootstraper.uri,
-			command:  args.bootstraper.originalCommand,
+			mem:      args.bootstrapper.t.PageMM(),
+			uri:      args.bootstrapper.uri,
+			command:  args.bootstrapper.originalCommand,
 		}
 	default:
-		cos.AssertMsg(false, args.bootstraper.msg.CommTypeX)
+		cos.AssertMsg(false, args.bootstrapper.msg.CommTypeX)
 	}
 	return nil
 }

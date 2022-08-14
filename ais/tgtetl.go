@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 )
@@ -63,9 +64,11 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 
 	switch msg := initMsg.(type) {
 	case *etl.InitSpecMsg:
-		err = etl.InitSpec(t, *msg, etl.StartOpts{})
+		err = etl.InitSpec(t, msg, etl.StartOpts{})
 	case *etl.InitCodeMsg:
-		err = etl.InitCode(t, *msg)
+		err = etl.InitCode(t, msg)
+	default:
+		debug.Assert(false)
 	}
 	if err != nil {
 		t.writeErr(w, r, err)
