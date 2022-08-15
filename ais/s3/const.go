@@ -5,9 +5,6 @@
 package s3
 
 const (
-	AISRegion = "ais"
-	AISSever  = "AIS"
-
 	// AWS URL params
 	QparamVersioning        = "versioning"
 	QparamLifecycle         = "lifecycle"
@@ -22,8 +19,20 @@ const (
 	versioningEnabled  = "Enabled"
 	versioningDisabled = "Suspended"
 
+	// Maximum number of parts per upload
+	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
+	MaxPartsPerUpload = 10000
+
 	s3Namespace = "http://s3.amazonaws.com/doc/2006-03-01"
 
-	// Headers
-	HeaderObjSrc = "x-amz-copy-source"
+	// s3 request headers
+	HdrObjSrc        = "x-amz-copy-source"
+	HdrMultipartCnt  = "x-amz-mp-parts-count"
+	HdrContentSHA256 = "x-amz-content-sha256"
+
+	HdrBckRegion = "x-amz-bucket-region"
+	AISRegion    = "ais"
+
+	HdrBckServer = "Server"
+	AISSever     = "AIStore"
 )

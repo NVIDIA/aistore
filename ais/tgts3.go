@@ -62,7 +62,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		t.writeErr(w, r, errS3Obj)
 		return
 	}
-	src := r.Header.Get(s3.HeaderObjSrc)
+	src := r.Header.Get(s3.HdrObjSrc)
 	src = strings.Trim(src, "/") // in AWS examples the path starts with "/"
 	parts := strings.SplitN(src, "/", 2)
 	if len(parts) < 2 {
@@ -190,14 +190,14 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	q := r.URL.Query()
 	if q.Has(s3.QparamMultipartPartNo) && r.URL.Query().Has(s3.QparamMultipartUploadID) {
-		if r.Header.Get(s3.HeaderObjSrc) != "" {
+		if r.Header.Get(s3.HdrObjSrc) != "" {
 			t.putObjMultipartPartCopy(w, r, items)
 		} else {
 			t.putObjMultipartPart(w, r, items, q)
 		}
 		return
 	}
-	if r.Header.Get(s3.HeaderObjSrc) == "" {
+	if r.Header.Get(s3.HdrObjSrc) == "" {
 		t.directPutObjS3(w, r, items)
 		return
 	}
@@ -208,7 +208,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	q := r.URL.Query()
 	if len(items) == 1 && q.Has(s3.QparamMultipartUploads) {
-		t.listMultipartUploads(w, r, items)
+		t.listMultipartUploads(w, r, items, q)
 		return
 	}
 
@@ -243,7 +243,8 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	dpqFree(dpq)
 }
 
-// HEAD s3/bckName/objName
+// HEAD s3/bckName/objName (TODO: s3.HdrMultipartCnt)
+// See: https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
 func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		t.writeErr(w, r, errS3Obj)
@@ -319,7 +320,8 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []strin
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html
 func (t *target) putObjMultipartPartCopy(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload", http.StatusBadRequest)
+		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload",
+			http.StatusBadRequest)
 		return
 	}
 	t.writeErrMsg(w, r, "not implemented yet")
@@ -331,12 +333,9 @@ func (t *target) putObjMultipartPartCopy(w http.ResponseWriter, r *http.Request,
 // s3cmd does not set it.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
 func (t *target) putObjMultipartPart(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
-	var (
-		partNum int64
-		err     error
-	)
 	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload", http.StatusBadRequest)
+		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload",
+			http.StatusBadRequest)
 		return
 	}
 	uploadID := q.Get(s3.QparamMultipartUploadID)
@@ -349,23 +348,26 @@ func (t *target) putObjMultipartPart(w http.ResponseWriter, r *http.Request, ite
 		t.writeErrMsg(w, r, "empty part number")
 		return
 	}
-	// AWS docs: partNumber is in [1, 10000] range
-	if partNum, err = strconv.ParseInt(part, 10, 16); err != nil || partNum < 1 || partNum > 10000 {
-		if err != nil {
-			t.writeErr(w, r, err)
-		} else {
-			t.writeErrStatusf(w, r, http.StatusBadRequest, "invalid part number %d, must be between 1 and 10000", partNum)
-		}
+	partNum, err := strconv.ParseInt(part, 10, 16)
+	if err != nil {
+		t.writeErrf(w, r, "%v (must be between 1 and %d)", err, s3.MaxPartsPerUpload)
 		return
 	}
-	if r.Header.Get(s3.HeaderObjSrc) != "" {
+	if partNum < 1 || partNum > s3.MaxPartsPerUpload {
+		t.writeErrStatusf(w, r, http.StatusBadRequest,
+			"invalid part number %d, must be between 1 and %d", partNum, s3.MaxPartsPerUpload)
+		return
+	}
+	if r.Header.Get(s3.HdrObjSrc) != "" {
 		t.writeErrMsg(w, r, "uploading a copy is not supported yet", http.StatusNotImplemented)
 		return
 	}
 	// TODO: it is empty for s3cmd. It seems s3cmd does not send MD5.
 	//       Check if s3cmd sets Header.ETag with MD5.
+	// TODO: s3cmd sends this one for every part, can we use it?
+	//       sha256 := r.Header.Get(s3.HdrContentSHA256)
+
 	partMD5 := r.Header.Get(cmn.AzCksumHeader)
-	// sha256 := r.Header.Get("x-amz-content-sha256") // TODO: s3cmd sends this one for every part, can we use it?
 	recvMD5 := cos.NewCksum(cos.ChecksumMD5, partMD5)
 
 	bckName := items[0]
@@ -400,7 +402,8 @@ func (t *target) putObjMultipartPart(w http.ResponseWriter, r *http.Request, ite
 	cksum.Finalize()
 	calculatedMD5 := cksum.Value()
 	if partMD5 != "" && !cksum.Equal(recvMD5) {
-		t.writeErrStatusf(w, r, http.StatusBadRequest, "MD5 checksum mismatch: got %s, calculated %s", partMD5, calculatedMD5)
+		t.writeErrStatusf(w, r, http.StatusBadRequest,
+			"MD5 checksum mismatch: got %s, calculated %s", partMD5, calculatedMD5)
 		return
 	}
 
@@ -420,7 +423,8 @@ func (t *target) putObjMultipartPart(w http.ResponseWriter, r *http.Request, ite
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html
 func (t *target) startMultipart(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
 	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to start multipart upload", http.StatusBadRequest)
+		t.writeErrMsg(w, r, "bucket and object names are required to start multipart upload",
+			http.StatusBadRequest)
 		return
 	}
 	bckName := items[0]
@@ -458,7 +462,8 @@ func (t *target) startMultipart(w http.ResponseWriter, r *http.Request, items []
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
 func (t *target) completeMultipart(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
 	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload", http.StatusBadRequest)
+		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload",
+			http.StatusBadRequest)
 		return
 	}
 	uploadID := q.Get(s3.QparamMultipartUploadID)
@@ -578,7 +583,7 @@ func (t *target) completeMultipart(w http.ResponseWriter, r *http.Request, items
 	sgl.Free()
 }
 
-// List already stored parts of the multipart upload by bucket name and uploadID.
+// List already stored parts of the active multipart upload by bucket name and uploadID.
 // NOTE: looks like `s3cmd` lists upload parts before checking if any parts can be skipped.
 // s3cmd is OK to receive an empty body in response with status=200. In this
 // case s3cmd sends all parts.
@@ -599,9 +604,13 @@ func (t *target) listMultipartParts(w http.ResponseWriter, r *http.Request, bck 
 }
 
 // List all active multipart uploads for a bucket.
-// Body is empty, everything is in the URL query:
+// Body is empty; URL path /bucket with everything else in the query, see:
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html
-func (t *target) listMultipartUploads(w http.ResponseWriter, r *http.Request, items []string) {
+// GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&
+//               max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
+func (t *target) listMultipartUploads(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
+	_ = q // TODO: use to support key-marker, upload-id-marker, max-uploads
+
 	if len(items) != 1 {
 		t.writeErrMsg(w, r, "listing multipart uploads accepts only bucket name")
 		return
@@ -627,7 +636,8 @@ func (t *target) listMultipartUploads(w http.ResponseWriter, r *http.Request, it
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html
 func (t *target) abortMultipartUpload(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
 	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload", http.StatusBadRequest)
+		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload",
+			http.StatusBadRequest)
 		return
 	}
 	uploadID := q.Get(s3.QparamMultipartUploadID)
@@ -641,7 +651,8 @@ func (t *target) abortMultipartUpload(w http.ResponseWriter, r *http.Request, it
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Returns part of an object by `partNumber` in the URL query.
+// Acts on an already multipart-uploaded object, returns `partNumber` (URL query)
+// part of the object.
 // The object must have been uploaded with multipart feature beforehand.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
 func (t *target) getObjectPart(w http.ResponseWriter, r *http.Request, items []string) {

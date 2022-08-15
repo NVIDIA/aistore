@@ -282,16 +282,17 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
-	// From AWS docs:
-	// This operation is useful to determine if a bucket exists and you have
+	// From https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html:
+	//
+	// "This operation is useful to determine if a bucket exists and you have
 	// permission to access it. The operation returns a 200 OK if the bucket
 	// exists and you have permission to access it. Otherwise, the operation
-	// might return responses such as 404 Not Found and 403 Forbidden.
+	// might return responses such as 404 Not Found and 403 Forbidden."
 	//
-	// But, after checking Amazon response, it appeared that Amazon adds
-	// region name to the response, and at least AWS CLI uses it.
-	w.Header().Set("Server", s3.AISSever)
-	w.Header().Set("x-amz-bucket-region", s3.AISRegion)
+	// But it appears that Amazon always adds region to the response,
+	// and AWS CLI uses it.
+	w.Header().Set(s3.HdrBckServer, s3.AISSever)
+	w.Header().Set(s3.HdrBckRegion, s3.AISRegion)
 }
 
 // GET s3/bckName
@@ -333,7 +334,7 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 // PUT s3/bckName/objName - with HeaderObjSrc in request header - a source
 func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
-	src := r.Header.Get(s3.HeaderObjSrc)
+	src := r.Header.Get(s3.HdrObjSrc)
 	src = strings.Trim(src, "/") // in examples the path starts with "/"
 	parts := strings.SplitN(src, "/", 2)
 	if len(parts) < 2 {
@@ -416,7 +417,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 
 // PUT s3/bckName/objName
 func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	if r.Header.Get(s3.HeaderObjSrc) == "" {
+	if r.Header.Get(s3.HdrObjSrc) == "" {
 		p.directPutObjS3(w, r, items)
 		return
 	}
