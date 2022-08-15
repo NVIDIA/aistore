@@ -1,8 +1,8 @@
-// Package s3compat provides Amazon S3 compatibility layer
+// Package s3 provides Amazon S3 compatibility layer
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package s3compat
+package s3
 
 import (
 	"encoding/xml"
@@ -21,6 +21,9 @@ import (
 
 const defaultLastModified = 0 // When an object was not accessed yet
 
+// NOTE: do not rename structs that have `xml` tags. The names of those structs
+// become a top level tag of resulting XML, and those tags S3-compatible
+// clients require.
 type (
 	// List objects response
 	ListObjectResult struct {
@@ -45,6 +48,52 @@ type (
 	CopyObjectResult struct {
 		LastModified string `xml:"LastModified"`
 		ETag         string `xml:"ETag"`
+	}
+
+	// Multipart upload start response
+	InitiateMultipartUploadResult struct {
+		Bucket   string `xml:"Bucket"`
+		Key      string `xml:"Key"`
+		UploadID string `xml:"UploadId"`
+	}
+
+	// Multipart uploaded part
+	PartInfo struct {
+		ETag       string `xml:"ETag"`
+		PartNumber int64  `xml:"PartNumber"`
+		Size       int64  `xml:"Size,omitempty"`
+	}
+
+	// Multipart upload completion request
+	CompleteMultipartUpload struct {
+		Parts []*PartInfo `xml:"Part"`
+	}
+
+	// Multipart upload completion response
+	CompleteMultipartUploadResult struct {
+		Bucket string `xml:"Bucket"`
+		Key    string `xml:"Key"`
+		ETag   string `xml:"ETag"`
+	}
+
+	// Multipart uploaded parts response
+	ListPartsResult struct {
+		Bucket   string      `xml:"Bucket"`
+		Key      string      `xml:"Key"`
+		UploadID string      `xml:"UploadId"`
+		Parts    []*PartInfo `xml:"Part"`
+	}
+
+	// Active upload info
+	UploadInfo struct {
+		Key      string `xml:"Key"`
+		UploadID string `xml:"UploadId"`
+	}
+
+	// List of active multipart uploads response
+	ListMultipartUploadsResult struct {
+		Bucket  string        `xml:"Bucket"`
+		Uploads []*UploadInfo `xml:"Upload"`
 	}
 )
 
@@ -128,11 +177,35 @@ func lomMD5(lom *cluster.LOM) string {
 
 func SetETag(header http.Header, lom *cluster.LOM) {
 	if md5val := lomMD5(lom); md5val != "" {
-		header.Set(headerETag, md5val)
+		header.Set(cmn.S3CksumHeader, md5val)
 	}
 }
 
 func (r *CopyObjectResult) MustMarshal(sgl *memsys.SGL) {
+	sgl.Write([]byte(xml.Header))
+	err := xml.NewEncoder(sgl).Encode(r)
+	cos.AssertNoErr(err)
+}
+
+func (r *InitiateMultipartUploadResult) MustMarshal(sgl *memsys.SGL) {
+	sgl.Write([]byte(xml.Header))
+	err := xml.NewEncoder(sgl).Encode(r)
+	cos.AssertNoErr(err)
+}
+
+func (r *CompleteMultipartUploadResult) MustMarshal(sgl *memsys.SGL) {
+	sgl.Write([]byte(xml.Header))
+	err := xml.NewEncoder(sgl).Encode(r)
+	cos.AssertNoErr(err)
+}
+
+func (r *ListPartsResult) MustMarshal(sgl *memsys.SGL) {
+	sgl.Write([]byte(xml.Header))
+	err := xml.NewEncoder(sgl).Encode(r)
+	cos.AssertNoErr(err)
+}
+
+func (r *ListMultipartUploadsResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	cos.AssertNoErr(err)

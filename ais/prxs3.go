@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/ais/s3compat"
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -60,16 +60,18 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		q := r.URL.Query()
-		_, lifecycle := q[s3compat.QparamLifecycle]
-		_, policy := q[s3compat.QparamPolicy]
-		_, cors := q[s3compat.QparamCORS]
-		_, acl := q[s3compat.QparamACL]
+		var (
+			_, lifecycle = q[s3.QparamLifecycle]
+			_, policy    = q[s3.QparamPolicy]
+			_, cors      = q[s3.QparamCORS]
+			_, acl       = q[s3.QparamACL]
+		)
 		if lifecycle || policy || cors || acl {
 			p.unsupported(w, r, apiItems[0])
 			return
 		}
 		if len(apiItems) == 1 {
-			_, versioning := q[s3compat.QparamVersioning]
+			_, versioning := q[s3.QparamVersioning]
 			if versioning {
 				p.getBckVersioningS3(w, r, apiItems[0])
 				return
@@ -87,7 +89,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(apiItems) == 1 {
 			q := r.URL.Query()
-			_, versioning := q[s3compat.QparamVersioning]
+			_, versioning := q[s3.QparamVersioning]
 			if versioning {
 				p.putBckVersioningS3(w, r, apiItems[0])
 				return
@@ -97,12 +99,16 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		}
 		p.putObjS3(w, r, apiItems)
 	case http.MethodPost:
+		q := r.URL.Query()
+		if q.Has(s3.QparamMultipartUploadID) || q.Has(s3.QparamMultipartUploads) {
+			p.handleMultipartupload(w, r, apiItems)
+			return
+		}
 		if len(apiItems) != 1 {
 			p.writeErr(w, r, errS3Req)
 			return
 		}
-		q := r.URL.Query()
-		if _, multiple := q[s3compat.QparamMultiDelete]; !multiple {
+		if _, multiple := q[s3.QparamMultiDelete]; !multiple {
 			p.writeErr(w, r, errS3Req)
 			return
 		}
@@ -114,7 +120,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(apiItems) == 1 {
 			q := r.URL.Query()
-			_, multiple := q[s3compat.QparamMultiDelete]
+			_, multiple := q[s3.QparamMultiDelete]
 			if multiple {
 				p.delMultipleObjs(w, r, apiItems[0])
 				return
@@ -136,7 +142,7 @@ func (p *proxy) bckNamesToS3(w http.ResponseWriter) {
 		qbck = cmn.QueryBcks{Provider: apc.ProviderAIS}
 		cp   = &qbck.Provider
 	)
-	resp := s3compat.NewListBucketResult()
+	resp := s3.NewListBucketResult()
 	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
 		if qbck.Equal(bck.Bucket()) || qbck.Contains(bck.Bucket()) {
 			resp.Add(bck)
@@ -196,6 +202,29 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	}
 }
 
+func (p *proxy) handleMultipartupload(w http.ResponseWriter, r *http.Request, parts []string) {
+	started := time.Now()
+	bucket := parts[0]
+	bck := cluster.NewBck(bucket, apc.ProviderAIS, cmn.NsGlobal)
+	if err := bck.Init(p.owner.bmd); err != nil {
+		p.writeErr(w, r, err, http.StatusNotFound)
+		return
+	}
+	if err := bck.Allow(apc.AcePUT); err != nil {
+		p.writeErr(w, r, err, http.StatusForbidden)
+		return
+	}
+	smap := p.owner.smap.get()
+	objName := strings.Join(parts[1:], "/")
+	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
+	p.s3Redirect(w, r, si, redirectURL, bck.Name)
+}
+
 // DEL s3/bck-name?delete
 // Delete list of objects
 func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
@@ -210,7 +239,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)
-	objList := &s3compat.Delete{}
+	objList := &s3.Delete{}
 	if err := decoder.Decode(objList); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -261,8 +290,8 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 	//
 	// But, after checking Amazon response, it appeared that Amazon adds
 	// region name to the response, and at least AWS CLI uses it.
-	w.Header().Set("Server", s3compat.AISSever)
-	w.Header().Set("x-amz-bucket-region", s3compat.AISRegion)
+	w.Header().Set("Server", s3.AISSever)
+	w.Header().Set("x-amz-bucket-region", s3.AISRegion)
 }
 
 // GET s3/bckName
@@ -274,7 +303,7 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 	}
 	lsmsg := apc.ListObjsMsg{UUID: cos.GenUUID(), TimeFormat: time.RFC3339}
 	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion)
-	s3compat.FillMsgFromS3Query(r.URL.Query(), &lsmsg)
+	s3.FillMsgFromS3Query(r.URL.Query(), &lsmsg)
 
 	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(apc.LsPresent)
 	var (
@@ -291,7 +320,7 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 		return
 	}
 
-	resp := s3compat.NewListObjectResult()
+	resp := s3.NewListObjectResult()
 	resp.ContinuationToken = lsmsg.ContinuationToken
 	resp.FillFromAisBckList(objList, &lsmsg)
 	sgl := memsys.PageMM().NewSGL(0)
@@ -304,7 +333,7 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 // PUT s3/bckName/objName - with HeaderObjSrc in request header - a source
 func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
-	src := r.Header.Get(s3compat.HeaderObjSrc)
+	src := r.Header.Get(s3.HeaderObjSrc)
 	src = strings.Trim(src, "/") // in examples the path starts with "/"
 	parts := strings.SplitN(src, "/", 2)
 	if len(parts) < 2 {
@@ -387,7 +416,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 
 // PUT s3/bckName/objName
 func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	if r.Header.Get(s3compat.HeaderObjSrc) == "" {
+	if r.Header.Get(s3.HeaderObjSrc) == "" {
 		p.directPutObjS3(w, r, items)
 		return
 	}
@@ -498,7 +527,7 @@ func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 		p.writeErr(w, r, err)
 		return
 	}
-	resp := s3compat.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
+	resp := s3.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
 	sgl := memsys.PageMM().NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
@@ -534,7 +563,7 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	}
 	decoder := xml.NewDecoder(r.Body)
 	defer cos.Close(r.Body)
-	vconf := &s3compat.VersioningConfiguration{}
+	vconf := &s3.VersioningConfiguration{}
 	if err := decoder.Decode(vconf); err != nil {
 		p.writeErr(w, r, err)
 		return

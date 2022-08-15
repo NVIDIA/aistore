@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -210,6 +211,8 @@ func (t *target) init(config *cmn.Config) {
 	if err := ts.InitCapacity(); err != nil { // goes after fs.New
 		cos.ExitLogf("%s", err)
 	}
+
+	s3.Init() // s3 multipart
 }
 
 func (t *target) initHostIP() {

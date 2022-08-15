@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 )
 
@@ -98,6 +99,8 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 			}
 		case apc.QparamOWT:
 			dpq.owt = value
+		case s3.QparamMultipartUploadID, s3.QparamMultipartUploads, s3.QparamMultipartPartNo:
+			// TODO: ignore for now
 		default:
 			err = errors.New("failed to fast-parse [" + rawQuery + "]")
 			return
