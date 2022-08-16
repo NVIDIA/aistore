@@ -7,7 +7,6 @@ from typing import Callable, List
 import cloudpickle
 from aistore.client.const import (
     CODE_TEMPLATE,
-    CODE_TEMPLATE_STREAM,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
@@ -81,7 +80,6 @@ class Etl:
         """
         Initializes ETL based on the provided source code. Returns ETL_ID.
 
-        Note: Either both before and after functions should be provided or none.
         Args:
             transform (Callable): Transform function of the ETL
             etl_id (str): Id of new ETL
@@ -110,29 +108,38 @@ class Etl:
             "funcs": functions,
         }
 
-        if before and after:
+        if before:
             before = base64.b64encode(cloudpickle.dumps(before)).decode("utf-8")
-            after = base64.b64encode(cloudpickle.dumps(after)).decode("utf-8")
             functions["before"] = "before"
-            functions["after"] = "after"
-            BEFORE_AND_AFTER_EXISTS = True
+            BEFORE_EXISTS = True
         else:
-            BEFORE_AND_AFTER_EXISTS = False
+            BEFORE_EXISTS = False
+
+        if after:
+            after = base64.b64encode(cloudpickle.dumps(after)).decode("utf-8")
+            functions["after"] = "after"
+            AFTER_EXISTS = True
+        else:
+            AFTER_EXISTS = False
 
         if chunk_size:
             action["chunk_size"] = chunk_size
 
         # code
         transform = base64.b64encode(cloudpickle.dumps(transform)).decode("utf-8")
-        if communication_type == "io":
-            template = CODE_TEMPLATE.format(transform, "transform()").encode("utf-8")
-        else:
-            if BEFORE_AND_AFTER_EXISTS:
-                template = CODE_TEMPLATE_STREAM.format(
-                    before, transform, after, ""
-                ).encode("utf-8")
-            else:
-                template = CODE_TEMPLATE.format(transform, "").encode("utf-8")
+
+        before_context = (
+            f"before = pickle.loads(base64.b64decode('{before}'))"
+            if BEFORE_EXISTS
+            else ""
+        )
+        after_context = (
+            f"after = pickle.loads(base64.b64decode('{after}'))" if AFTER_EXISTS else ""
+        )
+        io_comm_context = "transform()" if communication_type == "io" else ""
+        template = CODE_TEMPLATE.format(
+            before_context, transform, after_context, io_comm_context
+        ).encode("utf-8")
         action["code"] = base64.b64encode(template).decode("utf-8")
 
         # dependencies
