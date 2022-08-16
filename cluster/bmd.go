@@ -141,12 +141,13 @@ func (m *BMD) Add(bck *Bck) {
 		ok         bool
 	)
 	if namespaces, ok = m.Providers[bck.Provider]; !ok {
-		namespaces = make(Namespaces)
+		namespaces = make(Namespaces, 1)
 		m.Providers[bck.Provider] = namespaces
 	}
-	if buckets, ok = namespaces[bck.Ns.Uname()]; !ok {
+	nsUname := bck.Ns.Uname()
+	if buckets, ok = namespaces[nsUname]; !ok {
 		buckets = make(Buckets)
-		namespaces[bck.Ns.Uname()] = buckets
+		namespaces[nsUname] = buckets
 	}
 	buckets[bck.Name] = bck.Props
 }
@@ -223,4 +224,17 @@ func (m *BMD) initBck(bck *Bck) bool {
 		}
 	}
 	return false
+}
+
+func (m *BMD) getAllByName(bckName string) (all []Bck) {
+	for provider, namespace := range m.Providers {
+		for nsUname, buckets := range namespace {
+			if props, present := buckets[bckName]; present {
+				bck := Bck{Name: bckName, Provider: provider, Props: props}
+				bck.Ns = cmn.ParseNsUname(nsUname)
+				all = append(all, bck)
+			}
+		}
+	}
+	return
 }

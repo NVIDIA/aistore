@@ -9,6 +9,42 @@ redirect_from:
 
 While the preferred and recommended management client for AIStore is its own [CLI](/docs/cli.md), Amazon's [`s3cmd`](https://s3tools.org/s3cmd) client can also be used, with certain minor limitations.
 
+## TODO
+
+Using `s3cmd` to operate on remote and AIS buckets - as long as those buckets can be unambiguously resolved by name.
+
+```console
+$ ais ls ais:
+$ ais bucket create ais://abc
+"ais://abc" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)
+$ ais bucket props set ais://abc checksum.type=md5
+Bucket props successfully updated
+"checksum.type" set to: "md5" (was: "xxhash")
+$ s3cmd put README.md s3://abc
+upload: 'README.md' -> 's3://abc/README.md'  [1 of 1]
+ 10689 of 10689   100% in    0s     3.13 MB/s  done
+upload: 'README.md' -> 's3://abc/README.md'  [1 of 1]
+ 10689 of 10689   100% in    0s     4.20 MB/s  done
+$ s3cmd rm s3://abc/README.md
+delete: 's3://abc/README.md'
+```
+
+Similarly:
+
+```console
+$ ais ls s3:
+aws://my-s3-bucket
+...
+
+$ s3cmd put README.md s3://my-s3-bucket
+upload: 'README.md' -> 's3://my-s3-bucket/README.md'  [1 of 1]
+ 10689 of 10689   100% in    0s     3.13 MB/s  done
+upload: 'README.md' -> 's3://abc/README.md'  [1 of 1]
+ 10689 of 10689   100% in    0s     4.20 MB/s  done
+$ s3cmd rm s3://my-s3-bucket/README.md
+delete: 's3://my-s3-bucket/README.md'
+```
+
 ## Table of Contents
 
 - [`s3cmd` Configuration](#s3cmd-configuration)

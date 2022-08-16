@@ -69,7 +69,12 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		t.writeErr(w, r, errS3Obj)
 		return
 	}
-	bckSrc := cluster.NewBck(parts[0], apc.ProviderAIS, cmn.NsGlobal)
+	// src
+	bckSrc, err := cluster.InitByNameOnly(parts[0], t.owner.bmd)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
 	objSrc := strings.Trim(parts[1], "/")
 	if err := bckSrc.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)
@@ -91,8 +96,9 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		t.writeErr(w, r, err)
 		return
 	}
-	bckDst := cluster.NewBck(items[0], apc.ProviderAIS, cmn.NsGlobal)
-	if err := bckDst.Init(t.owner.bmd); err != nil {
+	// dst
+	bckDst, err := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -103,7 +109,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		coi.owt = cmn.OwtMigrate
 	}
 	objName := path.Join(items[1:]...)
-	_, err := coi.copyObject(lom, objName)
+	_, err = coi.copyObject(lom, objName)
 	freeCopyObjInfo(coi)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -128,13 +134,12 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 // A client sends an object data in the request body.
 // Do the same we do in regular object PUT.
 func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	started := time.Now()
 	if cs := fs.GetCapStatus(); cs.OOS {
 		t.writeErr(w, r, cs.Err, http.StatusInsufficientStorage)
 		return
 	}
-	bck := cluster.NewBck(items[0], apc.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(t.owner.bmd); err != nil {
+	bck, err := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -142,11 +147,8 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.writeErr(w, r, errS3Obj)
 		return
 	}
-
-	var (
-		objName = path.Join(items[1:]...)
-		lom     = cluster.AllocLOM(objName)
-	)
+	objName := path.Join(items[1:]...)
+	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
@@ -158,6 +160,7 @@ func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []
 			return
 		}
 	}
+	started := time.Now()
 	lom.SetAtimeUnix(started.UnixNano())
 
 	// TODO: dual checksumming, e.g. lom.SetCustom(apc.ProviderAmazon, ...)
@@ -211,7 +214,6 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		t.listMultipartUploads(w, r, items, q)
 		return
 	}
-
 	if len(items) < 2 {
 		t.writeErr(w, r, errS3Obj)
 		return
@@ -220,8 +222,9 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		t.getObjectPart(w, r, items)
 		return
 	}
-	bck := cluster.NewBck(items[0], apc.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(t.owner.bmd); err != nil {
+
+	bck, err := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -251,12 +254,11 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		return
 	}
 	bucket, objName := items[0], path.Join(items[1:]...)
-	bck := cluster.NewBck(bucket, apc.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(t.owner.bmd); err != nil {
+	bck, err := cluster.InitByNameOnly(bucket, t.owner.bmd)
+	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-
 	lom := cluster.AllocLOM(objName)
 	t.headObject(w, r, r.URL.Query(), bck, lom)
 	s3.SetETag(w.Header(), lom) // add etag/md5
@@ -265,8 +267,8 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 
 // DEL s3/bckName/objName
 func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bck := cluster.NewBck(items[0], apc.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(t.owner.bmd); err != nil {
+	bck, err := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -615,8 +617,8 @@ func (t *target) listMultipartUploads(w http.ResponseWriter, r *http.Request, it
 		t.writeErrMsg(w, r, "listing multipart uploads accepts only bucket name")
 		return
 	}
-	bck := cluster.NewBck(items[0], apc.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(t.owner.bmd); err != nil {
+	bck, err := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

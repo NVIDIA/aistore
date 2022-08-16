@@ -184,6 +184,7 @@ func (b *Bck) initFast(bowner Bowner) (err error) {
 		return
 	}
 	if backend := b.Backend(); backend != nil && backend.Props == nil {
+		debug.Assert(cmn.IsRemoteProvider(backend.Provider))
 		err = backend.init(bmd)
 	}
 	return
@@ -192,7 +193,7 @@ func (b *Bck) initFast(bowner Bowner) (err error) {
 func (b *Bck) InitNoBackend(bowner Bowner) error { return b.init(bowner.Get()) }
 
 func (b *Bck) init(bmd *BMD) error {
-	if b.Provider == "" {
+	if b.Provider == "" { // NOTE: ais:// is the default
 		b.Provider = apc.ProviderAIS
 		bmd.initBckGlobalNs(b)
 	} else if cmn.IsRemoteProvider(b.Provider) {
@@ -208,6 +209,29 @@ func (b *Bck) init(bmd *BMD) error {
 		return cmn.NewErrBckNotFound(b.Bucket())
 	}
 	return cmn.NewErrRemoteBckNotFound(b.Bucket())
+}
+
+// to support s3 clients:
+// find an already existing bucket by name (and nothing else)
+// returns an error when name cannot be unambiguously resolved to a single bucket
+func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, err error) {
+	bmd := bowner.Get()
+	all := bmd.getAllByName(bckName)
+	if all == nil {
+		err = cmn.NewErrBckNotFound(&cmn.Bck{Name: bckName})
+	} else if len(all) == 1 {
+		bck = &all[0]
+		if bck.Props == nil {
+			err = cmn.NewErrBckNotFound(bck.Bucket())
+		} else if backend := bck.Backend(); backend != nil && backend.Props == nil {
+			debug.Assert(cmn.IsRemoteProvider(backend.Provider))
+			err = backend.init(bmd)
+		}
+	} else {
+		err = fmt.Errorf("cannot unambiguously resolve bucket name %q to a single bucket (%v)",
+			bckName, all)
+	}
+	return
 }
 
 func (b *Bck) CksumConf() (conf *cmn.CksumConf) { return &b.Props.Cksum }

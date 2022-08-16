@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -36,8 +36,8 @@ type (
 
 	// Multiple object delete request
 	Delete struct {
-		Quiet  bool                `xml:"Quiet"`
 		Object []*DeleteObjectInfo `xml:"Object"`
+		Quiet  bool                `xml:"Quiet"`
 	}
 	DeleteObjectInfo struct {
 		Key     string `xml:"Key"`
@@ -56,22 +56,16 @@ func NewListBucketResult() *ListBucketResult {
 	}
 }
 
-func bckToS3(bck *cluster.Bck) *Bucket {
-	created := time.Unix(0, bck.Props.Created)
-	return &Bucket{
-		Name:    bck.Name,
-		Created: created.Format(time.RFC3339),
-	}
-}
-
 func (r *ListBucketResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }
 
 func (r *ListBucketResult) Add(bck *cluster.Bck) {
-	r.Buckets = append(r.Buckets, bckToS3(bck))
+	created := time.Unix(0, bck.Props.Created)
+	b := &Bucket{Name: bck.Name, Created: created.Format(time.RFC3339)}
+	r.Buckets = append(r.Buckets, b)
 }
 
 func NewVersioningConfiguration(enabled bool) *VersioningConfiguration {
@@ -84,7 +78,7 @@ func NewVersioningConfiguration(enabled bool) *VersioningConfiguration {
 func (r *VersioningConfiguration) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }
 
 func (r *VersioningConfiguration) Enabled() bool {
