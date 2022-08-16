@@ -239,14 +239,14 @@ class TestETLOps(unittest.TestCase):
             self.assertEqual(transform(bytes(value)), transformed_obj_io)
 
     def test_etl_apis_stream(self):
-        def before():
-            return hashlib.md5()
+        def before(context):
+            context["before"] = hashlib.md5()
 
-        def transform(input_bytes, md5):
-            md5.update(input_bytes)
+        def transform(input_bytes, context):
+            context["before"].update(input_bytes)
 
-        def after(md5):
-            return md5.hexdigest().encode()
+        def after(context):
+            return context["before"].hexdigest().encode()
 
         self.client.etl().init_code(
             transform=transform,
@@ -255,6 +255,7 @@ class TestETLOps(unittest.TestCase):
             etl_id=self.etl_id_code_stream,
             chunk_size=32768,
         )
+
         obj = (
             self.client.bucket(self.bck_name)
             .object(self.obj_name)
