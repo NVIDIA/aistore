@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"golang.org/x/sync/errgroup"
 )
@@ -187,7 +188,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	if bck.IsHDFS() {
-		hdfsBck := cmn.Bck{Provider: apc.ProviderHDFS, Name: cos.RandString(10)}
+		hdfsBck := cmn.Bck{Provider: apc.ProviderHDFS, Name: trand.String(10)}
 		err := api.CreateBucket(baseParams, hdfsBck, &cmn.BucketPropsToUpdate{
 			Extra: &cmn.ExtraToUpdate{
 				HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
@@ -203,7 +204,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 		}{
 			{bck: bck, props: nil},
 			{ // If cluster is not built with HDFS support, bucket creation should fail.
-				bck: cmn.Bck{Provider: apc.ProviderHDFS, Name: cos.RandString(10)},
+				bck: cmn.Bck{Provider: apc.ProviderHDFS, Name: trand.String(10)},
 				props: &cmn.BucketPropsToUpdate{
 					Extra: &cmn.ExtraToUpdate{
 						HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
@@ -227,7 +228,7 @@ func TestCreateDestroyRemoteAISBucket(t *testing.T) {
 func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
 	bck := cmn.Bck{
-		Name:     cos.RandString(10),
+		Name:     trand.String(10),
 		Provider: apc.ProviderAIS,
 		Ns: cmn.Ns{
 			UUID: tutils.RemoteCluster.UUID,
@@ -276,7 +277,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 			num:       234,
 			fileSize:  73,
 			fixedSize: true,
-			prefix:    cos.RandString(6) + "-",
+			prefix:    trand.String(6) + "-",
 		}
 		baseParams = tutils.BaseAPIParams()
 	)
@@ -533,7 +534,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 			bck:      cliBck,
 			num:      50,
 			fileSize: 128,
-			prefix:   cos.RandString(6) + "-",
+			prefix:   trand.String(6) + "-",
 		}
 		baseParams = tutils.BaseAPIParams()
 	)
@@ -1614,7 +1615,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		numGetsEachFile: 5,
 		bck: cmn.Bck{
 			Provider: apc.ProviderAIS,
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 		},
 	}
 
@@ -2012,16 +2013,16 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 		}
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 		srcBcks = []cmn.Bck{
 			{
-				Name:     cos.RandString(10),
+				Name:     trand.String(10),
 				Provider: apc.ProviderAIS,
 			},
 			{
-				Name:     cos.RandString(10),
+				Name:     trand.String(10),
 				Provider: apc.ProviderAmazon,
 			},
 		}
@@ -2402,7 +2403,7 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
-		cpyPrefix = "cpyprefix" + cos.RandString(5)
+		cpyPrefix = "cpyprefix" + trand.String(5)
 		dstBck    = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.ProviderAIS}
 	)
 
@@ -2448,7 +2449,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie() + cos.RandString(5), Provider: apc.ProviderAIS}
+	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie() + trand.String(5), Provider: apc.ProviderAIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{DryRun: true})
 	tassert.CheckFatal(t, err)
@@ -2637,7 +2638,7 @@ func TestBackendBucket(t *testing.T) {
 	var (
 		remoteBck = cliBck
 		aisBck    = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 		m = ioContext{
@@ -3010,7 +3011,7 @@ func TestBucketListAndSummary(t *testing.T) {
 				m = &ioContext{
 					t: t,
 					bck: cmn.Bck{
-						Name:     cos.RandString(10),
+						Name:     trand.String(10),
 						Provider: test.provider,
 					},
 

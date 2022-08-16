@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 
@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/trand"
 )
 
 // A structure to test nested binary packing
@@ -145,7 +146,7 @@ func BenchmarkPackWriteString(b *testing.B) {
 
 	a := make([]string, 0, 1000)
 	for i := 0; i < 1000; i++ {
-		a = append(a, cos.RandString(80))
+		a = append(a, trand.String(80))
 	}
 
 	b.ReportAllocs()

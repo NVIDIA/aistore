@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -45,7 +46,7 @@ func TestPutSG(t *testing.T) {
 }
 
 func putFile(size int64, cksumType string) error {
-	fn := "ais-client-test-" + cos.RandString(32)
+	fn := "ais-client-test-" + trand.String(32)
 	dir := "/tmp"
 	r, err := readers.NewFileReader(dir, fn, size, cksumType)
 	if err != nil {

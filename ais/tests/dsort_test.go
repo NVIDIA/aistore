@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/dsort/extract"
@@ -658,7 +659,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 					m:           m,
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
-						Name:     cos.RandString(15),
+						Name:     trand.String(15),
 						Provider: apc.ProviderAIS,
 					},
 					tarballCnt:       500,
@@ -746,7 +747,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 					m:           m,
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
-						Name:     cos.RandString(15),
+						Name:     trand.String(15),
 						Provider: apc.ProviderAIS,
 					},
 					tarballCnt:       500,
@@ -1808,7 +1809,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					m:           m,
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
-						Name:     cos.RandString(15),
+						Name:     trand.String(15),
 						Provider: apc.ProviderAIS,
 					},
 					tarballCnt:       100,

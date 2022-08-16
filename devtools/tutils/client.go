@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/stats"
 	"golang.org/x/sync/errgroup"
 )
@@ -296,7 +297,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 		if args.Ordered {
 			objNames = append(objNames, path.Join(args.ObjPath, fmt.Sprintf("%d", i)))
 		} else {
-			objNames = append(objNames, path.Join(args.ObjPath, cos.RandString(16)))
+			objNames = append(objNames, path.Join(args.ObjPath, trand.String(16)))
 		}
 	}
 	chunkSize := (len(objNames) + workerCnt - 1) / workerCnt

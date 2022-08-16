@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tetl"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/etl/runtime"
@@ -148,7 +149,7 @@ def transform(input_bytes):
 
 	var (
 		bckFrom = cmn.Bck{Provider: apc.ProviderAIS, Name: "etlbig"}
-		bckTo   = cmn.Bck{Provider: apc.ProviderAIS, Name: "etlbigout-" + cos.RandString(5)}
+		bckTo   = cmn.Bck{Provider: apc.ProviderAIS, Name: "etlbigout-" + trand.String(5)}
 
 		m = ioContext{
 			t:         t,
@@ -250,8 +251,8 @@ def transform(input_bytes):
 // Responsible for cleaning all resources, except ETL xact.
 func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID string) {
 	var (
-		bckFrom = cmn.Bck{Name: "etl-in-" + cos.RandString(5), Provider: apc.ProviderAIS}
-		bckTo   = cmn.Bck{Name: "etl-out-" + cos.RandString(5), Provider: apc.ProviderAIS}
+		bckFrom = cmn.Bck{Name: "etl-in-" + trand.String(5), Provider: apc.ProviderAIS}
+		bckTo   = cmn.Bck{Name: "etl-out-" + trand.String(5), Provider: apc.ProviderAIS}
 	)
 
 	m.bck = bckFrom

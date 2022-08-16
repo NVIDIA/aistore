@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package apitests
 
@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
@@ -33,7 +34,7 @@ func (tc testConfig) name() string {
 func createAndFillBucket(b *testing.B, objCnt uint, u string) cmn.Bck {
 	const workerCount = 10
 	var (
-		bck        = cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
+		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS}
 		baseParams = tutils.BaseAPIParams(u)
 
 		wg              = &sync.WaitGroup{}

@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
@@ -397,7 +398,7 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 	conf := tutils.GetDaemonConfig(t, node)
 
 	// Make sure that the `DaemonID` is different.
-	node.DaeID = "testing_" + cos.RandString(10)
+	node.DaeID = "testing_" + trand.String(10)
 
 	pid := tutils.DeployNode(t, node, conf, nil)
 	t.Cleanup(func() {
@@ -692,7 +693,7 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string
 		if err != nil {
 			return fmt.Errorf("error creating reader: %v", err)
 		}
-		fname := cos.RandString(20)
+		fname := trand.String(20)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -762,7 +763,7 @@ loop:
 			continue
 		}
 
-		fname := cos.RandString(20)
+		fname := trand.String(20)
 		objName := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,

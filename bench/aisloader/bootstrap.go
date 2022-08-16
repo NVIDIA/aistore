@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 
 // AIS loader (aisloader) is a tool to measure storage performance. It's a load
@@ -626,7 +626,7 @@ func setupBucket(runParams *params) error {
 		return nil
 	}
 	if runParams.bck.Name == "" {
-		runParams.bck.Name = cos.RandString(8)
+		runParams.bck.Name = cos.RandStringStrong(8)
 		fmt.Printf("New bucket name %q\n", runParams.bck.Name)
 	} else if bck, objName, err := cmn.ParseBckObjectURI(runParams.bck.Name, cmn.ParseURIOpts{}); err == nil {
 		if objName != "" {

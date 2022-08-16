@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/trand"
 )
 
 func TestUpgradeLock(t *testing.T) {
@@ -26,7 +27,7 @@ func TestUpgradeLock(t *testing.T) {
 				wg      = &sync.WaitGroup{}
 				sema    = cos.NewDynSemaphore(threadCnt)
 				counter = atomic.NewInt32(0)
-				uname   = cos.RandString(10)
+				uname   = trand.String(10)
 			)
 			n.init()
 

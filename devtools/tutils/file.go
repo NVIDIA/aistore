@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -55,7 +56,7 @@ type (
 func RandomObjDir(dirLen, maxDepth int) (dir string) {
 	depth := rand.Intn(maxDepth)
 	for i := 0; i < depth; i++ {
-		dir = filepath.Join(dir, cos.RandString(dirLen))
+		dir = filepath.Join(dir, trand.String(dirLen))
 	}
 	return
 }
@@ -130,7 +131,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		mpathCnts = make(map[string]int, desc.MountpathsCnt)
 
 		bck = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 			Ns:       cmn.NsGlobal,
 			Props: &cmn.BucketProps{
@@ -174,7 +175,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	for _, ct := range desc.CTs {
 		for i := 0; i < ct.ContentCnt; i++ {
-			fqn, _, err := cluster.HrwFQN(&bck, ct.Type, cos.RandString(15))
+			fqn, _, err := cluster.HrwFQN(&bck, ct.Type, trand.String(15))
 			tassert.CheckFatal(t, err)
 
 			fqns[ct.Type] = append(fqns[ct.Type], fqn)

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tetl"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
 )
@@ -103,7 +104,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			prefix:  "copy-multiobj/",
 			ordered: true,
 		}
-		toBck     = cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS}
+		toBck     = cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS}
 		numToCopy = cos.Min(m.num/2, 13)
 		fmtRange  = "%s{%d..%d}"
 		subtests  = []struct {
@@ -188,7 +189,7 @@ func TestETLMultiObj(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		bck   = cmn.Bck{Name: "etloffline", Provider: apc.ProviderAIS}
-		toBck = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: apc.ProviderAIS}
+		toBck = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.ProviderAIS}
 	)
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
@@ -40,7 +41,7 @@ func TestAuthObj(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresAuth: true})
 	var (
 		unAuthBP, authBP = createBaseParams()
-		bck              = cmn.Bck{Name: cos.RandString(10)}
+		bck              = cmn.Bck{Name: trand.String(10)}
 	)
 	err := api.CreateBucket(authBP, bck, nil)
 	tassert.CheckFatal(t, err)
@@ -52,7 +53,7 @@ func TestAuthObj(t *testing.T) {
 	}()
 
 	r, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
-	objName := cos.RandString(10)
+	objName := trand.String(10)
 	err = api.PutObject(api.PutObjectArgs{
 		BaseParams: unAuthBP,
 		Bck:        bck,
@@ -78,7 +79,7 @@ func TestAuthBck(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresAuth: true})
 	var (
 		unAuthBP, authBP = createBaseParams()
-		bck              = cmn.Bck{Name: cos.RandString(10)}
+		bck              = cmn.Bck{Name: trand.String(10)}
 	)
 	err := api.CreateBucket(unAuthBP, bck, nil)
 	expectUnauthorized(t, err)

@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dsort
@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
@@ -259,19 +260,19 @@ func generateRecords(recordCnt, recordObjCnt int) *extract.Records {
 	records := extract.NewRecords(recordCnt)
 	for i := 0; i < recordCnt; i++ {
 		r := &extract.Record{
-			Key:      cos.RandString(20),
-			Name:     cos.RandString(30),
-			DaemonID: cos.RandString(10),
+			Key:      trand.String(20),
+			Name:     trand.String(30),
+			DaemonID: trand.String(10),
 		}
 		for j := 0; j < recordObjCnt; j++ {
 			r.Objects = append(r.Objects, &extract.RecordObj{
-				ContentPath:    cos.RandString(50),
+				ContentPath:    trand.String(50),
 				ObjectFileType: "abc",
 				StoreType:      "ab",
 				Offset:         rand.Int63(),
 				MetadataSize:   cos.TarBlockSize,
 				Size:           rand.Int63(),
-				Extension:      "." + cos.RandString(4),
+				Extension:      "." + trand.String(4),
 			})
 		}
 		records.Insert(r)

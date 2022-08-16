@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tetl"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/etl/runtime"
@@ -121,7 +122,7 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		bck            = cmn.Bck{Provider: apc.ProviderAIS, Name: "etl-test"}
-		objName        = fmt.Sprintf("%s-%s-object", uuid, cos.RandString(5))
+		objName        = fmt.Sprintf("%s-%s-object", uuid, trand.String(5))
 		outputFileName = filepath.Join(t.TempDir(), objName+".out")
 	)
 
@@ -176,7 +177,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 	// Always uses Echo transformation, as correctness of other transformations is checked in different tests.
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
 
-	objName := fmt.Sprintf("%s-%s-object", uuid, cos.RandString(5))
+	objName := fmt.Sprintf("%s-%s-object", uuid, trand.String(5))
 	tlog.Logln("PUT object")
 	reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
@@ -214,7 +215,7 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		bckTo          = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: apc.ProviderAIS}
+		bckTo          = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.ProviderAIS}
 		requestTimeout = 30 * time.Second
 	)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
@@ -384,7 +385,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	tlog.Logln("PUT object")
-	objName := cos.RandString(10)
+	objName := trand.String(10)
 	reader, err := readers.NewRandReader(cos.MiB, cos.ChecksumMD5)
 	tassert.CheckFatal(t, err)
 
@@ -567,7 +568,7 @@ func TestETLBucketDryRun(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		bckFrom = cmn.Bck{Name: "etloffline", Provider: apc.ProviderAIS}
-		bckTo   = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: apc.ProviderAIS}
+		bckTo   = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.ProviderAIS}
 		objCnt  = 10
 
 		m = ioContext{

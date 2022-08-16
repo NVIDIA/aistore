@@ -1,6 +1,6 @@
 // Package filter implements fully features dynamic probabilistic filter.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package filter
 
@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -25,7 +25,7 @@ var buckets = []string{
 }
 
 func randObjName(n int) []byte {
-	return []byte(buckets[rand.Intn(len(buckets))] + "/" + cos.RandString(n))
+	return []byte(buckets[rand.Intn(len(buckets))] + "/" + trand.String(n))
 }
 
 func genKeys(keysNum int) [][]byte {

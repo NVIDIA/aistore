@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
@@ -31,7 +32,7 @@ type opRes struct {
 func generateRandomNames(fileCount int) {
 	fileNames = make([]string, fileCount)
 	for i := 0; i < fileCount; i++ {
-		fileNames[i] = cos.RandString(20)
+		fileNames[i] = trand.String(20)
 	}
 }
 

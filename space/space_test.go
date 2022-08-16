@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
@@ -381,7 +382,7 @@ func createAndAddMountpath(path string) {
 }
 
 func getRandomFileName(fileCounter int) string {
-	return fmt.Sprintf("%v-%v.txt", cos.RandString(13), fileCounter)
+	return fmt.Sprintf("%v-%v.txt", trand.String(13), fileCounter)
 }
 
 func saveRandomFile(filename string, size int64) {

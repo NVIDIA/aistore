@@ -17,8 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
@@ -30,7 +30,7 @@ var (
 func setBucket() (bck cmn.Bck, err error) {
 	bucket := os.Getenv("BUCKET")
 	if bucket == "" {
-		bucket = apc.ProviderAIS + apc.BckProviderSeparator + cos.RandString(7)
+		bucket = apc.ProviderAIS + apc.BckProviderSeparator + trand.String(7)
 	}
 	bck, _, err = cmn.ParseBckObjectURI(bucket, cmn.ParseURIOpts{})
 	if err != nil {

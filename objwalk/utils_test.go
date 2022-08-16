@@ -1,6 +1,6 @@
 // Package objwalk provides core functionality for listing bucket objects in pages.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package objwalk
 
@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/trand"
 )
 
 func TestConcatObjLists(t *testing.T) {
@@ -53,7 +54,7 @@ func TestConcatObjLists(t *testing.T) {
 				list := &cmn.BucketList{}
 				for i := 0; i < objCount; i++ {
 					list.Entries = append(list.Entries, &cmn.BucketEntry{
-						Name: cos.RandString(5),
+						Name: trand.String(5),
 					})
 				}
 				lists = append(lists, list)

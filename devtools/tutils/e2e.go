@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 )
@@ -109,7 +110,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		outs []string
 
 		lastResult = ""
-		bucket     = strings.ToLower(cos.RandString(10))
+		bucket     = strings.ToLower(trand.String(10))
 		space      = regexp.MustCompile(`\s+`) // Used to replace all whitespace with single spaces.
 		target     = randomTarget()
 		mountpath  = randomMountpath(target)

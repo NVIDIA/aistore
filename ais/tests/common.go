@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
 	jsoniter "github.com/json-iterator/go"
@@ -129,7 +130,7 @@ func (m *ioContext) initWithCleanup() {
 		m.controlCh = make(chan struct{}, m.otherTasksToTrigger)
 	}
 	if m.bck.Name == "" {
-		m.bck.Name = cos.RandString(15)
+		m.bck.Name = trand.String(15)
 	}
 	if m.bck.Provider == "" {
 		m.bck.Provider = apc.ProviderAIS
@@ -288,7 +289,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		} else if m.ordered {
 			objName = fmt.Sprintf("%s%d", m.prefix, i)
 		} else {
-			objName = fmt.Sprintf("%s%s-%d", m.prefix, cos.RandString(8), i)
+			objName = fmt.Sprintf("%s%s-%d", m.prefix, trand.String(8), i)
 		}
 		wg.Add(1)
 		go func() {
@@ -723,7 +724,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 	}{
 		{
 			name: "local",
-			bck:  cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS},
+			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS},
 		},
 		{
 			name: "remote",
@@ -736,7 +737,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		{
 			name: "remote_ais",
 			bck: cmn.Bck{
-				Name:     cos.RandString(10),
+				Name:     trand.String(10),
 				Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID},
 			},
 			skipArgs: tutils.SkipTestArgs{
@@ -746,7 +747,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name:       "backend",
-			bck:        cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS},
+			bck:        cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS},
 			backendBck: cliBck,
 			skipArgs: tutils.SkipTestArgs{
 				Long:      true,
@@ -755,7 +756,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "local_3_copies",
-			bck:  cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS},
+			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS},
 			props: &cmn.BucketPropsToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
 					Enabled: api.Bool(true),
@@ -766,7 +767,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "local_ec_2_2",
-			bck:  cmn.Bck{Name: cos.RandString(10), Provider: apc.ProviderAIS},
+			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS},
 			props: &cmn.BucketPropsToUpdate{
 				EC: &cmn.ECConfToUpdate{
 					DataSlices:   api.Int(2),
@@ -850,7 +851,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 	)
 
 	for i := 0; i < objCnt; i++ {
-		fileName := cos.RandString(20)
+		fileName := trand.String(20)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// NOTE: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader.

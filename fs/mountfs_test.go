@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package fs_test
 
@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -323,8 +324,8 @@ func BenchmarkMakePathFQN(b *testing.B) {
 			Provider: apc.ProviderAzure,
 			Ns:       cmn.Ns{Name: "name", UUID: "uuid"},
 		}
-		mi      = fs.MountpathInfo{Path: cos.RandString(200)}
-		objName = cos.RandString(15)
+		mi      = fs.MountpathInfo{Path: trand.String(200)}
+		objName = trand.String(15)
 	)
 
 	b.ReportAllocs()

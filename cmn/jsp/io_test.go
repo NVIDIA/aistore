@@ -1,7 +1,7 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp_test
 
@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -44,15 +45,15 @@ func makeRandStruct() (ts testStruct) {
 	if rand.Intn(2) == 0 {
 		ts.I = rand.Int()
 	}
-	ts.S = cos.RandString(rand.Intn(100))
+	ts.S = trand.String(rand.Intn(100))
 	if rand.Intn(2) == 0 {
-		ts.B = []byte(cos.RandString(rand.Intn(200)))
+		ts.B = []byte(trand.String(rand.Intn(200)))
 	}
 	ts.ST.I64 = rand.Int63()
 	if rand.Intn(2) == 0 {
 		ts.M = make(map[string]string)
 		for i := 0; i < rand.Intn(100)+1; i++ {
-			ts.M[cos.RandString(10)] = cos.RandString(20)
+			ts.M[trand.String(10)] = trand.String(20)
 		}
 	}
 	return
@@ -60,12 +61,12 @@ func makeRandStruct() (ts testStruct) {
 
 func makeStaticStruct() (ts testStruct) {
 	ts.I = rand.Int()
-	ts.S = cos.RandString(100)
-	ts.B = []byte(cos.RandString(200))
+	ts.S = trand.String(100)
+	ts.B = []byte(trand.String(200))
 	ts.ST.I64 = rand.Int63()
 	ts.M = make(map[string]string, 10)
 	for i := 0; i < 10; i++ {
-		ts.M[cos.RandString(10)] = cos.RandString(20)
+		ts.M[trand.String(10)] = trand.String(20)
 	}
 	return
 }
@@ -129,7 +130,7 @@ func TestDecodeAndEncodeFuzz(t *testing.T) {
 			opts = jsp.Options{Signature: true, Checksum: true}
 		)
 
-		x = cos.RandString(i)
+		x = trand.String(i)
 
 		err := jsp.Encode(b, x, opts)
 		tassert.CheckFatal(t, err)

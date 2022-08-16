@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
@@ -327,7 +328,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 
 	var (
 		md     = newCheckerMD(t)
-		suffix = "-" + cos.RandString(5)
+		suffix = "-" + trand.String(5)
 	)
 
 	if md.origAvail == 0 {
@@ -380,7 +381,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 
 	var (
 		md     = newCheckerMD(t)
-		suffix = "-" + cos.RandString(5)
+		suffix = "-" + trand.String(5)
 	)
 
 	if md.origAvail == 0 {

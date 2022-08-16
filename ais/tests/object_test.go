@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
@@ -52,7 +53,7 @@ func TestObjectInvalidName(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams()
 		bck        = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 	)
@@ -127,9 +128,9 @@ func TestRemoteBucketObject(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s:%v", test.ty, test.exists), func(t *testing.T) {
-			object := cos.RandString(10)
+			object := trand.String(10)
 			if !test.exists {
-				bck.Name = cos.RandString(10)
+				bck.Name = trand.String(10)
 			} else {
 				bck.Name = cliBck.Name
 			}
@@ -223,7 +224,7 @@ func TestAppendObject(t *testing.T) {
 				proxyURL   = tutils.RandomProxyURL(t)
 				baseParams = tutils.BaseAPIParams(proxyURL)
 				bck        = cmn.Bck{
-					Name:     cos.RandString(10),
+					Name:     trand.String(10),
 					Provider: apc.ProviderAIS,
 				}
 				objName = "test/obj1"
@@ -845,7 +846,7 @@ func TestEvictRemoteBucket(t *testing.T) {
 func testEvictRemoteAISBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
 	bck := cmn.Bck{
-		Name:     cos.RandString(10),
+		Name:     trand.String(10),
 		Provider: apc.ProviderAIS,
 		Ns: cmn.Ns{
 			UUID: tutils.RemoteCluster.UUID,
@@ -942,7 +943,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 			t: t,
 			bck: cmn.Bck{
 				Provider: apc.ProviderAIS,
-				Name:     cos.RandString(15),
+				Name:     trand.String(15),
 				Props:    &cmn.BucketProps{BID: 2},
 			},
 			num:      3,

@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/downloader"
 )
@@ -475,7 +476,7 @@ func TestDownloadRemote(t *testing.T) {
 			name:   "src!=dst",
 			srcBck: cliBck,
 			dstBck: cmn.Bck{
-				Name:     cos.RandString(5),
+				Name:     trand.String(5),
 				Provider: apc.ProviderAIS,
 			},
 		},
@@ -810,7 +811,7 @@ func TestDownloadMountpath(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cos.RandString(15),
+			Name:     trand.String(15),
 			Provider: apc.ProviderAIS,
 		}
 		objsCnt  = 100
@@ -887,12 +888,12 @@ func TestDownloadOverrideObject(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 		p = bck.DefaultProps()
 
-		objName = cos.RandString(10)
+		objName = trand.String(10)
 		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
 
 		expectedSize int64 = 65
@@ -933,12 +934,12 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 		p = bck.DefaultProps()
 
-		objName = cos.RandString(10)
+		objName = trand.String(10)
 		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/master/LICENSE"
 
 		expectedSize int64 = 1075
@@ -975,7 +976,7 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 		dlBody = downloader.DlBackendBody{
@@ -1006,11 +1007,11 @@ func TestDownloadSkipObject(t *testing.T) {
 	var (
 		proxyURL = tutils.RandomProxyURL(t)
 		bck      = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 
-		objName = cos.RandString(10)
+		objName = trand.String(10)
 		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
 
 		expectedSize    int64 = 65
@@ -1035,7 +1036,7 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 		dlBody = downloader.DlBackendBody{
@@ -1072,7 +1073,7 @@ func TestDownloadSync(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 		dlBody = downloader.DlBackendBody{
@@ -1148,7 +1149,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 	)
@@ -1207,7 +1208,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 
@@ -1303,7 +1304,7 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cos.RandString(10),
+			Name:     trand.String(10),
 			Provider: apc.ProviderAIS,
 		}
 	)

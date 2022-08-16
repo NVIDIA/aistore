@@ -26,7 +26,7 @@ var (
 
 func init() {
 	reg = &registry{byUUID: make(map[string]Communicator)}
-	reqSecret = cos.RandString(10)
+	reqSecret = cos.RandStringStrong(10)
 }
 
 func (r *registry) put(uuid string, c Communicator) error {
