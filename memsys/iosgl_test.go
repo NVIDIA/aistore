@@ -44,8 +44,7 @@ var _ = Describe("SGL", func() {
 			err := sgl.WriteByte(buf[i])
 			Expect(err).ToNot(HaveOccurred())
 		}
-		b, err := sgl.ReadAll()
-		Expect(err).ToNot(HaveOccurred())
+		b := sgl.ReadAll()
 		Expect(b).To(HaveLen(int(size)))
 		Expect(b).To(BeEquivalentTo(buf))
 	})
@@ -61,8 +60,7 @@ var _ = Describe("SGL", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n).To(Equal(size))
 
-			b, err := sgl.ReadAll()
-			Expect(err).ToNot(HaveOccurred())
+			b := sgl.ReadAll()
 			Expect(b).To(HaveLen(int(size)))
 			Expect(b).To(BeEquivalentTo(buf))
 		})
@@ -77,8 +75,7 @@ var _ = Describe("SGL", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n).To(Equal(size))
 
-			b, err := sgl.ReadAll()
-			Expect(err).ToNot(HaveOccurred())
+			b := sgl.ReadAll()
 			Expect(b).To(HaveLen(int(size)))
 			Expect(b).To(BeEquivalentTo(buf))
 		})
@@ -93,8 +90,7 @@ var _ = Describe("SGL", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n).To(Equal(size))
 
-			b, err := sgl.ReadAll()
-			Expect(err).ToNot(HaveOccurred())
+			b := sgl.ReadAll()
 			Expect(b).To(HaveLen(int(size)))
 			Expect(b).To(BeEquivalentTo(buf))
 		})
@@ -113,8 +109,7 @@ var _ = Describe("SGL", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n).To(Equal(size))
 
-			b, err := sgl.ReadAll()
-			Expect(err).ToNot(HaveOccurred())
+			b := sgl.ReadAll()
 			Expect(b).To(HaveLen(2 * int(size)))
 		})
 	})

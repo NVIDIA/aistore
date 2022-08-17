@@ -232,7 +232,7 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error
 // Still, it's an optimized alternative to the generic io.ReadAll which
 // normally returns err == nil (and not io.EOF) upon successful reading until EOF.
 // ReadAll always returns err == nil.
-func (z *SGL) ReadAll() (b []byte, err error) {
+func (z *SGL) ReadAll() (b []byte) {
 	b = make([]byte, z.Size())
 	for off, i := 0, 0; i < len(z.sgl); i++ {
 		n := copy(b[off:], z.sgl[i])
@@ -280,7 +280,7 @@ func (z *SGL) Free() {
 func (z *SGL) Bytes() (b []byte) {
 	cos.Assert(z.roff == 0)
 	if z.woff >= z.slab.Size() {
-		b, _ = z.ReadAll()
+		b = z.ReadAll()
 		return
 	}
 	return z.sgl[0][:z.woff]

@@ -32,7 +32,6 @@ type (
 	etlMD struct {
 		etl.MD
 		cksum *cos.Cksum
-		_sgl  *memsys.SGL
 	}
 
 	etlOwner interface {
@@ -88,14 +87,13 @@ func (*etlMD) sgl() *memsys.SGL  { return nil }
 
 // always remarshal (TODO: unify and optimize across all cluster-level metadata types)
 func (e *etlMD) marshal() []byte {
-	if prev := e._sgl; prev != nil {
-		defer prev.Free()
-	}
-	e._sgl = memsys.PageMM().NewSGL(etlMDImmSize)
-	err := jsp.Encode(e._sgl, e, jsp.CCSign(cmn.MetaverEtlMD))
+	sgl := memsys.PageMM().NewSGL(etlMDImmSize)
+	err := jsp.Encode(sgl, e, jsp.CCSign(cmn.MetaverEtlMD))
 	debug.AssertNoErr(err)
-	etlMDImmSize = cos.MaxI64(etlMDImmSize, e._sgl.Len())
-	return e._sgl.Bytes()
+	etlMDImmSize = cos.MaxI64(etlMDImmSize, sgl.Len())
+	b := sgl.ReadAll() // TODO: optimize
+	sgl.Free()
+	return b
 }
 
 func (e *etlMD) clone() *etlMD {
@@ -184,10 +182,6 @@ func (eo *etlMDOwnerPrx) _pre(ctx *etlMDModifier) (clone *etlMD, err error) {
 	eo.Lock()
 	defer eo.Unlock()
 	etlMD := eo.get()
-	if prev := etlMD._sgl; prev != nil {
-		etlMD._sgl = nil
-		defer prev.Free()
-	}
 	clone = etlMD.clone()
 	if err = ctx.pre(ctx, clone); err != nil {
 		return

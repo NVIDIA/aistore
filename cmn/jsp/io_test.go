@@ -198,9 +198,8 @@ func BenchmarkDecode(b *testing.B) {
 
 			err := jsp.Encode(sgl, bench.v, bench.opts)
 			tassert.CheckFatal(b, err)
-			network, err := sgl.ReadAll()
+			network := sgl.ReadAll()
 			sgl.Free()
-			tassert.CheckFatal(b, err)
 
 			b.ReportAllocs()
 			b.ResetTimer()
