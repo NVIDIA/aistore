@@ -13,7 +13,6 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/ais/s3"
@@ -23,16 +22,17 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 )
+
+const fmtErrBO = "bucket and object names are required to complete multipart upload (have %v)"
 
 // Copy another object or its range as a part of the multipart upload.
 // Body is empty, everything in the query params and the header.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html
+// TODO: not implemented yet
 func (t *target) putObjMptCopy(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload",
-			http.StatusBadRequest)
+		t.writeErrf(w, r, fmtErrBO, items)
 		return
 	}
 	t.writeErrMsg(w, r, "not implemented yet")
@@ -43,10 +43,9 @@ func (t *target) putObjMptCopy(w http.ResponseWriter, r *http.Request, items []s
 // While API states about "Content-MD5" is in the request, it looks like
 // s3cmd does not set it.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
-func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
+func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *cluster.Bck) {
 	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload",
-			http.StatusBadRequest)
+		t.writeErrf(w, r, fmtErrBO, items)
 		return
 	}
 	uploadID := q.Get(s3.QparamMptUploadID)
@@ -81,13 +80,7 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 	partMD5 := r.Header.Get(cmn.AzCksumHeader)
 	recvMD5 := cos.NewCksum(cos.ChecksumMD5, partMD5)
 
-	bckName := items[0]
-	objName := strings.Join(items[1:], "/")
-	bck, err := newBckFromQ(bckName, r.URL.Query(), nil)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
+	objName := s3.ObjName(items)
 	lom := &cluster.LOM{ObjName: objName}
 	err = lom.InitBck(bck.Bucket())
 	if err != nil {
@@ -139,33 +132,18 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 // - Generate UUID for the upload
 // - Return the UUID to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html
-func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
-	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to start multipart upload",
-			http.StatusBadRequest)
-		return
-	}
-	bckName := items[0]
-	objName := strings.Join(items[1:], "/")
-	bck, err := newBckFromQ(bckName, q, nil)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
+func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, bck *cluster.Bck) {
+	objName := s3.ObjName(items)
 	lom := cluster.LOM{ObjName: objName}
-	err = lom.InitBck(bck.Bucket())
-	if err != nil {
+	if err := lom.InitBck(bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
+
 	uploadID := cos.GenUUID()
 	s3.InitUpload(uploadID, objName)
-	result := &s3.InitiateMptUploadResult{
-		Bucket:   bckName,
-		Key:      objName,
-		UploadID: uploadID,
-	}
-	sgl := memsys.PageMM().NewSGL(0)
+	result := &s3.InitiateMptUploadResult{Bucket: bck.Name, Key: objName, UploadID: uploadID}
+	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
@@ -179,12 +157,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 // 3. Return ETag to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
 // TODO: lom.Lock; ETag => customMD
-func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
-	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload",
-			http.StatusBadRequest)
-		return
-	}
+func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *cluster.Bck) {
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID == "" {
 		t.writeErrMsg(w, r, "empty uploadId")
@@ -200,16 +173,9 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		t.writeErrMsg(w, r, "empty list of upload parts")
 		return
 	}
-
-	bckName := items[0]
-	objName := strings.Join(items[1:], "/")
-	bck, err := newBckFromQ(bckName, q, nil)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
+	objName := s3.ObjName(items)
 	lom := &cluster.LOM{ObjName: objName}
-	if err = lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -285,7 +251,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	s3.FinishUpload(uploadID, lom.FQN, false /*aborted*/)
 
 	// 7. respond
-	result := &s3.CompleteMptUploadResult{Bucket: bckName, Key: objName, ETag: objETag}
+	result := &s3.CompleteMptUploadResult{Bucket: bck.Name, Key: objName, ETag: objETag}
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
@@ -338,8 +304,7 @@ func (t *target) listMptUploads(w http.ResponseWriter, bck *cluster.Bck, q url.V
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html
 func (t *target) abortMptUpload(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
 	if len(items) < 2 {
-		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload",
-			http.StatusBadRequest)
+		t.writeErrf(w, r, fmtErrBO, items)
 		return
 	}
 	uploadID := q.Get(s3.QparamMptUploadID)

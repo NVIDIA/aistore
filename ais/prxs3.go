@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
 	"strings"
 	"time"
 
@@ -59,8 +58,8 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			p.bckNamesToS3(w)
 			return
 		}
-		q := r.URL.Query()
 		var (
+			q            = r.URL.Query()
 			_, lifecycle = q[s3.QparamLifecycle]
 			_, policy    = q[s3.QparamPolicy]
 			_, cors      = q[s3.QparamCORS]
@@ -215,7 +214,7 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 		return
 	}
 	smap := p.owner.smap.get()
-	objName := strings.Join(parts[1:], "/")
+	objName := s3.ObjName(parts)
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -403,7 +402,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		p.writeErr(w, r, errS3Obj)
 		return
 	}
-	objName := path.Join(items[1:]...)
+	objName := s3.ObjName(items)
 	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -446,8 +445,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		p.writeErr(w, r, errS3Obj)
 		return
 	}
-	objName := path.Join(items[1:]...)
-
+	objName := s3.ObjName(items)
 	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -466,7 +464,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		p.writeErr(w, r, errS3Obj)
 		return
 	}
-	bucket, objName := items[0], path.Join(items[1:]...)
+	bucket, objName := items[0], s3.ObjName(items)
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -509,7 +507,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		p.writeErr(w, r, errS3Obj)
 		return
 	}
-	objName := path.Join(items[1:]...)
+	objName := s3.ObjName(items)
 	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.writeErr(w, r, err)

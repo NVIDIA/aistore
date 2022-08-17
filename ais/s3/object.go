@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -96,6 +97,8 @@ type (
 		Uploads []*UploadInfo `xml:"Upload"`
 	}
 )
+
+func ObjName(items []string) string { return path.Join(items[1:]...) }
 
 func FillMsgFromS3Query(query url.Values, msg *apc.ListObjsMsg) {
 	mxStr := query.Get("max-keys")
