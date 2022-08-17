@@ -25,7 +25,7 @@ deps = ["opencv-python-headless==4.5.3.56"]
 client.etl().init_code(transform=transform, etl_id="etl-img-to-npy", dependencies=deps)
 
 # Transform bucket with given ETL id
-xaction_id = client.bucket("caltech256").transform(
+xaction_id = client.bucket("from-bck").transform(
     etl_id="etl-img-to-npy", to_bck="to-bck", ext={"jpg": "npy"}
 )
 client.xaction().wait_for_xaction_finished(xaction_id)

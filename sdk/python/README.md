@@ -230,7 +230,7 @@ Deleting an ETL deletes all pods created by Kuberenetes for the ETL as well as a
 
 ### More Examples
 
-For more in-depth examples, please see [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/sdk/sdk-tutorial.ipynb).
+For more in-depth examples, please see [AIStore Python SDK Examples Directory](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/).
 
 
 ### API Documentation

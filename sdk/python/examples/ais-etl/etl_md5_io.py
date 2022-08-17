@@ -20,7 +20,7 @@ def etl():
 
 client.etl().init_code(transform=etl, etl_id="etl-md5-io-code", communication_type="io")
 
-xaction_id = client.bucket("caltech256").transform(
-    etl_id="etl-md5-io-code", to_bck="etl-md5-io-code", ext={"jpg": "txt"}
+xaction_id = client.bucket("from-bck").transform(
+    etl_id="etl-md5-io-code", to_bck="to-bck", ext={"jpg": "txt"}
 )
 client.xaction().wait_for_xaction_finished(xaction_id)

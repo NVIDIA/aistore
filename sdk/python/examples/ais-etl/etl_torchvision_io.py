@@ -35,7 +35,7 @@ client.etl().init_code(
 )
 
 # Transform bucket with given ETL id
-xaction_id = client.bucket("caltech256").transform(
-    etl_id="torchvision_io1", to_bck="caltech256-transformed-io", ext={"jpg": "npy"}
+xaction_id = client.bucket("from-bck").transform(
+    etl_id="torchvision_io1", to_bck="to-bck", ext={"jpg": "npy"}
 )
 client.xaction().wait_for_xaction_finished(xaction_id)

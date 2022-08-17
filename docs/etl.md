@@ -39,6 +39,10 @@ Technically, the service supports running user-provided ETL containers **and** c
   - [PyTorch ImageNet preprocessing](/docs/tutorials/etl/etl_imagenet_pytorch.md)
   - [Compute the MD5 of the object](/docs/tutorials/etl/compute_md5.md)
 * For a quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)
+* For initializing ETLs with AIStore Python SDK, see:
+  - [Python SDK ETL Usage Docs](https://github.com/NVIDIA/aistore/tree/master/sdk/python#etls)
+  - [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/sdk/python/examples/ais-etl)
+  - [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/sdk/sdk-etl-tutorial.ipynb)
 
 
 The rest of this text is organized as follows:
@@ -103,14 +107,6 @@ To deploy the ETL-ready AIStore cluster, please refer to [Getting Started](getti
 > Note that you have to choose one of the deployment types that supports Kubernetes - for example, [Cloud Deployment](getting_started.md#cloud-deployment).
 
 > During the AIStore on Kubernetes deployment, the `HOSTNAME` environment variable, set by Kubernetes, **shouldn't** be overwritten - AIS target uses it to discover its Pod and Node name.
-> In some environments (like `minikube`) the `HOSTNAME` is not reliable and in such cases, it's required to set `K8S_NODE_NAME` in Pod spec:
-> ```yaml
-> env:
->  - name: K8S_NODE_NAME
->     valueFrom:
->       fieldRef:
->         fieldPath: spec.nodeName
-> ```
 
 To verify that your deployment is set up correctly, run the following [CLI](/docs/cli.md) command:
 ```console
@@ -118,6 +114,11 @@ $ ais etl ls
 ```
 
 If you see an empty response (and no errors) - your AIStore cluster is ready to run ETL.
+
+To deploy AIStore on Minkube, see:
+
+- [Deploying AIStore on Minikube](https://github.com/NVIDIA/aistore/tree/master/deploy/dev/k8s#developing-aistore-on-minikube)
+
 
 ## Extract, Transform and Load using user-defined functions
 
@@ -132,7 +133,7 @@ If you see an empty response (and no errors) - your AIStore cluster is ready to 
 2. Upon receiving the **init spec** request, the AIS proxy broadcasts the request to all AIS targets in the cluster.
 3. When a target receives **init spec**, it starts the user container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
 
-### *init code* request
+## *init code* request
 
 You can write your custom `transform` function that takes input object bytes as a parameter and returns output bytes (the transformed object's content).
 You can then use the *init code* request to execute this `transform` on the entire distributed dataset.
@@ -141,19 +142,51 @@ In effect, a user can skip the entire step of writing their Dockerfile and build
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-For a detailed step-by-step tutorial on *init code* request, please see [ImageNet ETL playbook](/docs/tutorials/etl/etl_imagenet_pytorch.md).
+For a detailed step-by-step tutorial on *init code* requests, please see [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/sdk/sdk-etl-tutorial.ipynb) and [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/sdk/python/examples/ais-etl).
 
-#### `transform` function
+The `init_code` request currently supports two communication types:
 
-To use the *init code* request a user has to provide a Python script with a defined `transform` function that has the following signature:
+### `hpush://` communication
+
+In `hpush` communication type, the user has to define a function that takes bytes as a parameter, processes it and returns bytes. e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_md5_hpush.py)
+
 ```python
 def transform(input_bytes: bytes) -> bytes
 ```
 
-If the function uses external dependencies, a user can provide an optional dependencies file, in `pip` [requirements file format](https://pip.pypa.io/en/stable/user_guide/#requirements-files).
-These requirements will be installed on the machine executing the `transform` function and will be available for the function.
+We realize that sometimes the transformation function is not that straightforward, and you might need some initialization prior to the function as well post the function. For that, we have included `before(context)` and `after(context)` functions in python runtime for AIS-ETL. 
 
-#### Runtimes
+```python
+def before(context: Dict[str, object]) -> None
+
+def transform(input_bytes: bytes) -> Union[bytes, None]
+
+def after(context: Dict[str, object]) -> bytes
+```
+
+You can also stream objects in `transform()` by setting the `CHUNK_SIZE` parameter (`CHUNK_SIZE` > 0).
+
+e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_md5_hpush.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_torchvision_hpush.py).
+
+> **Note:** 
+>- `before(context)` and `after(context)` functions are optional and not always needed.
+>- If your `transform()` function uses streaming (`CHUNK_SIZE`> 0), and has no `after(context)` function to consolidate result, please add the result into `context["result"]`.
+>- If the function uses external dependencies, a user can provide an optional dependencies file or in the `elt().init()` function of Python SDK. These requirements will be installed on the machine executing the `transform` function and will be available for the function.
+
+### `io://` communication
+
+In `io://` communication type, users have to define a `transform()` function that reads bytes from [`sys.stdin`](https://docs.python.org/3/library/sys.html#sys.stdin), carries out transformations over it, and then writes bytes to [`sys.stdout`](https://docs.python.org/3/library/sys.html#sys.stdout).
+
+```python
+def transform() -> None:
+    input_bytes = sys.stdin.buffer.read()
+    # output_bytes = process(input_bytes)
+    sys.stdout.buffer.write(output_bytes)
+```
+
+e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_md5_io.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_torchvision_io.py)
+
+### Runtimes
 
 AIS-ETL provides several *runtimes* out of the box.
 Each *runtime* determines the programming language of your custom `transform` function and the set of pre-installed packages and tools that your `transform` can utilize.
@@ -168,7 +201,7 @@ Currently, the following runtimes are supported:
 More *runtimes* will be added in the future, with plans to support the most popular ETL toolchains.
 Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your ETL container and deploy it via [*init spec* request](#init-spec-request).
 
-### *init spec* request
+## *init spec* request
 
 *Init spec* request covers all, even the most sophisticated, cases of ETL initialization.
 It allows running any Docker image that implements certain requirements on communication with the cluster.

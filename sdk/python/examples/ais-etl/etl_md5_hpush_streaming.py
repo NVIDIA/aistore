@@ -32,7 +32,7 @@ client.etl().init_code(
 )
 
 
-xaction_id = client.bucket("caltech256").transform(
-    etl_id="etl-stream3", to_bck="etl-stream1", ext={"jpg": "txt"}
+xaction_id = client.bucket("from-bck").transform(
+    etl_id="etl-stream3", to_bck="to-bck", ext={"jpg": "txt"}
 )
 client.xaction().wait_for_xaction_finished(xaction_id)
