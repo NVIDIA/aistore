@@ -10,22 +10,22 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
+// NOTE: xattr stores only the (*) marked attributes
 type (
-	// xattr stores only MD5 and Size (packed)
-	UploadPart struct {
-		MD5   string // MD5 of the part
+	MptPart struct {
+		MD5   string // MD5 of the part (*)
 		FQN   string // FQN of the corresponding workfile
-		Size  int64  // part size (bytes)
+		Size  int64  // part size in bytes (*)
 		Ctime int64  // creation time
+		Num   int64  // part number (*)
 	}
-	uploadInfo struct {
-		objName string
-		parts   map[int64]*UploadPart // by part number
+	mpt struct {
+		objName string     // (*)
+		parts   []*MptPart // by part number
 	}
-	uploads map[string]*uploadInfo // by upload ID
+	uploads map[string]*mpt // by upload ID
 )
 
 var (
@@ -40,63 +40,43 @@ func InitUpload(id, objName string) {
 	mu.Lock()
 	// TODO: as we generate ID internally, it is very unlikely that an upload with
 	// the same ID exists. But we can check it anyway.
-	up[id] = &uploadInfo{objName: objName, parts: make(map[int64]*UploadPart, 8)}
+	up[id] = &mpt{objName: objName, parts: make([]*MptPart, 0, iniCapParts)}
 	mu.Unlock()
 }
 
 // Add part to an active upload.
 // Some clients may omit size and md5. Only partNum is must-have.
 // md5 and fqn is filled by a target after successful saving the data to a workfile.
-func AddPart(id string, partNum, size int64, fqn, md5 string) (err error) {
+func AddPart(id string, npart *MptPart) (err error) {
 	mu.Lock()
 	upload, ok := up[id]
 	if !ok {
-		err = fmt.Errorf("upload %q not found (%s, %d)", id, fqn, partNum)
+		err = fmt.Errorf("upload %q not found (%s, %d)", id, npart.FQN, npart.Num)
 	} else {
-		upload.parts[partNum] = &UploadPart{MD5: md5, FQN: fqn, Size: size, Ctime: mono.NanoTime()}
+		upload.parts = append(upload.parts, npart)
 	}
 	mu.Unlock()
 	return
 }
 
-// Complete an upload and send the list of its parts.
-// Some clients(e.g, s3cmd) omits some fields(e.g, size and md5).
-// PartNumber is always filled.
-// The function checks whether a target has all parts.
-func CheckParts(id string, parts []*PartInfo) error {
-	mu.RLock()
-	defer mu.RUnlock()
-	upload, ok := up[id]
-	if !ok {
-		return fmt.Errorf("upload %q not found", id)
-	}
-	if len(upload.parts) != len(parts) {
-		return fmt.Errorf("upload %q expects %d parts, found %d parts", id, len(parts), len(upload.parts))
-	}
-	for _, part := range parts {
-		_, ok := upload.parts[part.PartNumber]
-		if !ok {
-			return fmt.Errorf("upload %q: part %d not found", id, part.PartNumber)
-		}
-		// TODO: compare sizes? but is it filled by a client always? s3cmd seems sending 0 size
-		// TODO: compare part.ETag with md5Part to be sure that the part is correct? but is it filled by a client always?
-	}
-	return nil
-}
-
-// Returns upload part that is already saved as a workfile.
-func GetPart(id string, partNum int64) (*UploadPart, error) {
+// TODO: compare non-zero sizes (note: s3cmd sends 0) and part.ETag as well, if specified
+func CheckParts(id string, parts []*PartInfo) ([]*MptPart, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 	upload, ok := up[id]
 	if !ok {
 		return nil, fmt.Errorf("upload %q not found", id)
 	}
-	part, ok := upload.parts[partNum]
-	if !ok {
-		return nil, fmt.Errorf("upload %q does not have part %d", id, partNum)
+	for _, part := range parts {
+		if upload.getPart(part.PartNumber) == nil {
+			return nil, fmt.Errorf("upload %q: part %d not found", id, part.PartNumber)
+		}
 	}
-	return part, nil
+	nparts := make([]*MptPart, 0, len(parts))
+	for _, part := range parts {
+		nparts = append(nparts, upload.getPart(part.PartNumber))
+	}
+	return nparts, nil
 }
 
 // Return a sum of upload part sizes.
@@ -107,8 +87,8 @@ func ObjSize(id string) (size int64, err error) {
 	if !ok {
 		err = fmt.Errorf("upload %q not found", id)
 	} else {
-		for _, v := range upload.parts {
-			size += v.Size
+		for _, part := range upload.parts {
+			size += part.Size
 		}
 	}
 	mu.RUnlock()
@@ -126,7 +106,7 @@ func FinishUpload(id, fqn string, aborted bool) {
 		return
 	}
 	if !aborted {
-		err := storeMpartXattr(fqn, upload)
+		err := storeMptXattr(fqn, upload)
 		debug.AssertNoErr(err)
 	}
 	for _, part := range upload.parts {
@@ -137,14 +117,14 @@ func FinishUpload(id, fqn string, aborted bool) {
 }
 
 // Returns the info about active upload with ID
-func GetUpload(id string) (upload *uploadInfo, err error) {
+func GetUpload(id string) (upload *mpt, err error) {
 	mu.RLock()
 	upload, err = _getup(id)
 	mu.RUnlock()
 	return
 }
 
-func _getup(id string) (*uploadInfo, error) {
+func _getup(id string) (*mpt, error) {
 	upload, ok := up[id]
 	if !ok {
 		return nil, fmt.Errorf("upload %q not found", id)
@@ -179,8 +159,8 @@ func ListParts(id string) ([]*PartInfo, error) {
 		return nil, err
 	}
 	parts := make([]*PartInfo, 0, len(upload.parts))
-	for num, part := range upload.parts {
-		parts = append(parts, &PartInfo{ETag: part.MD5, PartNumber: num, Size: part.Size})
+	for _, part := range upload.parts {
+		parts = append(parts, &PartInfo{ETag: part.MD5, PartNumber: part.Num, Size: part.Size})
 	}
 	mu.RUnlock()
 	return parts, nil

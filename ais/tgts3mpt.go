@@ -20,6 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -116,7 +118,14 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 		return
 	}
 
-	err = s3.AddPart(uploadID, partNum, numBytes, workfileFQN, cksum.Value())
+	npart := &s3.MptPart{
+		MD5:   cksum.Value(),
+		FQN:   workfileFQN,
+		Size:  numBytes,
+		Ctime: mono.NanoTime(),
+		Num:   partNum,
+	}
+	err = s3.AddPart(uploadID, npart)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -169,6 +178,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 // 2. Merge all parts into a single file and calculate its ETag
 // 3. Return ETag to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
+// TODO: lom.Lock; ETag => customMD
 func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
 	if len(items) < 2 {
 		t.writeErrMsg(w, r, "bucket and object names are required to complete multipart upload",
@@ -203,67 +213,63 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		t.writeErr(w, r, err)
 		return
 	}
-	if err = s3.CheckParts(uploadID, partList.Parts); err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	// lom.Lock(true) // TODO: ?
 
-	// Loop through all parts and check that all files exist.
-	// obj is the full object.
+	// do 1. through 7.
 	var (
 		obj         io.WriteCloser
 		objWorkfile string
+		objMD5      string
 	)
-
+	// 1. sort
 	sort.Slice(partList.Parts, func(i, j int) bool {
 		return partList.Parts[i].PartNumber < partList.Parts[j].PartNumber
 	})
-	// TODO: sanity check: the list must start with partNumber=1, and
-	//       has no gaps between numbers, and no duplicates
-
-	// Multipart calculation is taken from:
-	//       https://zihao.me/post/calculating-etag-for-aws-s3-objects/
-	var objMD5 string
-	for _, part := range partList.Parts {
-		partInfo, err := s3.GetPart(uploadID, part.PartNumber)
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-		workfileFQN := partInfo.FQN
+	// 2. check existence and get specified
+	nparts, err := s3.CheckParts(uploadID, partList.Parts)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	// 3. cycle through parts and do appending
+	buf, slab := t.gmm.Alloc()
+	defer slab.Free(buf)
+	for _, partInfo := range nparts {
+		var err error
 		objMD5 += partInfo.MD5
+		// first part
 		if obj == nil {
-			// The first part. All parts are appended to the first part.
-			obj, err = os.OpenFile(workfileFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
+			objWorkfile = partInfo.FQN
+			obj, err = os.OpenFile(objWorkfile, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
 			if err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
-			objWorkfile = workfileFQN
 			continue
 		}
-		nextPart, err := os.Open(workfileFQN)
+		// 2nd etc. parts
+		nextPart, err := os.Open(partInfo.FQN)
 		if err != nil {
+			cos.Close(obj)
 			t.writeErr(w, r, err)
 			return
 		}
-		_, err = io.Copy(obj, nextPart)
-		if err != nil {
+		if _, err := io.CopyBuffer(obj, nextPart, buf); err != nil {
+			cos.Close(obj)
+			cos.Close(nextPart)
 			t.writeErr(w, r, err)
 			return
 		}
 		cos.Close(nextPart)
 	}
 	cos.Close(obj)
+
+	// 4. md5, size, atime
 	eTagMD5 := cos.NewCksumHash(cos.ChecksumMD5)
 	_, err = eTagMD5.H.Write([]byte(objMD5)) // Should never fail?
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	eTagMD5.Finalize()
 	objETag := fmt.Sprintf("%s-%d", eTagMD5.Value(), len(partList.Parts))
-	// lom.Unlock(true) // TODO: ?
 
-	// TODO: the solution does not work if target restarted.
 	size, err := s3.ObjSize(uploadID)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -271,19 +277,16 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	}
 	lom.SetSize(size)
 	lom.SetAtimeUnix(time.Now().UnixNano())
-	// TODO: store ETag into custom MD?
 
+	// 5. finalize
 	t.FinalizeObj(lom, objWorkfile, nil)
 
-	// xattr
+	// 6. mpt state => xattr
 	s3.FinishUpload(uploadID, lom.FQN, false /*aborted*/)
 
-	result := &s3.CompleteMptUploadResult{
-		Bucket: bckName,
-		Key:    objName,
-		ETag:   objETag,
-	}
-	sgl := memsys.PageMM().NewSGL(0)
+	// 7. respond
+	result := &s3.CompleteMptUploadResult{Bucket: bckName, Key: objName, ETag: objETag}
+	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	w.Header().Set(cmn.S3CksumHeader, objETag)
@@ -304,7 +307,7 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *clust
 		return
 	}
 	result := &s3.ListPartsResult{Bucket: bck.Name, Key: objName, UploadID: uploadID, Parts: parts}
-	sgl := memsys.PageMM().NewSGL(0)
+	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
@@ -316,11 +319,11 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *clust
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html
 // GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&
 //               max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
-func listMptUploads(w http.ResponseWriter, bck *cluster.Bck, q url.Values) {
+func (t *target) listMptUploads(w http.ResponseWriter, bck *cluster.Bck, q url.Values) {
 	_ = q // TODO: use to support key-marker, upload-id-marker, max-uploads
 
 	result := s3.ListUploads(bck.Name)
-	sgl := memsys.PageMM().NewSGL(0)
+	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)

@@ -207,7 +207,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 	q := r.URL.Query()
 	if len(items) == 1 && q.Has(s3.QparamMptUploads) {
-		listMptUploads(w, bck, q)
+		t.listMptUploads(w, bck, q)
 		return
 	}
 	if len(items) < 2 {
