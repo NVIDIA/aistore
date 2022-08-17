@@ -8,19 +8,24 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 type (
+	// xattr stores only MD5 and Size (packed)
 	UploadPart struct {
-		MD5  string // MD5 of the part
-		FQN  string // FQN of the corresponding workfile
-		Size int64  // part size in bytes
+		MD5   string // MD5 of the part
+		FQN   string // FQN of the corresponding workfile
+		Size  int64  // part size (bytes)
+		Ctime int64  // creation time
 	}
 	uploadInfo struct {
 		objName string
-		parts   map[int64]*UploadPart // part number <-> part info
+		parts   map[int64]*UploadPart // by part number
 	}
-	uploads map[string]*uploadInfo // upload ID <-> upload info
+	uploads map[string]*uploadInfo // by upload ID
 )
 
 var (
@@ -46,9 +51,9 @@ func AddPart(id string, partNum, size int64, fqn, md5 string) (err error) {
 	mu.Lock()
 	upload, ok := up[id]
 	if !ok {
-		err = fmt.Errorf("upload %q not found", id)
+		err = fmt.Errorf("upload %q not found (%s, %d)", id, fqn, partNum)
 	} else {
-		upload.parts[partNum] = &UploadPart{Size: size, MD5: md5, FQN: fqn}
+		upload.parts[partNum] = &UploadPart{MD5: md5, FQN: fqn, Size: size, Ctime: mono.NanoTime()}
 	}
 	mu.Unlock()
 	return
@@ -110,15 +115,19 @@ func ObjSize(id string) (size int64, err error) {
 	return
 }
 
-// Cleanup upload: remove all temp files and delete from the map
-// (called in both cases: aborting and completing upload).
-func RemoveUpload(id string) {
+// remove all temp files and delete from the map
+// if completed (i.e., not aborted): store xattr
+func FinishUpload(id, fqn string, aborted bool) {
 	mu.Lock()
 	upload, ok := up[id]
 	if !ok {
-		// nothing to cleanup (TODO: target restart)
 		mu.Unlock()
+		debug.AssertMsg(aborted, fqn+": "+id)
 		return
+	}
+	if !aborted {
+		err := storeMpartXattr(fqn, upload)
+		debug.AssertNoErr(err)
 	}
 	for _, part := range upload.parts {
 		_ = os.RemoveAll(part.FQN)
@@ -151,14 +160,14 @@ func UploadExists(id string) bool {
 	return ok
 }
 
-func ListUploads(bckName string) (result *ListMultipartUploadsResult) {
+func ListUploads(bckName string) (result *ListMptUploadsResult) {
 	mu.RLock()
 	uploads := make([]*UploadInfo, 0, len(up))
 	for id, info := range up {
 		uploads = append(uploads, &UploadInfo{Key: info.objName, UploadID: id})
 	}
 	mu.RUnlock()
-	result = &ListMultipartUploadsResult{Bucket: bckName, Uploads: uploads}
+	result = &ListMptUploadsResult{Bucket: bckName, Uploads: uploads}
 	return
 }
 

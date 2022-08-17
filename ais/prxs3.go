@@ -100,8 +100,8 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		p.putObjS3(w, r, apiItems)
 	case http.MethodPost:
 		q := r.URL.Query()
-		if q.Has(s3.QparamMultipartUploadID) || q.Has(s3.QparamMultipartUploads) {
-			p.handleMultipartUpload(w, r, apiItems)
+		if q.Has(s3.QparamMptUploadID) || q.Has(s3.QparamMptUploads) {
+			p.handleMptUpload(w, r, apiItems)
 			return
 		}
 		if len(apiItems) != 1 {
@@ -203,7 +203,7 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	}
 }
 
-func (p *proxy) handleMultipartUpload(w http.ResponseWriter, r *http.Request, parts []string) {
+func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []string) {
 	bucket := parts[0]
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {

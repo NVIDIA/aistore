@@ -120,7 +120,7 @@ func (br *ByteUnpack) ReadByte() (byte, error) {
 	if br.off >= len(br.b) {
 		return 0, ErrBufferUnderrun
 	}
-	Assert(br.off < len(br.b))
+	debug.Assert(br.off < len(br.b))
 	b := br.b[br.off]
 	br.off++
 	return b, nil
@@ -221,6 +221,8 @@ func (br *ByteUnpack) ReadMapStrUint16() (MapStrUint16, error) {
 	return mp, nil
 }
 
+func (br *ByteUnpack) Len() int { return len(br.b) - br.off }
+
 //
 // Packer
 //
@@ -277,7 +279,7 @@ func (bw *BytePack) WriteString(s string) {
 		return
 	}
 	written := copy(bw.b[bw.off:], s)
-	Assert(written == l)
+	debug.Assert(written == l)
 	bw.off += l
 }
 

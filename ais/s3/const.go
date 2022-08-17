@@ -6,15 +6,17 @@ package s3
 
 const (
 	// AWS URL params
-	QparamVersioning        = "versioning"
-	QparamLifecycle         = "lifecycle"
-	QparamCORS              = "cors"
-	QparamPolicy            = "policy"
-	QparamACL               = "acl"
-	QparamMultiDelete       = "delete"
-	QparamMultipartUploads  = "uploads"
-	QparamMultipartUploadID = "uploadId"
-	QparamMultipartPartNo   = "partNumber"
+	QparamVersioning  = "versioning"
+	QparamLifecycle   = "lifecycle"
+	QparamCORS        = "cors"
+	QparamPolicy      = "policy"
+	QparamACL         = "acl"
+	QparamMultiDelete = "delete"
+
+	// multipart
+	QparamMptUploads  = "uploads"
+	QparamMptUploadID = "uploadId"
+	QparamMptPartNo   = "partNumber"
 
 	versioningEnabled  = "Enabled"
 	versioningDisabled = "Suspended"
@@ -27,7 +29,7 @@ const (
 
 	// s3 request headers
 	HdrObjSrc        = "x-amz-copy-source"
-	HdrMultipartCnt  = "x-amz-mp-parts-count"
+	HdrMptCnt        = "x-amz-mp-parts-count"
 	HdrContentSHA256 = "x-amz-content-sha256"
 
 	HdrBckRegion = "x-amz-bucket-region"

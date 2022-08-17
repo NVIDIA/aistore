@@ -38,30 +38,23 @@ func (p *pck) Pack(wr *cos.BytePack) {
 	}
 }
 
-func (p *pck) Unpack(rd *cos.ByteUnpack) error {
-	var (
-		err    error
-		exists byte
-	)
-	p.name, err = rd.ReadString()
-	if err != nil {
-		return err
+func (p *pck) Unpack(rd *cos.ByteUnpack) (err error) {
+	if p.name, err = rd.ReadString(); err != nil {
+		return
 	}
-	p.id, err = rd.ReadInt64()
-	if err != nil {
-		return err
+	if p.id, err = rd.ReadInt64(); err != nil {
+		return
 	}
-	p.data, err = rd.ReadBytes()
-	if err != nil {
-		return err
+	if p.data, err = rd.ReadBytes(); err != nil {
+		return
 	}
-	p.group, err = rd.ReadInt16()
-	if err != nil {
-		return err
+	if p.group, err = rd.ReadInt16(); err != nil {
+		return
 	}
-	exists, err = rd.ReadByte()
-	if err != nil {
-		return err
+
+	var exists byte
+	if exists, err = rd.ReadByte(); err != nil {
+		return
 	}
 	// Read inner struct only of the marker is `true`.
 	if exists != 0 {
@@ -70,7 +63,7 @@ func (p *pck) Unpack(rd *cos.ByteUnpack) error {
 		p.parent = &pck{}
 		rd.ReadAny(p.parent)
 	}
-	return nil
+	return
 }
 
 func (p *pck) PackedSize() int {

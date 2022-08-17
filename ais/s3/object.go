@@ -51,7 +51,7 @@ type (
 	}
 
 	// Multipart upload start response
-	InitiateMultipartUploadResult struct {
+	InitiateMptUploadResult struct {
 		Bucket   string `xml:"Bucket"`
 		Key      string `xml:"Key"`
 		UploadID string `xml:"UploadId"`
@@ -65,12 +65,12 @@ type (
 	}
 
 	// Multipart upload completion request
-	CompleteMultipartUpload struct {
+	CompleteMptUpload struct {
 		Parts []*PartInfo `xml:"Part"`
 	}
 
 	// Multipart upload completion response
-	CompleteMultipartUploadResult struct {
+	CompleteMptUploadResult struct {
 		Bucket string `xml:"Bucket"`
 		Key    string `xml:"Key"`
 		ETag   string `xml:"ETag"`
@@ -91,7 +91,7 @@ type (
 	}
 
 	// List of active multipart uploads response
-	ListMultipartUploadsResult struct {
+	ListMptUploadsResult struct {
 		Bucket  string        `xml:"Bucket"`
 		Uploads []*UploadInfo `xml:"Upload"`
 	}
@@ -187,13 +187,13 @@ func (r *CopyObjectResult) MustMarshal(sgl *memsys.SGL) {
 	cos.AssertNoErr(err)
 }
 
-func (r *InitiateMultipartUploadResult) MustMarshal(sgl *memsys.SGL) {
+func (r *InitiateMptUploadResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	cos.AssertNoErr(err)
 }
 
-func (r *CompleteMultipartUploadResult) MustMarshal(sgl *memsys.SGL) {
+func (r *CompleteMptUploadResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	cos.AssertNoErr(err)
@@ -205,7 +205,7 @@ func (r *ListPartsResult) MustMarshal(sgl *memsys.SGL) {
 	cos.AssertNoErr(err)
 }
 
-func (r *ListMultipartUploadsResult) MustMarshal(sgl *memsys.SGL) {
+func (r *ListMptUploadsResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	cos.AssertNoErr(err)

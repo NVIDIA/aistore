@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -140,30 +140,27 @@ func (ntfn *stageNtfn) NewPack(kind byte) []byte {
 	return packer.Bytes()
 }
 
-func (ntfn *stageNtfn) Unpack(unpacker *cos.ByteUnpack) error {
-	var (
-		marker byte
-		err    error
-	)
+func (ntfn *stageNtfn) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if ntfn.rebID, err = unpacker.ReadInt64(); err != nil {
-		return err
+		return
 	}
 	if ntfn.action, err = unpacker.ReadUint32(); err != nil {
-		return err
+		return
 	}
 	if ntfn.stage, err = unpacker.ReadUint32(); err != nil {
-		return err
+		return
 	}
 	if ntfn.daemonID, err = unpacker.ReadString(); err != nil {
-		return err
+		return
 	}
-	marker, err = unpacker.ReadByte()
-	if err != nil {
-		return err
+
+	var marker byte
+	if marker, err = unpacker.ReadByte(); err != nil {
+		return
 	}
 	if marker == 0 {
 		ntfn.md = nil
-		return nil
+		return
 	}
 	ntfn.md = ec.NewMetadata()
 	return unpacker.ReadAny(ntfn.md)
