@@ -16,7 +16,7 @@ This technical blog will dive into [Dask `DataFrames`](https://examples.dask.org
 
 1. **Python Popularity**
 
-    ![Programming Language Growth](../images/language-popularity.png)
+    ![Programming Language Growth](/images/language-popularity.png)
 
     Python's popularity has skyrocketed over the past few years, especially with data scientists and machine learning developers. This is largely due to Python's extensive and mature collection of libraries for data science and machine learning, such as `Pandas`, `NumPy`, `Scikit-Learn`, `MatPlotLib`, `PyTorch`, and more.
 
@@ -32,7 +32,7 @@ This technical blog will dive into [Dask `DataFrames`](https://examples.dask.org
 
 3. **Familiar API**
 
-    ![Python Library Popularity](../images/python-package-popularity.png)
+    ![Python Library Popularity](/images/python-package-popularity.png)
     
     The above mentioned Python libraries have grown immensely in popularity as of recent. However, most of them were not designed to scale beyond a single machine nor with the exponentional growth of dataset sizes. Many of them were developed *before* big data use-cases became prevalent and can't process today's larger datasets as a result. Even Pandas, one of the most popular Python libraries available today, struggles to perform with larger datasets.
 
