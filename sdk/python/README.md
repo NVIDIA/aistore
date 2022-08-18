@@ -141,6 +141,29 @@ def transform(input_bytes):
 client.etl().init_code(transform=transform, etl_id="etl-code")
 ```
 
+Additionally, we can provide `before` and/or `after` code functions to the method `init_code`. The `before` code function executes before the transform function and will return objects to be used in the transform function. The `after` code function executes after the transform function and is applied to the results of the transform function.
+
+The following is functionally identical to the code shown above:
+
+```python
+def before(context):
+    context["before"] = hashlib.md5()
+
+def transform(input_bytes, context):
+    context["before"].update(input_bytes)
+
+def after(context):
+    return context["before"].hexdigest().encode()
+
+self.client.etl().init_code(
+    transform=transform,
+    before=before,
+    after=after,
+    etl_id="etl-code-alt",
+    chunk_size=32768,
+        )
+```
+
 We initialize another ETL w/ [spec](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#init-spec-request):
 
 ```python
@@ -150,7 +173,7 @@ template = MD5.format(communication_type="hpush")
 client.etl().init_spec(template=template, etl_id="etl-spec")
 ```
 
-> Refer to more templates [here](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/etl_templates.py).
+> Refer to more ETL templates [here](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/etl_templates.py).
 
 Once initialized, we can verify the ETLs are running with method `list()`:
 

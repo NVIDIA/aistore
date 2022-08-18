@@ -983,8 +983,6 @@ def init_code(transform: Callable,
 
 Initializes ETL based on the provided source code. Returns ETL_ID.
 
-Note: Either both before and after functions should be provided or none.
-
 **Arguments**:
 
 - `transform` _Callable_ - Transform function of the ETL
