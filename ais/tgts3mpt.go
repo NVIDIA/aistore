@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/ais/s3"
@@ -19,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -111,11 +111,10 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 	}
 
 	npart := &s3.MptPart{
-		MD5:   cksum.Value(),
-		FQN:   workfileFQN,
-		Size:  numBytes,
-		Ctime: mono.NanoTime(),
-		Num:   partNum,
+		MD5:  cksum.Value(),
+		FQN:  workfileFQN,
+		Size: numBytes,
+		Num:  partNum,
 	}
 	err = s3.AddPart(uploadID, npart)
 	if err != nil {
@@ -140,8 +139,9 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 	}
 
 	uploadID := cos.GenUUID()
-	s3.InitUpload(uploadID, objName)
+	s3.InitUpload(uploadID, bck.Name, objName)
 	result := &s3.InitiateMptUploadResult{Bucket: bck.Name, Key: objName, UploadID: uploadID}
+
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
@@ -266,7 +266,14 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html
 func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, q url.Values) {
 	uploadID := q.Get(s3.QparamMptUploadID)
-	parts, err := s3.ListParts(uploadID)
+
+	lom := &cluster.LOM{ObjName: objName}
+	if err := lom.InitBck(bck.Bucket()); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+
+	parts, err := s3.ListParts(uploadID, lom)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -280,14 +287,21 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *clust
 }
 
 // List all active multipart uploads for a bucket.
-// Body is empty; URL path /bucket with everything else in the query, see:
-// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html
+// See https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html
 // GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&
 //               max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
 func (t *target) listMptUploads(w http.ResponseWriter, bck *cluster.Bck, q url.Values) {
-	_ = q // TODO: use to support key-marker, upload-id-marker, max-uploads
-
-	result := s3.ListUploads(bck.Name)
+	var (
+		maxUploads int
+		idMarker   string
+	)
+	if s := q.Get(s3.QparamMptMaxUploads); s != "" {
+		if v, err := strconv.Atoi(s); err == nil {
+			maxUploads = v
+		}
+	}
+	idMarker = q.Get(s3.QparamMptUploadIDMarker)
+	result := s3.ListUploads(bck.Name, idMarker, maxUploads)
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)

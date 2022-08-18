@@ -7,24 +7,28 @@ package s3
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
+	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // NOTE: xattr stores only the (*) marked attributes
 type (
 	MptPart struct {
-		MD5   string // MD5 of the part (*)
-		FQN   string // FQN of the corresponding workfile
-		Size  int64  // part size in bytes (*)
-		Ctime int64  // creation time
-		Num   int64  // part number (*)
+		MD5  string // MD5 of the part (*)
+		FQN  string // FQN of the corresponding workfile
+		Size int64  // part size in bytes (*)
+		Num  int64  // part number (*)
 	}
 	mpt struct {
-		objName string     // (*)
+		bckName string
+		objName string
 		parts   []*MptPart // by part number
+		ctime   time.Time  // InitUpload time
 	}
 	uploads map[string]*mpt // by upload ID
 )
@@ -37,11 +41,14 @@ var (
 func Init() { up = make(uploads) }
 
 // Start miltipart upload
-func InitUpload(id, objName string) {
+func InitUpload(id, bckName, objName string) {
 	mu.Lock()
-	// TODO: as we generate ID internally, it is very unlikely that an upload with
-	// the same ID exists. But we can check it anyway.
-	up[id] = &mpt{objName: objName, parts: make([]*MptPart, 0, iniCapParts)}
+	up[id] = &mpt{
+		bckName: bckName,
+		objName: objName,
+		parts:   make([]*MptPart, 0, iniCapParts),
+		ctime:   time.Now(),
+	}
 	mu.Unlock()
 }
 
@@ -154,26 +161,52 @@ func UploadExists(id string) bool {
 	return ok
 }
 
-func ListUploads(bckName string) (result *ListMptUploadsResult) {
+func ListUploads(bckName, idMarker string, maxUploads int) (result *ListMptUploadsResult) {
 	mu.RLock()
-	uploads := make([]*UploadInfo, 0, len(up))
-	for id, info := range up {
-		uploads = append(uploads, &UploadInfo{Key: info.objName, UploadID: id})
+	results := make([]UploadInfoResult, 0, len(up))
+	for id, mpt := range up {
+		results = append(results, UploadInfoResult{Key: mpt.objName, UploadID: id, Initiated: mpt.ctime})
 	}
 	mu.RUnlock()
-	result = &ListMptUploadsResult{Bucket: bckName, Uploads: uploads}
+
+	sort.Slice(results, func(i int, j int) bool {
+		return results[i].Initiated.Before(results[j].Initiated)
+	})
+
+	var from int
+	if idMarker != "" {
+		// truncate
+		for i, res := range results {
+			if res.UploadID == idMarker {
+				from = i + 1
+				break
+			}
+			copy(results, results[from:])
+			results = results[:len(results)-from]
+		}
+	}
+	if maxUploads > 0 && len(results) > maxUploads {
+		results = results[:maxUploads]
+	}
+	result = &ListMptUploadsResult{Bucket: bckName, Uploads: results, IsTruncated: from > 0}
 	return
 }
 
-func ListParts(id string) ([]*PartInfo, error) {
+func ListParts(id string, lom *cluster.LOM) ([]*PartInfo, error) {
 	mu.RLock()
-	upload, err := _getup(id)
+	mpt, err := _getup(id)
 	if err != nil {
-		mu.RUnlock()
-		return nil, err
+		// TODO: check
+		mpt, err = LoadMptXattr(lom.FQN)
+		if err != nil || mpt == nil {
+			mu.RUnlock()
+			return nil, err
+		}
+		mpt.bckName, mpt.objName = lom.Bck().Name, lom.ObjName
+		mpt.ctime = lom.Atime()
 	}
-	parts := make([]*PartInfo, 0, len(upload.parts))
-	for _, part := range upload.parts {
+	parts := make([]*PartInfo, 0, len(mpt.parts))
+	for _, part := range mpt.parts {
 		parts = append(parts, &PartInfo{ETag: part.MD5, PartNumber: part.Num, Size: part.Size})
 	}
 	mu.RUnlock()

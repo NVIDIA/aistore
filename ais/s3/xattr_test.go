@@ -4,25 +4,31 @@
  */
 package s3
 
-import "testing"
+import (
+	"testing"
 
-func Test1(t *testing.T) {
-	uin := mpt{objName: "qrgqersgE4", parts: make([]*MptPart, 2)}
-	uin.parts[0] = &MptPart{Num: 111, MD5: "rj*&^!&tj5wh", Size: 1024}
-	uin.parts[1] = &MptPart{Num: 222, MD5: "mn^^^n&753rP", Size: 2048}
+	"github.com/NVIDIA/aistore/devtools/trand"
+)
 
-	b := uin.pack()
-	uout := &mpt{}
-	if err := uout.unpack(b); err != nil {
+func TestPackUnpack(t *testing.T) {
+	const nump = 10
+	var (
+		in  = mpt{parts: make([]*MptPart, 0)}
+		out = &mpt{}
+	)
+	for i := int64(0); i < nump; i++ {
+		in.parts = append(in.parts, &MptPart{Num: 111 + i*i, MD5: trand.String(8), Size: 1024 + i})
+	}
+	b := in.pack()
+	if err := out.unpack(b); err != nil {
 		t.Fatal(err)
 	}
-	if uin.objName != uout.objName || len(uin.parts) != len(uout.parts) {
-		t.Fatalf("uin != uout: %s, %s, %d, %d", uin.objName, uout.objName, len(uin.parts), len(uout.parts))
+	if len(in.parts) != len(out.parts) {
+		t.Fatalf("in != out: %d, %d", len(in.parts), len(out.parts))
 	}
-	if *uin.parts[0] != *uout.parts[0] {
-		t.Fatalf("uin %v != uout %v", *uin.parts[0], *uout.parts[0])
-	}
-	if *uin.parts[1] != *uout.parts[1] {
-		t.Fatalf("uin %v != uout %v", *uin.parts[1], *uout.parts[1])
+	for i := 0; i < nump; i++ {
+		if *in.parts[i] != *out.parts[i] {
+			t.Fatalf("in %v != out %v", *in.parts[i], *out.parts[i])
+		}
 	}
 }

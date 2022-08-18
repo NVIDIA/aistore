@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -86,15 +87,19 @@ type (
 	}
 
 	// Active upload info
-	UploadInfo struct {
-		Key      string `xml:"Key"`
-		UploadID string `xml:"UploadId"`
+	UploadInfoResult struct {
+		Key       string    `xml:"Key"`
+		UploadID  string    `xml:"UploadId"`
+		Initiated time.Time `xml:"Initiated"`
 	}
 
 	// List of active multipart uploads response
 	ListMptUploadsResult struct {
-		Bucket  string        `xml:"Bucket"`
-		Uploads []*UploadInfo `xml:"Upload"`
+		Bucket         string             `xml:"Bucket"`
+		UploadIDMarker string             `xml:"UploadIdMarker"`
+		Uploads        []UploadInfoResult `xml:"Upload"`
+		MaxUploads     int
+		IsTruncated    bool
 	}
 )
 
@@ -130,7 +135,7 @@ func NewListObjectResult() *ListObjectResult {
 func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }
 
 func (r *ListObjectResult) Add(entry *cmn.BucketEntry, lsmsg *apc.ListObjsMsg) {
@@ -187,29 +192,29 @@ func SetETag(header http.Header, lom *cluster.LOM) {
 func (r *CopyObjectResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }
 
 func (r *InitiateMptUploadResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }
 
 func (r *CompleteMptUploadResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }
 
 func (r *ListPartsResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }
 
 func (r *ListMptUploadsResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }

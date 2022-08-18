@@ -69,7 +69,8 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			p.unsupported(w, r, apiItems[0])
 			return
 		}
-		if len(apiItems) == 1 {
+		listMultipart := q.Has(s3.QparamMptUploads)
+		if len(apiItems) == 1 && !listMultipart {
 			_, versioning := q[s3.QparamVersioning]
 			if versioning {
 				p.getBckVersioningS3(w, r, apiItems[0])
@@ -80,7 +81,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// object data otherwise
-		p.getObjS3(w, r, apiItems)
+		p.getObjS3(w, r, apiItems, q, listMultipart)
 	case http.MethodPut:
 		if len(apiItems) == 0 {
 			p.writeErr(w, r, errS3Req)
@@ -425,8 +426,8 @@ func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, items []string)
 	p.copyObjS3(w, r, items)
 }
 
-// GET s3/<bucket-name/<object-name>[?uuid=<etl-uuid>]
-func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+// GET s3/<bucket-name/<object-name>
+func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, listMultipart bool) {
 	bucket := items[0]
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
@@ -439,6 +440,10 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string)
 	)
 	if err = bck.Allow(apc.AceGET); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
+		return
+	}
+	if listMultipart {
+		p.listMultipart(w, r, bck, q)
 		return
 	}
 	if len(items) < 2 {
@@ -457,6 +462,52 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string)
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
 	p.s3Redirect(w, r, si, redirectURL, bck.Name)
+}
+
+func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, q url.Values) {
+	smap := p.owner.smap.get()
+	if smap.CountActiveTargets() == 1 {
+		si, err := cluster.HrwTarget(bck.MakeUname(""), &smap.Smap)
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		started := time.Now()
+		redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
+		p.s3Redirect(w, r, si, redirectURL, bck.Name)
+		return
+	}
+	// bcast & aggregate
+	all := &s3.ListMptUploadsResult{}
+	for _, si := range smap.Tmap {
+		var (
+			url   = si.URL(cmn.NetPublic)
+			cargs = allocCargs()
+		)
+		cargs.si = si
+		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: r.URL.Path, Query: q}
+		res := p.call(cargs)
+		b, err := res.bytes, res.err
+		freeCargs(cargs)
+		freeCR(res)
+		if err == nil {
+			results := &s3.ListMptUploadsResult{}
+			if err := xml.Unmarshal(b, results); err == nil {
+				if len(results.Uploads) > 0 {
+					if len(all.Uploads) == 0 {
+						*all = *results
+						all.Uploads = make([]s3.UploadInfoResult, 0)
+					}
+					all.Uploads = append(all.Uploads, results.Uploads...)
+				}
+			}
+		}
+	}
+	sgl := p.gmm.NewSGL(0)
+	all.MustMarshal(sgl)
+	w.Header().Set(cos.HdrContentType, cos.ContentXML)
+	sgl.WriteTo(w)
+	sgl.Free()
 }
 
 func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {

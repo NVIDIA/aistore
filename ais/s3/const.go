@@ -14,9 +14,11 @@ const (
 	QparamMultiDelete = "delete"
 
 	// multipart
-	QparamMptUploads  = "uploads"
-	QparamMptUploadID = "uploadId"
-	QparamMptPartNo   = "partNumber"
+	QparamMptUploads        = "uploads"
+	QparamMptUploadID       = "uploadId"
+	QparamMptPartNo         = "partNumber"
+	QparamMptMaxUploads     = "max-uploads"
+	QparamMptUploadIDMarker = "upload-id-marker"
 
 	versioningEnabled  = "Enabled"
 	versioningDisabled = "Suspended"

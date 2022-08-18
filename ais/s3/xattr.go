@@ -57,7 +57,6 @@ func (mpt *mpt) OffsetSorted(name string, num int64) (off, size int64, err error
 }
 
 func (mpt *mpt) packedSize() (size int) {
-	size = cos.SizeofLen + len(mpt.objName)
 	for _, part := range mpt.parts {
 		size += cos.SizeofI64 // num
 		size += cos.SizeofLen + len(part.MD5)
@@ -68,7 +67,6 @@ func (mpt *mpt) packedSize() (size int) {
 
 func (mpt *mpt) pack() []byte {
 	packer := cos.NewPacker(nil, mpt.packedSize())
-	packer.WriteString(mpt.objName)
 	for _, part := range mpt.parts {
 		packer.WriteInt64(part.Num)
 		packer.WriteString(part.MD5)
@@ -79,10 +77,7 @@ func (mpt *mpt) pack() []byte {
 
 func (mpt *mpt) unpack(b []byte) (err error) {
 	unpacker := cos.NewUnpacker(b)
-	debug.Assert(mpt.objName == "" && mpt.parts == nil)
-	if mpt.objName, err = unpacker.ReadString(); err != nil {
-		return
-	}
+	debug.Assert(mpt.parts == nil)
 	mpt.parts = make([]*MptPart, 0, iniCapParts)
 	for unpacker.Len() > 0 {
 		part := &MptPart{}
