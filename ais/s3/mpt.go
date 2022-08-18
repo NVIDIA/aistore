@@ -7,6 +7,7 @@ package s3
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -67,16 +68,29 @@ func CheckParts(id string, parts []*PartInfo) ([]*MptPart, error) {
 	if !ok {
 		return nil, fmt.Errorf("upload %q not found", id)
 	}
+	// first, check that all parts are present
+	var prev = int64(-1)
 	for _, part := range parts {
+		debug.Assert(part.PartNumber > prev) // must ascend
 		if upload.getPart(part.PartNumber) == nil {
 			return nil, fmt.Errorf("upload %q: part %d not found", id, part.PartNumber)
 		}
+		prev = part.PartNumber
 	}
+	// copy (to work on it with no locks)
 	nparts := make([]*MptPart, 0, len(parts))
 	for _, part := range parts {
 		nparts = append(nparts, upload.getPart(part.PartNumber))
 	}
 	return nparts, nil
+}
+
+func ParsePartNum(s string) (partNum int64, err error) {
+	partNum, err = strconv.ParseInt(s, 10, 16)
+	if err != nil {
+		err = fmt.Errorf("invalid part number %q (must be in 1-%d range): %v", s, MaxPartsPerUpload, err)
+	}
+	return
 }
 
 // Return a sum of upload part sizes.

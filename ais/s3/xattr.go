@@ -5,20 +5,23 @@
 package s3
 
 import (
+	"fmt"
+	"sort"
+
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 )
 
-const uploadXattrID = "user.ais.s3-multipart"
+const mptXattrID = "user.ais.s3-multipart"
 
 const iniCapParts = 8
 
-func LoadMptXattr(fqn string) (upload *mpt, err error) {
-	b, err := fs.GetXattr(fqn, uploadXattrID)
+func LoadMptXattr(fqn string) (out *mpt, err error) {
+	b, err := fs.GetXattr(fqn, mptXattrID)
 	if err == nil {
-		upload = &mpt{}
-		err = upload.unpack(b)
+		out = &mpt{}
+		err = out.unpack(b)
 		return
 	}
 	if cos.IsErrXattrNotFound(err) {
@@ -27,14 +30,31 @@ func LoadMptXattr(fqn string) (upload *mpt, err error) {
 	return
 }
 
-func storeMptXattr(fqn string, upload *mpt) (err error) {
-	b := upload.pack()
-	return fs.SetXattr(fqn, uploadXattrID, b)
+func storeMptXattr(fqn string, mpt *mpt) (err error) {
+	sort.Slice(mpt.parts, func(i, j int) bool {
+		return mpt.parts[i].Num < mpt.parts[j].Num
+	})
+	b := mpt.pack()
+	return fs.SetXattr(fqn, mptXattrID, b)
 }
 
 /////////
 // mpt //
 /////////
+
+func (mpt *mpt) OffsetSorted(name string, num int64) (off, size int64, err error) {
+	var prev = int64(-1)
+	for _, part := range mpt.parts {
+		debug.Assert(part.Num > prev) // must ascend
+		if part.Num == num {
+			size = part.Size
+			return
+		}
+		off += part.Size
+		prev = part.Num
+	}
+	return 0, 0, fmt.Errorf("invalid part number %d (%s has %d)", num, name, prev)
+}
 
 func (mpt *mpt) packedSize() (size int) {
 	size = cos.SizeofLen + len(mpt.objName)

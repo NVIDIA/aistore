@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/ais/s3"
@@ -58,9 +57,9 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 		t.writeErrMsg(w, r, "empty part number")
 		return
 	}
-	partNum, err := strconv.ParseInt(part, 10, 16)
+	partNum, err := s3.ParsePartNum(part)
 	if err != nil {
-		t.writeErrf(w, r, "%v (must be between 1 and %d)", err, s3.MaxPartsPerUpload)
+		t.writeErr(w, r, err)
 		return
 	}
 	if partNum < 1 || partNum > s3.MaxPartsPerUpload {
@@ -324,10 +323,42 @@ func (t *target) abortMptUpload(w http.ResponseWriter, r *http.Request, items []
 // See:
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
 func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, q url.Values) {
-	// TODO: write code
-	partNo := q.Get(s3.QparamMptPartNo)
-	_ = partNo
-
-	t.writeErrStatusf(w, r, http.StatusNotImplemented,
-		"%s/%s: GET part of the multipart upload is not implemented yet", bck.Name, objName)
+	lom := cluster.AllocLOM(objName)
+	defer cluster.FreeLOM(lom)
+	if err := lom.InitBck(bck.Bucket()); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	mpt, err := s3.LoadMptXattr(lom.FQN)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	if mpt == nil {
+		err := fmt.Errorf("%s: multipart state not found", lom)
+		t.writeErr(w, r, err, http.StatusNotFound)
+		return
+	}
+	partNum, err := s3.ParsePartNum(q.Get(s3.QparamMptPartNo))
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	off, size, err := mpt.OffsetSorted(lom.FullName(), partNum)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	fh, err := os.Open(lom.FQN)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	buf, slab := t.gmm.AllocSize(size)
+	reader := io.NewSectionReader(fh, off, size)
+	if _, err := io.CopyBuffer(w, reader, buf); err != nil {
+		t.writeErr(w, r, err)
+	}
+	cos.Close(fh)
+	slab.Free(buf)
 }
