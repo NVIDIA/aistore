@@ -2,6 +2,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #
 
+from itertools import cycle
 import unittest
 import hashlib
 import sys
@@ -265,6 +266,27 @@ class TestETLOps(unittest.TestCase):
         md5 = hashlib.md5()
         md5.update(self.content)
         self.assertEqual(obj, md5.hexdigest().encode())
+
+    def test_etl_api_xor(self):
+        def before(context):
+            context["key"] = b"AISTORE"
+
+        def transform(input_bytes, context):
+            return bytes(
+                [_a ^ _b for _a, _b in zip(input_bytes, cycle(context["key"]))]
+            )
+
+        self.client.etl().init_code(
+            transform=transform, before=before, etl_id="etl-xor1"
+        )
+        transformed_obj = (
+            self.client.bucket(self.bck_name)
+            .object(self.obj_name)
+            .get(etl_id="etl-xor1")
+            .read_all()
+        )
+
+        self.assertEqual(transform(transformed_obj, {"key": b"AISTORE"}), self.content)
 
 
 if __name__ == "__main__":
