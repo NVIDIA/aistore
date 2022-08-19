@@ -6,6 +6,7 @@ package api
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -194,7 +195,7 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 		IsClient:  true,
 	})
 	if err != nil && resp != nil {
-		httpErr := cmn.NewErrHTTP(req, err.Error(), resp.StatusCode)
+		httpErr := cmn.NewErrHTTP(req, err, resp.StatusCode)
 		httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 		err = httpErr
 	}
@@ -275,7 +276,7 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 	}
 	if reqParams.BaseParams.Method == http.MethodHead {
 		if msg := resp.Header.Get(cos.HdrError); msg != "" {
-			httpErr := cmn.NewErrHTTP(nil, msg, resp.StatusCode)
+			httpErr := cmn.NewErrHTTP(nil, errors.New(msg), resp.StatusCode)
 			httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 			return httpErr
 		}
@@ -296,7 +297,7 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 	}
 	// HEAD request does not return the body - create http error
 	// 503 is also to be preserved
-	httpErr = cmn.NewErrHTTP(nil, strMsg, resp.StatusCode)
+	httpErr = cmn.NewErrHTTP(nil, errors.New(strMsg), resp.StatusCode)
 	httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 	return httpErr
 }

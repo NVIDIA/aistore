@@ -1085,14 +1085,14 @@ func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
-	err := cmn.NewErrHTTP(r, fmt.Sprintf("invalid action %q", action))
+	err := cmn.NewErrHTTP(r, fmt.Errorf("invalid action %q", action), 0)
 	h.writeErr(w, r, err)
 }
 
 func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
 	format string, a ...interface{}) {
 	detail := fmt.Sprintf(format, a...)
-	err := cmn.NewErrHTTP(r, fmt.Sprintf("invalid action %q: %s", action, detail))
+	err := cmn.NewErrHTTP(r, fmt.Errorf("invalid action %q: %s", action, detail), 0)
 	h.writeErr(w, r, err)
 }
 
@@ -1122,7 +1122,7 @@ func (res *callResult) toErr() error {
 		if res.details != "" {
 			detail = "[" + res.details + "]"
 		}
-		return cmn.NewErrHTTP(nil, fmt.Sprintf("%v%s", res.err, detail), res.status)
+		return cmn.NewErrHTTP(nil, fmt.Errorf("%v%s", res.err, detail), res.status)
 	}
 	if res.details == "" {
 		return res.err

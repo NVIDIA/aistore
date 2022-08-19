@@ -249,23 +249,23 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 func validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
 	token, err := tok.ExtractToken(r.Header)
 	if err != nil {
-		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
+		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
 	}
 	secret := Conf.Secret()
 	tk, err := tok.DecryptToken(token, secret)
 	if err != nil {
-		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
+		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
 	}
 	if tk.Expires.Before(time.Now()) {
 		err := fmt.Errorf("not authorized: %s", tk)
-		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
+		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
 	}
 	if !tk.IsAdmin {
 		err := fmt.Errorf("not authorized: requires admin (%s)", tk)
-		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
+		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
 	}
 	return nil
@@ -294,7 +294,7 @@ func (h *hserv) userLogin(w http.ResponseWriter, r *http.Request) {
 	tokenString, err := h.mgr.issueToken(userID, pass, msg)
 	if err != nil {
 		glog.Errorf("Failed to generate token for user %q: %v\n", userID, err)
-		cmn.WriteErrMsg(w, r, err.Error(), http.StatusUnauthorized)
+		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 

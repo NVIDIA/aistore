@@ -141,7 +141,7 @@ type (
 	}
 	// Error structure for HTTP errors
 	ErrHTTP struct {
-		Status     int    `json:"status"`
+		TypeCode   string `json:"tcode,omitempty"`
 		Message    string `json:"message"`
 		Method     string `json:"method"`
 		URLPath    string `json:"url_path"`
@@ -149,6 +149,7 @@ type (
 		Caller     string `json:"caller"`
 		Node       string `json:"node"`
 		trace      []byte
+		Status     int `json:"status"`
 	}
 
 	ErrLmetaCorrupted struct {
@@ -695,23 +696,27 @@ func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
 // ErrHTTP //
 /////////////
 
-func NewErrHTTP(r *http.Request, msg string, opts ...int) (e *ErrHTTP) {
-	var errCode int
-	if len(opts) > 0 {
-		errCode = opts[0]
-	}
+func NewErrHTTP(r *http.Request, err error, errCode int) (e *ErrHTTP) {
 	e = &ErrHTTP{}
-	e.init(r, msg, errCode)
+	e.init(r, err, errCode)
 	return e
 }
 
-func (e *ErrHTTP) init(r *http.Request, msg string, errCode int) {
+func (e *ErrHTTP) init(r *http.Request, err error, errCode int) {
 	e.Status = http.StatusBadRequest
 	if errCode != 0 {
-		debug.Assert(errCode >= http.StatusBadRequest)
 		e.Status = errCode
 	}
-	e.Message = msg
+
+	tcode := fmt.Sprintf("%T", err)
+	if i := strings.Index(tcode, "."); i > 0 {
+		if pkg := tcode[:i]; pkg != "*errors" && pkg != "errors" {
+			tcode = tcode[i+1:]
+			e.TypeCode = tcode
+		}
+	}
+	e.Message = err.Error()
+
 	if r != nil {
 		e.Method, e.URLPath = r.Method, r.URL.Path
 		e.RemoteAddr = r.RemoteAddr
@@ -720,15 +725,21 @@ func (e *ErrHTTP) init(r *http.Request, msg string, errCode int) {
 	e.Node = thisNodeName
 }
 
-// Example:
-// Bad Request: Bucket abc does not appear to be local or does not exist:
-// DELETE /v1/buckets/abc from (127.0.0.1:54064, vhsjxq8000) stack: (httpcommon.go:840 <- proxy.go:484 <- proxy.go:264)
-func (e *ErrHTTP) String() (s string) {
-	if e.Status == http.StatusBadRequest || e.Status == http.StatusInternalServerError {
+func (e *ErrHTTP) Error() (s string) {
+	if e.TypeCode != "" {
+		s = e.TypeCode + ": " + e.Message
+	} else if e.Status == http.StatusBadRequest || e.Status == http.StatusInternalServerError {
 		s = e.Message
 	} else {
 		s = http.StatusText(e.Status) + ": " + e.Message
 	}
+	return
+}
+
+// Example:
+// ErrBckNotFound: bucket "ais://abc" does not exist: HEAD /v1/buckets/abc (p[kWQp8080]: htrun.go:1035 <- prxtrybck.go:180 <- ...
+func (e *ErrHTTP) _string() (s string) {
+	s = e.Error()
 	if e.Method != "" || e.URLPath != "" {
 		if !strings.HasSuffix(s, ".") {
 			s += ":"
@@ -746,10 +757,13 @@ func (e *ErrHTTP) String() (s string) {
 	if e.Caller != "" {
 		s += " (called by " + e.Caller + ")"
 	}
+	if len(e.trace) == 0 {
+		e._trace()
+	}
 	return s + " (" + string(e.trace) + ")"
 }
 
-func (e *ErrHTTP) Error() string {
+func (e *ErrHTTP) _jsonError() string {
 	// Stop from escaping `<`, `>` and `&`.
 	buf := new(bytes.Buffer)
 	enc := jsoniter.NewEncoder(buf)
@@ -761,18 +775,8 @@ func (e *ErrHTTP) Error() string {
 }
 
 func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
-	msg := e.Error()
-	if len(msg) > 0 {
-		// Error strings should not be capitalized (lint).
-		if c := msg[0]; c >= 'A' && c <= 'Z' {
-			msg = string(c+'a'-'A') + msg[1:]
-		}
-	}
-	if !strings.Contains(msg, stackTracePrefix) {
-		e.populateStackTrace()
-	}
 	if !silent {
-		s := e.String()
+		s := e._string()
 		if thisNodeName != "" && !strings.Contains(e.Message, thisNodeName) {
 			// node name instead of generic stack:
 			replaced1 := strings.Replace(s, stackTracePrefix, thisNodeName+": ", 1)
@@ -789,17 +793,15 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if r.Method == http.MethodHead {
-		w.Header().Set(cos.HdrError, e.Error())
+		w.Header().Set(cos.HdrError, e._jsonError())
 		w.WriteHeader(e.Status)
 	} else {
 		w.WriteHeader(e.Status)
-		fmt.Fprintln(w, e.Error())
+		fmt.Fprintln(w, e._jsonError())
 	}
 }
 
-func (e *ErrHTTP) populateStackTrace() {
-	debug.Assert(len(e.trace) == 0)
-
+func (e *ErrHTTP) _trace() {
 	buffer := bytes.NewBuffer(e.trace)
 	fmt.Fprint(buffer, stackTracePrefix)
 	for i := 1; i < 9; i++ {
@@ -862,16 +864,16 @@ func S2HTTPErr(r *http.Request, msg string, status int) *ErrHTTP {
 			return &httpErr
 		}
 	}
-	return NewErrHTTP(r, msg, status)
+	return NewErrHTTP(r, errors.New(msg), status)
 }
 
 func Err2HTTPErr(err error) *ErrHTTP {
-	if e, ok := err.(*ErrHTTP); ok {
-		return e
-	}
-	e := &ErrHTTP{}
-	if !errors.As(err, &e) {
-		e = nil
+	e, ok := err.(*ErrHTTP)
+	if !ok {
+		e = &ErrHTTP{}
+		if !errors.As(err, &e) {
+			return nil
+		}
 	}
 	return e
 }
@@ -919,14 +921,18 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 	} else if errf, ok := err.(*ErrFailedTo); ok {
 		status = errf.status
 	}
-	httpErr.init(r, err.Error(), status)
+	httpErr.init(r, err, status)
 	httpErr.write(w, r, l > 1)
 	freeHterr(httpErr)
 }
 
 // Create ErrHTTP (based on `msg` and `opts`) and write it into HTTP response.
 func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int) {
-	httpErr := NewErrHTTP(r, msg, opts...)
+	var errCode int
+	if len(opts) > 0 {
+		errCode = opts[0]
+	}
+	httpErr := NewErrHTTP(r, errors.New(msg), errCode)
 	httpErr.write(w, r, len(opts) > 1 /*silent*/)
 }
 

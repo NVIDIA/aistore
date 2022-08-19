@@ -128,26 +128,29 @@ func isUnreachableError(err error) (msg string, unreachable bool) {
 	return
 }
 
+func prepareError(err error, tcode string) error {
+	msg := err.Error()
+	red := color.New(color.FgRed).SprintFunc()
+	if strings.HasPrefix(msg, cluster.TnamePrefix) || strings.HasPrefix(msg, cluster.PnamePrefix) {
+		// not capitalizing
+	} else {
+		msg = cos.CapitalizeString(msg)
+	}
+	msg = strings.TrimRight(msg, "\n") // Remove newlines if any.
+	if tcode != "" {
+		msg = tcode + ": " + msg
+	}
+	return errors.New(red(msg))
+}
+
 // Formats the error message to a nice string
 func (aisCLI *AISCLI) handleCLIError(err error) error {
 	if err == nil {
 		return nil
 	}
-	var (
-		red          = color.New(color.FgRed).SprintFunc()
-		prepareError = func(msg string) error {
-			if strings.HasPrefix(msg, cluster.TnamePrefix) || strings.HasPrefix(msg, cluster.PnamePrefix) {
-				// not capitalizing
-			} else {
-				msg = cos.CapitalizeString(msg)
-			}
-			msg = strings.TrimRight(msg, "\n") // Remove newlines if any.
-			return errors.New(red(msg))
-		}
-	)
-
 	detailedErr, unreachable := isUnreachableError(err)
 	if unreachable {
+		red := color.New(color.FgRed).SprintFunc()
 		errmsg := fmt.Sprintf("AIStore cannot be reached at %s\n", clusterURL)
 		errmsg += fmt.Sprintf("Error: %s\n"+
 			"Make sure that environment variable %s points to an AIS gateway (any AIS gateway in the cluster)\n"+
@@ -155,16 +158,17 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 			detailedErr, env.AIS.Endpoint, config.Path())
 		return errors.New(red(errmsg))
 	}
+
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
-		return prepareError(err.Message)
+		return prepareError(err, err.TypeCode)
 	case *errUsage:
 		return err
 	case *errAdditionalInfo:
 		err.baseErr = aisCLI.handleCLIError(err.baseErr)
 		return err
 	default:
-		return prepareError(err.Error())
+		return prepareError(err, "")
 	}
 }
 

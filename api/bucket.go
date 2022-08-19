@@ -84,15 +84,8 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck) (p *cmn.BucketProps, err err
 			httpErr.Message = fmt.Sprintf("Bucket %q unauthorized access", bck)
 		case http.StatusForbidden:
 			httpErr.Message = fmt.Sprintf("Bucket %q access denied", bck)
-		case http.StatusNotFound:
-			httpErr.Message = fmt.Sprintf("Bucket %q not found", bck)
 		case http.StatusGone:
 			httpErr.Message = fmt.Sprintf("Bucket %q has been removed from the backend", bck)
-		default:
-			httpErr.Message = fmt.Sprintf(
-				"Failed to access bucket %q (code: %d)",
-				bck, httpErr.Status,
-			)
 		}
 		err = httpErr
 	}

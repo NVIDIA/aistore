@@ -1026,15 +1026,15 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 	_, err := api.GetObjectWithValidation(baseParams, bck, objName)
 	if err == nil {
 		t.Error("Error is nil, expected internal server error on a GET for an object")
-	} else if !strings.Contains(err.Error(), "500") {
-		t.Errorf("Expected internal server error on a GET for a corrupted object, got [%s]", err.Error())
+	} else if !strings.Contains(err.Error(), "ErrBadCksum") {
+		t.Errorf("Expected bad checksum error on a GET for a corrupted object, got [%v]", err)
 	}
 	// Execute another GET to make sure that the object is deleted
 	_, err = api.GetObjectWithValidation(baseParams, bck, objName)
 	if err == nil {
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
-	} else if !strings.Contains(err.Error(), "404") {
-		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%s]", err.Error())
+	} else if !strings.Contains(err.Error(), "ErrNotFound") {
+		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%v]", err)
 	}
 }
 
