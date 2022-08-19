@@ -53,6 +53,8 @@ type (
 		// 0 (zero) - read the entire payload in memory and then transform it in one shot;
 		// > 0 - use chunk-size buffering and transform incrementally, one chunk at a time
 		ChunkSize int64 `json:"chunk_size"`
+		// bitwise flags: (streaming | debug | strict | ...)
+		Flags int64 `json:"flags"`
 	}
 
 	InfoList []Info

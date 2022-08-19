@@ -184,6 +184,7 @@ func InitCode(t cluster.Target, msg *InitCodeMsg) error {
 func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	var (
 		chunk string
+		flags string
 		name  = k8s.CleanName(msg.IDX) // cleanup the `msg.ID` as K8s doesn't allow `_` and uppercase
 	)
 	ftp = make([]string, 0, 16)
@@ -196,6 +197,11 @@ func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 		chunk = "\"" + strconv.FormatInt(msg.ChunkSize, 10) + "\""
 	}
 	ftp = append(ftp, "<CHUNK_SIZE>", chunk)
+
+	if msg.Flags > 0 {
+		flags = "\"" + strconv.FormatInt(msg.Flags, 10) + "\""
+	}
+	ftp = append(ftp, "<FLAGS>", flags)
 
 	// functions
 	ftp = append(ftp, "<FUNC_FILTER>", msg.Funcs.Filter)

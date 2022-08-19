@@ -26,6 +26,8 @@ spec:
           value: <COMM_TYPE>
         - name: CHUNK_SIZE
           value: <CHUNK_SIZE>
+        - name: FLAGS
+          value: <FLAGS>
         - name: PYTHONPATH
           value: /runtime
       readinessProbe:
