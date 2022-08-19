@@ -208,13 +208,14 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.R
 		req    *http.Request
 		resp   *http.Response
 		cancel func()
+		url    = pc.uri + "/" + lom.Bck().Name + "/" + lom.ObjName
 	)
 	if timeout != 0 {
 		var ctx context.Context
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		req, err = http.NewRequestWithContext(ctx, http.MethodPut, pc.uri, fh)
+		req, err = http.NewRequestWithContext(ctx, http.MethodPut, url, fh)
 	} else {
-		req, err = http.NewRequest(http.MethodPut, pc.uri, fh)
+		req, err = http.NewRequest(http.MethodPut, url, fh)
 	}
 	if err != nil {
 		cos.Close(fh)
