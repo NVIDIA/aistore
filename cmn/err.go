@@ -702,6 +702,13 @@ func NewErrHTTP(r *http.Request, err error, errCode int) (e *ErrHTTP) {
 	return e
 }
 
+// uses `allocHterr` to allocate - caller must free via `FreeHterr`
+func InitErrHTTP(r *http.Request, err error, errCode int) (e *ErrHTTP) {
+	e = allocHterr()
+	e.init(r, err, errCode)
+	return e
+}
+
 func (e *ErrHTTP) init(r *http.Request, err error, errCode int) {
 	e.Status = http.StatusBadRequest
 	if errCode != 0 {
@@ -885,7 +892,7 @@ func err2HTTP(err error) (*ErrHTTP, bool) {
 	}
 	e := allocHterr()
 	if !errors.As(err, &e) {
-		freeHterr(e)
+		FreeHterr(e)
 		return nil, false
 	}
 	return e, true
@@ -905,7 +912,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 		}
 		httpErr.write(w, r, len(opts) > 1 /*silent*/)
 		if allocated {
-			freeHterr(httpErr)
+			FreeHterr(httpErr)
 		}
 		return
 	}
@@ -923,7 +930,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 	}
 	httpErr.init(r, err, status)
 	httpErr.write(w, r, l > 1)
-	freeHterr(httpErr)
+	FreeHterr(httpErr)
 }
 
 // Create ErrHTTP (based on `msg` and `opts`) and write it into HTTP response.
@@ -932,8 +939,9 @@ func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int
 	if len(opts) > 0 {
 		errCode = opts[0]
 	}
-	httpErr := NewErrHTTP(r, errors.New(msg), errCode)
+	httpErr := InitErrHTTP(r, errors.New(msg), errCode)
 	httpErr.write(w, r, len(opts) > 1 /*silent*/)
+	FreeHterr(httpErr)
 }
 
 // 405 Method Not Allowed, see: https://tools.ietf.org/html/rfc2616#section-10.4.6
@@ -963,7 +971,7 @@ func allocHterr() (a *ErrHTTP) {
 	return &ErrHTTP{}
 }
 
-func freeHterr(a *ErrHTTP) {
+func FreeHterr(a *ErrHTTP) {
 	trace := a.trace
 	*a = err0
 	if trace != nil {

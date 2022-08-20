@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 // PUT s3/bckName/objName
@@ -115,7 +114,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		LastModified: s3.FormatTime(lom.Atime()),
 		ETag:         cksumValue,
 	}
-	sgl := memsys.PageMM().NewSGL(0)
+	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)

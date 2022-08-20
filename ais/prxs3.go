@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -44,7 +43,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodHead:
 		if len(apiItems) == 0 {
-			p.writeErr(w, r, errS3Req)
+			s3.WriteErr(w, r, errS3Req, 0)
 			return
 		}
 		if len(apiItems) == 1 {
@@ -84,7 +83,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		p.getObjS3(w, r, apiItems, q, listMultipart)
 	case http.MethodPut:
 		if len(apiItems) == 0 {
-			p.writeErr(w, r, errS3Req)
+			s3.WriteErr(w, r, errS3Req, 0)
 			return
 		}
 		if len(apiItems) == 1 {
@@ -105,17 +104,17 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(apiItems) != 1 {
-			p.writeErr(w, r, errS3Req)
+			s3.WriteErr(w, r, errS3Req, 0)
 			return
 		}
 		if _, multiple := q[s3.QparamMultiDelete]; !multiple {
-			p.writeErr(w, r, errS3Req)
+			s3.WriteErr(w, r, errS3Req, 0)
 			return
 		}
 		p.delMultipleObjs(w, r, apiItems[0])
 	case http.MethodDelete:
 		if len(apiItems) == 0 {
-			p.writeErr(w, r, errS3Req)
+			s3.WriteErr(w, r, errS3Req, 0)
 			return
 		}
 		if len(apiItems) == 1 {
@@ -150,7 +149,7 @@ func (p *proxy) bckNamesToS3(w http.ResponseWriter) {
 		}
 		return false
 	})
-	sgl := memsys.PageMM().NewSGL(0)
+	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
@@ -165,7 +164,7 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	}
 	bck := cluster.NewBck(bucket, apc.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Validate(); err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if err := p.createBucket(&msg, bck); err != nil {
@@ -173,7 +172,7 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
 			errCode = http.StatusConflict
 		}
-		p.writeErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, errCode)
 	}
 }
 
@@ -182,11 +181,11 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err, http.StatusNotFound)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	if err := bck.Allow(apc.AceDestroyBucket); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	msg := apc.ActionMsg{Action: apc.ActDestroyBck}
@@ -199,7 +198,7 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 			glog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
 			return
 		}
-		p.writeErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, errCode)
 	}
 }
 
@@ -207,18 +206,18 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 	bucket := parts[0]
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err, http.StatusNotFound)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	if err := bck.Allow(apc.AcePUT); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	smap := p.owner.smap.get()
 	objName := s3.ObjName(parts)
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	started := time.Now()
@@ -233,17 +232,17 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err, http.StatusNotFound)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	if err := bck.Allow(apc.AceObjDELETE); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)
 	objList := &s3.Delete{}
 	if err := decoder.Decode(objList); err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if len(objList.Object) == 0 {
@@ -269,11 +268,11 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	query.Set(apc.QparamProvider, apc.ProviderAIS)
 	if err := jsoniter.Unmarshal(bt, &msg2); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "list-range action message", cos.BHead(bt), err)
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if _, err := p.doListRange(r.Method, bucket, &msg2, query); err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 	}
 }
 
@@ -281,11 +280,11 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err, http.StatusNotFound)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	if err := bck.Allow(apc.AceBckHEAD); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	// From https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html:
@@ -305,7 +304,7 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	lsmsg := apc.ListObjsMsg{UUID: cos.GenUUID(), TimeFormat: time.RFC3339}
@@ -322,14 +321,14 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 		objList, err = p.listObjectsRemote(bck, &lsmsg)
 	}
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 
 	resp := s3.NewListObjectResult()
 	resp.ContinuationToken = lsmsg.ContinuationToken
 	resp.FillFromAisBckList(objList, &lsmsg)
-	sgl := memsys.PageMM().NewSGL(0)
+	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
@@ -342,23 +341,23 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 	src = strings.Trim(src, "/")
 	parts := strings.SplitN(src, "/", 2)
 	if len(parts) < 2 {
-		p.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	// src
 	bckSrc, err := cluster.InitByNameOnly(parts[0], p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	if err := bckSrc.Allow(apc.AceGET); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	// dst
 	bckDst, err := cluster.InitByNameOnly(items[0], p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	var (
@@ -366,13 +365,13 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		smap = p.owner.smap.get()
 	)
 	if err = bckDst.Allow(apc.AcePUT); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	objName := strings.Trim(parts[1], "/")
 	si, err = cluster.HrwTarget(bckSrc.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -388,7 +387,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 	bucket := items[0]
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	var (
@@ -396,17 +395,17 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		smap = p.owner.smap.get()
 	)
 	if err = bck.Allow(apc.AcePUT); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	if len(items) < 2 {
-		p.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	objName := s3.ObjName(items)
 	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -431,7 +430,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 	bucket := items[0]
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	var (
@@ -439,7 +438,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		smap = p.owner.smap.get()
 	)
 	if err = bck.Allow(apc.AceGET); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	if listMultipart {
@@ -447,13 +446,13 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		return
 	}
 	if len(items) < 2 {
-		p.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	objName := s3.ObjName(items)
 	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -469,7 +468,7 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *clust
 	if smap.CountActiveTargets() == 1 {
 		si, err := cluster.HrwTarget(bck.MakeUname(""), &smap.Smap)
 		if err != nil {
-			p.writeErr(w, r, err)
+			s3.WriteErr(w, r, err, 0)
 			return
 		}
 		started := time.Now()
@@ -512,23 +511,23 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *clust
 
 func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
-		p.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	bucket, objName := items[0], s3.ObjName(items)
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	if err := bck.Allow(apc.AceObjHEAD); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.writeErr(w, r, err, http.StatusInternalServerError)
+		s3.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -543,7 +542,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 	bucket := items[0]
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	var (
@@ -551,17 +550,17 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		smap = p.owner.smap.get()
 	)
 	if err = bck.Allow(apc.AceObjDELETE); err != nil {
-		p.writeErr(w, r, err, http.StatusForbidden)
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	if len(items) < 2 {
-		p.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	objName := s3.ObjName(items)
 	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -576,11 +575,11 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	resp := s3.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
-	sgl := memsys.PageMM().NewSGL(0)
+	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
@@ -590,7 +589,7 @@ func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 // GET s3/bk-name?lifecycle|cors|policy|acl
 func (p *proxy) unsupported(w http.ResponseWriter, r *http.Request, bucket string) {
 	if _, err := cluster.InitByNameOnly(bucket, p.owner.bmd); err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusNotImplemented)
@@ -604,14 +603,14 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	}
 	bck, err := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)
 	defer cos.Close(r.Body)
 	vconf := &s3.VersioningConfiguration{}
 	if err := decoder.Decode(vconf); err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	enabled := vconf.Enabled()
@@ -621,10 +620,10 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	// make and validate new props
 	nprops, err := p.makeNewBckProps(bck, &propsToUpdate)
 	if err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if _, err := p.setBucketProps(msg, bck, nprops); err != nil {
-		p.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 	}
 }

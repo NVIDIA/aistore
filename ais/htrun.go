@@ -1085,15 +1085,17 @@ func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
-	err := cmn.NewErrHTTP(r, fmt.Errorf("invalid action %q", action), 0)
+	err := cmn.InitErrHTTP(r, fmt.Errorf("invalid action %q", action), 0)
 	h.writeErr(w, r, err)
+	cmn.FreeHterr(err)
 }
 
 func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
 	format string, a ...interface{}) {
 	detail := fmt.Sprintf(format, a...)
-	err := cmn.NewErrHTTP(r, fmt.Errorf("invalid action %q: %s", action, detail), 0)
+	err := cmn.InitErrHTTP(r, fmt.Errorf("invalid action %q: %s", action, detail), 0)
 	h.writeErr(w, r, err)
+	cmn.FreeHterr(err)
 }
 
 ////////////////
