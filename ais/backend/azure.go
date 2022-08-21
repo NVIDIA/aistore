@@ -8,6 +8,7 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -151,26 +152,34 @@ func NewAzure(t cluster.Target) (cluster.BackendProvider, error) {
 }
 
 func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, error) {
+	bckNotFound, status, err := _toErr(azureError, bck, objName)
+	if bckNotFound {
+		return status, err
+	}
+	return status, errors.New("azure-error[" + err.Error() + "]")
+}
+
+func _toErr(azureError error, bck *cmn.Bck, objName string) (bool, int, error) {
 	stgErr, ok := azureError.(azblob.StorageError)
 	if !ok {
-		return http.StatusInternalServerError, azureError
+		return false, http.StatusInternalServerError, azureError
 	}
 	switch stgErr.ServiceCode() {
 	case azblob.ServiceCodeContainerNotFound:
-		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
+		return true, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	case azblob.ServiceCodeBlobNotFound:
 		err := fmt.Errorf("%s/%s not found", bck, objName)
-		return http.StatusNotFound, cmn.NewErrHTTP(nil, err, http.StatusNotFound)
+		return false, http.StatusNotFound, cmn.NewErrHTTP(nil, err, http.StatusNotFound)
 	case azblob.ServiceCodeInvalidResourceName:
 		err := fmt.Errorf("%s/%s not found", bck, objName)
-		return http.StatusNotFound, cmn.NewErrHTTP(nil, err, http.StatusNotFound)
+		return false, http.StatusNotFound, cmn.NewErrHTTP(nil, err, http.StatusNotFound)
 	default:
 		resp := stgErr.Response()
 		if resp != nil {
 			resp.Body.Close()
-			return resp.StatusCode, azureError
+			return false, resp.StatusCode, azureError
 		}
-		return http.StatusInternalServerError, azureError
+		return false, http.StatusInternalServerError, azureError
 	}
 }
 

@@ -584,5 +584,5 @@ func cleanError(awsError error) error {
 		// `idx+1` because we want to remove `\n`.
 		msg += " (" + origErrMsg[idx+1:] + ")"
 	}
-	return errors.New(msg)
+	return errors.New("aws-error[" + msg + "]")
 }

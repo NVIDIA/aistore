@@ -441,7 +441,7 @@ func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 	} else if gcpError == storage.ErrObjectNotExist {
 		status = http.StatusNotFound
 	}
-	return status, gcpError
+	return status, errors.New("gcp-error[" + gcpError.Error() + "]")
 }
 
 func handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {

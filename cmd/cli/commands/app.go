@@ -128,7 +128,7 @@ func isUnreachableError(err error) (msg string, unreachable bool) {
 	return
 }
 
-func prepareError(err error, tcode string) error {
+func redErr(err error) error {
 	msg := err.Error()
 	red := color.New(color.FgRed).SprintFunc()
 	if strings.HasPrefix(msg, cluster.TnamePrefix) || strings.HasPrefix(msg, cluster.PnamePrefix) {
@@ -136,10 +136,7 @@ func prepareError(err error, tcode string) error {
 	} else {
 		msg = cos.CapitalizeString(msg)
 	}
-	msg = strings.TrimRight(msg, "\n") // Remove newlines if any.
-	if tcode != "" {
-		msg = tcode + ": " + msg
-	}
+	msg = strings.TrimRight(msg, "\n")
 	return errors.New(red(msg))
 }
 
@@ -161,14 +158,14 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
-		return prepareError(err, err.TypeCode)
+		return redErr(err)
 	case *errUsage:
 		return err
 	case *errAdditionalInfo:
 		err.baseErr = aisCLI.handleCLIError(err.baseErr)
 		return err
 	default:
-		return prepareError(err, "")
+		return redErr(err)
 	}
 }
 

@@ -714,16 +714,13 @@ func (e *ErrHTTP) init(r *http.Request, err error, errCode int) {
 	if errCode != 0 {
 		e.Status = errCode
 	}
-
 	tcode := fmt.Sprintf("%T", err)
 	if i := strings.Index(tcode, "."); i > 0 {
 		if pkg := tcode[:i]; pkg != "*errors" && pkg != "errors" {
-			tcode = tcode[i+1:]
-			e.TypeCode = tcode
+			e.TypeCode = tcode[i+1:]
 		}
 	}
 	e.Message = err.Error()
-
 	if r != nil {
 		e.Method, e.URLPath = r.Method, r.URL.Path
 		e.RemoteAddr = r.RemoteAddr
@@ -733,14 +730,12 @@ func (e *ErrHTTP) init(r *http.Request, err error, errCode int) {
 }
 
 func (e *ErrHTTP) Error() (s string) {
-	if e.TypeCode != "" {
-		s = e.TypeCode + ": " + e.Message
-	} else if e.Status == http.StatusBadRequest || e.Status == http.StatusInternalServerError {
-		s = e.Message
-	} else {
-		s = http.StatusText(e.Status) + ": " + e.Message
+	if e.TypeCode != "" && e.TypeCode != "ErrFailedTo" {
+		if !strings.Contains(e.Message, e.TypeCode+":") {
+			return e.TypeCode + ": " + e.Message
+		}
 	}
-	return
+	return e.Message
 }
 
 // Example:

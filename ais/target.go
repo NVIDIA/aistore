@@ -900,7 +900,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 				err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
 				t.writeErrSilent(w, r, err, code)
 			} else {
-				err = cmn.NewErrFailedTo(t, "HEAD remote", apireq.bck, err, code)
+				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", apireq.bck, err, code)
 				if cos.IsParseBool(apireq.query.Get(apc.QparamSilent)) {
 					t.writeErrSilent(w, r, err, code)
 				} else {
