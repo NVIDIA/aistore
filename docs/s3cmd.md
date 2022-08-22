@@ -9,22 +9,39 @@ redirect_from:
 
 While the preferred and recommended management client for AIStore is its own [CLI](/docs/cli.md), Amazon's [`s3cmd`](https://s3tools.org/s3cmd) client can also be used, with certain minor limitations.
 
-## TODO
+But first:
 
-Using `s3cmd` to operate on remote and AIS buckets - as long as those buckets can be unambiguously resolved by name.
+## A quick example using `s3cmd` to operate on any buckets
+
+AIStore is a multi-cloud mutli-backend solution: an AIS cluster can simultaneously access `ais://`, `s3://`, `gs://`, etc. buckets.
+
+> For background on supported Cloud and non-Cloud backends, please see [Backend Providers](providers.md)
+
+However:
+
+When we use 3rd party clients, such as `s3cmd` and `aws`, we must impose a certain limitation: buckets in question must be unambiguously resolvable by name.
+
+The following shows (native) `ais` and (Amazon's) `s3cmd` CLI that in many cases can be used interchangeably. There is a single bucket named `abc` and we access it using the two aforementioned clients.
+
+But again, if we want to use `s3cmd` (or `aws`, etc.), there must be a **single `abc` bucket** across all providers.
+
+> Notice that with `s3cmd` we must always use `s3://` prefix.
 
 ```console
 $ ais ls ais:
 $ ais bucket create ais://abc
 "ais://abc" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)
+
 $ ais bucket props set ais://abc checksum.type=md5
 Bucket props successfully updated
 "checksum.type" set to: "md5" (was: "xxhash")
+
 $ s3cmd put README.md s3://abc
 upload: 'README.md' -> 's3://abc/README.md'  [1 of 1]
  10689 of 10689   100% in    0s     3.13 MB/s  done
 upload: 'README.md' -> 's3://abc/README.md'  [1 of 1]
  10689 of 10689   100% in    0s     4.20 MB/s  done
+
 $ s3cmd rm s3://abc/README.md
 delete: 's3://abc/README.md'
 ```
@@ -41,6 +58,7 @@ upload: 'README.md' -> 's3://my-s3-bucket/README.md'  [1 of 1]
  10689 of 10689   100% in    0s     3.13 MB/s  done
 upload: 'README.md' -> 's3://abc/README.md'  [1 of 1]
  10689 of 10689   100% in    0s     4.20 MB/s  done
+
 $ s3cmd rm s3://my-s3-bucket/README.md
 delete: 's3://my-s3-bucket/README.md'
 ```
@@ -50,10 +68,11 @@ delete: 's3://my-s3-bucket/README.md'
 - [`s3cmd` Configuration](#s3cmd-configuration)
 - [Getting Started](#getting-started)
   - [1. AIS Endpoint](#1-ais-endpoint)
-  - [2. How to have `s3cmd` call AIS endpoint](#2-how-to-have-s3cmd-call-ais-endpoint)
+  - [2. How to have `s3cmd` calling AIS endpoint](#2-how-to-have-s3cmd-calling-ais-endpoint)
   - [3. Alternatively](#3-alternatively)
   - [4. Notice and possibly update AIS configuration](#4-notice-and-possibly-update-ais-configuration)
   - [5. Create bucket and PUT/GET objects using `s3cmd`](#5-create-bucket-and-putget-objects-using-s3cmd)
+  - [6. Multipart upload using `s3cmd`](#6-multipart-upload-using-s3cmd)
 - [S3 URI and Further References](#s3-uri-and-further-references)
 
 ## `s3cmd` Configuration
@@ -138,7 +157,7 @@ For example: given AIS gateway at `10.10.0.1:51080` (where `51080` would be the 
 
 > **NOTE** the `/s3` suffix. It is important to have it in all subsequent `s3cmd` requests to AIS, and the surest way to achieve that is to have it in the endpoint.
 
-### 2. How to have `s3cmd` call AIS endpoint
+### 2. How to have `s3cmd` calling AIS endpoint
 
 But then the question is, how to transfer AIS endpoint into `s3cmd` commands. There are several ways; the one we show here is probably the easiest, exemplified by the `diff` below:
 
@@ -290,6 +309,71 @@ download: 's3://mmm/saved-readme.md -> '/tmp/copied-readme.md'  [1 of 1]
 ```
 
 And so on.
+
+### 6. Multipart upload using `s3cmd`
+
+In this section, we use updated `.s3cfg` to avoid typing much longer command lines that contain `--host` and `--host-bucket` options.
+
+In other words, we simplify `s3cmd` commands using the following local configuration update:
+
+```diff
+$ diff -uN ~/.s3cfg.orig ~/.s3cfg
+--- /root/.s3cfg.orig
++++ /root/.s3cfg
+@@ -31,6 +31,8 @@
+ guess_mime_type = True
+ host_base = s3.amazonaws.com
+ host_bucket = %(bucket)s.s3.amazonaws.com
++host_base = localhost:8080/s3
++host_bucket = localhost:8080/s3
+ human_readable_sizes = False
+ invalidate_default_index_on_cf = False
+ invalidate_default_index_root_on_cf = True
+```
+
+Goes without saying that `localhost:8080` (above) can be replaced with any legitimate (http or https) address of any AIS gateway.
+
+The following further assumes that `abc` is an AIStore bucket, while `my-s3-bucket` is S3 bucket that _this_ AIStore cluster can access.
+
+> The cluster must be deployed with [AWS credentials](https://docs.aws.amazon.com/sdk-for-php/v3/developer-guide/guide_credentials_profiles.html) to list, read, and write `my-s3-bucket`.
+
+```console
+# Upload 50MB aisnode executable in 5MB chunks
+$ s3cmd put /go/bin/aisnode s3://abc --multipart-chunk-size-mb=5
+
+# Notice the `ais://` prefix:
+$ ais ls ais://abc
+NAME      SIZE
+aisnode   50.98MiB
+
+# When using Amazon clients, we have to resort to always use s3://:
+$ s3cmd ls s3://abc
+2022-08-22 13:04  53452800   s3://abc/aisnode
+
+# Confirm via `ls`:
+$ ls -al /go/bin/aisnode
+-rwxr-xr-x 1 root root 53452800 Aug 22 12:17 /root/gocode/bin/aisnode*
+```
+
+Uploading `s3://my-s3-bucket` looks absolutely identical with a one notable difference: consistently using `s3:` (or `aws://`) prefix:
+
+```console
+# Upload 50MB aisnode executable in 7MB chunks
+$ s3cmd put /go/bin/aisnode s3://my-s3-bucket --multipart-chunk-size-mb=7
+
+$ ais ls s3://my-s3-bucket
+NAME      SIZE
+aisnode   50.98MiB
+
+$ s3cmd ls s3://my-s3-bucket
+2022-08-22 13:04  53452800   s3://my-s3-bucket/aisnode
+```
+
+Use `s3cmd multipart` to show any/all ongoing uploads to `s3://my-s3-bucket` (or any other bucket):
+
+```console
+$ s3cmd multipart s3://my-s3-bucket
+```
 
 ## S3 URI and Further References
 

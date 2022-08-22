@@ -25,6 +25,7 @@ For additional background, see:
 
 ## Table of Contents
 
+- [Quick example using `aws` CLI](quick-example-using-aws-cli)
 - [`s3cmd` command line](s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
 - [Last Modification Time](#last-modification-time)
@@ -34,6 +35,37 @@ For additional background, see:
 - [TensorFlow Demo](#tensorflow-demo)
 - [S3 Compatibility](#s3-compatibility)
 - [Boto3 Compatibility](#boto3-compatibility)
+
+## Quick example using `aws` CLI
+
+```console
+$ aws --endpoint-url http://localhost:8080/s3 s3 mb s3://abc
+make_bucket: abc
+$ ais put README.md ais://abc
+PUT "README.md" to ais://abc
+```
+
+Alternatively, PUT via `aws`:
+
+```console
+$ aws --endpoint-url http://localhost:8080/s3 s3api put-object --bucket abc --key LICENSE --body LICENSE
+$ ais ls ais://abc
+NAME             SIZE
+LICENSE          1.05KiB
+README.md        10.44KiB
+```
+
+and GET as well:
+
+```console
+$ aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket abc --key README.md /tmp/readme
+{
+    "ContentType": "text/plain; charset=utf-8",
+    "Metadata": {},
+    "ContentLength": 10689
+}
+$ diff -uN README.md /tmp/readme
+```
 
 ## `s3cmd` command line
 
