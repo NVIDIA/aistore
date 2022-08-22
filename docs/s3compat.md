@@ -25,8 +25,8 @@ For additional background, see:
 
 ## Table of Contents
 
-- [Quick example using `aws` CLI](quick-example-using-aws-cli)
-- [`s3cmd` command line](s3cmd-command-line)
+- [Quick example using `aws` CLI](#quick-example-using-aws-cli)
+- [`s3cmd` command line](#s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
 - [Last Modification Time](#last-modification-time)
 - [More Usage Examples](#more-usage-examples)
