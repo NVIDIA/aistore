@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -34,16 +35,16 @@ type (
 )
 
 var (
-	up uploads
-	mu sync.RWMutex
+	ups uploads
+	mu  sync.RWMutex
 )
 
-func Init() { up = make(uploads) }
+func Init() { ups = make(uploads) }
 
 // Start miltipart upload
 func InitUpload(id, bckName, objName string) {
 	mu.Lock()
-	up[id] = &mpt{
+	ups[id] = &mpt{
 		bckName: bckName,
 		objName: objName,
 		parts:   make([]*MptPart, 0, iniCapParts),
@@ -57,11 +58,11 @@ func InitUpload(id, bckName, objName string) {
 // md5 and fqn is filled by a target after successful saving the data to a workfile.
 func AddPart(id string, npart *MptPart) (err error) {
 	mu.Lock()
-	upload, ok := up[id]
+	mpt, ok := ups[id]
 	if !ok {
 		err = fmt.Errorf("upload %q not found (%s, %d)", id, npart.FQN, npart.Num)
 	} else {
-		upload.parts = append(upload.parts, npart)
+		mpt.parts = append(mpt.parts, npart)
 	}
 	mu.Unlock()
 	return
@@ -71,7 +72,7 @@ func AddPart(id string, npart *MptPart) (err error) {
 func CheckParts(id string, parts []*PartInfo) ([]*MptPart, error) {
 	mu.RLock()
 	defer mu.RUnlock()
-	upload, ok := up[id]
+	mpt, ok := ups[id]
 	if !ok {
 		return nil, fmt.Errorf("upload %q not found", id)
 	}
@@ -79,7 +80,7 @@ func CheckParts(id string, parts []*PartInfo) ([]*MptPart, error) {
 	var prev = int64(-1)
 	for _, part := range parts {
 		debug.Assert(part.PartNumber > prev) // must ascend
-		if upload.getPart(part.PartNumber) == nil {
+		if mpt.getPart(part.PartNumber) == nil {
 			return nil, fmt.Errorf("upload %q: part %d not found", id, part.PartNumber)
 		}
 		prev = part.PartNumber
@@ -87,7 +88,7 @@ func CheckParts(id string, parts []*PartInfo) ([]*MptPart, error) {
 	// copy (to work on it with no locks)
 	nparts := make([]*MptPart, 0, len(parts))
 	for _, part := range parts {
-		nparts = append(nparts, upload.getPart(part.PartNumber))
+		nparts = append(nparts, mpt.getPart(part.PartNumber))
 	}
 	return nparts, nil
 }
@@ -104,11 +105,11 @@ func ParsePartNum(s string) (partNum int64, err error) {
 // Used on upload completion to calculate the final size of the object.
 func ObjSize(id string) (size int64, err error) {
 	mu.RLock()
-	upload, ok := up[id]
+	mpt, ok := ups[id]
 	if !ok {
 		err = fmt.Errorf("upload %q not found", id)
 	} else {
-		for _, part := range upload.parts {
+		for _, part := range mpt.parts {
 			size += part.Size
 		}
 	}
@@ -118,53 +119,32 @@ func ObjSize(id string) (size int64, err error) {
 
 // remove all temp files and delete from the map
 // if completed (i.e., not aborted): store xattr
-func FinishUpload(id, fqn string, aborted bool) {
+func FinishUpload(id, fqn string, aborted bool) (exists bool) {
 	mu.Lock()
-	upload, ok := up[id]
+	mpt, ok := ups[id]
 	if !ok {
 		mu.Unlock()
-		debug.AssertMsg(aborted, fqn+": "+id)
-		return
+		glog.Warningf("fqn %s, id %s", fqn, id)
+		return false
 	}
+	delete(ups, id)
+	mu.Unlock()
+
 	if !aborted {
-		err := storeMptXattr(fqn, upload)
-		debug.AssertNoErr(err)
+		if err := storeMptXattr(fqn, mpt); err != nil {
+			glog.Warningf("fqn %s, id %s: %v", fqn, id, err)
+		}
 	}
-	for _, part := range upload.parts {
+	for _, part := range mpt.parts {
 		_ = os.RemoveAll(part.FQN)
 	}
-	delete(up, id)
-	mu.Unlock()
-}
-
-// Returns the info about active upload with ID
-func GetUpload(id string) (upload *mpt, err error) {
-	mu.RLock()
-	upload, err = _getup(id)
-	mu.RUnlock()
-	return
-}
-
-func _getup(id string) (*mpt, error) {
-	upload, ok := up[id]
-	if !ok {
-		return nil, fmt.Errorf("upload %q not found", id)
-	}
-	return upload, nil
-}
-
-// Returns true if there is active upload with ID
-func UploadExists(id string) bool {
-	mu.RLock()
-	_, ok := up[id]
-	mu.RUnlock()
-	return ok
+	return true
 }
 
 func ListUploads(bckName, idMarker string, maxUploads int) (result *ListMptUploadsResult) {
 	mu.RLock()
-	results := make([]UploadInfoResult, 0, len(up))
-	for id, mpt := range up {
+	results := make([]UploadInfoResult, 0, len(ups))
+	for id, mpt := range ups {
 		results = append(results, UploadInfoResult{Key: mpt.objName, UploadID: id, Initiated: mpt.ctime})
 	}
 	mu.RUnlock()
@@ -194,9 +174,9 @@ func ListUploads(bckName, idMarker string, maxUploads int) (result *ListMptUploa
 
 func ListParts(id string, lom *cluster.LOM) ([]*PartInfo, error) {
 	mu.RLock()
-	mpt, err := _getup(id)
-	if err != nil {
-		// TODO: check
+	mpt, ok := ups[id]
+	if !ok {
+		var err error
 		mpt, err = LoadMptXattr(lom.FQN)
 		if err != nil || mpt == nil {
 			mu.RUnlock()

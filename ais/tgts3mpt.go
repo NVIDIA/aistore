@@ -247,7 +247,8 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	t.FinalizeObj(lom, objWorkfile, nil)
 
 	// 6. mpt state => xattr
-	s3.FinishUpload(uploadID, lom.FQN, false /*aborted*/)
+	exists := s3.FinishUpload(uploadID, lom.FQN, false /*aborted*/)
+	debug.Assert(exists)
 
 	// 7. respond
 	result := &s3.CompleteMptUploadResult{Bucket: bck.Name, Key: objName, ETag: objETag}
@@ -321,11 +322,11 @@ func (t *target) abortMptUpload(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 	uploadID := q.Get(s3.QparamMptUploadID)
-	if !s3.UploadExists(uploadID) {
+	exists := s3.FinishUpload(uploadID, "", true /*aborted*/)
+	if !exists {
 		t.writeErrStatusf(w, r, http.StatusNotFound, "upload %q does not exist", uploadID)
 		return
 	}
-	s3.FinishUpload(uploadID, "", true /*aborted*/)
 
 	// Respond with status 204(!see the docs) and empty body.
 	w.WriteHeader(http.StatusNoContent)

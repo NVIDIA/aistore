@@ -1,0 +1,5 @@
+Bucket 's3://$BUCKET/' created
+Bucket props successfully updated
+"checksum.type" set to:"md5" (was:"xxhash")
+testfile 11.29MiB
+Bucket 's3://$BUCKET/' removed
