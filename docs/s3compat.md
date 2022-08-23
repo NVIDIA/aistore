@@ -38,16 +38,26 @@ For additional background, see:
 
 ## Quick example using `aws` CLI
 
+The following was tested with an _older_ version of `aws` CLI, namely:
+
+```console
+$ aws --version
+aws-cli/1.15.58 Python/3.5.2 Linux/5.4.0-124-generic botocore/1.10.57
+```
+
+You can create buckets and execute PUT/GET verbs, etc.
+
 ```console
 $ aws --endpoint-url http://localhost:8080/s3 s3 mb s3://abc
 make_bucket: abc
-$ ais put README.md ais://abc
-PUT "README.md" to ais://abc
 ```
 
-Alternatively, PUT via `aws`:
-
 ```console
+# PUT using AIS CLI:
+$ ais put README.md ais://abc
+
+# The same via `aws`:
+PUT "README.md" to ais://abc
 $ aws --endpoint-url http://localhost:8080/s3 s3api put-object --bucket abc --key LICENSE --body LICENSE
 $ ais ls ais://abc
 NAME             SIZE

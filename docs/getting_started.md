@@ -56,92 +56,57 @@ $ getfattr -n user.bar foo
 macOS/Darwin is also supported, albeit for development only.
 Certain capabilities related to querying the state and status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
 
-## Make
+The rest of this document is structured as follows:
 
-AIS comes with its build system that we use in a variety of development and production environments. The very first `make` command you may want to run could be:
+------------------------------------------------
 
-```console
-$ make help
-```
+## Table of Contents
 
-This shows supported subcommands, environment variables, and numerous usage examples, including:
-
-```console
-Examples:
-# Deploy cluster locally
-$ make deploy
-
-# Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)
-$ make kill clean
-
-# Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with the support for GCP and AWS backends
-$ make kill deploy <<< $'7\n2\n4\ny\ny\nn\nn\n0\n'
-
-# Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations
-$ make restart <<< $'7\n2\n4\ny\ny\nn\nn\n0\n'
-
-# Redeploy the cluster (4 targets, 1 proxyi, 4 mountoaths); build `aisnode` executable for debug without any backend-supporting libraries; use RUN_ARGS to pass an additional command-line option ('-override_backends=true') to each running node
-$ RUN_ARGS=-override_backends MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n0\n'
-
-# Same as above, but additionally run all 4 targets in a standby mode
-$ RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n0\n'
-...
-```
-
-**NOTE:**
-
-* All [containerized deployments](/deploy/README.md) have their own separate `Makefiles`. With the exception of [local playground](#local-playground), each specific build-able development (`dev/`) and production (`prod/`) option under the `deploy` folder has a pair: {`Dockerfile`, `Makefile`}.
-* The latter is typically small in size and easily readable/maintainable.
-* Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](Makefile).
-
-## Multiple deployment options
-
-Are [all summarized and further referenced here](/deploy/README.md).
-
-In particular:
-
-### Kubernetes Deployments
-
-For any Kubernetes deployments (including, of course, production deployments) please use a separate and dedicated [AIS-K8s GitHub](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md) repository. The repo contains [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/master/helm/ais/charts) and detailed [Playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks) that cover a variety of use cases and configurations.
-
-In particular, [AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md) provides a single-line command to deploy Kubernetes cluster and the underlying infrastructure with the AIStore cluster running inside (see below). The only requirement is having a few dependencies preinstalled (in particular, `helm`) and a Cloud account.
-
-The following GIF illustrates steps to deploy AIS on the Google Cloud Platform (GCP):
-
-![Kubernetes cloud deployment](images/ais-k8s-deploy.gif)
-
-Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts the [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
-
-### Minimal all-in-one-docker Deployment
-
-This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/deploy/prod/docker/single/README.md) for details.
+- [Local Playground](#local-playground)
+  - [From source](#from-source)
+  - [Demo](#demo)
+  - [Running Local Playground remotely](#running-local-playground-remotely)
+- [Make](#make)
+- [Multiple deployment options](#multiple-deployment-options)
+  - [Kubernetes deployments](#kubernetes-deployments)
+  - [Minimal all-in-one-docker Deployment](#minimal-all-in-one-docker-deployment)
+  - [Local Playground Demo](#local-playground-demo)
+  - [Manual deployment](#manual-deployment)
+  - [Testing your cluster](#testing-your-cluster)
+- [Kubernetes Playground](#kubernetes-playground)
+- [HTTPS](#https)
+- [Build, Make and Development Tools](#build-make-and-development-tools)
+- [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
 
 ## Local Playground
 
-Running AIS locally is good for quick evaluation, experimenting with features, first-time usage, and, of course, development.
+For a quick evaluation, experimenting with features, first-time usage, and (of course) development - for any and all of the above running AIS from its GitHub source is maybe the first option to consider.
 
-> Local AIStore playground is not intended for production clusters and is not meant to provide optimal performance.
+Hence, **Local Playground** - one of the several supported [deployment options](#multiple-deployment-options).
 
-To run it locally from the source, you have to have **Go** (compiler, linker, tools, system packages).
+> Local Playground is **not intended** for production and is not meant to provide optimal performance.
 
-For Linux:
+To run AIStore from source, you'd typically need **Go**: compiler, linker, tools, and required packages. However:
+
+> `CROSS_COMPILE` option (see below) can be used to build AIStore without having (to install) [Go](https://golang.org/dl/) and its toolchain.
+
+To install Go(lang) on Linux:
 
 * download the latest `go1.18.x.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
 * follow [installation instructions](https://go.dev/doc/install)
 
-Finally, if not done yet, export the [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
+Next, if not done yet, export the [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 
-Here's one [local-playground usage example](/deploy/dev/local/README.md) that can serve as a 5-minute introduction on:
+Here's an additional [5-minute introduction](/deploy/dev/local/README.md) that talks about setting up the Go environment and also includes:
 
-* setting up the Go environment
 * provisioning data drives for AIS deployment, and
-* running a minimal AIS cluster - locally.
+* running a single-node AIS cluster locally.
 
-Alternatively, or in addition, run it as follows:
+Once done, run AIS as follows:
 
-### Steps to run AIS from source
+### From source
 
-Assuming that the [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
+The steps:
 
 ```console
 $ cd $GOPATH/src/github.com/NVIDIA
@@ -167,13 +132,99 @@ $ clean_deploy.sh --proxy-cnt 1 --target-cnt 7 --gcp
 
 For more options and detailed descriptions, run `make help` and see: [`clean_deploy.sh`](/docs/development.md#clean-deploy).
 
-### Local Playground Demo
+### Demo
 
-This [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
+Here's a quick, albeit somewhat outdated, [YouTube introduction and demo](https://www.youtube.com/watch?v=ANshjHphqfI).
 
-{% include youtubePlayer.html id="ANshjHphqfI" %}
+### Running Local Playground remotely
 
-### Manual Deployment
+AIStore (product and solution) is fully based on HTTP(S) utilizing the protocol both externally (to support both frontend interfaces and communications with remote backends) and internally, for [intra-cluster streaming](/transport).
+
+Connectivity-wise, what that means is that your local deployment at `localhost:8080` can as easily run at any **arbitrary HTTP(S)** address.
+
+Here're the quick change you make to deploy Local Playground at (e.g.) `10.0.0.207`, whereby the main gateway's listening port would still remain `8080` default:
+
+```diff
+diff --git a/deploy/dev/local/aisnode_config.sh b/deploy/dev/local/aisnode_config.sh                                                             |
+index 9198c0de4..be63f50d0 100755                                                                                                                |
+--- a/deploy/dev/local/aisnode_config.sh                                                                                                         |
++++ b/deploy/dev/local/aisnode_config.sh                                                                                                         |
+@@ -181,7 +181,7 @@ cat > $AIS_LOCAL_CONF_FILE <<EOL                                                                                             |
+        "confdir": "${AIS_CONF_DIR:-/etc/ais/}",                                                                                                 |
+        "log_dir":       "${AIS_LOG_DIR:-/tmp/ais$NEXT_TIER/log}",                                                                               |
+        "host_net": {                                                                                                                            |
+-               "hostname":                 "${HOSTNAME_LIST}",                                                                                  |
++               "hostname":                 "10.0.0.207",                                                                                        |
+                "hostname_intra_control":   "${HOSTNAME_LIST_INTRA_CONTROL}",                                                                    |
+                "hostname_intra_data":      "${HOSTNAME_LIST_INTRA_DATA}",                                                                       |
+                "port":               "${PORT:-8080}",                                                                                           |
+diff --git a/deploy/dev/local/deploy.sh b/deploy/dev/local/deploy.sh                                                                             |
+index e0b467d82..b18361155 100755                                                                                                                |
+--- a/deploy/dev/local/deploy.sh                                                                                                                 |
++++ b/deploy/dev/local/deploy.sh                                                                                                                 |
+@@ -68,7 +68,7 @@ else                                                                                                                           |
+   PORT_INTRA_DATA=${PORT_INTRA_DATA:-13080}                                                                                                     |
+   NEXT_TIER="_next"                                                                                                                             |
+ fi                                                                                                                                              |
+-AIS_PRIMARY_URL="http://localhost:$PORT"                                                                                                        |
++AIS_PRIMARY_URL="http://10.0.0.207:$PORT"                                                                                                       |
+ if $AIS_USE_HTTPS; then                                                                                                                         |
+   AIS_PRIMARY_URL="https://localhost:$PORT"                                                                                                     |
+```
+
+## Make
+
+AIS comes with its own build system that we use to build both standalone binaries and container images for a variety of deployment options.
+
+The very first `make` command you may want to execute could as well be:
+
+```console
+$ make help
+```
+
+This shows all subcommands, environment variables, and numerous usage examples, including:
+
+```console
+Examples:
+# Deploy cluster locally
+$ make deploy
+
+# Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)
+$ make kill clean
+
+# Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with the support for GCP and AWS backends
+$ make kill deploy <<< $'7\n2\n4\ny\ny\nn\nn\n0\n'
+```
+
+## Multiple deployment options
+
+All [containerized deployments](/deploy/README.md) have their own separate `Makefiles`. With the exception of [local playground](#local-playground), each specific build-able development (`dev/`) and production (`prod/`) option under the `deploy` folder has a pair: {`Dockerfile`, `Makefile`}.
+
+> This separation is typically small in size and easily readable and maintainable.
+
+Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](Makefile).
+
+AIStore deploys anywhere anytime supporting multiple deployment options [summarized and further referenced here](/deploy/README.md).
+
+In particular:
+
+### Kubernetes deployments
+
+For any Kubernetes deployments (including, of course, production deployments) please use a separate and dedicated [AIS-K8s GitHub](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md) repository. The repo contains [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/master/helm/ais/charts) and detailed [Playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks) that cover a variety of use cases and configurations.
+
+In particular, [AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md) provides a single-line command to deploy Kubernetes cluster and the underlying infrastructure with the AIStore cluster running inside (see below). The only requirement is having a few dependencies preinstalled (in particular, `helm`) and a Cloud account.
+
+The following GIF illustrates steps to deploy AIS on the Google Cloud Platform (GCP):
+
+![Kubernetes cloud deployment](images/ais-k8s-deploy.gif)
+
+Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts the [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
+
+### Minimal all-in-one-docker Deployment
+
+This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/deploy/prod/docker/single/README.md) for details.
+
+### Manual deployment
 
 You can also run `make deploy` in the root directory of the repository to deploy a cluster:
 ```console
@@ -199,13 +250,30 @@ Building aisnode: version=df24df77 providers=
 ```
 > Notice the "Cloud" prompt above and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
+Run `make help` for supported (make) options and usage examples, including:
+
+```console
+# Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations
+$ make restart <<< $'7\n2\n4\ny\ny\nn\nn\n0\n'
+
+# Redeploy the cluster (4 targets, 1 proxyi, 4 mountoaths); build `aisnode` executable for debug without any backend-supporting libraries; use RUN_ARGS to pass an additional command-line option ('-override_backends=true') to each running node
+$ RUN_ARGS=-override_backends MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n0\n'
+
+# Same as above, but additionally run all 4 targets in a standby mode
+$ RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n0\n'
+...
+...
+```
+
 Further:
 
 * `make kill`    - terminate local AIStore.
 * `make restart` - shut it down and immediately restart using the existing configuration.
 * `make help`    - show make options and usage examples.
 
-For more development options and tools, please refer to the [development docs](/docs/development.md).
+For even more development options and tools, please refer to:
+
+* [development docs](/docs/development.md)
 
 ### Testing your cluster
 
