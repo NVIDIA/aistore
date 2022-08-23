@@ -277,7 +277,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		apiOp  string // one of: admin-join, self-join, keepalive
 		action string // msg.Action, one: apc.ActSelfJoinProxy, ...
 	)
-	apiItems, err := p.checkRESTItems(w, r, 1, false, apc.URLPathClu.L)
+	apiItems, err := p.apiItems(w, r, 1, false, apc.URLPathClu.L)
 	if err != nil {
 		return
 	}
@@ -693,7 +693,7 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 // - cluster-wide configuration
 // - cluster membership, xactions, rebalance, configuration
 func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, apc.URLPathClu.L)
+	apiItems, err := p.apiItems(w, r, 0, true, apc.URLPathClu.L)
 	if err != nil {
 		return
 	}
@@ -1344,7 +1344,7 @@ func (p *proxy) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
 }
 
 func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, apc.URLPathCluProxy.L)
+	apiItems, err := p.apiItems(w, r, 1, false, apc.URLPathCluProxy.L)
 	if err != nil {
 		return
 	}
@@ -1438,7 +1438,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 /////////////////////////////////////////
 
 func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, apc.URLPathCluDaemon.L)
+	apiItems, err := p.apiItems(w, r, 1, false, apc.URLPathCluDaemon.L)
 	if err != nil {
 		return
 	}

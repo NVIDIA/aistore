@@ -126,7 +126,7 @@ func (t *target) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathDae.L)
+	apiItems, err := t.apiItems(w, r, 0, true, apc.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -290,7 +290,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 // admin-join target | enable/disable mountpath
 func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathDae.L)
+	apiItems, err := t.apiItems(w, r, 0, true, apc.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -340,7 +340,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, apc.URLPathDae.L)
+	apiItems, err := t.apiItems(w, r, 1, false, apc.URLPathDae.L)
 	if err != nil {
 		return
 	}

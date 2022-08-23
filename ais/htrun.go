@@ -87,7 +87,7 @@ func (h *htrun) Sowner() cluster.Sowner { return h.owner.smap }
 
 func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequest) (err error) {
 	debug.Assert(len(apireq.prefix) != 0)
-	apireq.items, err = h.checkRESTItems(w, r, apireq.after, false, apireq.prefix)
+	apireq.items, err = h.apiItems(w, r, apireq.after, false, apireq.prefix)
 	if err != nil {
 		return
 	}
@@ -877,7 +877,7 @@ func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, args *bcas
 //////////////////////////////////
 
 // remove validated fields and return the resulting slice
-func (h *htrun) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
+func (h *htrun) apiItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
 	splitAfter bool, items []string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items)
 	if err != nil {
@@ -1077,14 +1077,15 @@ func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string,
 }
 
 func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Scheme == "" {
-		// ignore GET /favicon.ico by browsers
-		if r.URL.Path != "/favicon.ico" {
-			h.writeErrf(w, r, "%s: %s %q", h.si, cmn.EmptyProtoSchemeForURL, r.URL.Path)
-		}
-	} else {
+	if r.URL.Scheme != "" {
 		h.writeErrf(w, r, "%s: invalid URL path %q", h.si, r.URL.Path)
+		return
 	}
+	// ignore GET /favicon.ico by Browsers
+	if r.URL.Path == "/favicon.ico" || r.URL.Path == "favicon.ico" {
+		return
+	}
+	h.writeErrf(w, r, "%s: %s %q", h.si, cmn.EmptyProtoSchemeForURL, r.URL.Path)
 }
 
 func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {

@@ -21,7 +21,7 @@ import (
 
 // PUT s3/bckName/objName
 func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathS3.L)
+	apiItems, err := t.apiItems(w, r, 0, true, apc.URLPathS3.L)
 	if err != nil {
 		return
 	}

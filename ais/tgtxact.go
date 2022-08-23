@@ -29,7 +29,7 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		xactMsg xact.QueryMsg
 		bck     *cluster.Bck
 	)
-	if _, err := t.checkRESTItems(w, r, 0, true, apc.URLPathXactions.L); err != nil {
+	if _, err := t.apiItems(w, r, 0, true, apc.URLPathXactions.L); err != nil {
 		return
 	}
 	switch r.Method {

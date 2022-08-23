@@ -126,10 +126,10 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 
 	apiItems = apiItems[len(items):]
 	if len(apiItems) < itemsAfter {
-		return nil, fmt.Errorf("path is too short: got %d items, but expected %d",
+		return nil, fmt.Errorf("URL path is too short: got %d items, expected %d",
 			len(apiItems)+len(items), itemsAfter+len(items))
 	} else if len(apiItems) > itemsAfter && !splitAfter {
-		return nil, fmt.Errorf("path is too long: got %d items, but expected %d",
+		return nil, fmt.Errorf("URL path is too long: got %d items, expected %d",
 			len(apiItems)+len(items), itemsAfter+len(items))
 	}
 

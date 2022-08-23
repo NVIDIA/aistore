@@ -456,7 +456,7 @@ func (t *target) initRecvHandlers() {
 		{r: apc.ETL, h: t.etlHandler, net: accessNetAll},
 
 		{r: "/" + apc.S3, h: t.s3Handler, net: accessNetPublicData},
-		{r: "/", h: t.writeErrURL, net: accessNetAll},
+		{r: "/", h: t.errURL, net: accessNetAll},
 	}
 	t.registerNetworkHandlers(networkHandlers)
 }
@@ -490,6 +490,25 @@ func (t *target) checkRestarted() (fatalErr, writeErr error) {
 //
 // http handlers
 //
+
+func (t *target) errURL(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Scheme != "" {
+		t.writeErrURL(w, r)
+		return
+	}
+	path := r.URL.Path
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	split := strings.Split(path, "/")
+	// "easy URL"
+	if len(split) > 0 &&
+		(split[0] == apc.GSScheme || split[0] == apc.AZScheme || split[0] == apc.AISScheme) {
+		t.writeErrMsg(w, r, "trying to execute \"easy URL\" via AIS target? (hint: use proxy)")
+	} else {
+		t.writeErrURL(w, r)
+	}
+}
 
 // verb /v1/buckets
 func (t *target) bucketHandler(w http.ResponseWriter, r *http.Request) {
@@ -546,7 +565,7 @@ func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/buckets[/bucket-name]
 func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var bckName string
-	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathBuckets.L)
+	apiItems, err := t.apiItems(w, r, 0, true, apc.URLPathBuckets.L)
 	if err != nil {
 		return
 	}

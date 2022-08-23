@@ -31,9 +31,10 @@ var (
 	defaultConfig Config
 
 	DefaultAliasConfig = AliasConfig{
-		"get": "object get",
-		"put": "object put",
-		"ls":  "bucket ls",
+		"get":    "object get",
+		"put":    "object put",
+		"ls":     "bucket ls",
+		"create": "bucket create",
 	}
 )
 

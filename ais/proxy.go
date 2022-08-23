@@ -432,28 +432,50 @@ func (p *proxy) objectHandler(w http.ResponseWriter, r *http.Request) {
 //	"v1/objects/mybucket/myobject?provider=gcp" with _no_ other changes to the request
 //	and response parameters and components.
 func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
-	var provider, bucket, objName string
-	apiItems, err := p.checkRESTItems(w, r, 2, true, nil)
+	apiItems, err := p.apiItems(w, r, 1, true, nil)
 	if err != nil {
 		return
 	}
-	provider, bucket = apiItems[0], apiItems[1]
+	provider := apiItems[0]
 	if provider, err = cmn.NormalizeProvider(provider); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
+	if len(apiItems) == 1 {
+		// list buckets for a given provider
+		// NOTE two differences between this implementation and `p.bckNamesFromBMD` (s3 API):
+		// - `/s3` is an API endpoint rather than a namesake provider
+		//   (the API must "cover" all providers)
+		// - `/s3` and its subordinate URL paths can only "see" buckets that are already present
+		//   in the BMD, while native API, when given sufficient permissions, can immediately
+		//   access (read, write, list) any remote buckets, while adding them to the BMD "on the fly".
+		r.URL.Path = apc.URLPathBuckets.S
+		if r.URL.RawQuery == "" {
+			qbck := cmn.QueryBcks{Provider: provider}
+			query := qbck.AddToQuery(nil)
+			r.URL.RawQuery = query.Encode()
+		} else if !strings.Contains(r.URL.RawQuery, apc.QparamProvider) {
+			r.URL.RawQuery += "&" + apc.QparamProvider + "=" + provider
+		}
+		p.bucketHandler(w, r)
+		return
+	}
+	bucket := apiItems[1]
 	bck := cmn.Bck{Name: bucket, Provider: provider}
 	if err := bck.ValidateName(); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
+
+	var objName string
 	if len(apiItems) > 2 {
 		objName = apiItems[2]
-		r.URL.Path = "/" + path.Join(apc.Version, apc.Objects, bucket, objName)
+		r.URL.Path = apc.URLPathObjects.Join(bucket, objName)
 		r.URL.Path += path.Join(apiItems[3:]...)
 	} else {
-		r.URL.Path = "/" + path.Join(apc.Version, apc.Buckets, bucket)
+		r.URL.Path = apc.URLPathBuckets.Join(bucket)
 	}
+
 	if r.URL.RawQuery == "" {
 		query := bck.AddToQuery(nil)
 		r.URL.RawQuery = query.Encode()
@@ -475,7 +497,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		bckName string
 		qbck    *cmn.QueryBcks
 	)
-	apiItems, err := p.checkRESTItems(w, r, 0, true, apc.URLPathBuckets.L)
+	apiItems, err := p.apiItems(w, r, 0, true, apc.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
@@ -934,7 +956,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg           *apc.ActionMsg
 		query         = r.URL.Query()
-		apiItems, err = p.checkRESTItems(w, r, 1, true, apc.URLPathBuckets.L)
+		apiItems, err = p.apiItems(w, r, 1, true, apc.URLPathBuckets.L)
 	)
 	if err != nil {
 		return
@@ -994,7 +1016,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var msg *apc.ActionMsg
-	apiItems, err := p.checkRESTItems(w, r, 1, true, apc.URLPathBuckets.L)
+	apiItems, err := p.apiItems(w, r, 1, true, apc.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
@@ -2210,7 +2232,7 @@ func (p *proxy) doListRange(method, bucket string, msg *apc.ActionMsg, query url
 }
 
 func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, apc.URLPathReverse.L)
+	apiItems, err := p.apiItems(w, r, 1, false, apc.URLPathReverse.L)
 	if err != nil {
 		return
 	}
@@ -2378,7 +2400,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, apc.URLPathDae.L)
+	apiItems, err := p.apiItems(w, r, 0, true, apc.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -2458,7 +2480,7 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 
 func (p *proxy) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	// the path includes cmn.CallbackRmSelf (compare with t.httpdaedelete)
-	_, err := p.checkRESTItems(w, r, 0, false, apc.URLPathDaeRmSelf.L)
+	_, err := p.apiItems(w, r, 0, false, apc.URLPathDaeRmSelf.L)
 	if err != nil {
 		return
 	}
@@ -2499,7 +2521,7 @@ func (p *proxy) unreg(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg
 }
 
 func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, apc.URLPathDae.L)
+	apiItems, err := p.apiItems(w, r, 0, true, apc.URLPathDae.L)
 	if err != nil {
 		return
 	}
@@ -2600,7 +2622,7 @@ func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID str
 }
 
 func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 2, false, apc.URLPathDae.L)
+	apiItems, err := p.apiItems(w, r, 2, false, apc.URLPathDae.L)
 	if err != nil {
 		return
 	}

@@ -40,7 +40,7 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/etl
 func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, apc.URLPathETL.L)
+	apiItems, err := p.apiItems(w, r, 0, true, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
@@ -72,7 +72,7 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 // handleETLPut is responsible validation and adding new ETL spec/code
 // to etl metadata.
 func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
-	_, err := p.checkRESTItems(w, r, 0, false, apc.URLPathETL.L)
+	_, err := p.apiItems(w, r, 0, false, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
@@ -120,7 +120,7 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 //
 // handleETLPost handles start/stop ETL pods
 func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 2, true, apc.URLPathETL.L)
+	apiItems, err := p.apiItems(w, r, 2, true, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}
@@ -148,7 +148,7 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /v1/etl/<uuid>
 func (p *proxy) handleETLDelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, true, apc.URLPathETL.L)
+	apiItems, err := p.apiItems(w, r, 1, true, apc.URLPathETL.L)
 	if err != nil {
 		return
 	}

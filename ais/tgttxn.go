@@ -70,7 +70,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiItems, err := t.checkRESTItems(w, r, 0, true, apc.URLPathTxn.L)
+	apiItems, err := t.apiItems(w, r, 0, true, apc.URLPathTxn.L)
 	if err != nil {
 		return
 	}

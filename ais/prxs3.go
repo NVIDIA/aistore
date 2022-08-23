@@ -35,7 +35,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Fix the hack, https://github.com/tensorflow/tensorflow/issues/41798
 	cos.ReparseQuery(r)
-	apiItems, err := p.checkRESTItems(w, r, 0, true, apc.URLPathS3.L)
+	apiItems, err := p.apiItems(w, r, 0, true, apc.URLPathS3.L)
 	if err != nil {
 		return
 	}
@@ -53,7 +53,8 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 		p.headObjS3(w, r, apiItems)
 	case http.MethodGet:
 		if len(apiItems) == 0 {
-			// nothing  - list all the buckets
+			// list all buckets; NOTE: compare with `p.easyURLHandler` and see
+			// "list buckets for a given provider" comment there
 			p.bckNamesFromBMD(w)
 			return
 		}

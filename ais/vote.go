@@ -77,7 +77,7 @@ func (p *proxy) voteHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
 		return
 	}
-	apiItems, err := p.checkRESTItems(w, r, 1, false, apc.URLPathVote.L)
+	apiItems, err := p.apiItems(w, r, 1, false, apc.URLPathVote.L)
 	if err != nil {
 		return
 	}
@@ -99,7 +99,7 @@ func (p *proxy) voteHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/vote/init
 func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.checkRESTItems(w, r, 0, false, apc.URLPathVoteInit.L); err != nil {
+	if _, err := p.apiItems(w, r, 0, false, apc.URLPathVoteInit.L); err != nil {
 		return
 	}
 	msg := VoteInitiationMessage{}
@@ -348,7 +348,7 @@ func (t *target) voteHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
 		return
 	}
-	apiItems, err := t.checkRESTItems(w, r, 1, false, apc.URLPathVote.L)
+	apiItems, err := t.apiItems(w, r, 1, false, apc.URLPathVote.L)
 	if err != nil {
 		return
 	}
@@ -424,7 +424,7 @@ func (h *htrun) onPrimaryFail() {
 
 // GET /v1/vote/proxy
 func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, apc.URLPathVoteProxy.L); err != nil {
+	if _, err := h.apiItems(w, r, 0, false, apc.URLPathVoteProxy.L); err != nil {
 		return
 	}
 	msg := VoteMessage{}
@@ -500,7 +500,7 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/vote/result
 func (h *htrun) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, apc.URLPathVoteVoteres.L); err != nil {
+	if _, err := h.apiItems(w, r, 0, false, apc.URLPathVoteVoteres.L); err != nil {
 		return
 	}
 	msg := VoteResultMessage{}

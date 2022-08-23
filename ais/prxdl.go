@@ -222,7 +222,7 @@ func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		progressInterval = downloader.DownloadProgressInterval
 	)
 
-	if _, err = p.checkRESTItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
+	if _, err = p.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 		return
 	}
 
