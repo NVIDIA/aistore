@@ -54,7 +54,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		if len(apiItems) == 0 {
 			// nothing  - list all the buckets
-			p.bckNamesToS3(w)
+			p.bckNamesFromBMD(w)
 			return
 		}
 		var (
@@ -135,18 +135,14 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET s3/
-func (p *proxy) bckNamesToS3(w http.ResponseWriter) {
+// NOTE: unlike native API, this one is limited to list only those that are currently present in the BMD.
+func (p *proxy) bckNamesFromBMD(w http.ResponseWriter) {
 	var (
 		bmd  = p.owner.bmd.get()
-		qbck = cmn.QueryBcks{Provider: apc.ProviderAIS}
-		cp   = &qbck.Provider
+		resp = s3.NewListBucketResult() // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html
 	)
-	resp := s3.NewListBucketResult()
-	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		b := bck.Bucket()
-		if qbck.Equal(b) || qbck.Contains(b) {
-			resp.Add(bck)
-		}
+	bmd.Range(nil /*any provider*/, nil /*any namespace*/, func(bck *cluster.Bck) bool {
+		resp.Add(bck)
 		return false
 	})
 	sgl := p.gmm.NewSGL(0)

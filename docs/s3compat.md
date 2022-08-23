@@ -26,6 +26,7 @@ For additional background, see:
 ## Table of Contents
 
 - [Quick example using `aws` CLI](#quick-example-using-aws-cli)
+- [Quick example using Internet Browser](#quick-example-using-internet-browser)
 - [`s3cmd` command line](#s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
 - [Last Modification Time](#last-modification-time)
@@ -76,6 +77,47 @@ $ aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket abc --ke
 }
 $ diff -uN README.md /tmp/readme
 ```
+
+## Quick example using Internet Browser
+
+AIStore gateways provide HTTP/HTTPS interface, which is also why it is maybe sometimes convenient (and very fast) to use your Browser to execute `GET` type queries.
+
+Specifically - since in this document we are talking about s3-compatible API - here's an example that utilizes `/s3` endpoint to list all buckets:
+
+```xml
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01">
+  <Owner>
+     <ID>1</ID>
+     <DisplayName>ListAllMyBucketsResult</DisplayName>
+  </Owner>
+<Buckets>
+  <Bucket>
+    <Name>bucket-111</Name>
+    <CreationDate>2022-08-23T09:16:40-04:00</CreationDate>
+    <String>Provider: ais</String>
+  </Bucket>
+  <Bucket>
+    <Name>bucket-222</Name>
+    <CreationDate>2022-08-23T13:47:00-04:00</CreationDate>
+    <String>Provider: ais</String>
+  </Bucket>
+  <Bucket>
+  <Name>bucket-222</Name>
+    <CreationDate>2022-08-23T13:21:21-04:00</CreationDate>
+    <String>Provider: aws (WARNING: {bucket-222, Provider: ais} and {bucket-222, Provider: aws} share the same name)</String>
+  </Bucket>
+  <Bucket>
+    <Name>bucket-333</Name>
+    <CreationDate>2022-08-23T13:26:32-04:00</CreationDate>
+    <String>Provider: gcp</String>
+  </Bucket>
+</Buckets>
+</ListBucketResult>
+```
+
+> Notice the "sharing the same name" warning above. For background, please refer to [backend providers](/docs/providers.md).
+
+> In re `/s3 endpoint` mentioned above, the corresponding request URL in the browser's address bar would look something like `ais-gateway-host:port/s3`.
 
 ## `s3cmd` command line
 

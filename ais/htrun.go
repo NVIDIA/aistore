@@ -1078,7 +1078,10 @@ func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string,
 
 func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Scheme == "" {
-		h.writeErrf(w, r, "%s: %s %q", h.si, cmn.EmptyProtoSchemeForURL, r.URL.Path)
+		// ignore GET /favicon.ico by browsers
+		if r.URL.Path != "/favicon.ico" {
+			h.writeErrf(w, r, "%s: %s %q", h.si, cmn.EmptyProtoSchemeForURL, r.URL.Path)
+		}
 	} else {
 		h.writeErrf(w, r, "%s: invalid URL path %q", h.si, r.URL.Path)
 	}

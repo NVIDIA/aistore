@@ -6,6 +6,7 @@ package s3
 
 import (
 	"encoding/xml"
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -27,6 +28,7 @@ type (
 	Bucket struct {
 		Name    string `xml:"Name"`
 		Created string `xml:"CreationDate"`
+		String  string `xml:"String"`
 	}
 
 	// Bucket versioning
@@ -45,27 +47,38 @@ type (
 	}
 )
 
-func NewListBucketResult() *ListBucketResult {
-	return &ListBucketResult{
-		Ns: s3Namespace,
-		Owner: BckOwner{
-			ID:   "1", // NOTE: to satisfy s3 (not used on our side)
-			Name: "ais",
-		},
-		Buckets: make([]*Bucket, 0),
+func NewListBucketResult() (r *ListBucketResult) {
+	r = &ListBucketResult{
+		Ns:      s3Namespace,
+		Owner:   BckOwner{Name: "ListAllMyBucketsResult"},
+		Buckets: make([]*Bucket, 0, 8),
 	}
+	r.Owner.ID = "1" // to satisfy s3
+	return
+}
+
+func (r *ListBucketResult) Add(bck *cluster.Bck) {
+	var warn string
+	for _, b := range r.Buckets {
+		if b.Name == bck.Name {
+			// NOTE: when bck.Name is not unique
+			warn = fmt.Sprintf(" (WARNING: {%s, %s} and {%s, Provider: %s} share the same name)",
+				b.Name, b.String, bck.Name, bck.Provider)
+		}
+	}
+	created := time.Unix(0, bck.Props.Created)
+	b := &Bucket{
+		Name:    bck.Name,
+		Created: created.Format(time.RFC3339),
+		String:  "Provider: " + bck.Provider + warn,
+	}
+	r.Buckets = append(r.Buckets, b)
 }
 
 func (r *ListBucketResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
-}
-
-func (r *ListBucketResult) Add(bck *cluster.Bck) {
-	created := time.Unix(0, bck.Props.Created)
-	b := &Bucket{Name: bck.Name, Created: created.Format(time.RFC3339)}
-	r.Buckets = append(r.Buckets, b)
 }
 
 func NewVersioningConfiguration(enabled bool) *VersioningConfiguration {

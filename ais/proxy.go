@@ -210,8 +210,6 @@ func (p *proxy) Run() error {
 
 		{r: apc.Notifs, h: p.notifs.handler, net: accessNetIntraControl},
 
-		{r: "/", h: p.httpCloudHandler, net: accessNetPublic},
-
 		// S3 compatibility
 		{r: "/" + apc.S3, h: p.s3Handler, net: accessNetPublic},
 
@@ -219,6 +217,9 @@ func (p *proxy) Run() error {
 		{r: "/" + apc.GSScheme, h: p.easyURLHandler, net: accessNetPublic},
 		{r: "/" + apc.AZScheme, h: p.easyURLHandler, net: accessNetPublic},
 		{r: "/" + apc.AISScheme, h: p.easyURLHandler, net: accessNetPublic},
+
+		// everything else
+		{r: "/", h: p.httpCloudHandler, net: accessNetPublic},
 	}
 	p.registerNetworkHandlers(networkHandlers)
 
