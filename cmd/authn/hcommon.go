@@ -11,7 +11,7 @@ import (
 )
 
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
-	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, true, items)
+	items, err := cmn.MatchItems(r.URL.Path, itemsAfter, true, items)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return nil, err

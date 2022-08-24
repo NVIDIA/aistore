@@ -93,11 +93,11 @@ func PrependProtocol(url string, protocol ...string) string {
 	return proto + "://" + url
 }
 
-// MatchRESTItems splits url path and matches the parts against specified `items`.
-// If `splitAfter` is true all items will be split, otherwise the
-// rest of the path will be split only to `itemsAfter` items.
+// MatchItems splits URL path at "/" and matches resulting items against the specified, if any.
+// - splitAfter == true:  strings.Split() the entire path;
+// - splitAfter == false: strings.SplitN(len(items)+itemsAfter)
 // Returns all items that follow the specified `items`.
-func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items []string) ([]string, error) {
+func MatchItems(unescapedPath string, itemsAfter int, splitAfter bool, items []string) ([]string, error) {
 	var split []string
 	escaped := html.EscapeString(unescapedPath)
 	if len(escaped) > 0 && escaped[0] == '/' {
@@ -175,19 +175,6 @@ func WriteErrJSON(w http.ResponseWriter, r *http.Request, out interface{}, err e
 	}
 	WriteErr(w, r, err)
 	return err
-}
-
-// WriteJSON writes a struct or byte slice to an HTTP response.
-// If `v` is a byte slice, it is passed as-is(already JSON-encoded data).
-// In other cases, `v` is encoded to JSON and then passed.
-// The function returns an error if writing to the response fails.
-func WriteJSON(w http.ResponseWriter, v interface{}) error {
-	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
-	if b, ok := v.([]byte); ok {
-		_, err := w.Write(b)
-		return err
-	}
-	return jsoniter.NewEncoder(w).Encode(v)
 }
 
 // Copies headers from original request(from client) to

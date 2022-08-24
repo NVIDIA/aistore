@@ -879,7 +879,7 @@ func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, args *bcas
 // remove validated fields and return the resulting slice
 func (h *htrun) apiItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
 	splitAfter bool, items []string) ([]string, error) {
-	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items)
+	items, err := cmn.MatchItems(r.URL.Path, itemsAfter, splitAfter, items)
 	if err != nil {
 		h.writeErr(w, r, err)
 		return nil, err

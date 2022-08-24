@@ -2773,7 +2773,7 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiItems, err := cmn.MatchRESTItems(r.URL.Path, 0, true, apc.URLPathdSort.L)
+	apiItems, err := cmn.MatchItems(r.URL.Path, 0, true, apc.URLPathdSort.L)
 	if err != nil {
 		p.writeErrURL(w, r)
 		return

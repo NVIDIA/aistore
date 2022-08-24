@@ -189,7 +189,7 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlID string)
 }
 
 func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *cluster.Bck, objName string, err error) {
-	items, err := cmn.MatchRESTItems(r.URL.EscapedPath(), 2, false, apc.URLPathETLObject.L)
+	items, err := cmn.MatchItems(r.URL.EscapedPath(), 2, false, apc.URLPathETLObject.L)
 	if err != nil {
 		return secret, bck, objName, err
 	}

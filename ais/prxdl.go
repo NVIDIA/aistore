@@ -181,7 +181,7 @@ func (p *proxy) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodDelete {
-		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, apc.URLPathDownload.L)
+		items, err := cmn.MatchItems(r.URL.Path, 1, false, apc.URLPathDownload.L)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
