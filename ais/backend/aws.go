@@ -477,8 +477,8 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 // If the client already exists newClient simply returns it.
 //
 // From S3 SDK:
-//     "S3 methods are safe to use concurrently. It is not safe to
-//      modify mutate any of the struct's properties though."
+// "S3 methods are safe to use concurrently. It is not safe to modify mutate
+// any of the struct's properties though."
 func newClient(conf sessConf, tag string) (svc *s3.S3, region string, err error) {
 	endpoint := s3Endpoint
 	region = conf.region
@@ -566,7 +566,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 }
 
 // Original AWS error contains extra information that a caller does not need:
-//     status code: 400, request id: D918CB, host id: RJtDP0q8
+// status code: 400, request id: D918CB, host id: RJtDP0q8
 // The extra information starts from the new line (`\n`) and tab (`\t`) of the message.
 // At the same time we want to preserve original error which starts with `\ncaused by:`.
 // See more `aws-sdk-go/aws/awserr/types.go:12` (`SprintError`).

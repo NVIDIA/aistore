@@ -966,8 +966,7 @@ loop:
 }
 
 // smap 	- current Smap
-// directURL	- URL of the proxy that we send the request to
-//           	  (not necessarily the current primary)
+// directURL	- URL of the proxy that we send the request to (not necessarily the current primary)
 // toID, toURL 	- DaemonID and URL of the proxy that must become the new primary
 func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, toID string) (newSmap *cluster.Smap) {
 	if directURL == "" {
@@ -1643,13 +1642,13 @@ func icStressCachedXactions(t *testing.T) {
 	wg.Wait()
 }
 
-//nolint:unused // will be used when icStressCachedXaction test is enabled
-//
 // Expects objects to be numbered as {%04d}; BaseParams of primary proxy
+//
+//nolint:unused // will be used when icStressCachedXaction test is enabled
 func startListObjRange(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, numJobs, numObjs, rangeSize int,
 	pageSize uint) *sync.WaitGroup {
-	tassert.Fatalf(t, numObjs > rangeSize, "number of objects (%d) should be greater than range size (%d)", numObjs, rangeSize)
-
+	tassert.Fatalf(t, numObjs > rangeSize,
+		"number of objects (%d) should be greater than range size (%d)", numObjs, rangeSize)
 	wg := &sync.WaitGroup{}
 	for i := 0; i < numJobs; i++ {
 		wg.Add(1)

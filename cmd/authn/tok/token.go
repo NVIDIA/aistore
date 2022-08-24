@@ -163,8 +163,8 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 
 func expiresIn(tm time.Time) string {
 	now := time.Now()
-	if !now.Before(tm) {
-		return "TOKEN EXPIRED"
+	if now.After(tm) {
+		return ErrTokenExpired.Error()
 	}
 	// round up
 	d := tm.Sub(now) / time.Second

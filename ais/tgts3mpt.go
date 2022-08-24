@@ -290,7 +290,7 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *clust
 // List all active multipart uploads for a bucket.
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html
 // GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&
-//               max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
+// max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
 func (t *target) listMptUploads(w http.ResponseWriter, bck *cluster.Bck, q url.Values) {
 	var (
 		maxUploads int

@@ -102,8 +102,8 @@ func (b backends) init(t *target, starting bool) {
 }
 
 // 3rd part cloud: empty stubs unless populated via build tags
-// NOTE: write access to backends - other than target startup is also invoked
-//       via primary startup (see earlystart for "choosing remote backends")
+// NOTE: write access to backends - other than at target startup is also invoked
+// via primary (proxy) startup - see earlystart.go for "choosing remote backends".
 func (b backends) initExt(t *target, starting bool) (err error) {
 	config := cmn.GCO.Get()
 	for provider := range b {

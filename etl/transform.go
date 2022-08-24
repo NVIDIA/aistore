@@ -180,6 +180,7 @@ func InitCode(t cluster.Target, msg *InitCodeMsg) error {
 }
 
 // generate (from => to) replacements
+//
 //nolint:gocritic // appendCombine vs readability
 func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	var (

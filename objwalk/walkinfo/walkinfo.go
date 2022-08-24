@@ -148,8 +148,7 @@ func (wi *WalkInfo) matchObj(lom *cluster.LOM) bool {
 //   - this target responses getobj request for the object
 //
 // NOTE: When only object names are requested, objectFilter and postCallback
-//	 are not called because there will be no metadata to look at (see
-//	 WalkInfo.Callback() for details)
+// are not called because there won't be any metadata to look at.
 func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntry {
 	if !wi.matchObj(lom) {
 		return nil

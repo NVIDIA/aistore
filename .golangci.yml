@@ -5,7 +5,6 @@ linters:
     - revive
     - asciicheck
     - bodyclose
-    - deadcode
     - durationcheck
     - errcheck
     - exportloopref
@@ -30,7 +29,6 @@ linters:
     - unconvert
     - unparam
     - unused
-    - varcheck
     - whitespace
 
     # See: https://golangci-lint.run/usage/linters/
@@ -39,7 +37,7 @@ linters:
     # - ifshort
     # - nilerr
     #
-    # Following linters produce false positives (enable only when needed):
+    # linters that produce false positives (enable at your own risk):
     # - goconst
     # - godot
     # - goerr113
@@ -49,7 +47,7 @@ linters:
     # - structcheck - doesn't handle embedded structs
     # - gofumpt
     #
-    # Following linters are not really helpful:
+    # linters that are not really helpful:
     # - cyclop
     # - exhaustive
     # - forbidigo
@@ -62,6 +60,10 @@ linters:
     # - thelper
     # - tparallel
     # - wrapcheck
+    #
+    # linters that seem to be abandoned:
+    # deadcode
+    # varcheck
 
 linters-settings:
   revive:

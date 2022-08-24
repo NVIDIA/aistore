@@ -148,8 +148,7 @@ func etlPostAction(baseParams BaseParams, id, action string) (err error) {
 	return err
 }
 
-// TODO: "if query has UUID then the request is ETL" is not good enough. Add ETL-specific
-//       query param and change the examples/docs (!4455)
+// TODO: add ETL-specific query param and change the examples/docs (!4455)
 func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {
 	_, err = GetObject(baseParams, bck, objName, GetObjectInput{
 		Writer: w,

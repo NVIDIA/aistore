@@ -189,7 +189,7 @@ func TestToken(t *testing.T) {
 	time.Sleep(shortExpiration)
 	tk, err := tok.DecryptToken(token, secret)
 	tassert.CheckFatal(t, err)
-	if !tk.Expires.Before(time.Now()) {
+	if tk.Expires.After(time.Now()) {
 		t.Fatalf("Token must be expired: %s", token)
 	}
 }
