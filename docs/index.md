@@ -79,6 +79,7 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
   - [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api)
   - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) (and [pip package](https://pypi.org/project/aistore/))
   - [REST API](/docs/http_api.md)
+    - [Easy URL](/docs/easy_url.md)
 - Amazon S3
   - [`s3cmd` client](/docs/s3cmd.md)
   - [S3 compatibility](/docs/s3compat.md)

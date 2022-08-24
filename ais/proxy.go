@@ -441,6 +441,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
+	// num items: 1
 	if len(apiItems) == 1 {
 		// list buckets for a given provider
 		// NOTE two differences between this implementation and `p.bckNamesFromBMD` (s3 API):
@@ -460,6 +461,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 		p.bucketHandler(w, r)
 		return
 	}
+	// num items: 2
 	bucket := apiItems[1]
 	bck := cmn.Bck{Name: bucket, Provider: provider}
 	if err := bck.ValidateName(); err != nil {
@@ -469,10 +471,15 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 
 	var objName string
 	if len(apiItems) > 2 {
+		// num items: 3
 		objName = apiItems[2]
 		r.URL.Path = apc.URLPathObjects.Join(bucket, objName)
 		r.URL.Path += path.Join(apiItems[3:]...)
 	} else {
+		if r.Method == http.MethodPut {
+			p.writeErrMsg(w, r, "missing destination object name in the \"easy URL\"")
+			return
+		}
 		r.URL.Path = apc.URLPathBuckets.Join(bucket)
 	}
 

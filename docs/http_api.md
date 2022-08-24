@@ -81,7 +81,7 @@ and more.
 
 5. **URL query**, e. g., `?what=config`.
 
-In particular, all API requests that operate on a bucket carry the bucket's specification details in the URL's query. Those details may include [backend provider](providers.md) and [namespace](providers.md#unified-global-namespace) where an empty backend provider indicates an AIS bucket (with AIStore being, effectively, the default provider) while an empty namespace parameter translates as a global (default) namespace. For exact names of the bucket-specifying URL Query parameters, please refer to this [API source](/api/bucket.go).
+In particular, all API requests that operate on a bucket carry the bucket's specification details in the URL's query. Those details may include [backend provider](/docs/providers.md) and [namespace](/docs/providers.md#unified-global-namespace) where an empty backend provider indicates an AIS bucket (with AIStore being, effectively, the default provider) while an empty namespace parameter translates as a global (default) namespace. For exact names of the bucket-specifying URL Query parameters, please refer to this [API source](/api/bucket.go).
 
 > Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e. g., an entire cluster or a given AIS node. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
 
@@ -91,15 +91,27 @@ In particular, all API requests that operate on a bucket carry the bucket's spec
 
 ## Easy URL
 
-"Easy URL" (feature) has been added with AIS version 3.7 and is a simple alternative mapping of the AIS API to handle URLs paths that look as follows:
+"Easy URL" is a simple alternative mapping of the AIS API to handle URLs paths that look as follows:
+
+* **GET http(s)://host:port/provider/[bucket[/object]]**
+* **PUT http(s)://host:port/provider/[bucket[/object]]**,
+
+The capability enables (convenient) usage of your Internet Browser (or `curl`, etc. tools). In other words, you can use simple intuitive URLs to execute:
+
+1. GET(object)
+2. PUT(object)
+3. list-objects(bucket)
+4. list-buckets
+
+**NOTE**: rest of this section provides a short summary; please see [easy URL readme](/docs/easy_url.md) for background, details, and extended comments.
+
+In other words, the supported URL paths include:
 
 | URL | Comment |
 |--- | --- |
 | `/gs/mybucket/myobject` | read, write, delete, and list objects in Google Cloud buckets |
 | `/az/mybucket/myobject` | same, for Azure Blob Storage buckets |
 | `/ais/mybucket/myobject` | AIS buckets |
-
-In other words, "easy URL" is a convenience to provide an intuitive ("easy") RESTful API for the most essential reading and writing operations, e.g.:
 
 ```console
 # Example: GET
@@ -115,11 +127,12 @@ $ curl -L -X PUT 'http://aistore/gs/my-google-bucket/abc-train-9999.tar -T /tmp/
   $ curl -L -X PUT 'http://aistore/v1/objects/my-google-bucket/abc-train-9999.tar?provider=gs -T /tmp/9999.tar'
 
 # Example: LIST (i.e., `list-objects`)
-$ curl -L -X GET 'http://aistore/gs/my-google-bucket'
+$ curl -L -X GET 'http://aistore/gs/my-google-bucket' | jq
 ```
 
-**NOTE**:
-> Amazon S3 is missing in the list that includes GCP and Azure. The reason for this is that AIS provides S3 compatibility layer via its "/s3" endpoint. [S3 compatibility](https://github.com/NVIDIA/aistore/blob/master/docs/s3compat.md) shall not be confused with a simple alternative URL Path mapping, whereby a path (e.g.) "gs/mybucket/myobject" gets replaced with "v1/objects/mybucket/myobject?provider=gcp" with _no_ other changes to the request and response parameters and components.
+> AIS provides S3 compatibility layer via its "/s3" endpoint. [S3 compatibility](/docs/s3compat.md) shall not be confused with "easy URL" mapping, whereby a path (e.g.) "gs/mybucket/myobject" gets replaced with "v1/objects/mybucket/myobject?provider=gcp" with _no_ other changes to the request and response parameters and components.
+
+> For detals and more usage examples, please see [easy URL readme](/docs/easy_url.md).
 
 ## API Reference
 
@@ -147,8 +160,8 @@ The operations that query cluster-wide information and/or involve or otherwise a
 | Force-Set primary proxy (NOTE: advanced usage only!) | PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"` <sup id="a6">[6](#ft6)</sup>| `api.SetPrimaryProxy` |
 | Get cluster configuration | (to be added) | (to be added) | `api.GetClusterConfig` |
 | Get `BMD` | (to be added) | (to be added) | `api.GetBMD` |
-| Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "set-config", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](configuration.md) | `api.SetClusterConfigUsingMsg` |
-| Set cluster-wide configuration **via URL query** | PUT /v1/cluster/set-config/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/set-config?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md) | `api.SetClusterConfig` |
+| Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "set-config", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](/docs/configuration.md) | `api.SetClusterConfigUsingMsg` |
+| Set cluster-wide configuration **via URL query** | PUT /v1/cluster/set-config/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/set-config?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](/docs/configuration.md) | `api.SetClusterConfig` |
 | Reset cluster-wide configuration | PUT {"action": "reset-config"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-config"}' 'http://G/v1/cluster'` | `api.ResetClusterConfig` |
 | Shutdown cluster | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-primary/v1/cluster'` | `api.ShutdownCluster` |
 | Rebalance cluster | PUT {"action": "start", "value": {"kind": "rebalance"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "value": {"kind": "rebalance"}}' 'http://G/v1/cluster'` | `api.StartXaction` |
@@ -176,7 +189,7 @@ The operations that are limited in scope to a single specified node and that usu
 | Get node log | (to be added) | (to be added) | `api.GetDaemonLog` |
 | Get node status | (to be added) | (to be added) | `api.GetDaemonStatus` |
 | Get node config | (to be added) | (to be added) | `api.GetDaemonConfig` |
-| Set node configuration | PUT /v1/daemon/set-config/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/set-config?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md) | `api.SetDaemonConfig` |
+| Set node configuration | PUT /v1/daemon/set-config/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/set-config?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](/docs/configuration.md) | `api.SetDaemonConfig` |
 | Reset node configuration | PUT {"action": "reset-config"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-config"}' 'http://G-or-T/v1/daemon'` | `api.ResetDaemonConfig` |
 | Get target IO (aka disk) statistics | (to be added) | (to be added) | `api.GetTargetDiskStats` |
 | Set (i.e., update) node config | (to be added) | (to be added) | `api.SetDaemonConfig` |
@@ -184,7 +197,7 @@ The operations that are limited in scope to a single specified node and that usu
 
 ### Mountpaths and Disks
 
-Special subset of node operations (see previous section) to manage disks attached to specific storage target. The corresponding AIS abstraction is called [mountpath](overview.md#terminology).
+Special subset of node operations (see previous section) to manage disks attached to specific storage target. The corresponding AIS abstraction is called [mountpath](/docs/overview.md#terminology).
 
 These APIs also require specific node ID (to identify the target in the cluster to operate on):
 
@@ -200,27 +213,27 @@ These APIs also require specific node ID (to identify the target in the cluster 
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
-| List [bucket](bucket.md) names | GET {"action": "list"} /v1/buckets/ | `curl -L -X GET  -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://G/v1/buckets/'` | `api.ListBuckets` |
-| Create [bucket](bucket.md) | POST {"action": "create-bck"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "create-bck"}' 'http://G/v1/buckets/abc'` | `api.CreateBucket` |
-| Destroy [bucket](bucket.md) | DELETE {"action": "destroy-bck"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroy-bck"}' 'http://G/v1/buckets/abc'` | `api.DestroyBucket` |
-| Rename ais [bucket](bucket.md) | POST {"action": "move-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "move-bck" }' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.RenameBucket` |
-| Copy [bucket](bucket.md) | POST {"action": "copy-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "copy-bck", }}}' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.CopyBucket` |
+| List [bucket](/docs/bucket.md) names | GET {"action": "list"} /v1/buckets/ | `curl -L -X GET  -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://G/v1/buckets/'` | `api.ListBuckets` |
+| Create [bucket](/docs/bucket.md) | POST {"action": "create-bck"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "create-bck"}' 'http://G/v1/buckets/abc'` | `api.CreateBucket` |
+| Destroy [bucket](/docs/bucket.md) | DELETE {"action": "destroy-bck"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroy-bck"}' 'http://G/v1/buckets/abc'` | `api.DestroyBucket` |
+| Rename ais [bucket](/docs/bucket.md) | POST {"action": "move-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "move-bck" }' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.RenameBucket` |
+| Copy [bucket](/docs/bucket.md) | POST {"action": "copy-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "copy-bck", }}}' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.CopyBucket` |
 | Rename/move object (ais buckets only) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mybucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> | `api.RenameObject` |
 | Check if an object from a remote bucket *is present*  | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` | `api.HeadObject` |
 | GET object | GET /v1/objects/bucket-name/object-name | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=s3' -o myobject` <sup id="a1">[1](#ft1)</sup> | `api.GetObject`, `api.GetObjectWithValidation`, `api.GetObjectReader`, `api.GetObjectWithResp` |
 | Read range | GET /v1/objects/bucket-name/object-name | `curl -L -X GET -H 'Range: bytes=1024-1535' 'http://G/v1/objects/myS3bucket/myobject?provider=s3' -o myobject`<br> Note: For more information about the HTTP Range header, see [this](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)  | `` |
-| List objects in a given [bucket](bucket.md) | GET {"action": "list", "value": { properties-and-options... }} /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"action": "list", "value":{"props": "size"}}' 'http://G/v1/buckets/myS3bucket'` <sup id="a2">[2](#ft2)</sup> | `api.ListObjects` (see also `api.ListObjectsPage`) |
-| Get [bucket properties](bucket.md#bucket-properties) | HEAD /v1/buckets/bucket-name | `curl -L --head 'http://G/v1/buckets/mybucket'` | `api.HeadBucket` |
+| List objects in a given [bucket](/docs/bucket.md) | GET {"action": "list", "value": { properties-and-options... }} /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"action": "list", "value":{"props": "size"}}' 'http://G/v1/buckets/myS3bucket'` <sup id="a2">[2](#ft2)</sup> | `api.ListObjects` (see also `api.ListObjectsPage`) |
+| Get [bucket properties](/docs/bucket.md#bucket-properties) | HEAD /v1/buckets/bucket-name | `curl -L --head 'http://G/v1/buckets/mybucket'` | `api.HeadBucket` |
 | Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject'` | `api.HeadObject` |
 | Set object's custom (user-defined) properties | (to be added) | (to be added) | `api.SetObjectCustomProps` |
 | PUT object | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject' -T filenameToUpload` | `api.PutObject` |
 | APPEND to object | PUT /v1/objects/bucket-name/object-name?appendty=append&handle= | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=append&handle=' -T filenameToUpload-partN`  <sup>[8](#ft8)</sup> | `api.AppendObject` |
 | Finalize APPEND | PUT /v1/objects/bucket-name/object-name?appendty=flush&handle=obj-handle | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=flush&handle=obj-handle'`  <sup>[8](#ft8)</sup> | `api.FlushObject` |
 | Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L 'http://G/v1/objects/mybucket/myobject'` | `api.DeleteObject` |
-| Set [bucket properties](bucket.md#bucket-properties) (proxy) | PATCH {"action": "set-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"set-bprops", "value": {"checksum": {"type": "sha256"}, "mirror": {"enable": true}, "force": false}' 'http://G/v1/buckets/abc'`  <sup id="a9">[9](#ft9)</sup> | `api.SetBucketProps` |
-| Reset [bucket properties](bucket.md#bucket-properties) (proxy) | PATCH {"action": "reset-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"reset-bprops"}' 'http://G/v1/buckets/abc'` | `api.ResetBucketProps` |
-| [Evict](bucket.md#prefetchevict-objects) object | DELETE '{"action": "evict-listrange"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict-listrange"}' 'http://G/v1/objects/mybucket/myobject'` | `api.EvictObject` |
-| [Evict](bucket.md#evict-bucket) remote bucket | DELETE {"action": "evict-remote-bck"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evict-remote-bck"}' 'http://G/v1/buckets/myS3bucket'` | `api.EvictRemoteBucket` |
+| Set [bucket properties](/docs/bucket.md#bucket-properties) (proxy) | PATCH {"action": "set-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"set-bprops", "value": {"checksum": {"type": "sha256"}, "mirror": {"enable": true}, "force": false}' 'http://G/v1/buckets/abc'`  <sup id="a9">[9](#ft9)</sup> | `api.SetBucketProps` |
+| Reset [bucket properties](/docs/bucket.md#bucket-properties) (proxy) | PATCH {"action": "reset-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"reset-bprops"}' 'http://G/v1/buckets/abc'` | `api.ResetBucketProps` |
+| [Evict](/docs/bucket.md#prefetchevict-objects) object | DELETE '{"action": "evict-listrange"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict-listrange"}' 'http://G/v1/objects/mybucket/myobject'` | `api.EvictObject` |
+| [Evict](/docs/bucket.md#evict-bucket) remote bucket | DELETE {"action": "evict-remote-bck"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evict-remote-bck"}' 'http://G/v1/buckets/myS3bucket'` | `api.EvictRemoteBucket` |
 | Promote file or directory | POST {"action": "promote", "name": "/home/user/dirname", "value": {"target": "234ed78", "recurs": true, "keep": true}} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote", "name":"/user/dir", "value": {"target": "234ed78", "trim_prefix": "/user/", "recurs": true, "keep": true} }' 'http://G/v1/buckets/abc'` <sup>[7](#ft7)</sup>| `api.PromoteFileOrDir` |
 
 ### Storage Services
@@ -228,20 +241,20 @@ These APIs also require specific node ID (to identify the target in the cluster 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
 | Erasure code entire bucket | (to be added) | (to be added) | `api.ECEncodeBucket` |
-| Configure bucket as [n-way mirror](storage_svcs.md#n-way-mirror) | POST {"action": "make-n-copies", "value": n} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"make-n-copies", "value": 2}' 'http://G/v1/buckets/abc'` | `api.MakeNCopies` |
-| Enable [erasure coding](storage_svcs.md#erasure-coding) protection for all objects (proxy) | POST {"action": "ec-encode"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"ec-encode"}' 'http://G/v1/buckets/abc'` | (to be added) |
+| Configure bucket as [n-way mirror](/docs/storage_svcs.md#n-way-mirror) | POST {"action": "make-n-copies", "value": n} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"make-n-copies", "value": 2}' 'http://G/v1/buckets/abc'` | `api.MakeNCopies` |
+| Enable [erasure coding](/docs/storage_svcs.md#erasure-coding) protection for all objects (proxy) | POST {"action": "ec-encode"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"ec-encode"}' 'http://G/v1/buckets/abc'` | (to be added) |
 
 ### Multi-Object Operations
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
-| [Prefetch](bucket.md#prefetchevict-objects) a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"]}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.PrefetchList` |
-| [Prefetch](bucket.md#prefetchevict-objects) a range of objects| POST '{"action":"prefetch", "value":{"template":"your-prefix{min..max}" }}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.PrefetchRange` |
+| [Prefetch](/docs/bucket.md#prefetchevict-objects) a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"]}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.PrefetchList` |
+| [Prefetch](/docs/bucket.md#prefetchevict-objects) a range of objects| POST '{"action":"prefetch", "value":{"template":"your-prefix{min..max}" }}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.PrefetchRange` |
 | Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]]"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"]}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.DeleteList` |
 | Delete a range of objects | DELETE '{"action":"delete", "value":{"template":"your-prefix{min..max}"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.DeleteRange` |
 | | (to be added) | (to be added) | |
-| [Evict](bucket.md#prefetchevict-objects) a list of objects | DELETE '{"action":"evictobj", "value":{"objnames":"[o1[,o]]"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobj", "value":{"objnames":["o1","o2","o3"]}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.EvictList` |
-| [Evict](bucket.md#prefetchevict-objects) a range of objects| DELETE '{"action":"evictobj", "value":{"template":"your-prefix{min..max}"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobj", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.EvictRange` |
+| [Evict](/docs/bucket.md#prefetchevict-objects) a list of objects | DELETE '{"action":"evictobj", "value":{"objnames":"[o1[,o]]"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobj", "value":{"objnames":["o1","o2","o3"]}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.EvictList` |
+| [Evict](/docs/bucket.md#prefetchevict-objects) a range of objects| DELETE '{"action":"evictobj", "value":{"template":"your-prefix{min..max}"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobj", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.EvictRange` |
 | Copy multiple objects from bucket to bucket | (to be added) | (to be added) | `api.CopyMultiObj` |
 | Copy and, simultaneously, transform multiple objects (i.e., perform user-defined offline transformation) | (to be added) | (to be added) | `api.ETLMultiObj` |
 
@@ -255,10 +268,10 @@ These APIs also require specific node ID (to identify the target in the cluster 
 
 ### Starting, stopping, and querying batch operations (jobs)
 
-The term we use in the code and elsewhere is [xaction](overview.md#terminology) - a shortcut for *eXtended action*. For definition and further references, see:
+The term we use in the code and elsewhere is [xaction](/docs/overview.md#terminology) - a shortcut for *eXtended action*. For definition and further references, see:
 
-* [Terminology](overview.md#terminology)
-* [Batch operations](batch.md)
+* [Terminology](/docs/overview.md#terminology)
+* [Batch operations](/docs/batch.md)
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
@@ -275,15 +288,15 @@ The term we use in the code and elsewhere is [xaction](overview.md#terminology) 
 
 Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in another AIS cluster, or - the 3rd option - be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an AIS bucket that happen to share the same name? To resolve all potential naming, and (arguably, more importantly) partition namespace with respect to both physical isolation and QoS, AIS introduces the concept of *provider*.
 
-* [Backend Provider](providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+* [Backend Provider](/docs/providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
-> Backend provider is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. For supported backend providers, please refer to [Providers](providers.md) and/or [Buckets: introduction and detailed overview](bucket.md) documents.
+> Backend provider is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](/docs/batch.md) operations. For supported backend providers, please refer to [backend providers](/docs/providers.md) and/or [Buckets: introduction and detailed overview](/docs/bucket.md) documents.
 
 For even more information, CLI examples, and the most recent updates, please see:
-- [Backend Providers](providers.md)
+- [Backend Providers](/docs/providers.md)
 - [CLI: operations on buckets](/docs/cli/bucket.md)
 - [CLI: operations on objects](/docs/cli/object.md)
-- [On-Disk Layout](on_disk_layout.md)
+- [On-Disk Layout](/docs/on_disk_layout.md)
 
 ## Curl Examples
 
@@ -356,21 +369,21 @@ This single command causes execution of multiple `GET ?what=stats` requests with
 
 ![AIStore statistics](images/ais-get-stats.png)
 
-More usage examples can be found in the [README that describes AIS configuration](configuration.md).
+More usage examples can be found in the [README that describes AIS configuration](/docs/configuration.md).
 
 ## ETL
 
-For API Reference of ETL please refer to [ETL Readme](etl.md#api-reference)
+For API Reference of ETL please refer to [ETL Readme](/docs/etl.md#api-reference)
 
 ## Footnotes
 
 <a name="ft1">1</a>) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html). [↩](#a1)
 
-<a name="ft2">2</a>) See the [List Objects section](bucket.md#list-objects) for details. [↩](#a2)
+<a name="ft2">2</a>) See the [List Objects section](/docs/bucket.md#list-objects) for details. [↩](#a2)
 
 <a name="ft3">3</a>) Notice the -L option here and elsewhere. [↩](#a3)
 
-<a name="ft4">4</a>) See the [List/Range Operations section](batch.md#listrange-operations) for details.
+<a name="ft4">4</a>) See the [List/Range Operations section](/docs/batch.md#listrange-operations) for details.
 
 <a name="ft5">5</a>) The request returns an HTTP status code 204 if the mountpath is already enabled/disabled or 404 if mountpath was not found. [↩](#a5)
 
