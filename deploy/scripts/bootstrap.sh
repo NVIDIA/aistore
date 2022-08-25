@@ -63,13 +63,6 @@ fmt)
   *)
     echo "Running style check..." >&2
 
-    out=$(gofmt -l -e ${AISTORE_DIR})
-
-    if [[ -n ${out} ]]; then
-      echo ${out} >&2
-      exit 1
-    fi
-
     check_gomod
     check_imports
     check_deps

@@ -22,6 +22,7 @@ linters:
     - misspell
     - nolintlint
     - prealloc
+    - reassign
     - rowserrcheck
     - sqlclosecheck
     - staticcheck
@@ -33,11 +34,11 @@ linters:
 
     # See: https://golangci-lint.run/usage/linters/
     #
-    # TODO: Following linters should be enabled at some:
-    # - ifshort
-    # - nilerr
+    # linters that could be only occasionally useful:
+    # - errchkjson
+    # - nilnil
     #
-    # linters that produce false positives (enable at your own risk):
+    # linters that used to produce false positives:
     # - goconst
     # - godot
     # - goerr113
@@ -62,8 +63,8 @@ linters:
     # - wrapcheck
     #
     # linters that seem to be abandoned:
-    # deadcode
-    # varcheck
+    # - deadcode
+    # - varcheck
 
 linters-settings:
   revive:
