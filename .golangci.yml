@@ -77,7 +77,7 @@ linters-settings:
       - name: if-return
       - name: blank-imports
       - name: context-as-argument
-      # - name: context-keys-type NOTE: uncomment when golangci gets released with revive 1.2.2
+      - name: context-keys-type
       - name: dot-imports
       - name: error-naming
       - name: error-strings
@@ -85,19 +85,19 @@ linters-settings:
       - name: increment-decrement
       - name: indent-error-flow
       - name: imports-blacklist
-      # - name: modifies-value-receiver NOTE: uncomment when ... 1.2.2
+      - name: modifies-value-receiver
       - name: package-comments
       - name: range
       - name: receiver-naming
       - name: redefines-builtin-id
-      # - name: string-of-int NOTE: uncomment when ... 1.2.2
+      - name: string-of-int
       - name: superfluous-else
-      # - name: time-naming NOTE: uncomment when ... 1.2.2
+      - name: time-naming
       - name: var-naming
-      # - name: var-declaration NOTE: uncomment when ... 1.2.2
+      - name: var-declaration
       - name: unconditional-recursion
       - name: unexported-naming
-      # - name: unexported-return NOTE: uncomment when ... 1.2.2
+      - name: unexported-return
       - name: unnecessary-stmt
       - name: unreachable-code
       - name: unused-parameter

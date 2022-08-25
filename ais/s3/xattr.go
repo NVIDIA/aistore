@@ -6,8 +6,10 @@ package s3
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
@@ -17,7 +19,20 @@ const mptXattrID = "user.ais.s3-multipart"
 
 const iniCapParts = 8
 
-func LoadMptXattr(fqn string) (out *mpt, err error) {
+func OffsetSorted(lom *cluster.LOM, partNum int64) (off, size int64, status int, err error) {
+	var mpt *mpt
+	if mpt, err = loadMptXattr(lom.FQN); err != nil {
+		return
+	}
+	if mpt == nil {
+		return -1, 0, http.StatusNotFound, fmt.Errorf("%s: multipart state not found", lom)
+	}
+
+	off, size, err = mpt._offSorted(lom.FullName(), partNum)
+	return
+}
+
+func loadMptXattr(fqn string) (out *mpt, err error) {
 	b, err := fs.GetXattr(fqn, mptXattrID)
 	if err == nil {
 		out = &mpt{}
@@ -42,7 +57,7 @@ func storeMptXattr(fqn string, mpt *mpt) (err error) {
 // mpt //
 /////////
 
-func (mpt *mpt) OffsetSorted(name string, num int64) (off, size int64, err error) {
+func (mpt *mpt) _offSorted(name string, num int64) (off, size int64, err error) {
 	var prev = int64(-1)
 	for _, part := range mpt.parts {
 		debug.Assert(part.Num > prev) // must ascend

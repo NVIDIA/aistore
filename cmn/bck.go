@@ -473,8 +473,7 @@ func (qbck QueryBcks) Contains(other *Bck) bool {
 			other.Provider = apc.ProviderAIS
 		}
 		if qbck.Provider == "" {
-			// If qbck's provider not set, we should match the expected bucket
-			qbck.Provider = other.Provider
+			qbck.Provider = other.Provider //nolint:revive // if not set we match the expected
 		}
 		return qbck.Equal(other)
 	}

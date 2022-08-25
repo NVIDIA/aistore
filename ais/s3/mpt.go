@@ -177,7 +177,7 @@ func ListParts(id string, lom *cluster.LOM) ([]*PartInfo, error) {
 	mpt, ok := ups[id]
 	if !ok {
 		var err error
-		mpt, err = LoadMptXattr(lom.FQN)
+		mpt, err = loadMptXattr(lom.FQN)
 		if err != nil || mpt == nil {
 			mu.RUnlock()
 			return nil, err

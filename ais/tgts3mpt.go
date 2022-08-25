@@ -344,25 +344,15 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *cluster
 		t.writeErr(w, r, err)
 		return
 	}
-	mpt, err := s3.LoadMptXattr(lom.FQN)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	if mpt == nil {
-		err := fmt.Errorf("%s: multipart state not found", lom)
-		t.writeErr(w, r, err, http.StatusNotFound)
-		return
-	}
 	partNum, err := s3.ParsePartNum(q.Get(s3.QparamMptPartNo))
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-	off, size, err := mpt.OffsetSorted(lom.FullName(), partNum)
+	// load mpt xattr and find out the part num's offset & size
+	off, size, status, err := s3.OffsetSorted(lom, partNum)
 	if err != nil {
-		t.writeErr(w, r, err)
-		return
+		t.writeErr(w, r, err, status)
 	}
 	fh, err := os.Open(lom.FQN)
 	if err != nil {
