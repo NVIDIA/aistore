@@ -11,7 +11,7 @@ BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
 MAKEFLAGS += --no-print-directory
 
 # Uncomment this line to cross-compile:
-# CROSS_COMPILE = docker run --rm -v $(shell pwd):/go/src/github.com/NVIDIA/aistore -w /go/src/github.com/NVIDIA/aistore golang:1.18
+# CROSS_COMPILE = docker run --rm -v $(shell pwd):/go/src/github.com/NVIDIA/aistore -w /go/src/github.com/NVIDIA/aistore golang:1.19
 
 # Build version, flags, and tags
 VERSION = $(shell git rev-parse --short HEAD)

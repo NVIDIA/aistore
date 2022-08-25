@@ -25,7 +25,7 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 > It is expected that within a given cluster, all AIS target machines are identical, hardware-wise.
 
 * [Linux](#Linux) (with `GCC`, `sysstat` and `attr` packages, and kernel 4.15+) or [macOS](#macOS)
-* [Go 1.18 or later](https://golang.org/dl/) (and look for go1.18.1)
+* [Go 1.19 or later](https://golang.org/dl/) (and look for go1.19)
 * Extended attributes (`xattrs` - see next section)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 

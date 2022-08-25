@@ -20,7 +20,7 @@ sudo rm -rf ~/ais || true
 mkdir -p ~/ais/{bin,pkg,src}
 
 GOLANG_VER_FILE="/usr/local/go/VERSION"
-GOLANG_VERSION="go1.18"
+GOLANG_VERSION="go1.19"
 CURRENT_GOLANG_VERSION=""
 if [[ -f ${GOLANG_VER_FILE} ]]; then
   CURRENT_GOLANG_VERSION=$(cat ${GOLANG_VER_FILE})
