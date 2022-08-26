@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -32,23 +31,24 @@ const (
    For more information, please refer to ` + cmn.GitHubHome + `/blob/master/cmd/cli/README.md`
 )
 
+// AISCLI represents an instance of an AIS command line interface
+type AISCLI struct {
+	app           *cli.App
+	outWriter     io.Writer
+	errWriter     io.Writer
+	longRunParams *longRunParams
+}
+
 var (
-	cfg *config.Config // AIS config
-
-	buildTime string
-
+	cfg         *config.Config
+	buildTime   string
 	k8sDetected bool
 )
 
-// AISCLI represents an instance of an AIS command line interface
-type AISCLI struct {
-	app *cli.App
-
-	outWriter io.Writer
-	errWriter io.Writer
-
-	longRunParams *longRunParams
-}
+// color
+var (
+	fred, fcyan func(a ...interface{}) string
+)
 
 // New returns a new, initialized AISCLI instance
 func New(version, buildtime string) *AISCLI {
@@ -129,15 +129,8 @@ func isUnreachableError(err error) (msg string, unreachable bool) {
 }
 
 func redErr(err error) error {
-	msg := err.Error()
-	red := color.New(color.FgRed).SprintFunc()
-	if strings.HasPrefix(msg, cluster.TnamePrefix) || strings.HasPrefix(msg, cluster.PnamePrefix) {
-		// not capitalizing
-	} else {
-		msg = cos.CapitalizeString(msg)
-	}
-	msg = strings.TrimRight(msg, "\n")
-	return errors.New(red(msg))
+	msg := strings.TrimRight(err.Error(), "\n")
+	return errors.New(fred("Error: ") + msg)
 }
 
 // Formats the error message to a nice string
@@ -145,15 +138,13 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 	if err == nil {
 		return nil
 	}
-	detailedErr, unreachable := isUnreachableError(err)
-	if unreachable {
-		red := color.New(color.FgRed).SprintFunc()
+	if _, unreachable := isUnreachableError(err); unreachable {
 		errmsg := fmt.Sprintf("AIStore cannot be reached at %s\n", clusterURL)
-		errmsg += fmt.Sprintf("Error: %s\n"+
-			"Make sure that environment variable %s points to an AIS gateway (any AIS gateway in the cluster)\n"+
-			"For default settings, see CLI config at %s (or run `ais show config cli`)",
-			detailedErr, env.AIS.Endpoint, config.Path())
-		return errors.New(red(errmsg))
+		errmsg += fmt.Sprintf("Make sure that environment variable %s points to an AIS gateway "+
+			"(any AIS gateway in the cluster)\n"+
+			"For defaults, see CLI config at %s (or run `ais show config cli`)",
+			env.AIS.Endpoint, config.Path())
+		return redErr(errors.New(errmsg))
 	}
 
 	switch err := err.(type) {
@@ -183,6 +174,9 @@ func onBeforeCommand(c *cli.Context) error {
 
 func (aisCLI *AISCLI) init(version string) {
 	app := aisCLI.app
+
+	fcyan = color.New(color.FgHiCyan).SprintFunc()
+	fred = color.New(color.FgHiRed).SprintFunc()
 
 	app.Name = cliName
 	app.Usage = "AIS CLI: command-line management utility for AIStore"

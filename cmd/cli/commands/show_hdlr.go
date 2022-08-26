@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xact"
-	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
 
@@ -544,10 +543,8 @@ func showClusterConfig(c *cli.Context, section string) error {
 		return err
 	}
 	if useJSON && section != "" {
-		// TODO: extract section != ""
-		cyan := color.New(color.FgHiCyan).SprintFunc()
-		msg := fmt.Sprintf("Warning: cannot show %q selection in JSON - not implemented yet\n", section)
-		fmt.Fprintln(c.App.Writer, cyan(msg))
+		msg := fmt.Sprintf("cannot show %q selection in JSON - not implemented yet\n", section)
+		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
 		useJSON = false
 	}
 	if useJSON {
@@ -613,10 +610,8 @@ func showNodeConfig(c *cli.Context) error {
 	}
 
 	if useJSON && section != "" {
-		// TODO: extract section != ""
-		cyan := color.New(color.FgHiCyan).SprintFunc()
-		msg := fmt.Sprintf("Warning: cannot show %q selection in JSON - not implemented yet\n", section)
-		fmt.Fprintln(c.App.Writer, cyan(msg))
+		msg := fmt.Sprintf("cannot show %q selection in JSON - not implemented yet\n", section)
+		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
 		useJSON = false
 	}
 	return templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, useJSON)

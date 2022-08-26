@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
@@ -99,12 +98,10 @@ func setCluConfigHandler(c *cli.Context) error {
 	// assorted named fields that'll require (cluster | node) restart
 	// for the change to take an effect
 	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
-		cyan := color.New(color.FgHiCyan).SprintFunc()
-		msg := fmt.Sprintf("Warning: restart required for the change '%s=%s' to take an effect\n",
-			name, nvs[name])
-		fmt.Fprintln(c.App.Writer, cyan(msg))
+		msg := fmt.Sprintf("restart required for the change '%s=%s' to take an effect\n", name, nvs[name])
+		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
 	}
-	// TODO -- FIXME: transient doesn't work?
+	// TODO: check that transient works
 	if err := api.SetClusterConfig(defaultAPIParams, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
@@ -165,10 +162,8 @@ func setNodeConfigHandler(c *cli.Context) error {
 	// assorted named fields that'll require (cluster | node) restart
 	// for the change to take an effect
 	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
-		cyan := color.New(color.FgHiCyan).SprintFunc()
-		msg := fmt.Sprintf("Warning: restart required for the change '%s=%s' to take an effect\n",
-			name, nvs[name])
-		fmt.Fprintln(c.App.Writer, cyan(msg))
+		msg := fmt.Sprintf("restart required for the change '%s=%s' to take an effect\n", name, nvs[name])
+		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
 	}
 
 	if err := api.SetDaemonConfig(defaultAPIParams, daemonID, nvs, flagIsSet(c, transientFlag)); err != nil {

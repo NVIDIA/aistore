@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/fatih/color"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
 )
@@ -432,7 +431,6 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 
 	if colored {
 		defList = bckPropList(defProps, !compact)
-		highlight := color.New(color.FgCyan).SprintfFunc()
 		for idx, p := range propList {
 			for _, def := range defList {
 				if def.Name != p.Name {
@@ -446,7 +444,7 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 					propList[idx] = p
 				}
 				if def.Value != p.Value {
-					p.Value = highlight(p.Value)
+					p.Value = fcyan(p.Value)
 					propList[idx] = p
 				}
 				break
