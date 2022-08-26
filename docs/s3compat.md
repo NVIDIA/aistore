@@ -30,12 +30,16 @@ For additional background, see:
 - [`s3cmd` command line](#s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
 - [Last Modification Time](#last-modification-time)
+- [Multipart Upload using `aws`](#multipart-upload-using-aws)
 - [More Usage Examples](#more-usage-examples)
   - [Create bucket](#create-bucket)
   - [Remove bucket](#remove-bucket)
 - [TensorFlow Demo](#tensorflow-demo)
 - [S3 Compatibility](#s3-compatibility)
+  - [Supported S3](#supported-s3)
+  - [Unsupported S3](#unsupported-s3)
 - [Boto3 Compatibility](#boto3-compatibility)
+- [Amazon CLI tools](#amazon-cli-tools)
 
 ## Quick example using `aws` CLI
 
@@ -196,6 +200,65 @@ $ s3cmd ls s3://bck --host=localhost:51080 --host-bucket="localhost:51080/s3/%(b
 1969-12-31 16:00     71671   s3://test/obj-aws
 ```
 
+## Multipart Upload using `aws`
+
+Example below reproduces the following [Amazon Knowledge-Center instruction](https://aws.amazon.com/premiumsupport/knowledge-center/s3-multipart-upload-cli/).
+
+> Compare with (user-friendly and easy-to-execute) multipart examples from the [s3cmd companion doc](/docs/s3cmd.md).
+
+```console
+# 1. initiate multipart upload
+$ aws s3api create-multipart-upload --bucket abc --key large-test-file
+{
+    "Bucket": "abc",
+    "Key": "large-test-file",
+    "UploadId": "WDLdt08opZDXQoAZmjAaP3jofYAOTTRZoBemtflLMKO.bUBAbImhGSKMR5XbXr9TjVksY67lROMZkQP3aWsEc6vCmIhRmB7fEXeIQbmXCfCeQYtLAlf8hasOulnZZs8m"
+}
+
+# 2. upload the first part (w/ upload-id copied from the previous command)
+$ aws s3api upload-part --bucket abc --key large-test-file --part-number 1 --body README.md --upload-id WDLdt08opZDXQoAZmjAaP3jofYAOTTRZoBemtflLMKO.bUBAbImhGSKMR5XbXr9TjVksY67lROMZkQP3aWsEc6vCmIhRmB7fEXeIQbmXCfCeQYtLAlf8hasOulnZZs8m
+{
+    "ETag": "\"9bc8111718e22a34f9fa6a099da1f3df\""
+}
+
+# 3. upload the second, etc. parts
+$ aws s3api upload-part --bucket abc --key large-test-file --part-number 2 --body LICENSE --upload-id WDLdt08opZDXQoAZmjAaP3jofYAOTTRZoBemtflLMKO.bUBAbImhGSKMR5XbXr9TjVksY67lROMZkQP3aWsEc6vCmIhRmB7fEXeIQbmXCfCeQYtLAlf8hasOulnZZs8m
+{
+    "ETag": "\"f70a21a0c5fa26a93820b0bef5be7619\""
+}
+...
+
+# 4. list active upload by its ID (upload-id)
+$ aws s3api list-parts --bucket abc --key large-test-file --upload-id WDLdt08opZDXQoAZmjAaP3jofYAOTTRZoBemtflLMKO.bUBAbImhGSKMR5XbXr9TjVksY67lROMZkQP3aWsEc6vCmIhRmB7fEXeIQbmXCfCeQYtLAlf8hasOulnZZs8m
+{
+    "Initiator": {
+        "ID": "arn:aws:iam::834420256508:user/johndoe",
+        "DisplayName": "johndoe"
+    },
+    "StorageClass": "STANDARD",
+    "Parts": [
+        {
+            "ETag": "\"9bc8111718e22a34f9fa6a099da1f3df\"",
+            "PartNumber": 1,
+            "Size": 10725,
+            "LastModified": "2022-08-26T23:59:12.000Z"
+        },
+        {
+            "ETag": "\"f70a21a0c5fa26a93820b0bef5be7619\"",
+            "PartNumber": 2,
+            "Size": 1075,
+            "LastModified": "2022-08-26T23:59:40.000Z"
+        }
+    ],
+    "Owner": {
+        "ID": "3bcb8baa034ab2166cd7d6a5b7ac1264d613c5e9fbdf120bc9f0ae91bda54347",
+        "DisplayName": "nsviscs-aws-root"
+    }
+}
+```
+
+And so on. See https://aws.amazon.com/premiumsupport/knowledge-center/s3-multipart-upload-cli for details.
+
 ## More Usage Examples
 
 Use any S3 client to access an AIS bucket. Examples below use standard AWS CLI. To access an AIS bucket, one has to pass the correct `endpoint` to the client. The endpoint is the primary proxy URL and `/s3` path, e.g, `http://10.0.0.20:51080/s3`.
@@ -262,6 +325,8 @@ By way of quick summary, Amazon S3 supports the following API categories:
 
 and a few more. The following table summarizes S3 APIs and provides the corresponding AIS (native) CLI as well as [s3cmd](https://github.com/s3tools/s3cmd) and [aws CLI](https://aws.amazon.com/cli) examples along with comments on limitations - iff there are any. In the rightmost [aws CLI](https://aws.amazon.com/cli) column all mentions of `s3rproxy` refer to [AIS <=> Boto3 compatibility](#boto3-compatibility) at the end of this document.
 
+### Supported S3
+
 | API | AIS CLI and comments | [s3cmd](https://github.com/s3tools/s3cmd) | [aws CLI](https://aws.amazon.com/cli) |
 | --- | --- | --- | --- |
 | Create bucket | `ais bucket create ais://bck` (note: consider using S3 default `md5` checksum - see [discussion](#object-checksum) and examples below) | `s3cmd mb` | `aws s3 mb` |
@@ -274,17 +339,19 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 | HEAD object | `ais object show ais://bck/obj` | `s3cmd info s3://bck/obj` | `aws s3api head-object`(needs `s3rproxy` tag) |
 | List objects in a bucket | `ais ls ais://bck` | `s3cmd ls s3://bucket-name/` | `aws s3 ls s3://bucket-name/`(needs `s3rproxy` tag) |
 | Copy object in a given bucket or between buckets | S3 API is fully supported; we have yet to implement our native CLI to copy objects (we do copy buckets, though) | **Limited support**: `s3cmd` performs GET followed by PUT instead of AWS API call | `aws s3api copy-object ...` calls copy object API(needs `s3rpoxy` tag) |
-| Regions | **Not supported**; AIS has a single built-in region called `ais`; regions sent by S3 clients are simply ignored. | - | - |
 | Last modification time | AIS always stores only one - the last - version of an object. Therefore, we track creation **and** last access time but not "modification time". | - | - |
 | Bucket creation time | `ais bucket show ais://bck` | `s3cmd` displays creation time via `ls` subcommand: `s3cmd ls s3://` | - |
 | Versioning | AIS tracks and updates versioning information but only for the **latest** object version. Versioning is enabled by default; to disable, run: `ais bucket props ais://bck versioning.enabled=false` | - | `aws s3api get/put-bucket-versioning` |
 | ACL | Limited support; AIS provides an extensive set of configurable permissions - see `ais bucket props ais://bck access` and `ais auth` and the corresponding documentation | - | - |
-| Multipart (upload, download) | **Not supported** | - | - |
-| Retention Policy | **Not supported** | - | - |
-| CORS| **Not supported** | - | - |
-| Website endpoints | **Not supported** | - | - |
-| CloudFront CDN | **Not supported** | - | - |
+| Multipart (upload, download) | - (added in v3.12) | `s3cmd put ... s3://bck --multipart-chunk-size-mb=5` | - |
 
+### Unsupported S3
+
+* Amazon Regions (us-east-1, us-west-1, etc.)
+* Retention Policy
+* CORS
+* Website endpoints
+* CloudFront CDN
 
 ## Boto3 Compatibility
 
@@ -301,3 +368,17 @@ $ TAGS=s3rproxy make deploy
 ```
 
 See [Makefile](https://github.com/NVIDIA/aistore/blob/master/Makefile) in the root directory for further details.
+
+## Amazon CLI tools
+
+As far as existing Amazon-native CLI tools, `s3cmd` would be the preferred and recommended option. Please see [`s3cmd` readme](/docs/s3cmd.md) for usage examples and a variety of topics, including:
+
+- [`s3cmd` Configuration](/docs/s3cmd.md#s3cmd-configuration)
+- [Getting Started](/docs/s3cmd.md#getting-started)
+  - [1. AIS Endpoint](/docs/s3cmd.md#1-ais-endpoint)
+  - [2. How to have `s3cmd` calling AIS endpoint](/docs/s3cmd.md#2-how-to-have-s3cmd-calling-ais-endpoint)
+  - [3. Alternatively](/docs/s3cmd.md#3-alternatively)
+  - [4. Notice and possibly update AIS configuration](/docs/s3cmd.md#4-notice-and-possibly-update-ais-configuration)
+  - [5. Create bucket and PUT/GET objects using `s3cmd`](/docs/s3cmd.md#5-create-bucket-and-putget-objects-using-s3cmd)
+  - [6. Multipart upload using `s3cmd`](/docs/s3cmd.md#6-multipart-upload-using-s3cmd)
+
