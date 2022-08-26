@@ -20,6 +20,7 @@ const (
 	HdrUserAgent             = "User-Agent"
 	HdrAccept                = "Accept"
 	HdrLocation              = "Location"
+	HdrServer                = "Server"
 	HdrETag                  = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/ETag
 )
 

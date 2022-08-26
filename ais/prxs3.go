@@ -293,7 +293,7 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 	//
 	// But it appears that Amazon always adds region to the response,
 	// and AWS CLI uses it.
-	w.Header().Set(s3.HdrBckServer, s3.AISSever)
+	w.Header().Set(cos.HdrServer, s3.AISServer)
 	w.Header().Set(s3.HdrBckRegion, s3.AISRegion)
 }
 

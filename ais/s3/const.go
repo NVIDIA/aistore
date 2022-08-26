@@ -35,8 +35,7 @@ const (
 	HdrContentSHA256 = "x-amz-content-sha256"
 
 	HdrBckRegion = "x-amz-bucket-region"
-	AISRegion    = "ais"
 
-	HdrBckServer = "Server"
-	AISSever     = "AIStore"
+	AISRegion = "ais"
+	AISServer = "AIStore"
 )

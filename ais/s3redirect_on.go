@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -24,6 +25,7 @@ func (*proxy) s3Redirect(w http.ResponseWriter, _ *http.Request, _ *cluster.Snod
 	h := w.Header()
 	h.Set(cos.HdrLocation, redirectURL)
 	h.Set(cos.HdrContentType, "text/xml; charset=utf-8")
+	h.Set(cos.HdrServer, s3.AISServer)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 	ep := ExtractEndpoint(redirectURL)
 	body := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
