@@ -26,6 +26,7 @@ type (
 		URL    string
 		Method string
 		Token  string
+		UA     string
 	}
 
 	// ReqParams is used in constructing client-side API requests to the AIStore.
@@ -46,6 +47,11 @@ type (
 
 		// Determines if the response should be validated with the checksum
 		Validate bool
+	}
+	reqResp struct {
+		client *http.Client
+		req    *http.Request
+		resp   *http.Response
 	}
 
 	wrappedResp struct {
@@ -84,9 +90,12 @@ func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr 
 	return
 }
 
-func SetAuthToken(r *http.Request, token string) {
-	if token != "" {
-		r.Header.Set(apc.HdrAuthorization, apc.AuthenticationTypeBearer+" "+token)
+func SetAuxHeaders(r *http.Request, bp *BaseParams) {
+	if bp.Token != "" {
+		r.Header.Set(apc.HdrAuthorization, apc.AuthenticationTypeBearer+" "+bp.Token)
+	}
+	if bp.UA != "" {
+		r.Header.Set(cos.HdrUserAgent, bp.UA)
 	}
 }
 
@@ -177,23 +186,18 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 		return nil, fmt.Errorf("failed to create http request: %w", errR)
 	}
 	reqParams.setRequestOptParams(req)
-	SetAuthToken(req, reqParams.BaseParams.Token)
+	SetAuxHeaders(req, &reqParams.BaseParams)
 
-	call := func() (status int, err error) {
-		resp, err = reqParams.BaseParams.Client.Do(req) //nolint:bodyclose // closed by a caller
-		if resp != nil {
-			status = resp.StatusCode
-		}
-		return
-	}
+	rr := reqResp{client: reqParams.BaseParams.Client, req: req}
 	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
-		Call:      call,
+		Call:      rr.call,
 		Verbosity: cmn.RetryLogOff,
 		SoftErr:   httpMaxRetries,
 		Sleep:     httpRetrySleep,
 		BackOff:   true,
 		IsClient:  true,
 	})
+	resp = rr.resp
 	if err != nil && resp != nil {
 		httpErr := cmn.NewErrHTTP(req, err, resp.StatusCode)
 		httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
@@ -275,7 +279,7 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 		return nil
 	}
 	if reqParams.BaseParams.Method == http.MethodHead {
-		if msg := resp.Header.Get(cos.HdrError); msg != "" {
+		if msg := resp.Header.Get(apc.HdrError); msg != "" {
 			httpErr := cmn.NewErrHTTP(nil, errors.New(msg), resp.StatusCode)
 			httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 			return httpErr
@@ -300,4 +304,16 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 	httpErr = cmn.NewErrHTTP(nil, errors.New(strMsg), resp.StatusCode)
 	httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 	return httpErr
+}
+
+/////////////
+// reqResp //
+/////////////
+
+func (rr *reqResp) call() (status int, err error) {
+	rr.resp, err = rr.client.Do(rr.req) //nolint:bodyclose // closed by a caller
+	if rr.resp != nil {
+		status = rr.resp.StatusCode
+	}
+	return
 }

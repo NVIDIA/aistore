@@ -41,6 +41,7 @@ func initClusterParams() {
 			Client: authnHTTPClient,
 			URL:    authnURL,
 			Token:  loggedUserToken,
+			UA:     ua,
 		}
 	}
 
@@ -48,6 +49,7 @@ func initClusterParams() {
 		Client: defaultHTTPClient,
 		URL:    clusterURL,
 		Token:  loggedUserToken,
+		UA:     ua,
 	}
 }
 

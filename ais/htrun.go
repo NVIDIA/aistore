@@ -636,6 +636,7 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 	if smap := h.owner.smap.get(); smap != nil && smap.vstr != "" {
 		req.Header.Set(apc.HdrCallerSmapVersion, smap.vstr)
 	}
+	req.Header.Set(cos.HdrUserAgent, ua)
 
 	resp, res.err = client.Do(req)
 	if res.err != nil {
@@ -650,7 +651,7 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 	// err == nil && bad status: resp.Body contains the error message
 	if res.status >= http.StatusBadRequest {
 		if args.req.Method == http.MethodHead {
-			msg := resp.Header.Get(cos.HdrError)
+			msg := resp.Header.Get(apc.HdrError)
 			res.err = cmn.S2HTTPErr(req, msg, res.status)
 		} else {
 			var b bytes.Buffer

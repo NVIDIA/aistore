@@ -369,7 +369,7 @@ func (m *ioContext) del(opts ...int) {
 		}
 	)
 	// checks, params
-	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(m.bck))
+	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(m.bck))
 	tassert.CheckFatal(m.t, err)
 	if !exists {
 		return

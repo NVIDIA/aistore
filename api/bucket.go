@@ -183,9 +183,9 @@ func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	return err
 }
 
-// DoesBucketExist queries a proxy or target to get a list of all AIS buckets,
-// returns true if the bucket is present in the list.
-func DoesBucketExist(baseParams BaseParams, qbck cmn.QueryBcks) (bool, error) {
+// QueryBuckets queries cluster for buckets that satisfy the (`qbck`) criteria,
+// and returns true if the selection contains at least one bucket that does.
+func QueryBuckets(baseParams BaseParams, qbck cmn.QueryBcks) (bool, error) {
 	bcks, err := ListBuckets(baseParams, qbck)
 	if err != nil {
 		return false, err

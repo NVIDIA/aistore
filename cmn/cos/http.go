@@ -4,7 +4,9 @@
  */
 package cos
 
-// Ref: "HTTP headers" at https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers
+// References:
+// - Standard HTTP headers: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers
+// - AIS HTTP headers: api package and api/apc/const.go
 
 const (
 	HdrRange                 = "Range" // Ref: https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35
@@ -19,7 +21,6 @@ const (
 	HdrAccept                = "Accept"
 	HdrLocation              = "Location"
 	HdrETag                  = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/ETag
-	HdrError                 = "Hdr-Error"
 )
 
 // Ref: https://www.iana.org/assignments/media-types/media-types.xhtml

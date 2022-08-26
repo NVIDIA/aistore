@@ -2071,7 +2071,7 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, xargs)
 	tassert.CheckFatal(t, err)
 
-	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(bck))
+	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bck))
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !exists, "source bucket shouldn't exist")
 
@@ -2472,7 +2472,7 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes, got (locBytes=%d, outBytes=%d, inBytes=%d)",
 		expectedBytesCnt, locBytes, outBytes, inBytes)
 
-	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(dstBck))
+	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(dstBck))
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, exists == false, "expected destination bucket to not be created")
 }

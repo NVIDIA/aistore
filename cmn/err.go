@@ -795,7 +795,7 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	w.Header().Set(cos.HdrContentTypeOptions, "nosniff")
 	if r.Method == http.MethodHead {
-		w.Header().Set(cos.HdrError, string(e._jsonError()))
+		w.Header().Set(apc.HdrError, string(e._jsonError()))
 		w.WriteHeader(e.Status)
 	} else {
 		w.WriteHeader(e.Status)

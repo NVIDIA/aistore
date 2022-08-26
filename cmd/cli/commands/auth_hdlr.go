@@ -414,6 +414,7 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 			Client: defaultHTTPClient,
 			URL:    cluSpec.URLs[0],
 			Token:  loggedUserToken,
+			UA:     ua,
 		}
 		smap, err = api.GetClusterMap(baseParams)
 		if err != nil {

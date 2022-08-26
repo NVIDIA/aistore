@@ -111,7 +111,7 @@ func (args *PutObjectArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	if args.Size != 0 {
 		req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
 	}
-	SetAuthToken(req, args.BaseParams.Token)
+	SetAuxHeaders(req, &args.BaseParams)
 	return req, nil
 }
 
@@ -132,7 +132,7 @@ func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	if args.Size != 0 {
 		req.ContentLength = args.Size // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
 	}
-	SetAuthToken(req, args.BaseParams.Token)
+	SetAuxHeaders(req, &args.BaseParams)
 	return req, nil
 }
 

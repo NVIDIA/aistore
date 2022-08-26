@@ -84,6 +84,8 @@ const (
 
 	wo2FreeSize  = 4096
 	wo2FreeDelay = 3*time.Second + time.Millisecond
+
+	ua = "aisloader"
 )
 
 type (
@@ -639,7 +641,7 @@ func setupBucket(runParams *params) error {
 		}
 		runParams.bck = bck
 	}
-	exists, err := api.DoesBucketExist(runParams.bp, cmn.QueryBcks(runParams.bck))
+	exists, err := api.QueryBuckets(runParams.bp, cmn.QueryBcks(runParams.bck))
 	if err != nil {
 		return fmt.Errorf("%s not found: %v", runParams.bck, err)
 	}
@@ -729,6 +731,7 @@ func Start(version, buildtime string) (err error) {
 
 	loggedUserToken = authn.LoadToken(runParams.tokenFile)
 	runParams.bp.Token = loggedUserToken
+	runParams.bp.UA = ua
 	if err := setupBucket(&runParams); err != nil {
 		return err
 	}

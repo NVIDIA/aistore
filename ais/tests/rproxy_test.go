@@ -214,7 +214,7 @@ func TestRProxyInvalidURL(t *testing.T) {
 
 		req, err := http.NewRequest(http.MethodGet, test.url, http.NoBody)
 		tassert.CheckFatal(t, err)
-		api.SetAuthToken(req, baseParams.Token)
+		api.SetAuxHeaders(req, &baseParams)
 
 		if test.doAndCheck {
 			// case 1: bad response on GET followed by a failure to HEAD

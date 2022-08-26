@@ -21,6 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
+const ua = "aisnode/backend"
+
 type (
 	remAISCluster struct {
 		url  string
@@ -145,7 +147,7 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.Ba
 			info.Alias = fmt.Sprintf("%v", aliases)
 		}
 		// online?
-		if smap, err := api.GetClusterMap(api.BaseParams{Client: client, URL: remAis.url}); err == nil {
+		if smap, err := api.GetClusterMap(api.BaseParams{Client: client, URL: remAis.url, UA: ua}); err == nil {
 			if smap.UUID != uuid {
 				glog.Errorf("%s: unexpected (or changed) uuid %q", remAis, smap.UUID)
 				continue
@@ -194,7 +196,7 @@ func (r *remAISCluster) init(alias string, confURLs []string, cfg *cmn.Config) (
 		if cos.IsHTTPS(u) {
 			client = httpsClient
 		}
-		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u}); err != nil {
+		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u, UA: ua}); err != nil {
 			glog.Warningf("remote cluster failing to reach %q via %s, err: %v", alias, u, err)
 			continue
 		}
@@ -218,9 +220,9 @@ func (r *remAISCluster) init(alias string, confURLs []string, cfg *cmn.Config) (
 	}
 	r.smap, r.url = remSmap, url
 	if cos.IsHTTPS(url) {
-		r.bp = api.BaseParams{Client: httpsClient, URL: url}
+		r.bp = api.BaseParams{Client: httpsClient, URL: url, UA: ua}
 	} else {
-		r.bp = api.BaseParams{Client: httpClient, URL: url}
+		r.bp = api.BaseParams{Client: httpClient, URL: url, UA: ua}
 	}
 	r.uuid = remSmap.UUID
 	return

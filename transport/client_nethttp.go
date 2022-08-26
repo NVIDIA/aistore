@@ -3,7 +3,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -17,6 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
+
+const ua = "aisnode/streams"
 
 type Client interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -61,6 +63,7 @@ func (s *streamBase) do(body io.Reader) (err error) {
 		request.Header.Set(apc.HdrCompress, apc.LZ4Compression)
 	}
 	request.Header.Set(apc.HdrSessID, strconv.FormatInt(s.sessID, 10))
+	request.Header.Set(cos.HdrUserAgent, ua)
 
 	response, err = s.client.Do(request)
 	if err != nil {

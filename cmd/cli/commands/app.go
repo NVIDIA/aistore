@@ -24,6 +24,7 @@ import (
 
 const (
 	cliName  = "ais"
+	ua       = "ais/cli"
 	metadata = "md"
 	cliDescr = `If [Tab] completion doesn't work:
    * download ` + cmn.GitHubHome + `/tree/master/cmd/cli/autocomplete

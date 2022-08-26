@@ -100,6 +100,10 @@ const (
 	ActAbort  = "abort"
 )
 
+// NOTE: for standard HTTP headers, see cmn/cos/http.go or https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers
+
+const HdrError = "Hdr-Error"
+
 // Header Key conventions:
 //   - starts with a prefix "ais-",
 //   - all words separated with "-": no dots and underscores.

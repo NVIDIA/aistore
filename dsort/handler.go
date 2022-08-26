@@ -826,7 +826,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 		moreThanThreshold = moreThanThreshold && dsortAvailMemory > uint64(dsorterMemThreshold)
 	}
 
-	// TODO: currently we have import cycle: dsort -> api -> dsort. Need to
+	// TODO: currently, we have import cycle: dsort -> api -> dsort. Need to
 	// think of a way to get the total size of bucket without copy-and-paste
 	// the API code.
 	//

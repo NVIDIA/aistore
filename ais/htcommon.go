@@ -33,6 +33,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+const ua = "aisnode"
+
 const unknownDaemonID = "unknown"
 
 const msgpObjListBufSize = 32 * cos.KiB
