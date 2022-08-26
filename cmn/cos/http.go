@@ -13,7 +13,9 @@ const (
 	HdrContentRangeValPrefix = "bytes " // Ref: https://tools.ietf.org/html/rfc7233#section-4.2
 	HdrAcceptRanges          = "Accept-Ranges"
 	HdrContentType           = "Content-Type"
+	HdrContentTypeOptions    = "X-Content-Type-Options"
 	HdrContentLength         = "Content-Length"
+	HdrUserAgent             = "User-Agent"
 	HdrAccept                = "Accept"
 	HdrLocation              = "Location"
 	HdrETag                  = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/ETag
@@ -22,8 +24,9 @@ const (
 
 // Ref: https://www.iana.org/assignments/media-types/media-types.xhtml
 const (
-	ContentJSON    = "application/json"
-	ContentMsgPack = "application/msgpack"
-	ContentXML     = "application/xml"
-	ContentBinary  = "application/octet-stream"
+	ContentJSON           = "application/json"
+	ContentJSONCharsetUTF = "application/json; charset=utf-8"
+	ContentMsgPack        = "application/msgpack"
+	ContentXML            = "application/xml"
+	ContentBinary         = "application/octet-stream"
 )

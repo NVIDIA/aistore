@@ -43,7 +43,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, errCode int) {
 	out.mustMarshal(sgl)
 
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set(cos.HdrContentTypeOptions, "nosniff")
 
 	w.WriteHeader(in.Status)
 	sgl.WriteTo(w)

@@ -511,7 +511,8 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	if len(apiItems) > 0 {
 		bckName = apiItems[0]
 	}
-	if r.ContentLength == 0 && r.Header.Get(cos.HdrContentType) != cos.ContentJSON {
+	ctype := r.Header.Get(cos.HdrContentType)
+	if r.ContentLength == 0 && !strings.HasPrefix(ctype, cos.ContentJSON) {
 		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
 		msg = &apc.ActionMsg{Action: apc.ActList, Value: &apc.ListObjsMsg{}}
 	} else if msg, err = p.readActionMsg(w, r); err != nil {

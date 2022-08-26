@@ -21,22 +21,11 @@ import (
 
 const ContentLengthUnknown = -1
 
+// readers
 type (
-	nopReader struct {
-		size   int
-		offset int
-	}
-	ReadReaderAt interface {
-		io.Reader
-		io.ReaderAt
-	}
 	ReadOpenCloser interface {
 		io.ReadCloser
 		Open() (ReadOpenCloser, error)
-	}
-	WriterAt interface {
-		io.Writer
-		io.WriterAt
 	}
 	// ReadSizer is the interface that adds Size method to io.Reader.
 	ReadSizer interface {
@@ -56,6 +45,17 @@ type (
 	sizedReader struct {
 		io.Reader
 		size int64
+	}
+
+	// implementations
+
+	nopReader struct {
+		size   int
+		offset int
+	}
+	ReadReaderAt interface {
+		io.Reader
+		io.ReaderAt
 	}
 	sizedRC struct {
 		io.ReadCloser
@@ -84,6 +84,11 @@ type (
 	ReaderWithArgs struct {
 		args ReaderArgs
 	}
+	nopOpener struct{ io.ReadCloser }
+)
+
+// handles (and more readers)
+type (
 	FileHandle struct {
 		*os.File
 		fqn string
@@ -110,8 +115,19 @@ type (
 		*bytes.Reader
 		b []byte
 	}
+)
 
-	nopOpener   struct{ io.ReadCloser }
+// writers
+type (
+	WriterAt interface {
+		io.Writer
+		io.WriterAt
+	}
+	WriteSizer interface {
+		io.Writer
+		Size() int64
+	}
+
 	WriterMulti struct{ writers []io.Writer }
 
 	// WriterOnly is helper struct to hide `io.ReaderFrom` implementation which

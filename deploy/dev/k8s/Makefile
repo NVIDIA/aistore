@@ -11,7 +11,7 @@ IMAGE_REPO=aistore/aisnode-minikube
 IMAGE_TAG=latest
 
 # Run AIStore with 1 proxy 1 target on already running Minikube
-minimal: 
+minimal:
 	@ ./minimal.sh
 
 # Check if everything is installed correctly, start minikube and run minimal inside of it

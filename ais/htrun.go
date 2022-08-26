@@ -905,16 +905,30 @@ func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v msgp.Enco
 	return false
 }
 
-func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
-	_, isByteArray := v.([]byte)
-	debug.Assert(!isByteArray)
-	ok = true
-	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
-	if err := jsoniter.NewEncoder(w).Encode(v); err != nil {
-		h.handleWriteError(r, tag, err)
-		ok = false
+func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) bool {
+	var err error
+	w.Header().Set(cos.HdrContentType, cos.ContentJSONCharsetUTF)
+	if isBrowser(r.Header.Get(cos.HdrUserAgent)) {
+		var out []byte
+		if out, err = jsoniter.MarshalIndent(v, "", "    "); err != nil {
+			goto rerr
+		}
+		written, _ := w.Write(out)
+		return written == len(out)
 	}
-	return
+	// non-browser client
+	if err = jsoniter.NewEncoder(w).Encode(v); err == nil {
+		return true
+	}
+rerr:
+	h.handleWriteError(r, tag, err)
+	return false
+}
+
+// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent
+// and https://developer.mozilla.org/en-US/docs/Web/HTTP/Browser_detection_using_the_user_agent
+func isBrowser(userAgent string) bool {
+	return strings.HasPrefix(userAgent, "Mozilla/5.0")
 }
 
 func (h *htrun) handleWriteError(r *http.Request, tag string, err error) {

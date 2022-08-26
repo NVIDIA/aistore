@@ -765,15 +765,15 @@ func (e *ErrHTTP) _string() (s string) {
 	return s + " (" + string(e.trace) + ")"
 }
 
-func (e *ErrHTTP) _jsonError() string {
+func (e *ErrHTTP) _jsonError() []byte {
 	// Stop from escaping `<`, `>` and `&`.
 	buf := new(bytes.Buffer)
 	enc := jsoniter.NewEncoder(buf)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(e); err != nil {
-		return err.Error()
+		return []byte(err.Error())
 	}
-	return buf.String()
+	return buf.Bytes()
 }
 
 func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
@@ -793,13 +793,13 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	}
 	// Make sure that the caller is aware that we return JSON error.
 	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set(cos.HdrContentTypeOptions, "nosniff")
 	if r.Method == http.MethodHead {
-		w.Header().Set(cos.HdrError, e._jsonError())
+		w.Header().Set(cos.HdrError, string(e._jsonError()))
 		w.WriteHeader(e.Status)
 	} else {
 		w.WriteHeader(e.Status)
-		fmt.Fprintln(w, e._jsonError())
+		w.Write(e._jsonError()) // no newline
 	}
 }
 
