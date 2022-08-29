@@ -12,8 +12,6 @@ require (
 	github.com/colinmarc/hdfs/v2 v2.3.0
 	github.com/fatih/color v1.13.0
 	github.com/golang-jwt/jwt/v4 v4.4.2
-	github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f
-	github.com/jacobsa/fuse v0.0.0-20220726073400-226fec2ce902
 	github.com/json-iterator/go v1.1.12
 	github.com/karrick/godirwalk v1.17.0
 	github.com/klauspost/reedsolomon v1.10.0
