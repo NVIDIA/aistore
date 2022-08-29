@@ -30,7 +30,6 @@ For additional background, see:
 - [`s3cmd` command line](#s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
 - [Last Modification Time](#last-modification-time)
-- [Multipart Upload using `aws`](#multipart-upload-using-aws)
 - [More Usage Examples](#more-usage-examples)
   - [Create bucket](#create-bucket)
   - [Remove bucket](#remove-bucket)
@@ -199,65 +198,6 @@ $ s3cmd ls s3://bck --host=localhost:51080 --host-bucket="localhost:51080/s3/%(b
 2020-12-08 11:25     71671   s3://test/obj-ais
 1969-12-31 16:00     71671   s3://test/obj-aws
 ```
-
-## Multipart Upload using `aws`
-
-Example below reproduces the following [Amazon Knowledge-Center instruction](https://aws.amazon.com/premiumsupport/knowledge-center/s3-multipart-upload-cli/).
-
-> Compare with (user-friendly and easy-to-execute) multipart examples from the [s3cmd companion doc](/docs/s3cmd.md).
-
-```console
-# 1. initiate multipart upload
-$ aws s3api create-multipart-upload --bucket abc --key large-test-file
-{
-    "Bucket": "abc",
-    "Key": "large-test-file",
-    "UploadId": "WDLdt08opZDXQoAZmjAaP3jofYAOTTRZoBemtflLMKO.bUBAbImhGSKMR5XbXr9TjVksY67lROMZkQP3aWsEc6vCmIhRmB7fEXeIQbmXCfCeQYtLAlf8hasOulnZZs8m"
-}
-
-# 2. upload the first part (w/ upload-id copied from the previous command)
-$ aws s3api upload-part --bucket abc --key large-test-file --part-number 1 --body README.md --upload-id WDLdt08opZDXQoAZmjAaP3jofYAOTTRZoBemtflLMKO.bUBAbImhGSKMR5XbXr9TjVksY67lROMZkQP3aWsEc6vCmIhRmB7fEXeIQbmXCfCeQYtLAlf8hasOulnZZs8m
-{
-    "ETag": "\"9bc8111718e22a34f9fa6a099da1f3df\""
-}
-
-# 3. upload the second, etc. parts
-$ aws s3api upload-part --bucket abc --key large-test-file --part-number 2 --body LICENSE --upload-id WDLdt08opZDXQoAZmjAaP3jofYAOTTRZoBemtflLMKO.bUBAbImhGSKMR5XbXr9TjVksY67lROMZkQP3aWsEc6vCmIhRmB7fEXeIQbmXCfCeQYtLAlf8hasOulnZZs8m
-{
-    "ETag": "\"f70a21a0c5fa26a93820b0bef5be7619\""
-}
-...
-
-# 4. list active upload by its ID (upload-id)
-$ aws s3api list-parts --bucket abc --key large-test-file --upload-id WDLdt08opZDXQoAZmjAaP3jofYAOTTRZoBemtflLMKO.bUBAbImhGSKMR5XbXr9TjVksY67lROMZkQP3aWsEc6vCmIhRmB7fEXeIQbmXCfCeQYtLAlf8hasOulnZZs8m
-{
-    "Initiator": {
-        "ID": "arn:aws:iam::834420256508:user/johndoe",
-        "DisplayName": "johndoe"
-    },
-    "StorageClass": "STANDARD",
-    "Parts": [
-        {
-            "ETag": "\"9bc8111718e22a34f9fa6a099da1f3df\"",
-            "PartNumber": 1,
-            "Size": 10725,
-            "LastModified": "2022-08-26T23:59:12.000Z"
-        },
-        {
-            "ETag": "\"f70a21a0c5fa26a93820b0bef5be7619\"",
-            "PartNumber": 2,
-            "Size": 1075,
-            "LastModified": "2022-08-26T23:59:40.000Z"
-        }
-    ],
-    "Owner": {
-        "ID": "3bcb8baa034ab2166cd7d6a5b7ac1264d613c5e9fbdf120bc9f0ae91bda54347",
-        "DisplayName": "nsviscs-aws-root"
-    }
-}
-```
-
-And so on. See https://aws.amazon.com/premiumsupport/knowledge-center/s3-multipart-upload-cli for details.
 
 ## More Usage Examples
 
