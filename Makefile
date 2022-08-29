@@ -102,9 +102,9 @@ else
 endif
 	@echo "done."
 
-aisfs-pre:
-	@./$(BUILD_DIR)/aisfs/install.sh
-aisfs: aisfs-pre build-aisfs ## Build 'aisfs' binary
+## Build 'aisfs' binary (NOTE: separate go.mod)
+aisfs:
+	@cd $(BUILD_DIR)/aisfs && ./install.sh && go build -o $(BUILD_DEST)/aisfs $(BUILD_FLAGS) $(LDFLAGS) *.go
 
 cli: ## Build CLI ('ais' binary)
 	@echo "Building ais (CLI) => $(BUILD_DEST)/ais"
@@ -173,22 +173,23 @@ clean: ## Remove all AIS related files and binaries
 
 clean-client-bindings: ## Remove all generated client binding files
 	$(SCRIPTS_DIR)/clean-python-api-client.sh
+
 #
 # go modules
 #
-
 .PHONY: mod mod-clean mod-tidy
 
-mod: mod-clean mod-tidy ## Do Go modules chores
+mod: mod-clean mod-tidy
 
-# cleanup gomod cache
-mod-clean: ## Clean modules
+# cleanup go-mod cache
+mod-clean:
 	go clean --modcache
 
-mod-tidy: ## Remove unused modules from 'go.mod'
+# in particular, remove unused
+mod-tidy:
 	go mod tidy
 
-# Target for local docker deployment
+# for local docker deployment
 .PHONY: deploy-docker stop-docker
 
 deploy-docker: ## Deploy AIS cluster inside the dockers

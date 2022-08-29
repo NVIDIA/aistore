@@ -1,0 +1,13 @@
+dd if=/dev/urandom of=$DIR/64MB_file.txt count=65536 bs=1024
+$PRINT_SIZE $DIR/64MB_file.txt
+echo "abcdefgh" > $DIR/64MB_file.txt // overwrite file
+$PRINT_SIZE $DIR/64MB_file.txt
+
+ls $DIR | wc -l
+rm -f $DIR/64MB_file.txt
+cat $DIR/64MB_file.txt // FAIL "no such file or directory"
+
+dd if=/dev/zero of=$DIR/32MB_file.txt count=32768 bs=1024
+$PRINT_SIZE $DIR/32MB_file.txt
+rm -f $DIR/32MB_file.txt
+ls $DIR | wc -l
