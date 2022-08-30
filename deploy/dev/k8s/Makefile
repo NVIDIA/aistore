@@ -7,7 +7,7 @@ CPU=4
 MEMORY=7000
 MODE="debug"
 REGISTRY_URL ?= docker.io
-IMAGE_REPO=aistore/aisnode-minikube
+IMAGE_REPO=aistorage/aisnode-minikube
 IMAGE_TAG=latest
 
 # Run AIStore with 1 proxy 1 target on already running Minikube

@@ -1,6 +1,6 @@
 REGISTRY_URL ?= docker.io
-CI_IMAGE=aistore/ci
-HDFS_CI_IMAGE=aistore/hdfs-ci
+CI_IMAGE=aistorage/ci
+HDFS_CI_IMAGE=aistorage/hdfs-ci
 IMAGE_TAG=latest
 
 all: build push

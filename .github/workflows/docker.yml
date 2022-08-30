@@ -4,31 +4,31 @@ on:
   workflow_dispatch:
     inputs:
       build_admin_image:
-        description: 'Build admin image (aistore/admin)'
+        description: 'Build admin image (aistorage/admin)'
         required: true
         type: boolean
         default: true
 
       build_aisnode_image:
-        description: 'Build aisnode image (aistore/aisnode)'
+        description: 'Build aisnode image (aistorage/aisnode)'
         required: true
         type: boolean
         default: true
 
       build_cluster_minimal_image:
-        description: 'Build cluster-minimal image (aistore/cluster-minimal)'
+        description: 'Build cluster-minimal image (aistorage/cluster-minimal)'
         required: true
         type: boolean
         default: true
 
       build_gitlab_ci_image:
-        description: 'Build GitLab CI image (aistore/ci)'
+        description: 'Build GitLab CI image (aistorage/ci)'
         required: true
         type: boolean
         default: true
 
       build_aisnode_minikube_image:
-        description: 'Build aisnode-minikube image (aistore/aisnode-minikube)'
+        description: 'Build aisnode-minikube image (aistorage/aisnode-minikube)'
         required: true
         type: boolean
         default: true
@@ -39,13 +39,12 @@ on:
         default: 'latest'
 
 env:
-  ADMIN_IMAGE: 'aistore/admin'
-  AISNODE_IMAGE: 'aistore/aisnode'
-  CLUSTER_MINIMAL_IMAGE: 'aistore/cluster-minimal'
-  CI_IMAGE: 'aistore/ci'
-  AISNODE_MINIKUBE_IMAGE: 'aistore/aisnode-minikube'
-  HDFS_CI_IMAGE: 'aistore/hdfs-ci'
-
+  ADMIN_IMAGE: 'aistorage/admin'
+  AISNODE_IMAGE: 'aistorage/aisnode'
+  CLUSTER_MINIMAL_IMAGE: 'aistorage/cluster-minimal'
+  CI_IMAGE: 'aistorage/ci'
+  AISNODE_MINIKUBE_IMAGE: 'aistorage/aisnode-minikube'
+  HDFS_CI_IMAGE: 'aistorage/hdfs-ci'
 
 jobs:
   docker:

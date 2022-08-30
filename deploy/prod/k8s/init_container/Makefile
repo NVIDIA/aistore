@@ -1,11 +1,11 @@
 #
 # Usage:
 #  $ env IMAGE_TAG=3.3 make -e all
-#  $ env IMAGE_REPO=quay.io/aistore/admin IMAGE_TAG=4.0 make -e all
+#  $ env IMAGE_REPO=docker.io/aistorage/ais-init IMAGE_TAG=4.0 make -e all
 #
 
 REGISTRY_URL ?= docker.io
-IMAGE_REPO=aistore/ais-init
+IMAGE_REPO=aistorage/ais-init
 IMAGE_TAG=.must_set_in_environment
 
 all: build push

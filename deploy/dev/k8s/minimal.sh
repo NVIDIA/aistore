@@ -3,7 +3,7 @@
 source utils/ais_minikube_setup.sh
 export AIS_FS_PATHS=""
 export TEST_FSPATH_COUNT=1
-export DOCKER_IMAGE="aistore/aisnode-minikube:latest"
+export DOCKER_IMAGE="aistorage/aisnode-minikube:latest"
 
 PRIMARY_PORT=8080
 HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"

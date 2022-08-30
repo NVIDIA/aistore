@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV DEBCONF_NOWARNINGS="yes"
 
 RUN apt-get update -yq
-RUN apt-get --no-install-recommends -y install curl git build-essential coreutils
+RUN apt-get --no-install-recommends -y install curl git coreutils
 
 # Clone and build latest aisnode.
 RUN git clone https://github.com/NVIDIA/aistore.git && cd aistore && \

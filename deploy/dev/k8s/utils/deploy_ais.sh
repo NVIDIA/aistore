@@ -20,7 +20,7 @@ fi
 source utils/parse_fsparams.sh
 source utils/parse_cld.sh
 
-export DOCKER_IMAGE="aistore/aisnode-minikube:latest"
+export DOCKER_IMAGE="aistorage/aisnode-minikube:latest"
 echo "Build and push to local registry: (y/n) ?"
 read -r build
 if [[ "$build" == "y" ]]; then

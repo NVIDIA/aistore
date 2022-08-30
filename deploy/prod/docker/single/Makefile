@@ -1,11 +1,11 @@
 #
 # Usage:
 #  $ IMAGE_TAG=latest make -e all
-#  $ IMAGE_REPO=aistore/cluster-minimal IMAGE_TAG=4.0 make -e all
+#  $ IMAGE_REPO=aistorage/cluster-minimal IMAGE_TAG=4.0 make -e all
 #
 
 REGISTRY_URL ?= docker.io
-IMAGE_REPO=aistore/cluster-minimal
+IMAGE_REPO=aistorage/cluster-minimal
 IMAGE_TAG=.must_set_in_environment
 AISTORE_PATH=$(shell git rev-parse --show-toplevel)
 
