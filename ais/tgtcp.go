@@ -878,9 +878,9 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 		t.backend.init(t, false /*starting*/) // re-init from scratch
 		return
 	}
-	// NOTE: primary command-line flag `-override_backends` allows to choose
-	//       cloud backends (and HDFS) at deployment time
-	//       (via build tags) - see earlystart
+	// NOTE: primary command-line flag `-override_backends` allows to update
+	// (via build tags - see AIS_BACKEND_PROVIDERS) remote backends at deployment time.
+	// See also: arlystart.go
 	if !newConfig.Backend.EqualClouds(&oldConfig.Backend) {
 		t.backend.initExt(t, false /*starting*/)
 	}

@@ -437,16 +437,8 @@ func loadBMD(mpaths fs.MPI, path string) (mainBMD *bucketMD) {
 func _loadBMD(path string) (bmd *bucketMD, err error) {
 	bmd = newBucketMD()
 	bmd.cksum, err = jsp.LoadMeta(path, bmd)
-	if err == nil {
-		return
-	}
-	if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); !ok {
-		return
-	}
-	glog.Warningln("failed to load BMD - trying the previous meta-version")
-	err = loadBMDV1(path, bmd)
-	if err == nil {
-		err = jsp.SaveMeta(path, bmd, nil) // overwrite w/ v2
+	if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
+		glog.Errorf(cmn.FmtErrBackwardCompat, err)
 	}
 	return
 }

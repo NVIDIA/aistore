@@ -1720,22 +1720,10 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 			}
 			debug.Assert(config.Version == 0)
 			globalFpath = globalConfPath
-		} else if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
-			glog.Warningf("failed to %s - trying the previous meta-version v%d", txt, v1MetaverConfig)
-			errOld := loadClusterConfigV1(globalFpath, config)
-			if errOld != nil {
-				return fmt.Errorf("failed to %s %q: [%v] [%v]", txt, globalFpath, err, errOld)
-			}
-			debug.Assert(config.Version > 0 && config.UUID != "")
-
-			// rewrite with the current meta-version
-			if errSav := jsp.SaveMeta(globalFpath, &config.ClusterConfig, nil); errSav != nil {
-				return fmt.Errorf("failed to %s %q: [%v] [%v]", txt, globalFpath, err, errSav)
-			}
-			glog.Warningf("backward compatibility: saved %s meta-version v%d => v%d",
-				&config.ClusterConfig, v1MetaverConfig, MetaverConfig)
 		} else {
-			// otherwise
+			if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
+				glog.Errorf(FmtErrBackwardCompat, err)
+			}
 			return fmt.Errorf("failed to %s %q: %v", txt, globalConfPath, err)
 		}
 	} else {
@@ -1780,8 +1768,8 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	// log header
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
-	glog.Infof("config: %q stats_time: %v, authentication: %t",
-		globalFpath, config.Periodic.StatsTime, config.Auth.Enabled)
+	glog.Infof("config: %q stats_time: %v, authentication: %t, backends: %v",
+		globalFpath, config.Periodic.StatsTime, config.Auth.Enabled, config.Backend.Conf)
 	return nil
 }
 

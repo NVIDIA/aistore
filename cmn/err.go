@@ -41,6 +41,7 @@ const (
 	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %w"
 	FmtErrUnsupported    = "%s: %s is not supported"
 	FmtErrUnknown        = "%s: unknown %s %q"
+	FmtErrBackwardCompat = "%v (backward compatibility is supported only one version back, e.g. 3.9 => 3.10)"
 
 	// (see ErrFailedTo)
 	fmtErrFailedTo = "%s: failed to %s %s, err: %w"
@@ -631,6 +632,7 @@ func IsErrLmetaNotFound(err error) bool {
 ///////////////////////////
 // ErrLimitedCoexistence //
 ///////////////////////////
+
 func NewErrLimitedCoexistence(node, xaction, action, detail string) *ErrLimitedCoexistence {
 	return &ErrLimitedCoexistence{node, xaction, action, detail}
 }
@@ -643,6 +645,7 @@ func (e *ErrLimitedCoexistence) Error() string {
 ///////////////////////
 // ErrUsePrevXaction //
 ///////////////////////
+
 func NewErrUsePrevXaction(xaction string) *ErrUsePrevXaction {
 	return &ErrUsePrevXaction{xaction}
 }

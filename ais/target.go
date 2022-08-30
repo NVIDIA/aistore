@@ -92,6 +92,8 @@ func (b backends) init(t *target, starting bool) {
 	if aisConf, ok := config.Backend.ProviderConf(apc.ProviderAIS); ok {
 		if err := ais.Apply(aisConf, "init"); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t, err)
+		} else {
+			glog.Infof("%s: remote-ais %v", t, aisConf)
 		}
 	}
 
@@ -117,6 +119,7 @@ func (b backends) initExt(t *target, starting bool) (err error) {
 			delete(b, provider)
 		}
 	}
+	var all []string
 	for provider := range config.Backend.Providers {
 		var add string
 		switch provider {
@@ -149,10 +152,14 @@ func (b backends) initExt(t *target, starting bool) (err error) {
 		if err != nil {
 			return
 		}
-		if add != "" && !starting {
-			glog.Errorf("Warning: %s: add %q backend", t, add)
+		if add != "" {
+			all = append(all, add)
+			if !starting {
+				glog.Errorf("Warning: %s: add %q backend", t, add)
+			}
 		}
 	}
+	glog.Infof("%s: linked backends %v (%t)", t, all, starting)
 	return
 }
 
