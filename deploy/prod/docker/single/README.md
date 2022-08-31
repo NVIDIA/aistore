@@ -1,8 +1,35 @@
 # Minimal Production-Ready Standalone Docker Deployment
 
+The idea is to quickly run a fully functional (albeit minimal) AIS cluster consisting of a single gateway and a single storage node.
+
+This text explains How. Running it should take less than a minute, after which you can execute a few assorted commands, e.g.:
+
+```console
+$ AIS_ENDPOINT=http://localhost:51080 ais show cluster
+
+$ AIS_ENDPOINT=http://localhost:51080 ais show config cluster
+
+$ AIS_ENDPOINT=http://localhost:51080 ais show log <NODE>
+
+$ export AIS_ENDPOINT="http://localhost:51080"
+$ ais create ais://abc
+```
+
+and [so on](/docs/cli.md).
+
+## Table of Contents
+- [Prerequisites](#prerequisites)
+  - [docker](#docker)
+  - [CLI](#cli)
+- [How to Build](#how-to-build)
+- [How to Deploy](#how-to-deploy)
+  - [Multiple Disk Setup](#multiple-disk-setup)
+  - [Backend Provider Setup](#backend-provider-setup)
+  - [Cloud Deployment](#cloud-deployment)
+
 ## Prerequisites
 
-The prerequisites boil down to having a) docker and b) [AIS CLI](/docs/cli.md)
+The prerequisites boil down to having **a)** docker and **b)** [AIS CLI](/docs/cli.md)
 
 ### <ins>docker
 
@@ -28,6 +55,32 @@ Further references:
 
 * [AIS CLI](/docs/cli.md)
 * [CLI Documentation](https://github.com/NVIDIA/aistore/tree/master/docs/cli)
+
+## How to Build
+
+First of, you can always pull docker hub for the existing (official) image:
+
+```
+docker pull aistorage/cluster-minimal:latest
+```
+
+But there may be any number of reasons to build it from (the latest) sources and/or with alternative environment settings.
+
+In which case:
+
+```
+# build `cluster-minimal:test` and add it to local registry called `aistorage`
+#
+$ IMAGE_REPO=aistorage/cluster-minimal IMAGE_TAG=test make -e build
+```
+
+Alternatively, you could build _and_ upload custom image to a selected registry of choice (DockerHub, AWS, GitLab Container Registry, etc.), e.g.:
+
+```console
+# build `cluster-minimal:custom` and push it to docker hub repository called `my-docker-rep`
+#
+$ REGISTRY_URL=docker.io IMAGE_REPO=my-docker-rep IMAGE_TAG=custom make -e all
+```
 
 ## How to Deploy
 
@@ -81,6 +134,18 @@ docker run -d \
 
 
 ### <ins>Backend Provider Setup
+
+By default, `cluster-minimal` gets built with two selected providers of remote backends: GCP and AWS.
+
+But you can change this default - see `Dockerfile` in this directory for `AIS_BACKEND_PROVIDERS`.
+
+Secondly, and separately, you could also deploy `cluster-minimal` with a subset of linked-in providers.
+
+In other words, there's the flexibility to *activate* only some of the built-in providers at deployment time, e.g.:
+
+```
+docker run -d -p 51080:51080 -v $(mktemp -d):/ais/disk0 -e AIS_BACKEND_PROVIDERS="gcp" aistorage/cluster-minimal:latest
+```
 
 > **IMPORTANT**: For both AWS or GCP usage, to ensure the cluster works properly with backend providers, it is _essential_ to pass the environment variable `AIS_BACKEND_PROVIDERS`, a space-separated list of support backend provides to be used, in your `docker run` command.
 
@@ -137,9 +202,9 @@ docker run -d \
   aistorage/cluster-minimal:latest
 ```
 
-### <ins>Cloud Compute Deployment
+### <ins>Cloud Deployment
 
-Minimal deployments of AIS clusters can also be done on cloud compute instances, such as those provided by AWS EC2. Containerized deployment on a cloud compute cluster may be an appealing option for those wishing to continually run an AIS cluster in the background. 
+Minimal deployments of AIS clusters can also be done on cloud compute instances, such as those provided by AWS EC2. Containerized deployment on a cloud compute cluster may be an appealing option for those wishing to continually run an AIS cluster in the background.
 
  [`ssh`](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AccessingInstancesLinux.html) into your EC2 instance and deploy an AIS cluster (as shown above). The following command creates a containerized AIS cluster with one mounted volume hosted locally:
 
@@ -155,7 +220,7 @@ From the EC2 instance's `bash`, locally access your cluster via the following co
 AIS_ENDPOINT="http://<ip-address>:51080" ais show cluster
 ```
 
-> Run `ifconfig` on your EC2 instance to find an available IP address to be used for local host access to the cluster. 
+> Run `ifconfig` on your EC2 instance to find an available IP address to be used for local host access to the cluster.
 
 **Accessing Cluster Remotely**
 
@@ -168,12 +233,3 @@ AIS_ENDPOINT="http://<ec2-host-name>:51080" ais show cluster
 **EC2 Minimal Deployment Benchmarks**
 
 For more information on deployment performance, please refer [here](./ec2-standalone-benchmark.md).
-
-## Build and Upload (Dev)
-
-It is also possible to [build a custom image](https://docs.docker.com/develop/develop-images/baseimages/) locally and upload it to selected registry (i.e. DockerHub, AWS, GitLab Container Registry):
-
-```console
-$ ./build_image.sh <TAG>
-$ ./upload_image.sh <REGISTRY_URL> <TAG>
-```

@@ -12,13 +12,12 @@ AISTORE_PATH=$(shell git rev-parse --show-toplevel)
 all: build push
 
 build:
-	cp ${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh aisnode_config.sh
-	cp ${AISTORE_PATH}/deploy/conf/limits.conf limits.conf
+	cp ${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh .
+	cp ${AISTORE_PATH}/deploy/conf/limits.conf .
 
-	docker build -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile .
+	docker build -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile . || rm -f aisnode_config.sh limits.conf
 
-	rm -rf aisnode_config.sh
-	rm -rf limits.conf
+	rm -f aisnode_config.sh limits.conf
 
 push:
 	docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)

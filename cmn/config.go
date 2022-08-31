@@ -1766,9 +1766,9 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 		return fmt.Errorf("failed to set log level %q: %s", config.Log.Level, err)
 	}
 	// log header
-	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
+	glog.Infof("log.dir: %q; l4.proto: %s; pub port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
-	glog.Infof("config: %q stats_time: %v, authentication: %t, backends: %v",
+	glog.Infof("config: %q; stats_time: %v; authentication: %t; backends: %v",
 		globalFpath, config.Periodic.StatsTime, config.Auth.Enabled, config.Backend.Conf)
 	return nil
 }
