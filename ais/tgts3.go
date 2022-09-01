@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -49,25 +50,25 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 // Create a new object by copying the data from another bucket/object.
 func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
-		t.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	src := r.Header.Get(s3.HdrObjSrc)
 	src = strings.Trim(src, "/") // in AWS examples the path starts with "/"
 	parts := strings.SplitN(src, "/", 2)
 	if len(parts) < 2 {
-		t.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	// src
-	bckSrc, err := cluster.InitByNameOnly(parts[0], t.owner.bmd)
+	bckSrc, err, errCode := cluster.InitByNameOnly(parts[0], t.owner.bmd)
 	if err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, errCode)
 		return
 	}
 	objSrc := strings.Trim(parts[1], "/")
 	if err := bckSrc.Init(t.owner.bmd); err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	lom := cluster.AllocLOM(objSrc)
@@ -78,18 +79,18 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 			err = lom.InitBck(bckSrc.Bucket())
 		}
 		if err != nil {
-			t.writeErr(w, r, err)
+			s3.WriteErr(w, r, err, 0)
 		}
 		return
 	}
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	// dst
-	bckDst, err := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	bckDst, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, errCode)
 		return
 	}
 	coi := allocCopyObjInfo()
@@ -102,7 +103,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	_, err = coi.copyObject(lom, objName)
 	freeCopyObjInfo(coi)
 	if err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 
@@ -123,7 +124,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 
 func (t *target) doPutObjS3(w http.ResponseWriter, r *http.Request, items []string, bck *cluster.Bck) {
 	if len(items) < 2 {
-		t.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	objName := s3.ObjName(items)
@@ -135,7 +136,7 @@ func (t *target) doPutObjS3(w http.ResponseWriter, r *http.Request, items []stri
 			err = lom.InitBck(bck.Bucket())
 		}
 		if err != nil {
-			t.writeErr(w, r, err)
+			s3.WriteErr(w, r, err, 0)
 			return
 		}
 	}
@@ -147,7 +148,7 @@ func (t *target) doPutObjS3(w http.ResponseWriter, r *http.Request, items []stri
 	dpq := dpqAlloc()
 	defer dpqFree(dpq)
 	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	poi := allocPutObjInfo()
@@ -162,7 +163,7 @@ func (t *target) doPutObjS3(w http.ResponseWriter, r *http.Request, items []stri
 	freePutObjInfo(poi)
 	if err != nil {
 		t.fsErr(err, lom.FQN)
-		t.writeErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, errCode)
 		return
 	}
 	s3.SetETag(w.Header(), lom)
@@ -171,12 +172,12 @@ func (t *target) doPutObjS3(w http.ResponseWriter, r *http.Request, items []stri
 // PUT s3/bckName/objName
 func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if cs := fs.GetCapStatus(); cs.OOS {
-		t.writeErr(w, r, cs.Err, http.StatusInsufficientStorage)
+		s3.WriteErr(w, r, cs.Err, http.StatusInsufficientStorage)
 		return
 	}
-	bck, err := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, errCode)
 		return
 	}
 	q := r.URL.Query()
@@ -198,9 +199,9 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 // GET s3/<bucket-name[/<object-name>
 func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket := items[0]
-	bck, err := cluster.InitByNameOnly(bucket, t.owner.bmd)
+	bck, err, errCode := cluster.InitByNameOnly(bucket, t.owner.bmd)
 	if err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, errCode)
 		return
 	}
 	q := r.URL.Query()
@@ -209,7 +210,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if len(items) < 2 {
-		t.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	objName := s3.ObjName(items)
@@ -226,7 +227,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	dpq := dpqAlloc()
 	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
 		dpqFree(dpq)
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	lom := cluster.AllocLOM(objName)
@@ -240,13 +241,13 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 // See: https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
 func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
-		t.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	bucket, objName := items[0], s3.ObjName(items)
-	bck, err := cluster.InitByNameOnly(bucket, t.owner.bmd)
+	bck, err, errCode := cluster.InitByNameOnly(bucket, t.owner.bmd)
 	if err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, errCode)
 		return
 	}
 	lom := cluster.AllocLOM(objName)
@@ -257,29 +258,29 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 
 // DEL s3/bckName/objName
 func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bck, err := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, errCode)
 		return
 	}
 	if len(items) < 2 {
-		t.writeErr(w, r, errS3Obj)
+		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
 	objName := s3.ObjName(items)
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	errCode, err := t.DeleteObject(lom, false)
+	errCode, err = t.DeleteObject(lom, false)
 	if err != nil {
+		name := lom.FullName()
 		if errCode == http.StatusNotFound {
-			err := cmn.NewErrNotFound("%s: %s", t.si, lom.FullName())
-			t.writeErrSilent(w, r, err, http.StatusNotFound)
+			s3.WriteErr(w, r, cmn.NewErrNotFound("%s: %s", t.si, name), http.StatusNotFound)
 		} else {
-			t.writeErrStatusf(w, r, errCode, "error deleting %s: %v", lom, err)
+			s3.WriteErr(w, r, fmt.Errorf("error deleting %s: %v", name, err), errCode)
 		}
 		return
 	}
@@ -289,15 +290,16 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 
 // POST s3/bckName/objName
 func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bck, err := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		t.writeErr(w, r, err)
+		s3.WriteErr(w, r, err, errCode)
 		return
 	}
 	q := r.URL.Query()
 	if q.Has(s3.QparamMptUploads) {
 		if len(items) < 2 {
-			t.writeErrf(w, r, fmtErrBO, items)
+			err := fmt.Errorf(fmtErrBO, items)
+			s3.WriteErr(w, r, err, 0)
 			return
 		}
 		t.startMpt(w, r, items, bck)
@@ -305,13 +307,14 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	}
 	if q.Has(s3.QparamMptUploadID) {
 		if len(items) < 2 {
-			t.writeErrf(w, r, fmtErrBO, items)
+			err := fmt.Errorf(fmtErrBO, items)
+			s3.WriteErr(w, r, err, 0)
 			return
 		}
 		t.completeMpt(w, r, items, q, bck)
 		return
 	}
-	t.writeErrStatusf(w, r, http.StatusBadRequest,
-		"set query parameter %q to start multipart upload or %q to complete the upload",
+	err = fmt.Errorf("set query parameter %q to start multipart upload or %q to complete the upload",
 		s3.QparamMptUploads, s3.QparamMptUploadID)
+	s3.WriteErr(w, r, err, 0)
 }
