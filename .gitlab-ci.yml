@@ -264,6 +264,11 @@ test:long:aisloader:
     - git clone https://github.com/prometheus-operator/kube-prometheus.git
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
 
+.test_k8s_optional_template: &test_k8s_optional_def
+  <<: *test_short_optional_def
+  tags:
+    - ais-k8s
+
 .test_k8s_long_template: &test_k8s_long_def
   extends: .test_k8s_short_template
   stage: test-long
@@ -287,14 +292,7 @@ test:short:k8s:
     - status=$? make kill && exit $status
 
 test:short:python:etl:
-  stage: test-short
-  <<: *test_k8s_short_def
-  timeout: 23m
-  only:
-    - merge_requests
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+  <<: *test_k8s_optional_def
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - cd sdk/python
