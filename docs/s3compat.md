@@ -351,7 +351,9 @@ By way of quick summary, Amazon S3 supports the following API categories:
 - Multi-object deletion
 - Get, enable, and disable bucket versioning
 
-and a few more. The following table summarizes S3 APIs and provides the corresponding AIS (native) CLI as well as [s3cmd](https://github.com/s3tools/s3cmd) and [aws CLI](https://aws.amazon.com/cli) examples along with comments on limitations - iff there are any. In the rightmost [aws CLI](https://aws.amazon.com/cli) column all mentions of `s3rproxy` refer to [AIS <=> Boto3 compatibility](#boto3-compatibility) at the end of this document.
+and a few more. The following table summarizes S3 APIs and provides the corresponding AIS (native) CLI, as well as [s3cmd](https://github.com/s3tools/s3cmd) and [aws CLI](https://aws.amazon.com/cli) examples (along with comments on limitations, if any).
+
+> See also: a note on [AIS <=> Boto3 compatibility](#boto3-compatibility).
 
 ### Supported S3
 
@@ -361,17 +363,19 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 | Head bucket | `ais bucket show ais://bck` | `s3cmd info s3://bck` | `aws s3api head-bucket` |
 | Destroy bucket (aka "remove bucket") | `ais bucket rm ais://bck` | `s3cmd rb`, `aws s3 rb` ||
 | List buckets | `ais ls ais://` (or, same: `ais ls ais:`) | `s3cmd ls s3://` | `aws s3 ls s3://` |
-| PUT object | `ais object put filename ais://bck/obj` | `s3cmd put ...` | `aws s3 cp ..`(needs `s3rproxy` tag) |
-| GET object | `ais object get ais://bck/obj filename` | `s3cmd get ...` | `aws s3 cp ..`(needs `s3rproxy` tag) |
-| GET object(range) | `ais object get ais://bck/obj --offset 0 --length 10` | **Not supported** | `aws s3api get-object --range= ..`(needs `s3rproxy` tag) |
-| HEAD object | `ais object show ais://bck/obj` | `s3cmd info s3://bck/obj` | `aws s3api head-object`(needs `s3rproxy` tag) |
-| List objects in a bucket | `ais ls ais://bck` | `s3cmd ls s3://bucket-name/` | `aws s3 ls s3://bucket-name/`(needs `s3rproxy` tag) |
-| Copy object in a given bucket or between buckets | S3 API is fully supported; we have yet to implement our native CLI to copy objects (we do copy buckets, though) | **Limited support**: `s3cmd` performs GET followed by PUT instead of AWS API call | `aws s3api copy-object ...` calls copy object API(needs `s3rpoxy` tag) |
+| PUT object | `ais object put filename ais://bck/obj` | `s3cmd put ...` | `aws s3 cp ..` |
+| GET object | `ais object get ais://bck/obj filename` | `s3cmd get ...` | `aws s3 cp ..` |
+| GET object(range) | `ais object get ais://bck/obj --offset 0 --length 10` | **Not supported** | `aws s3api get-object --range= ..` |
+| HEAD object | `ais object show ais://bck/obj` | `s3cmd info s3://bck/obj` | `aws s3api head-object` |
+| List objects in a bucket | `ais ls ais://bck` | `s3cmd ls s3://bucket-name/` | `aws s3 ls s3://bucket-name/` |
+| Copy object in a given bucket or between buckets | S3 API is fully supported; we have yet to implement our native CLI to copy objects (we do copy buckets, though) | **Limited support**: `s3cmd` performs GET followed by PUT instead of AWS API call | `aws s3api copy-object ...` calls copy object API |
 | Last modification time | AIS always stores only one - the last - version of an object. Therefore, we track creation **and** last access time but not "modification time". | - | - |
 | Bucket creation time | `ais bucket show ais://bck` | `s3cmd` displays creation time via `ls` subcommand: `s3cmd ls s3://` | - |
 | Versioning | AIS tracks and updates versioning information but only for the **latest** object version. Versioning is enabled by default; to disable, run: `ais bucket props ais://bck versioning.enabled=false` | - | `aws s3api get/put-bucket-versioning` |
 | ACL | Limited support; AIS provides an extensive set of configurable permissions - see `ais bucket props ais://bck access` and `ais auth` and the corresponding documentation | - | - |
-| Multipart (upload, download) | - (added in v3.12) | `s3cmd put ... s3://bck --multipart-chunk-size-mb=5` | - |
+| Multipart upload(**) | - (added in v3.12) | `s3cmd put ... s3://bck --multipart-chunk-size-mb=5` | `aws s3api create-multipart-upload --bucket abc ...` |
+
+> (**) With the only exception of [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) operation.
 
 ### Unsupported S3
 
@@ -383,19 +387,7 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 
 ## Boto3 Compatibility
 
-Very few HTTP client-side libraries do _not_ follow HTTP redirects, and Amazon's [boto3](https://github.com/boto/boto3) just happens to be one of those (libraries).
-
-To circumvent the limitation, we provided a special **build tag**: `s3rproxy`. Building `aisnode` executable with this tag causes each AIS proxy to become, effectively, reverse proxy vis-a-vis the rest clustered nodes.
-
-> **NOTE**: reverse-proxying datapath requests might adversely affect performance! It is, therefore, strongly recommended _not_ to use `s3rproxy` build tag, if possible.
-
-To build with `s3rproxy` tag (or any other supported build tag), simply specify the `TAGS` environment variable, for example:
-
-```console
-$ TAGS=s3rproxy make deploy
-```
-
-See [Makefile](https://github.com/NVIDIA/aistore/blob/master/Makefile) in the root directory for further details.
+Arguably, extremely few HTTP client-side libraries do _not_ follow [HTTP redirects](https://www.rfc-editor.org/rfc/rfc7231#page-54), and Amazon's [Boto3](https://github.com/boto/boto3) just happens to be one of those (libraries).
 
 ## Amazon CLI tools
 
