@@ -34,22 +34,6 @@ const (
 	OrigURLObjMD = "orig_url"
 )
 
-// provider-specific header keys
-const (
-	// https://cloud.google.com/storage/docs/xml-api/reference-headers
-	GsCksumHeader   = "x-goog-hash"
-	GsVersionHeader = "x-goog-generation"
-
-	// https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
-	// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonResponseHeaders.html
-	S3CksumHeader   = "ETag"
-	S3VersionHeader = "x-amz-version-id"
-
-	// https://docs.microsoft.com/en-us/rest/api/storageservices/get-blob-properties#response-headers
-	AzCksumHeader   = "Content-MD5"
-	AzVersionHeader = "ETag"
-)
-
 // object properties (NOTE: embeds system `ObjAttrs` that in turn includes custom user-defined)
 type ObjectProps struct {
 	Bck Bck `json:"bucket"`

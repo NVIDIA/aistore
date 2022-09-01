@@ -81,7 +81,7 @@ func (c *defaultClient) Create(v interface{}) (err error) {
 	case *corev1.Service:
 		_, err = c.services().Create(ctx, t, metav1.CreateOptions{})
 	default:
-		debug.Assertf(false, "unknown entity type: %T", t)
+		debug.FailTypeCast(v)
 	}
 	return
 }

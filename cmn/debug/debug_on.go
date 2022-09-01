@@ -163,6 +163,10 @@ func AssertRWMutexRLocked(m *sync.RWMutex) {
 	AssertMsg(rc > 0 || (0 > rc && rc > -maxReaders), "RWMutex not RLocked")
 }
 
+func FailTypeCast(a interface{}) {
+	_panic(fmt.Errorf("unexpected type %v (%T)", a, a))
+}
+
 func Handlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		"/debug/vars":               expvar.Handler().ServeHTTP,

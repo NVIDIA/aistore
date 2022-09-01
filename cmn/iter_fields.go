@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -402,7 +402,7 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 	default:
 		if !srcVal.IsValid() {
 			if src != nil {
-				debug.Assertf(false, "src is invalid: %v(%T)", srcVal, srcVal)
+				debug.FailTypeCast(srcVal)
 				return nil
 			}
 			srcVal = reflect.Zero(dst.Type())

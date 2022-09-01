@@ -1,6 +1,6 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
@@ -60,9 +60,9 @@ type (
 // interface guard
 var _ cluster.XactSnap = (*Snap)(nil)
 
-///////////////
+//////////
 // Snap //
-///////////////
+//////////
 
 func (b *Snap) IsAborted() bool { return b.AbortedX }
 func (b *Snap) Running() bool   { return b.EndTime.IsZero() }
@@ -88,6 +88,7 @@ func (b *SnapExt) Idle() bool {
 //////////////
 // QueryMsg //
 //////////////
+
 func (msg *QueryMsg) String() (s string) {
 	if msg.ID == "" {
 		s = fmt.Sprintf("xmsg-%s", msg.Kind)

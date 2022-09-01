@@ -22,6 +22,7 @@ import (
 /////////////////////////
 // notification sender //
 /////////////////////////
+
 // enum: when to notify
 const (
 	UponTerm     = Upon(1 << iota) // success or fail is separately provided via error

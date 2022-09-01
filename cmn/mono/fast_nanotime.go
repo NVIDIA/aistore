@@ -11,5 +11,6 @@ import (
 )
 
 // https://golang.org/pkg/runtime/?m=all#nanotime
+//
 //go:linkname NanoTime runtime.nanotime
 func NanoTime() int64

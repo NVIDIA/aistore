@@ -185,7 +185,7 @@ func lomMD5(lom *cluster.LOM) string {
 
 func SetETag(header http.Header, lom *cluster.LOM) {
 	if md5val := lomMD5(lom); md5val != "" {
-		header.Set(cmn.S3CksumHeader, md5val)
+		header.Set(cos.S3CksumHeader, md5val)
 	}
 }
 

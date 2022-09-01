@@ -31,7 +31,7 @@ type (
 		SelectObjsMsg
 		InclSrcBname          bool `json:"isbn"` // include source bucket name into the names of archived objects
 		AllowAppendToExisting bool `json:"aate"` // allow adding a list or a range of objects to an existing archive
-		ContinueOnError       bool `json:"coer"` // keep running archiving xaction in presence of errors in a any given multi-object transaction
+		ContinueOnError       bool `json:"coer"` // on err, keep running arc xaction in a any given multi-object transaction
 	}
 
 	//  Multi-object copy & transform (see also: TCBMsg)
@@ -52,4 +52,5 @@ func (lrm *SelectObjsMsg) HasTemplate() bool { return lrm.Template != "" }
 ////////////////
 // ArchiveMsg //
 ////////////////
+
 func (msg *ArchiveMsg) FullName() string { return filepath.Join(msg.ToBck.Name, msg.ArchName) }

@@ -29,13 +29,6 @@ const (
 
 	s3Namespace = "http://s3.amazonaws.com/doc/2006-03-01"
 
-	// s3 request headers
-	HdrObjSrc        = "x-amz-copy-source"
-	HdrMptCnt        = "x-amz-mp-parts-count"
-	HdrContentSHA256 = "x-amz-content-sha256"
-
-	HdrBckRegion = "x-amz-bucket-region"
-
 	AISRegion = "ais"
 	AISServer = "AIStore"
 )

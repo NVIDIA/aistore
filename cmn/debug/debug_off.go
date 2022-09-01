@@ -26,6 +26,8 @@ func AssertMsg(_ bool, _ string)                 {}
 func AssertNoErr(_ error)                        {}
 func Assertf(_ bool, _ string, _ ...interface{}) {}
 
+func FailTypeCast(interface{}) {}
+
 func AssertMutexLocked(_ *sync.Mutex)      {}
 func AssertRWMutexLocked(_ *sync.RWMutex)  {}
 func AssertRWMutexRLocked(_ *sync.RWMutex) {}

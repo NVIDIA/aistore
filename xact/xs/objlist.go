@@ -1,7 +1,7 @@
 // Package xs contains eXtended actions (xactions) except storage services
 // (mirror, ec) and extensions (downloader, lru).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -541,6 +541,7 @@ func listMsgpack(readerAt cos.ReadReaderAt) ([]*archEntry, error) {
 	}
 	out, ok := dst.(map[string]interface{})
 	if !ok {
+		debug.FailTypeCast(dst)
 		return nil, fmt.Errorf("unexpected type (%T)", dst)
 	}
 	fileList := make([]*archEntry, 0, len(out))

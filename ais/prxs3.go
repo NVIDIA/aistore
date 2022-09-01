@@ -292,7 +292,7 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 	// But it appears that Amazon always adds region to the response,
 	// and AWS CLI uses it.
 	w.Header().Set(cos.HdrServer, s3.AISServer)
-	w.Header().Set(s3.HdrBckRegion, s3.AISRegion)
+	w.Header().Set(cos.S3HdrBckRegion, s3.AISRegion)
 }
 
 // GET s3/bckName
@@ -332,7 +332,7 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 
 // PUT s3/bckName/objName - with HeaderObjSrc in request header - a source
 func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	src := r.Header.Get(s3.HdrObjSrc)
+	src := r.Header.Get(cos.S3HdrObjSrc)
 	src = strings.Trim(src, "/")
 	parts := strings.SplitN(src, "/", 2)
 	if len(parts) < 2 {
@@ -413,7 +413,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 
 // PUT s3/bckName/objName
 func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	if r.Header.Get(s3.HdrObjSrc) == "" {
+	if r.Header.Get(cos.S3HdrObjSrc) == "" {
 		p.directPutObjS3(w, r, items)
 		return
 	}

@@ -303,7 +303,7 @@ func isErrDowngrade(err error) bool {
 
 /////////////////////////
 // errNotEnoughTargets //
-////////////////////////
+/////////////////////////
 
 func (e *errNotEnoughTargets) Error() string {
 	return fmt.Sprintf("%s: not enough targets in %s: need %d, have %d",
@@ -739,9 +739,9 @@ func extractCii(body []byte, smap *smapX, self, si *cluster.Snode) *clusterInfo 
 	return &cii
 }
 
-////////////////
+// //////////////
 // apiRequest //
-////////////////
+// //////////////
 var (
 	apiReqPool sync.Pool
 	apireq0    apiRequest

@@ -163,10 +163,10 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 	case cos.IsGoogleStorageURL(u) || cos.IsGoogleAPIURL(u):
 		h := cmn.BackendHelpers.Google
 		oah.SetCustomKey(cmn.SourceObjMD, apc.ProviderGoogle)
-		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.GsVersionHeader)); ok {
+		if v, ok := h.EncodeVersion(resp.Header.Get(cos.GsVersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
-		if hdr := resp.Header[http.CanonicalHeaderKey(cmn.GsCksumHeader)]; len(hdr) > 0 {
+		if hdr := resp.Header[http.CanonicalHeaderKey(cos.GsCksumHeader)]; len(hdr) > 0 {
 			for cksumType, cksumValue := range parseGoogleCksumHeader(hdr) {
 				switch cksumType {
 				case cos.ChecksumMD5:
@@ -181,19 +181,19 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 	case cos.IsS3URL(link):
 		h := cmn.BackendHelpers.Amazon
 		oah.SetCustomKey(cmn.SourceObjMD, apc.ProviderAmazon)
-		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.S3VersionHeader)); ok {
+		if v, ok := h.EncodeVersion(resp.Header.Get(cos.S3VersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
-		if v, ok := h.EncodeCksum(resp.Header.Get(cmn.S3CksumHeader)); ok {
+		if v, ok := h.EncodeCksum(resp.Header.Get(cos.S3CksumHeader)); ok {
 			oah.SetCustomKey(cmn.MD5ObjMD, v)
 		}
 	case cos.IsAzureURL(u):
 		h := cmn.BackendHelpers.Azure
 		oah.SetCustomKey(cmn.SourceObjMD, apc.ProviderAzure)
-		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.AzVersionHeader)); ok {
+		if v, ok := h.EncodeVersion(resp.Header.Get(cos.AzVersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
-		if v, ok := h.EncodeCksum(resp.Header.Get(cmn.AzCksumHeader)); ok {
+		if v, ok := h.EncodeCksum(resp.Header.Get(cos.AzCksumHeader)); ok {
 			oah.SetCustomKey(cmn.MD5ObjMD, v)
 		}
 	default:

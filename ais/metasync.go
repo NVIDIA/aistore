@@ -698,6 +698,7 @@ func (payload msPayload) unmarshal(reader io.ReadCloser, tag string) (err error)
 //////////////
 // errMsync //
 //////////////
+
 func (e *errMsync) Error() string { return e.Message }
 
 func (e *errMsync) message(errs ...error) {

@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
@@ -42,8 +41,10 @@ func (*target) putObjMptCopy(w http.ResponseWriter, r *http.Request, items []str
 
 // PUT a part of the multipart upload.
 // Body is empty, everything in the query params and the header.
-// While API states about "Content-MD5" is in the request, it looks like
-// s3cmd does not set it.
+//
+// Obsevation: "Content-MD5" in the parts' headers looks be to be deprecated:
+// either not present (s3cmd) or cannot be trusted (aws s3api).
+//
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
 func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *cluster.Bck) {
 	if len(items) < 2 {
@@ -72,7 +73,7 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 		s3.WriteErr(w, r, err, http.StatusBadRequest)
 		return
 	}
-	if r.Header.Get(s3.HdrObjSrc) != "" {
+	if r.Header.Get(cos.S3HdrObjSrc) != "" {
 		s3.WriteErr(w, r, errors.New("uploading a copy is not supported yet"), http.StatusNotImplemented)
 		return
 	}
@@ -100,7 +101,7 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 		partSHA   string
 		mwriter   io.Writer
 	)
-	if partSHA = r.Header.Get(s3.HdrContentSHA256); partSHA != "" {
+	if partSHA = r.Header.Get(cos.S3HdrContentSHA256); partSHA != "" {
 		cksumSHA = cos.NewCksumHash(cos.ChecksumSHA256)
 		mwriter = io.MultiWriter(cksumMD5.H, cksumSHA.H, fh)
 	} else {
@@ -138,7 +139,7 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	w.Header().Set(cmn.S3CksumHeader, cksumMD5.Value()) // s3cmd checks this one
+	w.Header().Set(cos.S3CksumHeader, cksumMD5.Value()) // s3cmd checks this one
 }
 
 // Initialize multipart upload.
@@ -270,7 +271,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	w.Header().Set(cmn.S3CksumHeader, objETag)
+	w.Header().Set(cos.S3CksumHeader, objETag)
 	sgl.WriteTo(w)
 	sgl.Free()
 }

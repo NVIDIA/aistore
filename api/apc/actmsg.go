@@ -72,6 +72,7 @@ type (
 ///////////////
 // ActionMsg //
 ///////////////
+
 func (msg *ActionMsg) String() string {
 	s := "amsg[" + msg.Action
 	if msg.Name != "" {

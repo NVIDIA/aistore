@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -36,6 +36,7 @@ type (
 /////////
 // pdu //
 /////////
+
 func (pdu *pdu) plength() int { return pdu.woff - sizeProtoHdr } // just the payload
 func (pdu *pdu) slength() int { return pdu.roff - sizeProtoHdr } // payload transmitted/received so far
 func (pdu *pdu) rlength() int { return pdu.woff - pdu.roff }     // not yet sent/received part of the PDU

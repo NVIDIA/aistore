@@ -1,7 +1,7 @@
 // Package xs contains eXtended actions (xactions) except storage services
 // (mirror, ec) and extensions (downloader, lru).
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -368,6 +368,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 ////////////
 // archwi //
 ////////////
+
 func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
@@ -473,6 +474,7 @@ func (wi *archwi) finalize() (size int64, err error) {
 ///////////////
 // tarWriter //
 ///////////////
+
 func (tw *tarWriter) init(wi *archwi) {
 	tw.archwi = wi
 	tw.buf, tw.slab = memsys.PageMM().Alloc()
@@ -510,6 +512,7 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 ///////////////
 // tgzWriter //
 ///////////////
+
 func (tzw *tgzWriter) init(wi *archwi) {
 	tzw.tw.archwi = wi
 	tzw.tw.buf, tzw.tw.slab = memsys.PageMM().Alloc()

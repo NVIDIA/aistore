@@ -178,7 +178,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	case *cos.FileHandle:
 		srcReader, err = cos.NewFileHandle(ctx.lom.FQN)
 	default:
-		debug.Assertf(false, "unsupported reader type: %v", reader)
+		debug.FailTypeCast(reader)
 		err = fmt.Errorf("unsupported reader type: %T", reader)
 	}
 
@@ -508,6 +508,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 				break
 			}
 		} else {
+			debug.FailTypeCast(sl.writer)
 			err = fmt.Errorf("unsupported slice source: %T", sl.writer)
 			break
 		}

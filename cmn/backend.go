@@ -10,6 +10,8 @@ import (
 	"encoding/hex"
 	"strconv"
 	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -48,7 +50,8 @@ var BackendHelpers = struct {
 				}
 				return x, false
 			default:
-				panic(v)
+				debug.FailTypeCast(v)
+				return "", false
 			}
 		},
 		EncodeCksum: func(v interface{}) (string, bool) {
@@ -61,7 +64,8 @@ var BackendHelpers = struct {
 				// FIXME: multipart
 				return x, !strings.Contains(x, awsMultipartDelim)
 			default:
-				panic(v)
+				debug.FailTypeCast(v)
+				return "", false
 			}
 		},
 	},
@@ -72,7 +76,8 @@ var BackendHelpers = struct {
 				x = strings.Trim(x, "\"")
 				return x, x != ""
 			default:
-				panic(v)
+				debug.FailTypeCast(v)
+				return "", false
 			}
 		},
 		EncodeCksum: func(v interface{}) (string, bool) {
@@ -86,7 +91,8 @@ var BackendHelpers = struct {
 			case []byte:
 				return hex.EncodeToString(x), true
 			default:
-				panic(v)
+				debug.FailTypeCast(v)
+				return "", false
 			}
 		},
 	},
@@ -98,7 +104,8 @@ var BackendHelpers = struct {
 			case int64:
 				return strconv.FormatInt(x, 10), true
 			default:
-				panic(v)
+				debug.FailTypeCast(v)
+				return "", false
 			}
 		},
 		EncodeCksum: func(v interface{}) (string, bool) {
@@ -117,7 +124,8 @@ var BackendHelpers = struct {
 				b := []byte{byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x)}
 				return base64.StdEncoding.EncodeToString(b), true
 			default:
-				panic(v)
+				debug.FailTypeCast(v)
+				return "", false
 			}
 		},
 	},
@@ -127,7 +135,8 @@ var BackendHelpers = struct {
 			case []byte:
 				return hex.EncodeToString(x), true
 			default:
-				panic(v)
+				debug.FailTypeCast(v)
+				return "", false
 			}
 		},
 	},
@@ -140,7 +149,8 @@ var BackendHelpers = struct {
 				x = strings.Trim(x, "\"")
 				return x, x != ""
 			default:
-				panic(v)
+				debug.FailTypeCast(v)
+				return "", false
 			}
 		},
 	},

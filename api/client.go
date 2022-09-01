@@ -111,6 +111,7 @@ func GetWhatRawQuery(getWhat, getProps string) string {
 ///////////////
 // ReqParams //
 ///////////////
+
 var (
 	reqParamPool sync.Pool
 	reqParams0   ReqParams

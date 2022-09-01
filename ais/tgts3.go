@@ -53,7 +53,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
-	src := r.Header.Get(s3.HdrObjSrc)
+	src := r.Header.Get(cos.S3HdrObjSrc)
 	src = strings.Trim(src, "/") // in AWS examples the path starts with "/"
 	parts := strings.SplitN(src, "/", 2)
 	if len(parts) < 2 {
@@ -182,14 +182,14 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 	q := r.URL.Query()
 	if q.Has(s3.QparamMptPartNo) && q.Has(s3.QparamMptUploadID) {
-		if r.Header.Get(s3.HdrObjSrc) != "" {
+		if r.Header.Get(cos.S3HdrObjSrc) != "" {
 			t.putObjMptCopy(w, r, items)
 		} else {
 			t.putObjMptPart(w, r, items, q, bck)
 		}
 		return
 	}
-	if r.Header.Get(s3.HdrObjSrc) == "" {
+	if r.Header.Get(cos.S3HdrObjSrc) == "" {
 		t.doPutObjS3(w, r, items, bck)
 		return
 	}

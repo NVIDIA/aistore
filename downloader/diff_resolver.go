@@ -9,6 +9,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -150,7 +151,7 @@ func (dr *DiffResolver) PushSrc(v interface{}) {
 	case *cluster.LOM:
 		dr.srcCh <- x
 	default:
-		cos.Assertf(false, "%T", x)
+		debug.FailTypeCast(v)
 	}
 }
 
@@ -169,7 +170,7 @@ func (dr *DiffResolver) PushDst(v interface{}) {
 			Link:    x.Link,
 		}
 	default:
-		cos.Assertf(false, "%T", x)
+		debug.FailTypeCast(v)
 	}
 
 	dr.dstCh <- d

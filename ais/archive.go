@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -192,6 +192,7 @@ func freadMsgpack(readerAt cos.ReadReaderAt, filename, archname string) (csf *cs
 	}
 	out, ok := dst.(map[string]interface{})
 	if !ok {
+		debug.FailTypeCast(dst)
 		return nil, fmt.Errorf("unexpected type (%T)", dst)
 	}
 	v, ok := out[filename]

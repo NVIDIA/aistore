@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -218,7 +218,7 @@ func (s *slice) free() {
 		case *memsys.SGL:
 			w.Free()
 		default:
-			cos.Assertf(false, "%T", w)
+			debug.FailTypeCast(s.writer)
 		}
 	}
 	if s.workFQN != "" {
@@ -252,8 +252,8 @@ func (s *slice) reopenReader() (reader cos.ReadOpenCloser, err error) {
 				reader = rc.(cos.ReadOpenCloser)
 			}
 		default:
+			debug.FailTypeCast(s.reader)
 			err = fmt.Errorf("unsupported reader type: %T", s.reader)
-			debug.Assertf(false, "unsupported reader type: %T", s.reader)
 		}
 		return reader, err
 	}
@@ -263,8 +263,8 @@ func (s *slice) reopenReader() (reader cos.ReadOpenCloser, err error) {
 	} else if s.workFQN != "" {
 		reader, err = cos.NewFileHandle(s.workFQN)
 	} else {
+		debug.FailTypeCast(s.obj)
 		err = fmt.Errorf("unsupported obj type: %T", s.obj)
-		debug.Assertf(false, "unsupported obj type: %T", s.obj)
 	}
 	return reader, err
 }
@@ -339,7 +339,7 @@ func freeObject(r interface{}) {
 			cos.Close(handle)
 		}
 	default:
-		debug.Assertf(false, "invalid object type: %T", r)
+		debug.FailTypeCast(r)
 	}
 }
 

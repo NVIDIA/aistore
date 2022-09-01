@@ -73,6 +73,7 @@ func (uInfo *User) IsAdmin() bool {
 ////////////
 // CluACL //
 ////////////
+
 func (clu *CluACL) String() string {
 	uuid := "[" + clu.ID + "]"
 	if clu.Alias != "" && clu.Alias != clu.ID {
@@ -87,6 +88,7 @@ func (clu *CluACL) String() string {
 //////////////
 // TokenMsg //
 //////////////
+
 var _ jsp.Opts = (*TokenMsg)(nil)
 
 func (*TokenMsg) JspOpts() jsp.Options { return authtokJspOpts }
