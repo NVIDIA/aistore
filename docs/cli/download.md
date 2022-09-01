@@ -177,7 +177,7 @@ Download all objects contained in `gcp://lpr-vision` bucket and save them into t
 Note that this feature is only available when `ais://lpr-vision-copy` is connected to backend cloud bucket `gcp://lpr-vision`.
 
 ```console
-$ ais bucket props ais://lpr-vision-copy backend_bck=gcp://lpr-vision
+$ ais bucket props set ais://lpr-vision-copy backend_bck=gcp://lpr-vision
 Bucket props successfully updated
 "backend_bck.name" set to:"lpr-vision" (was:"")
 "backend_bck.provider" set to:"gcp" (was:"")
@@ -195,7 +195,7 @@ To change this behavior, you can specify `--sync` flag to enforce downloader to 
 ```console
 $ ais bucket ls --no-headers gcp://lpr-vision | wc -l
 50
-$ ais bucket props ais://lpr-vision-copy backend_bck=gcp://lpr-vision
+$ ais bucket props set ais://lpr-vision-copy backend_bck=gcp://lpr-vision
 Bucket props successfully updated
 "backend_bck.name" set to:"lpr-vision" (was:"")
 "backend_bck.provider" set to:"gcp" (was:"")
@@ -228,7 +228,7 @@ Download objects contained in `gcp://lpr-vision` bucket which start with `dir/pr
 Note that this feature is only available when `ais://lpr-vision-copy` is connected to backend cloud bucket `gcp://lpr-vision`.
 
 ```console
-$ ais bucket props ais://lpr-vision-copy backend_bck=gcp://lpr-vision
+$ ais bucket props set ais://lpr-vision-copy backend_bck=gcp://lpr-vision
 Bucket props successfully updated
 "backend_bck.name" set to:"lpr-vision" (was:"")
 "backend_bck.provider" set to:"gcp" (was:"")
