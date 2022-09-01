@@ -10,8 +10,8 @@ ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --crc32c 0767345f
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --crc32c badchecksum // FAIL "BAD DATA CHECKSUM: crc32c(badchecksum != 0767345f)"
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --md5 3749f52bb326ae96782b42dc0a97b4c1
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --md5 badchecksum // FAIL "BAD DATA CHECKSUM: md5(badchecksum != 3749f52bb326ae96782b42dc0a97b4c1)"
-ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha256 dc2bac3ba773b7bc52c20aa85e6ce3ae097dec870e7b9bda03671a1c434b7a5d
-ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha256 badchecksum // FAIL "BAD DATA CHECKSUM: sha256(badchecksum != dc2bac3ba773b7bc52c20aa85e6ce3ae097dec870e7b9bda03671a1c434b7a5d)"
+ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha256 c67c199595622dfbdc9e415c4a0ad6166eb49cbf74c6aac7bb3e958604d5ecb8
+ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha256 badchecksum // FAIL "BAD DATA CHECKSUM: sha256(badchecksum != c67c199595622dfbdc9e415c4a0ad6166eb49cbf74c6aac7bb3e958604d5ecb8)"
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha512 e7da5269d4cd882deb8d7b7ca5cbf424047f56815fd7723123482e2931823a68d866627a449a55ca3a18f9c9ba7c8bb6219a028ba3ff5a5e905240907d087e40
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha512 badchecksum // FAIL "BAD DATA CHECKSUM: sha512(badchecksum != e7da5269d4cd882deb8d7b7ca5cbf424047f56815fd7723123482e2931823a68d866627a449a55ca3a18f9c9ba7c8bb6219a028ba3ff5a5e905240907d087e40)"
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --compute-checksum

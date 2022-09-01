@@ -6,6 +6,7 @@ package cos
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"crypto/sha512"
 	"encoding"
 	"encoding/hex"
@@ -114,7 +115,7 @@ func (ck *CksumHash) Init(ty string) {
 	case ChecksumCRC32C:
 		ck.H = NewCRC32C()
 	case ChecksumSHA256:
-		ck.H = sha512.New512_256()
+		ck.H = sha256.New()
 	case ChecksumSHA512:
 		ck.H = sha512.New()
 	default:

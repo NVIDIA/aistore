@@ -180,7 +180,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	q := r.URL.Query()
-	if q.Has(s3.QparamMptPartNo) && r.URL.Query().Has(s3.QparamMptUploadID) {
+	if q.Has(s3.QparamMptPartNo) && q.Has(s3.QparamMptUploadID) {
 		if r.Header.Get(s3.HdrObjSrc) != "" {
 			t.putObjMptCopy(w, r, items)
 		} else {

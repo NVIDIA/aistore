@@ -30,6 +30,7 @@ For additional background, see:
 - [`s3cmd` command line](#s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
 - [Last Modification Time](#last-modification-time)
+- [Multipart Upload using `aws`](#multipart-upload-using-aws)
 - [More Usage Examples](#more-usage-examples)
   - [Create bucket](#create-bucket)
   - [Remove bucket](#remove-bucket)
@@ -198,6 +199,93 @@ $ s3cmd ls s3://bck --host=localhost:51080 --host-bucket="localhost:51080/s3/%(b
 2020-12-08 11:25     71671   s3://test/obj-ais
 1969-12-31 16:00     71671   s3://test/obj-aws
 ```
+
+## Multipart Upload using `aws`
+
+Example below reproduces the following [Amazon Knowledge-Center instruction](https://aws.amazon.com/premiumsupport/knowledge-center/s3-multipart-upload-cli/).
+
+> Used `aws-cli/1.15.58 Python/3.5.2 Linux/5.15.0-46-generic botocore/1.10.57`
+
+> Compare with (user-friendly and easy-to-execute) multipart examples from the [s3cmd companion doc](/docs/s3cmd.md).
+
+But first and separately, we create `ais://` bucket and configure it with MD5:
+
+```console
+$ ais create ais://abc
+"ais://abc" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)
+$ ais bucket props set ais://abc checksum.type=md5
+Bucket props successfully updated
+"checksum.type" set to: "md5" (was: "xxhash")
+```
+
+Next, the uploading sequence:
+
+```console
+# 1. initiate multipart upload
+$ aws s3api create-multipart-upload --bucket abc --key large-test-file --endpoint-url http://localhost:8080/s3                                   {
+    "Key": "large-test-file",
+    "UploadId": "uu3DuXsJG",
+    "Bucket": "abc"
+}
+```
+
+```console
+# 2. upload the first part (w/ upload-id copied from the previous command)
+$ aws s3api upload-part --endpoint-url http://localhost:8080/s3 --bucket abc --key large-test-file --part-number 1 --body README.md --upload-id uu3DuXsJG
+{
+    "ETag": "9bc8111718e22a34f9fa6a099da1f3df"
+}
+```
+
+```console
+# 3. upload the second, etc. parts
+$ aws s3api upload-part --endpoint-url http://localhost:8080/s3 --bucket abc --key large-test-file --part-number 2 --body LICENSE --upload-id uu3DuXsJG
+{
+    "ETag": "f70a21a0c5fa26a93820b0bef5be7619"
+}
+```
+
+```console
+# 4. list active upload by its ID (upload-id)
+$ aws s3api list-parts --endpoint-url http://localhost:8080/s3 --bucket abc --key large-test-file --upload-id uu3DuXsJG                          {
+    "Owner": null,
+    "StorageClass": null,
+    "Initiator": null,
+    "Parts": [
+        {
+            "PartNumber": 1,
+            "ETag": "9bc8111718e22a34f9fa6a099da1f3df",
+            "Size": 10725
+        },
+        {
+            "PartNumber": 2,
+            "ETag": "f70a21a0c5fa26a93820b0bef5be7619",
+            "Size": 1075
+        }
+    ]
+}
+```
+
+And finally:
+
+```console
+# 5. complete upload, and be done
+$ aws s3api complete-multipart-upload --endpoint-url http://localhost:8080/s3 --bucket abc --key large-test-file --multipart-upload file://up.json  --upload-id uu3DuXsJG
+{
+    "Key": "large-test-file",
+    "Bucket": "abc",
+    "ETag": "799e69a43a00794a86eebffb5fbaf4e6-2"
+}
+$ s3cmd ls s3://abc
+2022-08-31 20:36        11800  s3://abc/large-test-file
+```
+
+Notice `file://up.json` in the `complete-multipart-upload` command. It simply contains the "Parts" section(**) copied from the "list active upload" step (above).
+
+> (**) with no sizes
+
+See https://aws.amazon.com/premiumsupport/knowledge-center/s3-multipart-upload-cli for details.
+
 
 ## More Usage Examples
 
