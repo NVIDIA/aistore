@@ -1,0 +1,15 @@
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
+ais bucket props set ais://$BUCKET_1 'mirror.enabled=true' 'mirror.copies=2'
+
+ais bucket props set ais://$BUCKET_1 'unknown.field' // FAIL "invalid property "unknown.field""
+ais bucket props set ais://$BUCKET_1 'unknown.field=true' // FAIL "unknown property "unknown.field""
+ais bucket props set ais://$BUCKET_1 'provider=ais' // FAIL "property "provider" is readonly"
+
+ais show bucket ais://$BUCKET_1 --compact
+ais bucket props reset ais://$BUCKET_1
+
+ais bucket props set ais://$BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'
+ais show bucket ais://$BUCKET_1 --compact
+ais show bucket ais://$BUCKET_1 lru
+
+ais bucket props set ais://$BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'

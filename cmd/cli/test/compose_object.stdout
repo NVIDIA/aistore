@@ -1,0 +1,5 @@
+"ais://$BUCKET" created
+COMPOSE ais://$BUCKET/object.txt, size 20B
+0123456789abcdefghi
+COMPOSE ais://$BUCKET/object1.txt, size 7B
+012345

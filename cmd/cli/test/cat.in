@@ -1,0 +1,6 @@
+echo "0123456789" > $OBJECT_1.txt
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
+ais object put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt
+rm -f $OBJECT_1.txt
+
+ais object cat ais://$BUCKET_1/object_1.txt

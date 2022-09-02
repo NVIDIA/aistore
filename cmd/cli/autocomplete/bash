@@ -1,0 +1,38 @@
+#!/bin/bash
+# Modified bash autocomplete script from github.com/urfave/cli
+
+PROG=ais
+
+_cli_bash_autocomplete() {
+  if [[ "${COMP_WORDS[0]}" != "source" ]]; then
+    local cur opts base
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    if [[ $COMP_CWORD -gt 0 && ${COMP_WORDS[COMP_CWORD]} == "put" ]]; then
+      COMPREPLY=( $(compgen -A filename) )
+    else
+      if [[ "$cur" == "-"* ]]; then
+        opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} ${cur} --generate-bash-completion )
+      else
+        opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} --generate-bash-completion )
+      fi
+      COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    fi
+
+    # append single space after a suggestion if it doesn't end with a /
+    local i=${#COMPREPLY[*]}
+    while [[ $((--i)) -ge 0 ]]; do
+        case "${COMPREPLY[$i]}" in
+            */ )
+                 ;;
+             * )
+                 COMPREPLY[$i]="${COMPREPLY[$i]} "
+                 ;;
+        esac
+    done
+    return 0
+  fi
+}
+
+complete -o bashdefault -o default -o nospace -F _cli_bash_autocomplete $PROG
+unset PROG

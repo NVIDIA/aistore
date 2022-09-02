@@ -1,0 +1,19 @@
+ais bucket create ais://$BUCKET | awk '{print $1 " " $2}'
+echo -n "0123456789" > $OBJECT_1.txt
+echo "abcdefghi" > $OBJECT_2.txt
+
+ais object concat $OBJECT_1.txt $OBJECT_2.txt ais://$BUCKET/object.txt
+
+ais object get ais://$BUCKET/object.txt -
+
+mkdir "$OBJECT_3-b"
+mkdir "$OBJECT_3-a"
+echo -n "2" > $OBJECT_3-b/7.txt
+echo -n "0" > $OBJECT_3-b/5.txt
+echo -n "1" > $OBJECT_3-b/6.txt
+echo -n "4" > $OBJECT_3-a/1.txt
+echo -n "3" > $OBJECT_3-a/0.txt
+echo "5" > $OBJECT_3.txt
+
+ais object concat $OBJECT_3-b $OBJECT_3-a $OBJECT_3.txt ais://$BUCKET/object1.txt
+ais object get ais://$BUCKET/object1.txt -

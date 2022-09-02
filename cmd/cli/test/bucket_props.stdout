@@ -1,0 +1,29 @@
+"ais://$BUCKET_1" created
+Bucket props successfully updated
+"mirror.enabled" set to:"true" (was:"false")
+PROPERTY	     VALUE
+access           GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,DISCONNECTED-BACKEND,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN
+checksum	 Type: xxhash | Validate: ColdGET
+^.*created.*$
+ec		 Disabled
+lru		 Disabled
+mirror		 2 copies
+provider	 ais
+versioning	 Enabled | Validate on WarmGET: no
+Bucket props successfully reset to cluster defaults
+Bucket props successfully updated
+"versioning.validate_warm_get" set to:"true" (was:"false")
+ PROPERTY	 VALUE
+access           GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,DISCONNECTED-BACKEND,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN
+checksum	 Type: xxhash | Validate: ColdGET
+^.*created.*$
+ec		     Disabled
+lru		     Disabled
+mirror		 Disabled
+provider	 ais
+versioning	 Enabled | Validate on WarmGET: yes
+PROPERTY		        VALUE
+lru.capacity_upd_time	        10m
+lru.dont_evict_time	        2h0m
+lru.enabled     	        false
+Bucket "ais://$BUCKET_1" already has the set props, nothing to do

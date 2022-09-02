@@ -1,0 +1,10 @@
+ais advanced gen-shards "ais://$BUCKET_1/tmp/shard-{0..9}.tar" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
+ais bucket mv ais://$BUCKET_1/ ais://$BUCKET_2/ --wait
+ais bucket mv ais://$BUCKET_2/ ais://$BUCKET_1/
+ais advanced gen-shards "ais://$BUCKET_3/tmp/shard-{0..9}.tar" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
+ais bucket mv ais://$BUCKET_1/ ais://$BUCKET_3/ // FAIL "bucket "ais://$BUCKET_3" already exists"
+ais bucket mv ais://$BUCKET_1/ ais://$BUCKET_1/ // FAIL "cannot mv bucket "ais://$BUCKET_1" onto itself"
+
+ais bucket rm ais://$BUCKET_1 ais://$BUCKET_3 // IGNORE
+
+ais bucket mv az://bucket ais://new_bucket // FAIL "bucket "azure://bucket" does not exist"

@@ -1,0 +1,3 @@
+"ais://$BUCKET_1" created
+PUT "object_1.txt" to ais://$BUCKET_1
+0123456789

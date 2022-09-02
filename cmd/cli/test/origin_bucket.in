@@ -1,0 +1,7 @@
+ais bucket create ais://$BUCKET | awk '{print $1 " " $2}'
+
+ais bucket props set ais://$BUCKET backend_bck=ais://something // FAIL "Backend bucket "ais://something" must be remote"
+ais bucket props set ais://$BUCKET backend_bck=gcp:// // FAIL "missing bucket name"
+ais bucket props set ais://$BUCKET backend_bck=name // FAIL "invalid "backend_bck": provider cannot be empty"
+
+ais show bucket ais://$BUCKET backend_bck

@@ -1,0 +1,22 @@
+// RUN authn
+echo "/tmp/auth-token.$RANDOM.adm" > /tmp/e2e.admin.rand
+tf=`cat /tmp/e2e.admin.rand`; ais auth login admin -p admin -f $tf // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth add user u1 -p tt // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth add cluster http://localhost:8080 cluster-test // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth add role r1 ro --cluster cluster-test // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth set user u1 r1 // IGNORE
+
+echo "/tmp/auth-token.$RANDOM.usr" > /tmp/e2e.user.rand
+tf=`cat /tmp/e2e.user.rand`; ais auth login u1 -p tt -f $tf --cluster cluster-test // IGNORE
+
+
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais bucket create ais://$BUCKET_1 // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.user.rand` ais bucket rm ais://$BUCKET_1 // FAIL ermis
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.user.rand` ais bucket create ais://$BUCKET_2 // FAIL ermis
+
+
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth rm user u1 // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth rm role r1 // IGNORE
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth rm cluster cluster-test // IGNORE
+
+rm /tmp/e2e.admin.rand /tmp/e2e.user.rand

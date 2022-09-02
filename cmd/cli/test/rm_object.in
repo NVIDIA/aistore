@@ -1,0 +1,6 @@
+ais bucket create ais://$BUCKET // IGNORE
+echo "0123456789" > $OBJECT.txt
+ais object put $OBJECT.txt ais://$BUCKET/object.txt
+
+ais object rm ais://$BUCKET/object.txt --verbose
+ais object rm ais://$BUCKET/object.txt // FAIL "doesn't exist"

@@ -1,0 +1,35 @@
+echo "0123456789" > $OBJECT_1.txt
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
+ais object put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt
+rm -f $OBJECT_1.txt
+
+# Negative Testing
+ais object get ais://$BUCKET_2/object_1.txt $OBJECT_1.txt // FAIL "bucket "ais://$BUCKET_2" does not exist"
+ais object get ais://$BUCKET_1/object_2.txt $OBJECT_1.txt // FAIL "object "ais://$BUCKET_1/object_2.txt" does not exist"
+ais object get aws://$BUCKET_1/object_1.txt $OBJECT_1.txt // FAIL
+
+# Positive Testing
+ais object get ais://$BUCKET_1/object_1.txt $OBJECT_1.txt
+$PRINT_SIZE $OBJECT_1.txt
+ais object get ais://$BUCKET_1/object_1.txt $OBJECT_2.txt
+$PRINT_SIZE $OBJECT_2.txt
+rm -f $OBJECT_*
+
+# Test with no OUT_FILE argument specified
+ais object get ais://$BUCKET_1/object_1.txt
+$PRINT_SIZE object_1.txt
+rm -f object_1.txt
+
+# Set up file and directory structure for the next tests
+for d1 in {0..2}; do for d2 in {0..2}; do mkdir -p /tmp/rdir/test$d1/$d2 && echo -n "$d1 $d2" > /tmp/rdir/test$d1/$d2/test.txt; done; done
+ais object put "/tmp/rdir/test{0..2}/{0..2}/test.txt" ais://$BUCKET_1 -y // IGNORE
+RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais object get ais://$BUCKET_1/test$d1/$d2/test.txt && RES=$((RES+1)); done; done && echo $RES
+
+# Test get to stdout
+ais object get ais://$BUCKET_1/test2/2/test.txt -
+
+# Expect the last retrieved object to overwrite previous gets of the same file name
+cat test.txt
+
+rm test.txt // IGNORE
+rm -rf /tmp/rdir // IGNORE

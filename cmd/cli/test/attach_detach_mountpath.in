@@ -1,0 +1,9 @@
+ais storage mountpath attach // FAIL
+ais storage mountpath detach // FAIL
+ais storage mountpath attach something // FAIL "invalid key=value pair "something""
+ais storage mountpath detach something // FAIL "invalid key=value pair "something""
+ais storage mountpath attach $RANDOM_TARGET=/nonexisting // FAIL "does not exist"
+ais storage mountpath detach $RANDOM_TARGET=/nonexisting // FAIL "does not exist"
+
+ais storage mountpath detach $RANDOM_TARGET=$RANDOM_MOUNTPATH
+ais storage mountpath attach $RANDOM_TARGET=$RANDOM_MOUNTPATH
