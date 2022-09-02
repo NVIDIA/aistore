@@ -102,17 +102,15 @@ else
 endif
 	@echo "done."
 
-## Build 'aisfs' binary (NOTE: separate go.mod)
+## Build 'aisfs' binary (NOTE: a separate go.mod)
 aisfs:
+	@echo -n "Building aisfs..."
 	@cd $(BUILD_DIR)/aisfs && ./install.sh && go build -o $(BUILD_DEST)/aisfs $(BUILD_FLAGS) $(LDFLAGS) *.go
+	@echo "   done."
 
-cli: ## Build CLI ('ais' binary)
+cli: ## Build CLI binary (NOTE: a separate go.mod)
 	@echo "Building ais (CLI) => $(BUILD_DEST)/ais"
-ifdef CROSS_COMPILE
-	@cd $(BUILD_DIR)/cli && $(CROSS_COMPILE) go build -o ./ais $(BUILD_FLAGS) $(LDFLAGS) *.go && mv ./ais $(BUILD_DEST)/.
-else
 	@cd $(BUILD_DIR)/cli && go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) *.go
-endif
 	@echo "*** To enable autocompletions in your current shell, run:"
 	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/bash or"
 	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/zsh"
