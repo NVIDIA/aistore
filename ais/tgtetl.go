@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -96,8 +95,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 
 	// /v1/etl/<uuid>
 	if len(apiItems) == 1 {
-		// TODO: should return info for given UUID
-		t.writeErr(w, r, errors.New("not implemented yet"))
+		t.writeErr(w, r, fmt.Errorf("GET(ETL[%s] info) not implemented yet", apiItems[0]), http.StatusNotImplemented)
 		return
 	}
 

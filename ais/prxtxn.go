@@ -149,7 +149,8 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHeader 
 		if bucketProps == nil {
 			bucketProps = remoteProps
 		} else {
-			bucketProps.Versioning.Enabled = remoteProps.Versioning.Enabled // always takes precedence
+			// backend versioning always takes precedence
+			bucketProps.Versioning.Enabled = remoteProps.Versioning.Enabled
 		}
 	} else if backend := bck.Backend(); backend != nil {
 		if bucketProps == nil {
@@ -159,9 +160,9 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHeader 
 		debug.Assert(present)
 		bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
 	} else if bck.IsHTTP() {
-		return errors.New("creating bucket for HTTP provider is not supported")
+		return errors.New("creating bucket for HTTP provider is not supported (and cannot be done)")
 	} else if bck.IsCloud() {
-		return fmt.Errorf("creating bucket for %q (cloud) provider is not supported", bck.Provider)
+		return fmt.Errorf("cannot create cloud (%q) bucket (not implemented yet)", bck.Provider)
 	} else if bucketProps == nil {
 		bucketProps = defaultBckProps(bckPropsArgs{bck: bck})
 	}

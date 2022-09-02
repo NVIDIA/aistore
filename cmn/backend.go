@@ -14,16 +14,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-const (
-	awsMultipartDelim = "-"
-)
+const AwsMultipartDelim = "-"
 
-type (
-	backendFuncs struct {
-		EncodeVersion func(v interface{}) (version string, isSet bool)
-		EncodeCksum   func(v interface{}) (cksumValue string, isSet bool)
-	}
-)
+type backendFuncs struct {
+	EncodeVersion func(v interface{}) (version string, isSet bool)
+	EncodeCksum   func(v interface{}) (cksumValue string, isSet bool)
+}
 
 func awsIsVersionSet(version *string) bool {
 	return version != nil && *version != "" && *version != "null"
@@ -57,12 +53,13 @@ var BackendHelpers = struct {
 		EncodeCksum: func(v interface{}) (string, bool) {
 			switch x := v.(type) {
 			case *string:
+				if strings.Contains(*x, AwsMultipartDelim) {
+					return *x, true // return as-is multipart
+				}
 				cksum, _ := strconv.Unquote(*x)
-				// FIXME: multipart
-				return cksum, !strings.Contains(cksum, awsMultipartDelim)
+				return cksum, true
 			case string:
-				// FIXME: multipart
-				return x, !strings.Contains(x, awsMultipartDelim)
+				return x, true
 			default:
 				debug.FailTypeCast(v)
 				return "", false

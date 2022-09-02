@@ -1312,6 +1312,10 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 
 	// to header
 	cmn.ToHeader(&op.ObjAttrs, hdr)
+	if op.ObjAttrs.Cksum == nil {
+		// cos.Cksum does not have default nil/zero value (reflection)
+		op.ObjAttrs.Cksum = cos.NewCksum("", "")
+	}
 	errIter := cmn.IterFields(op, func(tag string, field cmn.IterField) (err error, b bool) {
 		if !hasEC && strings.HasPrefix(tag, "ec.") {
 			return nil, false

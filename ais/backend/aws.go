@@ -301,10 +301,19 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 	}
 	if v, ok := h.EncodeCksum(headOutput.ETag); ok {
 		oa.SetCustomKey(cmn.ETag, v)
-		// NOTE: the checksum is _not_ multipart (see `h.EncodeCksum`) but still,
-		//       assuming SSE-S3 or plaintext encryption - see
-		//       https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html
-		oa.SetCustomKey(cmn.MD5ObjMD, v)
+		// assuming SSE-S3 or plaintext encryption - see
+		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html
+		if !strings.Contains(v, cmn.AwsMultipartDelim) {
+			oa.SetCustomKey(cmn.MD5ObjMD, v)
+		}
+	}
+	if v := headOutput.ContentType; v != nil {
+		oa.SetCustomKey(cos.HdrContentType, *v)
+	}
+	if oa.Atime == 0 {
+		if v := headOutput.LastModified; v != nil {
+			oa.Atime = v.UnixNano()
+		}
 	}
 	if verbose {
 		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
@@ -384,7 +393,7 @@ func setCustomS3(lom *cluster.LOM, obj *s3.GetObjectOutput) (expCksum *cos.Cksum
 		lom.SetCustomKey(cmn.VersionObjMD, v)
 	}
 	// see ETag/MD5 NOTE above
-	if v, ok := h.EncodeCksum(obj.ETag); ok {
+	if v, ok := h.EncodeCksum(obj.ETag); ok && !strings.Contains(v, cmn.AwsMultipartDelim) {
 		expCksum = cos.NewCksum(cos.ChecksumMD5, v)
 		lom.SetCustomKey(cmn.MD5ObjMD, v)
 	}
@@ -433,7 +442,9 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 	if v, ok := h.EncodeCksum(uploadOutput.ETag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 		// see ETag/MD5 NOTE above
-		lom.SetCustomKey(cmn.MD5ObjMD, v)
+		if !strings.Contains(v, cmn.AwsMultipartDelim) {
+			lom.SetCustomKey(cmn.MD5ObjMD, v)
+		}
 	}
 	if verbose {
 		glog.Infof("[put_object] %s", lom)

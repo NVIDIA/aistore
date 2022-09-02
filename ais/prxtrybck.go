@@ -265,10 +265,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	}
 
 	if err = args.p.createBucket(&apc.ActionMsg{Action: action}, bck, remoteProps); err != nil {
-		if _, ok := err.(*cmn.ErrBucketAlreadyExists); !ok {
-			errCode = http.StatusConflict
-			return
-		}
+		errCode = _crber(err)
 		return
 	}
 

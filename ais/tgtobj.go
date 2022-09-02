@@ -262,7 +262,7 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 		return
 	}
 
-	// NOTE: see GetCold() implementation and cmn.OWT
+	// see GetCold() implementation and cmn.OWT (locking strategies)
 	switch poi.owt {
 	case cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet:
 		debug.AssertFunc(func() bool { _, exclusive := lom.IsLocked(); return exclusive })

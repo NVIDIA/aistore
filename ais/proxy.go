@@ -1202,11 +1202,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			return
 		}
 		if err := p.createBucket(msg, bck); err != nil {
-			errCode := http.StatusInternalServerError
-			if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
-				errCode = http.StatusConflict
-			}
-			p.writeErr(w, r, err, errCode)
+			p.writeErr(w, r, err, _crber(err))
 			return
 		}
 	case apc.ActPrefetchObjects:
@@ -1300,12 +1296,18 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query 
 		msg.Value = bck.Props
 	}
 	if err := p.createBucket(msg, bck); err != nil {
-		errCode := http.StatusInternalServerError
-		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
-			errCode = http.StatusConflict
-		}
-		p.writeErr(w, r, err, errCode)
+		p.writeErr(w, r, err, _crber(err))
 	}
+}
+
+func _crber(err error) (errCode int) {
+	errCode = http.StatusInternalServerError
+	if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
+		errCode = http.StatusConflict
+	} else if strings.Contains(err.Error(), "not implemented") {
+		errCode = http.StatusNotImplemented
+	}
+	return
 }
 
 func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg,

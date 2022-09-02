@@ -36,7 +36,7 @@ func (*target) putObjMptCopy(w http.ResponseWriter, r *http.Request, items []str
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	s3.WriteErr(w, r, errors.New("not implemented yet"), 0)
+	s3.WriteErr(w, r, errors.New("not implemented yet"), http.StatusNotImplemented)
 }
 
 // PUT a part of the multipart upload.
@@ -59,7 +59,7 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 	}
 	part := q.Get(s3.QparamMptPartNo)
 	if part == "" {
-		s3.WriteErr(w, r, errors.New("empty part number"), 0)
+		s3.WriteErr(w, r, fmt.Errorf("upload %q: missing part number", uploadID), 0)
 		return
 	}
 	partNum, err := s3.ParsePartNum(part)
@@ -70,7 +70,7 @@ func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []s
 	if partNum < 1 || partNum > s3.MaxPartsPerUpload {
 		err := fmt.Errorf("upload %q: invalid part number %d, must be between 1 and %d",
 			uploadID, partNum, s3.MaxPartsPerUpload)
-		s3.WriteErr(w, r, err, http.StatusBadRequest)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if r.Header.Get(cos.S3HdrObjSrc) != "" {
@@ -215,7 +215,6 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	buf, slab := t.gmm.Alloc()
 	defer slab.Free(buf)
 	for _, partInfo := range nparts {
-		var err error
 		objMD5 += partInfo.MD5
 		// first part
 		if obj == nil {
@@ -259,7 +258,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	lom.SetSize(size)
 	lom.SetAtimeUnix(time.Now().UnixNano())
 
-	// 5. finalize
+	// 5. finalize (note: locks inside)
 	t.FinalizeObj(lom, objWorkfile, nil)
 
 	// 6. mpt state => xattr
@@ -277,7 +276,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 }
 
 // List already stored parts of the active multipart upload by bucket name and uploadID.
-// NOTE: looks like `s3cmd` lists upload parts before checking if any parts can be skipped.
+// (NOTE: `s3cmd` lists upload parts before checking if any parts can be skipped.)
 // s3cmd is OK to receive an empty body in response with status=200. In this
 // case s3cmd sends all parts.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html
@@ -290,9 +289,9 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *clust
 		return
 	}
 
-	parts, err := s3.ListParts(uploadID, lom)
+	parts, err, errCode := s3.ListParts(uploadID, lom)
 	if err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteErr(w, r, err, errCode)
 		return
 	}
 	result := &s3.ListPartsResult{Bucket: bck.Name, Key: objName, UploadID: uploadID, Parts: parts}

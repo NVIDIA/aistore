@@ -6,6 +6,7 @@ package s3
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -172,23 +173,23 @@ func ListUploads(bckName, idMarker string, maxUploads int) (result *ListMptUploa
 	return
 }
 
-func ListParts(id string, lom *cluster.LOM) ([]*PartInfo, error) {
+func ListParts(id string, lom *cluster.LOM) (parts []*PartInfo, err error, errCode int) {
 	mu.RLock()
 	mpt, ok := ups[id]
 	if !ok {
-		var err error
+		errCode = http.StatusNotFound
 		mpt, err = loadMptXattr(lom.FQN)
 		if err != nil || mpt == nil {
 			mu.RUnlock()
-			return nil, err
+			return
 		}
 		mpt.bckName, mpt.objName = lom.Bck().Name, lom.ObjName
 		mpt.ctime = lom.Atime()
 	}
-	parts := make([]*PartInfo, 0, len(mpt.parts))
+	parts = make([]*PartInfo, 0, len(mpt.parts))
 	for _, part := range mpt.parts {
 		parts = append(parts, &PartInfo{ETag: part.MD5, PartNumber: part.Num, Size: part.Size})
 	}
 	mu.RUnlock()
-	return parts, nil
+	return
 }

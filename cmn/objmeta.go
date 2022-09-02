@@ -25,11 +25,11 @@ const (
 	// downloader' source is "web"
 	WebObjMD = "web"
 
-	// system-supported custom attrs
+	// system-supported custom attrs (NOTE: for all provider's headers, see cmn/cos/const_http.go)
 	VersionObjMD = "remote-version"
 	CRC32CObjMD  = cos.ChecksumCRC32C
 	MD5ObjMD     = cos.ChecksumMD5
-	ETag         = "ETag"
+	ETag         = cos.HdrETag
 
 	OrigURLObjMD = "orig_url"
 )

@@ -46,6 +46,10 @@ const (
 	S3ChecksumSHA1    = "x-amz-checksum-sha1"
 	S3ChecksumSHA256  = "x-amz-checksum-sha256"
 	S3ContentEncoding = "Content-Encoding"
+	S3LastModified    = "Last-Modified"
+
+	S3MetadataChecksumType = "x-amz-meta-ais-cksum-type"
+	S3MetadataChecksumVal  = "x-amz-meta-ais-cksum-val"
 
 	// https://docs.microsoft.com/en-us/rest/api/storageservices/get-blob-properties#response-headers
 	AzCksumHeader   = "Content-MD5"

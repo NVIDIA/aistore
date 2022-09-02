@@ -165,11 +165,7 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 		return
 	}
 	if err := p.createBucket(&msg, bck); err != nil {
-		errCode := http.StatusInternalServerError
-		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
-			errCode = http.StatusConflict
-		}
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, _crber(err))
 	}
 }
 

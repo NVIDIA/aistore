@@ -530,10 +530,10 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Second, hijack the connection. A kind of man-in-the-middle attack
-	// Since this moment this function is responsible of HTTP connection
+	// From this point on, this function is responsible for HTTP connection
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		cmn.WriteErr(w, r, errors.New("client does not support hijacking"),
+		cmn.WriteErr(w, r, errors.New("response writer does not support hijacking"),
 			http.StatusInternalServerError)
 		return
 	}

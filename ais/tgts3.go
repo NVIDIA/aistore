@@ -5,8 +5,10 @@
 package ais
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -251,9 +253,59 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		return
 	}
 	lom := cluster.AllocLOM(objName)
-	t.headObject(w, r, r.URL.Query(), bck, lom)
-	s3.SetETag(w.Header(), lom) // add etag/md5
-	cluster.FreeLOM(lom)
+	defer cluster.FreeLOM(lom)
+	if err := lom.InitBck(bck.Bucket()); err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
+	exists := true
+	err = lom.Load(true /*cache it*/, false /*locked*/)
+	if err != nil {
+		exists = false
+		if cmn.IsObjNotExist(err) {
+			if bck.IsAIS() {
+				s3.WriteErr(w, r, cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName()), 0)
+				return
+			}
+		} else {
+			s3.WriteErr(w, r, err, 0)
+			return
+		}
+	}
+
+	var (
+		hdr = w.Header()
+		op  cmn.ObjectProps
+	)
+	if exists {
+		op.ObjAttrs = *lom.ObjAttrs()
+	} else {
+		// cold HEAD
+		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
+		if err != nil {
+			s3.WriteErr(w, r, err, errCode)
+			return
+		}
+		op.ObjAttrs = *objAttrs
+	}
+
+	custom := op.GetCustomMD()
+	lom.SetCustomMD(custom)
+	if v, ok := custom[cos.HdrETag]; ok {
+		hdr.Set(cos.HdrETag, v)
+	}
+	s3.SetETag(hdr, lom)
+	hdr.Set(cos.HdrContentLength, strconv.FormatInt(op.Size, 10))
+	if v, ok := custom[cos.HdrContentType]; ok {
+		hdr.Set(cos.HdrContentType, v)
+	}
+	if op.Atime != 0 {
+		atime := time.Unix(0, op.Atime)
+		hdr.Set(cos.S3LastModified, atime.Format(time.RFC3339))
+	}
+
+	// TODO: lom.Checksum() via apc.HeaderPrefix+apc.HdrObjCksumType/Val via
+	// s3 obj Metadata map[string]*string
 }
 
 // DEL s3/bckName/objName
