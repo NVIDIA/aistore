@@ -1,2 +1,0 @@
-Node "$RANDOM_TARGET" detached mountpath "$RANDOM_MOUNTPATH"
-Node "$RANDOM_TARGET" attached mountpath "$RANDOM_MOUNTPATH"

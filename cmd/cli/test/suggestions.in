@@ -1,5 +1,0 @@
-ais bucket copy b // FAIL "Did you mean: "ais bucket cp b"?"
-ais bucket copy ais://b // FAIL "Did you mean: "ais bucket cp ais://b"?"
-
-ais job star rebalance --flag1 --flag2 // FAIL "Did you mean: "ais job start rebalance --flag1 --flag2"?"
-ais job start rebolance --flag1 v1 --flag2 v2 // FAIL "Did you mean: "ais job start rebalance --flag1 v1 --flag2 v2"?"

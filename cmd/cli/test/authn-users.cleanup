@@ -1,3 +1,0 @@
-AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth rm user u1 // IGNORE
-AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth rm role r1 // IGNORE
-AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth rm cluster cluster-test // IGNORE

@@ -1,7 +1,0 @@
-ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
-ais bucket rm ais://$BUCKET_1
-
-ais bucket rm hdfs://tmp // FAIL "bucket "hdfs://tmp" does not exist"
-
-ais bucket rm aws://$BUCKET_2 // FAIL "is not supported"
-ais bucket rm gcp://$BUCKET_2 // FAIL "is not supported"

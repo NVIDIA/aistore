@@ -1,2 +1,0 @@
-PUT "object.txt" to ais://$BUCKET
-deleted "object.txt" from ais://$BUCKET
