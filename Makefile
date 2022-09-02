@@ -109,10 +109,9 @@ aisfs:
 cli: ## Build CLI ('ais' binary)
 	@echo "Building ais (CLI) => $(BUILD_DEST)/ais"
 ifdef CROSS_COMPILE
-	@$(CROSS_COMPILE) go build -o ./cli $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/cli/*.go
-	@mv ./cli $(BUILD_DEST)/ais
+	@cd $(BUILD_DIR)/cli && $(CROSS_COMPILE) go build -o ./ais $(BUILD_FLAGS) $(LDFLAGS) *.go && mv ./ais $(BUILD_DEST)/.
 else
-	@go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/cli/*.go
+	@cd $(BUILD_DIR)/cli && go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) *.go
 endif
 	@echo "*** To enable autocompletions in your current shell, run:"
 	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/bash or"
