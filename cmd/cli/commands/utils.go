@@ -920,15 +920,40 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	return
 }
 
-func flattenConfig(cfg interface{}, section string) []prop {
-	flat := make([]prop, 0, 40)
+// see also authNConfPairs
+func flattenConfig(cfg interface{}, section string) (flat []prop) {
+	flat = make([]prop, 0, 40)
 	cmn.IterFields(cfg, func(tag string, field cmn.IterField) (error, bool) {
 		if section == "" || strings.HasPrefix(tag, section) {
-			flat = append(flat, prop{tag, fmt.Sprintf("%v", field.Value())})
+			v := _toStr(field.Value())
+			flat = append(flat, prop{tag, v})
 		}
 		return nil, false
 	})
 	return flat
+}
+
+// NOTE: remove secrets if any
+func _toStr(v interface{}) (s string) {
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return fmt.Sprintf("%v", v)
+	}
+	// prune
+	for k, vv := range m {
+		if strings.Contains(strings.ToLower(k), "secret") {
+			delete(m, k)
+			continue
+		}
+		if mm, ok := vv.(map[string]interface{}); ok {
+			for kk := range mm {
+				if strings.Contains(strings.ToLower(kk), "secret") {
+					delete(mm, kk)
+				}
+			}
+		}
+	}
+	return fmt.Sprintf("%v", m)
 }
 
 func diffConfigs(actual, original []prop) []propDiff {
@@ -985,23 +1010,21 @@ func waitForXactionCompletion(defaultAPIParams api.BaseParams, args api.XactReqA
 	return nil
 }
 
+// see also flattenConfig
 func authNConfPairs(conf *authn.Config, prefix string) ([]prop, error) {
-	propList := make([]prop, 0, 8)
-	err := cmn.IterFields(conf, func(uniqueTag string, field cmn.IterField) (error, bool) {
-		if prefix != "" && !strings.HasPrefix(uniqueTag, prefix) {
+	flat := make([]prop, 0, 8)
+	err := cmn.IterFields(conf, func(tag string, field cmn.IterField) (error, bool) {
+		if prefix != "" && !strings.HasPrefix(tag, prefix) {
 			return nil, false
 		}
-		value := fmt.Sprintf("%v", field.Value())
-		propList = append(propList, prop{
-			Name:  uniqueTag,
-			Value: value,
-		})
+		v := _toStr(field.Value())
+		flat = append(flat, prop{Name: tag, Value: v})
 		return nil, false
 	})
-	sort.Slice(propList, func(i, j int) bool {
-		return propList[i].Name < propList[j].Name
+	sort.Slice(flat, func(i, j int) bool {
+		return flat[i].Name < flat[j].Name
 	})
-	return propList, err
+	return flat, err
 }
 
 func formatStatHuman(name string, value int64) string {

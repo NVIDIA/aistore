@@ -795,6 +795,13 @@ func (c *ClientConf) Validate() error {
 // BackendConf //
 /////////////////
 
+func (c *BackendConf) keys() (v []string) {
+	for k := range c.Conf {
+		v = append(v, k)
+	}
+	return
+}
+
 func (c *BackendConf) UnmarshalJSON(data []byte) error {
 	return jsoniter.Unmarshal(data, &c.Conf)
 }
@@ -1769,7 +1776,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	glog.Infof("log.dir: %q; l4.proto: %s; pub port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
 	glog.Infof("config: %q; stats_time: %v; authentication: %t; backends: %v",
-		globalFpath, config.Periodic.StatsTime, config.Auth.Enabled, config.Backend.Conf)
+		globalFpath, config.Periodic.StatsTime, config.Auth.Enabled, config.Backend.keys())
 	return nil
 }
 
