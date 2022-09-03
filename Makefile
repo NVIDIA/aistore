@@ -7,11 +7,14 @@ SCRIPTS_DIR = ./deploy/scripts
 BUILD_DIR = ./cmd
 BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
 
+AISTORE_PATH=$(shell git rev-parse --show-toplevel)
+
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
 
-# Uncomment this line to cross-compile:
-# CROSS_COMPILE = docker run --rm -v $(shell pwd):/go/src/github.com/NVIDIA/aistore -w /go/src/github.com/NVIDIA/aistore golang:1.19
+# Uncomment to cross-compile:
+# CROSS_COMPILE = docker run --rm -v $(AISTORE_PATH):/go/src/n -w /go/src/n golang:1.19
+# CROSS_COMPILE_CLI = docker run --rm -v $(AISTORE_PATH)/cmd/cli:/go/src/n -w /go/src/n golang:1.19
 
 # Build version, flags, and tags
 VERSION = $(shell git rev-parse --short HEAD)
@@ -96,21 +99,19 @@ ifdef WRD
 endif
 ifdef CROSS_COMPILE
 	@$(CROSS_COMPILE) go build -o ./aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
-	@mv ./aisnode $(BUILD_DEST)/aisnode
+	@mv ./aisnode $(BUILD_DEST)/.
 else
 	@$(WRD) go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
 endif
 	@echo "done."
 
-## Build 'aisfs' binary (NOTE: a separate go.mod)
-aisfs:
-	@echo -n "Building aisfs..."
-	@cd $(BUILD_DIR)/aisfs && ./install.sh && go build -o $(BUILD_DEST)/aisfs $(BUILD_FLAGS) $(LDFLAGS) *.go
-	@echo "   done."
-
 cli: ## Build CLI binary (NOTE: a separate go.mod)
 	@echo "Building ais (CLI) => $(BUILD_DEST)/ais"
+ifdef CROSS_COMPILE_CLI
+	cd $(BUILD_DIR)/cli && $(CROSS_COMPILE_CLI) go build -o ./ais $(BUILD_FLAGS) $(LDFLAGS) *.go && mv ./ais $(BUILD_DEST)/.
+else
 	@cd $(BUILD_DIR)/cli && go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) *.go
+endif
 	@echo "*** To enable autocompletions in your current shell, run:"
 	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/bash or"
 	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/zsh"
@@ -119,9 +120,9 @@ cli-autocompletions: ## Add CLI autocompletions
 	@echo "Adding CLI autocomplete..."
 	@./$(BUILD_DIR)/cli/autocomplete/install.sh
 
-authn: build-authn ## Build 'authn' binary
-aisloader: build-aisloader ## Build 'aisloader' binary
-xmeta: build-xmeta ## Build 'xmeta' binary
+authn: build-authn         ## Build AuthN
+aisloader: build-aisloader ## Build aisloader
+xmeta: build-xmeta         ## Build xmeta
 
 build-%:
 	@echo -n "Building $*... "
@@ -132,6 +133,12 @@ else
 	@go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 endif
 	@echo "done."
+
+## Build 'aisfs' binary (experimental)
+aisfs:
+	@echo -n "Building aisfs..."
+	@cd $(BUILD_DIR)/aisfs && ./install.sh && go build -o $(BUILD_DEST)/aisfs $(BUILD_FLAGS) $(LDFLAGS) *.go
+	@echo "   done."
 
 client-bindings:
 	$(SCRIPTS_DIR)/generate-python-api-client.sh
