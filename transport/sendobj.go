@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -297,8 +297,9 @@ func (s *Stream) sendPDU(b []byte) (n int) {
 	return
 }
 
-// end-of-object updates stats, reset idle timeout, and post completion
-// NOTE: reader.Close() is done by the completion handling code doCmpl
+// end-of-object:
+// - update stats, reset idle timeout, and post completion
+// - note that reader.Close() is done by `doCmpl`
 func (s *Stream) eoObj(err error) {
 	obj := &s.sendoff.obj
 	objSize := obj.Size()

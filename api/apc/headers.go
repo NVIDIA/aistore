@@ -19,20 +19,26 @@ const (
 	HdrBucketVerEnabled = HeaderPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket.
 	HdrBucketCreated    = HeaderPrefix + "created"            // Bucket creation time.
 	HdrBackendProvider  = HeaderPrefix + "provider"           // ProviderAmazon et al. - see cmn/bck.go.
+
 	// including BucketProps.Extra.AWS
 	HdrS3Region   = HeaderPrefix + "cloud_region"
 	HdrS3Endpoint = HeaderPrefix + "endpoint"
+
 	// including BucketProps.Extra.HTTP
 	HdrOrigURLBck = HeaderPrefix + "original-url"
 
 	HdrRemoteOffline = HeaderPrefix + "remote-offline" // When accessing cached remote bucket with no backend connectivity.
 
-	// Object props headers.
+	// Object props headers
 	HdrObjCksumType = HeaderPrefix + "checksum-type"  // Checksum type, one of SupportedChecksums().
 	HdrObjCksumVal  = HeaderPrefix + "checksum-value" // Checksum value.
 	HdrObjAtime     = HeaderPrefix + "atime"          // Object access time.
 	HdrObjCustomMD  = HeaderPrefix + "custom-md"      // Object custom metadata.
 	HdrObjVersion   = HeaderPrefix + "version"        // Object version/generation - ais or cloud.
+
+	// Archive filename and format (mime type)
+	HdrArchpath = HeaderPrefix + "archpath"
+	HdrArchmime = HeaderPrefix + "archmime"
 
 	// Append object header.
 	HdrAppendHandle = HeaderPrefix + "append-handle"

@@ -76,11 +76,7 @@ func notFoundInArch(filename, archname string) error {
 // GET OBJECT: archive //
 /////////////////////////
 
-func (goi *getObjInfo) freadArch(file *os.File) (cos.ReadCloseSizer, error) {
-	mime, err := goi.mime(file)
-	if err != nil {
-		return nil, err
-	}
+func (goi *getObjInfo) freadArch(file *os.File, mime string) (cos.ReadCloseSizer, error) {
 	archname := filepath.Join(goi.lom.Bck().Name, goi.lom.ObjName)
 	filename := goi.archive.filename
 	switch mime {

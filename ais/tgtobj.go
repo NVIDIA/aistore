@@ -422,14 +422,12 @@ func (poi *putObjInfo) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, er
 		slab.Free(buf)
 	}
 	if err == nil {
-		debug.Assert(lmfh == nil)
 		cos.Close(poi.r)
 		return // ok
 	}
 
 	// not ok
 	poi.r.Close()
-	debug.Assert(lmfh != nil)
 	if nerr := lmfh.Close(); nerr != nil {
 		glog.Errorf(fmtNested, poi.t, err, "close", poi.workFQN, nerr)
 	}
@@ -797,21 +795,14 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) boo
 
 func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err error) {
 	var (
-		lmfh    *os.File
-		slab    *memsys.Slab
-		buf     []byte
-		hdr     http.Header
-		written int64
+		lmfh   *os.File
+		hdr    http.Header
+		rrange *cmn.HTTPRange
+		fqn    = goi.lom.FQN
 	)
-	if resp, ok := goi.w.(http.ResponseWriter); ok {
-		hdr = resp.Header()
-	}
-	fqn := goi.lom.FQN
 	if !coldGet && !goi.isGFN {
-		// best-effort GET load balancing (see also mirror.findLeastUtilized())
-		fqn = goi.lom.LBGet()
+		fqn = goi.lom.LBGet() // best-effort GET load balancing (see also mirror.findLeastUtilized())
 	}
-	// open
 	lmfh, err = os.Open(fqn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -825,127 +816,137 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		return
 	}
 
-	var (
-		rrange     *cmn.HTTPRange
-		reader     io.Reader = lmfh
-		size                 = goi.lom.SizeBytes()
-		cksumConf            = goi.lom.CksumConf()
-		cksumRange bool
-	)
 	defer func() {
-		if lmfh != nil {
-			cos.Close(lmfh)
-		}
-		if buf != nil {
-			slab.Free(buf)
-		}
+		cos.Close(lmfh)
 	}()
-	// parse, validate, set response header
-	if hdr != nil {
-		// read range
-		if goi.ranges.Range != "" {
-			rsize := size
-			if goi.ranges.Size > 0 {
-				rsize = goi.ranges.Size
-			}
-			if rrange, errCode, err = goi.parseRange(hdr, rsize); err != nil {
-				return
-			}
-			if rrange != nil {
-				cksumRange = cksumConf.Type != cos.ChecksumNone && cksumConf.EnableReadRange
-				size = rrange.Length // Content-Length
-			}
-		}
-		cmn.ToHeader(goi.lom.ObjAttrs(), hdr)
-	}
-
-	// reader
-	w := goi.w
-	if rrange == nil {
-		if goi.archive.filename != "" {
-			var csl cos.ReadCloseSizer
-			csl, err = goi.freadArch(lmfh)
-			if err != nil {
-				if cmn.IsErrNotFound(err) {
-					errCode = http.StatusNotFound
-				} else {
-					err = cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
-				}
-				return
-			}
-			defer func() {
-				csl.Close()
-			}()
-			reader, size = csl, csl.Size() // Content-Length
-		}
-		if goi.chunked {
-			// NOTE: hide `ReadFrom` of the `http.ResponseWriter` (in re: sendfile)
-			w = cos.WriterOnly{Writer: goi.w}
-			if lmfh != nil {
-				buf, slab = goi.t.gmm.AllocSize(size)
-			}
-		}
+	if resp, ok := goi.w.(http.ResponseWriter); ok {
+		hdr = resp.Header()
 	} else {
+		hdr = make(http.Header, 8) // (discard)
+	}
+	if goi.ranges.Range != "" {
+		rsize := goi.lom.SizeBytes()
+		if goi.ranges.Size > 0 {
+			rsize = goi.ranges.Size
+		}
+		if rrange, errCode, err = goi.parseRange(hdr, rsize); err != nil {
+			return
+		}
+		if goi.archive.filename != "" {
+			err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t, "range-read of an archived file")
+			errCode = http.StatusRequestedRangeNotSatisfiable
+			return
+		}
+	}
+	errCode, err = goi.fini(fqn, lmfh, hdr, rrange, coldGet)
+	return
+}
+
+// in particular, setup reader and writer and set headers
+func (goi *getObjInfo) fini(fqn string, lmfh *os.File, hdr http.Header, rrange *cmn.HTTPRange, coldGet bool) (errCode int, err error) {
+	var (
+		slab   *memsys.Slab
+		buf    []byte
+		size   int64
+		reader io.Reader = lmfh
+	)
+
+	cmn.ToHeader(goi.lom.ObjAttrs(), hdr) // (defaults)
+
+	switch {
+	case goi.archive.filename != "": // archive
+		var mime string
+		mime, err = goi.mime(lmfh)
+		if err != nil {
+			return
+		}
+		var csl cos.ReadCloseSizer
+		csl, err = goi.freadArch(lmfh, mime)
+		if err != nil {
+			if cmn.IsErrNotFound(err) {
+				errCode = http.StatusNotFound
+			} else {
+				err = cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
+			}
+			return
+		}
+		defer func() {
+			csl.Close()
+		}()
+		reader, size = csl, csl.Size()
+		hdr.Del(apc.HdrObjCksumVal)
+		hdr.Del(apc.HdrObjCksumType)
+		hdr.Set(apc.HdrArchmime, mime)
+		hdr.Set(apc.HdrArchpath, goi.archive.filename)
+		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
+
+		buf, slab = goi.t.gmm.AllocSize(size)
+	case rrange != nil: // range
+		cksumConf := goi.lom.CksumConf()
+		cksumRange := cksumConf.Type != cos.ChecksumNone && cksumConf.EnableReadRange
+		size = rrange.Length
 		buf, slab = goi.t.gmm.AllocSize(rrange.Length)
 		reader = io.NewSectionReader(lmfh, rrange.Start, rrange.Length)
 		if cksumRange {
-			var (
-				cksum *cos.CksumHash
-				n     int64
-				sgl   = slab.MMSA().NewSGL(rrange.Length, slab.Size())
-			)
+			sgl := slab.MMSA().NewSGL(rrange.Length, slab.Size())
 			defer func() {
 				sgl.Free()
 			}()
-			if n, cksum, err = cos.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
+			var cksum *cos.CksumHash
+			if _, cksum, err = cos.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
+				slab.Free(buf)
 				return
 			}
-			debug.Assert(n <= rrange.Length)
 			hdr.Set(apc.HdrObjCksumVal, cksum.Value())
 			hdr.Set(apc.HdrObjCksumType, cksumConf.Type)
 			reader = sgl
 		}
-	}
-	// set Content-Length
-	if hdr != nil {
 		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
+	default:
+		size = goi.lom.SizeBytes()
+		buf, slab = goi.t.gmm.AllocSize(size)
 	}
 
-	// transmit
-	written, err = io.CopyBuffer(w, reader, buf)
+	err = goi.transmit(reader, buf, fqn, coldGet)
+	slab.Free(buf)
+	return
+}
+
+func (goi *getObjInfo) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) error {
+	w := goi.w
+	if goi.chunked {
+		w = cos.WriterOnly{Writer: goi.w} // hide `ReadFrom` of the `http.ResponseWriter` (in re: sendfile)
+	}
+	written, err := io.CopyBuffer(w, r, buf)
 	if err != nil {
 		if !cos.IsRetriableConnErr(err) {
 			goi.t.fsErr(err, fqn)
 			goi.t.statsT.Add(stats.ErrGetCount, 1)
 		}
 		glog.Error(cmn.NewErrFailedTo(goi.t, "GET", fqn, err))
-		// at this point, error is already written into the response
-		// return special to indicate just that
-		err = errSendingResp
-		return
+		// at this point, error is already written into the response -
+		// return special code to indicate just that
+		return errSendingResp
 	}
-
 	// GFN: atime must be already set
 	if !coldGet && !goi.isGFN {
 		goi.lom.Load(false /*cache it*/, true /*locked*/)
 		goi.lom.SetAtimeUnix(goi.atime)
 		goi.lom.ReCache(true) // GFN and cold GETs already did this
 	}
-
 	// Update objects which were sent during GFN. Thanks to this we will not
 	// have to resend them in rebalance. In case of a race between rebalance
 	// and GFN, the former wins and it will result in double send.
 	if goi.isGFN {
 		goi.t.reb.FilterAdd([]byte(goi.lom.Uname()))
 	}
-
-	delta := mono.SinceNano(goi.nanotim)
+	// stats
 	goi.t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.GetThroughput, Value: written},
-		cos.NamedVal64{Name: stats.GetLatency, Value: delta},
+		cos.NamedVal64{Name: stats.GetLatency, Value: mono.SinceNano(goi.nanotim)},
 		cos.NamedVal64{Name: stats.GetCount, Value: 1},
 	)
-	return
+	return nil
 }
 
 // parse, validate, set response header
