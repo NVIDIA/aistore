@@ -39,7 +39,6 @@ const (
 	FmtErrIntegrity      = "[%s%d, for troubleshooting see %s/blob/master/docs/troubleshooting.md]"
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
 	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %w"
-	FmtErrUnsupported    = "%s: %s is not supported"
 	FmtErrUnknown        = "%s: unknown %s %q"
 	FmtErrBackwardCompat = "%v (backward compatibility is supported only one version back, e.g. 3.9 => 3.10)"
 
@@ -62,6 +61,12 @@ type (
 		what   interface{} // not necessarily LOM
 		err    error       // original error that can be Unwrap-ed
 		status int         // http status, if available
+	}
+	ErrUnsupp struct {
+		action, what string
+	}
+	ErrNotImpl struct {
+		action, what string
 	}
 
 	ErrInvalidBucketProvider struct {
@@ -200,7 +205,6 @@ func NewErrFailedTo(actor interface{}, action string, what interface{}, err erro
 	return e
 }
 
-// TODO: insert status, if available
 func (e *ErrFailedTo) Error() string {
 	err := fmt.Errorf(fmtErrFailedTo, e.actor, e.action, e.what, e.err)
 	return err.Error()
@@ -208,7 +212,21 @@ func (e *ErrFailedTo) Error() string {
 
 func (e *ErrFailedTo) Unwrap() (err error) { return e.err }
 
-// ais ErrBucketAlreadyExists
+// ErrUnsupp & ErrNotImpl
+
+func NewErrUnsupp(action, what string) *ErrUnsupp { return &ErrUnsupp{action, what} }
+
+func (e *ErrUnsupp) Error() string {
+	return fmt.Sprintf("cannot %s %s - operation not supported", e.action, e.what)
+}
+
+func NewErrNotImpl(action, what string) *ErrNotImpl { return &ErrNotImpl{action, what} }
+
+func (e *ErrNotImpl) Error() string {
+	return fmt.Sprintf("cannot %s %s - not impemented yet", e.action, e.what)
+}
+
+// (ais) ErrBucketAlreadyExists
 
 func NewErrBckAlreadyExists(bck *Bck) *ErrBucketAlreadyExists {
 	return &ErrBucketAlreadyExists{bck: *bck}

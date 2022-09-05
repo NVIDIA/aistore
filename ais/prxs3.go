@@ -165,7 +165,7 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 		return
 	}
 	if err := p.createBucket(&msg, bck); err != nil {
-		s3.WriteErr(w, r, err, _crber(err))
+		s3.WriteErr(w, r, err, crerrStatus(err))
 	}
 }
 

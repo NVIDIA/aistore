@@ -833,7 +833,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			return
 		}
 		if goi.archive.filename != "" {
-			err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t, "range-read of an archived file")
+			err = cmn.NewErrUnsupp("range-read archived file", goi.archive.filename)
 			errCode = http.StatusRequestedRangeNotSatisfiable
 			return
 		}
@@ -966,12 +966,12 @@ func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTP
 		return
 	}
 	if len(ranges) > 1 {
-		err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t, "multi-range")
+		err = cmn.NewErrUnsupp("multi-range read", goi.lom.FullName())
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return
 	}
 	if goi.archive.filename != "" {
-		err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t, "range-reading archived files")
+		err = cmn.NewErrUnsupp("range-read archived file", goi.archive.filename)
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return
 	}

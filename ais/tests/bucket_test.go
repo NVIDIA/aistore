@@ -215,7 +215,10 @@ func TestCreateRemoteBucket(t *testing.T) {
 		for _, test := range tests {
 			err := api.CreateBucket(baseParams, test.bck, test.props)
 			tassert.Fatalf(t, err != nil, "expected error")
-			tassert.Fatalf(t, strings.Contains(err.Error(), "not supported"), "should contain 'not supported' message")
+			herr := cmn.Err2HTTPErr(err)
+			tassert.Fatalf(t, herr != nil, "expected ErrHTTP")
+			tassert.Fatalf(t, herr.Status == http.StatusNotImplemented || strings.Contains(herr.Message, "support"),
+				"expecting 501 status or unsupported")
 		}
 	}
 }

@@ -61,9 +61,9 @@ func (hp *httpProvider) client(u string) *http.Client {
 func (*httpProvider) Provider() string  { return apc.ProviderHTTP }
 func (*httpProvider) MaxPageSize() uint { return 10000 }
 
+// TODO: can be done
 func (hp *httpProvider) CreateBucket(*cluster.Bck) (int, error) {
-	// TODO: We could support it.
-	return creatingBucketNotSupportedErr(hp.Provider())
+	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", hp.Provider()+" bucket")
 }
 
 func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
@@ -216,10 +216,10 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	return wrapReader(ctx, resp.Body), nil, 0, nil
 }
 
-func (hp *httpProvider) PutObj(io.ReadCloser, *cluster.LOM) (int, error) {
-	return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, hp.Provider(), "creating new objects")
+func (*httpProvider) PutObj(io.ReadCloser, *cluster.LOM) (int, error) {
+	return http.StatusBadRequest, cmn.NewErrUnsupp("PUT", " objects => HTTP backend")
 }
 
-func (hp *httpProvider) DeleteObj(*cluster.LOM) (int, error) {
-	return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, hp.Provider(), "deleting object")
+func (*httpProvider) DeleteObj(*cluster.LOM) (int, error) {
+	return http.StatusBadRequest, cmn.NewErrUnsupp("DELETE", " objects from HTTP backend")
 }

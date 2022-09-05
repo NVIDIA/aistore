@@ -1202,7 +1202,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			return
 		}
 		if err := p.createBucket(msg, bck); err != nil {
-			p.writeErr(w, r, err, _crber(err))
+			p.writeErr(w, r, err, crerrStatus(err))
 			return
 		}
 	case apc.ActPrefetchObjects:
@@ -1296,15 +1296,15 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query 
 		msg.Value = bck.Props
 	}
 	if err := p.createBucket(msg, bck); err != nil {
-		p.writeErr(w, r, err, _crber(err))
+		p.writeErr(w, r, err, crerrStatus(err))
 	}
 }
 
-func _crber(err error) (errCode int) {
-	errCode = http.StatusInternalServerError
-	if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
+func crerrStatus(err error) (errCode int) {
+	switch err.(type) {
+	case *cmn.ErrBucketAlreadyExists:
 		errCode = http.StatusConflict
-	} else if strings.Contains(err.Error(), "not implemented") {
+	case *cmn.ErrNotImpl:
 		errCode = http.StatusNotImplemented
 	}
 	return

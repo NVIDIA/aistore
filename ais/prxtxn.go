@@ -135,42 +135,54 @@ func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 // create-bucket: { check non-existence -- begin -- create locally -- metasync -- commit }
-func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHeader ...http.Header) error {
+func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHdr ...http.Header) error {
 	var (
-		bucketProps *cmn.BucketProps
-		nlp         = bck.GetNameLockPair()
-		bmd         = p.owner.bmd.get()
+		bprops  *cmn.BucketProps
+		nlp     = bck.GetNameLockPair()
+		bmd     = p.owner.bmd.get()
+		backend = bck.Backend()
 	)
 	if bck.Props != nil {
-		bucketProps = bck.Props
+		bprops = bck.Props
 	}
-	if len(remoteHeader) != 0 && len(remoteHeader[0]) > 0 {
-		remoteProps := defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHeader[0]})
-		if bucketProps == nil {
-			bucketProps = remoteProps
+
+	// validate & assign bprops
+	switch {
+	case len(remoteHdr) != 0 && len(remoteHdr[0]) > 0: // remote exists
+		remoteProps := defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr[0]})
+		if bprops == nil {
+			bprops = remoteProps
 		} else {
 			// backend versioning always takes precedence
-			bucketProps.Versioning.Enabled = remoteProps.Versioning.Enabled
+			bprops.Versioning.Enabled = remoteProps.Versioning.Enabled
 		}
-	} else if backend := bck.Backend(); backend != nil {
-		if bucketProps == nil {
-			bucketProps = defaultBckProps(bckPropsArgs{bck: bck})
+	case backend != nil: // remote backend exists
+		if bprops == nil {
+			bprops = defaultBckProps(bckPropsArgs{bck: bck})
 		}
 		cloudProps, present := bmd.Get(backend)
 		debug.Assert(present)
-		bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
-	} else if bck.IsHTTP() {
-		return errors.New("creating bucket for HTTP provider is not supported (and cannot be done)")
-	} else if bck.IsCloud() {
-		return fmt.Errorf("cannot create cloud (%q) bucket (not implemented yet)", bck.Provider)
-	} else if bucketProps == nil {
-		bucketProps = defaultBckProps(bckPropsArgs{bck: bck})
+		bprops.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
+	case bck.IsRemote(): // cannot create remote bucket (NIE/NSY)
+		if bck.IsHTTP() {
+			return cmn.NewErrNotImpl("create", "bucket for HTTP provider")
+		}
+		if bck.IsCloud() {
+			return cmn.NewErrNotImpl("create", bck.Provider+"(cloud) bucket")
+		}
+		if !bck.IsRemoteAIS() {
+			return cmn.NewErrUnsupp("create", bck.Provider+":// bucket")
+		}
+		// can do remote ais
 	}
 
-	nlp.Lock()
-	defer nlp.Unlock()
+	if bprops == nil { // inherit (all) cluster defaults
+		bprops = defaultBckProps(bckPropsArgs{bck: bck})
+	}
 
 	// 1. try add
+	nlp.Lock()
+	defer nlp.Unlock()
 	if _, present := bmd.Get(bck); present {
 		return cmn.NewErrBckAlreadyExists(bck.Bucket())
 	}
@@ -192,7 +204,7 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHeader 
 		msg:      &c.msg.ActionMsg,
 		txnID:    c.uuid,
 		bcks:     []*cluster.Bck{bck},
-		setProps: bucketProps,
+		setProps: bprops,
 	}
 	if _, err := p.owner.bmd.modify(ctx); err != nil {
 		return c.bcastAbort(bck, err)

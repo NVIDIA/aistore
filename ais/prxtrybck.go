@@ -117,12 +117,13 @@ func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, er
 	return
 }
 
-// FIXME: must be provider-specific.
 func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
+	var op string
 	if !args.bck.IsRemote() {
 		return
 	}
 	if args._requiresPermission(apc.AceMoveBucket) {
+		op = "rename/move remote bucket"
 		goto retErr
 	}
 	// HDFS buckets are allowed to be deleted.
@@ -131,22 +132,17 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 	}
 	// HTTP buckets should fail on PUT and bucket rename operations
 	if args.bck.IsHTTP() && args._requiresPermission(apc.AcePUT) {
+		op = "PUT => HTTP bucket"
 		goto retErr
 	}
 	// Destroy and Rename/Move are not permitted.
-	if args.bck.IsCloud() && args._requiresPermission(apc.AceDestroyBucket) &&
-		args.msg.Action == apc.ActDestroyBck {
+	if args.bck.IsCloud() && args._requiresPermission(apc.AceDestroyBucket) && args.msg.Action == apc.ActDestroyBck {
+		op = "destroy " + args.bck.Provider + " (cloud) bucket"
 		goto retErr
 	}
-
 	return
 retErr:
-	op := "operation"
-	if args.msg != nil {
-		op = fmt.Sprintf("operation %q", args.msg.Action)
-	}
-	err = fmt.Errorf(cmn.FmtErrUnsupported, args.bck, op)
-	return
+	return cmn.NewErrUnsupp(op, args.bck.String())
 }
 
 func (args *bckInitArgs) _requiresPermission(perm apc.AccessAttrs) bool {
@@ -265,7 +261,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	}
 
 	if err = args.p.createBucket(&apc.ActionMsg{Action: action}, bck, remoteProps); err != nil {
-		errCode = _crber(err)
+		errCode = crerrStatus(err)
 		return
 	}
 

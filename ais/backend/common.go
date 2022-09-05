@@ -6,9 +6,7 @@ package backend
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"net/http"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -21,10 +19,6 @@ var verbose bool
 
 func Init() {
 	verbose = bool(glog.FastV(4, glog.SmoduleBackend))
-}
-
-func creatingBucketNotSupportedErr(provider string) (errCode int, err error) {
-	return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, provider, "creating bucket")
 }
 
 func wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {

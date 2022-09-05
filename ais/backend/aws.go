@@ -77,8 +77,8 @@ func (*awsProvider) MaxPageSize() uint { return 1000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (awsp *awsProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
-	return creatingBucketNotSupportedErr(awsp.Provider())
+func (*awsProvider) CreateBucket(_ *cluster.Bck) (int, error) {
+	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "s3:// bucket")
 }
 
 /////////////////

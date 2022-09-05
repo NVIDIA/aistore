@@ -198,7 +198,7 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 	case "":
 		return fmt.Errorf("%q: unspecified (empty) xaction kind", xactMsg)
 	default:
-		return fmt.Errorf(cmn.FmtErrUnsupported, xactMsg, "kind")
+		return cmn.NewErrUnsupp("start xaction", xactMsg.Kind)
 	}
 	return nil
 }

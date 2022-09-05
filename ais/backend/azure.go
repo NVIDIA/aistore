@@ -2,7 +2,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -191,8 +191,8 @@ func (*azureProvider) MaxPageSize() uint { return 5000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (ap *azureProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
-	return creatingBucketNotSupportedErr(ap.Provider())
+func (*azureProvider) CreateBucket(_ *cluster.Bck) (int, error) {
+	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "azure:// bucket")
 }
 
 /////////////////
