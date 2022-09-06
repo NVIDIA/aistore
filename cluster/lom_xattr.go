@@ -157,9 +157,9 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	return
 }
 
+// (caller must set atime)
 func (lom *LOM) Persist() (err error) {
 	atime := lom.AtimeUnix()
-	// caller is expected to set atime
 	debug.Assert(isValidAtime(atime))
 
 	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never or delayed*/ {

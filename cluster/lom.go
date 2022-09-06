@@ -572,7 +572,7 @@ func (lom *LOM) Unlock(exclusive bool) {
 	nlc.Unlock(lom.Uname(), exclusive)
 }
 
-// compare with cos.CreateFile
+// (compare with cos.CreateFile)
 func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
 	if err == nil || !os.IsNotExist(err) {
@@ -589,6 +589,18 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	}
 	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
 	return
+}
+
+// (compare with cos.Rename)
+func (lom *LOM) RenameFile(workfqn string) error {
+	bdir := lom.mpathInfo.MakePathBck(lom.Bucket())
+	if err := cos.Stat(bdir); err != nil {
+		return fmt.Errorf("%s(bdir %s): %w", lom, bdir, err)
+	}
+	if err := cos.Rename(workfqn, lom.FQN); err != nil {
+		return cmn.NewErrFailedTo(T, "rename", lom, err)
+	}
+	return nil
 }
 
 // permission to overwrite objects that were previously read from:

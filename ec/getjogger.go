@@ -265,7 +265,6 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 		mm     = c.parent.t.ByteMM()
 	)
 	// Try to read a replica from targets one by one until the replica is downloaded
-	objFQN := ctx.lom.FQN
 	tmpFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, "ec-restore-repl")
 
 	for node := range ctx.nodes {
@@ -303,7 +302,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	if writer == nil {
 		return errors.New("failed to read a replica from any target")
 	}
-	if err := cos.Rename(tmpFQN, objFQN); err != nil {
+	if err := ctx.lom.RenameFile(tmpFQN); err != nil {
 		return err
 	}
 
@@ -323,7 +322,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 		return fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
 	}
 
-	reader, err := cos.NewFileHandle(objFQN)
+	reader, err := cos.NewFileHandle(ctx.lom.FQN)
 	if err != nil {
 		return err
 	}

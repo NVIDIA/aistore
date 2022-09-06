@@ -1109,23 +1109,20 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	// do
 	var (
-		handle           string
-		err              error
-		errCode          int
-		archPathProvided = apireq.dpq.archpath != "" // apc.QparamArchpath
-		appendTyProvided = apireq.dpq.appendTy != "" // apc.QparamAppendType
+		handle  string
+		err     error
+		errCode int
 	)
-	if archPathProvided {
-		// TODO: resolve non-empty dpq.uuid => xaction and pass it on
+	switch {
+	case apireq.dpq.archpath != "": // apc.QparamArchpath
 		errCode, err = t.doAppendArch(r, lom, started, apireq.dpq)
-	} else if appendTyProvided {
-		// ditto
+	case apireq.dpq.appendTy != "": // apc.QparamAppendType
 		handle, errCode, err = t.doAppend(r, lom, started, apireq.dpq)
 		if err == nil {
 			w.Header().Set(apc.HdrAppendHandle, handle)
 			return
 		}
-	} else {
+	default:
 		poi := allocPutObjInfo()
 		{
 			poi.atime = started

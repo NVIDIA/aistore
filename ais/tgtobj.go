@@ -236,9 +236,8 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 	var (
 		lom = poi.lom
 		bck = lom.Bck()
-		bmd = poi.t.owner.bmd.Get()
 	)
-	// remote versioning
+	// put remote
 	if bck.IsRemote() && (poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize || poi.owt == cmn.OwtPromote) {
 		errCode, err = poi.putRemote()
 		if err != nil {
@@ -247,7 +246,7 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 			if errCode != http.StatusServiceUnavailable {
 				return
 			}
-			// e.g.: "googleapi: Error 503: We encountered an internal error. Please try again."
+			// (googleapi: "Error 503: We encountered an internal error. Please try again.")
 			time.Sleep(time.Second)
 			errCode, err = poi.putRemote()
 			if err != nil {
@@ -256,13 +255,9 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 			glog.Infof("PUT (%s): retried OK", loghdr)
 		}
 	}
-	if _, present := bmd.Get(bck); !present {
-		err = fmt.Errorf("PUT (%s): %q does not exist", poi.loghdr(), bck)
-		errCode = http.StatusBadRequest
-		return
-	}
 
-	// see GetCold() implementation and cmn.OWT (locking strategies)
+	// locking strategies: optimistic and otherwise
+	// (see GetCold() implementation and cmn.OWT enum)
 	switch poi.owt {
 	case cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet:
 		debug.AssertFunc(func() bool { _, exclusive := lom.IsLocked(); return exclusive })
@@ -292,8 +287,9 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 			}
 		}
 	}
-	if err = cos.Rename(poi.workFQN, lom.FQN); err != nil {
-		err = cmn.NewErrFailedTo(poi.t, "rename", lom, err)
+
+	// done
+	if err = lom.RenameFile(poi.workFQN); err != nil {
 		return
 	}
 	if lom.HasCopies() {
@@ -301,9 +297,8 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 			glog.Errorf("PUT (%s): failed to delete old copies [%v], proceeding to PUT anyway...", poi.loghdr(), errdc)
 		}
 	}
-	if lom.AtimeUnix() == 0 {
+	if lom.AtimeUnix() == 0 { // (is set when migrating within cluster)
 		lom.SetAtimeUnix(poi.atime.UnixNano())
-		debug.Assert(lom.AtimeUnix() != 0)
 	}
 	err = lom.Persist()
 	return

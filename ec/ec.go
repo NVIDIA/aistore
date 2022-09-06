@@ -382,10 +382,6 @@ func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 		reader = io.LimitReader(reader, size)
 	}
 	readCloser := io.NopCloser(reader)
-	bdir := lom.MpathInfo().MakePathBck(lom.Bucket())
-	if err := cos.Stat(bdir); err != nil {
-		return err
-	}
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = "ec"

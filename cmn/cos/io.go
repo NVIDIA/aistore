@@ -436,22 +436,18 @@ func CreateFile(fqn string) (*os.File, error) {
 	return os.OpenFile(fqn, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, PermRWR)
 }
 
-// Rename renames file ensuring that the parent's directory of dst exists. Creates
-// destination directory when it does not exist.
-// NOTE: Rename should not be used to move objects across different disks, see: fs.MvFile.
-func Rename(src, dst string) error {
-	if err := os.Rename(src, dst); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-
-		// Retry with created directory - slow path.
-		if err := CreateDir(filepath.Dir(dst)); err != nil {
-			return err
-		}
-		return os.Rename(src, dst)
+// (creates destination directory if it doesn't exist.)
+func Rename(src, dst string) (err error) {
+	err = os.Rename(src, dst)
+	if err == nil || !os.IsNotExist(err) {
+		return
 	}
-	return nil
+	// create and retry (slow path)
+	err = CreateDir(filepath.Dir(dst))
+	if err == nil {
+		err = os.Rename(src, dst)
+	}
+	return
 }
 
 // RemoveFile removes path; returns nil upon success or if the path does not exist.
