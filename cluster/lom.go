@@ -392,7 +392,7 @@ func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
 //
 
 // store new or refresh existing
-func (lom *LOM) ReCache() {
+func (lom *LOM) Recache() {
 	debug.Assert(!lom.IsCopy())
 	md := lom.md
 	bid := lom.Bprops().BID

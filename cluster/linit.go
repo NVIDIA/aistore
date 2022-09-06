@@ -26,7 +26,7 @@ const fmtErrLinit = "lom-init %s: %s mismatch (%q != %q)"
 //    It is illegal to check LOM's existence and, generally, do almost anything
 //    with it prior to loading - see previous
 // 4) update persistent state in memory: lom.Set*() methods
-//    (requires subsequent re-caching via lom.ReCache())
+//    (requires subsequent re-caching via lom.Recache())
 // 5) update persistent state on disk: lom.Persist()
 // 6) remove a given LOM instance from cache: lom.Uncache()
 // 7) evict an entire bucket-load of LOM cache: cluster.EvictCache(bucket)

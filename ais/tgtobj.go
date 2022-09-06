@@ -272,6 +272,7 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 	default:
 		lom.Lock(true)
 		defer lom.Unlock(true)
+		lom.SetAtimeUnix(poi.atime.UnixNano())
 	}
 
 	// ais versioning
@@ -930,7 +931,7 @@ func (goi *getObjInfo) transmit(r io.Reader, buf []byte, fqn string, coldGet boo
 			return errSendingResp
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
-		goi.lom.ReCache() // GFN and cold GETs have already done this
+		goi.lom.Recache() // GFN and cold GETs have already done this
 	}
 	// Update objects which were sent during GFN. Thanks to this we will not
 	// have to resend them in rebalance. In case of a race between rebalance

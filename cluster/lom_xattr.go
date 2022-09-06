@@ -163,7 +163,7 @@ func (lom *LOM) PersistMain() (err error) {
 	debug.Assert(isValidAtime(atime))
 	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never, write-delayed*/ {
 		lom.md.makeDirty()
-		lom.ReCache()
+		lom.Recache()
 		return
 	}
 	// write-immediate (default)
@@ -173,7 +173,7 @@ func (lom *LOM) PersistMain() (err error) {
 		T.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()
-		lom.ReCache()
+		lom.Recache()
 	}
 	mm.Free(buf)
 	return
@@ -188,7 +188,7 @@ func (lom *LOM) Persist() (err error) {
 		lom.md.makeDirty()
 		if lom.Bprops() != nil {
 			if !lom.IsCopy() {
-				lom.ReCache()
+				lom.Recache()
 			}
 			lom.md.bckID = lom.Bprops().BID
 		}
@@ -203,7 +203,7 @@ func (lom *LOM) Persist() (err error) {
 		lom.md.clearDirty()
 		if lom.Bprops() != nil {
 			if !lom.IsCopy() {
-				lom.ReCache()
+				lom.Recache()
 			}
 			lom.md.bckID = lom.Bprops().BID
 		}
