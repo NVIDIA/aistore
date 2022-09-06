@@ -159,6 +159,14 @@ func objectPropList(bck cmn.Bck, props *cmn.ObjectProps, selection []string) (pr
 }
 
 func didYouMeanMessage(c *cli.Context, cmd string) string {
+	if alike := findCmdByKey(cmd); len(alike) > 0 {
+		msg := fmt.Sprintf("%v", alike)
+		sb := &strings.Builder{}
+		sb.WriteString(msg)
+		sbWriteTail(c, sb)
+		return fmt.Sprintf("Did you mean: %q?", sb.String())
+	}
+
 	closestCommand, distance := findClosestCommand(cmd, c.App.VisibleCommands())
 	if distance >= cos.Max(incorrectCmdDistance, len(cmd)/2) {
 		// 2nd attempt: check misplaced `show`
@@ -179,13 +187,19 @@ func didYouMeanMessage(c *cli.Context, cmd string) string {
 	sb := &strings.Builder{}
 	sb.WriteString(c.App.Name)
 	sb.WriteString(" " + closestCommand)
-	for _, a := range c.Args()[1:] { // skip first arg - it is the wrong command
-		sb.WriteString(" " + a)
+	sbWriteTail(c, sb)
+	return fmt.Sprintf("Did you mean: %q?", sb.String())
+}
+
+func sbWriteTail(c *cli.Context, sb *strings.Builder) {
+	if c.NArg() > 1 {
+		for _, a := range c.Args()[1:] { // skip the wrong one
+			sb.WriteString(" " + a)
+		}
 	}
 	for _, f := range c.FlagNames() {
 		sb.WriteString(" --" + f)
 	}
-	return fmt.Sprintf("Did you mean: %q?", sb.String())
 }
 
 func findClosestCommand(cmd string, candidates []cli.Command) (result string, distance int) {

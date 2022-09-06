@@ -42,7 +42,7 @@ func (e *errUsage) Error() string {
 		return fmt.Sprintf("Incorrect '%s %s' usage: %s.\n\n%s",
 			e.context.App.Name, e.context.Command.Name, e.message, msg)
 	}
-	return fmt.Sprintf("Incorrect usage of %q: %s.\n\n%s", e.context.App.Name, e.message, msg)
+	return fmt.Sprintf("Incorrect usage: %s.\n\n%s", e.message, msg)
 }
 
 ///////////////////////
@@ -65,14 +65,28 @@ func (e *errAdditionalInfo) Error() string {
 // error utils //
 /////////////////
 
-func commandNotFoundError(c *cli.Context, cmd string) error {
+func commandNotFoundError(c *cli.Context, cmd string) *errUsage {
+	msg := "unknown subcommand \"" + cmd + "\""
+	if !isAlphaLc(msg) {
+		msg = "unknown or misplaced \"" + cmd + "\""
+	}
 	return &errUsage{
 		context:       c,
-		message:       fmt.Sprintf("unknown command %q", cmd),
+		message:       msg,
 		helpData:      c.App,
 		helpTemplate:  templates.ShortUsageTmpl,
 		bottomMessage: didYouMeanMessage(c, cmd),
 	}
+}
+
+func isAlphaLc(s string) bool {
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || c == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
@@ -82,7 +96,7 @@ func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
 	return cannotExecuteError(c, err)
 }
 
-func cannotExecuteError(c *cli.Context, err error) error {
+func cannotExecuteError(c *cli.Context, err error) *errUsage {
 	return &errUsage{
 		context:      c,
 		message:      err.Error(),
@@ -91,26 +105,26 @@ func cannotExecuteError(c *cli.Context, err error) error {
 	}
 }
 
-func incorrectUsageMsg(c *cli.Context, fmtString string, args ...interface{}) error {
+func incorrectUsageMsg(c *cli.Context, fmtString string, args ...interface{}) *errUsage {
 	msg := fmt.Sprintf(fmtString, args...)
 	return _errUsage(c, msg)
 }
 
-func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
+func missingArgumentsError(c *cli.Context, missingArgs ...string) *errUsage {
 	msg := fmt.Sprintf("missing arguments %q", strings.Join(missingArgs, ", "))
 	return _errUsage(c, msg)
 }
 
-func missingKeyValueError(c *cli.Context) error {
+func missingKeyValueError(c *cli.Context) *errUsage {
 	return missingArgumentsError(c, "attribute key=value pairs")
 }
 
-func objectNameArgumentNotSupported(c *cli.Context, objectName string) error {
+func objectNameArgumentNotSupported(c *cli.Context, objectName string) *errUsage {
 	msg := fmt.Sprintf("object name %q argument not supported", objectName)
 	return _errUsage(c, msg)
 }
 
-func _errUsage(c *cli.Context, msg string) error {
+func _errUsage(c *cli.Context, msg string) *errUsage {
 	return &errUsage{
 		context:      c,
 		message:      msg,
