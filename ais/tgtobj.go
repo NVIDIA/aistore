@@ -297,10 +297,10 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 			glog.Errorf("PUT (%s): failed to delete old copies [%v], proceeding to PUT anyway...", poi.loghdr(), errdc)
 		}
 	}
-	if lom.AtimeUnix() == 0 { // (is set when migrating within cluster)
+	if lom.AtimeUnix() == 0 { // (is set when migrating within cluster; prefetch special case)
 		lom.SetAtimeUnix(poi.atime.UnixNano())
 	}
-	err = lom.Persist()
+	err = lom.PersistMain()
 	return
 }
 
@@ -925,9 +925,12 @@ func (goi *getObjInfo) transmit(r io.Reader, buf []byte, fqn string, coldGet boo
 	}
 	// GFN: atime must be already set
 	if !coldGet && !goi.isGFN {
-		goi.lom.Load(false /*cache it*/, true /*locked*/)
+		if err := goi.lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+			glog.Errorf("%s: GET post-transmission failure: %v", goi.t, err)
+			return errSendingResp
+		}
 		goi.lom.SetAtimeUnix(goi.atime)
-		goi.lom.ReCache(true) // GFN and cold GETs already did this
+		goi.lom.ReCache() // GFN and cold GETs have already done this
 	}
 	// Update objects which were sent during GFN. Thanks to this we will not
 	// have to resend them in rebalance. In case of a race between rebalance

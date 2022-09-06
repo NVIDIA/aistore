@@ -157,19 +157,13 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	return
 }
 
-// (caller must set atime)
-func (lom *LOM) Persist() (err error) {
+// (copy/paste tradeoff on purpose)
+func (lom *LOM) PersistMain() (err error) {
 	atime := lom.AtimeUnix()
 	debug.Assert(isValidAtime(atime))
-
-	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never or delayed*/ {
+	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never, write-delayed*/ {
 		lom.md.makeDirty()
-		if lom.Bprops() != nil {
-			if !lom.IsCopy() {
-				lom.ReCache(true)
-			}
-			lom.md.bckID = lom.Bprops().BID
-		}
+		lom.ReCache()
 		return
 	}
 	// write-immediate (default)
@@ -179,9 +173,37 @@ func (lom *LOM) Persist() (err error) {
 		T.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()
+		lom.ReCache()
+	}
+	mm.Free(buf)
+	return
+}
+
+// (caller must set atime; compare with the above)
+func (lom *LOM) Persist() (err error) {
+	atime := lom.AtimeUnix()
+	debug.Assert(isValidAtime(atime))
+
+	if atime < 0 || !lom.WritePolicy().IsImmediate() {
+		lom.md.makeDirty()
 		if lom.Bprops() != nil {
 			if !lom.IsCopy() {
-				lom.ReCache(lom.AtimeUnix() != 0)
+				lom.ReCache()
+			}
+			lom.md.bckID = lom.Bprops().BID
+		}
+		return
+	}
+
+	buf, mm := lom.marshal()
+	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
+		lom.Uncache(true /*delDirty*/)
+		T.FSHC(err, lom.FQN)
+	} else {
+		lom.md.clearDirty()
+		if lom.Bprops() != nil {
+			if !lom.IsCopy() {
+				lom.ReCache()
 			}
 			lom.md.bckID = lom.Bprops().BID
 		}

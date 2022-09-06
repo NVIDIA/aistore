@@ -391,20 +391,18 @@ func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
 // lom cache
 //
 
-func (lom *LOM) ReCache(store bool) {
-	debug.Assert(!lom.IsCopy()) // not caching copies
-	lcache, lmd := lom.fromCache()
-	if !store && lmd == nil {
-		return
-	}
-	// store new or refresh existing
+// store new or refresh existing
+func (lom *LOM) ReCache() {
+	debug.Assert(!lom.IsCopy())
 	md := lom.md
+	bid := lom.Bprops().BID
+	debug.Assert(bid != 0)
+
+	lcache, lmd := lom.fromCache()
 	if lmd != nil {
 		md.cpAtime(lmd)
 	}
-	md.bckID = lom.Bprops().BID
-	lom.md.bckID = md.bckID
-	debug.Assert(md.bckID != 0)
+	md.bckID, lom.md.bckID = bid, bid
 	lcache.Store(lom.md.uname, &md)
 }
 

@@ -436,7 +436,7 @@ func CreateFile(fqn string) (*os.File, error) {
 	return os.OpenFile(fqn, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, PermRWR)
 }
 
-// (creates destination directory if it doesn't exist.)
+// (creates destination directory if doesn't exist)
 func Rename(src, dst string) (err error) {
 	err = os.Rename(src, dst)
 	if err == nil || !os.IsNotExist(err) {
