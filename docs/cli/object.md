@@ -41,7 +41,7 @@ Get an object from a bucket. If a local file of the same name exists, the local 
 | `--offset` | `string` | Read offset, which can end with size suffix (k, MB, GiB, ...) | `""` |
 | `--length` | `string` | Read length, which can end with size suffix (k, MB, GiB, ...) |  `""` |
 | `--checksum` | `bool` | Validate the checksum of the object | `false` |
-| `--check-cached` | `bool` | Check if object from a remote bucket is present (ie., cached) in the cluster. | `false` |
+| `--cached` | `bool` | Check if object from a remote bucket is present (ie., cached) in the cluster. | `false` |
 
 `OUT_FILE`: filename in an existing directory or `-` for `stdout`
 
@@ -99,7 +99,7 @@ Being "cached" does not have any implications on an object's persistence: "cache
 The following example checks whether `imagenet_train-000010.tgz` is "cached" in the bucket `imagenet`:
 
 ```console
-$ ais object get --check-cached ais://imagenet/imagenet_train-000010.tgz
+$ ais object get --cached ais://imagenet/imagenet_train-000010.tgz
 Cached: true
 ```
 

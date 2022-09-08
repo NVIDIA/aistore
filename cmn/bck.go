@@ -6,6 +6,7 @@
 package cmn
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -296,7 +297,10 @@ func (b *Bck) Validate() (err error) {
 }
 
 func (b *Bck) ValidateName() (err error) {
-	if b.Name == "" || b.Name == "." {
+	if b.Name == "" {
+		return errors.New("bucket name is missing")
+	}
+	if b.Name == "." {
 		return fmt.Errorf(fmtErrBckName, b.Name)
 	}
 	if !cos.IsAlphaPlus(b.Name, true /*with period*/) {

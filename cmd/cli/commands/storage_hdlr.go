@@ -19,6 +19,7 @@ var (
 		subcmdStgSummary: append(
 			longRunFlags,
 			listCachedFlag,
+			listPresentFlag,
 			fastFlag,
 			verboseFlag,
 		),
@@ -39,7 +40,7 @@ var (
 			{
 				Name:         subcmdStgValidate,
 				Usage:        "check buckets for misplaced objects and objects that have insufficient numbers of copies or EC slices",
-				ArgsUsage:    listCommandArgument,
+				ArgsUsage:    listAnyCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgValidate],
 				Action:       showMisplacedAndMore,
 				BashComplete: bucketCompletions(),
@@ -49,7 +50,7 @@ var (
 			{
 				Name:         subcmdStgCleanup,
 				Usage:        "perform storage cleanup: remove deleted objects and old/obsolete workfiles",
-				ArgsUsage:    listCommandArgument,
+				ArgsUsage:    listAnyCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgCleanup],
 				Action:       cleanupStorageHandler,
 				BashComplete: bucketCompletions(),

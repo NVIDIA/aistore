@@ -82,7 +82,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 
 	// just check if remote object is present (do not execute GET)
 	// TODO: archive
-	if flagIsSet(c, checkCachedFlag) {
+	if flagIsSet(c, checkCachedFlag) || /*same*/ flagIsSet(c, checkPresentFlag) {
 		return objectCheckExists(c, bck, objName)
 	}
 

@@ -184,7 +184,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if err != nil {
 		return err
 	}
-	if flagIsSet(c, listCachedFlag) {
+	if flagIsSet(c, listCachedFlag) || /*same*/ flagIsSet(c, listPresentFlag) {
 		msg.SetFlag(apc.LsPresent)
 	}
 	if flagIsSet(c, listAnonymousFlag) {

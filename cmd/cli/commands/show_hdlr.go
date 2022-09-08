@@ -298,7 +298,7 @@ var (
 	showCmdStgSummary = cli.Command{
 		Name:         subcmdStgSummary,
 		Usage:        "show bucket sizes and %% of used capacity on a per-bucket basis",
-		ArgsUsage:    listCommandArgument,
+		ArgsUsage:    listAnyCommandArgument,
 		Flags:        storageCmdFlags[subcmdStgSummary],
 		Action:       showBucketSummary,
 		BashComplete: bucketCompletions(),

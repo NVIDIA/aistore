@@ -253,7 +253,8 @@ const (
 	xactionArgument = "XACTION_NAME"
 
 	// List command
-	listCommandArgument = "[PROVIDER://][BUCKET_NAME]"
+	listAnyCommandArgument = "[PROVIDER://][BUCKET_NAME]"
+	listObjCommandArgument = "[PROVIDER://]BUCKET_NAME"
 
 	// Auth
 	userLoginArgument = "USER_NAME"
@@ -400,20 +401,32 @@ var (
 	templateFlag = cli.StringFlag{Name: "template", Usage: "template for matching object names, e.g.: 'shard-{900..999}.tar'"}
 
 	// Object
-	offsetFlag      = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
-	lengthFlag      = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
+	offsetFlag = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
+	lengthFlag = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
+
+	// NOTE:
+	// In certain (use-case) scenarios, the term "cached" will be more fitting. But in
+	// other cases, "present" will sound more appropriate (and devoid of any implied evict-ability).
+	// Implementation-wise, the two terms are identical, and we therefore provide both options
+	// for usability.
+	// See also: apc.FltPresent* enum.
 	checkCachedFlag = cli.BoolFlag{
-		Name:  "check-cached",
+		Name:  "cached",
 		Usage: "check if object from a remote bucket is present (ie., cached) in the cluster",
 	}
-	listCachedFlag = cli.BoolFlag{
+	checkPresentFlag = cli.BoolFlag{Name: "present", Usage: checkCachedFlag.Usage}
+	listCachedFlag   = cli.BoolFlag{
 		Name:  "cached",
 		Usage: "list only those objects from a remote bucket that are present (ie., cached) in the cluster",
 	}
+	listPresentFlag = cli.BoolFlag{Name: "present", Usage: listCachedFlag.Usage}
+
+	// to anonymously list public-access Cloud buckets
 	listAnonymousFlag = cli.BoolFlag{
 		Name:  "anonymous",
 		Usage: "list public-access Cloud buckets that may disallow certain operations (e.g., 'HEAD(bucket)')",
 	}
+
 	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}

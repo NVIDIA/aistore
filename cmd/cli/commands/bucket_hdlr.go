@@ -54,26 +54,12 @@ var (
 			forceFlag,
 		},
 		subcmdResetProps: {},
-		commandList: {
-			regexFlag,
-			templateFlag,
-			prefixFlag,
-			pageSizeFlag,
-			objPropsLsFlag,
-			objLimitFlag,
-			showUnmatchedFlag,
-			allItemsFlag,
-			noHeaderFlag,
-			pagedFlag,
-			maxPagesFlag,
-			startAfterFlag,
-			listCachedFlag, // applies to buckets as well (TODO: apc.Flt* terminology)
-			listAnonymousFlag,
-			listArchFlag,
-			nameOnlyFlag,
-		},
+
+		commandList: initLsOptions(),
+
 		subcmdSummary: {
 			listCachedFlag,
+			listPresentFlag,
 			fastFlag,
 			validateSummaryFlag,
 			verboseFlag,
@@ -85,12 +71,11 @@ var (
 	}
 
 	// list buckets, objects, and archives
-	// (TODO: define separately to allow for aliasing - see alias_hdlr.go)
 	bucketCmdList = cli.Command{
 		Name:         commandList,
 		Usage:        "list buckets and objects",
 		Action:       listAnyHandler,
-		ArgsUsage:    listCommandArgument,
+		ArgsUsage:    listAnyCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
 		BashComplete: bucketCompletions(bckCompletionsOpts{withProviders: true}),
 	}
@@ -197,6 +182,28 @@ var (
 		},
 	}
 )
+
+func initLsOptions() []cli.Flag {
+	return []cli.Flag{
+		regexFlag,
+		templateFlag,
+		prefixFlag,
+		pageSizeFlag,
+		objPropsLsFlag,
+		objLimitFlag,
+		showUnmatchedFlag,
+		allItemsFlag,
+		noHeaderFlag,
+		pagedFlag,
+		maxPagesFlag,
+		startAfterFlag,
+		listCachedFlag,  // applies to buckets as well (TODO: apc.Flt* terminology)
+		listPresentFlag, // ditto
+		listAnonymousFlag,
+		listArchFlag,
+		nameOnlyFlag,
+	}
+}
 
 func createBucketHandler(c *cli.Context) (err error) {
 	var props *cmn.BucketPropsToUpdate
@@ -307,7 +314,7 @@ func showBucketSummary(c *cli.Context) error {
 	if err := updateLongRunParams(c); err != nil {
 		return err
 	}
-	summaries, err := fetchSummaries(queryBcks, fast, flagIsSet(c, listCachedFlag))
+	summaries, err := fetchSummaries(queryBcks, fast, flagIsSet(c, listCachedFlag) || flagIsSet(c, listPresentFlag))
 	if err != nil {
 		return err
 	}
@@ -622,7 +629,7 @@ func listAnyHandler(c *cli.Context) error {
 		return objectNameArgumentNotSupported(c, objName)
 	case bck.Name == "": // list buckets
 		fltPresence := apc.FltPresentAnywhere
-		if flagIsSet(c, listCachedFlag) {
+		if flagIsSet(c, listCachedFlag) || /*same*/ flagIsSet(c, listPresentFlag) {
 			fltPresence = apc.FltPresentInCluster
 		}
 		return listBuckets(c, cmn.QueryBcks(bck), fltPresence)

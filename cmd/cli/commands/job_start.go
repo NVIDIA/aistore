@@ -95,7 +95,7 @@ var (
 			{
 				Name:         subcmdStgCleanup,
 				Usage:        "perform storage cleanup: remove deleted objects and old/obsolete workfiles",
-				ArgsUsage:    listCommandArgument,
+				ArgsUsage:    listAnyCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgCleanup],
 				Action:       cleanupStorageHandler,
 				BashComplete: bucketCompletions(),
