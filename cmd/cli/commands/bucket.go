@@ -154,7 +154,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	return
 }
 
-func listBuckets(c *cli.Context, qbck cmn.QueryBcks) (err error) {
+func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error) {
 	var (
 		regex  *regexp.Regexp
 		filter = func(_ cmn.Bck) bool { return true }
@@ -166,7 +166,7 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks) (err error) {
 		}
 		filter = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
 	}
-	bcks, err := api.ListBuckets(defaultAPIParams, qbck)
+	bcks, err := api.ListBuckets(defaultAPIParams, qbck, fltPresence)
 	if err != nil {
 		return
 	}

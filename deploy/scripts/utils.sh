@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function list_all_go_dirs {
-  go list -f '{{.Dir}}' "${AISTORE_DIR}/..."
+  go list -f '{{.Dir}}' "${AISTORE_PATH}/..."
 }
 
 function check_gomod {
@@ -21,7 +21,7 @@ function check_gomod {
 }
 
 function check_files_headers {
-  for f in $(find ${AISTORE_DIR} -type f -name "*.go" -not -name "*gen.go"  ! -regex $EXTERNAL_SRC_REGEX); do
+  for f in $(find ${AISTORE_PATH} -type f -name "*.go" -not -name "*gen.go"  ! -regex $EXTERNAL_SRC_REGEX); do
     # Expect '//go:build ...' or '// Package ...'.
     out=$(head -n 1 $f | grep -P "\/\/(go:build(.*)|\sPackage(.*))")
     if [[ $? -ne 0 ]]; then
@@ -41,7 +41,7 @@ function check_files_headers {
 
 function check_imports {
   # Check if `import` block contains more than one empty line.
-  for f in $(find ${AISTORE_DIR} -type f -name "*.go" ! -regex $EXTERNAL_SRC_REGEX); do
+  for f in $(find ${AISTORE_PATH} -type f -name "*.go" ! -regex $EXTERNAL_SRC_REGEX); do
     # https://regexr.com/55u6r
     out=$(head -n 50 $f | grep -Pz 'import \((.|\n)*(\n\n)+(\t(\w|\.)?\s?(.*)"(.*)"\n)*\n+(\t(\w|\.)?\s?"(.*)"\n)*\)')
     if [[ $? -eq 0 ]]; then
@@ -53,7 +53,7 @@ function check_imports {
 
 function check_deps {
   # Check if `aisloader` package imports `tutils`.
-  for f in $(find ${AISTORE_DIR}/bench/aisloader -type f -name "*.go" ! -regex $EXTERNAL_SRC_REGEX); do
+  for f in $(find ${AISTORE_PATH}/bench/aisloader -type f -name "*.go" ! -regex $EXTERNAL_SRC_REGEX); do
     out=$(cat $f | grep '"github.com/NVIDIA/aistore/tutils"')
     if [[ $? -eq 0 ]]; then
       echo "$f: imports 'tutils' package which is forbidden"

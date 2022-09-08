@@ -160,7 +160,7 @@ func objectPropList(bck cmn.Bck, props *cmn.ObjectProps, selection []string) (pr
 
 func didYouMeanMessage(c *cli.Context, cmd string) string {
 	if alike := findCmdByKey(cmd); len(alike) > 0 {
-		msg := fmt.Sprintf("%v", alike)
+		msg := fmt.Sprintf("%v", alike) //nolint:gocritic // alt formatting
 		sb := &strings.Builder{}
 		sb.WriteString(msg)
 		sbWriteTail(c, sb)
@@ -554,7 +554,7 @@ func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, 
 	}
 	for newIdx = idx; newIdx < len(values); {
 		// Case: `access 0x342`
-		val, err = cos.ParseHexOrUint(values[newIdx])
+		val, err = parseHexOrUint(values[newIdx])
 		if err == nil {
 			access |= apc.AccessAttrs(val)
 			newIdx++
@@ -1347,4 +1347,12 @@ func configPropList(scopes ...string) []string {
 	}, cmn.IterOpts{Allowed: scope})
 	debug.AssertNoErr(err)
 	return propList
+}
+
+func parseHexOrUint(s string) (uint64, error) {
+	const hexPrefix = "0x"
+	if strings.HasPrefix(s, hexPrefix) {
+		return strconv.ParseUint(s[len(hexPrefix):], 16, 64)
+	}
+	return strconv.ParseUint(s, 10, 64)
 }

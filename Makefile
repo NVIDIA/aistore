@@ -1,5 +1,5 @@
 #
-# For usage: `make help`
+# Usage: `make help`
 #
 SHELL := /bin/bash
 DEPLOY_DIR = ./deploy/dev/local
@@ -7,7 +7,7 @@ SCRIPTS_DIR = ./deploy/scripts
 BUILD_DIR = ./cmd
 BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
 
-AISTORE_PATH=$(shell git rev-parse --show-toplevel)
+AISTORE_PATH = $(shell git rev-parse --show-toplevel)
 
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
@@ -254,7 +254,7 @@ lint-update-ci:
 	@rm -f $(GOPATH)/bin/golangci-lint
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.49.0
 
-lint: ## Run linter on whole project
+lint: ## lint everything except submodules (e.g., cli)
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
 

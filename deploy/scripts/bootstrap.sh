@@ -7,9 +7,9 @@ run_tests() {
     re="-run=${RE}"
   fi
 
-  tests_dir="${AISTORE_DIR}/..."
+  tests_dir="${AISTORE_PATH}/..."
   if [[ -n "${TESTS_DIR}" ]]; then
-    tests_dir="${AISTORE_DIR}/${TESTS_DIR}"
+    tests_dir="${AISTORE_PATH}/${TESTS_DIR}"
   fi
 
   timeout="-timeout=3h"
@@ -36,11 +36,11 @@ run_tests() {
   fi
 }
 
-AISTORE_DIR="$(cd "$(dirname "$0")/../../"; pwd -P)"
+AISTORE_PATH="$(cd "$(dirname "$0")/../../"; pwd -P)"
 PYLINT_STYLE="$(dirname ${0})/config/.pylintrc"
 EXTERNAL_SRC_REGEX=".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"
 # This script is used by Makefile to run commands.
-source ${AISTORE_DIR}/deploy/scripts/utils.sh
+source ${AISTORE_PATH}/deploy/scripts/utils.sh
 
 case $1 in
 lint)
@@ -55,9 +55,9 @@ fmt)
   --fix)
     echo "Running style fixing..." >&2
 
-    echo ${AISTORE_DIR}
+    echo ${AISTORE_PATH}
 
-    gofmt -s -w ${AISTORE_DIR}
+    gofmt -s -w ${AISTORE_PATH}
     python_black_fix
     ;;
   *)
@@ -76,10 +76,10 @@ spell)
   echo "Running spell check..." >&2
   case $2 in
   --fix)
-    ${GOPATH}/bin/misspell -i "importas" -w -locale=US ${AISTORE_DIR}
+    ${GOPATH}/bin/misspell -i "importas" -w -locale=US ${AISTORE_PATH}
     ;;
   *)
-    ${GOPATH}/bin/misspell -i "importas" -error -locale=US ${AISTORE_DIR}
+    ${GOPATH}/bin/misspell -i "importas" -error -locale=US ${AISTORE_PATH}
     ;;
   esac
   ;;
@@ -145,25 +145,25 @@ test-docker)
 
   echo "Running test in Docker..." >&2
   branch=$(git branch | grep \* | cut -d ' ' -f2)
-  errs=$("${AISTORE_DIR}/deploy/test/docker/test.sh" --name=${branch} 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL: Bench\|^--- FAIL: Test"  )
+  errs=$("${AISTORE_PATH}/deploy/test/docker/test.sh" --name=${branch} 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL: Bench\|^--- FAIL: Test"  )
   perror $1 "${errs}"
   ;;
 
 
 test-bench)
   echo "Running benchmark tests..." >&2
-  SCRIPT_ROOT=${AISTORE_DIR}/deploy/scripts
-  . ${SCRIPT_ROOT}/bench.sh cmp --dir "${AISTORE_DIR}" --verbose --post-checkout "${SCRIPT_ROOT}/clean_deploy.sh --dir ${AISTORE_DIR}"
+  SCRIPT_ROOT=${AISTORE_PATH}/deploy/scripts
+  . ${SCRIPT_ROOT}/bench.sh cmp --dir "${AISTORE_PATH}" --verbose --post-checkout "${SCRIPT_ROOT}/clean_deploy.sh --dir ${AISTORE_PATH}"
   ;;
 
 bench)
   shift
-  . ${AISTORE_DIR}/deploy/scripts/bench.sh
+  . ${AISTORE_PATH}/deploy/scripts/bench.sh
   ;;
 
 clean-deploy)
   shift
-  . ${AISTORE_DIR}/deploy/scripts/clean_deploy.sh
+  . ${AISTORE_PATH}/deploy/scripts/clean_deploy.sh
   ;;
 
 dev-init)

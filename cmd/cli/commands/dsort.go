@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -85,7 +86,7 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 // Creates bucket if not exists. If exists uses it or deletes and creates new
 // one if cleanup flag was set.
 func setupBucket(c *cli.Context, bck cmn.Bck) error {
-	exists, err := api.QueryBuckets(defaultAPIParams, cmn.QueryBcks(bck))
+	exists, err := api.QueryBuckets(defaultAPIParams, cmn.QueryBcks(bck), apc.FltPresentInCluster)
 	if err != nil {
 		return err
 	}

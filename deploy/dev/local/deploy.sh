@@ -51,8 +51,8 @@ else
   fi
 fi
 
-AISTORE_DIR=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
-source $AISTORE_DIR/deploy/dev/utils.sh
+AISTORE_PATH=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
+source $AISTORE_PATH/deploy/dev/utils.sh
 AIS_USE_HTTPS=${AIS_USE_HTTPS:-false}
 AIS_HTTP_CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
@@ -164,7 +164,7 @@ parse_backend_providers
 
 create_loopbacks
 
-if ! AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}  make --no-print-directory -C ${AISTORE_DIR} node; then
+if ! AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}  make --no-print-directory -C ${AISTORE_PATH} node; then
   exit_error "failed to compile 'aisnode' binary"
 fi
 
@@ -183,7 +183,7 @@ if [ "${!#}" != "--dont-generate-configs" ]; then
     AIS_CONF_FILE="$AIS_CONF_DIR/ais.json"
     AIS_LOCAL_CONF_FILE="$AIS_CONF_DIR/ais_local.json"
     AIS_LOG_DIR="$LOG_ROOT/$c/log"
-    source "${AISTORE_DIR}/deploy/dev/local/aisnode_config.sh"
+    source "${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh"
 
     ((PORT++))
     ((PORT_INTRA_CONTROL++))
@@ -236,9 +236,9 @@ if [[ $AIS_AUTHN_ENABLED == "true" ]]; then
   AIS_AUTHN_CONF_DIR="${APP_CONF_DIR}/authn"
   mkdir -p "$AIS_AUTHN_CONF_DIR"
   AIS_AUTHN_LOG_DIR="$LOG_ROOT/authn/log"
-  source "${AISTORE_DIR}/deploy/dev/local/authn_config.sh"
+  source "${AISTORE_PATH}/deploy/dev/local/authn_config.sh"
 
-  if ! make --no-print-directory -C ${AISTORE_DIR} authn; then
+  if ! make --no-print-directory -C ${AISTORE_PATH} authn; then
     exit_error "failed to compile 'authn' binary"
   fi
   run_cmd "${GOPATH}/bin/authn -config=${AIS_AUTHN_CONF_DIR}"

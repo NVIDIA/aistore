@@ -1,7 +1,7 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 // This file handles CLI commands that pertain to AIS buckets.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
@@ -227,7 +227,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		Misplaced     uint64
 		MissingCopies uint64
 	}
-	bckList, err := api.ListBuckets(defaultAPIParams, queryBcks)
+	bckList, err := api.ListBuckets(defaultAPIParams, queryBcks, apc.FltPresentInCluster)
 	if err != nil {
 		return
 	}
@@ -621,12 +621,11 @@ func listAnyHandler(c *cli.Context) error {
 		}
 		return objectNameArgumentNotSupported(c, objName)
 	case bck.Name == "": // list buckets
-		// TODO -- FIXME: up aistore
-		// fltPresence := apc.FltPresentAnywhere
-		// if flagIsSet(c, listCachedFlag) {
-		// 	fltPresence = apc.FltPresentInCluster
-		// }
-		return listBuckets(c, cmn.QueryBcks(bck))
+		fltPresence := apc.FltPresentAnywhere
+		if flagIsSet(c, listCachedFlag) {
+			fltPresence = apc.FltPresentInCluster
+		}
+		return listBuckets(c, cmn.QueryBcks(bck), fltPresence)
 	default: // list objects
 		prefix := parseStrFlag(c, prefixFlag)
 		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested
