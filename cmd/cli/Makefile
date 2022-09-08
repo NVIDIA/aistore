@@ -8,5 +8,6 @@ cli:
 	@$(MAKE) -C $(AISTORE_PATH) cli
 
 lint:
-	golangci-lint run --config ../../.golangci.yml
+	@echo "Running lint cmd/cli..."
+	@golangci-lint run --config ../../.golangci.yml `go list -f {{.Dir}} ./...`
 

@@ -254,9 +254,10 @@ lint-update-ci:
 	@rm -f $(GOPATH)/bin/golangci-lint
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.49.0
 
-lint: ## lint everything except submodules (e.g., cli)
+lint:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
+	@$(MAKE) -C $(BUILD_DIR)/cli lint
 
 fmt-check: ## Check code formatting
 	@ [[ $$(black --help) ]] || pip3 install black[jupyter]
