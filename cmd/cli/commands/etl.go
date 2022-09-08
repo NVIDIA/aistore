@@ -31,10 +31,7 @@ var (
 			depsFileFlag,
 			runtimeFlag,
 			commTypeFlag,
-			funcFilterFlag,
-			funcBeforeFlag,
 			funcTransformFlag,
-			funcAfterFlag,
 			chunkSizeFlag,
 			waitTimeoutFlag,
 			etlUUID,
@@ -257,9 +254,6 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	msg.Timeout = cos.Duration(parseDurationFlag(c, waitTimeoutFlag))
 
 	// funcs
-	msg.Funcs.Filter = parseStrFlag(c, funcFilterFlag)
-	msg.Funcs.Before = parseStrFlag(c, funcBeforeFlag)
-	msg.Funcs.After = parseStrFlag(c, funcAfterFlag)
 	msg.Funcs.Transform = parseStrFlag(c, funcTransformFlag)
 
 	// validate

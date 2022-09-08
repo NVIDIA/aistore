@@ -14,14 +14,8 @@ spec:
       env:
         - name: MOD_NAME
           value: code
-        - name: FUNC_FILTER
-          value: <FUNC_FILTER>
-        - name: FUNC_BEFORE
-          value: <FUNC_BEFORE>
         - name: FUNC_TRANSFORM
           value: <FUNC_TRANSFORM>
-        - name: FUNC_AFTER
-          value: <FUNC_AFTER>
         - name: COMM_TYPE
           value: <COMM_TYPE>
         - name: CHUNK_SIZE

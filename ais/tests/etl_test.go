@@ -466,6 +466,11 @@ def transform(input_bytes):
     md5.update(input_bytes)
     return md5.hexdigest().encode()
 `
+		echo = `
+def transform(reader, w):
+    for chunk in reader:
+        w.write(chunk)
+`
 
 		md5IO = `
 import hashlib
@@ -500,14 +505,16 @@ def transform(input_bytes: bytes) -> bytes:
 		}
 
 		tests = []struct {
-			name     string
-			code     string
-			deps     string
-			runtime  string
-			commType string
-			onlyLong bool
+			name      string
+			code      string
+			deps      string
+			runtime   string
+			commType  string
+			chunkSize int64
+			onlyLong  bool
 		}{
 			{name: "simple_py38", code: md5, deps: "", runtime: runtime.Py38, onlyLong: false},
+			{name: "simple_py38_stream", code: echo, deps: "", runtime: runtime.Py38, onlyLong: false, chunkSize: 64},
 			{name: "with_deps_py38", code: numpy, deps: numpyDeps, runtime: runtime.Py38, onlyLong: false},
 			{name: "simple_py310_io", code: md5IO, deps: "", runtime: runtime.Py310, commType: etl.HpushStdin, onlyLong: false},
 		}
@@ -534,7 +541,7 @@ def transform(input_bytes: bytes) -> bytes:
 					Code:      []byte(test.code),
 					Deps:      []byte(test.deps),
 					Runtime:   test.runtime,
-					ChunkSize: 0,
+					ChunkSize: test.chunkSize,
 				}
 				msg.Funcs.Transform = "transform"
 

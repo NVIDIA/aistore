@@ -205,10 +205,7 @@ func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	ftp = append(ftp, "<FLAGS>", flags)
 
 	// functions
-	ftp = append(ftp, "<FUNC_FILTER>", msg.Funcs.Filter)
-	ftp = append(ftp, "<FUNC_BEFORE>", msg.Funcs.Before)
 	ftp = append(ftp, "<FUNC_TRANSFORM>", msg.Funcs.Transform)
-	ftp = append(ftp, "<FUNC_AFTER>", msg.Funcs.After)
 
 	switch msg.CommTypeX {
 	case Hpush, Hpull, Hrev:

@@ -36,18 +36,12 @@ type (
 		Deps    []byte `json:"dependencies"`
 		Runtime string `json:"runtime"`
 		// ========================================================================================
-		// `InitCodeMsg` carries the names of the transforming and, optionally, other functions;
-		// - only the `Transform` function is mandatory and cannot be "" (empty) - it _will_ be called
+		// `InitCodeMsg` carries the name of the transforming function;
+		// the `Transform` function is mandatory and cannot be "" (empty) - it _will_ be called
 		//   by the `Runtime` container (see etl/runtime/all.go for all supported pre-built runtimes);
-		// - `Filter` receives object-name (string) and a MIN(4KB, Content-Length) bytes of the payload;
-		//   returns true (to go ahead and transform) or false (to skip);
-		// - if specified, `Before` and `After` are called only once - before and, respectively,
-		//   after each transforming transaction.
 		// =========================================================================================
+		// TODO -- FIXME: decide if we need to remove nested struct for funcs
 		Funcs struct {
-			Filter    string `json:"filter,omitempty"`
-			Before    string `json:"before,omitempty"`
-			After     string `json:"after,omitempty"`
 			Transform string `json:"transform"` // cannot be omitted
 		}
 		// 0 (zero) - read the entire payload in memory and then transform it in one shot;
