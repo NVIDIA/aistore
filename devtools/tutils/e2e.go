@@ -37,9 +37,7 @@ func destroyMatchingBuckets(subName string) (err error) {
 	proxyURL := GetPrimaryURL()
 	baseParams := BaseAPIParams(proxyURL)
 
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{
-		Provider: apc.ProviderAIS,
-	})
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentAnywhere)
 	if err != nil {
 		return err
 	}

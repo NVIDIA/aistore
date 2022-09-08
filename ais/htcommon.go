@@ -39,13 +39,14 @@ const unknownDaemonID = "unknown"
 
 const msgpObjListBufSize = 32 * cos.KiB
 
+const whatRenamedLB = "renamedlb"
+
 const (
-	fmtErrInsuffMpaths1 = "%s: not enough mountpaths (%d) to configure %s as %d-way mirror"
-	fmtErrInsuffMpaths2 = "%s: not enough mountpaths (%d) to replicate %s (configured) %d times"
-
+	fmtErrInsuffMpaths1      = "%s: not enough mountpaths (%d) to configure %s as %d-way mirror"
+	fmtErrInsuffMpaths2      = "%s: not enough mountpaths (%d) to replicate %s (configured) %d times"
 	fmtErrPrimaryNotReadyYet = "%s primary is not ready yet to start rebalance (started=%t, starting-up=%t)"
-
-	fmtErrInvaldAction = "invalid action %q (expected one of %v)"
+	fmtErrInvaldAction       = "invalid action %q (expected one of %v)"
+	fmtUnknownQue            = "unexpected query [what=%s]"
 )
 
 type (

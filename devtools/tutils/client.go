@@ -170,7 +170,7 @@ func CreateBucketWithCleanup(tb testing.TB, proxyURL string, bck cmn.Bck, props 
 
 func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	baseParams := BaseAPIParams(proxyURL)
-	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bck))
+	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bck), apc.FltPresentAnywhere)
 	tassert.CheckFatal(tb, err)
 	if exists {
 		err = api.DestroyBucket(baseParams, bck)
@@ -438,7 +438,7 @@ func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
 	for _, s := range smap.Tmap {
 		for {
 			baseParams := BaseAPIParams(s.URL(cmn.NetPublic))
-			bucketExists, err := api.QueryBuckets(baseParams, query)
+			bucketExists, err := api.QueryBuckets(baseParams, query, apc.FltPresentAnywhere)
 			if err != nil {
 				return err
 			}

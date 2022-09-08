@@ -13,7 +13,6 @@ import (
 	"runtime"
 	rdebug "runtime/debug"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unsafe"
@@ -43,8 +42,6 @@ const (
 	PermRWR       os.FileMode = 0o640 // POSIX perms
 	PermRWXRX     os.FileMode = 0o750
 	configDirMode             = PermRWXRX | os.ModeDir
-
-	hexPrefix = "0x"
 )
 
 type (
@@ -122,39 +119,6 @@ func MustMorphMarshal(data, v interface{}) {
 	AssertNoErr(err)
 }
 
-//
-// PARSING
-//
-
-func IsParseBool(s string) bool {
-	yes, err := ParseBool(s)
-	_ = err // error means false
-	return yes
-}
-
-// ParseBool converts string to bool (case-insensitive):
-//
-//	y, yes, on -> true
-//	n, no, off, <empty value> -> false
-//
-// strconv handles the following:
-//
-//	1, true, t -> true
-//	0, false, f -> false
-func ParseBool(s string) (value bool, err error) {
-	if s == "" {
-		return
-	}
-	s = strings.ToLower(s)
-	switch s {
-	case "y", "yes", "on":
-		return true, nil
-	case "n", "no", "off":
-		return false, nil
-	}
-	return strconv.ParseBool(s)
-}
-
 // ParseEnvVariables takes in a .env file and parses its contents
 func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	m := map[string]string{}
@@ -179,13 +143,6 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 		}
 	}
 	return m
-}
-
-func ParseHexOrUint(s string) (uint64, error) {
-	if strings.HasPrefix(s, hexPrefix) {
-		return strconv.ParseUint(s[len(hexPrefix):], 16, 64)
-	}
-	return strconv.ParseUint(s, 10, 64)
 }
 
 ///////////////

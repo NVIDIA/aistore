@@ -114,10 +114,9 @@ var (
 
 	showCmd = cli.Command{
 		Name:  commandShow,
-		Usage: "show information about buckets, jobs, all other managed entities in the cluster and the cluster itself",
+		Usage: "show configuration, buckets, jobs, etc. - all managed entities in the cluster, and the cluster itself",
 		Subcommands: []cli.Command{
 			makeAlias(authCmdShow, "", true, commandAuth), // alias for `ais auth show`
-			// makeAlias(storageCmd, commandStorage, true, commandStorage), // alias for `ais storage ...`
 			showCmdObject,
 			showCmdCluster,
 			showCmdRebalance,
@@ -164,7 +163,8 @@ var (
 		Action:    showClusterHandler,
 		BashComplete: func(c *cli.Context) {
 			if c.NArg() == 0 {
-				fmt.Printf("%s\n%s\n%s\n%s\n%s\n%s\n", apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
+				fmt.Printf("%s\n%s\n%s\n%s\n%s\n%s\n",
+					apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
 			}
 			daemonCompletions(completeAllDaemons)(c)
 		},

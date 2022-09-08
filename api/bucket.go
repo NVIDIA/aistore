@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -94,13 +95,17 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck) (p *cmn.BucketProps, err err
 
 // ListBuckets returns buckets for provided query.
 // (not to confuse with `ListObjects()` and friends below)
-func ListBuckets(baseParams BaseParams, qbck cmn.QueryBcks) (cmn.Bcks, error) {
+func ListBuckets(baseParams BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, error) {
 	var (
-		bcks  = cmn.Bcks{}
-		path  = apc.URLPathBuckets.S
-		body  = cos.MustMarshal(apc.ActionMsg{Action: apc.ActList})
-		query = qbck.AddToQuery(nil)
+		bcks = cmn.Bcks{}
+		path = apc.URLPathBuckets.S
+		body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActList})
+		q    = url.Values{apc.QparamFltPresence: []string{strconv.Itoa(fltPresence)}}
 	)
+	if fltPresence != apc.FltPresentAnywhere && fltPresence != apc.FltPresentInCluster {
+		return nil, fmt.Errorf("invalid value for the %q query param: have %d, expecting apc.Flt* enum",
+			apc.QparamFltPresence, fltPresence)
+	}
 	baseParams.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -108,7 +113,7 @@ func ListBuckets(baseParams BaseParams, qbck cmn.QueryBcks) (cmn.Bcks, error) {
 		reqParams.Path = path
 		reqParams.Body = body
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = query
+		reqParams.Query = qbck.AddToQuery(q)
 	}
 	err := reqParams.DoHTTPReqResp(&bcks)
 	FreeRp(reqParams)
@@ -116,6 +121,16 @@ func ListBuckets(baseParams BaseParams, qbck cmn.QueryBcks) (cmn.Bcks, error) {
 		return nil, err
 	}
 	return bcks, nil
+}
+
+// QueryBuckets queries cluster for buckets that satisfy the (`qbck`) criteria,
+// and returns true if the selection contains at least one bucket that does.
+func QueryBuckets(baseParams BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, error) {
+	bcks, err := ListBuckets(baseParams, qbck, fltPresence)
+	if err != nil {
+		return false, err
+	}
+	return bcks.Contains(qbck), nil
 }
 
 // GetBucketsSummaries returns bucket summaries for the specified backend provider
@@ -181,16 +196,6 @@ func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	err := reqParams.DoHTTPRequest()
 	FreeRp(reqParams)
 	return err
-}
-
-// QueryBuckets queries cluster for buckets that satisfy the (`qbck`) criteria,
-// and returns true if the selection contains at least one bucket that does.
-func QueryBuckets(baseParams BaseParams, qbck cmn.QueryBcks) (bool, error) {
-	bcks, err := ListBuckets(baseParams, qbck)
-	if err != nil {
-		return false, err
-	}
-	return bcks.Contains(qbck), nil
 }
 
 // CopyBucket copies existing `fromBck` bucket to the destination `toBck` thus,

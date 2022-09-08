@@ -369,7 +369,7 @@ func (m *ioContext) del(opts ...int) {
 		}
 	)
 	// checks, params
-	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(m.bck))
+	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(m.bck), apc.FltPresentAnywhere)
 	tassert.CheckFatal(m.t, err)
 	if !exists {
 		return
@@ -675,11 +675,11 @@ func (m *ioContext) stopMaintenance(target *cluster.Snode) (rebID string) {
 		} else {
 			query := cmn.QueryBcks(m.bck)
 			baseParams.URL = m.proxyURL
-			proxyBcks, err := api.ListBuckets(baseParams, query)
+			proxyBcks, err := api.ListBuckets(baseParams, query, apc.FltPresentAnywhere)
 			tassert.CheckFatal(m.t, err)
 
 			baseParams.URL = target.URL(cmn.NetPublic)
-			targetBcks, err := api.ListBuckets(baseParams, query)
+			targetBcks, err := api.ListBuckets(baseParams, query, apc.FltPresentAnywhere)
 			tassert.CheckFatal(m.t, err)
 			if proxyBcks.Equal(targetBcks) {
 				tlog.Logf("%s got updated with the current BMD\n", target.StringEx())

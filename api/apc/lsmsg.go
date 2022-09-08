@@ -13,11 +13,14 @@ import (
 
 // ListObjsMsg flags
 const (
-	LsPresent   = 1 << iota // applies to buckets with remote backends (to _optimize-out_ listing the latter)
-	LsMisplaced             // include misplaced obj-s
-	LsDeleted               // include obj-s marked for deletion (TODO)
-	LsArchDir               // expand archives as directories
-	LsNameOnly              // return only object names and statuses (for faster listing)
+	// Applies to buckets with remote backends (e.g., to optimize-out listing remotes)
+	// See also: FltPresent* enum
+	LsPresent = 1 << iota
+
+	LsMisplaced // include misplaced obj-s
+	LsDeleted   // include obj-s marked for deletion (TODO)
+	LsArchDir   // expand archives as directories
+	LsNameOnly  // return only object names and statuses (for faster listing)
 
 	// The following two flags have to do with listing objects in those remote
 	// buckets that we don't yet have in the cluster's BMD. As far as AIS is concerned,

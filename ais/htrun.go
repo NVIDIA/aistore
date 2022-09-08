@@ -38,6 +38,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+const ciePrefix = "cluster integrity error cie#"
+
 type htrun struct {
 	name      string
 	si        *cluster.Snode

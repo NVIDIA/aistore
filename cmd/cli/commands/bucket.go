@@ -154,15 +154,10 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	return
 }
 
-type (
-	bucketFilter func(cmn.Bck) bool
-)
-
 func listBuckets(c *cli.Context, qbck cmn.QueryBcks) (err error) {
-	// TODO: Think if there is a need to make generic filter for buckets as well ?
 	var (
-		filter = func(_ cmn.Bck) bool { return true }
 		regex  *regexp.Regexp
+		filter = func(_ cmn.Bck) bool { return true }
 	)
 	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {
 		regex, err = regexp.Compile(regexStr)
@@ -171,7 +166,6 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks) (err error) {
 		}
 		filter = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
 	}
-
 	bcks, err := api.ListBuckets(defaultAPIParams, qbck)
 	if err != nil {
 		return
@@ -180,15 +174,8 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks) (err error) {
 	return
 }
 
-// Lists objects in a bucket; include archived content if requested
-func listObjects(c *cli.Context, bck cmn.Bck) error {
-	prefix := parseStrFlag(c, prefixFlag)
-	listArch := flagIsSet(c, listArchFlag)
-	return _doListObj(c, bck, prefix, listArch)
-}
-
-// TODO: refactor and split options
-func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
+// TODO: too many `flagIsSet` calls - refactor (archive | ... )
+func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
 	var (
 		showUnmatched         = flagIsSet(c, showUnmatchedFlag)
 		msg                   = &apc.ListObjsMsg{Prefix: prefix}
@@ -503,7 +490,7 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 	return bcks[0], bcks[1], nil
 }
 
-func printBuckets(c *cli.Context, bcks cmn.Bcks, showHeaders bool, matches bucketFilter) {
+func printBuckets(c *cli.Context, bcks cmn.Bcks, showHeaders bool, matches func(cmn.Bck) bool /*bucket filter*/) {
 	providerList := make([]string, 0, len(apc.Providers))
 	for provider := range apc.Providers {
 		providerList = append(providerList, provider)

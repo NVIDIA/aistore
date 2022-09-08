@@ -83,7 +83,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 
 	// /v1/etl
 	if len(apiItems) == 0 {
-		t.writeJSON(w, r, etl.List(), "list-ETL")
+		t.writeJSON(w, r, etl.List(), "list-etl")
 		return
 	}
 
@@ -170,7 +170,7 @@ func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlID string) {
 		t.writeErr(w, r, err)
 		return
 	}
-	t.writeJSON(w, r, logs, "logs-ETL")
+	t.writeJSON(w, r, logs, "logs-etl")
 }
 
 func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlID string) {
@@ -183,7 +183,7 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlID string)
 		}
 		return
 	}
-	t.writeJSON(w, r, healthMsg, "health-ETL")
+	t.writeJSON(w, r, healthMsg, "health-etl")
 }
 
 func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *cluster.Bck, objName string, err error) {

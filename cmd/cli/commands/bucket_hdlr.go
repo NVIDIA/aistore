@@ -67,7 +67,7 @@ var (
 			pagedFlag,
 			maxPagesFlag,
 			startAfterFlag,
-			listCachedFlag,
+			listCachedFlag, // applies to buckets as well (TODO: apc.Flt* terminology)
 			listAnonymousFlag,
 			listArchFlag,
 			nameOnlyFlag,
@@ -88,7 +88,7 @@ var (
 	// (TODO: define separately to allow for aliasing - see alias_hdlr.go)
 	bucketCmdList = cli.Command{
 		Name:         commandList,
-		Usage:        "list buckets and their objects",
+		Usage:        "list buckets and objects",
 		Action:       listAnyHandler,
 		ArgsUsage:    listCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
@@ -613,14 +613,23 @@ func listAnyHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if objName != "" {
+
+	switch {
+	case objName != "": // arch
 		if flagIsSet(c, listArchFlag) {
 			return listArchHandler(c)
 		}
 		return objectNameArgumentNotSupported(c, objName)
-	}
-	if bck.Name == "" {
+	case bck.Name == "": // list buckets
+		// TODO -- FIXME: up aistore
+		// fltPresence := apc.FltPresentAnywhere
+		// if flagIsSet(c, listCachedFlag) {
+		// 	fltPresence = apc.FltPresentInCluster
+		// }
 		return listBuckets(c, cmn.QueryBcks(bck))
+	default: // list objects
+		prefix := parseStrFlag(c, prefixFlag)
+		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested
+		return listObjects(c, bck, prefix, listArch)
 	}
-	return listObjects(c, bck)
 }

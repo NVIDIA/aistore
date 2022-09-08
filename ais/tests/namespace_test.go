@@ -15,25 +15,21 @@ import (
 )
 
 func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool) cmn.Bcks {
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS})
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentInCluster)
 	tassert.CheckFatal(t, err)
 	if includeRemote {
-		remoteBuckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{
-			Provider: apc.ProviderAIS,
-			Ns:       cmn.NsAnyRemote,
-		})
+		remoteBuckets, err := api.ListBuckets(baseParams,
+			cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.NsAnyRemote}, apc.FltPresentAnywhere)
 		tassert.CheckFatal(t, err)
 		buckets = append(buckets, remoteBuckets...)
 
-		// Make sure that listing with specific UUID also works and have
-		// similar outcome.
-		remoteClusterBuckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{
-			Provider: apc.ProviderAIS,
-			Ns:       cmn.Ns{UUID: tutils.RemoteCluster.UUID},
-		})
+		// Make sure that listing with specific UUID also works and have similar outcome.
+		remoteClusterBuckets, err := api.ListBuckets(baseParams,
+			cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID}},
+			apc.FltPresentAnywhere)
 		tassert.CheckFatal(t, err)
-		// NOTE: we cannot do `remoteClusterBuckets.Equal(remoteBuckets)` because
-		//  they will most probably have different `Ns.UUID` (alias vs uuid).
+		// NOTE: cannot do `remoteClusterBuckets.Equal(remoteBuckets)` because of different `Ns.UUID`
+		// (alias vs uuid).
 		tassert.Fatalf(
 			t, len(remoteClusterBuckets) == len(remoteBuckets),
 			"remote buckets do not match expected: %v, got: %v", remoteClusterBuckets, remoteBuckets,
@@ -298,7 +294,7 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 
 	// TODO: works until this point
 
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS})
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentAnywhere)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
 		t, len(buckets) == 1,
@@ -351,7 +347,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check that bucket is still cached
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS})
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentInCluster)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(buckets) == 1, "number of buckets (%d) should be equal to 1", len(buckets))
 
@@ -362,7 +358,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	// TODO: it works until this point
 
 	// Check that bucket is no longer present
-	buckets, err = api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS})
+	buckets, err = api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentInCluster)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(buckets) == 0, "number of buckets (%d) should be equal to 0", len(buckets))
 }

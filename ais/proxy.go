@@ -40,16 +40,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const (
-	whatRenamedLB = "renamedlb"
-	ciePrefix     = "cluster integrity error cie#"
-	listBuckets   = "listBuckets"
-)
-
-const (
-	fmtNotRemote  = "%q appears to be ais bucket (expecting remote)"
-	fmtUnknownQue = "unexpected query [what=%s]"
-)
+const fmtNotRemote = "%q appears to be ais bucket (expecting remote)"
 
 type (
 	ClusterMountpathsRaw struct {
@@ -533,7 +524,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		// list buckets if `qbck` is indeed a bucket-query
 		if !qbck.IsBucket() {
 			if err := p.checkAccess(w, r, nil, apc.AceListBuckets); err == nil {
-				p.listBuckets(w, r, qbck, msg)
+				p.listBuckets(w, r, qbck, msg, dpq)
 			}
 			return
 		}
@@ -1369,10 +1360,10 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	debug.Assert(bckList != nil)
 
 	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
-		if !p.writeMsgPack(w, r, bckList, "list_objects") {
+		if !p.writeMsgPack(w, r, bckList, "list-objects") {
 			return
 		}
-	} else if !p.writeJSON(w, r, bckList, "list_objects") {
+	} else if !p.writeJSON(w, r, bckList, "list-objects") {
 		return
 	}
 
@@ -1420,7 +1411,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 		return
 	}
 
-	p.writeJSON(w, r, summaries, "bucket_summary")
+	p.writeJSON(w, r, summaries, "bucket-summary")
 }
 
 func (p *proxy) bsumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, uuid string, err error) {
@@ -1898,22 +1889,23 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	return nil
 }
 
-func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActionMsg) {
+func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActionMsg, dpq *dpq) {
 	bmd := p.owner.bmd.get()
-	if qbck.Provider != "" {
-		if qbck.IsAIS() || qbck.IsHDFS() {
-			bcks := selectBMDBuckets(bmd, qbck)
-			p.writeJSON(w, r, bcks, listBuckets)
+	if qbck.IsAIS() || qbck.IsHDFS() || cos.IsParseInt(dpq.fltPresence, apc.FltPresentInCluster) {
+		bcks := selectBMDBuckets(bmd, qbck)
+		p.writeJSON(w, r, bcks, "list-buckets")
+		return
+	}
+	// the backend must be configured
+	if qbck.IsCloud() {
+		config := cmn.GCO.Get()
+		if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
+			err := &cmn.ErrMissingBackend{Provider: qbck.Provider}
+			p.writeErrf(w, r, "cannot list %q bucket: %v", qbck, err)
 			return
-		} else if qbck.IsCloud() {
-			config := cmn.GCO.Get()
-			if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
-				err := &cmn.ErrMissingBackend{Provider: qbck.Provider}
-				p.writeErrf(w, r, "cannot list %q bucket: %v", qbck, err)
-				return
-			}
 		}
 	}
+	// via random target
 	si, err := p.owner.smap.get().GetRandTarget()
 	if err != nil {
 		p.writeErr(w, r, err)

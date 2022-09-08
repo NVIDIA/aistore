@@ -758,7 +758,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 	}
 	if taskAction == apc.TaskResult {
 		// return the final result only if it is requested explicitly
-		t.writeJSON(w, r, result, "")
+		t.writeJSON(w, r, result, "bucket-summ")
 	}
 }
 
@@ -1486,7 +1486,6 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 }
 
 func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks) {
-	const fmterr = "failed to list %q buckets: [%v]"
 	var (
 		bcks   cmn.Bcks
 		code   int
@@ -1496,7 +1495,8 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 	if qbck.Provider != "" {
 		bcks, code, err = t._listBcks(qbck, config)
 		if err != nil {
-			t.writeErrStatusf(w, r, code, fmterr, qbck, err)
+			err = cmn.NewErrFailedTo(t, "list buckets", qbck.String(), err, code)
+			t.writeErr(w, r, err, code)
 			return
 		}
 	} else /* all providers */ {
@@ -1505,19 +1505,20 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 			qbck.Provider = provider
 			buckets, code, err = t._listBcks(qbck, config)
 			if err != nil {
+				err = cmn.NewErrFailedTo(t, "list buckets", qbck.String(), err, code)
 				if provider == apc.ProviderAIS {
-					t.writeErrStatusf(w, r, code, fmterr, qbck, err)
+					t.writeErr(w, r, err, code)
 					return
 				}
 				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Warningf(fmterr, qbck, err)
+					glog.Warning(err)
 				}
 			}
 			bcks = append(bcks, buckets...)
 		}
 	}
 	sort.Sort(bcks)
-	t.writeJSON(w, r, bcks, listBuckets)
+	t.writeJSON(w, r, bcks, "list-buckets")
 }
 
 func (t *target) _listBcks(qbck *cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks, errCode int, err error) {

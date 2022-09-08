@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -8,10 +8,43 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-func I2S(i int64) string {
-	return strconv.FormatInt(i, 10)
+func IsParseBool(s string) bool {
+	yes, err := ParseBool(s)
+	_ = err // error means false
+	return yes
+}
+
+func IsParseInt(s string, expected int) bool {
+	i, err := strconv.ParseInt(s, 10, 64)
+	_ = err // error means false
+	return expected == int(i)
+}
+
+// ParseBool converts string to bool (case-insensitive):
+//
+//	y, yes, on -> true
+//	n, no, off, <empty value> -> false
+//
+// strconv handles the following:
+//
+//	1, true, t -> true
+//	0, false, f -> false
+func ParseBool(s string) (value bool, err error) {
+	if s == "" {
+		return
+	}
+	s = strings.ToLower(s)
+	switch s {
+	case "y", "yes", "on":
+		return true, nil
+	case "n", "no", "off":
+		return false, nil
+	}
+	return strconv.ParseBool(s)
 }
 
 func StringSliceToIntSlice(strs []string) ([]int64, error) {
@@ -30,13 +63,10 @@ func StrToSentence(str string) string {
 	if str == "" {
 		return ""
 	}
-
 	capitalized := CapitalizeString(str)
-
 	if !strings.HasSuffix(capitalized, ".") {
 		capitalized += "."
 	}
-
 	return capitalized
 }
 
@@ -47,7 +77,8 @@ func ConvertToString(value interface{}) (valstr string, err error) {
 	case bool, int, int32, int64, uint32, uint64, float32, float64:
 		valstr = fmt.Sprintf("%v", v)
 	default:
-		err = fmt.Errorf("failed to assert type on param: %v (type %T)", value, value)
+		debug.FailTypeCast(value)
+		err = fmt.Errorf("failed to assert type: %v(%T)", value, value)
 	}
 	return
 }

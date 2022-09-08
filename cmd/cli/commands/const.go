@@ -437,16 +437,21 @@ var (
 
 	cksumFlag        = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
 	computeCksumFlag = cli.BoolFlag{Name: "compute-checksum", Usage: "compute checksum configured for the bucket"}
-	skipVerCksumFlag = cli.BoolFlag{Name: "skip-vc", Usage: "skip loading object metadata (and the associated checksum & version related processing)"}
-
+	skipVerCksumFlag = cli.BoolFlag{
+		Name:  "skip-vc",
+		Usage: "skip loading object metadata (and the associated checksum & version related processing)",
+	}
 	supportedCksumFlags = initSupportedCksumFlags()
 
 	// auth
 	descRoleFlag      = cli.StringFlag{Name: "description,desc", Usage: "role description"}
 	clusterRoleFlag   = cli.StringFlag{Name: "cluster", Usage: "associate role with the specified AIS cluster"}
 	clusterTokenFlag  = cli.StringFlag{Name: "cluster", Usage: "issue token for the cluster"}
-	bucketRoleFlag    = cli.StringFlag{Name: "bucket", Usage: "associate role with the specified bucket"}
-	clusterFilterFlag = cli.StringFlag{Name: "cluster", Usage: "comma-separated list of AIS cluster IDs, pass ',' for empty cluster ID"}
+	bucketRoleFlag    = cli.StringFlag{Name: "bucket", Usage: "associate a role with the specified bucket"}
+	clusterFilterFlag = cli.StringFlag{
+		Name:  "cluster",
+		Usage: "comma-separated list of AIS cluster IDs (type ',' for an empty cluster ID)",
+	}
 
 	// begin archive
 	listArchFlag             = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}

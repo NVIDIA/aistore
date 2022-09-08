@@ -338,7 +338,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlID string, ap
 	}
 	freeBcastRes(results)
 	sort.Sort(logs)
-	p.writeJSON(w, r, logs, "logs-ETL")
+	p.writeJSON(w, r, logs, "logs-etl")
 }
 
 // GET /v1/etl/<uuid>/health
@@ -365,7 +365,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 		healths = append(healths, res.v.(*etl.PodHealthMsg))
 	}
 	sort.SliceStable(healths, func(i, j int) bool { return healths[i].TargetID < healths[j].TargetID })
-	p.writeJSON(w, r, healths, "health-ETL")
+	p.writeJSON(w, r, healths, "health-etl")
 }
 
 // POST /v1/etl/<uuid>/stop

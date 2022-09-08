@@ -66,5 +66,5 @@ func listArchHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	return _doListObj(c, bck, objName, true /*list arch*/)
+	return listObjects(c, bck, objName, true /*list arch*/)
 }

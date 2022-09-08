@@ -373,7 +373,8 @@ func (m *AISBackendProvider) listBucketsCluster(uuid string, qbck cmn.QueryBcks)
 	if aisCluster, err = m.remoteCluster(uuid); err != nil {
 		return
 	}
-	bcks, err = api.ListBuckets(aisCluster.bp, remoteQuery)
+	// TODO: extend backend ListBuckets() API to fully support apc.FltPresent* enum
+	bcks, err = api.ListBuckets(aisCluster.bp, remoteQuery, apc.FltPresentAnywhere)
 	if err != nil {
 		_, err = extractErrCode(err)
 		return nil, err

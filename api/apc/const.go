@@ -119,18 +119,28 @@ const (
 	HeadObjAvoidRemoteCheckAllMps
 )
 
-// URL Query "?name1=val1&name2=..."
-// Query parameter name conventions:
-//  - contains only alpha-numeric characters,
-//  - words must be separated with underscore "_".
-
-// User/client query params.
+// A general filtering enumeration that can be applied to both buckets and objects with respect to
+// their existence/presence (or non-existence/non-presence) *in* a given AIS cluster.
+//
+// Note that remote object (or a bucket) that is currently _not_ present in the cluster can still
+// be accessible with (the first) access resulting in this object or bucket becoming present, etc.
 const (
-	QparamWhat      = "what"           // "smap" | "bmd" | "config" | "stats" | "xaction" ...
-	QparamProps     = "props"          // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
-	QparamNewCustom = "set-new-custom" // remove existing custom keys (if any) and store new custom metadata
-	QparamUUID      = "uuid"           // xaction
-	QparamRegex     = "regex"          // dsort/downloader regex
+	FltPresentAnywhere = iota
+	FltPresentInCluster
+	FltPresentOutside
+)
+
+// URL Query "?name1=val1&name2=..."
+// User query params.
+const (
+	QparamWhat  = "what"  // "smap" | "bmd" | "config" | "stats" | "xaction" ...
+	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
+	QparamUUID  = "uuid"  // xaction
+	QparamRegex = "regex" // dsort/downloader regex
+
+	// remove existing custom keys and store new custom metadata
+	// (see also: namesake CLI and usage)
+	QparamNewCustom = "set-new-custom"
 
 	QparamHeadObj = "head_obj" // enum { HeadObjAvoidRemote, ... } above
 
@@ -139,6 +149,10 @@ const (
 	QparamNamespace = "namespace"
 	QparamBucketTo  = "bck_to"
 	QparamKeepBckMD = "keep_md"
+
+	// See Flt* enum above.
+	// See also: ListObjsMsg flags, docs/providers.md (for terminology)
+	QparamFltPresence = "flt_presence"
 
 	// Object related query params.
 	QparamAppendType   = "append_type"
