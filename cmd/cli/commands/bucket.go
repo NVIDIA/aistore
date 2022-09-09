@@ -94,7 +94,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	var xactID string
 
-	if _, err = headBucket(fromBck); err != nil {
+	if _, err = headBucket(fromBck, true /* don't add */); err != nil {
 		return
 	}
 
@@ -384,7 +384,7 @@ func showBucketProps(c *cli.Context) (err error) {
 	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
 		return
 	}
-	if p, err = headBucket(bck); err != nil {
+	if p, err = headBucket(bck, true /* don't add */); err != nil {
 		return
 	}
 	if flagIsSet(c, jsonFlag) {
@@ -517,7 +517,7 @@ func printBuckets(c *cli.Context, bcks cmn.Bcks, showHeaders bool, matches func(
 		}
 		for _, bck := range filtered {
 			if provider == apc.ProviderHTTP {
-				if props, err := api.HeadBucket(defaultAPIParams, bck); err == nil {
+				if props, err := api.HeadBucket(defaultAPIParams, bck, false /* don't add */); err == nil {
 					fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
 					continue
 				}

@@ -66,7 +66,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 
 	// NOTE: skip HEAD-ing http (ht://) buckets
 	if !bck.IsHTTP() {
-		if _, err = headBucket(bck); err != nil {
+		if _, err = headBucket(bck, false /* don't add */); err != nil {
 			return
 		}
 	}
@@ -232,7 +232,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 		cksum    *cos.Cksum
 	)
 	if flagIsSet(c, computeCksumFlag) {
-		bckProps, err := api.HeadBucket(defaultAPIParams, bck)
+		bckProps, err := api.HeadBucket(defaultAPIParams, bck, false /* don't add */)
 		if err != nil {
 			return err
 		}
@@ -912,7 +912,7 @@ func multiObjOp(c *cli.Context, command string) error {
 		if err != nil {
 			return err
 		}
-		if _, err = headBucket(bck); err != nil {
+		if _, err = headBucket(bck, false /* don't add */); err != nil {
 			return err
 		}
 

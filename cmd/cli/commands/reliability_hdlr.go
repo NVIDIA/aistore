@@ -51,7 +51,7 @@ func setCopiesHandler(c *cli.Context) (err error) {
 	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
 		return
 	}
-	if p, err = headBucket(bck); err != nil {
+	if p, err = headBucket(bck, false /* don't add */); err != nil {
 		return
 	}
 
@@ -76,7 +76,7 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
 		return
 	}
-	if p, err = headBucket(bck); err != nil {
+	if p, err = headBucket(bck, false /* don't add */); err != nil {
 		return
 	}
 

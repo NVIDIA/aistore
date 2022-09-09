@@ -250,7 +250,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 			objList *cmn.BucketList
 			obj     *cmn.BucketEntry
 		)
-		if p, err = headBucket(bck); err != nil {
+		if p, err = headBucket(bck, true /* don't add */); err != nil {
 			return
 		}
 		copies := int16(p.Mirror.Copies)
@@ -513,7 +513,7 @@ func lruBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if p, err = headBucket(bck); err != nil {
+	if p, err = headBucket(bck, true /* don't add */); err != nil {
 		return err
 	}
 	defProps, err := defaultBckProps(bck)
@@ -552,7 +552,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if currProps, err = headBucket(bck); err != nil {
+	if currProps, err = headBucket(bck, false /* don't add */); err != nil {
 		return err
 	}
 	newProps, err := parseBckPropsFromContext(c)
@@ -622,11 +622,14 @@ func listAnyHandler(c *cli.Context) error {
 	}
 
 	switch {
-	case objName != "": // arch
+	case objName != "": // list archive OR show specific obj (HEAD(obj))
 		if flagIsSet(c, listArchFlag) {
 			return listArchHandler(c)
 		}
-		return objectNameArgumentNotSupported(c, objName)
+		if _, err := headBucket(bck, true /* don't add */); err != nil {
+			return err
+		}
+		return showObjProps(c, bck, objName)
 	case bck.Name == "": // list buckets
 		fltPresence := apc.FltPresentAnywhere
 		if flagIsSet(c, listCachedFlag) || /*same*/ flagIsSet(c, listPresentFlag) {

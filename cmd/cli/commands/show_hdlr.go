@@ -487,7 +487,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if _, err := headBucket(bck); err != nil {
+	if _, err := headBucket(bck, true /* don't add */); err != nil {
 		return err
 	}
 	return showObjProps(c, bck, object)

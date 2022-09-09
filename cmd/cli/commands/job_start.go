@@ -141,7 +141,7 @@ func startXactionKindHandler(c *cli.Context, xactKind string) (err error) {
 
 func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err error) {
 	if xact.IsBckScope(xactKind) {
-		if _, err = headBucket(bck); err != nil {
+		if _, err = headBucket(bck, false /* don't add */); err != nil {
 			return err
 		}
 	}
@@ -235,11 +235,13 @@ func startDownloadHandler(c *cli.Context) error {
 		},
 	}
 
-	if basePayload.Bck.Props, err = api.HeadBucket(defaultAPIParams, basePayload.Bck); err != nil {
+	if basePayload.Bck.Props, err = api.HeadBucket(defaultAPIParams, basePayload.Bck, true /* don't add */); err != nil {
 		if !cmn.IsStatusNotFound(err) {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "Warning: destination bucket %q doesn't exist. A bucket with default properties will be created!\n", basePayload.Bck)
+		fmt.Fprintf(c.App.Writer,
+			"Warning: destination bucket %q doesn't exist. A bucket with default properties will be created!\n",
+			basePayload.Bck)
 	}
 
 	// Heuristics to determine the download type.
@@ -255,11 +257,10 @@ func startDownloadHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		if _, ok := cfg.Backend.Providers[source.backend.bck.Provider]; ok {
-			// Cloud is configured to requested backend provider.
+		if _, ok := cfg.Backend.Providers[source.backend.bck.Provider]; ok { // backend is configured
 			dlType = downloader.DlTypeBackend
 
-			p, err := api.HeadBucket(defaultAPIParams, basePayload.Bck)
+			p, err := api.HeadBucket(defaultAPIParams, basePayload.Bck, false /* don't add */)
 			if err != nil {
 				return err
 			}
@@ -548,7 +549,7 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 	if bck.IsAIS() {
 		return fmt.Errorf("cannot prefetch from ais buckets (the operation applies to remote buckets only)")
 	}
-	if _, err = headBucket(bck); err != nil {
+	if _, err = headBucket(bck, false /* don't add */); err != nil {
 		return
 	}
 

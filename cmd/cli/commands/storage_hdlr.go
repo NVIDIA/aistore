@@ -69,7 +69,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 		if err != nil {
 			return
 		}
-		if _, err = headBucket(bck); err != nil {
+		if _, err = headBucket(bck, true /* don't add */); err != nil {
 			return
 		}
 	}

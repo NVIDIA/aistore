@@ -488,7 +488,7 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 				if bck, err = parseBckURI(c, uri); err != nil {
 					return "", "", "", bck, err
 				}
-				if _, err = headBucket(bck); err != nil {
+				if _, err = headBucket(bck, true /* don't add */); err != nil {
 					return "", "", "", bck, err
 				}
 			}
@@ -700,8 +700,18 @@ func cliAPIParams(proxyURL string) api.BaseParams {
 	}
 }
 
-func headBucket(bck cmn.Bck) (p *cmn.BucketProps, err error) {
-	if p, err = api.HeadBucket(defaultAPIParams, bck); err == nil {
+// NOTE:
+// 1. By default, AIStore adds remote buckets to the cluster metadata on the fly.
+// Remote bucket that was never accessed before just "shows up" when user performs
+// PUT, GET, SET-PROPS, and a variety of other operations.
+// 2. This is done only once (and after confirming the bucket's existence and accessibility)
+// and doesn't require any action from the user.
+// However, when we explicitly do not want this (addition to BMD) to be happening,
+// we override this behavior with `dontAddBckMD` parameter in the api.HeadBucket() call.
+// 3. On the client side, we currently resort to a (hardcoded albeit intuitive) convention
+// that all non-modifying operations specify `dontAddBckMD = true`.
+func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) {
+	if p, err = api.HeadBucket(defaultAPIParams, bck, dontAddBckMD); err == nil {
 		return
 	}
 	if httpErr, ok := err.(*cmn.ErrHTTP); ok {

@@ -359,7 +359,7 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 	if bck, objName, err = parseBckObjectURI(c, uri, true /*optional objName*/); err != nil {
 		return
 	}
-	if p, err = headBucket(bck); err != nil {
+	if p, err = headBucket(bck, false /* don't add */); err != nil {
 		return err
 	}
 	if dryRun {
@@ -411,7 +411,7 @@ func concatHandler(c *cli.Context) (err error) {
 	if bck, objName, err = parseBckObjectURI(c, fullObjName); err != nil {
 		return
 	}
-	if _, err = headBucket(bck); err != nil {
+	if _, err = headBucket(bck, false /* don't add */); err != nil {
 		return
 	}
 	return concatObject(c, bck, objName, fileNames)
@@ -438,7 +438,7 @@ func promoteHandler(c *cli.Context) (err error) {
 	if bck, objName, err = parseBckObjectURI(c, fullObjName, true /*optObjName*/); err != nil {
 		return
 	}
-	if _, err = headBucket(bck); err != nil {
+	if _, err = headBucket(bck, false /* don't add */); err != nil {
 		return
 	}
 	return promote(c, bck, objName, fqn)
