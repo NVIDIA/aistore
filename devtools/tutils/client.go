@@ -208,7 +208,8 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 }
 
 func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.Bck) {
-	p, err := api.HeadBucket(baseParams, dstBck) // We need to know real provider of the bucket
+	// find out real provider of the bucket
+	p, err := api.HeadBucket(baseParams, dstBck, true /* don't add to cluster MD */)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.SetBucketProps(baseParams, srcBck, &cmn.BucketPropsToUpdate{
@@ -656,7 +657,7 @@ func CheckErrIsNotFound(t *testing.T, err error) {
 		return
 	}
 	httpErr, ok := err.(*cmn.ErrHTTP)
-	tassert.Fatalf(t, ok, "expected an error of type *cmn.ErrHTTP, but got: %T.", err)
+	tassert.Fatalf(t, ok, "expected an error of the type *cmn.ErrHTTP, got %v(%T)", err, err)
 	tassert.Fatalf(
 		t, httpErr.Status == http.StatusNotFound,
 		"expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status,

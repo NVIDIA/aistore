@@ -326,14 +326,10 @@ func (p *proxy) Stop(err error) {
 	p.htrun.stop(!isPrimary && smap.isValid() && !isErrNoUnregister(err) /* rm from Smap*/)
 }
 
-////////////////////////////////////////
-// http /bucket and /objects handlers //
-////////////////////////////////////////
-
 // parse request + init/lookup bucket (combo)
 func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs) (bck *cluster.Bck,
 	objName string, err error) {
-	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
+	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false /*dpq*/)
 	if err = p.parseReq(w, r, apireq); err != nil {
 		apiReqFree(apireq)
 		return
@@ -718,7 +714,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // DELETE { action } /v1/buckets
 func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	// 1. request
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false /*dpq*/)
 	defer apiReqFree(apireq)
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
@@ -1477,7 +1473,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	apireq := apiReqAlloc(1, apc.URLPathObjects.L, false)
+	apireq := apiReqAlloc(1, apc.URLPathObjects.L, false /*dpq*/)
 	defer apiReqFree(apireq)
 	if msg.Action == apc.ActRenameObject {
 		apireq.after = 2
@@ -1547,7 +1543,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false /*dpq*/)
 	defer apiReqFree(apireq)
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
@@ -1559,18 +1555,24 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if bck.IsAIS() || !bckArgs.exists {
+
+	if bck.IsAIS() || bckArgs.present {
 		_bpropsToHdr(bck, w.Header())
 		return
 	}
 	cloudProps, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
 	if err != nil {
-		// TODO: what if HEAD fails
 		p.writeErr(w, r, err, statusCode)
 		return
 	}
 
-	if p.forwardCP(w, r, nil, "httpheadbck") {
+	q := r.URL.Query()
+	if cos.IsParseBool(q.Get(apc.QparamDontAddBckMD)) {
+		_bpropsToHdr(bck, w.Header())
+		return
+	}
+
+	if p.forwardCP(w, r, nil, "head "+bck.String()) {
 		return
 	}
 
@@ -1624,7 +1626,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		xactID        string
 		nprops        *cmn.BucketProps // complete instance of bucket props with propsToUpdate changes
 	)
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
+	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false /*dpq*/)
 	defer apiReqFree(apireq)
 	if err = p.parseReq(w, r, apireq); err != nil {
 		return
@@ -1636,10 +1638,11 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		p.writeErrMsg(w, r, "invalid props-to-update value in apireq: "+msg.String())
 		return
 	}
-	if p.forwardCP(w, r, msg, "httpbckpatch") {
+	bck := apireq.bck
+	if p.forwardCP(w, r, msg, "patch "+bck.String()) {
 		return
 	}
-	bck, perms := apireq.bck, apc.AcePATCH
+	perms := apc.AcePATCH
 	if propsToUpdate.Access != nil {
 		perms |= apc.AceBckSetACL
 	}

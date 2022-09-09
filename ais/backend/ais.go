@@ -315,6 +315,10 @@ func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error)
 	return 0, nil
 }
 
+// TODO: remote AIS clusters provide native frontend API with additional capabilities
+// that, in particular, include `dontAddBckMD` = (true | false).
+// Here we have to hardcode the value to keep HeadBucket() consistent across all backends.
+// For similar limitations, see also ListBuckets() below.
 func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
@@ -325,7 +329,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	}
 	bck := remoteBck.Clone()
 	unsetUUID(&bck)
-	if p, err = api.HeadBucket(aisCluster.bp, bck); err != nil {
+	if p, err = api.HeadBucket(aisCluster.bp, bck, false /*dontAddBckMD*/); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}
@@ -373,7 +377,7 @@ func (m *AISBackendProvider) listBucketsCluster(uuid string, qbck cmn.QueryBcks)
 	if aisCluster, err = m.remoteCluster(uuid); err != nil {
 		return
 	}
-	// TODO: extend backend ListBuckets() API to fully support apc.FltPresent* enum
+	// apc.FltPresentAnywhere hardcoded - see note above
 	bcks, err = api.ListBuckets(aisCluster.bp, remoteQuery, apc.FltPresentAnywhere)
 	if err != nil {
 		_, err = extractErrCode(err)
@@ -386,6 +390,10 @@ func (m *AISBackendProvider) listBucketsCluster(uuid string, qbck cmn.QueryBcks)
 	return bcks, nil
 }
 
+// TODO: remote AIS clusters provide native frontend API with additional capabilities
+// that, in particular, include apc.FltPresent* enum.
+// Here we have to hardcode its value to keep ListBuckets() consistent across _all_ backends.
+// For similar limitations, see also HeadBucket() above.
 func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if !qbck.Ns.IsAnyRemote() {
 		bcks, err = m.listBucketsCluster(qbck.Ns.UUID, qbck)

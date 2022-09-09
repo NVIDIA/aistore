@@ -88,7 +88,7 @@ func TestAuthBck(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tlog.Logf("used token[%s...] to create %s\n", authBP.Token[:16], bck.StringEx())
 
-	p, err := api.HeadBucket(authBP, bck)
+	p, err := api.HeadBucket(authBP, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, p.Provider == apc.ProviderAIS, "expected provider %q, got %q", apc.ProviderAIS, p.Provider)
 

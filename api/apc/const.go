@@ -139,20 +139,28 @@ const (
 	QparamRegex = "regex" // dsort/downloader regex
 
 	// remove existing custom keys and store new custom metadata
-	// (see also: namesake CLI and usage)
+	// NOTE: making an s/_/-/ naming exception because of the namesake CLI usage
 	QparamNewCustom = "set-new-custom"
 
 	QparamHeadObj = "head_obj" // enum { HeadObjAvoidRemote, ... } above
 
 	// Bucket related query params.
-	QparamProvider  = "provider" // backend provider
+	QparamProvider  = "provider" // aka backend provider or, simply, backend
 	QparamNamespace = "namespace"
-	QparamBucketTo  = "bck_to"
-	QparamKeepBckMD = "keep_md"
+	QparamBckTo     = "bck_to"
+	QparamKeepBckMD = "keep_bck_md"
 
-	// See Flt* enum above.
+	// Do not add remote bucket to cluster's BMD e.g. when checking existence
+	// via api.HeadBucket
+	// By default, when existence of a remote buckets is confirmed the bucket's
+	// metadata gets automatically (and transactionally) added to the cluster's BMD.
+	// This query parameter can be used to override the default behavior.
+	QparamDontAddBckMD = "dont_add_remote_bck_md"
+
+	// See FltPresent* enum above.
+	// NOTE: not to confuse "presence" (in a given cluster) with "existence" (anywhere).
 	// See also: ListObjsMsg flags, docs/providers.md (for terminology)
-	QparamFltPresence = "flt_presence"
+	QparamFltPresence = "present_in_cluster"
 
 	// Object related query params.
 	QparamAppendType   = "append_type"
@@ -174,6 +182,10 @@ const (
 	// - we massively write new content into a bucket, and/or
 	// - we simply don't care.
 	QparamSkipVC = "skip_vc"
+
+	// force the operation; allows to overcome certain restrictions (e.g., shutdown primary and the entire cluster)
+	// or errors (e.g., attach invalid mountpath)
+	QparamForce = "frc"
 )
 
 // health
@@ -197,10 +209,6 @@ const (
 	QparamTaskAction       = "tac" // "start", "status", "result"
 	QparamClusterInfo      = "cii" // true: /Health to return cluster info and status
 	QparamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
-
-	// force the operation; allows to overcome certain restrictions (e.g., shutdown primary and the entire cluster)
-	// or errors (e.g., attach invalid mountpath)
-	QparamForce = "frc"
 
 	QparamDontResilver = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
 

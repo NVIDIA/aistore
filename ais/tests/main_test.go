@@ -112,7 +112,7 @@ func TestMain(m *testing.M) {
 	}
 
 	if !cliBck.IsAIS() {
-		exists, err = tutils.BckExists(tutils.GetPrimaryURL(), cliBck)
+		exists, err = tutils.BucketExists(nil, tutils.GetPrimaryURL(), cliBck)
 		if err == nil && !exists {
 			s := "%q not found \n(hint: "
 			s += "check whether %q exists and make sure to build aisnode executable with the corresponding build tag)"

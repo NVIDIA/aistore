@@ -655,7 +655,7 @@ func setupBucket(runParams *params) error {
 	}
 	propsToUpdate := cmn.BucketPropsToUpdate{}
 	// update bucket props if bPropsStr is set
-	oldProps, err := api.HeadBucket(runParams.bp, runParams.bck)
+	oldProps, err := api.HeadBucket(runParams.bp, runParams.bck, true /* don't add */)
 	if err != nil {
 		return fmt.Errorf("failed to read bucket %s properties: %v", runParams.bck, err)
 	}

@@ -139,7 +139,7 @@ func TestDefaultBucketProps(t *testing.T) {
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-	p, err := api.HeadBucket(baseParams, bck)
+	p, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if !p.EC.Enabled {
 		t.Error("EC should be enabled for ais buckets")
@@ -173,7 +173,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 	}
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, propsToSet)
 
-	p, err := api.HeadBucket(baseParams, bck)
+	p, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, propsToSet, p)
 }
@@ -238,7 +238,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 		},
 	}
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	_, err := api.HeadBucket(baseParams, bck)
+	_, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if withObjects {
 		m := ioContext{
@@ -437,13 +437,13 @@ func TestResetBucketProps(t *testing.T) {
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-	defaultProps, err := api.HeadBucket(baseParams, bck)
+	defaultProps, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 	tassert.CheckFatal(t, err)
 
-	p, err := api.HeadBucket(baseParams, bck)
+	p, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	// check that bucket props do get set
@@ -451,7 +451,7 @@ func TestResetBucketProps(t *testing.T) {
 	_, err = api.ResetBucketProps(baseParams, bck)
 	tassert.CheckFatal(t, err)
 
-	p, err = api.HeadBucket(baseParams, bck)
+	p, err = api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	if !p.Equal(defaultProps) {
@@ -546,7 +546,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 
 	m.initWithCleanup()
 
-	p, err := api.HeadBucket(baseParams, m.bck)
+	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	if !p.Versioning.Enabled {
@@ -1189,7 +1189,7 @@ func TestListObjectsPrefix(t *testing.T) {
 
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
-				bckProp, err := api.HeadBucket(baseParams, bck)
+				bckProp, err := api.HeadBucket(baseParams, bck, false /* don't add */)
 				tassert.CheckFatal(t, err)
 				customPage = bckProp.Provider != apc.ProviderAzure
 
@@ -1431,7 +1431,7 @@ func TestBucketSingleProp(t *testing.T) {
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
-	p, err := api.HeadBucket(baseParams, m.bck)
+	p, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if !p.EC.Enabled {
 		t.Error("EC was not enabled")
@@ -1454,7 +1454,7 @@ func TestBucketSingleProp(t *testing.T) {
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
-	p, err = api.HeadBucket(baseParams, m.bck)
+	p, err = api.HeadBucket(baseParams, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if !p.Mirror.Enabled {
 		t.Error("Mirroring was not enabled")
@@ -1484,7 +1484,7 @@ func TestBucketSingleProp(t *testing.T) {
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
-	p, err = api.HeadBucket(baseParams, m.bck)
+	p, err = api.HeadBucket(baseParams, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if p.EC.DataSlices != dataSlices {
 		t.Errorf("Number of data slices was not changed to %d. Current value %d", dataSlices, p.EC.DataSlices)
@@ -1508,7 +1508,7 @@ func TestBucketSingleProp(t *testing.T) {
 	},
 	)
 	tassert.CheckError(t, err)
-	p, err = api.HeadBucket(baseParams, m.bck)
+	p, err = api.HeadBucket(baseParams, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if p.Mirror.Burst != burst {
 		t.Errorf("Mirror burst was not changed to %d. Current value %d", burst, p.Mirror.Burst)
@@ -1643,7 +1643,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		})
 		tassert.CheckFatal(t, err)
 
-		p, err := api.HeadBucket(baseParams, m.bck)
+		p, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, p.Mirror.Copies == 2, "%d copies != 2", p.Mirror.Copies)
 
@@ -1752,7 +1752,7 @@ func TestBucketReadOnly(t *testing.T) {
 	m.puts()
 	m.gets()
 
-	p, err := api.HeadBucket(baseParams, m.bck)
+	p, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	// make bucket read-only
@@ -1799,7 +1799,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
 	m.setNonDefaultBucketProps()
-	srcProps, err := api.HeadBucket(baseParams, srcBck)
+	srcProps, err := api.HeadBucket(baseParams, srcBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	// Rename it
@@ -1820,7 +1820,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	}
 
 	tlog.Logln("checking bucket props...")
-	dstProps, err := api.HeadBucket(baseParams, dstBck)
+	dstProps, err := api.HeadBucket(baseParams, dstBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if !srcProps.Equal(dstProps) {
 		t.Fatalf("source and destination bucket props do not match: %v - %v", srcProps, dstProps)
@@ -1855,7 +1855,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
 	m.setNonDefaultBucketProps()
-	srcProps, err := api.HeadBucket(baseParams, srcBck)
+	srcProps, err := api.HeadBucket(baseParams, srcBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	// Put some files
@@ -1881,7 +1881,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	m.ensureNoGetErrors()
 
 	tlog.Logln("checking bucket props...")
-	dstProps, err := api.HeadBucket(baseParams, dstBck)
+	dstProps, err := api.HeadBucket(baseParams, dstBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if !srcProps.Equal(dstProps) {
 		t.Fatalf("source and destination bucket props do not match: %v - %v", srcProps, dstProps)
@@ -1924,10 +1924,10 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 		t.Error("one of the buckets was not found in buckets list")
 	}
 
-	srcProps, err := api.HeadBucket(baseParams, m.bck)
+	srcProps, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
-	dstProps, err := api.HeadBucket(baseParams, tmpBck)
+	dstProps, err := api.HeadBucket(baseParams, tmpBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	if srcProps.Equal(dstProps) {
@@ -2037,7 +2037,7 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 	for _, srcBck := range srcBcks {
 		_, err := api.RenameBucket(baseParams, srcBck, dstBck)
 		tutils.CheckErrIsNotFound(t, err)
-		_, err = api.HeadBucket(baseParams, dstBck)
+		_, err = api.HeadBucket(baseParams, dstBck, true /* don't add */)
 		tutils.CheckErrIsNotFound(t, err)
 	}
 }
@@ -2065,7 +2065,7 @@ func TestRenameBucketWithBackend(t *testing.T) {
 		}})
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
-	srcProps, err := api.HeadBucket(baseParams, bck)
+	srcProps, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	xactID, err := api.RenameBucket(baseParams, bck, dstBck)
@@ -2079,7 +2079,7 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	tassert.Errorf(t, !exists, "source bucket shouldn't exist")
 
 	tlog.Logln("checking bucket props...")
-	dstProps, err := api.HeadBucket(baseParams, dstBck)
+	dstProps, err := api.HeadBucket(baseParams, dstBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	tassert.Fatalf(
@@ -2226,7 +2226,7 @@ func TestCopyBucket(t *testing.T) {
 				}
 			}
 
-			srcProps, err := api.HeadBucket(baseParams, srcm.bck)
+			srcProps, err := api.HeadBucket(baseParams, srcm.bck, true /* don't add */)
 			tassert.CheckFatal(t, err)
 
 			if test.dstBckHasObjects {
@@ -2273,7 +2273,7 @@ func TestCopyBucket(t *testing.T) {
 				}
 
 				tlog.Logf("checking and comparing bucket %s props\n", dstm.bck)
-				dstProps, err := api.HeadBucket(baseParams, dstm.bck)
+				dstProps, err := api.HeadBucket(baseParams, dstm.bck, true /* don't add */)
 				tassert.CheckFatal(t, err)
 
 				if dstProps.Provider != apc.ProviderAIS {
@@ -2308,9 +2308,9 @@ func TestCopyBucket(t *testing.T) {
 					expectedObjCount += dstm.num
 				}
 
-				_, err := api.HeadBucket(baseParams, srcm.bck)
+				_, err := api.HeadBucket(baseParams, srcm.bck, true /* don't add */)
 				tassert.CheckFatal(t, err)
-				dstmProps, err := api.HeadBucket(baseParams, dstm.bck)
+				dstmProps, err := api.HeadBucket(baseParams, dstm.bck, true /* don't add */)
 				tassert.CheckFatal(t, err)
 
 				msg := &apc.ListObjsMsg{}
@@ -2661,7 +2661,7 @@ func TestBackendBucket(t *testing.T) {
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, aisBck, nil)
 
-	p, err := api.HeadBucket(baseParams, remoteBck)
+	p, err := api.HeadBucket(baseParams, remoteBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	remoteBck.Provider = p.Provider
 
@@ -2684,7 +2684,7 @@ func TestBackendBucket(t *testing.T) {
 	err = tutils.PutObjRR(baseParams, aisBck, remoteObjList.Entries[0].Name, 128, cos.ChecksumNone)
 	tassert.Errorf(t, err == nil, "expected err==nil (put to a BackendBck should be allowed via aisBck)")
 
-	p, err = api.HeadBucket(baseParams, aisBck)
+	p, err = api.HeadBucket(baseParams, aisBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
 		t, p.BackendBck.Equal(&remoteBck),
@@ -2727,7 +2727,7 @@ func TestBackendBucket(t *testing.T) {
 		Access: api.AccessAttrs(aattrs),
 	})
 	tassert.CheckFatal(t, err)
-	p, err = api.HeadBucket(baseParams, aisBck)
+	p, err = api.HeadBucket(baseParams, aisBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, p.BackendBck.IsEmpty(), "backend bucket isn't empty")
 
@@ -2855,7 +2855,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			tassert.CheckFatal(t, err)
 		}
 
-		p, err := api.HeadBucket(baseParams, m.bck)
+		p, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 		tassert.CheckFatal(t, err)
 		if p.Cksum.Type != cksumType {
 			t.Fatalf("failed to set checksum: %q != %q", p.Cksum.Type, cksumType)

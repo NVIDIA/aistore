@@ -56,21 +56,26 @@ func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...
 // HeadBucket returns the properties of a bucket specified by its name.
 // Converts the string type fields returned from the HEAD request to their
 // corresponding counterparts in the cmn.BucketProps struct.
-func HeadBucket(baseParams BaseParams, bck cmn.Bck) (p *cmn.BucketProps, err error) {
+//
+// - `dontAddBckMD`: do not add remote bucket to cluster's BMD.
+// By default, remote buckets are automatically added, pass `true` to override the default.
+func HeadBucket(baseParams BaseParams, bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) {
 	var (
 		q    url.Values
 		resp *wrappedResp
 		path = apc.URLPathBuckets.Join(bck.Name)
 	)
-	baseParams.Method = http.MethodHead
-	q = bck.AddToQuery(q)
+	if dontAddBckMD {
+		q = url.Values{apc.QparamDontAddBckMD: []string{"true"}}
+	}
 
+	baseParams.Method = http.MethodHead
 	reqParams := AllocRp()
 	defer FreeRp(reqParams)
 	{
 		reqParams.BaseParams = baseParams
 		reqParams.Path = path
-		reqParams.Query = q
+		reqParams.Query = bck.AddToQuery(q)
 	}
 	resp, err = reqParams.doResp(nil)
 	if err == nil {
@@ -212,7 +217,7 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckM
 		return
 	}
 	q := fromBck.AddToQuery(nil)
-	_ = toBck.AddUnameToQuery(q, apc.QparamBucketTo)
+	_ = toBck.AddUnameToQuery(q, apc.QparamBckTo)
 	baseParams.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -234,7 +239,7 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 	}
 	baseParams.Method = http.MethodPost
 	q := fromBck.AddToQuery(nil)
-	_ = toBck.AddUnameToQuery(q, apc.QparamBucketTo)
+	_ = toBck.AddUnameToQuery(q, apc.QparamBckTo)
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams
@@ -252,10 +257,11 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 // - keepMD: evict objects but keep bucket metadata
 func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 	var q url.Values
-	baseParams.Method = http.MethodDelete
 	if keepMD {
 		q = url.Values{apc.QparamKeepBckMD: []string{"true"}}
 	}
+
+	baseParams.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = baseParams

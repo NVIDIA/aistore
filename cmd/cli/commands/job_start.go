@@ -504,7 +504,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 	}
 
 	if flagIsSet(c, forceFlag) {
-		warning := "Forcing LRU will evict any bucket ignoring `lru.enabled` property"
+		warning := "forcing LRU will evict any bucket ignoring `lru.enabled` property"
 		if ok := confirm(c, "Would you like to continue?", warning); !ok {
 			return
 		}

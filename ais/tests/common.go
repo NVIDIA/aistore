@@ -201,7 +201,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		return
 	}
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	p, err := api.HeadBucket(baseParams, m.bck)
+	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)
 
 	var ignoreErr bool
@@ -276,7 +276,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	if !m.silent {
 		tlog.Logf("remote PUT %d objects => %s\n", objCnt, m.bck)
 	}
-	p, err := api.HeadBucket(baseParams, m.bck)
+	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)
 
 	for i := 0; i < objCnt; i++ {
@@ -815,7 +815,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 				defer api.DestroyBucket(baseParams, test.bck)
 			}
 
-			p, err := api.HeadBucket(baseParams, test.bck)
+			p, err := api.HeadBucket(baseParams, test.bck, false /* don't add */)
 			tassert.CheckFatal(t, err)
 
 			bck := cluster.CloneBck(&test.bck)

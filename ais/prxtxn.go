@@ -429,7 +429,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (x
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBucketTo)
+	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -530,7 +530,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg, dryRun bool
 		waitmsync = !dryRun
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBucketTo)
+	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -596,7 +596,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (xactID 
 		waitmsync = false
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
-	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBucketTo)
+	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}
@@ -737,7 +737,7 @@ func _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (xactID string, err error) {
 	// begin
 	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
-	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBucketTo)
+	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
 	}

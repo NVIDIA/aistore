@@ -823,10 +823,10 @@ func _bckFromQ(bckName string, query url.Values, dpq *dpq) *cluster.Bck {
 }
 
 func newBckFromQuname(query url.Values, required bool) (*cluster.Bck, error) {
-	uname := query.Get(apc.QparamBucketTo)
+	uname := query.Get(apc.QparamBckTo)
 	if uname == "" {
 		if required {
-			return nil, fmt.Errorf("missing %q query parameter", apc.QparamBucketTo)
+			return nil, fmt.Errorf("missing %q query parameter", apc.QparamBckTo)
 		}
 		return nil, nil
 	}

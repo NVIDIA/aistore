@@ -219,7 +219,7 @@ func TestRProxyInvalidURL(t *testing.T) {
 		if test.doAndCheck {
 			// case 1: bad response on GET followed by a failure to HEAD
 			tassert.DoAndCheckResp(t, client, req, test.statusCode, http.StatusForbidden)
-			_, err = api.HeadBucket(baseParams, hbo.Bck)
+			_, err = api.HeadBucket(baseParams, hbo.Bck, false /* don't add */)
 			tassert.Errorf(t, err != nil, "shouldn't create bucket (%s) for invalid resource URL %q", hbo.Bck, test.url)
 		} else {
 			// case 2: cannot GET but can still do a HEAD (even though ETag is not provided)
@@ -228,7 +228,7 @@ func TestRProxyInvalidURL(t *testing.T) {
 				resp.Body.Close()
 			}
 			tassert.Errorf(t, err != nil, "expecting error executing GET %q", test.url)
-			_, err = api.HeadBucket(baseParams, hbo.Bck)
+			_, err = api.HeadBucket(baseParams, hbo.Bck, false /* don't add */)
 			tassert.CheckError(t, err)
 		}
 

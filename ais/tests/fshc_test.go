@@ -130,7 +130,7 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 
 	switch method {
 	case http.MethodPut:
-		p, err := api.HeadBucket(md.baseParams, md.bck)
+		p, err := api.HeadBucket(md.baseParams, md.bck, true /* don't add */)
 		tassert.CheckFatal(md.t, err)
 		for _, objName := range objList {
 			r, _ := readers.NewRandReader(md.fileSize, p.Cksum.Type)
@@ -276,7 +276,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 	tlog.Logf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
 
-	p, err := api.HeadBucket(baseParams, bck)
+	p, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	for stopTime.After(time.Now()) {

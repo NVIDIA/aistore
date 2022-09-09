@@ -487,7 +487,7 @@ func TestObjProps(t *testing.T) {
 				tassert.CheckFatal(t, fmt.Errorf("unknown type %q", test.bucketType))
 			}
 
-			defaultBckProp, err := api.HeadBucket(baseParams, m.bck)
+			defaultBckProp, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 			tassert.CheckFatal(t, err)
 
 			_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
@@ -518,7 +518,7 @@ func TestObjProps(t *testing.T) {
 				m.gets() // set the access time
 			}
 
-			bckProps, err := api.HeadBucket(baseParams, m.bck)
+			bckProps, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 			tassert.CheckFatal(t, err)
 
 			tlog.Logln("checking object props...")

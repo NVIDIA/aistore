@@ -49,7 +49,7 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 			Name:     prefix + trand.String(8),
 			Provider: apc.ProviderAIS,
 		}
-		_, err := api.HeadBucket(baseParams, bck)
+		_, err := api.HeadBucket(baseParams, bck, true /* don't add to cluster MD */)
 		if err == nil {
 			continue
 		}
@@ -68,20 +68,37 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 	return "", errors.New("error generating bucket name: too many tries gave no result")
 }
 
-func BckExists(proxyURL string, bck cmn.Bck) (bool, error) {
-	baseParams := api.BaseParams{Client: gctx.Client, URL: proxyURL, Token: LoggedUserToken}
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltPresentAnywhere)
-	if err != nil {
-		return false, err
+func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
+	if bck.IsQuery() {
+		if tb != nil {
+			tassert.CheckFatal(tb, fmt.Errorf("expecting a named bucket, got %q", bck))
+		} else {
+			return false, fmt.Errorf("expecting a named bucket, got %q", bck)
+		}
 	}
-	return bcks.Contains(cmn.QueryBcks(bck)), nil
+	baseParams := api.BaseParams{Client: gctx.Client, URL: proxyURL, Token: LoggedUserToken}
+	_, err := api.HeadBucket(baseParams, bck, true /* don't add to cluster MD */)
+	if err == nil {
+		return true, nil
+	}
+
+	errHTTP, ok := err.(*cmn.ErrHTTP)
+	if !ok {
+		err = fmt.Errorf("expected an error of the type *cmn.ErrHTTP, got %v(%T)", err, err)
+		if tb != nil {
+			tassert.CheckFatal(tb, err)
+		} else {
+			return false, err
+		}
+	}
+	return errHTTP.Status == http.StatusNotFound, err
 }
 
 func isRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 	if !bck.IsRemote() {
 		return false
 	}
-	exists, err := BckExists(proxyURL, bck)
+	exists, err := BucketExists(tb, proxyURL, bck)
 	tassert.CheckFatal(tb, err)
 	return exists
 }
@@ -90,7 +107,7 @@ func isCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 	if !bck.IsCloud() {
 		return false
 	}
-	exists, err := BckExists(proxyURL, bck)
+	exists, err := BucketExists(tb, proxyURL, bck)
 	tassert.CheckFatal(tb, err)
 	return exists
 }

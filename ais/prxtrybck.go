@@ -40,10 +40,9 @@ type bckInitArgs struct {
 
 	skipBackend bool // initialize bucket via `bck.InitNoBackend`
 	createAIS   bool // create ais bucket on the fly
-
 	headRemB    bool // handle ErrRemoteBckNotFound to discover _remote_ bucket on the fly (and add to BMD)
 	tryHeadRemB bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemB)
-	exists      bool // true if bucket already exists
+	present     bool // present in the cluster's BMD
 }
 
 ////////////////
@@ -103,7 +102,7 @@ func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, er
 	}
 
 	args.bck = bck
-	args.exists = true
+	args.present = true
 
 	// if permissions are not explicitly specified check the default (msg.Action => permissions)
 	if args.perms == 0 && args.msg != nil {

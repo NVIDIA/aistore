@@ -545,36 +545,36 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Validate ais bucket props are set
-	localProps, err := api.HeadBucket(baseParams, bckLocal)
+	localProps, err := api.HeadBucket(baseParams, bckLocal, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bucketPropsLocal, localProps)
 
 	// Validate cloud bucket props are set
-	cloudProps, err := api.HeadBucket(baseParams, bckRemote)
+	cloudProps, err := api.HeadBucket(baseParams, bckRemote, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bucketPropsRemote, cloudProps)
 
 	// Reset ais bucket props and validate they are reset
 	_, err = api.ResetBucketProps(baseParams, bckLocal)
 	tassert.CheckFatal(t, err)
-	localProps, err = api.HeadBucket(baseParams, bckLocal)
+	localProps, err = api.HeadBucket(baseParams, bckLocal, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, &defLocalProps, localProps)
 
 	// Check if cloud bucket props remain the same
-	cloudProps, err = api.HeadBucket(baseParams, bckRemote)
+	cloudProps, err = api.HeadBucket(baseParams, bckRemote, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bucketPropsRemote, cloudProps)
 
 	// Reset cloud bucket props
 	_, err = api.ResetBucketProps(baseParams, bckRemote)
 	tassert.CheckFatal(t, err)
-	cloudProps, err = api.HeadBucket(baseParams, bckRemote)
+	cloudProps, err = api.HeadBucket(baseParams, bckRemote, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, &defRemoteProps, cloudProps)
 
 	// Check if ais bucket props remain the same
-	localProps, err = api.HeadBucket(baseParams, bckLocal)
+	localProps, err = api.HeadBucket(baseParams, bckLocal, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, &defLocalProps, localProps)
 }
@@ -598,7 +598,7 @@ func Test_coldgetmd5(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	p, err := api.HeadBucket(baseParams, m.bck)
+	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
@@ -668,7 +668,7 @@ func TestHeadBucket(t *testing.T) {
 	_, err := api.SetBucketProps(baseParams, bck, bckPropsToUpdate)
 	tassert.CheckFatal(t, err)
 
-	p, err := api.HeadBucket(baseParams, bck)
+	p, err := api.HeadBucket(baseParams, bck, false /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	validateBucketProps(t, bckPropsToUpdate, p)
@@ -696,7 +696,7 @@ func TestHeadRemoteBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer resetBucketProps(t, proxyURL, bck)
 
-	p, err := api.HeadBucket(baseParams, bck)
+	p, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bckPropsToUpdate, p)
 }
@@ -715,7 +715,7 @@ func TestHeadNonexistentBucket(t *testing.T) {
 		Provider: apc.ProviderAIS,
 	}
 
-	_, err = api.HeadBucket(baseParams, bck)
+	_, err = api.HeadBucket(baseParams, bck, true /* don't add */)
 	if err == nil {
 		t.Fatalf("Expected an error, but go no errors.")
 	}
@@ -754,7 +754,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
 	}
 
-	p, err := api.HeadBucket(baseParams, m.bck)
+	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	_ = mock.NewTarget(mock.NewBaseBownerMock(
@@ -886,7 +886,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	})
 	tassert.CheckFatal(t, err)
 
-	bProps, err := api.HeadBucket(baseParams, m.bck)
+	bProps, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, bProps.Mirror.Enabled, "test property hasn't changed")
 
@@ -902,7 +902,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 		exists := tutils.CheckObjExists(proxyURL, m.bck, objName)
 		tassert.Errorf(t, !exists, "object remains cached: %s", objName)
 	}
-	bProps, err = api.HeadBucket(baseParams, m.bck)
+	bProps, err = api.HeadBucket(baseParams, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 	if keepMD {
 		tassert.Fatalf(t, bProps.Mirror.Enabled, "test property was reset")
@@ -1252,7 +1252,7 @@ func Test_checksum(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck})
 
-	p, err := api.HeadBucket(baseParams, m.bck)
+	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
