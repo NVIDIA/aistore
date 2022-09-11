@@ -389,6 +389,10 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 
 Arguably, extremely few HTTP client-side libraries do _not_ follow [HTTP redirects](https://www.rfc-editor.org/rfc/rfc7231#page-54), and Amazon's [Boto3](https://github.com/boto/boto3) just happens to be one of those (libraries).
 
+For more (and deeper) context, see maybe the following `aws-cli` ticket and discussion at:
+
+* [Support S3 HTTP redirects to non-Amazon URI's](https://github.com/aws/aws-cli/issues/6559)
+
 ## Amazon CLI tools
 
 As far as existing Amazon-native CLI tools, `s3cmd` would be the preferred and recommended option. Please see [`s3cmd` readme](/docs/s3cmd.md) for usage examples and a variety of topics, including:
