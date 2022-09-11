@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -15,10 +15,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// bucket properties
+// bucket properties (compare w/ BucketInfo)
 type (
-	// BucketProps defines the bucket's configuration and include
-	// checksum, version, LRU, and more.
+	// BucketProps defines the bucket's configuration and includes user-configurable
+	// checksum, version, LRU, erasure-coding, and more.
 	//
 	// At creation time, new bucket by default inherits its properties from the global configuration.
 	// * see api.CreateBucket for details

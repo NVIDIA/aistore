@@ -703,13 +703,14 @@ func cliAPIParams(proxyURL string) api.BaseParams {
 // NOTE:
 // 1. By default, AIStore adds remote buckets to the cluster metadata on the fly.
 // Remote bucket that was never accessed before just "shows up" when user performs
-// PUT, GET, SET-PROPS, and a variety of other operations.
+// HEAD, PUT, GET, SET-PROPS, and a variety of other operations.
 // 2. This is done only once (and after confirming the bucket's existence and accessibility)
 // and doesn't require any action from the user.
 // However, when we explicitly do not want this (addition to BMD) to be happening,
 // we override this behavior with `dontAddBckMD` parameter in the api.HeadBucket() call.
-// 3. On the client side, we currently resort to a (hardcoded albeit intuitive) convention
-// that all non-modifying operations specify `dontAddBckMD = true`.
+//
+// 3. On the client side, we currently resort to an intuitive convention
+// that all non-modifying operations (LIST, GET, HEAD) utilize `dontAddBckMD = true`.
 func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) {
 	if p, err = api.HeadBucket(defaultAPIParams, bck, dontAddBckMD); err == nil {
 		return
@@ -1365,4 +1366,19 @@ func parseHexOrUint(s string) (uint64, error) {
 		return strconv.ParseUint(s[len(hexPrefix):], 16, 64)
 	}
 	return strconv.ParseUint(s, 10, 64)
+}
+
+func selectProviders(bcks cmn.Bcks) (sorted []string) {
+	sorted = make([]string, 0, len(apc.Providers))
+	for p := range apc.Providers {
+		for _, bck := range bcks {
+			debug.Assert(cmn.IsNormalizedProvider(bck.Provider))
+			if bck.Provider == p {
+				sorted = append(sorted, p)
+				break
+			}
+		}
+	}
+	sort.Strings(sorted)
+	return
 }

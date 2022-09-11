@@ -1556,10 +1556,11 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if bck.IsAIS() || bckArgs.present {
-		_bpropsToHdr(bck, w.Header())
+	if bckArgs.present {
+		toHdr(bck, w.Header(), true)
 		return
 	}
+
 	cloudProps, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
 	if err != nil {
 		p.writeErr(w, r, err, statusCode)
@@ -1568,7 +1569,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query()
 	if cos.IsParseBool(q.Get(apc.QparamDontAddBckMD)) {
-		_bpropsToHdr(bck, w.Header())
+		toHdr(bck, w.Header(), false)
 		return
 	}
 
@@ -1589,14 +1590,19 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	_bpropsToHdr(bck, w.Header())
+	toHdr(bck, w.Header(), false)
 }
 
-func _bpropsToHdr(bck *cluster.Bck, hdr http.Header) {
+func toHdr(bck *cluster.Bck, hdr http.Header, present bool) {
 	if bck.Props == nil {
 		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: hdr})
+		debug.AssertMsg(!present, bck.String())
 	}
 	hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(bck.Props))
+	if present {
+		// TODO -- FIXME: extend BucketInfo: add size
+		hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(&cmn.BucketInfo{Present: true}))
+	}
 }
 
 func (p *proxy) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {

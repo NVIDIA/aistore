@@ -93,7 +93,7 @@ $(call make-lazy,term-reset)
 all: node cli aisfs authn aisloader ## Build all main binaries
 
 node: ## Build 'aisnode' binary
-	@echo "Building aisnode: build=$(VERSION) providers=$(AIS_BACKEND_PROVIDERS) tags=$(BUILD_TAGS)"
+	@echo "Building aisnode $(VERSION), build tags:$(BUILD_TAGS)"
 ifdef WRD
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif

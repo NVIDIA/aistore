@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -170,7 +169,9 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 	if err != nil {
 		return
 	}
-	printBuckets(c, bcks, !flagIsSet(c, noHeaderFlag), filter)
+	for _, provider := range selectProviders(bcks) {
+		_listBcks(c, provider, bcks, !flagIsSet(c, noHeaderFlag), filter)
+	}
 	return
 }
 
@@ -490,40 +491,34 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 	return bcks[0], bcks[1], nil
 }
 
-func printBuckets(c *cli.Context, bcks cmn.Bcks, showHeaders bool, matches func(cmn.Bck) bool /*bucket filter*/) {
-	providerList := make([]string, 0, len(apc.Providers))
-	for provider := range apc.Providers {
-		providerList = append(providerList, provider)
+func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
+	matches func(cmn.Bck) bool /*bucket filter*/) {
+	filtered := make(cmn.Bcks, 0, len(bcks))
+	for _, bck := range bcks {
+		if bck.Provider == provider && matches(bck) {
+			filtered = append(filtered, bck)
+		}
 	}
-	sort.Strings(providerList)
-	for _, provider := range providerList {
-		qbck := cmn.QueryBcks{Provider: provider}
-		bcks := bcks.Select(qbck)
-		if len(bcks) == 0 {
-			continue
+	if len(filtered) == 0 {
+		return
+	}
+	if showHeaders {
+		dspProvider := provider
+		if provider == apc.ProviderHTTP {
+			dspProvider = "HTTP(S)"
 		}
-		filtered := bcks[:0]
-		for _, bck := range bcks {
-			if matches(bck) {
-				filtered = append(filtered, bck)
-			}
-		}
-		if showHeaders {
-			dspProvider := provider
+		fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(dspProvider), len(filtered))
+	}
+	for _, bck := range filtered {
+		// TODO -- FIXME: rewrite
+		if props, err := headBucket(bck, true /* don't add */); err == nil {
 			if provider == apc.ProviderHTTP {
-				dspProvider = "HTTP(S)"
+				fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
+				continue
 			}
-			fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(dspProvider), len(filtered))
 		}
-		for _, bck := range filtered {
-			if provider == apc.ProviderHTTP {
-				if props, err := api.HeadBucket(defaultAPIParams, bck, false /* don't add */); err == nil {
-					fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
-					continue
-				}
-			}
-			fmt.Fprintf(c.App.Writer, "  %s\n", bck)
-		}
+		// TODO -- FIXME: add cmn.BucketInfo
+		fmt.Fprintf(c.App.Writer, "  %s\n", bck)
 	}
 }
 

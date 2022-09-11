@@ -15,7 +15,8 @@ const (
 	HeaderPrefix = "ais-"
 
 	// Bucket props headers.
-	HdrBucketProps      = HeaderPrefix + "bucket-props"
+	HdrBucketProps      = HeaderPrefix + "bucket-props"       // => cmn.BucketProps
+	HdrBucketInfo       = HeaderPrefix + "bucket-info"        // => cmn.BucketInfo; see also: QparamFltPresence
 	HdrBucketVerEnabled = HeaderPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket.
 	HdrBucketCreated    = HeaderPrefix + "created"            // Bucket creation time.
 	HdrBackendProvider  = HeaderPrefix + "provider"           // ProviderAmazon et al. - see cmn/bck.go.

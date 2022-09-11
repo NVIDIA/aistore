@@ -232,7 +232,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 		cksum    *cos.Cksum
 	)
 	if flagIsSet(c, computeCksumFlag) {
-		bckProps, err := api.HeadBucket(defaultAPIParams, bck, false /* don't add */)
+		bckProps, err := headBucket(bck, false /* don't add */)
 		if err != nil {
 			return err
 		}

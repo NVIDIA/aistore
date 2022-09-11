@@ -53,12 +53,20 @@ func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...
 	return
 }
 
-// HeadBucket returns the properties of a bucket specified by its name.
+// HEAD(bucket): apc.HdrBucketProps => cmn.BucketProps{} and apc.HdrBucketInfo => BucketInfo{}
+//
 // Converts the string type fields returned from the HEAD request to their
 // corresponding counterparts in the cmn.BucketProps struct.
 //
-// - `dontAddBckMD`: do not add remote bucket to cluster's BMD.
-// By default, remote buckets are automatically added, pass `true` to override the default.
+// By default, AIStore adds remote buckets to the cluster metadata on the fly.
+// Remote bucket that was never accessed before just "shows up" when user performs
+// HEAD, PUT, GET, SET-PROPS, and a variety of other operations.
+// This is done only once (and after confirming the bucket's existence and accessibility)
+// and doesn't require any action from the user.
+// Use `dontAddBckMD` to override the default behavior: as the name implies, setting
+// `dontAddBckMD = true` prevents AIS from adding remote bucket to the cluster's metadata.
+//
+// TODO -- FIXME: return cmn.BucketInfo
 func HeadBucket(baseParams BaseParams, bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) {
 	var (
 		q    url.Values
