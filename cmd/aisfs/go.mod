@@ -10,7 +10,7 @@ require (
 	github.com/jacobsa/fuse v0.0.0-20220726073400-226fec2ce902
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.20.0
-	github.com/urfave/cli v1.22.9
+	github.com/urfave/cli v1.22.10
 )
 
 // indirect
