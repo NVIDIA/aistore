@@ -19,72 +19,72 @@ import (
 // (not necessarily distinct)
 // For supported archiving formats, see `cos.ArchExtensions`.
 // NOTE: compare with `api.AppendToArch`
-func CreateArchMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
-	return doListRangeRequest(baseParams, fromBck, apc.ActArchive, msg)
+func CreateArchMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
+	return doListRangeRequest(bp, fromBck, apc.ActArchive, msg)
 }
 
-func CopyMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
-	return doListRangeRequest(baseParams, fromBck, apc.ActCopyObjects, msg)
+func CopyMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
+	return doListRangeRequest(bp, fromBck, apc.ActCopyObjects, msg)
 }
 
-func ETLMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
-	return doListRangeRequest(baseParams, fromBck, apc.ActETLObjects, msg)
+func ETLMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
+	return doListRangeRequest(bp, fromBck, apc.ActETLObjects, msg)
 }
 
 // DeleteList sends request to remove a list of objects from a bucket.
-func DeleteList(baseParams BaseParams, bck cmn.Bck, filesList []string) (string, error) {
+func DeleteList(bp BaseParams, bck cmn.Bck, filesList []string) (string, error) {
 	deleteMsg := cmn.SelectObjsMsg{ObjNames: filesList}
-	return doListRangeRequest(baseParams, bck, apc.ActDeleteObjects, deleteMsg)
+	return doListRangeRequest(bp, bck, apc.ActDeleteObjects, deleteMsg)
 }
 
 // DeleteRange sends request to remove a range of objects from a bucket.
-func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
+func DeleteRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 	deleteMsg := cmn.SelectObjsMsg{Template: rng}
-	return doListRangeRequest(baseParams, bck, apc.ActDeleteObjects, deleteMsg)
+	return doListRangeRequest(bp, bck, apc.ActDeleteObjects, deleteMsg)
 }
 
 // PrefetchList sends request to prefetch a list of objects from a remote bucket.
-func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
+func PrefetchList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	prefetchMsg := cmn.SelectObjsMsg{ObjNames: fileslist}
-	return doListRangeRequest(baseParams, bck, apc.ActPrefetchObjects, prefetchMsg)
+	return doListRangeRequest(bp, bck, apc.ActPrefetchObjects, prefetchMsg)
 }
 
 // PrefetchRange sends request to prefetch a range of objects from a remote bucket.
-func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
+func PrefetchRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 	prefetchMsg := cmn.SelectObjsMsg{Template: rng}
-	return doListRangeRequest(baseParams, bck, apc.ActPrefetchObjects, prefetchMsg)
+	return doListRangeRequest(bp, bck, apc.ActPrefetchObjects, prefetchMsg)
 }
 
 // EvictList sends request to evict a list of objects from a remote bucket.
-func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
+func EvictList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	evictMsg := cmn.SelectObjsMsg{ObjNames: fileslist}
-	return doListRangeRequest(baseParams, bck, apc.ActEvictObjects, evictMsg)
+	return doListRangeRequest(bp, bck, apc.ActEvictObjects, evictMsg)
 }
 
 // EvictRange sends request to evict a range of objects from a remote bucket.
-func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
+func EvictRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 	evictMsg := cmn.SelectObjsMsg{Template: rng}
-	return doListRangeRequest(baseParams, bck, apc.ActEvictObjects, evictMsg)
+	return doListRangeRequest(bp, bck, apc.ActEvictObjects, evictMsg)
 }
 
 // Handles multi-object (delete, prefetch, evict) operations
 // as well as (archive, copy and ETL) transactions
-func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg interface{}) (xactID string, err error) {
+func doListRangeRequest(bp BaseParams, bck cmn.Bck, action string, msg interface{}) (xactID string, err error) {
 	q := bck.AddToQuery(nil)
 	switch action {
 	case apc.ActDeleteObjects, apc.ActEvictObjects:
-		baseParams.Method = http.MethodDelete
+		bp.Method = http.MethodDelete
 	case apc.ActPrefetchObjects, apc.ActCopyObjects, apc.ActETLObjects:
-		baseParams.Method = http.MethodPost
+		bp.Method = http.MethodPost
 	case apc.ActArchive:
-		baseParams.Method = http.MethodPut
+		bp.Method = http.MethodPut
 	default:
 		err = fmt.Errorf("invalid action %q", action)
 		return
 	}
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: action, Value: msg})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}

@@ -1543,12 +1543,14 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false /*dpq*/)
+	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
 	defer apiReqFree(apireq)
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD, dpq: apireq.dpq, query: apireq.query}
+
+	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD,
+		dpq: apireq.dpq, query: apireq.query}
 	bckArgs.createAIS = false
 	bckArgs.headRemB = shouldHeadRemB()
 	bck, err := bckArgs.initAndTry(apireq.bck.Name)
@@ -1556,8 +1558,10 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hdr := w.Header()
+	getInfo := cos.IsParseBool(apireq.dpq.getInfo)
 	if bckArgs.present {
-		toHdr(bck, w.Header(), true)
+		toHdr(bck, hdr, true, getInfo)
 		return
 	}
 
@@ -1567,9 +1571,8 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := r.URL.Query()
-	if cos.IsParseBool(q.Get(apc.QparamDontAddBckMD)) {
-		toHdr(bck, w.Header(), false)
+	if cos.IsParseBool(apireq.dpq.dontAddMD) {
+		toHdr(bck, hdr, false, getInfo)
 		return
 	}
 
@@ -1590,18 +1593,18 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	toHdr(bck, w.Header(), false)
+	toHdr(bck, hdr, false, getInfo)
 }
 
-func toHdr(bck *cluster.Bck, hdr http.Header, present bool) {
+func toHdr(bck *cluster.Bck, hdr http.Header, present, getInfo bool) {
 	if bck.Props == nil {
 		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: hdr})
 		debug.AssertMsg(!present, bck.String())
 	}
 	hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(bck.Props))
-	if present {
-		// TODO -- FIXME: extend BucketInfo: add size
-		hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(&cmn.BucketInfo{Present: true}))
+	if getInfo {
+		// TODO -- FIXME: add size
+		hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(&cmn.BucketInfo{Present: present}))
 	}
 }
 

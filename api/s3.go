@@ -14,7 +14,7 @@ import (
 )
 
 // s3/<bucket-name>/<object-name>
-func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options ...GetObjectInput) (int64, error) {
+func GetObjectS3(bp BaseParams, bck cmn.Bck, objectName string, options ...GetObjectInput) (int64, error) {
 	var (
 		q   url.Values
 		hdr http.Header
@@ -24,10 +24,10 @@ func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options 
 		w, q, hdr = getObjectOptParams(options[0])
 	}
 	q = bck.AddToQuery(q)
-	baseParams.Method = http.MethodGet
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathS3.Join(bck.Name, objectName)
 		reqParams.Query = q
 		reqParams.Header = hdr

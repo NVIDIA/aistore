@@ -142,7 +142,7 @@ func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 
 // HeadObject returns the object properties; can be conventionally used to establish
 // local (in cluster) presence.
-func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
+func HeadObject(bp BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
 	var (
 		q             url.Values
 		checkIsCached bool
@@ -150,7 +150,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	if len(checkExists) > 0 {
 		checkIsCached = checkExists[0]
 	}
-	baseParams.Method = http.MethodHead
+	bp.Method = http.MethodHead
 
 	if checkIsCached {
 		q = make(url.Values, 4)
@@ -164,7 +164,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	reqParams := AllocRp()
 	defer FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = q
 	}
@@ -200,7 +200,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 // By default, adds new or updates existing custom keys.
 // Use `setNewCustomMDFlag` to _replace_ all existing keys with the specified (new) ones.
 // See also: HeadObject() and apc.HdrObjCustomMD
-func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, custom cos.SimpleKVs, setNew bool) error {
+func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, object string, custom cos.SimpleKVs, setNew bool) error {
 	var (
 		actMsg = apc.ActionMsg{Value: custom}
 		q      url.Values
@@ -212,10 +212,10 @@ func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, cus
 	} else {
 		q = bck.AddToQuery(q)
 	}
-	baseParams.Method = http.MethodPatch
+	bp.Method = http.MethodPatch
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Body = cos.MustMarshal(actMsg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
@@ -227,11 +227,11 @@ func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, cus
 }
 
 // DeleteObject deletes an object specified by bucket/object.
-func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
-	baseParams.Method = http.MethodDelete
+func DeleteObject(bp BaseParams, bck cmn.Bck, object string) error {
+	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = bck.AddToQuery(nil)
 	}
@@ -241,12 +241,12 @@ func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 }
 
 // EvictObject evicts an object specified by bucket/object.
-func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
-	baseParams.Method = http.MethodDelete
+func EvictObject(bp BaseParams, bck cmn.Bck, object string) error {
+	bp.Method = http.MethodDelete
 	actMsg := apc.ActionMsg{Action: apc.ActEvictObjects, Name: cos.JoinWords(bck.Name, object)}
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Body = cos.MustMarshal(actMsg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
@@ -264,7 +264,7 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 // `GetObjectInput.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
+func GetObject(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w   = io.Discard
 		q   url.Values
@@ -273,10 +273,10 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 	if len(options) != 0 {
 		w, q, hdr = getObjectOptParams(options[0])
 	}
-	baseParams.Method = http.MethodGet
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = bck.AddToQuery(q)
 		reqParams.Header = hdr
@@ -291,7 +291,7 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 
 // GetObjectReader returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
-func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser, err error) {
+func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser, err error) {
 	var (
 		q   url.Values
 		hdr http.Header
@@ -302,10 +302,10 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 		cos.Assert(w == nil)
 	}
 	q = bck.AddToQuery(q)
-	baseParams.Method = http.MethodGet
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = q
 		reqParams.Header = hdr
@@ -325,7 +325,7 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 //
 // Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
 // are different.
-func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
+func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w   = io.Discard
 		q   url.Values
@@ -334,11 +334,11 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 	if len(options) != 0 {
 		w, q, hdr = getObjectOptParams(options[0])
 	}
-	baseParams.Method = http.MethodGet
+	bp.Method = http.MethodGet
 
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = bck.AddToQuery(q)
 		reqParams.Header = hdr
@@ -363,7 +363,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 // `GetObjectInput.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (*http.Response,
+func GetObjectWithResp(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (*http.Response,
 	int64, error) {
 	var (
 		q   url.Values
@@ -374,10 +374,10 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 		w, q, hdr = getObjectOptParams(options[0])
 	}
 	q = bck.AddToQuery(q)
-	baseParams.Method = http.MethodGet
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = q
 		reqParams.Header = hdr
@@ -502,11 +502,11 @@ func FlushObject(args FlushArgs) error {
 
 // RenameObject renames object name from `oldName` to `newName`. Works only
 // across single, specified bucket.
-func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) error {
-	baseParams.Method = http.MethodPost
+func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
+	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, oldName)
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActRenameObject, Name: newName})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}

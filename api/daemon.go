@@ -32,11 +32,11 @@ type GetLogInput struct {
 }
 
 // GetMountpaths given the direct public URL of the target, returns the target's mountpaths or error.
-func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *apc.MountpathList, err error) {
-	baseParams.Method = http.MethodGet
+func GetMountpaths(bp BaseParams, node *cluster.Snode) (mpl *apc.MountpathList, err error) {
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatMountpaths}}
 		reqParams.Header = http.Header{
@@ -50,11 +50,11 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *apc.Mountpa
 }
 
 // TODO: rewrite tests that come here with `force`
-func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, force bool) error {
-	baseParams.Method = http.MethodPut
+func AttachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, force bool) error {
+	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathAttach, Value: mountpath})
 		reqParams.Header = http.Header{
@@ -69,11 +69,11 @@ func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	return err
 }
 
-func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
-	baseParams.Method = http.MethodPost
+func EnableMountpath(bp BaseParams, node *cluster.Snode, mountpath string) error {
+	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathEnable, Value: mountpath})
 		reqParams.Header = http.Header{
@@ -87,15 +87,15 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	return err
 }
 
-func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
+func DetachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
 	var q url.Values
 	if dontResilver {
 		q = url.Values{apc.QparamDontResilver: []string{"true"}}
 	}
-	baseParams.Method = http.MethodDelete
+	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathDetach, Value: mountpath})
 		reqParams.Header = http.Header{
@@ -109,15 +109,15 @@ func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	return err
 }
 
-func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
+func DisableMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
 	var q url.Values
 	if dontResilver {
 		q = url.Values{apc.QparamDontResilver: []string{"true"}}
 	}
-	baseParams.Method = http.MethodPost
+	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.Mountpaths)
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathDisable, Value: mountpath})
 		reqParams.Header = http.Header{
@@ -132,11 +132,11 @@ func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath stri
 }
 
 // GetDaemonConfig returns the configuration of a specific daemon in a cluster.
-func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Config, err error) {
-	baseParams.Method = http.MethodGet
+func GetDaemonConfig(bp BaseParams, node *cluster.Snode) (config *cmn.Config, err error) {
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatConfig}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
@@ -154,11 +154,11 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 	return config, nil
 }
 
-func GetDaemonStats(baseParams BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, err error) {
-	baseParams.Method = http.MethodGet
+func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, err error) {
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStats}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
@@ -169,17 +169,17 @@ func GetDaemonStats(baseParams BaseParams, node *cluster.Snode) (ds *stats.Daemo
 }
 
 // GetDaemonLog returns log of a specific daemon in a cluster.
-func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) error {
+func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) error {
 	w := args.Writer
 	q := url.Values{}
 	q.Set(apc.QparamWhat, apc.GetWhatLog)
 	if args.Severity != "" {
 		q.Set(apc.QparamSev, args.Severity)
 	}
-	baseParams.Method = http.MethodGet
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.S
 		reqParams.Query = q
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
@@ -190,11 +190,11 @@ func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) 
 }
 
 // GetDaemonStatus returns information about specific node in a cluster.
-func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonStatus, err error) {
-	baseParams.Method = http.MethodGet
+func GetDaemonStatus(bp BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonStatus, err error) {
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatDaemonStatus}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
@@ -215,8 +215,8 @@ func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats
 }
 
 // SetDaemonConfig, given key value pairs, sets the configuration accordingly for a specific node.
-func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs, transient ...bool) error {
-	baseParams.Method = http.MethodPut
+func SetDaemonConfig(bp BaseParams, nodeID string, nvs cos.SimpleKVs, transient ...bool) error {
+	bp.Method = http.MethodPut
 	query := url.Values{}
 	for key, val := range nvs {
 		query.Add(key, val)
@@ -226,7 +226,7 @@ func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs, tr
 	}
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.Join(apc.ActSetConfig)
 		reqParams.Query = query
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{nodeID}}
@@ -237,11 +237,11 @@ func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs, tr
 }
 
 // ResetDaemonConfig resets the configuration for a specific node to the cluster configuration.
-func ResetDaemonConfig(baseParams BaseParams, nodeID string) error {
-	baseParams.Method = http.MethodPut
+func ResetDaemonConfig(bp BaseParams, nodeID string) error {
+	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDaemon.S
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActResetConfig})
 		reqParams.Header = http.Header{

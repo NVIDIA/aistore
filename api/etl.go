@@ -18,11 +18,11 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func ETLInit(baseParams BaseParams, msg etl.InitMsg) (id string, err error) {
-	baseParams.Method = http.MethodPut
+func ETLInit(bp BaseParams, msg etl.InitMsg) (id string, err error) {
+	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathETL.S
 		reqParams.Body = cos.MustMarshal(msg)
 	}
@@ -31,11 +31,11 @@ func ETLInit(baseParams BaseParams, msg etl.InitMsg) (id string, err error) {
 	return id, err
 }
 
-func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
-	baseParams.Method = http.MethodGet
+func ETLList(bp BaseParams) (list []etl.Info, err error) {
+	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathETL.S
 	}
 	err = reqParams.DoHTTPReqResp(&list)
@@ -43,8 +43,8 @@ func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	return list, err
 }
 
-func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg, err error) {
-	baseParams.Method = http.MethodGet
+func ETLLogs(bp BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg, err error) {
+	bp.Method = http.MethodGet
 	var path string
 	if len(targetID) > 0 && targetID[0] != "" {
 		path = apc.URLPathETL.Join(id, apc.ETLLogs, targetID[0])
@@ -53,7 +53,7 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 	}
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
 	err = reqParams.DoHTTPReqResp(&logs)
@@ -74,12 +74,12 @@ func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err err
 	return healths, err
 }
 
-func ETLDelete(baseParams BaseParams, id string) (err error) {
-	baseParams.Method = http.MethodDelete
+func ETLDelete(bp BaseParams, id string) (err error) {
+	bp.Method = http.MethodDelete
 	path := apc.URLPathETL.Join(id)
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
 	err = reqParams.DoHTTPRequest()
@@ -128,19 +128,19 @@ func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error
 	return
 }
 
-func ETLStop(baseParams BaseParams, id string) (err error) {
-	return etlPostAction(baseParams, id, apc.ETLStop)
+func ETLStop(bp BaseParams, id string) (err error) {
+	return etlPostAction(bp, id, apc.ETLStop)
 }
 
-func ETLStart(baseParams BaseParams, id string) (err error) {
-	return etlPostAction(baseParams, id, apc.ETLStart)
+func ETLStart(bp BaseParams, id string) (err error) {
+	return etlPostAction(bp, id, apc.ETLStart)
 }
 
-func etlPostAction(baseParams BaseParams, id, action string) (err error) {
-	baseParams.Method = http.MethodPost
+func etlPostAction(bp BaseParams, id, action string) (err error) {
+	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathETL.Join(id, action)
 	}
 	err = reqParams.DoHTTPRequest()
@@ -149,24 +149,24 @@ func etlPostAction(baseParams BaseParams, id, action string) (err error) {
 }
 
 // TODO: add ETL-specific query param and change the examples/docs (!4455)
-func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {
-	_, err = GetObject(baseParams, bck, objName, GetObjectInput{
+func ETLObject(bp BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {
+	_, err = GetObject(bp, bck, objName, GetObjectInput{
 		Writer: w,
 		Query:  url.Values{apc.QparamUUID: []string{id}},
 	})
 	return
 }
 
-func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg) (xactID string, err error) {
+func ETLBucket(bp BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg) (xactID string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
 	}
-	baseParams.Method = http.MethodPost
+	bp.Method = http.MethodPost
 	q := fromBck.AddToQuery(nil)
 	_ = toBck.AddUnameToQuery(q, apc.QparamBckTo)
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(fromBck.Name)
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActETLBck, Value: bckMsg})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}

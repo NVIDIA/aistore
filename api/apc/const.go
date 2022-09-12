@@ -157,6 +157,9 @@ const (
 	// This query parameter can be used to override the default behavior.
 	QparamDontAddBckMD = "dont_add_remote_bck_md"
 
+	// HEAD(bucket)+
+	QparamGetBckInfo = "get_bck_info"
+
 	// See FltPresent* enum above.
 	// NOTE: not to confuse "presence" (in a given cluster) with "existence" (anywhere).
 	// See also: ListObjsMsg flags, docs/providers.md (for terminology)

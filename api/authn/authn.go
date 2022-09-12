@@ -16,16 +16,16 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func AddUser(baseParams api.BaseParams, newUser *User) error {
+func AddUser(bp api.BaseParams, newUser *User) error {
 	msg, err := jsoniter.Marshal(newUser)
 	if err != nil {
 		return err
 	}
-	baseParams.Method = http.MethodPost
+	bp.Method = http.MethodPost
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathUsers.S
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
@@ -33,13 +33,13 @@ func AddUser(baseParams api.BaseParams, newUser *User) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UpdateUser(baseParams api.BaseParams, user *User) error {
+func UpdateUser(bp api.BaseParams, user *User) error {
 	msg := cos.MustMarshal(user)
-	baseParams.Method = http.MethodPut
+	bp.Method = http.MethodPut
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathUsers.Join(user.ID)
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
@@ -47,12 +47,12 @@ func UpdateUser(baseParams api.BaseParams, user *User) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func DeleteUser(baseParams api.BaseParams, userID string) error {
-	baseParams.Method = http.MethodDelete
+func DeleteUser(bp api.BaseParams, userID string) error {
+	bp.Method = http.MethodDelete
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathUsers.Join(userID)
 	}
 	return reqParams.DoHTTPRequest()
@@ -61,13 +61,13 @@ func DeleteUser(baseParams api.BaseParams, userID string) error {
 // Authorize a user and return a user token in case of success.
 // The token expires in `expire` time. If `expire` is `nil` the expiration
 // time is set by AuthN (default AuthN expiration time is 24 hours)
-func LoginUser(baseParams api.BaseParams, userID, pass, clusterID string, expire *time.Duration) (token *TokenMsg, err error) {
-	baseParams.Method = http.MethodPost
+func LoginUser(bp api.BaseParams, userID, pass, clusterID string, expire *time.Duration) (token *TokenMsg, err error) {
+	bp.Method = http.MethodPost
 	rec := LoginMsg{Password: pass, ExpiresIn: expire, ClusterID: clusterID}
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathUsers.Join(userID)
 		reqParams.Body = cos.MustMarshal(rec)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
@@ -83,13 +83,13 @@ func LoginUser(baseParams api.BaseParams, userID, pass, clusterID string, expire
 	return token, nil
 }
 
-func RegisterCluster(baseParams api.BaseParams, cluSpec CluACL) error {
+func RegisterCluster(bp api.BaseParams, cluSpec CluACL) error {
 	msg := cos.MustMarshal(cluSpec)
-	baseParams.Method = http.MethodPost
+	bp.Method = http.MethodPost
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClusters.S
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
@@ -97,13 +97,13 @@ func RegisterCluster(baseParams api.BaseParams, cluSpec CluACL) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UpdateCluster(baseParams api.BaseParams, cluSpec CluACL) error {
+func UpdateCluster(bp api.BaseParams, cluSpec CluACL) error {
 	msg := cos.MustMarshal(cluSpec)
-	baseParams.Method = http.MethodPut
+	bp.Method = http.MethodPut
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClusters.Join(cluSpec.ID)
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
@@ -111,19 +111,19 @@ func UpdateCluster(baseParams api.BaseParams, cluSpec CluACL) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UnregisterCluster(baseParams api.BaseParams, spec CluACL) error {
-	baseParams.Method = http.MethodDelete
+func UnregisterCluster(bp api.BaseParams, spec CluACL) error {
+	bp.Method = http.MethodDelete
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClusters.Join(spec.ID)
 	}
 	return reqParams.DoHTTPRequest()
 }
 
-func GetRegisteredClusters(baseParams api.BaseParams, spec CluACL) ([]*CluACL, error) {
-	baseParams.Method = http.MethodGet
+func GetRegisteredClusters(bp api.BaseParams, spec CluACL) ([]*CluACL, error) {
+	bp.Method = http.MethodGet
 	path := apc.URLPathClusters.S
 	if spec.ID != "" {
 		path = cos.JoinWords(path, spec.ID)
@@ -132,7 +132,7 @@ func GetRegisteredClusters(baseParams api.BaseParams, spec CluACL) ([]*CluACL, e
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
 	err := reqParams.DoHTTPReqResp(clusters)
@@ -146,30 +146,30 @@ func GetRegisteredClusters(baseParams api.BaseParams, spec CluACL) ([]*CluACL, e
 	return rec, err
 }
 
-func GetRole(baseParams api.BaseParams, roleID string) (*Role, error) {
+func GetRole(bp api.BaseParams, roleID string) (*Role, error) {
 	if roleID == "" {
 		return nil, errors.New("missing role ID")
 	}
 	rInfo := &Role{}
-	baseParams.Method = http.MethodGet
+	bp.Method = http.MethodGet
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = cos.JoinWords(apc.URLPathRoles.S, roleID)
 	}
 	err := reqParams.DoHTTPReqResp(&rInfo)
 	return rInfo, err
 }
 
-func GetAllRoles(baseParams api.BaseParams) ([]*Role, error) {
-	baseParams.Method = http.MethodGet
+func GetAllRoles(bp api.BaseParams) ([]*Role, error) {
+	bp.Method = http.MethodGet
 	path := apc.URLPathRoles.S
 	roles := make([]*Role, 0)
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
 	err := reqParams.DoHTTPReqResp(&roles)
@@ -179,13 +179,13 @@ func GetAllRoles(baseParams api.BaseParams) ([]*Role, error) {
 	return roles, err
 }
 
-func GetAllUsers(baseParams api.BaseParams) ([]*User, error) {
-	baseParams.Method = http.MethodGet
+func GetAllUsers(bp api.BaseParams) ([]*User, error) {
+	bp.Method = http.MethodGet
 	users := make(map[string]*User, 4)
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathUsers.S
 	}
 	err := reqParams.DoHTTPReqResp(&users)
@@ -201,29 +201,29 @@ func GetAllUsers(baseParams api.BaseParams) ([]*User, error) {
 	return list, err
 }
 
-func GetUser(baseParams api.BaseParams, userID string) (*User, error) {
+func GetUser(bp api.BaseParams, userID string) (*User, error) {
 	if userID == "" {
 		return nil, errors.New("missing user ID")
 	}
 	uInfo := &User{}
-	baseParams.Method = http.MethodGet
+	bp.Method = http.MethodGet
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = cos.JoinWords(apc.URLPathUsers.S, userID)
 	}
 	err := reqParams.DoHTTPReqResp(&uInfo)
 	return uInfo, err
 }
 
-func AddRole(baseParams api.BaseParams, roleSpec *Role) error {
+func AddRole(bp api.BaseParams, roleSpec *Role) error {
 	msg := cos.MustMarshal(roleSpec)
-	baseParams.Method = http.MethodPost
+	bp.Method = http.MethodPost
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathRoles.S
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
@@ -231,13 +231,13 @@ func AddRole(baseParams api.BaseParams, roleSpec *Role) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func UpdateRole(baseParams api.BaseParams, roleSpec *Role) error {
+func UpdateRole(bp api.BaseParams, roleSpec *Role) error {
 	msg := cos.MustMarshal(roleSpec)
-	baseParams.Method = http.MethodPut
+	bp.Method = http.MethodPut
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathRoles.Join(roleSpec.ID)
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
@@ -245,51 +245,51 @@ func UpdateRole(baseParams api.BaseParams, roleSpec *Role) error {
 	return reqParams.DoHTTPRequest()
 }
 
-func DeleteRole(baseParams api.BaseParams, role string) error {
-	baseParams.Method = http.MethodDelete
+func DeleteRole(bp api.BaseParams, role string) error {
+	bp.Method = http.MethodDelete
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathRoles.Join(role)
 	}
 	return reqParams.DoHTTPRequest()
 }
 
-func RevokeToken(baseParams api.BaseParams, token string) error {
-	baseParams.Method = http.MethodDelete
+func RevokeToken(bp api.BaseParams, token string) error {
+	bp.Method = http.MethodDelete
 	msg := &TokenMsg{Token: token}
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
 		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathTokens.S
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoHTTPRequest()
 }
 
-func GetConfig(baseParams api.BaseParams) (*Config, error) {
+func GetConfig(bp api.BaseParams) (*Config, error) {
 	conf := &Config{}
-	baseParams.Method = http.MethodGet
+	bp.Method = http.MethodGet
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathDae.S
 	}
 	err := reqParams.DoHTTPReqResp(&conf)
 	return conf, err
 }
 
-func SetConfig(baseParams api.BaseParams, conf *ConfigToUpdate) error {
-	baseParams.Method = http.MethodPut
+func SetConfig(bp api.BaseParams, conf *ConfigToUpdate) error {
+	bp.Method = http.MethodPut
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
 		reqParams.Body = cos.MustMarshal(conf)
-		reqParams.BaseParams = baseParams
+		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathDae.S
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
