@@ -79,9 +79,9 @@ func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh 
 	return err
 }
 
-func CheckObjExists(proxyURL string, bck cmn.Bck, objName string) bool {
+func CheckObjIsPresent(proxyURL string, bck cmn.Bck, objName string) bool {
 	baseParams := BaseAPIParams(proxyURL)
-	_, err := api.HeadObject(baseParams, bck, objName, true /*checkExists*/)
+	_, err := api.HeadObject(baseParams, bck, objName, apc.FltPresent)
 	return err == nil
 }
 
@@ -170,7 +170,7 @@ func CreateBucketWithCleanup(tb testing.TB, proxyURL string, bck cmn.Bck, props 
 
 func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	baseParams := BaseAPIParams(proxyURL)
-	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bck), apc.FltPresentAnywhere)
+	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bck), apc.FltExists)
 	tassert.CheckFatal(tb, err)
 	if exists {
 		err = api.DestroyBucket(baseParams, bck)
@@ -439,7 +439,7 @@ func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
 	for _, s := range smap.Tmap {
 		for {
 			baseParams := BaseAPIParams(s.URL(cmn.NetPublic))
-			bucketExists, err := api.QueryBuckets(baseParams, query, apc.FltPresentAnywhere)
+			bucketExists, err := api.QueryBuckets(baseParams, query, apc.FltExists)
 			if err != nil {
 				return err
 			}

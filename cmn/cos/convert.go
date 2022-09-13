@@ -18,7 +18,7 @@ func IsParseBool(s string) bool {
 	return yes
 }
 
-func IsParseInt(s string, expected int) bool {
+func EqParseInt(s string, expected int) bool {
 	i, err := strconv.ParseInt(s, 10, 64)
 	_ = err // error means false
 	return expected == int(i)

@@ -89,7 +89,7 @@ func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
 	return
 }
 
-func (m *BMD) Check(bck *Bck, bckID uint64) error {
+func (m *BMD) eqBID(bck *Bck, bckID uint64) error {
 	debug.Assert(bckID != 0)
 	bprops, present := m.Get(bck)
 	if !present {

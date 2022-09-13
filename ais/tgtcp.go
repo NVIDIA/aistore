@@ -1012,7 +1012,7 @@ func (t *target) enable() error {
 func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	q := lom.Bck().AddToQuery(nil)
 	q.Set(apc.QparamSilent, "true")
-	q.Set(apc.QparamHeadObj, strconv.Itoa(apc.HeadObjAvoidRemote))
+	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent))
 	cargs := allocCargs()
 	{
 		cargs.si = tsi
@@ -1041,7 +1041,7 @@ func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	q := lom.Bck().AddToQuery(nil)
 	q.Set(apc.QparamSilent, "true")
 	// lookup across all mountpaths and copy (ie., restore) if misplaced
-	q.Set(apc.QparamHeadObj, strconv.Itoa(apc.HeadObjAvoidRemoteCheckAllMps))
+	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresentAnywhere))
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,

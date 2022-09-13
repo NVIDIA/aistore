@@ -175,6 +175,37 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 	return
 }
 
+func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
+	matches func(cmn.Bck) bool /*bucket filter*/) {
+	filtered := make(cmn.Bcks, 0, len(bcks))
+	for _, bck := range bcks {
+		if bck.Provider == provider && matches(bck) {
+			filtered = append(filtered, bck)
+		}
+	}
+	if len(filtered) == 0 {
+		return
+	}
+	if showHeaders {
+		dspProvider := provider
+		if provider == apc.ProviderHTTP {
+			dspProvider = "HTTP(S)"
+		}
+		fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(dspProvider), len(filtered))
+	}
+	for _, bck := range filtered {
+		// TODO -- FIXME: rewrite
+		if provider == apc.ProviderHTTP {
+			if props, err := headBucket(bck, true /* don't add */); err == nil {
+				fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
+			}
+			continue
+		}
+		// TODO -- FIXME: add cmn.BucketInfo
+		fmt.Fprintf(c.App.Writer, "  %s\n", bck)
+	}
+}
+
 // TODO: too many `flagIsSet` calls - refactor (archive | ... )
 func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
 	var (
@@ -489,37 +520,6 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 		bcks = append(bcks, bck)
 	}
 	return bcks[0], bcks[1], nil
-}
-
-func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
-	matches func(cmn.Bck) bool /*bucket filter*/) {
-	filtered := make(cmn.Bcks, 0, len(bcks))
-	for _, bck := range bcks {
-		if bck.Provider == provider && matches(bck) {
-			filtered = append(filtered, bck)
-		}
-	}
-	if len(filtered) == 0 {
-		return
-	}
-	if showHeaders {
-		dspProvider := provider
-		if provider == apc.ProviderHTTP {
-			dspProvider = "HTTP(S)"
-		}
-		fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(dspProvider), len(filtered))
-	}
-	for _, bck := range filtered {
-		// TODO -- FIXME: rewrite
-		if props, err := headBucket(bck, true /* don't add */); err == nil {
-			if provider == apc.ProviderHTTP {
-				fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
-				continue
-			}
-		}
-		// TODO -- FIXME: add cmn.BucketInfo
-		fmt.Fprintf(c.App.Writer, "  %s\n", bck)
-	}
 }
 
 func buildOutputTemplate(props string, showHeaders bool) string {

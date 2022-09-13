@@ -1223,18 +1223,18 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
 // so it must be done by the caller (if necessary).
 func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
 	var (
-		mustBeLocal    int
 		invalidHandler = t.writeErr
 		hdr            = w.Header()
 		silent         = cos.IsParseBool(query.Get(apc.QparamSilent))
+		fltPresence    int
 		exists         = true
 		hasEC          bool
 	)
 	if silent {
 		invalidHandler = t.writeErrSilent
 	}
-	if tmp := query.Get(apc.QparamHeadObj); tmp != "" {
-		mustBeLocal, _ = strconv.Atoi(tmp)
+	if tmp := query.Get(apc.QparamFltPresence); tmp != "" {
+		fltPresence, _ = strconv.Atoi(tmp)
 	}
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		invalidHandler(w, r, err)
@@ -1242,7 +1242,12 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	}
 	err := lom.Load(true /*cache it*/, false /*locked*/)
 	if err == nil {
-		if mustBeLocal > 0 {
+		if fltPresence == apc.FltPresentOmitProps {
+			return
+		}
+		if fltPresence == apc.FltExistsOutside {
+			err := fmt.Errorf("%s is present (flt %d=\"outside\")", lom.FullName(), fltPresence)
+			invalidHandler(w, r, err)
 			return
 		}
 	} else {
@@ -1251,33 +1256,24 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 			return
 		}
 		exists = false
-		if (mustBeLocal == apc.HeadObjAvoidRemote && lom.HasCopies()) ||
-			mustBeLocal == apc.HeadObjAvoidRemoteCheckAllMps {
+		if fltPresence == apc.FltPresentAnywhere {
 			exists = lom.RestoreToLocation()
 		}
 	}
-	if !exists && (mustBeLocal > 0 || lom.Bck().IsAIS()) {
-		err := cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
-		invalidHandler(w, r, err, http.StatusNotFound)
-		return
+
+	if !exists {
+		if bck.IsAIS() || (fltPresence != apc.FltExists && fltPresence != apc.FltExistsOutside) {
+			err := cmn.NewErrNotFound("%s: object %s", t, lom.FullName())
+			invalidHandler(w, r, err, http.StatusNotFound)
+			return
+		}
 	}
 
 	// props
 	op := cmn.ObjectProps{Name: lom.ObjName, Bck: *lom.Bucket(), Present: exists}
-	if lom.Bck().IsAIS() {
-		op.ObjAttrs = *lom.ObjAttrs()
-	} else if exists {
-		op.ObjAttrs = *lom.ObjAttrs()
-	} else {
-		// cold HEAD
-		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
-		if err != nil {
-			invalidHandler(w, r, cmn.NewErrFailedTo(t, "HEAD", lom, err), errCode)
-			return
-		}
-		op.ObjAttrs = *objAttrs
-	}
 	if exists {
+		op.ObjAttrs = *lom.ObjAttrs()
+
 		op.DaemonID = t.Snode().ID()
 		op.Mirror.Copies = lom.NumCopies()
 		if lom.HasCopies() {
@@ -1305,6 +1301,15 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 				op.EC.Generation = md.Generation
 			}
 		}
+	} else {
+		// cold HEAD
+		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
+		if err != nil {
+			invalidHandler(w, r, cmn.NewErrFailedTo(t, "HEAD", lom, err), errCode)
+			return
+		}
+		op.ObjAttrs = *objAttrs
+		op.ObjAttrs.Atime = 0
 	}
 
 	// to header
@@ -1317,7 +1322,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		if !hasEC && strings.HasPrefix(tag, "ec.") {
 			return nil, false
 		}
-		// NOTE: op.ObjAttrs are already added via cmn.ToHeader
+		// NOTE: op.ObjAttrs were already added via cmn.ToHeader
 		if tag[0] == '.' {
 			return nil, false
 		}

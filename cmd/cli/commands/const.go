@@ -409,7 +409,7 @@ var (
 	// other cases, "present" will sound more appropriate (and devoid of any implied evict-ability).
 	// Implementation-wise, the two terms are identical, and we therefore provide both options
 	// for usability.
-	// See also: apc.FltPresent* enum.
+	// See also: apc.Flt* enum.
 	checkCachedFlag = cli.BoolFlag{
 		Name:  "cached",
 		Usage: "check if object from a remote bucket is present (ie., cached) in the cluster",

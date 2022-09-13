@@ -1903,7 +1903,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 
 func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActionMsg, dpq *dpq) {
 	bmd := p.owner.bmd.get()
-	if qbck.IsAIS() || qbck.IsHDFS() || cos.IsParseInt(dpq.fltPresence, apc.FltPresentInCluster) {
+	if qbck.IsAIS() || qbck.IsHDFS() || cos.EqParseInt(dpq.fltPresence, apc.FltPresent) {
 		bcks := selectBMDBuckets(bmd, qbck)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return

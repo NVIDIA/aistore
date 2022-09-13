@@ -136,29 +136,14 @@ func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	return req, nil
 }
 
-//
-// object-level API
-//
-
-// HeadObject returns the object properties; can be conventionally used to establish
-// local (in cluster) presence.
-func HeadObject(bp BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
-	var (
-		q             url.Values
-		checkIsCached bool
-	)
-	if len(checkExists) > 0 {
-		checkIsCached = checkExists[0]
-	}
+// HeadObject returns object properties; can be conventionally used to establish in-cluster presence.
+func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cmn.ObjectProps, error) {
 	bp.Method = http.MethodHead
 
-	if checkIsCached {
-		q = make(url.Values, 4)
-		q = bck.AddToQuery(q)
-		q.Set(apc.QparamHeadObj, strconv.Itoa(apc.HeadObjAvoidRemote)) // TODO: support the entire enum
+	q := bck.AddToQuery(nil)
+	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
+	if fltPresence == apc.FltPresentOmitProps {
 		q.Set(apc.QparamSilent, "true")
-	} else {
-		q = bck.AddToQuery(nil)
 	}
 
 	reqParams := AllocRp()
@@ -172,12 +157,11 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, checkExists ...bool) 
 	if err != nil {
 		return nil, err
 	}
-	if checkIsCached {
+	if fltPresence == apc.FltPresentOmitProps {
 		return nil, err
 	}
 
-	// NOTE: compare with `headObject()` in target.go
-	// first, cnm.ObjAttrs
+	// first, cnm.ObjAttrs (NOTE: compare with `headObject()` in target.go)
 	op := &cmn.ObjectProps{}
 	op.Cksum = op.ObjAttrs.FromHeader(resp.Header)
 	// second, all the rest

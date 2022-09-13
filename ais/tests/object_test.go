@@ -381,10 +381,10 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check ais bucket has 2 objects
-	tlog.Logf("Validating ais bucket have %s and %s ...\n", fileName1, fileName2)
-	_, err = api.HeadObject(baseParams, bckLocal, fileName1)
+	tlog.Logf("Validating ais bucket has %s and %s ...\n", fileName1, fileName2)
+	_, err = api.HeadObject(baseParams, bckLocal, fileName1, apc.FltPresent)
 	tassert.CheckFatal(t, err)
-	_, err = api.HeadObject(baseParams, bckLocal, fileName2)
+	_, err = api.HeadObject(baseParams, bckLocal, fileName2, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	// Prefetch/Evict should work
@@ -416,20 +416,20 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	_, err = api.HeadObject(baseParams, bckLocal, fileName1)
+	_, err = api.HeadObject(baseParams, bckLocal, fileName1, apc.FltPresent)
 	if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Local file %s not deleted", fileName1)
 	}
-	_, err = api.HeadObject(baseParams, bckLocal, fileName2)
+	_, err = api.HeadObject(baseParams, bckLocal, fileName2, apc.FltPresent)
 	if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Local file %s not deleted", fileName2)
 	}
 
-	_, err = api.HeadObject(baseParams, bckRemote, fileName1)
+	_, err = api.HeadObject(baseParams, bckRemote, fileName1, apc.FltExists)
 	if err == nil {
 		t.Errorf("remote file %s not deleted", fileName1)
 	}
-	_, err = api.HeadObject(baseParams, bckRemote, fileName2)
+	_, err = api.HeadObject(baseParams, bckRemote, fileName2, apc.FltExists)
 	if err == nil {
 		t.Errorf("remote file %s not deleted", fileName2)
 	}
@@ -531,8 +531,8 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 		t.Errorf("Local file %s deleted", fileName)
 	}
 
-	// Check that cloud object is deleted using HeadObject
-	_, err = api.HeadObject(baseParams, bckRemote, fileName)
+	// Check that cloud object is deleted
+	_, err = api.HeadObject(baseParams, bckRemote, fileName, apc.FltExistsOutside)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Remote file %s not deleted", fileName)
 	}
@@ -899,7 +899,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	tassert.CheckFatal(t, err)
 
 	for _, objName := range m.objNames {
-		exists := tutils.CheckObjExists(proxyURL, m.bck, objName)
+		exists := tutils.CheckObjIsPresent(proxyURL, m.bck, objName)
 		tassert.Errorf(t, !exists, "object remains cached: %s", objName)
 	}
 	bProps, err = api.HeadBucket(baseParams, m.bck, true /* don't add */)
@@ -1382,7 +1382,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		if err == nil {
 			t.Errorf("Bad checksum provided by the user, Expected an error")
 		}
-		_, err = api.HeadObject(baseParams, bckLocal, fileName)
+		_, err = api.HeadObject(baseParams, bckLocal, fileName, apc.FltExists)
 		if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 			t.Errorf("Object %s exists despite bad checksum", fileName)
 		}
@@ -1391,7 +1391,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		if err != nil {
 			t.Errorf("Correct checksum provided, Err encountered %v", err)
 		}
-		_, err = api.HeadObject(baseParams, bckLocal, fileName)
+		_, err = api.HeadObject(baseParams, bckLocal, fileName, apc.FltPresent)
 		if err != nil {
 			t.Errorf("Object %s does not exist despite correct checksum", fileName)
 		}

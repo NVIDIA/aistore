@@ -598,7 +598,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bckTo), apc.FltPresentInCluster)
+	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bckTo), apc.FltPresent)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, exists == false, "expected destination bucket to not be created")
 

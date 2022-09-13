@@ -369,7 +369,26 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.ListOb
 	return
 }
 
-func (m *AISBackendProvider) listBucketsCluster(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error) {
+func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+	if !qbck.Ns.IsAnyRemote() {
+		bcks, err = m._listBcks(qbck.Ns.UUID, qbck)
+	} else {
+		for uuid := range m.remote {
+			remoteBcks, tryErr := m._listBcks(uuid, qbck)
+			bcks = append(bcks, remoteBcks...)
+			if tryErr != nil {
+				err = tryErr
+			}
+		}
+	}
+	errCode, err = extractErrCode(err)
+	return
+}
+
+// TODO: remote AIS clusters provide native frontend API with additional capabilities
+// in part including apc.Flt* location specifier.
+// Here we hardcode its value to keep ListBuckets() consistent across backends.
+func (m *AISBackendProvider) _listBcks(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error) {
 	var (
 		aisCluster  *remAISCluster
 		remoteQuery = cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{Name: qbck.Ns.Name}}
@@ -377,8 +396,7 @@ func (m *AISBackendProvider) listBucketsCluster(uuid string, qbck cmn.QueryBcks)
 	if aisCluster, err = m.remoteCluster(uuid); err != nil {
 		return
 	}
-	// apc.FltPresentAnywhere hardcoded - see note above
-	bcks, err = api.ListBuckets(aisCluster.bp, remoteQuery, apc.FltPresentAnywhere)
+	bcks, err = api.ListBuckets(aisCluster.bp, remoteQuery, apc.FltExists)
 	if err != nil {
 		_, err = extractErrCode(err)
 		return nil, err
@@ -391,25 +409,9 @@ func (m *AISBackendProvider) listBucketsCluster(uuid string, qbck cmn.QueryBcks)
 }
 
 // TODO: remote AIS clusters provide native frontend API with additional capabilities
-// that, in particular, include apc.FltPresent* enum.
-// Here we have to hardcode its value to keep ListBuckets() consistent across _all_ backends.
-// For similar limitations, see also HeadBucket() above.
-func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
-	if !qbck.Ns.IsAnyRemote() {
-		bcks, err = m.listBucketsCluster(qbck.Ns.UUID, qbck)
-	} else {
-		for uuid := range m.remote {
-			remoteBcks, tryErr := m.listBucketsCluster(uuid, qbck)
-			bcks = append(bcks, remoteBcks...)
-			if tryErr != nil {
-				err = tryErr
-			}
-		}
-	}
-	errCode, err = extractErrCode(err)
-	return
-}
-
+// in part including apc.Flt* location specifier.
+// Here, and elsewhere down below, we hardcode (the default) `apc.FltPresent` to, eesentially,
+// keep HeadObj() consistent across backends.
 func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
@@ -420,7 +422,7 @@ func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs,
 		return
 	}
 	unsetUUID(&remoteBck)
-	if op, err = api.HeadObject(aisCluster.bp, remoteBck, lom.ObjName); err != nil {
+	if op, err = api.HeadObject(aisCluster.bp, remoteBck, lom.ObjName, apc.FltPresent); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}
@@ -464,10 +466,8 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadClo
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
 	}
-	// NOTE -- TODO: piggy-back props on GET request to optimize out HEAD call
-	// attrs
 	unsetUUID(&remoteBck)
-	if op, err = api.HeadObject(aisCluster.bp, remoteBck, lom.ObjName); err != nil {
+	if op, err = api.HeadObject(aisCluster.bp, remoteBck, lom.ObjName, apc.FltPresent); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}
@@ -505,9 +505,8 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 		errCode, err = extractErrCode(err)
 		return
 	}
-	// NOTE -- TODO: piggy-back props on PUT request to optimize out HEAD call
-	// attrs
-	if op, err = api.HeadObject(aisCluster.bp, remoteBck, lom.ObjName); err != nil {
+	// TODO: piggy-back props on PUT request to optimize-out HEAD call
+	if op, err = api.HeadObject(aisCluster.bp, remoteBck, lom.ObjName, apc.FltPresent); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}

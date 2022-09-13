@@ -110,24 +110,19 @@ const (
 	PropBackendBckProvider = PropBackendBck + ".provider"
 )
 
-// enum that may accompany HEAD(obj) to specify additional _nuances_:
-// - object's in-cluster existence (and whether to avoid executing remote HEAD when not found)
-// - thoroughness of local lookup (all mountpaths or just the designated one)
-// In either case, we are not asking for the object's props.
-const (
-	HeadObjAvoidRemote = 1 << (iota + 2)
-	HeadObjAvoidRemoteCheckAllMps
-)
-
-// A general filtering enumeration that can be applied to both buckets and objects with respect to
-// their existence/presence (or non-existence/non-presence) *in* a given AIS cluster.
+// Terminology: "presence" refers to availability in a cluster.
+//
+// A general filtering enumeration that descibes both buckets and objects with respect to
+// their existence/presence (or non-existence/non-presence) in a given AIS cluster.
 //
 // Note that remote object (or a bucket) that is currently _not_ present in the cluster can still
-// be accessible with (the first) access resulting in this object or bucket becoming present, etc.
+// be accessible with (the first) access resulting in this object (or bucket) becoming "present", etc.
 const (
-	FltPresentAnywhere = iota
-	FltPresentInCluster
-	FltPresentOutside
+	FltExists           = iota // exists, as in: (FltPresentAnywhere | FltExistsOutside)
+	FltPresent                 // bucket: is present; LOM: present and properly located
+	FltPresentOmitProps        // same as above with no props returned (establish presence = Yes/No, and that's it)
+	FltPresentAnywhere         // LOM's present anywhere in cluster (e.g., as a replica)
+	FltExistsOutside           // remote location, e.g. cloud bucket
 )
 
 // URL Query "?name1=val1&name2=..."
@@ -141,8 +136,6 @@ const (
 	// remove existing custom keys and store new custom metadata
 	// NOTE: making an s/_/-/ naming exception because of the namesake CLI usage
 	QparamNewCustom = "set-new-custom"
-
-	QparamHeadObj = "head_obj" // enum { HeadObjAvoidRemote, ... } above
 
 	// Bucket related query params.
 	QparamProvider  = "provider" // aka backend provider or, simply, backend
@@ -160,7 +153,7 @@ const (
 	// HEAD(bucket)+
 	QparamGetBckInfo = "get_bck_info"
 
-	// See FltPresent* enum above.
+	// See Flt* enum above.
 	// NOTE: not to confuse "presence" (in a given cluster) with "existence" (anywhere).
 	// See also: ListObjsMsg flags, docs/providers.md (for terminology)
 	QparamFltPresence = "present_in_cluster"

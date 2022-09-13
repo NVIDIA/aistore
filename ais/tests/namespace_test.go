@@ -15,18 +15,18 @@ import (
 )
 
 func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool) cmn.Bcks {
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentInCluster)
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 	if includeRemote {
 		remoteBuckets, err := api.ListBuckets(baseParams,
-			cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.NsAnyRemote}, apc.FltPresentAnywhere)
+			cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.NsAnyRemote}, apc.FltExists)
 		tassert.CheckFatal(t, err)
 		buckets = append(buckets, remoteBuckets...)
 
 		// Make sure that listing with specific UUID also works and have similar outcome.
 		remoteClusterBuckets, err := api.ListBuckets(baseParams,
 			cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID}},
-			apc.FltPresentAnywhere)
+			apc.FltExists)
 		tassert.CheckFatal(t, err)
 		// NOTE: cannot do `remoteClusterBuckets.Equal(remoteBuckets)` because of different `Ns.UUID`
 		// (alias vs uuid).
@@ -294,7 +294,7 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 
 	// TODO: works until this point
 
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentAnywhere)
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltExists)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
 		t, len(buckets) == 1,
@@ -347,7 +347,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check that bucket is still cached
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentInCluster)
+	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(buckets) == 1, "number of buckets (%d) should be equal to 1", len(buckets))
 
@@ -358,7 +358,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	// TODO: it works until this point
 
 	// Check that bucket is no longer present
-	buckets, err = api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentInCluster)
+	buckets, err = api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(buckets) == 0, "number of buckets (%d) should be equal to 0", len(buckets))
 }

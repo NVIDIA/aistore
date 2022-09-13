@@ -71,7 +71,7 @@ func TestListBuckets(t *testing.T) {
 	)
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{}, apc.FltPresentAnywhere)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{}, apc.FltExists)
 	tassert.CheckFatal(t, err)
 
 	for _, bck := range bcks {
@@ -81,7 +81,7 @@ func TestListBuckets(t *testing.T) {
 	for _, provider := range []string{apc.ProviderAmazon, apc.ProviderGoogle, apc.ProviderAzure, apc.ProviderHDFS} {
 		_, configured := config.Backend.Providers[provider]
 		query := cmn.QueryBcks{Provider: provider}
-		remoteBuckets, err := api.ListBuckets(baseParams, query, apc.FltPresentAnywhere)
+		remoteBuckets, err := api.ListBuckets(baseParams, query, apc.FltExists)
 		if err != nil {
 			if !configured {
 				continue
@@ -97,7 +97,7 @@ func TestListBuckets(t *testing.T) {
 
 	// NsGlobal
 	query := cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
-	aisBuckets, err := api.ListBuckets(baseParams, query, apc.FltPresentAnywhere)
+	aisBuckets, err := api.ListBuckets(baseParams, query, apc.FltExists)
 	tassert.CheckError(t, err)
 	if len(aisBuckets) != len(bcks.Select(query)) {
 		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(query)))
@@ -105,10 +105,10 @@ func TestListBuckets(t *testing.T) {
 
 	// NsAnyRemote
 	query = cmn.QueryBcks{Ns: cmn.NsAnyRemote}
-	bcks, err = api.ListBuckets(baseParams, query, apc.FltPresentAnywhere)
+	bcks, err = api.ListBuckets(baseParams, query, apc.FltExists)
 	tassert.CheckError(t, err)
 	query = cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.NsAnyRemote}
-	aisBuckets, err = api.ListBuckets(baseParams, query, apc.FltPresentAnywhere)
+	aisBuckets, err = api.ListBuckets(baseParams, query, apc.FltExists)
 	tassert.CheckError(t, err)
 	if len(aisBuckets) != len(bcks.Select(query)) {
 		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(query)))
@@ -254,7 +254,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 
 	err = api.DestroyBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
-	names, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltPresentAnywhere)
+	names, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltExists)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, !names.Contains(cmn.QueryBcks(bck)), "expected bucket to not be listed")
 }
@@ -1812,7 +1812,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltPresentInCluster)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	if !bcks.Contains(cmn.QueryBcks(dstBck)) {
@@ -1917,7 +1917,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 	}
 
 	// Check if the old bucket still appears in the list
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(m.bck), apc.FltPresentInCluster)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(m.bck), apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	if !bcks.Contains(cmn.QueryBcks(m.bck)) || !bcks.Contains(cmn.QueryBcks(tmpBck)) {
@@ -1995,7 +1995,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltPresentInCluster)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	if bcks.Contains(cmn.QueryBcks(srcBck)) {
@@ -2074,7 +2074,7 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, xargs)
 	tassert.CheckFatal(t, err)
 
-	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bck), apc.FltPresentInCluster)
+	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bck), apc.FltPresent)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !exists, "source bucket shouldn't exist")
 
@@ -2445,7 +2445,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.CheckError(t, err)
 	tassert.Errorf(t, snaps.IsAborted(), "failed to abort copy-bucket (%s)", xactID)
 
-	bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltPresentAnywhere)
+	bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
 	tassert.CheckError(t, err)
 	tassert.Errorf(t, !bck.Contains(cmn.QueryBcks(dstBck)), "should not contain destination bucket %s", dstBck)
 }
@@ -2475,7 +2475,7 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes, got (locBytes=%d, outBytes=%d, inBytes=%d)",
 		expectedBytesCnt, locBytes, outBytes, inBytes)
 
-	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltPresentAnywhere)
+	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, exists == false, "expected destination bucket to not be created")
 }
@@ -2540,7 +2540,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	// more checks
 	//
 	tlog.Logln("Listing and counting")
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltPresentAnywhere)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltExists)
 	tassert.CheckFatal(t, err)
 
 	tassert.Fatalf(t, !bcks.Contains(cmn.QueryBcks(src)), "expected %s to not exist (be renamed from), got %v", src, bcks)
@@ -2623,7 +2623,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltPresentAnywhere)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltExists)
 	tassert.CheckFatal(t, err)
 
 	if bcks.Contains(cmn.QueryBcks(srcBck)) {

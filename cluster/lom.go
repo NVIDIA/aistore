@@ -379,8 +379,7 @@ func (lom *LOM) Load(cacheit, locked bool) (err error) {
 }
 
 func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
-	debug.Assert(lom.loaded())
-	err = bmd.Check(&lom.bck, lom.md.bckID)
+	err = bmd.eqBID(&lom.bck, lom.md.bckID)
 	if err == errBucketIDMismatch {
 		err = cmn.NewErrObjDefunct(lom.String(), lom.md.bckID, lom.bck.Props.BID)
 	}

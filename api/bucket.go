@@ -141,8 +141,9 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck) (p *cmn.BucketProps, info *cmn.Bu
 	return
 }
 
-// ListBuckets returns buckets for provided query.
-// (not to confuse with `ListObjects()` and friends below)
+// ListBuckets returns buckets for provided query, where
+// `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... }
+// (ListBuckets must not be confused with `ListObjects()` and friends below).
 func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, error) {
 	var (
 		bcks = cmn.Bcks{}
@@ -150,10 +151,6 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 		body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActList})
 		q    = url.Values{apc.QparamFltPresence: []string{strconv.Itoa(fltPresence)}}
 	)
-	if fltPresence != apc.FltPresentAnywhere && fltPresence != apc.FltPresentInCluster {
-		return nil, fmt.Errorf("invalid value for the %q query param: have %d, expecting apc.Flt* enum",
-			apc.QparamFltPresence, fltPresence)
-	}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{

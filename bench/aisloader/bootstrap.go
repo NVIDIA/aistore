@@ -641,7 +641,7 @@ func setupBucket(runParams *params) error {
 		}
 		runParams.bck = bck
 	}
-	exists, err := api.QueryBuckets(runParams.bp, cmn.QueryBcks(runParams.bck), apc.FltPresentAnywhere)
+	exists, err := api.QueryBuckets(runParams.bp, cmn.QueryBcks(runParams.bck), apc.FltExists)
 	if err != nil {
 		return fmt.Errorf("%s not found: %v", runParams.bck, err)
 	}

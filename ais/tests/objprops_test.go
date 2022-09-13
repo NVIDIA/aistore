@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -431,36 +430,36 @@ func TestObjProps(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		tests = []struct {
-			bucketType  string
-			checkExists bool
-			verEnabled  bool
-			evict       bool
+			bucketType   string
+			checkPresent bool
+			verEnabled   bool
+			evict        bool
 		}{
-			{checkExists: true, bucketType: typeLocal},
-			{checkExists: true, bucketType: typeCloud, evict: false},
-			{checkExists: true, bucketType: typeCloud, evict: true},
+			{checkPresent: true, bucketType: typeLocal},
+			{checkPresent: true, bucketType: typeCloud, evict: false},
+			{checkPresent: true, bucketType: typeCloud, evict: true},
 
-			{checkExists: false, verEnabled: false, bucketType: typeLocal},
-			{checkExists: false, verEnabled: true, bucketType: typeLocal},
+			{checkPresent: false, verEnabled: false, bucketType: typeLocal},
+			{checkPresent: false, verEnabled: true, bucketType: typeLocal},
 
-			{checkExists: false, verEnabled: false, bucketType: typeRemoteAIS, evict: false},
-			{checkExists: false, verEnabled: false, bucketType: typeRemoteAIS, evict: true},
+			{checkPresent: false, verEnabled: false, bucketType: typeRemoteAIS, evict: false},
+			{checkPresent: false, verEnabled: false, bucketType: typeRemoteAIS, evict: true},
 
-			{checkExists: false, verEnabled: false, bucketType: typeLocal},
-			{checkExists: false, verEnabled: true, bucketType: typeLocal},
+			{checkPresent: false, verEnabled: false, bucketType: typeLocal},
+			{checkPresent: false, verEnabled: true, bucketType: typeLocal},
 
-			{checkExists: false, verEnabled: false, bucketType: typeCloud, evict: false},
-			{checkExists: false, verEnabled: false, bucketType: typeCloud, evict: true},
+			{checkPresent: false, verEnabled: false, bucketType: typeCloud, evict: false},
+			{checkPresent: false, verEnabled: false, bucketType: typeCloud, evict: true},
 			// valid only if the cloud bucket has versioning enabled
-			{checkExists: false, verEnabled: true, bucketType: typeCloud, evict: false},
-			{checkExists: false, verEnabled: true, bucketType: typeCloud, evict: true},
+			{checkPresent: false, verEnabled: true, bucketType: typeCloud, evict: false},
+			{checkPresent: false, verEnabled: true, bucketType: typeCloud, evict: true},
 		}
 	)
 
 	for _, test := range tests {
 		name := fmt.Sprintf(
-			"checkExists=%t/verEnabled=%t/type=%s/evict=%t",
-			test.checkExists, test.verEnabled, test.bucketType, test.evict,
+			"checkPresent=%t/verEnabled=%t/type=%s/evict=%t",
+			test.checkPresent, test.verEnabled, test.bucketType, test.evict,
 		)
 		t.Run(name, func(t *testing.T) {
 			m := ioContext{
@@ -521,10 +520,19 @@ func TestObjProps(t *testing.T) {
 			bckProps, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 			tassert.CheckFatal(t, err)
 
-			tlog.Logln("checking object props...")
 			for _, objName := range m.objNames {
-				props, err := api.HeadObject(baseParams, m.bck, objName, test.checkExists)
-				if test.checkExists {
+				tlog.Logf("checking %s/%s object props...\n", m.bck, objName)
+
+				flt := apc.FltPresent
+				if test.checkPresent {
+					flt = apc.FltPresentOmitProps
+				}
+				if test.bucketType != typeLocal && test.evict && !test.checkPresent {
+					flt = apc.FltExistsOutside
+				}
+
+				props, err := api.HeadObject(baseParams, m.bck, objName, flt)
+				if test.checkPresent {
 					if test.bucketType != typeLocal && test.evict {
 						tassert.Fatalf(t, err != nil,
 							"object should be marked as 'not exists' (it is not cached)")
@@ -553,18 +561,14 @@ func TestObjProps(t *testing.T) {
 					if defaultBckProp.Versioning.Enabled && (test.verEnabled || test.evict) {
 						tassert.Errorf(t, props.Ver != "", "%s object version should not be empty", test.bucketType)
 					} else {
-						tassert.Errorf(t,
-							props.Ver == "" || defaultBckProp.Versioning.Enabled || test.bucketType == typeRemoteAIS,
+						tassert.Errorf(t, props.Ver == "" || defaultBckProp.Versioning.Enabled ||
+							test.bucketType == typeRemoteAIS,
 							"%s object version should be empty, have %q (enabled=%t)",
 							test.bucketType, props.Ver, defaultBckProp.Versioning.Enabled)
 					}
 					if test.evict {
-						if test.bucketType == typeRemoteAIS && props.Atime != 0 {
-							tlog.Logf("FIXME or check: post-eviction access time non-zero (%v) for remote AIS\n",
-								time.Unix(0, props.Atime))
-						} else {
-							tassert.Errorf(t, props.Atime == 0, "expected access time to be empty (not cached)")
-						}
+						tassert.Errorf(t, props.Atime == 0,
+							"expected %s/%s access time to be empty (not cached)", m.bck, objName)
 					} else {
 						tassert.Errorf(t, props.Atime != 0, "expected access time to be set (cached)")
 					}
