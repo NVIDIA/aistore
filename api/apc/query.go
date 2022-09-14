@@ -67,7 +67,7 @@ const (
 // Descibes both buckets and objects with respect to their existence/presence
 // (or non-existence/non-presence) in a given AIS cluster.
 //
-// (Terminology: "presence" here refers to availability _in_ the cluster.)
+// (Terminology: "FltPresent*" here refers to availability _in the cluster_.)
 //
 // Note that a remote object (or a bucket) that is currently _not_ present in the cluster can still
 // be accessible with (the first) access resulting in this object (or bucket) becoming "present", etc.
@@ -76,7 +76,7 @@ const (
 	FltPresent                 // bucket: is present; LOM: present and properly located
 	FltPresentOmitProps        // same as above with no props returned (establish presence = Yes/No, and that's it)
 	FltPresentAnywhere         // LOM's present anywhere in cluster (e.g., as a replica on mountpath)
-	FltExistsOutside           // remote location, e.g. cloud bucket
+	FltExistsOutside           // remote, e.g. cloud bucket
 )
 
 // QparamAppendType enum.

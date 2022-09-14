@@ -198,7 +198,9 @@ func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
 	for _, bck := range filtered {
 		props, info, err := api.GetBucketInfo(defaultAPIParams, bck)
 		if err != nil {
-			fmt.Fprintf(c.App.Writer, "  %s, get-info err: %v\n", bck, err)
+			if httpErr, ok := err.(*cmn.ErrHTTP); ok {
+				fmt.Fprintf(c.App.Writer, "  %s, err: %s\n", bck, httpErr.Message)
+			}
 			continue
 		}
 

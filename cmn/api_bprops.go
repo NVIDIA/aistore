@@ -15,6 +15,15 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// bucket information - runtime addendum to `BucketProps` (below) which are manageable/configurabe
+// - will include usage, capacity and other TBD statistics.
+// - is obtained via GetBucketInfo() API
+// - result delivered via apc.HdrBucketInfo header
+// (compare with BucketSummary)
+type BucketInfo struct {
+	Present bool `json:"present_in_cluster,omitempty"`
+}
+
 // bucket properties (compare w/ BucketInfo)
 type (
 	// BucketProps defines the bucket's configuration and includes user-configurable

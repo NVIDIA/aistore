@@ -234,7 +234,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		Misplaced     uint64
 		MissingCopies uint64
 	}
-	bckList, err := api.ListBuckets(defaultAPIParams, queryBcks, apc.FltPresentAnywhere)
+	bckList, err := api.ListBuckets(defaultAPIParams, queryBcks, apc.FltPresent)
 	if err != nil {
 		return
 	}
@@ -631,7 +631,7 @@ func listAnyHandler(c *cli.Context) error {
 		}
 		return showObjProps(c, bck, objName)
 	case bck.Name == "": // list buckets
-		fltPresence := apc.FltPresentAnywhere
+		fltPresence := apc.FltExists
 		if flagIsSet(c, listCachedFlag) || /*same*/ flagIsSet(c, listPresentFlag) {
 			fltPresence = apc.FltPresent
 		}

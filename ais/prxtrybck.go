@@ -38,9 +38,11 @@ type bckInitArgs struct {
 	reqBody []byte          // request body of original request
 	perms   apc.AccessAttrs // apc.AceGET, apc.AcePATCH etc.
 
+	// flags:
 	skipBackend bool // initialize bucket via `bck.InitNoBackend`
 	createAIS   bool // create ais bucket on the fly
 	headRemB    bool // handle ErrRemoteBckNotFound to discover _remote_ bucket on the fly (and add to BMD)
+	getInfo     bool // executing GetBucketInfo API (in part, upon ErrRemoteBckNotFound, return {Present: false} and nil)
 	tryHeadRemB bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemB)
 	present     bool // present in the cluster's BMD
 }
@@ -177,6 +179,10 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 	}
 	// create remote bucket on the fly?  (creation with respect to BMD, that is)
 	if cmn.IsErrRemoteBckNotFound(err) && !args.headRemB {
+		if args.getInfo {
+			err = nil
+			return
+		}
 		args.p.writeErrSilent(args.w, args.r, err, errCode)
 		return
 	}

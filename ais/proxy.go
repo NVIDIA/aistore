@@ -1548,10 +1548,8 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	dontAddMD := cos.IsParseBool(apireq.dpq.dontAddMD)
-	getInfo := cos.IsParseBool(apireq.dpq.getInfo)
 
-	// filter HEAD(bucket) to execute on present only (compare with listBuckets)
+	// filter HEAD(bucket) limiting it to execute on present-only (compare with `listBuckets`)
 	present := cos.EqParseInt(apireq.dpq.fltPresence, apc.FltPresent)
 	debug.Assert(present || cos.NeqParseInt(apireq.dpq.fltPresence, apc.FltPresentOmitProps, apc.FltPresentAnywhere))
 
@@ -1559,6 +1557,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		dpq: apireq.dpq, query: apireq.query}
 	bckArgs.createAIS = false
 	bckArgs.headRemB = !present && shouldHeadRemB()
+	bckArgs.getInfo = cos.IsParseBool(apireq.dpq.getInfo)
 
 	bck, err := bckArgs.initAndTry(apireq.bck.Name)
 	if err != nil {
@@ -1567,7 +1566,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	hdr := w.Header()
 	if present || bckArgs.present {
-		toHdr(bck, hdr, bckArgs.present, getInfo)
+		toHdr(bck, hdr, bckArgs.present, bckArgs.getInfo)
 		return
 	}
 
@@ -1577,8 +1576,9 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	dontAddMD := cos.IsParseBool(apireq.dpq.dontAddMD)
 	if dontAddMD {
-		toHdr(bck, hdr, false, getInfo)
+		toHdr(bck, hdr, false, bckArgs.getInfo)
 		return
 	}
 
@@ -1599,7 +1599,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	toHdr(bck, hdr, false, getInfo)
+	toHdr(bck, hdr, false, bckArgs.getInfo)
 }
 
 func toHdr(bck *cluster.Bck, hdr http.Header, present, getInfo bool) {
@@ -1915,6 +1915,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		return
 	}
 	debug.Assert(cos.NeqParseInt(dpq.fltPresence, apc.FltPresentOmitProps, apc.FltPresentAnywhere))
+
 	// the backend must be configured
 	if qbck.IsCloud() {
 		config := cmn.GCO.Get()
