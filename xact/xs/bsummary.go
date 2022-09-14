@@ -1,7 +1,7 @@
 // Package xs contains eXtended actions (xactions) except storage services
 // (mirror, ec) and extensions (downloader, lru).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -152,7 +151,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool)
 		err  error
 	)
 	if msg.Fast {
-		glog.Warningf("%s: remote bucket w/ `--cached=false`: executing slow and presize version (`--fast=false`)", r)
+		glog.Warningf("%s: remote bucket w/ `--cached=false`: executing slow and precise version (`--fast=false`)", r)
 	}
 	if !shouldListCB {
 		msg.Cached = true
@@ -197,38 +196,29 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool)
 	return nil
 }
 
-func (r *bsummXact) fast(bck *cluster.Bck) (objCount, size uint64, err error) {
+func (*bsummXact) fast(bck *cluster.Bck) (objCount, size uint64, err error) {
 	var (
 		availablePaths = fs.GetAvail()
 		group, _       = errgroup.WithContext(context.Background())
 	)
-	for _, mpathInfo := range availablePaths {
-		group.Go(func(mpathInfo *fs.MountpathInfo) func() error {
+	for _, mi := range availablePaths {
+		group.Go(func(mi *fs.MountpathInfo) func() error {
 			return func() error {
-				path := mpathInfo.MakePathCT(bck.Bucket(), fs.ObjectType)
-				dirSize, err := ios.GetDirSize(path)
+				siz, num, err := mi.SizeBck(bck.Bucket())
 				if err != nil {
 					return err
 				}
-				fileCount, err := ios.GetFileCount(path)
-				if err != nil {
-					return err
-				}
-
-				if bck.Props.Mirror.Enabled {
-					copies := int(bck.Props.Mirror.Copies)
-					dirSize /= uint64(copies)
-					fileCount = fileCount/copies + fileCount%copies
-				}
-
-				gatomic.AddUint64(&objCount, uint64(fileCount))
-				gatomic.AddUint64(&size, dirSize)
-				r.ObjsAdd(fileCount, int64(dirSize))
+				gatomic.AddUint64(&objCount, uint64(num))
+				gatomic.AddUint64(&size, siz)
 				return nil
 			}
-		}(mpathInfo))
+		}(mi))
 	}
-	return objCount, size, group.Wait()
+	err = group.Wait()
+	if copies := uint64(bck.Props.Mirror.Copies); copies > 1 && bck.Props.Mirror.Enabled {
+		objCount = cos.DivRoundU64(objCount, copies)
+	}
+	return objCount, size, err
 }
 
 func (r *bsummXact) updRes(err error) {

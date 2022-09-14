@@ -496,7 +496,7 @@ $ ais bucket summary ais://abc
 NAME             OBJECTS         SIZE ON DISK    USAGE(%)
 ais://abc        10902           5.38GiB         1%
 
-(For min/avg/max object sizes and _apparent_ bucket sizes, run with `--fast=false`.)
+For min/avg/max object sizes, use `--fast=false`.
 ```
 
 ```console
@@ -510,12 +510,15 @@ ais://nnn        49873           200.00MiB       0%
 ```console
 # 3. summarize ais://abc to show min/avg/max object sizes and _apparent_ bucket sizes
 ###
-###   Note: apparent bucket size is the sum(sizes of all objects in the bucket) - will
-###   always be smaller than the actual disk usage (see e.g. above).
+###   Apparent bucket size is the sum(sizes of all objects in the bucket) - will
+###   always be smaller than the actual disk usage. The difference will be even more
+###   pronounced in presence of mirroring and/or erasure coding.
+###   E.g., in a mirrored bucket configured for 3 replicas, the sum of all object
+###   sizes will be more than 3 times smaller than the size on disk.
 ###
 $ ais bucket summary ais://abc --fast=false
-NAME             OBJECTS         OBJECT SIZE (min, avg, max)             APPARENT BUCKET SIZE    USAGE(%)
-ais://abc        10902           1.07KiB    515.01KiB  1023.51KiB        5.35GiB                 1%
+NAME             OBJECTS         OBJECT SIZE (min, avg, max)             SIZE (sum object sizes)   USAGE(%)
+ais://abc        10902           1.07KiB    515.01KiB  1023.51KiB        5.35GiB                   1%
 ```
 
 ## Start N-way Mirroring

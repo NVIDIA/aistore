@@ -439,6 +439,17 @@ func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capaci
 	return
 }
 
+// fast bucket sizing via ios.Get* (fast - as opposed to traversing-and-visiting)
+func (mi *MountpathInfo) SizeBck(bck *cmn.Bck) (size uint64, numObj int, err error) {
+	bdir := mi.MakePathBck(bck)
+	if size, err = ios.GetDirSize(bdir); err != nil {
+		return
+	}
+	odir := mi.MakePathCT(bck, ObjectType)
+	numObj, err = ios.GetFileCount(odir)
+	return
+}
+
 //
 // mountpath add/enable helpers - always call under mfs lock
 //

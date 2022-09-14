@@ -188,7 +188,7 @@ const (
 	bucketsSummariesFastBody = "{{range $k, $v := . }}" +
 		"{{$v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUns $v.Size 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
-	BucketsSummariesTmpl = "NAME\t OBJECTS\t OBJECT SIZE (min, avg, max)\t APPARENT BUCKET SIZE\t USAGE(%)\n" +
+	BucketsSummariesTmpl = "NAME\t OBJECTS\t OBJECT SIZE (min, avg, max)\t SIZE (sum object sizes)\t USAGE(%)\n" +
 		bucketsSummariesBody
 	bucketsSummariesBody = "{{range $k, $v := . }}" +
 		"{{$v.Bck}}\t {{$v.ObjCount}}\t " +
