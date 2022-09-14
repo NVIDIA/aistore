@@ -14,7 +14,7 @@ import (
 // ListObjsMsg flags
 const (
 	// Applies to buckets with remote backends (e.g., to optimize-out listing remotes)
-	// See also: FltPresent* enum
+	// See related: Flt* enum
 	LsPresent = 1 << iota
 
 	LsMisplaced // include misplaced obj-s
@@ -24,7 +24,8 @@ const (
 
 	// The following two flags have to do with listing objects in those remote
 	// buckets that we don't yet have in the cluster's BMD. As far as AIS is concerned,
-	// this is equivalent to creating remote buckets *on the fly*.
+	// adding a (confirmed to exist) remote bucket (and its properties) to the metadata
+	// is equivalent to creating the bucket *on the fly*.
 	//
 	// For this, we need or, more exactly, we would like to execute HEAD request
 	// against the remote backend in question, in order to:
@@ -58,6 +59,29 @@ const (
 	UseListObjsCache
 )
 
+// List objects default page size
+const (
+	DefaultListPageSizeAIS = 10000
+)
+
+const (
+	// Status
+	ObjStatusOK = iota
+	ObjStatusMovedNode
+	ObjStatusMovedMpath
+	ObjStatusDeleted // TODO: reserved for future when we introduce delayed delete of the object/bucket
+
+	// Flags
+	EntryIsCached = 1 << (EntryStatusBits + 1)
+	EntryInArch   = 1 << (EntryStatusBits + 2)
+)
+
+// BucketEntry.Flags field
+const (
+	EntryStatusBits = 5                          // N bits
+	EntryStatusMask = (1 << EntryStatusBits) - 1 // mask for N low bits
+)
+
 // ListObjsMsg and HEAD(object) enum
 // Compare with `ObjectProps` and popular (i.e., most often used) selections of props (below)
 const (
@@ -79,10 +103,10 @@ type (
 	ListObjsMsg struct {
 		UUID              string `json:"uuid"`               // ID to identify a single multi-page request
 		Props             string `json:"props"`              // e.g. "checksum,size"
-		TimeFormat        string `json:"time_format"`        // "RFC822" default - see the enum above
+		TimeFormat        string `json:"time_format"`        // RFC822 is the default
 		Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
 		StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
-		ContinuationToken string `json:"continuation_token"` // `BucketList.ContinuationToken`
+		ContinuationToken string `json:"continuation_token"` // BucketList.ContinuationToken
 		Flags             uint64 `json:"flags,string"`       // enum {LsPresent, ...} - see above
 		PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 	}

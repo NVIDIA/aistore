@@ -193,17 +193,23 @@ func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
 		}
 		fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(dspProvider), len(filtered))
 	}
+
+	data := make([]templates.ListBucketsTemplateHelper, 0, len(filtered))
 	for _, bck := range filtered {
-		// TODO -- FIXME: rewrite
-		if provider == apc.ProviderHTTP {
-			if props, err := headBucket(bck, true /* don't add */); err == nil {
-				fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
-			}
+		props, info, err := api.GetBucketInfo(defaultAPIParams, bck)
+		if err != nil {
+			fmt.Fprintf(c.App.Writer, "  %s, get-info err: %v\n", bck, err)
 			continue
 		}
-		// TODO -- FIXME: add cmn.BucketInfo
-		fmt.Fprintf(c.App.Writer, "  %s\n", bck)
+
+		// TODO -- FIXME: rewrite
+		if provider == apc.ProviderHTTP {
+			fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
+			continue
+		}
+		data = append(data, templates.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: info})
 	}
+	templates.DisplayOutput(data, c.App.Writer, templates.ListBucketsTmpl, false)
 }
 
 // TODO: too many `flagIsSet` calls - refactor (archive | ... )

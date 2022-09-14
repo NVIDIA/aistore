@@ -1548,20 +1548,26 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
+	dontAddMD := cos.IsParseBool(apireq.dpq.dontAddMD)
+	getInfo := cos.IsParseBool(apireq.dpq.getInfo)
+
+	// filter HEAD(bucket) to execute on present only (compare with listBuckets)
+	present := cos.EqParseInt(apireq.dpq.fltPresence, apc.FltPresent)
+	debug.Assert(present || cos.NeqParseInt(apireq.dpq.fltPresence, apc.FltPresentOmitProps, apc.FltPresentAnywhere))
 
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD,
 		dpq: apireq.dpq, query: apireq.query}
 	bckArgs.createAIS = false
-	bckArgs.headRemB = shouldHeadRemB()
+	bckArgs.headRemB = !present && shouldHeadRemB()
+
 	bck, err := bckArgs.initAndTry(apireq.bck.Name)
 	if err != nil {
 		return
 	}
 
 	hdr := w.Header()
-	getInfo := cos.IsParseBool(apireq.dpq.getInfo)
-	if bckArgs.present {
-		toHdr(bck, hdr, true, getInfo)
+	if present || bckArgs.present {
+		toHdr(bck, hdr, bckArgs.present, getInfo)
 		return
 	}
 
@@ -1571,7 +1577,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if cos.IsParseBool(apireq.dpq.dontAddMD) {
+	if dontAddMD {
 		toHdr(bck, hdr, false, getInfo)
 		return
 	}
@@ -1908,6 +1914,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}
+	debug.Assert(cos.NeqParseInt(dpq.fltPresence, apc.FltPresentOmitProps, apc.FltPresentAnywhere))
 	// the backend must be configured
 	if qbck.IsCloud() {
 		config := cmn.GCO.Get()

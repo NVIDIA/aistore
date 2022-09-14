@@ -20,8 +20,23 @@ func IsParseBool(s string) bool {
 
 func EqParseInt(s string, expected int) bool {
 	i, err := strconv.ParseInt(s, 10, 64)
-	_ = err // error means false
+	if err != nil {
+		return false
+	}
 	return expected == int(i)
+}
+
+func NeqParseInt(s string, unexpected ...int) bool {
+	i, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return true
+	}
+	for _, v := range unexpected {
+		if v == int(i) {
+			return false
+		}
+	}
+	return true
 }
 
 // ParseBool converts string to bool (case-insensitive):

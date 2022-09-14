@@ -1,10 +1,85 @@
 // Package apc: API constants and message types
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
 import "github.com/NVIDIA/aistore/cmn/cos"
+
+// RESTful URL path: l1/l2/l3
+const (
+	// l1
+	Version = "v1"
+	// l2
+	Buckets   = "buckets"
+	Objects   = "objects"
+	EC        = "ec"
+	Download  = "download"
+	Daemon    = "daemon"
+	Cluster   = "cluster"
+	Tokens    = "tokens"
+	Metasync  = "metasync"
+	Health    = "health"
+	Vote      = "vote"
+	ObjStream = "objstream"
+	MsgStream = "msgstream"
+	Reverse   = "reverse"
+	Rebalance = "rebalance"
+	Xactions  = "xactions"
+	S3        = "s3"
+	Txn       = "txn"      // 2PC
+	Notifs    = "notifs"   // intra-cluster notifications
+	Users     = "users"    // AuthN
+	Clusters  = "clusters" // AuthN
+	Roles     = "roles"    // AuthN
+	IC        = "ic"       // information center
+
+	// l3
+	SyncSmap = "syncsmap" // legacy
+
+	Voteres    = "result"
+	VoteInit   = "init"
+	Mountpaths = "mountpaths"
+
+	// (see the corresponding action messages above)
+	Keepalive      = "keepalive"
+	AdminJoin      = "join-by-admin"   // when node is joined by admin ("manual join")
+	SelfJoin       = "autoreg"         // auto-join cluster at startup
+	CallbackRmSelf = "cb-rm-from-smap" // set by primary to request that node calls back to request removal (internal use only!)
+
+	// common
+	Init     = "init"
+	Start    = "start"
+	Stop     = "stop"
+	Abort    = "abort"
+	Sort     = "sort"
+	Finished = "finished"
+	Progress = "progress"
+
+	// dSort, downloader, query
+	Metrics     = "metrics"
+	Records     = "records"
+	Shards      = "shards"
+	FinishedAck = "finished_ack"
+	List        = "list"
+	Remove      = "remove"
+	Next        = "next"
+	Peek        = "peek"
+	Discard     = "discard"
+	WorkerOwner = "worker" // TODO: it should be removed once get-next-bytes endpoint is ready
+
+	// ETL
+	ETL         = "etl"
+	ETLInitSpec = "init_spec"
+	ETLInitCode = "init_code"
+	ETLInfo     = "info"
+	ETLList     = List
+	ETLLogs     = "logs"
+	ETLObject   = "_object"
+	ETLStop     = Stop
+	ETLStart    = Start
+	ETLHealth   = "health"
+)
 
 type URLPath struct {
 	L []string

@@ -178,6 +178,11 @@ const (
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
+	ListBucketsTmpl = "NAME\t PRESENT\t\n" +
+		"{{range $k, $v := . }}" +
+		"{{$v.Bck.Name}}\t {{$v.Info.Present}}\n" +
+		"{{end}}"
+
 	// Bucket summary templates
 	BucketsSummariesFastTmpl = "NAME\t OBJECTS\t SIZE ON DISK\t USAGE(%)\n" + bucketsSummariesFastBody
 	bucketsSummariesFastBody = "{{range $k, $v := . }}" +
@@ -387,6 +392,11 @@ type (
 		Smap      *cluster.Smap              `json:"smap"`
 		CluConfig *cmn.ClusterConfig         `json:"config"`
 		Status    DaemonStatusTemplateHelper `json:"status"`
+	}
+	ListBucketsTemplateHelper struct {
+		Bck   cmn.Bck
+		Props *cmn.BucketProps
+		Info  *cmn.BucketInfo
 	}
 )
 

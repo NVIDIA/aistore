@@ -68,20 +68,22 @@ func patchBucketProps(bp BaseParams, bck cmn.Bck, body []byte, query ...url.Valu
 // `dontAddBckMD = true` prevents AIS from adding remote bucket to the cluster's metadata.
 func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) {
 	var (
-		q    url.Values
 		resp *wrappedResp
 		path = apc.URLPathBuckets.Join(bck.Name)
+		q    = make(url.Values, 4)
 	)
 	if dontAddBckMD {
-		q = url.Values{apc.QparamDontAddBckMD: []string{"true"}}
+		q.Set(apc.QparamDontAddBckMD, "true")
 	}
+	q = bck.AddToQuery(q)
+
 	bp.Method = http.MethodHead
 	reqParams := AllocRp()
 	defer FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = path
-		reqParams.Query = bck.AddToQuery(q)
+		reqParams.Query = q
 	}
 	resp, err = reqParams.doResp(nil)
 	if err == nil {
@@ -89,12 +91,46 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketPro
 		err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketProps)), p)
 		return
 	}
-	err = err2msg(bck, err)
+	err = headerr2msg(bck, err)
 	return
 }
 
-// try to fill-in error message (HEAD response will never contain one)
-func err2msg(bck cmn.Bck, err error) error {
+// uses HEAD to obtain detailed info (compare with HeadBucket above)
+func GetBucketInfo(bp BaseParams, bck cmn.Bck) (p *cmn.BucketProps, info *cmn.BucketInfo, err error) {
+	var (
+		resp *wrappedResp
+		path = apc.URLPathBuckets.Join(bck.Name)
+		q    = make(url.Values, 4)
+	)
+	q = bck.AddToQuery(q)
+	q.Set(apc.QparamGetBckInfo, "true")                        // more than just a HEAD
+	q.Set(apc.QparamDontAddBckMD, "true")                      // query (don't add)
+	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent)) // limit detailed info to those that are _present_
+
+	bp.Method = http.MethodHead
+	reqParams := AllocRp()
+	defer FreeRp(reqParams)
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = path
+		reqParams.Query = q
+	}
+	resp, err = reqParams.doResp(nil)
+	if err == nil {
+		p = &cmn.BucketProps{}
+		err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketProps)), p)
+		if err == nil {
+			info = &cmn.BucketInfo{}
+			err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketInfo)), info)
+		}
+		return
+	}
+	err = headerr2msg(bck, err)
+	return
+}
+
+// fill-in error message (HEAD response will never contain one)
+func headerr2msg(bck cmn.Bck, err error) error {
 	httpErr := cmn.Err2HTTPErr(err)
 	if httpErr == nil {
 		debug.FailTypeCast(err)
@@ -111,36 +147,6 @@ func err2msg(bck cmn.Bck, err error) error {
 	return httpErr
 }
 
-// uses http.MethodHead to get more info
-// (compare with HeadBucket above)
-func GetBucketInfo(bp BaseParams, bck cmn.Bck) (p *cmn.BucketProps, info *cmn.BucketInfo, err error) {
-	var (
-		resp *wrappedResp
-		path = apc.URLPathBuckets.Join(bck.Name)
-		q    = url.Values{apc.QparamGetBckInfo: []string{"true"}}
-	)
-	bp.Method = http.MethodHead
-	reqParams := AllocRp()
-	defer FreeRp(reqParams)
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = path
-		reqParams.Query = bck.AddToQuery(q)
-	}
-	resp, err = reqParams.doResp(nil)
-	if err == nil {
-		p = &cmn.BucketProps{}
-		err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketProps)), p)
-		if err == nil {
-			info = &cmn.BucketInfo{}
-			err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketInfo)), info)
-		}
-		return
-	}
-	err = err2msg(bck, err)
-	return
-}
-
 // ListBuckets returns buckets for provided query, where
 // `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... }
 // (ListBuckets must not be confused with `ListObjects()` and friends below).
@@ -149,8 +155,12 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 		bcks = cmn.Bcks{}
 		path = apc.URLPathBuckets.S
 		body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActList})
-		q    = url.Values{apc.QparamFltPresence: []string{strconv.Itoa(fltPresence)}}
+		q    = make(url.Values, 4)
 	)
+	debug.Assert(fltPresence >= apc.FltExists && fltPresence <= apc.FltExistsOutside)
+	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
+	q = qbck.AddToQuery(q)
+
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -158,7 +168,7 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 		reqParams.Path = path
 		reqParams.Body = body
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = qbck.AddToQuery(q)
+		reqParams.Query = q
 	}
 	err := reqParams.DoHTTPReqResp(&bcks)
 	FreeRp(reqParams)

@@ -12,6 +12,98 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// ActionMsg.Action
+// includes Xaction.Kind == ActionMsg.Action (when the action is asynchronous)
+const (
+	ActAddRemoteBck   = "add-remote-bck" // register (existing) remote bucket into AIS
+	ActCopyBck        = "copy-bck"
+	ActCreateBck      = "create-bck"
+	ActDecommission   = "decommission" // decommission all nodes in the cluster (cleanup system data)
+	ActDestroyBck     = "destroy-bck"  // destroy bucket data and metadata
+	ActSummaryBck     = "summary-bck"
+	ActDownload       = "download"
+	ActECEncode       = "ec-encode" // erasure code a bucket
+	ActECGet          = "ec-get"    // erasure decode objects
+	ActECPut          = "ec-put"    // erasure encode objects
+	ActECRespond      = "ec-resp"   // respond to other targets' EC requests
+	ActETLInline      = "etl-inline"
+	ActETLBck         = "etl-bck"
+	ActElection       = "election"
+	ActEvictRemoteBck = "evict-remote-bck" // evict remote bucket's data
+	ActInvalListCache = "inval-listobj-cache"
+	ActLRU            = "lru"
+	ActList           = "list"
+	ActLoadLomCache   = "load-lom-cache"
+	ActMakeNCopies    = "make-n-copies"
+	ActMoveBck        = "move-bck"
+	ActNewPrimary     = "new-primary"
+	ActPromote        = "promote"
+	ActPutCopies      = "put-copies"
+	ActRebalance      = "rebalance"
+	ActRenameObject   = "rename-obj"
+	ActResetBprops    = "reset-bprops"
+	ActResetConfig    = "reset-config"
+	ActResilver       = "resilver"
+	ActResyncBprops   = "resync-bprops"
+	ActSetBprops      = "set-bprops"
+	ActSetConfig      = "set-config"
+	ActShutdown       = "shutdown"
+	ActStartGFN       = "start-gfn"
+	ActStoreCleanup   = "cleanup-store"
+
+	// multi-object (via `SelectObjsMsg`)
+	ActCopyObjects     = "copy-listrange"
+	ActDeleteObjects   = "delete-listrange"
+	ActETLObjects      = "etl-listrange"
+	ActEvictObjects    = "evict-listrange"
+	ActPrefetchObjects = "prefetch-listrange"
+	ActArchive         = "archive" // see ArchiveMsg
+
+	ActAttachRemote = "attach"
+	ActDetachRemote = "detach"
+
+	// Node maintenance & cluster membership (see the corresponding URL path words below)
+	ActStartMaintenance   = "start-maintenance"     // put into maintenance state
+	ActStopMaintenance    = "stop-maintenance"      // cancel maintenance state
+	ActDecommissionNode   = "decommission-node"     // start rebalance and, when done, remove node from Smap
+	ActShutdownNode       = "shutdown-node"         // shutdown node
+	ActCallbackRmFromSmap = "callback-rm-from-smap" // set by primary when requested (internal use only)
+
+	ActAdminJoinTarget = "admin-join-target"
+	ActSelfJoinTarget  = "self-join-target"
+	ActAdminJoinProxy  = "admin-join-proxy"
+	ActSelfJoinProxy   = "self-join-proxy"
+	ActKeepaliveUpdate = "keepalive-update"
+
+	// IC
+	ActSendOwnershipTbl  = "ic-send-own-tbl"
+	ActListenToNotif     = "watch-xaction"
+	ActMergeOwnershipTbl = "ic-merge-own-tbl"
+	ActRegGlobalXaction  = "reg-global-xaction"
+)
+
+const (
+	// Actions on mountpaths (/v1/daemon/mountpaths)
+	ActMountpathAttach  = "attach-mp"
+	ActMountpathEnable  = "enable-mp"
+	ActMountpathDetach  = "detach-mp"
+	ActMountpathDisable = "disable-mp"
+
+	// Actions on xactions
+	ActXactStop  = Stop
+	ActXactStart = Start
+
+	// auxiliary
+	ActTransient = "transient" // transient - in-memory only
+)
+
+// xaction begin-commit phases
+const (
+	ActBegin  = "begin"
+	ActCommit = "commit"
+	ActAbort  = "abort"
+)
+
 // ActionMsg is a JSON-formatted control structures used in a majority of API calls
 type (
 	ActionMsg struct {

@@ -327,7 +327,7 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	}
 	for i := 0; i < 3; i++ {
 		time.Sleep(time.Second)
-		_, err = api.HeadObject(defaultAPIParams, bckTo, objName, true /*checkExists*/)
+		_, err = api.HeadObject(defaultAPIParams, bckTo, objName, apc.FltPresentOmitProps)
 		if err == nil {
 			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.String()+"/"+objName)
 			return nil

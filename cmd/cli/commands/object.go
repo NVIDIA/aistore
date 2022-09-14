@@ -598,7 +598,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 }
 
 func objectCheckExists(c *cli.Context, bck cmn.Bck, object string) error {
-	_, err := api.HeadObject(defaultAPIParams, bck, object, true)
+	_, err := api.HeadObject(defaultAPIParams, bck, object, apc.FltPresentOmitProps)
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
 			fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
@@ -762,7 +762,8 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		propsFlag     []string
 		selectedProps []string
 	)
-	objProps, err := api.HeadObject(defaultAPIParams, bck, object)
+	// TODO -- FIXME: apc.FltPresentAnywhere hardcoded
+	objProps, err := api.HeadObject(defaultAPIParams, bck, object, apc.FltPresentAnywhere)
 	if err != nil {
 		return handleObjHeadError(err, bck, object)
 	}
