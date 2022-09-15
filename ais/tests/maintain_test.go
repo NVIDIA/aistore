@@ -470,7 +470,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	tassert.CheckError(t, err)
 	smap, err = tutils.WaitForClusterState(proxyURL, "restart node",
 		smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s", node.ID(), smap)
 	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(cluster.NodeFlagMaint),
 		"node should be in maintenance after starting")

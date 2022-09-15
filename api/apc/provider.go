@@ -15,7 +15,7 @@ const (
 	ProviderHDFS   = "hdfs"
 	ProviderHTTP   = "ht"
 
-	AllProviders = "ais, aws (s3://), gcp (gs://), azure (az://), hdfs://, ht://" // NOTE
+	AllProviders = "ais, aws (s3://), gcp (gs://), azure (az://), hdfs://, ht://" // NOTE: must include all
 
 	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
@@ -31,7 +31,6 @@ const (
 	AISScheme     = "ais"
 )
 
-// + AllProviders (above)
 var Providers = cos.NewStringSet(
 	ProviderAIS,
 	ProviderGoogle,
@@ -41,20 +40,15 @@ var Providers = cos.NewStringSet(
 	ProviderHTTP,
 )
 
-// returns true if the provider is one of (`aws`, `gcp`, etc.) - see above
-func IsNormalizedProvider(provider string) (ok bool) {
-	_, ok = Providers[provider]
-	return
-}
+func IsProvider(p string) bool { return Providers.Contains(p) }
 
-// NormalizeProvider maps *Scheme to the corresponding entry in `Providers`
-func NormalizeProvider(provider string) string {
-	if IsNormalizedProvider(provider) {
-		return provider
+func NormalizeProvider(p string) string {
+	if IsProvider(p) {
+		return p
 	}
-	switch provider {
+	switch p {
 	case "":
-		return ProviderAIS // NOTE: ais is the default
+		return ProviderAIS // NOTE: ais is the default provider
 	case S3Scheme:
 		return ProviderAmazon
 	case AZScheme:

@@ -157,7 +157,7 @@ func (bck *Bck) DefaultProps(cs ...*Config) *BucketProps {
 }
 
 func (bp *BucketProps) SetProvider(provider string) {
-	debug.Assert(apc.IsNormalizedProvider(provider))
+	debug.Assert(apc.IsProvider(provider))
 	bp.Provider = provider
 }
 
@@ -176,7 +176,7 @@ func (bp *BucketProps) Equal(other *BucketProps) (eq bool) {
 }
 
 func (bp *BucketProps) Validate(targetCnt int) error {
-	debug.Assert(apc.IsNormalizedProvider(bp.Provider))
+	debug.Assert(apc.IsProvider(bp.Provider))
 	if !bp.BackendBck.IsEmpty() {
 		if bp.Provider != apc.ProviderAIS {
 			return fmt.Errorf("wrong bucket provider %q: only AIS buckets can have remote backend (%q)",

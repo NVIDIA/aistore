@@ -100,7 +100,7 @@ var (
 // validated goes through `NormalizeProvider` which converts aliases to
 // normalized form or sets default provider if the provider is empty. But there
 // are cases where we already expect **only** the normalized providers, for
-// example in FQN parsing. For this case `IsNormalizedProvider` function must be
+// example in FQN parsing. For this case `IsProvider` function must be
 // used.
 //
 // Similar concepts are applied when bucket is provided as URI,

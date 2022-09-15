@@ -930,7 +930,7 @@ func isBucketEmpty(bck cmn.Bck) (bool, error) {
 }
 
 func ensureHasProvider(bck cmn.Bck, cmd string) error {
-	if !cmn.IsNormalizedProvider(bck.Provider) {
+	if !apc.IsNormalizedProvider(bck.Provider) {
 		return fmt.Errorf("missing backend provider in bucket %q for command %q", bck, cmd)
 	}
 	return nil
@@ -1372,7 +1372,7 @@ func selectProviders(bcks cmn.Bcks) (sorted []string) {
 	sorted = make([]string, 0, len(apc.Providers))
 	for p := range apc.Providers {
 		for _, bck := range bcks {
-			debug.Assert(cmn.IsNormalizedProvider(bck.Provider))
+			debug.Assert(apc.IsNormalizedProvider(bck.Provider))
 			if bck.Provider == p {
 				sorted = append(sorted, p)
 				break

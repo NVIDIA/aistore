@@ -149,35 +149,53 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 // SimpleKVs //
 ///////////////
 
-func (kv SimpleKVs) Compare(other SimpleKVs) bool {
-	if len(kv) != len(other) {
+func NewSimpleKVs(pairs ...string) (kvs SimpleKVs) {
+	l := len(pairs) / 2
+	debug.Assert(len(pairs) == l<<1)
+	kvs = make(SimpleKVs, l)
+	for i := 0; i < l; i++ {
+		kvs[pairs[2*i]] = kvs[pairs[2*i+1]]
+	}
+	debug.Assertf(len(kvs) == l, "len=%d, l=%d, kvs=%+v", len(kvs), l, kvs)
+	return
+}
+
+func (kvs SimpleKVs) Compare(other SimpleKVs) bool {
+	if len(kvs) != len(other) {
 		return false
-	} else if len(kv) > 0 {
-		return reflect.DeepEqual(kv, other)
+	} else if len(kvs) > 0 {
+		return reflect.DeepEqual(kvs, other)
 	}
 	return true
 }
 
-func (kv SimpleKVs) Keys() []string {
-	keys := make([]string, 0, len(kv))
-	for k := range kv {
+func (kvs SimpleKVs) Keys() []string {
+	keys := make([]string, 0, len(kvs))
+	for k := range kvs {
 		keys = append(keys, k)
 	}
 	return keys
 }
 
-func (kv SimpleKVs) Contains(key string) (ok bool) {
-	if len(kv) == 0 {
-		return false
+func (kvs SimpleKVs) KeyFor(value string) (key string) {
+	for k, v := range kvs {
+		if v == value {
+			key = k
+			break
+		}
 	}
-	_, ok = kv[key]
 	return
 }
 
-func (kv SimpleKVs) ContainsAnyMatch(in []string) string {
+func (kvs SimpleKVs) Contains(key string) (ok bool) {
+	_, ok = kvs[key]
+	return
+}
+
+func (kvs SimpleKVs) ContainsAnyMatch(in []string) string {
 	for _, k := range in {
 		debug.Assert(k != "")
-		for kk := range kv {
+		for kk := range kvs {
 			if strings.Contains(kk, k) {
 				return kk
 			}
