@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -108,7 +108,7 @@ var bmdImmSize int64
 func newBucketMD() *bucketMD {
 	providers := make(cluster.Providers, 2)
 	namespaces := make(cluster.Namespaces, 1)
-	providers[apc.ProviderAIS] = namespaces
+	providers[apc.AIS] = namespaces
 	buckets := make(cluster.Buckets, 16)
 	debug.Assert(cmn.NsGlobalUname == cmn.NsGlobal.Uname())
 	namespaces[cmn.NsGlobalUname] = buckets
@@ -507,10 +507,10 @@ func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
 func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.BucketProps {
 	debug.Assert(len(header) > 0)
 	switch props.Provider {
-	case apc.ProviderAmazon:
+	case apc.AWS:
 		props.Extra.AWS.CloudRegion = header.Get(apc.HdrS3Region)
 		props.Extra.AWS.Endpoint = header.Get(apc.HdrS3Endpoint)
-	case apc.ProviderHTTP:
+	case apc.HTTP:
 		props.Extra.HTTP.OrigURLBck = header.Get(apc.HdrOrigURLBck)
 	}
 

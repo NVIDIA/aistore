@@ -258,7 +258,7 @@ func TestRegressionBuckets(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL(t)
 	)
@@ -272,13 +272,13 @@ func TestRenameBucket(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		renamedBck = cmn.Bck{
 			Name:     bck.Name + "_" + cos.GenTie(),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 	for _, wait := range []bool{true, false} {
@@ -402,7 +402,7 @@ func TestRenameObjects(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     t.Name(),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -962,7 +962,7 @@ func TestStressDeleteRange(t *testing.T) {
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		bck           = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		cksumType = bck.DefaultProps().Cksum.Type
 	)

@@ -54,7 +54,7 @@ func TestObjectInvalidName(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -225,7 +225,7 @@ func TestAppendObject(t *testing.T) {
 				baseParams = tutils.BaseAPIParams(proxyURL)
 				bck        = cmn.Bck{
 					Name:     trand.String(10),
-					Provider: apc.ProviderAIS,
+					Provider: apc.AIS,
 				}
 				objName = "test/obj1"
 
@@ -292,7 +292,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bckLocal   = cmn.Bck{
 			Name:     cliBck.Name,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		bckRemote  = cliBck
 		fileName1  = "mytestobj1.txt"
@@ -442,7 +442,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 		bckLocal = cmn.Bck{
 			Name:     cliBck.Name,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		bckRemote  = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -651,7 +651,7 @@ func TestHeadBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -712,7 +712,7 @@ func TestHeadNonexistentBucket(t *testing.T) {
 
 	bck := cmn.Bck{
 		Name:     bucket,
-		Provider: apc.ProviderAIS,
+		Provider: apc.AIS,
 	}
 
 	_, err = api.HeadBucket(baseParams, bck, true /* don't add */)
@@ -847,7 +847,7 @@ func testEvictRemoteAISBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
 	bck := cmn.Bck{
 		Name:     trand.String(10),
-		Provider: apc.ProviderAIS,
+		Provider: apc.AIS,
 		Ns: cmn.Ns{
 			UUID: tutils.RemoteCluster.UUID,
 		},
@@ -942,7 +942,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		m = ioContext{
 			t: t,
 			bck: cmn.Bck{
-				Provider: apc.ProviderAIS,
+				Provider: apc.AIS,
 				Name:     trand.String(15),
 				Props:    &cmn.BucketProps{BID: 2},
 			},
@@ -954,7 +954,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		_          = mock.NewTarget(mock.NewBaseBownerMock(
 			cluster.NewBck(
-				m.bck.Name, apc.ProviderAIS, cmn.NsGlobal,
+				m.bck.Name, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 1},
 			),
 			cluster.CloneBck(&m.bck),
@@ -1356,7 +1356,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bckLocal   = cmn.Bck{
 			Name:     cliBck.Name,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		basefileName = "mytestobj.txt"
 		objData      = []byte("I am object data")

@@ -1084,8 +1084,8 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			return
 		}
 
-		bckFrom.Provider = apc.ProviderAIS
-		bckTo.Provider = apc.ProviderAIS
+		bckFrom.Provider = apc.AIS
+		bckTo.Provider = apc.AIS
 
 		if _, present := p.owner.bmd.get().Get(bckTo); present {
 			err := cmn.NewErrBckAlreadyExists(bckTo.Bucket())
@@ -1238,7 +1238,7 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query 
 		return
 	}
 	if bck.Provider == "" {
-		bck.Provider = apc.ProviderAIS
+		bck.Provider = apc.AIS
 	}
 	if bck.IsHDFS() && msg.Value == nil {
 		p.writeErr(w, r,
@@ -1857,7 +1857,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	var (
 		remoteUUID    = bck.Ns.UUID
 		query         = r.URL.Query()
-		v, configured = cmn.GCO.Get().Backend.ProviderConf(apc.ProviderAIS)
+		v, configured = cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
 	)
 
 	if !configured {
@@ -2360,7 +2360,7 @@ func (p *proxy) handlePendingRenamedLB(renamedBucket string) {
 		pre:   p._pendingRnPre,
 		final: p._syncBMDFinal,
 		msg:   &apc.ActionMsg{Value: apc.ActMoveBck},
-		bcks:  []*cluster.Bck{cluster.NewBck(renamedBucket, apc.ProviderAIS, cmn.NsGlobal)},
+		bcks:  []*cluster.Bck{cluster.NewBck(renamedBucket, apc.AIS, cmn.NsGlobal)},
 	}
 	_, err := p.owner.bmd.modify(ctx)
 	debug.AssertNoErr(err)
@@ -2856,7 +2856,7 @@ func (p *proxy) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		hbo := cmn.NewHTTPObj(r.URL)
 		q := r.URL.Query()
 		q.Set(apc.QparamOrigURL, r.URL.String())
-		q.Set(apc.QparamProvider, apc.ProviderHTTP)
+		q.Set(apc.QparamProvider, apc.HTTP)
 		r.URL.Path = apc.URLPathObjects.Join(hbo.Bck.Name, hbo.ObjName)
 		r.URL.RawQuery = q.Encode()
 		if r.Method == http.MethodGet {
@@ -2866,7 +2866,7 @@ func (p *proxy) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	p.writeErrf(w, r, "%q provider doesn't support %q", apc.ProviderHTTP, r.Method)
+	p.writeErrf(w, r, "%q provider doesn't support %q", apc.HTTP, r.Method)
 }
 
 /////////////////

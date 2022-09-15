@@ -35,7 +35,7 @@ func TestHTTPProviderBucket(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
-			Provider: apc.ProviderHTTP,
+			Provider: apc.HTTP,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -64,7 +64,7 @@ func TestListBuckets(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -78,7 +78,7 @@ func TestListBuckets(t *testing.T) {
 		fmt.Fprintf(os.Stdout, "  provider: %s, name: %s, ns: %s\n", bck.Provider, bck.Name, bck.Ns)
 	}
 	config := tutils.GetClusterConfig(t)
-	for _, provider := range []string{apc.ProviderAmazon, apc.ProviderGoogle, apc.ProviderAzure, apc.ProviderHDFS} {
+	for _, provider := range []string{apc.AWS, apc.GCP, apc.Azure, apc.HDFS} {
 		_, configured := config.Backend.Providers[provider]
 		query := cmn.QueryBcks{Provider: provider}
 		remoteBuckets, err := api.ListBuckets(baseParams, query, apc.FltExists)
@@ -96,7 +96,7 @@ func TestListBuckets(t *testing.T) {
 	}
 
 	// NsGlobal
-	query := cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
+	query := cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsGlobal}
 	aisBuckets, err := api.ListBuckets(baseParams, query, apc.FltExists)
 	tassert.CheckError(t, err)
 	if len(aisBuckets) != len(bcks.Select(query)) {
@@ -107,7 +107,7 @@ func TestListBuckets(t *testing.T) {
 	query = cmn.QueryBcks{Ns: cmn.NsAnyRemote}
 	bcks, err = api.ListBuckets(baseParams, query, apc.FltExists)
 	tassert.CheckError(t, err)
-	query = cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.NsAnyRemote}
+	query = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
 	aisBuckets, err = api.ListBuckets(baseParams, query, apc.FltExists)
 	tassert.CheckError(t, err)
 	if len(aisBuckets) != len(bcks.Select(query)) {
@@ -123,7 +123,7 @@ func TestDefaultBucketProps(t *testing.T) {
 		globalConfig = tutils.GetClusterConfig(t)
 		bck          = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -155,7 +155,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 	propsToSet := &cmn.BucketPropsToUpdate{
@@ -188,7 +188,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	if bck.IsHDFS() {
-		hdfsBck := cmn.Bck{Provider: apc.ProviderHDFS, Name: trand.String(10)}
+		hdfsBck := cmn.Bck{Provider: apc.HDFS, Name: trand.String(10)}
 		err := api.CreateBucket(baseParams, hdfsBck, &cmn.BucketPropsToUpdate{
 			Extra: &cmn.ExtraToUpdate{
 				HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
@@ -204,7 +204,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 		}{
 			{bck: bck, props: nil},
 			{ // If cluster is not built with HDFS support, bucket creation should fail.
-				bck: cmn.Bck{Provider: apc.ProviderHDFS, Name: trand.String(10)},
+				bck: cmn.Bck{Provider: apc.HDFS, Name: trand.String(10)},
 				props: &cmn.BucketPropsToUpdate{
 					Extra: &cmn.ExtraToUpdate{
 						HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
@@ -232,7 +232,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
 	bck := cmn.Bck{
 		Name:     trand.String(10),
-		Provider: apc.ProviderAIS,
+		Provider: apc.AIS,
 		Ns: cmn.Ns{
 			UUID: tutils.RemoteCluster.UUID,
 		},
@@ -409,7 +409,7 @@ func TestResetBucketProps(t *testing.T) {
 		baseParams   = tutils.BaseAPIParams(proxyURL)
 		bck          = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		propsToUpdate = &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
@@ -465,7 +465,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 
 		tests = []struct {
@@ -1014,7 +1014,7 @@ func TestListObjects(t *testing.T) {
 
 		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		wg = &sync.WaitGroup{}
 
@@ -1171,7 +1171,7 @@ func TestListObjectsPrefix(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	providers := []string{apc.ProviderAIS}
+	providers := []string{apc.AIS}
 	if cliBck.IsRemote() {
 		providers = append(providers, cliBck.Provider)
 	}
@@ -1191,7 +1191,7 @@ func TestListObjectsPrefix(t *testing.T) {
 
 				bckProp, err := api.HeadBucket(baseParams, bck, false /* don't add */)
 				tassert.CheckFatal(t, err)
-				customPage = bckProp.Provider != apc.ProviderAzure
+				customPage = bckProp.Provider != apc.Azure
 
 				tlog.Logf("Cleaning up the remote bucket %s\n", bck)
 				bckList, err := api.ListObjects(baseParams, bck, nil, 0)
@@ -1579,7 +1579,7 @@ func TestBucketInvalidName(t *testing.T) {
 	for _, name := range invalidNames {
 		bck := cmn.Bck{
 			Name:     name,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		if err := api.CreateBucket(baseParams, bck, nil); err == nil {
 			tutils.DestroyBucket(t, proxyURL, bck)
@@ -1617,7 +1617,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		num:             10000,
 		numGetsEachFile: 5,
 		bck: cmn.Bck{
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 			Name:     trand.String(10),
 		},
 	}
@@ -1784,7 +1784,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
 			Name:     testBucketName + "_new",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -1838,7 +1838,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
 			Name:     testBucketName + "_new",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -1896,7 +1896,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		tmpBck     = cmn.Bck{
 			Name:     "tmp_bck_name",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -1946,11 +1946,11 @@ func TestRenameBucketTwice(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
 			Name:     testBucketName + "_new1",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		dstBck2 = cmn.Bck{
 			Name:     testBucketName + "_new2",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -2017,16 +2017,16 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		srcBcks = []cmn.Bck{
 			{
 				Name:     trand.String(10),
-				Provider: apc.ProviderAIS,
+				Provider: apc.AIS,
 			},
 			{
 				Name:     trand.String(10),
-				Provider: apc.ProviderAmazon,
+				Provider: apc.AWS,
 			},
 		}
 	)
@@ -2050,11 +2050,11 @@ func TestRenameBucketWithBackend(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     "renamesrc",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		dstBck = cmn.Bck{
 			Name:     "bucketname",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -2156,7 +2156,7 @@ func TestCopyBucket(t *testing.T) {
 					num: objCnt,
 					bck: cmn.Bck{
 						Name:     "src_copy_bck",
-						Provider: apc.ProviderAIS,
+						Provider: apc.AIS,
 					},
 				}
 				dstms = []*ioContext{
@@ -2165,7 +2165,7 @@ func TestCopyBucket(t *testing.T) {
 						num: objCnt,
 						bck: cmn.Bck{
 							Name:     "dst_copy_bck_1",
-							Provider: apc.ProviderAIS,
+							Provider: apc.AIS,
 						},
 					},
 				}
@@ -2178,11 +2178,11 @@ func TestCopyBucket(t *testing.T) {
 					num: objCnt,
 					bck: cmn.Bck{
 						Name:     "dst_copy_bck_2",
-						Provider: apc.ProviderAIS,
+						Provider: apc.AIS,
 					},
 				})
 			}
-			bckTest := cmn.Bck{Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
+			bckTest := cmn.Bck{Provider: apc.AIS, Ns: cmn.NsGlobal}
 			if test.srcRemote {
 				srcm.bck = cliBck
 				bckTest.Provider = cliBck.Provider
@@ -2276,7 +2276,7 @@ func TestCopyBucket(t *testing.T) {
 				dstProps, err := api.HeadBucket(baseParams, dstm.bck, true /* don't add */)
 				tassert.CheckFatal(t, err)
 
-				if dstProps.Provider != apc.ProviderAIS {
+				if dstProps.Provider != apc.AIS {
 					t.Fatalf("destination bucket does not seem to be 'ais': %s", dstProps.Provider)
 				}
 				// Clear providers to compare the props across different ones
@@ -2349,7 +2349,7 @@ func TestCopyBucket(t *testing.T) {
 
 func TestCopyBucketSimple(t *testing.T) {
 	var (
-		srcBck = cmn.Bck{Name: "cpybck_src", Provider: apc.ProviderAIS}
+		srcBck = cmn.Bck{Name: "cpybck_src", Provider: apc.AIS}
 
 		m = &ioContext{
 			t:         t,
@@ -2382,7 +2382,7 @@ func TestCopyBucketSimple(t *testing.T) {
 }
 
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.ProviderAIS}
+	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
 	tassert.CheckFatal(t, err)
@@ -2407,7 +2407,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		cpyPrefix = "cpyprefix" + trand.String(5)
-		dstBck    = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.ProviderAIS}
+		dstBck    = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 	)
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prefix: cpyPrefix})
@@ -2428,7 +2428,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	dstBck := cmn.Bck{Name: testBucketName + cos.GenTie(), Provider: apc.ProviderAIS}
+	dstBck := cmn.Bck{Name: testBucketName + cos.GenTie(), Provider: apc.AIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
 	tassert.CheckError(t, err)
@@ -2452,7 +2452,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie() + trand.String(5), Provider: apc.ProviderAIS}
+	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie() + trand.String(5), Provider: apc.AIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{DryRun: true})
 	tassert.CheckFatal(t, err)
@@ -2484,10 +2484,10 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 func TestRenameAndCopyBucket(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		src        = cmn.Bck{Name: testBucketName + "_rc_src", Provider: apc.ProviderAIS}
+		src        = cmn.Bck{Name: testBucketName + "_rc_src", Provider: apc.AIS}
 		m          = ioContext{t: t, bck: src, num: 500}
-		dst1       = cmn.Bck{Name: testBucketName + "_rc_dst1", Provider: apc.ProviderAIS}
-		dst2       = cmn.Bck{Name: testBucketName + "_rc_dst2", Provider: apc.ProviderAIS}
+		dst1       = cmn.Bck{Name: testBucketName + "_rc_dst1", Provider: apc.AIS}
+		dst2       = cmn.Bck{Name: testBucketName + "_rc_dst2", Provider: apc.AIS}
 	)
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	m.initWithCleanupAndSaveState()
@@ -2540,7 +2540,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	// more checks
 	//
 	tlog.Logln("Listing and counting")
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltExists)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.AIS}, apc.FltExists)
 	tassert.CheckFatal(t, err)
 
 	tassert.Fatalf(t, !bcks.Contains(cmn.QueryBcks(src)), "expected %s to not exist (be renamed from), got %v", src, bcks)
@@ -2571,11 +2571,11 @@ func TestCopyAndRenameBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
 			Name:     testBucketName + "_new1",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		dstBck2 = cmn.Bck{
 			Name:     testBucketName + "_new2",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -2642,7 +2642,7 @@ func TestBackendBucket(t *testing.T) {
 		remoteBck = cliBck
 		aisBck    = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		m = ioContext{
 			t:      t,
@@ -2973,7 +2973,7 @@ func TestBucketListAndSummary(t *testing.T) {
 		fast     bool // It makes sense only for summary
 	}
 
-	providers := []string{apc.ProviderAIS}
+	providers := []string{apc.AIS}
 	if cliBck.IsRemote() {
 		providers = append(providers, cliBck.Provider)
 	}

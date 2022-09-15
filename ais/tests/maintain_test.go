@@ -53,7 +53,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 3})
 
 	var (
-		bck = cmn.Bck{Name: "maint-list", Provider: apc.ProviderAIS}
+		bck = cmn.Bck{Name: "maint-list", Provider: apc.AIS}
 		m   = &ioContext{
 			t:         t,
 			num:       1500,
@@ -184,7 +184,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		origTargetCount       = smap.CountTargets()
 		origActiveTargetCount = smap.CountActiveTargets()
 		origActiveProxyCount  = smap.CountActiveProxies()
-		bck                   = cmn.Bck{Name: t.Name(), Provider: apc.ProviderAIS}
+		bck                   = cmn.Bck{Name: t.Name(), Provider: apc.AIS}
 	)
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	for i := 0; i < objCount; i++ {
@@ -270,7 +270,7 @@ func countVMDTargets(tsMpaths map[*cluster.Snode][]string) (total int) {
 func TestMaintenanceRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
-		bck = cmn.Bck{Name: "maint-reb", Provider: apc.ProviderAIS}
+		bck = cmn.Bck{Name: "maint-reb", Provider: apc.AIS}
 		m   = &ioContext{
 			t:               t,
 			num:             30,
@@ -341,7 +341,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
-		bck = cmn.Bck{Name: "maint-get-reb", Provider: apc.ProviderAIS}
+		bck = cmn.Bck{Name: "maint-get-reb", Provider: apc.AIS}
 		m   = &ioContext{
 			t:               t,
 			num:             5000,
@@ -492,7 +492,7 @@ func TestShutdownListObjects(t *testing.T) {
 
 	const nodeOffTimeout = 10 * time.Second
 	var (
-		bck = cmn.Bck{Name: "shutdown-list", Provider: apc.ProviderAIS}
+		bck = cmn.Bck{Name: "shutdown-list", Provider: apc.AIS}
 		m   = &ioContext{
 			t:         t,
 			num:       1500,

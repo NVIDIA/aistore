@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -36,8 +36,8 @@ func TestCopyObjRange(t *testing.T) {
 	)
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
-		bckFrom    = cmn.Bck{Name: "cp-range-from", Provider: apc.ProviderAIS}
-		bckTo      = cmn.Bck{Name: "cp-range-to", Provider: apc.ProviderAIS}
+		bckFrom    = cmn.Bck{Name: "cp-range-from", Provider: apc.AIS}
+		bckTo      = cmn.Bck{Name: "cp-range-to", Provider: apc.AIS}
 		objList    = make([]string, 0, objCnt)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		xactID     string
@@ -104,7 +104,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			prefix:  "copy-multiobj/",
 			ordered: true,
 		}
-		toBck     = cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS}
+		toBck     = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 		numToCopy = cos.Min(m.num/2, 13)
 		fmtRange  = "%s{%d..%d}"
 		subtests  = []struct {
@@ -188,8 +188,8 @@ func TestETLMultiObj(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		bck   = cmn.Bck{Name: "etloffline", Provider: apc.ProviderAIS}
-		toBck = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.ProviderAIS}
+		bck   = cmn.Bck{Name: "etloffline", Provider: apc.AIS}
+		toBck = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.AIS}
 	)
 
 	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)

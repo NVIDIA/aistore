@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -406,7 +406,7 @@ func TestDownloadTimeout(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		objName    = "object"
 		link       = "https://storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar"
@@ -477,7 +477,7 @@ func TestDownloadRemote(t *testing.T) {
 			srcBck: cliBck,
 			dstBck: cmn.Bck{
 				Name:     trand.String(5),
-				Provider: apc.ProviderAIS,
+				Provider: apc.AIS,
 			},
 		},
 	}
@@ -581,7 +581,7 @@ func TestDownloadStatus(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		baseParams = tutils.BaseAPIParams()
 		m          = ioContext{t: t}
@@ -632,7 +632,7 @@ func TestDownloadStatusError(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		files = map[string]string{
 			"invalidURL":   "http://some.invalid.url",
@@ -682,7 +682,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		objNameFirst  = "object-first"
 		objNameSecond = "object-second"
@@ -721,7 +721,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		objNameFirst  = "linkFirst"
 		objNameSecond = "linkSecond"
@@ -759,7 +759,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 
 		bck = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 
 		template        = "storage.googleapis.com/minikube/iso/minikube-v0.{21..25..2}.0.iso.sha256"
@@ -798,7 +798,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 
 	bck := cmn.Bck{
 		Name:     bucket,
-		Provider: apc.ProviderAIS,
+		Provider: apc.AIS,
 	}
 
 	_, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, obj)
@@ -812,7 +812,7 @@ func TestDownloadMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(15),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		objsCnt  = 100
 		template = "storage.googleapis.com/nvdata-openimages/openimages-train-{000000..000050}.tar"
@@ -889,7 +889,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		p = bck.DefaultProps()
 
@@ -935,7 +935,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		p = bck.DefaultProps()
 
@@ -977,7 +977,7 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		dlBody = downloader.DlBackendBody{
 			DlBase: downloader.DlBase{Bck: bck},
@@ -1008,7 +1008,7 @@ func TestDownloadSkipObject(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL(t)
 		bck      = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 
 		objName = trand.String(10)
@@ -1037,7 +1037,7 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		dlBody = downloader.DlBackendBody{
 			DlBase: downloader.DlBase{Bck: bck},
@@ -1074,7 +1074,7 @@ func TestDownloadSync(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		dlBody = downloader.DlBackendBody{
 			DlBase: downloader.DlBase{Bck: bck},
@@ -1150,7 +1150,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -1209,7 +1209,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 
 		template = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
@@ -1305,7 +1305,7 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 

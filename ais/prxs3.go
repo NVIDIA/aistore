@@ -159,7 +159,7 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
-	bck := cluster.NewBck(bucket, apc.ProviderAIS, cmn.NsGlobal)
+	bck := cluster.NewBck(bucket, apc.AIS, cmn.NsGlobal)
 	if err := bck.Validate(); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -256,7 +256,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		bt    = cos.MustMarshal(&msg)
 		query = make(url.Values, 1)
 	)
-	query.Set(apc.QparamProvider, apc.ProviderAIS)
+	query.Set(apc.QparamProvider, apc.AIS)
 	if err := jsoniter.Unmarshal(bt, &msg2); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "list-range action message", cos.BHead(bt), err)
 		s3.WriteErr(w, r, err, 0)

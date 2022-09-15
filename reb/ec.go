@@ -52,9 +52,9 @@ func (reb *Reb) runECjoggers() {
 		b              = reb.xctn().Bck()
 	)
 	for _, mpathInfo := range availablePaths {
-		bck := cmn.Bck{Provider: apc.ProviderAIS}
+		bck := cmn.Bck{Provider: apc.AIS}
 		if b != nil {
-			bck = cmn.Bck{Name: b.Name, Provider: apc.ProviderAIS, Ns: b.Ns}
+			bck = cmn.Bck{Name: b.Name, Provider: apc.AIS, Ns: b.Ns}
 		}
 		wg.Add(1)
 		go reb.jogEC(mpathInfo, &bck, wg)

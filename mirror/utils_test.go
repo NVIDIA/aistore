@@ -52,7 +52,7 @@ var _ = Describe("Mirror", func() {
 			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
 			BID:    1,
 		}
-		bck             = cluster.Bck{Name: testBucketName, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal, Props: props}
+		bck             = cluster.Bck{Name: testBucketName, Provider: apc.AIS, Ns: cmn.NsGlobal, Props: props}
 		bmdMock         = mock.NewBaseBownerMock(&bck)
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}

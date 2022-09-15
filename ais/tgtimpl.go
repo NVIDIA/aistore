@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -32,10 +32,10 @@ func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
 
 func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.IsRemoteAIS() {
-		return t.backend[apc.ProviderAIS]
+		return t.backend[apc.AIS]
 	}
 	if bck.IsHTTP() {
-		return t.backend[apc.ProviderHTTP]
+		return t.backend[apc.HTTP]
 	}
 	provider := bck.Provider
 	if bck.Props != nil {

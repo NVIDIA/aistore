@@ -366,7 +366,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 					}
 				} else {
 					tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
-					tassert.Errorf(t, ct.Bck().Provider == bck.Provider, "invalid provider %s, expected: %s", ct.Bck().Provider, apc.ProviderAIS)
+					tassert.Errorf(t, ct.Bck().Provider == bck.Provider, "invalid provider %s, expected: %s", ct.Bck().Provider, apc.AIS)
 					tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)
 					tassert.Errorf(t, ct.ObjectName() == objPath, "invalid object name %s, expected: %s", ct.ObjectName(), objPath)
 					tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
@@ -549,7 +549,7 @@ func TestECChange(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
 			Name:     testBucketName + "-ec-change",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -860,7 +860,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-obj-n-slice",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -964,7 +964,7 @@ func TestECChecksum(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
 			Name:     testBucketName + "-ec-cksum",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -1027,7 +1027,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-props",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1124,7 +1124,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-load",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1232,7 +1232,7 @@ func TestECStress(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-stress",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1272,11 +1272,11 @@ func TestECStressManyBuckets(t *testing.T) {
 	var (
 		bck1 = cmn.Bck{
 			Name:     testBucketName + "1",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		bck2 = cmn.Bck{
 			Name:     testBucketName + "2",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -1344,7 +1344,7 @@ func TestECExtraStress(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-extrastress",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -1470,7 +1470,7 @@ func TestECXattrs(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-attrs",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -1587,7 +1587,7 @@ func TestECDestroyBucket(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-DESTROY",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1678,7 +1678,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-slice-emergency",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1775,7 +1775,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-replica-emergency",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -1922,7 +1922,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-mpath-emergency",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -2035,7 +2035,7 @@ func TestECRebalance(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-rebalance",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -2065,7 +2065,7 @@ func TestECMountpaths(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-mpaths",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -2227,11 +2227,11 @@ func TestECAndRegularRebalance(t *testing.T) {
 	var (
 		bckReg = cmn.Bck{
 			Name:     testBucketName + "-REG",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		bckEC = cmn.Bck{
 			Name:     testBucketName + "-EC",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -2360,7 +2360,7 @@ func TestECResilver(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-resilver",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -2457,7 +2457,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 	var (
 		bckEC = cmn.Bck{
 			Name:     testBucketName + "-EC",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -2693,7 +2693,7 @@ func TestECGenerations(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-obj-gens",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL    = tutils.RandomProxyURL()
 		baseParams  = tutils.BaseAPIParams(proxyURL)

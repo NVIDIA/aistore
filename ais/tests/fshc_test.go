@@ -55,7 +55,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		proxyURL: tutils.RandomProxyURL(),
 		bck: cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		},
 		fileSize: 64 * cos.KiB,
 		mpList:   make(cluster.NodeMap, 10),

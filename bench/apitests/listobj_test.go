@@ -34,7 +34,7 @@ func (tc testConfig) name() string {
 func createAndFillBucket(b *testing.B, objCnt uint, u string) cmn.Bck {
 	const workerCount = 10
 	var (
-		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS}
+		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 		baseParams = tutils.BaseAPIParams(u)
 
 		wg              = &sync.WaitGroup{}

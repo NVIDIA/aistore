@@ -155,7 +155,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	hdr := transport.ObjHdr{
 		Bck: cmn.Bck{
 			Name:     "abc",
-			Provider: apc.ProviderAmazon,
+			Provider: apc.AWS,
 			Ns:       cmn.Ns{UUID: "uuid", Name: "namespace"},
 		},
 		ObjName: "X",
@@ -176,7 +176,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	hdr = transport.ObjHdr{
 		Bck: cmn.Bck{
 			Name:     "abracadabra",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 			Ns:       cmn.NsGlobal,
 		},
 		ObjName: "p/q/s",
@@ -427,7 +427,7 @@ func Test_ObjAttrs(t *testing.T) {
 			reader io.ReadCloser
 			hdr    = transport.ObjHdr{
 				Bck: cmn.Bck{
-					Provider: apc.ProviderAIS,
+					Provider: apc.AIS,
 				},
 				ObjAttrs: attrs,
 				Opaque:   []byte{byte(idx)},
@@ -744,7 +744,7 @@ func newRand(seed int64) *rand.Rand {
 func genStaticHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 	hdr.Bck = cmn.Bck{
 		Name:     "a",
-		Provider: apc.ProviderAIS,
+		Provider: apc.AIS,
 	}
 	hdr.ObjName = strconv.FormatInt(random.Int63(), 10)
 	hdr.Opaque = []byte("123456789abcdef")

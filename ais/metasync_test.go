@@ -170,22 +170,22 @@ func newTransportServer(primary *proxy, s *metaSyncServer, ch chan<- transportDa
 
 func TestMetasyncDeepCopy(t *testing.T) {
 	bmd := newBucketMD()
-	bmd.add(cluster.NewBck("bucket1", apc.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket1", apc.AIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(cluster.NewBck("bucket2", apc.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket2", apc.AIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(cluster.NewBck("bucket3", apc.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket3", apc.AWS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(cluster.NewBck("bucket4", apc.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket4", apc.AWS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
@@ -631,12 +631,12 @@ func TestMetasyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bmd.add(cluster.NewBck("bucket1", apc.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket1", apc.AIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(cluster.NewBck("bucket2", apc.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(cluster.NewBck("bucket2", apc.AIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
@@ -660,7 +660,7 @@ func TestMetasyncData(t *testing.T) {
 		Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash},
 		LRU:   cmn.GCO.Get().LRU,
 	}
-	bmd.add(cluster.NewBck("bucket3", apc.ProviderAIS, cmn.NsGlobal), bprops)
+	bmd.add(cluster.NewBck("bucket3", apc.AIS, cmn.NsGlobal), bprops)
 	primary.owner.bmd.putPersist(bmd, nil)
 	bmdBody = bmd.marshal()
 

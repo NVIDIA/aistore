@@ -1175,7 +1175,7 @@ func (p *proxy) attachDetachRemoteAIS(ctx *configModifier, config *globalConfig)
 		errMsg  string
 		action  = ctx.msg.Action
 		query   = ctx.query
-		v, ok   = config.Backend.ProviderConf(apc.ProviderAIS)
+		v, ok   = config.Backend.ProviderConf(apc.AIS)
 	)
 	if !ok || v == nil {
 		if action == apc.ActDetachRemote {
@@ -1229,7 +1229,7 @@ rret:
 	if errMsg != "" {
 		return false, fmt.Errorf("%s: %s remote cluster: %s", p, action, errMsg)
 	}
-	config.Backend.ProviderConf(apc.ProviderAIS, aisConf)
+	config.Backend.ProviderConf(apc.AIS, aisConf)
 	return
 }
 

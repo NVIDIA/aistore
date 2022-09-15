@@ -1238,7 +1238,7 @@ func TestAtimeLocalGet(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     t.Name(),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL      = tutils.RandomProxyURL(t)
 		baseParams    = tutils.BaseAPIParams(proxyURL)
@@ -1377,7 +1377,7 @@ func TestAtimeLocalPut(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     t.Name(),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL      = tutils.RandomProxyURL(t)
 		baseParams    = tutils.BaseAPIParams(proxyURL)

@@ -1,6 +1,6 @@
 // Package cluster_test provides tests for cluster package
 /*
-* Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+* Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster_test
 
@@ -27,8 +27,8 @@ var _ = Describe("LOM Xattributes", func() {
 		bucketCached = "LOM_TEST_Cached"
 	)
 
-	localBck := cmn.Bck{Name: bucketLocal, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
-	cachedBck := cmn.Bck{Name: bucketCached, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
+	localBck := cmn.Bck{Name: bucketLocal, Provider: apc.AIS, Ns: cmn.NsGlobal}
+	cachedBck := cmn.Bck{Name: bucketCached, Provider: apc.AIS, Ns: cmn.NsGlobal}
 
 	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
@@ -38,11 +38,11 @@ var _ = Describe("LOM Xattributes", func() {
 		mix           = fs.MountpathInfo{Path: xattrMpath}
 		bmdMock       = mock.NewBaseBownerMock(
 			cluster.NewBck(
-				bucketLocal, apc.ProviderAIS, cmn.NsGlobal,
+				bucketLocal, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 201},
 			),
 			cluster.NewBck(
-				bucketCached, apc.ProviderAIS, cmn.NsGlobal,
+				bucketCached, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{
 					Cksum:       cmn.CksumConf{Type: cos.ChecksumXXHash},
 					WritePolicy: cmn.WritePolicyConf{Data: apc.WriteImmediate, MD: apc.WriteNever},
@@ -103,7 +103,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
 				lom.SetCustomMD(cos.SimpleKVs{
-					cmn.SourceObjMD: apc.ProviderGoogle,
+					cmn.SourceObjMD: apc.GCP,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",
 				})
@@ -139,7 +139,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(persist(lom)).NotTo(HaveOccurred())
 
 				lom.SetCustomMD(cos.SimpleKVs{
-					cmn.SourceObjMD: apc.ProviderGoogle,
+					cmn.SourceObjMD: apc.GCP,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",
 				})
@@ -180,7 +180,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(persist(lom)).NotTo(HaveOccurred())
 
 				lom.SetCustomMD(cos.SimpleKVs{
-					cmn.SourceObjMD: apc.ProviderGoogle,
+					cmn.SourceObjMD: apc.GCP,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",
 				})

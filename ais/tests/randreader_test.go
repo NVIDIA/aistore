@@ -19,7 +19,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		numobjects = 10 // NOTE: increase this number if need be ...
 		bck        = cmn.Bck{
 			Name:     "RRTestBucket",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)

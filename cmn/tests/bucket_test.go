@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 
@@ -25,41 +25,41 @@ func TestParseBckObjectURI(t *testing.T) {
 		},
 		{
 			uri:         "ais://",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS},
+			expectedBck: cmn.Bck{Provider: apc.AIS},
 		},
 		{
 			uri:         "ais://@uuid",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: "uuid"}},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Ns: cmn.Ns{UUID: "uuid"}},
 		},
 		{
 			uri:         "ais://@uuid#namespace/bucket/object",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 			expectedObj: "object",
 		},
 		{
 			uri:         "ais://@uuid#",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: "uuid"}},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Ns: cmn.Ns{UUID: "uuid"}},
 		},
 		{
 			uri:         "ais://@uuid#/",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: "uuid"}},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Ns: cmn.Ns{UUID: "uuid"}},
 		},
 		{
 			uri:         "ais://@#/",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS},
+			expectedBck: cmn.Bck{Provider: apc.AIS},
 		},
 		{
 			uri:         "ais://@#",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS},
+			expectedBck: cmn.Bck{Provider: apc.AIS},
 		},
 		{
 			uri:         "ais://@",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS},
+			expectedBck: cmn.Bck{Provider: apc.AIS},
 		},
 		{
 			uri:         "ais://@",
 			opts:        cmn.ParseURIOpts{IsQuery: true},
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Ns: cmn.NsAnyRemote},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Ns: cmn.NsAnyRemote},
 		},
 		{
 			uri:         "@uuid#namespace",
@@ -78,47 +78,47 @@ func TestParseBckObjectURI(t *testing.T) {
 		},
 		{
 			uri:         "ais://@#/bucket",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Name: "bucket"},
 		},
 		{
 			uri:         "ais://bucket",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Name: "bucket"},
 		},
 		{
 			uri:         "bucket",
-			opts:        cmn.ParseURIOpts{DefaultProvider: apc.ProviderAIS},
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"},
+			opts:        cmn.ParseURIOpts{DefaultProvider: apc.AIS},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Name: "bucket"},
 		},
 		{
 			uri:         "bucket",
-			opts:        cmn.ParseURIOpts{DefaultProvider: apc.ProviderAmazon},
-			expectedBck: cmn.Bck{Provider: apc.ProviderAmazon, Name: "bucket"},
+			opts:        cmn.ParseURIOpts{DefaultProvider: apc.AWS},
+			expectedBck: cmn.Bck{Provider: apc.AWS, Name: "bucket"},
 		},
 		{
 			uri:         "ais://bucket/objname",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Name: "bucket"},
 			expectedObj: "objname",
 		},
 		{
 			uri:         "ais://@uuid#namespace/bucket",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 		},
 		{
 			uri:         "@uuid#namespace/bucket",
-			opts:        cmn.ParseURIOpts{DefaultProvider: apc.ProviderAmazon},
-			expectedBck: cmn.Bck{Provider: apc.ProviderAmazon, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+			opts:        cmn.ParseURIOpts{DefaultProvider: apc.AWS},
+			expectedBck: cmn.Bck{Provider: apc.AWS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 		},
 		{
 			uri:         "ais://bucket",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"},
+			expectedBck: cmn.Bck{Provider: apc.AIS, Name: "bucket"},
 		},
 		{
 			uri:         "aws://",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAmazon},
+			expectedBck: cmn.Bck{Provider: apc.AWS},
 		},
 		{
 			uri:         "az:///",
-			expectedBck: cmn.Bck{Provider: apc.ProviderAzure},
+			expectedBck: cmn.Bck{Provider: apc.Azure},
 		},
 	}
 

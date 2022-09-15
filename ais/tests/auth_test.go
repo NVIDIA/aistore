@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -90,7 +90,7 @@ func TestAuthBck(t *testing.T) {
 
 	p, err := api.HeadBucket(authBP, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, p.Provider == apc.ProviderAIS, "expected provider %q, got %q", apc.ProviderAIS, p.Provider)
+	tassert.Errorf(t, p.Provider == apc.AIS, "expected provider %q, got %q", apc.AIS, p.Provider)
 
 	defer func() {
 		err := api.DestroyBucket(authBP, bck)

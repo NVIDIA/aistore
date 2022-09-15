@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -307,7 +307,7 @@ func extractErrCode(e error) (int, error) {
 // BackendProvider //
 /////////////////////
 
-func (*AISBackendProvider) Provider() string  { return apc.ProviderAIS }
+func (*AISBackendProvider) Provider() string  { return apc.AIS }
 func (*AISBackendProvider) MaxPageSize() uint { return apc.DefaultListPageSizeAIS }
 
 func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
@@ -391,7 +391,7 @@ func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, err
 func (m *AISBackendProvider) _listBcks(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error) {
 	var (
 		aisCluster  *remAISCluster
-		remoteQuery = cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{Name: qbck.Ns.Name}}
+		remoteQuery = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: qbck.Ns.Name}}
 	)
 	if aisCluster, err = m.remoteCluster(uuid); err != nil {
 		return
@@ -428,7 +428,7 @@ func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs,
 	}
 	oa = &cmn.ObjAttrs{}
 	*oa = op.ObjAttrs
-	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderAIS)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
 	return
 }
 
@@ -473,7 +473,7 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadClo
 	}
 	oa := lom.ObjAttrs()
 	*oa = op.ObjAttrs
-	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderAIS)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
 	expCksum = oa.Cksum
 	lom.SetCksum(nil)
 	// reader
@@ -512,7 +512,7 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 	}
 	oa := lom.ObjAttrs()
 	*oa = op.ObjAttrs
-	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderAIS)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
 	return
 }
 

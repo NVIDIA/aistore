@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -47,10 +47,10 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		cfg = cmn.GCO.Get()
 
 		bmd = newBucketMD()
-		for _, provider := range []string{apc.ProviderAIS, apc.ProviderAmazon} {
+		for _, provider := range []string{apc.AIS, apc.AWS} {
 			for i := 0; i < 10; i++ {
 				var hdr http.Header
-				if provider != apc.ProviderAIS {
+				if provider != apc.AIS {
 					hdr = http.Header{apc.HdrBackendProvider: []string{provider}}
 				}
 
@@ -100,7 +100,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 								Signature: signature,
 							}
 							clone := bmd.clone()
-							bck := cluster.NewBck("abc"+cos.GenTie(), apc.ProviderAIS, cmn.NsGlobal)
+							bck := cluster.NewBck("abc"+cos.GenTie(), apc.AIS, cmn.NsGlobal)
 
 							// Add bucket and save.
 							clone.add(bck, defaultBckProps(bckPropsArgs{bck: bck}))

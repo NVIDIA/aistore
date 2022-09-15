@@ -47,7 +47,7 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 	for i := 0; i < 100; i++ {
 		bck := cmn.Bck{
 			Name:     prefix + trand.String(8),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		_, err := api.HeadBucket(baseParams, bck, true /* don't add to cluster MD */)
 		if err == nil {

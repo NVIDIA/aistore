@@ -1,6 +1,6 @@
 // Package tutils provides common low-level utilities for all aistore unit and integration tests
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tutils_test
 
@@ -54,7 +54,7 @@ func putFile(size int64, cksumType string) error {
 	}
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bck:        cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS},
+		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
 		Object:     "key",
 		Cksum:      r.Cksum(),
 		Reader:     r,
@@ -71,7 +71,7 @@ func putRand(size int64, cksumType string) error {
 	}
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bck:        cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS},
+		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
 		Object:     "key",
 		Cksum:      r.Cksum(),
 		Reader:     r,
@@ -87,7 +87,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 	}
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bck:        cmn.Bck{Name: "bucket", Provider: apc.ProviderAIS},
+		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
 		Object:     "key",
 		Cksum:      r.Cksum(),
 		Reader:     r,

@@ -262,7 +262,7 @@ func parseCmdLine() (params, error) {
 	f.DurationVar(&transportArgs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name or bucket URI. If empty, a bucket with random name will be created")
-	f.StringVar(&p.bck.Provider, "provider", apc.ProviderAIS,
+	f.StringVar(&p.bck.Provider, "provider", apc.AIS,
 		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"hdfs\"  for Azure, Amazon, Google, and HDFS clouds respectively")
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
@@ -624,7 +624,7 @@ func (s *sts) aggregate(other sts) {
 }
 
 func setupBucket(runParams *params) error {
-	if runParams.bck.Provider != apc.ProviderAIS || runParams.getConfig {
+	if runParams.bck.Provider != apc.AIS || runParams.getConfig {
 		return nil
 	}
 	if runParams.bck.Name == "" {

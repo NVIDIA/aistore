@@ -244,7 +244,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			if m.bck.IsRemote() {
 				defer m.del()
 			}
-			toBck := cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS}
+			toBck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 			tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 
 			if test.list {
@@ -352,8 +352,8 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 
 func TestAppendToArch(t *testing.T) {
 	var (
-		fromBck = cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS}
-		toBck   = cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS}
+		fromBck = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		toBck   = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 		m       = ioContext{
 			t:       t,
 			bck:     fromBck,

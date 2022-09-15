@@ -2,7 +2,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -37,7 +37,7 @@ type (
 var _ cluster.BackendProvider = (*hdfsProvider)(nil)
 
 func NewHDFS(t cluster.Target) (cluster.BackendProvider, error) {
-	providerConf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.ProviderHDFS)
+	providerConf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.HDFS)
 	debug.Assert(ok)
 	hdfsConf := providerConf.(cmn.BackendConfHDFS)
 
@@ -68,7 +68,7 @@ func hdfsErrorToAISError(err error) (int, error) {
 	return http.StatusBadRequest, err
 }
 
-func (*hdfsProvider) Provider() string  { return apc.ProviderHDFS }
+func (*hdfsProvider) Provider() string  { return apc.HDFS }
 func (*hdfsProvider) MaxPageSize() uint { return 10000 }
 
 ///////////////////
@@ -105,7 +105,7 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.Simple
 	}
 
 	bckProps = make(cos.SimpleKVs)
-	bckProps[apc.HdrBackendProvider] = apc.ProviderHDFS
+	bckProps[apc.HdrBackendProvider] = apc.HDFS
 	bckProps[apc.HdrBucketVerEnabled] = "false"
 	return
 }
@@ -215,7 +215,7 @@ func (hp *hdfsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errC
 		return
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderHDFS)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.HDFS)
 	oa.Size = fr.Stat().Size()
 	if verbose {
 		glog.Infof("[head_object] %s", lom)
@@ -260,7 +260,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		errCode, err = hdfsErrorToAISError(err)
 		return
 	}
-	lom.SetCustomKey(cmn.SourceObjMD, apc.ProviderHDFS)
+	lom.SetCustomKey(cmn.SourceObjMD, apc.HDFS)
 	setSize(ctx, fr.Stat().Size())
 	return wrapReader(ctx, fr), nil, 0, nil
 }

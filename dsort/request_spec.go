@@ -158,7 +158,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return parsedRS, errMissingBucket
 	}
 	if rs.Bck.Provider == "" {
-		rs.Bck.Provider = apc.ProviderAIS
+		rs.Bck.Provider = apc.AIS
 	}
 	if _, err := cmn.NormalizeProvider(rs.Bck.Provider); err != nil {
 		return parsedRS, err

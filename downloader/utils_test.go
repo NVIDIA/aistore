@@ -1,6 +1,6 @@
 // Package downloader implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package downloader_test
 
@@ -54,7 +54,7 @@ func TestCompareObject(t *testing.T) {
 
 	// Modify local object to contain invalid (meta)data.
 	customMD := cos.SimpleKVs{
-		cmn.SourceObjMD:  apc.ProviderAmazon,
+		cmn.SourceObjMD:  apc.AWS,
 		cmn.VersionObjMD: "none",
 		cmn.CRC32CObjMD:  "bad",
 		cmn.MD5ObjMD:     "worse",
@@ -78,7 +78,7 @@ func TestCompareObject(t *testing.T) {
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that the same provider still doesn't make them equal
-	customMD[cmn.SourceObjMD] = apc.ProviderGoogle
+	customMD[cmn.SourceObjMD] = apc.GCP
 	equal, err = downloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")

@@ -1,6 +1,6 @@
 // Package tutils provides common low-level utilities for all aistore unit and integration tests
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tutils
 
@@ -37,7 +37,7 @@ func destroyMatchingBuckets(subName string) (err error) {
 	proxyURL := GetPrimaryURL()
 	baseParams := BaseAPIParams(proxyURL)
 
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.ProviderAIS}, apc.FltExists)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.AIS}, apc.FltExists)
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func retrieveBackendProviders() []string {
 	for b := range config.Backend.Providers {
 		set.Add(b)
 	}
-	set.Add(apc.ProviderAIS)
+	set.Add(apc.AIS)
 	backends := set.ToSlice()
 	sort.Strings(backends)
 	return backends

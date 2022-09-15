@@ -37,7 +37,7 @@ var _ = Describe("CommunicatorTest", func() {
 		dataSize      = int64(cos.MiB * 50)
 		transformData = make([]byte, dataSize)
 
-		bck        = cmn.Bck{Name: "commBck", Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
+		bck        = cmn.Bck{Name: "commBck", Provider: apc.AIS, Ns: cmn.NsGlobal}
 		objName    = "commObj"
 		clusterBck = cluster.NewBck(
 			bck.Name, bck.Provider, bck.Ns,

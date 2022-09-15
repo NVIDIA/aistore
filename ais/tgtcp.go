@@ -274,14 +274,14 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		fs.FillDiskStats(diskStats)
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case apc.GetWhatRemoteAIS:
-		conf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.ProviderAIS)
+		conf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
 		if !ok {
 			t.writeJSON(w, r, cmn.BackendInfoAIS{}, httpdaeWhat)
 			return
 		}
 		clusterConf, ok := conf.(cmn.BackendConfAIS)
 		debug.Assert(ok)
-		aisCloud := t.backend[apc.ProviderAIS].(*backend.AISBackendProvider)
+		aisCloud := t.backend[apc.AIS].(*backend.AISBackendProvider)
 		t.writeJSON(w, r, aisCloud.GetInfo(clusterConf), httpdaeWhat)
 	default:
 		t.htrun.httpdaeget(w, r)
@@ -865,9 +865,9 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 	}
 	if msg.Action == apc.ActAttachRemote || msg.Action == apc.ActDetachRemote {
 		// NOTE: apply the entire config: add new and _refresh_ existing
-		aisConf, ok := newConfig.Backend.ProviderConf(apc.ProviderAIS)
+		aisConf, ok := newConfig.Backend.ProviderConf(apc.AIS)
 		debug.Assert(ok)
-		aisCloud := t.backend[apc.ProviderAIS].(*backend.AISBackendProvider)
+		aisCloud := t.backend[apc.AIS].(*backend.AISBackendProvider)
 		err = aisCloud.Apply(aisConf, msg.Action)
 		if err != nil {
 			glog.Errorf("%s: %v - proceeding anyway...", t, err)

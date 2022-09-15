@@ -69,8 +69,8 @@ var _ = Describe("space evict/cleanup tests", func() {
 			createAndAddMountpath(basePath)
 			t = newTargetLRUMock()
 			availablePaths := fs.GetAvail()
-			bck := cmn.Bck{Name: bucketName, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
-			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: apc.ProviderAIS, Ns: cmn.NsGlobal}
+			bck := cmn.Bck{Name: bucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
+			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: apc.AIS, Ns: cmn.NsGlobal}
 			filesPath = availablePaths[basePath].MakePathCT(&bck, fs.ObjectType)
 			fpAnother = availablePaths[basePath].MakePathCT(&bckAnother, fs.ObjectType)
 			cos.CreateDir(filesPath)
@@ -318,7 +318,7 @@ func newTargetLRUMock() *mock.TargetMock {
 	var (
 		bmdMock = mock.NewBaseBownerMock(
 			cluster.NewBck(
-				bucketName, apc.ProviderAIS, cmn.NsGlobal,
+				bucketName, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: true},
@@ -327,7 +327,7 @@ func newTargetLRUMock() *mock.TargetMock {
 				},
 			),
 			cluster.NewBck(
-				bucketNameAnother, apc.ProviderAIS, cmn.NsGlobal,
+				bucketNameAnother, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: false},

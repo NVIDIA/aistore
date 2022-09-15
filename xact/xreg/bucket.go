@@ -74,7 +74,7 @@ func RenewMakeNCopies(t cluster.Target, uuid, tag string) {
 	var (
 		cfg      = cmn.GCO.Get()
 		bmd      = t.Bowner().Get()
-		provider = apc.ProviderAIS
+		provider = apc.AIS
 	)
 	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 		if bck.Props.Mirror.Enabled {

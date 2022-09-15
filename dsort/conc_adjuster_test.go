@@ -1,6 +1,6 @@
 // Package dsort provides APIs for distributed archive file shuffling.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 

@@ -178,7 +178,7 @@ func (bp *BucketProps) Equal(other *BucketProps) (eq bool) {
 func (bp *BucketProps) Validate(targetCnt int) error {
 	debug.Assert(apc.IsProvider(bp.Provider))
 	if !bp.BackendBck.IsEmpty() {
-		if bp.Provider != apc.ProviderAIS {
+		if bp.Provider != apc.AIS {
 			return fmt.Errorf("wrong bucket provider %q: only AIS buckets can have remote backend (%q)",
 				bp.Provider, bp.BackendBck)
 		}
@@ -247,11 +247,11 @@ func (c *ExtraProps) ValidateAsProps(arg ...interface{}) error {
 	provider, ok := arg[0].(string)
 	debug.Assert(ok)
 	switch provider {
-	case apc.ProviderHDFS:
+	case apc.HDFS:
 		if c.HDFS.RefDirectory == "" {
 			return fmt.Errorf("reference directory must be set for a bucket with HDFS provider")
 		}
-	case apc.ProviderHTTP:
+	case apc.HTTP:
 		if c.HTTP.OrigURLBck == "" {
 			return fmt.Errorf("original bucket URL must be set for a bucket with HTTP provider")
 		}

@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 
@@ -43,10 +43,10 @@ var _ = Describe("IterFields", func() {
 			},
 			Entry("list BucketProps fields",
 				cmn.BucketProps{
-					Provider: apc.ProviderAIS,
+					Provider: apc.AIS,
 					BackendBck: cmn.Bck{
 						Name:     "name",
-						Provider: apc.ProviderGoogle,
+						Provider: apc.GCP,
 					},
 					EC: cmn.ECConf{
 						Enabled:      true,
@@ -61,10 +61,10 @@ var _ = Describe("IterFields", func() {
 					},
 				},
 				map[string]interface{}{
-					"provider": apc.ProviderAIS,
+					"provider": apc.AIS,
 
 					"backend_bck.name":     "name",
-					"backend_bck.provider": apc.ProviderGoogle,
+					"backend_bck.provider": apc.GCP,
 
 					"mirror.enabled":      false,
 					"mirror.copies":       int64(0),
@@ -314,7 +314,7 @@ var _ = Describe("IterFields", func() {
 				"mirror.enabled": true,
 			}),
 			Entry("readonly field", &cmn.BucketProps{}, map[string]interface{}{
-				"provider": apc.ProviderAIS,
+				"provider": apc.AIS,
 			}),
 			Entry("field not found", &Foo{}, map[string]interface{}{
 				"foo.bar": 2,

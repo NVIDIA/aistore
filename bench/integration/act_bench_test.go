@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -68,7 +68,7 @@ func BenchmarkECEncode(b *testing.B) {
 			objCount := int(bckSize/size) + 1
 			bck := cmn.Bck{
 				Name:     fmt.Sprintf("bench-ec-enc-%d", len(objSizes)*ecIdx+szIdx),
-				Provider: apc.ProviderAIS,
+				Provider: apc.AIS,
 			}
 			tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 			fillBucket(b, proxyURL, bck, uint64(size), objCount)
@@ -110,7 +110,7 @@ func BenchmarkECRebalance(b *testing.B) {
 			objCount := int(bckSize/size) + 1
 			bck := cmn.Bck{
 				Name:     fmt.Sprintf("bench-reb-%d", len(objSizes)*ecIdx+szIdx),
-				Provider: apc.ProviderAIS,
+				Provider: apc.AIS,
 			}
 			tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 
@@ -158,7 +158,7 @@ func BenchmarkRebalance(b *testing.B) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     "bench-reb",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 

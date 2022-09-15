@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -27,31 +27,31 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"regular ais bucket with simple object name",
-				"bck", apc.ProviderAIS, cmn.NsGlobal, "obj",
+				"bck", apc.AIS, cmn.NsGlobal, "obj",
 			),
 			Entry(
 				"regular ais bucket with long object name",
-				"bck", apc.ProviderAIS, cmn.NsGlobal, "obj/tmp1/tmp2",
+				"bck", apc.AIS, cmn.NsGlobal, "obj/tmp1/tmp2",
 			),
 			Entry(
 				"non-empty local namespace",
-				"bck", apc.ProviderAIS, cmn.Ns{Name: "namespace"}, "obj/tmp1/tmp2",
+				"bck", apc.AIS, cmn.Ns{Name: "namespace"}, "obj/tmp1/tmp2",
 			),
 			Entry(
 				"non-empty cloud namespace",
-				"bck", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "namespace"}, "obj/tmp1/tmp2",
+				"bck", apc.AIS, cmn.Ns{UUID: "uuid", Name: "namespace"}, "obj/tmp1/tmp2",
 			),
 			Entry(
 				"aws provider",
-				"bck", apc.ProviderAmazon, cmn.NsGlobal, "obj",
+				"bck", apc.AWS, cmn.NsGlobal, "obj",
 			),
 			Entry(
 				"gcp provider",
-				"bck", apc.ProviderGoogle, cmn.NsGlobal, "obj",
+				"bck", apc.GCP, cmn.NsGlobal, "obj",
 			),
 			Entry(
 				"backend provider",
-				"bck", apc.ProviderGoogle, cmn.NsGlobal, "obj",
+				"bck", apc.GCP, cmn.NsGlobal, "obj",
 			),
 		)
 	})
@@ -64,33 +64,33 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"not matching names",
-				NewBck("a", apc.ProviderAIS, cmn.NsGlobal),
-				NewBck("b", apc.ProviderAIS, cmn.NsGlobal),
+				NewBck("a", apc.AIS, cmn.NsGlobal),
+				NewBck("b", apc.AIS, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching namespace #1",
-				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns1"}),
-				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns2"}),
+				NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns1"}),
+				NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns2"}),
 			),
 			Entry(
 				"not matching namespace #2",
-				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid1", Name: "ns"}),
-				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid2", Name: "ns"}),
+				NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid1", Name: "ns"}),
+				NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid2", Name: "ns"}),
 			),
 			Entry(
 				"not matching providers #2",
-				NewBck("a", apc.ProviderAIS, cmn.NsGlobal),
-				NewBck("a", apc.ProviderAmazon, cmn.NsGlobal),
+				NewBck("a", apc.AIS, cmn.NsGlobal),
+				NewBck("a", apc.AWS, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching Backend providers #4",
-				NewBck("a", apc.ProviderAmazon, cmn.NsGlobal),
-				NewBck("a", apc.ProviderGoogle, cmn.NsGlobal),
+				NewBck("a", apc.AWS, cmn.NsGlobal),
+				NewBck("a", apc.GCP, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching Backend providers #5",
-				NewBck("a", apc.ProviderGoogle, cmn.NsGlobal),
-				NewBck("a", apc.ProviderAmazon, cmn.NsGlobal),
+				NewBck("a", apc.GCP, cmn.NsGlobal),
+				NewBck("a", apc.AWS, cmn.NsGlobal),
 			),
 		)
 
@@ -101,18 +101,18 @@ var _ = Describe("Bck", func() {
 			},
 			Entry(
 				"matching AIS providers",
-				NewBck("a", apc.ProviderAIS, cmn.NsGlobal),
-				NewBck("a", apc.ProviderAIS, cmn.NsGlobal),
+				NewBck("a", apc.AIS, cmn.NsGlobal),
+				NewBck("a", apc.AIS, cmn.NsGlobal),
 			),
 			Entry(
 				"matching local namespaces",
-				NewBck("a", apc.ProviderAIS, cmn.Ns{Name: "ns"}),
-				NewBck("a", apc.ProviderAIS, cmn.Ns{Name: "ns"}),
+				NewBck("a", apc.AIS, cmn.Ns{Name: "ns"}),
+				NewBck("a", apc.AIS, cmn.Ns{Name: "ns"}),
 			),
 			Entry(
 				"matching cloud namespaces",
-				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
-				NewBck("a", apc.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
+				NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
+				NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
 			),
 		)
 	})

@@ -145,7 +145,7 @@ func (t *target) doPutObjS3(w http.ResponseWriter, r *http.Request, items []stri
 	started := time.Now()
 	lom.SetAtimeUnix(started.UnixNano())
 
-	// TODO: dual checksumming, e.g. lom.SetCustom(apc.ProviderAmazon, ...)
+	// TODO: dual checksumming, e.g. lom.SetCustom(apc.AWS, ...)
 
 	dpq := dpqAlloc()
 	defer dpqFree(dpq)

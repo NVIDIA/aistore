@@ -30,7 +30,7 @@ var (
 func setBucket() (bck cmn.Bck, err error) {
 	bucket := os.Getenv("BUCKET")
 	if bucket == "" {
-		bucket = apc.ProviderAIS + apc.BckProviderSeparator + trand.String(7)
+		bucket = apc.AIS + apc.BckProviderSeparator + trand.String(7)
 	}
 	bck, _, err = cmn.ParseBckObjectURI(bucket, cmn.ParseURIOpts{})
 	if err != nil {

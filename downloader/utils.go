@@ -1,6 +1,6 @@
 // Package downloader implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package downloader
 
@@ -162,7 +162,7 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 	switch {
 	case cos.IsGoogleStorageURL(u) || cos.IsGoogleAPIURL(u):
 		h := cmn.BackendHelpers.Google
-		oah.SetCustomKey(cmn.SourceObjMD, apc.ProviderGoogle)
+		oah.SetCustomKey(cmn.SourceObjMD, apc.GCP)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cos.GsVersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
@@ -180,7 +180,7 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 		}
 	case cos.IsS3URL(link):
 		h := cmn.BackendHelpers.Amazon
-		oah.SetCustomKey(cmn.SourceObjMD, apc.ProviderAmazon)
+		oah.SetCustomKey(cmn.SourceObjMD, apc.AWS)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cos.S3VersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
@@ -189,7 +189,7 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 		}
 	case cos.IsAzureURL(u):
 		h := cmn.BackendHelpers.Azure
-		oah.SetCustomKey(cmn.SourceObjMD, apc.ProviderAzure)
+		oah.SetCustomKey(cmn.SourceObjMD, apc.Azure)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cos.AzVersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}

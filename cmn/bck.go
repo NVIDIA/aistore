@@ -303,11 +303,11 @@ func (b *Bck) MakeUname(objName string) string {
 //
 
 func IsCloudProvider(p string) bool {
-	return p == apc.ProviderAmazon || p == apc.ProviderGoogle || p == apc.ProviderAzure
+	return p == apc.AWS || p == apc.GCP || p == apc.Azure
 }
 
 func IsRemoteProvider(p string) bool {
-	return IsCloudProvider(p) || p == apc.ProviderHDFS || p == apc.ProviderHTTP
+	return IsCloudProvider(p) || p == apc.HDFS || p == apc.HTTP
 }
 
 func (n Ns) IsGlobal() bool    { return n == NsGlobal }
@@ -336,12 +336,12 @@ func (b *Bck) RemoteBck() *Bck {
 }
 
 func (b *Bck) IsAIS() bool {
-	return b.Provider == apc.ProviderAIS && !b.Ns.IsRemote() && b.Backend() == nil
+	return b.Provider == apc.AIS && !b.Ns.IsRemote() && b.Backend() == nil
 }
 
-func (b *Bck) IsRemoteAIS() bool { return b.Provider == apc.ProviderAIS && b.Ns.IsRemote() }
-func (b *Bck) IsHDFS() bool      { return b.Provider == apc.ProviderHDFS }
-func (b *Bck) IsHTTP() bool      { return b.Provider == apc.ProviderHTTP }
+func (b *Bck) IsRemoteAIS() bool { return b.Provider == apc.AIS && b.Ns.IsRemote() }
+func (b *Bck) IsHDFS() bool      { return b.Provider == apc.HDFS }
+func (b *Bck) IsHTTP() bool      { return b.Provider == apc.HTTP }
 
 func (b *Bck) IsRemote() bool {
 	return IsRemoteProvider(b.Provider) || b.IsRemoteAIS() || b.Backend() != nil
@@ -439,7 +439,7 @@ func (qbck QueryBcks) Contains(other *Bck) bool {
 	if qbck.Name != "" {
 		// NOTE: named bucket with no provider is assumed to be ais://
 		if other.Provider == "" {
-			other.Provider = apc.ProviderAIS
+			other.Provider = apc.AIS
 		}
 		if qbck.Provider == "" {
 			qbck.Provider = other.Provider //nolint:revive // if not set we match the expected
@@ -513,7 +513,7 @@ func (bcks Bcks) Equal(other Bcks) bool {
 func NewHTTPObj(u *url.URL) *HTTPBckObj {
 	hbo := &HTTPBckObj{
 		Bck: Bck{
-			Provider: apc.ProviderHTTP,
+			Provider: apc.HTTP,
 			Ns:       NsGlobal,
 		},
 	}

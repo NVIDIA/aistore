@@ -374,7 +374,7 @@ func (mgr *Manager) BucketsMDChanged() error {
 	} else if !newBckMD.IsECUsed() && oldBckMD.IsECUsed() {
 		mgr.closeECBundles()
 	}
-	provider := apc.ProviderAIS
+	provider := apc.AIS
 	newBckMD.Range(&provider, nil, func(nbck *cluster.Bck) bool {
 		oprops, ok := oldBckMD.Get(nbck)
 		if !ok {
@@ -410,7 +410,7 @@ func (mgr *Manager) ListenSmapChanged() {
 	// bckMD will be present at this point
 	// stopping relevant EC xactions which can't be satisfied with current number of targets
 	// respond xaction is never stopped as it should respond regardless of the other targets
-	provider := apc.ProviderAIS
+	provider := apc.AIS
 	mgr.bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 		bckName, bckProps := bck.Name, bck.Props
 		bckXacts := mgr.getBckXactsUnlocked(bckName)

@@ -63,7 +63,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		fuseDir, err = os.MkdirTemp("/tmp", "")
 		Expect(err).NotTo(HaveOccurred())

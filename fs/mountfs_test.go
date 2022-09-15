@@ -321,7 +321,7 @@ func BenchmarkMakePathFQN(b *testing.B) {
 	var (
 		bck = cmn.Bck{
 			Name:     "bck",
-			Provider: apc.ProviderAzure,
+			Provider: apc.Azure,
 			Ns:       cmn.Ns{Name: "name", UUID: "uuid"},
 		}
 		mi      = fs.MountpathInfo{Path: trand.String(200)}

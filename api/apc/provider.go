@@ -11,12 +11,12 @@ import (
 
 // Backend Provider enum
 const (
-	ProviderAIS    = "ais"
-	ProviderAmazon = "aws"
-	ProviderAzure  = "azure"
-	ProviderGoogle = "gcp"
-	ProviderHDFS   = "hdfs"
-	ProviderHTTP   = "ht"
+	AIS   = "ais"
+	AWS   = "aws"
+	Azure = "azure"
+	GCP   = "gcp"
+	HDFS  = "hdfs"
+	HTTP  = "ht"
 
 	AllProviders = "ais, aws (s3://), gcp (gs://), azure (az://), hdfs://, ht://" // NOTE: must include all
 
@@ -34,25 +34,18 @@ const (
 	AISScheme     = "ais"
 )
 
-var Providers = cos.NewStringSet(
-	ProviderAIS,
-	ProviderGoogle,
-	ProviderAmazon,
-	ProviderAzure,
-	ProviderHDFS,
-	ProviderHTTP,
-)
+var Providers = cos.NewStringSet(AIS, GCP, AWS, Azure, HDFS, HTTP)
 
 func IsProvider(p string) bool { return Providers.Contains(p) }
 
 func ToScheme(p string) string {
 	debug.Assert(IsProvider(p))
 	switch p {
-	case ProviderAmazon:
+	case AWS:
 		return S3Scheme
-	case ProviderAzure:
+	case Azure:
 		return AZScheme
-	case ProviderGoogle:
+	case GCP:
 		return GSScheme
 	default:
 		return p
@@ -65,13 +58,13 @@ func NormalizeProvider(p string) string {
 	}
 	switch p {
 	case "":
-		return ProviderAIS // NOTE: ais is the default provider
+		return AIS // NOTE: ais is the default provider
 	case S3Scheme:
-		return ProviderAmazon
+		return AWS
 	case AZScheme:
-		return ProviderAzure
+		return Azure
 	case GSScheme:
-		return ProviderGoogle
+		return GCP
 	default:
 		return ""
 	}

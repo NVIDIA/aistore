@@ -1,6 +1,6 @@
 // Package tutils provides common low-level utilities for all aistore unit and integration tests
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package tutils
 
@@ -132,7 +132,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 		bck = cmn.Bck{
 			Name:     trand.String(10),
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 			Ns:       cmn.NsGlobal,
 			Props: &cmn.BucketProps{
 				Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash},

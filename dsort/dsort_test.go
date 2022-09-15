@@ -1,6 +1,6 @@
 // Package dsort provides APIs for distributed archive file shuffling.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -272,7 +272,7 @@ func (tctx *testContext) setup() {
 	// Initialize BMD owner.
 	bmdMock := mock.NewBaseBownerMock(
 		cluster.NewBck(
-			testBucket, apc.ProviderAIS, cmn.NsGlobal,
+			testBucket, apc.AIS, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		),
 	)

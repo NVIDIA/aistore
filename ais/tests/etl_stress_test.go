@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -47,7 +47,7 @@ def transform(input_bytes):
 		t:        t,
 		num:      10_000,
 		fileSize: cos.KiB,
-		bck:      cmn.Bck{Name: "etl_build_connection_err", Provider: apc.ProviderAIS},
+		bck:      cmn.Bck{Name: "etl_build_connection_err", Provider: apc.AIS},
 	}
 
 	tlog.Logln("Preparing source bucket")
@@ -148,8 +148,8 @@ def transform(input_bytes):
 `
 
 	var (
-		bckFrom = cmn.Bck{Provider: apc.ProviderAIS, Name: "etlbig"}
-		bckTo   = cmn.Bck{Provider: apc.ProviderAIS, Name: "etlbigout-" + trand.String(5)}
+		bckFrom = cmn.Bck{Provider: apc.AIS, Name: "etlbig"}
+		bckTo   = cmn.Bck{Provider: apc.AIS, Name: "etlbigout-" + trand.String(5)}
 
 		m = ioContext{
 			t:         t,
@@ -251,8 +251,8 @@ def transform(input_bytes):
 // Responsible for cleaning all resources, except ETL xact.
 func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID string) {
 	var (
-		bckFrom = cmn.Bck{Name: "etl-in-" + trand.String(5), Provider: apc.ProviderAIS}
-		bckTo   = cmn.Bck{Name: "etl-out-" + trand.String(5), Provider: apc.ProviderAIS}
+		bckFrom = cmn.Bck{Name: "etl-in-" + trand.String(5), Provider: apc.AIS}
+		bckTo   = cmn.Bck{Name: "etl-out-" + trand.String(5), Provider: apc.AIS}
 	)
 
 	m.bck = bckFrom

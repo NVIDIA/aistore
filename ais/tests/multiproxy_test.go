@@ -728,7 +728,7 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 
 	bck := cmn.Bck{
 		Name:     testBucketName,
-		Provider: apc.ProviderAIS,
+		Provider: apc.AIS,
 	}
 	cksumType := bck.DefaultProps().Cksum.Type
 loop:
@@ -912,7 +912,7 @@ func proxyStress(t *testing.T) {
 		proxyURLChs = make([]chan string, workerCnt)
 		bck         = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		proxyURL = tutils.RandomProxyURL(t)
 	)
@@ -1469,12 +1469,12 @@ func icSyncOwnershipTable(t *testing.T) {
 
 		src = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 
 		dstBck = cmn.Bck{
 			Name:     testBucketName + "_new",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -1527,12 +1527,12 @@ func icSinglePrimaryRevamp(t *testing.T) {
 
 		src = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 
 		dstBck = cmn.Bck{
 			Name:     testBucketName + "_new",
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 	)
 
@@ -1688,7 +1688,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 		go func(idx int) {
 			dstBck := cmn.Bck{
 				Name:     fmt.Sprintf("%s_dst_par_%d", testBucketName, idx),
-				Provider: apc.ProviderAIS,
+				Provider: apc.AIS,
 			}
 			xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, nil)
 			tassert.CheckError(t, err)

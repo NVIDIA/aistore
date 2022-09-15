@@ -26,7 +26,7 @@ func NewBaseBownerMock(bcks ...*cluster.Bck) *BownerMock {
 		namespaces = make(cluster.Namespaces)
 		buckets    = make(cluster.Buckets)
 	)
-	providers[apc.ProviderAIS] = namespaces
+	providers[apc.AIS] = namespaces
 	debug.Assert(cmn.NsGlobalUname == cmn.NsGlobal.Uname())
 	namespaces[cmn.NsGlobalUname] = buckets
 

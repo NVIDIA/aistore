@@ -86,10 +86,10 @@ func (b backends) init(t *target, starting bool) {
 	backend.Init()
 
 	ais := backend.NewAIS(t)
-	b[apc.ProviderAIS] = ais // ais cloud is always present
+	b[apc.AIS] = ais // ais cloud is always present
 
 	config := cmn.GCO.Get()
-	if aisConf, ok := config.Backend.ProviderConf(apc.ProviderAIS); ok {
+	if aisConf, ok := config.Backend.ProviderConf(apc.AIS); ok {
 		if err := ais.Apply(aisConf, "init"); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t, err)
 		} else {
@@ -97,7 +97,7 @@ func (b backends) init(t *target, starting bool) {
 		}
 	}
 
-	b[apc.ProviderHTTP], _ = backend.NewHTTP(t, config)
+	b[apc.HTTP], _ = backend.NewHTTP(t, config)
 	if err := b.initExt(t, starting); err != nil {
 		cos.ExitLogf("%v", err)
 	}
@@ -109,7 +109,7 @@ func (b backends) init(t *target, starting bool) {
 func (b backends) initExt(t *target, starting bool) (err error) {
 	config := cmn.GCO.Get()
 	for provider := range b {
-		if provider == apc.ProviderHTTP || provider == apc.ProviderAIS { // always present
+		if provider == apc.HTTP || provider == apc.AIS { // always present
 			continue
 		}
 		if _, ok := config.Backend.Providers[provider]; !ok {
@@ -123,22 +123,22 @@ func (b backends) initExt(t *target, starting bool) (err error) {
 	for provider := range config.Backend.Providers {
 		var add string
 		switch provider {
-		case apc.ProviderAmazon:
+		case apc.AWS:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewAWS(t)
 				add = provider
 			}
-		case apc.ProviderAzure:
+		case apc.Azure:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewAzure(t)
 				add = provider
 			}
-		case apc.ProviderGoogle:
+		case apc.GCP:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewGCP(t)
 				add = provider
 			}
-		case apc.ProviderHDFS:
+		case apc.HDFS:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewHDFS(t)
 				add = provider
@@ -1513,7 +1513,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 			buckets, code, err = t._listBcks(qbck, config)
 			if err != nil {
 				err = cmn.NewErrFailedTo(t, "list buckets", qbck.String(), err, code)
-				if provider == apc.ProviderAIS {
+				if provider == apc.AIS {
 					t.writeErr(w, r, err, code)
 					return
 				}

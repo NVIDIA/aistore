@@ -31,13 +31,13 @@ var _ = Describe("API", func() {
 			),
 			Entry("non-nested field and non-empty initial struct",
 				cmn.BucketProps{
-					Provider: apc.ProviderAmazon,
+					Provider: apc.AWS,
 				},
 				cmn.BucketPropsToUpdate{
 					Access: api.AccessAttrs(1024),
 				},
 				cmn.BucketProps{
-					Provider: apc.ProviderAmazon,
+					Provider: apc.AWS,
 					Access:   1024,
 				},
 			),
@@ -82,7 +82,7 @@ var _ = Describe("API", func() {
 			),
 			Entry("multiple nested fields and non-empty initial struct",
 				cmn.BucketProps{
-					Provider: apc.ProviderAmazon,
+					Provider: apc.AWS,
 					Cksum: cmn.CksumConf{
 						ValidateColdGet: true,
 						ValidateWarmGet: false,
@@ -106,7 +106,7 @@ var _ = Describe("API", func() {
 					Access: api.AccessAttrs(10),
 				},
 				cmn.BucketProps{
-					Provider: apc.ProviderAmazon,
+					Provider: apc.AWS,
 					Cksum: cmn.CksumConf{
 						Type:            "value",
 						ValidateColdGet: true,

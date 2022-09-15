@@ -660,7 +660,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
 						Name:     trand.String(15),
-						Provider: apc.ProviderAIS,
+						Provider: apc.AIS,
 					},
 					tarballCnt:       500,
 					fileInTarballCnt: 100,
@@ -748,7 +748,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
 						Name:     trand.String(15),
-						Provider: apc.ProviderAIS,
+						Provider: apc.AIS,
 					},
 					tarballCnt:       500,
 					fileInTarballCnt: 100,
@@ -1810,7 +1810,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
 						Name:     trand.String(15),
-						Provider: apc.ProviderAIS,
+						Provider: apc.AIS,
 					},
 					tarballCnt:       100,
 					fileInTarballCnt: 10,
@@ -1834,7 +1834,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			df.orderFileURL = fmt.Sprintf(
 				"%s/%s/%s/%s/%s?%s=%s",
 				proxyURL, apc.Version, apc.Objects, m.bck.Name, orderFileName,
-				apc.QparamProvider, apc.ProviderAIS,
+				apc.QparamProvider, apc.AIS,
 			)
 
 			df.init()

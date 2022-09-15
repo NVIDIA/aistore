@@ -98,7 +98,7 @@ func TestRProxyGCS(t *testing.T) {
 	}
 
 	initMountpaths(t, proxyURL)
-	bck := cmn.Bck{Provider: apc.ProviderHTTP}
+	bck := cmn.Bck{Provider: apc.HTTP}
 	queryBck := cmn.QueryBcks(bck)
 	bckList, err := api.ListBuckets(baseParams, queryBck, apc.FltExists)
 	tassert.CheckFatal(t, err)

@@ -55,7 +55,7 @@ func TestETLTar2TFS3(t *testing.T) {
 		proxyURL     = tutils.RandomProxyURL()
 		bck          = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
@@ -115,7 +115,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL()
 		bck        = cmn.Bck{
 			Name:     testBucketName,
-			Provider: apc.ProviderAIS,
+			Provider: apc.AIS,
 		}
 		baseParams     = tutils.BaseAPIParams(proxyURL)
 		rangeBytesBuff = bytes.NewBuffer(nil)

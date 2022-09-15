@@ -2,7 +2,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -12,5 +12,5 @@ import (
 )
 
 func NewHDFS(_ cluster.Target) (cluster.BackendProvider, error) {
-	return nil, newErrInitBackend(apc.ProviderHDFS)
+	return nil, newErrInitBackend(apc.HDFS)
 }

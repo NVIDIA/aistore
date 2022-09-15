@@ -58,7 +58,7 @@ func (hp *httpProvider) client(u string) *http.Client {
 	return hp.httpClient
 }
 
-func (*httpProvider) Provider() string  { return apc.ProviderHTTP }
+func (*httpProvider) Provider() string  { return apc.HTTP }
 func (*httpProvider) MaxPageSize() uint { return 10000 }
 
 // TODO: can be done
@@ -96,7 +96,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	}
 
 	bckProps = make(cos.SimpleKVs)
-	bckProps[apc.HdrBackendProvider] = apc.ProviderHTTP
+	bckProps[apc.HdrBackendProvider] = apc.HTTP
 	return
 }
 
@@ -145,7 +145,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, apc.ProviderHTTP)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.HTTP)
 	if resp.ContentLength >= 0 {
 		oa.Size = resp.ContentLength
 	}
@@ -207,7 +207,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		glog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
-	lom.SetCustomKey(cmn.SourceObjMD, apc.ProviderHTTP)
+	lom.SetCustomKey(cmn.SourceObjMD, apc.HTTP)
 	lom.SetCustomKey(cmn.OrigURLObjMD, origURL)
 	if v, ok := h.EncodeVersion(resp.Header.Get(cos.HdrETag)); ok {
 		lom.SetCustomKey(cmn.ETag, v)

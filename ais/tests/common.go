@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -133,7 +133,7 @@ func (m *ioContext) initWithCleanup() {
 		m.bck.Name = trand.String(15)
 	}
 	if m.bck.Provider == "" {
-		m.bck.Provider = apc.ProviderAIS
+		m.bck.Provider = apc.AIS
 	}
 	if m.numGetsEachFile == 0 {
 		m.numGetsEachFile = 1
@@ -724,7 +724,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 	}{
 		{
 			name: "local",
-			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS},
+			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
 		},
 		{
 			name: "remote",
@@ -738,7 +738,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			name: "remote_ais",
 			bck: cmn.Bck{
 				Name:     trand.String(10),
-				Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID},
+				Provider: apc.AIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID},
 			},
 			skipArgs: tutils.SkipTestArgs{
 				RequiresRemoteCluster: true,
@@ -747,7 +747,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name:       "backend",
-			bck:        cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS},
+			bck:        cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
 			backendBck: cliBck,
 			skipArgs: tutils.SkipTestArgs{
 				Long:      true,
@@ -756,7 +756,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "local_3_copies",
-			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS},
+			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
 			props: &cmn.BucketPropsToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
 					Enabled: api.Bool(true),
@@ -767,7 +767,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "local_ec_2_2",
-			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.ProviderAIS},
+			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
 			props: &cmn.BucketPropsToUpdate{
 				EC: &cmn.ECConfToUpdate{
 					DataSlices:   api.Int(2),

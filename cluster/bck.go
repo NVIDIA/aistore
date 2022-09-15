@@ -195,7 +195,7 @@ func (b *Bck) InitNoBackend(bowner Bowner) error { return b.init(bowner.Get()) }
 
 func (b *Bck) init(bmd *BMD) error {
 	if b.Provider == "" { // NOTE: ais:// is the default
-		b.Provider = apc.ProviderAIS
+		b.Provider = apc.AIS
 		bmd.initBckGlobalNs(b)
 	} else if cmn.IsRemoteProvider(b.Provider) {
 		present := bmd.initBck(b)

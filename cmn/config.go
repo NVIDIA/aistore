@@ -814,7 +814,7 @@ func (c *BackendConf) Validate() (err error) {
 	for provider := range c.Conf {
 		b := cos.MustMarshal(c.Conf[provider])
 		switch provider {
-		case apc.ProviderAIS:
+		case apc.AIS:
 			var aisConf BackendConfAIS
 			if err := jsoniter.Unmarshal(b, &aisConf); err != nil {
 				return fmt.Errorf("invalid cloud specification: %v", err)
@@ -826,7 +826,7 @@ func (c *BackendConf) Validate() (err error) {
 				break
 			}
 			c.Conf[provider] = aisConf
-		case apc.ProviderHDFS:
+		case apc.HDFS:
 			var hdfsConf BackendConfHDFS
 			if err := jsoniter.Unmarshal(b, &hdfsConf); err != nil {
 				return fmt.Errorf("invalid cloud specification: %v", err)
@@ -870,7 +870,7 @@ func (c *BackendConf) Validate() (err error) {
 func (c *BackendConf) setProvider(provider string) {
 	var ns Ns
 	switch provider {
-	case apc.ProviderAmazon, apc.ProviderAzure, apc.ProviderGoogle, apc.ProviderHDFS:
+	case apc.AWS, apc.Azure, apc.GCP, apc.HDFS:
 		ns = NsGlobal
 	default:
 		debug.AssertMsg(false, "unknown backend provider "+provider)
@@ -903,8 +903,8 @@ func (c *BackendConf) EqualClouds(o *BackendConf) bool {
 
 func (c *BackendConf) EqualRemAIS(o *BackendConf) bool {
 	var oldRemotes, newRemotes BackendConfAIS
-	oais, oko := o.Conf[apc.ProviderAIS]
-	nais, okn := c.Conf[apc.ProviderAIS]
+	oais, oko := o.Conf[apc.AIS]
+	nais, okn := c.Conf[apc.AIS]
 	if !oko && !okn {
 		return true
 	}
