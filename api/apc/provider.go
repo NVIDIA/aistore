@@ -40,3 +40,28 @@ var Providers = cos.NewStringSet(
 	ProviderHDFS,
 	ProviderHTTP,
 )
+
+// returns true if the provider is one of (`aws`, `gcp`, etc.) - see above
+func IsNormalizedProvider(provider string) (ok bool) {
+	_, ok = Providers[provider]
+	return
+}
+
+// NormalizeProvider maps *Scheme to the corresponding entry in `Providers`
+func NormalizeProvider(provider string) string {
+	if IsNormalizedProvider(provider) {
+		return provider
+	}
+	switch provider {
+	case "":
+		return ProviderAIS // NOTE: ais is the default
+	case S3Scheme:
+		return ProviderAmazon
+	case AZScheme:
+		return ProviderAzure
+	case GSScheme:
+		return ProviderGoogle
+	default:
+		return ""
+	}
+}

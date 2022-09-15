@@ -1549,7 +1549,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// filter HEAD(bucket) limiting it to execute on present-only (compare with `listBuckets`)
+	// filter HEAD(bucket) request, i.e. limit to present-only (compare vs list-buckets)
 	present := cos.EqParseInt(apireq.dpq.fltPresence, apc.FltPresent)
 	debug.Assert(present || cos.NeqParseInt(apireq.dpq.fltPresence, apc.FltPresentOmitProps, apc.FltPresentAnywhere))
 
@@ -1910,7 +1910,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActionMsg, dpq *dpq) {
 	bmd := p.owner.bmd.get()
 	if qbck.IsAIS() || qbck.IsHDFS() || cos.EqParseInt(dpq.fltPresence, apc.FltPresent) {
-		bcks := selectBMDBuckets(bmd, qbck)
+		bcks := bmd.Select(qbck)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}
@@ -1931,12 +1931,36 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		p.writeErr(w, r, err)
 		return
 	}
-	bodyCopy := cos.MustMarshal(msg)
-	// NOTE: as the original r.Body has been already read and closed we always reset Content-Length;
-	// (e.g. when it changes: curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' ...)
-	r.ContentLength = int64(len(bodyCopy))
-	r.Body = io.NopCloser(bytes.NewBuffer(bodyCopy))
-	p.reverseNodeRequest(w, r, si)
+
+	cargs := allocCargs()
+	{
+		cargs.si = si
+		cargs.req = cmn.HreqArgs{
+			Method:   r.Method,
+			Path:     r.URL.Path,
+			RawQuery: r.URL.RawQuery,
+			Header:   r.Header,
+			Body:     cos.MustMarshal(msg),
+		}
+		cargs.timeout = apc.DefaultTimeout
+	}
+	res := p.call(cargs)
+	freeCargs(cargs)
+
+	if res.err != nil {
+		err = res.toErr()
+		p.writeErr(w, r, err, res.status)
+		return
+	}
+	debug.Assert(cos.EqParseInt(res.header.Get(cos.HdrContentLength), len(res.bytes)))
+
+	hdr := w.Header()
+	hdr.Set(cos.HdrContentType, res.header.Get(cos.HdrContentType))
+	hdr.Set(cos.HdrContentLength, res.header.Get(cos.HdrContentLength))
+	_, err = w.Write(res.bytes)
+	if err != nil {
+		glog.Errorf("Unexpected failure to send list-buckets response: %v", err)
+	}
 }
 
 func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, netName string) (redirect string) {
@@ -2970,7 +2994,7 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, s
 	cargs := allocCargs()
 	{
 		cargs.si = tsi
-		cargs.req = cmn.HreqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetIntraData), Path: path, Query: q}
+		cargs.req = cmn.HreqArgs{Method: http.MethodHead, Path: path, Query: q}
 		cargs.timeout = apc.DefaultTimeout
 	}
 	res := p.call(cargs)

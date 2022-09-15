@@ -1225,8 +1225,8 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	var (
 		invalidHandler = t.writeErr
 		hdr            = w.Header()
-		silent         = cos.IsParseBool(query.Get(apc.QparamSilent))
 		fltPresence    int
+		silent         = cos.IsParseBool(query.Get(apc.QparamSilent))
 		exists         = true
 		hasEC          bool
 	)
@@ -1234,7 +1234,9 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		invalidHandler = t.writeErrSilent
 	}
 	if tmp := query.Get(apc.QparamFltPresence); tmp != "" {
-		fltPresence, _ = strconv.Atoi(tmp)
+		var erp error
+		fltPresence, erp = strconv.Atoi(tmp)
+		debug.AssertNoErr(erp)
 	}
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		invalidHandler(w, r, err)
@@ -1530,7 +1532,8 @@ func (t *target) _listBcks(qbck *cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks
 	_, ok := cfg.Backend.Providers[qbck.Provider]
 	// HDFS doesn't support listing remote buckets (there are no remote buckets).
 	if (!ok && !qbck.IsRemoteAIS()) || qbck.IsHDFS() {
-		names = selectBMDBuckets(t.owner.bmd.get(), qbck)
+		bmd := t.owner.bmd.get()
+		names = bmd.Select(qbck)
 	} else {
 		bck := cluster.NewBck("", qbck.Provider, qbck.Ns)
 		names, errCode, err = t.Backend(bck).ListBuckets(*qbck)

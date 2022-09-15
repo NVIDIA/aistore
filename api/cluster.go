@@ -71,7 +71,7 @@ func GetNodeClusterMap(bp BaseParams, nodeID string) (smap *cluster.Smap, err er
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDaemon.S
+		reqParams.Path = apc.URLPathReverseDae.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatSmap}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{nodeID}}
 	}
@@ -126,7 +126,7 @@ func GetTargetDiskStats(bp BaseParams, targetID string) (diskStats ios.AllDiskSt
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDaemon.S
+		reqParams.Path = apc.URLPathReverseDae.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatDiskStats}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{targetID}}
 	}

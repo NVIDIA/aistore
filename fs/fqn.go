@@ -64,7 +64,7 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 			}
 			provider := item[1:]
 			parsed.Bck.Provider = provider
-			if !cmn.IsNormalizedProvider(provider) {
+			if !apc.IsNormalizedProvider(provider) {
 				err = fmt.Errorf("invalid fqn %s: unknown provider %q", fqn, provider)
 				return
 			}

@@ -32,14 +32,16 @@ type (
 	}
 
 	// HreqArgs specifies HTTP request that we want to send.
+	// BodyR optimizes-out allocations - if non-nil and implements `io.Closer`, will always be closed by `client.Do`
 	HreqArgs struct {
-		BodyR  io.Reader   // to optimize-out allocations; if non-nil and implements `io.Closer`, will always be closed by `client.Do`
-		Header http.Header // request headers
-		Query  url.Values  // query, e.g. ?a=x&b=y&c=z
-		Method string
-		Base   string // base URL, e.g. http://xyz.abc
-		Path   string // path URL, e.g. /x/y/z
-		Body   []byte
+		BodyR    io.Reader
+		Header   http.Header // request headers
+		Query    url.Values  // query, e.g. ?a=x&b=y&c=z
+		RawQuery string      // raw query
+		Method   string
+		Base     string // base URL, e.g. http://xyz.abc
+		Path     string // path URL, e.g. /x/y/z
+		Body     []byte
 	}
 
 	RetryArgs struct {
@@ -357,9 +359,11 @@ func FreeHra(a *HreqArgs) {
 
 func (u *HreqArgs) URL() string {
 	url := cos.JoinPath(u.Base, u.Path)
-	query := u.Query.Encode()
-	if query != "" {
-		url += "?" + query
+	if u.RawQuery != "" {
+		return url + "?" + u.RawQuery
+	}
+	if rawq := u.Query.Encode(); rawq != "" {
+		return url + "?" + rawq
 	}
 	return url
 }

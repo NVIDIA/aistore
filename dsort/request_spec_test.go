@@ -313,7 +313,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).Should(MatchError(&cmn.ErrInvalidBucketProvider{}))
+			Expect(err).Should(MatchError(&cmn.ErrInvalidBackendProvider{}))
 		})
 
 		It("should fail due to invalid output bucket provider", func() {
@@ -325,7 +325,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).Should(MatchError(&cmn.ErrInvalidBucketProvider{}))
+			Expect(err).Should(MatchError(&cmn.ErrInvalidBackendProvider{}))
 		})
 
 		It("should fail due to start after end in input format", func() {

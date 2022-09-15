@@ -180,7 +180,7 @@ const (
 
 	ListBucketsTmpl = "NAME\t PRESENT\t\n" +
 		"{{range $k, $v := . }}" +
-		"{{$v.Bck.Name}}\t {{$v.Info.Present}}\n" +
+		"{{$v.Bck.Name}}\t {{FormatBool $v.Info.Present}}\n" +
 		"{{end}}"
 
 	// Bucket summary templates

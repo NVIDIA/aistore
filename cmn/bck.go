@@ -80,24 +80,20 @@ var (
 	NsAnyRemote = Ns{UUID: string(apc.NsUUIDPrefix)}
 )
 
-////////////////
-// Validation //
-////////////////
-
-// Validation for buckets is split into 2 cases:
-//  1. Validation of concrete bucket, eg. get(bck, objName). In this case we
-//     require the bucket name to be set. If the provider is not set the default
-//     will be used, see `NormalizeProvider`.
+// A note on validation logic: cmn.Bck vs cmn.QueryBcks - same structures,
+// different types.
+//
+//  1. Validation of a concrete bucket checks that bucket name is set and is valid.
+//     If the provider is not set the default will be used, see `NormalizeProvider`.
 //     This case is handled in `newBckFromQuery` and `newBckFromQueryUname`. The
 //     CLI counterpart is `parseBckURI`.
-//  2. Validation of query buckets, eg. list(queryBcks). Here all parts of the
-//     bucket all optional.
+//  2. Validation of query buckets. Here all parts of the structure all optional.
 //     This case is handled in `newQueryBcksFromQuery`. The CLI counterpart is
 //     `parseQueryBckURI`.
 // These 2 cases have a slightly different logic for the validation but the
 // validation functions are always the same. Bucket name (`bck.ValidateName`)
-// and bucket namespace (`bck.Ns.Validate`) validation is quite straightforward
-// as we only need to check if the strings contain only valid characters. Bucket
+// and bucket namespace (`bck.Ns.Validate`) validation is straightforward
+// as we only need to check that the strings contain only valid characters. Bucket
 // provider validation on the other hand a little bit more tricky as we have so
 // called "normalized providers" and their aliases. Normalized providers are the
 // providers registered in `Providers` set. Almost any provider that is being
@@ -112,31 +108,11 @@ var (
 // is handled by `ParseBckObjectURI` which by itself doesn't do much validation.
 // The validation happens in aforementioned CLI specific parse functions.
 
-// IsNormalizedProvider returns true if the provider is in normalized
-// form (`aws`, `gcp`, etc.), not aliased (`s3`, `gs`, etc.). Only providers
-// registered in `Providers` set are considered normalized.
-func IsNormalizedProvider(provider string) bool {
-	_, exists := apc.Providers[provider]
-	return exists
-}
-
-// NormalizeProvider replaces provider aliases with their normalized form/name.
-func NormalizeProvider(provider string) (string, error) {
-	if IsNormalizedProvider(provider) {
-		return provider, nil
+func NormalizeProvider(provider string) (p string, err error) {
+	if p = apc.NormalizeProvider(provider); p == "" {
+		err = &ErrInvalidBackendProvider{Bck{Provider: provider}}
 	}
-	switch provider {
-	case "":
-		return apc.ProviderAIS, nil // NOTE: ais is the default provider
-	case apc.S3Scheme:
-		return apc.ProviderAmazon, nil
-	case apc.AZScheme:
-		return apc.ProviderAzure, nil
-	case apc.GSScheme:
-		return apc.ProviderGoogle, nil
-	default:
-		return provider, NewErrorInvalidBucketProvider(Bck{Provider: provider})
-	}
+	return
 }
 
 ////////
@@ -229,17 +205,6 @@ func (b Bck) String() string {
 		return fmt.Sprintf("%s/%s", b.Ns, b.Name)
 	}
 	return fmt.Sprintf("%s%s%s/%s", b.Provider, apc.BckProviderSeparator, b.Ns, b.Name)
-}
-
-func (b Bck) StringEx() string {
-	if b.Provider == "" {
-		// ais:// is the default
-		if b.Ns.IsGlobal() {
-			return apc.ProviderAIS + apc.BckProviderSeparator + b.Name
-		}
-		return fmt.Sprintf("%s%s%s/%s", apc.ProviderAIS, apc.BckProviderSeparator, b.Ns, b.Name)
-	}
-	return b.String()
 }
 
 // unique name => Bck (use MakeUname above to perform the reverse translation)

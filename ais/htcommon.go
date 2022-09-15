@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	rdebug "runtime/debug"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -772,24 +771,6 @@ func apiReqFree(a *apiRequest) {
 //
 // misc helpers
 //
-
-func selectBMDBuckets(bmd *bucketMD, qbck *cmn.QueryBcks) cmn.Bcks {
-	var (
-		names = make(cmn.Bcks, 0, 10)
-		cp    = &qbck.Provider
-	)
-	if qbck.Provider == "" {
-		cp = nil
-	}
-	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
-		if qbck.Equal(bck.Bucket()) || qbck.Contains(bck.Bucket()) {
-			names = append(names, bck.Clone())
-		}
-		return false
-	})
-	sort.Sort(names)
-	return names
-}
 
 func newBckFromQ(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, error) {
 	bck := _bckFromQ(bckName, query, dpq)

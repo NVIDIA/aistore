@@ -120,8 +120,8 @@ var (
 	URLPathDaeAdminJoin = urlpath(Version, Daemon, AdminJoin)
 	URLPathDaeRmSelf    = urlpath(Version, Daemon, CallbackRmSelf)
 
-	URLPathReverse       = urlpath(Version, Reverse)
-	URLPathReverseDaemon = urlpath(Version, Reverse, Daemon)
+	URLPathReverse    = urlpath(Version, Reverse)
+	URLPathReverseDae = urlpath(Version, Reverse, Daemon)
 
 	URLPathVote        = urlpath(Version, Vote)
 	URLPathVoteInit    = urlpath(Version, Vote, Init)

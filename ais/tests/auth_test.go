@@ -45,11 +45,11 @@ func TestAuthObj(t *testing.T) {
 	)
 	err := api.CreateBucket(authBP, bck, nil)
 	tassert.CheckFatal(t, err)
-	tlog.Logf("used token[%s...] to create %s\n", authBP.Token[:16], bck.StringEx())
+	tlog.Logf("used token[%s...] to create %s\n", authBP.Token[:16], bck.String())
 	defer func() {
 		err := api.DestroyBucket(authBP, bck)
 		tassert.CheckFatal(t, err)
-		tlog.Logf("bucket %s destroyed\n", bck.StringEx())
+		tlog.Logf("bucket %s destroyed\n", bck.String())
 	}()
 
 	r, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
@@ -72,7 +72,7 @@ func TestAuthObj(t *testing.T) {
 		Object:     objName,
 	})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("used token[%s...] to PUT %s/%s\n", authBP.Token[:16], bck.StringEx(), objName)
+	tlog.Logf("used token[%s...] to PUT %s/%s\n", authBP.Token[:16], bck.String(), objName)
 }
 
 func TestAuthBck(t *testing.T) {
@@ -86,7 +86,7 @@ func TestAuthBck(t *testing.T) {
 
 	err = api.CreateBucket(authBP, bck, nil)
 	tassert.CheckFatal(t, err)
-	tlog.Logf("used token[%s...] to create %s\n", authBP.Token[:16], bck.StringEx())
+	tlog.Logf("used token[%s...] to create %s\n", authBP.Token[:16], bck.String())
 
 	p, err := api.HeadBucket(authBP, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
@@ -95,7 +95,7 @@ func TestAuthBck(t *testing.T) {
 	defer func() {
 		err := api.DestroyBucket(authBP, bck)
 		tassert.CheckFatal(t, err)
-		tlog.Logf("%s destroyed\n", bck.StringEx())
+		tlog.Logf("%s destroyed\n", bck.String())
 	}()
 
 	err = api.DestroyBucket(unAuthBP, bck)

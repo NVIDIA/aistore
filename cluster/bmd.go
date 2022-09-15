@@ -7,6 +7,7 @@ package cluster
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -181,6 +182,24 @@ func (m *BMD) Range(providerQuery *string, nsQuery *cmn.Ns, callback func(*Bck) 
 			}
 		}
 	}
+}
+
+func (m *BMD) Select(qbck *cmn.QueryBcks) cmn.Bcks {
+	var (
+		names = make(cmn.Bcks, 0, 10)
+		cp    = &qbck.Provider
+	)
+	if qbck.Provider == "" {
+		cp = nil
+	}
+	m.Range(cp, nil, func(bck *Bck) bool {
+		if qbck.Equal(bck.Bucket()) || qbck.Contains(bck.Bucket()) {
+			names = append(names, bck.Clone())
+		}
+		return false
+	})
+	sort.Sort(names)
+	return names
 }
 
 //

@@ -186,6 +186,9 @@ func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
 	if len(filtered) == 0 {
 		return
 	}
+
+	// TODO -- FIXME: rewrite the rest of this f
+
 	if showHeaders {
 		dspProvider := provider
 		if provider == apc.ProviderHTTP {
@@ -203,8 +206,6 @@ func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
 			}
 			continue
 		}
-
-		// TODO -- FIXME: rewrite
 		if provider == apc.ProviderHTTP {
 			fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
 			continue

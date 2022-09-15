@@ -69,7 +69,7 @@ type (
 		action, what string
 	}
 
-	ErrInvalidBucketProvider struct {
+	ErrInvalidBackendProvider struct {
 		bck Bck
 	}
 	ErrCapacityExceeded struct {
@@ -290,13 +290,9 @@ func isErrRemoteBucketOffline(err error) bool {
 	return ok
 }
 
-// ErrInvalidBucketProvider
+// ErrInvalidBackendProvider
 
-func NewErrorInvalidBucketProvider(bck Bck) *ErrInvalidBucketProvider {
-	return &ErrInvalidBucketProvider{bck: bck}
-}
-
-func (e *ErrInvalidBucketProvider) Error() string {
+func (e *ErrInvalidBackendProvider) Error() string {
 	if e.bck.Name != "" {
 		return fmt.Sprintf("invalid backend provider %q for bucket %s: must be one of [%s]",
 			e.bck.Provider, e.bck, apc.AllProviders)
@@ -304,8 +300,8 @@ func (e *ErrInvalidBucketProvider) Error() string {
 	return fmt.Sprintf("invalid backend provider %q: must be one of [%s]", e.bck.Provider, apc.AllProviders)
 }
 
-func (*ErrInvalidBucketProvider) Is(target error) bool {
-	_, ok := target.(*ErrInvalidBucketProvider)
+func (*ErrInvalidBackendProvider) Is(target error) bool {
+	_, ok := target.(*ErrInvalidBackendProvider)
 	return ok
 }
 
@@ -812,11 +808,11 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 		}
 		glog.Errorln(s)
 	}
-	// Make sure that the caller is aware that we return JSON error.
-	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
-	w.Header().Set(cos.HdrContentTypeOptions, "nosniff")
+	hdr := w.Header()
+	hdr.Set(cos.HdrContentType, cos.ContentJSON)
+	hdr.Set(cos.HdrContentTypeOptions, "nosniff")
 	if r.Method == http.MethodHead {
-		w.Header().Set(apc.HdrError, string(e._jsonError()))
+		hdr.Set(apc.HdrError, string(e._jsonError()))
 		w.WriteHeader(e.Status)
 	} else {
 		w.WriteHeader(e.Status)

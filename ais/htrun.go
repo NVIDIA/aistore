@@ -587,7 +587,7 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 
 	debug.Assert(args.si != nil || args.req.Base != "") // either si or base
 	if args.req.Base == "" && args.si != nil {
-		args.req.Base = args.si.ControlNet.URL // by default use intra-cluster control network
+		args.req.Base = args.si.ControlNet.URL // by default, use intra-cluster control network
 	}
 
 	if args.req.Header == nil {
@@ -600,14 +600,12 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 		if res.err != nil {
 			break
 		}
-
 		client = h.client.control
 	case apc.LongTimeout:
 		req, res.err = args.req.Req()
 		if res.err != nil {
 			break
 		}
-
 		client = h.client.data
 	default:
 		var cancel context.CancelFunc
@@ -618,8 +616,12 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 		if res.err != nil {
 			break
 		}
-		defer cancel() // timeout => context.deadlineExceededError
+		defer cancel()
 
+		// NOTE: timeout handling
+		// - timeout causes context.deadlineExceededError, i.e. "context deadline exceeded"
+		// - the two knobs are configurable via "client_timeout" and "client_long_timeout",
+		// respectively (client section in the global config)
 		if args.timeout > h.client.control.Timeout {
 			client = h.client.data
 		} else {
