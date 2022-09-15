@@ -130,7 +130,7 @@ var (
 				BashComplete: oldAndNewBucketCompletions(
 					[]cli.BashCompleteFunc{},
 					false, /* separator */
-					apc.ProviderAIS,
+					apc.AIS,
 				),
 			},
 			{
@@ -140,7 +140,7 @@ var (
 				Flags:     bucketCmdsFlags[commandRemove],
 				Action:    removeBucketHandler,
 				BashComplete: bucketCompletions(bckCompletionsOpts{
-					multiple: true, provider: apc.ProviderAIS,
+					multiple: true, provider: apc.AIS,
 				}),
 			},
 			{

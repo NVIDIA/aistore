@@ -325,7 +325,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 			if err != nil {
 				return
 			}
-			providers = []string{apc.ProviderAIS, apc.ProviderHTTP}
+			providers = []string{apc.AIS, apc.HTTP}
 			for provider := range config.Backend.Conf {
 				providers = append(providers, provider)
 			}
@@ -442,11 +442,11 @@ func bpropsFilterExtra(c *cli.Context, tag string) bool {
 		return true
 	}
 	switch c.Args().First() {
-	case apc.S3Scheme, apc.ProviderAmazon:
+	case apc.S3Scheme, apc.AWS:
 		return strings.HasPrefix(tag, "extra.aws")
-	case apc.ProviderHTTP:
+	case apc.HTTP:
 		return strings.HasPrefix(tag, "extra.http")
-	case apc.ProviderHDFS:
+	case apc.HDFS:
 		return strings.HasPrefix(tag, "extra.hdfs")
 	}
 	return false

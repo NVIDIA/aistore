@@ -191,7 +191,7 @@ func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
 
 	if showHeaders {
 		dspProvider := provider
-		if provider == apc.ProviderHTTP {
+		if provider == apc.HTTP {
 			dspProvider = "HTTP(S)"
 		}
 		fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(dspProvider), len(filtered))
@@ -206,7 +206,7 @@ func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
 			}
 			continue
 		}
-		if provider == apc.ProviderHTTP {
+		if provider == apc.HTTP {
 			fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
 			continue
 		}

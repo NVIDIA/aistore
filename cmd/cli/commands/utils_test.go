@@ -38,7 +38,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket/very/long/prefix-",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderGoogle},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.GCP},
 					prefix: "very/long/prefix-",
 				},
 			},
@@ -48,7 +48,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderGoogle},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.GCP},
 					prefix: "",
 				},
 			},
@@ -58,7 +58,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket/objname.tar",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderGoogle},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.GCP},
 					prefix: "objname.tar",
 				},
 			},
@@ -68,7 +68,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket/subfolder/objname.tar",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderGoogle},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.GCP},
 					prefix: "subfolder/objname.tar",
 				},
 			},
@@ -96,7 +96,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "http://s3.amazonaws.com/bucket/very/long/prefix-",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderAmazon},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.AWS},
 					prefix: "very/long/prefix-",
 				},
 			},
@@ -106,7 +106,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "http://s3.amazonaws.com/bucket",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderAmazon},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.AWS},
 					prefix: "",
 				},
 			},
@@ -116,7 +116,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "http://s3.amazonaws.com/bucket/objname.tar",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderAmazon},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.AWS},
 					prefix: "objname.tar",
 				},
 			},
@@ -126,7 +126,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "http://s3.amazonaws.com/bucket/subfolder/objname.tar",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderAmazon},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.AWS},
 					prefix: "subfolder/objname.tar",
 				},
 			},
@@ -137,7 +137,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderAzure},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.Azure},
 					prefix: "",
 				},
 			},
@@ -147,7 +147,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderAzure},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.Azure},
 					prefix: "subfolder/objname.tar",
 				},
 			},
@@ -167,7 +167,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket/obj{00..10}.tgz",
 				backend: dlSourceBackend{
-					bck:    cmn.Bck{Name: "bucket", Provider: apc.ProviderGoogle},
+					bck:    cmn.Bck{Name: "bucket", Provider: apc.GCP},
 					prefix: "obj{00..10}.tgz",
 				},
 			},
@@ -200,13 +200,13 @@ func TestParseDestValidURIs(t *testing.T) {
 		bucket  cmn.Bck
 		objName string
 	}{
-		{"ais://bucket/objname", cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"}, "objname"},
-		{"ais://bucket//subfolder/objname.tar", cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"}, "subfolder/objname.tar"},
-		{"ais://bucket/subfolder/objname.tar", cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"}, "subfolder/objname.tar"},
-		{"ais://bucket", cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"}, ""},
-		{"aws://bucket/something/", cmn.Bck{Provider: apc.ProviderAmazon, Name: "bucket"}, "something"},
-		{"az://bucket/something//", cmn.Bck{Provider: apc.ProviderAzure, Name: "bucket"}, "something"},
-		{"gcp://bucket/one/two/", cmn.Bck{Provider: apc.ProviderGoogle, Name: "bucket"}, "one/two"},
+		{"ais://bucket/objname", cmn.Bck{Provider: apc.AIS, Name: "bucket"}, "objname"},
+		{"ais://bucket//subfolder/objname.tar", cmn.Bck{Provider: apc.AIS, Name: "bucket"}, "subfolder/objname.tar"},
+		{"ais://bucket/subfolder/objname.tar", cmn.Bck{Provider: apc.AIS, Name: "bucket"}, "subfolder/objname.tar"},
+		{"ais://bucket", cmn.Bck{Provider: apc.AIS, Name: "bucket"}, ""},
+		{"aws://bucket/something/", cmn.Bck{Provider: apc.AWS, Name: "bucket"}, "something"},
+		{"az://bucket/something//", cmn.Bck{Provider: apc.Azure, Name: "bucket"}, "something"},
+		{"gcp://bucket/one/two/", cmn.Bck{Provider: apc.GCP, Name: "bucket"}, "one/two"},
 	}
 
 	for _, test := range parseDestTests {
@@ -298,16 +298,16 @@ func TestParseQueryBckURI(t *testing.T) {
 		bck cmn.QueryBcks
 	}{
 		{uri: "", bck: cmn.QueryBcks{}},
-		{uri: "ais://", bck: cmn.QueryBcks{Provider: apc.ProviderAIS}},
-		{uri: "ais://#ns", bck: cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{Name: "ns"}}},
-		{uri: "ais://@uuid", bck: cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{UUID: "uuid"}}},
-		{uri: "ais://@uuid#ns", bck: cmn.QueryBcks{Provider: apc.ProviderAIS, Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
-		{uri: "ais://bucket", bck: cmn.QueryBcks{Provider: apc.ProviderAIS, Name: "bucket"}},
-		{uri: "hdfs://bucket", bck: cmn.QueryBcks{Provider: apc.ProviderHDFS, Name: "bucket"}},
-		{uri: "ais://#ns/bucket", bck: cmn.QueryBcks{Provider: apc.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
-		{uri: "ais://@uuid#ns/bucket", bck: cmn.QueryBcks{Provider: apc.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
-		{uri: "http://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
-		{uri: "https://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "ais://", bck: cmn.QueryBcks{Provider: apc.AIS}},
+		{uri: "ais://#ns", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: "ns"}}},
+		{uri: "ais://@uuid", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{UUID: "uuid"}}},
+		{uri: "ais://@uuid#ns", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
+		{uri: "ais://bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}},
+		{uri: "hdfs://bucket", bck: cmn.QueryBcks{Provider: apc.HDFS, Name: "bucket"}},
+		{uri: "ais://#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
+		{uri: "ais://@uuid#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
+		{uri: "http://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "https://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
 	}
 	for _, test := range positiveTests {
 		bck, err := parseQueryBckURI(&cli.Context{}, test.uri)
@@ -339,12 +339,12 @@ func TestParseBckURI(t *testing.T) {
 		uri string
 		bck cmn.Bck
 	}{
-		{uri: "ais://bucket", bck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"}},
-		{uri: "hdfs://bucket", bck: cmn.Bck{Provider: apc.ProviderHDFS, Name: "bucket"}},
-		{uri: "ais://#ns/bucket", bck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
-		{uri: "ais://@uuid#ns/bucket", bck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
-		{uri: "http://web.url/dataset", bck: cmn.Bck{Provider: apc.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
-		{uri: "https://web.url/dataset", bck: cmn.Bck{Provider: apc.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "ais://bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket"}},
+		{uri: "hdfs://bucket", bck: cmn.Bck{Provider: apc.HDFS, Name: "bucket"}},
+		{uri: "ais://#ns/bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
+		{uri: "ais://@uuid#ns/bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
+		{uri: "http://web.url/dataset", bck: cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "https://web.url/dataset", bck: cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
 	}
 	for _, test := range positiveTests {
 		bck, err := parseBckURI(&cli.Context{}, test.uri)
@@ -385,45 +385,45 @@ func TestParseBckObjectURI(t *testing.T) {
 	}{
 		{
 			uri: "ais://bucket", optObjName: true,
-			bck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"},
+			bck: cmn.Bck{Provider: apc.AIS, Name: "bucket"},
 		},
 		{
 			uri: "ais://bucket/object_name", optObjName: true,
-			bck:     cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"},
+			bck:     cmn.Bck{Provider: apc.AIS, Name: "bucket"},
 			objName: "object_name",
 		},
 		{
 			uri:     "ais://bucket/object_name",
-			bck:     cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket"},
+			bck:     cmn.Bck{Provider: apc.AIS, Name: "bucket"},
 			objName: "object_name",
 		},
 		{
 			uri:     "hdfs://bucket/object_name/something",
-			bck:     cmn.Bck{Provider: apc.ProviderHDFS, Name: "bucket"},
+			bck:     cmn.Bck{Provider: apc.HDFS, Name: "bucket"},
 			objName: "object_name/something",
 		},
 		{
 			uri:     "ais://#ns/bucket/a/b/c",
-			bck:     cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}},
+			bck:     cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}},
 			objName: "a/b/c",
 		},
 		{
 			uri: "ais://#ns/bucket", optObjName: true,
-			bck: cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}},
+			bck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}},
 		},
 		{
 			uri:     "ais://@uuid#ns/bucket/object",
-			bck:     cmn.Bck{Provider: apc.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}},
+			bck:     cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}},
 			objName: "object",
 		},
 		{
 			uri:     "http://web.url/dataset/object_name",
-			bck:     cmn.Bck{Provider: apc.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
+			bck:     cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
 			objName: "object_name",
 		},
 		{
 			uri:     "https://web.url/dataset/object_name",
-			bck:     cmn.Bck{Provider: apc.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
+			bck:     cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
 			objName: "object_name",
 		},
 	}

@@ -863,7 +863,7 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop) {
 			{"lru", props.LRU.String()},
 			{"versioning", props.Versioning.String()},
 		}
-		if props.Provider == apc.ProviderHTTP {
+		if props.Provider == apc.HTTP {
 			origURL := props.Extra.HTTP.OrigURLBck
 			if origURL != "" {
 				propList = append(propList, prop{Name: "original-url", Value: origURL})
@@ -940,7 +940,7 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	if strURL[len(strURL)-1:] != apc.BckObjnameSeparator {
 		strURL += apc.BckObjnameSeparator
 	}
-	bck.Provider = apc.ProviderHTTP
+	bck.Provider = apc.HTTP
 	bck.Name = cmn.OrigURLBck2Name(strURL)
 	return
 }
@@ -1102,31 +1102,31 @@ func parseSource(rawURL string) (source dlSource, err error) {
 	// If `rawURL` is using `gs` or `s3` scheme ({gs/s3}://<bucket>/...)
 	// then <bucket> is considered a `Host` by `url.Parse`.
 	switch u.Scheme {
-	case apc.GSScheme, apc.ProviderGoogle:
+	case apc.GSScheme, apc.GCP:
 		cloudSource = dlSourceBackend{
-			bck:    cmn.Bck{Name: host, Provider: apc.ProviderGoogle},
+			bck:    cmn.Bck{Name: host, Provider: apc.GCP},
 			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
 
 		scheme = "https"
 		host = gsHost
 		fullPath = path.Join(u.Host, fullPath)
-	case apc.S3Scheme, apc.ProviderAmazon:
+	case apc.S3Scheme, apc.AWS:
 		cloudSource = dlSourceBackend{
-			bck:    cmn.Bck{Name: host, Provider: apc.ProviderAmazon},
+			bck:    cmn.Bck{Name: host, Provider: apc.AWS},
 			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
 
 		scheme = "http"
 		host = s3Host
 		fullPath = path.Join(u.Host, fullPath)
-	case apc.AZScheme, apc.ProviderAzure:
+	case apc.AZScheme, apc.Azure:
 		// NOTE: We don't set the link here because there is no way to translate
 		//  `az://bucket/object` into Azure link without account name.
 		return dlSource{
 			link: "",
 			backend: dlSourceBackend{
-				bck:    cmn.Bck{Name: host, Provider: apc.ProviderAzure},
+				bck:    cmn.Bck{Name: host, Provider: apc.Azure},
 				prefix: strings.TrimPrefix(fullPath, "/"),
 			},
 		}, nil

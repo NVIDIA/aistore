@@ -61,7 +61,7 @@ func init() {
 		Auth: AuthConfig{
 			URL: fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAuthNPort),
 		},
-		DefaultProvider: apc.ProviderAIS,
+		DefaultProvider: apc.AIS,
 		Aliases:         DefaultAliasConfig,
 	}
 }

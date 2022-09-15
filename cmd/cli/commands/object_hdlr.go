@@ -134,7 +134,7 @@ var (
 				Flags:     objectCmdsFlags[commandRename],
 				Action:    mvObjectHandler,
 				BashComplete: oldAndNewBucketCompletions(
-					[]cli.BashCompleteFunc{}, true /* separator */, apc.ProviderAIS),
+					[]cli.BashCompleteFunc{}, true /* separator */, apc.AIS),
 			},
 			{
 				Name:      commandRemove,
