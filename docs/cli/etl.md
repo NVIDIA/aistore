@@ -68,7 +68,7 @@ Based on the communication type used, there are mutiple ways you can initialize 
 All available runtimes are listed [here](/docs/etl.md#runtimes).
 
 Note:
-- Default value of --transform is "transform".  
+- Default value of --transform is "transform".
 
 ### Example
 

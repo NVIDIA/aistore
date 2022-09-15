@@ -154,7 +154,7 @@ In `hpush` communication type, the user has to define a function that takes byte
 def transform(input_bytes: bytes) -> bytes
 ```
 
-We realize that sometimes the transformation function is not that straightforward, and you might need some initialization prior to the function as well post the function. For that, we have included `before(context)` and `after(context)` functions in python runtime for AIS-ETL. 
+We realize that sometimes the transformation function is not that straightforward, and you might need some initialization prior to the function as well post the function. For that, we have included `before(context)` and `after(context)` functions in python runtime for AIS-ETL.
 
 ```python
 def before(context: Dict[str, object]) -> None
@@ -168,7 +168,7 @@ You can also stream objects in `transform()` by setting the `CHUNK_SIZE` paramet
 
 e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_md5_hpush.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_torchvision_hpush.py).
 
-> **Note:** 
+> **Note:**
 >- `before(context)` and `after(context)` functions are optional and not always needed.
 >- If your `transform()` function uses streaming (`CHUNK_SIZE`> 0), and has no `after(context)` function to consolidate result, please add the result into `context["result"]`.
 >- If the function uses external dependencies, a user can provide an optional dependencies file or in the `elt().init()` function of Python SDK. These requirements will be installed on the machine executing the `transform` function and will be available for the function.

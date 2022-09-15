@@ -101,7 +101,7 @@ func (c *Config) validate() (err error) {
 	if c.Timeout.HTTPTimeout, err = time.ParseDuration(c.Timeout.HTTPTimeoutStr); err != nil {
 		return fmt.Errorf("invalid timeout.http_timeout format %q: %v", c.Timeout.HTTPTimeoutStr, err)
 	}
-	if c.DefaultProvider != "" && !apc.IsNormalizedProvider(c.DefaultProvider) {
+	if c.DefaultProvider != "" && !apc.IsProvider(c.DefaultProvider) {
 		return fmt.Errorf("invalid default_provider value %q, expected one of [%s]", c.DefaultProvider, apc.Providers)
 	}
 	if c.Aliases == nil {

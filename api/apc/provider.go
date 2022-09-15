@@ -23,7 +23,7 @@ const (
 	BckProviderSeparator = "://"
 	BckObjnameSeparator  = "/"
 
-	// Scheme parsing
+	// scheme://
 	DefaultScheme = "https"
 	GSScheme      = "gs"
 	S3Scheme      = "s3"
