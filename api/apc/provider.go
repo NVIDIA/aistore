@@ -4,7 +4,10 @@
  */
 package apc
 
-import "github.com/NVIDIA/aistore/cmn/cos"
+import (
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+)
 
 // Backend Provider enum
 const (
@@ -41,6 +44,20 @@ var Providers = cos.NewStringSet(
 )
 
 func IsProvider(p string) bool { return Providers.Contains(p) }
+
+func ToScheme(p string) string {
+	debug.Assert(IsProvider(p))
+	switch p {
+	case ProviderAmazon:
+		return S3Scheme
+	case ProviderAzure:
+		return AZScheme
+	case ProviderGoogle:
+		return GSScheme
+	default:
+		return p
+	}
+}
 
 func NormalizeProvider(p string) string {
 	if IsProvider(p) {
