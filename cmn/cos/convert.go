@@ -19,21 +19,23 @@ func IsParseBool(s string) bool {
 }
 
 func EqParseInt(s string, expected int) bool {
-	i, err := strconv.ParseInt(s, 10, 64)
+	if s == "" {
+		return false
+	}
+	parsed, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
 		return false
 	}
-	return expected == int(i)
+	return expected == int(parsed)
 }
 
 func NeqParseInt(s string, unexpected ...int) bool {
 	i, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return true
-	}
-	for _, v := range unexpected {
-		if v == int(i) {
-			return false
+	if err == nil {
+		for _, v := range unexpected {
+			if v == int(i) {
+				return false
+			}
 		}
 	}
 	return true

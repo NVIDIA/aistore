@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -1565,8 +1566,19 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hdr := w.Header()
-	if present || bckArgs.present {
+	if bckArgs.present {
 		toHdr(bck, hdr, bckArgs.present, bckArgs.getInfo)
+		return
+	}
+	// requested (via QparamFltPresence) to be present but is not
+	if present {
+		debug.Assert(bck.IsRemote())
+		props := bck.Bucket().DefaultProps()
+		props.SetProvider(bck.Provider)
+		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(props))
+		if bckArgs.getInfo {
+			hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(&cmn.BucketInfo{Present: present}))
+		}
 		return
 	}
 
@@ -1952,11 +1964,10 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		p.writeErr(w, r, err, res.status)
 		return
 	}
-	debug.Assert(cos.EqParseInt(res.header.Get(cos.HdrContentLength), len(res.bytes)))
 
 	hdr := w.Header()
 	hdr.Set(cos.HdrContentType, res.header.Get(cos.HdrContentType))
-	hdr.Set(cos.HdrContentLength, res.header.Get(cos.HdrContentLength))
+	hdr.Set(cos.HdrContentLength, strconv.Itoa(len(res.bytes)))
 	_, err = w.Write(res.bytes)
 	if err != nil {
 		glog.Errorf("Unexpected failure to send list-buckets response: %v", err)

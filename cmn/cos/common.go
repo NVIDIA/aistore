@@ -156,7 +156,6 @@ func NewSimpleKVs(pairs ...string) (kvs SimpleKVs) {
 	for i := 0; i < l; i++ {
 		kvs[pairs[2*i]] = kvs[pairs[2*i+1]]
 	}
-	debug.Assertf(len(kvs) == l, "len=%d, l=%d, kvs=%+v", len(kvs), l, kvs)
 	return
 }
 
