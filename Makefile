@@ -7,6 +7,10 @@ SCRIPTS_DIR = ./deploy/scripts
 BUILD_DIR = ./cmd
 BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
 
+ifeq ($(shell go env GOOS),linux)
+	CGO_DISABLE = CGO_ENABLED=0
+endif
+
 AISTORE_PATH = $(shell git rev-parse --show-toplevel)
 
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
@@ -14,7 +18,7 @@ MAKEFLAGS += --no-print-directory
 
 # Uncomment to cross-compile aisnode and cli, respectively:
 # CROSS_COMPILE = docker run --rm -v $(AISTORE_PATH):/go/src/n -w /go/src/n golang:1.19
-# CROSS_COMPILE_CLI = docker run -e CGO_ENABLED=0 --rm -v $(AISTORE_PATH)/cmd/cli:/go/src/n -w /go/src/n golang:1.19
+# CROSS_COMPILE_CLI = docker run -e $(CGO_DISABLE) --rm -v $(AISTORE_PATH)/cmd/cli:/go/src/n -w /go/src/n golang:1.19
 
 # Build version, flags, and tags
 VERSION = $(shell git rev-parse --short HEAD)
@@ -111,7 +115,7 @@ ifdef CROSS_COMPILE_CLI
 	cd $(BUILD_DIR)/cli && \
 	$(CROSS_COMPILE_CLI) go build -o ./ais $(BUILD_FLAGS) $(LDFLAGS) *.go && mv ./ais $(BUILD_DEST)/.
 else
-	@cd $(BUILD_DIR)/cli && CGO_ENABLED=0 go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) *.go
+	@cd $(BUILD_DIR)/cli && $(CGO_DISABLE) go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) *.go
 endif
 	@echo "*** To enable autocompletions in your current shell, run:"
 	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/bash or"
