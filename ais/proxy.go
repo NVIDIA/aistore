@@ -1577,7 +1577,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		props.SetProvider(bck.Provider)
 		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(props))
 		if bckArgs.getInfo {
-			hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(&cmn.BucketInfo{Present: present}))
+			hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(&cmn.BucketInfo{Present: false}))
 		}
 		return
 	}

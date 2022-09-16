@@ -274,6 +274,14 @@ func (b *Bck) ValidateName() (err error) {
 	return
 }
 
+func (b *Bck) DisplayName() string {
+	sch := apc.ToScheme(b.Provider)
+	if b.Ns.IsGlobal() {
+		return sch + apc.BckProviderSeparator + b.Name
+	}
+	return fmt.Sprintf("%s%s%s/%s", sch, apc.BckProviderSeparator, b.Ns, b.Name)
+}
+
 func (b *Bck) IsEmpty() bool {
 	return b == nil || (b.Name == "" && b.Provider == "" && b.Ns == NsGlobal)
 }
