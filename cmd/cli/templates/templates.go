@@ -186,12 +186,12 @@ const (
 	// Bucket summary templates
 	BucketsSummariesFastTmpl = "NAME\t OBJECTS\t SIZE ON DISK\t USAGE(%)\n" + bucketsSummariesFastBody
 	bucketsSummariesFastBody = "{{range $k, $v := . }}" +
-		"{{$v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUns $v.Size 2}}\t {{$v.UsedPct}}%\n" +
+		"{{FormatBckName $v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUns $v.Size 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
 	BucketsSummariesTmpl = "NAME\t OBJECTS\t OBJECT SIZE (min, avg, max)\t SIZE (sum object sizes)\t USAGE(%)\n" +
 		bucketsSummariesBody
 	bucketsSummariesBody = "{{range $k, $v := . }}" +
-		"{{$v.Bck}}\t {{$v.ObjCount}}\t " +
+		"{{FormatBckName $v.Bck}}\t {{$v.ObjCount}}\t " +
 		"{{FormatMAM $v.ObjSize.Min}} {{FormatMAM $v.ObjSize.Avg}} {{FormatMAM $v.ObjSize.Max}}\t " +
 		"{{FormatBytesUns $v.Size 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
@@ -343,7 +343,7 @@ var (
 		"FormatSmapVersion": fmtSmapVer,
 		"FormatFloat":       func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":        FmtBool,
-		"FormatBckName":     fmtBckName,
+		"FormatBckName":     func(bck cmn.Bck) string { return bck.DisplayName() },
 		"FormatMilli":       fmtMilli,
 		"JoinList":          fmtStringList,
 		"JoinListNL":        func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
@@ -631,15 +631,6 @@ func extECPutStats(base *xact.SnapExt) *ec.ExtECPutStats {
 		return &ec.ExtECPutStats{}
 	}
 	return ecPut
-}
-
-// TODO -- FIXME: up and use bck.DisplayName()
-func fmtBckName(bck cmn.Bck) string {
-	sch := apc.ToScheme(bck.Provider)
-	if bck.Ns.IsGlobal() {
-		return sch + apc.BckProviderSeparator + bck.Name
-	}
-	return fmt.Sprintf("%s%s%s/%s", sch, apc.BckProviderSeparator, bck.Ns, bck.Name)
 }
 
 func fmtMilli(val cos.Duration) string {
