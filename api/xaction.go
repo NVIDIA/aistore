@@ -34,7 +34,6 @@ const (
 type (
 	NodesXactSnap      map[string]*xact.SnapExt
 	NodesXactMultiSnap map[string][]*xact.SnapExt
-	XactSnapTestFunc   func(NodesXactMultiSnap) bool
 
 	XactStatsHelper interface {
 		Running() bool
@@ -178,7 +177,23 @@ func backoffPoll(dur time.Duration) time.Duration {
 	return cos.MinDuration(xactMaxPollTime, dur)
 }
 
-func _waitForXaction(bp BaseParams, args XactReqArgs, condFn ...XactSnapTestFunc) (status *nl.NotifStatus, err error) {
+// WaitForXactionIC waits for a given xaction to complete.
+// Use it only for global xactions
+// (those that execute on all targets and report their status to IC, e.g. rebalance).
+func WaitForXactionIC(bp BaseParams, args XactReqArgs) (status *nl.NotifStatus, err error) {
+	return waitX(bp, args, nil)
+}
+
+// WaitForXactionNode waits for a given xaction to complete.
+// Use for xaction which can be launched on a single node and do not report their
+// statuses(e.g resilver) to IC or to check specific xaction states (e.g Idle).
+func WaitForXactionNode(bp BaseParams, args XactReqArgs, fn func(NodesXactMultiSnap) bool) error {
+	debug.Assert(args.Kind != "")
+	_, err := waitX(bp, args, fn)
+	return err
+}
+
+func waitX(bp BaseParams, args XactReqArgs, fn func(NodesXactMultiSnap) bool) (status *nl.NotifStatus, err error) {
 	var (
 		elapsed      time.Duration
 		begin        = mono.NanoTime()
@@ -188,14 +203,11 @@ func _waitForXaction(bp BaseParams, args XactReqArgs, condFn ...XactSnapTestFunc
 	defer cancel()
 	for {
 		var done bool
-		if len(condFn) == 0 {
+		if fn == nil {
 			status, err = GetXactionStatus(bp, args)
 			done = err == nil && status.Finished() && elapsed >= xactMinPollTime
 		} else {
-			var (
-				snaps NodesXactMultiSnap
-				fn    = condFn[0]
-			)
+			var snaps NodesXactMultiSnap
 			snaps, err = QueryXactionSnaps(bp, args)
 			done = err == nil && fn(snaps)
 		}
@@ -213,22 +225,6 @@ func _waitForXaction(bp BaseParams, args XactReqArgs, condFn ...XactSnapTestFunc
 			break
 		}
 	}
-}
-
-// WaitForXactionIC waits for a given xaction to complete.
-// Use it only for global xactions
-// (those that execute on all targets and report their status to IC, e.g. rebalance).
-func WaitForXactionIC(bp BaseParams, args XactReqArgs) (status *nl.NotifStatus, err error) {
-	return _waitForXaction(bp, args)
-}
-
-// WaitForXactionNode waits for a given xaction to complete.
-// Use for xaction which can be launched on a single node and do not report their
-// statuses(e.g resilver) to IC or to check specific xaction states (e.g Idle).
-func WaitForXactionNode(bp BaseParams, args XactReqArgs, fn XactSnapTestFunc) error {
-	debug.Assert(args.Kind != "")
-	_, err := _waitForXaction(bp, args, fn)
-	return err
 }
 
 // WaitForXactionIdle waits for a given on-demand xaction to be idle.
@@ -319,7 +315,7 @@ func (nxs NodesXactSnap) TotalRunningTime() time.Duration {
 //  3. Breaks loop on error
 //  4. If the destination returns status code StatusOK, it means the response
 //     contains the real data and the function returns the response to the caller
-func (reqParams *ReqParams) waitSummary(msg *apc.BckSummMsg, v interface{}) error {
+func (reqParams *ReqParams) waitBsumm(msg *apc.BckSummMsg, v interface{}) error {
 	var (
 		uuid   string
 		action = apc.ActSummaryBck

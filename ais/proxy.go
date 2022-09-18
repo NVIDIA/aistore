@@ -525,7 +525,8 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		// otherwise, list objects
+
+		// list objects
 		var (
 			err   error
 			lsmsg apc.ListObjsMsg
@@ -1306,7 +1307,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		smap    = p.owner.smap.get()
 	)
 	if smap.CountActiveTargets() < 1 {
-		p.writeErrMsg(w, r, "no registered targets yet")
+		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
 		return
 	}
 
@@ -1345,10 +1346,10 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		bckList, err = p.listObjectsAIS(bck, lsmsg)
 	} else {
 		bckList, err = p.listObjectsRemote(bck, lsmsg)
-		// TODO: `status == http.StatusGone` At this point we know that this
-		//       remote bucket exists and is offline. We should somehow try to list
-		//       cached objects. This isn't easy as we basically need to start a new
-		//       xaction and return new `UUID`.
+		// TODO: `status == http.StatusGone`: at this point we know that this
+		// remote bucket exists and is offline. We should somehow try to list
+		// cached objects. This isn't easy as we basically need to start a new
+		// xaction and return a new `UUID`.
 	}
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -1374,98 +1375,6 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		cos.NamedVal64{Name: stats.ListCount, Value: 1},
 		cos.NamedVal64{Name: stats.ListLatency, Value: delta},
 	)
-}
-
-func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, amsg *apc.ActionMsg, dpq *dpq) {
-	var lsmsg apc.BckSummMsg
-	if err := cos.MorphMarshal(amsg.Value, &lsmsg); err != nil {
-		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
-		return
-	}
-	if qbck.IsBucket() {
-		bck := cluster.CloneBck((*cmn.Bck)(qbck))
-		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
-		bckArgs.createAIS = false
-		bckArgs.headRemB = shouldHeadRemB()
-		if _, err := bckArgs.initAndTry(qbck.Name); err != nil {
-			return
-		}
-	}
-	if dpq.uuid != "" { // apc.QparamUUID
-		lsmsg.UUID = dpq.uuid
-	}
-	summaries, uuid, err := p.bsumm(qbck, &lsmsg)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-
-	// returned uuid == "" indicates that async runner has finished and the summary is done;
-	// otherwise it's an ID of the still running task
-	if uuid != "" {
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(uuid))
-		return
-	}
-
-	p.writeJSON(w, r, summaries, "bucket-summary")
-}
-
-func (p *proxy) bsumm(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, uuid string, err error) {
-	var (
-		isNew, q = initAsyncQuery((*cmn.Bck)(qbck), msg, cos.GenUUID())
-		config   = cmn.GCO.Get()
-		smap     = p.owner.smap.get()
-		aisMsg   = p.newAmsgActVal(apc.ActSummaryBck, msg)
-	)
-	args := allocBcArgs()
-	args.req = cmn.HreqArgs{
-		Method: http.MethodGet,
-		Path:   apc.URLPathBuckets.Join(qbck.Name),
-		Query:  q,
-		Body:   cos.MustMarshal(aisMsg),
-	}
-	args.smap = smap
-	args.timeout = config.Timeout.MaxHostBusy.D() + config.Timeout.MaxKeepalive.D()
-	results := p.bcastGroup(args)
-	allOK, _, err := p.checkBckTaskResp(msg.UUID, results)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// some targets are still executing their tasks, or it is the request to start
-	// an async task - return only uuid
-	if !allOK || isNew {
-		return nil, msg.UUID, nil
-	}
-
-	// all targets are ready: collect the result
-	q = url.Values{}
-	q = qbck.AddToQuery(q)
-	q.Set(apc.QparamTaskAction, apc.TaskResult)
-	q.Set(apc.QparamSilent, "true")
-	args.req.Query = q
-	args.cresv = cresBsumm{} // -> cmn.BckSummaries
-	results = p.bcastGroup(args)
-	freeBcArgs(args)
-
-	summaries = make(cmn.BckSummaries, 0, 8)
-	dsize := make(map[string]uint64, len(results))
-	for _, res := range results {
-		if res.err != nil {
-			err = res.toErr()
-			freeBcastRes(results)
-			return nil, "", err
-		}
-		targetSumm, tid := res.v.(*cmn.BckSummaries), res.si.ID()
-		for _, summ := range *targetSumm {
-			dsize[tid] = summ.TotalDisksSize
-			summaries = summaries.Aggregate(summ)
-		}
-	}
-	summaries.Finalize(dsize, config.TestingEnv())
-	freeBcastRes(results)
-	return summaries, "", nil
 }
 
 // POST { action } /v1/objects/bucket-name[/object-name]
@@ -1565,20 +1474,42 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hdr := w.Header()
+	var (
+		hdr  = w.Header()
+		info *cmn.BucketInfo
+	)
+	if bckArgs.getInfo {
+		info = &cmn.BucketInfo{Present: false}
+	}
 	if bckArgs.present {
-		toHdr(bck, hdr, bckArgs.present, bckArgs.getInfo)
+		if bckArgs.getInfo { // get (extended) info - broadcast, collect, and summarize
+			info.Present = true
+			if err := p.bsummDoWait(bck, info); err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+		}
+		toHdr(bck, hdr, bckArgs.present, info)
 		return
 	}
-	// requested (via QparamFltPresence) to be present but is not
+	// when present-only (via QparamFltPresence) is not
 	if present {
 		debug.Assert(bck.IsRemote())
-		props := bck.Bucket().DefaultProps()
-		props.SetProvider(bck.Provider)
-		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(props))
-		if bckArgs.getInfo {
-			hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(&cmn.BucketInfo{Present: false}))
+		toHdr(bck, hdr, false, info)
+		return
+	}
+
+	if cos.IsParseBool(apireq.dpq.dontAddMD) {
+		_, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
+		if err != nil {
+			p.writeErr(w, r, err, statusCode)
+			return
 		}
+		toHdr(bck, hdr, false, info)
+		return
+	}
+
+	if p.forwardCP(w, r, nil, "head "+bck.String()) {
 		return
 	}
 
@@ -1587,17 +1518,6 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, statusCode)
 		return
 	}
-
-	dontAddMD := cos.IsParseBool(apireq.dpq.dontAddMD)
-	if dontAddMD {
-		toHdr(bck, hdr, false, bckArgs.getInfo)
-		return
-	}
-
-	if p.forwardCP(w, r, nil, "head "+bck.String()) {
-		return
-	}
-
 	ctx := &bmdModifier{
 		pre:        p._bckHeadPre,
 		final:      p._syncBMDFinal,
@@ -1611,18 +1531,20 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	toHdr(bck, hdr, false, bckArgs.getInfo)
+	bck, err = bckArgs.initAndTry(bck.Name)
+	cos.AssertMsg(err == nil, "must be cloned and in BMD with remote+inherited props")
+	toHdr(bck, hdr, true /* created just now on the fly */, info)
 }
 
-func toHdr(bck *cluster.Bck, hdr http.Header, present, getInfo bool) {
+func toHdr(bck *cluster.Bck, hdr http.Header, present bool, info *cmn.BucketInfo) {
 	if bck.Props == nil {
-		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: hdr})
-		debug.AssertMsg(!present, bck.String())
+		debug.Assert(!present)
+		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(&cmn.BucketProps{}))
+	} else {
+		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(bck.Props))
 	}
-	hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(bck.Props))
-	if getInfo {
-		// TODO -- FIXME: add size
-		hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(&cmn.BucketInfo{Present: present}))
+	if info != nil {
+		hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(info))
 	}
 }
 
@@ -2004,56 +1926,6 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 	query.Set(apc.QparamProxyID, p.si.ID())
 	query.Set(apc.QparamUnixTime, cos.UnixNano2S(ts.UnixNano()))
 	redirect += query.Encode()
-	return
-}
-
-func initAsyncQuery(bck *cmn.Bck, msg *apc.BckSummMsg, newTaskID string) (bool, url.Values) {
-	isNew := msg.UUID == ""
-	q := url.Values{}
-	if isNew {
-		msg.UUID = newTaskID
-		q.Set(apc.QparamTaskAction, apc.TaskStart)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("proxy: starting new async task %s", msg.UUID)
-		}
-	} else {
-		// First request is always 'Status' to avoid wasting gigabytes of
-		// traffic in case when few targets have finished their tasks.
-		q.Set(apc.QparamTaskAction, apc.TaskStatus)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("proxy: reading async task %s result", msg.UUID)
-		}
-	}
-
-	q = bck.AddToQuery(q)
-	return isNew, q
-}
-
-func (p *proxy) checkBckTaskResp(uuid string, results sliceResults) (allOK bool, status int, err error) {
-	// check response codes of all targets
-	// Target that has completed its async task returns 200, and 202 otherwise
-	allOK = true
-	allNotFound := true
-	for _, res := range results {
-		if res.status == http.StatusNotFound {
-			continue
-		}
-		allNotFound = false
-		if res.err != nil {
-			allOK, status, err = false, res.status, res.err
-			freeBcastRes(results)
-			return
-		}
-		if res.status != http.StatusOK {
-			allOK = false
-			status = res.status
-			break
-		}
-	}
-	freeBcastRes(results)
-	if allNotFound {
-		err = cmn.NewErrNotFound("%s: task %q", p.si, uuid)
-	}
 	return
 }
 

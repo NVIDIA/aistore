@@ -306,7 +306,7 @@ func isErrDowngrade(err error) bool {
 /////////////////////////
 
 func (e *errNotEnoughTargets) Error() string {
-	return fmt.Sprintf("%s: not enough targets in %s: need %d, have %d",
+	return fmt.Sprintf("%s: not enough targets: %s, need %d, have %d",
 		e.si, e.smap, e.required, e.smap.CountActiveTargets())
 }
 

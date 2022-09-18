@@ -204,7 +204,7 @@ func GetBucketsSummaries(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BckSummMsg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = qbck.AddToQuery(nil)
 	}
-	if err := reqParams.waitSummary(msg, &summaries); err != nil {
+	if err := reqParams.waitBsumm(msg, &summaries); err != nil {
 		return nil, err
 	}
 	sort.Sort(summaries)

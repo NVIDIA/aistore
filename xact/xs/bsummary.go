@@ -109,7 +109,7 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 			pq = &provider
 		}
 		r.summaries = make(cmn.BckSummaries, 0, 8)
-		bmd.Range(pq, nil, func(bck *cluster.Bck) bool { // TODO: add bmd.Range(qbck, func(...))
+		bmd.Range(pq, nil, func(bck *cluster.Bck) bool {
 			if err := r.runBck(bck, shouldListCB); err != nil {
 				glog.Error(err)
 			}
@@ -196,17 +196,19 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool)
 	return nil
 }
 
-func (*bsummXact) fast(bck *cluster.Bck) (objCount, size uint64, err error) {
+func (*bsummXact) fast(bck *cluster.Bck) (uint64, uint64, error) {
 	var (
+		objCount, size uint64
+		err            error
 		availablePaths = fs.GetAvail()
 		group, _       = errgroup.WithContext(context.Background())
 	)
 	for _, mi := range availablePaths {
 		group.Go(func(mi *fs.MountpathInfo) func() error {
 			return func() error {
-				siz, num, err := mi.SizeBck(bck.Bucket())
-				if err != nil {
-					return err
+				siz, num, erm := mi.SizeBck(bck.Bucket())
+				if erm != nil {
+					return erm
 				}
 				gatomic.AddUint64(&objCount, uint64(num))
 				gatomic.AddUint64(&size, siz)

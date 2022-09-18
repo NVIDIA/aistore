@@ -21,6 +21,7 @@ import (
 // - result delivered via apc.HdrBucketInfo header
 // (compare with BucketSummary)
 type BucketInfo struct {
+	BckSumm
 	Present bool `json:"present_in_cluster,omitempty"`
 }
 
