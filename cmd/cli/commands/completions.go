@@ -158,9 +158,9 @@ func showConfigCompletions(c *cli.Context) {
 func configSectionCompletions(_ *cli.Context, cfgScope string) {
 	var (
 		err    error
-		config             = &cmn.Config{}
-		v      interface{} = &config.ClusterConfig
-		props              = cos.NewStringSet()
+		config     = &cmn.Config{}
+		v      any = &config.ClusterConfig
+		props      = cos.NewStringSet()
 	)
 	if cfgScope == cfgScopeLocal {
 		v = &config.LocalConfig
@@ -187,9 +187,9 @@ func setNodeConfigCompletions(c *cli.Context) {
 		return
 	}
 	var (
-		config             = &cmn.Config{}
-		v      interface{} = &config.ClusterConfig
-		props              = cos.NewStringSet()
+		config     = &cmn.Config{}
+		v      any = &config.ClusterConfig
+		props      = cos.NewStringSet()
 	)
 	if c.NArg() == 2 { // daemon id and scope
 		if argLast(c) == cfgScopeLocal {

@@ -21,13 +21,13 @@ func Logln(msg string) {
 	}
 }
 
-func Logf(f string, a ...interface{}) {
+func Logf(f string, a ...any) {
 	if testing.Verbose() {
 		fmt.Fprintf(os.Stdout, prependTime(f), a...)
 	}
 }
 
-func LogfCond(cond bool, f string, a ...interface{}) {
+func LogfCond(cond bool, f string, a ...any) {
 	if cond {
 		Logf(f, a...)
 	}

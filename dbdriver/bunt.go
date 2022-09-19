@@ -70,13 +70,13 @@ func (bd *BuntDriver) Close() error {
 	return bd.driver.Close()
 }
 
-func (bd *BuntDriver) Set(collection, key string, object interface{}) error {
+func (bd *BuntDriver) Set(collection, key string, object any) error {
 	b := cos.MustMarshal(object)
 	err := bd.SetString(collection, key, string(b))
 	return buntToCommonErr(err, collection, key)
 }
 
-func (bd *BuntDriver) Get(collection, key string, object interface{}) error {
+func (bd *BuntDriver) Get(collection, key string, object any) error {
 	s, err := bd.GetString(collection, key)
 	if err != nil {
 		return buntToCommonErr(err, collection, key)

@@ -145,7 +145,7 @@ type (
 	// in a response object, which is used to communicate the outcome of the
 	// request.
 	response struct {
-		value      interface{}
+		value      any
 		err        error
 		statusCode int
 	}
@@ -196,7 +196,7 @@ func clientForURL(u string) *http.Client {
 // request //
 /////////////
 
-func (req *request) write(value interface{}, err error, statusCode int) {
+func (req *request) write(value any, err error, statusCode int) {
 	req.response = &response{
 		value:      value,
 		err:        err,
@@ -208,7 +208,7 @@ func (req *request) writeErrResp(err error, statusCode int) {
 	req.write(nil, err, statusCode)
 }
 
-func (req *request) writeResp(value interface{}) {
+func (req *request) writeResp(value any) {
 	req.write(value, nil, http.StatusOK)
 }
 
@@ -278,7 +278,7 @@ func (d *Downloader) stop(err error) {
 	d.Finish(err)
 }
 
-func (d *Downloader) Download(dJob DlJob) (resp interface{}, statusCode int, err error) {
+func (d *Downloader) Download(dJob DlJob) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	dlStore.setJob(dJob.ID(), dJob)
@@ -295,7 +295,7 @@ func (d *Downloader) Download(dJob DlJob) (resp interface{}, statusCode int, err
 	}
 }
 
-func (d *Downloader) AbortJob(id string) (resp interface{}, statusCode int, err error) {
+func (d *Downloader) AbortJob(id string) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
@@ -305,7 +305,7 @@ func (d *Downloader) AbortJob(id string) (resp interface{}, statusCode int, err 
 	return d.dispatcher.dispatchAdminReq(req)
 }
 
-func (d *Downloader) RemoveJob(id string) (resp interface{}, statusCode int, err error) {
+func (d *Downloader) RemoveJob(id string) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
@@ -315,7 +315,7 @@ func (d *Downloader) RemoveJob(id string) (resp interface{}, statusCode int, err
 	return d.dispatcher.dispatchAdminReq(req)
 }
 
-func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, statusCode int, err error) {
+func (d *Downloader) JobStatus(id string, onlyActive bool) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
@@ -326,7 +326,7 @@ func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, st
 	return d.dispatcher.dispatchAdminReq(req)
 }
 
-func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, statusCode int, err error) {
+func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{

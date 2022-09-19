@@ -13,7 +13,7 @@ import (
 const assertMsg = "assertion failed"
 
 // NOTE: Not to be used in the datapath - consider instead one of the other flavors below.
-func Assertf(cond bool, f string, a ...interface{}) {
+func Assertf(cond bool, f string, a ...any) {
 	if !cond {
 		AssertMsg(cond, fmt.Sprintf(f, a...))
 	}

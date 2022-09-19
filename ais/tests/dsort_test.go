@@ -103,7 +103,7 @@ func generateDSortDesc() string {
 	return dsortDescCurPrefix + time.Now().Format(time.RFC3339Nano)
 }
 
-func runDSortTest(t *testing.T, dts dsortTestSpec, f interface{}) {
+func runDSortTest(t *testing.T, dts dsortTestSpec, f any) {
 	if dts.p {
 		t.Parallel()
 	}
@@ -304,7 +304,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	tlog.Logln("checking if files are sorted...")
 
 	lastName := ""
-	var lastValue interface{}
+	var lastValue any
 
 	gzipped := false
 	if df.extension != cos.ExtTar {

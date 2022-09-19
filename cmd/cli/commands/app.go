@@ -48,7 +48,7 @@ var (
 
 // color
 var (
-	fred, fcyan func(a ...interface{}) string
+	fred, fcyan func(a ...any) string
 )
 
 // New returns a new, initialized AISCLI instance
@@ -187,7 +187,7 @@ func (aisCLI *AISCLI) init(version string) {
 	app.Flags = []cli.Flag{cli.HelpFlag, noColorFlag}
 	app.CommandNotFound = commandNotFoundHandler
 	app.OnUsageError = incorrectUsageHandler
-	app.Metadata = map[string]interface{}{metadata: aisCLI.longRunParams}
+	app.Metadata = map[string]any{metadata: aisCLI.longRunParams}
 	app.Writer = aisCLI.outWriter
 	app.ErrWriter = aisCLI.errWriter
 	app.Before = onBeforeCommand // to disable colors if `no-colors' is set

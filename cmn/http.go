@@ -156,7 +156,7 @@ func ReadBytes(r *http.Request) (b []byte, err error) {
 	return b, err
 }
 
-func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) (err error) {
+func ReadJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 	err = jsoniter.NewDecoder(r.Body).Decode(out)
 	cos.Close(r.Body)
 	if err == nil {
@@ -165,7 +165,7 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) (err erro
 	return WriteErrJSON(w, r, out, err)
 }
 
-func WriteErrJSON(w http.ResponseWriter, r *http.Request, out interface{}, err error) error {
+func WriteErrJSON(w http.ResponseWriter, r *http.Request, out any, err error) error {
 	at := thisNodeName
 	if thisNodeName == "" {
 		at = r.URL.Path

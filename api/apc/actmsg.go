@@ -107,9 +107,9 @@ const (
 // ActionMsg is a JSON-formatted control structures used in a majority of API calls
 type (
 	ActionMsg struct {
-		Value  interface{} `json:"value"`  // action-specific and optional
-		Action string      `json:"action"` // ActShutdown, ActRebalance, and many more (see apc/const.go)
-		Name   string      `json:"name"`   // action-specific name (e.g., bucket name)
+		Value  any    `json:"value"`  // action-specific and optional
+		Action string `json:"action"` // ActShutdown, ActRebalance, and many more (see apc/const.go)
+		Name   string `json:"name"`   // action-specific name (e.g., bucket name)
 	}
 	ActValRmNode struct {
 		DaemonID          string `json:"sid"`

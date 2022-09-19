@@ -370,7 +370,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			if ds.m.Metrics.extended {
 				beforeSend = mono.NanoTime()
 			}
-			o.Callback = func(hdr transport.ObjHdr, r io.ReadCloser, _ interface{}, err error) {
+			o.Callback = func(hdr transport.ObjHdr, r io.ReadCloser, _ any, err error) {
 				if err != nil {
 					cbErr = err
 				}
@@ -562,7 +562,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 	}
 }
 
-func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, x interface{}, err error) {
+func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, x any, err error) {
 	if ds.m.Metrics.extended {
 		dur := mono.Since(x.(int64))
 		ds.m.Metrics.Creation.mu.Lock()

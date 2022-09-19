@@ -30,7 +30,7 @@ const (
 func TestMsgpackGenericShardMarshal(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		var (
-			dst      interface{}
+			dst      any
 			in       = makeShard(1000 /* num files in a shard */, false /* non-ascii key*/)
 			buf, err = msgpack.Marshal(in)
 		)
@@ -58,7 +58,7 @@ func TestMsgpackGenericShardEncode(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		var (
-			dst interface{}
+			dst any
 			in  = makeShard(1000 /* num files in a shard */, false /* non-ascii key*/)
 			enc = msgpack.NewEncoder(sgl)
 			w   = enc.Writer()
@@ -105,8 +105,8 @@ func makeShard(num int, nonASCIIKey bool) (s cmn.GenShard) {
 	return
 }
 
-func cmpShard(t *testing.T, in cmn.GenShard, dst interface{}) {
-	out, ok := dst.(map[string]interface{})
+func cmpShard(t *testing.T, in cmn.GenShard, dst any) {
+	out, ok := dst.(map[string]any)
 	if !ok {
 		t.Fatalf("not ok: %T", dst)
 	}

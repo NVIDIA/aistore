@@ -120,7 +120,7 @@ var _ = Describe("Notifications xaction test", func() {
 			return
 		}
 
-		notifRequest = func(daeID, xactID, notifKind string, stats interface{}) *http.Request {
+		notifRequest = func(daeID, xactID, notifKind string, stats any) *http.Request {
 			nm := cluster.NotifMsg{
 				UUID: xactID,
 				Data: cos.MustMarshal(stats),

@@ -99,7 +99,7 @@ func argLast(c *cli.Context) string { return c.Args().Get(c.NArg() - 1) }
 
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
 
-func helpMessage(template string, data interface{}) string {
+func helpMessage(template string, data any) string {
 	var buf bytes.Buffer
 	w := bufio.NewWriter(&buf)
 
@@ -782,7 +782,7 @@ func printDryRunHeader(c *cli.Context) {
 // if maxLines >= 0 prints at most maxLines, otherwise prints everything until
 // it reaches the end of one of args
 func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]string) {
-	objs := make([]interface{}, 0, len(args))
+	objs := make([]any, 0, len(args))
 	if fmtStr == "" || fmtStr[len(fmtStr)-1] != '\n' {
 		fmtStr += "\n"
 	}
@@ -946,7 +946,7 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 }
 
 // see also authNConfPairs
-func flattenConfig(cfg interface{}, section string) (flat []prop) {
+func flattenConfig(cfg any, section string) (flat []prop) {
 	flat = make([]prop, 0, 40)
 	cmn.IterFields(cfg, func(tag string, field cmn.IterField) (error, bool) {
 		if section == "" || strings.HasPrefix(tag, section) {
@@ -959,8 +959,8 @@ func flattenConfig(cfg interface{}, section string) (flat []prop) {
 }
 
 // NOTE: remove secrets if any
-func _toStr(v interface{}) (s string) {
-	m, ok := v.(map[string]interface{})
+func _toStr(v any) (s string) {
+	m, ok := v.(map[string]any)
 	if !ok {
 		return fmt.Sprintf("%v", v)
 	}
@@ -970,7 +970,7 @@ func _toStr(v interface{}) (s string) {
 			delete(m, k)
 			continue
 		}
-		if mm, ok := vv.(map[string]interface{}); ok {
+		if mm, ok := vv.(map[string]any); ok {
 			for kk := range mm {
 				if strings.Contains(strings.ToLower(kk), "secret") {
 					delete(mm, kk)
@@ -1325,7 +1325,7 @@ func flattenXactStats(snap *xact.SnapExt) []*prop {
 		&prop{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
 		&prop{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
 	)
-	if extStats, ok := snap.Ext.(map[string]interface{}); ok {
+	if extStats, ok := snap.Ext.(map[string]any); ok {
 		for k, v := range extStats {
 			var value string
 			if strings.HasSuffix(k, ".size") {

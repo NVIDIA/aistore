@@ -334,7 +334,7 @@ func (*notifs) handleProgress(nl nl.NotifListener, tsi *cluster.Snode, data []by
 
 func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
 	var (
-		stats   interface{}
+		stats   any
 		aborted bool
 	)
 	nl.Lock()

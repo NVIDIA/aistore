@@ -203,7 +203,7 @@ func TestMain(m *testing.M) {
 			r.Body.Close()
 		}()
 
-		errCb := func(statusCode int, f string, a ...interface{}) {
+		errCb := func(statusCode int, f string, a ...any) {
 			w.WriteHeader(statusCode)
 			fmt.Fprintf(w, f, a...)
 		}

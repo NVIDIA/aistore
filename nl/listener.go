@@ -20,7 +20,7 @@ import (
 
 type NotifListener interface {
 	Callback(nl NotifListener, ts int64)
-	UnmarshalStats(rawMsg []byte) (interface{}, bool, bool, error)
+	UnmarshalStats(rawMsg []byte) (any, bool, bool, error)
 	Lock()
 	Unlock()
 	RLock()
@@ -34,7 +34,7 @@ type NotifListener interface {
 	SetAborted()
 	Aborted() bool
 	Status() *NotifStatus
-	SetStats(daeID string, stats interface{})
+	SetStats(daeID string, stats any)
 	NodeStats() *NodeStats
 	QueryArgs() cmn.HreqArgs
 	AbortArgs() cmn.HreqArgs
@@ -63,7 +63,7 @@ type (
 
 	NodeStats struct {
 		sync.RWMutex
-		stats map[string]interface{} // daeID => Stats (e.g. cmn.SnapExt)
+		stats map[string]any // daeID => Stats (e.g. cmn.SnapExt)
 	}
 
 	NotifListenerBase struct {
@@ -162,7 +162,7 @@ func (nlb *NotifListenerBase) Callback(nl NotifListener, ts int64) {
 func (nlb *NotifListenerBase) SetErr(err error) { nlb.ErrValue.Store(err) }
 func (nlb *NotifListenerBase) Err() error       { return nlb.ErrValue.Err() }
 
-func (nlb *NotifListenerBase) SetStats(daeID string, stats interface{}) {
+func (nlb *NotifListenerBase) SetStats(daeID string, stats any) {
 	debug.AssertRWMutexLocked(&nlb.mu)
 
 	_, ok := nlb.Srcs[daeID]
@@ -261,20 +261,20 @@ func NewNodeStats(sizes ...int) *NodeStats {
 		size = sizes[0]
 	}
 	return &NodeStats{
-		stats: make(map[string]interface{}, size),
+		stats: make(map[string]any, size),
 	}
 }
 
-func (ns *NodeStats) Store(key string, stats interface{}) {
+func (ns *NodeStats) Store(key string, stats any) {
 	ns.Lock()
 	if ns.stats == nil {
-		ns.stats = make(map[string]interface{})
+		ns.stats = make(map[string]any)
 	}
 	ns.stats[key] = stats
 	ns.Unlock()
 }
 
-func (ns *NodeStats) Range(f func(string, interface{}) bool) {
+func (ns *NodeStats) Range(f func(string, any) bool) {
 	ns.RLock()
 	defer ns.RUnlock()
 
@@ -285,7 +285,7 @@ func (ns *NodeStats) Range(f func(string, interface{}) bool) {
 	}
 }
 
-func (ns *NodeStats) Load(key string) (val interface{}, ok bool) {
+func (ns *NodeStats) Load(key string) (val any, ok bool) {
 	ns.RLock()
 	val, ok = ns.stats[key]
 	ns.RUnlock()

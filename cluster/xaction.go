@@ -39,7 +39,7 @@ type (
 		AbortedAfter(time.Duration) error
 		ChanAbort() <-chan error
 		Quiesce(time.Duration, QuiCB) QuiRes
-		Result() (interface{}, error)
+		Result() (any, error)
 		Snap() XactSnap
 
 		// reporting: log, err

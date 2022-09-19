@@ -182,7 +182,7 @@ func (c *namespaceCache) remove(p string) {
 		wg.Add(1)
 		go func(i int) {
 			m := c.getCacheByIdx(i)
-			m.Range(func(k, v interface{}) bool {
+			m.Range(func(k, v any) bool {
 				name := k.(string)
 				if strings.HasPrefix(name, p) {
 					m.Delete(k)
@@ -226,7 +226,7 @@ func (c *namespaceCache) listEntries(p string, cb func(nsEntry)) {
 		wg.Add(1)
 		go func(i int) {
 			m := c.getCacheByIdx(i)
-			m.Range(func(k, v interface{}) bool {
+			m.Range(func(k, v any) bool {
 				name := k.(string)
 				if !strings.HasPrefix(name, p) {
 					return true

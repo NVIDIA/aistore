@@ -503,7 +503,7 @@ func EvictLomCache(b *Bck) {
 	for _, lcache := range caches {
 		wg.Add(1)
 		go func(cache *sync.Map) {
-			cache.Range(func(hkey, _ interface{}) bool {
+			cache.Range(func(hkey, _ any) bool {
 				uname := hkey.(string)
 				bck, _ := cmn.ParseUname(uname)
 				if bck.Equal((*cmn.Bck)(b)) {

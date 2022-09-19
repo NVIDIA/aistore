@@ -42,7 +42,7 @@ func NewXactNL(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, bc
 	}
 }
 
-func (*NotifXactListener) UnmarshalStats(rawMsg []byte) (stats interface{}, finished, aborted bool, err error) {
+func (*NotifXactListener) UnmarshalStats(rawMsg []byte) (stats any, finished, aborted bool, err error) {
 	xactStats := &SnapExt{}
 	if err = jsoniter.Unmarshal(rawMsg, xactStats); err != nil {
 		return

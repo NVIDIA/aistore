@@ -446,7 +446,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		// Make send synchronous.
 		streamWg := &sync.WaitGroup{}
 		errCh := make(chan error, 1)
-		o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
+		o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 			errCh <- err
 			streamWg.Done()
 		}

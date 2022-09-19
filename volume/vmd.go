@@ -22,12 +22,12 @@ const vmdCopies = 3
 
 type (
 	fsMpathMD struct {
-		Path    string      `json:"mountpath"`
-		Fs      string      `json:"fs"`
-		FsType  string      `json:"fs_type"`
-		FsID    cos.FsID    `json:"fs_id"`
-		Ext     interface{} `json:"ext,omitempty"` // reserved for within-metaversion extensions
-		Enabled bool        `json:"enabled"`
+		Path    string   `json:"mountpath"`
+		Fs      string   `json:"fs"`
+		FsType  string   `json:"fs_type"`
+		FsID    cos.FsID `json:"fs_id"`
+		Ext     any      `json:"ext,omitempty"` // reserved for within-metaversion extensions
+		Enabled bool     `json:"enabled"`
 	}
 
 	// VMD is AIS target's volume metadata structure

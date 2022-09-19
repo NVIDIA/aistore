@@ -140,7 +140,7 @@ func (h wbeHeap) Len() int           { return len(h) }
 func (h wbeHeap) Less(i, j int) bool { return h[i].objName < h[j].objName }
 func (h wbeHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 
-func (h *wbeHeap) Push(x interface{}) {
+func (h *wbeHeap) Push(x any) {
 	info := x.(wbeInfo)
 	debug.Assert(info.objName == "")
 	parsedFQN, err := ParseFQN(info.fqn)
@@ -151,7 +151,7 @@ func (h *wbeHeap) Push(x interface{}) {
 	*h = append(*h, info)
 }
 
-func (h *wbeHeap) Pop() interface{} {
+func (h *wbeHeap) Pop() any {
 	old := *h
 	n := len(old)
 	x := old[n-1]

@@ -20,7 +20,7 @@ type (
 		context       *cli.Context
 		message       string
 		bottomMessage string
-		helpData      interface{}
+		helpData      any
 		helpTemplate  string
 	}
 	errAdditionalInfo struct {
@@ -105,7 +105,7 @@ func cannotExecuteError(c *cli.Context, err error) *errUsage {
 	}
 }
 
-func incorrectUsageMsg(c *cli.Context, fmtString string, args ...interface{}) *errUsage {
+func incorrectUsageMsg(c *cli.Context, fmtString string, args ...any) *errUsage {
 	msg := fmt.Sprintf(fmtString, args...)
 	return _errUsage(c, msg)
 }

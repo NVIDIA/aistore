@@ -2792,7 +2792,7 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error
 func (p *proxy) smapOnUpdate(newSmap, oldSmap *smapX) {
 	// When some node was removed from the cluster we need to clean up the
 	// reverse proxy structure.
-	p.rproxy.nodes.Range(func(key, _ interface{}) bool {
+	p.rproxy.nodes.Range(func(key, _ any) bool {
 		nodeID := key.(string)
 		if oldSmap.containsID(nodeID) && !newSmap.containsID(nodeID) {
 			p.rproxy.nodes.Delete(nodeID)

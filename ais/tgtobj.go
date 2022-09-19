@@ -1375,7 +1375,7 @@ func (coi *copyObjInfo) dm(lom *cluster.LOM, sargs *sendArgs) error {
 		hdr.ObjName = sargs.objNameTo
 		hdr.ObjAttrs.CopyFrom(oa)
 	}
-	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
+	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
 		cluster.FreeLOM(lom)
 	}
 	return sargs.dm.Send(o, sargs.reader, sargs.tsi)

@@ -34,7 +34,7 @@ type (
 		Validate() error
 	}
 	PropsValidator interface {
-		ValidateAsProps(arg ...interface{}) error
+		ValidateAsProps(arg ...any) error
 	}
 )
 
@@ -83,7 +83,7 @@ type (
 		UUID        string `json:"uuid"`                  // UUID
 		Version     int64  `json:"config_version,string"` // version
 		// within meta-version extensions
-		Ext interface{} `json:"ext,omitempty"`
+		Ext any `json:"ext,omitempty"`
 	}
 	ConfigToUpdate struct {
 		// ClusterConfig
@@ -141,7 +141,7 @@ type (
 
 	BackendConf struct {
 		// provider implementation-dependent
-		Conf map[string]interface{} `json:"conf,omitempty"`
+		Conf map[string]any `json:"conf,omitempty"`
 		// 3rd party Cloud(s) -- set during validation
 		Providers map[string]Ns `json:"-"`
 	}
@@ -881,7 +881,7 @@ func (c *BackendConf) setProvider(provider string) {
 	c.Providers[provider] = ns
 }
 
-func (c *BackendConf) ProviderConf(provider string, newConf ...interface{}) (conf interface{}, ok bool) {
+func (c *BackendConf) ProviderConf(provider string, newConf ...any) (conf any, ok bool) {
 	if len(newConf) > 0 {
 		c.Conf[provider] = newConf[0]
 	}
@@ -961,7 +961,7 @@ func (c *SpaceConf) Validate() (err error) {
 	return
 }
 
-func (c *SpaceConf) ValidateAsProps(...interface{}) error { return c.Validate() }
+func (c *SpaceConf) ValidateAsProps(...any) error { return c.Validate() }
 
 func (c *SpaceConf) String() string {
 	return fmt.Sprintf("space config: cleanup=%d%%, low=%d%%, high=%d%%, OOS=%d%%",
@@ -994,7 +994,7 @@ func (c *CksumConf) Validate() (err error) {
 	return cos.ValidateCksumType(c.Type)
 }
 
-func (c *CksumConf) ValidateAsProps(...interface{}) (err error) {
+func (c *CksumConf) ValidateAsProps(...any) (err error) {
 	return c.Validate()
 }
 
@@ -1062,7 +1062,7 @@ func (c *MirrorConf) Validate() error {
 	return nil
 }
 
-func (c *MirrorConf) ValidateAsProps(...interface{}) error {
+func (c *MirrorConf) ValidateAsProps(...any) error {
 	if !c.Enabled {
 		return nil
 	}
@@ -1107,7 +1107,7 @@ func (c *ECConf) Validate() error {
 	return nil
 }
 
-func (c *ECConf) ValidateAsProps(arg ...interface{}) (err error) {
+func (c *ECConf) ValidateAsProps(arg ...any) (err error) {
 	if !c.Enabled {
 		return
 	}
@@ -1160,7 +1160,7 @@ func (c *WritePolicyConf) Validate() (err error) {
 	return
 }
 
-func (c *WritePolicyConf) ValidateAsProps(...interface{}) error { return c.Validate() }
+func (c *WritePolicyConf) ValidateAsProps(...any) error { return c.Validate() }
 
 ///////////////////
 // KeepaliveConf //

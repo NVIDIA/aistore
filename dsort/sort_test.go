@@ -15,7 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func createRecords(keys ...interface{}) *extract.Records {
+func createRecords(keys ...any) *extract.Records {
 	records := extract.NewRecords(len(keys))
 	for _, key := range keys {
 		records.Insert(&extract.Record{Key: key, Name: fmt.Sprintf("%v", key)})

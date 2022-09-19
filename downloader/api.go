@@ -358,7 +358,7 @@ func (b *DlRangeBody) String() string {
 // Multi request
 type DlMultiBody struct {
 	DlBase
-	ObjectsPayload interface{} `json:"objects"`
+	ObjectsPayload any `json:"objects"`
 }
 
 func (b *DlMultiBody) Validate() error {
@@ -371,7 +371,7 @@ func (b *DlMultiBody) Validate() error {
 func (b *DlMultiBody) ExtractPayload() (cos.SimpleKVs, error) {
 	objects := make(cos.SimpleKVs, 10)
 	switch ty := b.ObjectsPayload.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		for key, val := range ty {
 			switch v := val.(type) {
 			case string:
@@ -380,7 +380,7 @@ func (b *DlMultiBody) ExtractPayload() (cos.SimpleKVs, error) {
 				return nil, fmt.Errorf("values in map should be strings, found: %T", v)
 			}
 		}
-	case []interface{}:
+	case []any:
 		// process list of links
 		for _, val := range ty {
 			switch link := val.(type) {

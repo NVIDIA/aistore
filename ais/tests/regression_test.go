@@ -575,10 +575,10 @@ func TestGetClusterStats(t *testing.T) {
 
 	for k, v := range stats.Target {
 		tdstats := tutils.GetDaemonStats(t, smap.Tmap[k].PubNet.URL)
-		tdcapstats := tdstats["capacity"].(map[string]interface{})
+		tdcapstats := tdstats["capacity"].(map[string]any)
 		dcapstats := v.MPCap
 		for fspath, fstats := range dcapstats {
-			tfstats := tdcapstats[fspath].(map[string]interface{})
+			tfstats := tdcapstats[fspath].(map[string]any)
 			used, err := strconv.ParseInt(tfstats["used"].(string), 10, 64)
 			if err != nil {
 				t.Fatalf("Could not decode Target Stats: fstats.Used")

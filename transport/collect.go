@@ -108,7 +108,7 @@ func (gc *collector) Swap(i, j int) {
 	gc.heap[j].time.index = j
 }
 
-func (gc *collector) Push(x interface{}) {
+func (gc *collector) Push(x any) {
 	l := len(gc.heap)
 	s := x.(*streamBase)
 	s.time.index = l
@@ -122,7 +122,7 @@ func (gc *collector) update(s *streamBase, ticks int) {
 	heap.Fix(gc, s.time.index)
 }
 
-func (gc *collector) Pop() interface{} {
+func (gc *collector) Pop() any {
 	old := gc.heap
 	n := len(old)
 	sl := old[n-1]

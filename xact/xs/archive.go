@@ -288,7 +288,7 @@ func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.Rea
 		hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
 		hdr.Opaque = []byte(wi.msg.TxnUUID)
 	}
-	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
+	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
 		cluster.FreeLOM(lom)
 	}
 	r.p.dm.Send(o, fh, wi.tsi)

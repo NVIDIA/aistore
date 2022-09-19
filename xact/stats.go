@@ -33,7 +33,7 @@ type (
 	}
 
 	SnapExt struct {
-		Ext interface{} `json:"ext"`
+		Ext any `json:"ext"`
 		Snap
 	}
 	BaseDemandStatsExt struct {
@@ -43,13 +43,13 @@ type (
 	// NOTE: see closely related `api.XactReqArgs` and comments
 	// TODO: apc package, here and elsewhere
 	QueryMsg struct {
-		OnlyRunning *bool       `json:"show_active"`
-		Ext         interface{} `json:"ext"`
-		Bck         cmn.Bck     `json:"bck"`
-		ID          string      `json:"id"`
-		Kind        string      `json:"kind"`
-		DaemonID    string      `json:"node,omitempty"`
-		Buckets     []cmn.Bck   `json:"buckets,omitempty"`
+		OnlyRunning *bool     `json:"show_active"`
+		Ext         any       `json:"ext"`
+		Bck         cmn.Bck   `json:"bck"`
+		ID          string    `json:"id"`
+		Kind        string    `json:"kind"`
+		DaemonID    string    `json:"node,omitempty"`
+		Buckets     []cmn.Bck `json:"buckets,omitempty"`
 	}
 
 	QueryMsgLRU struct {
@@ -77,7 +77,7 @@ func (b *SnapExt) Idle() bool {
 	if b.Ext == nil {
 		return !b.Running()
 	}
-	if vals, ok := b.Ext.(map[string]interface{}); ok {
+	if vals, ok := b.Ext.(map[string]any); ok {
 		if idle, ok := vals["is_idle"].(bool); ok {
 			return idle
 		}

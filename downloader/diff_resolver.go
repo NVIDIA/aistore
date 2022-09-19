@@ -146,7 +146,7 @@ func (dr *DiffResolver) Start() {
 	}()
 }
 
-func (dr *DiffResolver) PushSrc(v interface{}) {
+func (dr *DiffResolver) PushSrc(v any) {
 	switch x := v.(type) {
 	case *cluster.LOM:
 		dr.srcCh <- x
@@ -157,7 +157,7 @@ func (dr *DiffResolver) PushSrc(v interface{}) {
 
 func (dr *DiffResolver) CloseSrc() { close(dr.srcCh) }
 
-func (dr *DiffResolver) PushDst(v interface{}) {
+func (dr *DiffResolver) PushDst(v any) {
 	var d *DstElement
 	switch x := v.(type) {
 	case *BackendResource:

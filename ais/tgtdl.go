@@ -26,7 +26,7 @@ import (
 // [METHOD] /v1/download
 func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		response   interface{}
+		response   any
 		respErr    error
 		statusCode int
 	)

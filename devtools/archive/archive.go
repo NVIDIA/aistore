@@ -44,7 +44,7 @@ func (f *dummyFile) Size() int64      { return f.size }
 func (*dummyFile) Mode() os.FileMode  { return 0 }
 func (*dummyFile) ModTime() time.Time { return time.Now() }
 func (*dummyFile) IsDir() bool        { return false }
-func (*dummyFile) Sys() interface{}   { return nil }
+func (*dummyFile) Sys() any           { return nil }
 
 // adds a given buf to a tar or tar.gz or fills-out random fileSize bytes and adds anyway
 func addBufferToTar(tw *tar.Writer, path string, fileSize int, buf []byte) (err error) {

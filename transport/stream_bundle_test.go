@@ -129,7 +129,7 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 		cos.Assert(written == hdr.ObjAttrs.Size || hdr.IsUnsized())
 		return nil
 	}
-	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
+	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
 		numCompleted.Inc()
 	}
 

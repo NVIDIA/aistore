@@ -59,14 +59,14 @@ func DoAndCheckResp(tb testing.TB, client *http.Client, req *http.Request, statu
 	Errorf(tb, false, "expected %v status code, got %d", statusCode, resp.StatusCode)
 }
 
-func Fatalf(tb testing.TB, cond bool, msg string, args ...interface{}) {
+func Fatalf(tb testing.TB, cond bool, msg string, args ...any) {
 	if !cond {
 		printStack()
 		tb.Fatalf(msg, args...)
 	}
 }
 
-func Errorf(tb testing.TB, cond bool, msg string, args ...interface{}) {
+func Errorf(tb testing.TB, cond bool, msg string, args ...any) {
 	if !cond {
 		printStack()
 		tb.Errorf(msg, args...)

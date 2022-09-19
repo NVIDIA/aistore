@@ -23,7 +23,7 @@ const (
 	lz4BufferSize = 64 << 10
 )
 
-func Encode(ws cos.WriterAt, v interface{}, opts Options) (err error) {
+func Encode(ws cos.WriterAt, v any, opts Options) (err error) {
 	var (
 		h       hash.Hash
 		w       io.Writer = ws
@@ -87,7 +87,7 @@ func Encode(ws cos.WriterAt, v interface{}, opts Options) (err error) {
 	return
 }
 
-func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (checksum *cos.Cksum, err error) {
+func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *cos.Cksum, err error) {
 	var (
 		r             io.Reader = reader
 		expectedCksum uint64

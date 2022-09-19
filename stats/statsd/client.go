@@ -49,7 +49,7 @@ type (
 	Metric struct {
 		Type  MetricType // time, counter or gauge
 		Name  string     // Name for this particular metric
-		Value interface{}
+		Value any
 	}
 )
 

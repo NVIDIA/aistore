@@ -244,7 +244,7 @@ func NewBucketPropsToUpdate(nvs cos.SimpleKVs) (props *BucketPropsToUpdate, err 
 	return
 }
 
-func (c *ExtraProps) ValidateAsProps(arg ...interface{}) error {
+func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	provider, ok := arg[0].(string)
 	debug.Assert(ok)
 	switch provider {

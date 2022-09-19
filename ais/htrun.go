@@ -910,7 +910,7 @@ func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v msgp.Enco
 	return false
 }
 
-func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) bool {
+func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v any, tag string) bool {
 	var err error
 	w.Header().Set(cos.HdrContentType, cos.ContentJSONCharsetUTF)
 	if isBrowser(r.Header.Get(cos.HdrUserAgent)) {
@@ -946,7 +946,7 @@ func (h *htrun) handleWriteError(r *http.Request, tag string, err error) {
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
-func _parseNCopies(value interface{}) (copies int64, err error) {
+func _parseNCopies(value any) (copies int64, err error) {
 	switch v := value.(type) {
 	case string:
 		copies, err = strconv.ParseInt(v, 10, 64)
@@ -975,7 +975,7 @@ func _checkAction(msg *apc.ActionMsg, expectedActions ...string) (err error) {
 
 func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
-		body interface{}
+		body any
 		what = r.URL.Query().Get(apc.QparamWhat)
 	)
 	switch what {
@@ -1070,23 +1070,23 @@ func (h *htrun) writeErrSilent(w http.ResponseWriter, r *http.Request, err error
 }
 
 func (h *htrun) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode int,
-	format string, a ...interface{}) {
+	format string, a ...any) {
 	err := fmt.Errorf(format, a...)
 	h.writeErrSilent(w, r, err, errCode)
 }
 
 func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int,
-	format string, a ...interface{}) {
+	format string, a ...any) {
 	err := fmt.Errorf(format, a...)
 	h.writeErrMsg(w, r, err.Error(), errCode)
 }
 
 func (h *htrun) writeErrStatusSilentf(w http.ResponseWriter, r *http.Request, errCode int,
-	format string, a ...interface{}) {
+	format string, a ...any) {
 	h.writeErrSilent(w, r, fmt.Errorf(format, a...), errCode)
 }
 
-func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...interface{}) {
+func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...any) {
 	err := fmt.Errorf(format, a...)
 	if cmn.IsNotExist(err) {
 		h.writeErrMsg(w, r, err.Error(), http.StatusNotFound)
@@ -1114,7 +1114,7 @@ func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action strin
 }
 
 func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
-	format string, a ...interface{}) {
+	format string, a ...any) {
 	detail := fmt.Sprintf(format, a...)
 	err := cmn.InitErrHTTP(r, fmt.Errorf("invalid action %q: %s", action, detail), 0)
 	h.writeErr(w, r, err)
@@ -1155,7 +1155,7 @@ func (res *callResult) toErr() error {
 	return cmn.NewErrFailedTo(nil, "call "+res.si.String(), res.details, res.err)
 }
 
-func (res *callResult) errorf(format string, a ...interface{}) error {
+func (res *callResult) errorf(format string, a ...any) error {
 	debug.Assert(res.err != nil)
 	// add formatted
 	msg := fmt.Sprintf(format, a...)
@@ -1930,7 +1930,7 @@ func (h *htrun) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
 	return h.newAmsg(&apc.ActionMsg{Value: msgStr}, bmd)
 }
 
-func (h *htrun) newAmsgActVal(act string, val interface{}) *aisMsg {
+func (h *htrun) newAmsgActVal(act string, val any) *aisMsg {
 	return h.newAmsg(&apc.ActionMsg{Action: act, Value: val}, nil)
 }
 
@@ -1958,7 +1958,7 @@ func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.
 }
 
 // cmn.ReadJSON with the only difference: EOF is ok
-func readJSON(w http.ResponseWriter, r *http.Request, out interface{}) (err error) {
+func readJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 	err = jsoniter.NewDecoder(r.Body).Decode(out)
 	cos.Close(r.Body)
 	if err == nil || err == io.EOF {

@@ -69,7 +69,7 @@ func (r *remAISCluster) String() string {
 //       in addition to the basic GetObj, et al.
 
 // apply new or updated (attach, detach) cmn.BackendConfAIS configuration
-func (m *AISBackendProvider) Apply(v interface{}, action string) error {
+func (m *AISBackendProvider) Apply(v any, action string) error {
 	var (
 		cfg         = cmn.GCO.Get()
 		clusterConf = cmn.BackendConfAIS{}

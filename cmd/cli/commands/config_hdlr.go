@@ -119,10 +119,10 @@ func setNodeConfigHandler(c *cli.Context) error {
 	var (
 		config   cmn.Config
 		nvs      cos.SimpleKVs
-		daemonID             = argDaemonID(c)
-		args                 = c.Args()
-		v        interface{} = &config.ClusterConfig
-		propList             = make([]string, 0, 48)
+		daemonID     = argDaemonID(c)
+		args         = c.Args()
+		v        any = &config.ClusterConfig
+		propList     = make([]string, 0, 48)
 	)
 	if cos.StringInSlice(cfgScopeLocal, args) {
 		v = &config.LocalConfig

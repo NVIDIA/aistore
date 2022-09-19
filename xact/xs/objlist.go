@@ -532,14 +532,14 @@ func listZip(readerAt cos.ReadReaderAt, size int64) ([]*archEntry, error) {
 
 func listMsgpack(readerAt cos.ReadReaderAt) ([]*archEntry, error) {
 	var (
-		dst interface{}
+		dst any
 		dec = msgpack.NewDecoder(readerAt)
 	)
 	err := dec.Decode(&dst)
 	if err != nil {
 		return nil, err
 	}
-	out, ok := dst.(map[string]interface{})
+	out, ok := dst.(map[string]any)
 	if !ok {
 		debug.FailTypeCast(dst)
 		return nil, fmt.Errorf("unexpected type (%T)", dst)

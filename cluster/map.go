@@ -58,13 +58,13 @@ type (
 
 	// Snode - a node (gateway or target) in a cluster
 	Snode struct {
-		Ext        interface{} `json:"ext,omitempty"` // within meta-version extensions
-		LocalNet   *net.IPNet  `json:"-"`
-		PubNet     NetInfo     `json:"public_net"`        // cmn.NetPublic
-		DataNet    NetInfo     `json:"intra_data_net"`    // cmn.NetIntraData
-		ControlNet NetInfo     `json:"intra_control_net"` // cmn.NetIntraControl
-		DaeType    string      `json:"daemon_type"`       // "target" or "proxy"
-		DaeID      string      `json:"daemon_id"`
+		Ext        any        `json:"ext,omitempty"` // within meta-version extensions
+		LocalNet   *net.IPNet `json:"-"`
+		PubNet     NetInfo    `json:"public_net"`        // cmn.NetPublic
+		DataNet    NetInfo    `json:"intra_data_net"`    // cmn.NetIntraData
+		ControlNet NetInfo    `json:"intra_control_net"` // cmn.NetIntraControl
+		DaeType    string     `json:"daemon_type"`       // "target" or "proxy"
+		DaeID      string     `json:"daemon_id"`
 		name       string
 		Flags      cos.BitFlags `json:"flags"` // enum { SnodeNonElectable, SnodeIC, ... }
 		idDigest   uint64
@@ -73,13 +73,13 @@ type (
 	NodeMap map[string]*Snode // map of Snodes: DaeID => Snodes
 
 	Smap struct {
-		Ext          interface{} `json:"ext,omitempty"`
-		Pmap         NodeMap     `json:"pmap"` // [pid => Snode]
-		Primary      *Snode      `json:"proxy_si"`
-		Tmap         NodeMap     `json:"tmap"`          // [tid => Snode]
-		UUID         string      `json:"uuid"`          // assigned once at creation time and never change
-		CreationTime string      `json:"creation_time"` // creation timestamp
-		Version      int64       `json:"version,string"`
+		Ext          any     `json:"ext,omitempty"`
+		Pmap         NodeMap `json:"pmap"` // [pid => Snode]
+		Primary      *Snode  `json:"proxy_si"`
+		Tmap         NodeMap `json:"tmap"`          // [tid => Snode]
+		UUID         string  `json:"uuid"`          // assigned once at creation time and never change
+		CreationTime string  `json:"creation_time"` // creation timestamp
+		Version      int64   `json:"version,string"`
 	}
 
 	// Smap on-change listeners

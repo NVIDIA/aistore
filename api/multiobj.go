@@ -69,7 +69,7 @@ func EvictRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 
 // Handles multi-object (delete, prefetch, evict) operations
 // as well as (archive, copy and ETL) transactions
-func doListRangeRequest(bp BaseParams, bck cmn.Bck, action string, msg interface{}) (xactID string, err error) {
+func doListRangeRequest(bp BaseParams, bck cmn.Bck, action string, msg any) (xactID string, err error) {
 	q := bck.AddToQuery(nil)
 	switch action {
 	case apc.ActDeleteObjects, apc.ActEvictObjects:

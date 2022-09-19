@@ -27,8 +27,8 @@ import (
 
 type (
 	taskState struct {
-		Result interface{} `json:"res"`
-		Err    error       `json:"error"`
+		Result any   `json:"res"`
+		Err    error `json:"error"`
 	}
 	bsummFactory struct {
 		xreg.RenewBase
@@ -232,7 +232,7 @@ func (r *bsummXact) updRes(err error) {
 	r.Finish(err)
 }
 
-func (r *bsummXact) Result() (interface{}, error) {
+func (r *bsummXact) Result() (any, error) {
 	ts := (*taskState)(r.res.Load())
 	if ts == nil {
 		return nil, errors.New("no result to load")

@@ -8,9 +8,9 @@ type (
 	// RMD aka "rebalance metadata" is used to distribute information
 	// for the next rebalance.
 	RMD struct {
-		Ext       interface{} `json:"ext,omitempty"` // within meta-version extensions
-		Resilver  string      `json:"resilver,omitempty"`
-		TargetIDs []string    `json:"target_ids,omitempty"`
-		Version   int64       `json:"version"`
+		Ext       any      `json:"ext,omitempty"` // within meta-version extensions
+		Resilver  string   `json:"resilver,omitempty"`
+		TargetIDs []string `json:"target_ids,omitempty"`
+		Version   int64    `json:"version"`
 	}
 )

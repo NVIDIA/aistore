@@ -302,7 +302,7 @@ func (h *hserv) userLogin(w http.ResponseWriter, r *http.Request) {
 	writeBytes(w, []byte(repl), "auth")
 }
 
-func writeJSON(w http.ResponseWriter, val interface{}, tag string) {
+func writeJSON(w http.ResponseWriter, val any, tag string) {
 	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	var err error
 	if err = jsoniter.NewEncoder(w).Encode(val); err == nil {

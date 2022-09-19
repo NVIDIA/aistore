@@ -56,11 +56,11 @@ type (
 	ErrBucketIsBusy        struct{ bck Bck }
 
 	ErrFailedTo struct {
-		actor  interface{} // most of the time it's this (target|proxy) node but may also be some other "actor"
-		action string      // not necessarily msg.Action
-		what   interface{} // not necessarily LOM
-		err    error       // original error that can be Unwrap-ed
-		status int         // http status, if available
+		actor  any    // most of the time it's this (target|proxy) node but may also be some other "actor"
+		action string // not necessarily msg.Action
+		what   any    // not necessarily LOM
+		err    error  // original error that can be Unwrap-ed
+		status int    // http status, if available
 	}
 	ErrUnsupp struct {
 		action, what string
@@ -191,7 +191,7 @@ var (
 
 // ErrFailedTo
 
-func NewErrFailedTo(actor interface{}, action string, what interface{}, err error, errCode ...int) *ErrFailedTo {
+func NewErrFailedTo(actor any, action string, what any, err error, errCode ...int) *ErrFailedTo {
 	if e, ok := err.(*ErrFailedTo); ok {
 		return e
 	}
@@ -501,7 +501,7 @@ func AsErrAborted(err error) (errAborted *ErrAborted) {
 
 // ErrNotFound
 
-func NewErrNotFound(format string, a ...interface{}) *ErrNotFound {
+func NewErrNotFound(format string, a ...any) *ErrNotFound {
 	return &ErrNotFound{fmt.Sprintf(format, a...)}
 }
 
@@ -528,7 +528,7 @@ func (e *ErrMissingBackend) Error() string {
 
 // ErrETL
 
-func NewErrETL(ctx *ETLErrorContext, format string, a ...interface{}) *ErrETL {
+func NewErrETL(ctx *ETLErrorContext, format string, a ...any) *ErrETL {
 	e := &ErrETL{
 		Reason: fmt.Sprintf(format, a...),
 	}

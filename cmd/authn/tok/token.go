@@ -71,7 +71,7 @@ func ExtractToken(hdr http.Header) (string, error) {
 }
 
 func DecryptToken(tokenStr, secret string) (*Token, error) {
-	jwtToken, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+	jwtToken, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}

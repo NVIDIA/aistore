@@ -315,7 +315,7 @@ func (nxs NodesXactSnap) TotalRunningTime() time.Duration {
 //  3. Breaks loop on error
 //  4. If the destination returns status code StatusOK, it means the response
 //     contains the real data and the function returns the response to the caller
-func (reqParams *ReqParams) waitBsumm(msg *apc.BckSummMsg, v interface{}) error {
+func (reqParams *ReqParams) waitBsumm(msg *apc.BckSummMsg, v any) error {
 	var (
 		uuid   string
 		action = apc.ActSummaryBck

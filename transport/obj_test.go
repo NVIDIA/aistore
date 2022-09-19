@@ -147,7 +147,7 @@ func Example_headers() {
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
 	var wg sync.WaitGroup
-	cb := func(transport.ObjHdr, io.ReadCloser, interface{}, error) {
+	cb := func(transport.ObjHdr, io.ReadCloser, any, error) {
 		wg.Done()
 	}
 	sgl1 := memsys.PageMM().NewSGL(0)
@@ -583,7 +583,7 @@ func Test_CompletionCount(t *testing.T) {
 		numReceived.Inc()
 		return nil
 	}
-	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
+	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
 		numCompleted.Inc()
 	}
 
@@ -882,7 +882,7 @@ type randReaderCtx struct {
 	idx    int
 }
 
-func (rrc *randReaderCtx) sentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
+func (rrc *randReaderCtx) sentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	if err != nil {
 		rrc.t.Errorf("sent-callback %d(%s) returned an error: %v", rrc.idx, hdr.FullName(), err)
 	}

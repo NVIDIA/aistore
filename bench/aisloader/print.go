@@ -205,7 +205,7 @@ func writeStatsJSON(to io.Writer, s sts, withcomma ...bool) {
 	}
 }
 
-func fprintf(w io.Writer, format string, a ...interface{}) {
+func fprintf(w io.Writer, format string, a ...any) {
 	_, err := fmt.Fprintf(w, format, a...)
 	debug.AssertNoErr(err)
 }

@@ -147,7 +147,7 @@ func (s *severity) String() string {
 }
 
 // Get is part of the flag.Value interface.
-func (s *severity) Get() interface{} {
+func (s *severity) Get() any {
 	return *s
 }
 
@@ -236,7 +236,7 @@ func (l *Level) String() string {
 }
 
 // Get is part of the flag.Value interface.
-func (l *Level) Get() interface{} {
+func (l *Level) Get() any {
 	return *l
 }
 
@@ -294,7 +294,7 @@ func (m *moduleSpec) String() string {
 
 // Get is part of the (Go 1.2)  flag.Getter interface. It always returns nil for this flag type since the
 // struct is not exported.
-func (*moduleSpec) Get() interface{} { return nil }
+func (*moduleSpec) Get() any { return nil }
 
 var errVmoduleSyntax = errors.New("syntax error: expect comma-separated list of filename=N")
 
@@ -370,7 +370,7 @@ func (t *traceLocation) String() string {
 
 // Get is part of the (Go 1.2) flag.Getter interface. It always returns nil for this flag type since the
 // struct is not exported
-func (*traceLocation) Get() interface{} { return nil }
+func (*traceLocation) Get() any { return nil }
 
 var errTraceSyntax = errors.New("syntax error: expect file.go:234")
 
@@ -633,17 +633,17 @@ func (buf *buffer) someDigits(i, d int) int {
 	return copy(buf.tmp[i:], buf.tmp[j:])
 }
 
-func (l *loggingT) println(s severity, args ...interface{}) {
+func (l *loggingT) println(s severity, args ...any) {
 	buf, file, line := l.header(s, 0)
 	fmt.Fprintln(buf, args...)
 	l.output(s, buf, file, line, false)
 }
 
-func (l *loggingT) print(s severity, args ...interface{}) {
+func (l *loggingT) print(s severity, args ...any) {
 	l.printDepth(s, 1, args...)
 }
 
-func (l *loggingT) printDepth(s severity, depth int, args ...interface{}) {
+func (l *loggingT) printDepth(s severity, depth int, args ...any) {
 	buf, file, line := l.header(s, depth)
 	fmt.Fprint(buf, args...)
 	if buf.Bytes()[buf.Len()-1] != '\n' {
@@ -652,7 +652,7 @@ func (l *loggingT) printDepth(s severity, depth int, args ...interface{}) {
 	l.output(s, buf, file, line, false)
 }
 
-func (l *loggingT) printf(s severity, format string, args ...interface{}) {
+func (l *loggingT) printf(s severity, format string, args ...any) {
 	buf, file, line := l.header(s, 0)
 	fmt.Fprintf(buf, format, args...)
 	if buf.Bytes()[buf.Len()-1] != '\n' {
@@ -664,7 +664,7 @@ func (l *loggingT) printf(s severity, format string, args ...interface{}) {
 // printWithFileLine behaves like print but uses the provided file and line number.  If
 // alsoLogToStderr is true, the log message always appears on standard error; it
 // will also appear in the log file unless --logtostderr is set.
-func (l *loggingT) printWithFileLine(s severity, file string, line int, alsoToStderr bool, args ...interface{}) {
+func (l *loggingT) printWithFileLine(s severity, file string, line int, alsoToStderr bool, args ...any) {
 	buf := l.formatHeader(s, file, line, false)
 	fmt.Fprint(buf, args...)
 	if buf.Bytes()[buf.Len()-1] != '\n' {
@@ -1009,7 +1009,7 @@ func SetV(smodule uint8, level Level) {
 
 // Info is equivalent to the global Info function, guarded by the value of v.
 // See the documentation of V for usage.
-func (v Verbose) Info(args ...interface{}) {
+func (v Verbose) Info(args ...any) {
 	if v {
 		logging.print(infoLog, args...)
 	}
@@ -1017,7 +1017,7 @@ func (v Verbose) Info(args ...interface{}) {
 
 // Infoln is equivalent to the global Infoln function, guarded by the value of v.
 // See the documentation of V for usage.
-func (v Verbose) Infoln(args ...interface{}) {
+func (v Verbose) Infoln(args ...any) {
 	if v {
 		logging.println(infoLog, args...)
 	}
@@ -1025,7 +1025,7 @@ func (v Verbose) Infoln(args ...interface{}) {
 
 // Infof is equivalent to the global Infof function, guarded by the value of v.
 // See the documentation of V for usage.
-func (v Verbose) Infof(format string, args ...interface{}) {
+func (v Verbose) Infof(format string, args ...any) {
 	if v {
 		logging.printf(infoLog, format, args...)
 	}
@@ -1033,72 +1033,72 @@ func (v Verbose) Infof(format string, args ...interface{}) {
 
 // Info logs to the INFO log.
 // Arguments are handled in the manner of fmt.Print; a newline is appended if missing.
-func Info(args ...interface{}) {
+func Info(args ...any) {
 	logging.print(infoLog, args...)
 }
 
 // InfoDepth acts as Info but uses depth to determine which call frame to log.
 // InfoDepth(0, "msg") is the same as Info("msg").
-func InfoDepth(depth int, args ...interface{}) {
+func InfoDepth(depth int, args ...any) {
 	logging.printDepth(infoLog, depth, args...)
 }
 
 // Infoln logs to the INFO log.
 // Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
-func Infoln(args ...interface{}) {
+func Infoln(args ...any) {
 	logging.println(infoLog, args...)
 }
 
 // Infof logs to the INFO log.
 // Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
-func Infof(format string, args ...interface{}) {
+func Infof(format string, args ...any) {
 	logging.printf(infoLog, format, args...)
 }
 
 // Warning logs to the WARNING and INFO logs.
 // Arguments are handled in the manner of fmt.Print; a newline is appended if missing.
-func Warning(args ...interface{}) {
+func Warning(args ...any) {
 	logging.print(warningLog, args...)
 }
 
 // WarningDepth acts as Warning but uses depth to determine which call frame to log.
 // WarningDepth(0, "msg") is the same as Warning("msg").
-func WarningDepth(depth int, args ...interface{}) {
+func WarningDepth(depth int, args ...any) {
 	logging.printDepth(warningLog, depth, args...)
 }
 
 // Warningln logs to the WARNING and INFO logs.
 // Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
-func Warningln(args ...interface{}) {
+func Warningln(args ...any) {
 	logging.println(warningLog, args...)
 }
 
 // Warningf logs to the WARNING and INFO logs.
 // Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
-func Warningf(format string, args ...interface{}) {
+func Warningf(format string, args ...any) {
 	logging.printf(warningLog, format, args...)
 }
 
 // Error logs to the ERROR, WARNING, and INFO logs.
 // Arguments are handled in the manner of fmt.Print; a newline is appended if missing.
-func Error(args ...interface{}) {
+func Error(args ...any) {
 	logging.print(errorLog, args...)
 }
 
 // ErrorDepth acts as Error but uses depth to determine which call frame to log.
 // ErrorDepth(0, "msg") is the same as Error("msg").
-func ErrorDepth(depth int, args ...interface{}) {
+func ErrorDepth(depth int, args ...any) {
 	logging.printDepth(errorLog, depth, args...)
 }
 
 // Errorln logs to the ERROR, WARNING, and INFO logs.
 // Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
-func Errorln(args ...interface{}) {
+func Errorln(args ...any) {
 	logging.println(errorLog, args...)
 }
 
 // Errorf logs to the ERROR, WARNING, and INFO logs.
 // Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
-func Errorf(format string, args ...interface{}) {
+func Errorf(format string, args ...any) {
 	logging.printf(errorLog, format, args...)
 }

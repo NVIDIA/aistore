@@ -80,13 +80,13 @@ func SetExpvar(smodule uint8, name string, val int64) {
 	v.Set(val)
 }
 
-func Infof(f string, a ...interface{}) {
+func Infof(f string, a ...any) {
 	glog.InfoDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
 }
 
 func Func(f func()) { f() }
 
-func _panic(a ...interface{}) {
+func _panic(a ...any) {
 	msg := "DEBUG PANIC: "
 	if len(a) > 0 {
 		msg += fmt.Sprint(a...) + ": "
@@ -112,13 +112,13 @@ func _panic(a ...interface{}) {
 	panic(msg)
 }
 
-func Assert(cond bool, a ...interface{}) {
+func Assert(cond bool, a ...any) {
 	if !cond {
 		_panic(a...)
 	}
 }
 
-func AssertFunc(f func() bool, a ...interface{}) {
+func AssertFunc(f func() bool, a ...any) {
 	if !f() {
 		_panic(a...)
 	}
@@ -136,7 +136,7 @@ func AssertNoErr(err error) {
 	}
 }
 
-func Assertf(cond bool, f string, a ...interface{}) {
+func Assertf(cond bool, f string, a ...any) {
 	if !cond {
 		msg := fmt.Sprintf(f, a...)
 		_panic(msg)
@@ -163,7 +163,7 @@ func AssertRWMutexRLocked(m *sync.RWMutex) {
 	AssertMsg(rc > 0 || (0 > rc && rc > -maxReaders), "RWMutex not RLocked")
 }
 
-func FailTypeCast(a interface{}) {
+func FailTypeCast(a any) {
 	_panic(fmt.Errorf("unexpected type %v (%T)", a, a))
 }
 
@@ -210,7 +210,7 @@ func loadLogLevel() {
 	}
 }
 
-func fatalMsg(f string, v ...interface{}) {
+func fatalMsg(f string, v ...any) {
 	s := fmt.Sprintf(f, v...)
 	if s == "" || s[len(s)-1] != '\n' {
 		fmt.Fprintln(os.Stderr, s)

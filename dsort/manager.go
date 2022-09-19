@@ -634,7 +634,7 @@ func (m *Manager) unlock() {
 	m.mu.Unlock()
 }
 
-func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x interface{}, err error) {
+func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x any, err error) {
 	if m.Metrics.extended {
 		dur := mono.Since(x.(int64))
 		m.Metrics.Creation.mu.Lock()

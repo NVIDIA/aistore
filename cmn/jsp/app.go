@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func LoadAppConfig(configDir, configFname string, v interface{}) (err error) {
+func LoadAppConfig(configDir, configFname string, v any) (err error) {
 	path := filepath.Join(configDir, configFname)
 	if err = cos.Stat(path); err != nil {
 		return err
@@ -23,7 +23,7 @@ func LoadAppConfig(configDir, configFname string, v interface{}) (err error) {
 	return
 }
 
-func SaveAppConfig(configDir, configFname string, v interface{}) error {
+func SaveAppConfig(configDir, configFname string, v any) error {
 	path := filepath.Join(configDir, configFname)
 	return Save(path, v, Options{Indent: true}, nil /*sgl*/)
 }

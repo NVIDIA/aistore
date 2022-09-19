@@ -54,7 +54,7 @@ type (
 	// used in constructions
 	Args struct {
 		T      cluster.Target
-		Custom interface{} // Additional arguments that are specific for a given xact.
+		Custom any // Additional arguments that are specific for a given xact.
 		UUID   string
 	}
 	RenewBase struct {

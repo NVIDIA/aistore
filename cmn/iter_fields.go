@@ -27,9 +27,9 @@ const (
 type (
 	// Represents a single named field
 	IterField interface {
-		Value() interface{}                          // returns the value
-		String() string                              // string representation of the value
-		SetValue(v interface{}, force ...bool) error // `force` ignores `tagReadonly` (to be used with caution!)
+		Value() any                          // returns the value
+		String() string                      // string representation of the value
+		SetValue(v any, force ...bool) error // `force` ignores `tagReadonly` (to be used with caution!)
 	}
 
 	field struct {
@@ -67,7 +67,7 @@ var _ IterField = (*field)(nil)
 //
 // Passing additional options with `IterOpts` can for example call callback
 // also at the non-leaf structures.
-func IterFields(v interface{}, updf updateFunc, opts ...IterOpts) error {
+func IterFields(v any, updf updateFunc, opts ...IterOpts) error {
 	o := IterOpts{OnlyRead: true} // by default it's read run
 	if len(opts) > 0 {
 		o = opts[0]
@@ -78,7 +78,7 @@ func IterFields(v interface{}, updf updateFunc, opts ...IterOpts) error {
 
 // UpdateFieldValue updates the field in the struct with given value.
 // Returns error if the field was not found or could not be updated.
-func UpdateFieldValue(s interface{}, name string, value interface{}) error {
+func UpdateFieldValue(s any, name string, value any) error {
 	found := false
 	err := IterFields(s, func(uniqueTag string, field IterField) (error, bool) {
 		if uniqueTag == name {
@@ -96,7 +96,7 @@ func UpdateFieldValue(s interface{}, name string, value interface{}) error {
 	return nil
 }
 
-func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (dirty, stop bool, err error) {
+func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, stop bool, err error) {
 	srcVal := reflect.ValueOf(v)
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
@@ -150,7 +150,7 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 			}
 		}
 
-		// If it's `interface{}` we must get concrete type.
+		// If it's `any` we must get concrete type.
 		if srcValField.Kind() == reflect.Interface && !srcValField.IsZero() {
 			srcValField = srcValField.Elem()
 		}
@@ -222,7 +222,7 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 	return
 }
 
-func copyProps(src, dst interface{}, asType string) (err error) {
+func copyProps(src, dst any, asType string) (err error) {
 	var (
 		srcVal = reflect.ValueOf(src)
 		dstVal = reflect.ValueOf(dst).Elem()
@@ -272,7 +272,7 @@ func copyProps(src, dst interface{}, asType string) (err error) {
 	return
 }
 
-func mergeProps(src, dst interface{}) {
+func mergeProps(src, dst any) {
 	var (
 		srcVal = reflect.ValueOf(src).Elem()
 		dstVal = reflect.ValueOf(dst).Elem()
@@ -303,7 +303,7 @@ func mergeProps(src, dst interface{}) {
 // field //
 ///////////
 
-func (f *field) Value() interface{} { return f.v.Interface() }
+func (f *field) Value() any { return f.v.Interface() }
 
 func (f *field) String() (s string) {
 	if f.v.Kind() == reflect.String {
@@ -315,7 +315,7 @@ func (f *field) String() (s string) {
 	return
 }
 
-func (f *field) SetValue(src interface{}, force ...bool) error {
+func (f *field) SetValue(src any, force ...bool) error {
 	debug.Assert(!f.opts.OnlyRead)
 
 	dst := f.v

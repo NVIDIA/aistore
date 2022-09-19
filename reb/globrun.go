@@ -717,7 +717,7 @@ func (rj *rebJogger) walkBck(bck *cluster.Bck) bool {
 }
 
 // send completion
-func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg interface{}, err error) {
+func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	rj.m.inQueue.Dec()
 	if err != nil {
 		lom, ok := arg.(*cluster.LOM)

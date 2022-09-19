@@ -29,12 +29,12 @@ func (*DBDriver) makePath(collection, key string) string {
 	return collection + dbdriver.CollectionSepa + key
 }
 
-func (bd *DBDriver) Set(collection, key string, object interface{}) error {
+func (bd *DBDriver) Set(collection, key string, object any) error {
 	b := cos.MustMarshal(object)
 	return bd.SetString(collection, key, string(b))
 }
 
-func (bd *DBDriver) Get(collection, key string, object interface{}) error {
+func (bd *DBDriver) Get(collection, key string, object any) error {
 	s, err := bd.GetString(collection, key)
 	if err != nil {
 		return err

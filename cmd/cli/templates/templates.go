@@ -380,7 +380,7 @@ var (
 type (
 	// Used to return specific fields/objects for marshaling (MarshalIdent).
 	forMarshaler interface {
-		forMarshal() interface{}
+		forMarshal() any
 	}
 	DiskStatsTemplateHelper struct {
 		TargetID string
@@ -410,7 +410,7 @@ type (
 // interface guard
 var _ forMarshaler = SmapTemplateHelper{}
 
-func (sth SmapTemplateHelper) forMarshal() interface{} {
+func (sth SmapTemplateHelper) forMarshal() any {
 	return sth.Smap
 }
 
@@ -523,7 +523,7 @@ func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }
 
 // Displays the output in either JSON or tabular form
 // if formatJSON == true, outputTemplate is omitted
-func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, altMap template.FuncMap, useJSON bool) error {
+func DisplayOutput(object any, writer io.Writer, outputTemplate string, altMap template.FuncMap, useJSON bool) error {
 	if useJSON {
 		if o, ok := object.(forMarshaler); ok {
 			object = o.forMarshal()

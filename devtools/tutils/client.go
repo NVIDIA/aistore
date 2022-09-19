@@ -48,7 +48,7 @@ const xactPollSleep = time.Second
 
 type Ctx struct {
 	Client *http.Client
-	Log    func(format string, a ...interface{})
+	Log    func(format string, a ...any)
 }
 
 type PutObjectsArgs struct {
@@ -596,7 +596,7 @@ func GetNamedStatsVal(ds *stats.DaemonStats, name string) int64 {
 }
 
 // FIXME: obsolete - remove and reimpl. the test that calls it
-func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
+func GetDaemonStats(t *testing.T, u string) (stats map[string]any) {
 	baseParams := BaseAPIParams(u)
 	baseParams.Method = http.MethodGet
 	reqParams := &api.ReqParams{

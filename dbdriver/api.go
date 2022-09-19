@@ -32,9 +32,9 @@ type (
 		// A driver should sync data with local drives on close
 		Close() error
 		// Write an object to database. Object is marshaled as JSON
-		Set(collection, key string, object interface{}) error
+		Set(collection, key string, object any) error
 		// Read an object from database.
-		Get(collection, key string, object interface{}) error
+		Get(collection, key string, object any) error
 		// Write an already marshaled object or simple string
 		SetString(collection, key, data string) error
 		// Read a string or an object as JSON from database

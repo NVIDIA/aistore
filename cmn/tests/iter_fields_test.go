@@ -32,8 +32,8 @@ var _ = Describe("IterFields", func() {
 
 	Describe("IterFields", func() {
 		DescribeTable("should successfully iterate fields in structs",
-			func(v interface{}, expected map[string]interface{}) {
-				got := make(map[string]interface{})
+			func(v any, expected map[string]any) {
+				got := make(map[string]any)
 				err := cmn.IterFields(v, func(tag string, field cmn.IterField) (error, bool) {
 					got[tag] = field.Value()
 					return nil, false
@@ -60,7 +60,7 @@ var _ = Describe("IterFields", func() {
 						AWS: cmn.ExtraPropsAWS{CloudRegion: "us-central"},
 					},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"provider": apc.AIS,
 
 					"backend_bck.name":     "name",
@@ -116,7 +116,7 @@ var _ = Describe("IterFields", func() {
 						MD: api.WritePolicy(apc.WriteDelayed),
 					},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"backend_bck.name":     (*string)(nil),
 					"backend_bck.provider": (*string)(nil),
 
@@ -158,7 +158,7 @@ var _ = Describe("IterFields", func() {
 			),
 			Entry("check for omit tag",
 				Foo{A: 1, B: 2},
-				map[string]interface{}{
+				map[string]any{
 					"b": 2,
 				},
 			),
@@ -166,13 +166,13 @@ var _ = Describe("IterFields", func() {
 
 		It("list all the fields (not only leafs)", func() {
 			v := bar{Foo: Foo{A: 3, B: 10}, C: "string"}
-			expected := map[string]interface{}{
+			expected := map[string]any{
 				"foo.b": 10,
 				"foo":   Foo{A: 3, B: 10},
 				"c":     "string",
 			}
 
-			got := make(map[string]interface{})
+			got := make(map[string]any)
 			err := cmn.IterFields(v, func(tag string, field cmn.IterField) (error, bool) {
 				got[tag] = field.Value()
 				return nil, false
@@ -183,13 +183,13 @@ var _ = Describe("IterFields", func() {
 
 		It("list inline fields", func() {
 			v := barInline{Foo: Foo{A: 3, B: 10}, C: "string"}
-			expected := map[string]interface{}{
+			expected := map[string]any{
 				"b": 10,
 				"":  Foo{A: 3, B: 10},
 				"c": "string",
 			}
 
-			got := make(map[string]interface{})
+			got := make(map[string]any)
 			err := cmn.IterFields(v, func(tag string, field cmn.IterField) (error, bool) {
 				got[tag] = field.Value()
 				return nil, false
@@ -201,7 +201,7 @@ var _ = Describe("IterFields", func() {
 
 	Describe("UpdateFieldValue", func() {
 		DescribeTable("should successfully update the fields in struct",
-			func(v interface{}, values map[string]interface{}, expected interface{}) {
+			func(v any, values map[string]any, expected any) {
 				for name, value := range values {
 					err := cmn.UpdateFieldValue(v, name, value)
 					Expect(err).NotTo(HaveOccurred())
@@ -214,7 +214,7 @@ var _ = Describe("IterFields", func() {
 						ValidateWarmGet: true,
 					},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"mirror.enabled":      "true", // type == bool
 					"mirror.copies":       "120",  // type == int
 					"mirror.burst_buffer": "9560", // type == int64
@@ -259,7 +259,7 @@ var _ = Describe("IterFields", func() {
 						ValidateWarmGet: api.Bool(true),
 					},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"mirror.enabled":      "true", // type == bool
 					"mirror.copies":       "120",  // type == int
 					"mirror.burst_buffer": "9560", // type == int64
@@ -304,19 +304,19 @@ var _ = Describe("IterFields", func() {
 		)
 
 		DescribeTable("should error on update",
-			func(v interface{}, values map[string]interface{}) {
+			func(v any, values map[string]any) {
 				for name, value := range values {
 					err := cmn.UpdateFieldValue(v, name, value)
 					Expect(err).To(HaveOccurred())
 				}
 			},
-			Entry("non-pointer struct", cmn.BucketProps{}, map[string]interface{}{
+			Entry("non-pointer struct", cmn.BucketProps{}, map[string]any{
 				"mirror.enabled": true,
 			}),
-			Entry("readonly field", &cmn.BucketProps{}, map[string]interface{}{
+			Entry("readonly field", &cmn.BucketProps{}, map[string]any{
 				"provider": apc.AIS,
 			}),
-			Entry("field not found", &Foo{}, map[string]interface{}{
+			Entry("field not found", &Foo{}, map[string]any{
 				"foo.bar": 2,
 			}),
 		)

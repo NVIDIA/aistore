@@ -38,7 +38,7 @@ func (ea *ErrValue) Store(err error) {
 }
 
 // NOTE: hide atomic.Value.Load() - must use Err() below
-func (*ErrValue) Load() interface{} { debug.Assert(false); return nil }
+func (*ErrValue) Load() any { debug.Assert(false); return nil }
 
 func (ea *ErrValue) _load() (err error) {
 	if x := ea.Value.Load(); x != nil {
@@ -113,14 +113,14 @@ func (e *ErrSignal) Error() string               { return fmt.Sprintf("Signal %d
 //////////////////////////
 
 // Exitf writes formatted message to STDERR and exits with non-zero status code.
-func Exitf(f string, a ...interface{}) {
+func Exitf(f string, a ...any) {
 	msg := fmt.Sprintf("FATAL ERROR: "+f+"\n", a...)
 	fmt.Fprint(os.Stderr, msg)
 	os.Exit(1)
 }
 
 // ExitLogf is glog + Exitf.
-func ExitLogf(f string, a ...interface{}) {
+func ExitLogf(f string, a ...any) {
 	msg := fmt.Sprintf("FATAL ERROR: "+f+"\n", a...)
 	glog.ErrorDepth(1, msg)
 	glog.Flush()

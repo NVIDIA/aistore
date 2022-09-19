@@ -142,7 +142,7 @@ func (reqParams *ReqParams) DoHTTPRequest() error {
 }
 
 // uses doResp() to make request and decode response into `v`
-func (reqParams *ReqParams) DoHTTPReqResp(v interface{}) error {
+func (reqParams *ReqParams) DoHTTPReqResp(v any) error {
 	_, err := reqParams.doResp(v)
 	return err
 }
@@ -151,7 +151,7 @@ func (reqParams *ReqParams) DoHTTPReqResp(v interface{}) error {
 // and returns the entire wrapped response.
 //
 // The function returns an error if the response status code is >= 400.
-func (reqParams *ReqParams) doResp(v interface{}) (wrap *wrappedResp, err error) {
+func (reqParams *ReqParams) doResp(v any) (wrap *wrappedResp, err error) {
 	var resp *http.Response
 	resp, err = reqParams.do()
 	if err != nil {
@@ -221,7 +221,7 @@ func (reqParams *ReqParams) setRequestOptParams(req *http.Request) {
 	}
 }
 
-func (reqParams *ReqParams) readResp(resp *http.Response, v interface{}) (*wrappedResp, error) {
+func (reqParams *ReqParams) readResp(resp *http.Response, v any) (*wrappedResp, error) {
 	defer cos.DrainReader(resp.Body)
 
 	if err := reqParams.checkResp(resp); err != nil {

@@ -184,7 +184,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		cos.Assertf(false, "%d %d", args.extractMethod, args.extractMethod&ExtractToDisk)
 	}
 
-	var key interface{}
+	var key any
 	if key, err = rm.keyExtractor.ExtractKey(ske); err != nil {
 		return size, errors.WithStack(err)
 	}
@@ -298,7 +298,7 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 	}
 }
 
-func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, value interface{}, buf []byte) (n int64) {
+func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, value any, buf []byte) (n int64) {
 	sgl := value.(*memsys.SGL)
 
 	recordObjExt := Ext(fullContentPath)
@@ -362,7 +362,7 @@ func (rm *RecordManager) ExtractionPaths() *sync.Map {
 
 func (rm *RecordManager) Cleanup() {
 	rm.Records.Drain()
-	rm.extractionPaths.Range(func(k, v interface{}) bool {
+	rm.extractionPaths.Range(func(k, v any) bool {
 		if err := os.RemoveAll(k.(string)); err != nil {
 			glog.Errorf("could not remove extraction path (%v) from previous run, err: %v", k, err)
 		}
@@ -370,7 +370,7 @@ func (rm *RecordManager) Cleanup() {
 		return true
 	})
 	rm.extractionPaths = nil
-	rm.contents.Range(func(k, v interface{}) bool {
+	rm.contents.Range(func(k, v any) bool {
 		if sgl, ok := v.(*memsys.SGL); ok {
 			sgl.Free()
 		}

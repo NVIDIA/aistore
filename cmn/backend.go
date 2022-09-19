@@ -17,8 +17,8 @@ import (
 const AwsMultipartDelim = "-"
 
 type backendFuncs struct {
-	EncodeVersion func(v interface{}) (version string, isSet bool)
-	EncodeCksum   func(v interface{}) (cksumValue string, isSet bool)
+	EncodeVersion func(v any) (version string, isSet bool)
+	EncodeCksum   func(v any) (cksumValue string, isSet bool)
 }
 
 func awsIsVersionSet(version *string) bool {
@@ -33,7 +33,7 @@ var BackendHelpers = struct {
 	HTTP   backendFuncs
 }{
 	Amazon: backendFuncs{
-		EncodeVersion: func(v interface{}) (string, bool) {
+		EncodeVersion: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case *string:
 				if awsIsVersionSet(x) {
@@ -50,7 +50,7 @@ var BackendHelpers = struct {
 				return "", false
 			}
 		},
-		EncodeCksum: func(v interface{}) (string, bool) {
+		EncodeCksum: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case *string:
 				if strings.Contains(*x, AwsMultipartDelim) {
@@ -67,7 +67,7 @@ var BackendHelpers = struct {
 		},
 	},
 	Azure: backendFuncs{
-		EncodeVersion: func(v interface{}) (string, bool) {
+		EncodeVersion: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case string:
 				x = strings.Trim(x, "\"")
@@ -77,7 +77,7 @@ var BackendHelpers = struct {
 				return "", false
 			}
 		},
-		EncodeCksum: func(v interface{}) (string, bool) {
+		EncodeCksum: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case string:
 				decoded, err := base64.StdEncoding.DecodeString(x)
@@ -94,7 +94,7 @@ var BackendHelpers = struct {
 		},
 	},
 	Google: backendFuncs{
-		EncodeVersion: func(v interface{}) (string, bool) {
+		EncodeVersion: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case string:
 				return x, x != ""
@@ -105,7 +105,7 @@ var BackendHelpers = struct {
 				return "", false
 			}
 		},
-		EncodeCksum: func(v interface{}) (string, bool) {
+		EncodeCksum: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case string:
 				decoded, err := base64.StdEncoding.DecodeString(x)
@@ -127,7 +127,7 @@ var BackendHelpers = struct {
 		},
 	},
 	HDFS: backendFuncs{
-		EncodeCksum: func(v interface{}) (cksumValue string, isSet bool) {
+		EncodeCksum: func(v any) (cksumValue string, isSet bool) {
 			switch x := v.(type) {
 			case []byte:
 				return hex.EncodeToString(x), true
@@ -138,7 +138,7 @@ var BackendHelpers = struct {
 		},
 	},
 	HTTP: backendFuncs{
-		EncodeVersion: func(v interface{}) (string, bool) {
+		EncodeVersion: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case string:
 				// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag

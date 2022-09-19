@@ -392,7 +392,7 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok 
 	}
 }
 
-func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCode int, err error) {
+func (d *dispatcher) dispatchAdminReq(req *request) (resp any, statusCode int, err error) {
 	debug.Infof("Admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 
 	// Need to make sure that the dispatcher has fully initialized and started,

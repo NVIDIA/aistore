@@ -154,7 +154,7 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 			}
 
 			// In case memory is exceeded spill sgls to disk
-			mw.m.recManager.RecordContents().Range(func(key, value interface{}) bool {
+			mw.m.recManager.RecordContents().Range(func(key, value any) bool {
 				var n int64
 				if mw.m.extractCreator.SupportsOffset() {
 					n = mw.m.recManager.ChangeStoreType(key.(string), extract.OffsetStoreType, value, buf)

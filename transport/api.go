@@ -67,7 +67,7 @@ type (
 	// object to transmit
 	Obj struct {
 		Reader   io.ReadCloser // reader (to read the object, and close when done)
-		CmplArg  interface{}   // optional context passed to the ObjSentCB callback
+		CmplArg  any           // optional context passed to the ObjSentCB callback
 		Callback ObjSentCB     // called when the last byte is sent _or_ when the stream terminates (see term.reason)
 		prc      *atomic.Int64 // private; if present, ref-counts so that we call ObjSentCB only once
 		Hdr      ObjHdr
@@ -79,7 +79,7 @@ type (
 	// Naturally, object callback "overrides" the per-stream one: when object callback is defined
 	// (i.e., non-nil), the stream callback is ignored/skipped.
 	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
-	ObjSentCB func(ObjHdr, io.ReadCloser, interface{}, error)
+	ObjSentCB func(ObjHdr, io.ReadCloser, any, error)
 
 	Msg struct {
 		SID    string
@@ -263,7 +263,7 @@ func GetStats() (netstats map[string]EndpointStats, err error) {
 	mu.Lock()
 	for trname, h := range handlers {
 		eps := make(EndpointStats)
-		f := func(key, value interface{}) bool {
+		f := func(key, value any) bool {
 			out := &Stats{}
 			uid := key.(uint64)
 			in := value.(*Stats)

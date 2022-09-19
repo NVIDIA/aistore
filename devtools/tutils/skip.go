@@ -32,7 +32,7 @@ type SkipTestArgs struct {
 
 const fmtSkippingShort = "skipping %s in short mode"
 
-func ShortSkipf(tb testing.TB, a ...interface{}) {
+func ShortSkipf(tb testing.TB, a ...any) {
 	var msg string
 	if len(a) > 0 {
 		msg = fmt.Sprint(a...) + ": "

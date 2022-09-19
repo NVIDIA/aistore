@@ -92,13 +92,13 @@ func _init(mustRun bool) {
 // timedActions //
 //////////////////
 
-func (tc timedActions) Len() int            { return len(tc) }
-func (tc timedActions) Less(i, j int) bool  { return tc[i].updateTime < tc[j].updateTime }
-func (tc timedActions) Swap(i, j int)       { tc[i], tc[j] = tc[j], tc[i] }
-func (tc timedActions) Peek() *timedAction  { return &tc[0] }
-func (tc *timedActions) Push(x interface{}) { *tc = append(*tc, x.(timedAction)) }
+func (tc timedActions) Len() int           { return len(tc) }
+func (tc timedActions) Less(i, j int) bool { return tc[i].updateTime < tc[j].updateTime }
+func (tc timedActions) Swap(i, j int)      { tc[i], tc[j] = tc[j], tc[i] }
+func (tc timedActions) Peek() *timedAction { return &tc[0] }
+func (tc *timedActions) Push(x any)        { *tc = append(*tc, x.(timedAction)) }
 
-func (tc *timedActions) Pop() interface{} {
+func (tc *timedActions) Pop() any {
 	old := *tc
 	n := len(old)
 	item := old[n-1]

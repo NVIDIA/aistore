@@ -41,7 +41,7 @@ func DownloadRange(bp BaseParams, description string, bck cmn.Bck, template stri
 	return DownloadWithParam(bp, downloader.DlTypeRange, dlBody)
 }
 
-func DownloadWithParam(bp BaseParams, dlt downloader.DlType, body interface{}) (id string, err error) {
+func DownloadWithParam(bp BaseParams, dlt downloader.DlType, body any) (id string, err error) {
 	bp.Method = http.MethodPost
 	msg := cos.MustMarshal(body)
 	reqParams := AllocRp()
@@ -56,7 +56,7 @@ func DownloadWithParam(bp BaseParams, dlt downloader.DlType, body interface{}) (
 	return
 }
 
-func DownloadMulti(bp BaseParams, description string, bck cmn.Bck, msg interface{}, intervals ...time.Duration) (string, error) {
+func DownloadMulti(bp BaseParams, description string, bck cmn.Bck, msg any, intervals ...time.Duration) (string, error) {
 	dlBody := downloader.DlMultiBody{}
 	if len(intervals) > 0 {
 		dlBody.ProgressInterval = intervals[0].String()

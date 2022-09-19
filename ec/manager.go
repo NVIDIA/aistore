@@ -86,7 +86,7 @@ func (mgr *Manager) initECBundles() error {
 	if err := transport.HandleObjStream(RespStreamName, ECM.recvResponse); err != nil {
 		return fmt.Errorf("failed to register respResponse: %v", err)
 	}
-	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ interface{}, err error) {
+	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ any, err error) {
 		if err != nil {
 			glog.Errorf("failed to request %s: %v", hdr.FullName(), err)
 		}

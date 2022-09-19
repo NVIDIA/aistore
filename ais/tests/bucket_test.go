@@ -1118,7 +1118,7 @@ func TestListObjects(t *testing.T) {
 				}
 
 				// Check if names in the entries are unique.
-				objs.Range(func(key, _ interface{}) bool {
+				objs.Range(func(key, _ any) bool {
 					objName := key.(string)
 					i := sort.Search(len(bckList.Entries), func(i int) bool {
 						return bckList.Entries[i].Name >= objName
@@ -1134,7 +1134,7 @@ func TestListObjects(t *testing.T) {
 				}
 
 				// Check listing bucket with predefined prefix.
-				prefixes.Range(func(key, value interface{}) bool {
+				prefixes.Range(func(key, value any) bool {
 					prefix := key.(string)
 					expectedObjCount := value.(int)
 

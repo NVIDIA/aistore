@@ -180,13 +180,13 @@ func freadZip(readerAt cos.ReadReaderAt, filename, archname string, size int64) 
 
 func freadMsgpack(readerAt cos.ReadReaderAt, filename, archname string) (csf *cslFile, err error) {
 	var (
-		dst interface{}
+		dst any
 		dec = msgpack.NewDecoder(readerAt)
 	)
 	if err = dec.Decode(&dst); err != nil {
 		return
 	}
-	out, ok := dst.(map[string]interface{})
+	out, ok := dst.(map[string]any)
 	if !ok {
 		debug.FailTypeCast(dst)
 		return nil, fmt.Errorf("unexpected type (%T)", dst)

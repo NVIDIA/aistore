@@ -34,9 +34,9 @@ func (b *BoolExt) Set(s string) (err error) {
 	return err
 }
 
-func (b *BoolExt) Get() interface{} { return b.Val }
-func (b *BoolExt) String() string   { return strconv.FormatBool(b.Val) }
-func (*BoolExt) IsBoolFlag() bool   { return true }
+func (b *BoolExt) Get() any       { return b.Val }
+func (b *BoolExt) String() string { return strconv.FormatBool(b.Val) }
+func (*BoolExt) IsBoolFlag() bool { return true }
 
 func BoolExtVar(f *flag.FlagSet, p *BoolExt, name, usage string) {
 	f.Var(p, name, usage)
@@ -48,9 +48,9 @@ func (d *DurationExt) Set(s string) (err error) {
 	return err
 }
 
-func (d *DurationExt) Get() interface{} { return d.Val }
-func (d *DurationExt) String() string   { return d.Val.String() }
-func (*DurationExt) IsBoolFlag() bool   { return false }
+func (d *DurationExt) Get() any       { return d.Val }
+func (d *DurationExt) String() string { return d.Val.String() }
+func (*DurationExt) IsBoolFlag() bool { return false }
 
 func DurationExtVar(f *flag.FlagSet, p *DurationExt, name string, defValue time.Duration, usage string) {
 	p.Val = defValue

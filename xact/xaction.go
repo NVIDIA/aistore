@@ -269,7 +269,7 @@ func (xctn *Base) Finish(err error) {
 	}
 }
 
-func (*Base) Result() (interface{}, error) {
+func (*Base) Result() (any, error) {
 	return nil, errors.New("getting result is not implemented")
 }
 

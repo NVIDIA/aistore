@@ -502,11 +502,11 @@ func (j *lruJ) allow() (ok bool, err error) {
 // min-heap //
 //////////////
 
-func (h minHeap) Len() int            { return len(h) }
-func (h minHeap) Less(i, j int) bool  { return h[i].Atime().Before(h[j].Atime()) }
-func (h minHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
-func (h *minHeap) Push(x interface{}) { *h = append(*h, x.(*cluster.LOM)) }
-func (h *minHeap) Pop() interface{} {
+func (h minHeap) Len() int           { return len(h) }
+func (h minHeap) Less(i, j int) bool { return h[i].Atime().Before(h[j].Atime()) }
+func (h minHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *minHeap) Push(x any)        { *h = append(*h, x.(*cluster.LOM)) }
+func (h *minHeap) Pop() any {
 	old := *h
 	n := len(old)
 	fi := old[n-1]

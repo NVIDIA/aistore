@@ -42,7 +42,7 @@ type (
 		nl    nl.NotifListener
 		smap  *smapX
 		query url.Values
-		msg   interface{}
+		msg   any
 	}
 
 	xactRegMsg struct {
@@ -65,7 +65,7 @@ func (ic *ic) init(p *proxy) {
 	ic.p = p
 }
 
-func (ic *ic) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string, msg interface{}) (reversedOrFailed bool) {
+func (ic *ic) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string, msg any) (reversedOrFailed bool) {
 	retry := true
 begin:
 	var (

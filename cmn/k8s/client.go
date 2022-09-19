@@ -31,7 +31,7 @@ import (
 type (
 	// Client is simplified version of default `kubernetes.Interface` client.
 	Client interface {
-		Create(v interface{}) error
+		Create(v any) error
 		Delete(entityType, entityName string) error
 		CheckExists(entityType, entityName string) (bool, error)
 		Pod(name string) (*corev1.Pod, error)
@@ -73,7 +73,7 @@ func (c *defaultClient) services() tcorev1.ServiceInterface {
 	return c.client.CoreV1().Services(c.namespace)
 }
 
-func (c *defaultClient) Create(v interface{}) (err error) {
+func (c *defaultClient) Create(v any) (err error) {
 	ctx := context.Background()
 	switch t := v.(type) {
 	case *corev1.Pod:

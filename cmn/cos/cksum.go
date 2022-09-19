@@ -44,7 +44,7 @@ type (
 
 	ErrBadCksum struct {
 		prefix  string
-		a, b    interface{}
+		a, b    any
 		context string
 	}
 	Cksum struct {

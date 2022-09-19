@@ -168,7 +168,7 @@ func LcacheIdx(digest uint64) int { return int(digest & (cos.MultiSyncMapCount -
 func (mi *MountpathInfo) EvictLomCache() {
 	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
 		cache := mi.LomCache(idx)
-		cache.Range(func(key interface{}, _ interface{}) bool {
+		cache.Range(func(key any, _ any) bool {
 			cache.Delete(key)
 			return true
 		})
@@ -178,7 +178,7 @@ func (mi *MountpathInfo) EvictLomCache() {
 func (mi *MountpathInfo) evictLomBucketCache(bck *cmn.Bck) {
 	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
 		cache := mi.LomCache(idx)
-		cache.Range(func(hkey interface{}, _ interface{}) bool {
+		cache.Range(func(hkey any, _ any) bool {
 			uname := hkey.(string)
 			b, _ := cmn.ParseUname(uname)
 			if b.Equal(bck) {

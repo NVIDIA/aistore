@@ -38,7 +38,7 @@ type (
 		PrepareExtractor(name string, r cos.ReadSizer, ext string) (cos.ReadSizer, *SingleKeyExtractor, bool)
 
 		// ExtractKey extracts key from either name or reader (file/sgl)
-		ExtractKey(ske *SingleKeyExtractor) (interface{}, error)
+		ExtractKey(ske *SingleKeyExtractor) (any, error)
 	}
 
 	md5KeyExtractor struct {
@@ -56,7 +56,7 @@ func NewMD5KeyExtractor() (KeyExtractor, error) {
 	return &md5KeyExtractor{h: md5.New()}, nil
 }
 
-func (ke *md5KeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, error) {
+func (ke *md5KeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) {
 	s := fmt.Sprintf("%x", ke.h.Sum([]byte(ske.name)))
 	ke.h.Reset()
 	return s, nil
@@ -74,7 +74,7 @@ func (*nameKeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, _ string
 	return r, &SingleKeyExtractor{name: name}, false
 }
 
-func (*nameKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, error) {
+func (*nameKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) {
 	return ske.name, nil
 }
 
@@ -96,7 +96,7 @@ func (ke *contentKeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, ex
 	return tee, &SingleKeyExtractor{name: name, buf: buf}, true
 }
 
-func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, error) {
+func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) {
 	if ske == nil { // is not valid to be read
 		return nil, nil
 	}

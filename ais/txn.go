@@ -37,7 +37,7 @@ type (
 		started(phase string, tm ...time.Time) time.Time
 		isDone() (done bool, err error)
 		// triggers
-		commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (bool, error)
+		commitAfter(caller string, msg *aisMsg, err error, args ...any) (bool, error)
 		rsvp(err error)
 		// cleanup
 		abort()
@@ -211,7 +211,7 @@ func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 		msg.UUID, cos.FormatTimestamp(rndzvs.timestamp))
 }
 
-func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (errDone error) {
+func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, args ...any) (errDone error) {
 	var running bool
 	txns.Lock()
 
@@ -446,7 +446,7 @@ func (txn *txnBckBase) String() string {
 	return fmt.Sprintf("txn-%s[%s]-%s%s%s]", txn.action, txn.uid, txn.bck.Bucket().String(), tm, res)
 }
 
-func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (found bool, errDone error) {
+func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...any) (found bool, errDone error) {
 	if txn.callerName != caller || msg.UUID != txn.uuid() {
 		return
 	}

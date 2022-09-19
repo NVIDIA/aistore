@@ -40,7 +40,7 @@ func main() {
 	}
 }
 
-func exitf(f string, a ...interface{}) {
+func exitf(f string, a ...any) {
 	fmt.Fprintf(os.Stderr, f+"\n", a...)
 	os.Exit(1)
 }

@@ -16,17 +16,17 @@ func ON() bool { return false }
 func NewExpvar(_ uint8)                    {}
 func SetExpvar(_ uint8, _ string, _ int64) {}
 
-func Infof(_ string, _ ...interface{}) {}
+func Infof(_ string, _ ...any) {}
 
 func Func(_ func()) {}
 
-func Assert(_ bool, _ ...interface{})            {}
-func AssertFunc(_ func() bool, _ ...interface{}) {}
-func AssertMsg(_ bool, _ string)                 {}
-func AssertNoErr(_ error)                        {}
-func Assertf(_ bool, _ string, _ ...interface{}) {}
+func Assert(_ bool, _ ...any)            {}
+func AssertFunc(_ func() bool, _ ...any) {}
+func AssertMsg(_ bool, _ string)         {}
+func AssertNoErr(_ error)                {}
+func Assertf(_ bool, _ string, _ ...any) {}
 
-func FailTypeCast(interface{}) {}
+func FailTypeCast(any) {}
 
 func AssertMutexLocked(_ *sync.Mutex)      {}
 func AssertRWMutexLocked(_ *sync.RWMutex)  {}

@@ -26,7 +26,7 @@ type (
 	}
 )
 
-func readSysctl(name string, data interface{}) (err error) {
+func readSysctl(name string, data any) (err error) {
 	value, err := syscall.Sysctl(name)
 	if err != nil {
 		return err

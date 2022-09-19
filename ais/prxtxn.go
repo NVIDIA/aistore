@@ -636,7 +636,7 @@ func _b2bBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
-func parseECConf(value interface{}) (*cmn.ECConfToUpdate, error) {
+func parseECConf(value any) (*cmn.ECConfToUpdate, error) {
 	switch v := value.(type) {
 	case string:
 		conf := &cmn.ECConfToUpdate{}

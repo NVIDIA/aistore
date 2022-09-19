@@ -87,7 +87,7 @@ func StrToSentence(str string) string {
 	return capitalized
 }
 
-func ConvertToString(value interface{}) (valstr string, err error) {
+func ConvertToString(value any) (valstr string, err error) {
 	switch v := value.(type) {
 	case string:
 		valstr = v

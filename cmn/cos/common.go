@@ -93,28 +93,28 @@ func init() {
 // JSON & JSONLocal
 //
 
-func MustMarshalToString(v interface{}) string {
+func MustMarshalToString(v any) string {
 	s, err := JSON.MarshalToString(v)
 	debug.AssertNoErr(err)
 	return s
 }
 
 // MustMarshal marshals v and panics if error occurs.
-func MustMarshal(v interface{}) []byte {
+func MustMarshal(v any) []byte {
 	b, err := JSON.Marshal(v)
 	AssertNoErr(err)
 	return b
 }
 
-func MorphMarshal(data, v interface{}) error {
-	// `data` can be of type `map[string]interface{}` or just same type as `v`.
+func MorphMarshal(data, v any) error {
+	// `data` can be of type `map[string]any` or just same type as `v`.
 	// Therefore, the easiest way is to marshal the `data` again and unmarshal it
 	// with hope that every field will be set correctly.
 	b := MustMarshal(data)
 	return JSON.Unmarshal(b, v)
 }
 
-func MustMorphMarshal(data, v interface{}) {
+func MustMorphMarshal(data, v any) {
 	err := MorphMarshal(data, v)
 	AssertNoErr(err)
 }
@@ -272,7 +272,7 @@ func (ss StringSet) All(xs ...string) bool {
 }
 
 // shallow copy
-func CopyStruct(dst, src interface{}) {
+func CopyStruct(dst, src any) {
 	x := reflect.ValueOf(src)
 	debug.Assert(x.Kind() == reflect.Ptr)
 	starX := x.Elem()
@@ -282,7 +282,7 @@ func CopyStruct(dst, src interface{}) {
 	reflect.ValueOf(dst).Elem().Set(y.Elem())
 }
 
-func Infof(format string, a ...interface{}) {
+func Infof(format string, a ...any) {
 	if flag.Parsed() {
 		glog.InfoDepth(1, fmt.Sprintf(format, a...))
 	} else {
@@ -290,7 +290,7 @@ func Infof(format string, a ...interface{}) {
 	}
 }
 
-func Warningf(format string, a ...interface{}) {
+func Warningf(format string, a ...any) {
 	if flag.Parsed() {
 		glog.WarningDepth(1, fmt.Sprintf(format, a...))
 	} else {
@@ -298,7 +298,7 @@ func Warningf(format string, a ...interface{}) {
 	}
 }
 
-func Errorf(format string, a ...interface{}) {
+func Errorf(format string, a ...any) {
 	if flag.Parsed() {
 		glog.ErrorDepth(1, fmt.Sprintf(format, a...))
 		glog.Flush()

@@ -320,7 +320,7 @@ func useDisk(objSize int64) bool {
 }
 
 // Frees allocated memory if it is SGL or closes the file handle if regular file
-func freeObject(r interface{}) {
+func freeObject(r any) {
 	if r == nil {
 		return
 	}

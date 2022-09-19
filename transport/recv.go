@@ -155,7 +155,7 @@ func (h *handler) handle() error {
 
 func (h *handler) cleanupOldSessions() time.Duration {
 	now := mono.NanoTime()
-	f := func(key, value interface{}) bool {
+	f := func(key, value any) bool {
 		uid := key.(uint64)
 		timeClosed := value.(int64)
 		if time.Duration(now-timeClosed) > hkOld {

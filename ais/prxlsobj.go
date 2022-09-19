@@ -280,7 +280,7 @@ func (b *lsobjBuffers) set(id, targetID string, entries []*cmn.BucketEntry, size
 }
 
 func (b *lsobjBuffers) housekeep() (num int) {
-	b.buffers.Range(func(key, value interface{}) bool {
+	b.buffers.Range(func(key, value any) bool {
 		buffer := value.(*lsobjBuffer)
 		num++
 		if mono.Since(buffer.lastAccess.Load()) > lsobjBufferTTL {
@@ -496,7 +496,7 @@ func (c *lsobjCaches) set(reqID cacheReqID, token string, entries []*cmn.BucketE
 }
 
 func (c *lsobjCaches) invalidate(bck *cmn.Bck) {
-	c.caches.Range(func(key, value interface{}) bool {
+	c.caches.Range(func(key, value any) bool {
 		id := key.(cacheReqID)
 		if id.bck.Equal(bck) {
 			value.(*lsobjCache).invalidate()
@@ -508,7 +508,7 @@ func (c *lsobjCaches) invalidate(bck *cmn.Bck) {
 // TODO: factor-in memory pressure.
 func (c *lsobjCaches) housekeep() (num int) {
 	var toRemove []*cacheInterval
-	c.caches.Range(func(key, value interface{}) bool {
+	c.caches.Range(func(key, value any) bool {
 		cache := value.(*lsobjCache)
 		cache.mtx.Lock()
 		for _, interval := range cache.intervals {

@@ -51,11 +51,11 @@ func (res EntryLookupResult) NoInode() bool {
 // LOGGING //
 /////////////
 
-func (fs *aisfs) logf(fmt string, v ...interface{}) {
+func (fs *aisfs) logf(fmt string, v ...any) {
 	fs.errLog.Printf(fmt, v...)
 }
 
-func (fs *aisfs) fatalf(fmt string, v ...interface{}) {
+func (fs *aisfs) fatalf(fmt string, v ...any) {
 	errFmt := "FATAL: " + fmt +
 		"\n*** CONNECTION LOST, BUT THE FILE SYSTEM REMAINS MOUNTED ON %s ***\n" +
 		"CALL STACK ---> %s\n"

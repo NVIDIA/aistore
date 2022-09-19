@@ -53,7 +53,7 @@ func RenewDownloader(t cluster.Target, statsT stats.Tracker) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewETL(t cluster.Target, msg interface{}) RenewRes {
+func RenewETL(t cluster.Target, msg any) RenewRes {
 	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{T: t, Custom: msg}, nil)
 	return dreg.renew(e, nil)
 }

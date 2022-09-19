@@ -35,7 +35,7 @@ func SaveMeta(filepath string, meta Opts, wto io.WriterTo) error {
 	return Save(filepath, meta, meta.JspOpts(), wto)
 }
 
-func Save(filepath string, v interface{}, opts Options, wto io.WriterTo) (err error) {
+func Save(filepath string, v any, opts Options, wto io.WriterTo) (err error) {
 	var (
 		file *os.File
 		tmp  = filepath + ".tmp." + cos.GenTie()
@@ -74,7 +74,7 @@ func LoadMeta(filepath string, meta Opts) (*cos.Cksum, error) {
 	return Load(filepath, meta, meta.JspOpts())
 }
 
-func Load(filepath string, v interface{}, opts Options) (checksum *cos.Cksum, err error) {
+func Load(filepath string, v any, opts Options) (checksum *cos.Cksum, err error) {
 	var file *os.File
 	file, err = os.Open(filepath)
 	if err != nil {

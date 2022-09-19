@@ -29,7 +29,7 @@ type (
 	MD struct {
 		Version int64
 		ETLs    ETLs
-		Ext     interface{}
+		Ext     any
 	}
 
 	jsonETL struct {
@@ -39,7 +39,7 @@ type (
 	jsonMD struct {
 		Version int64              `json:"version"`
 		ETLs    map[string]jsonETL `json:"etls"`
-		Ext     interface{}        `json:"ext,omitempty"` // within meta-version extensions
+		Ext     any                `json:"ext,omitempty"` // within meta-version extensions
 	}
 )
 

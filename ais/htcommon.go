@@ -61,7 +61,7 @@ type (
 
 	// callResult contains HTTP response.
 	callResult struct {
-		v       interface{} // Unmarshalled value (set only when requested, see: `callArgs.v`).
+		v       any // Unmarshalled value (set only when requested, see: `callArgs.v`).
 		err     error
 		si      *cluster.Snode
 		header  http.Header
@@ -79,7 +79,7 @@ type (
 	// cresv: call result value factory and result-type specific decoder
 	// (used in both callArgs and bcastArgs)
 	cresv interface {
-		newV() interface{}
+		newV() any
 		read(*callResult, io.Reader)
 	}
 
@@ -457,37 +457,37 @@ func (res *callResult) mread(body io.Reader) {
 	slab.Free(buf)
 }
 
-func (cresCM) newV() interface{}                      { return &cluMeta{} }
+func (cresCM) newV() any                              { return &cluMeta{} }
 func (c cresCM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBL) newV() interface{}                      { return &cmn.BucketList{} }
+func (cresBL) newV() any                              { return &cmn.BucketList{} }
 func (c cresBL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
 
-func (cresSM) newV() interface{}                      { return &smapX{} }
+func (cresSM) newV() any                              { return &smapX{} }
 func (c cresSM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresND) newV() interface{}                      { return &cluster.Snode{} }
+func (cresND) newV() any                              { return &cluster.Snode{} }
 func (c cresND) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBA) newV() interface{}                      { return &cmn.BackendInfoAIS{} }
+func (cresBA) newV() any                              { return &cmn.BackendInfoAIS{} }
 func (c cresBA) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresEI) newV() interface{}                      { return &etl.InfoList{} }
+func (cresEI) newV() any                              { return &etl.InfoList{} }
 func (c cresEI) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresEL) newV() interface{}                      { return &etl.PodLogsMsg{} }
+func (cresEL) newV() any                              { return &etl.PodLogsMsg{} }
 func (c cresEL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresEH) newV() interface{}                      { return &etl.PodHealthMsg{} }
+func (cresEH) newV() any                              { return &etl.PodHealthMsg{} }
 func (c cresEH) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresIC) newV() interface{}                      { return &icBundle{} }
+func (cresIC) newV() any                              { return &icBundle{} }
 func (c cresIC) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBM) newV() interface{}                      { return &bucketMD{} }
+func (cresBM) newV() any                              { return &bucketMD{} }
 func (c cresBM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBsumm) newV() interface{}                      { return &cmn.BckSummaries{} }
+func (cresBsumm) newV() any                              { return &cmn.BckSummaries{} }
 func (c cresBsumm) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 ////////////////

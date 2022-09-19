@@ -78,7 +78,7 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 
 	// one cache at a time (TODO: throttle via mountpath.IsIdle())
 	for _, cache := range caches {
-		f := func(hkey, value interface{}) bool {
+		f := func(hkey, value any) bool {
 			md := value.(*lmeta)
 			mdTime := md.Atime
 			if mdTime < 0 {
