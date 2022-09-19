@@ -306,7 +306,8 @@ var (
 	}
 	regexFlag       = cli.StringFlag{Name: "regex", Usage: "regex pattern for matching"}
 	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
-	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
+	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,no-header,H", Usage: "display tables without headers"}
+	noFooterFlag    = cli.BoolFlag{Name: "no-footers,no-footer", Usage: "display tables without footers"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
 	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}

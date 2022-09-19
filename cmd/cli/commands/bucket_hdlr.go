@@ -194,6 +194,7 @@ func initLsOptions() []cli.Flag {
 		showUnmatchedFlag,
 		allItemsFlag,
 		noHeaderFlag,
+		noFooterFlag,
 		pagedFlag,
 		maxPagesFlag,
 		startAfterFlag,

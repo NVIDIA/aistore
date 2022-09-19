@@ -178,10 +178,14 @@ const (
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
-	ListBucketsTmpl = "NAME\t PRESENT\t\n" +
-		"{{range $k, $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.Present}}\n" +
+	ListBucketsHeader = "NAME\t PRESENT\t OBJECTS\t SIZE ON DISK\t USAGE(%)\n"
+	ListBucketsBody   = "{{range $k, $v := . }}" +
+		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.Present}}\t " +
+		"{{if (IsFalse $v.Info.Present)}}-{{else}}{{$v.Info.ObjCount}}{{end}}\t " +
+		"{{if (IsFalse $v.Info.Present)}}-{{else}}{{FormatBytesUns $v.Info.Size 2}}{{end}}\t " +
+		"{{if (IsFalse $v.Info.Present)}}-{{else}}{{$v.Info.UsedPct}}%{{end}}\n" +
 		"{{end}}"
+	ListBucketsTmpl = ListBucketsHeader + ListBucketsBody
 
 	// Bucket summary templates
 	BucketsSummariesFastTmpl = "NAME\t OBJECTS\t SIZE ON DISK\t USAGE(%)\n" + bucketsSummariesFastBody
@@ -333,6 +337,7 @@ var (
 		"FormatBytesUns":    cos.UnsignedB2S,
 		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", cos.B2S(u, 2)) },
 		"IsUnsetTime":       isUnsetTime,
+		"IsFalse":           func(v bool) bool { return !v },
 		"FormatTime":        fmtTime,
 		"FormatUnixNano":    func(t int64) string { return cos.FormatUnixNano(t, "") },
 		"FormatEC":          FmtEC,

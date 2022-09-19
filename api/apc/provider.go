@@ -69,3 +69,22 @@ func NormalizeProvider(p string) string {
 		return ""
 	}
 }
+
+func DisplayProvider(p string) string {
+	switch p {
+	case AIS:
+		return "AIS"
+	case AWS, S3Scheme:
+		return "AWS"
+	case Azure, AZScheme:
+		return "Azure"
+	case GCP, GSScheme:
+		return "GCP"
+	case HDFS:
+		return "HDFS"
+	case HTTP:
+		return "HTTP(S)"
+	default:
+		return p
+	}
+}

@@ -170,14 +170,22 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		return
 	}
 	for _, provider := range selectProviders(bcks) {
-		_listBcks(c, provider, bcks, !flagIsSet(c, noHeaderFlag), filter)
+		lsBckTable(c, provider, bcks, filter)
+		fmt.Fprintln(c.App.Writer)
 	}
 	return
 }
 
-func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
-	matches func(cmn.Bck) bool /*bucket filter*/) {
-	filtered := make(cmn.Bcks, 0, len(bcks))
+type lstally struct {
+	nb, nbp, pct int
+	nobj, size   uint64
+}
+
+func lsBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool /*filter*/) {
+	var (
+		lst      lstally
+		filtered = make(cmn.Bcks, 0, len(bcks))
+	)
 	for _, bck := range bcks {
 		if bck.Provider == provider && matches(bck) {
 			filtered = append(filtered, bck)
@@ -186,17 +194,8 @@ func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
 	if len(filtered) == 0 {
 		return
 	}
-
-	// TODO -- FIXME: rewrite the rest of this f
-
-	if showHeaders {
-		dspProvider := provider
-		if provider == apc.HTTP {
-			dspProvider = "HTTP(S)"
-		}
-		fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(dspProvider), len(filtered))
-	}
-
+	hideHeader := flagIsSet(c, noHeaderFlag)
+	hideFooter := flagIsSet(c, noFooterFlag)
 	data := make([]templates.ListBucketsTemplateHelper, 0, len(filtered))
 	for _, bck := range filtered {
 		props, info, err := api.GetBucketInfo(defaultAPIParams, bck)
@@ -206,13 +205,28 @@ func _listBcks(c *cli.Context, provider string, bcks cmn.Bcks, showHeaders bool,
 			}
 			continue
 		}
-		if provider == apc.HTTP {
-			fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
-			continue
+		lst.nb++
+		if info.Present {
+			lst.nbp++
+			lst.nobj += info.ObjCount
+			lst.size += info.Size
+			lst.pct += int(info.UsedPct)
+		}
+		if bck.IsHTTP() {
+			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
 		data = append(data, templates.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: info})
 	}
-	templates.DisplayOutput(data, c.App.Writer, templates.ListBucketsTmpl, false)
+	if hideHeader {
+		templates.DisplayOutput(data, c.App.Writer, templates.ListBucketsBody, false)
+	} else {
+		templates.DisplayOutput(data, c.App.Writer, templates.ListBucketsTmpl, false)
+	}
+	if !hideFooter && lst.nbp > 1 {
+		foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d, size %s, used %d%%] =======",
+			provider, lst.nb, lst.nbp, lst.nobj, cos.UnsignedB2S(lst.size, 2), lst.pct)
+		fmt.Fprintln(c.App.Writer, fcyan(foot))
+	}
 }
 
 // TODO: too many `flagIsSet` calls - refactor (archive | ... )
