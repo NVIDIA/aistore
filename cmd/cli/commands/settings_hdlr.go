@@ -66,7 +66,7 @@ func showCLIConfigHandler(c *cli.Context) (err error) {
 	sort.Slice(flat, func(i, j int) bool {
 		return flat[i].Name < flat[j].Name
 	})
-	return templates.DisplayOutput(flat, c.App.Writer, templates.ConfigTmpl, false)
+	return templates.DisplayOutput(flat, c.App.Writer, templates.ConfigTmpl, nil, false)
 }
 
 func setCLIConfigHandler(c *cli.Context) (err error) {

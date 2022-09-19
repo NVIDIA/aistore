@@ -478,7 +478,7 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNClusterTmpl, false)
+	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNClusterTmpl, nil, false)
 }
 
 func showAuthSingleRole(c *cli.Context, roleID string) error {
@@ -488,9 +488,9 @@ func showAuthSingleRole(c *cli.Context, roleID string) error {
 	}
 	// verbose is the implicit default when showing one
 	if flagIsSet(c, nonverboseFlag) {
-		return templates.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, templates.AuthNRoleTmpl, false)
+		return templates.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, templates.AuthNRoleTmpl, nil, false)
 	}
-	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, false)
+	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, nil, false)
 }
 func showAuthAllRoles(c *cli.Context) error {
 	list, err := authn.GetAllRoles(authParams)
@@ -513,12 +513,12 @@ func showAuthAllRoles(c *cli.Context) error {
 				if i > 0 {
 					fmt.Fprintln(c.App.Writer)
 				}
-				templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, false)
+				templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl, nil, false)
 			}
 		}
 		return nil
 	}
-	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl, false)
+	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl, nil, false)
 }
 
 func showAuthRoleHandler(c *cli.Context) (err error) {
@@ -545,12 +545,12 @@ func showAuthUserHandler(c *cli.Context) (err error) {
 					if i > 0 {
 						fmt.Fprintln(c.App.Writer)
 					}
-					templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl, false)
+					templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl, nil, false)
 				}
 			}
 			return nil
 		}
-		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl, false)
+		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl, nil, false)
 	}
 	uInfo, err := authn.GetUser(authParams, userID)
 	if err != nil {
@@ -558,9 +558,9 @@ func showAuthUserHandler(c *cli.Context) (err error) {
 	}
 	// verbose is the implicit default when showing one
 	if flagIsSet(c, nonverboseFlag) {
-		return templates.DisplayOutput([]*authn.User{uInfo}, c.App.Writer, templates.AuthNUserTmpl, false)
+		return templates.DisplayOutput([]*authn.User{uInfo}, c.App.Writer, templates.AuthNUserTmpl, nil, false)
 	}
-	return templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl, false)
+	return templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl, nil, false)
 }
 
 func addAuthRoleHandler(c *cli.Context) error {
@@ -705,9 +705,9 @@ func showAuthConfigHandler(c *cli.Context) (err error) {
 	}
 	useJSON := flagIsSet(c, jsonFlag)
 	if useJSON {
-		return templates.DisplayOutput(conf, c.App.Writer, templates.PropsSimpleTmpl, useJSON)
+		return templates.DisplayOutput(conf, c.App.Writer, templates.PropsSimpleTmpl, nil, useJSON)
 	}
-	return templates.DisplayOutput(list, c.App.Writer, templates.PropsSimpleTmpl, useJSON)
+	return templates.DisplayOutput(list, c.App.Writer, templates.PropsSimpleTmpl, nil, useJSON)
 }
 
 func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {

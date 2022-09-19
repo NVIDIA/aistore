@@ -7,6 +7,7 @@ package templates
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"text/template"
@@ -522,7 +523,7 @@ func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }
 
 // Displays the output in either JSON or tabular form
 // if formatJSON == true, outputTemplate is omitted
-func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, useJSON bool) error {
+func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, altMap template.FuncMap, useJSON bool) error {
 	if useJSON {
 		if o, ok := object.(forMarshaler); ok {
 			object = o.forMarshal()
@@ -535,11 +536,22 @@ func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, 
 		return err
 	}
 
-	// Template
-	tmpl, err := template.New("DisplayTemplate").Funcs(funcMap).Parse(outputTemplate)
+	fmap := funcMap
+	if altMap != nil {
+		fmap = make(template.FuncMap, len(funcMap))
+		for k, v := range funcMap {
+			if altv, ok := altMap[k]; ok {
+				fmap[k] = altv
+			} else {
+				fmap[k] = v
+			}
+		}
+	}
+	tmpl, err := template.New("DisplayTemplate").Funcs(fmap).Parse(outputTemplate)
 	if err != nil {
 		return err
 	}
+
 	w := tabwriter.NewWriter(writer, 0, 8, 1, '\t', 0)
 	if err := tmpl.Execute(w, object); err != nil {
 		return err
@@ -676,4 +688,12 @@ func fmtXactStatus(xctn *xact.SnapExt) string {
 		return xactStateIdle
 	}
 	return xactStateRunning
+}
+
+func AltFuncMapSizeBytes() (m template.FuncMap) {
+	m = make(template.FuncMap, 2)
+	m["FormatBytesSig"] = func(b int64, _ int) string { return strconv.FormatInt(b, 10) }
+	m["FormatBytesUns"] = func(b uint64, _ int) string { return strconv.FormatInt(int64(b), 10) }
+	m["FormatMAM"] = func(u int64) string { return fmt.Sprintf("%-10d", u) }
+	return
 }

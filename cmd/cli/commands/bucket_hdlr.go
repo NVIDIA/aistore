@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -61,6 +62,7 @@ var (
 			listCachedFlag,
 			listPresentFlag,
 			fastFlag,
+			sizeInBytesFlag,
 			validateSummaryFlag,
 			verboseFlag,
 		},
@@ -203,6 +205,7 @@ func initLsOptions() []cli.Flag {
 		listAnonymousFlag,
 		listArchFlag,
 		nameOnlyFlag,
+		sizeInBytesFlag,
 	}
 }
 
@@ -291,7 +294,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 
 		bckSums = append(bckSums, stats)
 	}
-	return templates.DisplayOutput(bckSums, c.App.Writer, templates.BucketSummaryValidateTmpl, false)
+	return templates.DisplayOutput(bckSums, c.App.Writer, templates.BucketSummaryValidateTmpl, nil, false)
 }
 
 func showMisplacedAndMore(c *cli.Context) (err error) {
@@ -315,19 +318,24 @@ func showBucketSummary(c *cli.Context) error {
 	if err := updateLongRunParams(c); err != nil {
 		return err
 	}
-	summaries, err := fetchSummaries(queryBcks, fast, flagIsSet(c, listCachedFlag) || flagIsSet(c, listPresentFlag))
+	summaries, err := getSummaries(queryBcks, fast, flagIsSet(c, listCachedFlag) || flagIsSet(c, listPresentFlag))
 	if err != nil {
 		return err
 	}
+
+	var altMap template.FuncMap
+	if flagIsSet(c, sizeInBytesFlag) {
+		altMap = templates.AltFuncMapSizeBytes()
+	}
 	if fast {
-		err := templates.DisplayOutput(summaries, c.App.Writer, templates.BucketsSummariesFastTmpl, false)
+		err := templates.DisplayOutput(summaries, c.App.Writer, templates.BucketsSummariesFastTmpl, altMap, false)
 		if err == nil {
 			// as in: `du --apparent-size`
 			fmt.Fprintf(c.App.Writer, "\nFor min/avg/max object sizes, use `--fast=false`.\n")
 		}
 		return err
 	}
-	return templates.DisplayOutput(summaries, c.App.Writer, templates.BucketsSummariesTmpl, false)
+	return templates.DisplayOutput(summaries, c.App.Writer, templates.BucketsSummariesTmpl, altMap, false)
 }
 
 func summaryBucketHandler(c *cli.Context) (err error) {

@@ -69,7 +69,7 @@ func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, use
 		Smap:         smap,
 		ExtendedURLs: extendedURLs,
 	}
-	return templates.DisplayOutput(body, c.App.Writer, templates.SmapTmpl, useJSON)
+	return templates.DisplayOutput(body, c.App.Writer, templates.SmapTmpl, nil, useJSON)
 }
 
 func getBMD(c *cli.Context) error {
@@ -79,7 +79,7 @@ func getBMD(c *cli.Context) error {
 		return err
 	}
 	if useJSON {
-		return templates.DisplayOutput(bmd, c.App.Writer, "", useJSON)
+		return templates.DisplayOutput(bmd, c.App.Writer, "", nil, useJSON)
 	}
 
 	tw := &tabwriter.Writer{}
@@ -123,20 +123,20 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, cluConfig *cmn.Clus
 		},
 	}
 	if res, proxyOK := pmapStatus[daemonID]; proxyOK {
-		return templates.DisplayOutput(res, c.App.Writer, templates.NewProxyTable(res, smap).Template(hideHeader), useJSON)
+		return templates.DisplayOutput(res, c.App.Writer, templates.NewProxyTable(res, smap).Template(hideHeader), nil, useJSON)
 	} else if res, targetOK := tmapStatus[daemonID]; targetOK {
-		return templates.DisplayOutput(res, c.App.Writer, templates.NewTargetTable(res).Template(hideHeader), useJSON)
+		return templates.DisplayOutput(res, c.App.Writer, templates.NewTargetTable(res).Template(hideHeader), nil, useJSON)
 	} else if daemonID == apc.Proxy {
 		template := templates.NewProxiesTable(&body.Status, smap).Template(hideHeader)
-		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
+		return templates.DisplayOutput(body, c.App.Writer, template, nil, useJSON)
 	} else if daemonID == apc.Target {
 		return templates.DisplayOutput(body, c.App.Writer,
-			templates.NewTargetsTable(&body.Status).Template(hideHeader), useJSON)
+			templates.NewTargetsTable(&body.Status).Template(hideHeader), nil, useJSON)
 	} else if daemonID == "" {
 		template := templates.NewProxiesTable(&body.Status, smap).Template(false) + "\n" +
 			templates.NewTargetsTable(&body.Status).Template(false) + "\n" +
 			templates.ClusterSummary
-		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
+		return templates.DisplayOutput(body, c.App.Writer, template, nil, useJSON)
 	}
 	return fmt.Errorf("%s is not a valid DAEMON_ID nor DAEMON_TYPE", daemonID)
 }
@@ -162,7 +162,7 @@ func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) 
 	}
 
 	template := chooseTmpl(templates.DiskStatBodyTmpl, templates.DiskStatsFullTmpl, hideHeader)
-	err = templates.DisplayOutput(diskStats, c.App.Writer, template, useJSON)
+	err = templates.DisplayOutput(diskStats, c.App.Writer, template, nil, useJSON)
 	if err != nil {
 		return err
 	}

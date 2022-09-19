@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -217,19 +218,23 @@ func lsBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn
 		}
 		data = append(data, templates.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: info})
 	}
+
+	var altMap template.FuncMap
+	if flagIsSet(c, sizeInBytesFlag) {
+		altMap = templates.AltFuncMapSizeBytes()
+	}
 	if hideHeader {
-		templates.DisplayOutput(data, c.App.Writer, templates.ListBucketsBody, false)
+		templates.DisplayOutput(data, c.App.Writer, templates.ListBucketsBody, altMap, false)
 	} else {
-		templates.DisplayOutput(data, c.App.Writer, templates.ListBucketsTmpl, false)
+		templates.DisplayOutput(data, c.App.Writer, templates.ListBucketsTmpl, altMap, false)
 	}
 	if !hideFooter && lst.nbp > 1 {
 		foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d, size %s, used %d%%] =======",
-			provider, lst.nb, lst.nbp, lst.nobj, cos.UnsignedB2S(lst.size, 2), lst.pct)
+			apc.DisplayProvider(provider), lst.nb, lst.nbp, lst.nobj, cos.UnsignedB2S(lst.size, 2), lst.pct)
 		fmt.Fprintln(c.App.Writer, fcyan(foot))
 	}
 }
 
-// TODO: too many `flagIsSet` calls - refactor (archive | ... )
 func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
 	var (
 		showUnmatched         = flagIsSet(c, showUnmatchedFlag)
@@ -349,7 +354,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	return printObjectProps(c, objList.Entries, objectListFilter, msg.Props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-func fetchSummaries(qbck cmn.QueryBcks, fast, cached bool) (summaries cmn.BckSummaries, err error) {
+func getSummaries(qbck cmn.QueryBcks, fast, cached bool) (summaries cmn.BckSummaries, err error) {
 	fDetails := func() (err error) {
 		msg := &apc.BckSummMsg{Cached: cached, Fast: fast}
 		summaries, err = api.GetBucketsSummaries(defaultAPIParams, qbck, msg)
@@ -443,7 +448,7 @@ func showBucketProps(c *cli.Context) (err error) {
 		return
 	}
 	if flagIsSet(c, jsonFlag) {
-		return templates.DisplayOutput(p, c.App.Writer, "", true)
+		return templates.DisplayOutput(p, c.App.Writer, "", nil, true)
 	}
 	defProps, err := defaultBckProps(bck)
 	if err != nil {
@@ -494,7 +499,7 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 		}
 	}
 
-	return templates.DisplayOutput(propList, c.App.Writer, templates.PropsSimpleTmpl, false)
+	return templates.DisplayOutput(propList, c.App.Writer, templates.PropsSimpleTmpl, nil, false)
 }
 
 // Configure bucket as n-way mirror
@@ -545,7 +550,7 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 	return bcks[0], bcks[1], nil
 }
 
-func buildOutputTemplate(props string, showHeaders bool) string {
+func objPropsTemplate(props string, showHeaders bool) string {
 	var (
 		headSb strings.Builder
 		bodySb strings.Builder
@@ -575,17 +580,21 @@ func buildOutputTemplate(props string, showHeaders bool) string {
 func printObjectProps(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string,
 	showUnmatched, showHeaders bool) error {
 	var (
-		outputTemplate        = buildOutputTemplate(props, showHeaders)
+		altMap                template.FuncMap
+		tmpl                  = objPropsTemplate(props, showHeaders)
 		matchingEntries, rest = objectFilter.filter(entries)
 	)
-	err := templates.DisplayOutput(matchingEntries, c.App.Writer, outputTemplate, false)
+	if flagIsSet(c, sizeInBytesFlag) {
+		altMap = templates.AltFuncMapSizeBytes()
+	}
+	err := templates.DisplayOutput(matchingEntries, c.App.Writer, tmpl, altMap, false)
 	if err != nil {
 		return err
 	}
 
 	if showHeaders && showUnmatched {
-		outputTemplate = "Unmatched objects:\n" + outputTemplate
-		err = templates.DisplayOutput(rest, c.App.Writer, outputTemplate, false)
+		tmpl = "Unmatched objects:\n" + tmpl
+		err = templates.DisplayOutput(rest, c.App.Writer, tmpl, altMap, false)
 	}
 	return err
 }

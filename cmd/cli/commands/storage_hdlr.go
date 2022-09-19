@@ -21,6 +21,7 @@ var (
 			listCachedFlag,
 			listPresentFlag,
 			fastFlag,
+			sizeInBytesFlag,
 			verboseFlag,
 		),
 		subcmdStgValidate:  {},

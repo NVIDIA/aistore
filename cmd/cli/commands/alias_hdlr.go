@@ -153,7 +153,7 @@ func showCLIAliasHandler(c *cli.Context) (err error) {
 	sort.Slice(aliases, func(i, j int) bool {
 		return aliases[i].Name < aliases[j].Name
 	})
-	return templates.DisplayOutput(aliases, c.App.Writer, templates.AliasTemplate, false)
+	return templates.DisplayOutput(aliases, c.App.Writer, templates.AliasTemplate, nil, false)
 }
 
 func rmCLIAliasHandler(c *cli.Context) (err error) {

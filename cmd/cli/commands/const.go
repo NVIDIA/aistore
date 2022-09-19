@@ -384,7 +384,7 @@ var (
 		Usage: "progress interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h' (e.g. '10s')",
 	}
 	// dSort
-	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of file in a shard"}
+	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "file size in a shard"}
 	logFlag      = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
 	cleanupFlag  = cli.BoolFlag{
 		Name:  "cleanup",
@@ -440,6 +440,11 @@ var (
 	notFshareFlag = cli.BoolFlag{
 		Name:  "not-file-share",
 		Usage: "each target must act autonomously skipping file-share auto-detection and promoting the entire source (as seen from _the_ target)",
+	}
+
+	sizeInBytesFlag = cli.BoolFlag{
+		Name:  "bytes",
+		Usage: "show size in bytes (do not convert to KiB, MiB, etc.)",
 	}
 
 	yesFlag = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}

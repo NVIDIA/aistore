@@ -454,7 +454,7 @@ func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck)
 
 	useJSON := flagIsSet(c, jsonFlag)
 	if useJSON {
-		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionsBodyTmpl, useJSON)
+		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionsBodyTmpl, nil, useJSON)
 	}
 
 	if canVerbose && flagIsSet(c, verboseFlag) {
@@ -464,16 +464,16 @@ func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck)
 		} else {
 			props = flattenXactStats(dts[0].XactSnaps[0])
 		}
-		return templates.DisplayOutput(props, c.App.Writer, templates.PropsSimpleTmpl, useJSON)
+		return templates.DisplayOutput(props, c.App.Writer, templates.PropsSimpleTmpl, nil, useJSON)
 	}
 
 	switch xactKind {
 	case apc.ActECGet:
-		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionECGetBodyTmpl, useJSON)
+		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionECGetBodyTmpl, nil, useJSON)
 	case apc.ActECPut:
-		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionECPutBodyTmpl, useJSON)
+		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionECPutBodyTmpl, nil, useJSON)
 	default:
-		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionsBodyTmpl, useJSON)
+		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionsBodyTmpl, nil, useJSON)
 	}
 }
 
@@ -548,10 +548,10 @@ func showClusterConfig(c *cli.Context, section string) error {
 		useJSON = false
 	}
 	if useJSON {
-		return templates.DisplayOutput(cluConfig, c.App.Writer, "", useJSON)
+		return templates.DisplayOutput(cluConfig, c.App.Writer, "", nil, useJSON)
 	}
 	flat := flattenConfig(cluConfig, section)
-	return templates.DisplayOutput(flat, c.App.Writer, templates.ConfigTmpl, false)
+	return templates.DisplayOutput(flat, c.App.Writer, templates.ConfigTmpl, nil, false)
 }
 
 func showNodeConfig(c *cli.Context) error {
@@ -614,7 +614,7 @@ func showNodeConfig(c *cli.Context) error {
 		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
 		useJSON = false
 	}
-	return templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, useJSON)
+	return templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, nil, useJSON)
 }
 
 func showDaemonLogHandler(c *cli.Context) (err error) {
@@ -732,7 +732,7 @@ func showMpathHandler(c *cli.Context) error {
 		return mpls[i].DaemonID < mpls[j].DaemonID // ascending by node id
 	})
 	useJSON := flagIsSet(c, jsonFlag)
-	return templates.DisplayOutput(mpls, c.App.Writer, templates.TargetMpathListTmpl, useJSON)
+	return templates.DisplayOutput(mpls, c.App.Writer, templates.TargetMpathListTmpl, nil, useJSON)
 }
 
 func fmtStatValue(name string, value int64, human bool) string {
@@ -756,7 +756,7 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 		return err
 	}
 	if flagIsSet(c, jsonFlag) {
-		return templates.DisplayOutput(stats, c.App.Writer, templates.ConfigTmpl, true)
+		return templates.DisplayOutput(stats, c.App.Writer, templates.ConfigTmpl, nil, true)
 	}
 
 	human := !flagIsSet(c, rawFlag)
@@ -790,7 +790,7 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 			mID++
 		}
 	}
-	return templates.DisplayOutput(props, c.App.Writer, templates.ConfigTmpl, false)
+	return templates.DisplayOutput(props, c.App.Writer, templates.ConfigTmpl, nil, false)
 }
 
 func showClusterTotalStats(c *cli.Context) (err error) {
@@ -799,9 +799,9 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 		return err
 	}
 
-	json := flagIsSet(c, jsonFlag)
-	if json {
-		return templates.DisplayOutput(st, c.App.Writer, templates.TargetMpathListTmpl, json)
+	useJSON := flagIsSet(c, jsonFlag)
+	if useJSON {
+		return templates.DisplayOutput(st, c.App.Writer, templates.TargetMpathListTmpl, nil, useJSON)
 	}
 
 	human := !flagIsSet(c, rawFlag)
@@ -838,7 +838,7 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 		return props[i].Name < props[j].Name
 	})
 
-	return templates.DisplayOutput(props, c.App.Writer, templates.ConfigTmpl, false)
+	return templates.DisplayOutput(props, c.App.Writer, templates.ConfigTmpl, nil, false)
 }
 
 func showClusterStatsHandler(c *cli.Context) (err error) {
