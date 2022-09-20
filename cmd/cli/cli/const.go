@@ -366,6 +366,10 @@ var (
 		Name:  "validate",
 		Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts",
 	}
+	noSummaryFlag = cli.BoolFlag{
+		Name:  "no-summary",
+		Usage: "list buckets faster (by _not_ running 'bucket-summary' to collect and summarize bucket stats)",
+	}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}

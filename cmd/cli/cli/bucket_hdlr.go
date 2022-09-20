@@ -206,6 +206,7 @@ func initLsOptions() []cli.Flag {
 		listArchFlag,
 		nameOnlyFlag,
 		sizeInBytesFlag,
+		noSummaryFlag,
 	}
 }
 

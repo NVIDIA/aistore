@@ -203,11 +203,15 @@ func lsBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn
 	if len(filtered) == 0 {
 		return
 	}
-	hideHeader := flagIsSet(c, noHeaderFlag)
-	hideFooter := flagIsSet(c, noFooterFlag)
-	data := make([]tmpls.ListBucketsTemplateHelper, 0, len(filtered))
+	var (
+		altMap     template.FuncMap
+		hideHeader = flagIsSet(c, noHeaderFlag)
+		hideFooter = flagIsSet(c, noFooterFlag)
+		noSummary  = flagIsSet(c, noSummaryFlag)
+		data       = make([]tmpls.ListBucketsTemplateHelper, 0, len(filtered))
+	)
 	for _, bck := range filtered {
-		props, info, err := api.GetBucketInfo(defaultAPIParams, bck)
+		props, info, err := api.GetBucketInfo(defaultAPIParams, bck, !noSummary /*getSummary*/)
 		if err != nil {
 			if httpErr, ok := err.(*cmn.ErrHTTP); ok {
 				fmt.Fprintf(c.App.Writer, "  %s, err: %s\n", bck, httpErr.Message)
@@ -215,7 +219,7 @@ func lsBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn
 			continue
 		}
 		lst.nb++
-		if info.Present {
+		if !noSummary && info.Present {
 			lst.nbp++
 			lst.nobj += info.ObjCount
 			lst.size += info.Size
@@ -226,20 +230,30 @@ func lsBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn
 		}
 		data = append(data, tmpls.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: info})
 	}
-
-	var altMap template.FuncMap
 	if flagIsSet(c, sizeInBytesFlag) {
 		altMap = tmpls.AltFuncMapSizeBytes()
 	}
-	if hideHeader {
-		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBody, altMap, false)
+	if noSummary {
+		if hideHeader {
+			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBodyNoSummary, altMap, false)
+		} else {
+			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, altMap, false)
+		}
+		if !hideFooter && lst.nbp > 1 {
+			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d)] =======", apc.DisplayProvider(provider), lst.nb, lst.nbp)
+			fmt.Fprintln(c.App.Writer, fcyan(foot))
+		}
 	} else {
-		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
-	}
-	if !hideFooter && lst.nbp > 1 {
-		foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d, size %s, used %d%%] =======",
-			apc.DisplayProvider(provider), lst.nb, lst.nbp, lst.nobj, cos.UnsignedB2S(lst.size, 2), lst.pct)
-		fmt.Fprintln(c.App.Writer, fcyan(foot))
+		if hideHeader {
+			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBody, altMap, false)
+		} else {
+			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
+		}
+		if !hideFooter && lst.nbp > 1 {
+			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d, size %s, used %d%%] =======",
+				apc.DisplayProvider(provider), lst.nb, lst.nbp, lst.nobj, cos.UnsignedB2S(lst.size, 2), lst.pct)
+			fmt.Fprintln(c.App.Writer, fcyan(foot))
+		}
 	}
 }
 

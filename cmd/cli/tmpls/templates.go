@@ -188,6 +188,12 @@ const (
 		"{{end}}"
 	ListBucketsTmpl = ListBucketsHeader + ListBucketsBody
 
+	ListBucketsHeaderNoSummary = "NAME\t PRESENT\n"
+	ListBucketsBodyNoSummary   = "{{range $k, $v := . }}" +
+		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.Present}}\n" +
+		"{{end}}"
+	ListBucketsTmplNoSummary = ListBucketsHeaderNoSummary + ListBucketsBodyNoSummary
+
 	// Bucket summary templates
 	BucketsSummariesFastTmpl = "NAME\t OBJECTS\t SIZE ON DISK\t USAGE(%)\n" + bucketsSummariesFastBody
 	bucketsSummariesFastBody = "{{range $k, $v := . }}" +
