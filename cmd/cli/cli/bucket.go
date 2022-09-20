@@ -1,5 +1,4 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
-// This file handles bucket operations.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
@@ -34,6 +33,19 @@ const (
 
 	fmtXactStarted     = "%s (%q => %q) ...\n"
 	fmtXactStatusCheck = "%s (%q => %q) is in progress.\nTo check the status, run: ais show job xaction %s %s\n"
+)
+
+type (
+	lsBckTally struct {
+		nb, nbp, pct int
+		nobj, size   uint64
+	}
+
+	entryFilter func(*cmn.BucketEntry) bool
+
+	objectListFilter struct {
+		predicates []entryFilter
+	}
 )
 
 // Creates new ais bucket
@@ -177,14 +189,10 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 	return
 }
 
-type lstally struct {
-	nb, nbp, pct int
-	nobj, size   uint64
-}
-
+// `ais ls`, `ais ls s3:` and similar
 func lsBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool /*filter*/) {
 	var (
-		lst      lstally
+		lst      lsBckTally
 		filtered = make(cmn.Bcks, 0, len(bcks))
 	)
 	for _, bck := range bcks {
@@ -598,38 +606,9 @@ func objPropsTemplate(c *cli.Context, props string) string {
 	return headSb.String() + bodySb.String()
 }
 
-type (
-	entryFilter func(*cmn.BucketEntry) bool
-
-	objectListFilter struct {
-		predicates []entryFilter
-	}
-)
-
-func (o *objectListFilter) addFilter(f entryFilter) {
-	o.predicates = append(o.predicates, f)
-}
-
-func (o *objectListFilter) matchesAll(obj *cmn.BucketEntry) bool {
-	// Check if object name matches *all* specified predicates
-	for _, predicate := range o.predicates {
-		if !predicate(obj) {
-			return false
-		}
-	}
-	return true
-}
-
-func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching, rest []cmn.BucketEntry) {
-	for _, obj := range entries {
-		if o.matchesAll(obj) {
-			matching = append(matching, *obj)
-		} else {
-			rest = append(rest, *obj)
-		}
-	}
-	return
-}
+//////////////////////
+// objectListFilter //
+//////////////////////
 
 func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	objFilter := &objectListFilter{}
@@ -664,4 +643,29 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	}
 
 	return objFilter, nil
+}
+
+func (o *objectListFilter) addFilter(f entryFilter) {
+	o.predicates = append(o.predicates, f)
+}
+
+func (o *objectListFilter) matchesAll(obj *cmn.BucketEntry) bool {
+	// Check if object name matches *all* specified predicates
+	for _, predicate := range o.predicates {
+		if !predicate(obj) {
+			return false
+		}
+	}
+	return true
+}
+
+func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching, rest []cmn.BucketEntry) {
+	for _, obj := range entries {
+		if o.matchesAll(obj) {
+			matching = append(matching, *obj)
+		} else {
+			rest = append(rest, *obj)
+		}
+	}
+	return
 }

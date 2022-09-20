@@ -96,17 +96,19 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketPro
 }
 
 // uses HEAD to obtain detailed info (compare with HeadBucket above)
-func GetBucketInfo(bp BaseParams, bck cmn.Bck) (p *cmn.BucketProps, info *cmn.BucketInfo, err error) {
+func GetBucketInfo(bp BaseParams, bck cmn.Bck, getSummary bool) (p *cmn.BucketProps, info *cmn.BucketInfo, err error) {
 	var (
 		resp *wrappedResp
 		path = apc.URLPathBuckets.Join(bck.Name)
 		q    = make(url.Values, 4)
 	)
 	q = bck.AddToQuery(q)
-	q.Set(apc.QparamGetBckInfo, "true")                        // more than just a HEAD
-	q.Set(apc.QparamDontAddBckMD, "true")                      // query (don't add)
-	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent)) // limit detailed info to those that are _present_
-
+	q.Set(apc.QparamDontAddBckMD, "true") // don't add md (ie., is a "pure" query)
+	if getSummary {
+		q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent)) // presence + bck summary
+	} else {
+		q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresentOmitProps)) // just presence
+	}
 	bp.Method = http.MethodHead
 	reqParams := AllocRp()
 	defer FreeRp(reqParams)

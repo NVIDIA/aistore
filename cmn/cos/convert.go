@@ -18,29 +18,6 @@ func IsParseBool(s string) bool {
 	return yes
 }
 
-func EqParseInt(s string, expected int) bool {
-	if s == "" {
-		return false
-	}
-	parsed, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return false
-	}
-	return expected == int(parsed)
-}
-
-func NeqParseInt(s string, unexpected ...int) bool {
-	i, err := strconv.ParseInt(s, 10, 64)
-	if err == nil {
-		for _, v := range unexpected {
-			if v == int(i) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 // ParseBool converts string to bool (case-insensitive):
 //
 //	y, yes, on -> true

@@ -7,7 +7,8 @@ package apc
 // URL Query "?name1=val1&name2=..."
 // User query params.
 const (
-	QparamWhat  = "what"  // "smap" | "bmd" | "config" | "stats" | "xaction" ...
+	QparamWhat = "what" // "smap" | "bmd" | "config" | "stats" | "xaction" ... (enum below)
+
 	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 	QparamUUID  = "uuid"  // xaction
 	QparamRegex = "regex" // dsort/downloader regex
@@ -29,13 +30,11 @@ const (
 	// This query parameter can be used to override the default behavior.
 	QparamDontAddBckMD = "dont_add_remote_bck_md"
 
-	// HEAD(bucket)+
-	QparamGetBckInfo = "get_bck_info"
-
-	// See Flt* enum below.
-	// NOTE: not to confuse "presence" (in a given cluster) with "existence" (anywhere).
-	// See also: ListObjsMsg flags, docs/providers.md (for terminology)
-	QparamFltPresence = "present_in_cluster"
+	// NOTE: "presence" in a given cluster shall not be be confused with "existence" (possibly, remote).
+	// See also:
+	// - Flt* enum below
+	// - ListObjsMsg flags, docs/providers.md (for terminology)
+	QparamFltPresence = "presence"
 
 	// Object related query params.
 	QparamAppendType   = "append_type"
@@ -74,10 +73,14 @@ const (
 const (
 	FltExists           = iota // exists, as in: (FltPresentAnywhere | FltExistsOutside)
 	FltPresent                 // bucket: is present; LOM: present and properly located
-	FltPresentOmitProps        // same as above with no props returned (establish presence = Yes/No, and that's it)
-	FltPresentAnywhere         // LOM's present anywhere in cluster (e.g., as a replica on mountpath)
+	FltPresentOmitProps        // establish presence = Yes/No, and that's it (same as above with no info returned)
+	FltPresentAnywhere         // presence anywhere/anyhow _in_ the cluster (as a replica, ec-slices, temp misplaced)
 	FltExistsOutside           // remote, e.g. cloud bucket
 )
+
+func IsFltPresent(v int) bool {
+	return v == FltPresent || v == FltPresentOmitProps || v == FltPresentAnywhere
+}
 
 // QparamAppendType enum.
 const (

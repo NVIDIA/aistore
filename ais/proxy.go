@@ -1453,47 +1453,54 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
+	var (
+		info   *cmn.BucketInfo
+		hdr    = w.Header()
+		apireq = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
+	)
 	defer apiReqFree(apireq)
+
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
 
-	// filter HEAD(bucket) request, i.e. limit to present-only (compare vs list-buckets)
-	present := cos.EqParseInt(apireq.dpq.fltPresence, apc.FltPresent)
-	debug.Assert(present || cos.NeqParseInt(apireq.dpq.fltPresence, apc.FltPresentOmitProps, apc.FltPresentAnywhere))
-
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD,
 		dpq: apireq.dpq, query: apireq.query}
+
+	// present-only [+ bucket summary]
+	if apireq.dpq.fltPresence != "" {
+		fltPresence, err := strconv.Atoi(apireq.dpq.fltPresence)
+		debug.AssertNoErr(err)
+		debug.Assert(fltPresence == 0 || apc.IsFltPresent(fltPresence))
+		bckArgs.fltPresence = fltPresence
+	}
+	bckArgs.headRemB = !apc.IsFltPresent(bckArgs.fltPresence) && shouldHeadRemB()
 	bckArgs.createAIS = false
-	bckArgs.headRemB = !present && shouldHeadRemB()
-	bckArgs.getInfo = cos.IsParseBool(apireq.dpq.getInfo)
 
 	bck, err := bckArgs.initAndTry(apireq.bck.Name)
 	if err != nil {
 		return
 	}
 
-	var (
-		hdr  = w.Header()
-		info *cmn.BucketInfo
-	)
-	if bckArgs.getInfo {
+	if apc.IsFltPresent(bckArgs.fltPresence) {
 		info = &cmn.BucketInfo{Present: false}
 	}
-	if bckArgs.present {
-		if bckArgs.getInfo { // get (extended) info - broadcast, collect, and summarize
+	if bckArgs.isPresent {
+		if apc.IsFltPresent(bckArgs.fltPresence) {
 			info.Present = true
-			if err := p.bsummDoWait(bck, info); err != nil {
-				p.writeErr(w, r, err)
-				return
+			if bckArgs.fltPresence != apc.FltPresentOmitProps {
+				// get runtime info aka "summary" (broadcast, collect, and summarize)
+				if err := p.bsummDoWait(bck, info); err != nil {
+					p.writeErr(w, r, err)
+					return
+				}
 			}
 		}
-		toHdr(bck, hdr, bckArgs.present, info)
+		toHdr(bck, hdr, bckArgs.isPresent, info)
 		return
 	}
-	// when present-only (via QparamFltPresence) is not
-	if present {
+	// when present-only (via QparamFltPresence) - is not
+	if apc.IsFltPresent(bckArgs.fltPresence) {
 		debug.Assert(bck.IsRemote())
 		toHdr(bck, hdr, false, info)
 		return
@@ -1842,13 +1849,20 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 }
 
 func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActionMsg, dpq *dpq) {
-	bmd := p.owner.bmd.get()
-	if qbck.IsAIS() || qbck.IsHDFS() || cos.EqParseInt(dpq.fltPresence, apc.FltPresent) {
+	var (
+		bmd     = p.owner.bmd.get()
+		present bool
+	)
+	if dpq.fltPresence != "" {
+		if v, err := strconv.Atoi(dpq.fltPresence); err == nil {
+			present = apc.IsFltPresent(v)
+		}
+	}
+	if qbck.IsAIS() || qbck.IsHDFS() || present {
 		bcks := bmd.Select(qbck)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}
-	debug.Assert(cos.NeqParseInt(dpq.fltPresence, apc.FltPresentOmitProps, apc.FltPresentAnywhere))
 
 	// the backend must be configured
 	if qbck.IsCloud() {

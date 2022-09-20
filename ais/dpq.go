@@ -27,7 +27,6 @@ type dpq struct {
 	owt                 string // object write transaction { OwtPut, ... }
 	fltPresence         string // QparamFltPresence
 	dontAddMD           string // QparamDontAddBckMD
-	getInfo             string // QparamGetBckInfo
 }
 
 var (
@@ -106,8 +105,7 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 			dpq.fltPresence = value
 		case apc.QparamDontAddBckMD:
 			dpq.dontAddMD = value
-		case apc.QparamGetBckInfo:
-			dpq.getInfo = value
+
 		case s3.QparamMptUploadID, s3.QparamMptUploads, s3.QparamMptPartNo:
 			// TODO: ignore for now
 		default:

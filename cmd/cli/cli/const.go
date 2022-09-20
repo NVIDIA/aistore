@@ -1,5 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
-// This file contains common constants and variables used in other files.
+//
+// This file contains common constants and global variables
+// (including all command-line options aka flags).
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
@@ -15,9 +17,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+// top-level commands (categories - nouns)
 const (
-	// Commands (top-level) - preferably categories (nouns)
-	commandAdvanced  = "advanced"
 	commandAuth      = "auth"
 	commandBucket    = "bucket"
 	commandObject    = "object"
@@ -25,12 +26,31 @@ const (
 	commandConfig    = "config"
 	commandMountpath = "mountpath"
 	commandJob       = "job"
-	commandShow      = "show"
 	commandSearch    = "search"
 	commandETL       = apc.ETL
 	commandSource    = "source"
-	commandLog       = "log"
-	commandRebalance = "rebalance"
+	commandAlias     = "alias"
+	commandStorage   = "storage"
+	commandArch      = "archive"
+)
+
+// top-level `show`
+const (
+	commandShow = "show"
+)
+
+// advanced command and subcommands
+const (
+	commandAdvanced  = "advanced"
+	commandGenShards = "gen-shards"
+	subcmdPreload    = "preload"
+	subcmdRmSmap     = "remove-from-smap"
+)
+
+// - 2nd level subcommands (mostly, verbs)
+// - show subcommands (`show <what>`)
+// - 3rd level subcommands
+const (
 	commandCat       = "cat"
 	commandConcat    = "concat"
 	commandCopy      = "cp"
@@ -41,23 +61,18 @@ const (
 	commandGet       = "get"
 	commandList      = "ls"
 	commandPromote   = "promote"
-	commandPut       = "put"
 	commandSetCustom = "set-custom"
+	commandPut       = "put"
 	commandRemove    = "rm"
 	commandRename    = "mv"
 	commandSet       = "set"
-	commandMirror    = "mirror"
 	commandStart     = apc.ActXactStart
 	commandStop      = apc.ActXactStop
-	commandWait      = "wait"
-	commandAlias     = "alias"
-	commandStorage   = "storage"
-	commandArch      = "archive"
 
-	commandGenShards = "gen-shards"
+	commandLog       = "log"
+	commandRebalance = "rebalance"
+	commandMirror    = "mirror"
 
-	// Common Subcommands
-	// NOTE: second level subcommands are preferably verbs
 	subcmdDsort      = dsort.DSortNameLowercase
 	subcmdSmap       = apc.GetWhatSmap
 	subcmdBMD        = apc.GetWhatBMD
@@ -83,7 +98,6 @@ const (
 	subcmdShutdown   = "shutdown"
 	subcmdAttach     = "attach"
 	subcmdDetach     = "detach"
-	subcmdRmSmap     = "remove-from-smap"
 
 	// Cluster subcommands
 	subcmdCluAttach = "remote-" + subcmdAttach
@@ -168,10 +182,7 @@ const (
 	subcmdAuthToken   = "token"
 	subcmdAuthConfig  = subcmdConfig
 
-	// Warm up subcommands
-	subcmdPreload = "preload"
-
-	// k8s subcommans
+	// K8s subcommans
 	subcmdK8s        = "kubectl"
 	subcmdK8sSvc     = "svc"
 	subcmdK8sCluster = commandCluster
@@ -181,7 +192,7 @@ const (
 	subcmdSpec = "spec"
 	subcmdCode = "code"
 
-	// CLI config subcommands
+	// config subcommands
 	subcmdCLI           = "cli"
 	subcmdCLIShow       = commandShow
 	subcmdCLISet        = subcmdSetProps
@@ -189,6 +200,14 @@ const (
 	subcmdCLIAliasRm    = commandRemove
 	subcmdCLIAliasSet   = subcmdCLISet
 	subcmdCLIAliasReset = subcmdResetProps
+)
+
+//
+// misc constants
+//
+
+const (
+	commandWait = "wait"
 
 	// Default values for long running operations
 	refreshRateDefault = time.Second
@@ -200,7 +219,7 @@ const scopeAll = "all"
 const (
 	cfgScopeAll       = scopeAll
 	cfgScopeLocal     = "local"
-	cfgScopeInherited = "inherited" // formerly, "cluster"
+	cfgScopeInherited = "inherited"
 )
 
 const sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"
@@ -278,15 +297,16 @@ const (
 	searchArgument = "KEYWORD [KEYWORD...]"
 )
 
-// Flags
+//
+// Command-line Options aka Flags
+//
+
 var (
-	// Global
 	noColorFlag = cli.BoolFlag{
 		Name:  "no-color",
 		Usage: "disable colored output",
 	}
 
-	// Common
 	objPropsFlag = cli.StringFlag{
 		Name:  "props",
 		Usage: "comma-separated list of object properties including name, size, version, copies, EC data and parity info, custom props (to include all properties, use '--props all')",
