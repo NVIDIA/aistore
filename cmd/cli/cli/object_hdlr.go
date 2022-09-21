@@ -329,11 +329,11 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 		time.Sleep(time.Second)
 		_, err = api.HeadObject(defaultAPIParams, bckTo, objName, apc.FltPresentOmitProps)
 		if err == nil {
-			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.String()+"/"+objName)
+			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.DisplayName()+"/"+objName)
 			return nil
 		}
 	}
-	fmt.Fprintf(c.App.Writer, "Creating archive %q ...\n", bckTo.String()+"/"+objName)
+	fmt.Fprintf(c.App.Writer, "Creating archive %q ...\n", bckTo.DisplayName()+"/"+objName)
 	return nil
 }
 
@@ -373,9 +373,10 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 		}
 		archPath := parseStrFlag(c, archpathFlag)
 		if archPath != "" {
-			fmt.Fprintf(c.App.Writer, "Add file %q to archive %s/%s as %s/%s\n", path, bck, objName, objName, archPath)
+			fmt.Fprintf(c.App.Writer, "Add file %q to archive %s/%s as %s/%s\n", path, bck.DisplayName(),
+				objName, objName, archPath)
 		} else {
-			fmt.Fprintf(c.App.Writer, "Put file %q to %s/%s\n", path, bck, objName)
+			fmt.Fprintf(c.App.Writer, "Put file %q to %s/%s\n", path, bck.DisplayName(), objName)
 		}
 		return nil
 	}

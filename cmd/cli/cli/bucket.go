@@ -68,7 +68,7 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 		fmt.Fprintf(c.App.Writer,
 			"%q created (see %s/blob/master/docs/bucket.md#default-bucket-properties)\n", bck, cmn.GitHubHome)
 	} else {
-		fmt.Fprintf(c.App.Writer, "%q created\n", bck)
+		fmt.Fprintf(c.App.Writer, "%q created\n", bck.DisplayName())
 	}
 	return
 }
@@ -86,7 +86,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 			}
 		}
 		if err = api.DestroyBucket(defaultAPIParams, bck); err == nil {
-			fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck)
+			fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck.DisplayName())
 			continue
 		}
 		if cmn.IsStatusNotFound(err) {
@@ -153,7 +153,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (er
 // Evict remote bucket
 func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	if flagIsSet(c, dryRunFlag) {
-		fmt.Fprintf(c.App.Writer, "EVICT: %q\n", bck)
+		fmt.Fprintf(c.App.Writer, "EVICT: %q\n", bck.DisplayName())
 		return
 	}
 	if err = ensureHasProvider(bck, c.Command.Name); err != nil {
@@ -162,7 +162,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = api.EvictRemoteBucket(defaultAPIParams, bck, flagIsSet(c, keepMDFlag)); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%q bucket evicted\n", bck)
+	fmt.Fprintf(c.App.Writer, "%q bucket evicted\n", bck.DisplayName())
 	return
 }
 
@@ -214,7 +214,7 @@ func lsBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn
 		props, info, err := api.GetBucketInfo(defaultAPIParams, bck, !noSummary /*getSummary*/)
 		if err != nil {
 			if httpErr, ok := err.(*cmn.ErrHTTP); ok {
-				fmt.Fprintf(c.App.Writer, "  %s, err: %s\n", bck, httpErr.Message)
+				fmt.Fprintf(c.App.Writer, "  %s, err: %s\n", bck.DisplayName(), httpErr.Message)
 			}
 			continue
 		}
@@ -545,7 +545,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	if xactID, err = api.ECEncodeBucket(defaultAPIParams, bck, data, parity); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %s, ", bck)
+	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %s, ", bck.DisplayName())
 	fmt.Fprintln(c.App.Writer, xactProgressMsg(xactID))
 	return
 }

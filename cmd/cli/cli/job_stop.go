@@ -80,7 +80,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	if bck.IsEmpty() {
 		fmt.Fprintf(c.App.Writer, "Stopped %s\n", sid)
 	} else {
-		fmt.Fprintf(c.App.Writer, "Stopped %s, bucket=%s\n", sid, bck)
+		fmt.Fprintf(c.App.Writer, "Stopped %s, bucket=%s\n", sid, bck.DisplayName())
 	}
 	return
 }

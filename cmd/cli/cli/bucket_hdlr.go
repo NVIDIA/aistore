@@ -541,11 +541,11 @@ func lruBucketHandler(c *cli.Context) (err error) {
 func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (err error) {
 	const fmts = "Bucket %q: LRU is already %s, nothing to do\n"
 	if toggle && p.LRU.Enabled {
-		fmt.Fprintf(c.App.Writer, fmts, bck, "enabled")
+		fmt.Fprintf(c.App.Writer, fmts, bck.DisplayName(), "enabled")
 		return
 	}
 	if !toggle && !p.LRU.Enabled {
-		fmt.Fprintf(c.App.Writer, fmts, bck, "disabled")
+		fmt.Fprintf(c.App.Writer, fmts, bck.DisplayName(), "disabled")
 		return
 	}
 	toggledProps, err := cmn.NewBucketPropsToUpdate(cos.SimpleKVs{"lru.enabled": strconv.FormatBool(toggle)})
@@ -595,10 +595,10 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, upd
 func displayPropsEqMsg(c *cli.Context, bck cmn.Bck) {
 	args := c.Args().Tail()
 	if len(args) == 1 && !isJSON(args[0]) {
-		fmt.Fprintf(c.App.Writer, "Bucket %q: property %q, nothing to do\n", bck, args[0])
+		fmt.Fprintf(c.App.Writer, "Bucket %q: property %q, nothing to do\n", bck.DisplayName(), args[0])
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Bucket %q already has the set props, nothing to do\n", bck)
+	fmt.Fprintf(c.App.Writer, "Bucket %q already has the same values of props, nothing to do\n", bck.DisplayName())
 }
 
 func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {
