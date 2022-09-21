@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -30,6 +31,13 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 		bck := (*cluster.Bck)(qbck)
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
+		// present-only
+		if dpq.fltPresence != "" {
+			fltPresence, err := strconv.Atoi(dpq.fltPresence)
+			debug.AssertNoErr(err)
+			debug.Assert(fltPresence == 0 || apc.IsFltPresent(fltPresence))
+			bckArgs.fltPresence = fltPresence
+		}
 		if _, err := bckArgs.initAndTry(qbck.Name); err != nil {
 			return
 		}
@@ -141,8 +149,8 @@ func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (bool /*all don
 	return numDone == len(results), nil
 }
 
-// TODO -- FIXME: add query param to wait so-much time
-func (p *proxy) bsummDoWait(bck *cluster.Bck, info *cmn.BucketInfo) error {
+// TODO: add user-assigned timeout (currently, max-keepalive hardcoded)
+func (p *proxy) bsummDoWait(bck *cluster.Bck, info *cmn.BckSumm) error {
 	var (
 		max   = cmn.Timeout.MaxKeepalive()
 		sleep = cos.ProbingFrequency(max)
@@ -162,7 +170,7 @@ func (p *proxy) bsummDoWait(bck *cluster.Bck, info *cmn.BucketInfo) error {
 		if summaries == nil {
 			continue
 		}
-		info.BckSumm = *summaries[0]
+		*info = *summaries[0]
 		return nil
 	}
 	glog.Warningf("%s: timed-out waiting for %s x-summary[%s]", p, bck, msg.UUID)

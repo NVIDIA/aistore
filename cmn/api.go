@@ -7,7 +7,10 @@ package cmn
 
 import (
 	"fmt"
+	"math"
+	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -15,22 +18,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// bucket information - runtime addendum to `BucketProps` (below) which are manageable/configurabe
-// - will include usage, capacity and other TBD statistics.
-// - is obtained via GetBucketInfo() API
-// - result delivered via apc.HdrBucketInfo header
-// (compare with BucketSummary)
-type BucketInfo struct {
-	BckSumm
-	Present bool `json:"present_in_cluster,omitempty"`
-}
-
-// bucket properties (compare w/ BucketInfo)
+// Bucket properties - manageable, user-configurable, and inheritable (from cluster config)
 type (
-	// BucketProps defines the bucket's configuration and includes user-configurable
-	// checksum, version, LRU, erasure-coding, and more.
+	// BucketProps includes per-bucket user-configurable checksum, version, LRU, erasure-coding,
+	// and more.
 	//
-	// At creation time, new bucket by default inherits its properties from the global configuration.
+	// At creation time, unless specified via api.CreateBucket, new bucket by default
+	// inherits its properties from the global configuration.
 	// * see api.CreateBucket for details
 	// * for all inheritable props, see DefaultProps below
 	//
@@ -114,6 +108,62 @@ type (
 		Provider *string `json:"provider"`
 	}
 )
+
+// Bucket summary (result) for a given bucket
+type (
+	BckSumm struct {
+		Bck
+		ObjCount uint64 `json:"obj_count,string"`
+		ObjSize  struct {
+			Min int64 `json:"obj_min_size"`
+			Avg int64 `json:"obj_avg_size"`
+			Max int64 `json:"obj_max_size"`
+		}
+		Size           uint64 `json:"size,string"` // TODO -- FIXME: several different sizes: on-disk, objects, ...
+		TotalDisksSize uint64 `json:"total_disks_size,string"`
+		UsedPct        uint64 `json:"used_pct"`
+		// presence, as in: apc.Flt*
+		Present bool `json:"present,omitempty"`
+	}
+	BckSummaries []*BckSumm
+)
+
+// Multi-object (list|range) operations
+type (
+	// List of object names _or_ a template specifying { Prefix, Regex, and/or Range }
+	SelectObjsMsg struct {
+		Template string   `json:"template"`
+		ObjNames []string `json:"objnames"`
+	}
+
+	// ArchiveMsg is used in CreateArchMultiObj operations; the message contains parameters
+	// for archiving mutiple (source) objects as one of the supported cos.ArchExtensions types
+	// at the specified (bucket) destination
+	ArchiveMsg struct {
+		ToBck       Bck    `json:"tobck"`
+		TxnUUID     string `json:"-"`
+		FromBckName string `json:"-"`
+		ArchName    string `json:"archname"` // must have one of the cos.ArchExtensions
+		Mime        string `json:"mime"`     // user-specified mime type takes precedence if defined
+		SelectObjsMsg
+		InclSrcBname          bool `json:"isbn"` // include source bucket name into the names of archived objects
+		AllowAppendToExisting bool `json:"aate"` // allow adding a list or a range of objects to an existing archive
+		ContinueOnError       bool `json:"coer"` // on err, keep running arc xaction in a any given multi-object transaction
+	}
+
+	//  Multi-object copy & transform (see also: TCBMsg)
+	TCObjsMsg struct {
+		ToBck Bck `json:"tobck"`
+		SelectObjsMsg
+		TxnUUID string `json:"-"`
+		apc.TCBMsg
+		ContinueOnError bool `json:"coer"` // ditto
+	}
+)
+
+/////////////////
+// BucketProps //
+/////////////////
 
 // By default, created buckets inherit their properties from the cluster (global) configuration.
 // Global configuration, in turn, is protected versioned, checksummed, and replicated across the entire cluster.
@@ -221,9 +271,9 @@ func (bp *BucketProps) Apply(propsToUpdate *BucketPropsToUpdate) {
 	debug.AssertNoErr(err)
 }
 
-/////////////////////////
-// BucketPropsToUpdate //
-/////////////////////////
+//
+// BucketPropsToUpdate
+//
 
 func NewBucketPropsToUpdate(nvs cos.SimpleKVs) (props *BucketPropsToUpdate, err error) {
 	props = &BucketPropsToUpdate{}
@@ -259,3 +309,76 @@ func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	}
 	return nil
 }
+
+//
+// bucket summary
+//
+
+// interface guard
+var _ sort.Interface = (*BckSummaries)(nil)
+
+func NewBckSumm(bck *Bck, totalDisksSize uint64) (bs *BckSumm) {
+	bs = &BckSumm{Bck: *bck, TotalDisksSize: totalDisksSize}
+	bs.ObjSize.Min = math.MaxInt64
+	return
+}
+
+func (s BckSummaries) Len() int           { return len(s) }
+func (s BckSummaries) Less(i, j int) bool { return s[i].Bck.Less(&s[j].Bck) }
+func (s BckSummaries) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+func (s BckSummaries) Aggregate(from *BckSumm) BckSummaries {
+	for _, to := range s {
+		if to.Bck.Equal(&from.Bck) {
+			aggr(from, to)
+			return s
+		}
+	}
+	s = append(s, from)
+	return s
+}
+
+func aggr(from, to *BckSumm) {
+	if from.ObjSize.Min < to.ObjSize.Min {
+		to.ObjSize.Min = from.ObjSize.Min
+	}
+	if from.ObjSize.Max > to.ObjSize.Max {
+		to.ObjSize.Max = from.ObjSize.Max
+	}
+	to.ObjCount += from.ObjCount
+	to.Size += from.Size
+}
+
+func (s BckSummaries) Finalize(dsize map[string]uint64, testingEnv bool) {
+	var totalDisksSize uint64
+	for _, tsiz := range dsize {
+		totalDisksSize += tsiz
+		if testingEnv {
+			break
+		}
+	}
+	for _, summ := range s {
+		if summ.ObjSize.Min == math.MaxInt64 {
+			summ.ObjSize.Min = 0 // alternatively, CLI to show `-`
+		}
+		if summ.ObjCount > 0 {
+			summ.ObjSize.Avg = int64(cos.DivRoundU64(summ.Size, summ.ObjCount))
+		}
+		summ.UsedPct = cos.DivRoundU64(summ.Size*100, totalDisksSize)
+	}
+}
+
+///////////////////
+// SelectObjsMsg //
+///////////////////
+
+// NOTE: to operate on an entire bucket, use empty SelectObjsMsg{}
+
+func (lrm *SelectObjsMsg) IsList() bool      { return len(lrm.ObjNames) > 0 }
+func (lrm *SelectObjsMsg) HasTemplate() bool { return lrm.Template != "" }
+
+////////////////
+// ArchiveMsg //
+////////////////
+
+func (msg *ArchiveMsg) FullName() string { return filepath.Join(msg.ToBck.Name, msg.ArchName) }

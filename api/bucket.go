@@ -95,8 +95,13 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketPro
 	return
 }
 
-// uses HEAD to obtain detailed info (compare with HeadBucket above)
-func GetBucketInfo(bp BaseParams, bck cmn.Bck, getSummary bool) (p *cmn.BucketProps, info *cmn.BucketInfo, err error) {
+// Bucket information - a runtime addendum to `BucketProps`.
+// Unlike `cmn.BucketProps` properties (which are user configurable), bucket runtime info:
+// - includes usage, capacity, other statistics
+// - is obtained via GetBucketInfo() API
+// - delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
+// The API utilizes HEAD method (compare with HeadBucket above)
+func GetBucketInfo(bp BaseParams, bck cmn.Bck, getSummary bool) (p *cmn.BucketProps, info *cmn.BckSumm, err error) {
 	var (
 		resp *wrappedResp
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -122,8 +127,8 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, getSummary bool) (p *cmn.BucketPr
 		p = &cmn.BucketProps{}
 		err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketProps)), p)
 		if err == nil {
-			info = &cmn.BucketInfo{}
-			err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketInfo)), info)
+			info = &cmn.BckSumm{}
+			err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketSumm)), info)
 		}
 		return
 	}
@@ -190,12 +195,17 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 	return bcks.Contains(qbck), nil
 }
 
-// GetBucketsSummaries returns bucket summaries for the specified backend provider
-// (and all bucket summaries for unspecified ("") provider).
-func GetBucketsSummaries(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BckSummMsg) (cmn.BckSummaries, error) {
+// GetBucketSummary returns bucket summaries for the specified `cmn.QueryBcks` query
+// (e.g., empty query corresponds to all buckets present in the cluster's BMD)
+func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BckSummMsg, fltPresence int) (cmn.BckSummaries, error) {
 	if msg == nil {
 		msg = &apc.BckSummMsg{}
 	}
+	q := make(url.Values, 4)
+	debug.Assert(fltPresence >= apc.FltExists && fltPresence <= apc.FltExistsOutside)
+	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
+	q = qbck.AddToQuery(q)
+
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	defer FreeRp(reqParams)
@@ -204,7 +214,7 @@ func GetBucketsSummaries(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BckSummMsg)
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(qbck.Name)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = qbck.AddToQuery(nil)
+		reqParams.Query = q
 	}
 	if err := reqParams.waitBsumm(msg, &summaries); err != nil {
 		return nil, err

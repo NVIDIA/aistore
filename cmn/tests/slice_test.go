@@ -41,11 +41,30 @@ func TestDiscardFirstEntries(t *testing.T) {
 	for _, tc := range testCases {
 		t.Logf("testcase %d/%d", len(tc.entries), tc.size)
 		original := append([]*cmn.BucketEntry(nil), tc.entries...)
-		entries := cmn.DiscardFirstEntries(tc.entries, tc.size)
+		entries := discardFirstEntries(tc.entries, tc.size)
 		expSize := cos.Max(0, len(original)-tc.size)
 		tassert.Errorf(t, len(entries) == expSize, "incorrect size. expected %d; got %d", expSize, len(entries))
 		if len(entries) > 0 {
-			tassert.Errorf(t, entries[0] == original[tc.size], "incorrect elements. expected %s, got %s", entries[0].Name, original[tc.size].Name)
+			tassert.Errorf(t, entries[0] == original[tc.size],
+				"incorrect elements. expected %s, got %s", entries[0].Name, original[tc.size].Name)
 		}
 	}
+}
+
+func discardFirstEntries(entries []*cmn.BucketEntry, n int) []*cmn.BucketEntry {
+	if n == 0 {
+		return entries
+	}
+	if n >= len(entries) {
+		return entries[:0]
+	}
+
+	toDiscard := cos.Min(len(entries), n)
+
+	copy(entries, entries[toDiscard:])
+	for i := len(entries) - toDiscard; i < len(entries); i++ {
+		entries[i] = nil
+	}
+
+	return entries[:len(entries)-toDiscard]
 }

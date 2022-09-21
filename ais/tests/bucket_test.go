@@ -198,11 +198,13 @@ func TestCreateRemoteBucket(t *testing.T) {
 		err = api.DestroyBucket(baseParams, hdfsBck)
 		tassert.CheckFatal(t, err)
 	} else {
+		exists, _ := tutils.BucketExists(nil, tutils.GetPrimaryURL(), bck)
 		tests := []struct {
-			bck   cmn.Bck
-			props *cmn.BucketPropsToUpdate
+			bck    cmn.Bck
+			props  *cmn.BucketPropsToUpdate
+			exists bool
 		}{
-			{bck: bck, props: nil},
+			{bck: bck, exists: exists},
 			{ // If cluster is not built with HDFS support, bucket creation should fail.
 				bck: cmn.Bck{Provider: apc.HDFS, Name: trand.String(10)},
 				props: &cmn.BucketPropsToUpdate{
@@ -211,14 +213,19 @@ func TestCreateRemoteBucket(t *testing.T) {
 					},
 				},
 			},
+			{bck: cmn.Bck{Provider: cliBck.Provider, Name: trand.String(10)}},
 		}
 		for _, test := range tests {
 			err := api.CreateBucket(baseParams, test.bck, test.props)
-			tassert.Fatalf(t, err != nil, "expected error")
 			herr := cmn.Err2HTTPErr(err)
 			tassert.Fatalf(t, herr != nil, "expected ErrHTTP")
-			tassert.Fatalf(t, herr.Status == http.StatusNotImplemented || strings.Contains(herr.Message, "support"),
-				"expecting 501 status or unsupported")
+			if test.exists {
+				tassert.Fatalf(t, strings.Contains(herr.Message, "already exists"),
+					"expecting \"already exists\", got %+v", herr)
+			} else {
+				tassert.Fatalf(t, herr.Status == http.StatusNotImplemented || strings.Contains(herr.Message, "support"),
+					"expecting 501 status or unsupported, got %+v", herr)
+			}
 		}
 	}
 }
@@ -3054,7 +3061,7 @@ func TestBucketListAndSummary(t *testing.T) {
 
 			if test.summary {
 				msg := &apc.BckSummMsg{Cached: test.cached, Fast: test.fast}
-				summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks(m.bck), msg)
+				summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(m.bck), msg, apc.FltExists)
 				tassert.CheckFatal(t, err)
 
 				if len(summaries) == 0 {

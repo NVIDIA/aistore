@@ -1242,6 +1242,12 @@ func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query 
 	if bck.IsRemote() {
 		rhdr, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
 		if err != nil {
+			if bck.IsCloud() {
+				statusCode = http.StatusNotImplemented
+				err = cmn.NewErrNotImpl("create", bck.Provider+"(cloud) bucket")
+			} else if !bck.IsRemoteAIS() {
+				err = cmn.NewErrUnsupp("create", bck.Provider+":// bucket")
+			}
 			p.writeErr(w, r, err, statusCode)
 			return
 		}
@@ -1456,7 +1462,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		info   *cmn.BucketInfo
+		info   *cmn.BckSumm
 		hdr    = w.Header()
 		apireq = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
 	)
@@ -1483,11 +1489,11 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if apc.IsFltPresent(bckArgs.fltPresence) {
-		info = &cmn.BucketInfo{Present: false}
+	if apc.IsFltPresent(bckArgs.fltPresence) { // is info(bck) request
+		info = &cmn.BckSumm{Present: false}
 	}
 	if bckArgs.isPresent {
-		if apc.IsFltPresent(bckArgs.fltPresence) {
+		if apc.IsFltPresent(bckArgs.fltPresence) { // ditto
 			info.Present = true
 			if bckArgs.fltPresence != apc.FltPresentOmitProps {
 				// get runtime info aka "summary" (broadcast, collect, and summarize)
@@ -1544,7 +1550,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	toHdr(bck, hdr, true /* created just now on the fly */, info)
 }
 
-func toHdr(bck *cluster.Bck, hdr http.Header, present bool, info *cmn.BucketInfo) {
+func toHdr(bck *cluster.Bck, hdr http.Header, present bool, info *cmn.BckSumm) {
 	if bck.Props == nil {
 		debug.Assert(!present)
 		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(&cmn.BucketProps{}))
@@ -1552,7 +1558,7 @@ func toHdr(bck *cluster.Bck, hdr http.Header, present bool, info *cmn.BucketInfo
 		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(bck.Props))
 	}
 	if info != nil {
-		hdr.Set(apc.HdrBucketInfo, cos.MustMarshalToString(info))
+		hdr.Set(apc.HdrBucketSumm, cos.MustMarshalToString(info))
 	}
 }
 

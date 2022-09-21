@@ -75,7 +75,7 @@ const (
 	FltPresent                 // bucket: is present; LOM: present and properly located
 	FltPresentOmitProps        // establish presence = Yes/No, and that's it (same as above with no info returned)
 	FltPresentAnywhere         // presence anywhere/anyhow _in_ the cluster (as a replica, ec-slices, temp misplaced)
-	FltExistsOutside           // remote, e.g. cloud bucket
+	FltExistsOutside           // outside cluster, e.g. cloud bucket
 )
 
 func IsFltPresent(v int) bool {
