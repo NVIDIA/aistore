@@ -42,9 +42,9 @@ type bckInitArgs struct {
 	fltPresence int  // (enum apc.Flt*)
 	skipBackend bool // initialize bucket via `bck.InitNoBackend`
 	createAIS   bool // create ais bucket on the fly
-	headRemB    bool // handle ErrRemoteBckNotFound to discover _remote_ bucket on the fly (and add to BMD)
+	noHeadRemB  bool // do not handle ErrRemoteBckNotFound by adding remote bucket on the fly
 	tryHeadRemB bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemB)
-	isPresent   bool // the bucket is present (in the cluster's BMD)
+	isPresent   bool // the bucket is confirmed to be present (in the cluster's BMD)
 }
 
 ////////////////
@@ -72,8 +72,6 @@ func freeInitBckArgs(a *bckInitArgs) {
 //
 // lookup and add buckets on the fly
 //
-
-func shouldHeadRemB() bool { return !cmn.Features.IsSet(feat.NoHeadRemB) }
 
 // args.init initializes bucket and checks access permissions.
 func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, err error) {
@@ -177,16 +175,22 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}
-	if cmn.IsErrRemoteBckNotFound(err) && !args.headRemB {
+	// remote
+	if cmn.IsErrRemoteBckNotFound(err) {
+		// filtered
 		if apc.IsFltPresent(args.fltPresence) {
 			err = nil
 			return
 		}
-		args.p.writeErrSilent(args.w, args.r, err, errCode)
-		return
+		// NOTE: when and if `feat.NoHeadRemB` (feature) is globally enabled
+		// use `api.CreateBucket`
+		// (as in: explicit user request vs implied on-the-fly creation/addition)
+		if cmn.Features.IsSet(feat.NoHeadRemB) || args.noHeadRemB {
+			args.p.writeErrSilent(args.w, args.r, err, errCode)
+			return
+		}
 	}
-
-	// create remote bucket on the fly (meaning, add - creation with respect to BMD that is)
+	// otherwise, try create remote bucket on the fly (ie., add to BMD)
 	bck, err = args.try()
 	return
 }

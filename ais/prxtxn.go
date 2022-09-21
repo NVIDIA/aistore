@@ -135,7 +135,7 @@ func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 // create-bucket: { check non-existence -- begin -- create locally -- metasync -- commit }
-func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHdr ...http.Header) error {
+func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHdr http.Header) error {
 	var (
 		bprops  *cmn.BucketProps
 		nlp     = bck.GetNameLockPair()
@@ -148,8 +148,8 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHdr ...
 
 	// validate & assign bprops
 	switch {
-	case len(remoteHdr) != 0 && len(remoteHdr[0]) > 0: // remote exists
-		remoteProps := defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr[0]})
+	case remoteHdr != nil: // remote exists
+		remoteProps := defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
 		if bprops == nil {
 			bprops = remoteProps
 		} else {

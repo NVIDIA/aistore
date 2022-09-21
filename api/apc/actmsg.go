@@ -15,12 +15,10 @@ import (
 // ActionMsg.Action
 // includes Xaction.Kind == ActionMsg.Action (when the action is asynchronous)
 const (
-	ActAddRemoteBck   = "add-remote-bck" // register (existing) remote bucket into AIS
-	ActCopyBck        = "copy-bck"
-	ActCreateBck      = "create-bck"
-	ActDecommission   = "decommission" // decommission all nodes in the cluster (cleanup system data)
-	ActDestroyBck     = "destroy-bck"  // destroy bucket data and metadata
+	ActCreateBck      = "create-bck"  // NOTE: compare w/ ActAddRemoteBck below
+	ActDestroyBck     = "destroy-bck" // destroy bucket data and metadata
 	ActSummaryBck     = "summary-bck"
+	ActCopyBck        = "copy-bck"
 	ActDownload       = "download"
 	ActECEncode       = "ec-encode" // erasure code a bucket
 	ActECGet          = "ec-get"    // erasure decode objects
@@ -65,9 +63,11 @@ const (
 	// Node maintenance & cluster membership (see the corresponding URL path words below)
 	ActStartMaintenance   = "start-maintenance"     // put into maintenance state
 	ActStopMaintenance    = "stop-maintenance"      // cancel maintenance state
-	ActDecommissionNode   = "decommission-node"     // start rebalance and, when done, remove node from Smap
 	ActShutdownNode       = "shutdown-node"         // shutdown node
 	ActCallbackRmFromSmap = "callback-rm-from-smap" // set by primary when requested (internal use only)
+	ActDecommissionNode   = "decommission-node"     // start rebalance and, when done, remove node from Smap
+
+	ActDecommission = "decommission" // decommission all nodes in the cluster (cleanup system data)
 
 	ActAdminJoinTarget = "admin-join-target"
 	ActSelfJoinTarget  = "self-join-target"
@@ -80,6 +80,11 @@ const (
 	ActListenToNotif     = "watch-xaction"
 	ActMergeOwnershipTbl = "ic-merge-own-tbl"
 	ActRegGlobalXaction  = "reg-global-xaction"
+)
+
+// internal - add (usually, on the fly) existing remote bucket to AIS BMD
+const (
+	ActAddRemoteBck = "add-remote-bck"
 )
 
 const (

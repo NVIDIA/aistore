@@ -30,7 +30,6 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 		bck := (*cluster.Bck)(qbck)
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
-		bckArgs.headRemB = shouldHeadRemB()
 		if _, err := bckArgs.initAndTry(qbck.Name); err != nil {
 			return
 		}

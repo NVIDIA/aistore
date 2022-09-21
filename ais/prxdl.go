@@ -277,7 +277,6 @@ func (p *proxy) validateStartDownloadRequest(w http.ResponseWriter, r *http.Requ
 	bck := cluster.CloneBck(&dlBase.Bck)
 	args := bckInitArgs{p: p, w: w, r: r, reqBody: body, bck: bck, perms: apc.AccessRW}
 	args.createAIS = true
-	args.headRemB = true
 	if _, err := args.initAndTry(bck.Name); err == nil {
 		ok = true
 	}
