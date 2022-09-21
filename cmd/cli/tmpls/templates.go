@@ -181,16 +181,16 @@ const (
 
 	ListBucketsHeader = "NAME\t PRESENT\t OBJECTS\t SIZE ON DISK\t USAGE(%)\n"
 	ListBucketsBody   = "{{range $k, $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.Present}}\t " +
-		"{{if (IsFalse $v.Info.Present)}}-{{else}}{{$v.Info.ObjCount}}{{end}}\t " +
-		"{{if (IsFalse $v.Info.Present)}}-{{else}}{{FormatBytesUns $v.Info.Size 2}}{{end}}\t " +
-		"{{if (IsFalse $v.Info.Present)}}-{{else}}{{$v.Info.UsedPct}}%{{end}}\n" +
+		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsPresent}}\t " +
+		"{{if (IsFalse $v.Info.IsPresent)}}-{{else}}{{$v.Info.ObjCount}}{{end}}\t " +
+		"{{if (IsFalse $v.Info.IsPresent)}}-{{else}}{{FormatBytesUns $v.Info.Size 2}}{{end}}\t " +
+		"{{if (IsFalse $v.Info.IsPresent)}}-{{else}}{{$v.Info.UsedPct}}%{{end}}\n" +
 		"{{end}}"
 	ListBucketsTmpl = ListBucketsHeader + ListBucketsBody
 
 	ListBucketsHeaderNoSummary = "NAME\t PRESENT\n"
 	ListBucketsBodyNoSummary   = "{{range $k, $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.Present}}\n" +
+		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsPresent}}\n" +
 		"{{end}}"
 	ListBucketsTmplNoSummary = ListBucketsHeaderNoSummary + ListBucketsBodyNoSummary
 

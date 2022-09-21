@@ -219,7 +219,7 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 			continue
 		}
 		lst.nb++
-		if !noSummary && info.Present {
+		if !noSummary && info.IsPresent {
 			lst.nbp++
 			lst.nobj += info.ObjCount
 			lst.size += info.Size
