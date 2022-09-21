@@ -439,12 +439,15 @@ var (
 		Name:  "cached",
 		Usage: "check if object from a remote bucket is present (ie., cached) in the cluster",
 	}
-	checkPresentFlag = cli.BoolFlag{Name: "present", Usage: checkCachedFlag.Usage}
-	listCachedFlag   = cli.BoolFlag{
+	checkPresentFlag  = cli.BoolFlag{Name: "present", Usage: checkCachedFlag.Usage}
+	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "list only those objects from a remote bucket that are present (ie., cached) in the cluster",
+		Usage: "list only cached (ie., stored in AIS) objects from a remote bucket",
 	}
-	listPresentFlag = cli.BoolFlag{Name: "present", Usage: listCachedFlag.Usage}
+	listBckPresentFlag = cli.BoolFlag{
+		Name:  "present",
+		Usage: "operate only on buckets that are present in the cluster's BMD",
+	}
 
 	// to anonymously list public-access Cloud buckets
 	listAnonymousFlag = cli.BoolFlag{

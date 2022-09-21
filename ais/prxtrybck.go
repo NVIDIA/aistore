@@ -39,11 +39,11 @@ type bckInitArgs struct {
 	perms   apc.AccessAttrs // apc.AceGET, apc.AcePATCH etc.
 
 	// flags
-	fltPresence int  // (enum apc.Flt*)
 	skipBackend bool // initialize bucket via `bck.InitNoBackend`
 	createAIS   bool // create ais bucket on the fly
-	noHeadRemB  bool // do not handle ErrRemoteBckNotFound by adding remote bucket on the fly
+	noHeadRemB  bool // do not handle `ErrRemoteBckNotFound` by adding remote bucket on the fly
 	tryHeadRemB bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemB)
+	noErrRemB   bool // do not return `ErrRemoteBckNotFound` - return nil instead
 	isPresent   bool // the bucket is confirmed to be present (in the cluster's BMD)
 }
 
@@ -177,8 +177,7 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 	}
 	// remote
 	if cmn.IsErrRemoteBckNotFound(err) {
-		// filtered
-		if apc.IsFltPresent(args.fltPresence) {
+		if args.noErrRemB {
 			err = nil
 			return
 		}

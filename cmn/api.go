@@ -122,8 +122,7 @@ type (
 		Size           uint64 `json:"size,string"` // TODO -- FIXME: several different sizes: on-disk, objects, ...
 		TotalDisksSize uint64 `json:"total_disks_size,string"`
 		UsedPct        uint64 `json:"used_pct"`
-		// presence, as in: apc.Flt*
-		Present bool `json:"present,omitempty"`
+		IsPresent      bool   `json:"present"` // in BMD
 	}
 	BckSummaries []*BckSumm
 )

@@ -34,9 +34,8 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 		// present-only
 		if dpq.fltPresence != "" {
 			fltPresence, err := strconv.Atoi(dpq.fltPresence)
-			debug.AssertNoErr(err)
-			debug.Assert(fltPresence == 0 || apc.IsFltPresent(fltPresence))
-			bckArgs.fltPresence = fltPresence
+			debug.Assert(err == nil && (fltPresence == 0 || apc.IsFltPresent(fltPresence)))
+			bckArgs.noHeadRemB = apc.IsFltPresent(fltPresence)
 		}
 		if _, err := bckArgs.initAndTry(qbck.Name); err != nil {
 			return

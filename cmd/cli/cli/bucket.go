@@ -183,14 +183,14 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		return
 	}
 	for _, provider := range selectProviders(bcks) {
-		lsBckTable(c, provider, bcks, filter)
+		listBckTable(c, provider, bcks, filter)
 		fmt.Fprintln(c.App.Writer)
 	}
 	return
 }
 
 // `ais ls`, `ais ls s3:` and similar
-func lsBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool /*filter*/) {
+func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool /*filter*/) {
 	var (
 		lst      lsBckTally
 		filtered = make(cmn.Bcks, 0, len(bcks))
@@ -265,7 +265,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if err != nil {
 		return err
 	}
-	if flagIsSet(c, listCachedFlag) || /*same*/ flagIsSet(c, listPresentFlag) {
+	if flagIsSet(c, listObjCachedFlag) || flagIsSet(c, listBckPresentFlag) { // TODO -- FIXME: cleanup
 		msg.SetFlag(apc.LsPresent)
 	}
 	if flagIsSet(c, listAnonymousFlag) {
@@ -375,10 +375,14 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	return printObjProps(c, objList.Entries, objectListFilter, msg.Props)
 }
 
-func getSummaries(qbck cmn.QueryBcks, fast, cached bool) (summaries cmn.BckSummaries, err error) {
+func getSummaries(qbck cmn.QueryBcks, fast, cachedObjs, presentBck bool) (summaries cmn.BckSummaries, err error) {
 	fDetails := func() (err error) {
-		msg := &apc.BckSummMsg{Cached: cached, Fast: fast}
-		summaries, err = api.GetBucketsSummaries(defaultAPIParams, qbck, msg)
+		msg := &apc.BckSummMsg{Cached: cachedObjs, Fast: fast}
+		fltPresence := apc.FltExists
+		if presentBck {
+			fltPresence = apc.FltPresent
+		}
+		summaries, err = api.GetBucketSummary(defaultAPIParams, qbck, msg, fltPresence)
 		return
 	}
 	err = cmn.WaitForFunc(fDetails, longCommandTime)
@@ -475,10 +479,10 @@ func showBucketProps(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	return printBckHeadTable(c, p, defProps, section)
+	return HeadBckTable(c, p, defProps, section)
 }
 
-func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section string) error {
+func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section string) error {
 	var (
 		defList []prop
 		colored = !flagIsSet(c, noColorFlag)

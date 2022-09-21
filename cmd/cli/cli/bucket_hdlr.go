@@ -59,8 +59,8 @@ var (
 		commandList: initLsOptions(),
 
 		subcmdSummary: {
-			listCachedFlag,
-			listPresentFlag,
+			listObjCachedFlag,
+			listBckPresentFlag,
 			fastFlag,
 			sizeInBytesFlag,
 			validateSummaryFlag,
@@ -200,8 +200,8 @@ func initLsOptions() []cli.Flag {
 		pagedFlag,
 		maxPagesFlag,
 		startAfterFlag,
-		listCachedFlag,  // applies to buckets as well (TODO: apc.Flt* terminology)
-		listPresentFlag, // ditto
+		listObjCachedFlag,
+		listBckPresentFlag,
 		listAnonymousFlag,
 		listArchFlag,
 		nameOnlyFlag,
@@ -311,7 +311,6 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 }
 
 func showBucketSummary(c *cli.Context) error {
-	fast := flagIsSet(c, fastFlag)
 	queryBcks, err := parseQueryBckURI(c, c.Args().First())
 	if err != nil {
 		return err
@@ -319,7 +318,10 @@ func showBucketSummary(c *cli.Context) error {
 	if err := updateLongRunParams(c); err != nil {
 		return err
 	}
-	summaries, err := getSummaries(queryBcks, fast, flagIsSet(c, listCachedFlag) || flagIsSet(c, listPresentFlag))
+
+	fast := flagIsSet(c, fastFlag)
+	summaries, err := getSummaries(queryBcks, fast,
+		flagIsSet(c, listObjCachedFlag), flagIsSet(c, listBckPresentFlag))
 	if err != nil {
 		return err
 	}
@@ -535,7 +537,7 @@ func lruBucketHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, disableFlag) {
 		return toggleLRU(c, bck, p, false)
 	}
-	return printBckHeadTable(c, p, defProps, "lru")
+	return HeadBckTable(c, p, defProps, "lru")
 }
 
 func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (err error) {
@@ -641,7 +643,7 @@ func listAnyHandler(c *cli.Context) error {
 		return showObjProps(c, bck, objName)
 	case bck.Name == "": // list buckets
 		fltPresence := apc.FltExists
-		if flagIsSet(c, listCachedFlag) || /*same*/ flagIsSet(c, listPresentFlag) {
+		if flagIsSet(c, listBckPresentFlag) {
 			fltPresence = apc.FltPresent
 		}
 		return listBuckets(c, cmn.QueryBcks(bck), fltPresence)

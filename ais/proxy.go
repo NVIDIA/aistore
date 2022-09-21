@@ -1462,9 +1462,10 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		info   *cmn.BckSumm
-		hdr    = w.Header()
-		apireq = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
+		info        *cmn.BckSumm
+		fltPresence int
+		hdr         = w.Header()
+		apireq      = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
 	)
 	defer apiReqFree(apireq)
 
@@ -1477,10 +1478,9 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	// present-only [+ bucket summary]
 	if apireq.dpq.fltPresence != "" {
-		fltPresence, err := strconv.Atoi(apireq.dpq.fltPresence)
-		debug.AssertNoErr(err)
+		fltPresence, _ = strconv.Atoi(apireq.dpq.fltPresence)
 		debug.Assert(fltPresence == 0 || apc.IsFltPresent(fltPresence))
-		bckArgs.fltPresence = fltPresence
+		bckArgs.noErrRemB = apc.IsFltPresent(fltPresence)
 	}
 	bckArgs.createAIS = false
 
@@ -1489,25 +1489,25 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if apc.IsFltPresent(bckArgs.fltPresence) { // is info(bck) request
-		info = &cmn.BckSumm{Present: false}
+	if apc.IsFltPresent(fltPresence) { // is info(bck) request
+		info = &cmn.BckSumm{IsPresent: false}
 	}
 	if bckArgs.isPresent {
-		if apc.IsFltPresent(bckArgs.fltPresence) { // ditto
-			info.Present = true
-			if bckArgs.fltPresence != apc.FltPresentOmitProps {
+		if apc.IsFltPresent(fltPresence) { // ditto
+			if fltPresence != apc.FltPresentOmitProps {
 				// get runtime info aka "summary" (broadcast, collect, and summarize)
 				if err := p.bsummDoWait(bck, info); err != nil {
 					p.writeErr(w, r, err)
 					return
 				}
 			}
+			info.IsPresent = true
 		}
-		toHdr(bck, hdr, bckArgs.isPresent, info)
+		toHdr(bck, hdr, true, info)
 		return
 	}
 	// when present-only (via QparamFltPresence) - is not
-	if apc.IsFltPresent(bckArgs.fltPresence) {
+	if apc.IsFltPresent(fltPresence) {
 		debug.Assert(bck.IsRemote())
 		toHdr(bck, hdr, false, info)
 		return
