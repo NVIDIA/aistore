@@ -604,10 +604,10 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.ListOb
 	if msg == nil {
 		tlog.Logf("LIST %s []\n", bck)
 	} else if msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "" {
-		tlog.Logf("LIST %s [cached: %t]\n", bck, msg.IsFlagSet(apc.LsPresent))
+		tlog.Logf("LIST %s [cached: %t]\n", bck, msg.IsFlagSet(apc.LsCached))
 	} else {
 		tlog.Logf("LIST %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
-			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsPresent), msg.ContinuationToken)
+			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsCached), msg.ContinuationToken)
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	resList, err := api.ListObjects(baseParams, bck, msg, 0)

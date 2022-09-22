@@ -313,7 +313,7 @@ const (
 )
 
 var (
-	// ObjectPropsMap matches BucketEntry field
+	// ObjectPropsMap matches ObjEntry field
 	ObjectPropsMap = map[string]string{
 		"name":       "{{FormatNameArch $obj.Name $obj.Flags}}",
 		"size":       "{{FormatBytesSig $obj.Size 2}}",
@@ -446,7 +446,7 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 	return total
 }
 
-func fmtObjStatus(obj *cmn.BucketEntry) string {
+func fmtObjStatus(obj *cmn.ObjEntry) string {
 	switch obj.Status() {
 	case apc.ObjStatusOK:
 		return "ok"
@@ -461,7 +461,7 @@ func fmtObjStatus(obj *cmn.BucketEntry) string {
 	}
 }
 
-func fmtObjIsCached(obj *cmn.BucketEntry) string {
+func fmtObjIsCached(obj *cmn.ObjEntry) string {
 	return FmtBool(obj.CheckExists())
 }
 

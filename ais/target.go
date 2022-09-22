@@ -665,7 +665,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
 		return
 	}
-	if !bck.IsAIS() && !msg.IsFlagSet(apc.LsPresent) {
+	if !bck.IsAIS() && !msg.IsFlagSet(apc.LsCached) {
 		maxCloudPageSize := t.Backend(bck).MaxPageSize()
 		if msg.PageSize > maxCloudPageSize {
 			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxCloudPageSize)

@@ -1184,11 +1184,11 @@ func TestAtimeRebalance(t *testing.T) {
 	msg := &apc.ListObjsMsg{TimeFormat: time.StampNano}
 	msg.AddProps(apc.GetPropsAtime, apc.GetPropsStatus)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	objNames := make(cos.SimpleKVs, 10)
-	for _, entry := range bucketList.Entries {
+	for _, entry := range lst.Entries {
 		objNames[entry.Name] = entry.Atime
 	}
 
@@ -1208,15 +1208,15 @@ func TestAtimeRebalance(t *testing.T) {
 
 	msg = &apc.ListObjsMsg{TimeFormat: time.StampNano}
 	msg.AddProps(apc.GetPropsAtime, apc.GetPropsStatus)
-	bucketListReb, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	lstReb, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
-	itemCount, itemCountOk := len(bucketListReb.Entries), 0
-	l := len(bucketList.Entries)
+	itemCount, itemCountOk := len(lstReb.Entries), 0
+	l := len(lst.Entries)
 	if itemCount != l {
-		t.Errorf("The number of objects mismatch: before %d, after %d", len(bucketList.Entries), itemCount)
+		t.Errorf("The number of objects mismatch: before %d, after %d", len(lst.Entries), itemCount)
 	}
-	for _, entry := range bucketListReb.Entries {
+	for _, entry := range lstReb.Entries {
 		atime, ok := objNames[entry.Name]
 		if !ok {
 			t.Errorf("Object %q not found", entry.Name)
@@ -1358,12 +1358,12 @@ func TestAtimePrefetch(t *testing.T) {
 
 	timeFormat := time.RFC3339Nano
 	msg := &apc.ListObjsMsg{Props: apc.GetPropsAtime, TimeFormat: timeFormat, Prefix: objPath}
-	bucketList, err := api.ListObjects(baseParams, bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	if len(bucketList.Entries) != numObjs {
-		t.Errorf("Number of objects mismatch: expected %d, found %d", numObjs, len(bucketList.Entries))
+	if len(lst.Entries) != numObjs {
+		t.Errorf("Number of objects mismatch: expected %d, found %d", numObjs, len(lst.Entries))
 	}
-	for _, entry := range bucketList.Entries {
+	for _, entry := range lst.Entries {
 		atime, err := time.Parse(timeFormat, entry.Atime)
 		tassert.CheckFatal(t, err)
 		if atime.After(timeAfterPut) {

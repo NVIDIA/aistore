@@ -15,7 +15,7 @@ import (
 const (
 	// Applies to buckets with remote backends (e.g., to optimize-out listing remotes)
 	// See related: Flt* enum
-	LsPresent = 1 << iota
+	LsCached = 1 << iota
 
 	LsMisplaced // include misplaced obj-s
 	LsDeleted   // include obj-s marked for deletion (TODO)
@@ -107,7 +107,7 @@ type (
 		Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
 		StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
 		ContinuationToken string `json:"continuation_token"` // BucketList.ContinuationToken
-		Flags             uint64 `json:"flags,string"`       // enum {LsPresent, ...} - see above
+		Flags             uint64 `json:"flags,string"`       // enum {LsCached, ...} - see above
 		PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 	}
 )

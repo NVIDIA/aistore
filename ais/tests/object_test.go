@@ -1492,7 +1492,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					)
 					if evict {
 						xactID, err = api.EvictRange(baseParams, b, test.rangeStr)
-						msg.Flags = apc.LsPresent
+						msg.Flags = apc.LsCached
 						kind = apc.ActEvictObjects
 					} else {
 						xactID, err = api.DeleteRange(baseParams, b, test.rangeStr)
@@ -1522,11 +1522,11 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 
 				msg := &apc.ListObjsMsg{Prefix: "test/"}
-				bckList, err := api.ListObjects(baseParams, b, msg, 0)
+				lst, err := api.ListObjects(baseParams, b, msg, 0)
 				tassert.CheckFatal(t, err)
 
 				tlog.Logf("Cleaning up remaining objects...\n")
-				for _, obj := range bckList.Entries {
+				for _, obj := range lst.Entries {
 					err := tutils.Del(proxyURL, b, obj.Name, nil, nil, true /*silent*/)
 					tassert.CheckError(t, err)
 				}

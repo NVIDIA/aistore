@@ -252,8 +252,8 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		}
 		var (
 			p       *cmn.BucketProps
-			objList *cmn.BucketList
-			obj     *cmn.BucketEntry
+			objList *cmn.ListObjects
+			obj     *cmn.ObjEntry
 		)
 		if p, err = headBucket(bck, true /* don't add */); err != nil {
 			return
@@ -265,7 +265,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 			return err
 		}
 
-		updateStats := func(obj *cmn.BucketEntry) {
+		updateStats := func(obj *cmn.ObjEntry) {
 			if obj == nil {
 				return
 			}

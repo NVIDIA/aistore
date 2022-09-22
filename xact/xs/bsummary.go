@@ -109,6 +109,9 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 			pq = &provider
 		}
 		r.summaries = make(cmn.BckSummaries, 0, 8)
+
+		// TODO: currently, summarizing only _present_ buckets (see apc.Flt* enum and commentary)
+
 		bmd.Range(pq, nil, func(bck *cluster.Bck) bool {
 			if err := r.runBck(bck, shouldListCB); err != nil {
 				glog.Error(err)
@@ -158,7 +161,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool)
 	}
 	lsmsg := &apc.ListObjsMsg{Props: apc.GetPropsSize}
 	if msg.Cached {
-		lsmsg.Flags = apc.LsPresent
+		lsmsg.Flags = apc.LsCached
 	}
 	for {
 		walk := objwalk.NewWalk(context.Background(), r.t, bck, lsmsg)

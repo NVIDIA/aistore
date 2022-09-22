@@ -74,9 +74,9 @@ func TestCopyObjRange(t *testing.T) {
 	api.WaitForXactionIdle(baseParams, wargs)
 
 	msg := &apc.ListObjsMsg{Prefix: "test/"}
-	bckList, err := api.ListObjects(baseParams, bckTo, msg, 0)
+	lst, err := api.ListObjects(baseParams, bckTo, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(bckList.Entries) == copyCnt, "%d != %d", copyCnt, len(bckList.Entries))
+	tassert.Fatalf(t, len(lst.Entries) == copyCnt, "%d != %d", copyCnt, len(lst.Entries))
 	for i := rangeStart; i < rangeStart+copyCnt; i++ {
 		objName := fmt.Sprintf("test/a-%04d", i)
 		err := api.DeleteObject(baseParams, bckTo, objName)

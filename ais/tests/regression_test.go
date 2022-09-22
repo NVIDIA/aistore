@@ -156,18 +156,18 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 
 	m.puts()
 
-	listObjectsMsg := &apc.ListObjsMsg{Props: apc.GetTargetURL, Flags: apc.LsPresent}
-	bucketList, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
+	listObjectsMsg := &apc.ListObjsMsg{Props: apc.GetTargetURL, Flags: apc.LsCached}
+	lst, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
-	if len(bucketList.Entries) < m.num {
-		t.Errorf("Bucket %s has %d objects, expected %d", m.bck, len(bucketList.Entries), m.num)
+	if len(lst.Entries) < m.num {
+		t.Errorf("Bucket %s has %d objects, expected %d", m.bck, len(lst.Entries), m.num)
 	}
 	j := 10
-	if len(bucketList.Entries) >= 200 {
+	if len(lst.Entries) >= 200 {
 		j = 100
 	}
-	for i, object := range bucketList.Entries {
+	for i, object := range lst.Entries {
 		if object.TargetURL == "" {
 			t.Errorf("Target URL in response is empty for object [%s]", object.Name)
 		}
@@ -203,14 +203,14 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	listObjectsMsg.Props = ""
-	bucketList, err = api.ListObjects(baseParams, bck, listObjectsMsg, 0)
+	lst, err = api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
-	if len(bucketList.Entries) != m.num {
-		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(bucketList.Entries))
+	if len(lst.Entries) != m.num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(lst.Entries))
 	}
 
-	for _, object := range bucketList.Entries {
+	for _, object := range lst.Entries {
 		if object.TargetURL != "" {
 			t.Fatalf("Target URL: %s returned when empty target URL expected\n", object.TargetURL)
 		}
@@ -377,10 +377,10 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 		t.Fatalf("renamed ais bucket %s does not exist after rename", rtd.renamedBck)
 	}
 
-	bckList, err := api.ListObjects(baseParams, rtd.renamedBck, &apc.ListObjsMsg{}, 0)
+	lst, err := api.ListObjects(baseParams, rtd.renamedBck, &apc.ListObjsMsg{}, 0)
 	tassert.CheckFatal(t, err)
 	unique := make(map[string]bool)
-	for _, e := range bckList.Entries {
+	for _, e := range lst.Entries {
 		base := filepath.Base(e.Name)
 		unique[base] = true
 	}
@@ -1012,15 +1012,15 @@ func TestStressDeleteRange(t *testing.T) {
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
 	msg := &apc.ListObjsMsg{Prefix: objNamePrefix}
-	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	if len(bckList.Entries) != expectedRemaining {
+	if len(lst.Entries) != expectedRemaining {
 		t.Errorf("Incorrect number of remaining objects: %d, expected: %d",
-			len(bckList.Entries), expectedRemaining)
+			len(lst.Entries), expectedRemaining)
 	}
 
 	objNames := make(map[string]*cmn.ObjEntry)
-	for _, entry := range bckList.Entries {
+	for _, entry := range lst.Entries {
 		objNames[entry.Name] = entry
 	}
 	for i := 0; i < numFiles; i++ {
@@ -1043,10 +1043,10 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 5. Check to see that all files have been deleted
 	msg = &apc.ListObjsMsg{Prefix: objNamePrefix}
-	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
+	lst, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	if len(bckList.Entries) != 0 {
-		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bckList.Entries))
+	if len(lst.Entries) != 0 {
+		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(lst.Entries))
 	}
 }
 

@@ -74,11 +74,11 @@ func TestMaintenanceListObjects(t *testing.T) {
 	// 1. Perform list-object and populate entries map
 	msg := &apc.ListObjsMsg{}
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsSize)
-	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d",
-		m.num, len(bckList.Entries))
-	for _, entry := range bckList.Entries {
+	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
+		m.num, len(lst.Entries))
+	for _, entry := range lst.Entries {
 		origEntries[entry.Name] = entry
 	}
 
@@ -109,11 +109,11 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// 3. Check if we can list all the objects
-	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
+	lst, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d",
-		m.num, len(bckList.Entries))
-	for _, entry := range bckList.Entries {
+	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
+		m.num, len(lst.Entries))
+	for _, entry := range lst.Entries {
 		origEntry, ok := origEntries[entry.Name]
 		tassert.Fatalf(t, ok, "object %s missing in original entries", entry.Name)
 		if entry.Checksum != origEntry.Checksum ||
@@ -210,10 +210,10 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 
 	tutils.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
 	msgList := &apc.ListObjsMsg{Prefix: objPath}
-	bucketList, err := api.ListObjects(baseParams, bck, msgList, 0)
+	lst, err := api.ListObjects(baseParams, bck, msgList, 0)
 	tassert.CheckError(t, err)
-	if bucketList != nil && len(bucketList.Entries) != objCount {
-		t.Errorf("Wrong number of objects: have %d, expected %d", len(bucketList.Entries), objCount)
+	if lst != nil && len(lst.Entries) != objCount {
+		t.Errorf("Wrong number of objects: have %d, expected %d", len(lst.Entries), objCount)
 	}
 
 	// FIXME: must use WaitForNodeToTerminate instead of sleep
@@ -248,10 +248,10 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tassert.CheckError(t, err)
 	}
 
-	bucketList, err = api.ListObjects(baseParams, bck, msgList, 0)
+	lst, err = api.ListObjects(baseParams, bck, msgList, 0)
 	tassert.CheckError(t, err)
-	if bucketList != nil && len(bucketList.Entries) != objCount {
-		t.Errorf("Invalid number of objects: %d, expected %d", len(bucketList.Entries), objCount)
+	if lst != nil && len(lst.Entries) != objCount {
+		t.Errorf("Invalid number of objects: %d, expected %d", len(lst.Entries), objCount)
 	}
 }
 
@@ -514,11 +514,11 @@ func TestShutdownListObjects(t *testing.T) {
 	// 1. Perform list-object and populate entries map.
 	msg := &apc.ListObjsMsg{}
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsCopies, apc.GetPropsSize)
-	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d",
-		m.num, len(bckList.Entries))
-	for _, entry := range bckList.Entries {
+	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
+		m.num, len(lst.Entries))
+	for _, entry := range lst.Entries {
 		origEntries[entry.Name] = entry
 	}
 
@@ -560,11 +560,11 @@ func TestShutdownListObjects(t *testing.T) {
 		return
 	}
 	tlog.Logln("Listing objects")
-	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
+	lst, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d",
-		m.num, len(bckList.Entries))
-	for _, entry := range bckList.Entries {
+	tassert.Errorf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
+		m.num, len(lst.Entries))
+	for _, entry := range lst.Entries {
 		origEntry, ok := origEntries[entry.Name]
 		tassert.Errorf(t, ok, "object %s missing in original entries", entry.Name)
 		if entry.Version != origEntry.Version ||

@@ -1327,10 +1327,10 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	// Vanilla HTTP buckets do not support remote listing.
 	// LsArchDir needs files locally to read archive content.
 	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
-		lsmsg.SetFlag(apc.LsPresent)
+		lsmsg.SetFlag(apc.LsCached)
 	}
 
-	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(apc.LsPresent)
+	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(apc.LsCached)
 	if lsmsg.UUID == "" {
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()

@@ -146,7 +146,7 @@ func (r *ObjListXact) Do(msg *apc.ListObjsMsg) *Resp {
 }
 
 func (r *ObjListXact) init() {
-	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(apc.LsPresent)
+	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(apc.LsCached)
 	if r.fromRemote {
 		return
 	}

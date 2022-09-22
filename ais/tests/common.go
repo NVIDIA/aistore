@@ -179,9 +179,9 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	)
 	tlog.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListObjects(baseParams, m.bck, &apc.ListObjsMsg{Props: apc.GetTargetURL}, 0)
+	lst, err := api.ListObjects(baseParams, m.bck, &apc.ListObjsMsg{Props: apc.GetTargetURL}, 0)
 	tassert.CheckFatal(t, err)
-	for _, obj := range bucketList.Entries {
+	for _, obj := range lst.Entries {
 		targetObjectCount[obj.TargetURL]++
 	}
 	if len(targetObjectCount) != m.originalTargetCount {
@@ -536,7 +536,7 @@ func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies in
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
-	msg := &apc.ListObjsMsg{Flags: apc.LsPresent, Prefix: m.prefix}
+	msg := &apc.ListObjsMsg{Flags: apc.LsCached, Prefix: m.prefix}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsAtime, apc.GetPropsStatus)
 	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)

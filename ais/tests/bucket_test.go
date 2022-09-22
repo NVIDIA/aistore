@@ -896,7 +896,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 		tlog.Logf("list remote objects with evict=%t\n", evict)
 		m.remotePuts(evict)
 
-		msg := &apc.ListObjsMsg{PageSize: 10, Flags: apc.LsPresent}
+		msg := &apc.ListObjsMsg{PageSize: 10, Flags: apc.LsCached}
 		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if evict {
@@ -976,7 +976,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 				num:      rand.Intn(5000) + 1000,
 				fileSize: 128,
 			}
-			msg = &apc.ListObjsMsg{Flags: apc.LsPresent}
+			msg = &apc.ListObjsMsg{Flags: apc.LsCached}
 		)
 
 		if !bck.IsAIS() {
@@ -1092,15 +1092,15 @@ func TestListObjects(t *testing.T) {
 				msg := &apc.ListObjsMsg{PageSize: test.pageSize}
 				msg.AddProps(apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsSize)
 				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck))
-				bckList, err := api.ListObjects(baseParams, bck, msg, 0)
+				lst, err := api.ListObjects(baseParams, bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
-				if bckList.ContinuationToken != "" {
-					t.Errorf("continuation token was unexpectedly set to: %s", bckList.ContinuationToken)
+				if lst.ContinuationToken != "" {
+					t.Errorf("continuation token was unexpectedly set to: %s", lst.ContinuationToken)
 				}
 
 				empty := &cmn.ObjEntry{}
-				for _, entry := range bckList.Entries {
+				for _, entry := range lst.Entries {
 					e, exists := objs.Load(entry.Name)
 					if !exists {
 						t.Errorf("failed to locate object %s in bucket %s", entry.Name, bck)
@@ -1127,17 +1127,17 @@ func TestListObjects(t *testing.T) {
 				// Check if names in the entries are unique.
 				objs.Range(func(key, _ any) bool {
 					objName := key.(string)
-					i := sort.Search(len(bckList.Entries), func(i int) bool {
-						return bckList.Entries[i].Name >= objName
+					i := sort.Search(len(lst.Entries), func(i int) bool {
+						return lst.Entries[i].Name >= objName
 					})
-					if i == len(bckList.Entries) || bckList.Entries[i].Name != objName {
+					if i == len(lst.Entries) || lst.Entries[i].Name != objName {
 						t.Errorf("object %s was not found in the result of bucket listing", objName)
 					}
 					return true
 				})
 
-				if len(bckList.Entries) != totalObjects {
-					t.Fatalf("actual objects %d, expected: %d", len(bckList.Entries), totalObjects)
+				if len(lst.Entries) != totalObjects {
+					t.Fatalf("actual objects %d, expected: %d", len(lst.Entries), totalObjects)
 				}
 
 				// Check listing bucket with predefined prefix.
@@ -1148,17 +1148,17 @@ func TestListObjects(t *testing.T) {
 					msg := &apc.ListObjsMsg{
 						Prefix: prefix,
 					}
-					bckList, err = api.ListObjects(baseParams, bck, msg, 0)
+					lst, err = api.ListObjects(baseParams, bck, msg, 0)
 					tassert.CheckFatal(t, err)
 
-					if expectedObjCount != len(bckList.Entries) {
+					if expectedObjCount != len(lst.Entries) {
 						t.Errorf(
 							"(prefix: %s), actual objects %d, expected: %d",
-							prefix, len(bckList.Entries), expectedObjCount,
+							prefix, len(lst.Entries), expectedObjCount,
 						)
 					}
 
-					for _, entry := range bckList.Entries {
+					for _, entry := range lst.Entries {
 						if !strings.HasPrefix(entry.Name, prefix) {
 							t.Errorf("object %q does not have expected prefix: %q", entry.Name, prefix)
 						}
@@ -1201,9 +1201,9 @@ func TestListObjectsPrefix(t *testing.T) {
 				customPage = bckProp.Provider != apc.Azure
 
 				tlog.Logf("Cleaning up the remote bucket %s\n", bck)
-				bckList, err := api.ListObjects(baseParams, bck, nil, 0)
+				lst, err := api.ListObjects(baseParams, bck, nil, 0)
 				tassert.CheckFatal(t, err)
-				for _, entry := range bckList.Entries {
+				for _, entry := range lst.Entries {
 					err := tutils.Del(proxyURL, bck, entry.Name, nil, nil, false /*silent*/)
 					tassert.CheckFatal(t, err)
 				}
@@ -1293,13 +1293,13 @@ func TestListObjectsPrefix(t *testing.T) {
 						bck, msg.Prefix, msg.PageSize,
 					)
 
-					bckList, err := api.ListObjects(baseParams, bck, msg, test.limit)
+					lst, err := api.ListObjects(baseParams, bck, msg, test.limit)
 					tassert.CheckFatal(t, err)
 
-					tlog.Logf("list_objects output: %d objects\n", len(bckList.Entries))
+					tlog.Logf("list_objects output: %d objects\n", len(lst.Entries))
 
-					if len(bckList.Entries) != test.expected {
-						t.Errorf("returned %d objects instead of %d", len(bckList.Entries), test.expected)
+					if len(lst.Entries) != test.expected {
+						t.Errorf("returned %d objects instead of %d", len(lst.Entries), test.expected)
 					}
 				})
 			}
@@ -1395,12 +1395,12 @@ func TestListObjectsWithRebalance(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < 15; i++ {
 			tlog.Logf("listing all objects, iter: %d\n", i)
-			bckList, err := api.ListObjects(baseParams, m.bck, nil, 0)
+			lst, err := api.ListObjects(baseParams, m.bck, nil, 0)
 			tassert.CheckFatal(t, err)
-			if bckList.Flags == 0 {
-				tassert.Errorf(t, len(bckList.Entries) == m.num, "entries mismatch (%d vs %d)", len(bckList.Entries), m.num)
-			} else if len(bckList.Entries) != m.num {
-				tlog.Logf("List objects while rebalancing: %d vs %d\n", len(bckList.Entries), m.num)
+			if lst.Flags == 0 {
+				tassert.Errorf(t, len(lst.Entries) == m.num, "entries mismatch (%d vs %d)", len(lst.Entries), m.num)
+			} else if len(lst.Entries) != m.num {
+				tlog.Logf("List objects while rebalancing: %d vs %d\n", len(lst.Entries), m.num)
 			}
 
 			time.Sleep(time.Second)
@@ -2323,7 +2323,7 @@ func TestCopyBucket(t *testing.T) {
 				msg := &apc.ListObjsMsg{}
 				msg.AddProps(apc.GetPropsVersion)
 				if test.dstRemote {
-					msg.Flags = apc.LsPresent
+					msg.Flags = apc.LsCached
 				}
 				dstBckList, err := api.ListObjects(baseParams, dstm.bck, msg, 0)
 				tassert.CheckFatal(t, err)
@@ -2715,7 +2715,7 @@ func TestBackendBucket(t *testing.T) {
 	)
 
 	// Check if cached listing works correctly.
-	cacheMsg := &apc.ListObjsMsg{Flags: apc.LsPresent, Prefix: m.prefix}
+	cacheMsg := &apc.ListObjsMsg{Flags: apc.LsCached, Prefix: m.prefix}
 	aisObjList, err = api.ListObjects(baseParams, aisBck, cacheMsg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
@@ -3079,7 +3079,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			} else {
 				msg := &apc.ListObjsMsg{}
 				if test.cached {
-					msg.Flags = apc.LsPresent
+					msg.Flags = apc.LsCached
 				}
 				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 				tassert.CheckFatal(t, err)

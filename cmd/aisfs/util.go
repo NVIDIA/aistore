@@ -101,7 +101,7 @@ func tryAccessBucket(url string, bck cmn.Bck) bool {
 		URL:    url,
 	}
 
-	_, err := api.HeadBucket(baseParams, bck)
+	_, err := api.HeadBucket(baseParams, bck, false /*don't add*/)
 	return err == nil
 }
 

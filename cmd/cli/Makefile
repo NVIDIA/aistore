@@ -11,3 +11,17 @@ lint:
 	@echo "Running lint cmd/cli..."
 	@golangci-lint run --config ../../.golangci.yml `go list -f {{.Dir}} ./...`
 
+#
+# go modules
+#
+.PHONY: mod mod-clean mod-tidy
+
+mod: mod-clean mod-tidy
+
+# cleanup go-mod cache
+mod-clean:
+	go clean --modcache
+
+# in particular, remove unused
+mod-tidy:
+	go mod tidy

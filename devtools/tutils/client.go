@@ -120,7 +120,7 @@ func PutObject(t *testing.T, bck cmn.Bck, objName string, reader readers.Reader)
 func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint) ([]string, error) {
 	var (
 		baseParams = BaseAPIParams(proxyURL)
-		msg        = &apc.ListObjsMsg{Flags: apc.LsPresent, Prefix: prefix}
+		msg        = &apc.ListObjsMsg{Flags: apc.LsCached, Prefix: prefix}
 	)
 
 	data, err := api.ListObjects(baseParams, bck, msg, objectCountLimit)

@@ -41,7 +41,7 @@ type (
 		nobj, size   uint64
 	}
 
-	entryFilter func(*cmn.BucketEntry) bool
+	entryFilter func(*cmn.ObjEntry) bool
 
 	objectListFilter struct {
 		predicates []entryFilter
@@ -265,7 +265,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if err != nil {
 		return err
 	}
-	if flagIsSet(c, listObjCachedFlag) || flagIsSet(c, listBckPresentFlag) { // TODO -- FIXME: cleanup
+	if flagIsSet(c, listObjCachedFlag) {
 		msg.SetFlag(apc.LsPresent)
 	}
 	if flagIsSet(c, listAnonymousFlag) {
@@ -327,7 +327,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 
 			// print exact number of objects if it is `limit`ed: in case of
 			// limit > page size, the last page is printed partially
-			var toPrint []*cmn.BucketEntry
+			var toPrint []*cmn.ObjEntry
 			if limit > 0 && toShow < len(objList.Entries) {
 				toPrint = objList.Entries[:toShow]
 			} else {
@@ -575,7 +575,7 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 	return bcks[0], bcks[1], nil
 }
 
-func printObjProps(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string) error {
+func printObjProps(c *cli.Context, entries []*cmn.ObjEntry, objectFilter *objectListFilter, props string) error {
 	var (
 		altMap         template.FuncMap
 		tmpl           = objPropsTemplate(c, props)
@@ -633,7 +633,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 
 	if !flagIsSet(c, allItemsFlag) {
 		// Filter out files with status different than OK
-		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return obj.IsStatusOK() })
+		objFilter.addFilter(func(obj *cmn.ObjEntry) bool { return obj.IsStatusOK() })
 	}
 
 	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {
@@ -642,7 +642,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 			return nil, err
 		}
 
-		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return regex.MatchString(obj.Name) })
+		objFilter.addFilter(func(obj *cmn.ObjEntry) bool { return regex.MatchString(obj.Name) })
 	}
 
 	if bashTemplate := parseStrFlag(c, templateFlag); bashTemplate != "" {
@@ -657,7 +657,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 		for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
 			matchingObjectNames[objName] = struct{}{}
 		}
-		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { _, ok := matchingObjectNames[obj.Name]; return ok })
+		objFilter.addFilter(func(obj *cmn.ObjEntry) bool { _, ok := matchingObjectNames[obj.Name]; return ok })
 	}
 
 	return objFilter, nil
@@ -667,7 +667,7 @@ func (o *objectListFilter) addFilter(f entryFilter) {
 	o.predicates = append(o.predicates, f)
 }
 
-func (o *objectListFilter) matchesAll(obj *cmn.BucketEntry) bool {
+func (o *objectListFilter) matchesAll(obj *cmn.ObjEntry) bool {
 	// Check if object name matches *all* specified predicates
 	for _, predicate := range o.predicates {
 		if !predicate(obj) {
@@ -677,7 +677,7 @@ func (o *objectListFilter) matchesAll(obj *cmn.BucketEntry) bool {
 	return true
 }
 
-func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching, rest []cmn.BucketEntry) {
+func (o *objectListFilter) filter(entries []*cmn.ObjEntry) (matching, rest []cmn.ObjEntry) {
 	for _, obj := range entries {
 		if o.matchesAll(obj) {
 			matching = append(matching, *obj)

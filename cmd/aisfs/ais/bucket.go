@@ -31,7 +31,7 @@ type (
 
 func NewBucket(name string, apiParams api.BaseParams) (bck Bucket, err error) {
 	b := cmn.Bck{Name: name}
-	b.Props, err = api.HeadBucket(apiParams, b)
+	b.Props, err = api.HeadBucket(apiParams, b, false /*don't add*/)
 	if err != nil {
 		return &bucketAPI{bck: b, apiParams: apiParams}, err
 	}
@@ -43,7 +43,7 @@ func (bck *bucketAPI) Bck() cmn.Bck              { return bck.bck }
 func (bck *bucketAPI) APIParams() api.BaseParams { return bck.apiParams }
 
 func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err error) {
-	objProps, err := api.HeadObject(bck.apiParams, bck.Bck(), objName)
+	objProps, err := api.HeadObject(bck.apiParams, bck.Bck(), objName, 0 /*fltPresence*/)
 	if err != nil {
 		if httpErr := cmn.Err2HTTPErr(err); httpErr != nil && httpErr.Status == http.StatusNotFound {
 			return nil, false, nil
