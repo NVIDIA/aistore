@@ -10,23 +10,15 @@ from aistore import Client
 client = Client("http://192.168.49.2:8080")
 
 
-def before(context):
-    context["before"] = hashlib.md5()
-    return context
-
-
-def transform(input_bytes, context):
-    context["before"].update(input_bytes)
-
-
-def after(context):
-    return context["before"].hexdigest().encode()
+def transform(reader, writer):
+    checksum = hashlib.md5()
+    for b in reader:
+        checksum.update(b)
+    writer.write(checksum.hexdigest().encode())
 
 
 client.etl().init_code(
     transform=transform,
-    before=before,
-    after=after,
     etl_id="etl-stream3",
     chunk_size=32768,
 )

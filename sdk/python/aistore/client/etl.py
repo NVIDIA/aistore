@@ -69,8 +69,6 @@ class Etl:
         self,
         transform: Callable,
         etl_id: str,
-        before: Callable = None,
-        after: Callable = None,
         dependencies: List[str] = None,
         runtime: str = "python3.8v2",
         communication_type: str = "hpush",
@@ -83,9 +81,6 @@ class Etl:
         Args:
             transform (Callable): Transform function of the ETL
             etl_id (str): Id of new ETL
-            before (Callable): Code function to be executed before transform function, will initialize and return objects used in transform function
-            after (Callable): Code function to be executed after transform function, will return results
-            dependencies (List[str]): [optional] List of the necessary dependencies with version (eg. aistore>1.0.0)
             runtime (str): [optional, default="python3.8v2"] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2] (see etl/runtime/all.go)
             communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev, hpush, io)
             timeout (str): [optional, default="5m"] Timeout of the ETL (eg. 5m for 5 minutes)
@@ -108,38 +103,14 @@ class Etl:
             "funcs": functions,
         }
 
-        if before:
-            before = base64.b64encode(cloudpickle.dumps(before)).decode("utf-8")
-            functions["before"] = "before"
-            BEFORE_EXISTS = True
-        else:
-            BEFORE_EXISTS = False
-
-        if after:
-            after = base64.b64encode(cloudpickle.dumps(after)).decode("utf-8")
-            functions["after"] = "after"
-            AFTER_EXISTS = True
-        else:
-            AFTER_EXISTS = False
-
         if chunk_size:
             action["chunk_size"] = chunk_size
 
         # code
         transform = base64.b64encode(cloudpickle.dumps(transform)).decode("utf-8")
 
-        before_context = (
-            f"before = pickle.loads(base64.b64decode('{before}'))"
-            if BEFORE_EXISTS
-            else ""
-        )
-        after_context = (
-            f"after = pickle.loads(base64.b64decode('{after}'))" if AFTER_EXISTS else ""
-        )
         io_comm_context = "transform()" if communication_type == "io" else ""
-        template = CODE_TEMPLATE.format(
-            before_context, transform, after_context, io_comm_context
-        ).encode("utf-8")
+        template = CODE_TEMPLATE.format(transform, io_comm_context).encode("utf-8")
         action["code"] = base64.b64encode(template).decode("utf-8")
 
         # dependencies

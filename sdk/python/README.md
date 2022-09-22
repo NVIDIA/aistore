@@ -8,7 +8,7 @@ Note that only Python 3.x (version 3.6 or later) is currently supported.
 
 
 ## Installation
- 
+
 
 ### Install as a Package
 
@@ -85,9 +85,9 @@ client.bucket("my-ais-bucket").object("my-new-object").put("path-to-object")
 
 > If you are using AIS buckets, you can simply omit the provider argument (defaults to ProviderAIS) when instantiating a bucket object (`client.bucket("my-ais-bucket").create()` is equivalent to `client.bucket("my-ais-bucket", provider="ais").create()`).
 
-**External Cloud Storage Buckets**  
+**External Cloud Storage Buckets**
 
-AIS supports a number of different [backend providers](https://aiatscale.org/docs/providers) or, simply, backends. 
+AIS supports a number of different [backend providers](https://aiatscale.org/docs/providers) or, simply, backends.
 
 > For exact definitions and related capabilities, please see [terminology](https://aiatscale.org//docs/overview#terminology).
 
@@ -141,29 +141,6 @@ def transform(input_bytes):
 client.etl().init_code(transform=transform, etl_id="etl-code")
 ```
 
-Additionally, we can provide `before` and/or `after` code functions to the method `init_code`. The `before` code function executes before the transform function and will return objects to be used in the transform function. The `after` code function executes after the transform function and is applied to the results of the transform function.
-
-The following is functionally identical to the code shown above:
-
-```python
-def before(context):
-    context["before"] = hashlib.md5()
-
-def transform(input_bytes, context):
-    context["before"].update(input_bytes)
-
-def after(context):
-    return context["before"].hexdigest().encode()
-
-self.client.etl().init_code(
-    transform=transform,
-    before=before,
-    after=after,
-    etl_id="etl-code-alt",
-    chunk_size=32768,
-        )
-```
-
 We initialize another ETL w/ [spec](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#init-spec-request):
 
 ```python
@@ -215,7 +192,7 @@ client.bucket("bucket-demo").transform(etl_id="etl-spec", to_bck="bucket-transfo
 We can stop the ETLs if desired with method `stop()`:
 
 ```python
-# Stop ETL 
+# Stop ETL
 client.etl().stop(etl_id="etl-code")
 client.etl().stop(etl_id="etl-spec")
 

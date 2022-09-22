@@ -48,8 +48,6 @@ CODE_TEMPLATE = """
 import pickle
 import base64
 
-{}
 transform = pickle.loads(base64.b64decode('{}'))
-{}
 {}
 """

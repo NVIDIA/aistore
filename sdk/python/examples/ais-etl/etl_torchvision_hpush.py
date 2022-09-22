@@ -17,26 +17,19 @@ client = Client("http://192.168.49.2:8080")
 # if you want to convert it to tensor, return it in "bytes-like" object
 
 
-def before(context):
-    context["before"] = transforms.Compose(
+def apply_image_transforms(reader, writer):
+    transform = transforms.Compose(
         [transforms.Resize(256), transforms.CenterCrop(224), transforms.PILToTensor()]
     )
-    return context
+    for b in reader:
+        buffer = io.BytesIO()
+        torch.save(transform(Image.open(io.BytesIO(b))), buffer)
+        buffer.seek(0)
+        writer.write(buffer.read())
 
-
-def apply_image_transforms(input_bytes, context):
-    transform = context["before"]
-    buffer = io.BytesIO()
-    torch.save(transform(Image.open(io.BytesIO(input_bytes))), buffer)
-    buffer.seek(0)
-    return buffer.read()
-
-
-# no after()
 
 # initialize ETL
 client.etl().init_code(
-    before=before,
     transform=apply_image_transforms,
     etl_id="etl-torchvision",
     dependencies=["Pillow", "torchvision"],

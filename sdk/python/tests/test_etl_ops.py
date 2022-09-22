@@ -28,8 +28,12 @@ class TestETLOps(unittest.TestCase):
 
         self.client.bucket(bck_name=self.bck_name).create()
         self.obj_name = "temp-obj1.jpg"
+        self.obj_size = 128
         self.content = create_and_put_object(
-            client=self.client, bck_name=self.bck_name, obj_name=self.obj_name
+            client=self.client,
+            bck_name=self.bck_name,
+            obj_name=self.obj_name,
+            obj_size=self.obj_size,
         )
 
         self.current_etl_count = len(self.client.etl().list())
@@ -262,18 +266,18 @@ class TestETLOps(unittest.TestCase):
         md5.update(self.content)
         self.assertEqual(obj, md5.hexdigest().encode())
 
-    @unittest.skip("to be fixed with new ETL streaming implementation")
     def test_etl_api_xor(self):
-        def before(context):
-            context["key"] = b"AISTORE"
-
-        def transform(input_bytes, context):
-            return bytes(
-                [_a ^ _b for _a, _b in zip(input_bytes, cycle(context["key"]))]
-            )
+        def transform(reader, writer):
+            checksum = hashlib.md5()
+            key = b"AISTORE"
+            for b in reader:
+                out = bytes([_a ^ _b for _a, _b in zip(b, cycle(key))])
+                writer.write(out)
+                checksum.update(out)
+            writer.write(checksum.hexdigest().encode())
 
         self.client.etl().init_code(
-            transform=transform, before=before, etl_id="etl-xor1"
+            transform=transform, etl_id="etl-xor1", chunk_size=32
         )
         transformed_obj = (
             self.client.bucket(self.bck_name)
@@ -281,8 +285,9 @@ class TestETLOps(unittest.TestCase):
             .get(etl_id="etl-xor1")
             .read_all()
         )
-
-        self.assertEqual(transform(transformed_obj, {"key": b"AISTORE"}), self.content)
+        data, checksum = transformed_obj[:-32], transformed_obj[-32:]
+        computed_checksum = hashlib.md5(data).hexdigest().encode()
+        self.assertEqual(checksum, computed_checksum)
 
 
 if __name__ == "__main__":
