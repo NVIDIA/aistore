@@ -64,7 +64,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 		}
 		proxyURL    = tutils.RandomProxyURL(t)
 		baseParams  = tutils.BaseAPIParams(proxyURL)
-		origEntries = make(map[string]*cmn.BucketEntry, 1500)
+		origEntries = make(map[string]*cmn.ObjEntry, 1500)
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -503,7 +503,7 @@ func TestShutdownListObjects(t *testing.T) {
 		}
 		proxyURL    = tutils.RandomProxyURL(t)
 		baseParams  = tutils.BaseAPIParams(proxyURL)
-		origEntries = make(map[string]*cmn.BucketEntry, 1500)
+		origEntries = make(map[string]*cmn.ObjEntry, 1500)
 	)
 
 	m.initWithCleanupAndSaveState()

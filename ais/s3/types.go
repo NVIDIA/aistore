@@ -138,11 +138,11 @@ func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
 	debug.AssertNoErr(err)
 }
 
-func (r *ListObjectResult) Add(entry *cmn.BucketEntry, lsmsg *apc.ListObjsMsg) {
+func (r *ListObjectResult) Add(entry *cmn.ObjEntry, lsmsg *apc.ListObjsMsg) {
 	r.Contents = append(r.Contents, entryToS3(entry, lsmsg))
 }
 
-func entryToS3(entry *cmn.BucketEntry, lsmsg *apc.ListObjsMsg) *ObjInfo {
+func entryToS3(entry *cmn.ObjEntry, lsmsg *apc.ListObjsMsg) *ObjInfo {
 	objInfo := &ObjInfo{
 		Key:          entry.Name,
 		LastModified: entry.Atime,
@@ -157,7 +157,7 @@ func entryToS3(entry *cmn.BucketEntry, lsmsg *apc.ListObjsMsg) *ObjInfo {
 	return objInfo
 }
 
-func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.BucketList, lsmsg *apc.ListObjsMsg) {
+func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.ListObjects, lsmsg *apc.ListObjsMsg) {
 	r.KeyCount = len(bckList.Entries)
 	r.IsTruncated = bckList.ContinuationToken != ""
 	r.ContinuationToken = bckList.ContinuationToken

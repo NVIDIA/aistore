@@ -54,17 +54,17 @@ type (
 		respCh chan *Resp            // Outgoing responses.
 		stopCh *cos.StopCh           // Informs about stopped xact.
 
-		objCache   chan *cmn.BucketEntry // local cache filled when idle
-		lastPage   []*cmn.BucketEntry    // last sent page and a little more
-		walkStopCh *cos.StopCh           // to abort file walk
-		token      string                // the continuation token for the last sent page (for re-requests)
-		nextToken  string                // continuation token returned by Cloud to get the next page
-		walkWg     sync.WaitGroup        // to wait until walk finishes
-		walkDone   bool                  // true: done walking or Cloud returned all objects
-		fromRemote bool                  // whether to request remote data
+		objCache   chan *cmn.ObjEntry // local cache filled when idle
+		lastPage   []*cmn.ObjEntry    // last sent page and a little more
+		walkStopCh *cos.StopCh        // to abort file walk
+		token      string             // the continuation token for the last sent page (for re-requests)
+		nextToken  string             // continuation token returned by Cloud to get the next page
+		walkWg     sync.WaitGroup     // to wait until walk finishes
+		walkDone   bool               // true: done walking or Cloud returned all objects
+		fromRemote bool               // whether to request remote data
 	}
 	Resp struct {
-		BckList *cmn.BucketList
+		BckList *cmn.ListObjects
 		Status  int
 		Err     error
 	}
@@ -116,7 +116,7 @@ func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *apc.ListObjsMsg, uuid st
 		workCh:   make(chan *apc.ListObjsMsg),
 		respCh:   make(chan *Resp),
 		stopCh:   cos.NewStopCh(),
-		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
+		lastPage: make([]*cmn.ObjEntry, 0, cacheSize),
 	}
 	debug.Assert(xctn.bck.Props != nil)
 	xctn.DemandBase.Init(uuid, apc.ActList, bck, totallyIdle)
@@ -162,7 +162,7 @@ func (r *ObjListXact) _initTraverse() {
 		r.walkWg.Wait()
 	}
 
-	r.objCache = make(chan *cmn.BucketEntry, cacheSize)
+	r.objCache = make(chan *cmn.ObjEntry, cacheSize)
 	r.walkDone = false
 	r.walkStopCh = cos.NewStopCh()
 	r.walkWg.Add(1)
@@ -299,10 +299,10 @@ func (r *ObjListXact) nextPageRemote() error {
 	return nil
 }
 
-func (r *ObjListXact) getPage(marker string, cnt uint) *cmn.BucketList {
+func (r *ObjListXact) getPage(marker string, cnt uint) *cmn.ListObjects {
 	debug.Assert(cos.IsValidUUID(r.msg.UUID))
 	if r.fromRemote {
-		return &cmn.BucketList{
+		return &cmn.ListObjects{
 			UUID:              r.msg.UUID,
 			Entries:           r.lastPage,
 			ContinuationToken: r.nextToken,
@@ -318,13 +318,13 @@ func (r *ObjListXact) getPage(marker string, cnt uint) *cmn.BucketList {
 
 	if uint(len(list)) >= cnt {
 		entries := list[:cnt]
-		return &cmn.BucketList{
+		return &cmn.ListObjects{
 			UUID:              r.msg.UUID,
 			Entries:           entries,
 			ContinuationToken: entries[cnt-1].Name,
 		}
 	}
-	return &cmn.BucketList{Entries: list, UUID: r.msg.UUID}
+	return &cmn.ListObjects{Entries: list, UUID: r.msg.UUID}
 }
 
 // genNextPage calls DecPending either immediately on error or inside
@@ -406,7 +406,7 @@ func (r *ObjListXact) traverseBucket(msg *apc.ListObjsMsg) {
 			return err
 		}
 		for _, archEntry := range archList {
-			e := &cmn.BucketEntry{
+			e := &cmn.ObjEntry{
 				Name:  path.Join(entry.Name, archEntry.name),
 				Flags: entry.Flags | apc.EntryInArch,
 				Size:  int64(archEntry.size),

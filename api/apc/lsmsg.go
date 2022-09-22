@@ -76,7 +76,7 @@ const (
 	EntryInArch   = 1 << (EntryStatusBits + 2)
 )
 
-// BucketEntry.Flags field
+// ObjEntry.Flags field
 const (
 	EntryStatusBits = 5                          // N bits
 	EntryStatusMask = (1 << EntryStatusBits) - 1 // mask for N low bits

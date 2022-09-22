@@ -151,7 +151,7 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects, errCode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
@@ -175,10 +175,10 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bc
 		return
 	}
 
-	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(objs))}
-	bckList.ContinuationToken = nextPageToken
+	lst = &cmn.ListObjects{Entries: make([]*cmn.ObjEntry, 0, len(objs))}
+	lst.ContinuationToken = nextPageToken
 	for _, attrs := range objs {
-		entry := &cmn.BucketEntry{}
+		entry := &cmn.ObjEntry{}
 		entry.Name = attrs.Name
 		if msg.WantProp(apc.GetPropsSize) {
 			entry.Size = attrs.Size
@@ -193,10 +193,10 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bc
 				entry.Version = v
 			}
 		}
-		bckList.Entries = append(bckList.Entries, entry)
+		lst.Entries = append(lst.Entries, entry)
 	}
 	if verbose {
-		glog.Infof("[list_objects] count %d", len(bckList.Entries))
+		glog.Infof("[list_objects] count %d", len(lst.Entries))
 	}
 	return
 }

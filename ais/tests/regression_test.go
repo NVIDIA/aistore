@@ -910,7 +910,7 @@ func TestDeleteRange(t *testing.T) {
 		if len(bktlst.Entries) != objCnt-smallrangesize {
 			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), objCnt-smallrangesize)
 		}
-		filemap := make(map[string]*cmn.BucketEntry)
+		filemap := make(map[string]*cmn.ObjEntry)
 		for _, entry := range bktlst.Entries {
 			filemap[entry.Name] = entry
 		}
@@ -1019,7 +1019,7 @@ func TestStressDeleteRange(t *testing.T) {
 			len(bckList.Entries), expectedRemaining)
 	}
 
-	objNames := make(map[string]*cmn.BucketEntry)
+	objNames := make(map[string]*cmn.ObjEntry)
 	for _, entry := range bckList.Entries {
 		objNames[entry.Name] = entry
 	}

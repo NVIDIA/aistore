@@ -419,7 +419,7 @@ func freeBcastRes(results sliceResults) {
 
 type (
 	cresCM struct{} // -> cluMeta
-	cresBL struct{} // -> cmn.BucketList
+	cresBL struct{} // -> cmn.ListObjects
 	cresSM struct{} // -> smapX
 	cresND struct{} // -> cluster.Snode
 	cresBA struct{} // -> cmn.BackendInfoAIS
@@ -460,7 +460,7 @@ func (res *callResult) mread(body io.Reader) {
 func (cresCM) newV() any                              { return &cluMeta{} }
 func (c cresCM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBL) newV() any                              { return &cmn.BucketList{} }
+func (cresBL) newV() any                              { return &cmn.ListObjects{} }
 func (c cresBL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
 
 func (cresSM) newV() any                              { return &smapX{} }

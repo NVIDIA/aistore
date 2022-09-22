@@ -337,8 +337,11 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 	return err
 }
 
-// ListObjects returns list of objects in a bucket. `numObjects` is the
-// maximum number of objects to be returned (0 - return all objects in a bucket).
+// ListObjects returns a list of objects in a bucket - a slice of structures in the
+// `cmn.ListObjects` that look like `cmn.ObjEntry`.
+//
+// The `numObjects` argument is the maximum number of objects to be returned
+// (where 0 (zero) means returning all objects in the bucket).
 //
 // This API supports numerous options and flags. In particular, `apc.ListObjsMsg`
 // supports "opening" objects formatted as one of the supported
@@ -351,16 +354,17 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 // AIS fully supports listing buckets that may have millions of objects.
 // For large and very large buckets, it is strongly recommended to use ListObjectsPage
 // that will return the very first (listed) page and a so called "continuation token".
-// See ListObjectsPage for details.
 //
-// For usage examples, see CLI docs under docs/cli.
-func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObjects uint) (*cmn.BucketList, error) {
-	return ListObjectsWithOpts(bp, bck, lsmsg, numObjects, nil)
+// See also:
+// - `ListObjectsPage` below.
+// - usage examples, see CLI docs under docs/cli.
+func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObj uint) (*cmn.ListObjects, error) {
+	return ListObjectsWithOpts(bp, bck, lsmsg, numObj, nil)
 }
 
 // additional argument may include "progress-bar" context
-func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObjects uint,
-	progress *ProgressContext) (bckList *cmn.BucketList, err error) {
+func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObj uint,
+	progress *ProgressContext) (lst *cmn.ListObjects, err error) {
 	var (
 		q    url.Values
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -368,16 +372,16 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, num
 			cos.HdrAccept:      []string{cos.ContentMsgPack},
 			cos.HdrContentType: []string{cos.ContentJSON},
 		}
-		nextPage = &cmn.BucketList{}
-		toRead   = numObjects
-		listAll  = numObjects == 0
+		nextPage = &cmn.ListObjects{}
+		toRead   = numObj
+		listAll  = numObj == 0
 	)
 	bp.Method = http.MethodGet
 	if lsmsg == nil {
 		lsmsg = &apc.ListObjsMsg{}
 	}
 	q = bck.AddToQuery(q)
-	bckList = &cmn.BucketList{}
+	lst = &cmn.ListObjects{}
 	lsmsg.UUID = ""
 	lsmsg.ContinuationToken = ""
 
@@ -402,7 +406,7 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, num
 		page := nextPage
 
 		if pageNum == 1 {
-			page = bckList
+			page = lst
 		} else {
 			// Do not try to optimize by reusing allocated page as `Unmarshaler`/`Decoder`
 			// will reuse the entry pointers what will result in duplications.
@@ -426,15 +430,15 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, num
 			return nil, err
 		}
 
-		bckList.Flags |= page.Flags
-		// The first iteration uses the `bckList` directly so there is no need to append.
+		lst.Flags |= page.Flags
+		// The first iteration uses the `lst` directly so there is no need to append.
 		if pageNum > 1 {
-			bckList.Entries = append(bckList.Entries, page.Entries...)
-			bckList.ContinuationToken = page.ContinuationToken
+			lst.Entries = append(lst.Entries, page.Entries...)
+			lst.ContinuationToken = page.ContinuationToken
 		}
 
 		if progress != nil && progress.mustFire() {
-			progress.info.Count = len(bckList.Entries)
+			progress.info.Count = len(lst.Entries)
 			if page.ContinuationToken == "" {
 				progress.finish()
 			}
@@ -452,7 +456,7 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, num
 		lsmsg.ContinuationToken = page.ContinuationToken
 	}
 
-	return bckList, err
+	return lst, err
 }
 
 // ListObjectsPage returns the first page of bucket objects.
@@ -462,7 +466,7 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, num
 // See also: `apc.ListObjsMsg`
 // See also: `api.ListObjectsInvalidateCache`
 // See also: `api.ListObjects`
-func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg) (*cmn.BucketList, error) {
+func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg) (*cmn.ListObjects, error) {
 	bp.Method = http.MethodGet
 	if lsmsg == nil {
 		lsmsg = &apc.ListObjsMsg{}
@@ -481,7 +485,7 @@ func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg) (*cmn.B
 	}
 
 	// NOTE: No need to preallocate bucket entries slice, we use msgpack so it will do it for us!
-	page := &cmn.BucketList{}
+	page := &cmn.ListObjects{}
 	err := reqParams.DoHTTPReqResp(page)
 	FreeRp(reqParams)
 	if err != nil {

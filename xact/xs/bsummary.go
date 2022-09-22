@@ -147,7 +147,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool)
 
 	// slow path, exact sizes
 	var (
-		list *cmn.BucketList
+		list *cmn.ListObjects
 		err  error
 	)
 	if msg.Fast {

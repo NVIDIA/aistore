@@ -47,13 +47,13 @@ func TestConcatObjLists(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var (
-				lists          = make([]*cmn.BucketList, 0, len(test.objCounts))
+				lists          = make([]*cmn.ListObjects, 0, len(test.objCounts))
 				expectedObjCnt = 0
 			)
 			for _, objCount := range test.objCounts {
-				list := &cmn.BucketList{}
+				list := &cmn.ListObjects{}
 				for i := 0; i < objCount; i++ {
-					list.Entries = append(list.Entries, &cmn.BucketEntry{
+					list.Entries = append(list.Entries, &cmn.ObjEntry{
 						Name: trand.String(5),
 					})
 				}

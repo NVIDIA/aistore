@@ -114,12 +114,12 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.Simple
 // LIST OBJECTS //
 //////////////////
 
-func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList,
+func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects,
 	errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 
 	h := cmn.BackendHelpers.HDFS
-	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, msg.PageSize)}
+	lst = &cmn.ListObjects{Entries: make([]*cmn.ObjEntry, 0, msg.PageSize)}
 	err = hp.c.Walk(bck.Props.Extra.HDFS.RefDirectory, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			if cos.IsEOF(err) {
@@ -127,7 +127,7 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bck
 			}
 			return err
 		}
-		if uint(len(bckList.Entries)) >= msg.PageSize {
+		if uint(len(lst.Entries)) >= msg.PageSize {
 			return skipDir(fi)
 		}
 		objName := strings.TrimPrefix(strings.TrimPrefix(path, bck.Props.Extra.HDFS.RefDirectory), string(filepath.Separator))
@@ -149,7 +149,7 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bck
 		if fi.IsDir() {
 			return nil
 		}
-		entry := &cmn.BucketEntry{
+		entry := &cmn.ObjEntry{
 			Name:    objName,
 			Version: "",
 		}
@@ -170,7 +170,7 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bck
 				entry.Checksum = v
 			}
 		}
-		bckList.Entries = append(bckList.Entries, entry)
+		lst.Entries = append(lst.Entries, entry)
 		return nil
 	})
 	if err != nil {
@@ -178,10 +178,10 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bck
 		return nil, errCode, err
 	}
 	// Set continuation token only if we reached the page size.
-	if uint(len(bckList.Entries)) >= msg.PageSize {
-		bckList.ContinuationToken = bckList.Entries[len(bckList.Entries)-1].Name
+	if uint(len(lst.Entries)) >= msg.PageSize {
+		lst.ContinuationToken = lst.Entries[len(lst.Entries)-1].Name
 	}
-	return bckList, 0, nil
+	return lst, 0, nil
 }
 
 // `hdfs.Walk` does not correctly handle `SkipDir` if the `fi` is non-directory.

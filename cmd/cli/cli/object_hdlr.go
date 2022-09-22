@@ -30,8 +30,7 @@ var (
 			lengthFlag,
 			archpathFlag,
 			cksumFlag,
-			checkCachedFlag,
-			checkPresentFlag,
+			checkObjCachedFlag,
 		},
 
 		commandList: initLsOptions(),

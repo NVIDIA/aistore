@@ -136,7 +136,7 @@ func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate,
 
 func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) error {
 	var (
-		objList *cmn.BucketList
+		objList *cmn.ListObjects
 		err     error
 		bck     = r.xctn.Bck()
 	)

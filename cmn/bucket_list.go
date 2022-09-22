@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -14,7 +14,7 @@ import (
 // NOTE: changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md for details.
 //
 
-// BucketEntry corresponds to a single entry in the BucketList and
+// ObjEntry corresponds to a single entry in the ListObjects and
 // contains file and directory metadata as per the ListObjsMsg
 // Flags is a bit field:
 // 0-2: objects status, all statuses are mutually exclusive, so it can hold up
@@ -22,7 +22,7 @@ import (
 //	to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
 //
 // 3:   CheckExists (for remote bucket it shows if the object in present in AIS)
-type BucketEntry struct {
+type ObjEntry struct {
 	Name      string `json:"name" msg:"n"`                            // name of the object (NOTE: does not include the bucket name)
 	Checksum  string `json:"checksum,omitempty" msg:"cs,omitempty"`   // object's checksum
 	Atime     string `json:"atime,omitempty" msg:"a,omitempty"`       // last access time; formatted as per ListObjsMsg.TimeFormat
@@ -33,15 +33,15 @@ type BucketEntry struct {
 	Flags     uint16 `json:"flags,omitempty" msg:"f,omitempty"`
 }
 
-func (be *BucketEntry) CheckExists() bool  { return be.Flags&apc.EntryIsCached != 0 }
-func (be *BucketEntry) SetExists()         { be.Flags |= apc.EntryIsCached }
-func (be *BucketEntry) IsStatusOK() bool   { return be.Status() == 0 }
-func (be *BucketEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }
-func (be *BucketEntry) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
-func (be *BucketEntry) String() string     { return "{" + be.Name + "}" }
+func (be *ObjEntry) CheckExists() bool  { return be.Flags&apc.EntryIsCached != 0 }
+func (be *ObjEntry) SetExists()         { be.Flags |= apc.EntryIsCached }
+func (be *ObjEntry) IsStatusOK() bool   { return be.Status() == 0 }
+func (be *ObjEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }
+func (be *ObjEntry) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
+func (be *ObjEntry) String() string     { return "{" + be.Name + "}" }
 
-func (be *BucketEntry) CopyWithProps(propsSet cos.StringSet) (ne *BucketEntry) {
-	ne = &BucketEntry{Name: be.Name}
+func (be *ObjEntry) CopyWithProps(propsSet cos.StringSet) (ne *ObjEntry) {
+	ne = &ObjEntry{Name: be.Name}
 	if propsSet.Contains(apc.GetPropsSize) {
 		ne.Size = be.Size
 	}
@@ -67,10 +67,10 @@ const (
 	BckListFlagRebalance = (1 << iota) // List generated while rebalance was running
 )
 
-// BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'
-type BucketList struct {
-	UUID              string         `json:"uuid"`
-	ContinuationToken string         `json:"continuation_token"`
-	Entries           []*BucketEntry `json:"entries"`
-	Flags             uint32         `json:"flags"`
+// ListObjects represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'
+type ListObjects struct {
+	UUID              string      `json:"uuid"`
+	ContinuationToken string      `json:"continuation_token"`
+	Entries           []*ObjEntry `json:"entries"`
+	Flags             uint32      `json:"flags"`
 }

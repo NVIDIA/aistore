@@ -135,7 +135,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs,
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		h        = cmn.BackendHelpers.Amazon
@@ -165,9 +165,9 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bc
 		return
 	}
 
-	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(resp.Contents))}
+	lst = &cmn.ListObjects{Entries: make([]*cmn.ObjEntry, 0, len(resp.Contents))}
 	for _, key := range resp.Contents {
-		entry := &cmn.BucketEntry{Name: *key.Key}
+		entry := &cmn.ObjEntry{Name: *key.Key}
 		if msg.WantProp(apc.GetPropsSize) {
 			entry.Size = *key.Size
 		}
@@ -177,17 +177,17 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bc
 			}
 		}
 
-		bckList.Entries = append(bckList.Entries, entry)
+		lst.Entries = append(lst.Entries, entry)
 	}
 	if verbose {
-		glog.Infof("[list_objects] count %d", len(bckList.Entries))
+		glog.Infof("[list_objects] count %d", len(lst.Entries))
 	}
 
 	if *resp.IsTruncated {
-		bckList.ContinuationToken = *resp.NextContinuationToken
+		lst.ContinuationToken = *resp.NextContinuationToken
 	}
 
-	if len(bckList.Entries) == 0 {
+	if len(lst.Entries) == 0 {
 		return
 	}
 
@@ -196,9 +196,9 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bc
 	// Page is limited with 500+ items, so reading them is slow.
 	if msg.WantProp(apc.GetPropsVersion) {
 		var (
-			versions   = make(map[string]string, len(bckList.Entries))
+			versions   = make(map[string]string, len(lst.Entries))
 			keyMarker  = ""
-			lastMarker = bckList.Entries[len(bckList.Entries)-1].Name
+			lastMarker = lst.Entries[len(lst.Entries)-1].Name
 		)
 
 		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
@@ -231,7 +231,7 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (bc
 
 			keyMarker = *verResp.NextKeyMarker
 		}
-		for _, entry := range bckList.Entries {
+		for _, entry := range lst.Entries {
 			if version, ok := versions[entry.Name]; ok {
 				entry.Version = version
 			}

@@ -1311,7 +1311,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	lsmsg *apc.ListObjsMsg, begin int64) {
 	var (
 		err     error
-		bckList *cmn.BucketList
+		bckList *cmn.ListObjects
 		smap    = p.owner.smap.get()
 	)
 	if smap.CountActiveTargets() < 1 {
@@ -1949,11 +1949,11 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 // listObjectsAIS reads object list from all targets, combines, sorts and returns
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
+func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *cmn.ListObjects, err error) {
 	var (
 		aisMsg    *aisMsg
 		args      *bcastArgs
-		entries   []*cmn.BucketEntry
+		entries   []*cmn.ObjEntry
 		results   sliceResults
 		smap      = p.owner.smap.get()
 		cacheID   = cacheReqID{bck: bck.Bucket(), prefix: lsmsg.Prefix}
@@ -2000,7 +2000,7 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEnt
 	}
 	args.timeout = apc.LongTimeout
 	args.smap = smap
-	args.cresv = cresBL{} // -> cmn.BucketList
+	args.cresv = cresBL{} // -> cmn.ListObjects
 
 	// Combine the results.
 	results = p.bcastGroup(args)
@@ -2011,7 +2011,7 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEnt
 			freeBcastRes(results)
 			return nil, err
 		}
-		objList := res.v.(*cmn.BucketList)
+		objList := res.v.(*cmn.ListObjects)
 		flags |= objList.Flags
 		p.qm.b.set(lsmsg.UUID, res.si.ID(), objList.Entries, pageSize)
 	}
@@ -2028,14 +2028,14 @@ end:
 		// Since cache keeps entries with whole subset props we must create copy
 		// of the entries with smaller subset of props (if we would change the
 		// props of the `entries` it would also affect entries inside cache).
-		propsEntries := make([]*cmn.BucketEntry, len(entries))
+		propsEntries := make([]*cmn.ObjEntry, len(entries))
 		for idx := range entries {
 			propsEntries[idx] = entries[idx].CopyWithProps(props)
 		}
 		entries = propsEntries
 	}
 
-	allEntries = &cmn.BucketList{
+	allEntries = &cmn.ListObjects{
 		UUID:    lsmsg.UUID,
 		Entries: entries,
 		Flags:   flags,
@@ -2050,7 +2050,7 @@ end:
 // (cloud or remote AIS). If request requires local data then it is broadcast
 // to all targets which perform traverse on the disks, otherwise random target
 // is chosen to perform cloud listing.
-func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
+func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *cmn.ListObjects, err error) {
 	if lsmsg.StartAfter != "" {
 		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", lsmsg.StartAfter)
 	}
@@ -2071,7 +2071,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (all
 	if lsmsg.NeedLocalMD() {
 		args.timeout = reqTimeout
 		args.smap = smap
-		args.cresv = cresBL{} // -> cmn.BucketList
+		args.cresv = cresBL{} // -> cmn.ListObjects
 		results = p.bcastGroup(args)
 	} else {
 		nl, exists := p.notifs.entry(lsmsg.UUID)
@@ -2082,7 +2082,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (all
 				cargs.si = si
 				cargs.req = args.req
 				cargs.timeout = reqTimeout
-				cargs.cresv = cresBL{} // -> cmn.BucketList
+				cargs.cresv = cresBL{} // -> cmn.ListObjects
 			}
 			res := p.call(cargs)
 			freeCargs(cargs)
@@ -2093,7 +2093,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (all
 	}
 	freeBcArgs(args)
 	// Combine the results.
-	bckLists := make([]*cmn.BucketList, 0, len(results))
+	bckLists := make([]*cmn.ListObjects, 0, len(results))
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
 			continue
@@ -2103,7 +2103,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (all
 			freeBcastRes(results)
 			return nil, err
 		}
-		bckLists = append(bckLists, res.v.(*cmn.BucketList))
+		bckLists = append(bckLists, res.v.(*cmn.ListObjects))
 	}
 	freeBcastRes(results)
 

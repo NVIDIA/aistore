@@ -30,9 +30,9 @@ func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.L
 
 // DefaultLocalObjPage should be used when there's no need to persist results for a longer period of time.
 // It's supposed to be used when results are needed immediately.
-func (w *Walk) DefaultLocalObjPage() (*cmn.BucketList, error) {
+func (w *Walk) DefaultLocalObjPage() (*cmn.ListObjects, error) {
 	var (
-		bckList = &cmn.BucketList{}
+		bckList = &cmn.ListObjects{}
 		wi      = walkinfo.NewWalkInfo(w.ctx, w.t, w.msg)
 	)
 
@@ -71,7 +71,7 @@ func (w *Walk) DefaultLocalObjPage() (*cmn.BucketList, error) {
 // talking to backend provider.
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
-func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
+func (w *Walk) RemoteObjPage() (*cmn.ListObjects, error) {
 	if w.msg.IsFlagSet(apc.LsPresent) {
 		return w.DefaultLocalObjPage()
 	}

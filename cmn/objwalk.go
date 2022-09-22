@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func SortBckEntries(bckEntries []*BucketEntry) {
+func SortBckEntries(bckEntries []*ObjEntry) {
 	entryLess := func(i, j int) bool {
 		if bckEntries[i].Name == bckEntries[j].Name {
 			return bckEntries[i].Flags&apc.EntryStatusMask < bckEntries[j].Flags&apc.EntryStatusMask
@@ -23,7 +23,7 @@ func SortBckEntries(bckEntries []*BucketEntry) {
 	sort.Slice(bckEntries, entryLess)
 }
 
-func deduplicateBckEntries(bckEntries []*BucketEntry, maxSize uint) ([]*BucketEntry, string) {
+func deduplicateBckEntries(bckEntries []*ObjEntry, maxSize uint) ([]*ObjEntry, string) {
 	objCount := uint(len(bckEntries))
 
 	j := 0
@@ -55,13 +55,13 @@ func deduplicateBckEntries(bckEntries []*BucketEntry, maxSize uint) ([]*BucketEn
 // are appended to the first one.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func ConcatObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
+func ConcatObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
 	if len(lists) == 0 {
-		return &BucketList{}
+		return &ListObjects{}
 	}
 
-	objs = &BucketList{}
-	objs.Entries = make([]*BucketEntry, 0)
+	objs = &ListObjects{}
+	objs.Entries = make([]*ObjEntry, 0)
 
 	for _, l := range lists {
 		objs.Flags |= l.Flags
@@ -90,9 +90,9 @@ func ConcatObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 // them to get single list with merged information for each object.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
+func MergeObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
 	if len(lists) == 0 {
-		return &BucketList{}
+		return &ListObjects{}
 	}
 
 	bckList := lists[0] // main list to collect all info
@@ -105,7 +105,7 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 		return bckList
 	}
 
-	objSet := make(map[string]*BucketEntry, len(bckList.Entries))
+	objSet := make(map[string]*ObjEntry, len(bckList.Entries))
 	for _, l := range lists {
 		bckList.Flags |= l.Flags
 		if contiunationToken < l.ContinuationToken {
@@ -130,7 +130,7 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	}
 
 	if len(objSet) == 0 {
-		return &BucketList{}
+		return &ListObjects{}
 	}
 
 	// cleanup and refill

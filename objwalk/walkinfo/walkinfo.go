@@ -149,13 +149,13 @@ func (wi *WalkInfo) matchObj(lom *cluster.LOM) bool {
 //
 // NOTE: When only object names are requested, objectFilter and postCallback
 // are not called because there won't be any metadata to look at.
-func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntry {
+func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.ObjEntry {
 	if !wi.matchObj(lom) {
 		return nil
 	}
 
 	// add the obj to the page
-	fileInfo := &cmn.BucketEntry{
+	fileInfo := &cmn.ObjEntry{
 		Name:  lom.ObjName,
 		Flags: objStatus | apc.EntryIsCached,
 	}
@@ -192,7 +192,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 //
 //	the flag cmn.LsNameOnly optimizes-out loading object metadata. If defined,
 //	the function returns (only the) name and status.
-func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.BucketEntry, err error) {
+func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.ObjEntry, err error) {
 	if de.IsDir() {
 		return
 	}
@@ -202,7 +202,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.BucketEntry
 	return
 }
 
-func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.BucketEntry, error) {
+func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.ObjEntry, error) {
 	var objStatus uint16 = apc.ObjStatusOK
 	if err := lom.InitFQN(fqn, nil); err != nil {
 		return nil, err

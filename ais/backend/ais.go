@@ -341,7 +341,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	return
 }
 
-func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.ListObjsMsg) (bckList *cmn.BucketList,
+func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects,
 	errCode int, err error) {
 	var aisCluster *remAISCluster
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
@@ -360,12 +360,12 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.ListOb
 
 	bck := remoteBck.Clone()
 	unsetUUID(&bck)
-	if bckList, err = api.ListObjectsPage(aisCluster.bp, bck, remoteMsg); err != nil {
+	if lst, err = api.ListObjectsPage(aisCluster.bp, bck, remoteMsg); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}
 	// Restore original request UUID (UUID of the remote cluster is already inside `ContinuationToken`).
-	bckList.UUID = msg.UUID
+	lst.UUID = msg.UUID
 	return
 }
 

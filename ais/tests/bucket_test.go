@@ -636,8 +636,8 @@ func TestListObjectsGoBack(t *testing.T) {
 		}
 		var (
 			tokens          []string
-			entries         []*cmn.BucketEntry
-			expectedEntries []*cmn.BucketEntry
+			entries         []*cmn.ObjEntry
+			expectedEntries []*cmn.ObjEntry
 		)
 		tlog.Logln("listing couple pages to move iterator on targets")
 		for page := 0; page < m.num/int(msg.PageSize); page++ {
@@ -706,7 +706,7 @@ func TestListObjectsRerequestPage(t *testing.T) {
 		}
 		var (
 			err     error
-			objList *cmn.BucketList
+			objList *cmn.ListObjects
 
 			totalCnt = 0
 			msg      = &apc.ListObjsMsg{PageSize: 10}
@@ -795,7 +795,7 @@ func TestListObjectsProps(t *testing.T) {
 		if m.bck.IsRemote() {
 			defer m.del()
 		}
-		checkProps := func(useCache bool, props []string, f func(entry *cmn.BucketEntry)) {
+		checkProps := func(useCache bool, props []string, f func(entry *cmn.ObjEntry)) {
 			msg := &apc.ListObjsMsg{PageSize: 100}
 			if useCache {
 				msg.SetFlag(apc.UseListObjsCache)
@@ -815,7 +815,7 @@ func TestListObjectsProps(t *testing.T) {
 
 		for _, useCache := range []bool{false, true} {
 			tlog.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
-			checkProps(useCache, []string{}, func(entry *cmn.BucketEntry) {
+			checkProps(useCache, []string{}, func(entry *cmn.ObjEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
@@ -826,7 +826,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefault, func(entry *cmn.BucketEntry) {
+			checkProps(useCache, apc.GetPropsDefault, func(entry *cmn.ObjEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
@@ -837,7 +837,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.BucketEntry) {
+			checkProps(useCache, []string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.ObjEntry) {
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				if bck.IsAIS() {
 					tassert.Errorf(t, entry.Version != "", "version is not set")
@@ -850,7 +850,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying small subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsSize}, func(entry *cmn.BucketEntry) {
+			checkProps(useCache, []string{apc.GetPropsSize}, func(entry *cmn.ObjEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 
 				tassert.Errorf(t, entry.Version == "", "version is set")
@@ -861,7 +861,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying all props...\n", useCache)
-			checkProps(useCache, apc.GetPropsAll, func(entry *cmn.BucketEntry) {
+			checkProps(useCache, apc.GetPropsAll, func(entry *cmn.ObjEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				if bck.IsAIS() {
 					tassert.Errorf(t, entry.Version != "", "version is not set")
@@ -1099,7 +1099,7 @@ func TestListObjects(t *testing.T) {
 					t.Errorf("continuation token was unexpectedly set to: %s", bckList.ContinuationToken)
 				}
 
-				empty := &cmn.BucketEntry{}
+				empty := &cmn.ObjEntry{}
 				for _, entry := range bckList.Entries {
 					e, exists := objs.Load(entry.Name)
 					if !exists {
@@ -2155,7 +2155,7 @@ func TestCopyBucket(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
 			var (
-				srcBckList *cmn.BucketList
+				srcBckList *cmn.ListObjects
 
 				objCnt = 100
 				srcm   = &ioContext{

@@ -430,23 +430,23 @@ var (
 	lengthFlag = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
 
 	// NOTE:
-	// In certain (use-case) scenarios, the term "cached" will be more fitting. But in
-	// other cases, "present" will sound more appropriate (and devoid of any implied evict-ability).
-	// Implementation-wise, the two terms are identical, and we therefore provide both options
-	// for usability.
+	// In many cases, stating that a given object "is present" will sound more appropriate and,
+	// in fact, accurate then "object is cached". The latter comes with a certain implied sense
+	// that, if not accessed for a while, the object may suddenly disappear. This is, generally
+	// speaking, not true for AIStore where LRU eviction is per-bucket configurable with default
+	// settings inherited from the cluster config, etc. etc.
 	// See also: apc.Flt* enum.
-	checkCachedFlag = cli.BoolFlag{
+	checkObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
 		Usage: "check if object from a remote bucket is present (ie., cached) in the cluster",
 	}
-	checkPresentFlag  = cli.BoolFlag{Name: "present", Usage: checkCachedFlag.Usage}
 	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
 		Usage: "list only cached (ie., stored in AIS) objects from a remote bucket",
 	}
 	listBckPresentFlag = cli.BoolFlag{
 		Name:  "present",
-		Usage: "operate only on buckets that are present in the cluster's BMD",
+		Usage: "operate only on buckets that are present in the cluster",
 	}
 
 	// to anonymously list public-access Cloud buckets
@@ -471,7 +471,7 @@ var (
 
 	sizeInBytesFlag = cli.BoolFlag{
 		Name:  "bytes",
-		Usage: "show sizes in bytes (do not convert to KiB, MiB, etc.)",
+		Usage: "show sizes in bytes (ie., do not convert to KiB, MiB, GiB, etc.)",
 	}
 
 	yesFlag = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}

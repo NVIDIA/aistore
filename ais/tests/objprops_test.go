@@ -311,12 +311,10 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 	)
 
 	m.initWithCleanup()
-	m.puts()
-
-	t.Cleanup(func() {
+	if m.bck.IsRemote() {
 		m.del()
-	})
-
+	}
+	m.puts()
 	// Read object versions.
 	msg := &apc.ListObjsMsg{}
 	msg.AddProps(apc.GetPropsVersion, apc.GetPropsAtime, apc.GetPropsStatus)
@@ -602,7 +600,7 @@ func TestObjProps(t *testing.T) {
 	}
 }
 
-func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.ListObjsMsg) *cmn.BucketList {
+func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.ListObjsMsg) *cmn.ListObjects {
 	if msg == nil {
 		tlog.Logf("LIST %s []\n", bck)
 	} else if msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "" {

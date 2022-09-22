@@ -80,10 +80,10 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		}
 	}
 
-	// just check if remote object is present (do not execute GET)
-	// TODO: archive
-	if flagIsSet(c, checkCachedFlag) || /*same*/ flagIsSet(c, checkPresentFlag) {
-		return objectCheckExists(c, bck, objName)
+	// just check if a remote object is present (do not GET)
+	// TODO: archived files
+	if flagIsSet(c, checkObjCachedFlag) {
+		return isObjPresent(c, bck, objName)
 	}
 
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
@@ -597,7 +597,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 	return nil
 }
 
-func objectCheckExists(c *cli.Context, bck cmn.Bck, object string) error {
+func isObjPresent(c *cli.Context, bck cmn.Bck, object string) error {
 	_, err := api.HeadObject(defaultAPIParams, bck, object, apc.FltPresentOmitProps)
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
