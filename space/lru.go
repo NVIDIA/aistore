@@ -476,7 +476,7 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 	for i := range bcks {
 		path := j.mi.MakePathCT(&bcks[i], fs.ObjectType)
 		sized[i].b = bcks[i]
-		sized[i].v, _ = ios.GetDirSize(path)
+		sized[i].v, _ = ios.DirSizeOnDisk(path)
 	}
 	sort.Slice(sized, func(i, j int) bool {
 		return sized[i].v > sized[j].v

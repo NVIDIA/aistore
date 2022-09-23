@@ -18,7 +18,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -94,11 +96,12 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 		r.updRes(err)
 		return
 	}
-	// (we only want a single target listing remote bucket)
-	shouldListCB := r.msg.Cached || (si.ID() == r.t.SID() && !r.msg.Cached)
+
+	listRemote := si.ID() == r.t.SID() // we only want a single target listing remote bucket
+
 	if !r.Bck().IsQuery() {
 		r.summaries = make(cmn.BckSummaries, 0, 1)
-		err = r.runBck(r.Bck(), shouldListCB)
+		err = r.runBck(r.Bck(), listRemote)
 	} else {
 		var (
 			pq   *string
@@ -110,10 +113,11 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 		}
 		r.summaries = make(cmn.BckSummaries, 0, 8)
 
-		// TODO: currently, summarizing only _present_ buckets (see apc.Flt* enum and commentary)
+		// TODO: currently, summarizing only the _present_ buckets
+		// (see apc.QparamFltPresence and commentary)
 
 		bmd.Range(pq, nil, func(bck *cluster.Bck) bool {
-			if err := r.runBck(bck, shouldListCB); err != nil {
+			if err := r.runBck(bck, listRemote); err != nil {
 				glog.Error(err)
 			}
 			return false // keep going
@@ -122,108 +126,112 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	r.updRes(err)
 }
 
-func (r *bsummXact) runBck(bck *cluster.Bck, shouldListCB bool) (err error) {
-	summ := cmn.NewBckSumm(bck.Bucket(), r.totalDisksSize)
-	if err = r._run(bck, summ, shouldListCB); err == nil {
+func (r *bsummXact) runBck(bck *cluster.Bck, listRemote bool) (err error) {
+	var (
+		msg  apc.BckSummMsg
+		summ = cmn.NewBckSumm(bck.Bucket(), r.totalDisksSize)
+	)
+	cos.CopyStruct(&msg, r.msg) // each bucket to have it's own copy of the msg (we may update it)
+	if bck.IsRemote() {
+		msg.Cached = msg.Cached || !listRemote
+		if bck.IsHTTP() && !msg.Cached {
+			glog.Warningf("cannot list %s buckets, assuming 'cached'", apc.DisplayProvider(bck.Provider))
+			msg.Cached = true
+		}
+	} else {
+		msg.Cached = true
+	}
+	if err = r._run(bck, summ, &msg); err == nil {
 		r.summaries = append(r.summaries, summ)
 	}
 	return
 }
 
-func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, shouldListCB bool) error {
-	msg := apc.BckSummMsg{}
+func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, msg *apc.BckSummMsg) (err error) {
 	summ.Bck.Copy(bck.Bucket())
 
-	// Each bucket should have it's own copy of the msg (we may update it).
-	cos.CopyStruct(&msg, r.msg)
-	if bck.IsHTTP() {
-		msg.Cached = true
+	// 1. always size on-disk (is fast)
+	summ.TotalSize.OnDisk, err = r.sizeOnDisk(bck)
+	if err != nil {
+		return
+	}
+	if msg.Fast { // TODO -- FIXME: support (best effort) msg.max-time
+		return
 	}
 
-	// fast path, estimated sizes
-	if msg.Fast && (bck.IsAIS() || msg.Cached) {
-		objCount, size, err := r.fast(bck)
-		summ.ObjCount = objCount
-		summ.Size = size
-		return err
-	}
-
-	// slow path, exact sizes
-	var (
-		list *cmn.ListObjects
-		err  error
-	)
-	if msg.Fast {
-		glog.Warningf("%s: remote bucket w/ `--cached=false`: executing slow and precise version (`--fast=false`)", r)
-	}
-	if !shouldListCB {
-		msg.Cached = true
-	}
-	lsmsg := &apc.ListObjsMsg{Props: apc.GetPropsSize}
-	if msg.Cached {
-		lsmsg.Flags = apc.LsCached
-	}
+	// 2. walk local pages
+	lsmsg := &apc.ListObjsMsg{Props: apc.GetPropsSize, Flags: apc.LsCached}
 	for {
 		walk := objwalk.NewWalk(context.Background(), r.t, bck, lsmsg)
-		if bck.IsAIS() {
-			list, err = walk.DefaultLocalObjPage()
-		} else {
-			list, err = walk.RemoteObjPage()
-		}
+		lst, err := walk.NextObjPage()
 		if err != nil {
 			return err
 		}
-		for _, v := range list.Entries {
-			summ.Size += uint64(v.Size)
+		for _, v := range lst.Entries {
+			summ.TotalSize.PresentObjs += uint64(v.Size)
 			if v.Size < summ.ObjSize.Min {
 				summ.ObjSize.Min = v.Size
 			}
 			if v.Size > summ.ObjSize.Max {
 				summ.ObjSize.Max = v.Size
 			}
-
-			// for remote backends, not updating obj-count to avoid double counting
-			// (by other targets).
-			if bck.IsAIS() || shouldListCB {
-				summ.ObjCount++
-			}
-			// generic x stats
-			r.ObjsAdd(1, v.Size)
+			summ.ObjCount.Present++
 		}
-		if list.ContinuationToken == "" {
+		if lst.ContinuationToken == "" {
 			break
 		}
-		list.Entries = nil
-		lsmsg.ContinuationToken = list.ContinuationToken
+		lst.Entries = nil
+		lsmsg.ContinuationToken = lst.ContinuationToken
+	}
+
+	if msg.Cached {
+		return nil
+	}
+	debug.Assert(bck.IsRemote())
+
+	// 3. walk remote
+	lsmsg = &apc.ListObjsMsg{Props: apc.GetPropsSize}
+	for {
+		walk := objwalk.NewWalk(context.Background(), r.t, bck, lsmsg)
+		lst, err := walk.NextRemoteObjPage()
+		if err != nil {
+			return err
+		}
+		for _, v := range lst.Entries {
+			summ.TotalSize.RemoteObjs += uint64(v.Size)
+			summ.ObjCount.Remote++
+		}
+		if lst.ContinuationToken == "" {
+			break
+		}
+		lst.Entries = nil
+		lsmsg.ContinuationToken = lst.ContinuationToken
 	}
 	return nil
 }
 
-func (*bsummXact) fast(bck *cluster.Bck) (uint64, uint64, error) {
+func (*bsummXact) sizeOnDisk(bck *cluster.Bck) (uint64, error) {
 	var (
-		objCount, size uint64
-		err            error
 		availablePaths = fs.GetAvail()
 		group, _       = errgroup.WithContext(context.Background())
+		size           uint64
 	)
 	for _, mi := range availablePaths {
 		group.Go(func(mi *fs.MountpathInfo) func() error {
-			return func() error {
-				siz, num, erm := mi.SizeBck(bck.Bucket())
-				if erm != nil {
-					return erm
+			return func() (err error) {
+				var (
+					sz   uint64
+					bdir = mi.MakePathBck(bck.Bucket())
+				)
+				if sz, err = ios.DirSizeOnDisk(bdir); err != nil {
+					return
 				}
-				gatomic.AddUint64(&objCount, uint64(num))
-				gatomic.AddUint64(&size, siz)
+				gatomic.AddUint64(&size, sz)
 				return nil
 			}
 		}(mi))
 	}
-	err = group.Wait()
-	if copies := uint64(bck.Props.Mirror.Copies); copies > 1 && bck.Props.Mirror.Enabled {
-		objCount = cos.DivRoundU64(objCount, copies)
-	}
-	return objCount, size, err
+	return size, group.Wait()
 }
 
 func (r *bsummXact) updRes(err error) {

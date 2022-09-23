@@ -28,12 +28,12 @@ func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.L
 	return &Walk{ctx: ctx, t: t, bck: bck, msg: msg}
 }
 
-// DefaultLocalObjPage should be used when there's no need to persist results for a longer period of time.
+// NextObjPage can be used when there's no need to retain results for a longer period of time.
 // It's supposed to be used when results are needed immediately.
-func (w *Walk) DefaultLocalObjPage() (*cmn.ListObjects, error) {
+func (w *Walk) NextObjPage() (*cmn.ListObjects, error) {
 	var (
-		bckList = &cmn.ListObjects{}
-		wi      = walkinfo.NewWalkInfo(w.ctx, w.t, w.msg)
+		lst = &cmn.ListObjects{}
+		wi  = walkinfo.NewWalkInfo(w.ctx, w.t, w.msg)
 	)
 
 	cb := func(fqn string, de fs.DirEntry) error {
@@ -44,7 +44,7 @@ func (w *Walk) DefaultLocalObjPage() (*cmn.ListObjects, error) {
 		if err != nil {
 			return cmn.NewErrAborted(w.t.String()+" ResultSetXact", "query", err)
 		}
-		bckList.Entries = append(bckList.Entries, entry)
+		lst.Entries = append(lst.Entries, entry)
 		return nil
 	}
 
@@ -63,21 +63,20 @@ func (w *Walk) DefaultLocalObjPage() (*cmn.ListObjects, error) {
 		return nil, err
 	}
 
-	return bckList, nil
+	return lst, nil
 }
 
-// RemoteObjPage reads a page of objects in a cloud bucket. NOTE: if a request
-// wants cached object list, the function returns only local data without
-// talking to backend provider.
+// NextRemoteObjPage reads a page of objects in a cloud bucket. If cached object requested,
+// the function returns only local data without talking to the backend provider.
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
-func (w *Walk) RemoteObjPage() (*cmn.ListObjects, error) {
+func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
 	if w.msg.IsFlagSet(apc.LsCached) {
-		return w.DefaultLocalObjPage()
+		return w.NextObjPage()
 	}
 	msg := &apc.ListObjsMsg{}
-	*msg = *w.msg
-	objList, _, err := w.t.Backend(w.bck).ListObjects(w.bck, msg)
+	cos.CopyStruct(msg, w.msg)
+	lst, _, err := w.t.Backend(w.bck).ListObjects(w.bck, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +91,7 @@ func (w *Walk) RemoteObjPage() (*cmn.ListObjects, error) {
 		needVersion     = w.msg.WantProp(apc.GetPropsVersion)
 		needCopies      = w.msg.WantProp(apc.GetPropsCopies)
 	)
-	for _, e := range objList.Entries {
+	for _, e := range lst.Entries {
 		si, _ := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)
 		if si.ID() != localID {
 			continue
@@ -137,5 +136,5 @@ func (w *Walk) RemoteObjPage() (*cmn.ListObjects, error) {
 		cluster.FreeLOM(lom)
 	}
 
-	return objList, nil
+	return lst, nil
 }

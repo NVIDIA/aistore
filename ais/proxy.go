@@ -1490,7 +1490,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if apc.IsFltPresent(fltPresence) { // is info(bck) request
-		info = &cmn.BckSumm{IsPresent: false}
+		info = &cmn.BckSumm{IsBckPresent: false}
 	}
 	if bckArgs.isPresent {
 		if apc.IsFltPresent(fltPresence) { // ditto
@@ -1501,7 +1501,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			info.IsPresent = true
+			info.IsBckPresent = true
 		}
 		toHdr(bck, hdr, true, info)
 		return

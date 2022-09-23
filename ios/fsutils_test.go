@@ -1,9 +1,9 @@
 // Package ios is a collection of interfaces to the local storage subsystem;
 // the package includes OS-dependent implementations for those interfaces.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package ios
+package ios_test
 
 import (
 	"os"
@@ -11,10 +11,12 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/ios"
 )
 
 func TestGetFSUsedPercentage(t *testing.T) {
-	percentage, ok := GetFSUsedPercentage("/")
+	percentage, ok := ios.GetFSUsedPercentage("/")
 	if !ok {
 		t.Error("Unable to retrieve FS used percentage!")
 	}
@@ -23,25 +25,25 @@ func TestGetFSUsedPercentage(t *testing.T) {
 	}
 }
 
-func TestGetDirSize(t *testing.T) {
+func TestDirSize(t *testing.T) {
 	name, err := os.MkdirTemp("/tmp", t.Name())
 	if err != nil {
 		t.Error(err)
 	}
 	defer os.RemoveAll(name)
 
-	mkFile(t, name)
+	size := mkFile(t, name, "file.txt")
 
-	totalSize, err := GetDirSize(name)
+	totalSize, err := ios.DirSizeOnDisk(name)
 	if err != nil {
 		t.Error(err)
 	}
-	if totalSize == 0 {
-		t.Fatal("Directory size was not determined correctly")
+	if totalSize < uint64(size) {
+		t.Fatalf("Dir size %d < %d file", totalSize, size)
 	}
 }
 
-func TestGetFilesCount(t *testing.T) {
+func TestDirFiles(t *testing.T) {
 	name, err := os.MkdirTemp("/tmp", t.Name())
 	if err != nil {
 		t.Error(err)
@@ -50,35 +52,56 @@ func TestGetFilesCount(t *testing.T) {
 
 	checkFileCount(t, name, 0)
 
-	nameInside, err := os.MkdirTemp(name, "")
+	subdir, err := os.MkdirTemp(name, "")
 	if err != nil {
 		t.Error(err)
 	}
 
 	checkFileCount(t, name, 0)
 
-	mkFile(t, name)
+	size := mkFile(t, name, "f1.txt")
 	checkFileCount(t, name, 1)
 
-	mkFile(t, nameInside)
-	checkFileCount(t, name, 2)
+	size += mkFile(t, subdir, "f2.txt")
+	size += mkFile(t, subdir, "f3.txt")
+	checkFileCount(t, name, 3)
+	checkFileSizes(t, name, size)
 }
 
-func mkFile(t *testing.T, dir string) {
-	f, err := os.Create(path.Join(dir, "file.txt"))
+func mkFile(t *testing.T, dir, fname string) (written int) {
+	k := mono.NanoTime() & 0xff
+	f, err := os.Create(path.Join(dir, fname))
 	if err != nil {
 		t.Error(err)
 	}
-	f.Write(make([]byte, cos.KiB))
+	size := cos.KiB * int(k)
+	written, err = f.Write(make([]byte, size))
 	f.Close()
-}
-
-func checkFileCount(t *testing.T, dir string, n int) {
-	fileCount, err := GetFileCount(dir)
 	if err != nil {
 		t.Error(err)
 	}
-	if fileCount != n {
-		t.Fatalf("Expected %d files inside the directories", n)
+	if written != size {
+		t.Fatalf("written %d != %d", size, written)
+	}
+	return
+}
+
+func checkFileCount(t *testing.T, dir string, expcnt int) {
+	fileCount, err := ios.DirFileCount(dir)
+	if err != nil {
+		t.Error(err)
+	}
+	if fileCount != expcnt {
+		t.Fatalf("Expected %d files, got %d", expcnt, fileCount)
+	}
+}
+
+func checkFileSizes(t *testing.T, dir string, expsize int) {
+	size, err := ios.DirSumFileSizes(dir)
+	if err != nil {
+		t.Error(err)
+	}
+	if size != uint64(expsize) {
+		t.Fatalf("Expected %d size, got %d", expsize, size)
 	}
 }

@@ -3072,9 +3072,12 @@ func TestBucketListAndSummary(t *testing.T) {
 				}
 
 				summary := summaries[0]
-				if summary.ObjCount != uint64(expectedFiles) {
-					t.Errorf("number of objects in summary (%d) is different than expected (%d)",
-						summary.ObjCount, expectedFiles)
+				if !test.fast {
+					// TODO -- FIXME: add checks and rewrite
+					if summary.ObjCount.Remote+summary.ObjCount.Present != uint64(expectedFiles) {
+						t.Errorf("%s: number of objects in summary (%+v) differs from expected (%d)",
+							m.bck, summary.ObjCount, expectedFiles)
+					}
 				}
 			} else {
 				msg := &apc.ListObjsMsg{}

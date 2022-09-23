@@ -285,7 +285,7 @@ func (r *ObjListXact) isPageCached(marker string, cnt uint) bool {
 
 func (r *ObjListXact) nextPageRemote() error {
 	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.bck, r.msg)
-	bckList, err := walk.RemoteObjPage()
+	bckList, err := walk.NextRemoteObjPage()
 	if err != nil {
 		r.nextToken = ""
 		return err

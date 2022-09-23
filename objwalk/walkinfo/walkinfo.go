@@ -30,7 +30,7 @@ type (
 		objectFilter objFilter
 		propNeeded   map[string]bool
 		prefix       string
-		Marker       string
+		marker       string
 		markerDir    string
 		msg          *apc.ListObjsMsg
 		timeFormat   string
@@ -82,7 +82,7 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) *W
 		smap:         t.Sowner().Get(),
 		postCallback: postCallback,
 		prefix:       msg.Prefix,
-		Marker:       msg.ContinuationToken,
+		marker:       msg.ContinuationToken,
 		markerDir:    markerDir,
 		msg:          msg,
 		timeFormat:   msg.TimeFormat,
@@ -133,7 +133,7 @@ func (wi *WalkInfo) matchObj(lom *cluster.LOM) bool {
 	if !cmn.ObjNameContainsPrefix(lom.ObjName, wi.prefix) {
 		return false
 	}
-	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, lom.ObjName) {
+	if wi.marker != "" && cmn.TokenIncludesObject(wi.marker, lom.ObjName) {
 		return false
 	}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {

@@ -113,16 +113,23 @@ type (
 type (
 	BckSumm struct {
 		Bck
-		ObjCount uint64 `json:"obj_count,string"`
-		ObjSize  struct {
+		ObjCount struct {
+			Present uint64 `json:"obj_count_present,string"`
+			Remote  uint64 `json:"obj_count_remote,string"`
+		}
+		ObjSize struct {
 			Min int64 `json:"obj_min_size"`
 			Avg int64 `json:"obj_avg_size"`
 			Max int64 `json:"obj_max_size"`
 		}
-		Size           uint64 `json:"size,string"` // TODO -- FIXME: several different sizes: on-disk, objects, ...
-		TotalDisksSize uint64 `json:"total_disks_size,string"`
-		UsedPct        uint64 `json:"used_pct"`
-		IsPresent      bool   `json:"present"` // in BMD
+		TotalSize struct {
+			OnDisk      uint64 `json:"size_on_disk,string"`          // sum(dir sizes) aka "apparent size"
+			PresentObjs uint64 `json:"size_all_present_objs,string"` // sum(cached object sizes)
+			RemoteObjs  uint64 `json:"size_all_remote_objs,string"`  // sum(all object sizes in a remote bucket)
+			Disks       uint64 `json:"total_disks_size,string"`
+		}
+		UsedPct      uint64 `json:"used_pct"`
+		IsBckPresent bool   `json:"is_present"` // in BMD
 	}
 	BckSummaries []*BckSumm
 )
@@ -317,7 +324,8 @@ func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 var _ sort.Interface = (*BckSummaries)(nil)
 
 func NewBckSumm(bck *Bck, totalDisksSize uint64) (bs *BckSumm) {
-	bs = &BckSumm{Bck: *bck, TotalDisksSize: totalDisksSize}
+	bs = &BckSumm{Bck: *bck}
+	bs.TotalSize.Disks = totalDisksSize
 	bs.ObjSize.Min = math.MaxInt64
 	return
 }
@@ -344,8 +352,11 @@ func aggr(from, to *BckSumm) {
 	if from.ObjSize.Max > to.ObjSize.Max {
 		to.ObjSize.Max = from.ObjSize.Max
 	}
-	to.ObjCount += from.ObjCount
-	to.Size += from.Size
+	to.ObjCount.Present += from.ObjCount.Present
+	to.ObjCount.Remote += from.ObjCount.Remote
+	to.TotalSize.OnDisk += from.TotalSize.OnDisk
+	to.TotalSize.PresentObjs += from.TotalSize.PresentObjs
+	to.TotalSize.RemoteObjs += from.TotalSize.RemoteObjs
 }
 
 func (s BckSummaries) Finalize(dsize map[string]uint64, testingEnv bool) {
@@ -360,10 +371,10 @@ func (s BckSummaries) Finalize(dsize map[string]uint64, testingEnv bool) {
 		if summ.ObjSize.Min == math.MaxInt64 {
 			summ.ObjSize.Min = 0 // alternatively, CLI to show `-`
 		}
-		if summ.ObjCount > 0 {
-			summ.ObjSize.Avg = int64(cos.DivRoundU64(summ.Size, summ.ObjCount))
+		if summ.ObjCount.Present > 0 {
+			summ.ObjSize.Avg = int64(cos.DivRoundU64(summ.TotalSize.PresentObjs, summ.ObjCount.Present))
 		}
-		summ.UsedPct = cos.DivRoundU64(summ.Size*100, totalDisksSize)
+		summ.UsedPct = cos.DivRoundU64(summ.TotalSize.OnDisk*100, totalDisksSize)
 	}
 }
 
@@ -371,7 +382,7 @@ func (s BckSummaries) Finalize(dsize map[string]uint64, testingEnv bool) {
 // SelectObjsMsg //
 ///////////////////
 
-// NOTE: to operate on an entire bucket, use empty SelectObjsMsg{}
+// NOTE: to operate on an entire bucket use empty `SelectObjsMsg{}`
 
 func (lrm *SelectObjsMsg) IsList() bool      { return len(lrm.ObjNames) > 0 }
 func (lrm *SelectObjsMsg) HasTemplate() bool { return lrm.Template != "" }

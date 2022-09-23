@@ -229,13 +229,13 @@ func TestNamespace(t *testing.T) {
 				if summary.Bck.Equal(&m1.bck) {
 					bck1Found = true
 					tassert.Errorf(
-						t, summary.ObjCount == uint64(m1.num),
+						t, summary.ObjCount.Present == uint64(m1.num),
 						"number of objects (%d) should be equal to (%d)", summary.ObjCount, m1.num,
 					)
 				} else if summary.Bck.Equal(&m2.bck) {
 					bck2Found = true
 					tassert.Errorf(
-						t, summary.ObjCount == uint64(m2.num),
+						t, summary.ObjCount.Present == uint64(m2.num),
 						"number of objects (%d) should be equal to (%d)", summary.ObjCount, m2.num,
 					)
 				}

@@ -114,7 +114,7 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn
 		}
 		tgtsumm, tid := res.v.(*cmn.BckSummaries), res.si.ID()
 		for _, summ := range *tgtsumm {
-			dsize[tid] = summ.TotalDisksSize
+			dsize[tid] = summ.TotalSize.Disks
 			summaries = summaries.Aggregate(summ)
 		}
 	}
