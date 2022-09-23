@@ -10,8 +10,8 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool) cmn.Bcks {
@@ -25,7 +25,7 @@ func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool)
 
 		// Make sure that listing with specific UUID also works and have similar outcome.
 		remoteClusterBuckets, err := api.ListBuckets(baseParams,
-			cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID}},
+			cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}},
 			apc.FltExists)
 		tassert.CheckFatal(t, err)
 		// NOTE: cannot do `remoteClusterBuckets.Equal(remoteBuckets)` because of different `Ns.UUID`
@@ -92,7 +92,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
-					UUID: tutils.RemoteCluster.UUID,
+					UUID: tools.RemoteCluster.UUID,
 					Name: cmn.NsGlobal.Name,
 				},
 			},
@@ -112,7 +112,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
-					UUID: tutils.RemoteCluster.UUID,
+					UUID: tools.RemoteCluster.UUID,
 					Name: "ns1",
 				},
 			},
@@ -124,7 +124,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
-					UUID: tutils.RemoteCluster.UUID,
+					UUID: tools.RemoteCluster.UUID,
 					Name: "ns1",
 				},
 			},
@@ -132,7 +132,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
-					UUID: tutils.RemoteCluster.UUID,
+					UUID: tools.RemoteCluster.UUID,
 					Name: "ns2",
 				},
 			},
@@ -140,8 +140,8 @@ func TestNamespace(t *testing.T) {
 	}
 
 	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	for _, test := range tests {
@@ -159,7 +159,7 @@ func TestNamespace(t *testing.T) {
 				}
 			)
 
-			tutils.CheckSkip(t, tutils.SkipTestArgs{
+			tools.CheckSkip(t, tools.SkipTestArgs{
 				RequiresRemoteCluster: test.remote,
 			})
 
@@ -253,7 +253,7 @@ func TestNamespace(t *testing.T) {
 }
 
 func TestRemoteWithAliasAndUUID(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{
+	tools.CheckSkip(t, tools.SkipTestArgs{
 		RequiresRemoteCluster: true,
 	})
 
@@ -261,11 +261,11 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 	t.Skip("NYI")
 
 	var (
-		alias = tutils.RemoteCluster.Alias
-		uuid  = tutils.RemoteCluster.UUID
+		alias = tools.RemoteCluster.Alias
+		uuid  = tools.RemoteCluster.UUID
 
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		m1 = ioContext{
 			t:   t,
@@ -312,7 +312,7 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 }
 
 func TestRemoteWithSilentBucketDestroy(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{
+	tools.CheckSkip(t, tools.SkipTestArgs{
 		RequiresRemoteCluster: true,
 	})
 
@@ -320,14 +320,14 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	t.Skip("NYI")
 
 	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		remoteBP   = tutils.BaseAPIParams(tutils.RemoteCluster.URL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
+		remoteBP   = tools.BaseAPIParams(tools.RemoteCluster.URL)
 
 		m = ioContext{
 			t:   t,
 			num: 100,
-			bck: cmn.Bck{Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID}},
+			bck: cmn.Bck{Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}},
 		}
 	)
 

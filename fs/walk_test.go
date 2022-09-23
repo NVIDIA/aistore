@@ -17,9 +17,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestWalkBck(t *testing.T) {
@@ -68,7 +68,7 @@ func TestWalkBck(t *testing.T) {
 				err := cos.CreateDir(dir)
 				tassert.CheckFatal(t, err)
 
-				_, names := tutils.PrepareDirTree(t, tutils.DirTreeDesc{
+				_, names := tools.PrepareDirTree(t, tools.DirTreeDesc{
 					InitDir: dir,
 					Dirs:    rand.Int()%100 + 1,
 					Files:   rand.Int()%100 + 1,

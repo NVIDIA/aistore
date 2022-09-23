@@ -15,21 +15,21 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 func propsStats(t *testing.T, proxyURL string) (objChanged, bytesChanged int64) {
-	cstats := tutils.GetClusterStats(t, proxyURL)
+	cstats := tools.GetClusterStats(t, proxyURL)
 	objChanged = 0
 	bytesChanged = 0
 
 	for _, v := range cstats.Target {
-		objChanged += tutils.GetNamedStatsVal(v, stats.VerChangeCount)
-		bytesChanged += tutils.GetNamedStatsVal(v, stats.VerChangeSize)
+		objChanged += tools.GetNamedStatsVal(v, stats.VerChangeCount)
+		bytesChanged += tools.GetNamedStatsVal(v, stats.VerChangeSize)
 	}
 	return
 }
@@ -42,7 +42,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 	if err != nil {
 		t.Fatalf("Failed to create reader: %v", err)
 	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	for fname := range oldVersions {
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -90,7 +90,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 
 func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[string]string) {
 	versChanged, bytesChanged := propsStats(t, proxyURL)
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	for object := range objList {
 		_, err := api.GetObject(baseParams, bck, object)
 		if err != nil {
@@ -124,7 +124,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		}
 	}
 
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	xactID, err := api.EvictList(baseParams, bck, toEvictList)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
@@ -210,10 +210,10 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 
 func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *apc.ListObjsMsg,
 	versionEnabled bool, cksumType string) {
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bck, objects)
 
-	smap := tutils.GetClusterMap(t, proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
 	origActiveTargetCnt := smap.CountActiveTargets()
 	if origActiveTargetCnt < 2 {
 		t.Skipf("Only %d targets found, need at least 2", origActiveTargetCnt)
@@ -224,7 +224,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	args := &apc.ActValRmNode{DaemonID: removeTarget.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(
+	smap, err = tools.WaitForClusterState(
 		proxyURL,
 		"target removed",
 		smap.Version,
@@ -239,7 +239,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	args = &apc.ActValRmNode{DaemonID: removeTarget.ID()}
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(
+	_, err = tools.WaitForClusterState(
 		proxyURL,
 		"target joined",
 		smap.Version,
@@ -247,7 +247,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		smap.CountActiveTargets()+1,
 	)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForRebalanceByID(t, origActiveTargetCnt, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, origActiveTargetCnt, baseParams, rebID, rebalanceTimeout)
 
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	if reslist == nil {
@@ -290,7 +290,7 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 	wg := &sync.WaitGroup{}
 	for objName := range newVersions {
 		wg.Add(1)
-		go tutils.Del(proxyURL, bck, objName, wg, errCh, true /*silent*/)
+		go tools.Del(proxyURL, bck, objName, wg, errCh, true /*silent*/)
 	}
 	wg.Wait()
 	tassert.SelectErr(t, errCh, "delete", true)
@@ -307,7 +307,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 			prefix:              "props/obj-",
 			deleteRemoteBckObjs: true,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 
 	m.initWithCleanup()
@@ -371,7 +371,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 
 func propsMainTest(t *testing.T, versioning bool) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		config := tutils.GetClusterConfig(t)
+		config := tools.GetClusterConfig(t)
 
 		oldChkVersion := config.Versioning.ValidateWarmGet
 		oldVersioning := config.Versioning.Enabled
@@ -385,7 +385,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 			newConfig["versioning.validate_warm_get"] = strconv.FormatBool(warmCheck)
 		}
 		if len(newConfig) != 0 {
-			tutils.SetClusterConfig(t, newConfig)
+			tools.SetClusterConfig(t, newConfig)
 		}
 
 		defer func() {
@@ -399,7 +399,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 				newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(oldVersioning)
 			}
 			if len(newConfig) != 0 {
-				tutils.SetClusterConfig(t, newConfig)
+				tools.SetClusterConfig(t, newConfig)
 			}
 		}()
 
@@ -408,7 +408,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 }
 
 func TestObjPropsVersion(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	for _, versioning := range []bool{false, true} {
 		t.Run(fmt.Sprintf("enabled=%t", versioning), func(t *testing.T) {
@@ -424,8 +424,8 @@ func TestObjProps(t *testing.T) {
 		typeCloud     = "cloud"
 	)
 	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		tests = []struct {
 			bucketType   string
@@ -473,13 +473,13 @@ func TestObjProps(t *testing.T) {
 			switch test.bucketType {
 			case typeCloud:
 				m.bck = cliBck
-				tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 			case typeLocal:
-				tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+				tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 			case typeRemoteAIS:
-				tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
-				m.bck.Ns.UUID = tutils.RemoteCluster.UUID
-				tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+				tools.CheckSkip(t, tools.SkipTestArgs{RequiresRemoteCluster: true})
+				m.bck.Ns.UUID = tools.RemoteCluster.UUID
+				tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 			default:
 				tassert.CheckFatal(t, fmt.Errorf("unknown type %q", test.bucketType))
 			}
@@ -609,7 +609,7 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.ListOb
 		tlog.Logf("LIST %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
 			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsCached), msg.ContinuationToken)
 	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	resList, err := api.ListObjects(baseParams, bck, msg, 0)
 	if err != nil {
 		t.Errorf("List objects %s failed, err = %v", bck, err)

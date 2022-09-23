@@ -16,11 +16,11 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tetl"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 )
 
@@ -42,7 +42,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 }
 
 func TestETLTar2TFS3(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 
 	const (
 		tarObjName   = "small-mnist-3.tar"
@@ -52,15 +52,15 @@ func TestETLTar2TFS3(t *testing.T) {
 	var (
 		tarPath      = filepath.Join("data", tarObjName)
 		tfRecordPath = filepath.Join("data", tfRecordFile)
-		proxyURL     = tutils.RandomProxyURL()
+		proxyURL     = tools.RandomProxyURL()
 		bck          = cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
 		}
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	// PUT TAR to the cluster
 	f, err := readers.NewFileReaderFromFile(tarPath, cos.ChecksumXXHash)
@@ -103,7 +103,7 @@ func TestETLTar2TFS3(t *testing.T) {
 
 func TestETLTar2TFRanges(t *testing.T) {
 	// TestETLTar2TFS3 already runs in short tests, no need for short here as well.
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 
 	type testCase struct {
 		start, end int64
@@ -112,12 +112,12 @@ func TestETLTar2TFRanges(t *testing.T) {
 	var (
 		tarObjName = "small-mnist-3.tar"
 		tarPath    = filepath.Join("data", tarObjName)
-		proxyURL   = tutils.RandomProxyURL()
+		proxyURL   = tools.RandomProxyURL()
 		bck        = cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
 		}
-		baseParams     = tutils.BaseAPIParams(proxyURL)
+		baseParams     = tools.BaseAPIParams(proxyURL)
 		rangeBytesBuff = bytes.NewBuffer(nil)
 
 		tcs = []testCase{
@@ -130,7 +130,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 		}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	// PUT TAR to the cluster
 	f, err := readers.NewFileReaderFromFile(tarPath, cos.ChecksumXXHash)

@@ -19,11 +19,11 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/docker"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/docker"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 // Intended for a deployment with multiple targets
@@ -32,7 +32,7 @@ import (
 // 3. PUT large amount of objects into the ais bucket
 // 4. GET the objects while simultaneously registering the target T
 func TestGetAndReRegisterInParallel(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:               t,
@@ -47,7 +47,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	m.expectTargets(2)
 
 	// Step 1.
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 2.
 	target := m.startMaintenanceNoRebalance()
@@ -75,7 +75,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
 	if rebID != "" {
-		tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
+		tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 	}
 }
 
@@ -85,7 +85,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 // 3. Crash the primary proxy and PUT in parallel
 // 4. Failback to the original primary proxy, register target, and GET in parallel
 func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 2, MinProxies: 3})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, MinTargets: 2, MinProxies: 3})
 	m := ioContext{
 		t:                   t,
 		otherTasksToTrigger: 1,
@@ -95,7 +95,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 
 	// Step 1.
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 2.
 	target := m.startMaintenanceNoRebalance()
@@ -104,7 +104,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	_, newPrimaryURL, err := chooseNextProxy(m.smap)
 	tassert.CheckFatal(t, err)
 	// use a new proxyURL because primaryCrashElectRestart has a side-effect:
-	// it changes the primary proxy. Without the change tutils.PutRandObjs is
+	// it changes the primary proxy. Without the change tools.PutRandObjs is
 	// failing while the current primary is restarting and rejoining
 	m.proxyURL = newPrimaryURL
 
@@ -151,7 +151,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 // 3. PUT large amounts of objects into ais bucket
 // 4. Get the objects while simultaneously registering the target
 func TestGetAndRestoreInParallel(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		m = ioContext{
@@ -170,16 +170,16 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	// Select a random target
 	targetNode, _ = m.smap.GetRandTarget()
 	tlog.Logf("Killing %s\n", targetNode.StringEx())
-	tcmd, err := tutils.KillNode(targetNode)
+	tcmd, err := tools.KillNode(targetNode)
 	tassert.CheckFatal(t, err)
 
-	proxyURL := tutils.RandomProxyURL(t)
-	m.smap, err = tutils.WaitForClusterState(proxyURL, "target removed", m.smap.Version, m.originalProxyCount,
+	proxyURL := tools.RandomProxyURL(t)
+	m.smap, err = tools.WaitForClusterState(proxyURL, "target removed", m.smap.Version, m.originalProxyCount,
 		m.originalTargetCount-1)
 	tassert.CheckError(t, err)
 
 	// Step 2
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 3
 	m.puts()
@@ -190,7 +190,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(4 * time.Second)
-		tutils.RestoreNode(tcmd, false, "target")
+		tools.RestoreNode(tcmd, false, "target")
 	}()
 	go func() {
 		defer wg.Done()
@@ -200,7 +200,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
-	tutils.WaitForRebalAndResil(m.t, tutils.BaseAPIParams(m.proxyURL))
+	tools.WaitForRebalAndResil(m.t, tools.BaseAPIParams(m.proxyURL))
 }
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
@@ -211,10 +211,10 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 
 	// Decommission the same target again.
 	args := &apc.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
-	_, err := api.StartMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
+	_, err := api.StartMaintenance(tools.BaseAPIParams(m.proxyURL), args)
 	tassert.Errorf(t, err != nil, "error expected")
 
-	n := tutils.GetClusterMap(t, m.proxyURL).CountActiveTargets()
+	n := tools.GetClusterMap(t, m.proxyURL).CountActiveTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("expected %d targets after putting target in maintenance, got %d targets",
 			m.originalTargetCount-1, n)
@@ -223,11 +223,11 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	// Register target (bring cluster to normal state)
 	rebID := m.stopMaintenance(target)
 	m.waitAndCheckCluState()
-	tutils.WaitForRebalanceByID(m.t, m.originalTargetCount, tutils.BaseAPIParams(m.proxyURL), rebID)
+	tools.WaitForRebalanceByID(m.t, m.originalTargetCount, tools.BaseAPIParams(m.proxyURL), rebID)
 }
 
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:   t,
@@ -239,14 +239,14 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Unregister target[0]
 	args := &apc.ActValRmNode{DaemonID: targets[0].ID(), SkipRebalance: true}
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForClusterState(
+	tools.WaitForClusterState(
 		m.proxyURL,
 		"put target in maintenance",
 		m.smap.Version,
@@ -254,7 +254,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		m.originalTargetCount-1,
 	)
 
-	n := tutils.GetClusterMap(t, m.proxyURL).CountActiveTargets()
+	n := tools.GetClusterMap(t, m.proxyURL).CountActiveTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("expected %d targets after putting target in maintenance, got %d targets",
 			m.originalTargetCount-1, n)
@@ -292,13 +292,13 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	rebID := m.stopMaintenance(targets[1])
 
 	// wait for rebalance to complete
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
 	m.waitAndCheckCluState()
 }
 
 func TestAckRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:             t,
@@ -309,7 +309,7 @@ func TestAckRebalance(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -319,8 +319,8 @@ func TestAckRebalance(t *testing.T) {
 	rebID := m.stopMaintenance(target)
 
 	// Wait for everything to finish.
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
 	m.gets()
 
@@ -329,7 +329,7 @@ func TestAckRebalance(t *testing.T) {
 }
 
 func TestStressRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	m := &ioContext{
 		t: t,
@@ -338,7 +338,7 @@ func TestStressRebalance(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(4)
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	for i := 1; i <= 3; i++ {
 		tlog.Logf("Iteration #%d ======\n", i)
@@ -363,10 +363,10 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	// Unregister targets.
 	tlog.Logf("Killing %s and %s\n", target1.StringEx(), target2.StringEx())
-	cmd1, err := tutils.KillNode(target1)
+	cmd1, err := tools.KillNode(target1)
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
-	cmd2, err := tutils.KillNode(target2)
+	cmd2, err := tools.KillNode(target2)
 	tassert.CheckFatal(t, err)
 
 	// Start putting objects into bucket
@@ -382,16 +382,16 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	// and join 2 targets in parallel
 	time.Sleep(time.Second)
-	err = tutils.RestoreNode(cmd1, false, "the 1st target")
+	err = tools.RestoreNode(cmd1, false, "the 1st target")
 	tassert.CheckFatal(t, err)
 
 	// random sleep between the first and the second join
 	time.Sleep(time.Duration(rand.Intn(3)+1) * time.Second)
 
-	err = tutils.RestoreNode(cmd2, false, "the 2nd target")
+	err = tools.RestoreNode(cmd2, false, "the 2nd target")
 	tassert.CheckFatal(t, err)
 
-	_, err = tutils.WaitForClusterState(
+	_, err = tools.WaitForClusterState(
 		m.proxyURL,
 		"targets to join",
 		m.smap.Version,
@@ -401,8 +401,8 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	tassert.CheckFatal(m.t, err)
 
 	// wait for the rebalance to finish
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
+	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 
 	// wait for the reads to run out
 	wg.Wait()
@@ -412,7 +412,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 }
 
 func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	m := ioContext{
 		t:   t,
 		num: 10000,
@@ -422,15 +422,15 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target0, target1 := targets[0], targets[1]
 	args := &apc.ActValRmNode{DaemonID: target0.ID(), SkipRebalance: true}
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	_, err = tutils.WaitForClusterState(
+	_, err = tools.WaitForClusterState(
 		m.proxyURL,
 		"put target in maintenance",
 		m.smap.Version,
@@ -456,7 +456,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Unregister target 1 in parallel
 	go func() {
 		defer wg.Done()
-		err = tutils.RemoveNodeFromSmap(m.proxyURL, target1.ID())
+		err = tools.RemoveNodeFromSmap(m.proxyURL, target1.ID())
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -467,9 +467,9 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	sleep := time.Duration(rand.Intn(5))*time.Second + time.Millisecond
 	time.Sleep(sleep)
 	tlog.Logf("Join %s back\n", target1.StringEx())
-	rebID, err := tutils.JoinCluster(m.proxyURL, target1)
+	rebID, err := tools.JoinCluster(m.proxyURL, target1)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(
+	_, err = tools.WaitForClusterState(
 		m.proxyURL,
 		"targets to join",
 		m.smap.Version,
@@ -480,7 +480,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	tlog.Logf("Wait for rebalance (%q?)...\n", rebID)
 	time.Sleep(sleep)
-	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 
 	m.gets()
 
@@ -489,7 +489,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 }
 
 func TestPutDuringRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:   t,
@@ -499,7 +499,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -518,8 +518,8 @@ func TestPutDuringRebalance(t *testing.T) {
 
 	// Wait for everything to finish.
 	wg.Wait()
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
 	// Main check - try to read all objects.
 	m.gets()
@@ -529,7 +529,7 @@ func TestPutDuringRebalance(t *testing.T) {
 }
 
 func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -537,7 +537,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 			num:             10000,
 			numGetsEachFile: 3,
 		}
-		baseParams     = tutils.BaseAPIParams()
+		baseParams     = tools.BaseAPIParams()
 		selectedTarget *cluster.Snode
 		killTarget     *cluster.Snode
 	)
@@ -545,7 +545,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Select a random target to disable one of its mountpaths,
 	// and another random target to unregister.
@@ -574,7 +574,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	args := &apc.ActValRmNode{DaemonID: killTarget.ID(), SkipRebalance: true}
 	_, err = api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	smap, err := tutils.WaitForClusterState(
+	smap, err := tools.WaitForClusterState(
 		m.proxyURL,
 		"target removal",
 		m.smap.Version,
@@ -609,7 +609,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	wg.Wait()
 
 	// make sure that the cluster has all targets enabled
-	_, err = tutils.WaitForClusterState(
+	_, err = tools.WaitForClusterState(
 		m.proxyURL,
 		"join target back",
 		smap.Version,
@@ -619,8 +619,8 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	tassert.CheckFatal(m.t, err)
 
 	// wait for rebalance to complete
-	baseParams = tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout) // TODO -- FIXME: revise
+	baseParams = tools.BaseAPIParams(m.proxyURL)
+	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout) // TODO -- FIXME: revise
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
@@ -628,20 +628,20 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 }
 
 func TestGetDuringResilver(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
 			t:   t,
 			num: 20000,
 		}
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 	)
 
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
@@ -688,14 +688,14 @@ func TestGetDuringResilver(t *testing.T) {
 	args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
-	tutils.WaitForResilvering(t, baseParams, nil)
+	tools.WaitForResilvering(t, baseParams, nil)
 
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, mpList)
 }
 
 func TestGetDuringRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:   t,
@@ -705,7 +705,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -722,8 +722,8 @@ func TestGetDuringRebalance(t *testing.T) {
 	rebID := m.stopMaintenance(target)
 
 	// Wait for everything to finish.
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 	wg.Wait()
 
 	// Get objects once again to check if they are still accessible after rebalance.
@@ -734,7 +734,7 @@ func TestGetDuringRebalance(t *testing.T) {
 }
 
 func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	const (
 		unregisterTargetCount = 2
@@ -749,7 +749,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Decommission targets
 	for i := 0; i < unregisterTargetCount; i++ {
@@ -757,7 +757,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		_, err := api.StartMaintenance(baseParams, args)
 		tassert.CheckError(t, err)
 	}
-	tutils.WaitForClusterState(
+	tools.WaitForClusterState(
 		m.proxyURL,
 		"remove targets",
 		m.smap.Version,
@@ -783,19 +783,19 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, bck, nil)
 		}()
 	}
 	wg.Wait()
 	m.waitAndCheckCluState()
-	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 }
 
 func TestMountpathDetachAll(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: add back, here and elsewhere
 	}
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 2})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, MinTargets: 2})
 
 	var (
 		m = ioContext{
@@ -803,7 +803,7 @@ func TestMountpathDetachAll(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -835,7 +835,7 @@ func TestMountpathDetachAll(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Add target mountpath again
 	for _, mpath := range origMountpaths.Available {
@@ -848,7 +848,7 @@ func TestMountpathDetachAll(t *testing.T) {
 	args = api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	// random read/write
 	m.puts()
@@ -859,14 +859,14 @@ func TestMountpathDetachAll(t *testing.T) {
 }
 
 func TestResilverAfterAddingMountpath(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:               t,
 			num:             5000,
 			numGetsEachFile: 2,
 		}
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -876,7 +876,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	ensureNoDisabledMountpaths(t, target, mpList)
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	if docker.IsRunning() {
 		err := docker.CreateMpathDir(0, testMpath)
@@ -899,7 +899,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	err = api.AttachMountpath(baseParams, target, testMpath, true /*force*/)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	m.gets()
 
@@ -916,19 +916,19 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 
 	m.ensureNoGetErrors()
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 	m.ensureNumMountpaths(target, mpList)
 }
 
 func TestAttachDetachMountpathAllTargets(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 5,
 		}
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 
 		allMps = make(map[string]*apc.MountpathList)
 	)
@@ -938,7 +938,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	defer func() {
 		if !docker.IsRunning() {
@@ -974,7 +974,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		}
 	}
 
-	tutils.WaitForResilvering(t, baseParams, nil)
+	tools.WaitForResilvering(t, baseParams, nil)
 
 	// Read after rebalance
 	m.gets()
@@ -998,7 +998,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		}
 	}
 
-	tutils.WaitForResilvering(t, baseParams, nil)
+	tools.WaitForResilvering(t, baseParams, nil)
 
 	m.ensureNoGetErrors()
 	for _, target := range targets {
@@ -1013,7 +1013,7 @@ func TestMountpathDisableAll(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -1051,7 +1051,7 @@ func TestMountpathDisableAll(t *testing.T) {
 			args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 			_, _ = api.WaitForXactionIC(baseParams, args)
 
-			tutils.WaitForResilvering(t, baseParams, nil)
+			tools.WaitForResilvering(t, baseParams, nil)
 		}
 	}()
 	for _, mpath := range origMountpaths.Available {
@@ -1079,7 +1079,7 @@ func TestMountpathDisableAll(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Re-enable target mountpaths
 	for _, mpath := range origMountpaths.Available {
@@ -1093,10 +1093,10 @@ func TestMountpathDisableAll(t *testing.T) {
 	args = api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	tlog.Logf("waiting for bucket %s to show up on all targets\n", m.bck)
-	err = tutils.WaitForBucket(m.proxyURL, cmn.QueryBcks(m.bck), true /*exists*/)
+	err = tools.WaitForBucket(m.proxyURL, cmn.QueryBcks(m.bck), true /*exists*/)
 	tassert.CheckFatal(t, err)
 
 	// Put and read random files
@@ -1126,13 +1126,13 @@ func TestForwardCP(t *testing.T) {
 
 	t.Cleanup(func() {
 		// Restore original primary.
-		m.smap = tutils.GetClusterMap(m.t, m.proxyURL)
+		m.smap = tools.GetClusterMap(m.t, m.proxyURL)
 		setPrimaryTo(t, m.proxyURL, m.smap, origURL, origID)
 
 		time.Sleep(time.Second)
 	})
 
-	tutils.CreateBucketWithCleanup(t, nextProxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, nextProxyURL, m.bck, nil)
 	tlog.Logf("Created bucket %s via non-primary %s\n", m.bck, nextProxyID)
 
 	// Step 3.
@@ -1156,12 +1156,12 @@ func TestForwardCP(t *testing.T) {
 	m.ensureNoGetErrors()
 
 	// Step 5. destroy ais bucket via original primary which is not primary at this point
-	tutils.DestroyBucket(t, origURL, m.bck)
+	tools.DestroyBucket(t, origURL, m.bck)
 	tlog.Logf("Destroyed bucket %s via non-primary %s/%s\n", m.bck, origID, origURL)
 }
 
 func TestAtimeRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:               t,
@@ -1172,7 +1172,7 @@ func TestAtimeRebalance(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -1183,7 +1183,7 @@ func TestAtimeRebalance(t *testing.T) {
 	// be different from the original one, but the difference could be very small).
 	msg := &apc.ListObjsMsg{TimeFormat: time.StampNano}
 	msg.AddProps(apc.GetPropsAtime, apc.GetPropsStatus)
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 	lst, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -1195,7 +1195,7 @@ func TestAtimeRebalance(t *testing.T) {
 	rebID := m.stopMaintenance(target)
 
 	// make sure that the cluster has all targets enabled
-	_, err = tutils.WaitForClusterState(
+	_, err = tools.WaitForClusterState(
 		m.proxyURL,
 		"join target back",
 		m.smap.Version,
@@ -1204,7 +1204,7 @@ func TestAtimeRebalance(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
 	msg = &apc.ListObjsMsg{TimeFormat: time.StampNano}
 	msg.AddProps(apc.GetPropsAtime, apc.GetPropsStatus)
@@ -1240,24 +1240,24 @@ func TestAtimeLocalGet(t *testing.T) {
 			Name:     t.Name(),
 			Provider: apc.AIS,
 		}
-		proxyURL      = tutils.RandomProxyURL(t)
-		baseParams    = tutils.BaseAPIParams(proxyURL)
+		proxyURL      = tools.RandomProxyURL(t)
+		baseParams    = tools.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
 
-	putAtime, putAtimeFormatted := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	putAtime, putAtimeFormatted := tools.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	// Get object so that atime is updated
 	_, err = api.GetObject(baseParams, bck, objectName)
 	tassert.CheckFatal(t, err)
 
-	getAtime, getAtimeFormatted := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	getAtime, getAtimeFormatted := tools.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	if !(getAtime.After(putAtime)) {
 		t.Errorf("Expected PUT atime (%s) to be before GET atime (%s)", putAtimeFormatted, getAtimeFormatted)
@@ -1267,17 +1267,17 @@ func TestAtimeLocalGet(t *testing.T) {
 func TestAtimeColdGet(t *testing.T) {
 	var (
 		bck           = cliBck
-		proxyURL      = tutils.RandomProxyURL(t)
-		baseParams    = tutils.BaseAPIParams(proxyURL)
+		proxyURL      = tools.RandomProxyURL(t)
+		baseParams    = tools.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("dummy content"))
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 	api.DeleteObject(baseParams, bck, objectName)
 	defer api.DeleteObject(baseParams, bck, objectName)
 
-	tutils.PutObjectInRemoteBucketWithoutCachingLocally(t, bck, objectName, objectContent)
+	tools.PutObjectInRemoteBucketWithoutCachingLocally(t, bck, objectName, objectContent)
 
 	timeAfterPut := time.Now()
 
@@ -1285,7 +1285,7 @@ func TestAtimeColdGet(t *testing.T) {
 	_, err := api.GetObject(baseParams, bck, objectName)
 	tassert.CheckFatal(t, err)
 
-	getAtime, getAtimeFormatted := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	getAtime, getAtimeFormatted := tools.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 	tassert.Fatalf(t, !getAtime.IsZero(), "GET atime is zero")
 
 	if !(getAtime.After(timeAfterPut)) {
@@ -1294,12 +1294,12 @@ func TestAtimeColdGet(t *testing.T) {
 }
 
 func TestAtimePrefetch(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck        = cliBck
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		objectName = t.Name()
 		numObjs    = 10
 		objPath    = "atime/obj-"
@@ -1308,7 +1308,7 @@ func TestAtimePrefetch(t *testing.T) {
 		objs       = make([]string, 0, numObjs)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 	api.DeleteObject(baseParams, bck, objectName)
 	defer func() {
 		for _, obj := range objs {
@@ -1379,19 +1379,19 @@ func TestAtimeLocalPut(t *testing.T) {
 			Name:     t.Name(),
 			Provider: apc.AIS,
 		}
-		proxyURL      = tutils.RandomProxyURL(t)
-		baseParams    = tutils.BaseAPIParams(proxyURL)
+		proxyURL      = tools.RandomProxyURL(t)
+		baseParams    = tools.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("dummy content"))
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	timeBeforePut := time.Now()
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
 
-	putAtime, putAtimeFormatted := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	putAtime, putAtimeFormatted := tools.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	if !(putAtime.After(timeBeforePut)) {
 		t.Errorf("Expected atime after PUT (%s) to be after atime before PUT (%s)",
@@ -1405,7 +1405,7 @@ func TestAtimeLocalPut(t *testing.T) {
 // 4. Put objects
 // 5. Get objects - everything should succeed
 func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:               t,
@@ -1418,7 +1418,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	target := m.startMaintenanceNoRebalance()
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	rebID := m.stopMaintenance(target)
 
@@ -1427,8 +1427,8 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 }
 
 // 1. Unregister target
@@ -1437,7 +1437,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 // 4. Reregister target - rebalance kicks in
 // 5. Get objects - everything should succeed
 func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:               t,
@@ -1454,9 +1454,9 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	// Unregister target[0]
 	args := &apc.ActValRmNode{DaemonID: targets[0].ID(), SkipRebalance: true}
-	_, err := api.StartMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
+	_, err := api.StartMaintenance(tools.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForClusterState(
+	tools.WaitForClusterState(
 		m.proxyURL,
 		"remove target",
 		m.smap.Version,
@@ -1465,7 +1465,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	)
 
 	// Create ais bucket
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -1473,8 +1473,8 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	rebID := m.stopMaintenance(targets[0])
 
 	// Wait for rebalance and do gets
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 
 	m.gets()
 
@@ -1483,7 +1483,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 }
 
 func TestRenewRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -1502,12 +1502,12 @@ func TestRenewRebalance(t *testing.T) {
 	target := m.startMaintenanceNoRebalance()
 
 	// Step 2: Create an ais bucket
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
 
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Step 4: Re-register target (triggers rebalance)
 	m.stopMaintenance(target)
@@ -1547,7 +1547,7 @@ func TestRenewRebalance(t *testing.T) {
 }
 
 func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
 		copies = 2
 		m      = ioContext{
@@ -1555,7 +1555,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 4,
 		}
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -1571,7 +1571,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	}
 
 	// Step 1: Create a local bucket
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 2: Make the bucket redundant
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
@@ -1594,7 +1594,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	err = api.DetachMountpath(baseParams, target, mpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	// Step 5: GET objects from the bucket
 	m.gets()
@@ -1606,7 +1606,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	m.ensureNumCopies(baseParams, copies, true)
 	m.ensureNoGetErrors()
@@ -1614,14 +1614,14 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 }
 
 func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	m := ioContext{
 		t:               t,
 		num:             10000,
 		numGetsEachFile: 4,
 	}
 	m.initWithCleanupAndSaveState()
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target
 	target, _ := m.smap.GetRandTarget()
@@ -1633,7 +1633,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 		t.Skipf("%s requires at least 3 mountpaths per target (%s has %d)", t.Name(), target.StringEx(), mpathCount)
 	}
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Make the bucket n-copy mirrored
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
@@ -1663,7 +1663,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	// Wait for async mirroring to finish
 	flt := api.XactReqArgs{Kind: apc.ActPutCopies, Bck: m.bck}
@@ -1681,7 +1681,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	tutils.WaitForResilvering(t, baseParams, nil)
+	tools.WaitForResilvering(t, baseParams, nil)
 
 	m.ensureNumCopies(baseParams, mpathCount, true /*greaterOk*/)
 	m.ensureNoGetErrors()
@@ -1698,14 +1698,14 @@ func TestGetNonRedundantWithDetachedMountpath(t *testing.T) {
 }
 
 func testNonRedundantMpathDD(t *testing.T, action string) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	m := ioContext{
 		t:               t,
 		num:             1000,
 		numGetsEachFile: 2,
 	}
 	m.initWithCleanupAndSaveState()
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target
 	target, _ := m.smap.GetRandTarget()
@@ -1718,7 +1718,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 		t.Skipf("%s requires at least 2 mountpaths per target (%s has %d)", t.Name(), target.StringEx(), mpathCount)
 	}
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// PUT
 	m.puts()
@@ -1731,7 +1731,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 	}
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	// GET
 	m.gets()
@@ -1746,7 +1746,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 	}
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, mpList)
@@ -1756,7 +1756,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 // 2. Start changing the primary proxy
 // 3. IC must survive and rebalance must finish
 func TestICRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		m = ioContext{
@@ -1772,13 +1772,13 @@ func TestICRebalance(t *testing.T) {
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 	m.proxyURL = psi.URL(cmn.NetPublic)
-	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
+	icNode := tools.GetICProxy(t, m.smap, psi.ID())
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	tlog.Logf("Manually initiated rebalance\n")
 	rebID, err = api.StartXaction(baseParams, api.XactReqArgs{Kind: apc.ActRebalance})
@@ -1789,18 +1789,18 @@ func TestICRebalance(t *testing.T) {
 
 	tlog.Logf("Killing %s\n", icNode.StringEx())
 	// cmd and args are the original command line of how the proxy is started
-	cmd, err := tutils.KillNode(icNode)
+	cmd, err := tools.KillNode(icNode)
 	tassert.CheckFatal(t, err)
 
 	proxyCnt := m.smap.CountActiveProxies()
-	smap, err := tutils.WaitForClusterState(m.proxyURL, "designate new primary", m.smap.Version, proxyCnt-1, 0)
+	smap, err := tools.WaitForClusterState(m.proxyURL, "designate new primary", m.smap.Version, proxyCnt-1, 0)
 	tassert.CheckError(t, err)
 
 	// re-construct the command line to start the original proxy but add the current primary proxy to the args
-	err = tutils.RestoreNode(cmd, false, "proxy (prev primary)")
+	err = tools.RestoreNode(cmd, false, "proxy (prev primary)")
 	tassert.CheckFatal(t, err)
 
-	smap, err = tutils.WaitForClusterState(m.proxyURL, "restore", smap.Version, proxyCnt, 0)
+	smap, err = tools.WaitForClusterState(m.proxyURL, "restore", smap.Version, proxyCnt, 0)
 	tassert.CheckFatal(t, err)
 	if _, ok := smap.Pmap[psi.ID()]; !ok {
 		t.Fatalf("Previous primary proxy did not rejoin the cluster")
@@ -1818,7 +1818,7 @@ func TestICRebalance(t *testing.T) {
 // 2. Start changing the primary proxy
 // 3. IC must survive, rebalance must finish, and the target must be gone
 func TestICDecommission(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		err error
@@ -1835,13 +1835,13 @@ func TestICDecommission(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	m.proxyURL = psi.URL(cmn.NetPublic)
 	tlog.Logf("Monitoring node: %s\n", psi)
-	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
+	icNode := tools.GetICProxy(t, m.smap, psi.ID())
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 	tsi, err := m.smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
 
@@ -1853,7 +1853,7 @@ func TestICDecommission(t *testing.T) {
 		args := &apc.ActValRmNode{DaemonID: tsi.ID()}
 		rebID, err := api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
-		tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
+		tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -1861,25 +1861,25 @@ func TestICDecommission(t *testing.T) {
 	tlog.Logf("Killing %s\n", icNode.StringEx())
 
 	// cmd and args are the original command line of how the proxy is started
-	cmd, err := tutils.KillNode(icNode)
+	cmd, err := tools.KillNode(icNode)
 	tassert.CheckFatal(t, err)
 
 	proxyCnt := m.smap.CountActiveProxies()
-	smap, err := tutils.WaitForClusterState(m.proxyURL, "designate new primary", m.smap.Version, proxyCnt-1, 0)
+	smap, err := tools.WaitForClusterState(m.proxyURL, "designate new primary", m.smap.Version, proxyCnt-1, 0)
 	tassert.CheckError(t, err)
 
 	// re-construct the command line to start the original proxy but add the current primary proxy to the args
-	err = tutils.RestoreNode(cmd, false, "proxy (prev primary)")
+	err = tools.RestoreNode(cmd, false, "proxy (prev primary)")
 	tassert.CheckFatal(t, err)
 
-	smap, err = tutils.WaitForClusterState(m.proxyURL, "restore", smap.Version, proxyCnt, 0)
+	smap, err = tools.WaitForClusterState(m.proxyURL, "restore", smap.Version, proxyCnt, 0)
 	tassert.CheckFatal(t, err)
 	if _, ok := smap.Pmap[psi.ID()]; !ok {
 		t.Fatalf("Previous primary proxy did not rejoin the cluster")
 	}
 	checkSmaps(t, m.proxyURL)
 
-	_, err = tutils.WaitForClusterState(m.proxyURL, "decommission target",
+	_, err = tools.WaitForClusterState(m.proxyURL, "decommission target",
 		m.smap.Version, m.smap.CountProxies(), m.smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 }
@@ -1887,7 +1887,7 @@ func TestICDecommission(t *testing.T) {
 func TestSingleResilver(t *testing.T) {
 	m := ioContext{t: t}
 	m.initWithCleanupAndSaveState()
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target
 	target, _ := m.smap.GetRandTarget()

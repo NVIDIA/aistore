@@ -13,17 +13,17 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 func createBaseParams() (unAuth, auth api.BaseParams) {
-	unAuth = tutils.BaseAPIParams()
+	unAuth = tools.BaseAPIParams()
 	unAuth.Token = ""
-	auth = tutils.BaseAPIParams()
+	auth = tools.BaseAPIParams()
 	return
 }
 
@@ -38,7 +38,7 @@ func expectUnauthorized(t *testing.T, err error) {
 }
 
 func TestAuthObj(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresAuth: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiresAuth: true})
 	var (
 		unAuthBP, authBP = createBaseParams()
 		bck              = cmn.Bck{Name: trand.String(10)}
@@ -76,7 +76,7 @@ func TestAuthObj(t *testing.T) {
 }
 
 func TestAuthBck(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresAuth: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiresAuth: true})
 	var (
 		unAuthBP, authBP = createBaseParams()
 		bck              = cmn.Bck{Name: trand.String(10)}

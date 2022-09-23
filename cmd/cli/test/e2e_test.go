@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -18,7 +18,7 @@ import (
 )
 
 func TestE2E(t *testing.T) {
-	tutils.InitLocalCluster()
+	tools.InitLocalCluster()
 	cmd := exec.Command("which", "ais")
 	if err := cmd.Run(); err != nil {
 		t.Skip("'ais' binary not found")
@@ -33,7 +33,7 @@ var _ = Describe("E2E CLI Tests", func() {
 	var (
 		entries []TableEntry
 
-		f        = &tutils.E2EFramework{}
+		f        = &tools.E2EFramework{}
 		files, _ = filepath.Glob("./*.in")
 	)
 

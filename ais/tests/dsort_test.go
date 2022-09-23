@@ -20,16 +20,16 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/archive"
-	"github.com/NVIDIA/aistore/devtools/docker"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/archive"
+	"github.com/NVIDIA/aistore/tools/docker"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 const (
@@ -210,7 +210,7 @@ func (df *dsortFramework) init() {
 		df.algorithm = &dsort.SortAlgorithm{}
 	}
 
-	df.baseParams = tutils.BaseAPIParams(df.m.proxyURL)
+	df.baseParams = tools.BaseAPIParams(df.m.proxyURL)
 }
 
 func (df *dsortFramework) gen() dsort.RequestSpec {
@@ -289,7 +289,7 @@ func (df *dsortFramework) createInputShards() {
 			reader, err := readers.NewFileReaderFromFile(fqn, cos.ChecksumNone)
 			tassert.CheckFatal(df.m.t, err)
 
-			tutils.Put(df.m.proxyURL, df.m.bck, filepath.Base(fqn), reader, errCh)
+			tools.Put(df.m.proxyURL, df.m.bck, filepath.Base(fqn), reader, errCh)
 		}(i)
 	}
 	wg.Wait()
@@ -313,7 +313,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 
 	var (
 		inversions = 0
-		baseParams = tutils.BaseAPIParams(df.m.proxyURL)
+		baseParams = tools.BaseAPIParams(df.m.proxyURL)
 
 		idx     = 0
 		records = make(map[string]int, 100)
@@ -562,7 +562,7 @@ func dispatchDSortJob(m *ioContext, dsorterType string, i int) {
 	tlog.Logln("starting distributed sort...")
 	df.start()
 
-	_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+	_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 	tassert.CheckFatal(m.t, err)
 	tlog.Logln("finished distributed sort")
 
@@ -572,7 +572,7 @@ func dispatchDSortJob(m *ioContext, dsorterType string, i int) {
 
 func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, callback func()) {
 	tlog.Logf("waiting for %s phase...\n", phaseName)
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	for {
 		allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
 		if err != nil { // in case of error call callback anyway
@@ -605,7 +605,7 @@ func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 }
 
 func TestDistributedSort(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		// Include empty ("") type - in this case type must be selected automatically.
@@ -629,7 +629,7 @@ func TestDistributedSort(t *testing.T) {
 			m.expectTargets(3)
 
 			// Create ais bucket
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -637,7 +637,7 @@ func TestDistributedSort(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -675,7 +675,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			df.init()
 
 			// Create local output bucket
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
 
 			tlog.Logln("starting distributed sort...")
 			rs := df.gen()
@@ -684,8 +684,8 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			}
 
 			// Now destroy output bucket and create input bucket
-			tutils.DestroyBucket(t, m.proxyURL, df.outputBck)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.DestroyBucket(t, m.proxyURL, df.outputBck)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			tlog.Logln("starting second distributed sort...")
 			if _, err := api.StartDSort(df.baseParams, rs); err == nil {
@@ -716,14 +716,14 @@ func TestDistributedSortWithEmptyBucket(t *testing.T) {
 			// Initialize ioContext
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -734,7 +734,7 @@ func TestDistributedSortWithEmptyBucket(t *testing.T) {
 }
 
 func TestDistributedSortWithOutputBucket(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -759,10 +759,10 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 			// Create ais buckets
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			// Create local output bucket
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -770,7 +770,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -782,7 +782,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 
 // TestDistributedSortParallel runs multiple dSorts in parallel
 func TestDistributedSortParallel(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes},
@@ -796,7 +796,7 @@ func TestDistributedSortParallel(t *testing.T) {
 
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			wg := &sync.WaitGroup{}
 			for i := 0; i < dSortsCount; i++ {
@@ -813,7 +813,7 @@ func TestDistributedSortParallel(t *testing.T) {
 
 // TestDistributedSortChain runs multiple dSorts one after another
 func TestDistributedSortChain(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -827,7 +827,7 @@ func TestDistributedSortChain(t *testing.T) {
 
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			for i := 0; i < dSortsCount; i++ {
 				dispatchDSortJob(m, dsorterType, i)
@@ -856,7 +856,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -864,7 +864,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -894,7 +894,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -902,7 +902,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 			tlog.Logln("starting distributed sort with spilling to disk...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -938,7 +938,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -946,7 +946,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 			tlog.Logln("starting distributed sort with compression (.tar.gz)...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -957,7 +957,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 }
 
 func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		m = &ioContext{
@@ -975,7 +975,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	df.init()
 	df.createInputShards()
@@ -992,7 +992,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	tlog.Logf("starting distributed sort with using memory and disk (max mem usage: %s)...\n", df.maxMemUsage)
 	df.start()
 
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+	_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 	tassert.CheckFatal(t, err)
 	tlog.Logln("finished distributed sort")
 
@@ -1017,7 +1017,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 }
 
 func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		m = &ioContext{
@@ -1036,7 +1036,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	df.init()
 	df.createInputShards()
@@ -1053,7 +1053,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	tlog.Logf("starting distributed sort with using memory, disk and compression (max mem usage: %s)...\n", df.maxMemUsage)
 	df.start()
 
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+	_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 	tassert.CheckFatal(t, err)
 	tlog.Logln("finished distributed sort")
 
@@ -1078,7 +1078,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 }
 
 func TestDistributedSortZip(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1100,7 +1100,7 @@ func TestDistributedSortZip(t *testing.T) {
 
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1108,7 +1108,7 @@ func TestDistributedSortZip(t *testing.T) {
 			tlog.Logln("starting distributed sort with compression (.zip)...")
 			df.start()
 
-			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1119,7 +1119,7 @@ func TestDistributedSortZip(t *testing.T) {
 }
 
 func TestDistributedSortWithCompression(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1141,7 +1141,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1149,7 +1149,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 			tlog.Logln("starting distributed sort with compression (.tar.gz)...")
 			df.start()
 
-			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1160,7 +1160,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 }
 
 func TestDistributedSortWithContent(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1206,7 +1206,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 
 					m.initWithCleanupAndSaveState()
 					m.expectTargets(3)
-					tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 					df.init()
 					df.createInputShards()
@@ -1214,7 +1214,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 					tlog.Logln("starting distributed sort...")
 					df.start()
 
-					aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					aborted, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckFatal(t, err)
 					if entry.missingKeys && !aborted {
 						t.Errorf("%s was not aborted", dsort.DSortName)
@@ -1261,7 +1261,7 @@ func TestDistributedSortAbort(t *testing.T) {
 
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1274,7 +1274,7 @@ func TestDistributedSortAbort(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			tlog.Logln("waiting for distributed sort to finish up...")
-			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 
 			df.checkMetrics(true /* expectAbort */)
@@ -1283,7 +1283,7 @@ func TestDistributedSortAbort(t *testing.T) {
 }
 
 func TestDistributedSortAbortDuringPhases(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes, phases: dsortPhases},
@@ -1303,7 +1303,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1318,7 +1318,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 			})
 
 			tlog.Logln("waiting for distributed sort to finish up...")
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 
 			df.checkMetrics(true /* expectAbort */)
@@ -1351,7 +1351,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 
 			df.init()
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.createInputShards()
 
@@ -1365,7 +1365,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			})
 
 			tlog.Logln("waiting for distributed sort to finish up...")
-			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			aborted, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckError(t, err)
 			if !aborted {
 				t.Errorf("%s was not aborted", dsort.DSortName)
@@ -1385,7 +1385,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			}
 
 			rebID := m.stopMaintenance(target)
-			tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, df.baseParams, rebID)
+			tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, df.baseParams, rebID)
 		},
 	)
 }
@@ -1441,7 +1441,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 
 					t.Cleanup(func() {
 						// Wait for any resilver that might be still running.
-						tutils.WaitForResilvering(t, df.baseParams, nil)
+						tools.WaitForResilvering(t, df.baseParams, nil)
 
 						for target, mpath := range mountpaths {
 							if adding {
@@ -1457,10 +1457,10 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 							}
 						}
 
-						tutils.WaitForResilvering(t, df.baseParams, nil)
+						tools.WaitForResilvering(t, df.baseParams, nil)
 					})
 
-					tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 					df.createInputShards()
 
@@ -1482,7 +1482,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					})
 
 					tlog.Logln("waiting for distributed sort to finish up...")
-					_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckError(t, err)
 
 					df.checkMetrics(true /*expectAbort*/)
@@ -1493,7 +1493,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortAddTarget(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes},
@@ -1518,21 +1518,21 @@ func TestDistributedSortAddTarget(t *testing.T) {
 
 			target := m.startMaintenanceNoRebalance()
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.createInputShards()
 
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			defer tutils.WaitForRebalAndResil(t, df.baseParams)
+			defer tools.WaitForRebalAndResil(t, df.baseParams)
 
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, dsort.ExtractionPhase, func() {
 				m.stopMaintenance(target)
 			})
 
 			tlog.Logln("waiting for distributed sort to finish up...")
-			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			aborted, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			if !aborted {
 				t.Errorf("%s was not aborted", dsort.DSortName)
@@ -1568,7 +1568,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1576,7 +1576,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1612,14 +1612,14 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 
 			tlog.Logln("starting distributed sort without any files generated...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1662,7 +1662,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1670,7 +1670,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1681,7 +1681,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 }
 
 func TestDistributedSortMissingShards(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes, reactions: cmn.SupportedReactions, scopes: dsortSettingScopes},
@@ -1708,12 +1708,12 @@ func TestDistributedSortMissingShards(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			switch scope {
 			case scopeConfig:
-				defer tutils.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.missing_shards": cmn.IgnoreReaction})
-				tutils.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.missing_shards": reaction})
+				defer tools.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.missing_shards": cmn.IgnoreReaction})
+				tools.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.missing_shards": reaction})
 
 				tlog.Logf("changed `missing_shards` config to: %s\n", reaction)
 			case scopeSpec:
@@ -1729,7 +1729,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1739,7 +1739,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 }
 
 func TestDistributedSortDuplications(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes, reactions: cmn.SupportedReactions, scopes: dsortSettingScopes},
@@ -1766,12 +1766,12 @@ func TestDistributedSortDuplications(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			switch scope {
 			case scopeConfig:
-				defer tutils.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
-				tutils.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.duplicated_records": reaction})
+				defer tools.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
+				tools.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.duplicated_records": reaction})
 
 				tlog.Logf("changed `duplicated_records` config to: %s\n", reaction)
 			case scopeSpec:
@@ -1787,7 +1787,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1823,8 +1823,8 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					"input-%d-pref",
 					"smth-%d",
 				}
-				proxyURL   = tutils.RandomProxyURL()
-				baseParams = tutils.BaseAPIParams(proxyURL)
+				proxyURL   = tools.RandomProxyURL()
+				baseParams = tools.BaseAPIParams(proxyURL)
 			)
 
 			m.initWithCleanupAndSaveState()
@@ -1839,10 +1839,10 @@ func TestDistributedSortOrderFile(t *testing.T) {
 
 			df.init()
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			// Create local output bucket
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
 
 			df.createInputShards()
 
@@ -1867,7 +1867,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			managerUUID, err := api.StartDSort(baseParams, rs)
 			tassert.CheckFatal(t, err)
 
-			_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+			_, err = tools.WaitForDSortToFinish(m.proxyURL, managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1896,7 +1896,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 }
 
 func TestDistributedSortDryRun(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1917,7 +1917,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1925,7 +1925,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1935,7 +1935,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 }
 
 func TestDistributedSortDryRunDisk(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1956,7 +1956,7 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1964,7 +1964,7 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -1974,7 +1974,7 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 }
 
 func TestDistributedSortWithLongerExt(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes, algorithms: dsortAlgorithms},
@@ -1998,7 +1998,7 @@ func TestDistributedSortWithLongerExt(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -2006,7 +2006,7 @@ func TestDistributedSortWithLongerExt(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 
@@ -2017,7 +2017,7 @@ func TestDistributedSortWithLongerExt(t *testing.T) {
 }
 
 func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -2040,7 +2040,7 @@ func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(3)
 
-			tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -2048,7 +2048,7 @@ func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			tlog.Logln("finished distributed sort")
 

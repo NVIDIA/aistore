@@ -9,9 +9,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/volume"
 )
 
@@ -20,8 +20,8 @@ func TestVMD(t *testing.T) {
 		mpathsCnt = 10
 		daemonID  = "testDaemonID"
 	)
-	mpaths := tutils.PrepareMountPaths(t, mpathsCnt)
-	defer tutils.RemoveMpaths(t, mpaths)
+	mpaths := tools.PrepareMountPaths(t, mpathsCnt)
+	defer tools.RemoveMpaths(t, mpaths)
 
 	t.Run("CreateNewVMD", func(t *testing.T) { testVMDCreate(t, mpaths, daemonID) })
 	t.Run("VMDPersist", func(t *testing.T) { testVMDPersist(t, daemonID) })

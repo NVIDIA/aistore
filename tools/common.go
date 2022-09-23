@@ -1,8 +1,8 @@
-// Package tutils provides common low-level utilities for all aistore unit and integration tests
+// Package tools provides common tools and utilities for all unit and integration tests
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package tutils
+package tools
 
 import (
 	"errors"
@@ -20,9 +20,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/fname"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/trand"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 // Generates an object name that hashes to a different target than `baseName`.

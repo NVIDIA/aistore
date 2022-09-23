@@ -39,10 +39,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -230,7 +230,7 @@ func Example_obj() {
 
 // test random streaming
 func Test_OneStream(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
@@ -239,7 +239,7 @@ func Test_OneStream(t *testing.T) {
 }
 
 func Test_MultiStream(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	tlog.Logf("Duration %v\n", duration)
 	ts := httptest.NewServer(objmux)
@@ -525,7 +525,7 @@ func Test_CompressedOne(t *testing.T) {
 }
 
 func Test_DryRun(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	t.Setenv("AIS_STREAM_DRY_RUN", "true")
 
@@ -570,7 +570,7 @@ func Test_DryRun(t *testing.T) {
 }
 
 func Test_CompletionCount(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
 		numSent                   int64
 		numCompleted, numReceived atomic.Int64

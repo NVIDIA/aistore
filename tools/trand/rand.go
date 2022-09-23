@@ -1,4 +1,4 @@
-// Package trand provides random string for devtools and tests
+// Package trand provides random string for dev tools and tests
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */

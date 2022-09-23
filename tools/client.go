@@ -1,8 +1,8 @@
-// Package tutils provides common low-level utilities for all aistore unit and integration tests
+// Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package tutils
+package tools
 
 import (
 	"fmt"
@@ -20,11 +20,11 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -138,7 +138,13 @@ func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLim
 func GetPrimaryURL() string {
 	primary, err := GetPrimaryProxy(proxyURLReadOnly)
 	if err != nil {
-		return proxyURLReadOnly
+		fmt.Printf("Warning: GetPrimaryProxy [%v] - retrying once...\n", err)
+		time.Sleep(time.Second)
+		primary, err = GetPrimaryProxy(proxyURLReadOnly)
+		if err != nil {
+			fmt.Printf("Warning: GetPrimaryProxy [%v] - returning global %q\n", err, proxyURLReadOnly)
+			return proxyURLReadOnly
+		}
 	}
 	return primary.URL(cmn.NetPublic)
 }
@@ -425,7 +431,7 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 	} else {
 		u = RandomProxyURL()
 	}
-	return api.BaseParams{Client: gctx.Client, URL: u, Token: LoggedUserToken, UA: "devtools/test"}
+	return api.BaseParams{Client: gctx.Client, URL: u, Token: LoggedUserToken, UA: "tools/test"}
 }
 
 // waitForBucket waits until all targets ack having ais bucket created or deleted
@@ -633,7 +639,7 @@ func getClusterConfig() (config *cmn.Config, err error) {
 
 func GetClusterConfig(t *testing.T) (config *cmn.Config) {
 	config, err := getClusterConfig()
-	tassert.CheckFatal(t, err)
+	tassert.CheckError(t, err)
 	return config
 }
 
@@ -641,7 +647,7 @@ func SetClusterConfig(t *testing.T, nvs cos.SimpleKVs) {
 	proxyURL := GetPrimaryURL()
 	baseParams := BaseAPIParams(proxyURL)
 	err := api.SetClusterConfig(baseParams, nvs)
-	tassert.CheckFatal(t, err)
+	tassert.CheckError(t, err)
 }
 
 func SetClusterConfigUsingMsg(t *testing.T, toUpdate *cmn.ConfigToUpdate) {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestParseBckObjectURI(t *testing.T) {

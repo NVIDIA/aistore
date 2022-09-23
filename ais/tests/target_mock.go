@@ -16,9 +16,9 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/reb"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -59,7 +59,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	}
 
 	<-stopch
-	err = tutils.RemoveNodeFromSmap(proxyURL, tutils.MockDaemonID)
+	err = tools.RemoveNodeFromSmap(proxyURL, tools.MockDaemonID)
 	tassert.CheckFatal(t, err)
 	s.Shutdown(context.Background())
 }
@@ -72,7 +72,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 
 	// borrow a random target's ip but using a different port to register the mock target
 	for _, v := range smap.Tmap {
-		v.DaeID = tutils.MockDaemonID
+		v.DaeID = tools.MockDaemonID
 		v.PubNet = cluster.NetInfo{
 			Hostname: v.PubNet.Hostname,
 			Port:     mockTargetPort,
@@ -87,7 +87,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 		}
 		break
 	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	baseParams.Method = http.MethodPost
 	reqParams := &api.ReqParams{
 		BaseParams: baseParams,

@@ -7,7 +7,7 @@ package s3
 import (
 	"testing"
 
-	"github.com/NVIDIA/aistore/devtools/trand"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 func TestPackUnpack(t *testing.T) {

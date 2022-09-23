@@ -13,17 +13,17 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tetl"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/etl/runtime"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tetl"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 func TestETLConnectionError(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	// ETL should survive occasional failures and successfully transform all objects.
@@ -51,7 +51,7 @@ def transform(input_bytes):
 	}
 
 	tlog.Logln("Preparing source bucket")
-	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
 	m.initWithCleanup()
 	m.puts()
@@ -70,7 +70,7 @@ def transform(input_bytes):
 }
 
 func TestETLBucketAbort(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	m := &ioContext{
@@ -96,7 +96,7 @@ func TestETLBucketAbort(t *testing.T) {
 }
 
 func TestETLTargetDown(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, MinTargets: 2})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, MinTargets: 2})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	m := &ioContext{
@@ -119,12 +119,12 @@ func TestETLTargetDown(t *testing.T) {
 
 	targetNode, _ := m.smap.GetRandTarget()
 	tlog.Logf("Killing %s\n", targetNode.StringEx())
-	tcmd, err := tutils.KillNode(targetNode) // TODO: alternatively, m.startMaintenanceNoRebalance()
+	tcmd, err := tools.KillNode(targetNode) // TODO: alternatively, m.startMaintenanceNoRebalance()
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
 		time.Sleep(4 * time.Second)
-		tutils.RestoreNode(tcmd, false, "target")
+		tools.RestoreNode(tcmd, false, "target")
 		m.waitAndCheckCluState()
 
 		args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
@@ -140,7 +140,7 @@ func TestETLTargetDown(t *testing.T) {
 
 func TestETLBigBucket(t *testing.T) {
 	// The test takes a lot of time if it's run against a single target deployment.
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true, MinTargets: 2})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true, MinTargets: 2})
 
 	const echoPythonTransform = `
 def transform(input_bytes):
@@ -190,7 +190,7 @@ def transform(input_bytes):
 	)
 
 	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cos.B2S(int64(m.fileSize), 2))
-	tutils.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
 	m.initWithCleanupAndSaveState()
 
 	m.puts()
@@ -258,7 +258,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 	m.bck = bckFrom
 
 	tlog.Logf("Preparing source bucket %q\n", bckFrom.String())
-	tutils.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
 	m.initWithCleanupAndSaveState()
 
 	m.puts()

@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/fname"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 type markerEntry struct {
@@ -27,8 +27,8 @@ func checkMarkersExist(t *testing.T, xs ...markerEntry) {
 
 func TestMarkers(t *testing.T) {
 	const mpathsCnt = 5
-	mpaths := tutils.PrepareMountPaths(t, mpathsCnt)
-	defer tutils.RemoveMpaths(t, mpaths)
+	mpaths := tools.PrepareMountPaths(t, mpathsCnt)
+	defer tools.RemoveMpaths(t, mpaths)
 
 	checkMarkersExist(t,
 		markerEntry{marker: fname.RebalanceMarker, exists: false},
@@ -70,8 +70,8 @@ func TestMarkers(t *testing.T) {
 
 func TestMarkersClear(t *testing.T) {
 	const mpathsCnt = 5
-	mpaths := tutils.PrepareMountPaths(t, mpathsCnt)
-	defer tutils.RemoveMpaths(t, mpaths)
+	mpaths := tools.PrepareMountPaths(t, mpathsCnt)
+	defer tools.RemoveMpaths(t, mpaths)
 
 	checkMarkersExist(t,
 		markerEntry{marker: fname.RebalanceMarker, exists: false},

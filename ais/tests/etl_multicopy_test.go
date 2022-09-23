@@ -16,13 +16,13 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tetl"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tetl"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 func TestCopyObjRange(t *testing.T) {
@@ -35,16 +35,16 @@ func TestCopyObjRange(t *testing.T) {
 		waitTimeout = 45 * time.Second
 	)
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
+		proxyURL   = tools.RandomProxyURL(t)
 		bckFrom    = cmn.Bck{Name: "cp-range-from", Provider: apc.AIS}
 		bckTo      = cmn.Bck{Name: "cp-range-to", Provider: apc.AIS}
 		objList    = make([]string, 0, objCnt)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		xactID     string
 		err        error
 	)
-	tutils.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
-	tutils.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
 	for i := 0; i < objCnt; i++ {
 		objList = append(objList,
 			fmt.Sprintf("test/a-%04d", i),
@@ -94,8 +94,8 @@ func TestCopyMultiObj(t *testing.T) {
 func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 	const objCnt = 200
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		m = ioContext{
 			t:       t,
@@ -128,7 +128,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 				defer m.del()
 			}
 			if !toBck.Equal(&m.bck) && toBck.IsAIS() {
-				tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
+				tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 			}
 			var erv atomic.Value
 			if test.list {
@@ -172,7 +172,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 }
 
 func TestETLMultiObj(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	const (
@@ -185,15 +185,15 @@ func TestETLMultiObj(t *testing.T) {
 		cksumType   = cos.ChecksumMD5
 	)
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bck   = cmn.Bck{Name: "etloffline", Provider: apc.AIS}
 		toBck = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.AIS}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 
 	for i := 0; i < objCnt; i++ {
 		r, _ := readers.NewRandReader(objSize, cksumType)
@@ -222,8 +222,8 @@ func testETLMultiObj(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRang
 	tassert.CheckFatal(t, err)
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		objList        = pt.ToSlice()
 		objCnt         = len(objList)

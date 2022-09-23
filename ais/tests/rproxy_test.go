@@ -18,9 +18,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 const (
@@ -86,9 +86,9 @@ func extractSpeed(out []byte) int64 {
 func TestRProxyGCS(t *testing.T) {
 	var (
 		resURL     = genObjURL(false, true)
-		proxyURL   = tutils.GetPrimaryURL()
-		smap       = tutils.GetClusterMap(t, proxyURL)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.GetPrimaryURL()
+		smap       = tools.GetClusterMap(t, proxyURL)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		maxRetries = 2
 	)
@@ -118,7 +118,7 @@ retry:
 	if speedCold < 100*cos.KiB {
 		if testing.Short() {
 			fmt := "cold download speed %s is way too low indicating potential timeout"
-			tutils.ShortSkipf(t, fmt, cos.B2S(speedCold, 1))
+			tools.ShortSkipf(t, fmt, cos.B2S(speedCold, 1))
 		}
 		if maxRetries > 0 {
 			tlog.Logf("Warning: will retry (%d)\n", maxRetries)
@@ -133,7 +133,7 @@ retry:
 	tassert.CheckFatal(t, err)
 	bck, err = detectNewBucket(bckList, bckListNew)
 	tassert.CheckFatal(t, err)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+	defer tools.DestroyBucket(t, proxyURL, bck)
 
 	pathCached := findObjOnDisk(bck, gcsFilename)
 	tassert.Fatalf(t, pathCached != "", "object was not downloaded")
@@ -162,7 +162,7 @@ retry:
 		tassert.CheckFatal(t, err)
 		bckHTTPS, err := detectNewBucket(bckList, bckListNew)
 		tassert.CheckFatal(t, err)
-		defer tutils.DestroyBucket(t, proxyURL, bckHTTPS)
+		defer tools.DestroyBucket(t, proxyURL, bckHTTPS)
 
 		tlog.Logf("Check via JSON API\n")
 		cmdline = genCURLCmdLine(false, false, proxyURL, smap.Tmap)
@@ -192,9 +192,9 @@ retry:
 
 func TestRProxyInvalidURL(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		client     = tutils.NewClientWithProxy(proxyURL)
+		proxyURL   = tools.GetPrimaryURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
+		client     = tools.NewClientWithProxy(proxyURL)
 	)
 	tests := []struct {
 		url        string

@@ -37,8 +37,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 var (

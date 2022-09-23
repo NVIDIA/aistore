@@ -1,8 +1,8 @@
-// Package tutils provides common low-level utilities for all aistore unit and integration tests
+// Package tools provides common tools and utilities for all unit and integration tests
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package tutils
+package tools
 
 import (
 	"errors"
@@ -20,8 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/docker"
-	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/tools/docker"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 const (
@@ -96,9 +96,9 @@ func init() {
 	}
 }
 
-// InitLocalCluster initializes tutils component with AIS cluster that must be either:
-//  1. the cluster must be deployed locally using `make deploy` command and accessible @ localhost:8080, or
-//  2. cluster deployed on local docker environment, or
+// InitLocalCluster initializes AIS cluster that must be either:
+//  1. deployed locally using `make deploy` command and accessible @ localhost:8080, or
+//  2. deployed in local docker environment, or
 //  3. provided via `AIS_ENDPOINT` environment variable
 //
 // In addition, try to query remote AIS cluster that may or may not be locally deployed as well.

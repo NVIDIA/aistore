@@ -16,24 +16,24 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestJoggerGroup(t *testing.T) {
 	var (
-		desc = tutils.ObjectsDesc{
-			CTs: []tutils.ContentTypeDesc{
+		desc = tools.ObjectsDesc{
+			CTs: []tools.ContentTypeDesc{
 				{Type: fs.WorkfileType, ContentCnt: 10},
 				{Type: fs.ObjectType, ContentCnt: 500},
 			},
 			MountpathsCnt: 10,
 			ObjectSize:    cos.KiB,
 		}
-		out     = tutils.PrepareObjects(t, desc)
+		out     = tools.PrepareObjects(t, desc)
 		counter = atomic.NewInt32(0)
 	)
 	defer os.RemoveAll(out.Dir)
@@ -67,14 +67,14 @@ func TestJoggerGroupParallel(t *testing.T) {
 		objectsCnt      = 1000
 		mpathsCnt       = 3
 
-		desc = tutils.ObjectsDesc{
-			CTs: []tutils.ContentTypeDesc{
+		desc = tools.ObjectsDesc{
+			CTs: []tools.ContentTypeDesc{
 				{Type: fs.ObjectType, ContentCnt: objectsCnt},
 			},
 			MountpathsCnt: mpathsCnt,
 			ObjectSize:    cos.KiB,
 		}
-		out     = tutils.PrepareObjects(t, desc)
+		out     = tools.PrepareObjects(t, desc)
 		counter *atomic.Int32
 
 		mmsa = memsys.PageMM()
@@ -126,15 +126,15 @@ func TestJoggerGroupParallel(t *testing.T) {
 
 func TestJoggerGroupLoad(t *testing.T) {
 	var (
-		desc = tutils.ObjectsDesc{
-			CTs: []tutils.ContentTypeDesc{
+		desc = tools.ObjectsDesc{
+			CTs: []tools.ContentTypeDesc{
 				{Type: fs.WorkfileType, ContentCnt: 10},
 				{Type: fs.ObjectType, ContentCnt: 500},
 			},
 			MountpathsCnt: 10,
 			ObjectSize:    cos.KiB,
 		}
-		out     = tutils.PrepareObjects(t, desc)
+		out     = tools.PrepareObjects(t, desc)
 		counter = atomic.NewInt32(0)
 	)
 	defer os.RemoveAll(out.Dir)
@@ -166,14 +166,14 @@ func TestJoggerGroupLoad(t *testing.T) {
 
 func TestJoggerGroupError(t *testing.T) {
 	var (
-		desc = tutils.ObjectsDesc{
-			CTs: []tutils.ContentTypeDesc{
+		desc = tools.ObjectsDesc{
+			CTs: []tools.ContentTypeDesc{
 				{Type: fs.ObjectType, ContentCnt: 50},
 			},
 			MountpathsCnt: 4,
 			ObjectSize:    cos.KiB,
 		}
-		out     = tutils.PrepareObjects(t, desc)
+		out     = tools.PrepareObjects(t, desc)
 		counter = atomic.NewInt32(0)
 	)
 	defer os.RemoveAll(out.Dir)
@@ -206,14 +206,14 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		totalObjCnt = 5000
 		mpathsCnt   = 4
 		failAt      = int32(totalObjCnt/mpathsCnt) / 5 // Fail more or less at 20% of objects jogged.
-		desc        = tutils.ObjectsDesc{
-			CTs: []tutils.ContentTypeDesc{
+		desc        = tools.ObjectsDesc{
+			CTs: []tools.ContentTypeDesc{
 				{Type: fs.ObjectType, ContentCnt: totalObjCnt},
 			},
 			MountpathsCnt: mpathsCnt,
 			ObjectSize:    cos.KiB,
 		}
-		out = tutils.PrepareObjects(t, desc)
+		out = tools.PrepareObjects(t, desc)
 
 		mpaths      = fs.GetAvail()
 		counters    = make(map[string]*atomic.Int32, len(mpaths))
@@ -262,8 +262,8 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 func TestJoggerGroupMultiContentTypes(t *testing.T) {
 	var (
 		cts  = []string{fs.ObjectType, fs.ECSliceType, fs.ECMetaType}
-		desc = tutils.ObjectsDesc{
-			CTs: []tutils.ContentTypeDesc{
+		desc = tools.ObjectsDesc{
+			CTs: []tools.ContentTypeDesc{
 				{Type: fs.WorkfileType, ContentCnt: 10},
 				{Type: fs.ObjectType, ContentCnt: 541},
 				{Type: fs.ECSliceType, ContentCnt: 244},
@@ -272,7 +272,7 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 			MountpathsCnt: 10,
 			ObjectSize:    cos.KiB,
 		}
-		out = tutils.PrepareObjects(t, desc)
+		out = tools.PrepareObjects(t, desc)
 	)
 	defer os.RemoveAll(out.Dir)
 

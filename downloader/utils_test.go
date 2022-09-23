@@ -11,10 +11,10 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestNormalizeObjName(t *testing.T) {
@@ -44,7 +44,7 @@ func TestNormalizeObjName(t *testing.T) {
 }
 
 func TestCompareObject(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
 		src = prepareObject(t)
 		dst = &downloader.DstElement{
@@ -93,8 +93,8 @@ func TestCompareObject(t *testing.T) {
 }
 
 func prepareObject(t *testing.T) *cluster.LOM {
-	out := tutils.PrepareObjects(t, tutils.ObjectsDesc{
-		CTs: []tutils.ContentTypeDesc{{
+	out := tools.PrepareObjects(t, tools.ObjectsDesc{
+		CTs: []tools.ContentTypeDesc{{
 			Type:       fs.ObjectType,
 			ContentCnt: 1,
 		}},

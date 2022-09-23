@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/trand"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 // run with all defaults:

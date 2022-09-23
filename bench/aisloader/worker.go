@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tools/readers"
 )
 
 func doPut(wo *workOrder) {

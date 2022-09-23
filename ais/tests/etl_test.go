@@ -24,15 +24,15 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tetl"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/etl/runtime"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tetl"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 )
 
@@ -118,8 +118,8 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 		inputFilePath          string
 		expectedOutputFilePath string
 
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bck            = cmn.Bck{Provider: apc.AIS, Name: "etl-test"}
 		objName        = fmt.Sprintf("%s-%s-object", uuid, trand.String(5))
@@ -134,7 +134,7 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 	if inPath != "" {
 		inputFilePath = inPath
 	} else {
-		inputFilePath = tutils.CreateFileFromReader(t, "object.in", r)
+		inputFilePath = tools.CreateFileFromReader(t, "object.in", r)
 	}
 	if outPath != "" {
 		expectedOutputFilePath = outPath
@@ -143,16 +143,16 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 		tassert.CheckFatal(t, err)
 
 		r := fTransform(r)
-		expectedOutputFilePath = tutils.CreateFileFromReader(t, "object.out", r)
+		expectedOutputFilePath = tools.CreateFileFromReader(t, "object.out", r)
 	}
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	defer tools.DestroyBucket(t, proxyURL, bck)
 
 	tlog.Logln("PUT object")
 	reader, err := readers.NewFileReaderFromFile(inputFilePath, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	tutils.PutObject(t, bck, objName, reader)
+	tools.PutObject(t, bck, objName, reader)
 
 	fho, err := cos.CreateFile(outputFileName)
 	tassert.CheckFatal(t, err)
@@ -170,12 +170,12 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 
 func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached bool) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	// Always uses Echo transformation, as correctness of other transformations is checked in different tests.
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: onlyLong})
 
 	objName := fmt.Sprintf("%s-%s-object", uuid, trand.String(5))
 	tlog.Logln("PUT object")
@@ -212,8 +212,8 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 // Responsible for cleaning ETL xaction, ETL containers, destination bucket.
 func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bckTo          = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.AIS}
 		requestTimeout = 30 * time.Second
@@ -256,14 +256,14 @@ func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedByte
 }
 
 func TestETLObject(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	noopTransform := func(r io.Reader) io.Reader { return r }
 	tests := []testObjConfig{
-		{transformer: tetl.Echo, comm: etl.Hpull, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
-		{transformer: tetl.Echo, comm: etl.Hrev, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
-		{transformer: tetl.Echo, comm: etl.Hpush, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
+		{transformer: tetl.Echo, comm: etl.Hpull, transform: noopTransform, filesEqual: tools.FilesEqual, onlyLong: true},
+		{transformer: tetl.Echo, comm: etl.Hrev, transform: noopTransform, filesEqual: tools.FilesEqual, onlyLong: true},
+		{transformer: tetl.Echo, comm: etl.Hpush, transform: noopTransform, filesEqual: tools.FilesEqual, onlyLong: true},
 		{tetl.Tar2TF, etl.Hpull, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
 		{tetl.Tar2TF, etl.Hrev, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
 		{tetl.Tar2TF, etl.Hpush, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
@@ -274,7 +274,7 @@ func TestETLObject(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
+			tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
 
 			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
@@ -285,7 +285,7 @@ func TestETLObject(t *testing.T) {
 }
 
 func TestETLObjectCloud(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Bck: cliBck, RequiredDeployment: tutils.ClusterTypeK8s, RemoteBck: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Bck: cliBck, RequiredDeployment: tools.ClusterTypeK8s, RemoteBck: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	// TODO: When a test is stable, make part of test cases onlyLong: true.
@@ -320,12 +320,12 @@ func TestETLObjectCloud(t *testing.T) {
 
 // TODO: initial impl - revise and add many more tests
 func TestETLInline(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bck = cmn.Bck{Provider: apc.AIS, Name: "etl-test"}
 
@@ -336,15 +336,15 @@ func TestETLInline(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
+			tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
 
 			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
-			tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+			tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 			tlog.Logln("PUT object")
-			objNames, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
+			objNames, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
 				ProxyURL: proxyURL,
 				Bck:      bck,
 				ObjCnt:   1,
@@ -369,20 +369,20 @@ func TestETLInline(t *testing.T) {
 
 func TestETLInlineMD5SingleObj(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bck         = cmn.Bck{Provider: apc.AIS, Name: "etl-test"}
 		transformer = tetl.MD5
 		comm        = etl.Hpush
 	)
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	uuid := tetl.Init(t, baseParams, transformer, comm)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	tlog.Logln("PUT object")
 	objName := trand.String(10)
@@ -412,12 +412,12 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 }
 
 func TestETLBucket(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bck    = cmn.Bck{Name: "etloffline", Provider: apc.AIS}
 		objCnt = 10
@@ -437,7 +437,7 @@ func TestETLBucket(t *testing.T) {
 		}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	m.initWithCleanup()
 
 	tlog.Logf("PUT %d objects", m.num)
@@ -445,7 +445,7 @@ func TestETLBucket(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: test.onlyLong})
+			tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: test.onlyLong})
 
 			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
 			testETLBucket(t, uuid, bck, objCnt, m.fileSize, time.Minute)
@@ -454,7 +454,7 @@ func TestETLBucket(t *testing.T) {
 }
 
 func TestETLInitCode(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	const (
@@ -493,8 +493,8 @@ def transform(input_bytes: bytes) -> bytes:
 	)
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		m = ioContext{
 			t:         t,
@@ -520,7 +520,7 @@ def transform(input_bytes: bytes) -> bytes:
 		}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
 	m.initWithCleanup()
 
@@ -530,7 +530,7 @@ def transform(input_bytes: bytes) -> bytes:
 	for _, testType := range []string{"etl_object", "etl_bucket"} {
 		for _, test := range tests {
 			t.Run(testType+"__"+test.name, func(t *testing.T) {
-				tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: test.onlyLong})
+				tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: test.onlyLong})
 
 				msg := etl.InitCodeMsg{
 					InitMsgBase: etl.InitMsgBase{
@@ -567,12 +567,12 @@ def transform(input_bytes: bytes) -> bytes:
 }
 
 func TestETLBucketDryRun(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bckFrom = cmn.Bck{Name: "etloffline", Provider: apc.AIS}
 		bckTo   = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.AIS}
@@ -587,7 +587,7 @@ func TestETLBucketDryRun(t *testing.T) {
 		}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
 	m.initWithCleanup()
 
 	tlog.Logf("PUT %d objects", m.num)
@@ -613,12 +613,12 @@ func TestETLBucketDryRun(t *testing.T) {
 }
 
 func TestETLStopAndRestartETL(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
@@ -641,7 +641,7 @@ func TestETLStopAndRestartETL(t *testing.T) {
 }
 
 func TestETLMultipleTransformersAtATime(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	output, err := exec.Command("bash", "-c", "kubectl get nodes | grep Ready | wc -l").CombinedOutput()
@@ -650,7 +650,7 @@ func TestETLMultipleTransformersAtATime(t *testing.T) {
 		t.Skip("Requires a single node kubernetes cluster")
 	}
 
-	if tutils.GetClusterMap(t, proxyURL).CountTargets() > 1 {
+	if tools.GetClusterMap(t, proxyURL).CountTargets() > 1 {
 		t.Skip("Requires a single-node single-target deployment")
 	}
 
@@ -663,11 +663,11 @@ func TestETLMultipleTransformersAtATime(t *testing.T) {
 
 func TestETLHealth(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	tlog.Logln("Starting ETL")
@@ -711,11 +711,11 @@ func TestETLHealth(t *testing.T) {
 
 func TestETLList(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 
 	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })

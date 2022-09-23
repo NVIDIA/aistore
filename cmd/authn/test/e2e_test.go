@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -18,12 +18,12 @@ import (
 )
 
 func TestAuthE2E(t *testing.T) {
-	tutils.InitLocalCluster()
+	tools.InitLocalCluster()
 	cmd := exec.Command("which", "ais")
 	if err := cmd.Run(); err != nil {
 		t.Skipf("skipping %s: 'ais' binary not found", t.Name())
 	}
-	cluConfig := tutils.GetClusterConfig(t)
+	cluConfig := tools.GetClusterConfig(t)
 	if !cluConfig.Auth.Enabled {
 		t.Skipf("skipping %s: AuthN is not enabled", t.Name())
 	}
@@ -37,7 +37,7 @@ var _ = Describe("E2E AuthN Tests", func() {
 	var (
 		entries []TableEntry
 
-		f        = &tutils.E2EFramework{}
+		f        = &tools.E2EFramework{}
 		files, _ = filepath.Glob("./*.in")
 	)
 

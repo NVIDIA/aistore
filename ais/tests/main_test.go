@@ -17,9 +17,9 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 var (
@@ -63,7 +63,7 @@ func waitForCluster() error {
 			return fmt.Errorf("error EnvVars: %s. err: %v", env.AIS.NumTarget, err)
 		}
 	}
-	_, err = tutils.WaitForClusterState(tutils.GetPrimaryURL(), "startup", -1, proxyCnt, targetCnt)
+	_, err = tools.WaitForClusterState(tools.GetPrimaryURL(), "startup", -1, proxyCnt, targetCnt)
 	if err != nil {
 		return fmt.Errorf("error waiting for cluster startup, err: %v", err)
 	}
@@ -72,7 +72,7 @@ func waitForCluster() error {
 		if retry%5 == 4 {
 			fmt.Fprintf(os.Stdout, "%ds --- ", retry+1)
 		}
-		err = api.Health(tutils.BaseAPIParams(tutils.GetPrimaryURL()), true /*primary is ready to rebalance*/)
+		err = api.Health(tools.BaseAPIParams(tools.GetPrimaryURL()), true /*primary is ready to rebalance*/)
 		if err == nil {
 			fmt.Fprintln(os.Stdout, "")
 			break
@@ -89,9 +89,9 @@ func waitForCluster() error {
 }
 
 func initTestEnv() {
-	tutils.InitLocalCluster()
-	proxyURL = tutils.RandomProxyURL()
-	baseParams = tutils.BaseAPIParams(proxyURL)
+	tools.InitLocalCluster()
+	proxyURL = tools.RandomProxyURL()
+	baseParams = tools.BaseAPIParams(proxyURL)
 }
 
 func TestMain(m *testing.M) {
@@ -112,7 +112,7 @@ func TestMain(m *testing.M) {
 	}
 
 	if !cliBck.IsAIS() {
-		exists, err = tutils.BucketExists(nil, tutils.GetPrimaryURL(), cliBck)
+		exists, err = tools.BucketExists(nil, tools.GetPrimaryURL(), cliBck)
 		if err == nil && !exists {
 			s := "%q not found \n(hint: "
 			s += "check whether %q exists and make sure to build aisnode executable with the corresponding build tag)"

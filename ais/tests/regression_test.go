@@ -24,12 +24,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/devtools/docker"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/docker"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 type Test struct {
@@ -60,15 +60,15 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		}
 
 		targets    = make(map[string]struct{})
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		smap       = tutils.GetClusterMap(t, proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		smap       = tools.GetClusterMap(t, proxyURL)
 	)
 
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -91,7 +91,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		if _, ok := targets[e.TargetURL]; !ok {
 			targets[e.TargetURL] = struct{}{}
 		}
-		baseParams := tutils.BaseAPIParams(e.TargetURL)
+		baseParams := tools.BaseAPIParams(e.TargetURL)
 
 		l, err := api.GetObject(baseParams, m.bck, e.Name)
 		tassert.CheckFatal(t, err)
@@ -103,14 +103,14 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 			if i == 0 {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
-			tutils.SetClusterConfig(t, cos.SimpleKVs{"features": feat.EnforceIntraClusterAccess.Value()})
+			tools.SetClusterConfig(t, cos.SimpleKVs{"features": feat.EnforceIntraClusterAccess.Value()})
 			_, err = api.GetObject(baseParams, m.bck, e.Name)
 
 			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features
 			// tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
 			tlog.Logf("TODO: updating feature flags requires cluster restart (err=%v)\n", err)
 
-			tutils.SetClusterConfig(t, cos.SimpleKVs{"features": "0"})
+			tools.SetClusterConfig(t, cos.SimpleKVs{"features": "0"})
 		}
 	}
 
@@ -145,11 +145,11 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		}
 		targets    = make(map[string]struct{})
 		bck        = cliBck
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
@@ -174,7 +174,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		if _, ok := targets[object.TargetURL]; !ok {
 			targets[object.TargetURL] = struct{}{}
 		}
-		baseParams := tutils.BaseAPIParams(object.TargetURL)
+		baseParams := tools.BaseAPIParams(object.TargetURL)
 		objectSize, err := api.GetObject(baseParams, bck, object.Name)
 		tassert.CheckFatal(t, err)
 		if uint64(objectSize) != m.fileSize {
@@ -185,14 +185,14 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 			if i == 0 {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
-			tutils.SetClusterConfig(t, cos.SimpleKVs{"features": feat.EnforceIntraClusterAccess.Value()})
+			tools.SetClusterConfig(t, cos.SimpleKVs{"features": feat.EnforceIntraClusterAccess.Value()})
 			_, err = api.GetObject(baseParams, m.bck, object.Name)
 
 			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features
 			// tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
 			tlog.Logf("TODO: updating feature flags requires cluster restart (err=%v)\n", err)
 
-			tutils.SetClusterConfig(t, cos.SimpleKVs{"features": "0"})
+			tools.SetClusterConfig(t, cos.SimpleKVs{"features": "0"})
 		}
 	}
 
@@ -228,8 +228,8 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 			fileSize: cos.KiB,
 		}
 
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	if docker.IsRunning() {
@@ -239,7 +239,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	m.initWithCleanup()
 	initMountpaths(t, proxyURL)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -260,22 +260,22 @@ func TestRegressionBuckets(t *testing.T) {
 			Name:     testBucketName,
 			Provider: apc.AIS,
 		}
-		proxyURL = tutils.RandomProxyURL(t)
+		proxyURL = tools.RandomProxyURL(t)
 	)
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bck: bck})
 }
 
 func TestRenameBucket(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		renamedBck = cmn.Bck{
 			Name:     bck.Name + "_" + cos.GenTie(),
 			Provider: apc.AIS,
@@ -283,9 +283,9 @@ func TestRenameBucket(t *testing.T) {
 	)
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
-			tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-			tutils.DestroyBucket(t, proxyURL, renamedBck) // cleanup post Ctrl-C etc.
-			defer tutils.DestroyBucket(t, proxyURL, renamedBck)
+			tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+			tools.DestroyBucket(t, proxyURL, renamedBck) // cleanup post Ctrl-C etc.
+			defer tools.DestroyBucket(t, proxyURL, renamedBck)
 
 			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltPresent)
 			tassert.CheckFatal(t, err)
@@ -311,7 +311,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 			num:      2036,
 			fileSize: cos.KiB,
 		}
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	m.initWithCleanup()
@@ -320,7 +320,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	if rtd.rename {
 		// Rename bucket fails when rebalance or resilver is running.
 		// Ensure rebalance or resilver isn't running before performing a rename.
-		tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+		tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 
 		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
 		tassert.CheckFatal(t, err)
@@ -347,7 +347,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 	_, err := api.WaitForXactionIC(baseParams, xactArgs)
 	if err != nil {
 		if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
-			smap := tutils.GetClusterMap(t, proxyURL)
+			smap := tools.GetClusterMap(t, proxyURL)
 			if smap.CountActiveTargets() == 1 {
 				err = nil
 			}
@@ -398,17 +398,17 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 func TestRenameObjects(t *testing.T) {
 	var (
 		renameStr  = "rename"
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     t.Name(),
 			Provider: apc.AIS,
 		}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-	objNames, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
+	objNames, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
 		ProxyURL:  proxyURL,
 		Bck:       bck,
 		ObjCnt:    100,
@@ -440,7 +440,7 @@ func TestRenameObjects(t *testing.T) {
 func TestObjectPrefix(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
-			proxyURL  = tutils.RandomProxyURL(t)
+			proxyURL  = tools.RandomProxyURL(t)
 			b         = bck.Clone()
 			fileNames = prefixCreateFiles(t, proxyURL, b, bck.Props.Cksum.Type)
 		)
@@ -450,7 +450,7 @@ func TestObjectPrefix(t *testing.T) {
 }
 
 func TestReregisterMultipleTargets(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		filesSentOrig = make(map[string]int64)
@@ -473,12 +473,12 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	targetsToUnregister := m.originalTargetCount - 1
 
 	// Step 0: Collect rebalance stats
-	clusterStats := tutils.GetClusterStats(t, m.proxyURL)
+	clusterStats := tools.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSentOrig[targetID] = tutils.GetNamedStatsVal(targetStats, stats.StreamsOutObjCount)
-		filesRecvOrig[targetID] = tutils.GetNamedStatsVal(targetStats, stats.StreamsInObjCount)
-		bytesSentOrig[targetID] = tutils.GetNamedStatsVal(targetStats, stats.StreamsOutObjSize)
-		bytesRecvOrig[targetID] = tutils.GetNamedStatsVal(targetStats, stats.StreamsInObjSize)
+		filesSentOrig[targetID] = tools.GetNamedStatsVal(targetStats, stats.StreamsOutObjCount)
+		filesRecvOrig[targetID] = tools.GetNamedStatsVal(targetStats, stats.StreamsInObjCount)
+		bytesSentOrig[targetID] = tools.GetNamedStatsVal(targetStats, stats.StreamsOutObjSize)
+		bytesRecvOrig[targetID] = tools.GetNamedStatsVal(targetStats, stats.StreamsInObjSize)
 	}
 
 	// Step 1: Unregister multiple targets
@@ -489,7 +489,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 			rebID = m.stopMaintenance(tgt)
 		}
 		if len(removed) != 0 && rebID != "" {
-			tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
+			tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 		}
 	}()
 
@@ -502,13 +502,13 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		removed[targets[i].ID()] = targets[i]
 	}
 
-	smap, err := tutils.WaitForClusterState(proxyURL, "remove targets",
+	smap, err := tools.WaitForClusterState(proxyURL, "remove targets",
 		m.smap.Version, m.originalProxyCount, m.originalTargetCount-targetsToUnregister)
 	tassert.CheckFatal(t, err)
 	tlog.Logf("The cluster now has %d target(s)\n", smap.CountActiveTargets())
 
 	// Step 2: PUT objects into a newly created bucket
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 	m.puts()
 
 	// Step 3: Start performing GET requests
@@ -529,15 +529,15 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	tlog.Logf("Stopping GETs...\n")
 	m.stopGets()
 
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
+	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 
-	clusterStats = tutils.GetClusterStats(t, m.proxyURL)
+	clusterStats = tools.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSent += tutils.GetNamedStatsVal(targetStats, stats.StreamsOutObjCount) - filesSentOrig[targetID]
-		filesRecv += tutils.GetNamedStatsVal(targetStats, stats.StreamsInObjCount) - filesRecvOrig[targetID]
-		bytesSent += tutils.GetNamedStatsVal(targetStats, stats.StreamsOutObjSize) - bytesSentOrig[targetID]
-		bytesRecv += tutils.GetNamedStatsVal(targetStats, stats.StreamsInObjSize) - bytesRecvOrig[targetID]
+		filesSent += tools.GetNamedStatsVal(targetStats, stats.StreamsOutObjCount) - filesSentOrig[targetID]
+		filesRecv += tools.GetNamedStatsVal(targetStats, stats.StreamsInObjCount) - filesRecvOrig[targetID]
+		bytesSent += tools.GetNamedStatsVal(targetStats, stats.StreamsOutObjSize) - bytesSentOrig[targetID]
+		bytesRecv += tools.GetNamedStatsVal(targetStats, stats.StreamsInObjSize) - bytesRecvOrig[targetID]
 	}
 
 	// Step 5: Log rebalance stats
@@ -549,9 +549,9 @@ func TestReregisterMultipleTargets(t *testing.T) {
 }
 
 func TestGetNodeStats(t *testing.T) {
-	proxyURL := tutils.RandomProxyURL(t)
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	smap := tutils.GetClusterMap(t, proxyURL)
+	proxyURL := tools.RandomProxyURL(t)
+	baseParams := tools.BaseAPIParams(proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
 
 	proxy, err := smap.GetRandProxy(false)
 	tassert.CheckFatal(t, err)
@@ -569,12 +569,12 @@ func TestGetNodeStats(t *testing.T) {
 }
 
 func TestGetClusterStats(t *testing.T) {
-	proxyURL := tutils.RandomProxyURL(t)
-	smap := tutils.GetClusterMap(t, proxyURL)
-	stats := tutils.GetClusterStats(t, proxyURL)
+	proxyURL := tools.RandomProxyURL(t)
+	smap := tools.GetClusterMap(t, proxyURL)
+	stats := tools.GetClusterStats(t, proxyURL)
 
 	for k, v := range stats.Target {
-		tdstats := tutils.GetDaemonStats(t, smap.Tmap[k].PubNet.URL)
+		tdstats := tools.GetDaemonStats(t, smap.Tmap[k].PubNet.URL)
 		tdcapstats := tdstats["capacity"].(map[string]any)
 		dcapstats := v.MPCap
 		for fspath, fstats := range dcapstats {
@@ -600,8 +600,8 @@ func TestGetClusterStats(t *testing.T) {
 
 func TestLRU(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		m = &ioContext{
 			t:      t,
@@ -611,7 +611,7 @@ func TestLRU(t *testing.T) {
 		}
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	m.initWithCleanup()
 	m.remotePuts(false /*evict*/)
@@ -619,15 +619,15 @@ func TestLRU(t *testing.T) {
 	// Remember targets' watermarks
 	var (
 		usedPct      = int32(100)
-		cluStats     = tutils.GetClusterStats(t, proxyURL)
+		cluStats     = tools.GetClusterStats(t, proxyURL)
 		filesEvicted = make(map[string]int64)
 		bytesEvicted = make(map[string]int64)
 	)
 
 	// Find out min usage % across all targets
 	for k, v := range cluStats.Target {
-		filesEvicted[k] = tutils.GetNamedStatsVal(v, "lru.evict.n")
-		bytesEvicted[k] = tutils.GetNamedStatsVal(v, "lru.evict.size")
+		filesEvicted[k] = tools.GetNamedStatsVal(v, "lru.evict.n")
+		bytesEvicted[k] = tools.GetNamedStatsVal(v, "lru.evict.size")
 		for _, c := range v.MPCap {
 			usedPct = cos.MinI32(usedPct, c.PctUsed)
 		}
@@ -647,14 +647,14 @@ func TestLRU(t *testing.T) {
 	tlog.Logf("setting 'space.lowm=%d' and 'space.highwm=%d'\n", lowWM, highWM)
 
 	// All targets: set new watermarks; restore upon exit
-	oconfig := tutils.GetClusterConfig(t)
+	oconfig := tools.GetClusterConfig(t)
 	defer func() {
 		var (
 			cleanupWMStr, _ = cos.ConvertToString(oconfig.Space.CleanupWM)
 			lowWMStr, _     = cos.ConvertToString(oconfig.Space.LowWM)
 			highWMStr, _    = cos.ConvertToString(oconfig.Space.HighWM)
 		)
-		tutils.SetClusterConfig(t, cos.SimpleKVs{
+		tools.SetClusterConfig(t, cos.SimpleKVs{
 			"space.cleanupwm":       cleanupWMStr,
 			"space.lowwm":           lowWMStr,
 			"space.highwm":          highWMStr,
@@ -667,7 +667,7 @@ func TestLRU(t *testing.T) {
 	cleanupWMStr, _ := cos.ConvertToString(cleanupWM)
 	lowWMStr, _ := cos.ConvertToString(lowWM)
 	highWMStr, _ := cos.ConvertToString(highWM)
-	tutils.SetClusterConfig(t, cos.SimpleKVs{
+	tools.SetClusterConfig(t, cos.SimpleKVs{
 		"space.cleanupwm":       cleanupWMStr,
 		"space.lowwm":           lowWMStr,
 		"space.highwm":          highWMStr,
@@ -685,10 +685,10 @@ func TestLRU(t *testing.T) {
 
 	// Check results
 	tlog.Logln("checking the results...")
-	cluStats = tutils.GetClusterStats(t, proxyURL)
+	cluStats = tools.GetClusterStats(t, proxyURL)
 	for k, v := range cluStats.Target {
-		diffFilesEvicted := tutils.GetNamedStatsVal(v, "lru.evict.n") - filesEvicted[k]
-		diffBytesEvicted := tutils.GetNamedStatsVal(v, "lru.evict.size") - bytesEvicted[k]
+		diffFilesEvicted := tools.GetNamedStatsVal(v, "lru.evict.n") - filesEvicted[k]
+		diffBytesEvicted := tools.GetNamedStatsVal(v, "lru.evict.size") - bytesEvicted[k]
 		tlog.Logf(
 			"Target %s: evicted %d objects - %s (%dB) total\n",
 			k, diffFilesEvicted, cos.B2S(diffBytesEvicted, 2), diffBytesEvicted,
@@ -709,11 +709,11 @@ func TestPrefetchList(t *testing.T) {
 			fileSize: cos.KiB,
 		}
 		bck        = cliBck
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
@@ -759,8 +759,8 @@ func TestDeleteList(t *testing.T) {
 			objCnt     = 100
 			errCh      = make(chan error, objCnt)
 			files      = make([]string, 0, objCnt)
-			proxyURL   = tutils.RandomProxyURL(t)
-			baseParams = tutils.BaseAPIParams(proxyURL)
+			proxyURL   = tools.RandomProxyURL(t)
+			baseParams = tools.BaseAPIParams(proxyURL)
 			b          = bck.Clone()
 		)
 
@@ -774,7 +774,7 @@ func TestDeleteList(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				tutils.Put(proxyURL, b, keyname, r, errCh)
+				tools.Put(proxyURL, b, keyname, r, errCh)
 			}()
 			files = append(files, keyname)
 		}
@@ -810,13 +810,13 @@ func TestPrefetchRange(t *testing.T) {
 			prefix:   "regressionList/obj-",
 			ordered:  true,
 		}
-		proxyURL      = tutils.RandomProxyURL(t)
-		baseParams    = tutils.BaseAPIParams(proxyURL)
+		proxyURL      = tools.RandomProxyURL(t)
+		baseParams    = tools.BaseAPIParams(proxyURL)
 		prefetchRange = "{1..150}"
 		bck           = cliBck
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
 	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
@@ -875,8 +875,8 @@ func TestDeleteRange(t *testing.T) {
 			bigrange       = fmt.Sprintf("%s{0000..%04d}", prefix, objCnt)
 			wg             = &sync.WaitGroup{}
 			errCh          = make(chan error, objCnt)
-			proxyURL       = tutils.RandomProxyURL(t)
-			baseParams     = tutils.BaseAPIParams(proxyURL)
+			proxyURL       = tools.RandomProxyURL(t)
+			baseParams     = tools.BaseAPIParams(proxyURL)
 			b              = bck.Clone()
 		)
 
@@ -888,7 +888,7 @@ func TestDeleteRange(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				tutils.Put(proxyURL, b, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
+				tools.Put(proxyURL, b, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
 			}(i)
 		}
 		wg.Wait()
@@ -943,7 +943,7 @@ func TestDeleteRange(t *testing.T) {
 
 // Testing only ais bucket objects since generally not concerned with cloud bucket object deletion
 func TestStressDeleteRange(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	const (
 		numFiles   = 20000 // FIXME: must divide by 10 and by the numReaders
@@ -954,12 +954,12 @@ func TestStressDeleteRange(t *testing.T) {
 		err           error
 		wg            = &sync.WaitGroup{}
 		errCh         = make(chan error, numFiles)
-		proxyURL      = tutils.RandomProxyURL(t)
+		proxyURL      = tools.RandomProxyURL(t)
 		tenth         = numFiles / 10
 		objNamePrefix = "__listrange/tstf-"
 		partialRange  = fmt.Sprintf("%s{%d..%d}", objNamePrefix, 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
 		fullRange     = fmt.Sprintf("%s{0..%d}", objNamePrefix, numFiles)
-		baseParams    = tutils.BaseAPIParams(proxyURL)
+		baseParams    = tools.BaseAPIParams(proxyURL)
 		bck           = cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
@@ -967,7 +967,7 @@ func TestStressDeleteRange(t *testing.T) {
 		cksumType = bck.DefaultProps().Cksum.Type
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	// 1. PUT
 	tlog.Logln("putting objects...")
@@ -1052,12 +1052,12 @@ func TestStressDeleteRange(t *testing.T) {
 
 func TestXactionNotFound(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		missingID = "incorrect"
 	)
 
 	_, err := api.GetXactionSnapsByID(baseParams, missingID)
-	tutils.CheckErrIsNotFound(t, err)
+	tools.CheckErrIsNotFound(t, err)
 }

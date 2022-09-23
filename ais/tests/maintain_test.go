@@ -16,16 +16,16 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 func TestMaintenanceOnOff(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3})
-	proxyURL := tutils.RandomProxyURL(t)
-	smap := tutils.GetClusterMap(t, proxyURL)
+	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3})
+	proxyURL := tools.RandomProxyURL(t)
+	smap := tools.GetClusterMap(t, proxyURL)
 
 	// Invalid target case
 	msg := &apc.ActValRmNode{DaemonID: "fakeID", SkipRebalance: true}
@@ -34,15 +34,15 @@ func TestMaintenanceOnOff(t *testing.T) {
 
 	mntTarget, _ := smap.GetRandTarget()
 	msg.DaemonID = mntTarget.ID()
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	_, err = api.StartMaintenance(baseParams, msg)
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(proxyURL, "target in maintenance",
+	smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
 		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()-1)
 	tassert.CheckFatal(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "target is back",
+	_, err = tools.WaitForClusterState(proxyURL, "target is back",
 		smap.Version, smap.CountActiveProxies(), smap.CountTargets())
 	tassert.CheckFatal(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)
@@ -50,7 +50,7 @@ func TestMaintenanceOnOff(t *testing.T) {
 }
 
 func TestMaintenanceListObjects(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 3})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, MinTargets: 3})
 
 	var (
 		bck = cmn.Bck{Name: "maint-list", Provider: apc.AIS}
@@ -62,13 +62,13 @@ func TestMaintenanceListObjects(t *testing.T) {
 			bck:       bck,
 			proxyURL:  proxyURL,
 		}
-		proxyURL    = tutils.RandomProxyURL(t)
-		baseParams  = tutils.BaseAPIParams(proxyURL)
+		proxyURL    = tools.RandomProxyURL(t)
+		baseParams  = tools.BaseAPIParams(proxyURL)
 		origEntries = make(map[string]*cmn.ObjEntry, 1500)
 	)
 
 	m.initWithCleanupAndSaveState()
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	m.puts()
 	// 1. Perform list-object and populate entries map
@@ -92,14 +92,14 @@ func TestMaintenanceListObjects(t *testing.T) {
 	defer func() {
 		rebID, err = api.StopMaintenance(baseParams, actVal)
 		tassert.CheckFatal(t, err)
-		_, err = tutils.WaitForClusterState(proxyURL, "target is back",
+		_, err = tools.WaitForClusterState(proxyURL, "target is back",
 			m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountTargets())
 		args := api.XactReqArgs{ID: rebID, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 	}()
 
-	m.smap, err = tutils.WaitForClusterState(proxyURL, "target in maintenance",
+	m.smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
 		m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountActiveTargets()-1)
 	tassert.CheckFatal(t, err)
 
@@ -127,15 +127,15 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 func TestMaintenanceMD(t *testing.T) {
 	// NOTE: this test requires local deployment as it checks local filesystem for VMDs.
-	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, RequiredDeployment: tutils.ClusterTypeLocal})
+	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		smap       = tutils.GetClusterMap(t, proxyURL)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		smap       = tools.GetClusterMap(t, proxyURL)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		dcmTarget, _  = smap.GetRandTarget()
-		allTgtsMpaths = tutils.GetTargetsMountpaths(t, smap, baseParams)
+		allTgtsMpaths = tools.GetTargetsMountpaths(t, smap, baseParams)
 	)
 
 	t.Cleanup(func() {
@@ -143,12 +143,12 @@ func TestMaintenanceMD(t *testing.T) {
 		api.WaitForXactionIC(baseParams, args)
 	})
 
-	cmd := tutils.GetRestoreCmd(dcmTarget)
+	cmd := tools.GetRestoreCmd(dcmTarget)
 	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), SkipRebalance: true, KeepInitialConfig: true}
 	_, err := api.DecommissionNode(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
-	_, err = tutils.WaitForClusterState(proxyURL, "target decommission", smap.Version, smap.CountActiveProxies(),
+	_, err = tools.WaitForClusterState(proxyURL, "target decommission", smap.Version, smap.CountActiveProxies(),
 		smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 
@@ -157,13 +157,13 @@ func TestMaintenanceMD(t *testing.T) {
 		smap.CountTargets()-1, vmdTargets)
 
 	time.Sleep(time.Second)
-	err = tutils.RestoreNode(cmd, false, "target")
+	err = tools.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "target joined back", smap.Version, smap.CountActiveProxies(),
+	_, err = tools.WaitForClusterState(proxyURL, "target joined back", smap.Version, smap.CountActiveProxies(),
 		smap.CountTargets())
 	tassert.CheckFatal(t, err)
 
-	smap = tutils.GetClusterMap(t, proxyURL)
+	smap = tools.GetClusterMap(t, proxyURL)
 	vmdTargets = countVMDTargets(allTgtsMpaths)
 	tassert.Errorf(t, vmdTargets == smap.CountTargets(),
 		"expected VMD to be found on all %d targets after joining cluster, got %d",
@@ -171,11 +171,11 @@ func TestMaintenanceMD(t *testing.T) {
 }
 
 func TestMaintenanceDecommissionRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, RequiredDeployment: tutils.ClusterTypeLocal, Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3, RequiredDeployment: tools.ClusterTypeLocal, Long: true})
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		smap       = tutils.GetClusterMap(t, proxyURL)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		smap       = tools.GetClusterMap(t, proxyURL)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		objCount   = 100
 		objPath    = "ic-decomm/"
 		fileSize   = cos.KiB
@@ -186,7 +186,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		origActiveProxyCount  = smap.CountActiveProxies()
 		bck                   = cmn.Bck{Name: t.Name(), Provider: apc.AIS}
 	)
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	for i := 0; i < objCount; i++ {
 		objName := fmt.Sprintf("%sobj%04d", objPath, i)
 		r, _ := readers.NewRandReader(int64(fileSize), cos.ChecksumXXHash)
@@ -200,15 +200,15 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	cmd := tutils.GetRestoreCmd(dcmTarget)
+	cmd := tools.GetRestoreCmd(dcmTarget)
 	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), RmUserData: true, KeepInitialConfig: true}
 	rebID, err := api.DecommissionNode(baseParams, msg)
 	tassert.CheckError(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "target decommission",
+	_, err = tools.WaitForClusterState(proxyURL, "target decommission",
 		smap.Version, origActiveProxyCount, origTargetCount-1, dcmTarget.ID())
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
 	msgList := &apc.ListObjsMsg{Prefix: objPath}
 	lst, err := api.ListObjects(baseParams, bck, msgList, 0)
 	tassert.CheckError(t, err)
@@ -219,10 +219,10 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	// FIXME: must use WaitForNodeToTerminate instead of sleep
 	time.Sleep(13 * time.Second)
 
-	smap = tutils.GetClusterMap(t, proxyURL)
-	err = tutils.RestoreNode(cmd, false, "target")
+	smap = tools.GetClusterMap(t, proxyURL)
+	err = tools.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(proxyURL, "target restored", smap.Version, 0, 0)
+	smap, err = tools.WaitForClusterState(proxyURL, "target restored", smap.Version, 0, 0)
 	tassert.CheckFatal(t, err)
 
 	// If any node is in maintenance cancel the state
@@ -241,7 +241,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		val := &apc.ActValRmNode{DaemonID: dcm.ID()}
 		rebID, err = api.StopMaintenance(baseParams, val)
 		tassert.CheckError(t, err)
-		tutils.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
+		tools.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
 	} else {
 		args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
@@ -268,7 +268,7 @@ func countVMDTargets(tsMpaths map[*cluster.Snode][]string) (total int) {
 }
 
 func TestMaintenanceRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
 		bck = cmn.Bck{Name: "maint-reb", Provider: apc.AIS}
 		m   = &ioContext{
@@ -281,12 +281,12 @@ func TestMaintenanceRebalance(t *testing.T) {
 			proxyURL:        proxyURL,
 		}
 		actVal     = &apc.ActValRmNode{}
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	m.initWithCleanupAndSaveState()
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	origProxyCnt, origTargetCount := m.smap.CountActiveProxies(), m.smap.CountActiveTargets()
 
 	m.puts()
@@ -300,20 +300,20 @@ func TestMaintenanceRebalance(t *testing.T) {
 		if !restored {
 			rebID, err := api.StopMaintenance(baseParams, actVal)
 			tassert.CheckError(t, err)
-			_, err = tutils.WaitForClusterState(
+			_, err = tools.WaitForClusterState(
 				proxyURL,
 				"target joined the cluster",
 				m.smap.Version, origProxyCnt, origTargetCount,
 			)
 			tassert.CheckFatal(t, err)
-			tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
+			tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 		}
-		tutils.ClearMaintenance(baseParams, tsi)
+		tools.ClearMaintenance(baseParams, tsi)
 	}()
 	tlog.Logf("Wait for rebalance %s\n", rebID)
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 
-	smap, err := tutils.WaitForClusterState(
+	smap, err := tools.WaitForClusterState(
 		proxyURL,
 		"target removed from the cluster",
 		m.smap.Version, origProxyCnt, origTargetCount-1, tsi.ID(),
@@ -327,7 +327,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	rebID, err = api.StopMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
 	restored = true
-	smap, err = tutils.WaitForClusterState(
+	smap, err = tools.WaitForClusterState(
 		proxyURL,
 		"target joined the cluster",
 		m.smap.Version, origProxyCnt, origTargetCount,
@@ -335,11 +335,11 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	m.smap = smap
 
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 }
 
 func TestMaintenanceGetWhileRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
 		bck = cmn.Bck{Name: "maint-get-reb", Provider: apc.AIS}
 		m   = &ioContext{
@@ -352,12 +352,12 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 			proxyURL:        proxyURL,
 		}
 		actVal     = &apc.ActValRmNode{}
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	m.initWithCleanupAndSaveState()
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	origProxyCnt, origTargetCount := m.smap.CountActiveProxies(), m.smap.CountActiveTargets()
 
 	m.puts()
@@ -377,20 +377,20 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 		if !restored {
 			rebID, err := api.StopMaintenance(baseParams, actVal)
 			tassert.CheckFatal(t, err)
-			_, err = tutils.WaitForClusterState(
+			_, err = tools.WaitForClusterState(
 				proxyURL,
 				"target joined the cluster",
 				m.smap.Version, origProxyCnt, origTargetCount,
 			)
 			tassert.CheckFatal(t, err)
-			tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
+			tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 		}
-		tutils.ClearMaintenance(baseParams, tsi)
+		tools.ClearMaintenance(baseParams, tsi)
 	}()
 	tlog.Logf("Wait for rebalance %s\n", rebID)
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 
-	smap, err := tutils.WaitForClusterState(
+	smap, err := tools.WaitForClusterState(
 		proxyURL,
 		"target removed from the cluster",
 		m.smap.Version, origProxyCnt, origTargetCount-1, tsi.ID(),
@@ -405,14 +405,14 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	rebID, err = api.StopMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
 	restored = true
-	smap, err = tutils.WaitForClusterState(
+	smap, err = tools.WaitForClusterState(
 		proxyURL,
 		"target joined the cluster",
 		m.smap.Version, origProxyCnt, origTargetCount,
 	)
 	tassert.CheckFatal(t, err)
 	m.smap = smap
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
+	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 }
 
 func TestNodeShutdown(t *testing.T) {
@@ -427,8 +427,8 @@ func TestNodeShutdown(t *testing.T) {
 func testNodeShutdown(t *testing.T, nodeType string) {
 	const nodeOffTimeout = 10 * time.Second
 	var (
-		proxyURL = tutils.GetPrimaryURL()
-		smap     = tutils.GetClusterMap(t, proxyURL)
+		proxyURL = tools.GetPrimaryURL()
+		smap     = tools.GetClusterMap(t, proxyURL)
 		node     *cluster.Snode
 		err      error
 		pdc, tdc int
@@ -452,23 +452,23 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	tassert.CheckFatal(t, err)
 
 	// 1. Shutdown a random node.
-	pid, cmd, err := tutils.ShutdownNode(t, baseParams, node)
+	pid, cmd, err := tools.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
 	if nodeType == apc.Target {
-		tutils.WaitForRebalAndResil(t, baseParams)
+		tools.WaitForRebalAndResil(t, baseParams)
 	}
 
 	// 2. Make sure the node has been shut down.
-	err = tutils.WaitForNodeToTerminate(pid, nodeOffTimeout)
+	err = tools.WaitForNodeToTerminate(pid, nodeOffTimeout)
 	tassert.CheckError(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "shutdown node",
+	_, err = tools.WaitForClusterState(proxyURL, "shutdown node",
 		smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.ID())
 	tassert.CheckError(t, err)
 
 	// 3. Start node again.
-	err = tutils.RestoreNode(cmd, false, nodeType)
+	err = tools.RestoreNode(cmd, false, nodeType)
 	tassert.CheckError(t, err)
-	smap, err = tutils.WaitForClusterState(proxyURL, "restart node",
+	smap, err = tools.WaitForClusterState(proxyURL, "restart node",
 		smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s", node.ID(), smap)
@@ -478,17 +478,17 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	// 4. Remove the node from maintenance.
 	_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: node.ID()})
 	tassert.CheckError(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "remove node from maintenance",
+	_, err = tools.WaitForClusterState(proxyURL, "remove node from maintenance",
 		smap.Version, origProxyCnt, origTargetCount)
 	tassert.CheckError(t, err)
 
 	if nodeType == apc.Target {
-		tutils.WaitForRebalAndResil(t, baseParams)
+		tools.WaitForRebalAndResil(t, baseParams)
 	}
 }
 
 func TestShutdownListObjects(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	const nodeOffTimeout = 10 * time.Second
 	var (
@@ -501,14 +501,14 @@ func TestShutdownListObjects(t *testing.T) {
 			bck:       bck,
 			proxyURL:  proxyURL,
 		}
-		proxyURL    = tutils.RandomProxyURL(t)
-		baseParams  = tutils.BaseAPIParams(proxyURL)
+		proxyURL    = tools.RandomProxyURL(t)
+		baseParams  = tools.BaseAPIParams(proxyURL)
 		origEntries = make(map[string]*cmn.ObjEntry, 1500)
 	)
 
 	m.initWithCleanupAndSaveState()
 	origTargetCount := m.smap.CountActiveTargets()
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	m.puts()
 
 	// 1. Perform list-object and populate entries map.
@@ -524,33 +524,33 @@ func TestShutdownListObjects(t *testing.T) {
 
 	// 2. Shut down a random target.
 	tsi, _ := m.smap.GetRandTarget()
-	pid, cmd, err := tutils.ShutdownNode(t, baseParams, tsi)
+	pid, cmd, err := tools.ShutdownNode(t, baseParams, tsi)
 	tassert.CheckFatal(t, err)
 
 	// Restore target after test is over.
 	t.Cleanup(func() {
-		err = tutils.RestoreNode(cmd, false, apc.Target)
+		err = tools.RestoreNode(cmd, false, apc.Target)
 		tassert.CheckError(t, err)
-		_, err = tutils.WaitForClusterState(proxyURL, "target is back",
+		_, err = tools.WaitForClusterState(proxyURL, "target is back",
 			m.smap.Version, 0, origTargetCount-1)
 		tassert.CheckError(t, err)
 
 		// Remove the node from maintenance.
 		_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
 		tassert.CheckError(t, err)
-		_, err = tutils.WaitForClusterState(proxyURL, "remove node from maintenance",
+		_, err = tools.WaitForClusterState(proxyURL, "remove node from maintenance",
 			m.smap.Version, 0, origTargetCount)
 		tassert.CheckError(t, err)
 
-		tutils.WaitForRebalAndResil(t, baseParams)
+		tools.WaitForRebalAndResil(t, baseParams)
 	})
 
 	// Wait for reb, shutdown to complete.
-	tutils.WaitForRebalAndResil(t, baseParams)
+	tools.WaitForRebalAndResil(t, baseParams)
 	tassert.CheckError(t, err)
-	err = tutils.WaitForNodeToTerminate(pid, nodeOffTimeout)
+	err = tools.WaitForNodeToTerminate(pid, nodeOffTimeout)
 	tassert.CheckError(t, err)
-	m.smap, err = tutils.WaitForClusterState(proxyURL, "target in maintenance",
+	m.smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
 		m.smap.Version, 0, origTargetCount-1, tsi.ID())
 	tassert.CheckError(t, err)
 

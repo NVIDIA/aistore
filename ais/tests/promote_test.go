@@ -19,9 +19,9 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 // TODO: stress notFshare
@@ -108,7 +108,7 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 		// NOTE: filtering out some test permutations to save time
 		if testing.Short() {
 			fmt := "%s is cloud bucket"
-			tutils.ShortSkipf(t, fmt, bck)
+			tools.ShortSkipf(t, fmt, bck)
 		}
 		if strings.Contains(t.Name(), "few-files") ||
 			strings.Contains(t.Name(), "single-target") ||
@@ -124,7 +124,7 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 		m          = ioContext{t: t, bck: bck.Clone()}
 		from       = 10000
 		to         = from + test.num - 1
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 	)
 	m.saveCluState(m.proxyURL)
 

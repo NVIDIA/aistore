@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/aisfs/fs"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/docker"
+	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/urfave/cli"
 )
 

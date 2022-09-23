@@ -4,7 +4,7 @@
  */
 package sys
 
-// Do not import main 'tutils' package because of circular dependency
+// Do not import the main 'tools' package because of circular dependency
 // Use t.Logf or t.Errorf instead of tlog.Logf
 import (
 	"math"
@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func checkSkipOS(t *testing.T, os ...string) {

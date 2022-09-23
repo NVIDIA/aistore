@@ -1,8 +1,8 @@
-// Package tutils provides common low-level utilities for all aistore unit and integration tests
+// Package tools provides common tools and utilities for all unit and integration tests
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package tutils_test
+package tools_test
 
 import (
 	"bufio"
@@ -18,10 +18,10 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 var baseParams api.BaseParams
@@ -181,7 +181,7 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		mmsa, _ := memsys.NewMMSA("tutils")
+		mmsa, _ := memsys.NewMMSA("dev-tools")
 		sgl := mmsa.NewSGL(cos.MiB)
 		defer func() {
 			mmsa.Terminate(false)
@@ -222,7 +222,7 @@ func TestMain(m *testing.M) {
 			errCb(http.StatusNotAcceptable, "cksum mismatch got: %q, expected: %q", cksum.Value(), cksumValue)
 		}
 	}))
-	baseParams = tutils.BaseAPIParams(srv.URL)
+	baseParams = tools.BaseAPIParams(srv.URL)
 
 	m.Run()
 	srv.Close()

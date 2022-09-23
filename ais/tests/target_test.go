@@ -10,9 +10,9 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestPutObjectNoDaemonID(t *testing.T) {
@@ -22,8 +22,8 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	var (
 		sid          string
 		objDummyData = []byte("testing is so much fun")
-		proxyURL     = tutils.RandomProxyURL()
-		smap         = tutils.GetClusterMap(t, proxyURL)
+		proxyURL     = tools.RandomProxyURL()
+		smap         = tools.GetClusterMap(t, proxyURL)
 		bck          = cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
@@ -35,7 +35,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	sid = si.ID()
 
 	url := smap.Tmap[sid].URL(cmn.NetPublic)
-	baseParams := tutils.BaseAPIParams(url)
+	baseParams := tools.BaseAPIParams(url)
 	reader := readers.NewBytesReader(objDummyData)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
@@ -55,7 +55,7 @@ func TestDeleteInvalidDaemonID(t *testing.T) {
 		SkipRebalance:     true,
 		KeepInitialConfig: true,
 	}
-	if _, err := api.DecommissionNode(tutils.BaseAPIParams(), val); err == nil {
+	if _, err := api.DecommissionNode(tools.BaseAPIParams(), val); err == nil {
 		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}
 }

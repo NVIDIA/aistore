@@ -19,12 +19,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/devtools/archive"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/archive"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 //
@@ -39,7 +39,7 @@ func TestGetFromArchive(t *testing.T) {
 				t:   t,
 				bck: bck.Clone(),
 			}
-			baseParams  = tutils.BaseAPIParams(m.proxyURL)
+			baseParams  = tools.BaseAPIParams(m.proxyURL)
 			errCh       = make(chan error, m.num)
 			numArchived = 10
 			randomNames = make([]string, numArchived)
@@ -121,9 +121,9 @@ func TestGetFromArchive(t *testing.T) {
 				reader, err := readers.NewFileReaderFromFile(archName, cos.ChecksumNone)
 				tassert.CheckFatal(t, err)
 
-				tutils.Put(m.proxyURL, m.bck, objname, reader, errCh)
+				tools.Put(m.proxyURL, m.bck, objname, reader, errCh)
 				tassert.SelectErr(t, errCh, "put", true)
-				defer tutils.Del(m.proxyURL, m.bck, objname, nil, nil, true)
+				defer tools.Del(m.proxyURL, m.bck, objname, nil, nil, true)
 
 				for _, randomName := range randomNames {
 					var mime string
@@ -147,7 +147,7 @@ func TestGetFromArchive(t *testing.T) {
 
 // PUT/create
 func TestCreateMultiObjArch(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		testMobjArch(t, bck)
 	})
@@ -163,8 +163,8 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			prefix:  "archive/",
 			ordered: true,
 		}
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		numArchs   = 15
 		numInArch  = cos.Min(m.num/2, 7)
 		fmtRange   = "%s{%d..%d}"
@@ -245,7 +245,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				defer m.del()
 			}
 			toBck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-			tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
+			tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 
 			if test.list {
 				tlog.Logf("Archive %d lists %s => %s\n", numArchs, m.bck, toBck)
@@ -361,8 +361,8 @@ func TestAppendToArch(t *testing.T) {
 			prefix:  "archive/",
 			ordered: true,
 		}
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		numArchs   = m.num
 		numAdd     = m.num
 		numInArch  = cos.Min(m.num/2, 7)
@@ -383,14 +383,14 @@ func TestAppendToArch(t *testing.T) {
 	for _, test := range subtests {
 		tname := fmt.Sprintf("%s/multi=%t", test.ext, test.multi)
 		t.Run(tname, func(t *testing.T) {
-			tutils.CreateBucketWithCleanup(t, proxyURL, fromBck, nil)
-			tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
+			tools.CreateBucketWithCleanup(t, proxyURL, fromBck, nil)
+			tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 			m.initWithCleanup()
 			m.puts()
 
 			if testing.Short() {
 				if test.multi {
-					tutils.ShortSkipf(t)
+					tools.ShortSkipf(t)
 				}
 				numArchs = 2
 				numAdd = 3

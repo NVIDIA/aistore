@@ -8,8 +8,8 @@ package ais_test
 import (
 	"testing"
 
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -22,6 +22,6 @@ func init() {
 
 func TestAIS(t *testing.T) {
 	RegisterFailHandler(Fail)
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	RunSpecs(t, t.Name())
 }

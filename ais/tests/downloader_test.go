@@ -19,12 +19,12 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 // NOTE: TestDownload* can fail if link, content, version changes - should be super rare!
@@ -41,7 +41,7 @@ func generateDownloadDesc() string {
 }
 
 func clearDownloadList(t *testing.T) {
-	listDownload, err := api.DownloadGetList(tutils.BaseAPIParams(), downloadDescAllRegex)
+	listDownload, err := api.DownloadGetList(tools.BaseAPIParams(), downloadDescAllRegex)
 	tassert.CheckFatal(t, err)
 
 	if len(listDownload) == 0 {
@@ -51,7 +51,7 @@ func clearDownloadList(t *testing.T) {
 	for _, v := range listDownload {
 		if v.JobRunning() {
 			tlog.Logf("Canceling: %v...\n", v.ID)
-			err := api.AbortDownload(tutils.BaseAPIParams(), v.ID)
+			err := api.AbortDownload(tools.BaseAPIParams(), v.ID)
 			tassert.CheckFatal(t, err)
 		}
 	}
@@ -59,7 +59,7 @@ func clearDownloadList(t *testing.T) {
 	// Wait for the jobs to complete.
 	for running := true; running; {
 		time.Sleep(time.Second)
-		listDownload, err := api.DownloadGetList(tutils.BaseAPIParams(), downloadDescAllRegex)
+		listDownload, err := api.DownloadGetList(tools.BaseAPIParams(), downloadDescAllRegex)
 		tassert.CheckFatal(t, err)
 
 		running = false
@@ -73,7 +73,7 @@ func clearDownloadList(t *testing.T) {
 
 	for _, v := range listDownload {
 		tlog.Logf("Removing: %v...\n", v.ID)
-		err := api.RemoveDownload(tutils.BaseAPIParams(), v.ID)
+		err := api.RemoveDownload(tools.BaseAPIParams(), v.ID)
 		tassert.CheckFatal(t, err)
 	}
 }
@@ -86,7 +86,7 @@ func checkDownloadList(t *testing.T, expNumEntries ...int) {
 		expNumEntriesVal = expNumEntries[0]
 	}
 
-	listDownload, err := api.DownloadGetList(tutils.BaseAPIParams(), downloadDescAllRegex)
+	listDownload, err := api.DownloadGetList(tools.BaseAPIParams(), downloadDescAllRegex)
 	tassert.CheckFatal(t, err)
 	actEntries := len(listDownload)
 
@@ -105,7 +105,7 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 		}
 
 		all := true
-		if resp, err := api.DownloadStatus(tutils.BaseAPIParams(), id, true); err == nil {
+		if resp, err := api.DownloadStatus(tools.BaseAPIParams(), id, true); err == nil {
 			if !resp.JobFinished() {
 				all = false
 			}
@@ -120,8 +120,8 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 
 func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []string) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
@@ -131,7 +131,7 @@ func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []stri
 		resp.FinishedCnt, len(objects),
 	)
 
-	objs, err := tutils.ListObjectNames(proxyURL, bck, "", 0)
+	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
 		t, reflect.DeepEqual(objs, objects),
@@ -140,10 +140,10 @@ func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []stri
 }
 
 func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSkipped bool) {
-	id, err := api.DownloadSingle(tutils.BaseAPIParams(), generateDownloadDesc(), bck, objName, link)
+	id, err := api.DownloadSingle(tools.BaseAPIParams(), generateDownloadDesc(), bck, objName, link)
 	tassert.CheckError(t, err)
 	waitForDownload(t, id, time.Minute)
-	status, err := api.DownloadStatus(tutils.BaseAPIParams(), id)
+	status, err := api.DownloadStatus(tools.BaseAPIParams(), id)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, status.ErrorCnt == 0, "expected no errors during download, got: %d (errs: %v)", status.ErrorCnt, status.Errs)
 	if shouldBeSkipped {
@@ -154,7 +154,7 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSki
 }
 
 func downloadObjectRemote(t *testing.T, body downloader.DlBackendBody, expectedFinished, expectedSkipped int) {
-	baseParams := tutils.BaseAPIParams()
+	baseParams := tools.BaseAPIParams()
 	body.Description = generateDownloadDesc()
 	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeBackend, body)
 	tassert.CheckFatal(t, err)
@@ -175,7 +175,7 @@ func downloadObjectRemote(t *testing.T, body downloader.DlBackendBody, expectedF
 }
 
 func abortDownload(t *testing.T, id string) {
-	baseParams := tutils.BaseAPIParams()
+	baseParams := tools.BaseAPIParams()
 
 	err := api.AbortDownload(baseParams, id)
 	tassert.CheckFatal(t, err)
@@ -190,7 +190,7 @@ func abortDownload(t *testing.T, id string) {
 }
 
 func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version string) *cmn.ObjectProps {
-	objProps, err := api.HeadObject(tutils.BaseAPIParams(), bck, objName, apc.FltPresent)
+	objProps, err := api.HeadObject(tools.BaseAPIParams(), bck, objName, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	tassert.Errorf(
@@ -206,8 +206,8 @@ func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version 
 
 func TestDownloadSingle(t *testing.T) {
 	var (
-		proxyURL      = tutils.RandomProxyURL(t)
-		baseParams    = tutils.BaseAPIParams(proxyURL)
+		proxyURL      = tools.RandomProxyURL(t)
+		baseParams    = tools.BaseAPIParams(proxyURL)
 		objName       = "object"
 		objNameSecond = "object-second"
 
@@ -274,8 +274,8 @@ func TestDownloadSingle(t *testing.T) {
 
 func TestDownloadRange(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		template        = "storage.googleapis.com/minikube/iso/minikube-v0.23.{0..4}.iso.sha256"
 		expectedObjects = []string{
@@ -310,8 +310,8 @@ func TestDownloadRange(t *testing.T) {
 
 func TestDownloadMultiRange(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		template        = "storage.googleapis.com/minikube/iso/minikube-v0.{23..25..2}.{0..1}.iso.sha256"
 		expectedObjects = []string{
@@ -361,7 +361,7 @@ func TestDownloadMultiMap(t *testing.T) {
 		defer m.del()
 		clearDownloadList(t)
 
-		id, err := api.DownloadMulti(tutils.BaseAPIParams(), generateDownloadDesc(), m.bck, mapping)
+		id, err := api.DownloadMulti(tools.BaseAPIParams(), generateDownloadDesc(), m.bck, mapping)
 		tassert.CheckFatal(t, err)
 
 		waitForDownload(t, id, 30*time.Second)
@@ -378,8 +378,8 @@ func TestDownloadMultiList(t *testing.T) {
 			"https://raw.githubusercontent.com/kubernetes/kubernetes/master/LICENSE?query=values",
 		}
 		expectedObjs = []string{"LICENSE", "README.md"}
-		proxyURL     = tutils.RandomProxyURL(t)
-		baseParams   = tutils.BaseAPIParams(proxyURL)
+		proxyURL     = tools.RandomProxyURL(t)
+		baseParams   = tools.BaseAPIParams(proxyURL)
 	)
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
@@ -410,13 +410,13 @@ func TestDownloadTimeout(t *testing.T) {
 		}
 		objName    = "object"
 		link       = "https://storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar"
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	clearDownloadList(t)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	body := downloader.DlSingleBody{
 		DlSingleObj: downloader.DlSingleObj{
@@ -454,8 +454,8 @@ func TestDownloadTimeout(t *testing.T) {
 
 func TestDownloadRemote(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		fileCnt = 5
 		prefix  = "imagenet/imagenet_train-"
@@ -483,16 +483,16 @@ func TestDownloadRemote(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: test.srcBck})
+			tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: test.srcBck})
 
 			clearDownloadList(t)
 
 			if test.dstBck.IsAIS() {
-				tutils.CreateBucketWithCleanup(t, proxyURL, test.dstBck, nil)
+				tools.CreateBucketWithCleanup(t, proxyURL, test.dstBck, nil)
 			}
 
-			tutils.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
-			defer tutils.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
+			tools.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
+			defer tools.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
 
 			tlog.Logln("putting objects into remote bucket...")
 
@@ -521,8 +521,8 @@ func TestDownloadRemote(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			if test.dstBck.IsAIS() {
-				tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: test.srcBck})
-				tutils.SetBackendBck(t, baseParams, test.dstBck, test.srcBck)
+				tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: test.srcBck})
+				tools.SetBackendBck(t, baseParams, test.dstBck, test.srcBck)
 			}
 
 			tlog.Logln("starting remote download...")
@@ -539,7 +539,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("wait for remote download...")
 			waitForDownload(t, id, time.Minute)
 
-			objs, err := tutils.ListObjectNames(proxyURL, test.dstBck, prefix, 0)
+			objs, err := tools.ListObjectNames(proxyURL, test.dstBck, prefix, 0)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
 
@@ -583,7 +583,7 @@ func TestDownloadStatus(t *testing.T) {
 			Name:     testBucketName,
 			Provider: apc.AIS,
 		}
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 		m          = ioContext{t: t}
 	)
 
@@ -592,7 +592,7 @@ func TestDownloadStatus(t *testing.T) {
 
 	var (
 		shortFileName = "shortFile"
-		longFileName  = tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", bck, m.smap)
+		longFileName  = tools.GenerateNotConflictingObjectName(shortFileName, "longFile", bck, m.smap)
 	)
 
 	files := map[string]string{
@@ -602,13 +602,13 @@ func TestDownloadStatus(t *testing.T) {
 
 	clearDownloadList(t)
 
-	tutils.CreateBucketWithCleanup(t, m.proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, m.proxyURL, bck, nil)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, files)
 	tassert.CheckFatal(t, err)
 
 	// Wait for the short file to be downloaded
-	err = tutils.WaitForObjectToBeDowloaded(baseParams, bck, shortFileName, 5*time.Second)
+	err = tools.WaitForObjectToBeDowloaded(baseParams, bck, shortFileName, 5*time.Second)
 	tassert.CheckFatal(t, err)
 
 	resp, err := api.DownloadStatus(baseParams, id)
@@ -627,7 +627,7 @@ func TestDownloadStatus(t *testing.T) {
 }
 
 func TestDownloadStatusError(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -639,14 +639,14 @@ func TestDownloadStatusError(t *testing.T) {
 			"notFoundFile": "https://google.com/404.tar",
 		}
 
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	clearDownloadList(t)
 
 	// Create ais bucket
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, files)
 	tassert.CheckFatal(t, err)
@@ -677,8 +677,8 @@ func TestDownloadStatusError(t *testing.T) {
 
 func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bck = cmn.Bck{
 			Name:     testBucketName,
@@ -693,7 +693,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
@@ -711,13 +711,13 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	// If the file was successfully downloaded, it means that the external checksum was correct. Also because of the
 	// ValidateWarmGet property being set to True, if it was downloaded without errors then the internal checksum was
 	// also set properly
-	tutils.EnsureObjectsExist(t, baseParams, bck, expectedObjects...)
+	tools.EnsureObjectsExist(t, baseParams, bck, expectedObjects...)
 }
 
 func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bck = cmn.Bck{
 			Name:     testBucketName,
@@ -734,7 +734,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
@@ -747,15 +747,15 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	waitForDownload(t, id, 30*time.Second)
 	checkDownloadedObjects(t, id, bck, expectedObjects)
 
-	tutils.EnsureObjectsExist(t, baseParams, bck, expectedObjects...)
+	tools.EnsureObjectsExist(t, baseParams, bck, expectedObjects...)
 }
 
 func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bck = cmn.Bck{
 			Name:     testBucketName,
@@ -770,7 +770,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 		}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
@@ -783,17 +783,17 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	waitForDownload(t, id, 10*time.Second)
 	checkDownloadedObjects(t, id, bck, expectedObjects)
 
-	tutils.EnsureObjectsExist(t, baseParams, bck, expectedObjects...)
+	tools.EnsureObjectsExist(t, baseParams, bck, expectedObjects...)
 }
 
 func TestDownloadIntoNonexistentBucket(t *testing.T) {
 	var (
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 		objName    = "object"
 		obj        = "storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar"
 	)
 
-	bucket, err := tutils.GenerateNonexistentBucketName("download", baseParams)
+	bucket, err := tools.GenerateNonexistentBucketName("download", baseParams)
 	tassert.CheckFatal(t, err)
 
 	bck := cmn.Bck{
@@ -808,8 +808,8 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 
 func TestDownloadMountpath(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(15),
 			Provider: apc.AIS,
@@ -827,7 +827,7 @@ func TestDownloadMountpath(t *testing.T) {
 		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
 	}
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	id1, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
@@ -841,7 +841,7 @@ func TestDownloadMountpath(t *testing.T) {
 	tlog.Logln("Wait a while for downloaders to pick up...")
 	time.Sleep(2 * time.Second)
 
-	smap := tutils.GetClusterMap(t, proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
 	selectedTarget, _ := smap.GetRandTarget()
 
 	mpathList, err := api.GetMountpaths(baseParams, selectedTarget)
@@ -859,7 +859,7 @@ func TestDownloadMountpath(t *testing.T) {
 		err = api.EnableMountpath(baseParams, selectedTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 
-		tutils.WaitForResilvering(t, baseParams, selectedTarget)
+		tools.WaitForResilvering(t, baseParams, selectedTarget)
 		ensureNumMountpaths(t, selectedTarget, mpathList)
 	}()
 
@@ -869,7 +869,7 @@ func TestDownloadMountpath(t *testing.T) {
 	abortDownload(t, id1)
 
 	tlog.Logf("Listing %s\n", bck)
-	objs, err := tutils.ListObjectNames(proxyURL, bck, "", 0)
+	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
 
@@ -878,15 +878,15 @@ func TestDownloadMountpath(t *testing.T) {
 	tlog.Logf("Started download job %s, waiting for it to finish\n", id2)
 
 	waitForDownload(t, id2, 2*time.Minute)
-	objs, err = tutils.ListObjectNames(proxyURL, bck, "", 0)
+	objs, err = tools.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs))
 }
 
 func TestDownloadOverrideObject(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
@@ -904,7 +904,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 	// disallow updating downloaded objects
 	aattrs := apc.AccessAll &^ apc.AceDisconnectedBackend
 	props := &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)}
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, props)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, props)
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
@@ -931,8 +931,8 @@ func TestDownloadOverrideObject(t *testing.T) {
 
 func TestDownloadOverrideObjectWeb(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
@@ -973,8 +973,8 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 
 func TestDownloadOverrideObjectRemote(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
@@ -990,13 +990,13 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 		}
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: m.bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
 	m.initWithCleanup()
 	m.remotePuts(false /*evict*/)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	tutils.SetBackendBck(t, baseParams, bck, m.bck)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.SetBackendBck(t, baseParams, bck, m.bck)
 
 	downloadObjectRemote(t, dlBody, m.num, 0)
 	m.remotePuts(false /*evict*/)
@@ -1005,7 +1005,7 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 
 func TestDownloadSkipObject(t *testing.T) {
 	var (
-		proxyURL = tutils.RandomProxyURL(t)
+		proxyURL = tools.RandomProxyURL(t)
 		bck      = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
@@ -1018,7 +1018,7 @@ func TestDownloadSkipObject(t *testing.T) {
 		expectedVersion       = "1"
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
@@ -1033,8 +1033,8 @@ func TestDownloadSkipObject(t *testing.T) {
 
 func TestDownloadSkipObjectRemote(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
@@ -1050,13 +1050,13 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 		}
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: m.bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
 	m.initWithCleanup()
 	m.remotePuts(false /*evict*/)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	tutils.SetBackendBck(t, baseParams, bck, m.bck)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.SetBackendBck(t, baseParams, bck, m.bck)
 
 	downloadObjectRemote(t, dlBody, m.num, 0)
 	downloadObjectRemote(t, dlBody, m.num, m.num)
@@ -1070,8 +1070,8 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 
 func TestDownloadSync(t *testing.T) {
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
@@ -1088,13 +1088,13 @@ func TestDownloadSync(t *testing.T) {
 		objsToDelete = 4
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: m.bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
 	m.initWithCleanup()
 	m.remotePuts(false /*evict*/)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	tutils.SetBackendBck(t, baseParams, bck, m.bck)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.SetBackendBck(t, baseParams, bck, m.bck)
 
 	tlog.Logln("1. initial sync of remote bucket...")
 	dlBody.Sync = true
@@ -1138,7 +1138,7 @@ func TestDownloadSync(t *testing.T) {
 }
 
 func TestDownloadJobLimitConnections(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	const (
 		limitConnection = 2
@@ -1146,15 +1146,15 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	)
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
@@ -1202,11 +1202,11 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 }
 
 func TestDownloadJobConcurrency(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
@@ -1215,7 +1215,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		template = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
@@ -1288,7 +1288,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 
 // NOTE: Test may fail if the network is SUPER slow!!
 func TestDownloadJobBytesThrottling(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	const (
 		link = "https://storage.googleapis.com/minikube/iso/minikube-v0.35.0.iso"
@@ -1301,15 +1301,15 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 	)
 
 	var (
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeSingle, downloader.DlSingleBody{
 		DlBase: downloader.DlBase{

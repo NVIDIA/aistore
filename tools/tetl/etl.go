@@ -18,10 +18,10 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -273,7 +273,7 @@ func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, 
 	xactID, err := api.ETLBucket(baseParams, fromBck, toBck, bckMsg)
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
-		tutils.DestroyBucket(t, baseParams.URL, toBck)
+		tools.DestroyBucket(t, baseParams.URL, toBck)
 	})
 	return xactID
 }

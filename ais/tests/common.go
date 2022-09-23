@@ -21,12 +21,12 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -82,7 +82,7 @@ func (m *ioContext) initWithCleanupAndSaveState() {
 }
 
 func (m *ioContext) saveCluState(proxyURL string) {
-	m.smap = tutils.GetClusterMap(m.t, proxyURL)
+	m.smap = tools.GetClusterMap(m.t, proxyURL)
 	m.originalTargetCount = m.smap.CountActiveTargets()
 	m.originalProxyCount = m.smap.CountActiveProxies()
 	tlog.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
@@ -90,7 +90,7 @@ func (m *ioContext) saveCluState(proxyURL string) {
 
 func (m *ioContext) waitAndCheckCluState() {
 	time.Sleep(2 * time.Second)
-	smap, err := tutils.WaitForClusterState(
+	smap, err := tools.WaitForClusterState(
 		m.proxyURL,
 		"cluster state",
 		m.smap.Version,
@@ -115,10 +115,10 @@ func (m *ioContext) checkCluState(smap *cluster.Smap) {
 }
 
 func (m *ioContext) initWithCleanup() {
-	m.proxyURL = tutils.RandomProxyURL()
+	m.proxyURL = tools.RandomProxyURL()
 	if m.proxyURL == "" {
 		// if random selection failed, use RO url
-		m.proxyURL = tutils.GetPrimaryURL()
+		m.proxyURL = tools.GetPrimaryURL()
 	}
 	if m.fileSize == 0 {
 		m.fileSize = cos.KiB
@@ -144,7 +144,7 @@ func (m *ioContext) initWithCleanup() {
 		if m.deleteRemoteBckObjs {
 			m.del(-1 /*delete all*/, 1 /* including not present*/)
 		} else {
-			tutils.EvictRemoteBucket(m.t, m.proxyURL, m.bck) // evict from AIStore
+			tools.EvictRemoteBucket(m.t, m.proxyURL, m.bck) // evict from AIStore
 		}
 	}
 
@@ -156,7 +156,7 @@ func (m *ioContext) _cleanup() {
 	m.del()
 	if m.bck.IsRemote() {
 		// Ensure all local objects are removed.
-		tutils.EvictRemoteBucket(m.t, m.proxyURL, m.bck)
+		tools.EvictRemoteBucket(m.t, m.proxyURL, m.bck)
 	}
 }
 
@@ -178,7 +178,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 		targetObjectCount = make(map[string]int64)
 	)
 	tlog.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 	lst, err := api.ListObjects(baseParams, m.bck, &apc.ListObjsMsg{Props: apc.GetTargetURL}, 0)
 	tassert.CheckFatal(t, err)
 	for _, obj := range lst.Entries {
@@ -200,7 +200,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		m.remotePuts(false /*evict*/)
 		return
 	}
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	baseParams := tools.BaseAPIParams(m.proxyURL)
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)
 
@@ -211,7 +211,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	if !m.silent {
 		tlog.Logf("PUT %d objects => %s\n", m.num, m.bck)
 	}
-	m.objNames, m.numPutErrs, err = tutils.PutRandObjs(tutils.PutObjectsArgs{
+	m.objNames, m.numPutErrs, err = tools.PutRandObjs(tools.PutObjectsArgs{
 		ProxyURL:  m.proxyURL,
 		Bck:       m.bck,
 		ObjPath:   m.prefix,
@@ -249,7 +249,7 @@ func (m *ioContext) remotePuts(evict bool, overrides ...bool) {
 // some of the objects were removed before calling remoteRefill.
 func (m *ioContext) remoteRefill() {
 	var (
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 		msg        = &apc.ListObjsMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
 
@@ -269,7 +269,7 @@ func (m *ioContext) remoteRefill() {
 
 func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	var (
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 		errCh      = make(chan error, objCnt)
 		wg         = cos.NewLimitedWaitGroup(20)
 	)
@@ -294,7 +294,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tutils.Put(m.proxyURL, m.bck, objName, r, errCh)
+			tools.Put(m.proxyURL, m.bck, objName, r, errCh)
 		}()
 		if !override {
 			m.objNames = append(m.objNames, objName)
@@ -311,7 +311,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 
 func (m *ioContext) evict() {
 	var (
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 		msg        = &apc.ListObjsMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
 
@@ -328,7 +328,7 @@ func (m *ioContext) evict() {
 
 func (m *ioContext) remotePrefetch(prefetchCnt int) {
 	var (
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 		msg        = &apc.ListObjsMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
 
@@ -361,7 +361,7 @@ func (m *ioContext) del(opts ...int) {
 	var (
 		httpErr    *cmn.ErrHTTP
 		optCnt     = -1 // (variadic opts)
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 		lsmsg      = &apc.ListObjsMsg{
 			Prefix: m.prefix,
 			Props:  apc.GetPropsName,
@@ -471,7 +471,7 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, validate 
 
 func (m *ioContext) gets(withValidation ...bool) {
 	var (
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 		totalGets  = m.num * m.numGetsEachFile
 		wg         = cos.NewLimitedWaitGroup(50)
 		validate   bool
@@ -502,7 +502,7 @@ func (m *ioContext) gets(withValidation ...bool) {
 func (m *ioContext) getsUntilStop() {
 	var (
 		idx        = 0
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 		wg         = cos.NewLimitedWaitGroup(40)
 	)
 	for {
@@ -585,7 +585,7 @@ func (m *ioContext) ensureNumMountpaths(target *cluster.Snode, mpList *apc.Mount
 func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *apc.MountpathList) {
 	t.Helper()
 	tname := target.StringEx()
-	baseParams := tutils.BaseAPIParams()
+	baseParams := tools.BaseAPIParams()
 	mpl, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	for i := 0; i < 6; i++ {
@@ -642,9 +642,9 @@ func (m *ioContext) startMaintenanceNoRebalance() *cluster.Snode {
 	target, _ := m.smap.GetRandTarget()
 	tlog.Logf("Put %s in maintenance\n", target.StringEx())
 	args := &apc.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
-	_, err := api.StartMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
+	_, err := api.StartMaintenance(tools.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
-	m.smap, err = tutils.WaitForClusterState(
+	m.smap, err = tools.WaitForClusterState(
 		m.proxyURL,
 		"put target in maintenance",
 		m.smap.Version,
@@ -664,14 +664,14 @@ func (m *ioContext) stopMaintenance(target *cluster.Snode) (rebID string) {
 	var err error
 	tlog.Logf("Take %s out of maintenance...\n", target.StringEx())
 	args := &apc.ActValRmNode{DaemonID: target.ID()}
-	rebID, err = api.StopMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
+	rebID, err = api.StopMaintenance(tools.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
-	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetPublic))
-	smap := tutils.GetClusterMap(m.t, m.proxyURL)
+	baseParams := tools.BaseAPIParams(target.URL(cmn.NetPublic))
+	smap := tools.GetClusterMap(m.t, m.proxyURL)
 	for i := 0; i < iterations; i++ {
 		time.Sleep(interval)
 		if _, ok := smap.Tmap[target.ID()]; !ok {
-			smap = tutils.GetClusterMap(m.t, m.proxyURL)
+			smap = tools.GetClusterMap(m.t, m.proxyURL)
 		} else {
 			query := cmn.QueryBcks(m.bck)
 			baseParams.URL = m.proxyURL
@@ -693,7 +693,7 @@ func (m *ioContext) stopMaintenance(target *cluster.Snode) (rebID string) {
 }
 
 func (m *ioContext) setNonDefaultBucketProps() {
-	baseParams := tutils.BaseAPIParams()
+	baseParams := tools.BaseAPIParams()
 	copies := int64(rand.Intn(2))
 	props := &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
@@ -719,7 +719,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		name       string
 		bck        cmn.Bck
 		backendBck cmn.Bck
-		skipArgs   tutils.SkipTestArgs
+		skipArgs   tools.SkipTestArgs
 		props      *cmn.BucketPropsToUpdate
 	}{
 		{
@@ -729,7 +729,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		{
 			name: "remote",
 			bck:  cliBck,
-			skipArgs: tutils.SkipTestArgs{
+			skipArgs: tools.SkipTestArgs{
 				Long:      true,
 				RemoteBck: true,
 			},
@@ -738,9 +738,9 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			name: "remote_ais",
 			bck: cmn.Bck{
 				Name:     trand.String(10),
-				Provider: apc.AIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID},
+				Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID},
 			},
-			skipArgs: tutils.SkipTestArgs{
+			skipArgs: tools.SkipTestArgs{
 				RequiresRemoteCluster: true,
 				Long:                  true,
 			},
@@ -749,7 +749,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			name:       "backend",
 			bck:        cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
 			backendBck: cliBck,
-			skipArgs: tutils.SkipTestArgs{
+			skipArgs: tools.SkipTestArgs{
 				Long:      true,
 				RemoteBck: true,
 			},
@@ -763,7 +763,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 					Copies:  api.Int64(3),
 				},
 			},
-			skipArgs: tutils.SkipTestArgs{Long: true},
+			skipArgs: tools.SkipTestArgs{Long: true},
 		},
 		{
 			name: "local_ec_2_2",
@@ -775,7 +775,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 					ObjSizeLimit: api.Int64(0),
 				},
 			},
-			skipArgs: tutils.SkipTestArgs{Long: true},
+			skipArgs: tools.SkipTestArgs{Long: true},
 		},
 	}
 	for _, test := range tests { //nolint:gocritic // no performance critical code
@@ -788,21 +788,21 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 					t.Skipf("backend bucket must be a Cloud bucket (have %q)", test.backendBck)
 				}
 			}
-			tutils.CheckSkip(t, test.skipArgs)
+			tools.CheckSkip(t, test.skipArgs)
 
-			baseParams := tutils.BaseAPIParams()
+			baseParams := tools.BaseAPIParams()
 
 			if test.props != nil && test.props.Mirror != nil {
-				skip := tutils.SkipTestArgs{
+				skip := tools.SkipTestArgs{
 					MinMountpaths: int(*test.props.Mirror.Copies),
 				}
-				tutils.CheckSkip(t, skip)
+				tools.CheckSkip(t, skip)
 			}
 			if test.props != nil && test.props.EC != nil {
-				skip := tutils.SkipTestArgs{
+				skip := tools.SkipTestArgs{
 					MinTargets: *test.props.EC.DataSlices + *test.props.EC.ParitySlices + 1,
 				}
-				tutils.CheckSkip(t, skip)
+				tools.CheckSkip(t, skip)
 			}
 
 			if test.bck.IsAIS() || test.bck.IsRemoteAIS() {
@@ -810,7 +810,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 				tassert.CheckFatal(t, err)
 
 				if !test.backendBck.IsEmpty() {
-					tutils.SetBackendBck(t, baseParams, test.bck, test.backendBck)
+					tools.SetBackendBck(t, baseParams, test.bck, test.backendBck)
 				}
 				defer api.DestroyBucket(baseParams, test.bck)
 			}
@@ -863,7 +863,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tutils.Put(proxyURL, bck, keyName, r, errCh)
+			tools.Put(proxyURL, bck, keyName, r, errCh)
 		}()
 		fileNames = append(fileNames, fileName)
 	}
@@ -879,7 +879,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tutils.Put(proxyURL, bck, keyName, r, errCh)
+			tools.Put(proxyURL, bck, keyName, r, errCh)
 		}()
 		fileNames = append(fileNames, fName)
 	}
@@ -894,7 +894,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 
 	var (
 		letters    = "abcdefghijklmnopqrstuvwxyz"
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 	for i := 0; i < len(letters); i++ {
 		key := letters[i : i+1]
@@ -935,7 +935,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objName
 		{"dir1", "dir1"},
 		{"dir1/", "dir1/"},
 	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	for idx, test := range tests {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
 
@@ -982,7 +982,7 @@ func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []strin
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tutils.Del(proxyURL, bck, keyName, nil, errCh, true)
+			tools.Del(proxyURL, bck, keyName, nil, errCh, true)
 		}()
 	}
 	wg.Wait()
@@ -996,12 +996,12 @@ func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []strin
 }
 
 func initFS() {
-	proxyURL := tutils.GetPrimaryURL()
-	primary, err := tutils.GetPrimaryProxy(proxyURL)
+	proxyURL := tools.GetPrimaryURL()
+	primary, err := tools.GetPrimaryProxy(proxyURL)
 	if err != nil {
 		tlog.Logf("ERROR: %v", err)
 	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	cfg, err := api.GetDaemonConfig(baseParams, primary)
 	if err != nil {
 		tlog.Logf("ERROR: %v", err)
@@ -1019,12 +1019,12 @@ func initFS() {
 }
 
 func initMountpaths(t *testing.T, proxyURL string) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 	fsOnce.Do(initFS)
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	fs.TestNew(nil)
 	fs.TestDisableValidation()
-	smap := tutils.GetClusterMap(t, proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
 	for _, target := range smap.Tmap {
 		mpathList, err := api.GetMountpaths(baseParams, target)
 		tassert.CheckFatal(t, err)

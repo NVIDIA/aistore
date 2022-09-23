@@ -18,11 +18,11 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 const (
@@ -52,7 +52,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 	md := &checkerMD{
 		t:        t,
 		seed:     300,
-		proxyURL: tutils.RandomProxyURL(),
+		proxyURL: tools.RandomProxyURL(),
 		bck: cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
@@ -73,8 +73,8 @@ func newCheckerMD(t *testing.T) *checkerMD {
 }
 
 func (md *checkerMD) init() {
-	md.baseParams = tutils.BaseAPIParams(md.proxyURL)
-	md.smap = tutils.GetClusterMap(md.t, md.proxyURL)
+	md.baseParams = tools.BaseAPIParams(md.proxyURL)
+	md.smap = tools.GetClusterMap(md.t, md.proxyURL)
 
 	for targetID, tsi := range md.smap.Tmap {
 		tlog.Logf("Target: %s\n", targetID)
@@ -164,7 +164,7 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 	var (
 		err        error
 		newMpaths  *apc.MountpathList
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 	)
 
 	detectStart := time.Now()
@@ -220,7 +220,7 @@ func breakMountpath(t *testing.T, mpath, suffix string) {
 func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen, disabledLen int, suffix string) {
 	var (
 		err        error
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tools.BaseAPIParams()
 	)
 
 	// "broken" mpath does no exist, nothing to restore
@@ -269,8 +269,8 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 
 	const fileSize = 64 * cos.KiB
 	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	tlog.Logf("Testing mpath fail detection on %s\n", op)
@@ -324,7 +324,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		md     = newCheckerMD(t)
@@ -335,7 +335,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		t.Fatal("No available mountpaths found")
 	}
 
-	tutils.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
+	tools.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget.StringEx())
 	defer func() {
@@ -346,7 +346,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 
-		tutils.WaitForResilvering(t, md.baseParams, nil)
+		tools.WaitForResilvering(t, md.baseParams, nil)
 
 		md.ensureNumMountpaths(selectedTarget, md.allMps[selectedTarget.ID()])
 	}()
@@ -377,7 +377,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		md     = newCheckerMD(t)
@@ -389,12 +389,12 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	}
 
 	tlog.Logf("*** Testing with disabled FSHC***\n")
-	tutils.SetClusterConfig(t, cos.SimpleKVs{"fshc.enabled": "false"})
-	defer tutils.SetClusterConfig(t, cos.SimpleKVs{"fshc.enabled": "true"})
+	tools.SetClusterConfig(t, cos.SimpleKVs{"fshc.enabled": "false"})
+	defer tools.SetClusterConfig(t, cos.SimpleKVs{"fshc.enabled": "true"})
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget.StringEx())
-	tutils.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
+	tools.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
 	defer func() {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath, true /*dont-resil*/); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
@@ -403,7 +403,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 
-		tutils.WaitForResilvering(t, md.baseParams, nil)
+		tools.WaitForResilvering(t, md.baseParams, nil)
 
 		md.ensureNumMountpaths(selectedTarget, md.allMps[selectedTarget.ID()])
 	}()
@@ -425,11 +425,11 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		smap       = tutils.GetClusterMap(t, proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
+		smap       = tools.GetClusterMap(t, proxyURL)
 		mpList     = make(cluster.NodeMap, 10)
 		origAvail  = 0
 	)
@@ -478,7 +478,7 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 			t.Errorf("Expected status %d, got %d, %v", http.StatusNotFound, status, err)
 		}
 	}
-	tutils.WaitForResilvering(t, baseParams, selectedTarget)
+	tools.WaitForResilvering(t, baseParams, selectedTarget)
 
 	ensureNumMountpaths(t, selectedTarget, origMpl)
 }
@@ -487,13 +487,13 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
 		target *cluster.Snode
 
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams()
-		smap       = tutils.GetClusterMap(t, proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams()
+		smap       = tools.GetClusterMap(t, proxyURL)
 		proxyCnt   = smap.CountActiveProxies()
 		targetCnt  = smap.CountActiveTargets()
 	)
@@ -515,7 +515,7 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	smap, err = tutils.WaitForClusterState(proxyURL, "all mountpaths disabled", smap.Version, proxyCnt, targetCnt-1)
+	smap, err = tools.WaitForClusterState(proxyURL, "all mountpaths disabled", smap.Version, proxyCnt, targetCnt-1)
 	tassert.CheckFatal(t, err)
 	tlog.Logf("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)\n",
 		target.StringEx())
@@ -528,14 +528,14 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	_, err = tutils.WaitForClusterState(proxyURL, "all mountpaths enabled", smap.Version, proxyCnt, targetCnt)
+	_, err = tools.WaitForClusterState(proxyURL, "all mountpaths enabled", smap.Version, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
 	args = api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
-	tutils.WaitForResilvering(t, baseParams, nil)
+	tools.WaitForResilvering(t, baseParams, nil)
 
 	ensureNumMountpaths(t, target, oldMpaths)
 }
@@ -547,9 +547,9 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 	var (
 		target *cluster.Snode
 
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams()
-		smap       = tutils.GetClusterMap(t, proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams()
+		smap       = tools.GetClusterMap(t, proxyURL)
 		proxyCnt   = smap.CountProxies()
 		targetCnt  = smap.CountActiveTargets()
 		tmpMpath   = "/tmp/testmp"
@@ -568,7 +568,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 	err = api.AttachMountpath(baseParams, target, tmpMpath, true /*force*/)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	t.Cleanup(func() {
 		api.DetachMountpath(baseParams, target, tmpMpath, true /*dont-resil*/)
@@ -586,13 +586,13 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 
 	// Kill and restore target
 	tlog.Logf("Killing %s\n", target.StringEx())
-	tcmd, err := tutils.KillNode(target)
+	tcmd, err := tools.KillNode(target)
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(proxyURL, "target removed", smap.Version, proxyCnt, targetCnt-1)
+	smap, err = tools.WaitForClusterState(proxyURL, "target removed", smap.Version, proxyCnt, targetCnt-1)
 
 	tassert.CheckError(t, err)
-	tutils.RestoreNode(tcmd, false, "target")
-	smap, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetPublic), "target restored", smap.Version,
+	tools.RestoreNode(tcmd, false, "target")
+	smap, err = tools.WaitForClusterState(smap.Primary.URL(cmn.NetPublic), "target restored", smap.Version,
 		proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 	if _, ok := smap.Tmap[target.ID()]; !ok {
@@ -613,17 +613,17 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tutils.CheckSkip(t, tutils.SkipTestArgs{
+	tools.CheckSkip(t, tools.SkipTestArgs{
 		Long:               true,
 		MinMountpaths:      3,
 		MinTargets:         2,
-		RequiredDeployment: tutils.ClusterTypeLocal,
+		RequiredDeployment: tools.ClusterTypeLocal,
 	})
 	var (
 		target *cluster.Snode
 
-		smap       = tutils.GetClusterMap(t, tutils.RandomProxyURL())
-		baseParams = tutils.BaseAPIParams()
+		smap       = tools.GetClusterMap(t, tools.RandomProxyURL())
+		baseParams = tools.BaseAPIParams()
 		proxyURL   = smap.Primary.URL(cmn.NetPublic)
 		proxyCnt   = smap.CountProxies()
 		targetCnt  = smap.CountActiveTargets()
@@ -646,7 +646,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 		err = api.DisableMountpath(baseParams, target, mpath, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	t.Cleanup(func() {
 		if enabled {
@@ -657,22 +657,22 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 		}
 		time.Sleep(time.Second)
 
-		tutils.WaitForResilvering(t, baseParams, target)
+		tools.WaitForResilvering(t, baseParams, target)
 
 		ensureNumMountpaths(t, target, oldMpaths)
 	})
 
 	// Kill and restore target
 	tlog.Logf("Killing target %s\n", target.StringEx())
-	tcmd, err := tutils.KillNode(target)
+	tcmd, err := tools.KillNode(target)
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(proxyURL, "remove target", smap.Version, proxyCnt, targetCnt-1)
+	smap, err = tools.WaitForClusterState(proxyURL, "remove target", smap.Version, proxyCnt, targetCnt-1)
 	tassert.CheckFatal(t, err)
 
 	time.Sleep(time.Second)
-	err = tutils.RestoreNode(tcmd, false, "target")
+	err = tools.RestoreNode(tcmd, false, "target")
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(proxyURL, "restore", smap.Version, proxyCnt, targetCnt)
+	smap, err = tools.WaitForClusterState(proxyURL, "restore", smap.Version, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, smap.GetTarget(target.ID()) != nil, "removed target didn't rejoin")
 
@@ -698,7 +698,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 		err = api.EnableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 	}
-	tutils.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, baseParams, target)
 
 	enabled = true
 

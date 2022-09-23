@@ -15,9 +15,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 // Note: Run these tests on both K8s and local.
@@ -40,12 +40,12 @@ func TestConfig(t *testing.T) {
 			"lru.capacity_upd_time": updTime.String(),
 			"lru.dont_evict_time":   updTime.String(),
 		}
-		oconfig      = tutils.GetClusterConfig(t)
+		oconfig      = tools.GetClusterConfig(t)
 		ospaceconfig = oconfig.Space
 		olruconfig   = oconfig.LRU
 		operiodic    = oconfig.Periodic
 	)
-	defer tutils.SetClusterConfig(t, cos.SimpleKVs{
+	defer tools.SetClusterConfig(t, cos.SimpleKVs{
 		"periodic.stats_time":   oconfig.Periodic.StatsTime.String(),
 		"space.cleanupwm":       fmt.Sprintf("%d", oconfig.Space.CleanupWM),
 		"space.lowwm":           fmt.Sprintf("%d", oconfig.Space.LowWM),
@@ -55,9 +55,9 @@ func TestConfig(t *testing.T) {
 		"lru.dont_evict_time":   oconfig.LRU.DontEvictTime.String(),
 	})
 
-	tutils.SetClusterConfig(t, configRegression)
+	tools.SetClusterConfig(t, configRegression)
 
-	nconfig := tutils.GetClusterConfig(t)
+	nconfig := tools.GetClusterConfig(t)
 	nlruconfig := nconfig.LRU
 	nspaceconfig := nconfig.Space
 	nperiodic := nconfig.Periodic
@@ -67,14 +67,14 @@ func TestConfig(t *testing.T) {
 			nperiodic.StatsTime, configRegression["periodic.stats_time"])
 	} else {
 		o := operiodic.StatsTime
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"periodic.stats_time": o.String()})
+		tools.SetClusterConfig(t, cos.SimpleKVs{"periodic.stats_time": o.String()})
 	}
 	if v, _ := time.ParseDuration(configRegression["lru.dont_evict_time"]); nlruconfig.DontEvictTime != cos.Duration(v) {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
 			nlruconfig.DontEvictTime, configRegression["lru.dont_evict_time"])
 	} else {
 		o := olruconfig.DontEvictTime
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.dont_evict_time": o.String()})
+		tools.SetClusterConfig(t, cos.SimpleKVs{"lru.dont_evict_time": o.String()})
 	}
 
 	if v, _ := time.ParseDuration(configRegression["lru.capacity_upd_time"]); nlruconfig.CapacityUpdTime != cos.Duration(v) {
@@ -82,7 +82,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig.CapacityUpdTime, configRegression["lru.capacity_upd_time"])
 	} else {
 		o := olruconfig.CapacityUpdTime
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.capacity_upd_time": o.String()})
+		tools.SetClusterConfig(t, cos.SimpleKVs{"lru.capacity_upd_time": o.String()})
 	}
 	if hw, err := strconv.Atoi(configRegression["space.highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
@@ -94,7 +94,7 @@ func TestConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error parsing HighWM: %v", err)
 		}
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"space.highwm": oldhwmStr})
+		tools.SetClusterConfig(t, cos.SimpleKVs{"space.highwm": oldhwmStr})
 	}
 	if lw, err := strconv.Atoi(configRegression["space.lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
@@ -106,7 +106,7 @@ func TestConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error parsing LowWM: %v", err)
 		}
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"space.lowwm": oldlwmStr})
+		tools.SetClusterConfig(t, cos.SimpleKVs{"space.lowwm": oldlwmStr})
 	}
 	if pt, err := cos.ParseBool(configRegression["lru.enabled"]); err != nil {
 		t.Fatalf("Error parsing lru.enabled: %v", err)
@@ -114,27 +114,27 @@ func TestConfig(t *testing.T) {
 		t.Errorf("lru.enabled was not set properly: %v, should be %v",
 			nlruconfig.Enabled, pt)
 	} else {
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.enabled": fmt.Sprintf("%v", olruconfig.Enabled)})
+		tools.SetClusterConfig(t, cos.SimpleKVs{"lru.enabled": fmt.Sprintf("%v", olruconfig.Enabled)})
 	}
 }
 
 func TestConfigGet(t *testing.T) {
-	smap := tutils.GetClusterMap(t, tutils.GetPrimaryURL())
+	smap := tools.GetClusterMap(t, tools.GetPrimaryURL())
 
 	proxy, err := smap.GetRandProxy(false)
 	tassert.CheckFatal(t, err)
-	tutils.GetDaemonConfig(t, proxy)
+	tools.GetDaemonConfig(t, proxy)
 
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	tutils.GetDaemonConfig(t, target)
+	tools.GetDaemonConfig(t, target)
 }
 
 func TestConfigSetGlobal(t *testing.T) {
 	var (
 		ecCondition bool
-		smap        = tutils.GetClusterMap(t, tutils.GetPrimaryURL())
-		config      = tutils.GetClusterConfig(t)
+		smap        = tools.GetClusterMap(t, tools.GetPrimaryURL())
+		config      = tools.GetClusterConfig(t)
 		check       = func(snode *cluster.Snode, c *cmn.Config) {
 			tassert.Errorf(t, c.EC.Enabled == ecCondition,
 				"%s expected 'ec.enabled' to be %v, got %v", snode, ecCondition, c.EC.Enabled)
@@ -145,12 +145,12 @@ func TestConfigSetGlobal(t *testing.T) {
 		Enabled: api.Bool(ecCondition),
 	}}
 
-	tutils.SetClusterConfigUsingMsg(t, toUpdate)
+	tools.SetClusterConfigUsingMsg(t, toUpdate)
 	checkConfig(t, smap, check)
 
 	// Reset config
 	ecCondition = config.EC.Enabled
-	tutils.SetClusterConfig(t, cos.SimpleKVs{
+	tools.SetClusterConfig(t, cos.SimpleKVs{
 		"ec.enabled": strconv.FormatBool(ecCondition),
 	})
 	checkConfig(t, smap, check)
@@ -162,10 +162,10 @@ func TestConfigSetGlobal(t *testing.T) {
 
 func TestConfigFailOverrideClusterOnly(t *testing.T) {
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		smap       = tutils.GetClusterMap(t, proxyURL)
-		config     = tutils.GetClusterConfig(t)
+		proxyURL   = tools.GetPrimaryURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
+		smap       = tools.GetClusterMap(t, proxyURL)
+		config     = tools.GetClusterConfig(t)
 	)
 	proxy, err := smap.GetRandProxy(false /*exclude primary*/)
 	tassert.CheckFatal(t, err)
@@ -174,7 +174,7 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"ec.enabled": strconv.FormatBool(!config.EC.Enabled)})
 	tassert.Fatalf(t, err != nil, "expected error to occur when trying to override cluster only config")
 
-	daemonConfig := tutils.GetDaemonConfig(t, proxy)
+	daemonConfig := tools.GetDaemonConfig(t, proxy)
 	tassert.Errorf(t, daemonConfig.EC.Enabled == config.EC.Enabled,
 		"expected 'ec.enabled' to be %v, got: %v", config.EC.Enabled, daemonConfig.EC.Enabled)
 
@@ -184,12 +184,12 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 }
 
 func TestConfigOverrideAndRestart(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 	var (
-		proxyURL      = tutils.GetPrimaryURL()
-		baseParams    = tutils.BaseAPIParams(proxyURL)
-		smap          = tutils.GetClusterMap(t, proxyURL)
-		config        = tutils.GetClusterConfig(t)
+		proxyURL      = tools.GetPrimaryURL()
+		baseParams    = tools.BaseAPIParams(proxyURL)
+		smap          = tools.GetClusterMap(t, proxyURL)
+		config        = tools.GetClusterConfig(t)
 		origProxyCnt  = smap.CountActiveProxies()
 		origTargetCnt = smap.CountActiveTargets()
 	)
@@ -201,23 +201,23 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 	tassert.CheckFatal(t, err)
 
-	daemonConfig := tutils.GetDaemonConfig(t, proxy)
+	daemonConfig := tools.GetDaemonConfig(t, proxy)
 	tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Restart and check that config persisted
 	tlog.Logf("Killing %s\n", proxy.StringEx())
-	cmd, err := tutils.KillNode(proxy)
+	cmd, err := tools.KillNode(proxy)
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
+	smap, err = tools.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
 
-	err = tutils.RestoreNode(cmd, false, apc.Proxy)
+	err = tools.RestoreNode(cmd, false, apc.Proxy)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
+	_, err = tools.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
 
-	daemonConfig = tutils.GetDaemonConfig(t, proxy)
+	daemonConfig = tools.GetDaemonConfig(t, proxy)
 	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
@@ -227,11 +227,11 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 }
 
 func TestConfigSyncToNewNode(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 	var (
-		proxyURL      = tutils.GetPrimaryURL()
-		smap          = tutils.GetClusterMap(t, proxyURL)
-		config        = tutils.GetClusterConfig(t)
+		proxyURL      = tools.GetPrimaryURL()
+		smap          = tools.GetClusterMap(t, proxyURL)
+		config        = tools.GetClusterConfig(t)
 		origProxyCnt  = smap.CountActiveProxies()
 		origTargetCnt = smap.CountActiveTargets()
 	)
@@ -240,32 +240,32 @@ func TestConfigSyncToNewNode(t *testing.T) {
 
 	// 1. Kill a random proxy
 	tlog.Logf("Killing %s\n", proxy.StringEx())
-	cmd, err := tutils.KillNode(proxy)
+	cmd, err := tools.KillNode(proxy)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		tutils.SetClusterConfig(t, cos.SimpleKVs{
+		tools.SetClusterConfig(t, cos.SimpleKVs{
 			"ec.enabled": strconv.FormatBool(config.EC.Enabled),
 		})
 	})
 
-	smap, err = tutils.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
+	smap, err = tools.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
 
 	// 2. After proxy is killed, update cluster configuration
 	newECEnabled := !config.EC.Enabled
-	tutils.SetClusterConfig(t, cos.SimpleKVs{
+	tools.SetClusterConfig(t, cos.SimpleKVs{
 		"ec.enabled": strconv.FormatBool(newECEnabled),
 	})
 
 	// 3. Restart proxy
-	err = tutils.RestoreNode(cmd, false, apc.Proxy)
+	err = tools.RestoreNode(cmd, false, apc.Proxy)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
+	_, err = tools.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
 
 	// 4. Ensure the proxy has lastest updated config
-	daemonConfig := tutils.GetDaemonConfig(t, proxy)
+	daemonConfig := tools.GetDaemonConfig(t, proxy)
 	tassert.Fatalf(t, daemonConfig.EC.Enabled == newECEnabled,
 		"expected 'ec.Enabled' to be %v, got: %v", newECEnabled, daemonConfig.EC.Enabled)
 
@@ -276,22 +276,22 @@ func TestConfigSyncToNewNode(t *testing.T) {
 
 func checkConfig(t *testing.T, smap *cluster.Smap, check func(*cluster.Snode, *cmn.Config)) {
 	for _, node := range smap.Pmap {
-		config := tutils.GetDaemonConfig(t, node)
+		config := tools.GetDaemonConfig(t, node)
 		check(node, config)
 	}
 	for _, node := range smap.Tmap {
-		config := tutils.GetDaemonConfig(t, node)
+		config := tools.GetDaemonConfig(t, node)
 		check(node, config)
 	}
 }
 
 func TestConfigOverrideAndResetDaemon(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		smap       = tutils.GetClusterMap(t, proxyURL)
-		config     = tutils.GetClusterConfig(t)
+		proxyURL   = tools.GetPrimaryURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
+		smap       = tools.GetClusterMap(t, proxyURL)
+		config     = tools.GetClusterConfig(t)
 	)
 	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
@@ -301,39 +301,39 @@ func TestConfigOverrideAndResetDaemon(t *testing.T) {
 	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 	tassert.CheckFatal(t, err)
 
-	daemonConfig := tutils.GetDaemonConfig(t, proxy)
+	daemonConfig := tools.GetDaemonConfig(t, proxy)
 	tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Reset daemon and check if the override is gone.
 	err = api.ResetDaemonConfig(baseParams, proxy.ID())
 	tassert.CheckFatal(t, err)
-	daemonConfig = tutils.GetDaemonConfig(t, proxy)
+	daemonConfig = tools.GetDaemonConfig(t, proxy)
 	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == config.Disk.DiskUtilLowWM,
 		errWMConfigNotExpected, config.Disk.DiskUtilLowWM, daemonConfig.Disk.DiskUtilLowWM)
 }
 
 func TestConfigOverrideAndResetCluster(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 	var (
 		daemonConfig *cmn.Config
-		proxyURL     = tutils.GetPrimaryURL()
-		baseParams   = tutils.BaseAPIParams(proxyURL)
-		smap         = tutils.GetClusterMap(t, proxyURL)
-		config       = tutils.GetClusterConfig(t)
+		proxyURL     = tools.GetPrimaryURL()
+		baseParams   = tools.BaseAPIParams(proxyURL)
+		smap         = tools.GetClusterMap(t, proxyURL)
+		config       = tools.GetClusterConfig(t)
 		newLowWM     = config.Disk.DiskUtilLowWM - 10
 	)
 	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
 	// Override a cluster config on daemon and primary
-	primary, err := tutils.GetPrimaryProxy(proxyURL)
+	primary, err := tools.GetPrimaryProxy(proxyURL)
 	tassert.CheckFatal(t, err)
 	for _, node := range []*cluster.Snode{primary, proxy} {
 		err = api.SetDaemonConfig(baseParams, node.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 		tassert.CheckFatal(t, err)
 
-		daemonConfig = tutils.GetDaemonConfig(t, node)
+		daemonConfig = tools.GetDaemonConfig(t, node)
 		tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
 			errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 	}
@@ -342,7 +342,7 @@ func TestConfigOverrideAndResetCluster(t *testing.T) {
 	err = api.ResetClusterConfig(baseParams)
 	tassert.CheckFatal(t, err)
 	for _, node := range []*cluster.Snode{primary, proxy} {
-		daemonConfig = tutils.GetDaemonConfig(t, node)
+		daemonConfig = tools.GetDaemonConfig(t, node)
 		tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == config.Disk.DiskUtilLowWM,
 			errWMConfigNotExpected, config.Disk.DiskUtilLowWM, daemonConfig.Disk.DiskUtilLowWM)
 	}

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestFastLog2(t *testing.T) {

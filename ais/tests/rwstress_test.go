@@ -13,9 +13,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 const (
@@ -201,7 +201,7 @@ func multiOpStress(opNames ...string) func(t *testing.T) {
 func rwstress(t *testing.T) {
 	generateRandomNames(numFiles)
 	m := ioContext{t: t}
-	m.saveCluState(tutils.RandomProxyURL())
+	m.saveCluState(tools.RandomProxyURL())
 	t.Run("parallelputget", parallelPutGetStress)
 	t.Run("putdelete", multiOpStress(http.MethodPut, http.MethodGet))
 	t.Run("putgetdelete", multiOpStress(http.MethodPut, http.MethodGet, http.MethodDelete))
@@ -215,7 +215,7 @@ func TestRWStressShort(t *testing.T) {
 }
 
 func TestRWStress(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	numLoops = 30
 	numFiles = 1000

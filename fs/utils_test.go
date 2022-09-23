@@ -9,13 +9,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestIsDirEmpty(t *testing.T) {
-	tests := []tutils.DirTreeDesc{
+	tests := []tools.DirTreeDesc{
 		{Dirs: 0, Depth: 1, Empty: true},
 		{Dirs: 0, Depth: 1, Empty: false},
 
@@ -31,7 +31,7 @@ func TestIsDirEmpty(t *testing.T) {
 	for _, test := range tests {
 		testName := fmt.Sprintf("dirs=%d#depth=%d#empty=%t", test.Dirs, test.Depth, test.Empty)
 		t.Run(testName, func(t *testing.T) {
-			topDirName, _ := tutils.PrepareDirTree(t, test)
+			topDirName, _ := tools.PrepareDirTree(t, test)
 			defer os.RemoveAll(topDirName)
 
 			_, empty, err := fs.IsDirEmpty(topDirName)
@@ -50,7 +50,7 @@ func TestIsDirEmptyNonExist(t *testing.T) {
 }
 
 func BenchmarkIsDirEmpty(b *testing.B) {
-	benches := []tutils.DirTreeDesc{
+	benches := []tools.DirTreeDesc{
 		{Dirs: 0, Depth: 1, Empty: true},
 		{Dirs: 0, Depth: 1, Empty: false},
 
@@ -71,7 +71,7 @@ func BenchmarkIsDirEmpty(b *testing.B) {
 	for _, bench := range benches {
 		benchName := fmt.Sprintf("dirs=%d#depth=%d#empty=%t", bench.Dirs, bench.Depth, bench.Empty)
 		b.Run(benchName, func(b *testing.B) {
-			topDirName, _ := tutils.PrepareDirTree(b, bench)
+			topDirName, _ := tools.PrepareDirTree(b, bench)
 			defer os.RemoveAll(topDirName)
 
 			b.ResetTimer()

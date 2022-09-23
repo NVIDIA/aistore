@@ -15,8 +15,8 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/tools"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -24,7 +24,7 @@ import (
 )
 
 func TestE2E(t *testing.T) {
-	tutils.InitLocalCluster()
+	tools.InitLocalCluster()
 	cmd := exec.Command("which", "aisfs")
 	if err := cmd.Run(); err != nil {
 		t.Skip("'aisfs' binary not found")
@@ -42,7 +42,7 @@ func TestE2E(t *testing.T) {
 
 var _ = Describe("E2E FUSE Tests", func() {
 	var (
-		f          *tutils.E2EFramework
+		f          *tools.E2EFramework
 		fuseDir    string
 		bck        cmn.Bck
 		entries    []TableEntry
@@ -59,8 +59,8 @@ var _ = Describe("E2E FUSE Tests", func() {
 	BeforeEach(func() {
 		var err error
 
-		proxyURL := tutils.GetPrimaryURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL := tools.GetPrimaryURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
@@ -89,7 +89,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 		}
 		Expect(err).NotTo(HaveOccurred(), "'aisfs' is not running after being started")
 
-		f = &tutils.E2EFramework{Dir: fuseDir}
+		f = &tools.E2EFramework{Dir: fuseDir}
 	})
 
 	AfterEach(func() {

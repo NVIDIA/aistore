@@ -13,9 +13,9 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/trand"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 type testConfig struct {
@@ -35,21 +35,21 @@ func createAndFillBucket(b *testing.B, objCnt uint, u string) cmn.Bck {
 	const workerCount = 10
 	var (
 		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-		baseParams = tutils.BaseAPIParams(u)
+		baseParams = tools.BaseAPIParams(u)
 
 		wg              = &sync.WaitGroup{}
 		objCntPerWorker = int(objCnt) / workerCount
 	)
 
-	tutils.CreateBucketWithCleanup(b, baseParams.URL, bck, nil)
+	tools.CreateBucketWithCleanup(b, baseParams.URL, bck, nil)
 
 	// Iterations of PUT
 	for wid := uint(0); wid < workerCount; wid++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			objDir := tutils.RandomObjDir(10, 5)
-			tutils.PutRR(b, baseParams, 128, cos.ChecksumXXHash, bck, objDir, objCntPerWorker)
+			objDir := tools.RandomObjDir(10, 5)
+			tools.PutRR(b, baseParams, 128, cos.ChecksumXXHash, bck, objDir, objCntPerWorker)
 		}()
 	}
 	wg.Wait()
@@ -57,7 +57,7 @@ func createAndFillBucket(b *testing.B, objCnt uint, u string) cmn.Bck {
 }
 
 func BenchmarkListObject(b *testing.B) {
-	tutils.CheckSkip(b, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(b, tools.SkipTestArgs{Long: true})
 	u := "http://127.0.0.1:8080"
 	tests := []testConfig{
 		{objectCnt: 1_000, pageSize: 10, useCache: false},
@@ -77,7 +77,7 @@ func BenchmarkListObject(b *testing.B) {
 		b.Run(test.name(), func(b *testing.B) {
 			var (
 				bck        = createAndFillBucket(b, test.objectCnt, u)
-				baseParams = tutils.BaseAPIParams(u)
+				baseParams = tools.BaseAPIParams(u)
 			)
 			b.ReportAllocs()
 			b.ResetTimer()

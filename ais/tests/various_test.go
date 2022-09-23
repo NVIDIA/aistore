@@ -8,14 +8,14 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestInvalidHTTPMethod(t *testing.T) {
-	proxyURL := tutils.RandomProxyURL(t)
+	proxyURL := tools.RandomProxyURL(t)
 
 	req, err := http.NewRequest("TEST", proxyURL, http.NoBody)
 	tassert.CheckFatal(t, err)
-	tassert.DoAndCheckResp(t, tutils.HTTPClient, req, http.StatusBadRequest)
+	tassert.DoAndCheckResp(t, tools.HTTPClient, req, http.StatusBadRequest)
 }

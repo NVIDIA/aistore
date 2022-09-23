@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/aistore/devtools/trand"
+	"github.com/NVIDIA/aistore/tools/trand"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

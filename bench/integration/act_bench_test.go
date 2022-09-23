@@ -13,9 +13,9 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 const (
@@ -43,7 +43,7 @@ var (
 
 func fillBucket(tb testing.TB, proxyURL string, bck cmn.Bck, objSize uint64, objCount int) {
 	tlog.Logf("PUT %d objects of size %d into bucket %s...\n", objCount, objSize, bck)
-	_, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
+	_, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
 		ProxyURL:  proxyURL,
 		Bck:       bck,
 		ObjCnt:    objCount,
@@ -59,8 +59,8 @@ func BenchmarkECEncode(b *testing.B) {
 		bckSize = cos.GiB
 	)
 	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	for ecIdx, test := range ecTests {
@@ -70,7 +70,7 @@ func BenchmarkECEncode(b *testing.B) {
 				Name:     fmt.Sprintf("bench-ec-enc-%d", len(objSizes)*ecIdx+szIdx),
 				Provider: apc.AIS,
 			}
-			tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
+			tools.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 			fillBucket(b, proxyURL, bck, uint64(size), objCount)
 
 			b.Run(test.name, func(b *testing.B) {
@@ -98,8 +98,8 @@ func BenchmarkECRebalance(b *testing.B) {
 		bckSize = 256 * cos.MiB
 	)
 	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	for ecIdx, test := range ecTests {
@@ -112,7 +112,7 @@ func BenchmarkECRebalance(b *testing.B) {
 				Name:     fmt.Sprintf("bench-reb-%d", len(objSizes)*ecIdx+szIdx),
 				Provider: apc.AIS,
 			}
-			tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
+			tools.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 
 			smap, err := api.GetClusterMap(baseParams)
 			tassert.CheckFatal(b, err)
@@ -143,7 +143,7 @@ func BenchmarkECRebalance(b *testing.B) {
 				args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 				_, err = api.StopMaintenance(baseParams, args)
 				tassert.CheckError(b, err)
-				tutils.WaitForRebalAndResil(b, baseParams, rebalanceTime)
+				tools.WaitForRebalAndResil(b, baseParams, rebalanceTime)
 			})
 		}
 	}
@@ -154,8 +154,8 @@ func BenchmarkRebalance(b *testing.B) {
 		bckSize = cos.GiB
 	)
 	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
 			Name:     "bench-reb",
 			Provider: apc.AIS,
@@ -164,7 +164,7 @@ func BenchmarkRebalance(b *testing.B) {
 
 	for _, size := range objSizes {
 		objCount := int(bckSize/size) + 1
-		tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
+		tools.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 
 		smap, err := api.GetClusterMap(baseParams)
 		tassert.CheckFatal(b, err)
@@ -180,7 +180,7 @@ func BenchmarkRebalance(b *testing.B) {
 			args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 			_, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(b, err)
-			tutils.WaitForRebalAndResil(b, baseParams, rebalanceTime)
+			tools.WaitForRebalAndResil(b, baseParams, rebalanceTime)
 		})
 	}
 }

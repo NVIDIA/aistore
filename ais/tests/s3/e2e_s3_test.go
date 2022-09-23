@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -21,7 +21,7 @@ import (
 )
 
 func TestE2ES3(t *testing.T) {
-	tutils.InitLocalCluster()
+	tools.InitLocalCluster()
 	cmd := exec.Command("which", "s3cmd")
 	if err := cmd.Run(); err != nil {
 		t.Skip("'s3cmd' binary not found")
@@ -49,7 +49,7 @@ var _ = Describe("E2E AWS Compatibility Tests", func() {
 	var (
 		entries []TableEntry
 
-		f = &tutils.E2EFramework{
+		f = &tools.E2EFramework{
 			Vars: map[string]string{"HOST": host, "PARAMS": params},
 		}
 		files, _ = filepath.Glob("./*.in")

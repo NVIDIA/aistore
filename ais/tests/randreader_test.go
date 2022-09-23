@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
 )
 
 func TestRandomReaderPutStress(t *testing.T) {
@@ -21,20 +21,20 @@ func TestRandomReaderPutStress(t *testing.T) {
 			Name:     "RRTestBucket",
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.GetPrimaryURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.GetPrimaryURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 		wg         = &sync.WaitGroup{}
 		dir        = t.Name()
 		cksumType  = bck.DefaultProps().Cksum.Type
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tutils.PutRR(t, baseParams, fileSize, cksumType, bck, dir, numobjects)
+			tools.PutRR(t, baseParams, fileSize, cksumType, bck, dir, numobjects)
 		}()
 	}
 	wg.Wait()

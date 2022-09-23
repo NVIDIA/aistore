@@ -57,7 +57,7 @@ type (
 
 		Verbosity int  // Determine the verbosity level.
 		BackOff   bool // If requests should be retried less and less often.
-		IsClient  bool // true: client (e.g. tutils, etc.)
+		IsClient  bool // true: client (e.g. dev tools, etc.)
 	}
 
 	ErrRangeNoOverlap struct {

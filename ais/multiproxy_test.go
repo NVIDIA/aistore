@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/tools"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -280,7 +280,7 @@ func TestDiscoverServers(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: tc.onlyLong})
+			tools.CheckSkip(t, tools.SkipTestArgs{Long: tc.onlyLong})
 			var (
 				primary      = newDiscoverServerPrimary()
 				discoverSmap = newSmap()

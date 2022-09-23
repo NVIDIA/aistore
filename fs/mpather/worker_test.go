@@ -12,22 +12,22 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestWorkerGroup(t *testing.T) {
 	var (
-		desc = tutils.ObjectsDesc{
-			CTs: []tutils.ContentTypeDesc{
+		desc = tools.ObjectsDesc{
+			CTs: []tools.ContentTypeDesc{
 				{Type: fs.ObjectType, ContentCnt: 100},
 			},
 			MountpathsCnt: 10,
 			ObjectSize:    cos.KiB,
 		}
-		out     = tutils.PrepareObjects(t, desc)
+		out     = tools.PrepareObjects(t, desc)
 		counter = atomic.NewInt32(0)
 	)
 	defer os.RemoveAll(out.Dir)

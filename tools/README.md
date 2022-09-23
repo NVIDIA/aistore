@@ -1,4 +1,4 @@
-Package `devtools` provides common methods and utilities for Golang-based **development** tools that include:
+Package `tools` provides common methods and utilities for Go(lang) based **development** tools that cover:
 
 * integration tests (primarily, `ais/tests/*`),
 * benchmarks (under `bench/`),
@@ -7,7 +7,7 @@ Package `devtools` provides common methods and utilities for Golang-based **deve
 This package and its sub-packages (listed below) should not be linked into production code. Unlike, say, `cmn` package
 (that also contains common functions) `devtools` is solely intended for usage with development tools.
 
-Package `devtools` is further sub-divided into packages that group closely related functions:
+Package `devtools` itself contains a spectrum of general-purpose sources and is further sub-divided into packages that group closely related functions:
 
 | Folder | Intended for |
 | --- | --- |
@@ -16,5 +16,4 @@ Package `devtools` is further sub-divided into packages that group closely relat
 | tassert | Testing asserts - `CheckFatal`, `Errorf`, `Fatalf`, and other convenient assertions |
 | tetl | Common functions used for (and by) ETL tests |
 | tlog | Uniform logging for integrations tests |
-| tutils | A broad spectrum of common testing utilities |
 

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestWordsDistance(t *testing.T) {

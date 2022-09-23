@@ -23,14 +23,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/devtools/docker"
-	"github.com/NVIDIA/aistore/devtools/readers"
-	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/docker"
+	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 const (
@@ -70,7 +70,7 @@ type ecOptions struct {
 //
 //nolint:revive // modifies-value-receiver on purpose
 func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
-	o.smap = tutils.GetClusterMap(t, proxyURL)
+	o.smap = tools.GetClusterMap(t, proxyURL)
 	if cnt := o.smap.CountActiveTargets(); cnt < o.minTargets {
 		t.Skipf("not enough targets in the cluster: expected at least %d, got %d", o.minTargets, cnt)
 	}
@@ -169,7 +169,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 
 	if !bck.IsAIS() && !bck.IsRemoteAIS() {
 		var ok bool
-		config := tutils.GetClusterConfig(t)
+		config := tools.GetClusterConfig(t)
 		_, ok = config.Backend.Providers[bck.Provider]
 		tassert.Errorf(t, ok, "invalid provider %s, expected to be in: %v",
 			bck.Provider, config.Backend.Providers)
@@ -456,8 +456,8 @@ func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath
 }
 
 func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps *cmn.BucketPropsToUpdate, o *ecOptions) {
-	proxyURL := tutils.RandomProxyURL()
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	proxyURL := tools.RandomProxyURL()
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	tlog.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		o.dataCnt, o.parityCnt, o.seed, o.concurrency)
@@ -474,7 +474,7 @@ func setBucketECProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckP
 func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOptions) {
 	var (
 		wg       = sync.WaitGroup{}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 
 	tlog.Logln("Deleting objects...")
@@ -484,7 +484,7 @@ func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOption
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
 			objPath := ecTestDir + objName
-			err := tutils.Del(proxyURL, bck, objPath, nil, nil, true)
+			err := tools.Del(proxyURL, bck, objPath, nil, nil, true)
 			if failOnDelErr {
 				tassert.CheckFatal(t, err)
 			} else if err != nil {
@@ -507,7 +507,7 @@ func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOption
 	}
 	wg.Wait()
 	reqArgs := api.XactReqArgs{Kind: apc.ActECPut, Bck: bck}
-	api.WaitForXactionIdle(tutils.BaseAPIParams(proxyURL), reqArgs)
+	api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), reqArgs)
 }
 
 func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt string, objCount int) {
@@ -543,17 +543,17 @@ func damageMetadataCksum(t *testing.T, slicePath string) {
 // Short test to make sure that EC options cannot be changed after
 // EC is enabled
 func TestECChange(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3})
+	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3})
 
 	var (
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 		bck      = cmn.Bck{
 			Name:     testBucketName + "-ec-change",
 			Provider: apc.AIS,
 		}
 	)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	bucketProps := &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
@@ -563,7 +563,7 @@ func TestECChange(t *testing.T) {
 			ParitySlices: api.Int(1),
 		},
 	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 
 	tlog.Logln("Resetting bucket properties")
 	_, err := api.ResetBucketProps(baseParams, bck)
@@ -778,8 +778,8 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 func TestECRestoreObjAndSliceRemote(t *testing.T) {
 	var (
 		bck        = cliBck
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 		useDisks   = []bool{false, true}
 	)
 
@@ -790,7 +790,7 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 		pattern:     "obj-rest-remote-%04d",
 	}.init(t, proxyURL)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	initMountpaths(t, proxyURL)
 	if testing.Short() {
@@ -802,10 +802,10 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 			testName := fmt.Sprintf("%s/disk_only/%t", test.name, useDisk)
 			t.Run(testName, func(t *testing.T) {
 				if useDisk {
-					tutils.SetClusterConfig(t, cos.SimpleKVs{
+					tools.SetClusterConfig(t, cos.SimpleKVs{
 						"ec.disk_only": fmt.Sprintf("%t", useDisk),
 					})
-					defer tutils.SetClusterConfig(t, cos.SimpleKVs{
+					defer tools.SetClusterConfig(t, cos.SimpleKVs{
 						"ec.disk_only": "false",
 					})
 				}
@@ -862,8 +862,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 			Name:     testBucketName + "-obj-n-slice",
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 		useDisks   = []bool{false, true}
 	)
 
@@ -884,10 +884,10 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 			testName := fmt.Sprintf("%s/disk_only/%t", test.name, useDisk)
 			t.Run(testName, func(t *testing.T) {
 				if useDisk {
-					tutils.SetClusterConfig(t, cos.SimpleKVs{
+					tools.SetClusterConfig(t, cos.SimpleKVs{
 						"ec.disk_only": fmt.Sprintf("%t", useDisk),
 					})
-					defer tutils.SetClusterConfig(t, cos.SimpleKVs{
+					defer tools.SetClusterConfig(t, cos.SimpleKVs{
 						"ec.disk_only": "false",
 					})
 				}
@@ -961,7 +961,7 @@ func TestECChecksum(t *testing.T) {
 	}
 
 	var (
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 		bck      = cmn.Bck{
 			Name:     testBucketName + "-ec-cksum",
 			Provider: apc.AIS,
@@ -974,7 +974,7 @@ func TestECChecksum(t *testing.T) {
 		parityCnt:  1,
 		pattern:    "obj-cksum-%04d",
 	}.init(t, proxyURL)
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	initMountpaths(t, proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1022,15 +1022,15 @@ func TestECChecksum(t *testing.T) {
 }
 
 func TestECEnabledDisabledEnabled(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-props",
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -1119,15 +1119,15 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 }
 
 func TestECDisableEnableDuringLoad(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-load",
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -1227,15 +1227,15 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 //   - The target restores the original object from slices/copies and returns it
 //   - No errors must occur
 func TestECStress(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-stress",
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -1267,7 +1267,7 @@ func TestECStress(t *testing.T) {
 
 // Stress 2 buckets at the same time
 func TestECStressManyBuckets(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck1 = cmn.Bck{
@@ -1278,7 +1278,7 @@ func TestECStressManyBuckets(t *testing.T) {
 			Name:     testBucketName + "2",
 			Provider: apc.AIS,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 
 	o1 := ecOptions{
@@ -1299,7 +1299,7 @@ func TestECStressManyBuckets(t *testing.T) {
 	}.init(t, proxyURL)
 
 	initMountpaths(t, proxyURL)
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	newLocalBckWithProps(t, baseParams, bck1, defaultECBckProps(o1), o1)
 	newLocalBckWithProps(t, baseParams, bck2, defaultECBckProps(o2), o2)
 
@@ -1335,7 +1335,7 @@ func TestECStressManyBuckets(t *testing.T) {
 //   - filepath.Walk checks that the number of metafiles at the end is correct
 //   - No errors must occur
 func TestECExtraStress(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	const (
 		objStart = "obj-extra-"
@@ -1346,7 +1346,7 @@ func TestECExtraStress(t *testing.T) {
 			Name:     testBucketName + "-extrastress",
 			Provider: apc.AIS,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 
 	o := ecOptions{
@@ -1377,7 +1377,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	var (
 		waitAllTime = time.Minute * 4 // should be enough for all object to complete EC
 		totalSlices atomic.Int64
-		baseParams  = tutils.BaseAPIParams(proxyURL)
+		baseParams  = tools.BaseAPIParams(proxyURL)
 	)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1465,14 +1465,14 @@ func TestECXattrs(t *testing.T) {
 		smallEvery       = 4
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-attrs",
 			Provider: apc.AIS,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 
 	o := ecOptions{
@@ -1485,7 +1485,7 @@ func TestECXattrs(t *testing.T) {
 	}.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
 	bckProps.Versioning = &cmn.VersionConfToUpdate{
 		Enabled: api.Bool(true),
@@ -1582,15 +1582,15 @@ func TestECXattrs(t *testing.T) {
 // 4. create bucket with the same name
 // 5. check that EC is working properly for this bucket
 func TestECDestroyBucket(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-DESTROY",
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -1641,7 +1641,7 @@ func TestECDestroyBucket(t *testing.T) {
 				}()
 
 				tlog.Logf("Destroying bucket %s\n", bck)
-				tutils.DestroyBucket(t, proxyURL, bck)
+				tools.DestroyBucket(t, proxyURL, bck)
 			}()
 		}
 	}
@@ -1673,15 +1673,15 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		smallEvery = 4
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-slice-emergency",
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -1750,12 +1750,12 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		t.FailNow()
 	}
 
-	_, removedTarget := tutils.RmTargetSkipRebWait(t, proxyURL, o.smap)
+	_, removedTarget := tools.RmTargetSkipRebWait(t, proxyURL, o.smap)
 	defer func() {
 		val := &apc.ActValRmNode{DaemonID: removedTarget.ID()}
 		rebID, err := api.StopMaintenance(baseParams, val)
 		tassert.CheckError(t, err)
-		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+		tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	}()
 
 	// 3. Read objects
@@ -1770,14 +1770,14 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 }
 
 func TestECEmergencyTargetForReplica(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-replica-emergency",
 			Provider: apc.AIS,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 
 	o := ecOptions{
@@ -1803,7 +1803,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	// Encoding will fail if even one is missing, restoring should still work
 	o.dataCnt++
 
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)
 
@@ -1828,23 +1828,23 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	// kill #dataslices of targets, normal EC restore won't be possible
 	// 2. Kill a random target
 	removedTargets := make(cluster.Nodes, 0, o.dataCnt)
-	smap := tutils.GetClusterMap(t, proxyURL)
+	smap := tools.GetClusterMap(t, proxyURL)
 
 	for i := o.dataCnt - 1; i >= 0; i-- {
 		var removedTarget *cluster.Snode
-		smap, removedTarget = tutils.RmTargetSkipRebWait(t, proxyURL, smap)
+		smap, removedTarget = tools.RmTargetSkipRebWait(t, proxyURL, smap)
 		removedTargets = append(removedTargets, removedTarget)
 	}
 
 	defer func() {
 		var rebID string
 		for _, target := range removedTargets {
-			rebID, _ = tutils.RestoreTarget(t, proxyURL, target)
+			rebID, _ = tools.RestoreTarget(t, proxyURL, target)
 		}
 		if rebID == "" {
 			return
 		}
-		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+		tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	}()
 
 	hasTarget := func(targets cluster.Nodes, target *cluster.Snode) bool {
@@ -1917,15 +1917,15 @@ func TestECEmergencyMountpath(t *testing.T) {
 		smallEvery = 4
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-mpath-emergency",
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
 	o := ecOptions{
@@ -2001,14 +2001,14 @@ func TestECEmergencyMountpath(t *testing.T) {
 	err = api.DisableMountpath(baseParams, removeTarget, removeMpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForResilvering(t, baseParams, removeTarget)
+	tools.WaitForResilvering(t, baseParams, removeTarget)
 
 	defer func() {
 		tlog.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
 		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 
-		tutils.WaitForResilvering(t, baseParams, removeTarget)
+		tools.WaitForResilvering(t, baseParams, removeTarget)
 		ensureNumMountpaths(t, removeTarget, mpathList)
 	}()
 
@@ -2030,14 +2030,14 @@ func TestECEmergencyMountpath(t *testing.T) {
 }
 
 func TestECRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-rebalance",
 			Provider: apc.AIS,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 	o := ecOptions{
 		objCount:    30,
@@ -2060,14 +2060,14 @@ func TestECRebalance(t *testing.T) {
 }
 
 func TestECMountpaths(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-mpaths",
 			Provider: apc.AIS,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 	o := ecOptions{
 		objCount:    30,
@@ -2092,7 +2092,7 @@ func TestECMountpaths(t *testing.T) {
 // The test only checks that the number of object after rebalance equals
 // the number of objects before it
 func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 
@@ -2122,10 +2122,10 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	rebID, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	defer func() {
-		rebID, _ := tutils.RestoreTarget(t, proxyURL, removedTarget)
-		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+		rebID, _ := tools.RestoreTarget(t, proxyURL, removedTarget)
+		tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	}()
-	tutils.WaitForRebalanceByID(t, -1, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, -1, baseParams, rebID, rebalanceTimeout)
 
 	newObjList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -2163,7 +2163,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 func TestECBucketEncode(t *testing.T) {
 	const parityCnt = 2
 	var (
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 		m        = ioContext{
 			t:        t,
 			num:      150,
@@ -2172,14 +2172,14 @@ func TestECBucketEncode(t *testing.T) {
 	)
 
 	m.initWithCleanupAndSaveState()
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 
 	if m.smap.CountActiveTargets() < parityCnt+1 {
 		t.Skipf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 	}
 
 	initMountpaths(t, proxyURL)
-	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -2222,7 +2222,7 @@ func TestECBucketEncode(t *testing.T) {
 // Creates two buckets (with EC enabled and disabled), fill them with data,
 // and then runs two parallel rebalances
 func TestECAndRegularRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		bckReg = cmn.Bck{
@@ -2233,7 +2233,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 			Name:     testBucketName + "-EC",
 			Provider: apc.AIS,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 	o := ecOptions{
 		minTargets:  5,
@@ -2257,9 +2257,9 @@ func TestECAndRegularRebalance(t *testing.T) {
 }
 
 func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, bckEC cmn.Bck) {
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bckReg, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bckReg, nil)
 	newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
 
 	// select a target that loses its mpath(simulate drive death),
@@ -2277,7 +2277,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 			args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
-			tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
+			tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
 		}
 	}()
 
@@ -2297,7 +2297,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		t.FailNow()
 	}
 
-	_, _, err = tutils.PutRandObjs(tutils.PutObjectsArgs{
+	_, _, err = tools.PutRandObjs(tools.PutObjectsArgs{
 		ProxyURL:  proxyURL,
 		Bck:       bckReg,
 		ObjPath:   ecTestDir,
@@ -2320,7 +2320,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered = true
-	tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 
 	tlog.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
@@ -2355,14 +2355,14 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 //     slices in HEAD response
 //  7. Extra check: the number of objects after rebalance equals initial number
 func TestECResilver(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-ec-resilver",
 			Provider: apc.AIS,
 		}
-		proxyURL = tutils.RandomProxyURL()
+		proxyURL = tools.RandomProxyURL()
 	)
 	o := ecOptions{
 		objCount:    100,
@@ -2385,7 +2385,7 @@ func TestECResilver(t *testing.T) {
 }
 
 func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 
@@ -2421,7 +2421,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.FailNow()
 	}
 
-	tutils.WaitForResilvering(t, baseParams, nil)
+	tools.WaitForResilvering(t, baseParams, nil)
 
 	msg := &apc.ListObjsMsg{Props: apc.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
@@ -2452,15 +2452,15 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 // 8. Stop reading loop and read all objects once more (nothing should fail)
 // 9. Get the number of objects in the bucket (must be the same as at start)
 func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		bckEC = cmn.Bck{
 			Name:     testBucketName + "-EC",
 			Provider: apc.AIS,
 		}
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 		o          = ecOptions{
 			minTargets:  5,
 			objCount:    300,
@@ -2479,11 +2479,11 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
 			newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
-			defer tutils.WaitForRebalAndResil(t, baseParams)
+			defer tools.WaitForRebalAndResil(t, baseParams)
 			ecAndRegularUnregisterWhileRebalancing(t, o, bckEC)
 
 			// Make sure that the next test gets accurate (without any intermediate modifications) smap.
-			o.smap = tutils.GetClusterMap(t, proxyURL)
+			o.smap = tools.GetClusterMap(t, proxyURL)
 		})
 	}
 }
@@ -2491,8 +2491,8 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cmn.Bck) {
 	const startTimeout = 10 * time.Second
 	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
 		smap       = o.smap
 	)
 	// select a target that loses its mpath(simulate drive death),
@@ -2505,7 +2505,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	args := &apc.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "target removed",
+	_, err = tools.WaitForClusterState(proxyURL, "target removed",
 		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()-1)
 	tassert.CheckFatal(t, err)
 	registered := false
@@ -2518,7 +2518,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 			args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
-			tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+			tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 		}
 	}()
 
@@ -2576,7 +2576,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 
 	err = api.AbortXaction(baseParams, xactArgs)
 	tassert.CheckError(t, err)
-	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 	tassert.CheckError(t, err)
 
 	tlog.Logf("Put %s in maintenance\n", tgtGone.StringEx())
@@ -2586,13 +2586,13 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	defer func() {
 		args = &apc.ActValRmNode{DaemonID: tgtGone.ID()}
 		rebID, _ := api.StopMaintenance(baseParams, args)
-		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
+		tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
 	}()
 
 	stopCh.Close()
 
 	tassert.CheckFatal(t, err)
-	tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	tlog.Logln("Reading objects")
 	for _, obj := range resECOld.Entries {
 		_, err := api.GetObject(baseParams, bckEC, obj.Name)
@@ -2631,7 +2631,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		si    *cluster.Snode
 		mpath string
 	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams := tools.BaseAPIParams(proxyURL)
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 
 	wg := sync.WaitGroup{}
@@ -2654,14 +2654,14 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects created, removing %d mountpaths\n", len(objList.Entries), o.parityCnt)
 
-	allMpaths := tutils.GetTargetsMountpaths(t, o.smap, baseParams)
+	allMpaths := tools.GetTargetsMountpaths(t, o.smap, baseParams)
 	removed := make(map[string]*removedMpath, o.parityCnt)
 	defer func() {
 		for _, rmMpath := range removed {
 			err := api.AttachMountpath(baseParams, rmMpath.si, rmMpath.mpath, true /*force*/)
 			tassert.CheckError(t, err)
 		}
-		tutils.WaitForResilvering(t, baseParams, nil)
+		tools.WaitForResilvering(t, baseParams, nil)
 	}()
 	// Choose `parity` random mpaths and disable them
 	i := 0
@@ -2695,8 +2695,8 @@ func TestECGenerations(t *testing.T) {
 			Name:     testBucketName + "-obj-gens",
 			Provider: apc.AIS,
 		}
-		proxyURL    = tutils.RandomProxyURL()
-		baseParams  = tutils.BaseAPIParams(proxyURL)
+		proxyURL    = tools.RandomProxyURL()
+		baseParams  = tools.BaseAPIParams(proxyURL)
 		generations = 3
 	)
 
