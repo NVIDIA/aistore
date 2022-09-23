@@ -266,7 +266,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		return err
 	}
 	if flagIsSet(c, listObjCachedFlag) {
-		msg.SetFlag(apc.LsPresent)
+		msg.SetFlag(apc.LsCached)
 	}
 	if flagIsSet(c, listAnonymousFlag) {
 		msg.SetFlag(apc.LsTryHeadRemB)

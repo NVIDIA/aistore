@@ -4,6 +4,8 @@ SCRIPTS_DIR = $(AISTORE_PATH)/deploy/scripts
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
 
+.PHONY: cli mod
+
 cli:
 	@$(MAKE) -C $(AISTORE_PATH) cli
 
@@ -14,7 +16,6 @@ lint:
 #
 # go modules
 #
-.PHONY: mod mod-clean mod-tidy
 
 mod: mod-clean mod-tidy
 

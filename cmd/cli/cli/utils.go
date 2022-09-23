@@ -33,8 +33,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -910,7 +910,7 @@ func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
 // (not to confuse with bck.IsEmpty())
 func isBucketEmpty(bck cmn.Bck) (bool, error) {
 	msg := &apc.ListObjsMsg{}
-	msg.SetFlag(apc.LsPresent)
+	msg.SetFlag(apc.LsCached)
 	msg.SetFlag(apc.LsNameOnly)
 	objList, err := api.ListObjectsPage(defaultAPIParams, bck, msg)
 	if err != nil {
