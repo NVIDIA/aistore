@@ -665,7 +665,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
 		return
 	}
-	if !bck.IsAIS() && !msg.IsFlagSet(apc.LsCached) {
+	if !bck.IsAIS() && !msg.IsFlagSet(apc.LsObjCached) {
 		maxCloudPageSize := t.Backend(bck).MaxPageSize()
 		if msg.PageSize > maxCloudPageSize {
 			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxCloudPageSize)
@@ -732,7 +732,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 
 	// never started
 	if xctn == nil {
-		err := cmn.NewErrNotFound("%s: task %q", t.si, msg.UUID)
+		err := cmn.NewErrNotFound("%s: x-%s[%s] failed to start or never started", t, apc.ActSummaryBck, msg.UUID)
 		if silent {
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {
@@ -758,7 +758,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 	}
 	if taskAction == apc.TaskResult {
 		// return the final result only if it is requested explicitly
-		t.writeJSON(w, r, result, "bucket-summ")
+		t.writeJSON(w, r, result, "bucket-summary")
 	}
 }
 

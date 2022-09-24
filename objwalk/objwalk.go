@@ -71,7 +71,7 @@ func (w *Walk) NextObjPage() (*cmn.ListObjects, error) {
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
 func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
-	if w.msg.IsFlagSet(apc.LsCached) {
+	if w.msg.IsFlagSet(apc.LsObjCached) {
 		return w.NextObjPage()
 	}
 	msg := &apc.ListObjsMsg{}

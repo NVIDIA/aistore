@@ -6,7 +6,8 @@ package apc
 
 // control message to generate bucket summary or summaries
 type BckSummMsg struct {
-	UUID   string `json:"uuid"`
-	Fast   bool   `json:"fast"`
-	Cached bool   `json:"cached"`
+	UUID       string `json:"uuid"`
+	Fast       bool   `json:"fast"`
+	ObjCached  bool   `json:"cached"`
+	BckPresent bool   `json:"present"`
 }

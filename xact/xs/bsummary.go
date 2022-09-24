@@ -1,5 +1,5 @@
-// Package xs contains eXtended actions (xactions) except storage services
-// (mirror, ec) and extensions (downloader, lru).
+// Package xs contains most of the supported eXtended actions (xactions) with some
+// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
@@ -132,13 +132,13 @@ func (r *bsummXact) runBck(bck *cluster.Bck, listRemote bool) (err error) {
 	)
 	cos.CopyStruct(&msg, r.msg) // each bucket to have it's own copy of the msg (we may update it)
 	if bck.IsRemote() {
-		msg.Cached = msg.Cached || !listRemote
-		if bck.IsHTTP() && !msg.Cached {
+		msg.ObjCached = msg.ObjCached || !listRemote
+		if bck.IsHTTP() && !msg.ObjCached {
 			glog.Warningf("cannot list %s buckets, assuming 'cached'", apc.DisplayProvider(bck.Provider))
-			msg.Cached = true
+			msg.ObjCached = true
 		}
 	} else {
-		msg.Cached = true
+		msg.ObjCached = true
 	}
 	if err = r._run(bck, summ, &msg); err == nil {
 		r.summaries = append(r.summaries, summ)
@@ -146,18 +146,18 @@ func (r *bsummXact) runBck(bck *cluster.Bck, listRemote bool) (err error) {
 	return
 }
 
+// TODO: `msg.Fast` might be a bit crude, usability-wise - consider adding (best effort) max-time limitation
 func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, msg *apc.BckSummMsg) (err error) {
 	summ.Bck.Copy(bck.Bucket())
 
 	// 1. always estimate on-disk size (is fast)
-	// TODO -- FIXME: support (best effort) msg.max-time
 	summ.TotalSize.OnDisk = r.sizeOnDisk(bck)
 	if msg.Fast {
 		return
 	}
 
 	// 2. walk local pages
-	lsmsg := &apc.ListObjsMsg{Props: apc.GetPropsSize, Flags: apc.LsCached}
+	lsmsg := &apc.ListObjsMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
 	for {
 		walk := objwalk.NewWalk(context.Background(), r.t, bck, lsmsg)
 		lst, err := walk.NextObjPage()
@@ -181,7 +181,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, msg *apc.BckSummMs
 		lsmsg.ContinuationToken = lst.ContinuationToken
 	}
 
-	if msg.Cached {
+	if msg.ObjCached {
 		return nil
 	}
 	debug.Assert(bck.IsRemote())

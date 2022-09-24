@@ -125,6 +125,7 @@ var (
 			objectCmdList,
 			objectCmdPut,
 			objectCmdSetCustom,
+			bucketObjCmdEvict,
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
 			{
 				Name:      commandRename,

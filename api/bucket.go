@@ -101,7 +101,7 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketPro
 // - is obtained via GetBucketInfo() API
 // - delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
 // The API utilizes HEAD method (compare with HeadBucket above)
-func GetBucketInfo(bp BaseParams, bck cmn.Bck, getSummary bool) (p *cmn.BucketProps, info *cmn.BckSumm, err error) {
+func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketProps, info *cmn.BckSumm, err error) {
 	var (
 		resp *wrappedResp
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -109,11 +109,7 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, getSummary bool) (p *cmn.BucketPr
 	)
 	q = bck.AddToQuery(q)
 	q.Set(apc.QparamDontAddBckMD, "true") // don't add md (ie., is a "pure" query)
-	if getSummary {
-		q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent)) // presence + bck summary
-	} else {
-		q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresentOmitProps)) // just presence
-	}
+	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
 	bp.Method = http.MethodHead
 	reqParams := AllocRp()
 	defer FreeRp(reqParams)
@@ -195,31 +191,30 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 	return bcks.Contains(qbck), nil
 }
 
-// GetBucketSummary returns bucket summaries for the specified `cmn.QueryBcks` query
-// (e.g., empty query corresponds to all buckets present in the cluster's BMD)
-func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BckSummMsg, fltPresence int) (cmn.BckSummaries, error) {
+// GetBucketSummary returns bucket summaries (i.e., capcity ulitization stats and
+// numbers of objects) for the specified bucket or buckets, as per `cmn.QueryBcks` query.
+// E.g., an empty bucket query corresponds to all buckets present in the cluster's metadata.
+func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BckSummMsg) (cmn.BckSummaries, error) {
 	if msg == nil {
-		msg = &apc.BckSummMsg{}
+		msg = &apc.BckSummMsg{ObjCached: true, BckPresent: true} // NOTE the defaults
 	}
-	q := make(url.Values, 4)
-	debug.Assert(fltPresence >= apc.FltExists && fltPresence <= apc.FltExistsOutside)
-	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
-	q = qbck.AddToQuery(q)
-
 	bp.Method = http.MethodGet
+
 	reqParams := AllocRp()
-	defer FreeRp(reqParams)
 	summaries := cmn.BckSummaries{}
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(qbck.Name)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = q
+		reqParams.Query = qbck.AddToQuery(nil)
 	}
+	// execute `apc.ActSummaryBck` and poll for results
 	if err := reqParams.waitBsumm(msg, &summaries); err != nil {
+		FreeRp(reqParams)
 		return nil, err
 	}
 	sort.Sort(summaries)
+	FreeRp(reqParams)
 	return summaries, nil
 }
 

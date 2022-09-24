@@ -1492,7 +1492,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					)
 					if evict {
 						xactID, err = api.EvictRange(baseParams, b, test.rangeStr)
-						msg.Flags = apc.LsCached
+						msg.Flags = apc.LsObjCached
 						kind = apc.ActEvictObjects
 					} else {
 						xactID, err = api.DeleteRange(baseParams, b, test.rangeStr)

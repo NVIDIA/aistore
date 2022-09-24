@@ -318,9 +318,8 @@ func (nxs NodesXactSnap) TotalRunningTime() time.Duration {
 func (reqParams *ReqParams) waitBsumm(msg *apc.BckSummMsg, v any) error {
 	var (
 		uuid   string
-		action = apc.ActSummaryBck
 		sleep  = xactMinPollTime
-		actMsg = apc.ActionMsg{Action: action, Value: msg}
+		actMsg = apc.ActionMsg{Action: apc.ActSummaryBck, Value: msg}
 	)
 	if reqParams.Query == nil {
 		reqParams.Query = url.Values{}

@@ -20,7 +20,6 @@ var (
 			longRunFlags,
 			listObjCachedFlag,
 			listBckPresentFlag,
-			fastFlag,
 			sizeInBytesFlag,
 			verboseFlag,
 		),

@@ -304,7 +304,7 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 
 	var (
 		objList       *cmn.ListObjects
-		locationIsAIS = bck.IsAIS() || lsmsg.IsFlagSet(apc.LsCached)
+		locationIsAIS = bck.IsAIS() || lsmsg.IsFlagSet(apc.LsObjCached)
 	)
 	if locationIsAIS {
 		objList, err = p.listObjectsAIS(bck, &lsmsg)

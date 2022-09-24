@@ -896,7 +896,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 		tlog.Logf("list remote objects with evict=%t\n", evict)
 		m.remotePuts(evict)
 
-		msg := &apc.ListObjsMsg{PageSize: 10, Flags: apc.LsCached}
+		msg := &apc.ListObjsMsg{PageSize: 10, Flags: apc.LsObjCached}
 		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if evict {
@@ -976,7 +976,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 				num:      rand.Intn(5000) + 1000,
 				fileSize: 128,
 			}
-			msg = &apc.ListObjsMsg{Flags: apc.LsCached}
+			msg = &apc.ListObjsMsg{Flags: apc.LsObjCached}
 		)
 
 		if !bck.IsAIS() {
@@ -2323,7 +2323,7 @@ func TestCopyBucket(t *testing.T) {
 				msg := &apc.ListObjsMsg{}
 				msg.AddProps(apc.GetPropsVersion)
 				if test.dstRemote {
-					msg.Flags = apc.LsCached
+					msg.Flags = apc.LsObjCached
 				}
 				dstBckList, err := api.ListObjects(baseParams, dstm.bck, msg, 0)
 				tassert.CheckFatal(t, err)
@@ -2715,7 +2715,7 @@ func TestBackendBucket(t *testing.T) {
 	)
 
 	// Check if cached listing works correctly.
-	cacheMsg := &apc.ListObjsMsg{Flags: apc.LsCached, Prefix: m.prefix}
+	cacheMsg := &apc.ListObjsMsg{Flags: apc.LsObjCached, Prefix: m.prefix}
 	aisObjList, err = api.ListObjects(baseParams, aisBck, cacheMsg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
@@ -3060,8 +3060,8 @@ func TestBucketListAndSummary(t *testing.T) {
 			tlog.Logln("checking objects...")
 
 			if test.summary {
-				msg := &apc.BckSummMsg{Cached: test.cached, Fast: test.fast}
-				summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(m.bck), msg, apc.FltExists)
+				msg := &apc.BckSummMsg{ObjCached: test.cached, Fast: test.fast}
+				summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(m.bck), msg)
 				tassert.CheckFatal(t, err)
 
 				if len(summaries) == 0 {
@@ -3082,7 +3082,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			} else {
 				msg := &apc.ListObjsMsg{}
 				if test.cached {
-					msg.Flags = apc.LsCached
+					msg.Flags = apc.LsObjCached
 				}
 				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 				tassert.CheckFatal(t, err)

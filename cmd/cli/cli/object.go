@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -909,7 +910,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 func multiObjOp(c *cli.Context, command string) error {
 	// stops iterating if encounters error
 	for _, uri := range c.Args() {
-		bck, objectName, err := parseBckObjectURI(c, uri)
+		bck, objName, err := parseBckObjectURI(c, uri)
 		if err != nil {
 			return err
 		}
@@ -919,22 +920,27 @@ func multiObjOp(c *cli.Context, command string) error {
 
 		switch command {
 		case commandRemove:
-			if err := api.DeleteObject(defaultAPIParams, bck, objectName); err != nil {
+			if err := api.DeleteObject(defaultAPIParams, bck, objName); err != nil {
 				return err
 			}
-			fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", objectName, bck.DisplayName())
+			fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", objName, bck.DisplayName())
 		case commandEvict:
-			if bck.IsAIS() {
-				return fmt.Errorf("evicting objects from AIS bucket is not allowed")
+			if !bck.IsRemote() {
+				const msg = "evicting objects from AIS buckets (ie., buckets with no remote backends) is not allowed."
+				return errors.New(msg + "\n(Hint: use 'ais object rm' command to delete)")
 			}
 			if flagIsSet(c, dryRunFlag) {
-				fmt.Fprintf(c.App.Writer, "EVICT: %s/%s\n", bck.DisplayName(), objectName)
+				fmt.Fprintf(c.App.Writer, "EVICT: %s/%s\n", bck.DisplayName(), objName)
 				continue
 			}
-			if err := api.EvictObject(defaultAPIParams, bck, objectName); err != nil {
+			if err := api.EvictObject(defaultAPIParams, bck, objName); err != nil {
+				if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
+					err = fmt.Errorf("object %s/%s does not exist (ie., not present or \"cached\")",
+						bck.DisplayName(), objName)
+				}
 				return err
 			}
-			fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", objectName, bck.DisplayName())
+			fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", objName, bck.DisplayName())
 		}
 	}
 	return nil

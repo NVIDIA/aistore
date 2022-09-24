@@ -1,5 +1,5 @@
-// Package xs contains eXtended actions (xactions) except storage services
-// (mirror, ec) and extensions (downloader, lru).
+// Package xs contains most of the supported eXtended actions (xactions) with some
+// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
 /*
  * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */

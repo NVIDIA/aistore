@@ -1327,10 +1327,10 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	// Vanilla HTTP buckets do not support remote listing.
 	// LsArchDir needs files locally to read archive content.
 	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
-		lsmsg.SetFlag(apc.LsCached)
+		lsmsg.SetFlag(apc.LsObjCached)
 	}
 
-	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(apc.LsCached)
+	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(apc.LsObjCached)
 	if lsmsg.UUID == "" {
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()
@@ -1462,10 +1462,13 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		info        *cmn.BckSumm
-		fltPresence int
-		hdr         = w.Header()
-		apireq      = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
+		info   *cmn.BckSumm
+		hdr    = w.Header()
+		apireq = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
+		// whether to include bucket summary and, if true,
+		// operate on present-only or all
+		fltPresence    int
+		wantBckSummary bool
 	)
 	defer apiReqFree(apireq)
 
@@ -1478,8 +1481,8 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	// present-only [+ bucket summary]
 	if apireq.dpq.fltPresence != "" {
+		wantBckSummary = true
 		fltPresence, _ = strconv.Atoi(apireq.dpq.fltPresence)
-		debug.Assert(fltPresence == 0 || apc.IsFltPresent(fltPresence))
 		bckArgs.noErrRemB = apc.IsFltPresent(fltPresence)
 	}
 	bckArgs.createAIS = false
@@ -1489,14 +1492,15 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if apc.IsFltPresent(fltPresence) { // is info(bck) request
+	if wantBckSummary {
 		info = &cmn.BckSumm{IsBckPresent: false}
 	}
 	if bckArgs.isPresent {
-		if apc.IsFltPresent(fltPresence) { // ditto
+		if wantBckSummary {
 			if fltPresence != apc.FltPresentOmitProps {
-				// get runtime info aka "summary" (broadcast, collect, and summarize)
-				if err := p.bsummDoWait(bck, info); err != nil {
+				// get runtime bucket info (aka /summary/):
+				// broadcast to all targets, collect, and summarize
+				if err := p.bsummDoWait(bck, info, fltPresence); err != nil {
 					p.writeErr(w, r, err)
 					return
 				}
@@ -1506,7 +1510,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		toHdr(bck, hdr, true, info)
 		return
 	}
-	// when present-only (via QparamFltPresence) - is not
+	// when the bucket that must be present is not
 	if apc.IsFltPresent(fltPresence) {
 		debug.Assert(bck.IsRemote())
 		toHdr(bck, hdr, false, info)
@@ -1518,6 +1522,13 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			p.writeErr(w, r, err, statusCode)
 			return
+		}
+		if wantBckSummary && fltPresence != apc.FltPresentOmitProps {
+			// ditto
+			if err := p.bsummDoWait(bck, info, fltPresence); err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
 		}
 		toHdr(bck, hdr, false, info)
 		return

@@ -328,6 +328,13 @@ func parseBckURI(c *cli.Context, uri string, requireProviderInURI ...bool) (cmn.
 }
 
 func parseQueryBckURI(c *cli.Context, uri string) (cmn.QueryBcks, error) {
+	// allow for `provider:` shortcut
+	if l := len(uri); l > 0 && uri[l-1] == ':' {
+		provider := uri[0 : l-1]
+		if _, err := cmn.NormalizeProvider(provider); err == nil {
+			uri = provider + apc.BckProviderSeparator
+		}
+	}
 	if isWebURL(uri) {
 		bck := parseURLtoBck(uri)
 		return cmn.QueryBcks(bck), nil

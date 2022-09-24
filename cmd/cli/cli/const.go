@@ -358,17 +358,13 @@ var (
 	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
 
-	fastFlag = cli.BoolTFlag{
-		Name:  "fast",
-		Usage: "use faster logic to count objects and report disk usage (default: true)",
-	}
 	validateSummaryFlag = cli.BoolFlag{
 		Name:  "validate",
 		Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts",
 	}
-	noSummaryFlag = cli.BoolFlag{
-		Name:  "no-summary",
-		Usage: "list buckets faster (by _not_ running 'bucket-summary' to collect and summarize bucket stats)",
+	bckSummaryFlag = cli.BoolFlag{
+		Name:  "summary",
+		Usage: "show bucket sizes and numbers of objects in the cluster and - for the buckets with remote backends - outside",
 	}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
@@ -444,6 +440,9 @@ var (
 		Name:  "cached",
 		Usage: "list only cached (ie., stored in AIS) objects from a remote bucket",
 	}
+
+	allBucketsFlag = cli.BoolFlag{Name: scopeAll, Usage: "operate on all buckets (including those that are not present in the cluster)"}
+
 	listBckPresentFlag = cli.BoolFlag{
 		Name:  "present",
 		Usage: "operate only on buckets that are present in the cluster",

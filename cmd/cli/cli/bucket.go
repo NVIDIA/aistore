@@ -185,14 +185,14 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		return
 	}
 	for _, provider := range selectProviders(bcks) {
-		listBckTable(c, provider, bcks, filter)
+		listBckTable(c, provider, bcks, filter) // TODO -- FIXME: add fltPresence
 		fmt.Fprintln(c.App.Writer)
 	}
 	return
 }
 
 // `ais ls`, `ais ls s3:` and similar
-func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool /*filter*/) {
+func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool) {
 	var (
 		footer   lsbFooter
 		filtered = make(cmn.Bcks, 0, len(bcks))
@@ -209,11 +209,11 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 		altMap     template.FuncMap
 		hideHeader = flagIsSet(c, noHeaderFlag)
 		hideFooter = flagIsSet(c, noFooterFlag)
-		noSummary  = flagIsSet(c, noSummaryFlag)
+		bckSummary = flagIsSet(c, bckSummaryFlag)
 		data       = make([]tmpls.ListBucketsTemplateHelper, 0, len(filtered))
 	)
 	for _, bck := range filtered {
-		props, info, err := api.GetBucketInfo(defaultAPIParams, bck, !noSummary /*getSummary*/)
+		props, info, err := api.GetBucketInfo(defaultAPIParams, bck, bckSummary /*getSummary*/)
 		if err != nil {
 			if httpErr, ok := err.(*cmn.ErrHTTP); ok {
 				fmt.Fprintf(c.App.Writer, "  %s, err: %s\n", bck.DisplayName(), httpErr.Message)
@@ -221,7 +221,7 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 			continue
 		}
 		footer.nb++
-		if !noSummary && info.IsBckPresent {
+		if bckSummary && info.IsBckPresent {
 			footer.nbp++
 			footer.pobj += info.ObjCount.Present
 			footer.robj += info.ObjCount.Remote
@@ -236,18 +236,8 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 	if flagIsSet(c, sizeInBytesFlag) {
 		altMap = tmpls.AltFuncMapSizeBytes()
 	}
-	if noSummary {
-		if hideHeader {
-			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBodyNoSummary, altMap, false)
-		} else {
-			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, altMap, false)
-		}
-		if !hideFooter && footer.nbp > 1 {
-			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d)] =======",
-				apc.DisplayProvider(provider), footer.nb, footer.nbp)
-			fmt.Fprintln(c.App.Writer, fcyan(foot))
-		}
-	} else {
+
+	if bckSummary {
 		if hideHeader {
 			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBody, altMap, false)
 		} else {
@@ -257,6 +247,17 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d(%d), size %s, used %d%%] =======",
 				apc.DisplayProvider(provider), footer.nb, footer.nbp, footer.pobj, footer.robj,
 				cos.UnsignedB2S(footer.size, 2), footer.pct)
+			fmt.Fprintln(c.App.Writer, fcyan(foot))
+		}
+	} else {
+		if hideHeader {
+			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBodyNoSummary, altMap, false)
+		} else {
+			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, altMap, false)
+		}
+		if !hideFooter && footer.nbp > 1 {
+			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d)] =======",
+				apc.DisplayProvider(provider), footer.nb, footer.nbp)
 			fmt.Fprintln(c.App.Writer, fcyan(foot))
 		}
 	}
@@ -378,20 +379,6 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		return err
 	}
 	return printObjProps(c, objList.Entries, objectListFilter, msg.Props)
-}
-
-func getSummaries(qbck cmn.QueryBcks, fast, cachedObjs, presentBck bool) (summaries cmn.BckSummaries, err error) {
-	fDetails := func() (err error) {
-		msg := &apc.BckSummMsg{Cached: cachedObjs, Fast: fast}
-		fltPresence := apc.FltExists
-		if presentBck {
-			fltPresence = apc.FltPresent
-		}
-		summaries, err = api.GetBucketSummary(defaultAPIParams, qbck, msg, fltPresence)
-		return
-	}
-	err = cmn.WaitForFunc(fDetails, longCommandTime)
-	return
 }
 
 // If both backend_bck.name and backend_bck.provider are present, use them.

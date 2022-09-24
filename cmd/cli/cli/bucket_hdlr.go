@@ -25,6 +25,7 @@ const (
 )
 
 var (
+	// flags
 	bucketCmdsFlags = map[string][]cli.Flag{
 		commandRemove: {
 			ignoreErrorFlag,
@@ -60,8 +61,7 @@ var (
 
 		subcmdSummary: {
 			listObjCachedFlag,
-			listBckPresentFlag,
-			fastFlag,
+			allBucketsFlag,
 			sizeInBytesFlag,
 			validateSummaryFlag,
 			verboseFlag,
@@ -72,10 +72,10 @@ var (
 		},
 	}
 
-	// list buckets, objects, and archives
+	// commands
 	bucketCmdList = cli.Command{
 		Name:         commandList,
-		Usage:        "list buckets and objects",
+		Usage:        "list buckets and objects in buckets and archives",
 		Action:       listAnyHandler,
 		ArgsUsage:    listAnyCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
@@ -99,6 +99,14 @@ var (
 		Action:       lruBucketHandler,
 		BashComplete: bucketCompletions(),
 	}
+	bucketObjCmdEvict = cli.Command{
+		Name:         commandEvict,
+		Usage:        "evict objects from buckets and entire buckets",
+		ArgsUsage:    optionalObjectsArgument,
+		Flags:        bucketCmdsFlags[commandEvict],
+		Action:       evictHandler,
+		BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
+	}
 
 	bucketCmd = cli.Command{
 		Name:  commandBucket,
@@ -107,6 +115,7 @@ var (
 			bucketCmdList,
 			bucketCmdSummary,
 			bucketCmdLRU,
+			bucketObjCmdEvict,
 			makeAlias(showCmdBucket, "", true, commandShow), // alias for `ais show`
 			{
 				Name:      commandCreate,
@@ -144,14 +153,6 @@ var (
 				BashComplete: bucketCompletions(bckCompletionsOpts{
 					multiple: true, provider: apc.AIS,
 				}),
-			},
-			{
-				Name:         commandEvict,
-				Usage:        "evict buckets or objects prefetched from remote buckets",
-				ArgsUsage:    optionalObjectsArgument,
-				Flags:        bucketCmdsFlags[commandEvict],
-				Action:       evictHandler,
-				BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
 			},
 			{
 				Name:   subcmdProps,
@@ -201,12 +202,12 @@ func initLsOptions() []cli.Flag {
 		maxPagesFlag,
 		startAfterFlag,
 		listObjCachedFlag,
-		listBckPresentFlag,
+		listBckPresentFlag, // TODO -- FIXME: consider "inversing" with allBucketsFlag
 		listAnonymousFlag,
 		listArchFlag,
 		nameOnlyFlag,
 		sizeInBytesFlag,
-		noSummaryFlag,
+		bckSummaryFlag,
 	}
 }
 
@@ -298,16 +299,12 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 	return tmpls.DisplayOutput(bckSums, c.App.Writer, tmpls.BucketSummaryValidateTmpl, nil, false)
 }
 
-func showMisplacedAndMore(c *cli.Context) (err error) {
-	queryBcks, err := parseQueryBckURI(c, c.Args().First())
-	if err != nil {
-		return err
+func summaryBucketHandler(c *cli.Context) (err error) {
+	if flagIsSet(c, validateSummaryFlag) {
+		return showMisplacedAndMore(c)
 	}
 
-	fValidate := func() error {
-		return checkObjectHealth(c, queryBcks)
-	}
-	return cmn.WaitForFunc(fValidate, longCommandTime)
+	return showBucketSummary(c)
 }
 
 func showBucketSummary(c *cli.Context) error {
@@ -319,9 +316,7 @@ func showBucketSummary(c *cli.Context) error {
 		return err
 	}
 
-	fast := flagIsSet(c, fastFlag)
-	summaries, err := getSummaries(queryBcks, fast,
-		flagIsSet(c, listObjCachedFlag), flagIsSet(c, listBckPresentFlag))
+	summaries, err := getSummaries(queryBcks, flagIsSet(c, listObjCachedFlag), flagIsSet(c, allBucketsFlag))
 	if err != nil {
 		return err
 	}
@@ -330,23 +325,36 @@ func showBucketSummary(c *cli.Context) error {
 	if flagIsSet(c, sizeInBytesFlag) {
 		altMap = tmpls.AltFuncMapSizeBytes()
 	}
-	if fast {
-		err := tmpls.DisplayOutput(summaries, c.App.Writer, tmpls.BucketsSummariesFastTmpl, altMap, false)
-		if err == nil {
-			// as in: `du --apparent-size`
-			fmt.Fprintf(c.App.Writer, "\nFor min/avg/max object sizes, use `--fast=false`.\n")
-		}
-		return err
-	}
 	return tmpls.DisplayOutput(summaries, c.App.Writer, tmpls.BucketsSummariesTmpl, altMap, false)
 }
 
-func summaryBucketHandler(c *cli.Context) (err error) {
-	if flagIsSet(c, validateSummaryFlag) {
-		return showMisplacedAndMore(c)
+// NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets`)
+func getSummaries(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.BckSummaries, err error) {
+	fDetails := func() (err error) {
+		msg := &apc.BckSummMsg{Cached: cachedObjs, Fast: false}
+
+		// TODO -- FIXME: CLI part
+		if allBuckets {
+			_ = allBuckets
+		}
+		summaries, err = api.GetBucketSummary(defaultAPIParams, qbck, msg, apc.FltPresent)
+
+		return
+	}
+	err = cmn.WaitForFunc(fDetails, longCommandTime)
+	return
+}
+
+func showMisplacedAndMore(c *cli.Context) (err error) {
+	queryBcks, err := parseQueryBckURI(c, c.Args().First())
+	if err != nil {
+		return err
 	}
 
-	return showBucketSummary(c)
+	fValidate := func() error {
+		return checkObjectHealth(c, queryBcks)
+	}
+	return cmn.WaitForFunc(fValidate, longCommandTime)
 }
 
 func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
@@ -506,7 +514,7 @@ func evictHandler(c *cli.Context) (err error) {
 			listFlag.Name, templateFlag.Name)
 	}
 
-	// Object argument(s) given by the user; operation on given object(s).
+	// operation on a given object or objects.
 	return multiObjOp(c, commandEvict)
 }
 

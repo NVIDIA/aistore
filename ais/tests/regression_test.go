@@ -156,7 +156,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 
 	m.puts()
 
-	listObjectsMsg := &apc.ListObjsMsg{Props: apc.GetTargetURL, Flags: apc.LsCached}
+	listObjectsMsg := &apc.ListObjsMsg{Props: apc.GetTargetURL, Flags: apc.LsObjCached}
 	lst, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
