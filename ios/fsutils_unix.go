@@ -27,14 +27,14 @@ func getFSStats(path string) (fsStats unix.Statfs_t, err error) {
 // - on-disk size is sometimes referred to as "apparent size"
 // - ignore errors since `du` exits with status 1 if it encounters a file that couldn't be accessed (permissions)
 func DirSizeOnDisk(dirPath string) (uint64, error) {
-	outputBytes, _ := exec.Command("du", "-sh", dirPath, "2>/dev/null").Output()
+	outputBytes, err := exec.Command("du", "-sh", dirPath, "2>/dev/null").Output()
 	out := string(outputBytes)
 	if out == "" {
-		return 0, fmt.Errorf("failed to get on-disk size of %q", dirPath)
+		return 0, fmt.Errorf("failed to get on-disk size of %q: %v", dirPath, err)
 	}
 	idx := strings.Index(out, "\t")
 	if idx == -1 {
-		return 0, fmt.Errorf("invalid output format from 'du' command")
+		return 0, fmt.Errorf("invalid output format from 'du': [%s]", out)
 	}
 	out = out[:idx]
 	// `du` can return ',' as float separator what cannot be parsed properly.

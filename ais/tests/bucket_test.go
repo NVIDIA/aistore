@@ -2911,7 +2911,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	if cksumType != cos.ChecksumNone {
 		tlog.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
-		wg := cos.NewLimitedWaitGroup(40)
+		wg := cos.NewLimitedWaitGroup(40, 0)
 
 		for _, entry := range bckObjs.Entries {
 			wg.Add(1)

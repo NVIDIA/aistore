@@ -250,7 +250,7 @@ func (df *dsortFramework) start() {
 func (df *dsortFramework) createInputShards() {
 	const tmpDir = "/tmp"
 	var (
-		wg    = cos.NewLimitedWaitGroup(40)
+		wg    = cos.NewLimitedWaitGroup(40, 0)
 		errCh = make(chan error, df.tarballCnt)
 	)
 

@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	"golang.org/x/sync/errgroup"
 )
 
 type (
@@ -150,12 +149,10 @@ func (r *bsummXact) runBck(bck *cluster.Bck, listRemote bool) (err error) {
 func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, msg *apc.BckSummMsg) (err error) {
 	summ.Bck.Copy(bck.Bucket())
 
-	// 1. always size on-disk (is fast)
-	summ.TotalSize.OnDisk, err = r.sizeOnDisk(bck)
-	if err != nil {
-		return
-	}
-	if msg.Fast { // TODO -- FIXME: support (best effort) msg.max-time
+	// 1. always estimate on-disk size (is fast)
+	// TODO -- FIXME: support (best effort) msg.max-time
+	summ.TotalSize.OnDisk = r.sizeOnDisk(bck)
+	if msg.Fast {
 		return
 	}
 
@@ -210,28 +207,30 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, msg *apc.BckSummMs
 	return nil
 }
 
-func (*bsummXact) sizeOnDisk(bck *cluster.Bck) (uint64, error) {
+func (*bsummXact) sizeOnDisk(bck *cluster.Bck) (size uint64) {
 	var (
-		availablePaths = fs.GetAvail()
-		group, _       = errgroup.WithContext(context.Background())
-		size           uint64
+		avail = fs.GetAvail()
+		wg    = cos.NewLimitedWaitGroup(4, len(avail))
+		psize = &size
+		b     = bck.Bucket()
 	)
-	for _, mi := range availablePaths {
-		group.Go(func(mi *fs.MountpathInfo) func() error {
-			return func() (err error) {
-				var (
-					sz   uint64
-					bdir = mi.MakePathBck(bck.Bucket())
-				)
-				if sz, err = ios.DirSizeOnDisk(bdir); err != nil {
-					return
-				}
-				gatomic.AddUint64(&size, sz)
-				return nil
-			}
-		}(mi))
+	for _, mi := range avail {
+		bdir := mi.MakePathBck(b)
+		wg.Add(1)
+		go addDU(bdir, psize, wg)
 	}
-	return size, group.Wait()
+	wg.Wait()
+	return
+}
+
+func addDU(bdir string, psize *uint64, wg cos.WG) {
+	sz, err := ios.DirSizeOnDisk(bdir)
+	if err != nil {
+		glog.Errorf("dir-size %q: %v", bdir, err)
+		debug.Assertf(false, "dir-size %q: %v", bdir, err)
+	}
+	gatomic.AddUint64(psize, sz)
+	wg.Done()
 }
 
 func (r *bsummXact) updRes(err error) {

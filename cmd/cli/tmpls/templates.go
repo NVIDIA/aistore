@@ -179,32 +179,32 @@ const (
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
-	ListBucketsHeader = "NAME\t PRESENT\t OBJECTS\t SIZE ON DISK\t USAGE(%)\n"
+	ListBucketsHeader = "NAME\t PRESENT\t OBJECTS (cached, remote)\t TOTAL SIZE (apparent, objects)\t USAGE(%)\n"
 	ListBucketsBody   = "{{range $k, $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsPresent}}\t " +
-		"{{if (IsFalse $v.Info.IsPresent)}}-{{else}}{{$v.Info.ObjCount}}{{end}}\t " +
-		"{{if (IsFalse $v.Info.IsPresent)}}-{{else}}{{FormatBytesUns $v.Info.Size 2}}{{end}}\t " +
-		"{{if (IsFalse $v.Info.IsPresent)}}-{{else}}{{$v.Info.UsedPct}}%{{end}}\n" +
+		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsBckPresent}}\t " +
+		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{$v.Info.ObjCount.Present}} {{$v.Info.ObjCount.Remote}}{{end}}\t " +
+		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{FormatBytesUns $v.Info.TotalSize.OnDisk 2}} {{FormatBytesUns $v.Info.TotalSize.PresentObjs 2}}{{end}}\t " +
+		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{$v.Info.UsedPct}}%{{end}}\n" +
 		"{{end}}"
 	ListBucketsTmpl = ListBucketsHeader + ListBucketsBody
 
 	ListBucketsHeaderNoSummary = "NAME\t PRESENT\n"
 	ListBucketsBodyNoSummary   = "{{range $k, $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsPresent}}\n" +
+		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsBckPresent}}\n" +
 		"{{end}}"
 	ListBucketsTmplNoSummary = ListBucketsHeaderNoSummary + ListBucketsBodyNoSummary
 
 	// Bucket summary templates
-	BucketsSummariesFastTmpl = "NAME\t OBJECTS\t SIZE ON DISK\t USAGE(%)\n" + bucketsSummariesFastBody
+	BucketsSummariesFastTmpl = "NAME\t APPARENT SIZE\t USAGE(%)\n" + bucketsSummariesFastBody
 	bucketsSummariesFastBody = "{{range $k, $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUns $v.Size 2}}\t {{$v.UsedPct}}%\n" +
+		"{{FormatBckName $v.Bck}}\t {{FormatBytesUns $v.TotalSize.OnDisk 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
-	BucketsSummariesTmpl = "NAME\t OBJECTS\t OBJECT SIZE (min, avg, max)\t SIZE (sum object sizes)\t USAGE(%)\n" +
+	BucketsSummariesTmpl = "NAME\t OBJECTS (cached, remote)\t OBJECT SIZES (min, avg, max)\t TOTAL OBJECT SIZE (cached, remote)\t USAGE(%)\n" +
 		bucketsSummariesBody
 	bucketsSummariesBody = "{{range $k, $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{$v.ObjCount}}\t " +
+		"{{FormatBckName $v.Bck}}\t {{$v.ObjCount.Present}} {{$v.ObjCount.Remote}}\t " +
 		"{{FormatMAM $v.ObjSize.Min}} {{FormatMAM $v.ObjSize.Avg}} {{FormatMAM $v.ObjSize.Max}}\t " +
-		"{{FormatBytesUns $v.Size 2}}\t {{$v.UsedPct}}%\n" +
+		"{{FormatBytesUns $v.TotalSize.PresentObjs 2}} {{FormatBytesUns $v.TotalSize.RemoteObjs 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
 
 	BucketSummaryValidateTmpl = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\n" + bucketSummaryValidateBody

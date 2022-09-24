@@ -36,9 +36,11 @@ const (
 )
 
 type (
-	lsBckTally struct {
-		nb, nbp, pct int
-		nobj, size   uint64
+	lsbFooter struct {
+		pct        int
+		nb, nbp    int
+		pobj, robj uint64
+		size       uint64 // apparent
 	}
 
 	entryFilter func(*cmn.ObjEntry) bool
@@ -192,7 +194,7 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 // `ais ls`, `ais ls s3:` and similar
 func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool /*filter*/) {
 	var (
-		lst      lsBckTally
+		footer   lsbFooter
 		filtered = make(cmn.Bcks, 0, len(bcks))
 	)
 	for _, bck := range bcks {
@@ -218,12 +220,13 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 			}
 			continue
 		}
-		lst.nb++
-		if !noSummary && info.IsPresent {
-			lst.nbp++
-			lst.nobj += info.ObjCount
-			lst.size += info.Size
-			lst.pct += int(info.UsedPct)
+		footer.nb++
+		if !noSummary && info.IsBckPresent {
+			footer.nbp++
+			footer.pobj += info.ObjCount.Present
+			footer.robj += info.ObjCount.Remote
+			footer.size += info.TotalSize.OnDisk
+			footer.pct += int(info.UsedPct)
 		}
 		if bck.IsHTTP() {
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
@@ -239,8 +242,9 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 		} else {
 			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, altMap, false)
 		}
-		if !hideFooter && lst.nbp > 1 {
-			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d)] =======", apc.DisplayProvider(provider), lst.nb, lst.nbp)
+		if !hideFooter && footer.nbp > 1 {
+			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d)] =======",
+				apc.DisplayProvider(provider), footer.nb, footer.nbp)
 			fmt.Fprintln(c.App.Writer, fcyan(foot))
 		}
 	} else {
@@ -249,9 +253,10 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 		} else {
 			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
 		}
-		if !hideFooter && lst.nbp > 1 {
-			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d, size %s, used %d%%] =======",
-				apc.DisplayProvider(provider), lst.nb, lst.nbp, lst.nobj, cos.UnsignedB2S(lst.size, 2), lst.pct)
+		if !hideFooter && footer.nbp > 1 {
+			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d(%d), size %s, used %d%%] =======",
+				apc.DisplayProvider(provider), footer.nb, footer.nbp, footer.pobj, footer.robj,
+				cos.UnsignedB2S(footer.size, 2), footer.pct)
 			fmt.Fprintln(c.App.Writer, fcyan(foot))
 		}
 	}

@@ -271,7 +271,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	var (
 		baseParams = tools.BaseAPIParams()
 		errCh      = make(chan error, objCnt)
-		wg         = cos.NewLimitedWaitGroup(20)
+		wg         = cos.NewLimitedWaitGroup(20, 0)
 	)
 	if !m.silent {
 		tlog.Logf("remote PUT %d objects => %s\n", objCnt, m.bck)
@@ -405,7 +405,7 @@ func (m *ioContext) del(opts ...int) {
 	tlog.Logf("deleting %d objects...\n", len(toRemove))
 	var (
 		errCnt atomic.Int64
-		wg     = cos.NewLimitedWaitGroup(16)
+		wg     = cos.NewLimitedWaitGroup(16, 0)
 	)
 	for _, obj := range toRemove {
 		if errCnt.Load() > maxErrCount {
@@ -473,7 +473,7 @@ func (m *ioContext) gets(withValidation ...bool) {
 	var (
 		baseParams = tools.BaseAPIParams()
 		totalGets  = m.num * m.numGetsEachFile
-		wg         = cos.NewLimitedWaitGroup(50)
+		wg         = cos.NewLimitedWaitGroup(50, 0)
 		validate   bool
 	)
 
@@ -503,7 +503,7 @@ func (m *ioContext) getsUntilStop() {
 	var (
 		idx        = 0
 		baseParams = tools.BaseAPIParams()
-		wg         = cos.NewLimitedWaitGroup(40)
+		wg         = cos.NewLimitedWaitGroup(40, 0)
 	)
 	for {
 		select {
@@ -973,7 +973,7 @@ func prefixLookup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string
 
 func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
 	var (
-		wg    = cos.NewLimitedWaitGroup(40)
+		wg    = cos.NewLimitedWaitGroup(40, 0)
 		errCh = make(chan error, len(fileNames))
 	)
 
