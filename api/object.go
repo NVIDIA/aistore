@@ -142,7 +142,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cm
 
 	q := bck.AddToQuery(nil)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
-	if fltPresence == apc.FltPresentOmitProps {
+	if fltPresence == apc.FltPresentNoProps {
 		q.Set(apc.QparamSilent, "true")
 	}
 
@@ -157,7 +157,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cm
 	if err != nil {
 		return nil, err
 	}
-	if fltPresence == apc.FltPresentOmitProps {
+	if fltPresence == apc.FltPresentNoProps {
 		return nil, err
 	}
 

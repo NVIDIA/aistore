@@ -19,7 +19,7 @@ var (
 		subcmdStgSummary: append(
 			longRunFlags,
 			listObjCachedFlag,
-			listBckPresentFlag,
+			allBucketsFlag,
 			sizeInBytesFlag,
 			verboseFlag,
 		),

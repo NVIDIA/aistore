@@ -250,9 +250,9 @@ func listBckTableNoSummary(c *cli.Context, provider string, filtered []cmn.Bck, 
 	} else {
 		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, nil, false)
 	}
-	if !hideFooter && footer.nbp > 1 {
-		foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d)] =======",
-			apc.DisplayProvider(provider), footer.nb, footer.nbp)
+	if !hideFooter {
+		foot := fmt.Sprintf("Total: [%s bucket%s: %d(%d)] ========",
+			apc.DisplayProvider(provider), cos.Plural(footer.nb), footer.nb, footer.nbp)
 		fmt.Fprintln(c.App.Writer, fcyan(foot))
 	}
 }
@@ -296,8 +296,8 @@ func listBckTableWithSummary(c *cli.Context, provider string, filtered []cmn.Bck
 		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
 	}
 	if !hideFooter && footer.nbp > 1 {
-		foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d(%d), size %s, used %d%%] =======",
-			apc.DisplayProvider(provider), footer.nb, footer.nbp, footer.pobj, footer.robj,
+		foot := fmt.Sprintf("Total: [%s bucket%s: %d(%d), objects %d(%d), apparent size %s, used capacity %d%%] ========",
+			apc.DisplayProvider(provider), cos.Plural(footer.nb), footer.nb, footer.nbp, footer.pobj, footer.robj,
 			cos.UnsignedB2S(footer.size, 2), footer.pct)
 		fmt.Fprintln(c.App.Writer, fcyan(foot))
 	}
@@ -320,7 +320,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
 	}
-	if flagIsSet(c, allItemsFlag) {
+	if flagIsSet(c, allObjectsFlag) {
 		msg.SetFlag(apc.LsMisplaced)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
@@ -338,10 +338,9 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			msg.AddProps(props...)
 		}
 	}
-	if flagIsSet(c, allItemsFlag) {
-		// If `all` flag is set print status of the file. Multiple files with
-		// the same name can be displayed (e.g, due to mirroring, EC), so
-		// the status helps to tell the real object from its replicas.
+	if flagIsSet(c, allObjectsFlag) {
+		// Show status. Object name can then be displayed multiple times
+		// (due to mirroring, EC). The status helps to tell an object from its replica(s).
 		msg.AddProps(apc.GetPropsStatus)
 	}
 	if flagIsSet(c, startAfterFlag) {
@@ -663,8 +662,8 @@ func objPropsTemplate(c *cli.Context, props string) string {
 func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	objFilter := &objectListFilter{}
 
-	if !flagIsSet(c, allItemsFlag) {
-		// Filter out files with status different than OK
+	if !flagIsSet(c, allObjectsFlag) {
+		// Filter out objects with a status different from OK
 		objFilter.addFilter(func(obj *cmn.ObjEntry) bool { return obj.IsStatusOK() })
 	}
 

@@ -1244,7 +1244,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	}
 	err := lom.Load(true /*cache it*/, false /*locked*/)
 	if err == nil {
-		if fltPresence == apc.FltPresentOmitProps {
+		if apc.IsFltNoProps(fltPresence) {
 			return
 		}
 		if fltPresence == apc.FltExistsOutside {
@@ -1264,7 +1264,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	}
 
 	if !exists {
-		if bck.IsAIS() || (fltPresence != apc.FltExists && fltPresence != apc.FltExistsOutside) {
+		if bck.IsAIS() || apc.IsFltPresent(fltPresence) {
 			err := cmn.NewErrNotFound("%s: object %s", t, lom.FullName())
 			invalidHandler(w, r, err, http.StatusNotFound)
 			return
@@ -1308,6 +1308,9 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
 			invalidHandler(w, r, cmn.NewErrFailedTo(t, "HEAD", lom, err), errCode)
+			return
+		}
+		if apc.IsFltNoProps(fltPresence) {
 			return
 		}
 		op.ObjAttrs = *objAttrs

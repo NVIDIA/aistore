@@ -523,7 +523,7 @@ func TestObjProps(t *testing.T) {
 
 				flt := apc.FltPresent
 				if test.checkPresent {
-					flt = apc.FltPresentOmitProps
+					flt = apc.FltPresentNoProps
 				}
 				if test.bucketType != typeLocal && test.evict && !test.checkPresent {
 					flt = apc.FltExistsOutside

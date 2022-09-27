@@ -195,14 +195,14 @@ func initLsOptions() []cli.Flag {
 		objPropsLsFlag,
 		objLimitFlag,
 		showUnmatchedFlag,
-		allItemsFlag,
+		allObjectsFlag,
+		allBucketsFlag,
 		noHeaderFlag,
 		noFooterFlag,
 		pagedFlag,
 		maxPagesFlag,
 		startAfterFlag,
 		listObjCachedFlag,
-		listBckPresentFlag, // TODO -- FIXME: consider "inversing" with allBucketsFlag
 		listAnonymousFlag,
 		listArchFlag,
 		nameOnlyFlag,
@@ -644,9 +644,9 @@ func listAnyHandler(c *cli.Context) error {
 		}
 		return showObjProps(c, bck, objName)
 	case bck.Name == "": // list buckets
-		fltPresence := apc.FltExists
-		if flagIsSet(c, listBckPresentFlag) {
-			fltPresence = apc.FltPresent
+		fltPresence := apc.FltPresent
+		if flagIsSet(c, allBucketsFlag) {
+			fltPresence = apc.FltExists
 		}
 		return listBuckets(c, cmn.QueryBcks(bck), fltPresence)
 	default: // list objects

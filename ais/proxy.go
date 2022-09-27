@@ -1478,11 +1478,18 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD,
 		dpq: apireq.dpq, query: apireq.query}
 
+	// TODO -- FIXME: bckArgs.noHeadRemB = cos.IsParseBool(apireq.dpq.dontAddMD) // QparamDontAddBckMD
+
 	// present-only [+ bucket summary]
 	if apireq.dpq.fltPresence != "" {
 		wantBckSummary = true
 		fltPresence, _ = strconv.Atoi(apireq.dpq.fltPresence)
-		bckArgs.noHeadRemB = apc.IsFltPresent(fltPresence)
+		// bckArgs.noHeadRemB == false will have an effect of adding an (existing)
+		// bucket to the cluster's BMD - right here and now, ie., on the fly.
+		// This could be easily prevented but then again, it is currently impossible
+		// to run xactions on buckets that are not present.
+		// See also: comments to `QparamFltPresence` and `apc.Flt*` enum
+		bckArgs.noHeadRemB = bckArgs.noHeadRemB || apc.IsFltPresent(fltPresence)
 	}
 	bckArgs.createAIS = false
 
@@ -1495,7 +1502,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	if bckArgs.isPresent {
 		if wantBckSummary {
-			if fltPresence != apc.FltPresentOmitProps {
+			if !apc.IsFltNoProps(fltPresence) {
 				// get runtime bucket info (aka /summary/):
 				// broadcast to all targets, collect, and summarize
 				if err := p.bsummDoWait(bck, info, fltPresence); err != nil {
@@ -1521,12 +1528,14 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	bck.Props, bckArgs.isPresent = bmd.Get(bck)
 
 	if wantBckSummary {
-		runtime.Gosched()
 		// NOTE: summarizing freshly added remote
+		runtime.Gosched()
 		debug.Assert(bckArgs.isPresent)
-		if err := p.bsummDoWait(bck, info, fltPresence); err != nil {
-			p.writeErr(w, r, err)
-			return
+		if !apc.IsFltNoProps(fltPresence) {
+			if err := p.bsummDoWait(bck, info, fltPresence); err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
 		}
 		info.IsBckPresent = true
 	}

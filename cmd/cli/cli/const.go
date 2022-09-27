@@ -214,14 +214,6 @@ const (
 	countDefault       = 1
 )
 
-const scopeAll = "all"
-
-const (
-	cfgScopeAll       = scopeAll
-	cfgScopeLocal     = "local"
-	cfgScopeInherited = "inherited"
-)
-
 const sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"
 
 // Argument placeholders in help messages
@@ -297,11 +289,31 @@ const (
 	searchArgument = "KEYWORD [KEYWORD...]"
 )
 
+const scopeAll = "all"
+
+const (
+	cfgScopeAll       = scopeAll
+	cfgScopeLocal     = "local"
+	cfgScopeInherited = "inherited"
+)
+
 //
 // Command-line Options aka Flags
 //
 
 var (
+	// scope = all
+	allXactionsFlag = cli.BoolFlag{Name: scopeAll, Usage: "show all xactions, including finished"}
+	allPropsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "show all object properties"}
+	allObjectsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "show all objects; include misplaced and copies"}
+	allBucketsFlag  = cli.BoolFlag{
+		Name:  "all-buckets", // NOTE: see (commandList: initLsOptions) common for both list-objects and list-buckets
+		Usage: "operate on all buckets including those (remote) buckets that are not present in the cluster",
+	}
+	allJobsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "remove all finished jobs"}
+	allETLStopFlag = cli.BoolFlag{Name: scopeAll, Usage: "stop all ETLs"}
+
+	// coloring
 	noColorFlag = cli.BoolFlag{
 		Name:  "no-color",
 		Usage: "disable colored output",
@@ -317,9 +329,8 @@ var (
 		Usage: objPropsFlag.Usage,
 		Value: strings.Join(apc.GetPropsMinimal, ","),
 	}
-	allPropsFlag = cli.BoolFlag{Name: scopeAll, Usage: "show all object properties"}
-	prefixFlag   = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}
-	refreshFlag  = cli.DurationFlag{
+	prefixFlag  = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}
+	refreshFlag = cli.DurationFlag{
 		Name:  "refresh",
 		Usage: "refresh interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h'",
 		Value: refreshRateDefault,
@@ -340,11 +351,6 @@ var (
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
 	rawFlag         = cli.BoolFlag{Name: "raw", Usage: "display exact values instead of human-readable ones"}
 
-	allXactionsFlag = cli.BoolFlag{Name: scopeAll, Usage: "show all xactions, including finished"}
-	allItemsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "list all items"} // TODO: differentiate bucket names vs objects
-	allJobsFlag     = cli.BoolFlag{Name: scopeAll, Usage: "remove all finished jobs"}
-	allETLStopFlag  = cli.BoolFlag{Name: scopeAll, Usage: "stop all ETLs"}
-
 	// Bucket
 	startAfterFlag = cli.StringFlag{
 		Name:  "start-after",
@@ -364,7 +370,7 @@ var (
 	}
 	bckSummaryFlag = cli.BoolFlag{
 		Name:  "summary",
-		Usage: "show bucket sizes and numbers of objects in the cluster and - for the buckets with remote backends - outside",
+		Usage: "show bucket sizes and used capacity; by default, applies only to the buckets that are _present_ in the cluster (use '--all' option to override)",
 	}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
@@ -439,13 +445,6 @@ var (
 	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
 		Usage: "list only cached (ie., stored in AIS) objects from a remote bucket",
-	}
-
-	allBucketsFlag = cli.BoolFlag{Name: scopeAll, Usage: "operate on all buckets (including those that are not present in the cluster)"}
-
-	listBckPresentFlag = cli.BoolFlag{
-		Name:  "present",
-		Usage: "operate only on buckets that are present in the cluster",
 	}
 
 	// to anonymously list public-access Cloud buckets
