@@ -109,9 +109,13 @@ func TestListBuckets(t *testing.T) {
 	tassert.CheckError(t, err)
 	query = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
 	aisBuckets, err = api.ListBuckets(baseParams, query, apc.FltExists)
-	tassert.CheckError(t, err)
-	if len(aisBuckets) != len(bcks.Select(query)) {
-		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(query)))
+	if tools.RemoteCluster.UUID == "" {
+		tassert.Errorf(t, err == nil || strings.Contains(err.Error(), "remote"), "%q: %v", tools.RemoteCluster.UUID, err)
+	} else {
+		tassert.CheckError(t, err)
+		if len(aisBuckets) != len(bcks.Select(query)) {
+			t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(query)))
+		}
 	}
 }
 
