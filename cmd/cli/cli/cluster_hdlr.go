@@ -58,6 +58,7 @@ var (
 		commandStop:  {},
 		commandShow: {
 			allXactionsFlag,
+			noHeaderFlag,
 		},
 	}
 

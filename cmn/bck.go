@@ -410,7 +410,16 @@ func DelBckFromQuery(query url.Values) url.Values {
 // QueryBcks is a Bck that _can_ have an empty Name. (TODO: extend to support prefix and regex.)
 func (qbck *QueryBcks) IsBucket() bool { return !(*Bck)(qbck).IsQuery() }
 
-func (qbck QueryBcks) String() string { b := Bck(qbck); return b.String() }
+func (qbck QueryBcks) String() string {
+	if qbck.Name == "" {
+		if qbck.Ns.IsGlobal() {
+			return qbck.Provider + apc.BckProviderSeparator
+		}
+		return fmt.Sprintf("%s%s%s", qbck.Provider, apc.BckProviderSeparator, qbck.Ns)
+	}
+	b := Bck(qbck)
+	return b.String()
+}
 
 func (qbck *QueryBcks) IsAIS() bool       { b := (*Bck)(qbck); return b.IsAIS() }
 func (qbck *QueryBcks) IsHDFS() bool      { b := (*Bck)(qbck); return b.IsHDFS() }

@@ -599,7 +599,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 }
 
 func isObjPresent(c *cli.Context, bck cmn.Bck, object string) error {
-	_, err := api.HeadObject(apiBP, bck, object, apc.FltPresentOmitProps)
+	_, err := api.HeadObject(apiBP, bck, object, apc.FltPresentNoProps)
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
 			fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)

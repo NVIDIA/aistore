@@ -125,15 +125,15 @@ const (
 	DSortListTmpl = DSortListHeader + "{{ range $value := . }}" + DSortListBody + "{{end}}"
 
 	// Xactions templates
-	XactionsBodyTmpl = XactionStatsHeader +
-		"{{range $daemon := . }}" + XactionBody + "{{end}}"
-	XactionStatsHeader = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	XactionBody        = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionStatsBody + "{{end}}" +
-		"{{if $daemon.XactSnaps}}\t \t \t \t \t \t \t \t \n{{end}}"
-	XactionStatsBody = "{{ $daemon.DaemonID }}\t " +
+	XactionsBodyTmpl = XactionStatsHeader + XactionsBodyNoHeaderTmpl
+
+	XactionsBodyNoHeaderTmpl = "{{range $daemon := . }}" + XactionBody + "{{end}}"
+	XactionStatsHeader       = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
+	XactionBody              = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionStatsBody + "{{end}}"
+	XactionStatsBody         = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{$xctn.Kind}}\t " +
-		"{{if $xctn.Bck.Name}}{{$xctn.Bck.Name}}{{else}}-{{end}}\t " +
+		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatTime $xctn.StartTime}}\t " +
@@ -146,7 +146,7 @@ const (
 	XactionECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECGetStatsBody + "{{end}}"
 	XactionECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
-		"{{if $xctn.Bck.Name}}{{$xctn.Bck.Name}}{{else}}-{{end}}\t " +
+		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 
@@ -165,7 +165,7 @@ const (
 	XactionECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECPutStatsBody + "{{end}}"
 	XactionECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
-		"{{if $xctn.Bck.Name}}{{$xctn.Bck.Name}}{{else}}-{{end}}\t " +
+		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 
@@ -209,7 +209,7 @@ const (
 
 	BucketSummaryValidateTmpl = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\n" + bucketSummaryValidateBody
 	bucketSummaryValidateBody = "{{range $v := . }}" +
-		"{{$v.Name}}\t {{$v.ObjectCnt}}\t {{$v.Misplaced}}\t {{$v.MissingCopies}}\n" +
+		"{{FormatBckName $v.Bck}}\t {{$v.ObjectCnt}}\t {{$v.Misplaced}}\t {{$v.MissingCopies}}\n" +
 		"{{end}}"
 
 	// For `object put` mass uploader. A caller adds to the template

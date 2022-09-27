@@ -1778,8 +1778,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	)
 
 	if !configured {
-		err = errors.New("ais remote cloud is not configured")
-		p.writeErr(w, r, err)
+		p.writeErrMsg(w, r, "no remote ais clusters attached")
 		return err
 	}
 
@@ -1829,26 +1828,41 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		bmd     = p.owner.bmd.get()
 		present bool
 	)
-	if dpq.fltPresence != "" {
-		if v, err := strconv.Atoi(dpq.fltPresence); err == nil {
-			present = apc.IsFltPresent(v)
-		}
-	}
-	if qbck.IsAIS() || qbck.IsHDFS() || present {
+	if qbck.IsAIS() {
 		bcks := bmd.Select(qbck)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}
 
-	// the backend must be configured
-	if qbck.IsCloud() {
+	// always check first that the remote backend is configured
+	// (optional non-exhaustive checks)
+	if qbck.IsCloud() || qbck.IsHDFS() {
 		config := cmn.GCO.Get()
 		if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
 			err := &cmn.ErrMissingBackend{Provider: qbck.Provider}
 			p.writeErrf(w, r, "cannot list %q bucket: %v", qbck, err)
 			return
 		}
+	} else if qbck.IsRemoteAIS() {
+		config := cmn.GCO.Get()
+		if _, ok := config.Backend.ProviderConf(apc.AIS); !ok {
+			p.writeErrf(w, r, "cannot list %q bucket: no remote ais clusters attached", qbck)
+			return
+		}
 	}
+
+	// present-only filtering
+	if dpq.fltPresence != "" {
+		if v, err := strconv.Atoi(dpq.fltPresence); err == nil {
+			present = apc.IsFltPresent(v)
+		}
+	}
+	if present {
+		bcks := bmd.Select(qbck)
+		p.writeJSON(w, r, bcks, "list-buckets")
+		return
+	}
+
 	// via random target
 	si, err := p.owner.smap.get().GetRandTarget()
 	if err != nil {

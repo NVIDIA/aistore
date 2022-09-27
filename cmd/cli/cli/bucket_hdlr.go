@@ -57,7 +57,28 @@ var (
 		},
 		subcmdResetProps: {},
 
-		commandList: initLsOptions(),
+		commandList: {
+			regexFlag,
+			templateFlag,
+			prefixFlag,
+			pageSizeFlag,
+			objPropsLsFlag,
+			objLimitFlag,
+			showUnmatchedFlag,
+			allObjectsFlag,
+			allBucketsFlag,
+			noHeaderFlag,
+			noFooterFlag,
+			pagedFlag,
+			maxPagesFlag,
+			startAfterFlag,
+			listObjCachedFlag,
+			listAnonymousFlag,
+			listArchFlag,
+			nameOnlyFlag,
+			sizeInBytesFlag,
+			bckSummaryFlag,
+		},
 
 		subcmdSummary: {
 			listObjCachedFlag,
@@ -73,9 +94,9 @@ var (
 	}
 
 	// commands
-	bucketCmdList = cli.Command{
+	bucketsObjectsCmdList = cli.Command{
 		Name:         commandList,
-		Usage:        "list buckets and objects in buckets and archives",
+		Usage:        "list buckets, objects in buckets, and files in objects formatted as archives",
 		Action:       listAnyHandler,
 		ArgsUsage:    listAnyCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
@@ -112,7 +133,7 @@ var (
 		Name:  commandBucket,
 		Usage: "create/destroy buckets, list bucket's content, show existing buckets and their properties",
 		Subcommands: []cli.Command{
-			bucketCmdList,
+			bucketsObjectsCmdList,
 			bucketCmdSummary,
 			bucketCmdLRU,
 			bucketObjCmdEvict,
@@ -186,31 +207,6 @@ var (
 	}
 )
 
-func initLsOptions() []cli.Flag {
-	return []cli.Flag{
-		regexFlag,
-		templateFlag,
-		prefixFlag,
-		pageSizeFlag,
-		objPropsLsFlag,
-		objLimitFlag,
-		showUnmatchedFlag,
-		allObjectsFlag,
-		allBucketsFlag,
-		noHeaderFlag,
-		noFooterFlag,
-		pagedFlag,
-		maxPagesFlag,
-		startAfterFlag,
-		listObjCachedFlag,
-		listAnonymousFlag,
-		listArchFlag,
-		nameOnlyFlag,
-		sizeInBytesFlag,
-		bckSummaryFlag,
-	}
-}
-
 func createBucketHandler(c *cli.Context) (err error) {
 	var props *cmn.BucketPropsToUpdate
 	if flagIsSet(c, bucketPropsFlag) {
@@ -235,7 +231,7 @@ func createBucketHandler(c *cli.Context) (err error) {
 
 func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 	type bucketHealth struct {
-		Name          string
+		Bck           cmn.Bck
 		ObjectCnt     uint64
 		Misplaced     uint64
 		MissingCopies uint64
@@ -260,7 +256,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 			return
 		}
 		copies := int16(p.Mirror.Copies)
-		stats := &bucketHealth{Name: bck.String()}
+		stats := &bucketHealth{Bck: bck}
 		objList, err = api.ListObjects(apiBP, bck, msg, 0)
 		if err != nil {
 			return err
@@ -622,13 +618,7 @@ func listAnyHandler(c *cli.Context) error {
 		opts = cmn.ParseURIOpts{IsQuery: true}
 		uri  = c.Args().First()
 	)
-	// allow for `provider:` shortcut
-	if l := len(uri); l > 0 && uri[l-1] == ':' {
-		provider := uri[0 : l-1]
-		if _, err := cmn.NormalizeProvider(provider); err == nil {
-			uri = provider + apc.BckProviderSeparator
-		}
-	}
+	uri = preparseBckObjURI(uri)
 	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
 	if err != nil {
 		return err

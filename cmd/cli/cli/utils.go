@@ -328,13 +328,7 @@ func parseBckURI(c *cli.Context, uri string, requireProviderInURI ...bool) (cmn.
 }
 
 func parseQueryBckURI(c *cli.Context, uri string) (cmn.QueryBcks, error) {
-	// allow for `provider:` shortcut
-	if l := len(uri); l > 0 && uri[l-1] == ':' {
-		provider := uri[0 : l-1]
-		if _, err := cmn.NormalizeProvider(provider); err == nil {
-			uri = provider + apc.BckProviderSeparator
-		}
-	}
+	uri = preparseBckObjURI(uri)
 	if isWebURL(uri) {
 		bck := parseURLtoBck(uri)
 		return cmn.QueryBcks(bck), nil
@@ -1378,4 +1372,16 @@ func selectProviders(bcks cmn.Bcks) (sorted []string) {
 	}
 	sort.Strings(sorted)
 	return
+}
+
+// `ais ls` and friends: allow for `provider:` shortcut
+func preparseBckObjURI(uri string) string {
+	if uri == "" {
+		return uri
+	}
+	p := strings.TrimSuffix(uri, ":")
+	if _, err := cmn.NormalizeProvider(p); err == nil {
+		return p + apc.BckProviderSeparator
+	}
+	return uri // unchanged
 }

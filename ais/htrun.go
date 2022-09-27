@@ -906,7 +906,7 @@ func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v msgp.Enco
 	if err == nil {
 		return true
 	}
-	h.handleWriteError(r, tag, err)
+	h.handleWriteError(r, tag, v, err)
 	return false
 }
 
@@ -926,7 +926,7 @@ func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v any, tag str
 		return true
 	}
 rerr:
-	h.handleWriteError(r, tag, err)
+	h.handleWriteError(r, tag, v, err)
 	return false
 }
 
@@ -936,13 +936,30 @@ func isBrowser(userAgent string) bool {
 	return strings.HasPrefix(userAgent, "Mozilla/5.0")
 }
 
-func (h *htrun) handleWriteError(r *http.Request, tag string, err error) {
-	msg := fmt.Sprintf("%s: failed to write bytes, err: %v", tag, err)
-	if _, file, line, ok := runtime.Caller(1); ok {
-		f := filepath.Base(file)
-		msg += fmt.Sprintf("(%s, #%d)", f, line)
+func (h *htrun) handleWriteError(r *http.Request, tag string, v any, err error) {
+	const maxl = 32
+	var s string
+	if v != nil {
+		s = fmt.Sprintf("[%+v", v)
+		if len(s) > maxl {
+			s = s[:maxl] + "...]"
+		} else {
+			s += "]"
+		}
 	}
-	glog.Errorln(msg)
+	msg := fmt.Sprintf("%s: failed to write bytes%s: %v (", s, tag, err)
+	for i := 1; i < 4; i++ {
+		_, file, line, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+		if i > 1 {
+			msg += " <- "
+		}
+		f := filepath.Base(file)
+		msg += fmt.Sprintf("%s:%d", f, line)
+	}
+	glog.Errorln(msg + ")")
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 

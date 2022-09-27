@@ -86,11 +86,13 @@ var (
 			jsonFlag,
 			allXactionsFlag,
 			activeFlag,
+			noHeaderFlag,
 			verboseFlag,
 		},
 		subcmdShowRebalance: {
 			refreshFlag,
 			allXactionsFlag,
+			noHeaderFlag,
 		},
 		subcmdShowBucket: {
 			jsonFlag,
@@ -321,11 +323,7 @@ func showDisksHandler(c *cli.Context) (err error) {
 	if err = updateLongRunParams(c); err != nil {
 		return
 	}
-	var (
-		useJSON    = flagIsSet(c, jsonFlag)
-		hideHeader = flagIsSet(c, noHeaderFlag)
-	)
-	return daemonDiskStats(c, daemonID, useJSON, hideHeader)
+	return daemonDiskStats(c, daemonID)
 }
 
 func showDownloadsHandler(c *cli.Context) (err error) {
@@ -467,12 +465,18 @@ func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck)
 		return tmpls.DisplayOutput(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
 	}
 
+	hideHeader := flagIsSet(c, noHeaderFlag)
 	switch xactKind {
 	case apc.ActECGet:
+		// TODO: hideHeader
 		return tmpls.DisplayOutput(dts, c.App.Writer, tmpls.XactionECGetBodyTmpl, nil, useJSON)
 	case apc.ActECPut:
+		// TODO: ditto
 		return tmpls.DisplayOutput(dts, c.App.Writer, tmpls.XactionECPutBodyTmpl, nil, useJSON)
 	default:
+		if hideHeader {
+			return tmpls.DisplayOutput(dts, c.App.Writer, tmpls.XactionsBodyNoHeaderTmpl, nil, useJSON)
+		}
 		return tmpls.DisplayOutput(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
 	}
 }

@@ -142,7 +142,11 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, cluConfig *cmn.Clus
 }
 
 // Displays the disk stats of a target
-func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) error {
+func daemonDiskStats(c *cli.Context, daemonID string) error {
+	var (
+		useJSON    = flagIsSet(c, jsonFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
+	)
 	if _, ok := pmapStatus[daemonID]; ok {
 		return fmt.Errorf("daemon ID=%q is a proxy, but \"%s %s %s\" works only for targets",
 			daemonID, cliName, commandShow, subcmdShowDisk)
@@ -224,6 +228,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 	var (
 		tw                            = &tabwriter.Writer{}
 		latestAborted, latestFinished bool
+		hideHeader                    = flagIsSet(c, noHeaderFlag)
 	)
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
@@ -260,9 +265,11 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 			return allSnaps[i].tid < allSnaps[j].tid
 		})
 
-		// NOTE: If changing header do not forget to change `colCount` couple
+		// NOTE: when changing header do not forget to change `colCount` couple
 		//  lines below and `displayRebStats` logic.
-		fmt.Fprintln(tw, "REB ID\t NODE\t OBJECTS RECV\t SIZE RECV\t OBJECTS SENT\t SIZE SENT\t START TIME\t END TIME\t ABORTED")
+		if !hideHeader {
+			fmt.Fprintln(tw, "REB ID\t NODE\t OBJECTS RECV\t SIZE RECV\t OBJECTS SENT\t SIZE SENT\t START TIME\t END TIME\t ABORTED")
+		}
 		prevID := ""
 		for _, sts := range allSnaps {
 			if flagIsSet(c, allXactionsFlag) {

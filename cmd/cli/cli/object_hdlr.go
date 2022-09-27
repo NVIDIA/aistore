@@ -33,8 +33,6 @@ var (
 			checkObjCachedFlag,
 		},
 
-		commandList: initLsOptions(),
-
 		commandPut: append(
 			supportedCksumFlags,
 			chunkSizeFlag,
@@ -90,16 +88,6 @@ var (
 		BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
 	}
 
-	// list objects and archives
-	objectCmdList = cli.Command{
-		Name:         commandList,
-		Usage:        "list objects and archives in a given bucket",
-		Action:       listObjHandler,
-		ArgsUsage:    listObjCommandArgument,
-		Flags:        objectCmdsFlags[commandList],
-		BashComplete: bucketCompletions(bckCompletionsOpts{withProviders: true}),
-	}
-
 	objectCmdPut = cli.Command{
 		Name:         commandPut,
 		Usage:        "put object(s)",
@@ -122,7 +110,7 @@ var (
 		Usage: "put, get, list, rename, remove, and other operations on objects",
 		Subcommands: []cli.Command{
 			objectCmdGet,
-			objectCmdList,
+			bucketsObjectsCmdList,
 			objectCmdPut,
 			objectCmdSetCustom,
 			bucketObjCmdEvict,
@@ -269,21 +257,6 @@ func getHandler(c *cli.Context) (err error) {
 	return getObject(c, outFile, false /*silent*/)
 }
 
-func listObjHandler(c *cli.Context) error {
-	var (
-		opts = cmn.ParseURIOpts{IsQuery: true}
-		uri  = c.Args().First()
-	)
-	bck, _, err := cmn.ParseBckObjectURI(uri, opts)
-	if err != nil {
-		return err
-	}
-	if bck.Name == "" {
-		return missingArgumentsError(c, "bucket")
-	}
-	return listAnyHandler(c)
-}
-
 func createArchMultiObjHandler(c *cli.Context) (err error) {
 	var (
 		bckTo, bckFrom cmn.Bck
@@ -327,7 +300,7 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	}
 	for i := 0; i < 3; i++ {
 		time.Sleep(time.Second)
-		_, err = api.HeadObject(apiBP, bckTo, objName, apc.FltPresentOmitProps)
+		_, err = api.HeadObject(apiBP, bckTo, objName, apc.FltPresentNoProps)
 		if err == nil {
 			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.DisplayName()+"/"+objName)
 			return nil

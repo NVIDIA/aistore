@@ -185,6 +185,10 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 	if err != nil {
 		return
 	}
+	if len(bcks) == 0 && apc.IsFltPresent(fltPresence) {
+		fmt.Fprintf(c.App.Writer, "No %s buckets in the cluster. To list all buckets, use '--%s' option.\n",
+			qbck, allBucketsFlag.Name)
+	}
 	for _, provider := range selectProviders(bcks) {
 		listBckTable(c, provider, bcks, filter, fltPresence)
 		fmt.Fprintln(c.App.Writer)
@@ -251,8 +255,12 @@ func listBckTableNoSummary(c *cli.Context, provider string, filtered []cmn.Bck, 
 		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, nil, false)
 	}
 	if !hideFooter {
-		foot := fmt.Sprintf("Total: [%s bucket%s: %d(%d)] ========",
-			apc.DisplayProvider(provider), cos.Plural(footer.nb), footer.nb, footer.nbp)
+		var s string
+		if !apc.IsFltPresent(fltPresence) {
+			s = fmt.Sprintf(" (%d present)", footer.nbp)
+		}
+		foot := fmt.Sprintf("Total: [%s bucket%s: %d%s] ========",
+			apc.DisplayProvider(provider), cos.Plural(footer.nb), footer.nb, s)
 		fmt.Fprintln(c.App.Writer, fcyan(foot))
 	}
 }
@@ -296,8 +304,12 @@ func listBckTableWithSummary(c *cli.Context, provider string, filtered []cmn.Bck
 		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
 	}
 	if !hideFooter && footer.nbp > 1 {
-		foot := fmt.Sprintf("Total: [%s bucket%s: %d(%d), objects %d(%d), apparent size %s, used capacity %d%%] ========",
-			apc.DisplayProvider(provider), cos.Plural(footer.nb), footer.nb, footer.nbp, footer.pobj, footer.robj,
+		var s string
+		if !apc.IsFltPresent(fltPresence) {
+			s = fmt.Sprintf(" (%d present)", footer.nbp)
+		}
+		foot := fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
+			apc.DisplayProvider(provider), cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj,
 			cos.UnsignedB2S(footer.size, 2), footer.pct)
 		fmt.Fprintln(c.App.Writer, fcyan(foot))
 	}
