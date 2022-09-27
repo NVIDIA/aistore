@@ -67,7 +67,7 @@ var (
 	clusterURL        string
 	defaultHTTPClient *http.Client
 	authnHTTPClient   *http.Client
-	defaultAPIParams  api.BaseParams
+	apiBP             api.BaseParams
 	authParams        api.BaseParams
 	mu                sync.Mutex
 )
@@ -220,14 +220,14 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 // Get cluster map and use it to retrieve node status for each clustered node
 func fillMap() (*cluster.Smap, error) {
 	wg := &sync.WaitGroup{}
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return nil, err
 	}
-	if smap.Primary.PubNet.URL != defaultAPIParams.URL {
+	if smap.Primary.PubNet.URL != apiBP.URL {
 		// TODO: cluster map (Smap) is replicated & synchronized across all nodes, and so
 		//       this step can be made optional/configurable with default='not doing it'
-		smapPrimary, err := api.GetNodeClusterMap(defaultAPIParams, smap.Primary.ID())
+		smapPrimary, err := api.GetNodeClusterMap(apiBP, smap.Primary.ID())
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +245,7 @@ func fillMap() (*cluster.Smap, error) {
 
 func retrieveStatus(nodeMap cluster.NodeMap, daeMap stats.DaemonStatusMap, wg *sync.WaitGroup) {
 	fill := func(node *cluster.Snode) {
-		obj, _ := api.GetDaemonStatus(defaultAPIParams, node)
+		obj, _ := api.GetDaemonStatus(apiBP, node)
 		if node.Flags.IsSet(cluster.NodeFlagMaint) {
 			obj.Status = "maintenance"
 		} else if node.Flags.IsSet(cluster.NodeFlagDecomm) {
@@ -266,7 +266,7 @@ func retrieveStatus(nodeMap cluster.NodeMap, daeMap stats.DaemonStatusMap, wg *s
 
 // Get config from random target.
 func getRandTargetConfig() (*cmn.Config, error) {
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func getRandTargetConfig() (*cmn.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := api.GetDaemonConfig(defaultAPIParams, si)
+	cfg, err := api.GetDaemonConfig(apiBP, si)
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +456,7 @@ ret:
 // Parses [TARGET_ID] [XACTION_ID|XACTION_NAME] [BUCKET]
 func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck cmn.Bck, err error) {
 	var smap *cluster.Smap
-	smap, err = api.GetClusterMap(defaultAPIParams)
+	smap, err = api.GetClusterMap(apiBP)
 	if err != nil {
 		return
 	}
@@ -712,7 +712,7 @@ func cliAPIParams(proxyURL string) api.BaseParams {
 // 3. On the client side, we currently resort to an intuitive convention
 // that all non-modifying operations (LIST, GET, HEAD) utilize `dontAddBckMD = true`.
 func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) {
-	if p, err = api.HeadBucket(defaultAPIParams, bck, dontAddBckMD); err == nil {
+	if p, err = api.HeadBucket(apiBP, bck, dontAddBckMD); err == nil {
 		return
 	}
 	if httpErr, ok := err.(*cmn.ErrHTTP); ok {
@@ -917,9 +917,9 @@ func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
 // (not to confuse with bck.IsEmpty())
 func isBucketEmpty(bck cmn.Bck) (bool, error) {
 	msg := &apc.ListObjsMsg{}
-	msg.SetFlag(apc.LsCached)
+	msg.SetFlag(apc.LsObjCached)
 	msg.SetFlag(apc.LsNameOnly)
-	objList, err := api.ListObjectsPage(defaultAPIParams, bck, msg)
+	objList, err := api.ListObjectsPage(apiBP, bck, msg)
 	if err != nil {
 		return false, err
 	}
@@ -1004,11 +1004,11 @@ func diffConfigs(actual, original []prop) []propDiff {
 // First, request cluster's config from the primary node that contains
 // default Cksum type. Second, generate default list of properties.
 func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.Primary)
+	cfg, err := api.GetDaemonConfig(apiBP, smap.Primary)
 	if err != nil {
 		return nil, err
 	}
@@ -1017,11 +1017,11 @@ func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
 }
 
 // Wait for an Xaction to complete, and print if it aborted
-func waitForXactionCompletion(defaultAPIParams api.BaseParams, args api.XactReqArgs) (err error) {
+func waitForXactionCompletion(apiBP api.BaseParams, args api.XactReqArgs) (err error) {
 	if args.Timeout == 0 {
 		args.Timeout = time.Minute // TODO: make it a flag and an argument with configurable default
 	}
-	status, err := api.WaitForXactionIC(defaultAPIParams, args)
+	status, err := api.WaitForXactionIC(apiBP, args)
 	if err != nil {
 		return err
 	}

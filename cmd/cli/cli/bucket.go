@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -52,7 +53,7 @@ type (
 
 // Creates new ais bucket
 func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (err error) {
-	if err = api.CreateBucket(defaultAPIParams, bck, props); err != nil {
+	if err = api.CreateBucket(apiBP, bck, props); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok {
 			if herr.Status == http.StatusConflict {
 				desc := fmt.Sprintf("Bucket %q already exists", bck)
@@ -87,7 +88,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 				}
 			}
 		}
-		if err = api.DestroyBucket(defaultAPIParams, bck); err == nil {
+		if err = api.DestroyBucket(apiBP, bck); err == nil {
 			fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck.DisplayName())
 			continue
 		}
@@ -112,7 +113,7 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 		return
 	}
 
-	if xactID, err = api.RenameBucket(defaultAPIParams, fromBck, toBck); err != nil {
+	if xactID, err = api.RenameBucket(apiBP, fromBck, toBck); err != nil {
 		return
 	}
 
@@ -122,7 +123,7 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	}
 
 	fmt.Fprintf(c.App.Writer, fmtXactStarted, "Renaming bucket", fromBck, toBck)
-	if err = waitForXactionCompletion(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
+	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", fromBck, toBck)
 	} else {
 		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
@@ -134,7 +135,7 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (err error) {
 	var xactID string
 
-	if xactID, err = api.CopyBucket(defaultAPIParams, fromBck, toBck, msg); err != nil {
+	if xactID, err = api.CopyBucket(apiBP, fromBck, toBck, msg); err != nil {
 		return
 	}
 
@@ -144,7 +145,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (er
 	}
 
 	fmt.Fprintf(c.App.Writer, fmtXactStarted, "Copying bucket", fromBck, toBck)
-	if err = waitForXactionCompletion(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
+	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "copy", fromBck, toBck)
 	} else {
 		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
@@ -161,7 +162,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = ensureHasProvider(bck, c.Command.Name); err != nil {
 		return
 	}
-	if err = api.EvictRemoteBucket(defaultAPIParams, bck, flagIsSet(c, keepMDFlag)); err != nil {
+	if err = api.EvictRemoteBucket(apiBP, bck, flagIsSet(c, keepMDFlag)); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "%q bucket evicted\n", bck.DisplayName())
@@ -180,23 +181,20 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		}
 		filter = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
 	}
-	bcks, err := api.ListBuckets(defaultAPIParams, qbck, fltPresence)
+	bcks, err := api.ListBuckets(apiBP, qbck, fltPresence)
 	if err != nil {
 		return
 	}
 	for _, provider := range selectProviders(bcks) {
-		listBckTable(c, provider, bcks, filter) // TODO -- FIXME: add fltPresence
+		listBckTable(c, provider, bcks, filter, fltPresence)
 		fmt.Fprintln(c.App.Writer)
 	}
 	return
 }
 
 // `ais ls`, `ais ls s3:` and similar
-func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool) {
-	var (
-		footer   lsbFooter
-		filtered = make(cmn.Bcks, 0, len(bcks))
-	)
+func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool, fltPresence int) {
+	filtered := make(cmn.Bcks, 0, len(bcks))
 	for _, bck := range bcks {
 		if bck.Provider == provider && matches(bck) {
 			filtered = append(filtered, bck)
@@ -205,15 +203,70 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 	if len(filtered) == 0 {
 		return
 	}
+	if flagIsSet(c, bckSummaryFlag) {
+		listBckTableWithSummary(c, provider, filtered, fltPresence)
+	} else {
+		listBckTableNoSummary(c, provider, filtered, fltPresence)
+	}
+}
+
+func listBckTableNoSummary(c *cli.Context, provider string, filtered []cmn.Bck, fltPresence int) {
 	var (
+		bmd        *cluster.BMD
+		err        error
+		footer     lsbFooter
+		hideHeader = flagIsSet(c, noHeaderFlag)
+		hideFooter = flagIsSet(c, noFooterFlag)
+		data       = make([]tmpls.ListBucketsTemplateHelper, 0, len(filtered))
+	)
+	if !apc.IsFltPresent(fltPresence) {
+		bmd, err = api.GetBMD(apiBP)
+		if err != nil {
+			fmt.Fprintln(c.App.ErrWriter, err)
+			return
+		}
+	}
+	for _, bck := range filtered {
+		var (
+			info  cmn.BckSumm
+			props *cmn.BucketProps
+		)
+		if apc.IsFltPresent(fltPresence) {
+			info.IsBckPresent = true
+		} else {
+			props, info.IsBckPresent = bmd.Get(cluster.CloneBck(&bck))
+		}
+		footer.nb++
+		if info.IsBckPresent {
+			footer.nbp++
+		}
+		if bck.IsHTTP() {
+			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
+		}
+		data = append(data, tmpls.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: &info})
+	}
+	if hideHeader {
+		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBodyNoSummary, nil, false)
+	} else {
+		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, nil, false)
+	}
+	if !hideFooter && footer.nbp > 1 {
+		foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d)] =======",
+			apc.DisplayProvider(provider), footer.nb, footer.nbp)
+		fmt.Fprintln(c.App.Writer, fcyan(foot))
+	}
+}
+
+func listBckTableWithSummary(c *cli.Context, provider string, filtered []cmn.Bck, fltPresence int) {
+	var (
+		footer     lsbFooter
 		altMap     template.FuncMap
 		hideHeader = flagIsSet(c, noHeaderFlag)
 		hideFooter = flagIsSet(c, noFooterFlag)
-		bckSummary = flagIsSet(c, bckSummaryFlag)
 		data       = make([]tmpls.ListBucketsTemplateHelper, 0, len(filtered))
 	)
 	for _, bck := range filtered {
-		props, info, err := api.GetBucketInfo(defaultAPIParams, bck, bckSummary /*getSummary*/)
+		props, info, err := api.GetBucketInfo(apiBP, bck, fltPresence)
 		if err != nil {
 			if httpErr, ok := err.(*cmn.ErrHTTP); ok {
 				fmt.Fprintf(c.App.Writer, "  %s, err: %s\n", bck.DisplayName(), httpErr.Message)
@@ -221,7 +274,7 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 			continue
 		}
 		footer.nb++
-		if bckSummary && info.IsBckPresent {
+		if info.IsBckPresent {
 			footer.nbp++
 			footer.pobj += info.ObjCount.Present
 			footer.robj += info.ObjCount.Remote
@@ -237,29 +290,16 @@ func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(c
 		altMap = tmpls.AltFuncMapSizeBytes()
 	}
 
-	if bckSummary {
-		if hideHeader {
-			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBody, altMap, false)
-		} else {
-			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
-		}
-		if !hideFooter && footer.nbp > 1 {
-			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d(%d), size %s, used %d%%] =======",
-				apc.DisplayProvider(provider), footer.nb, footer.nbp, footer.pobj, footer.robj,
-				cos.UnsignedB2S(footer.size, 2), footer.pct)
-			fmt.Fprintln(c.App.Writer, fcyan(foot))
-		}
+	if hideHeader {
+		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBody, altMap, false)
 	} else {
-		if hideHeader {
-			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBodyNoSummary, altMap, false)
-		} else {
-			tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, altMap, false)
-		}
-		if !hideFooter && footer.nbp > 1 {
-			foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d)] =======",
-				apc.DisplayProvider(provider), footer.nb, footer.nbp)
-			fmt.Fprintln(c.App.Writer, fcyan(foot))
-		}
+		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
+	}
+	if !hideFooter && footer.nbp > 1 {
+		foot := fmt.Sprintf("=======\t[%s buckets: \t%d(%d), objects %d(%d), size %s, used %d%%] =======",
+			apc.DisplayProvider(provider), footer.nb, footer.nbp, footer.pobj, footer.robj,
+			cos.UnsignedB2S(footer.size, 2), footer.pct)
+		fmt.Fprintln(c.App.Writer, fcyan(foot))
 	}
 }
 
@@ -272,7 +312,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		return err
 	}
 	if flagIsSet(c, listObjCachedFlag) {
-		msg.SetFlag(apc.LsCached)
+		msg.SetFlag(apc.LsObjCached)
 	}
 	if flagIsSet(c, listAnonymousFlag) {
 		msg.SetFlag(apc.LsTryHeadRemB)
@@ -326,7 +366,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if flagIsSet(c, pagedFlag) {
 		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), limit
 		for {
-			objList, err := api.ListObjectsPage(defaultAPIParams, bck, msg)
+			objList, err := api.ListObjectsPage(apiBP, bck, msg)
 			if err != nil {
 				return err
 			}
@@ -374,7 +414,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 
 	// list all pages up to a limit, show progress
 	ctx := api.NewProgressContext(cb, longCommandTime)
-	objList, err := api.ListObjectsWithOpts(defaultAPIParams, bck, msg, uint(limit), ctx)
+	objList, err := api.ListObjectsWithOpts(apiBP, bck, msg, uint(limit), ctx)
 	if err != nil {
 		return err
 	}
@@ -429,7 +469,7 @@ validate:
 
 // Sets bucket properties
 func setBucketProps(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (err error) {
-	if _, err = api.SetBucketProps(defaultAPIParams, bck, props); err != nil {
+	if _, err = api.SetBucketProps(apiBP, bck, props); err != nil {
 		return
 	}
 	fmt.Fprintln(c.App.Writer, "Bucket props successfully updated")
@@ -438,7 +478,7 @@ func setBucketProps(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate)
 
 // Resets bucket props
 func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
-	if _, err = api.ResetBucketProps(defaultAPIParams, bck); err != nil {
+	if _, err = api.ResetBucketProps(apiBP, bck); err != nil {
 		return
 	}
 
@@ -522,7 +562,7 @@ func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section stri
 // Configure bucket as n-way mirror
 func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	var xactID string
-	if xactID, err = api.MakeNCopies(defaultAPIParams, bck, copies); err != nil {
+	if xactID, err = api.MakeNCopies(apiBP, bck, copies); err != nil {
 		return
 	}
 	var baseMsg string
@@ -538,7 +578,7 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 // erasure code the entire bucket
 func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	var xactID string
-	if xactID, err = api.ECEncodeBucket(defaultAPIParams, bck, data, parity); err != nil {
+	if xactID, err = api.ECEncodeBucket(apiBP, bck, data, parity); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %s, ", bck.DisplayName())

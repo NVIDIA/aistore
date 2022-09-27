@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1462,13 +1463,11 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		info   *cmn.BckSumm
-		hdr    = w.Header()
-		apireq = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
-		// whether to include bucket summary and, if true,
-		// operate on present-only or all
-		fltPresence    int
-		wantBckSummary bool
+		info           *cmn.BckSumm
+		hdr            = w.Header()
+		apireq         = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
+		fltPresence    int  // operate on present-only or otherwise (as per apc.Flt* enum)
+		wantBckSummary bool // whether to include bucket summary in the response
 	)
 	defer apiReqFree(apireq)
 
@@ -1483,7 +1482,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if apireq.dpq.fltPresence != "" {
 		wantBckSummary = true
 		fltPresence, _ = strconv.Atoi(apireq.dpq.fltPresence)
-		bckArgs.noErrRemB = apc.IsFltPresent(fltPresence)
+		bckArgs.noHeadRemB = apc.IsFltPresent(fltPresence)
 	}
 	bckArgs.createAIS = false
 
@@ -1491,7 +1490,6 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	if wantBckSummary {
 		info = &cmn.BckSumm{IsBckPresent: false}
 	}
@@ -1507,63 +1505,36 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			}
 			info.IsBckPresent = true
 		}
-		toHdr(bck, hdr, true, info)
-		return
-	}
-	// when the bucket that must be present is not
-	if apc.IsFltPresent(fltPresence) {
-		debug.Assert(bck.IsRemote())
-		toHdr(bck, hdr, false, info)
+		toHdr(bck, hdr, info)
 		return
 	}
 
-	if cos.IsParseBool(apireq.dpq.dontAddMD) {
-		_, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
-		if err != nil {
-			p.writeErr(w, r, err, statusCode)
+	debug.Assert(bck.IsRemote())
+
+	// [filter] when the bucket that must be present is not
+	if apc.IsFltPresent(fltPresence) {
+		toHdr(bck, hdr, info)
+		return
+	}
+
+	bmd := p.owner.bmd.get()
+	bck.Props, bckArgs.isPresent = bmd.Get(bck)
+
+	if wantBckSummary {
+		runtime.Gosched()
+		// NOTE: summarizing freshly added remote
+		debug.Assert(bckArgs.isPresent)
+		if err := p.bsummDoWait(bck, info, fltPresence); err != nil {
+			p.writeErr(w, r, err)
 			return
 		}
-		if wantBckSummary && fltPresence != apc.FltPresentOmitProps {
-			// ditto
-			if err := p.bsummDoWait(bck, info, fltPresence); err != nil {
-				p.writeErr(w, r, err)
-				return
-			}
-		}
-		toHdr(bck, hdr, false, info)
-		return
+		info.IsBckPresent = true
 	}
-
-	if p.forwardCP(w, r, nil, "head "+bck.String()) {
-		return
-	}
-
-	remoteHdr, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
-	if err != nil {
-		p.writeErr(w, r, err, statusCode)
-		return
-	}
-	ctx := &bmdModifier{
-		pre:        p._bckHeadPre,
-		final:      p._syncBMDFinal,
-		msg:        &apc.ActionMsg{Action: apc.ActResyncBprops},
-		bcks:       []*cluster.Bck{bck},
-		cloudProps: remoteHdr,
-	}
-	_, err = p.owner.bmd.modify(ctx)
-	if err != nil {
-		debug.AssertNoErr(err)
-		p.writeErr(w, r, err, http.StatusNotFound)
-		return
-	}
-	bck, err = bckArgs.initAndTry(bck.Name)
-	cos.AssertMsg(err == nil, "must be cloned and in BMD with remote+inherited props")
-	toHdr(bck, hdr, true /* created just now on the fly */, info)
+	toHdr(bck, hdr, info)
 }
 
-func toHdr(bck *cluster.Bck, hdr http.Header, present bool, info *cmn.BckSumm) {
+func toHdr(bck *cluster.Bck, hdr http.Header, info *cmn.BckSumm) {
 	if bck.Props == nil {
-		debug.Assert(!present)
 		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(&cmn.BucketProps{}))
 	} else {
 		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(bck.Props))
@@ -1571,24 +1542,6 @@ func toHdr(bck *cluster.Bck, hdr http.Header, present bool, info *cmn.BckSumm) {
 	if info != nil {
 		hdr.Set(apc.HdrBucketSumm, cos.MustMarshalToString(info))
 	}
-}
-
-func (p *proxy) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
-	var (
-		bck             = ctx.bcks[0]
-		bprops, present = clone.Get(bck)
-	)
-	if !present {
-		return cmn.NewErrBckNotFound(bck.Bucket())
-	}
-	nprops := mergeRemoteBckProps(bprops, ctx.cloudProps)
-	if nprops.Equal(bprops) {
-		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p, bck)
-		ctx.terminate = true
-		return nil
-	}
-	clone.set(bck, nprops)
-	return nil
 }
 
 // PATCH /v1/buckets/bucket-name

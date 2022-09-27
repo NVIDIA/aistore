@@ -54,7 +54,7 @@ func removeDownloadHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "download job ID")
 	}
-	if err = api.RemoveDownload(defaultAPIParams, id); err != nil {
+	if err = api.RemoveDownload(apiBP, id); err != nil {
 		return
 	}
 
@@ -69,7 +69,7 @@ func removeDownloadRegex(c *cli.Context) (err error) {
 		cnt    int
 		failed bool
 	)
-	dlList, err = api.DownloadGetList(defaultAPIParams, regex)
+	dlList, err = api.DownloadGetList(apiBP, regex)
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func removeDownloadRegex(c *cli.Context) (err error) {
 		if !dl.JobFinished() {
 			continue
 		}
-		if err = api.RemoveDownload(defaultAPIParams, dl.ID); err == nil {
+		if err = api.RemoveDownload(apiBP, dl.ID); err == nil {
 			fmt.Fprintf(c.App.Writer, "removed download job %q\n", dl.ID)
 			cnt++
 		} else {
@@ -98,7 +98,7 @@ func removeDsortHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, dsort.DSortName+" job ID")
 	}
 
-	if err = api.RemoveDSort(defaultAPIParams, id); err != nil {
+	if err = api.RemoveDSort(apiBP, id); err != nil {
 		return
 	}
 

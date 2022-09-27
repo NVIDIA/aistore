@@ -86,20 +86,20 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 // Creates bucket if not exists. If exists uses it or deletes and creates new
 // one if cleanup flag was set.
 func setupBucket(c *cli.Context, bck cmn.Bck) error {
-	exists, err := api.QueryBuckets(defaultAPIParams, cmn.QueryBcks(bck), apc.FltPresent)
+	exists, err := api.QueryBuckets(apiBP, cmn.QueryBcks(bck), apc.FltPresent)
 	if err != nil {
 		return err
 	}
 
 	cleanup := flagIsSet(c, cleanupFlag)
 	if exists && cleanup {
-		if err := api.DestroyBucket(defaultAPIParams, bck); err != nil {
+		if err := api.DestroyBucket(apiBP, bck); err != nil {
 			return err
 		}
 	}
 
 	if !exists || cleanup {
-		if err := api.CreateBucket(defaultAPIParams, bck, nil); err != nil {
+		if err := api.CreateBucket(apiBP, bck, nil); err != nil {
 			return err
 		}
 	}
@@ -143,7 +143,7 @@ type dsortPhaseState struct {
 
 type dsortPB struct {
 	id          string
-	params      api.BaseParams
+	apiBP       api.BaseParams
 	refreshTime time.Duration
 
 	p *mpb.Progress
@@ -167,7 +167,7 @@ func newPhases() map[string]*dsortPhaseState {
 func newDSortPB(baseParams api.BaseParams, id string, refreshTime time.Duration) *dsortPB {
 	return &dsortPB{
 		id:          id,
-		params:      baseParams,
+		apiBP:       baseParams,
 		refreshTime: refreshTime,
 		p:           mpb.New(mpb.WithWidth(progressBarWidth)),
 		phases:      newPhases(),
@@ -188,7 +188,7 @@ func (b *dsortPB) run() (dsortResult, error) {
 	for !finished {
 		time.Sleep(b.refreshTime)
 
-		metrics, err := api.MetricsDSort(b.params, b.id)
+		metrics, err := api.MetricsDSort(b.apiBP, b.id)
 		if err != nil {
 			b.cleanBars()
 			return dsortResult{}, err
@@ -217,7 +217,7 @@ func (b *dsortPB) run() (dsortResult, error) {
 }
 
 func (b *dsortPB) start() (bool, error) {
-	metrics, err := api.MetricsDSort(b.params, b.id)
+	metrics, err := api.MetricsDSort(b.apiBP, b.id)
 	if err != nil {
 		return false, err
 	}
@@ -309,7 +309,7 @@ func (b *dsortPB) result() dsortResult {
 }
 
 func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finished bool, err error) {
-	resp, err := api.MetricsDSort(defaultAPIParams, jobID)
+	resp, err := api.MetricsDSort(apiBP, jobID)
 	if err != nil {
 		return false, false, err
 	}
@@ -346,7 +346,7 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 }
 
 func printCondensedStats(w io.Writer, id string) error {
-	resp, err := api.MetricsDSort(defaultAPIParams, id)
+	resp, err := api.MetricsDSort(apiBP, id)
 	if err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ func printCondensedStats(w io.Writer, id string) error {
 }
 
 func dsortJobsList(c *cli.Context, regex string) error {
-	list, err := api.ListDSort(defaultAPIParams, regex)
+	list, err := api.ListDSort(apiBP, regex)
 	if err != nil {
 		return err
 	}
@@ -446,7 +446,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 	// Show progress bar.
 	if !verbose && refresh && !logging {
 		refreshRate := calcRefreshRate(c)
-		dsortResult, err := newDSortPB(defaultAPIParams, id, refreshRate).run()
+		dsortResult, err := newDSortPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err
 		}

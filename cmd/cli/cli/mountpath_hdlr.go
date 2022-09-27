@@ -118,16 +118,16 @@ func mpathAction(c *cli.Context, action string) error {
 		switch action {
 		case apc.ActMountpathAttach:
 			acted = "attached"
-			err = api.AttachMountpath(defaultAPIParams, si, mountpath, flagIsSet(c, forceFlag))
+			err = api.AttachMountpath(apiBP, si, mountpath, flagIsSet(c, forceFlag))
 		case apc.ActMountpathEnable:
 			acted = "enabled"
-			err = api.EnableMountpath(defaultAPIParams, si, mountpath)
+			err = api.EnableMountpath(apiBP, si, mountpath)
 		case apc.ActMountpathDetach:
 			acted = "detached"
-			err = api.DetachMountpath(defaultAPIParams, si, mountpath, flagIsSet(c, noResilverFlag))
+			err = api.DetachMountpath(apiBP, si, mountpath, flagIsSet(c, noResilverFlag))
 		case apc.ActMountpathDisable:
 			acted = "disabled"
-			err = api.DisableMountpath(defaultAPIParams, si, mountpath, flagIsSet(c, noResilverFlag))
+			err = api.DisableMountpath(apiBP, si, mountpath, flagIsSet(c, noResilverFlag))
 		default:
 			return incorrectUsageMsg(c, "invalid mountpath action %q", action)
 		}

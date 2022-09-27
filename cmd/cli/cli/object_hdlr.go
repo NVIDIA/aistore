@@ -212,7 +212,7 @@ func mvObjectHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "source and destination are the same object")
 	}
 
-	if err = api.RenameObject(defaultAPIParams, bck, oldObj, newObj); err != nil {
+	if err = api.RenameObject(apiBP, bck, oldObj, newObj); err != nil {
 		return
 	}
 
@@ -317,17 +317,17 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 
 	if list != "" {
 		msg.SelectObjsMsg.ObjNames = makeList(list)
-		_, err = api.CreateArchMultiObj(defaultAPIParams, bckFrom, msg)
+		_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)
 	} else {
 		msg.SelectObjsMsg.Template = template
-		_, err = api.CreateArchMultiObj(defaultAPIParams, bckFrom, msg)
+		_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)
 	}
 	if err != nil {
 		return err
 	}
 	for i := 0; i < 3; i++ {
 		time.Sleep(time.Second)
-		_, err = api.HeadObject(defaultAPIParams, bckTo, objName, apc.FltPresentOmitProps)
+		_, err = api.HeadObject(apiBP, bckTo, objName, apc.FltPresentOmitProps)
 		if err == nil {
 			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.DisplayName()+"/"+objName)
 			return nil

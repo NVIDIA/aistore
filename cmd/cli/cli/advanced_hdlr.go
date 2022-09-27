@@ -161,7 +161,7 @@ CreateShards:
 				}
 
 				putArgs := api.PutObjectArgs{
-					BaseParams: defaultAPIParams,
+					BaseParams: apiBP,
 					Bck:        bck,
 					Object:     name,
 					Reader:     sgl,
@@ -205,7 +205,7 @@ func removeNodeFromSmap(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
 	}
 	daemonID := argDaemonID(c)
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return err
 	}
@@ -216,5 +216,5 @@ func removeNodeFromSmap(c *cli.Context) (err error) {
 	if smap.IsPrimary(node) {
 		return fmt.Errorf("node %s is primary: cannot remove", daemonID)
 	}
-	return api.RemoveNodeFromSmap(defaultAPIParams, daemonID)
+	return api.RemoveNodeFromSmap(apiBP, daemonID)
 }

@@ -43,7 +43,6 @@ type bckInitArgs struct {
 	createAIS   bool // create ais bucket on the fly
 	noHeadRemB  bool // do not handle `ErrRemoteBckNotFound` by adding remote bucket on the fly
 	tryHeadRemB bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemB)
-	noErrRemB   bool // do not return `ErrRemoteBckNotFound` - return nil instead
 	isPresent   bool // the bucket is confirmed to be present (in the cluster's BMD)
 }
 
@@ -177,13 +176,8 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 	}
 	// remote
 	if cmn.IsErrRemoteBckNotFound(err) {
-		if args.noErrRemB {
-			err = nil
-			return
-		}
-		// NOTE: when and if `feat.NoHeadRemB` (feature) is globally enabled
-		// use `api.CreateBucket`
-		// (as in: explicit user request vs implied on-the-fly creation/addition)
+		// if `feat.NoHeadRemB` (feature) is globally enabled use `api.CreateBucket` to add
+		// TODO -- FIXME: add || cos.IsParseBool(args.dpq.dontAddMD)
 		if cmn.Features.IsSet(feat.NoHeadRemB) || args.noHeadRemB {
 			args.p.writeErrSilent(args.w, args.r, err, errCode)
 			return

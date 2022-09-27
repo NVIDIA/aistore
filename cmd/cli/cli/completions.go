@@ -321,7 +321,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		}
 
 		if query.Provider == "" {
-			config, err := api.GetClusterConfig(defaultAPIParams)
+			config, err := api.GetClusterConfig(apiBP)
 			if err != nil {
 				return
 			}
@@ -335,7 +335,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 
 		for _, provider := range providers {
 			query.Provider = provider
-			buckets, err := api.ListBuckets(defaultAPIParams, query, apc.FltPresent)
+			buckets, err := api.ListBuckets(apiBP, query, apc.FltPresent)
 			if err != nil {
 				return
 			}
@@ -570,7 +570,7 @@ func suggestDownloadID(c *cli.Context, filter func(*downloader.DlJobInfo) bool) 
 		return
 	}
 
-	list, _ := api.DownloadGetList(defaultAPIParams, "")
+	list, _ := api.DownloadGetList(apiBP, "")
 	for _, job := range list {
 		if filter(job) {
 			fmt.Println(job.ID)
@@ -595,7 +595,7 @@ func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 		return
 	}
 
-	list, _ := api.ListDSort(defaultAPIParams, "")
+	list, _ := api.ListDSort(apiBP, "")
 
 	for _, job := range list {
 		if filter(job) {
@@ -724,7 +724,7 @@ func suggestUpdatableAuthNConfig(c *cli.Context) {
 }
 
 func suggestRemote(_ *cli.Context) {
-	aisCloudInfo, err := api.GetRemoteAIS(defaultAPIParams)
+	aisCloudInfo, err := api.GetRemoteAIS(apiBP)
 	if err != nil {
 		return
 	}

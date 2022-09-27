@@ -72,7 +72,7 @@ func waitXactionHandler(c *cli.Context) error {
 	}
 
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Timeout: parseDurationFlag(c, timeoutFlag)}
-	status, err := api.WaitForXactionIC(defaultAPIParams, xactArgs)
+	status, err := api.WaitForXactionIC(apiBP, xactArgs)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func waitDownloadHandler(c *cli.Context) (err error) {
 	)
 
 	if flagIsSet(c, progressBarFlag) {
-		downloadingResult, err := newDownloaderPB(defaultAPIParams, id, refreshRate).run()
+		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ func waitDownloadHandler(c *cli.Context) (err error) {
 	}
 
 	for {
-		resp, err := api.DownloadStatus(defaultAPIParams, id, true)
+		resp, err := api.DownloadStatus(apiBP, id, true)
 		if err != nil {
 			return err
 		}
@@ -140,7 +140,7 @@ func waitDSortHandler(c *cli.Context) (err error) {
 	)
 
 	if flagIsSet(c, progressBarFlag) {
-		dsortResult, err := newDSortPB(defaultAPIParams, id, refreshRate).run()
+		dsortResult, err := newDSortPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err
 		}
@@ -149,7 +149,7 @@ func waitDSortHandler(c *cli.Context) (err error) {
 	}
 
 	for {
-		resp, err := api.MetricsDSort(defaultAPIParams, id)
+		resp, err := api.MetricsDSort(apiBP, id)
 		if err != nil {
 			return err
 		}

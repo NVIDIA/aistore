@@ -84,7 +84,6 @@ type (
 		propsToUpdate *cmn.BucketPropsToUpdate // update existing props
 		revertProps   *cmn.BucketPropsToUpdate // props to revert
 		setProps      *cmn.BucketProps         // new props to set
-		cloudProps    http.Header
 
 		wait         bool
 		needReMirror bool

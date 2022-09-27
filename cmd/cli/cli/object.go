@@ -128,9 +128,9 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	}
 
 	if flagIsSet(c, cksumFlag) {
-		objLen, err = api.GetObjectWithValidation(defaultAPIParams, bck, objName, objArgs)
+		objLen, err = api.GetObjectWithValidation(apiBP, bck, objName, objArgs)
 	} else {
-		objLen, err = api.GetObject(defaultAPIParams, bck, objName, objArgs)
+		objLen, err = api.GetObject(apiBP, bck, objName, objArgs)
 	}
 	if err != nil {
 		if cmn.IsStatusNotFound(err) && archPath == "" {
@@ -162,7 +162,7 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 		recurs = flagIsSet(c, recursiveFlag)
 	)
 	promoteArgs := &api.PromoteArgs{
-		BaseParams: defaultAPIParams,
+		BaseParams: apiBP,
 		Bck:        bck,
 		PromoteArgs: cluster.PromoteArgs{
 			DaemonID:       target,
@@ -214,7 +214,7 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
 		}
 	}
 	setNewCustom := flagIsSet(c, setNewCustomMDFlag)
-	if err = api.SetObjectCustomProps(defaultAPIParams, bck, objName, props, setNewCustom); err != nil {
+	if err = api.SetObjectCustomProps(apiBP, bck, objName, props, setNewCustom); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer,
@@ -265,7 +265,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 	}
 
 	putArgs := api.PutObjectArgs{
-		BaseParams: defaultAPIParams,
+		BaseParams: apiBP,
 		Bck:        bck,
 		Object:     objName,
 		Reader:     reader,
@@ -352,7 +352,7 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 			})
 		}
 		handle, err = api.AppendObject(api.AppendArgs{
-			BaseParams: defaultAPIParams,
+			BaseParams: apiBP,
 			Bck:        bck,
 			Object:     objName,
 			Handle:     handle,
@@ -372,7 +372,7 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 	}
 
 	return api.FlushObject(api.FlushArgs{
-		BaseParams: defaultAPIParams,
+		BaseParams: apiBP,
 		Bck:        bck,
 		Object:     objName,
 		Handle:     handle,
@@ -561,7 +561,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 			}
 
 			appendArgs := api.AppendArgs{
-				BaseParams: defaultAPIParams,
+				BaseParams: apiBP,
 				Bck:        bck,
 				Object:     objName,
 				Reader:     fh,
@@ -583,7 +583,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 	}
 
 	err = api.FlushObject(api.FlushArgs{
-		BaseParams: defaultAPIParams,
+		BaseParams: apiBP,
 		Bck:        bck,
 		Object:     objName,
 		Handle:     handle,
@@ -599,7 +599,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 }
 
 func isObjPresent(c *cli.Context, bck cmn.Bck, object string) error {
-	_, err := api.HeadObject(defaultAPIParams, bck, object, apc.FltPresentOmitProps)
+	_, err := api.HeadObject(apiBP, bck, object, apc.FltPresentOmitProps)
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
 			fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
@@ -627,7 +627,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 
 		errSb strings.Builder
 
-		wg          = cos.NewLimitedWaitGroup(p.workerCnt)
+		wg          = cos.NewLimitedWaitGroup(p.workerCnt, 0)
 		lastReport  = time.Now()
 		reportEvery = p.refresh
 	)
@@ -708,7 +708,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		countReader := cos.NewCallbackReadOpenCloser(reader, updateBar)
 
 		putArgs := api.PutObjectArgs{
-			BaseParams: defaultAPIParams,
+			BaseParams: apiBP,
 			Bck:        p.bck,
 			Object:     f.name,
 			Reader:     countReader,
@@ -764,7 +764,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		selectedProps []string
 	)
 	// TODO -- FIXME: apc.FltPresentAnywhere hardcoded
-	objProps, err := api.HeadObject(defaultAPIParams, bck, object, apc.FltPresentAnywhere)
+	objProps, err := api.HeadObject(apiBP, bck, object, apc.FltPresentAnywhere)
 	if err != nil {
 		return handleObjHeadError(err, bck, object)
 	}
@@ -823,19 +823,19 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 
 	switch command {
 	case commandRemove:
-		xactID, err = api.DeleteList(defaultAPIParams, bck, fileList)
+		xactID, err = api.DeleteList(apiBP, bck, fileList)
 		command = "removed"
 	case commandPrefetch:
 		if err = ensureHasProvider(bck, command); err != nil {
 			return
 		}
-		xactID, err = api.PrefetchList(defaultAPIParams, bck, fileList)
+		xactID, err = api.PrefetchList(apiBP, bck, fileList)
 		command += "ed"
 	case commandEvict:
 		if err = ensureHasProvider(bck, command); err != nil {
 			return
 		}
-		xactID, err = api.EvictList(defaultAPIParams, bck, fileList)
+		xactID, err = api.EvictList(apiBP, bck, fileList)
 		command += "ed"
 	default:
 		err = fmt.Errorf(invalidCmdMsg, command)
@@ -876,19 +876,19 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 
 	switch command {
 	case commandRemove:
-		xactID, err = api.DeleteRange(defaultAPIParams, bck, rangeStr)
+		xactID, err = api.DeleteRange(apiBP, bck, rangeStr)
 		command = "removed"
 	case commandPrefetch:
 		if err = ensureHasProvider(bck, command); err != nil {
 			return
 		}
-		xactID, err = api.PrefetchRange(defaultAPIParams, bck, rangeStr)
+		xactID, err = api.PrefetchRange(apiBP, bck, rangeStr)
 		command += "ed"
 	case commandEvict:
 		if err = ensureHasProvider(bck, command); err != nil {
 			return
 		}
-		xactID, err = api.EvictRange(defaultAPIParams, bck, rangeStr)
+		xactID, err = api.EvictRange(apiBP, bck, rangeStr)
 		command += "ed"
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
@@ -920,7 +920,7 @@ func multiObjOp(c *cli.Context, command string) error {
 
 		switch command {
 		case commandRemove:
-			if err := api.DeleteObject(defaultAPIParams, bck, objName); err != nil {
+			if err := api.DeleteObject(apiBP, bck, objName); err != nil {
 				return err
 			}
 			fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", objName, bck.DisplayName())
@@ -933,7 +933,7 @@ func multiObjOp(c *cli.Context, command string) error {
 				fmt.Fprintf(c.App.Writer, "EVICT: %s/%s\n", bck.DisplayName(), objName)
 				continue
 			}
-			if err := api.EvictObject(defaultAPIParams, bck, objName); err != nil {
+			if err := api.EvictObject(apiBP, bck, objName); err != nil {
 				if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
 					err = fmt.Errorf("object %s/%s does not exist (ie., not present or \"cached\")",
 						bck.DisplayName(), objName)
@@ -949,7 +949,7 @@ func multiObjOp(c *cli.Context, command string) error {
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 	var (
 		l, cnt       int
-		objList, err = api.ListObjects(defaultAPIParams, bck, nil, 0)
+		objList, err = api.ListObjects(apiBP, bck, nil, 0)
 	)
 	if err != nil {
 		return err
@@ -959,7 +959,7 @@ func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 		return nil
 	}
 	for _, entry := range objList.Entries {
-		if err := api.DeleteObject(defaultAPIParams, bck, entry.Name); err == nil {
+		if err := api.DeleteObject(apiBP, bck, entry.Name); err == nil {
 			cnt++
 			if flagIsSet(c, verboseFlag) {
 				fmt.Fprintf(c.App.Writer, "deleted %q\n", entry.Name)

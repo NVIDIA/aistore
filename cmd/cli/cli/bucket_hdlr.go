@@ -240,7 +240,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		Misplaced     uint64
 		MissingCopies uint64
 	}
-	bckList, err := api.ListBuckets(defaultAPIParams, queryBcks, apc.FltPresent)
+	bckList, err := api.ListBuckets(apiBP, queryBcks, apc.FltPresent)
 	if err != nil {
 		return
 	}
@@ -261,7 +261,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		}
 		copies := int16(p.Mirror.Copies)
 		stats := &bucketHealth{Name: bck.String()}
-		objList, err = api.ListObjects(defaultAPIParams, bck, msg, 0)
+		objList, err = api.ListObjects(apiBP, bck, msg, 0)
 		if err != nil {
 			return err
 		}
@@ -331,14 +331,8 @@ func showBucketSummary(c *cli.Context) error {
 // NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets`)
 func getSummaries(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.BckSummaries, err error) {
 	fDetails := func() (err error) {
-		msg := &apc.BckSummMsg{Cached: cachedObjs, Fast: false}
-
-		// TODO -- FIXME: CLI part
-		if allBuckets {
-			_ = allBuckets
-		}
-		summaries, err = api.GetBucketSummary(defaultAPIParams, qbck, msg, apc.FltPresent)
-
+		msg := &apc.BckSummMsg{ObjCached: cachedObjs, BckPresent: !allBuckets, Fast: false}
+		summaries, err = api.GetBucketSummary(apiBP, qbck, msg)
 		return
 	}
 	err = cmn.WaitForFunc(fDetails, longCommandTime)
@@ -394,9 +388,9 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 	if len(etlID) != 0 {
 		msg.ID = etlID[0]
 		operation = "ETL objects"
-		xactID, err = api.ETLMultiObj(defaultAPIParams, fromBck, msg)
+		xactID, err = api.ETLMultiObj(apiBP, fromBck, msg)
 	} else {
-		xactID, err = api.CopyMultiObj(defaultAPIParams, fromBck, msg)
+		xactID, err = api.CopyMultiObj(apiBP, fromBck, msg)
 	}
 	if err != nil {
 		return err
@@ -407,7 +401,7 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 	}
 	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck, toBck)
 	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyObjects}
-	if err = api.WaitForXactionIdle(defaultAPIParams, wargs); err != nil {
+	if err = api.WaitForXactionIdle(apiBP, wargs); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
 	} else {
 		fmt.Fprint(c.App.Writer, fmtXactSucceeded)

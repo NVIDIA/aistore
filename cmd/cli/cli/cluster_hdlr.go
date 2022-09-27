@@ -181,7 +181,7 @@ func attachRemoteAISHandler(c *cli.Context) (err error) {
 	if alias == apc.QparamWhat {
 		return fmt.Errorf("cannot use %q as an alias", apc.QparamWhat)
 	}
-	if err = api.AttachRemoteAIS(defaultAPIParams, alias, url); err != nil {
+	if err = api.AttachRemoteAIS(apiBP, alias, url); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "Remote cluster (%s=%s) successfully attached\n", alias, url)
@@ -194,7 +194,7 @@ func detachRemoteAISHandler(c *cli.Context) (err error) {
 		return
 	}
 	alias := c.Args().Get(0)
-	if err = api.DetachRemoteAIS(defaultAPIParams, alias); err != nil {
+	if err = api.DetachRemoteAIS(apiBP, alias); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "Remote cluster %s successfully detached\n", alias)
@@ -202,7 +202,7 @@ func detachRemoteAISHandler(c *cli.Context) (err error) {
 }
 
 func clusterShutdownHandler(c *cli.Context) (err error) {
-	if err := api.ShutdownCluster(defaultAPIParams); err != nil {
+	if err := api.ShutdownCluster(apiBP); err != nil {
 		return err
 	}
 
@@ -218,7 +218,7 @@ func clusterDecommissionHandler(c *cli.Context) error {
 		}
 	}
 	rmUserData := flagIsSet(c, rmUserDataFlag)
-	if err := api.DecommissionCluster(defaultAPIParams, rmUserData); err != nil {
+	if err := api.DecommissionCluster(apiBP, rmUserData); err != nil {
 		return err
 	}
 	fmt.Fprint(c.App.Writer, "AIS cluster decommissioned.\n")
@@ -262,7 +262,7 @@ func joinNodeHandler(c *cli.Context) (err error) {
 		ControlNet: netInfo,
 		DataNet:    netInfo,
 	}
-	if rebID, nodeInfo.DaeID, err = api.JoinCluster(defaultAPIParams, nodeInfo); err != nil {
+	if rebID, nodeInfo.DaeID, err = api.JoinCluster(apiBP, nodeInfo); err != nil {
 		return
 	}
 
@@ -279,7 +279,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "daemon ID")
 	}
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return err
 	}
@@ -328,13 +328,13 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	}
 	switch action {
 	case subcmdStartMaint:
-		xactID, err = api.StartMaintenance(defaultAPIParams, actValue)
+		xactID, err = api.StartMaintenance(apiBP, actValue)
 	case subcmdStopMaint:
-		xactID, err = api.StopMaintenance(defaultAPIParams, actValue)
+		xactID, err = api.StopMaintenance(apiBP, actValue)
 	case subcmdNodeDecommission:
-		xactID, err = api.DecommissionNode(defaultAPIParams, actValue)
+		xactID, err = api.DecommissionNode(apiBP, actValue)
 	case subcmdShutdown:
-		xactID, err = api.ShutdownNode(defaultAPIParams, actValue)
+		xactID, err = api.ShutdownNode(apiBP, actValue)
 	}
 	if err != nil {
 		return err
@@ -377,7 +377,7 @@ func setPrimaryHandler(c *cli.Context) error {
 	if _, ok := primarySmap.Pmap[daemonID]; !ok {
 		return incorrectUsageMsg(c, "%s: is not a proxy", daemonID)
 	}
-	err = api.SetPrimaryProxy(defaultAPIParams, daemonID, false /*force*/)
+	err = api.SetPrimaryProxy(apiBP, daemonID, false /*force*/)
 	if err == nil {
 		fmt.Fprintf(c.App.Writer, "%s is now a new primary\n", daemonID)
 	}
@@ -391,7 +391,7 @@ func startClusterRebalanceHandler(c *cli.Context) (err error) {
 func stopClusterRebalanceHandler(c *cli.Context) (err error) {
 	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance, OnlyRunning: true}
 	var xs api.NodesXactMultiSnap
-	xs, err = api.QueryXactionSnaps(defaultAPIParams, xactArgs)
+	xs, err = api.QueryXactionSnaps(apiBP, xactArgs)
 	if err != nil {
 		return
 	}
@@ -409,7 +409,7 @@ outer:
 	}
 
 	xactArgs = api.XactReqArgs{ID: rebID, Kind: apc.ActRebalance}
-	if err = api.AbortXaction(defaultAPIParams, xactArgs); err != nil {
+	if err = api.AbortXaction(apiBP, xactArgs); err != nil {
 		return
 	}
 	_, err = fmt.Fprintf(c.App.Writer, "Stopped %s %q\n", apc.ActRebalance, rebID)

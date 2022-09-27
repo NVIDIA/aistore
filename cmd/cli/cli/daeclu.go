@@ -52,7 +52,7 @@ func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, use
 		err  error
 	)
 	if daemonID != "" {
-		smap, err = api.GetNodeClusterMap(defaultAPIParams, daemonID)
+		smap, err = api.GetNodeClusterMap(apiBP, daemonID)
 		if err != nil {
 			return err
 		}
@@ -74,7 +74,7 @@ func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, use
 
 func getBMD(c *cli.Context) error {
 	useJSON := flagIsSet(c, jsonFlag)
-	bmd, err := api.GetBMD(defaultAPIParams)
+	bmd, err := api.GetBMD(apiBP)
 	if err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]tmpls.DiskStatsTemplateHelpe
 	for targetID := range targets {
 		wg.Go(func(targetID string) func() error {
 			return func() (err error) {
-				diskStats, err := api.GetTargetDiskStats(defaultAPIParams, targetID)
+				diskStats, err := api.GetTargetDiskStats(apiBP, targetID)
 				if err != nil {
 					return err
 				}
@@ -230,7 +230,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 	// run until rebalance is completed
 	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance}
 	for {
-		rebSnaps, err := api.QueryXactionSnaps(defaultAPIParams, xactArgs)
+		rebSnaps, err := api.QueryXactionSnaps(apiBP, xactArgs)
 		if err != nil {
 			switch err := err.(type) {
 			case *cmn.ErrHTTP:

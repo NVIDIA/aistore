@@ -146,7 +146,7 @@ func etlIDCompletions(c *cli.Context) {
 		return
 	}
 
-	list, err := api.ETLList(defaultAPIParams)
+	list, err := api.ETLList(apiBP)
 	if err != nil {
 		return
 	}
@@ -158,7 +158,7 @@ func etlIDCompletions(c *cli.Context) {
 
 func etlExists(uuid string) (err error) {
 	// TODO: Replace with a generic API for checking duplicate UUID
-	list, err := api.ETLList(defaultAPIParams)
+	list, err := api.ETLList(apiBP)
 	if err != nil {
 		return
 	}
@@ -194,7 +194,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	id, err := api.ETLInit(defaultAPIParams, msg)
+	id, err := api.ETLInit(apiBP, msg)
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	}
 
 	// start
-	id, err := api.ETLInit(defaultAPIParams, msg)
+	id, err := api.ETLInit(apiBP, msg)
 	if err != nil {
 		return err
 	}
@@ -271,7 +271,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 }
 
 func etlListHandler(c *cli.Context) (err error) {
-	list, err := api.ETLList(defaultAPIParams)
+	list, err := api.ETLList(apiBP)
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func etlSourceHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "ETL_ID")
 	}
 	id := c.Args().Get(0)
-	msg, err := api.ETLGetInitMsg(defaultAPIParams, id)
+	msg, err := api.ETLGetInitMsg(apiBP, id)
 	if err != nil {
 		return err
 	}
@@ -308,7 +308,7 @@ func etlLogsHandler(c *cli.Context) (err error) {
 		targetID = c.Args().Get(1) // optional
 	)
 
-	logs, err := api.ETLLogs(defaultAPIParams, id, targetID)
+	logs, err := api.ETLLogs(apiBP, id, targetID)
 	if err != nil {
 		return err
 	}
@@ -335,7 +335,7 @@ func etlStopHandler(c *cli.Context) (err error) {
 			return fmt.Errorf("specify either --all flag or ETL IDs")
 		}
 
-		res, err := api.ETLList(defaultAPIParams)
+		res, err := api.ETLList(apiBP)
 		if err != nil {
 			return err
 		}
@@ -350,7 +350,7 @@ func etlStopHandler(c *cli.Context) (err error) {
 	}
 
 	for _, id := range etls {
-		if err := api.ETLStop(defaultAPIParams, id); err != nil {
+		if err := api.ETLStop(apiBP, id); err != nil {
 			if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
 				color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL %q not found", id)
 				continue
@@ -368,7 +368,7 @@ func etlStartHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "ETL_ID")
 	}
 	etlID := c.Args()[0]
-	if err := api.ETLStart(defaultAPIParams, etlID); err != nil {
+	if err := api.ETLStart(apiBP, etlID); err != nil {
 		if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
 			color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL %q not found", etlID)
 		}
@@ -410,7 +410,7 @@ func etlObjectHandler(c *cli.Context) (err error) {
 		defer f.Close()
 	}
 
-	return handleETLHTTPError(api.ETLObject(defaultAPIParams, id, bck, objName, w), id)
+	return handleETLHTTPError(api.ETLObject(apiBP, id, bck, objName, w), id)
 }
 
 func etlBucketHandler(c *cli.Context) (err error) {
@@ -472,7 +472,7 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		return multiObjBckCopy(c, fromBck, toBck, listObjs, tmplObjs, id)
 	}
 
-	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, msg)
+	xactID, err := api.ETLBucket(apiBP, fromBck, toBck, msg)
 	if err := handleETLHTTPError(err, id); err != nil {
 		return err
 	}
@@ -482,14 +482,14 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		return nil
 	}
 
-	if _, err := api.WaitForXactionIC(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
+	if _, err := api.WaitForXactionIC(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
 		return err
 	}
 	if !flagIsSet(c, cpBckDryRunFlag) {
 		return nil
 	}
 
-	snaps, err := api.GetXactionSnapsByID(defaultAPIParams, xactID)
+	snaps, err := api.GetXactionSnapsByID(apiBP, xactID)
 	if err != nil {
 		return err
 	}

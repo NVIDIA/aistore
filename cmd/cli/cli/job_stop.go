@@ -66,7 +66,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	}
 
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
-	if err = api.AbortXaction(defaultAPIParams, xactArgs); err != nil {
+	if err = api.AbortXaction(apiBP, xactArgs); err != nil {
 		return
 	}
 
@@ -92,7 +92,7 @@ func stopDownloadHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "download job ID")
 	}
 
-	if err = api.AbortDownload(defaultAPIParams, id); err != nil {
+	if err = api.AbortDownload(apiBP, id); err != nil {
 		return
 	}
 
@@ -107,7 +107,7 @@ func stopDsortHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, dsort.DSortName+" job ID")
 	}
 
-	if err = api.AbortDSort(defaultAPIParams, id); err != nil {
+	if err = api.AbortDSort(apiBP, id); err != nil {
 		return
 	}
 

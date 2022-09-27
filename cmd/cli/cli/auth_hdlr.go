@@ -407,16 +407,16 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 	}
 	var smap *cluster.Smap
 	if len(cluSpec.URLs) == 0 {
-		smap, err = api.GetClusterMap(defaultAPIParams)
+		smap, err = api.GetClusterMap(apiBP)
 		cluSpec.URLs = append(cluSpec.URLs, clusterURL)
 	} else {
-		baseParams := api.BaseParams{
+		bp := api.BaseParams{
 			Client: defaultHTTPClient,
 			URL:    cluSpec.URLs[0],
 			Token:  loggedUserToken,
 			UA:     ua,
 		}
-		smap, err = api.GetClusterMap(baseParams)
+		smap, err = api.GetClusterMap(bp)
 		if err != nil {
 			err = fmt.Errorf("failed to add cluster %q(%q, %s): %v",
 				cluSpec.ID, cluSpec.Alias, cluSpec.URLs[0], err)

@@ -45,7 +45,7 @@ func initClusterParams() {
 		}
 	}
 
-	defaultAPIParams = api.BaseParams{
+	apiBP = api.BaseParams{
 		Client: defaultHTTPClient,
 		URL:    clusterURL,
 		Token:  loggedUserToken,

@@ -108,7 +108,6 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketPr
 		q    = make(url.Values, 4)
 	)
 	q = bck.AddToQuery(q)
-	q.Set(apc.QparamDontAddBckMD, "true") // don't add md (ie., is a "pure" query)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
 	bp.Method = http.MethodHead
 	reqParams := AllocRp()

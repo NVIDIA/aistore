@@ -74,7 +74,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 		}
 	}
 	xactArgs := api.XactReqArgs{Kind: apc.ActStoreCleanup, Bck: bck}
-	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
+	if id, err = api.StartXaction(apiBP, xactArgs); err != nil {
 		return
 	}
 
@@ -92,7 +92,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, waitTimeoutFlag) {
 		wargs.Timeout = parseDurationFlag(c, waitTimeoutFlag)
 	}
-	if err := api.WaitForXactionIdle(defaultAPIParams, wargs); err != nil {
+	if err := api.WaitForXactionIdle(apiBP, wargs); err != nil {
 		return err
 	}
 	fmt.Fprint(c.App.Writer, fmtXactSucceeded)

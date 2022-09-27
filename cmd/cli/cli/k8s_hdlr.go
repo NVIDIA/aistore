@@ -77,7 +77,7 @@ func k8sShowEntireCluster(c *cli.Context) (err error) {
 }
 
 func k8sShowSingleDaemon(c *cli.Context) (err error) {
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return err
 	}

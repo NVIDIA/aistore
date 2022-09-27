@@ -102,7 +102,7 @@ func setCluConfigHandler(c *cli.Context) error {
 		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
 	}
 	// TODO: check that transient works
-	if err := api.SetClusterConfig(defaultAPIParams, nvs, flagIsSet(c, transientFlag)); err != nil {
+	if err := api.SetClusterConfig(apiBP, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
 	s, err := jsoniter.MarshalIndent(nvs, "", "    ")
@@ -166,7 +166,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
 	}
 
-	if err := api.SetDaemonConfig(defaultAPIParams, daemonID, nvs, flagIsSet(c, transientFlag)); err != nil {
+	if err := api.SetDaemonConfig(apiBP, daemonID, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
 	s, err := jsoniter.MarshalIndent(nvs, "", "    ")
@@ -177,7 +177,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 }
 
 func resetCluConfigHandler(c *cli.Context) (err error) {
-	if err := api.ResetClusterConfig(defaultAPIParams); err != nil {
+	if err := api.ResetClusterConfig(apiBP); err != nil {
 		return err
 	}
 	fmt.Fprintf(c.App.Writer, "inherited config successfully reset for all nodes\n")
@@ -190,7 +190,7 @@ func resetNodeConfigHandler(c *cli.Context) (err error) {
 		daemonID = argDaemonID(c)
 	)
 	debug.Assert(cluster.N2ID(sname) == daemonID)
-	if err := api.ResetDaemonConfig(defaultAPIParams, daemonID); err != nil {
+	if err := api.ResetDaemonConfig(apiBP, daemonID); err != nil {
 		return err
 	}
 	fmt.Fprintf(c.App.Writer, "%s: inherited config successfully reset to the current cluster-wide defaults\n", sname)

@@ -358,7 +358,7 @@ func showClusterHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	cluConfig, err := api.GetClusterConfig(defaultAPIParams)
+	cluConfig, err := api.GetClusterConfig(apiBP)
 	if err != nil {
 		return err
 	}
@@ -393,7 +393,7 @@ func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck)
 		xs       api.NodesXactMultiSnap
 		xactArgs = api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, OnlyRunning: latest}
 	)
-	xs, err = api.QueryXactionSnaps(defaultAPIParams, xactArgs)
+	xs, err = api.QueryXactionSnaps(apiBP, xactArgs)
 	if err != nil {
 		return
 	}
@@ -538,7 +538,7 @@ func showConfigHandler(c *cli.Context) (err error) {
 
 func showClusterConfig(c *cli.Context, section string) error {
 	useJSON := flagIsSet(c, jsonFlag)
-	cluConfig, err := api.GetClusterConfig(defaultAPIParams)
+	cluConfig, err := api.GetClusterConfig(apiBP)
 	if err != nil {
 		return err
 	}
@@ -561,14 +561,14 @@ func showNodeConfig(c *cli.Context) error {
 		daemonID       = argDaemonID(c)
 		useJSON        = flagIsSet(c, jsonFlag)
 	)
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return err
 	}
 	if node = smap.GetNode(daemonID); node == nil {
 		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
 	}
-	config, err := api.GetDaemonConfig(defaultAPIParams, node)
+	config, err := api.GetDaemonConfig(apiBP, node)
 	if err != nil {
 		return err
 	}
@@ -600,7 +600,7 @@ func showNodeConfig(c *cli.Context) error {
 		data.LocalConfig = flattenConfig(config.LocalConfig, section)
 	}
 	if scope == cfgScopeAll || scope == cfgScopeInherited {
-		cluConf, err := api.GetClusterConfig(defaultAPIParams)
+		cluConf, err := api.GetClusterConfig(apiBP)
 		if err != nil {
 			return err
 		}
@@ -621,7 +621,7 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "daemon ID")
 	}
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return err
 	}
@@ -641,11 +641,11 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 		}
 	}
 	args := api.GetLogInput{Writer: os.Stdout, Severity: sev}
-	return api.GetDaemonLog(defaultAPIParams, node, args)
+	return api.GetDaemonLog(apiBP, node, args)
 }
 
 func showRemoteAISHandler(c *cli.Context) (err error) {
-	aisCloudInfo, err := api.GetRemoteAIS(defaultAPIParams)
+	aisCloudInfo, err := api.GetRemoteAIS(apiBP)
 	if err != nil {
 		return err
 	}
@@ -681,7 +681,7 @@ func showMpathHandler(c *cli.Context) error {
 		daemonID = argDaemonID(c)
 		nodes    []*cluster.Snode
 	)
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return err
 	}
@@ -707,7 +707,7 @@ func showMpathHandler(c *cli.Context) error {
 		wg.Add(1)
 		go func(node *cluster.Snode) {
 			defer wg.Done()
-			mpl, err := api.GetMountpaths(defaultAPIParams, node)
+			mpl, err := api.GetMountpaths(apiBP, node)
 			if err != nil {
 				erCh <- err
 			} else {
@@ -751,7 +751,7 @@ func appendStatToProps(props []*prop, name string, value int64, prefix, filter s
 }
 
 func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
-	stats, err := api.GetDaemonStats(defaultAPIParams, node)
+	stats, err := api.GetDaemonStats(apiBP, node)
 	if err != nil {
 		return err
 	}
@@ -794,7 +794,7 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 }
 
 func showClusterTotalStats(c *cli.Context) (err error) {
-	st, err := api.GetClusterStats(defaultAPIParams)
+	st, err := api.GetClusterStats(apiBP)
 	if err != nil {
 		return err
 	}
@@ -842,7 +842,7 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 }
 
 func showClusterStatsHandler(c *cli.Context) (err error) {
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return err
 	}

@@ -40,7 +40,7 @@ type (
 
 	downloaderPB struct {
 		id          string
-		params      api.BaseParams
+		apiBP       api.BaseParams
 		refreshTime time.Duration
 
 		states map[string]*fileDownloadingState
@@ -98,7 +98,7 @@ func (d downloadingResult) String() string {
 func newDownloaderPB(baseParams api.BaseParams, id string, refreshTime time.Duration) *downloaderPB {
 	return &downloaderPB{
 		id:          id,
-		params:      baseParams,
+		apiBP:       baseParams,
 		refreshTime: refreshTime,
 		states:      make(map[string]*fileDownloadingState),
 		p:           mpb.New(mpb.WithWidth(progressBarWidth)),
@@ -118,7 +118,7 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 	for !b.jobFinished() {
 		time.Sleep(b.refreshTime)
 
-		resp, err := api.DownloadStatus(b.params, b.id, true)
+		resp, err := api.DownloadStatus(b.apiBP, b.id, true)
 		if err != nil {
 			b.cleanBars()
 			return downloadingResult{}, err
@@ -136,7 +136,7 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 }
 
 func (b *downloaderPB) start() (bool, error) {
-	resp, err := api.DownloadStatus(b.params, b.id, true)
+	resp, err := api.DownloadStatus(b.apiBP, b.id, true)
 	if err != nil {
 		return false, err
 	}
@@ -312,7 +312,7 @@ func (b *downloaderPB) totalFilesCnt() int {
 }
 
 func downloadJobsList(c *cli.Context, regex string) error {
-	list, err := api.DownloadGetList(defaultAPIParams, regex)
+	list, err := api.DownloadGetList(apiBP, regex)
 	if err != nil {
 		return err
 	}
@@ -323,7 +323,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 	// with progress bar
 	if flagIsSet(c, progressBarFlag) {
 		refreshRate := calcRefreshRate(c)
-		downloadingResult, err := newDownloaderPB(defaultAPIParams, id, refreshRate).run()
+		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err
 		}
@@ -334,7 +334,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 
 	// without progress bar
 	verbose := flagIsSet(c, verboseFlag)
-	resp, err := api.DownloadStatus(defaultAPIParams, id, !verbose)
+	resp, err := api.DownloadStatus(apiBP, id, !verbose)
 	if err != nil {
 		return err
 	}

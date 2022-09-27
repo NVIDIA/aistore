@@ -151,7 +151,7 @@ func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err
 		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck, DaemonID: sid}
 	)
 
-	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
+	if id, err = api.StartXaction(apiBP, xactArgs); err != nil {
 		return
 	}
 
@@ -168,7 +168,7 @@ func isResilverNode(c *cli.Context, xactKind string) (sid string, err error) {
 	if xactKind != apc.ActResilver || c.NArg() == 0 {
 		return "", nil
 	}
-	smap, err := api.GetClusterMap(defaultAPIParams)
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return "", err
 	}
@@ -235,7 +235,7 @@ func startDownloadHandler(c *cli.Context) error {
 		},
 	}
 
-	if basePayload.Bck.Props, err = api.HeadBucket(defaultAPIParams, basePayload.Bck, true /* don't add */); err != nil {
+	if basePayload.Bck.Props, err = api.HeadBucket(apiBP, basePayload.Bck, true /* don't add */); err != nil {
 		if !cmn.IsStatusNotFound(err) {
 			return err
 		}
@@ -260,7 +260,7 @@ func startDownloadHandler(c *cli.Context) error {
 		if _, ok := cfg.Backend.Providers[source.backend.bck.Provider]; ok { // backend is configured
 			dlType = downloader.DlTypeBackend
 
-			p, err := api.HeadBucket(defaultAPIParams, basePayload.Bck, false /* don't add */)
+			p, err := api.HeadBucket(apiBP, basePayload.Bck, false /* don't add */)
 			if err != nil {
 				return err
 			}
@@ -298,7 +298,7 @@ func startDownloadHandler(c *cli.Context) error {
 				ObjName: pathSuffix, // in this case pathSuffix is a full name of the object
 			},
 		}
-		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
+		id, err = api.DownloadWithParam(apiBP, dlType, payload)
 	case downloader.DlTypeMulti:
 		var objects []string
 		{
@@ -317,21 +317,21 @@ func startDownloadHandler(c *cli.Context) error {
 			DlBase:         basePayload,
 			ObjectsPayload: objects,
 		}
-		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
+		id, err = api.DownloadWithParam(apiBP, dlType, payload)
 	case downloader.DlTypeRange:
 		payload := downloader.DlRangeBody{
 			DlBase:   basePayload,
 			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
 			Template: source.link,
 		}
-		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
+		id, err = api.DownloadWithParam(apiBP, dlType, payload)
 	case downloader.DlTypeBackend:
 		payload := downloader.DlBackendBody{
 			DlBase: basePayload,
 			Sync:   flagIsSet(c, syncFlag),
 			Prefix: source.backend.prefix,
 		}
-		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
+		id, err = api.DownloadWithParam(apiBP, dlType, payload)
 	default:
 		debug.Assert(false)
 	}
@@ -355,7 +355,7 @@ func startDownloadHandler(c *cli.Context) error {
 
 func pbDownload(c *cli.Context, id string) (err error) {
 	refreshRate := calcRefreshRate(c)
-	downloadingResult, err := newDownloaderPB(defaultAPIParams, id, refreshRate).run()
+	downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 	if err != nil {
 		return err
 	}
@@ -368,7 +368,7 @@ func wtDownload(c *cli.Context, id string) error {
 	if err := waitDownload(c, id); err != nil {
 		return err
 	}
-	resp, err := api.DownloadStatus(defaultAPIParams, id, true /*only active*/)
+	resp, err := api.DownloadStatus(apiBP, id, true /*only active*/)
 	if err != nil {
 		return err
 	}
@@ -393,7 +393,7 @@ func bgDownload(c *cli.Context, id string) (err error) {
 	for passed < checkTimeout {
 		time.Sleep(checkInterval)
 		passed += checkInterval
-		resp, err = api.DownloadStatus(defaultAPIParams, id, true /*only active*/)
+		resp, err = api.DownloadStatus(apiBP, id, true /*only active*/)
 		if err != nil {
 			return err
 		}
@@ -419,7 +419,7 @@ func waitDownload(c *cli.Context, id string) (err error) {
 	)
 
 	for {
-		resp, err := api.DownloadStatus(defaultAPIParams, id, true)
+		resp, err := api.DownloadStatus(apiBP, id, true)
 		if err != nil {
 			return err
 		}
@@ -491,7 +491,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	if id, err = api.StartDSort(defaultAPIParams, rs); err != nil {
+	if id, err = api.StartDSort(apiBP, rs); err != nil {
 		return
 	}
 
@@ -525,7 +525,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		id       string
 		xactArgs = api.XactReqArgs{Kind: apc.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
 	)
-	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
+	if id, err = api.StartXaction(apiBP, xactArgs); err != nil {
 		return
 	}
 
