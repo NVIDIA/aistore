@@ -1115,7 +1115,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 	high, oos := config.Space.HighWM, config.Space.OOS
 	for path, mi := range availablePaths {
 		if c, err = mi.getCapacity(config, true); err != nil {
-			glog.Error(err)
+			glog.Errorf("%s: %v", mi, err)
 			return
 		}
 		cs.TotalUsed += c.Used

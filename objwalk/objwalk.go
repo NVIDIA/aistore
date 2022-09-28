@@ -1,8 +1,11 @@
-// Package objwalk provides core functionality for listing bucket objects in pages.
+// Package objwalk provides common context and helper methods for object listing and
+// object querying.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package objwalk
+
+// This source contains core next-page and next-remote-page methods for list-objects operations.
 
 import (
 	"context"
@@ -12,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 )
 
 type (
@@ -33,7 +35,7 @@ func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.L
 func (w *Walk) NextObjPage() (*cmn.ListObjects, error) {
 	var (
 		lst = &cmn.ListObjects{}
-		wi  = walkinfo.NewWalkInfo(w.ctx, w.t, w.msg)
+		wi  = NewWalkInfo(w.ctx, w.t, w.msg)
 	)
 
 	cb := func(fqn string, de fs.DirEntry) error {
@@ -84,7 +86,7 @@ func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
 		localURL        = w.t.Snode().URL(cmn.NetPublic)
 		localID         = w.t.SID()
 		smap            = w.t.Sowner().Get()
-		postCallback, _ = w.ctx.Value(walkinfo.CtxPostCallbackKey).(walkinfo.PostCallbackFunc)
+		postCallback, _ = w.ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
 		needURL         = w.msg.WantProp(apc.GetTargetURL)
 		needAtime       = w.msg.WantProp(apc.GetPropsAtime)
 		needCksum       = w.msg.WantProp(apc.GetPropsChecksum)

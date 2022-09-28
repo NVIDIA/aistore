@@ -305,13 +305,10 @@ var (
 	// scope = all
 	allXactionsFlag = cli.BoolFlag{Name: scopeAll, Usage: "show all xactions, including finished"}
 	allPropsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "show all object properties"}
-	allObjectsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "show all objects; include misplaced and copies"}
-	allBucketsFlag  = cli.BoolFlag{
-		Name:  "all-buckets", // NOTE: see (commandList: initLsOptions) common for both list-objects and list-buckets
-		Usage: "operate on all buckets including those (remote) buckets that are not present in the cluster",
-	}
-	allJobsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "remove all finished jobs"}
-	allETLStopFlag = cli.BoolFlag{Name: scopeAll, Usage: "stop all ETLs"}
+	allJobsFlag     = cli.BoolFlag{Name: scopeAll, Usage: "remove all finished jobs"}
+	allETLStopFlag  = cli.BoolFlag{Name: scopeAll, Usage: "stop all ETLs"}
+
+	allObjsOrBcksFlag = cli.BoolFlag{Name: scopeAll, Usage: "depending on context: all objects (including misplaced ones and copies) _or_ all buckets (including remote buckets that are not present in the cluster)"}
 
 	// coloring
 	noColorFlag = cli.BoolFlag{
@@ -335,7 +332,7 @@ var (
 		Usage: "refresh interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h'",
 		Value: refreshRateDefault,
 	}
-	regexFlag       = cli.StringFlag{Name: "regex", Usage: "regex pattern for matching"}
+	regexFlag       = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
 	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,no-header,H", Usage: "display tables without headers"}
 	noFooterFlag    = cli.BoolFlag{Name: "no-footers,no-footer", Usage: "display tables without footers"}
@@ -354,7 +351,7 @@ var (
 	// Bucket
 	startAfterFlag = cli.StringFlag{
 		Name:  "start-after",
-		Usage: "list bucket's content alphabetically starting with the first name *after* the specified",
+		Usage: "list bucket's content alphabetically starting with the first name _after_ the specified",
 	}
 	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count (0 - unlimited)", Value: 0}
 	pageSizeFlag = cli.IntFlag{Name: "page-size",
@@ -372,7 +369,7 @@ var (
 		Name:  "summary",
 		Usage: "show bucket sizes and used capacity; by default, applies only to the buckets that are _present_ in the cluster (use '--all' option to override)",
 	}
-	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
+	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "list objects page by page, one page at a time (see also '--page-size' and '--limit')"}
 	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}
 	keepMDFlag        = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}

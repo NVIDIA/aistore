@@ -65,8 +65,7 @@ var (
 			objPropsLsFlag,
 			objLimitFlag,
 			showUnmatchedFlag,
-			allObjectsFlag,
-			allBucketsFlag,
+			allObjsOrBcksFlag,
 			noHeaderFlag,
 			noFooterFlag,
 			pagedFlag,
@@ -82,7 +81,7 @@ var (
 
 		subcmdSummary: {
 			listObjCachedFlag,
-			allBucketsFlag,
+			allObjsOrBcksFlag,
 			sizeInBytesFlag,
 			validateSummaryFlag,
 			verboseFlag,
@@ -312,7 +311,7 @@ func showBucketSummary(c *cli.Context) error {
 		return err
 	}
 
-	summaries, err := getSummaries(queryBcks, flagIsSet(c, listObjCachedFlag), flagIsSet(c, allBucketsFlag))
+	summaries, err := getSummaries(queryBcks, flagIsSet(c, listObjCachedFlag), flagIsSet(c, allObjsOrBcksFlag))
 	if err != nil {
 		return err
 	}
@@ -635,7 +634,7 @@ func listAnyHandler(c *cli.Context) error {
 		return showObjProps(c, bck, objName)
 	case bck.Name == "": // list buckets
 		fltPresence := apc.FltPresent
-		if flagIsSet(c, allBucketsFlag) {
+		if flagIsSet(c, allObjsOrBcksFlag) {
 			fltPresence = apc.FltExists
 		}
 		return listBuckets(c, cmn.QueryBcks(bck), fltPresence)

@@ -1834,23 +1834,6 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		return
 	}
 
-	// always check first that the remote backend is configured
-	// (optional non-exhaustive checks)
-	if qbck.IsCloud() || qbck.IsHDFS() {
-		config := cmn.GCO.Get()
-		if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
-			err := &cmn.ErrMissingBackend{Provider: qbck.Provider}
-			p.writeErrf(w, r, "cannot list %q bucket: %v", qbck, err)
-			return
-		}
-	} else if qbck.IsRemoteAIS() {
-		config := cmn.GCO.Get()
-		if _, ok := config.Backend.ProviderConf(apc.AIS); !ok {
-			p.writeErrf(w, r, "cannot list %q bucket: no remote ais clusters attached", qbck)
-			return
-		}
-	}
-
 	// present-only filtering
 	if dpq.fltPresence != "" {
 		if v, err := strconv.Atoi(dpq.fltPresence); err == nil {
@@ -1859,6 +1842,23 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	}
 	if present {
 		bcks := bmd.Select(qbck)
+		if len(bcks) == 0 {
+			// an optional and very limited check to find out why
+			if qbck.IsCloud() || qbck.IsHDFS() {
+				config := cmn.GCO.Get()
+				if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
+					err := &cmn.ErrMissingBackend{Provider: qbck.Provider}
+					p.writeErrf(w, r, "cannot list %q bucket: %v", qbck, err)
+					return
+				}
+			} else if qbck.IsRemoteAIS() {
+				config := cmn.GCO.Get()
+				if _, ok := config.Backend.ProviderConf(apc.AIS); !ok {
+					p.writeErrf(w, r, "cannot list %q bucket: no remote ais clusters attached", qbck)
+					return
+				}
+			}
+		}
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}
@@ -1895,9 +1895,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	hdr.Set(cos.HdrContentType, res.header.Get(cos.HdrContentType))
 	hdr.Set(cos.HdrContentLength, strconv.Itoa(len(res.bytes)))
 	_, err = w.Write(res.bytes)
-	if err != nil {
-		glog.Errorf("Unexpected failure to send list-buckets response: %v", err)
-	}
+	debug.AssertNoErr(err)
 }
 
 func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, netName string) (redirect string) {

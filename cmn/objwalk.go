@@ -145,9 +145,8 @@ func MergeObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
 	return bckList
 }
 
-// Returns true if given `token` includes given object name.
-// `token` includes an object name iff the object name would
-// be included in response having given continuation token.
+// Returns true if the (continuation) token includes the object's name
+// (in other words, the object is already listed and must be skipped)
 func TokenIncludesObject(token, objName string) bool {
 	return strings.Compare(token, objName) >= 0
 }

@@ -13,10 +13,10 @@ ais ls azure:// // FAIL "backend"
 
 ais ls #ns // IGNORE
 ais ls @ // IGNORE
-ais ls @uuid --all-buckets // FAIL "remote cluster "uuid" "
+ais ls @uuid --all // FAIL "remote cluster "uuid" "
 ais ls ais://#ns // IGNORE
 ais ls ais://#ns/tmp // FAIL "bucket "ais://#ns/tmp" does not exist"
-ais ls ais://@uuid#ns --all-buckets // FAIL "remote"
+ais ls ais://@uuid#ns --all // FAIL "remote"
 ais ls ais://@uuid#ns/tmp // FAIL "remote cluster "uuid" "
 
 ais ls cloud://$BUCKET_1/ // FAIL "invalid backend provider "cloud""

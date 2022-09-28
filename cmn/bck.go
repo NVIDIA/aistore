@@ -411,6 +411,9 @@ func DelBckFromQuery(query url.Values) url.Values {
 func (qbck *QueryBcks) IsBucket() bool { return !(*Bck)(qbck).IsQuery() }
 
 func (qbck QueryBcks) String() string {
+	if qbck.IsEmpty() {
+		return ""
+	}
 	if qbck.Name == "" {
 		if qbck.Ns.IsGlobal() {
 			return qbck.Provider + apc.BckProviderSeparator
@@ -425,6 +428,8 @@ func (qbck *QueryBcks) IsAIS() bool       { b := (*Bck)(qbck); return b.IsAIS() 
 func (qbck *QueryBcks) IsHDFS() bool      { b := (*Bck)(qbck); return b.IsHDFS() }
 func (qbck *QueryBcks) IsRemoteAIS() bool { b := (*Bck)(qbck); return b.IsRemoteAIS() }
 func (qbck *QueryBcks) IsCloud() bool     { return IsCloudProvider(qbck.Provider) }
+
+func (qbck *QueryBcks) IsEmpty() bool { b := (*Bck)(qbck); return b.IsEmpty() }
 
 func (qbck *QueryBcks) AddToQuery(query url.Values) url.Values {
 	bck := (*Bck)(qbck)

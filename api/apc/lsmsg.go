@@ -17,10 +17,10 @@ const (
 	// See related Flt* enum
 	LsObjCached = 1 << iota
 
-	LsMisplaced // include misplaced obj-s
-	LsDeleted   // include obj-s marked for deletion (TODO)
-	LsArchDir   // expand archives as directories
-	LsNameOnly  // return only object names and statuses (for faster listing)
+	LsAll      // include misplaced objects and replicas
+	LsDeleted  // include obj-s marked for deletion (TODO)
+	LsArchDir  // expand archives as directories
+	LsNameOnly // return only object names and statuses (for faster listing)
 
 	// The following two flags have to do with listing objects in those remote
 	// buckets that we don't yet have in the cluster's BMD. As far as AIS is concerned,
@@ -66,10 +66,11 @@ const (
 
 const (
 	// Status
-	ObjStatusOK = iota
-	ObjStatusMovedNode
-	ObjStatusMovedMpath
-	ObjStatusDeleted // TODO: reserved for future when we introduce delayed delete of the object/bucket
+	LocOK = iota
+	LocMisplacedNode
+	LocMisplacedMountpath
+	LocIsCopy
+	LocIsCopyMissingObj
 
 	// Flags
 	EntryIsCached = 1 << (EntryStatusBits + 1)

@@ -455,7 +455,7 @@ func fmtObjStatus(obj *cmn.ObjEntry) string {
 	case apc.ObjStatusMovedMpath:
 		return "misplaced(mountpath)"
 	case apc.ObjStatusDeleted:
-		return "deleted"
+		return "replica"
 	default:
 		return "invalid"
 	}

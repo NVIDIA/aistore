@@ -1,8 +1,8 @@
-// Package objwalk provides core functionality for listing bucket objects in pages.
+// Package objwalk_test contains a few basic list-concatenation unit tests.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package objwalk
+package objwalk_test
 
 import (
 	"testing"

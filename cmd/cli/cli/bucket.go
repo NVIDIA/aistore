@@ -186,8 +186,14 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		return
 	}
 	if len(bcks) == 0 && apc.IsFltPresent(fltPresence) {
-		fmt.Fprintf(c.App.Writer, "No %s buckets in the cluster. To list all buckets, use '--%s' option.\n",
-			qbck, allBucketsFlag.Name)
+		s := qbck.String()
+		if s == "" || s == apc.BckProviderSeparator {
+			s = ""
+		} else {
+			s = " " + s
+		}
+		fmt.Fprintf(c.App.Writer, "No%s buckets in the cluster. To list _all_ buckets, use '--%s' option.\n",
+			s, allObjsOrBcksFlag.Name)
 	}
 	for _, provider := range selectProviders(bcks) {
 		listBckTable(c, provider, bcks, filter, fltPresence)
@@ -332,7 +338,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
 	}
-	if flagIsSet(c, allObjectsFlag) {
+	if flagIsSet(c, allObjsOrBcksFlag) {
 		msg.SetFlag(apc.LsMisplaced)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
@@ -350,7 +356,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			msg.AddProps(props...)
 		}
 	}
-	if flagIsSet(c, allObjectsFlag) {
+	if flagIsSet(c, allObjsOrBcksFlag) {
 		// Show status. Object name can then be displayed multiple times
 		// (due to mirroring, EC). The status helps to tell an object from its replica(s).
 		msg.AddProps(apc.GetPropsStatus)
@@ -398,7 +404,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			// interrupt the loop if:
 			// 1. the last page is printed
 			// 2. maximum pages are printed
-			// 3. printed `limit` number of objects
+			// 3. printed the `limit` number of objects
 			if msg.ContinuationToken == "" {
 				return nil
 			}
@@ -674,7 +680,7 @@ func objPropsTemplate(c *cli.Context, props string) string {
 func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	objFilter := &objectListFilter{}
 
-	if !flagIsSet(c, allObjectsFlag) {
+	if !flagIsSet(c, allObjsOrBcksFlag) {
 		// Filter out objects with a status different from OK
 		objFilter.addFilter(func(obj *cmn.ObjEntry) bool { return obj.IsStatusOK() })
 	}

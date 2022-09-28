@@ -29,7 +29,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk"
-	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/vmihailenco/msgpack"
@@ -240,8 +239,8 @@ func (r *ObjListXact) walkCallback(*cluster.LOM) { r.ObjsAdd(1, 0) }
 func (r *ObjListXact) walkCtx() context.Context {
 	return context.WithValue(
 		context.Background(),
-		walkinfo.CtxPostCallbackKey,
-		walkinfo.PostCallbackFunc(r.walkCallback),
+		objwalk.CtxPostCallbackKey,
+		objwalk.PostCallbackFunc(r.walkCallback),
 	)
 }
 
@@ -382,7 +381,7 @@ func (r *ObjListXact) discardObsolete(token string) {
 }
 
 func (r *ObjListXact) traverseBucket(msg *apc.ListObjsMsg) {
-	wi := walkinfo.NewWalkInfo(r.walkCtx(), r.t, msg)
+	wi := objwalk.NewWalkInfo(r.walkCtx(), r.t, msg)
 	defer r.walkWg.Done()
 	cb := func(fqn string, de fs.DirEntry) error {
 		entry, err := wi.Callback(fqn, de)

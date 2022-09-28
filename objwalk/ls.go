@@ -1,9 +1,9 @@
-// Package walkinfo provides common context and helper methods for object listing and
+// Package objwalk provides common context and helper methods for object listing and
 // object querying.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package walkinfo
+package objwalk
 
 import (
 	"context"
@@ -20,14 +20,11 @@ import (
 type (
 	ctxKey int
 
-	objFilter func(*cluster.LOM) bool
-
 	// used to traverse local filesystem and collect objects info
 	WalkInfo struct {
 		t            cluster.Target
 		smap         *cluster.Smap
 		postCallback PostCallbackFunc
-		objectFilter objFilter
 		propNeeded   map[string]bool
 		prefix       string
 		marker       string
@@ -53,13 +50,10 @@ var wiProps = []string{
 	apc.GetTargetURL,
 }
 
-func isObjMoved(status uint16) bool {
-	return status == apc.ObjStatusMovedNode || status == apc.ObjStatusMovedMpath
-}
+func isOK(status uint16) bool { return status == apc.LocOK }
 
+// TODO: `msg.StartAfter`
 func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) *WalkInfo {
-	// TODO: this should be removed.
-	// TODO: we should take care of `msg.StartAfter`.
 	// Marker is always a file name, so we need to strip filename from the path
 	markerDir := ""
 	if msg.ContinuationToken != "" {
@@ -73,6 +67,9 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) *W
 	// strings.Contains() for every entry.
 	postCallback, _ := ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
 
+	//
+	// TODO -- FIXME: don't allocate and don't use `propNeeded`, use `msg` instead. ???
+	//
 	propNeeded := make(map[string]bool, len(wiProps))
 	for _, prop := range wiProps {
 		propNeeded[prop] = msg.WantProp(prop)
@@ -81,21 +78,23 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) *W
 		t:            t, // targetrunner
 		smap:         t.Sowner().Get(),
 		postCallback: postCallback,
-		prefix:       msg.Prefix,
-		marker:       msg.ContinuationToken,
+		prefix:       msg.Prefix,            // TODO -- FIXME: remove
+		marker:       msg.ContinuationToken, // TODO -- FIXME: remove
 		markerDir:    markerDir,
 		msg:          msg,
-		timeFormat:   msg.TimeFormat,
-		propNeeded:   propNeeded,
+		timeFormat:   msg.TimeFormat, // TODO -- FIXME: remove
+		propNeeded:   propNeeded,     // TODO -- FIXME: remove
 	}
 }
 
-func (wi *WalkInfo) needSize() bool      { return wi.propNeeded[apc.GetPropsSize] }
-func (wi *WalkInfo) needAtime() bool     { return wi.propNeeded[apc.GetPropsAtime] }
-func (wi *WalkInfo) needCksum() bool     { return wi.propNeeded[apc.GetPropsChecksum] }
-func (wi *WalkInfo) needVersion() bool   { return wi.propNeeded[apc.GetPropsVersion] }
-func (wi *WalkInfo) needStatus() bool    { return wi.propNeeded[apc.GetPropsStatus] } //nolint:unused // left for consistency
-func (wi *WalkInfo) needCopies() bool    { return wi.propNeeded[apc.GetPropsCopies] }
+func (wi *WalkInfo) needSize() bool    { return wi.propNeeded[apc.GetPropsSize] }
+func (wi *WalkInfo) needAtime() bool   { return wi.propNeeded[apc.GetPropsAtime] }
+func (wi *WalkInfo) needCksum() bool   { return wi.propNeeded[apc.GetPropsChecksum] }
+func (wi *WalkInfo) needVersion() bool { return wi.propNeeded[apc.GetPropsVersion] }
+func (wi *WalkInfo) needStatus() bool  { return wi.propNeeded[apc.GetPropsStatus] } //nolint:unused // left for consistency
+func (wi *WalkInfo) needCopies() bool  { return wi.propNeeded[apc.GetPropsCopies] }
+
+// TODO -- FIXME: rename as target-info, remove URL, add node ID and mountpath instead
 func (wi *WalkInfo) needTargetURL() bool { return wi.propNeeded[apc.GetTargetURL] }
 
 // Checks if the directory should be processed by cache list call
@@ -123,68 +122,49 @@ func (wi *WalkInfo) ProcessDir(fqn string) error {
 	return nil
 }
 
-func (wi *WalkInfo) SetObjectFilter(f objFilter) {
-	wi.objectFilter = f
-}
-
-// Returns true if the LOM matches all criteria for including the object
-// to the resulting bucket list.
-func (wi *WalkInfo) matchObj(lom *cluster.LOM) bool {
+// Returns true if LOM is to be included in the result set.
+func (wi *WalkInfo) match(lom *cluster.LOM) bool {
 	if !cmn.ObjNameContainsPrefix(lom.ObjName, wi.prefix) {
 		return false
 	}
 	if wi.marker != "" && cmn.TokenIncludesObject(wi.marker, lom.ObjName) {
 		return false
 	}
-	if wi.msg.IsFlagSet(apc.LsNameOnly) {
-		return true
-	}
-	return wi.objectFilter == nil || wi.objectFilter(lom)
+	return true
 }
 
-// Adds an info about cached object to the list if:
-//   - its name starts with prefix (if prefix is set)
-//   - it has not been already returned by previous page request
-//   - this target responses getobj request for the object
-//
-// NOTE: When only object names are requested, objectFilter and postCallback
-// are not called because there won't be any metadata to look at.
-func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.ObjEntry {
-	if !wi.matchObj(lom) {
-		return nil
-	}
-
-	// add the obj to the page
-	fileInfo := &cmn.ObjEntry{
-		Name:  lom.ObjName,
-		Flags: objStatus | apc.EntryIsCached,
-	}
+// new entry to be added to the listed page (TODO: add/support EC info)
+func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) *cmn.ObjEntry {
+	entry := &cmn.ObjEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
-		return fileInfo
+		return entry
 	}
-
 	if wi.needAtime() {
-		fileInfo.Atime = cos.FormatUnixNano(lom.AtimeUnix(), wi.timeFormat)
+		entry.Atime = cos.FormatUnixNano(lom.AtimeUnix(), wi.timeFormat)
 	}
 	if wi.needCksum() && lom.Checksum() != nil {
-		fileInfo.Checksum = lom.Checksum().Value()
+		entry.Checksum = lom.Checksum().Value()
 	}
 	if wi.needVersion() {
-		fileInfo.Version = lom.Version()
+		entry.Version = lom.Version()
 	}
 	if wi.needCopies() {
-		fileInfo.Copies = int16(lom.NumCopies())
+		// TODO -- FIXME: may not be true - double-check
+		entry.Copies = int16(lom.NumCopies())
 	}
+	//
+	// TODO -- FIXME: add/support EC info
+	//
 	if wi.needTargetURL() {
-		fileInfo.TargetURL = wi.t.Snode().URL(cmn.NetPublic)
+		entry.TargetURL = wi.t.Snode().URL(cmn.NetPublic)
 	}
 	if wi.needSize() {
-		fileInfo.Size = lom.SizeBytes()
+		entry.Size = lom.SizeBytes()
 	}
 	if wi.postCallback != nil {
 		wi.postCallback(lom)
 	}
-	return fileInfo
+	return entry
 }
 
 // By default, Callback performs a number of syscalls to load object metadata.
@@ -203,9 +183,13 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.ObjEntry, e
 }
 
 func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.ObjEntry, error) {
-	var objStatus uint16 = apc.ObjStatusOK
+	status := uint16(apc.LocOK)
 	if err := lom.InitFQN(fqn, nil); err != nil {
 		return nil, err
+	}
+
+	if !wi.match(lom) {
+		return nil, nil
 	}
 
 	_, local, err := lom.HrwTarget(wi.smap)
@@ -213,26 +197,49 @@ func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.ObjEntry, error) {
 		return nil, err
 	}
 	if !local {
-		objStatus = apc.ObjStatusMovedNode
+		status = apc.LocMisplacedNode
 	} else if !lom.IsHRW() {
-		objStatus = apc.ObjStatusMovedMpath
+		// preliminary
+		status = apc.LocMisplacedMountpath
 	}
 
-	if isObjMoved(objStatus) && !wi.msg.IsFlagSet(apc.LsMisplaced) {
+	// shortcut #1: name-only (NOTE: won't show misplaced and copies)
+	if wi.msg.IsFlagSet(apc.LsNameOnly) {
+		if !isOK(status) {
+			return wi.ls(lom, status), nil
+		}
 		return nil, nil
 	}
-	if wi.msg.IsFlagSet(apc.LsNameOnly) {
-		return wi.lsObject(lom, objStatus), nil
-	}
-
-	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		if cmn.IsErrObjNought(err) {
+	// load
+	if err := lom.Load(isOK(status) /*cache it*/, false /*locked*/); err != nil {
+		if cmn.IsErrObjNought(err) || !isOK(status) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	if lom.IsCopy() {
+	if local && lom.IsCopy() {
+		// still may change below
+		status = apc.LocIsCopy
+	}
+	if isOK(status) {
+		return wi.ls(lom, status), nil
+	}
+
+	if !wi.msg.IsFlagSet(apc.LsAll) {
 		return nil, nil
 	}
-	return wi.lsObject(lom, objStatus), nil
+	if local {
+		// check hrw mountpath location
+		hlom := &cluster.LOM{}
+		if err := hlom.InitFQN(lom.HrwFQN, lom.Bucket()); err != nil {
+			return nil, err
+		}
+		if err := hlom.Load(true /*cache it*/, false /*locked*/); err != nil {
+			mirror := lom.MirrorConf()
+			if mirror.Enabled && mirror.Copies > 1 {
+				status = apc.LocIsCopyMissingObj
+			}
+		}
+	}
+	return wi.ls(lom, status), nil
 }
