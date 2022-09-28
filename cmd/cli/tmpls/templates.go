@@ -448,15 +448,18 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 
 func fmtObjStatus(obj *cmn.ObjEntry) string {
 	switch obj.Status() {
-	case apc.ObjStatusOK:
+	case apc.LocOK:
 		return "ok"
-	case apc.ObjStatusMovedNode:
+	case apc.LocMisplacedNode:
 		return "misplaced(cluster)"
-	case apc.ObjStatusMovedMpath:
+	case apc.LocMisplacedMountpath:
 		return "misplaced(mountpath)"
-	case apc.ObjStatusDeleted:
+	case apc.LocIsCopy:
 		return "replica"
+	case apc.LocIsCopyMissingObj:
+		return "replica(object-is-missing)"
 	default:
+		debug.Assertf(false, "%#v", obj)
 		return "invalid"
 	}
 }

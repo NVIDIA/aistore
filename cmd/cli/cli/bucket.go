@@ -187,9 +187,7 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 	}
 	if len(bcks) == 0 && apc.IsFltPresent(fltPresence) {
 		s := qbck.String()
-		if s == "" || s == apc.BckProviderSeparator {
-			s = ""
-		} else {
+		if s != "" {
 			s = " " + s
 		}
 		fmt.Fprintf(c.App.Writer, "No%s buckets in the cluster. To list _all_ buckets, use '--%s' option.\n",
@@ -339,7 +337,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		msg.SetFlag(apc.LsArchDir)
 	}
 	if flagIsSet(c, allObjsOrBcksFlag) {
-		msg.SetFlag(apc.LsMisplaced)
+		msg.SetFlag(apc.LsAll)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	if flagIsSet(c, nameOnlyFlag) {

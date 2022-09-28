@@ -240,7 +240,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		return
 	}
 	bckSums := make([]*bucketHealth, 0)
-	msg := &apc.ListObjsMsg{Flags: apc.LsMisplaced}
+	msg := &apc.ListObjsMsg{Flags: apc.LsAll}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsCached)
 	for _, bck := range bckList {
 		if queryBcks.Name != "" && !queryBcks.Equal(&bck) {

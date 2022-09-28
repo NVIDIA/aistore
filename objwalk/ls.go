@@ -206,9 +206,9 @@ func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.ObjEntry, error) {
 	// shortcut #1: name-only (NOTE: won't show misplaced and copies)
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		if !isOK(status) {
-			return wi.ls(lom, status), nil
+			return nil, nil
 		}
-		return nil, nil
+		return wi.ls(lom, status), nil
 	}
 	// load
 	if err := lom.Load(isOK(status) /*cache it*/, false /*locked*/); err != nil {
