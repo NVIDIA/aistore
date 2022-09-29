@@ -98,7 +98,7 @@ const (
 
 	GetTargetURL     = "target_url"
 	GetPropsNode     = "node"
-	GetPropsLocation = "target_mountpath"
+	GetPropsLocation = "location"
 )
 
 const PropsLocationSepa = ":"
@@ -128,14 +128,16 @@ type ListObjsMsg struct {
 // ListObjsMsg //
 /////////////////
 
-// TODO -- FIXME: remove
-// NeedLocalMD indicates that ListObjects for a remote bucket needs
-// to include AIS-maintained metadata: access time, etc.
-func (lsmsg *ListObjsMsg) NeedLocalMD() bool {
-	return lsmsg.WantProp(GetPropsAtime) ||
-		lsmsg.WantProp(GetPropsStatus) ||
-		lsmsg.WantProp(GetPropsCopies) ||
-		lsmsg.WantProp(GetPropsCached)
+func (lsmsg *ListObjsMsg) WantOnlyRemoteProps() bool {
+	for _, name := range GetPropsAll {
+		if !lsmsg.WantProp(name) {
+			continue
+		}
+		if name != GetPropsName && name != GetPropsSize && name != GetPropsChecksum && name != GetPropsVersion {
+			return false
+		}
+	}
+	return true
 }
 
 // WantProp returns true if msg request requires to return propName property.

@@ -60,7 +60,7 @@ type (
 		nextToken  string             // continuation token returned by Cloud to get the next page
 		walkWg     sync.WaitGroup     // to wait until walk finishes
 		walkDone   bool               // true: done walking or Cloud returned all objects
-		fromRemote bool               // whether to request remote data
+		listRemote bool               // single-target rule
 	}
 	Resp struct {
 		BckList *cmn.ListObjects
@@ -144,15 +144,21 @@ func (r *ObjListXact) Do(msg *apc.ListObjsMsg) *Resp {
 	}
 }
 
-func (r *ObjListXact) init() {
-	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(apc.LsObjCached)
-	if r.fromRemote {
-		return
+func (r *ObjListXact) init() error {
+	if r.bck.IsRemote() && !r.msg.IsFlagSet(apc.LsObjCached) {
+		_, err := cluster.HrwTargetTask(r.msg.UUID, r.t.Sowner().Get())
+		if err != nil {
+			return err
+		}
+		r.listRemote = true // TODO -- FIXME: si.ID() == r.t.SID() // we only want a single target listing remote bucket
 	}
-
-	// Start fs.Walk beforehand if needed so that by the time we read
-	// the next page local cache is populated.
+	if r.listRemote {
+		return nil
+	}
+	// Start fs.Walk so that by the time
+	// we read the next page local cache is already populated.
 	r._initTraverse()
+	return nil
 }
 
 func (r *ObjListXact) _initTraverse() {
@@ -203,8 +209,7 @@ func (r *ObjListXact) stopWalk() {
 func (r *ObjListXact) stop(err error) {
 	r.DemandBase.Stop()
 	r.stopCh.Close()
-	// NOTE: Not closing `r.workCh` as it potentially could result in "sending on closed channel" panic.
-	close(r.respCh)
+	close(r.respCh) // not closing `r.workCh` to avoid potential "closed channel" situation
 	r.stopWalk()
 	r.Finish(err)
 }
@@ -214,24 +219,15 @@ func (r *ObjListXact) dispatchRequest() *Resp {
 		cnt   = r.msg.PageSize
 		token = r.msg.ContinuationToken
 	)
-
 	debug.Assert(cnt != 0)
-
 	r.IncPending()
 	defer r.DecPending()
 
 	if err := r.genNextPage(token, cnt); err != nil {
-		return &Resp{
-			Status: http.StatusInternalServerError,
-			Err:    err,
-		}
+		return &Resp{Status: http.StatusInternalServerError, Err: err}
 	}
-
 	objList := r.getPage(token, cnt)
-	return &Resp{
-		BckList: objList,
-		Status:  http.StatusOK,
-	}
+	return &Resp{BckList: objList, Status: http.StatusOK}
 }
 
 func (r *ObjListXact) walkCallback(*cluster.LOM) { r.ObjsAdd(1, 0) }
@@ -244,7 +240,7 @@ func (r *ObjListXact) walkCtx() context.Context {
 	)
 }
 
-func (r *ObjListXact) nextPageAIS(cnt uint) error {
+func (r *ObjListXact) nextPageA(cnt uint) error {
 	if r.isPageCached(r.token, cnt) {
 		return nil
 	}
@@ -266,7 +262,7 @@ func (r *ObjListXact) nextPageAIS(cnt uint) error {
 
 // Returns an index of the first objects in the cache that follows marker
 func (r *ObjListXact) findMarker(marker string) uint {
-	if r.fromRemote && r.token == marker {
+	if r.listRemote && r.token == marker {
 		return 0
 	}
 	return uint(sort.Search(len(r.lastPage), func(i int) bool {
@@ -284,50 +280,39 @@ func (r *ObjListXact) isPageCached(marker string, cnt uint) bool {
 
 func (r *ObjListXact) nextPageRemote() error {
 	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.bck, r.msg)
-	bckList, err := walk.NextRemoteObjPage()
+	lst, err := walk.NextRemoteObjPage()
 	if err != nil {
 		r.nextToken = ""
 		return err
 	}
-	if bckList.ContinuationToken == "" {
+	if lst.ContinuationToken == "" {
 		r.walkDone = true
 	}
-	r.lastPage = bckList.Entries
-	r.nextToken = bckList.ContinuationToken
-	r.lastPage = append(r.lastPage, bckList.Entries...)
+
+	r.lastPage = lst.Entries
+	r.nextToken = lst.ContinuationToken
+	r.lastPage = append(r.lastPage, lst.Entries...)
 	return nil
 }
 
 func (r *ObjListXact) getPage(marker string, cnt uint) *cmn.ListObjects {
 	debug.Assert(cos.IsValidUUID(r.msg.UUID))
-	if r.fromRemote {
-		return &cmn.ListObjects{
-			UUID:              r.msg.UUID,
-			Entries:           r.lastPage,
-			ContinuationToken: r.nextToken,
-		}
+	if r.listRemote {
+		return &cmn.ListObjects{UUID: r.msg.UUID, Entries: r.lastPage, ContinuationToken: r.nextToken}
 	}
 
 	var (
 		idx  = r.findMarker(marker)
 		list = r.lastPage[idx:]
 	)
-
 	debug.Assert(uint(len(list)) >= cnt || r.walkDone)
-
 	if uint(len(list)) >= cnt {
 		entries := list[:cnt]
-		return &cmn.ListObjects{
-			UUID:              r.msg.UUID,
-			Entries:           entries,
-			ContinuationToken: entries[cnt-1].Name,
-		}
+		return &cmn.ListObjects{UUID: r.msg.UUID, Entries: entries, ContinuationToken: entries[cnt-1].Name}
 	}
 	return &cmn.ListObjects{Entries: list, UUID: r.msg.UUID}
 }
 
-// genNextPage calls DecPending either immediately on error or inside
-// a goroutine if some work must be done.
 func (r *ObjListXact) genNextPage(token string, cnt uint) error {
 	if verbose {
 		glog.Infof("[%s] token: %q", r, r.msg.ContinuationToken)
@@ -336,16 +321,15 @@ func (r *ObjListXact) genNextPage(token string, cnt uint) error {
 		return nil
 	}
 
-	// Due to impossibility of getting object name from continuation token,
-	// in case of remote bucket, a target keeps only the entire last sent page.
-	// The page is replaced with a new one when a client asks for next page.
-	if r.fromRemote {
+	// For remote buckets, it is not possible to get the object name from the continuation token.
+	// Hence, keeping the entire last page. It is replaced with a new one upon the (next) request.
+	if r.listRemote {
 		r.token = token
 		return r.nextPageRemote()
 	}
 
 	if r.token > token {
-		r._initTraverse() // Restart traversing as we cannot go back in time :(.
+		r._initTraverse() // NOTE: restart traversing as we cannot go back in time :(
 		r.lastPage = r.lastPage[:0]
 	} else {
 		if r.walkDone {
@@ -354,7 +338,7 @@ func (r *ObjListXact) genNextPage(token string, cnt uint) error {
 		r.discardObsolete(token)
 	}
 	r.token = token
-	return r.nextPageAIS(cnt)
+	return r.nextPageA(cnt)
 }
 
 // Removes from local cache, the objects that have been already sent.

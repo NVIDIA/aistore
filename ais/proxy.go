@@ -1310,16 +1310,15 @@ func crerrStatus(err error) (errCode int) {
 
 func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg, lsmsg *apc.ListObjsMsg, beg int64) {
 	var (
-		err  error
-		lst  *cmn.ListObjects
-		smap = p.owner.smap.get()
+		smap           = p.owner.smap.get()
+		listRemote     bool
+		wantOnlyRemote bool
 	)
 	if smap.CountActiveTargets() < 1 {
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
 		return
 	}
-
-	// If props were not explicitly specified always return default ones.
+	// If props were not explicitly specified return the default ones.
 	if lsmsg.Props == "" {
 		lsmsg.AddProps(apc.GetPropsDefault...)
 	}
@@ -1330,17 +1329,18 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		lsmsg.SetFlag(apc.LsObjCached)
 	}
 
-	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(apc.LsObjCached)
+	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
+	wantOnlyRemote = lsmsg.WantOnlyRemoteProps()
 	if lsmsg.UUID == "" {
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()
-		if locationIsAIS || lsmsg.NeedLocalMD() {
-			// bcast
-			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())
-		} else {
-			// single random target (TODO -- FIXME p.listObjectsRemote)
+		if listRemote && wantOnlyRemote {
+			// single random target
 			si, _ := smap.GetRandTarget()
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bucket())
+		} else {
+			// bcast
+			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())
 		}
 		nl.SetHrwOwner(&smap.Smap)
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
@@ -1350,14 +1350,18 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		return
 	}
 
-	if locationIsAIS {
-		lst, err = p.listObjectsAIS(bck, lsmsg)
-	} else {
-		lst, err = p.listObjectsRemote(bck, lsmsg)
+	var (
+		lst *cmn.ListObjects
+		err error
+	)
+	if listRemote {
+		lst, err = p.lsObjsRemote(bck, lsmsg, wantOnlyRemote)
 		// TODO: `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
 		// cached objects. This isn't easy as we basically need to start a new
 		// xaction and return a new `UUID`.
+	} else {
+		lst, err = p.lsObjsA(bck, lsmsg)
 	}
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -1930,10 +1934,10 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 	return
 }
 
-// listObjectsAIS reads object list from all targets, combines, sorts and returns
+// lsObjsA reads object list from all targets, combines, sorts and returns
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *cmn.ListObjects, err error) {
+func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *cmn.ListObjects, err error) {
 	var (
 		aisMsg    *aisMsg
 		args      *bcastArgs
@@ -2030,11 +2034,11 @@ end:
 	return allEntries, nil
 }
 
-// listObjectsRemote returns the list of objects from requested remote bucket
+// lsObjsRemote returns the list of objects from requested remote bucket
 // (cloud or remote AIS). If request requires local data then it is broadcast
 // to all targets which perform traverse on the disks, otherwise random target
 // is chosen to perform cloud listing.
-func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *cmn.ListObjects, err error) {
+func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg, wantOnlyRemote bool) (allEntries *cmn.ListObjects, err error) {
 	if lsmsg.StartAfter != "" {
 		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", lsmsg.StartAfter)
 	}
@@ -2053,14 +2057,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (all
 		Body:   cos.MustMarshal(aisMsg),
 	}
 
-	// TODO -- FIXME: always broadcast while designating a single random target to do next-page
-
-	if lsmsg.NeedLocalMD() {
-		args.timeout = reqTimeout
-		args.smap = smap
-		args.cresv = cresBL{} // -> cmn.ListObjects
-		results = p.bcastGroup(args)
-	} else {
+	if wantOnlyRemote {
 		nl, exists := p.notifs.entry(lsmsg.UUID)
 		debug.Assert(exists)
 		for _, si := range nl.Notifiers() {
@@ -2077,10 +2074,17 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (all
 			results[0] = res
 			break
 		}
+	} else {
+		args.timeout = reqTimeout
+		args.smap = smap
+		args.cresv = cresBL{} // -> cmn.ListObjects
+		results = p.bcastGroup(args)
 	}
+
 	freeBcArgs(args)
+
 	// Combine the results.
-	bckLists := make([]*cmn.ListObjects, 0, len(results))
+	resLists := make([]*cmn.ListObjects, 0, len(results))
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
 			continue
@@ -2090,13 +2094,11 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (all
 			freeBcastRes(results)
 			return nil, err
 		}
-		bckLists = append(bckLists, res.v.(*cmn.ListObjects))
+		resLists = append(resLists, res.v.(*cmn.ListObjects))
 	}
 	freeBcastRes(results)
 
-	// Maximum objects in the final result page. Take all objects in
-	// case of Cloud and no limit is set by a user.
-	allEntries = cmn.MergeObjLists(bckLists, 0)
+	allEntries = cmn.MergeObjLists(resLists, 0)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Objects after merge: %d, token: %q", len(allEntries.Entries), allEntries.ContinuationToken)
 	}
