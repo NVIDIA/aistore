@@ -30,8 +30,8 @@ func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.L
 	return &Walk{ctx: ctx, t: t, bck: bck, msg: msg}
 }
 
-// NextObjPage can be used when there's no need to retain results for a longer period of time.
-// It's supposed to be used when results are needed immediately.
+// NextObjPage can be used when there's no need to retain results for a longer period of time
+// (use it when the results are needed immediately)
 func (w *Walk) NextObjPage() (*cmn.ListObjects, error) {
 	var (
 		lst = &cmn.ListObjects{}

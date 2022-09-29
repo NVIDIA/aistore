@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // ListObjsMsg flags
@@ -98,6 +97,9 @@ const (
 	GetPropsEC       = "ec"
 	GetPropsCustom   = "custom"
 	GetPropsNode     = "node"
+
+	// NOTE: update when changing any of the above
+	AllListObjectsProps = "name,size,version,checksum,atime,cached,target_url,status,copies,ec,custom,node"
 )
 
 type (
@@ -141,7 +143,6 @@ func (lsmsg *ListObjsMsg) NeedLocalMD() bool {
 
 // WantProp returns true if msg request requires to return propName property.
 func (lsmsg *ListObjsMsg) WantProp(propName string) bool {
-	debug.Assert(!strings.ContainsRune(propName, ','))
 	return strings.Contains(lsmsg.Props, propName)
 }
 

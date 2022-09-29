@@ -18,84 +18,54 @@ import (
 )
 
 type (
-	ctxKey int
+	ctxKey           int
+	PostCallbackFunc func(lom *cluster.LOM)
 
 	// used to traverse local filesystem and collect objects info
 	WalkInfo struct {
-		t            cluster.Target
-		smap         *cluster.Smap
-		postCallback PostCallbackFunc
-		propNeeded   map[string]bool
-		prefix       string
-		marker       string
-		markerDir    string
-		msg          *apc.ListObjsMsg
-		timeFormat   string
+		t         cluster.Target
+		smap      *cluster.Smap
+		postCb    PostCallbackFunc
+		markerDir string
+		msg       apc.ListObjsMsg
+		wanted    cos.BitFlags
 	}
-
-	PostCallbackFunc func(lom *cluster.LOM)
 )
 
 const (
 	CtxPostCallbackKey ctxKey = iota
 )
 
-var wiProps = []string{
-	apc.GetPropsSize,
-	apc.GetPropsAtime,
-	apc.GetPropsChecksum,
-	apc.GetPropsVersion,
-	apc.GetPropsStatus,
-	apc.GetPropsCopies,
-	apc.GetTargetURL,
-}
-
 func isOK(status uint16) bool { return status == apc.LocOK }
 
 // TODO: `msg.StartAfter`
-func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) *WalkInfo {
-	// Marker is always a file name, so we need to strip filename from the path
-	markerDir := ""
-	if msg.ContinuationToken != "" {
+func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) (wi *WalkInfo) {
+	var (
+		markerDir string
+		wanted    cos.BitFlags
+		postCb, _ = ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
+	)
+	if msg.ContinuationToken != "" { // marker is always a filename
 		markerDir = filepath.Dir(msg.ContinuationToken)
 		if markerDir == "." {
 			markerDir = ""
 		}
 	}
-
-	// A small optimization: set boolean variables to avoid
-	// strings.Contains() for every entry.
-	postCallback, _ := ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
-
-	//
-	// TODO -- FIXME: don't allocate and don't use `propNeeded`, use `msg` instead. ???
-	//
-	propNeeded := make(map[string]bool, len(wiProps))
-	for _, prop := range wiProps {
-		propNeeded[prop] = msg.WantProp(prop)
+	for prop, fl := range allmap {
+		if msg.WantProp(prop) {
+			wanted = wanted.Set(fl)
+		}
 	}
-	return &WalkInfo{
-		t:            t, // targetrunner
-		smap:         t.Sowner().Get(),
-		postCallback: postCallback,
-		prefix:       msg.Prefix,            // TODO -- FIXME: remove
-		marker:       msg.ContinuationToken, // TODO -- FIXME: remove
-		markerDir:    markerDir,
-		msg:          msg,
-		timeFormat:   msg.TimeFormat, // TODO -- FIXME: remove
-		propNeeded:   propNeeded,     // TODO -- FIXME: remove
+	wi = &WalkInfo{
+		t:         t,
+		smap:      t.Sowner().Get(),
+		postCb:    postCb,
+		markerDir: markerDir,
+		wanted:    wanted,
 	}
+	wi.msg = *msg
+	return
 }
-
-func (wi *WalkInfo) needSize() bool    { return wi.propNeeded[apc.GetPropsSize] }
-func (wi *WalkInfo) needAtime() bool   { return wi.propNeeded[apc.GetPropsAtime] }
-func (wi *WalkInfo) needCksum() bool   { return wi.propNeeded[apc.GetPropsChecksum] }
-func (wi *WalkInfo) needVersion() bool { return wi.propNeeded[apc.GetPropsVersion] }
-func (wi *WalkInfo) needStatus() bool  { return wi.propNeeded[apc.GetPropsStatus] } //nolint:unused // left for consistency
-func (wi *WalkInfo) needCopies() bool  { return wi.propNeeded[apc.GetPropsCopies] }
-
-// TODO -- FIXME: rename as target-info, remove URL, add node ID and mountpath instead
-func (wi *WalkInfo) needTargetURL() bool { return wi.propNeeded[apc.GetTargetURL] }
 
 // Checks if the directory should be processed by cache list call
 // Does checks:
@@ -108,7 +78,7 @@ func (wi *WalkInfo) ProcessDir(fqn string) error {
 		return nil
 	}
 
-	if !cmn.DirNameContainsPrefix(ct.ObjectName(), wi.prefix) {
+	if !cmn.DirNameContainsPrefix(ct.ObjectName(), wi.msg.Prefix) {
 		return filepath.SkipDir
 	}
 
@@ -124,10 +94,10 @@ func (wi *WalkInfo) ProcessDir(fqn string) error {
 
 // Returns true if LOM is to be included in the result set.
 func (wi *WalkInfo) match(lom *cluster.LOM) bool {
-	if !cmn.ObjNameContainsPrefix(lom.ObjName, wi.prefix) {
+	if !cmn.ObjNameContainsPrefix(lom.ObjName, wi.msg.Prefix) {
 		return false
 	}
-	if wi.marker != "" && cmn.TokenIncludesObject(wi.marker, lom.ObjName) {
+	if wi.msg.ContinuationToken != "" && cmn.TokenIncludesObject(wi.msg.ContinuationToken, lom.ObjName) {
 		return false
 	}
 	return true
@@ -139,30 +109,43 @@ func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) *cmn.ObjEntry {
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return entry
 	}
-	if wi.needAtime() {
-		entry.Atime = cos.FormatUnixNano(lom.AtimeUnix(), wi.timeFormat)
+	for name, fl := range allmap {
+		if !wi.wanted.IsSet(fl) {
+			continue
+		}
+		switch name {
+		case apc.GetPropsName:
+		case apc.GetPropsStatus:
+		case apc.GetPropsCached:
+
+		case apc.GetPropsSize:
+			entry.Size = lom.SizeBytes()
+		case apc.GetPropsVersion:
+			entry.Version = lom.Version()
+		case apc.GetPropsChecksum:
+			if lom.Checksum() != nil {
+				entry.Checksum = lom.Checksum().Value()
+			}
+		case apc.GetPropsAtime:
+			entry.Atime = cos.FormatUnixNano(lom.AtimeUnix(), wi.msg.TimeFormat)
+
+		case apc.GetTargetURL:
+			// TODO -- FIXME: rename as target-info, remove URL, add node ID and mountpath instead
+			entry.TargetURL = wi.t.Snode().URL(cmn.NetPublic)
+		case apc.GetPropsNode:
+			// TODO -- FIXME: as above
+		case apc.GetPropsCopies:
+			// TODO -- FIXME: may not be true - double-check
+			entry.Copies = int16(lom.NumCopies())
+		case apc.GetPropsEC:
+			// TODO -- FIXME: add/support EC info
+		case apc.GetPropsCustom:
+			// TODO -- FIXME: add/support custom
+		default:
+		}
 	}
-	if wi.needCksum() && lom.Checksum() != nil {
-		entry.Checksum = lom.Checksum().Value()
-	}
-	if wi.needVersion() {
-		entry.Version = lom.Version()
-	}
-	if wi.needCopies() {
-		// TODO -- FIXME: may not be true - double-check
-		entry.Copies = int16(lom.NumCopies())
-	}
-	//
-	// TODO -- FIXME: add/support EC info
-	//
-	if wi.needTargetURL() {
-		entry.TargetURL = wi.t.Snode().URL(cmn.NetPublic)
-	}
-	if wi.needSize() {
-		entry.Size = lom.SizeBytes()
-	}
-	if wi.postCallback != nil {
-		wi.postCallback(lom)
+	if wi.postCb != nil {
+		wi.postCb(lom)
 	}
 	return entry
 }
