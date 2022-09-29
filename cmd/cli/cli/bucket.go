@@ -323,12 +323,14 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	var (
 		msg                   = &apc.ListObjsMsg{Prefix: prefix}
 		objectListFilter, err = newObjectListFilter(c)
+		addCachedCol          = bck.IsRemote()
 	)
 	if err != nil {
 		return err
 	}
 	if flagIsSet(c, listObjCachedFlag) {
 		msg.SetFlag(apc.LsObjCached)
+		addCachedCol = false
 	}
 	if flagIsSet(c, listAnonymousFlag) {
 		msg.SetFlag(apc.LsTryHeadRemB)
@@ -394,7 +396,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			} else {
 				toPrint = objList.Entries
 			}
-			err = printObjProps(c, toPrint, objectListFilter, msg.Props)
+			err = printObjProps(c, toPrint, objectListFilter, msg.Props, addCachedCol)
 			if err != nil {
 				return err
 			}
@@ -420,7 +422,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	}
 
 	cb := func(ctx *api.ProgressContext) {
-		fmt.Fprintf(c.App.Writer, "\rFetched %d objects (elapsed: %s)",
+		fmt.Fprintf(c.App.Writer, "\rListed %d objects (elapsed: %s)",
 			ctx.Info().Count, duration.HumanDuration(ctx.Elapsed()))
 		if ctx.IsFinished() {
 			fmt.Fprintln(c.App.Writer)
@@ -433,7 +435,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if err != nil {
 		return err
 	}
-	return printObjProps(c, objList.Entries, objectListFilter, msg.Props)
+	return printObjProps(c, objList.Entries, objectListFilter, msg.Props, addCachedCol)
 }
 
 // If both backend_bck.name and backend_bck.provider are present, use them.
@@ -622,10 +624,10 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 	return bcks[0], bcks[1], nil
 }
 
-func printObjProps(c *cli.Context, entries []*cmn.ObjEntry, objectFilter *objectListFilter, props string) error {
+func printObjProps(c *cli.Context, entries []*cmn.ObjEntry, objectFilter *objectListFilter, props string, addCachedCol bool) error {
 	var (
 		altMap         template.FuncMap
-		tmpl           = objPropsTemplate(c, props)
+		tmpl           = objPropsTemplate(c, props, addCachedCol)
 		matched, other = objectFilter.filter(entries)
 	)
 	if flagIsSet(c, sizeInBytesFlag) {
@@ -647,7 +649,7 @@ func printObjProps(c *cli.Context, entries []*cmn.ObjEntry, objectFilter *object
 	return err
 }
 
-func objPropsTemplate(c *cli.Context, props string) string {
+func objPropsTemplate(c *cli.Context, props string, addCachedCol bool) string {
 	var (
 		headSb    strings.Builder
 		bodySb    strings.Builder
@@ -655,12 +657,16 @@ func objPropsTemplate(c *cli.Context, props string) string {
 	)
 	bodySb.WriteString("{{range $obj := .}}")
 	for _, field := range propsList {
-		if _, ok := tmpls.ObjectPropsMap[field]; !ok {
+		format, ok := tmpls.ObjectPropsMap[field]
+		if !ok {
+			continue
+		}
+		if field == apc.GetPropsCached && !addCachedCol {
 			continue
 		}
 		columnName := strings.ReplaceAll(strings.ToUpper(field), "_", " ")
 		headSb.WriteString(columnName + "\t ")
-		bodySb.WriteString(tmpls.ObjectPropsMap[field] + "\t ")
+		bodySb.WriteString(format + "\t ")
 	}
 	headSb.WriteString("\n")
 	bodySb.WriteString("\n{{end}}")

@@ -315,16 +315,15 @@ const (
 var (
 	// ObjectPropsMap matches ObjEntry field
 	ObjectPropsMap = map[string]string{
-		"name":       "{{FormatNameArch $obj.Name $obj.Flags}}",
-		"size":       "{{FormatBytesSig $obj.Size 2}}",
-		"checksum":   "{{$obj.Checksum}}",
-		"type":       "{{$obj.Type}}",
-		"atime":      "{{$obj.Atime}}",
-		"version":    "{{$obj.Version}}",
-		"target_url": "{{$obj.TargetURL}}",
-		"status":     "{{FormatObjStatus $obj}}",
-		"copies":     "{{$obj.Copies}}",
-		"cached":     "{{FormatObjIsCached $obj}}",
+		apc.GetPropsName:     "{{FormatNameArch $obj.Name $obj.Flags}}",
+		apc.GetPropsSize:     "{{FormatBytesSig $obj.Size 2}}",
+		apc.GetPropsChecksum: "{{$obj.Checksum}}",
+		apc.GetPropsAtime:    "{{$obj.Atime}}",
+		apc.GetPropsVersion:  "{{$obj.Version}}",
+		apc.GetTargetURL:     "{{$obj.TargetURL}}",
+		apc.GetPropsStatus:   "{{FormatObjStatus $obj}}",
+		apc.GetPropsCopies:   "{{$obj.Copies}}",
+		apc.GetPropsCached:   "{{FormatObjIsCached $obj}}",
 	}
 
 	ObjStatMap = map[string]string{
