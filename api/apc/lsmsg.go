@@ -91,47 +91,44 @@ const (
 	GetPropsChecksum = "checksum"
 	GetPropsAtime    = "atime"
 	GetPropsCached   = "cached"
-	GetTargetURL     = "target_url"
 	GetPropsStatus   = "status"
 	GetPropsCopies   = "copies"
 	GetPropsEC       = "ec"
 	GetPropsCustom   = "custom"
+
+	GetTargetURL     = "target_url"
 	GetPropsNode     = "node"
-
-	// NOTE: update when changing any of the above
-	AllListObjectsProps = "name,size,version,checksum,atime,cached,target_url,status,copies,ec,custom,node"
+	GetPropsLocation = "target_mountpath"
 )
 
-type (
-	ListObjsMsg struct {
-		UUID              string `json:"uuid"`               // ID to identify a single multi-page request
-		Props             string `json:"props"`              // e.g. "checksum,size"
-		TimeFormat        string `json:"time_format"`        // RFC822 is the default
-		Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
-		StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
-		ContinuationToken string `json:"continuation_token"` // BucketList.ContinuationToken
-		Flags             uint64 `json:"flags,string"`       // enum {LsObjCached, ...} - see above
-		PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
-	}
-)
+const PropsLocationSepa = ":"
 
-// popular lists of selected props (NOTE: update when/if `ObjectProps` type changes)
+// NOTE: update when changing any of the above
 var (
-	// minimal
 	GetPropsMinimal = []string{GetPropsName, GetPropsSize}
-	// compact
 	GetPropsDefault = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
-	// all
-	GetPropsAll = append(GetPropsDefault,
-		GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC,
-		GetPropsCustom, GetPropsNode,
+	GetPropsAll     = append(GetPropsDefault,
+		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom,
+		GetTargetURL, GetPropsNode, GetPropsLocation,
 	)
 )
+
+type ListObjsMsg struct {
+	UUID              string `json:"uuid"`               // ID to identify a single multi-page request
+	Props             string `json:"props"`              // e.g. "checksum,size" (see Get* enum above)
+	TimeFormat        string `json:"time_format"`        // RFC822 is the default
+	Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
+	StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
+	ContinuationToken string `json:"continuation_token"` // BucketList.ContinuationToken
+	Flags             uint64 `json:"flags,string"`       // enum {LsObjCached, ...} - see above
+	PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
+}
 
 /////////////////
 // ListObjsMsg //
 /////////////////
 
+// TODO -- FIXME: remove
 // NeedLocalMD indicates that ListObjects for a remote bucket needs
 // to include AIS-maintained metadata: access time, etc.
 func (lsmsg *ListObjsMsg) NeedLocalMD() bool {

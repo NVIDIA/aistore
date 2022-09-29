@@ -1308,12 +1308,11 @@ func crerrStatus(err error) (errCode int) {
 	return
 }
 
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg,
-	lsmsg *apc.ListObjsMsg, begin int64) {
+func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg, lsmsg *apc.ListObjsMsg, beg int64) {
 	var (
-		err     error
-		bckList *cmn.ListObjects
-		smap    = p.owner.smap.get()
+		err  error
+		lst  *cmn.ListObjects
+		smap = p.owner.smap.get()
 	)
 	if smap.CountActiveTargets() < 1 {
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
@@ -1336,12 +1335,12 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()
 		if locationIsAIS || lsmsg.NeedLocalMD() {
+			// bcast
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())
 		} else {
-			// random target to execute `list-objects` on a Cloud bucket
+			// single random target (TODO -- FIXME p.listObjectsRemote)
 			si, _ := smap.GetRandTarget()
-			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList,
-				&smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bucket())
+			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bucket())
 		}
 		nl.SetHrwOwner(&smap.Smap)
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
@@ -1352,9 +1351,9 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	}
 
 	if locationIsAIS {
-		bckList, err = p.listObjectsAIS(bck, lsmsg)
+		lst, err = p.listObjectsAIS(bck, lsmsg)
 	} else {
-		bckList, err = p.listObjectsRemote(bck, lsmsg)
+		lst, err = p.listObjectsRemote(bck, lsmsg)
 		// TODO: `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
 		// cached objects. This isn't easy as we basically need to start a new
@@ -1364,22 +1363,22 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		p.writeErr(w, r, err)
 		return
 	}
-	debug.Assert(bckList != nil)
+	debug.Assert(lst != nil)
 
 	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
-		if !p.writeMsgPack(w, r, bckList, "list-objects") {
+		if !p.writeMsgPack(w, r, lst, "list-objects") {
 			return
 		}
-	} else if !p.writeJSON(w, r, bckList, "list-objects") {
+	} else if !p.writeJSON(w, r, lst, "list-objects") {
 		return
 	}
 
 	// Free memory allocated for temporary slice immediately as it can take up to a few GB
-	bckList.Entries = bckList.Entries[:0]
-	bckList.Entries = nil
-	bckList = nil
+	lst.Entries = lst.Entries[:0]
+	lst.Entries = nil
+	lst = nil
 
-	delta := mono.SinceNano(begin)
+	delta := mono.SinceNano(beg)
 	p.statsT.AddMany(
 		cos.NamedVal64{Name: stats.ListCount, Value: 1},
 		cos.NamedVal64{Name: stats.ListLatency, Value: delta},
@@ -2053,6 +2052,9 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (all
 		Query:  bck.AddToQuery(nil),
 		Body:   cos.MustMarshal(aisMsg),
 	}
+
+	// TODO -- FIXME: always broadcast while designating a single random target to do next-page
+
 	if lsmsg.NeedLocalMD() {
 		args.timeout = reqTimeout
 		args.smap = smap
@@ -2060,7 +2062,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (all
 		results = p.bcastGroup(args)
 	} else {
 		nl, exists := p.notifs.entry(lsmsg.UUID)
-		debug.Assert(exists) // NOTE: we register listobj xaction before starting to list
+		debug.Assert(exists)
 		for _, si := range nl.Notifiers() {
 			cargs := allocCargs()
 			{

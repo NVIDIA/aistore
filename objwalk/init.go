@@ -6,8 +6,6 @@
 package objwalk
 
 import (
-	"strings"
-
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -17,9 +15,8 @@ var (
 )
 
 func init() {
-	names := strings.Split(apc.AllListObjectsProps, ",")
-	allmap = make(map[string]cos.BitFlags, len(names))
-	for i, n := range names {
+	allmap = make(map[string]cos.BitFlags, len(apc.GetPropsAll))
+	for i, n := range apc.GetPropsAll {
 		allmap[n] = cos.BitFlags(1) << i
 	}
 }
