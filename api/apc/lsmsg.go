@@ -96,7 +96,6 @@ const (
 	GetPropsEC       = "ec"
 	GetPropsCustom   = "custom"
 
-	GetTargetURL     = "target_url"
 	GetPropsNode     = "node"
 	GetPropsLocation = "location"
 )
@@ -109,7 +108,7 @@ var (
 	GetPropsDefault = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
 	GetPropsAll     = append(GetPropsDefault,
 		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom,
-		GetTargetURL, GetPropsNode, GetPropsLocation,
+		GetPropsNode, GetPropsLocation,
 	)
 )
 

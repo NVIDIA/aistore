@@ -320,7 +320,7 @@ var (
 		apc.GetPropsChecksum: "{{$obj.Checksum}}",
 		apc.GetPropsAtime:    "{{$obj.Atime}}",
 		apc.GetPropsVersion:  "{{$obj.Version}}",
-		apc.GetTargetURL:     "{{$obj.TargetURL}}",
+		apc.GetPropsLocation: "{{$obj.Location}}",
 		apc.GetPropsStatus:   "{{FormatObjStatus $obj}}",
 		apc.GetPropsCopies:   "{{$obj.Copies}}",
 		apc.GetPropsCached:   "{{FormatObjIsCached $obj}}",

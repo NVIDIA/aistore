@@ -4,7 +4,7 @@ go 1.19
 
 // direct
 require (
-	github.com/NVIDIA/aistore v0.0.0-20220928220517-6dba8a73ad1f
+	github.com/NVIDIA/aistore v0.0.0-20220930180705-601febcbaaef
 	github.com/fatih/color v1.13.0
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo v1.16.5

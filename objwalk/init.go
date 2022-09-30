@@ -57,8 +57,6 @@ func setWanted(e *cmn.ObjEntry, t cluster.Target, lom *cluster.LOM, tmformat str
 		case apc.GetPropsLocation:
 			e.Location = t.String() + apc.PropsLocationSepa + lom.MpathInfo().String()
 
-		case apc.GetTargetURL:
-			// TODO -- FIXME: remove
 		case apc.GetPropsNode:
 			// TODO -- FIXME: remove
 		case apc.GetPropsCopies:
