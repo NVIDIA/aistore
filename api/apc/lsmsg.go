@@ -103,7 +103,7 @@ const (
 
 const PropsLocationSepa = ":"
 
-// NOTE: update when changing any of the above
+// NOTE: update when changing any of the above :NOTE
 var (
 	GetPropsMinimal = []string{GetPropsName, GetPropsSize}
 	GetPropsDefault = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}

@@ -24,18 +24,18 @@ import (
 //
 // 3:   CheckExists (for remote bucket it shows if the object in present in AIS)
 type ObjEntry struct {
-	Name      string `json:"name" msg:"n"`                            // name of the object (NOTE: does not include the bucket name)
-	Checksum  string `json:"checksum,omitempty" msg:"cs,omitempty"`   // object's checksum
-	Atime     string `json:"atime,omitempty" msg:"a,omitempty"`       // last access time; formatted as per ListObjsMsg.TimeFormat
-	Version   string `json:"version,omitempty" msg:"v,omitempty"`     // GCP int64 generation, AWS version (string), etc.
-	TargetURL string `json:"target_url,omitempty" msg:"t,omitempty"`  // (advanced usage)
-	Size      int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes
-	Copies    int16  `json:"copies,omitempty" msg:"c,omitempty"`      // ## copies (NOTE: non-replicated = 1)
-	Flags     uint16 `json:"flags,omitempty" msg:"f,omitempty"`
+	Name     string `json:"name" msg:"n"`                            // name of the object (NOTE: does not include the bucket name)
+	Checksum string `json:"checksum,omitempty" msg:"cs,omitempty"`   // object's checksum
+	Atime    string `json:"atime,omitempty" msg:"a,omitempty"`       // last access time; formatted as per ListObjsMsg.TimeFormat
+	Version  string `json:"version,omitempty" msg:"v,omitempty"`     // GCP int64 generation, AWS version (string), etc.
+	Location string `json:"location,omitempty" msg:"t,omitempty"`    // tnode:mountpath
+	Size     int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes
+	Copies   int16  `json:"copies,omitempty" msg:"c,omitempty"`      // ## copies (NOTE: non-replicated = 1)
+	Flags    uint16 `json:"flags,omitempty" msg:"f,omitempty"`
 }
 
 func (be *ObjEntry) CheckExists() bool  { return be.Flags&apc.EntryIsCached != 0 }
-func (be *ObjEntry) SetExists()         { be.Flags |= apc.EntryIsCached }
+func (be *ObjEntry) SetPresent()        { be.Flags |= apc.EntryIsCached }
 func (be *ObjEntry) IsStatusOK() bool   { return be.Status() == 0 }
 func (be *ObjEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }
 func (be *ObjEntry) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
@@ -55,8 +55,8 @@ func (be *ObjEntry) CopyWithProps(propsSet cos.StringSet) (ne *ObjEntry) {
 	if propsSet.Contains(apc.GetPropsVersion) {
 		ne.Version = be.Version
 	}
-	if propsSet.Contains(apc.GetTargetURL) {
-		ne.TargetURL = be.TargetURL
+	if propsSet.Contains(apc.GetPropsLocation) {
+		ne.Location = be.Location
 	}
 	if propsSet.Contains(apc.GetPropsCopies) {
 		ne.Copies = be.Copies

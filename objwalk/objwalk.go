@@ -14,20 +14,22 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 )
 
-type (
-	Walk struct {
-		ctx context.Context
-		t   cluster.Target
-		bck *cluster.Bck
-		msg *apc.ListObjsMsg
-	}
-)
+type Walk struct {
+	ctx    context.Context
+	t      cluster.Target
+	bck    *cluster.Bck
+	msg    *apc.ListObjsMsg
+	wanted cos.BitFlags
+}
 
-func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.ListObjsMsg) *Walk {
-	return &Walk{ctx: ctx, t: t, bck: bck, msg: msg}
+func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.ListObjsMsg) (w *Walk) {
+	w = &Walk{ctx: ctx, t: t, bck: bck, msg: msg}
+	w.wanted = wanted(msg)
+	return
 }
 
 // NextObjPage can be used when there's no need to retain results for a longer period of time
@@ -73,34 +75,30 @@ func (w *Walk) NextObjPage() (*cmn.ListObjects, error) {
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
 func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
-	if w.msg.IsFlagSet(apc.LsObjCached) {
-		return w.NextObjPage()
-	}
+	debug.Assert(!w.msg.IsFlagSet(apc.LsObjCached))
+
+	// TODO -- FIXME: needed?
 	msg := &apc.ListObjsMsg{}
 	cos.CopyStruct(msg, w.msg)
+
 	lst, _, err := w.t.Backend(w.bck).ListObjects(w.bck, msg)
 	if err != nil {
 		return nil, err
 	}
 	var (
-		localURL        = w.t.Snode().URL(cmn.NetPublic)
 		localID         = w.t.SID()
 		smap            = w.t.Sowner().Get()
 		postCallback, _ = w.ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
-		needURL         = w.msg.WantProp(apc.GetTargetURL)
-		needAtime       = w.msg.WantProp(apc.GetPropsAtime)
-		needCksum       = w.msg.WantProp(apc.GetPropsChecksum)
-		needVersion     = w.msg.WantProp(apc.GetPropsVersion)
-		needCopies      = w.msg.WantProp(apc.GetPropsCopies)
 	)
 	for _, e := range lst.Entries {
-		si, _ := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)
-		if si.ID() != localID {
-			continue
+		si, err := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)
+		if err != nil {
+			return nil, err
 		}
 
-		if needURL {
-			e.TargetURL = localURL
+		// TODO -- FIXME: check
+		if si.ID() != localID {
+			continue
 		}
 		lom := cluster.AllocLOM(e.Name)
 		if err := lom.InitBck(w.bck.Bucket()); err != nil {
@@ -114,24 +112,10 @@ func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
 			cluster.FreeLOM(lom)
 			continue
 		}
-		e.SetExists()
-		if needAtime {
-			if lom.AtimeUnix() < 0 {
-				// Prefetched object - return zero time
-				e.Atime = cos.FormatUnixNano(0, w.msg.TimeFormat)
-			} else {
-				e.Atime = cos.FormatUnixNano(lom.AtimeUnix(), w.msg.TimeFormat)
-			}
-		}
-		if needCksum && lom.Checksum() != nil {
-			e.Checksum = lom.Checksum().Value()
-		}
-		if needVersion && lom.Version() != "" {
-			e.Version = lom.Version()
-		}
-		if needCopies {
-			e.Copies = int16(lom.NumCopies())
-		}
+
+		setWanted(e, w.t, lom, w.msg.TimeFormat, w.wanted)
+		e.SetPresent()
+
 		if postCallback != nil {
 			postCallback(lom)
 		}

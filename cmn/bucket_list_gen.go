@@ -203,9 +203,9 @@ func (z *ObjEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "t":
-			z.TargetURL, err = dc.ReadString()
+			z.Location, err = dc.ReadString()
 			if err != nil {
-				err = msgp.WrapError(err, "TargetURL")
+				err = msgp.WrapError(err, "Location")
 				return
 			}
 		case "s":
@@ -254,7 +254,7 @@ func (z *ObjEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.TargetURL == "" {
+	if z.Location == "" {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
@@ -330,9 +330,9 @@ func (z *ObjEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		if err != nil {
 			return
 		}
-		err = en.WriteString(z.TargetURL)
+		err = en.WriteString(z.Location)
 		if err != nil {
-			err = msgp.WrapError(err, "TargetURL")
+			err = msgp.WrapError(err, "Location")
 			return
 		}
 	}
@@ -377,6 +377,6 @@ func (z *ObjEntry) EncodeMsg(en *msgp.Writer) (err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ObjEntry) Msgsize() (s int) {
-	s = 1 + 2 + msgp.StringPrefixSize + len(z.Name) + 3 + msgp.StringPrefixSize + len(z.Checksum) + 2 + msgp.StringPrefixSize + len(z.Atime) + 2 + msgp.StringPrefixSize + len(z.Version) + 2 + msgp.StringPrefixSize + len(z.TargetURL) + 2 + msgp.Int64Size + 2 + msgp.Int16Size + 2 + msgp.Uint16Size
+	s = 1 + 2 + msgp.StringPrefixSize + len(z.Name) + 3 + msgp.StringPrefixSize + len(z.Checksum) + 2 + msgp.StringPrefixSize + len(z.Atime) + 2 + msgp.StringPrefixSize + len(z.Version) + 2 + msgp.StringPrefixSize + len(z.Location) + 2 + msgp.Int64Size + 2 + msgp.Int16Size + 2 + msgp.Uint16Size
 	return
 }

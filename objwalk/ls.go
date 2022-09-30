@@ -42,7 +42,6 @@ func isOK(status uint16) bool { return status == apc.LocOK }
 func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) (wi *WalkInfo) {
 	var (
 		markerDir string
-		wanted    cos.BitFlags
 		postCb, _ = ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
 	)
 	if msg.ContinuationToken != "" { // marker is always a filename
@@ -51,18 +50,13 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) (w
 			markerDir = ""
 		}
 	}
-	for prop, fl := range allmap {
-		if msg.WantProp(prop) {
-			wanted = wanted.Set(fl)
-		}
-	}
 	wi = &WalkInfo{
 		t:         t,
 		smap:      t.Sowner().Get(),
 		postCb:    postCb,
 		markerDir: markerDir,
-		wanted:    wanted,
 	}
+	wi.wanted = wanted(msg)
 	wi.msg = *msg
 	return
 }
@@ -103,51 +97,17 @@ func (wi *WalkInfo) match(lom *cluster.LOM) bool {
 	return true
 }
 
-// new entry to be added to the listed page (TODO: add/support EC info)
-func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) *cmn.ObjEntry {
-	entry := &cmn.ObjEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
+// new entry to be added to the listed page
+func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.ObjEntry) {
+	e = &cmn.ObjEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
-		return entry
+		return
 	}
-	for name, fl := range allmap {
-		if !wi.wanted.IsSet(fl) {
-			continue
-		}
-		switch name {
-		case apc.GetPropsName:
-		case apc.GetPropsStatus:
-		case apc.GetPropsCached:
-
-		case apc.GetPropsSize:
-			entry.Size = lom.SizeBytes()
-		case apc.GetPropsVersion:
-			entry.Version = lom.Version()
-		case apc.GetPropsChecksum:
-			if lom.Checksum() != nil {
-				entry.Checksum = lom.Checksum().Value()
-			}
-		case apc.GetPropsAtime:
-			entry.Atime = cos.FormatUnixNano(lom.AtimeUnix(), wi.msg.TimeFormat)
-
-		case apc.GetTargetURL:
-			// TODO -- FIXME: rename as target-info, remove URL, add node ID and mountpath instead
-			entry.TargetURL = wi.t.Snode().URL(cmn.NetPublic)
-		case apc.GetPropsNode:
-			// TODO -- FIXME: as above
-		case apc.GetPropsCopies:
-			// TODO -- FIXME: may not be true - double-check
-			entry.Copies = int16(lom.NumCopies())
-		case apc.GetPropsEC:
-			// TODO -- FIXME: add/support EC info
-		case apc.GetPropsCustom:
-			// TODO -- FIXME: add/support custom
-		default:
-		}
-	}
+	setWanted(e, wi.t, lom, wi.msg.TimeFormat, wi.wanted)
 	if wi.postCb != nil {
 		wi.postCb(lom)
 	}
-	return entry
+	return
 }
 
 // By default, Callback performs a number of syscalls to load object metadata.

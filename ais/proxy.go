@@ -2034,10 +2034,6 @@ end:
 	return allEntries, nil
 }
 
-// lsObjsRemote returns the list of objects from requested remote bucket
-// (cloud or remote AIS). If request requires local data then it is broadcast
-// to all targets which perform traverse on the disks, otherwise random target
-// is chosen to perform cloud listing.
 func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg, wantOnlyRemote bool) (allEntries *cmn.ListObjects, err error) {
 	if lsmsg.StartAfter != "" {
 		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", lsmsg.StartAfter)
@@ -2102,16 +2098,6 @@ func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg, wantOnlyR
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Objects after merge: %d, token: %q", len(allEntries.Entries), allEntries.ContinuationToken)
 	}
-
-	if lsmsg.WantProp(apc.GetTargetURL) {
-		for _, e := range allEntries.Entries {
-			si, err := cluster.HrwTarget(bck.MakeUname(e.Name), &smap.Smap)
-			if err == nil {
-				e.TargetURL = si.URL(cmn.NetPublic)
-			}
-		}
-	}
-
 	return allEntries, nil
 }
 

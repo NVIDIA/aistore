@@ -179,10 +179,12 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	)
 	tlog.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	lst, err := api.ListObjects(baseParams, m.bck, &apc.ListObjsMsg{Props: apc.GetTargetURL}, 0)
+	lst, err := api.ListObjects(baseParams, m.bck, &apc.ListObjsMsg{Props: apc.GetPropsLocation}, 0)
 	tassert.CheckFatal(t, err)
 	for _, obj := range lst.Entries {
-		targetObjectCount[obj.TargetURL]++
+		tmp := strings.Split(obj.Location, apc.PropsLocationSepa)
+		tid := cluster.N2ID(tmp[0])
+		targetObjectCount[tid]++
 	}
 	if len(targetObjectCount) != m.originalTargetCount {
 		t.Fatalf("Rebalance error, %d/%d targets received no objects from bucket %s\n",

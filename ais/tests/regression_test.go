@@ -50,7 +50,7 @@ const (
 	testBucketName = "TESTAISBUCKET"
 )
 
-func TestLocalListObjectsGetTargetURL(t *testing.T) {
+func TestListObjectsLocalGetLocation(t *testing.T) {
 	var (
 		m = ioContext{
 			t:         t,
@@ -72,26 +72,29 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 
 	m.puts()
 
-	msg := &apc.ListObjsMsg{Props: apc.GetTargetURL}
-	bl, err := api.ListObjects(baseParams, m.bck, msg, uint(m.num))
+	msg := &apc.ListObjsMsg{Props: apc.GetPropsLocation}
+	lst, err := api.ListObjects(baseParams, m.bck, msg, uint(m.num))
 	tassert.CheckFatal(t, err)
 
-	if len(bl.Entries) != m.num {
-		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(bl.Entries))
+	if len(lst.Entries) != m.num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(lst.Entries))
 	}
 
 	j := 10
-	if len(bl.Entries) >= 200 {
+	if len(lst.Entries) >= 200 {
 		j = 100
 	}
-	for i, e := range bl.Entries {
-		if e.TargetURL == "" {
-			t.Error("Target URL in response is empty")
+	for i, e := range lst.Entries {
+		if e.Location == "" {
+			t.Fatalf("[%#v]: location is empty", e)
 		}
-		if _, ok := targets[e.TargetURL]; !ok {
-			targets[e.TargetURL] = struct{}{}
-		}
-		baseParams := tools.BaseAPIParams(e.TargetURL)
+		tmp := strings.Split(e.Location, apc.PropsLocationSepa)
+		tid := cluster.N2ID(tmp[0])
+		targets[tid] = struct{}{}
+
+		tsi := smap.GetTarget(tid)
+		url := tsi.URL(cmn.NetPublic)
+		baseParams := tools.BaseAPIParams(url)
 
 		l, err := api.GetObject(baseParams, m.bck, e.Name)
 		tassert.CheckFatal(t, err)
@@ -121,21 +124,21 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	msg.Props = ""
-	bl, err = api.ListObjects(baseParams, m.bck, msg, uint(m.num))
+	lst, err = api.ListObjects(baseParams, m.bck, msg, uint(m.num))
 	tassert.CheckFatal(t, err)
 
-	if len(bl.Entries) != m.num {
-		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(bl.Entries))
+	if len(lst.Entries) != m.num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(lst.Entries))
 	}
 
-	for _, e := range bl.Entries {
-		if e.TargetURL != "" {
-			t.Fatalf("Target URL: %s returned when empty target URL expected\n", e.TargetURL)
+	for _, e := range lst.Entries {
+		if e.Location != "" {
+			t.Fatalf("[%#v]: location expected to be empty\n", e)
 		}
 	}
 }
 
-func TestCloudListObjectsGetTargetURL(t *testing.T) {
+func TestListObjectsCloudGetLocation(t *testing.T) {
 	var (
 		m = ioContext{
 			t:        t,
@@ -147,6 +150,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		bck        = cliBck
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
+		smap       = tools.GetClusterMap(t, proxyURL)
 	)
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
@@ -156,7 +160,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 
 	m.puts()
 
-	listObjectsMsg := &apc.ListObjsMsg{Props: apc.GetTargetURL, Flags: apc.LsObjCached}
+	listObjectsMsg := &apc.ListObjsMsg{Props: apc.GetPropsLocation, Flags: apc.LsObjCached}
 	lst, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -167,15 +171,18 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	if len(lst.Entries) >= 200 {
 		j = 100
 	}
-	for i, object := range lst.Entries {
-		if object.TargetURL == "" {
-			t.Errorf("Target URL in response is empty for object [%s]", object.Name)
+	for i, e := range lst.Entries {
+		if e.Location == "" {
+			t.Fatalf("[%#v]: location is empty", e)
 		}
-		if _, ok := targets[object.TargetURL]; !ok {
-			targets[object.TargetURL] = struct{}{}
-		}
-		baseParams := tools.BaseAPIParams(object.TargetURL)
-		objectSize, err := api.GetObject(baseParams, bck, object.Name)
+		tmp := strings.Split(e.Location, apc.PropsLocationSepa)
+		tid := cluster.N2ID(tmp[0])
+		targets[tid] = struct{}{}
+		tsi := smap.GetTarget(tid)
+		url := tsi.URL(cmn.NetPublic)
+		baseParams := tools.BaseAPIParams(url)
+
+		objectSize, err := api.GetObject(baseParams, bck, e.Name)
 		tassert.CheckFatal(t, err)
 		if uint64(objectSize) != m.fileSize {
 			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", m.fileSize, objectSize)
@@ -186,7 +193,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
 			tools.SetClusterConfig(t, cos.SimpleKVs{"features": feat.EnforceIntraClusterAccess.Value()})
-			_, err = api.GetObject(baseParams, m.bck, object.Name)
+			_, err = api.GetObject(baseParams, m.bck, e.Name)
 
 			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features
 			// tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
@@ -210,9 +217,9 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(lst.Entries))
 	}
 
-	for _, object := range lst.Entries {
-		if object.TargetURL != "" {
-			t.Fatalf("Target URL: %s returned when empty target URL expected\n", object.TargetURL)
+	for _, e := range lst.Entries {
+		if e.Location != "" {
+			t.Fatalf("[%#v]: location expected to be empty\n", e)
 		}
 	}
 }

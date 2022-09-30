@@ -662,8 +662,8 @@ func TestListObjectsGoBack(t *testing.T) {
 			entries = append(entries, objPage.Entries...)
 		}
 
-		cmn.SortBckEntries(entries)
-		cmn.SortBckEntries(expectedEntries)
+		cmn.SortObjList(entries)
+		cmn.SortObjList(expectedEntries)
 
 		tassert.Fatalf(
 			t, len(expectedEntries) == m.num,
@@ -827,7 +827,7 @@ func TestListObjectsProps(t *testing.T) {
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, entry.Atime != "", "atime is not set")
 
-				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
 				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			})
 
@@ -838,7 +838,7 @@ func TestListObjectsProps(t *testing.T) {
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, entry.Atime != "", "atime is not set")
 
-				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
 				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			})
 
@@ -852,7 +852,7 @@ func TestListObjectsProps(t *testing.T) {
 
 				tassert.Errorf(t, entry.Size == 0, "size is set")
 				tassert.Errorf(t, entry.Atime == "", "atime is set")
-				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
 			})
 
 			tlog.Logf("[cache=%t] trying small subset of props...\n", useCache)
@@ -862,7 +862,7 @@ func TestListObjectsProps(t *testing.T) {
 				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum == "", "checksum is set")
 				tassert.Errorf(t, entry.Atime == "", "atime is set")
-				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
 				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			})
 
@@ -874,7 +874,7 @@ func TestListObjectsProps(t *testing.T) {
 				}
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, entry.Atime != "", "atime is not set")
-				tassert.Errorf(t, entry.TargetURL != "", "targetURL is not set")
+				tassert.Errorf(t, entry.Location != "", "target location is not set [%#v]", entry)
 				tassert.Errorf(t, entry.Copies != 0, "copies is not set")
 			})
 		}
@@ -922,7 +922,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 				tassert.Errorf(t, entry.Atime != "", "atime is not set")
 				// NOTE: `entry.Version` value depends on remote bucket configuration.
 
-				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
 				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			}
 		}

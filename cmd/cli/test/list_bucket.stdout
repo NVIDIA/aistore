@@ -29,11 +29,11 @@ tmp/shard-2.tar		 2.50KiB	 1
 tmp/shard-3.tar		 2.50KiB	 1
 tmp/shard-4.tar		 2.50KiB	 1
 NAME	 SIZE		 CHECKSUM	 ATIME	 VERSION	 TARGET URL	 STATUS	 COPIES
-^tmp/shard-0.tar	 2.50KiB	 (.*)	 .{16}	 1	 https?://(.*)	 ok	 1$
-^tmp/shard-1.tar	 2.50KiB	 (.*)	 .{16}	 1	 https?://(.*)	 ok	 1$
-^tmp/shard-2.tar	 2.50KiB	 (.*)	 .{16}	 1	 https?://(.*)	 ok	 1$
-^tmp/shard-3.tar	 2.50KiB	 (.*)	 .{16}	 1	 https?://(.*)	 ok	 1$
-^tmp/shard-4.tar	 2.50KiB	 (.*)	 .{16}	 1	 https?://(.*)	 ok	 1$
+^tmp/shard-0.tar	 2.50KiB	 (.*)	 .{16}	 1	 	 ok	 1$
+^tmp/shard-1.tar	 2.50KiB	 (.*)	 .{16}	 1	 	 ok	 1$
+^tmp/shard-2.tar	 2.50KiB	 (.*)	 .{16}	 1	 	 ok	 1$
+^tmp/shard-3.tar	 2.50KiB	 (.*)	 .{16}	 1	 	 ok	 1$
+^tmp/shard-4.tar	 2.50KiB	 (.*)	 .{16}	 1	 	 ok	 1$
 NAME			 SIZE
 tmp/shard-0.tar		 2.50KiB
 tmp/shard-1.tar		 2.50KiB

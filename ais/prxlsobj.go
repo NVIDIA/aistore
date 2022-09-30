@@ -187,7 +187,7 @@ func (b *lsobjBuffer) mergeTargetBuffers() (filled bool) {
 		}
 	}
 
-	cmn.SortBckEntries(entries)
+	cmn.SortObjList(entries)
 
 	if minObj != "" {
 		idx := sort.Search(len(entries), func(i int) bool {

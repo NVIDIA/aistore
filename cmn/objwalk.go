@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func SortBckEntries(bckEntries []*ObjEntry) {
+func SortObjList(bckEntries []*ObjEntry) {
 	entryLess := func(i, j int) bool {
 		if bckEntries[i].Name == bckEntries[j].Name {
 			return bckEntries[i].Flags&apc.EntryStatusMask < bckEntries[j].Flags&apc.EntryStatusMask
@@ -23,7 +23,7 @@ func SortBckEntries(bckEntries []*ObjEntry) {
 	sort.Slice(bckEntries, entryLess)
 }
 
-func deduplicateBckEntries(bckEntries []*ObjEntry, maxSize uint) ([]*ObjEntry, string) {
+func dedupObjList(bckEntries []*ObjEntry, maxSize uint) ([]*ObjEntry, string) {
 	objCount := uint(len(bckEntries))
 
 	j := 0
@@ -75,10 +75,10 @@ func ConcatObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
 	// For corner case: we have objects with replicas on page threshold
 	// we have to sort taking status into account. Otherwise wrong
 	// one(Status=moved) may get into the response
-	SortBckEntries(objs.Entries)
+	SortObjList(objs.Entries)
 
 	// Remove duplicates
-	objs.Entries, objs.ContinuationToken = deduplicateBckEntries(objs.Entries, maxSize)
+	objs.Entries, objs.ContinuationToken = dedupObjList(objs.Entries, maxSize)
 	return
 }
 
@@ -90,59 +90,55 @@ func ConcatObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
 // them to get single list with merged information for each object.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func MergeObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
+func MergeObjLists(lists []*ListObjects, maxSize uint) *ListObjects {
 	if len(lists) == 0 {
 		return &ListObjects{}
 	}
-
-	bckList := lists[0] // main list to collect all info
-	contiunationToken := bckList.ContinuationToken
-
+	resList := lists[0]
+	continuationToken := resList.ContinuationToken
 	if len(lists) == 1 {
-		SortBckEntries(bckList.Entries)
-		bckList.Entries, _ = deduplicateBckEntries(bckList.Entries, maxSize)
-		bckList.ContinuationToken = contiunationToken
-		return bckList
+		SortObjList(resList.Entries)
+		resList.Entries, _ = dedupObjList(resList.Entries, maxSize)
+		resList.ContinuationToken = continuationToken
+		return resList
 	}
 
-	objSet := make(map[string]*ObjEntry, len(bckList.Entries))
+	lst := make(map[string]*ObjEntry, len(resList.Entries))
 	for _, l := range lists {
-		bckList.Flags |= l.Flags
-		if contiunationToken < l.ContinuationToken {
-			contiunationToken = l.ContinuationToken
+		resList.Flags |= l.Flags
+		if continuationToken < l.ContinuationToken {
+			continuationToken = l.ContinuationToken
 		}
 		for _, e := range l.Entries {
-			entry, exists := objSet[e.Name]
+			entry, exists := lst[e.Name]
 			if !exists {
-				objSet[e.Name] = e
+				lst[e.Name] = e
 				continue
 			}
 			// detect which list contains real information about the object
 			if !entry.CheckExists() && e.CheckExists() {
 				e.Version = cos.Either(e.Version, entry.Version)
-				objSet[e.Name] = e
+				lst[e.Name] = e
 			} else {
-				// TargetURL maybe filled even if an object is not cached
-				entry.TargetURL = cos.Either(entry.TargetURL, e.TargetURL)
+				entry.Location = cos.Either(entry.Location, e.Location)
 				entry.Version = cos.Either(entry.Version, e.Version)
 			}
 		}
 	}
 
-	if len(objSet) == 0 {
+	if len(lst) == 0 {
 		return &ListObjects{}
 	}
 
-	// cleanup and refill
-	bckList.Entries = bckList.Entries[:0]
-	for _, v := range objSet {
-		bckList.Entries = append(bckList.Entries, v)
+	// cleanup and sort
+	resList.Entries = resList.Entries[:0]
+	for _, v := range lst {
+		resList.Entries = append(resList.Entries, v)
 	}
-
-	SortBckEntries(bckList.Entries)
-	bckList.Entries, _ = deduplicateBckEntries(bckList.Entries, maxSize)
-	bckList.ContinuationToken = contiunationToken
-	return bckList
+	SortObjList(resList.Entries)
+	resList.Entries, _ = dedupObjList(resList.Entries, maxSize)
+	resList.ContinuationToken = continuationToken
+	return resList
 }
 
 // Returns true if the (continuation) token includes the object's name
@@ -151,10 +147,10 @@ func TokenIncludesObject(token, objName string) bool {
 	return strings.Compare(token, objName) >= 0
 }
 
+// Every directory has to either:
+// - be contained in prefix (for levels lower than prefix: prefix="abcd/def", directory="abcd")
+// - include prefix (for levels deeper than prefix: prefix="a/", directory="a/b")
 func DirNameContainsPrefix(dirPath, prefix string) bool {
-	// Every directory has to either:
-	// - be contained in prefix (for levels lower than prefix: prefix="abcd/def", directory="abcd")
-	// - include prefix (for levels deeper than prefix: prefix="a/", directory="a/b")
 	return prefix == "" || (strings.HasPrefix(prefix, dirPath) || strings.HasPrefix(dirPath, prefix))
 }
 
