@@ -65,7 +65,7 @@ parse_backend_providers() {
 }
 
 create_loopbacks() {
-  echo "Loopback device size, e.g. 10G, 100M. Note that creating loopbacks may take time, press Enter to skip: "
+  echo "Loopback device size, e.g. 10G, 100M. Note that creating loopbacks may take a while, press Enter to skip: "
   read -r loopback_size
   if [[ "$loopback_size" == "" || "$loopback_size" == "0" ]] ; then
     return

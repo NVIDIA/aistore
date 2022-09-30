@@ -67,7 +67,7 @@ Amazon S3: (y/n) ?
 Google Cloud Storage: (y/n) ?
 Azure: (y/n) ?
 HDFS: (y/n) ?
-Loopback device size, e.g. 10G, 100M. Note that creating loopbacks may take time, press Enter to skip:
+Loopback device size, e.g. 10G, 100M. Note that creating loopbacks may take a while, press Enter to skip:
 Building aisnode: version=100676b29 providers= aws gcp tags= aws gcp debug mono
 done.
 Listening on port: 8080

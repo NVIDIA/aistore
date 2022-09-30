@@ -8,7 +8,9 @@ BUILD_DIR = ./cmd
 BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
 
 ifeq ($(shell go env GOOS),linux)
+ifeq ($(strip $(GORACE)),)
 	CGO_DISABLE = CGO_ENABLED=0
+endif
 endif
 
 AISTORE_PATH = $(shell git rev-parse --show-toplevel)
