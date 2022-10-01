@@ -1244,8 +1244,8 @@ func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
 	return cksums
 }
 
-func flattenXactStats(snap *xact.SnapExt) []*nvpair {
-	props := make([]*nvpair, 0)
+func flattenXactStats(snap *xact.SnapExt) nvpairList {
+	props := make(nvpairList, 0)
 	if snap == nil {
 		return props
 	}
@@ -1257,19 +1257,19 @@ func flattenXactStats(snap *xact.SnapExt) []*nvpair {
 	}
 	props = append(props,
 		// Start xaction properties with a dot to make them first alphabetically
-		&nvpair{Name: ".id", Value: snap.ID},
-		&nvpair{Name: ".kind", Value: snap.Kind},
-		&nvpair{Name: ".bck", Value: snap.Bck.String()},
-		&nvpair{Name: ".start", Value: fmtTime(snap.StartTime)},
-		&nvpair{Name: ".end", Value: fmtTime(snap.EndTime)},
-		&nvpair{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
+		nvpair{Name: ".id", Value: snap.ID},
+		nvpair{Name: ".kind", Value: snap.Kind},
+		nvpair{Name: ".bck", Value: snap.Bck.String()},
+		nvpair{Name: ".start", Value: fmtTime(snap.StartTime)},
+		nvpair{Name: ".end", Value: fmtTime(snap.EndTime)},
+		nvpair{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
 
-		&nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
-		&nvpair{Name: "loc.obj.size", Value: formatStatHuman(".size", snap.Stats.Bytes)},
-		&nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
-		&nvpair{Name: "in.obj.size", Value: formatStatHuman(".size", snap.Stats.InBytes)},
-		&nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
-		&nvpair{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
+		nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
+		nvpair{Name: "loc.obj.size", Value: formatStatHuman(".size", snap.Stats.Bytes)},
+		nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
+		nvpair{Name: "in.obj.size", Value: formatStatHuman(".size", snap.Stats.InBytes)},
+		nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
+		nvpair{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
 	)
 	if extStats, ok := snap.Ext.(map[string]any); ok {
 		for k, v := range extStats {
@@ -1283,7 +1283,7 @@ func flattenXactStats(snap *xact.SnapExt) []*nvpair {
 			if value == "" {
 				value = fmt.Sprintf("%v", v)
 			}
-			props = append(props, &nvpair{Name: k, Value: value})
+			props = append(props, nvpair{Name: k, Value: value})
 		}
 	}
 	sort.Slice(props, func(i, j int) bool {
