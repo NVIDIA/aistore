@@ -829,7 +829,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 			v = fmt.Sprintf("%+v", custom)
 		}
 	case apc.GetPropsLocation:
-		v = tmpls.NotSetVal // TODO -- FIXME: up and fix
+		v = op.Location
 	default:
 		debug.Assert(false, name)
 	}

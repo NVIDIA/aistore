@@ -12,7 +12,7 @@ checksum         xxhash[05967d5390ac53b0]
 ^copies\s*1(.*)$
 custom           -
 ec               -
-location         -
+^location(t.+:mp.+)$
 name             ais://$BUCKET_1/object_1.txt
 size             11B
 version          1
@@ -22,7 +22,7 @@ checksum         xxhash[05967d5390ac53b0]
 ^copies\s*1(.*)$
 custom           map[key1:val1 key222:val222]
 ec               -
-location         -
+^location(t.+:mp.+)$
 name             ais://$BUCKET_1/object_1.txt
 size             11B
 version          1
