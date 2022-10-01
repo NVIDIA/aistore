@@ -146,9 +146,9 @@ func resetCLIAliasHandler(c *cli.Context) (err error) {
 }
 
 func showCLIAliasHandler(c *cli.Context) (err error) {
-	aliases := make([]prop, 0, len(cfg.Aliases))
+	aliases := make(nvpairList, 0, len(cfg.Aliases))
 	for k, v := range cfg.Aliases {
-		aliases = append(aliases, prop{Name: k, Value: v})
+		aliases = append(aliases, nvpair{Name: k, Value: v})
 	}
 	sort.Slice(aliases, func(i, j int) bool {
 		return aliases[i].Name < aliases[j].Name

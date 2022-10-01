@@ -456,9 +456,9 @@ func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck)
 	}
 
 	if canVerbose && flagIsSet(c, verboseFlag) {
-		var props []*prop
+		var props []*nvpair
 		if len(dts) == 0 || len(dts[0].XactSnaps) == 0 {
-			props = make([]*prop, 0)
+			props = make([]*nvpair, 0)
 		} else {
 			props = flattenXactStats(dts[0].XactSnaps[0])
 		}
@@ -579,7 +579,7 @@ func showNodeConfig(c *cli.Context) error {
 
 	data := struct {
 		ClusterConfig []propDiff
-		LocalConfig   []prop
+		LocalConfig   nvpairList
 	}{}
 	for _, a := range c.Args().Tail() {
 		if a == scopeAll || a == cfgScopeInherited || a == cfgScopeLocal {
@@ -746,12 +746,12 @@ func fmtStatValue(name string, value int64, human bool) string {
 	return fmt.Sprintf("%v", value)
 }
 
-func appendStatToProps(props []*prop, name string, value int64, prefix, filter string, human bool) []*prop {
+func appendStatToProps(props []*nvpair, name string, value int64, prefix, filter string, human bool) []*nvpair {
 	name = prefix + name
 	if filter != "" && !strings.Contains(name, filter) {
 		return props
 	}
-	return append(props, &prop{Name: name, Value: fmtStatValue(name, value, human)})
+	return append(props, &nvpair{Name: name, Value: fmtStatValue(name, value, human)})
 }
 
 func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
@@ -765,7 +765,7 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 
 	human := !flagIsSet(c, rawFlag)
 	filter := c.Args().Get(1)
-	props := make([]*prop, 0, len(stats.Tracker))
+	props := make([]*nvpair, 0, len(stats.Tracker))
 	for k, v := range stats.Tracker {
 		props = appendStatToProps(props, k, v.Value, "", filter, human)
 	}
@@ -787,10 +787,10 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 				continue
 			}
 			props = append(props,
-				&prop{Name: prefix + "path", Value: mpath},
-				&prop{Name: prefix + "used", Value: fmtStatValue(".size", int64(mstat.Used), human)},
-				&prop{Name: prefix + "avail", Value: fmtStatValue(".size", int64(mstat.Avail), human)},
-				&prop{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
+				&nvpair{Name: prefix + "path", Value: mpath},
+				&nvpair{Name: prefix + "used", Value: fmtStatValue(".size", int64(mstat.Used), human)},
+				&nvpair{Name: prefix + "avail", Value: fmtStatValue(".size", int64(mstat.Avail), human)},
+				&nvpair{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
 			mID++
 		}
 	}
@@ -810,7 +810,7 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 
 	human := !flagIsSet(c, rawFlag)
 	filter := c.Args().Get(0)
-	props := make([]*prop, 0, len(st.Proxy.Tracker))
+	props := make([]*nvpair, 0, len(st.Proxy.Tracker))
 	for k, v := range st.Proxy.Tracker {
 		props = appendStatToProps(props, k, v.Value, "proxy.", filter, human)
 	}

@@ -88,10 +88,9 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 		if e.Location == "" {
 			t.Fatalf("[%#v]: location is empty", e)
 		}
-		tmp := strings.Split(e.Location, apc.PropsLocationSepa)
-		tid := cluster.N2ID(tmp[0])
+		tname, _ := cluster.ParseObjLoc(e.Location)
+		tid := cluster.N2ID(tname)
 		targets[tid] = struct{}{}
-
 		tsi := smap.GetTarget(tid)
 		url := tsi.URL(cmn.NetPublic)
 		baseParams := tools.BaseAPIParams(url)

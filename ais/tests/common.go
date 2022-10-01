@@ -182,8 +182,8 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	lst, err := api.ListObjects(baseParams, m.bck, &apc.ListObjsMsg{Props: apc.GetPropsLocation}, 0)
 	tassert.CheckFatal(t, err)
 	for _, obj := range lst.Entries {
-		tmp := strings.Split(obj.Location, apc.PropsLocationSepa)
-		tid := cluster.N2ID(tmp[0])
+		tname, _ := cluster.ParseObjLoc(obj.Location)
+		tid := cluster.N2ID(tname)
 		targetObjectCount[tid]++
 	}
 	if len(targetObjectCount) != m.originalTargetCount {

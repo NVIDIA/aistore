@@ -79,10 +79,13 @@ type (
 		total   int64
 		options []mpb.BarOption
 	}
-	prop struct {
+
+	nvpair struct {
 		Name  string
 		Value string
 	}
+	nvpairList []nvpair
+
 	propDiff struct {
 		Name    string
 		Current string
@@ -108,54 +111,6 @@ func helpMessage(template string, data any) string {
 	_ = w.Flush()
 
 	return buf.String()
-}
-
-func objectPropList(bck cmn.Bck, props *cmn.ObjectProps, selection []string) (propList []prop) {
-	var propValue string
-	for _, currProp := range selection {
-		switch currProp {
-		case apc.GetPropsName:
-			propValue = props.Bck.String() + "/" + props.Name
-		case apc.GetPropsSize:
-			propValue = cos.B2S(props.Size, 2)
-		case apc.GetPropsChecksum:
-			propValue = props.Cksum.String()
-		case apc.GetPropsAtime:
-			propValue = cos.FormatUnixNano(props.Atime, "")
-		case apc.GetPropsVersion:
-			propValue = props.Ver
-		case apc.GetPropsCached:
-			if bck.IsAIS() {
-				continue
-			}
-			propValue = tmpls.FmtBool(props.Present)
-		case apc.GetPropsCopies:
-			propValue = tmpls.FmtCopies(props.Mirror.Copies)
-			if len(props.Mirror.Paths) != 0 {
-				propValue += fmt.Sprintf(" %v", props.Mirror.Paths)
-			}
-		case apc.GetPropsEC:
-			propValue = tmpls.FmtEC(
-				props.EC.Generation, props.EC.DataSlices, props.EC.ParitySlices, props.EC.IsECCopy,
-			)
-		case apc.GetPropsCustom:
-			if custom := props.GetCustomMD(); len(custom) == 0 {
-				propValue = tmpls.NotSetVal
-			} else {
-				propValue = fmt.Sprintf("%+v", custom)
-			}
-		case apc.GetPropsNode:
-			propValue = cluster.Tname(props.DaemonID)
-		default:
-			continue
-		}
-		propList = append(propList, prop{currProp, propValue})
-	}
-
-	sort.Slice(propList, func(i, j int) bool {
-		return propList[i].Name < propList[j].Name
-	})
-	return
 }
 
 func didYouMeanMessage(c *cli.Context, cmd string) string {
@@ -845,9 +800,9 @@ func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
 	return progress, bars
 }
 
-func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop) {
+func bckPropList(props *cmn.BucketProps, verbose bool) (propList nvpairList) {
 	if !verbose {
-		propList = []prop{
+		propList = nvpairList{
 			{"created", time.Unix(0, props.Created).Format(time.RFC3339)},
 			{"provider", props.Provider},
 			{"access", props.Access.Describe()},
@@ -860,7 +815,7 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop) {
 		if props.Provider == apc.HTTP {
 			origURL := props.Extra.HTTP.OrigURLBck
 			if origURL != "" {
-				propList = append(propList, prop{Name: "original-url", Value: origURL})
+				propList = append(propList, nvpair{Name: "original-url", Value: origURL})
 			}
 		}
 	} else {
@@ -869,7 +824,7 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop) {
 			if tag == apc.PropBucketAccessAttrs {
 				value = props.Access.Describe()
 			}
-			propList = append(propList, prop{Name: tag, Value: value})
+			propList = append(propList, nvpair{Name: tag, Value: value})
 			return nil, false
 		})
 		debug.AssertNoErr(err)
@@ -937,12 +892,12 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 }
 
 // see also authNConfPairs
-func flattenConfig(cfg any, section string) (flat []prop) {
-	flat = make([]prop, 0, 40)
+func flattenConfig(cfg any, section string) (flat nvpairList) {
+	flat = make(nvpairList, 0, 40)
 	cmn.IterFields(cfg, func(tag string, field cmn.IterField) (error, bool) {
 		if section == "" || strings.HasPrefix(tag, section) {
 			v := _toStr(field.Value())
-			flat = append(flat, prop{tag, v})
+			flat = append(flat, nvpair{tag, v})
 		}
 		return nil, false
 	})
@@ -972,7 +927,7 @@ func _toStr(v any) (s string) {
 	return fmt.Sprintf("%v", m)
 }
 
-func diffConfigs(actual, original []prop) []propDiff {
+func diffConfigs(actual, original nvpairList) []propDiff {
 	diff := make([]propDiff, 0, len(actual))
 	for _, a := range actual {
 		item := propDiff{Name: a.Name, Current: a.Value, Old: "N/A"}
@@ -1027,14 +982,14 @@ func waitForXactionCompletion(apiBP api.BaseParams, args api.XactReqArgs) (err e
 }
 
 // see also flattenConfig
-func authNConfPairs(conf *authn.Config, prefix string) ([]prop, error) {
-	flat := make([]prop, 0, 8)
+func authNConfPairs(conf *authn.Config, prefix string) (nvpairList, error) {
+	flat := make(nvpairList, 0, 8)
 	err := cmn.IterFields(conf, func(tag string, field cmn.IterField) (error, bool) {
 		if prefix != "" && !strings.HasPrefix(tag, prefix) {
 			return nil, false
 		}
 		v := _toStr(field.Value())
-		flat = append(flat, prop{Name: tag, Value: v})
+		flat = append(flat, nvpair{Name: tag, Value: v})
 		return nil, false
 	})
 	sort.Slice(flat, func(i, j int) bool {
@@ -1289,8 +1244,8 @@ func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
 	return cksums
 }
 
-func flattenXactStats(snap *xact.SnapExt) []*prop {
-	props := make([]*prop, 0)
+func flattenXactStats(snap *xact.SnapExt) []*nvpair {
+	props := make([]*nvpair, 0)
 	if snap == nil {
 		return props
 	}
@@ -1302,19 +1257,19 @@ func flattenXactStats(snap *xact.SnapExt) []*prop {
 	}
 	props = append(props,
 		// Start xaction properties with a dot to make them first alphabetically
-		&prop{Name: ".id", Value: snap.ID},
-		&prop{Name: ".kind", Value: snap.Kind},
-		&prop{Name: ".bck", Value: snap.Bck.String()},
-		&prop{Name: ".start", Value: fmtTime(snap.StartTime)},
-		&prop{Name: ".end", Value: fmtTime(snap.EndTime)},
-		&prop{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
+		&nvpair{Name: ".id", Value: snap.ID},
+		&nvpair{Name: ".kind", Value: snap.Kind},
+		&nvpair{Name: ".bck", Value: snap.Bck.String()},
+		&nvpair{Name: ".start", Value: fmtTime(snap.StartTime)},
+		&nvpair{Name: ".end", Value: fmtTime(snap.EndTime)},
+		&nvpair{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
 
-		&prop{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
-		&prop{Name: "loc.obj.size", Value: formatStatHuman(".size", snap.Stats.Bytes)},
-		&prop{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
-		&prop{Name: "in.obj.size", Value: formatStatHuman(".size", snap.Stats.InBytes)},
-		&prop{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
-		&prop{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
+		&nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
+		&nvpair{Name: "loc.obj.size", Value: formatStatHuman(".size", snap.Stats.Bytes)},
+		&nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
+		&nvpair{Name: "in.obj.size", Value: formatStatHuman(".size", snap.Stats.InBytes)},
+		&nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
+		&nvpair{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
 	)
 	if extStats, ok := snap.Ext.(map[string]any); ok {
 		for k, v := range extStats {
@@ -1328,7 +1283,7 @@ func flattenXactStats(snap *xact.SnapExt) []*prop {
 			if value == "" {
 				value = fmt.Sprintf("%v", v)
 			}
-			props = append(props, &prop{Name: k, Value: value})
+			props = append(props, &nvpair{Name: k, Value: value})
 		}
 	}
 	sort.Slice(props, func(i, j int) bool {

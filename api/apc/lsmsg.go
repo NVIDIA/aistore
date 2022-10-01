@@ -82,8 +82,7 @@ const (
 	EntryStatusMask = (1 << EntryStatusBits) - 1 // mask for N low bits
 )
 
-// ListObjsMsg and HEAD(object) enum
-// Compare with `ObjectProps` and popular (i.e., most often used) selections of props (below)
+// ListObjsMsg and HEAD(object) enum (NOTE: compare with `cmn.ObjectProps`)
 const (
 	GetPropsName     = "name"
 	GetPropsSize     = "size"
@@ -95,8 +94,6 @@ const (
 	GetPropsCopies   = "copies"
 	GetPropsEC       = "ec"
 	GetPropsCustom   = "custom"
-
-	GetPropsNode     = "node"
 	GetPropsLocation = "location"
 )
 
@@ -107,9 +104,7 @@ var (
 	GetPropsMinimal = []string{GetPropsName, GetPropsSize}
 	GetPropsDefault = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
 	GetPropsAll     = append(GetPropsDefault,
-		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom,
-		GetPropsNode, GetPropsLocation,
-	)
+		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation)
 )
 
 type ListObjsMsg struct {

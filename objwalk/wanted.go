@@ -33,7 +33,7 @@ func wanted(msg *apc.ListObjsMsg) (flags cos.BitFlags) {
 	return
 }
 
-func setWanted(e *cmn.ObjEntry, t cluster.Target, lom *cluster.LOM, tmformat string, wanted cos.BitFlags) {
+func setWanted(e *cmn.ObjEntry, lom *cluster.LOM, tmformat string, wanted cos.BitFlags) {
 	for name, fl := range allmap {
 		if !wanted.IsSet(fl) {
 			continue
@@ -48,24 +48,17 @@ func setWanted(e *cmn.ObjEntry, t cluster.Target, lom *cluster.LOM, tmformat str
 		case apc.GetPropsVersion:
 			e.Version = lom.Version()
 		case apc.GetPropsChecksum:
-			if lom.Checksum() != nil {
-				e.Checksum = lom.Checksum().Value()
-			}
+			e.Checksum = lom.Checksum().Value()
 		case apc.GetPropsAtime:
 			e.Atime = cos.FormatUnixNano(lom.AtimeUnix(), tmformat)
-
 		case apc.GetPropsLocation:
-			e.Location = t.String() + apc.PropsLocationSepa + lom.MpathInfo().String()
-
-		case apc.GetPropsNode:
-			// TODO -- FIXME: remove
+			e.Location = lom.Location()
 		case apc.GetPropsCopies:
-			// TODO -- FIXME: may not be true - double-check
 			e.Copies = int16(lom.NumCopies())
+
+			// TODO -- FIXME: add/support both EC and custom
 		case apc.GetPropsEC:
-			// TODO -- FIXME: add/support EC info
 		case apc.GetPropsCustom:
-			// TODO -- FIXME: add/support custom
 		default:
 			debug.Assert(false, name)
 		}

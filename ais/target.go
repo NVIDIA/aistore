@@ -1275,8 +1275,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 	op := cmn.ObjectProps{Name: lom.ObjName, Bck: *lom.Bucket(), Present: exists}
 	if exists {
 		op.ObjAttrs = *lom.ObjAttrs()
-
-		op.DaemonID = t.Snode().ID()
+		op.Location = lom.Location()
 		op.Mirror.Copies = lom.NumCopies()
 		if lom.HasCopies() {
 			lom.Lock(false)

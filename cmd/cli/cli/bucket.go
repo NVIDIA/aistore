@@ -533,7 +533,7 @@ func showBucketProps(c *cli.Context) (err error) {
 
 func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section string) error {
 	var (
-		defList []prop
+		defList nvpairList
 		colored = !flagIsSet(c, noColorFlag)
 		compact = flagIsSet(c, compactPropFlag)
 	)

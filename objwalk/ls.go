@@ -103,7 +103,7 @@ func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.ObjEntry) {
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return
 	}
-	setWanted(e, wi.t, lom, wi.msg.TimeFormat, wi.wanted)
+	setWanted(e, lom, wi.msg.TimeFormat, wi.wanted)
 	if wi.postCb != nil {
 		wi.postCb(lom)
 	}

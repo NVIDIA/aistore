@@ -113,7 +113,7 @@ func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
 			continue
 		}
 
-		setWanted(e, w.t, lom, w.msg.TimeFormat, w.wanted)
+		setWanted(e, lom, w.msg.TimeFormat, w.wanted)
 		e.SetPresent()
 
 		if postCallback != nil {

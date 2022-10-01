@@ -34,12 +34,14 @@ const (
 	OrigURLObjMD = "orig_url"
 )
 
-// object properties (NOTE: embeds system `ObjAttrs` that in turn includes custom user-defined)
+// object properties
+// NOTE: embeds system `ObjAttrs` that in turn includes custom user-defined
+// NOTE: compare with `apc.ListObjsMsg`
 type ObjectProps struct {
 	Bck Bck `json:"bucket"`
 	ObjAttrs
 	Name     string `json:"name"`
-	DaemonID string `json:"daemon_id"`
+	Location string `json:"location"` // see also `GetPropsLocation`
 	Mirror   struct {
 		Paths  []string `json:"paths,omitempty"`
 		Copies int      `json:"copies,omitempty"`

@@ -783,8 +783,57 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	} else {
 		selectedProps = propsFlag
 	}
-	props := objectPropList(bck, objProps, selectedProps)
-	return tmpls.DisplayOutput(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
+
+	propNVs := make(nvpairList, 0, len(selectedProps))
+	for _, name := range selectedProps {
+		if v := propVal(objProps, name); v != "" {
+			propNVs = append(propNVs, nvpair{name, v})
+		}
+	}
+	sort.Slice(propNVs, func(i, j int) bool {
+		return propNVs[i].Name < propNVs[j].Name
+	})
+
+	return tmpls.DisplayOutput(propNVs, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
+}
+
+func propVal(op *cmn.ObjectProps, name string) (v string) {
+	switch name {
+	case apc.GetPropsName:
+		v = op.Bck.DisplayName() + "/" + op.Name
+	case apc.GetPropsSize:
+		v = cos.B2S(op.Size, 2)
+	case apc.GetPropsChecksum:
+		v = op.Cksum.String()
+	case apc.GetPropsAtime:
+		v = cos.FormatUnixNano(op.Atime, "")
+	case apc.GetPropsVersion:
+		v = op.Ver
+	case apc.GetPropsCached:
+		if op.Bck.IsAIS() {
+			debug.Assert(op.Present)
+			return
+		}
+		v = tmpls.FmtBool(op.Present)
+	case apc.GetPropsCopies:
+		v = tmpls.FmtCopies(op.Mirror.Copies)
+		if len(op.Mirror.Paths) != 0 {
+			v += fmt.Sprintf(" %v", op.Mirror.Paths)
+		}
+	case apc.GetPropsEC:
+		v = tmpls.FmtEC(op.EC.Generation, op.EC.DataSlices, op.EC.ParitySlices, op.EC.IsECCopy)
+	case apc.GetPropsCustom:
+		if custom := op.GetCustomMD(); len(custom) == 0 {
+			v = tmpls.NotSetVal
+		} else {
+			v = fmt.Sprintf("%+v", custom)
+		}
+	case apc.GetPropsLocation:
+		v = tmpls.NotSetVal // TODO -- FIXME: up and fix
+	default:
+		debug.Assert(false, name)
+	}
+	return
 }
 
 // This function is needed to print a nice error message for the user
