@@ -42,7 +42,7 @@ func initJobSubcmds() {
 func xactionCmds() cli.Commands {
 	cmds := make(cli.Commands, 0, 16)
 
-	splCmdKinds := make(cos.StringSet)
+	splCmdKinds := make(cos.StrSet)
 	// Add any xaction which requires a separate handler here.
 	splCmdKinds.Add(
 		apc.ActPrefetchObjects,

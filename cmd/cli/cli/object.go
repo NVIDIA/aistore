@@ -191,7 +191,7 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 }
 
 func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
-	props := make(cos.SimpleKVs)
+	props := make(cos.StrKVs)
 	propArgs := c.Args().Tail()
 
 	if len(propArgs) == 1 && isJSON(propArgs[0]) {

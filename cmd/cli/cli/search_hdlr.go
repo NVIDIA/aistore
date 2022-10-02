@@ -83,8 +83,8 @@ func populateKeyMapInvIdx() {
 	}
 }
 
-func findCmdByKey(key string) cos.StringSet {
-	result := make(cos.StringSet)
+func findCmdByKey(key string) (result cos.StrSet) {
+	result = make(cos.StrSet)
 	if resKeys, ok := keywordMap[key]; ok {
 		for _, resKey := range resKeys {
 			for _, idx := range invIndex[resKey] {
@@ -92,7 +92,7 @@ func findCmdByKey(key string) cos.StringSet {
 			}
 		}
 	}
-	return result
+	return
 }
 
 func findCmdMultiKey(keys []string) []string {

@@ -74,7 +74,7 @@ func setCLIConfigHandler(c *cli.Context) (err error) {
 		return missingKeyValueError(c)
 	}
 
-	var nvs cos.SimpleKVs
+	var nvs cos.StrKVs
 	if nvs, err = makePairs(c.Args()); err != nil {
 		return err
 	}

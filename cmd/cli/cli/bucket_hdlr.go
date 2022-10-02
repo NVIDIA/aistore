@@ -249,7 +249,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		var (
 			p       *cmn.BucketProps
 			objList *cmn.ListObjects
-			obj     *cmn.ObjEntry
+			obj     *cmn.LsObjEntry
 		)
 		if p, err = headBucket(bck, true /* don't add */); err != nil {
 			return
@@ -261,7 +261,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 			return err
 		}
 
-		updateStats := func(obj *cmn.ObjEntry) {
+		updateStats := func(obj *cmn.LsObjEntry) {
 			if obj == nil {
 				return
 			}
@@ -547,7 +547,7 @@ func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (er
 		fmt.Fprintf(c.App.Writer, fmts, bck.DisplayName(), "disabled")
 		return
 	}
-	toggledProps, err := cmn.NewBucketPropsToUpdate(cos.SimpleKVs{"lru.enabled": strconv.FormatBool(toggle)})
+	toggledProps, err := cmn.NewBucketPropsToUpdate(cos.StrKVs{"lru.enabled": strconv.FormatBool(toggle)})
 	if err != nil {
 		return
 	}

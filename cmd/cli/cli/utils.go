@@ -355,12 +355,12 @@ func makeList(list string) []string {
 }
 
 // Converts a list of "key value" and "key=value" into map
-func makePairs(args []string) (nvs cos.SimpleKVs, err error) {
+func makePairs(args []string) (nvs cos.StrKVs, err error) {
 	var (
 		i  int
 		ll = len(args)
 	)
-	nvs = cos.SimpleKVs{}
+	nvs = cos.StrKVs{}
 	for i < ll {
 		if args[i] != keyAndValueSeparator && strings.Contains(args[i], keyAndValueSeparator) {
 			pairs := strings.SplitN(args[i], keyAndValueSeparator, 2)
@@ -524,7 +524,7 @@ func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, 
 }
 
 // TODO: support `allow` and `deny` verbs/operations on existing access permissions
-func makeBckPropPairs(values []string) (nvs cos.SimpleKVs, err error) {
+func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 	props := make([]string, 0, 20)
 	err = cmn.IterFields(&cmn.BucketPropsToUpdate{}, func(tag string, _ cmn.IterField) (error, bool) {
 		props = append(props, tag)
@@ -538,7 +538,7 @@ func makeBckPropPairs(values []string) (nvs cos.SimpleKVs, err error) {
 		access apc.AccessAttrs
 		cmd    string
 	)
-	nvs = make(cos.SimpleKVs, 8)
+	nvs = make(cos.StrKVs, 8)
 	for idx := 0; idx < len(values); {
 		pos := strings.Index(values[idx], "=")
 		if pos > 0 {

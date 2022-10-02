@@ -447,7 +447,7 @@ func etlBucketHandler(c *cli.Context) (err error) {
 
 	if flagIsSet(c, etlExtFlag) {
 		mapStr := parseStrFlag(c, etlExtFlag)
-		extMap := make(cos.SimpleKVs, 1)
+		extMap := make(cos.StrKVs, 1)
 		if err = jsoniter.UnmarshalFromString(mapStr, &extMap); err != nil {
 			// add quotation marks and reparse
 			tmp := strings.ReplaceAll(mapStr, " ", "")

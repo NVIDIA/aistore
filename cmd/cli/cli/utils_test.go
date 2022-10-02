@@ -244,7 +244,7 @@ func TestParseDestInvalidURIs(t *testing.T) {
 func TestMakePairs(t *testing.T) {
 	makePairsTest := []struct {
 		input []string
-		nvs   cos.SimpleKVs
+		nvs   cos.StrKVs
 	}{
 		{
 			[]string{"key1=value1", "key2=value2", "key3=value3"},

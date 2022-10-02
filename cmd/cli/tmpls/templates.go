@@ -321,21 +321,10 @@ var (
 		apc.GetPropsAtime:    "{{$obj.Atime}}",
 		apc.GetPropsVersion:  "{{$obj.Version}}",
 		apc.GetPropsLocation: "{{$obj.Location}}",
+		apc.GetPropsCustom:   "{{FormatObjCustom $obj.Custom}}",
 		apc.GetPropsStatus:   "{{FormatObjStatus $obj}}",
 		apc.GetPropsCopies:   "{{$obj.Copies}}",
 		apc.GetPropsCached:   "{{FormatObjIsCached $obj}}",
-	}
-
-	ObjStatMap = map[string]string{
-		"name":     "{{.Bck.String}}/{{.Name}}",
-		"cached":   "{{FormatBool .Present}}",
-		"size":     "{{FormatBytesSig .Size 2}}",
-		"version":  "{{.Version}}",
-		"custom":   "{{.Custom}}",
-		"atime":    "{{if (eq .Atime 0)}}-{{else}}{{FormatUnixNano .Atime}}{{end}}",
-		"copies":   "{{if .NumCopies}}{{.NumCopies}}{{else}}-{{end}}",
-		"checksum": "{{if .Checksum.Value}}{{.Checksum.Value}}{{else}}-{{end}}",
-		"ec":       "{{if (eq .DataSlices 0)}}-{{else}}{{FormatEC .Generation .DataSlices .ParitySlices .IsECCopy}}{{end}}",
 	}
 
 	funcMap = template.FuncMap{
@@ -349,6 +338,7 @@ var (
 		"FormatEC":          FmtEC,
 		"FormatDur":         fmtDuration,
 		"FormatObjStatus":   fmtObjStatus,
+		"FormatObjCustom":   fmtObjCustom,
 		"FormatObjIsCached": fmtObjIsCached,
 		"FormatDaemonID":    fmtDaemonID,
 		"FormatSmapVersion": fmtSmapVer,
@@ -445,7 +435,7 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 	return total
 }
 
-func fmtObjStatus(obj *cmn.ObjEntry) string {
+func fmtObjStatus(obj *cmn.LsObjEntry) string {
 	switch obj.Status() {
 	case apc.LocOK:
 		return "ok"
@@ -463,7 +453,7 @@ func fmtObjStatus(obj *cmn.ObjEntry) string {
 	}
 }
 
-func fmtObjIsCached(obj *cmn.ObjEntry) string {
+func fmtObjIsCached(obj *cmn.LsObjEntry) string {
 	return FmtBool(obj.CheckExists())
 }
 
@@ -483,12 +473,11 @@ func fmtTime(t time.Time) string {
 	return t.Format("01-02 15:04:05")
 }
 
-// FmtChecksum formats a checksum into a string, where nil becomes "-"
-func FmtChecksum(checksum string) string {
-	if checksum != "" {
-		return checksum
+func fmtObjCustom(custom string) string {
+	if custom != "" {
+		return custom
 	}
-	return unknownVal
+	return NotSetVal
 }
 
 // FmtCopies formats an int to a string, where 0 becomes "-"
@@ -597,7 +586,7 @@ func (h *DaemonStatusTemplateHelper) pods() []string         { return h.toSlice(
 
 // internal helper for the methods above
 func (h *DaemonStatusTemplateHelper) toSlice(jtag string) []string {
-	set := cos.NewStringSet()
+	set := cos.NewStrSet()
 	for _, m := range []stats.DaemonStatusMap{h.Pmap, h.Tmap} {
 		for _, s := range m {
 			switch jtag {

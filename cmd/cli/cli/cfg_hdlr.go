@@ -66,7 +66,7 @@ var (
 
 func setCluConfigHandler(c *cli.Context) error {
 	var (
-		nvs      cos.SimpleKVs
+		nvs      cos.StrKVs
 		config   cmn.Config
 		propList = make([]string, 0, 48)
 		args     = c.Args()
@@ -118,7 +118,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 	}
 	var (
 		config   cmn.Config
-		nvs      cos.SimpleKVs
+		nvs      cos.StrKVs
 		daemonID     = argDaemonID(c)
 		args         = c.Args()
 		v        any = &config.ClusterConfig

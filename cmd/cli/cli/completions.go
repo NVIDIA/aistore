@@ -160,7 +160,7 @@ func configSectionCompletions(_ *cli.Context, cfgScope string) {
 		err    error
 		config     = &cmn.Config{}
 		v      any = &config.ClusterConfig
-		props      = cos.NewStringSet()
+		props      = cos.NewStrSet()
 	)
 	if cfgScope == cfgScopeLocal {
 		v = &config.LocalConfig
@@ -189,7 +189,7 @@ func setNodeConfigCompletions(c *cli.Context) {
 	var (
 		config     = &cmn.Config{}
 		v      any = &config.ClusterConfig
-		props      = cos.NewStringSet()
+		props      = cos.NewStrSet()
 	)
 	if c.NArg() == 2 { // daemon id and scope
 		if argLast(c) == cfgScopeLocal {

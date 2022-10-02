@@ -199,7 +199,7 @@ func (b *downloaderPB) updateBars(downloadStatus downloader.DlStatusResp) {
 
 func (b *downloaderPB) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
 	// The finished files are those that are in b.states, but were not included in CurrentTasks of the status response
-	fileStatesMap := make(cos.StringSet)
+	fileStatesMap := make(cos.StrSet)
 	for _, file := range fileStates {
 		fileStatesMap.Add(file.Name)
 	}
