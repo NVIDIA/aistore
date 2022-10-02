@@ -102,7 +102,7 @@ var _ = Describe("LOM Xattributes", func() {
 				defer lom.Unlock(true)
 				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
-				lom.SetCustomMD(cos.SimpleKVs{
+				lom.SetCustomMD(cos.StrKVs{
 					cmn.SourceObjMD: apc.GCP,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",
@@ -138,7 +138,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetVersion("dummy_version")
 				Expect(persist(lom)).NotTo(HaveOccurred())
 
-				lom.SetCustomMD(cos.SimpleKVs{
+				lom.SetCustomMD(cos.StrKVs{
 					cmn.SourceObjMD: apc.GCP,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",
@@ -179,7 +179,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetVersion("first_version")
 				Expect(persist(lom)).NotTo(HaveOccurred())
 
-				lom.SetCustomMD(cos.SimpleKVs{
+				lom.SetCustomMD(cos.StrKVs{
 					cmn.SourceObjMD: apc.GCP,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",

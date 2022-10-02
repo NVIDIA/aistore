@@ -151,9 +151,9 @@ func (lsmsg *ListObjsMsg) AddProps(propNames ...string) {
 	}
 }
 
-func (lsmsg *ListObjsMsg) PropsSet() (s cos.StringSet) {
+func (lsmsg *ListObjsMsg) PropsSet() (s cos.StrSet) {
 	props := strings.Split(lsmsg.Props, ",")
-	s = make(cos.StringSet, len(props))
+	s = make(cos.StrSet, len(props))
 	for _, p := range props {
 		s.Add(p)
 	}

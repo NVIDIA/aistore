@@ -310,8 +310,8 @@ func (b *DlSingleBody) Validate() error {
 	return b.DlSingleObj.Validate()
 }
 
-func (b *DlSingleBody) ExtractPayload() (cos.SimpleKVs, error) {
-	objects := make(cos.SimpleKVs, 1)
+func (b *DlSingleBody) ExtractPayload() (cos.StrKVs, error) {
+	objects := make(cos.StrKVs, 1)
 	objects[b.ObjName] = b.Link
 	return objects, nil
 }
@@ -368,8 +368,8 @@ func (b *DlMultiBody) Validate() error {
 	return b.DlBase.Validate()
 }
 
-func (b *DlMultiBody) ExtractPayload() (cos.SimpleKVs, error) {
-	objects := make(cos.SimpleKVs, 10)
+func (b *DlMultiBody) ExtractPayload() (cos.StrKVs, error) {
+	objects := make(cos.StrKVs, 10)
 	switch ty := b.ObjectsPayload.(type) {
 	case map[string]any:
 		for key, val := range ty {

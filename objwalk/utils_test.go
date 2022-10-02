@@ -53,7 +53,7 @@ func TestConcatObjLists(t *testing.T) {
 			for _, objCount := range test.objCounts {
 				list := &cmn.ListObjects{}
 				for i := 0; i < objCount; i++ {
-					list.Entries = append(list.Entries, &cmn.ObjEntry{
+					list.Entries = append(list.Entries, &cmn.LsObjEntry{
 						Name: trand.String(5),
 					})
 				}

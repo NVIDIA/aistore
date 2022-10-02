@@ -1039,7 +1039,7 @@ func TestMountpathDisableAll(t *testing.T) {
 	} else {
 		tlog.Logf("%s: orig avail mountpaths=%d\n", tname, len(origMountpaths.Available))
 	}
-	disabled := make(cos.StringSet)
+	disabled := make(cos.StrSet)
 	defer func() {
 		for mpath := range disabled {
 			err := api.EnableMountpath(baseParams, target, mpath)
@@ -1187,7 +1187,7 @@ func TestAtimeRebalance(t *testing.T) {
 	lst, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
-	objNames := make(cos.SimpleKVs, 10)
+	objNames := make(cos.StrKVs, 10)
 	for _, entry := range lst.Entries {
 		objNames[entry.Name] = entry.Atime
 	}

@@ -389,8 +389,8 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	}
 
 	tlog.Logf("*** Testing with disabled FSHC***\n")
-	tools.SetClusterConfig(t, cos.SimpleKVs{"fshc.enabled": "false"})
-	defer tools.SetClusterConfig(t, cos.SimpleKVs{"fshc.enabled": "true"})
+	tools.SetClusterConfig(t, cos.StrKVs{"fshc.enabled": "false"})
+	defer tools.SetClusterConfig(t, cos.StrKVs{"fshc.enabled": "true"})
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget.StringEx())

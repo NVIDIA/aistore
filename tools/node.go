@@ -225,7 +225,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 				}
 			}
 
-			idsToIgnore := cos.NewStringSet(MockDaemonID, proxyID)
+			idsToIgnore := cos.NewStrSet(MockDaemonID, proxyID)
 			idsToIgnore.Add(ignoreIDs...)
 			err = _waitMapVersionSync(baseParams, gctx, smapChangeDeadline, syncedSmap, origVer, idsToIgnore)
 			if err != nil {
@@ -711,13 +711,13 @@ func _joinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.D
 	// If node is already in cluster we should not wait for map version
 	// sync because update will not be scheduled
 	if node := smap.GetNode(node.ID()); node == nil {
-		err = _waitMapVersionSync(baseParams, ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStringSet())
+		err = _waitMapVersionSync(baseParams, ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStrSet())
 		return
 	}
 	return
 }
 
-func _nextNode(smap *cluster.Smap, idsToIgnore cos.StringSet) (string, string, bool) {
+func _nextNode(smap *cluster.Smap, idsToIgnore cos.StrSet) (string, string, bool) {
 	for _, d := range smap.Pmap {
 		if !idsToIgnore.Contains(d.ID()) {
 			return d.ID(), d.PubNet.URL, true
@@ -733,7 +733,7 @@ func _nextNode(smap *cluster.Smap, idsToIgnore cos.StringSet) (string, string, b
 }
 
 func _waitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64,
-	idsToIgnore cos.StringSet) error {
+	idsToIgnore cos.StrSet) error {
 	var (
 		prevSid string
 		orig    = idsToIgnore.Clone()
@@ -808,7 +808,7 @@ func _removeNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) 
 	// If node does not exist in cluster we should not wait for map version
 	// sync because update will not be scheduled.
 	if node != nil {
-		return _waitMapVersionSync(baseParams, ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStringSet(node.ID()))
+		return _waitMapVersionSync(baseParams, ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStrSet(node.ID()))
 	}
 	return nil
 }

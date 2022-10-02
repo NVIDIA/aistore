@@ -215,7 +215,7 @@ func GetDaemonStatus(bp BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonS
 }
 
 // SetDaemonConfig, given key value pairs, sets the configuration accordingly for a specific node.
-func SetDaemonConfig(bp BaseParams, nodeID string, nvs cos.SimpleKVs, transient ...bool) error {
+func SetDaemonConfig(bp BaseParams, nodeID string, nvs cos.StrKVs, transient ...bool) error {
 	bp.Method = http.MethodPut
 	query := url.Values{}
 	for key, val := range nvs {

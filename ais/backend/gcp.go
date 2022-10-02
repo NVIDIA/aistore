@@ -129,7 +129,7 @@ func (*gcpProvider) CreateBucket(_ *cluster.Bck) (int, error) {
 // HEAD BUCKET //
 /////////////////
 
-func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	if verbose {
 		glog.Infof("head_bucket %s", bck.Name)
 	}
@@ -139,7 +139,7 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 		errCode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
-	bckProps = make(cos.SimpleKVs)
+	bckProps = make(cos.StrKVs)
 	bckProps[apc.HdrBackendProvider] = apc.GCP
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
@@ -175,10 +175,10 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (ls
 		return
 	}
 
-	lst = &cmn.ListObjects{Entries: make([]*cmn.ObjEntry, 0, len(objs))}
+	lst = &cmn.ListObjects{Entries: make([]*cmn.LsObjEntry, 0, len(objs))}
 	lst.ContinuationToken = nextPageToken
 	for _, attrs := range objs {
-		entry := &cmn.ObjEntry{}
+		entry := &cmn.LsObjEntry{}
 		entry.Name = attrs.Name
 		if msg.WantProp(apc.GetPropsSize) {
 			entry.Size = attrs.Size
@@ -364,7 +364,7 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int,
 		attrs    *storage.ObjectAttrs
 		written  int64
 		cloudBck = lom.Bck().RemoteBck()
-		md       = make(cos.SimpleKVs, 2)
+		md       = make(cos.StrKVs, 2)
 		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 		wc       = gcpObj.NewWriter(gctx)
 	)

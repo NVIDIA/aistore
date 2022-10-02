@@ -34,7 +34,7 @@ const (
 	AISScheme     = "ais"
 )
 
-var Providers = cos.NewStringSet(AIS, GCP, AWS, Azure, HDFS, HTTP)
+var Providers = cos.NewStrSet(AIS, GCP, AWS, Azure, HDFS, HTTP)
 
 func IsProvider(p string) bool { return Providers.Contains(p) }
 

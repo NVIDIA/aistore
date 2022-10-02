@@ -62,7 +62,7 @@ type (
 	}
 )
 
-var checksums = StringSet{
+var checksums = StrSet{
 	ChecksumNone:   {},
 	ChecksumXXHash: {},
 	ChecksumMD5:    {},

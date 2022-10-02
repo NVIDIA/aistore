@@ -45,7 +45,7 @@ func TestConfig(t *testing.T) {
 		olruconfig   = oconfig.LRU
 		operiodic    = oconfig.Periodic
 	)
-	defer tools.SetClusterConfig(t, cos.SimpleKVs{
+	defer tools.SetClusterConfig(t, cos.StrKVs{
 		"periodic.stats_time":   oconfig.Periodic.StatsTime.String(),
 		"space.cleanupwm":       fmt.Sprintf("%d", oconfig.Space.CleanupWM),
 		"space.lowwm":           fmt.Sprintf("%d", oconfig.Space.LowWM),
@@ -67,14 +67,14 @@ func TestConfig(t *testing.T) {
 			nperiodic.StatsTime, configRegression["periodic.stats_time"])
 	} else {
 		o := operiodic.StatsTime
-		tools.SetClusterConfig(t, cos.SimpleKVs{"periodic.stats_time": o.String()})
+		tools.SetClusterConfig(t, cos.StrKVs{"periodic.stats_time": o.String()})
 	}
 	if v, _ := time.ParseDuration(configRegression["lru.dont_evict_time"]); nlruconfig.DontEvictTime != cos.Duration(v) {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
 			nlruconfig.DontEvictTime, configRegression["lru.dont_evict_time"])
 	} else {
 		o := olruconfig.DontEvictTime
-		tools.SetClusterConfig(t, cos.SimpleKVs{"lru.dont_evict_time": o.String()})
+		tools.SetClusterConfig(t, cos.StrKVs{"lru.dont_evict_time": o.String()})
 	}
 
 	if v, _ := time.ParseDuration(configRegression["lru.capacity_upd_time"]); nlruconfig.CapacityUpdTime != cos.Duration(v) {
@@ -82,7 +82,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig.CapacityUpdTime, configRegression["lru.capacity_upd_time"])
 	} else {
 		o := olruconfig.CapacityUpdTime
-		tools.SetClusterConfig(t, cos.SimpleKVs{"lru.capacity_upd_time": o.String()})
+		tools.SetClusterConfig(t, cos.StrKVs{"lru.capacity_upd_time": o.String()})
 	}
 	if hw, err := strconv.Atoi(configRegression["space.highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
@@ -94,7 +94,7 @@ func TestConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error parsing HighWM: %v", err)
 		}
-		tools.SetClusterConfig(t, cos.SimpleKVs{"space.highwm": oldhwmStr})
+		tools.SetClusterConfig(t, cos.StrKVs{"space.highwm": oldhwmStr})
 	}
 	if lw, err := strconv.Atoi(configRegression["space.lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
@@ -106,7 +106,7 @@ func TestConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error parsing LowWM: %v", err)
 		}
-		tools.SetClusterConfig(t, cos.SimpleKVs{"space.lowwm": oldlwmStr})
+		tools.SetClusterConfig(t, cos.StrKVs{"space.lowwm": oldlwmStr})
 	}
 	if pt, err := cos.ParseBool(configRegression["lru.enabled"]); err != nil {
 		t.Fatalf("Error parsing lru.enabled: %v", err)
@@ -114,7 +114,7 @@ func TestConfig(t *testing.T) {
 		t.Errorf("lru.enabled was not set properly: %v, should be %v",
 			nlruconfig.Enabled, pt)
 	} else {
-		tools.SetClusterConfig(t, cos.SimpleKVs{"lru.enabled": fmt.Sprintf("%v", olruconfig.Enabled)})
+		tools.SetClusterConfig(t, cos.StrKVs{"lru.enabled": fmt.Sprintf("%v", olruconfig.Enabled)})
 	}
 }
 
@@ -150,7 +150,7 @@ func TestConfigSetGlobal(t *testing.T) {
 
 	// Reset config
 	ecCondition = config.EC.Enabled
-	tools.SetClusterConfig(t, cos.SimpleKVs{
+	tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled": strconv.FormatBool(ecCondition),
 	})
 	checkConfig(t, smap, check)
@@ -171,7 +171,7 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Try overriding cluster only config on a daemon
-	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"ec.enabled": strconv.FormatBool(!config.EC.Enabled)})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.StrKVs{"ec.enabled": strconv.FormatBool(!config.EC.Enabled)})
 	tassert.Fatalf(t, err != nil, "expected error to occur when trying to override cluster only config")
 
 	daemonConfig := tools.GetDaemonConfig(t, proxy)
@@ -198,7 +198,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 
 	// Override cluster config on the selected proxy
 	newLowWM := config.Disk.DiskUtilLowWM - 10
-	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.StrKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 	tassert.CheckFatal(t, err)
 
 	daemonConfig := tools.GetDaemonConfig(t, proxy)
@@ -222,7 +222,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Reset node config.
-	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", config.Disk.DiskUtilLowWM)})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.StrKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", config.Disk.DiskUtilLowWM)})
 	tassert.CheckFatal(t, err)
 }
 
@@ -244,7 +244,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.SimpleKVs{
+		tools.SetClusterConfig(t, cos.StrKVs{
 			"ec.enabled": strconv.FormatBool(config.EC.Enabled),
 		})
 	})
@@ -254,7 +254,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 
 	// 2. After proxy is killed, update cluster configuration
 	newECEnabled := !config.EC.Enabled
-	tools.SetClusterConfig(t, cos.SimpleKVs{
+	tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled": strconv.FormatBool(newECEnabled),
 	})
 
@@ -298,7 +298,7 @@ func TestConfigOverrideAndResetDaemon(t *testing.T) {
 
 	// Override a cluster config on daemon
 	newLowWM := config.Disk.DiskUtilLowWM - 10
-	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.StrKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 	tassert.CheckFatal(t, err)
 
 	daemonConfig := tools.GetDaemonConfig(t, proxy)
@@ -330,7 +330,7 @@ func TestConfigOverrideAndResetCluster(t *testing.T) {
 	primary, err := tools.GetPrimaryProxy(proxyURL)
 	tassert.CheckFatal(t, err)
 	for _, node := range []*cluster.Snode{primary, proxy} {
-		err = api.SetDaemonConfig(baseParams, node.ID(), cos.SimpleKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
+		err = api.SetDaemonConfig(baseParams, node.ID(), cos.StrKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 		tassert.CheckFatal(t, err)
 
 		daemonConfig = tools.GetDaemonConfig(t, node)

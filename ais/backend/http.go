@@ -66,7 +66,7 @@ func (hp *httpProvider) CreateBucket(*cluster.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", hp.Provider()+" bucket")
 }
 
-func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	// TODO: we should use `bck.RemoteBck()`.
 
 	origURL, err := getOriginalURL(ctx, bck, "")
@@ -95,7 +95,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 		glog.Errorf("Warning: missing header %s (response header: %+v)", cos.HdrETag, resp.Header)
 	}
 
-	bckProps = make(cos.SimpleKVs)
+	bckProps = make(cos.StrKVs)
 	bckProps[apc.HdrBackendProvider] = apc.HTTP
 	return
 }

@@ -56,8 +56,8 @@ type (
 	}
 	ios struct {
 		mpath2disks map[string]FsDisks
-		disk2mpath  cos.SimpleKVs
-		disk2sysfn  cos.SimpleKVs
+		disk2mpath  cos.StrKVs
+		disk2sysfn  cos.StrKVs
 		cache       atomic.Pointer
 		cacheHst    [16]*cache
 		cacheIdx    int
@@ -92,8 +92,8 @@ func (x *MpathUtil) Set(mpath string, util int64) {
 func New() IOStater {
 	ios := &ios{
 		mpath2disks: make(map[string]FsDisks, 10),
-		disk2mpath:  make(cos.SimpleKVs, 10),
-		disk2sysfn:  make(cos.SimpleKVs, 10),
+		disk2mpath:  make(cos.StrKVs, 10),
+		disk2sysfn:  make(cos.StrKVs, 10),
 	}
 	for i := 0; i < len(ios.cacheHst); i++ {
 		ios.cacheHst[i] = newIostatCache()

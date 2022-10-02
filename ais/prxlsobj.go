@@ -40,7 +40,7 @@ import (
 // Each request is identified by its `cacheReqID`. List-objects requests
 // that share the same ID will also share a common cache.
 //
-// Cache consists of contiguous intervals of `cmn.ObjEntry`.
+// Cache consists of contiguous intervals of `cmn.LsObjEntry`.
 // Cached response (to a request) is valid if and only if the request can be
 // fulfilled by a single cache interval (otherwise, cache cannot be trusted
 // as we don't know how many objects can fit in the requested interval).
@@ -58,7 +58,7 @@ type (
 	lsobjBufferTarget struct {
 		// Leftovers entries which we keep locally so they will not be requested
 		// again by the proxy. Out of these `currentBuff` is extended.
-		entries []*cmn.ObjEntry
+		entries []*cmn.LsObjEntry
 		// Determines if the target is done with listing.
 		done bool
 	}
@@ -69,7 +69,7 @@ type (
 		nextToken string
 		// Currently maintained buffer that keeps the entries sorted
 		// and ready to be dispatched to the client.
-		currentBuff []*cmn.ObjEntry
+		currentBuff []*cmn.LsObjEntry
 		// Buffers for each target that are finally merged and the entries are
 		// appended to the `currentBuff`.
 		leftovers map[string]*lsobjBufferTarget // targetID (string) -> target buffer
@@ -90,7 +90,7 @@ type (
 		prefix string
 	}
 
-	// Single (contiguous) interval of `cmn.ObjEntry`.
+	// Single (contiguous) interval of `cmn.LsObjEntry`.
 	cacheInterval struct {
 		// Contains the previous entry (`ContinuationToken`) that was requested
 		// to get this interval. Thanks to this we can match and merge two
@@ -98,7 +98,7 @@ type (
 		token string
 		// Entries that are contained in this interval. They are sorted and ready
 		// to be dispatched to the client.
-		entries []*cmn.ObjEntry
+		entries []*cmn.LsObjEntry
 		// Contains the timestamp of the last access to this interval. Idle interval
 		// gets removed after `cacheIntervalTTL`.
 		lastAccess int64
@@ -174,7 +174,7 @@ func (b *lsobjBuffer) mergeTargetBuffers() (filled bool) {
 
 	var (
 		minObj  string
-		entries = make([]*cmn.ObjEntry, 0, totalCnt)
+		entries = make([]*cmn.LsObjEntry, 0, totalCnt)
 	)
 	for _, list := range b.leftovers {
 		entries = append(entries, list.entries...)
@@ -202,7 +202,7 @@ func (b *lsobjBuffer) mergeTargetBuffers() (filled bool) {
 	return true
 }
 
-func (b *lsobjBuffer) get(token string, size uint) (entries []*cmn.ObjEntry, hasEnough bool) {
+func (b *lsobjBuffer) get(token string, size uint) (entries []*cmn.LsObjEntry, hasEnough bool) {
 	b.lastAccess.Store(mono.NanoTime())
 
 	// If user requested something before what we have currently in the buffer
@@ -241,7 +241,7 @@ func (b *lsobjBuffer) get(token string, size uint) (entries []*cmn.ObjEntry, has
 	return entries, true
 }
 
-func (b *lsobjBuffer) set(id string, entries []*cmn.ObjEntry, size uint) {
+func (b *lsobjBuffer) set(id string, entries []*cmn.LsObjEntry, size uint) {
 	if b.leftovers == nil {
 		b.leftovers = make(map[string]*lsobjBufferTarget, 5)
 	}
@@ -269,12 +269,12 @@ func (b *lsobjBuffers) last(id, token string) string {
 	return last
 }
 
-func (b *lsobjBuffers) get(id, token string, size uint) (entries []*cmn.ObjEntry, hasEnough bool) {
+func (b *lsobjBuffers) get(id, token string, size uint) (entries []*cmn.LsObjEntry, hasEnough bool) {
 	v, _ := b.buffers.LoadOrStore(id, &lsobjBuffer{})
 	return v.(*lsobjBuffer).get(token, size)
 }
 
-func (b *lsobjBuffers) set(id, targetID string, entries []*cmn.ObjEntry, size uint) {
+func (b *lsobjBuffers) set(id, targetID string, entries []*cmn.LsObjEntry, size uint) {
 	v, _ := b.buffers.LoadOrStore(id, &lsobjBuffer{})
 	v.(*lsobjBuffer).set(targetID, entries, size)
 }
@@ -305,7 +305,7 @@ func (ci *cacheInterval) contains(token string) bool {
 	return false
 }
 
-func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entries []*cmn.ObjEntry, hasEnough bool) {
+func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entries []*cmn.LsObjEntry, hasEnough bool) {
 	ci.lastAccess = mono.NanoTime()
 	entries = ci.entries
 
@@ -320,7 +320,7 @@ func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entri
 				// Prefix is fully contained in the interval (but there are no entries), examples:
 				//  * interval = ["a", "z"], token = "", objCnt = 1, prefix = "b"
 				//  * interval = ["a", "z"], token = "a", objCnt = 1, prefix = "b"
-				return []*cmn.ObjEntry{}, true
+				return []*cmn.LsObjEntry{}, true
 			}
 		}
 		if !ci.last && start == uint(len(entries)) {
@@ -431,7 +431,7 @@ func (c *lsobjCache) removeInterval(ci *cacheInterval) {
 	}
 }
 
-func (c *lsobjCache) get(token string, objCnt uint, params reqParams) (entries []*cmn.ObjEntry, hasEnough bool) {
+func (c *lsobjCache) get(token string, objCnt uint, params reqParams) (entries []*cmn.LsObjEntry, hasEnough bool) {
 	c.mtx.RLock()
 	if interval := c.findInterval(token); interval != nil {
 		entries, hasEnough = interval.get(token, objCnt, params)
@@ -440,7 +440,7 @@ func (c *lsobjCache) get(token string, objCnt uint, params reqParams) (entries [
 	return
 }
 
-func (c *lsobjCache) set(token string, entries []*cmn.ObjEntry, size uint) {
+func (c *lsobjCache) set(token string, entries []*cmn.LsObjEntry, size uint) {
 	var (
 		end *cacheInterval
 		cur = &cacheInterval{
@@ -469,7 +469,7 @@ func (c *lsobjCache) invalidate() {
 // lsobjCaches //
 /////////////////
 
-func (c *lsobjCaches) get(reqID cacheReqID, token string, objCnt uint) (entries []*cmn.ObjEntry, hasEnough bool) {
+func (c *lsobjCaches) get(reqID cacheReqID, token string, objCnt uint) (entries []*cmn.LsObjEntry, hasEnough bool) {
 	if v, ok := c.caches.Load(reqID); ok {
 		if entries, hasEnough = v.(*lsobjCache).get(token, objCnt, reqParams{}); hasEnough {
 			return
@@ -490,7 +490,7 @@ func (c *lsobjCaches) get(reqID cacheReqID, token string, objCnt uint) (entries 
 	return nil, false
 }
 
-func (c *lsobjCaches) set(reqID cacheReqID, token string, entries []*cmn.ObjEntry, size uint) {
+func (c *lsobjCaches) set(reqID cacheReqID, token string, entries []*cmn.LsObjEntry, size uint) {
 	v, _ := c.caches.LoadOrStore(reqID, &lsobjCache{})
 	v.(*lsobjCache).set(token, entries, size)
 }

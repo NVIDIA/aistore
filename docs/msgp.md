@@ -15,10 +15,12 @@ redirect_from:
 ## Introduction
 
 MsgPack is a binary exchange format that provides better performance and lower bandwidth usage comparing to JSON.
-To make a struct MsgPack-compatible, add tags to the struct in the same way you add JSON tags. Example from `cmn/bucket_list.go`:
+To make a struct MsgPack-compatible, add tags to the struct in the same way you add JSON tags.
+
+Example from `cmn/objlist.go`:
 
 ```go
-type BucketEntry struct {
+type LsObjEntry struct {
 	Name      string `json:"name" msg:"n"`
 	Size      int64  `json:"size,string,omitempty" msg:"s,omitempty"`
 	// the rest struct fields
@@ -50,9 +52,10 @@ Do not forget to prepend a common AIS header to the generated file and commit it
 Workflow example:
 
 ```console
-$ ls cmn/bucket_list*
-bucket_list.go
-$ msgp -file cmn/bucket_list.go -tests=false -marshal=false -unexported
-$ ls cmn/bucket_list*
-bucket_list.go  bucket_list_gen.go
+$ ls cmn/objlist*
+objlist.go
+$ msgp -file cmn/objlist.go -tests=false -marshal=false -unexported
+
+$ ls cmn/objlist*
+objlist.go  objlist.go
 ```

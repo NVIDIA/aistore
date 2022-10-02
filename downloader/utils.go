@@ -51,7 +51,7 @@ func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *clus
 }
 
 // buildDlObjs returns list of objects that must be downloaded by target.
-func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cos.SimpleKVs) ([]dlObj, error) {
+func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cos.StrKVs) ([]dlObj, error) {
 	var (
 		smap = t.Sowner().Get()
 		sid  = t.SID()
@@ -202,10 +202,10 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 	return resp.ContentLength
 }
 
-func parseGoogleCksumHeader(hdr []string) cos.SimpleKVs {
+func parseGoogleCksumHeader(hdr []string) cos.StrKVs {
 	var (
 		h      = cmn.BackendHelpers.Google
-		cksums = make(cos.SimpleKVs, 2)
+		cksums = make(cos.StrKVs, 2)
 	)
 	for _, v := range hdr {
 		entry := strings.SplitN(v, "=", 2)

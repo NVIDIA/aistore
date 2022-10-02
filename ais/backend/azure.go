@@ -199,7 +199,7 @@ func (*azureProvider) CreateBucket(_ *cluster.Bck) (int, error) {
 // HEAD BUCKET //
 /////////////////
 
-func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs,
+func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.StrKVs,
 	errCode int, err error) {
 	var (
 		cloudBck = bck.RemoteBck()
@@ -214,7 +214,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		err := cmn.NewErrFailedTo(apc.Azure, "read bucket", cloudBck.Name, azureErrStatus(resp.StatusCode()))
 		return bckProps, resp.StatusCode(), err
 	}
-	bckProps = make(cos.SimpleKVs, 2)
+	bckProps = make(cos.StrKVs, 2)
 	bckProps[apc.HdrBackendProvider] = apc.Azure
 	bckProps[apc.HdrBucketVerEnabled] = "true"
 	return bckProps, http.StatusOK, nil
@@ -253,11 +253,11 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (ls
 		err := cmn.NewErrFailedTo(apc.Azure, "list objects of", cloudBck.Name, azureErrStatus(resp.StatusCode()))
 		return nil, resp.StatusCode(), err
 	}
-	lst = &cmn.ListObjects{Entries: make([]*cmn.ObjEntry, 0, len(resp.Segment.BlobItems))}
+	lst = &cmn.ListObjects{Entries: make([]*cmn.LsObjEntry, 0, len(resp.Segment.BlobItems))}
 	for idx := range resp.Segment.BlobItems {
 		var (
 			blob  = &resp.Segment.BlobItems[idx]
-			entry = &cmn.ObjEntry{Name: blob.Name}
+			entry = &cmn.LsObjEntry{Name: blob.Name}
 		)
 		if blob.Properties.ContentLength != nil && msg.WantProp(apc.GetPropsSize) {
 			entry.Size = *blob.Properties.ContentLength

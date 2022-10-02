@@ -242,7 +242,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 }
 
 // Simple majority voting.
-func (p *proxy) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.StringSet) {
+func (p *proxy) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.StrSet) {
 	var (
 		resCh = p.requestVotes(vr)
 		y, n  int
@@ -250,7 +250,7 @@ func (p *proxy) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.Strin
 	for res := range resCh {
 		if res.err != nil {
 			if errors == nil {
-				errors = cos.NewStringSet(res.daemonID)
+				errors = cos.NewStrSet(res.daemonID)
 			} else {
 				errors.Add(res.daemonID)
 			}
@@ -309,9 +309,9 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 	return resCh
 }
 
-func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StringSet {
+func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StrSet {
 	var (
-		errors = cos.NewStringSet()
+		errors = cos.NewStrSet()
 		msg    = &VoteResultMessage{
 			VoteResult{
 				Candidate: vr.Candidate,

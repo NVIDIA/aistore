@@ -85,7 +85,7 @@ func (*awsProvider) CreateBucket(_ *cluster.Bck) (int, error) {
 // HEAD BUCKET //
 /////////////////
 
-func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		region   string
@@ -118,7 +118,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs,
 		errCode, err = awsErrorToAISError(err, cloudBck)
 		return
 	}
-	bckProps = make(cos.SimpleKVs, 4)
+	bckProps = make(cos.StrKVs, 4)
 	bckProps[apc.HdrBackendProvider] = apc.AWS
 	bckProps[apc.HdrS3Region] = region
 	bckProps[apc.HdrS3Endpoint] = ""
@@ -165,9 +165,9 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (ls
 		return
 	}
 
-	lst = &cmn.ListObjects{Entries: make([]*cmn.ObjEntry, 0, len(resp.Contents))}
+	lst = &cmn.ListObjects{Entries: make([]*cmn.LsObjEntry, 0, len(resp.Contents))}
 	for _, key := range resp.Contents {
-		entry := &cmn.ObjEntry{Name: *key.Key}
+		entry := &cmn.LsObjEntry{Name: *key.Key}
 		if msg.WantProp(apc.GetPropsSize) {
 			entry.Size = *key.Size
 		}

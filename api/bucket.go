@@ -332,7 +332,7 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 }
 
 // ListObjects returns a list of objects in a bucket - a slice of structures in the
-// `cmn.ListObjects` that look like `cmn.ObjEntry`.
+// `cmn.ListObjects` that look like `cmn.LsObjEntry`.
 //
 // The `numObjects` argument is the maximum number of objects to be returned
 // (where 0 (zero) means returning all objects in the bucket).

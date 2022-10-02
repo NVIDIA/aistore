@@ -376,7 +376,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 		oldChkVersion := config.Versioning.ValidateWarmGet
 		oldVersioning := config.Versioning.Enabled
 
-		newConfig := make(cos.SimpleKVs)
+		newConfig := make(cos.StrKVs)
 		if oldVersioning != versioning {
 			newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(versioning)
 		}
@@ -390,7 +390,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 
 		defer func() {
 			// restore configuration
-			newConfig := make(cos.SimpleKVs)
+			newConfig := make(cos.StrKVs)
 			oldWarmCheck := oldChkVersion && oldVersioning
 			if oldWarmCheck != warmCheck {
 				newConfig["versioning.validate_warm_get"] = strconv.FormatBool(oldWarmCheck)

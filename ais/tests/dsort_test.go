@@ -1712,8 +1712,8 @@ func TestDistributedSortMissingShards(t *testing.T) {
 
 			switch scope {
 			case scopeConfig:
-				defer tools.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.missing_shards": cmn.IgnoreReaction})
-				tools.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.missing_shards": reaction})
+				defer tools.SetClusterConfig(t, cos.StrKVs{"distributed_sort.missing_shards": cmn.IgnoreReaction})
+				tools.SetClusterConfig(t, cos.StrKVs{"distributed_sort.missing_shards": reaction})
 
 				tlog.Logf("changed `missing_shards` config to: %s\n", reaction)
 			case scopeSpec:
@@ -1770,8 +1770,8 @@ func TestDistributedSortDuplications(t *testing.T) {
 
 			switch scope {
 			case scopeConfig:
-				defer tools.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
-				tools.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.duplicated_records": reaction})
+				defer tools.SetClusterConfig(t, cos.StrKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
+				tools.SetClusterConfig(t, cos.StrKVs{"distributed_sort.duplicated_records": reaction})
 
 				tlog.Logf("changed `duplicated_records` config to: %s\n", reaction)
 			case scopeSpec:

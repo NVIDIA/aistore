@@ -45,8 +45,8 @@ const (
 )
 
 type (
-	StringSet map[string]struct{}
-	SimpleKVs map[string]string
+	StrSet map[string]struct{}
+	StrKVs map[string]string
 
 	MemCPUInfo struct {
 		MemUsed    uint64  `json:"mem_used"`
@@ -145,21 +145,21 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	return m
 }
 
-///////////////
-// SimpleKVs //
-///////////////
+////////////
+// StrKVs //
+////////////
 
-func NewSimpleKVs(pairs ...string) (kvs SimpleKVs) {
+func NewStrKVs(pairs ...string) (kvs StrKVs) {
 	l := len(pairs) / 2
 	debug.Assert(len(pairs) == l<<1)
-	kvs = make(SimpleKVs, l)
+	kvs = make(StrKVs, l)
 	for i := 0; i < l; i++ {
 		kvs[pairs[2*i]] = kvs[pairs[2*i+1]]
 	}
 	return
 }
 
-func (kvs SimpleKVs) Compare(other SimpleKVs) bool {
+func (kvs StrKVs) Compare(other StrKVs) bool {
 	if len(kvs) != len(other) {
 		return false
 	} else if len(kvs) > 0 {
@@ -168,7 +168,7 @@ func (kvs SimpleKVs) Compare(other SimpleKVs) bool {
 	return true
 }
 
-func (kvs SimpleKVs) Keys() []string {
+func (kvs StrKVs) Keys() []string {
 	keys := make([]string, 0, len(kvs))
 	for k := range kvs {
 		keys = append(keys, k)
@@ -176,7 +176,7 @@ func (kvs SimpleKVs) Keys() []string {
 	return keys
 }
 
-func (kvs SimpleKVs) KeyFor(value string) (key string) {
+func (kvs StrKVs) KeyFor(value string) (key string) {
 	for k, v := range kvs {
 		if v == value {
 			key = k
@@ -186,12 +186,12 @@ func (kvs SimpleKVs) KeyFor(value string) (key string) {
 	return
 }
 
-func (kvs SimpleKVs) Contains(key string) (ok bool) {
+func (kvs StrKVs) Contains(key string) (ok bool) {
 	_, ok = kvs[key]
 	return
 }
 
-func (kvs SimpleKVs) ContainsAnyMatch(in []string) string {
+func (kvs StrKVs) ContainsAnyMatch(in []string) string {
 	for _, k := range in {
 		debug.Assert(k != "")
 		for kk := range kvs {
@@ -203,23 +203,23 @@ func (kvs SimpleKVs) ContainsAnyMatch(in []string) string {
 	return ""
 }
 
-///////////////
-// StringSet //
-///////////////
+////////////
+// StrSet //
+////////////
 
-func NewStringSet(keys ...string) (ss StringSet) {
-	ss = make(StringSet, len(keys))
+func NewStrSet(keys ...string) (ss StrSet) {
+	ss = make(StrSet, len(keys))
 	ss.Add(keys...)
 	return
 }
 
-func (ss StringSet) String() string {
+func (ss StrSet) String() string {
 	keys := ss.ToSlice()
 	sort.Strings(keys)
 	return strings.Join(keys, ",")
 }
 
-func (ss StringSet) ToSlice() []string {
+func (ss StrSet) ToSlice() []string {
 	keys := make([]string, len(ss))
 	idx := 0
 	for key := range ss {
@@ -229,23 +229,23 @@ func (ss StringSet) ToSlice() []string {
 	return keys
 }
 
-func (ss StringSet) Add(keys ...string) {
+func (ss StrSet) Add(keys ...string) {
 	for _, key := range keys {
 		ss[key] = struct{}{}
 	}
 }
 
-func (ss StringSet) Contains(key string) (yes bool) {
+func (ss StrSet) Contains(key string) (yes bool) {
 	_, yes = ss[key]
 	return
 }
 
-func (ss StringSet) Delete(key string) {
+func (ss StrSet) Delete(key string) {
 	delete(ss, key)
 }
 
-func (ss StringSet) Intersection(other StringSet) StringSet {
-	result := make(StringSet)
+func (ss StrSet) Intersection(other StrSet) StrSet {
+	result := make(StrSet)
 	for key := range ss {
 		if other.Contains(key) {
 			result.Add(key)
@@ -254,15 +254,15 @@ func (ss StringSet) Intersection(other StringSet) StringSet {
 	return result
 }
 
-func (ss StringSet) Clone() StringSet {
-	result := make(StringSet, len(ss))
+func (ss StrSet) Clone() StrSet {
+	result := make(StrSet, len(ss))
 	for k, v := range ss {
 		result[k] = v
 	}
 	return result
 }
 
-func (ss StringSet) All(xs ...string) bool {
+func (ss StrSet) All(xs ...string) bool {
 	for _, x := range xs {
 		if !ss.Contains(x) {
 			return false

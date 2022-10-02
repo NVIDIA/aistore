@@ -182,7 +182,7 @@ func SetPrimaryProxy(bp BaseParams, newPrimaryID string, force bool) error {
 // SetClusterConfig given key-value pairs of cluster configuration parameters,
 // sets the cluster-wide configuration accordingly. Setting cluster-wide
 // configuration requires sending the request to a proxy.
-func SetClusterConfig(bp BaseParams, nvs cos.SimpleKVs, transient ...bool) error {
+func SetClusterConfig(bp BaseParams, nvs cos.StrKVs, transient ...bool) error {
 	q := url.Values{}
 	for key, val := range nvs {
 		q.Add(key, val)

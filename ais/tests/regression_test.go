@@ -105,14 +105,14 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 			if i == 0 {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
-			tools.SetClusterConfig(t, cos.SimpleKVs{"features": feat.EnforceIntraClusterAccess.Value()})
+			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.Value()})
 			_, err = api.GetObject(baseParams, m.bck, e.Name)
 
 			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features
 			// tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
 			tlog.Logf("TODO: updating feature flags requires cluster restart (err=%v)\n", err)
 
-			tools.SetClusterConfig(t, cos.SimpleKVs{"features": "0"})
+			tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 		}
 	}
 
@@ -191,14 +191,14 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 			if i == 0 {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
-			tools.SetClusterConfig(t, cos.SimpleKVs{"features": feat.EnforceIntraClusterAccess.Value()})
+			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.Value()})
 			_, err = api.GetObject(baseParams, m.bck, e.Name)
 
 			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features
 			// tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
 			tlog.Logf("TODO: updating feature flags requires cluster restart (err=%v)\n", err)
 
-			tools.SetClusterConfig(t, cos.SimpleKVs{"features": "0"})
+			tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 		}
 	}
 
@@ -660,7 +660,7 @@ func TestLRU(t *testing.T) {
 			lowWMStr, _     = cos.ConvertToString(oconfig.Space.LowWM)
 			highWMStr, _    = cos.ConvertToString(oconfig.Space.HighWM)
 		)
-		tools.SetClusterConfig(t, cos.SimpleKVs{
+		tools.SetClusterConfig(t, cos.StrKVs{
 			"space.cleanupwm":       cleanupWMStr,
 			"space.lowwm":           lowWMStr,
 			"space.highwm":          highWMStr,
@@ -673,7 +673,7 @@ func TestLRU(t *testing.T) {
 	cleanupWMStr, _ := cos.ConvertToString(cleanupWM)
 	lowWMStr, _ := cos.ConvertToString(lowWM)
 	highWMStr, _ := cos.ConvertToString(highWM)
-	tools.SetClusterConfig(t, cos.SimpleKVs{
+	tools.SetClusterConfig(t, cos.StrKVs{
 		"space.cleanupwm":       cleanupWMStr,
 		"space.lowwm":           lowWMStr,
 		"space.highwm":          highWMStr,
@@ -916,7 +916,7 @@ func TestDeleteRange(t *testing.T) {
 		if len(bktlst.Entries) != objCnt-smallrangesize {
 			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), objCnt-smallrangesize)
 		}
-		filemap := make(map[string]*cmn.ObjEntry)
+		filemap := make(map[string]*cmn.LsObjEntry)
 		for _, entry := range bktlst.Entries {
 			filemap[entry.Name] = entry
 		}
@@ -1025,7 +1025,7 @@ func TestStressDeleteRange(t *testing.T) {
 			len(lst.Entries), expectedRemaining)
 	}
 
-	objNames := make(map[string]*cmn.ObjEntry)
+	objNames := make(map[string]*cmn.LsObjEntry)
 	for _, entry := range lst.Entries {
 		objNames[entry.Name] = entry
 	}

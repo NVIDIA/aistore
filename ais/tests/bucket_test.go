@@ -133,11 +133,11 @@ func TestDefaultBucketProps(t *testing.T) {
 		}
 	)
 
-	tools.SetClusterConfig(t, cos.SimpleKVs{
+	tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled":     "true",
 		"ec.data_slices": strconv.FormatUint(dataSlices, 10),
 	})
-	defer tools.SetClusterConfig(t, cos.SimpleKVs{
+	defer tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled":       "false",
 		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
@@ -441,8 +441,8 @@ func TestResetBucketProps(t *testing.T) {
 		MinTargets: *propsToUpdate.EC.DataSlices + *propsToUpdate.EC.ParitySlices,
 	})
 
-	tools.SetClusterConfig(t, cos.SimpleKVs{"ec.enabled": "true"})
-	defer tools.SetClusterConfig(t, cos.SimpleKVs{
+	tools.SetClusterConfig(t, cos.StrKVs{"ec.enabled": "true"})
+	defer tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled":       "false",
 		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
@@ -642,8 +642,8 @@ func TestListObjectsGoBack(t *testing.T) {
 		}
 		var (
 			tokens          []string
-			entries         []*cmn.ObjEntry
-			expectedEntries []*cmn.ObjEntry
+			entries         []*cmn.LsObjEntry
+			expectedEntries []*cmn.LsObjEntry
 		)
 		tlog.Logln("listing couple pages to move iterator on targets")
 		for page := 0; page < m.num/int(msg.PageSize); page++ {
@@ -801,7 +801,7 @@ func TestListObjectsProps(t *testing.T) {
 		if m.bck.IsRemote() {
 			defer m.del()
 		}
-		checkProps := func(useCache bool, props []string, f func(entry *cmn.ObjEntry)) {
+		checkProps := func(useCache bool, props []string, f func(entry *cmn.LsObjEntry)) {
 			msg := &apc.ListObjsMsg{PageSize: 100}
 			if useCache {
 				msg.SetFlag(apc.UseListObjsCache)
@@ -821,7 +821,7 @@ func TestListObjectsProps(t *testing.T) {
 
 		for _, useCache := range []bool{false, true} {
 			tlog.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
-			checkProps(useCache, []string{}, func(entry *cmn.ObjEntry) {
+			checkProps(useCache, []string{}, func(entry *cmn.LsObjEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
@@ -832,7 +832,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefault, func(entry *cmn.ObjEntry) {
+			checkProps(useCache, apc.GetPropsDefault, func(entry *cmn.LsObjEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
@@ -843,7 +843,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.ObjEntry) {
+			checkProps(useCache, []string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.LsObjEntry) {
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				if bck.IsAIS() {
 					tassert.Errorf(t, entry.Version != "", "version is not set")
@@ -856,7 +856,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying small subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsSize}, func(entry *cmn.ObjEntry) {
+			checkProps(useCache, []string{apc.GetPropsSize}, func(entry *cmn.LsObjEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 
 				tassert.Errorf(t, entry.Version == "", "version is set")
@@ -867,7 +867,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying all props...\n", useCache)
-			checkProps(useCache, apc.GetPropsAll, func(entry *cmn.ObjEntry) {
+			checkProps(useCache, apc.GetPropsAll, func(entry *cmn.LsObjEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				if bck.IsAIS() {
 					tassert.Errorf(t, entry.Version != "", "version is not set")
@@ -1105,7 +1105,7 @@ func TestListObjects(t *testing.T) {
 					t.Errorf("continuation token was unexpectedly set to: %s", lst.ContinuationToken)
 				}
 
-				empty := &cmn.ObjEntry{}
+				empty := &cmn.LsObjEntry{}
 				for _, entry := range lst.Entries {
 					e, exists := objs.Load(entry.Name)
 					if !exists {

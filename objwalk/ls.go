@@ -98,8 +98,8 @@ func (wi *WalkInfo) match(lom *cluster.LOM) bool {
 }
 
 // new entry to be added to the listed page
-func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.ObjEntry) {
-	e = &cmn.ObjEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
+func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsObjEntry) {
+	e = &cmn.LsObjEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return
 	}
@@ -115,7 +115,7 @@ func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.ObjEntry) {
 //
 //	the flag cmn.LsNameOnly optimizes-out loading object metadata. If defined,
 //	the function returns (only the) name and status.
-func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.ObjEntry, err error) {
+func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.LsObjEntry, err error) {
 	if de.IsDir() {
 		return
 	}
@@ -125,7 +125,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.ObjEntry, e
 	return
 }
 
-func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.ObjEntry, error) {
+func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.LsObjEntry, error) {
 	status := uint16(apc.LocOK)
 	if err := lom.InitFQN(fqn, nil); err != nil {
 		return nil, err

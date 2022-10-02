@@ -386,7 +386,7 @@ func (md *lmeta) unmarshal(buf []byte) error {
 			}
 		case lomCustomMD:
 			entries := strings.Split(val, customMDSepa)
-			custom := make(cos.SimpleKVs, len(entries)/2)
+			custom := make(cos.StrKVs, len(entries)/2)
 			for i := 0; i < len(entries); i += 2 {
 				custom[entries[i]] = entries[i+1]
 			}
@@ -467,7 +467,7 @@ func _marshCopies(mm *memsys.MMSA, buf []byte, copies fs.MPI) []byte {
 	return buf
 }
 
-func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cos.SimpleKVs) []byte {
+func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cos.StrKVs) []byte {
 	var (
 		i   int
 		num = len(md)

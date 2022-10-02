@@ -1381,8 +1381,8 @@ func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (tools.RestoreCmd, *
 	return cmd, smap
 }
 
-func icFromSmap(smap *cluster.Smap) cos.StringSet {
-	lst := make(cos.StringSet, smap.DefaultICSize())
+func icFromSmap(smap *cluster.Smap) cos.StrSet {
+	lst := make(cos.StrSet, smap.DefaultICSize())
 	for pid, psi := range smap.Pmap {
 		if smap.IsIC(psi) {
 			lst.Add(pid)
@@ -1732,7 +1732,7 @@ func killRestoreIC(t *testing.T, smap *cluster.Smap, stopCh *cos.StopCh, wg *syn
 
 // misc
 
-func getNewICMember(t testing.TB, oldMap, newMap cos.StringSet) (daeID string) {
+func getNewICMember(t testing.TB, oldMap, newMap cos.StrSet) (daeID string) {
 	for sid := range newMap {
 		if _, ok := oldMap[sid]; !ok {
 			tassert.Errorf(t, daeID == "", "should change only one IC member")

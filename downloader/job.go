@@ -208,7 +208,7 @@ func (j *baseDlJob) cleanup() {
 // sliceDlJob -- multiDlJob -- singleDlJob //
 ////////////////
 
-func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects cos.SimpleKVs) (*sliceDlJob, error) {
+func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects cos.StrKVs) (*sliceDlJob, error) {
 	objs, err := buildDlObjs(t, bck, objects)
 	if err != nil {
 		return nil, err
@@ -238,7 +238,7 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 
 func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMultiBody, dlXact *Downloader) (*multiDlJob, error) {
 	var (
-		objs cos.SimpleKVs
+		objs cos.StrKVs
 		err  error
 	)
 	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
@@ -258,7 +258,7 @@ func (j *multiDlJob) String() (s string) {
 
 func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSingleBody, dlXact *Downloader) (*singleDlJob, error) {
 	var (
-		objs cos.SimpleKVs
+		objs cos.StrKVs
 		err  error
 	)
 	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)

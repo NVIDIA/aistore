@@ -188,7 +188,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		},
 		Opaque: []byte{'1', '2', '3'},
 	}
-	hdr.ObjAttrs.SetCustomMD(cos.SimpleKVs{"xx": "11", "yy": "22"})
+	hdr.ObjAttrs.SetCustomMD(cos.StrKVs{"xx": "11", "yy": "22"})
 	wg.Add(1)
 	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl2, Callback: cb})
 	wg.Wait()

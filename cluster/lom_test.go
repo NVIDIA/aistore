@@ -567,7 +567,7 @@ var _ = Describe("LOM", func() {
 
 			It("should correctly set and get custom metadata", func() {
 				lom := filePut(localFQN, 0)
-				lom.SetCustomMD(cos.SimpleKVs{
+				lom.SetCustomMD(cos.StrKVs{
 					cmn.SourceObjMD: apc.GCP,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",

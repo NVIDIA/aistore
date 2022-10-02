@@ -664,7 +664,7 @@ func objPropsTemplate(c *cli.Context, props string, addCachedCol bool) string {
 		if field == apc.GetPropsCached && !addCachedCol {
 			continue
 		}
-		columnName := strings.ReplaceAll(strings.ToUpper(field), "_", " ")
+		columnName := strings.ToUpper(field)
 		headSb.WriteString(columnName + "\t ")
 		bodySb.WriteString(format + "\t ")
 	}

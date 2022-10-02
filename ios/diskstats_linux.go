@@ -44,7 +44,7 @@ var (
 var blockStats = make(diskBlockStats, 10)
 
 // readDiskStats returns disk stats
-func readDiskStats(disks, sysfnames cos.SimpleKVs) diskBlockStats {
+func readDiskStats(disks, sysfnames cos.StrKVs) diskBlockStats {
 	for d := range disks {
 		stat, ok := readSingleDiskStat(sysfnames[d])
 		if !ok {

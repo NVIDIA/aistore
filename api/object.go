@@ -180,11 +180,11 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cm
 	return op, nil
 }
 
-// Given cos.SimpleKVs (map[string]string) keys and values, sets object's custom properties.
+// Given cos.StrKVs (map[string]string) keys and values, sets object's custom properties.
 // By default, adds new or updates existing custom keys.
 // Use `setNewCustomMDFlag` to _replace_ all existing keys with the specified (new) ones.
 // See also: HeadObject() and apc.HdrObjCustomMD
-func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, object string, custom cos.SimpleKVs, setNew bool) error {
+func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, object string, custom cos.StrKVs, setNew bool) error {
 	var (
 		actMsg = apc.ActionMsg{Value: custom}
 		q      url.Values

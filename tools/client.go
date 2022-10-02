@@ -643,7 +643,7 @@ func GetClusterConfig(t *testing.T) (config *cmn.Config) {
 	return config
 }
 
-func SetClusterConfig(t *testing.T, nvs cos.SimpleKVs) {
+func SetClusterConfig(t *testing.T, nvs cos.StrKVs) {
 	proxyURL := GetPrimaryURL()
 	baseParams := BaseAPIParams(proxyURL)
 	err := api.SetClusterConfig(baseParams, nvs)

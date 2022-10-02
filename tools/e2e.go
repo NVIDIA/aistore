@@ -73,7 +73,7 @@ func retrieveBackendProviders() []string {
 	target := randomTarget()
 	config, err := api.GetDaemonConfig(BaseAPIParams(proxyURLReadOnly), target)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	set := cos.NewStringSet()
+	set := cos.NewStrSet()
 	for b := range config.Backend.Providers {
 		set.Add(b)
 	}

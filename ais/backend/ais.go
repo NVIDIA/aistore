@@ -319,7 +319,7 @@ func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error)
 // that, in particular, include `dontAddBckMD` = (true | false).
 // Here we have to hardcode the value to keep HeadBucket() consistent across all backends.
 // For similar limitations, see also ListBuckets() below.
-func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
 		p          *cmn.BucketProps
@@ -333,7 +333,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 		errCode, err = extractErrCode(err)
 		return
 	}
-	bckProps = make(cos.SimpleKVs)
+	bckProps = make(cos.StrKVs)
 	err = cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 		bckProps[uniqueTag] = fmt.Sprintf("%v", field.Value())
 		return nil, false

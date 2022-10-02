@@ -53,7 +53,7 @@ func TestCompareObject(t *testing.T) {
 	)
 
 	// Modify local object to contain invalid (meta)data.
-	customMD := cos.SimpleKVs{
+	customMD := cos.StrKVs{
 		cmn.SourceObjMD:  apc.AWS,
 		cmn.VersionObjMD: "none",
 		cmn.CRC32CObjMD:  "bad",

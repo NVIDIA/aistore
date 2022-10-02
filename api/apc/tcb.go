@@ -25,7 +25,7 @@ type (
 		// same base name, but different extension, specifying this field might cause object overriding. This is because
 		// of resulting name conflict.
 		// TODO: this field might not be required when transformation on subset (template) of bucket is supported.
-		Ext cos.SimpleKVs `json:"ext"`
+		Ext cos.StrKVs `json:"ext"`
 
 		ID             string       `json:"id,omitempty"`              // optional, ETL only
 		RequestTimeout cos.Duration `json:"request_timeout,omitempty"` // optional, ETL only

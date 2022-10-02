@@ -53,14 +53,14 @@ type (
 		respCh chan *Resp            // Outgoing responses.
 		stopCh *cos.StopCh           // Informs about stopped xact.
 
-		objCache   chan *cmn.ObjEntry // local cache filled when idle
-		lastPage   []*cmn.ObjEntry    // last sent page and a little more
-		walkStopCh *cos.StopCh        // to abort file walk
-		token      string             // the continuation token for the last sent page (for re-requests)
-		nextToken  string             // continuation token returned by Cloud to get the next page
-		walkWg     sync.WaitGroup     // to wait until walk finishes
-		walkDone   bool               // true: done walking or Cloud returned all objects
-		listRemote bool               // single-target rule
+		objCache   chan *cmn.LsObjEntry // local cache filled when idle
+		lastPage   []*cmn.LsObjEntry    // last sent page and a little more
+		walkStopCh *cos.StopCh          // to abort file walk
+		token      string               // the continuation token for the last sent page (for re-requests)
+		nextToken  string               // continuation token returned by Cloud to get the next page
+		walkWg     sync.WaitGroup       // to wait until walk finishes
+		walkDone   bool                 // true: done walking or Cloud returned all objects
+		listRemote bool                 // single-target rule
 	}
 	Resp struct {
 		BckList *cmn.ListObjects
@@ -115,7 +115,7 @@ func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *apc.ListObjsMsg, uuid st
 		workCh:   make(chan *apc.ListObjsMsg),
 		respCh:   make(chan *Resp),
 		stopCh:   cos.NewStopCh(),
-		lastPage: make([]*cmn.ObjEntry, 0, cacheSize),
+		lastPage: make([]*cmn.LsObjEntry, 0, cacheSize),
 	}
 	debug.Assert(xctn.bck.Props != nil)
 	xctn.DemandBase.Init(uuid, apc.ActList, bck, totallyIdle)
@@ -167,7 +167,7 @@ func (r *ObjListXact) _initTraverse() {
 		r.walkWg.Wait()
 	}
 
-	r.objCache = make(chan *cmn.ObjEntry, cacheSize)
+	r.objCache = make(chan *cmn.LsObjEntry, cacheSize)
 	r.walkDone = false
 	r.walkStopCh = cos.NewStopCh()
 	r.walkWg.Add(1)
@@ -389,7 +389,7 @@ func (r *ObjListXact) traverseBucket(msg *apc.ListObjsMsg) {
 			return err
 		}
 		for _, archEntry := range archList {
-			e := &cmn.ObjEntry{
+			e := &cmn.LsObjEntry{
 				Name:  path.Join(entry.Name, archEntry.name),
 				Flags: entry.Flags | apc.EntryInArch,
 				Size:  int64(archEntry.size),

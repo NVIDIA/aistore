@@ -61,18 +61,18 @@ type (
 		Version(special ...bool) string
 		Checksum() *cos.Cksum
 		AtimeUnix() int64
-		GetCustomMD() cos.SimpleKVs
+		GetCustomMD() cos.StrKVs
 		GetCustomKey(key string) (val string, exists bool)
 		SetCustomKey(k, v string)
 		String() string
 	}
 	// see also apc.HdrObjAtime et al. @ api/apc/const.go (and note that naming must be consistent)
 	ObjAttrs struct {
-		Cksum    *cos.Cksum    `json:"checksum,omitempty"`  // object checksum (cloned)
-		CustomMD cos.SimpleKVs `json:"custom-md,omitempty"` // custom metadata: ETag, MD5, CRC, user-defined ...
-		Ver      string        `json:"version,omitempty"`   // object version
-		Atime    int64         `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
-		Size     int64         `json:"size,omitempty"`      // object size (bytes)
+		Cksum    *cos.Cksum `json:"checksum,omitempty"`  // object checksum (cloned)
+		CustomMD cos.StrKVs `json:"custom-md,omitempty"` // custom metadata: ETag, MD5, CRC, user-defined ...
+		Ver      string     `json:"version,omitempty"`   // object version
+		Atime    int64      `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
+		Size     int64      `json:"size,omitempty"`      // object size (bytes)
 	}
 )
 
@@ -90,8 +90,8 @@ func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
 func (oa *ObjAttrs) SetCksum(ty, val string)   { oa.Cksum = cos.NewCksum(ty, val) }
 
 // custom metadata
-func (oa *ObjAttrs) GetCustomMD() cos.SimpleKVs   { return oa.CustomMD }
-func (oa *ObjAttrs) SetCustomMD(md cos.SimpleKVs) { oa.CustomMD = md }
+func (oa *ObjAttrs) GetCustomMD() cos.StrKVs   { return oa.CustomMD }
+func (oa *ObjAttrs) SetCustomMD(md cos.StrKVs) { oa.CustomMD = md }
 
 func (oa *ObjAttrs) GetCustomKey(key string) (val string, exists bool) {
 	val, exists = oa.CustomMD[key]
@@ -101,7 +101,7 @@ func (oa *ObjAttrs) GetCustomKey(key string) (val string, exists bool) {
 func (oa *ObjAttrs) SetCustomKey(k, v string) {
 	debug.Assert(k != "")
 	if oa.CustomMD == nil {
-		oa.CustomMD = make(cos.SimpleKVs, 6)
+		oa.CustomMD = make(cos.StrKVs, 6)
 	}
 	oa.CustomMD[k] = v
 }

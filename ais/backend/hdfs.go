@@ -98,13 +98,13 @@ func (hp *hdfsProvider) checkDirectoryExists(bck *cluster.Bck) (errCode int, err
 // HEAD BUCKET //
 /////////////////
 
-func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs,
+func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs,
 	errCode int, err error) {
 	if errCode, err = hp.checkDirectoryExists(bck); err != nil {
 		return
 	}
 
-	bckProps = make(cos.SimpleKVs)
+	bckProps = make(cos.StrKVs)
 	bckProps[apc.HdrBackendProvider] = apc.HDFS
 	bckProps[apc.HdrBucketVerEnabled] = "false"
 	return
@@ -114,12 +114,11 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.Simple
 // LIST OBJECTS //
 //////////////////
 
-func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects,
-	errCode int, err error) {
+func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects, errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 
 	h := cmn.BackendHelpers.HDFS
-	lst = &cmn.ListObjects{Entries: make([]*cmn.ObjEntry, 0, msg.PageSize)}
+	lst = &cmn.ListObjects{Entries: make([]*cmn.LsObjEntry, 0, msg.PageSize)}
 	err = hp.c.Walk(bck.Props.Extra.HDFS.RefDirectory, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			if cos.IsEOF(err) {
@@ -149,7 +148,7 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst
 		if fi.IsDir() {
 			return nil
 		}
-		entry := &cmn.ObjEntry{
+		entry := &cmn.LsObjEntry{
 			Name:    objName,
 			Version: "",
 		}

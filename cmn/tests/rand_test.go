@@ -13,7 +13,7 @@ import (
 
 func TestRandStringStrongSmoke(t *testing.T) {
 	var (
-		ss           = cos.NewStringSet()
+		ss           = cos.NewStrSet()
 		iterations   = 1000
 		stringLength = 20
 	)

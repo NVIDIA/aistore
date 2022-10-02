@@ -802,10 +802,10 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 			testName := fmt.Sprintf("%s/disk_only/%t", test.name, useDisk)
 			t.Run(testName, func(t *testing.T) {
 				if useDisk {
-					tools.SetClusterConfig(t, cos.SimpleKVs{
+					tools.SetClusterConfig(t, cos.StrKVs{
 						"ec.disk_only": fmt.Sprintf("%t", useDisk),
 					})
-					defer tools.SetClusterConfig(t, cos.SimpleKVs{
+					defer tools.SetClusterConfig(t, cos.StrKVs{
 						"ec.disk_only": "false",
 					})
 				}
@@ -884,10 +884,10 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 			testName := fmt.Sprintf("%s/disk_only/%t", test.name, useDisk)
 			t.Run(testName, func(t *testing.T) {
 				if useDisk {
-					tools.SetClusterConfig(t, cos.SimpleKVs{
+					tools.SetClusterConfig(t, cos.StrKVs{
 						"ec.disk_only": fmt.Sprintf("%t", useDisk),
 					})
-					defer tools.SetClusterConfig(t, cos.SimpleKVs{
+					defer tools.SetClusterConfig(t, cos.StrKVs{
 						"ec.disk_only": "false",
 					})
 				}

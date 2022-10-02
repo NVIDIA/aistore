@@ -164,8 +164,8 @@ type LsBlk struct {
 	BlockDevices []BlockDevice `json:"blockdevices"`
 }
 
-func lsblkOutput2disks(lsblkOutputBytes []byte) (disks cos.StringSet) {
-	disks = make(cos.StringSet)
+func lsblkOutput2disks(lsblkOutputBytes []byte) (disks cos.StrSet) {
+	disks = make(cos.StrSet)
 	var lsBlkOutput LsBlk
 	err := jsoniter.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
 	if err != nil {
@@ -178,7 +178,7 @@ func lsblkOutput2disks(lsblkOutputBytes []byte) (disks cos.StringSet) {
 	return disks
 }
 
-func findDevDisks(devList []BlockDevice, disks cos.StringSet) {
+func findDevDisks(devList []BlockDevice, disks cos.StrSet) {
 	for _, bd := range devList {
 		if !strings.HasPrefix(bd.Name, "loop") {
 			disks[bd.Name] = struct{}{}

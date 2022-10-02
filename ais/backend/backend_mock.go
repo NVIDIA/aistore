@@ -35,8 +35,8 @@ func (*mockBP) CreateBucket(*cluster.Bck) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("create", mock+" bucket")
 }
 
-func (*mockBP) HeadBucket(_ ctx, bck *cluster.Bck) (cos.SimpleKVs, int, error) {
-	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
+func (*mockBP) HeadBucket(_ ctx, bck *cluster.Bck) (cos.StrKVs, int, error) {
+	return cos.StrKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
 func (*mockBP) ListObjects(bck *cluster.Bck, _ *apc.ListObjsMsg) (*cmn.ListObjects, int, error) {

@@ -281,7 +281,7 @@ func (bp *BucketProps) Apply(propsToUpdate *BucketPropsToUpdate) {
 // BucketPropsToUpdate
 //
 
-func NewBucketPropsToUpdate(nvs cos.SimpleKVs) (props *BucketPropsToUpdate, err error) {
+func NewBucketPropsToUpdate(nvs cos.StrKVs) (props *BucketPropsToUpdate, err error) {
 	props = &BucketPropsToUpdate{}
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val

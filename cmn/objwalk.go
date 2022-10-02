@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func SortObjList(bckEntries []*ObjEntry) {
+func SortObjList(bckEntries []*LsObjEntry) {
 	entryLess := func(i, j int) bool {
 		if bckEntries[i].Name == bckEntries[j].Name {
 			return bckEntries[i].Flags&apc.EntryStatusMask < bckEntries[j].Flags&apc.EntryStatusMask
@@ -23,7 +23,7 @@ func SortObjList(bckEntries []*ObjEntry) {
 	sort.Slice(bckEntries, entryLess)
 }
 
-func dedupObjList(bckEntries []*ObjEntry, maxSize uint) ([]*ObjEntry, string) {
+func dedupObjList(bckEntries []*LsObjEntry, maxSize uint) ([]*LsObjEntry, string) {
 	objCount := uint(len(bckEntries))
 
 	j := 0
@@ -61,7 +61,7 @@ func ConcatObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
 	}
 
 	objs = &ListObjects{}
-	objs.Entries = make([]*ObjEntry, 0)
+	objs.Entries = make([]*LsObjEntry, 0)
 
 	for _, l := range lists {
 		objs.Flags |= l.Flags
@@ -103,7 +103,7 @@ func MergeObjLists(lists []*ListObjects, maxSize uint) *ListObjects {
 		return resList
 	}
 
-	lst := make(map[string]*ObjEntry, len(resList.Entries))
+	lst := make(map[string]*LsObjEntry, len(resList.Entries))
 	for _, l := range lists {
 		resList.Flags |= l.Flags
 		if continuationToken < l.ContinuationToken {

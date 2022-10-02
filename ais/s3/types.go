@@ -138,11 +138,11 @@ func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
 	debug.AssertNoErr(err)
 }
 
-func (r *ListObjectResult) Add(entry *cmn.ObjEntry, lsmsg *apc.ListObjsMsg) {
+func (r *ListObjectResult) Add(entry *cmn.LsObjEntry, lsmsg *apc.ListObjsMsg) {
 	r.Contents = append(r.Contents, entryToS3(entry, lsmsg))
 }
 
-func entryToS3(entry *cmn.ObjEntry, lsmsg *apc.ListObjsMsg) *ObjInfo {
+func entryToS3(entry *cmn.LsObjEntry, lsmsg *apc.ListObjsMsg) *ObjInfo {
 	objInfo := &ObjInfo{
 		Key:          entry.Name,
 		LastModified: entry.Atime,

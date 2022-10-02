@@ -346,7 +346,7 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 		}
 
 		wg.Add(1)
-		go func(obj *cmn.ObjEntry) {
+		go func(obj *cmn.LsObjEntry) {
 			_, err := api.GetObject(baseParams, m.bck, obj.Name)
 			tassert.CheckError(m.t, err)
 			wg.Done()
@@ -415,7 +415,7 @@ func (m *ioContext) del(opts ...int) {
 			break
 		}
 		wg.Add(1)
-		go func(obj *cmn.ObjEntry) {
+		go func(obj *cmn.LsObjEntry) {
 			defer wg.Done()
 			err := api.DeleteObject(baseParams, m.bck, obj.Name)
 			if err != nil {

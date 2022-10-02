@@ -704,7 +704,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 	debug.Assert(resp.BckList.UUID != "")
 
 	if fs.MarkerExists(fname.RebalanceMarker) || reb.IsActiveGFN() {
-		resp.BckList.Flags |= cmn.BckListFlagRebalance
+		resp.BckList.Flags |= cmn.ObjListFlagRebalance
 	}
 
 	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
@@ -883,7 +883,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucketProps cos.SimpleKVs
+		bucketProps cos.StrKVs
 		err         error
 		code        int
 		ctx         = context.Background()
@@ -936,7 +936,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		glog.Warningf("%s: bucket %s, err: %v(%d)", t, apireq.bck, err, code)
-		bucketProps = make(cos.SimpleKVs)
+		bucketProps = make(cos.StrKVs)
 		bucketProps[apc.HdrBackendProvider] = apireq.bck.Provider
 		bucketProps[apc.HdrRemoteOffline] = strconv.FormatBool(apireq.bck.IsRemote())
 	}
@@ -1365,7 +1365,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	custom := cos.SimpleKVs{}
+	custom := cos.StrKVs{}
 	if err := cos.MorphMarshal(msg.Value, &custom); err != nil {
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, "set-custom", msg.Value, err)
 		return

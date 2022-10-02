@@ -246,7 +246,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 }
 
 // pre-loading to try to recover lost tid
-func RecoverTID(generatedID string, configPaths cos.StringSet) (tid string) {
+func RecoverTID(generatedID string, configPaths cos.StrSet) (tid string) {
 	available := make(fs.MPI, len(configPaths)) // temp MPI to attempt loading
 	for mpath := range configPaths {
 		available[mpath] = nil
@@ -275,7 +275,7 @@ func RecoverTID(generatedID string, configPaths cos.StringSet) (tid string) {
 func LoadVMDTest() (*VMD, error) { return loadVMD("", nil) } // test-only
 
 // config => (temp MPI) => VMD
-func configLoadVMD(tid string, configPaths cos.StringSet) (vmd *VMD, err error) {
+func configLoadVMD(tid string, configPaths cos.StrSet) (vmd *VMD, err error) {
 	if len(configPaths) == 0 {
 		err = fmt.Errorf("no fspaths - see README => Configuration and fspaths section in the config.sh")
 		return

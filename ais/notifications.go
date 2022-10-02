@@ -528,7 +528,7 @@ func (n *notifs) ListenSmapChanged() {
 	}
 	var (
 		remnl = make(map[string]nl.NotifListener)
-		remid = make(cos.SimpleKVs)
+		remid = make(cos.StrKVs)
 	)
 	for uuid, nl := range n.nls.m {
 		nl.RLock()

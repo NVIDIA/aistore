@@ -64,7 +64,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 		}
 		proxyURL    = tools.RandomProxyURL(t)
 		baseParams  = tools.BaseAPIParams(proxyURL)
-		origEntries = make(map[string]*cmn.ObjEntry, 1500)
+		origEntries = make(map[string]*cmn.LsObjEntry, 1500)
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -503,7 +503,7 @@ func TestShutdownListObjects(t *testing.T) {
 		}
 		proxyURL    = tools.RandomProxyURL(t)
 		baseParams  = tools.BaseAPIParams(proxyURL)
-		origEntries = make(map[string]*cmn.ObjEntry, 1500)
+		origEntries = make(map[string]*cmn.LsObjEntry, 1500)
 	)
 
 	m.initWithCleanupAndSaveState()

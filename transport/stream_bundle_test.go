@@ -45,17 +45,17 @@ func (*slisteners) Unreg(cluster.Slistener) {}
 func Test_Bundle(t *testing.T) {
 	tests := []struct {
 		name string
-		nvs  cos.SimpleKVs
+		nvs  cos.StrKVs
 	}{
 		{
 			name: "not-compressed",
-			nvs: cos.SimpleKVs{
+			nvs: cos.StrKVs{
 				"compression": apc.CompressNever,
 			},
 		},
 		{
 			name: "not-compressed-unsized",
-			nvs: cos.SimpleKVs{
+			nvs: cos.StrKVs{
 				"compression": apc.CompressNever,
 				"unsized":     "yes",
 			},
@@ -64,25 +64,25 @@ func Test_Bundle(t *testing.T) {
 	if !testing.Short() {
 		testsLong := []struct {
 			name string
-			nvs  cos.SimpleKVs
+			nvs  cos.StrKVs
 		}{
 			{
 				name: "compress-block-1M",
-				nvs: cos.SimpleKVs{
+				nvs: cos.StrKVs{
 					"compression": apc.CompressAlways,
 					"block":       "1MiB",
 				},
 			},
 			{
 				name: "compress-block-256K",
-				nvs: cos.SimpleKVs{
+				nvs: cos.StrKVs{
 					"compression": apc.CompressAlways,
 					"block":       "256KiB",
 				},
 			},
 			{
 				name: "compress-block-256K-unsized",
-				nvs: cos.SimpleKVs{
+				nvs: cos.StrKVs{
 					"compression": apc.CompressAlways,
 					"block":       "256KiB",
 					"unsized":     "yes",
@@ -99,7 +99,7 @@ func Test_Bundle(t *testing.T) {
 	}
 }
 
-func testBundle(t *testing.T, nvs cos.SimpleKVs) {
+func testBundle(t *testing.T, nvs cos.StrKVs) {
 	var (
 		numCompleted atomic.Int64
 		mmsa, _      = memsys.NewMMSA("bundle")

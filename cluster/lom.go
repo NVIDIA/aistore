@@ -128,8 +128,8 @@ func isValidAtime(atime int64) bool {
 }
 
 // custom metadata
-func (lom *LOM) GetCustomMD() cos.SimpleKVs   { return lom.md.GetCustomMD() }
-func (lom *LOM) SetCustomMD(md cos.SimpleKVs) { lom.md.SetCustomMD(md) }
+func (lom *LOM) GetCustomMD() cos.StrKVs   { return lom.md.GetCustomMD() }
+func (lom *LOM) SetCustomMD(md cos.StrKVs) { lom.md.SetCustomMD(md) }
 
 func (lom *LOM) GetCustomKey(key string) (string, bool) { return lom.md.GetCustomKey(key) }
 func (lom *LOM) SetCustomKey(key, value string)         { lom.md.SetCustomKey(key, value) }

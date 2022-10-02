@@ -6,6 +6,8 @@
 package objwalk
 
 import (
+	"fmt"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -33,7 +35,7 @@ func wanted(msg *apc.ListObjsMsg) (flags cos.BitFlags) {
 	return
 }
 
-func setWanted(e *cmn.ObjEntry, lom *cluster.LOM, tmformat string, wanted cos.BitFlags) {
+func setWanted(e *cmn.LsObjEntry, lom *cluster.LOM, tmformat string, wanted cos.BitFlags) {
 	for name, fl := range allmap {
 		if !wanted.IsSet(fl) {
 			continue
@@ -56,9 +58,12 @@ func setWanted(e *cmn.ObjEntry, lom *cluster.LOM, tmformat string, wanted cos.Bi
 		case apc.GetPropsCopies:
 			e.Copies = int16(lom.NumCopies())
 
-			// TODO -- FIXME: add/support both EC and custom
 		case apc.GetPropsEC:
+			// TODO?: risk of significant slow-down loading EC metafiles
 		case apc.GetPropsCustom:
+			if md := lom.GetCustomMD(); len(md) > 0 {
+				e.Custom = fmt.Sprintf("%+v", md)
+			}
 		default:
 			debug.Assert(false, name)
 		}

@@ -495,7 +495,7 @@ type (
 	}
 
 	FSPConf struct {
-		Paths cos.StringSet `json:"paths,omitempty" list:"readonly"`
+		Paths cos.StrSet `json:"paths,omitempty" list:"readonly"`
 	}
 
 	TransportConf struct {
@@ -1324,7 +1324,7 @@ func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 /////////////
 
 func (c *FSPConf) UnmarshalJSON(data []byte) (err error) {
-	m := cos.NewStringSet()
+	m := cos.NewStrSet()
 	err = jsoniter.Unmarshal(data, &m)
 	if err != nil {
 		return
@@ -1404,7 +1404,7 @@ func (c *TestFSPConf) Validate(contextConfig *Config) (err error) {
 	}
 	c.Root = cleanMpath
 
-	contextConfig.FSP.Paths = make(cos.StringSet, c.Count)
+	contextConfig.FSP.Paths = make(cos.StrSet, c.Count)
 	for i := 0; i < c.Count; i++ {
 		mpath := filepath.Join(c.Root, fmt.Sprintf("mp%d", i+1))
 		if c.Instance > 0 {
