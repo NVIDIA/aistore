@@ -367,7 +367,7 @@ func (m *ioContext) del(opts ...int) {
 		lsmsg      = &apc.ListObjsMsg{
 			Prefix: m.prefix,
 			Props:  apc.GetPropsName,
-			Flags:  apc.LsNoHeadRemB, // don't lookup unless overridden via variadic (see below)
+			Flags:  apc.LsDontHeadRemote, // don't lookup unless overridden via variadic (see below)
 		}
 	)
 	// checks, params

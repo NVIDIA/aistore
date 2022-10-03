@@ -215,7 +215,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 
 func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.Bck) {
 	// find out real provider of the bucket
-	p, err := api.HeadBucket(baseParams, dstBck, true /* don't add to cluster MD */)
+	p, err := api.HeadBucket(baseParams, dstBck, false /* don't add to cluster MD */)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.SetBucketProps(baseParams, srcBck, &cmn.BucketPropsToUpdate{

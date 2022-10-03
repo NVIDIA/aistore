@@ -12,7 +12,7 @@ type Flags uint64
 
 const (
 	EnforceIntraClusterAccess Flags = 1 << iota
-	NoHeadRemB                      // see also api/apc/lsmsg.go, and in particular `LsNoHeadRemB`
+	DontHeadRemote                  // see also api/apc/lsmsg.go, and in particular `LsDontHeadRemote`
 	SkipVC                          // skip loading existing object's metadata, Version and Checksum in particular
 	DontAutoDetectFshare            // when promoting NFS shares to AIS
 )
@@ -22,7 +22,7 @@ var all = []struct {
 	value Flags
 }{
 	{name: "EnforceIntraClusterAccess", value: EnforceIntraClusterAccess},
-	{name: "NoHeadRemB", value: NoHeadRemB},
+	{name: "DontHeadRemote", value: DontHeadRemote},
 	{name: "SkipVC", value: SkipVC},
 	{name: "DontAutoDetectFshare", value: DontAutoDetectFshare},
 }

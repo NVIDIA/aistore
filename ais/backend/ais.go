@@ -316,7 +316,7 @@ func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error)
 }
 
 // TODO: remote AIS clusters provide native frontend API with additional capabilities
-// that, in particular, include `dontAddBckMD` = (true | false).
+// that, in particular, include `dontAddRemote` = (true | false).
 // Here we have to hardcode the value to keep HeadBucket() consistent across all backends.
 // For similar limitations, see also ListBuckets() below.
 func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
@@ -329,7 +329,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	}
 	bck := remoteBck.Clone()
 	unsetUUID(&bck)
-	if p, err = api.HeadBucket(aisCluster.bp, bck, false /*dontAddBckMD*/); err != nil {
+	if p, err = api.HeadBucket(aisCluster.bp, bck, false /*dontAddRemote*/); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}

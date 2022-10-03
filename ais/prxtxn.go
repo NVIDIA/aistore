@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -333,7 +333,9 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 		bargs := bckPropsArgs{bck: bck}
 		if bck.IsRemote() {
 			if backend := bck.Backend(); backend != nil {
-				return "", fmt.Errorf("%q has backend %q - detach it prior to resetting the props", bck, backend)
+				err := fmt.Errorf("%q has backend %q (hint: detach prior to resetting the props)",
+					bck, backend)
+				return "", err
 			}
 			remoteBckProps, _, err := p.headRemoteBck(bck.Bucket(), nil)
 			if err != nil {
@@ -880,7 +882,7 @@ func (p *proxy) destroyBucket(msg *apc.ActionMsg, bck *cluster.Bck) error {
 
 // erase bucket data from all targets (keep metadata)
 func (p *proxy) destroyBucketData(msg *apc.ActionMsg, bck *cluster.Bck) error {
-	query := bck.AddToQuery(url.Values{apc.QparamKeepBckMD: []string{"true"}})
+	query := bck.AddToQuery(url.Values{apc.QparamKeepRemote: []string{"true"}})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodDelete,

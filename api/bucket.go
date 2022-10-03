@@ -64,16 +64,16 @@ func patchBucketProps(bp BaseParams, bck cmn.Bck, body []byte, query ...url.Valu
 // HEAD, PUT, GET, SET-PROPS, and a variety of other operations.
 // This is done only once (and after confirming the bucket's existence and accessibility)
 // and doesn't require any action from the user.
-// Use `dontAddBckMD` to override the default behavior: as the name implies, setting
-// `dontAddBckMD = true` prevents AIS from adding remote bucket to the cluster's metadata.
-func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) {
+// Use `dontAddRemote` to override the default behavior: as the name implies, setting
+// `dontAddRemote = true` prevents AIS from adding remote bucket to the cluster's metadata.
+func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketProps, err error) {
 	var (
 		resp *wrappedResp
 		path = apc.URLPathBuckets.Join(bck.Name)
 		q    = make(url.Values, 4)
 	)
-	if dontAddBckMD {
-		q.Set(apc.QparamDontAddBckMD, "true")
+	if dontAddRemote {
+		q.Set(apc.QparamDontAddRemote, "true")
 	}
 	q = bck.AddToQuery(q)
 
@@ -314,7 +314,7 @@ func RenameBucket(bp BaseParams, fromBck, toBck cmn.Bck) (xactID string, err err
 func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 	var q url.Values
 	if keepMD {
-		q = url.Values{apc.QparamKeepBckMD: []string{"true"}}
+		q = url.Values{apc.QparamKeepRemote: []string{"true"}}
 	}
 
 	bp.Method = http.MethodDelete

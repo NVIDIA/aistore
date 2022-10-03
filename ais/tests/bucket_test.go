@@ -223,8 +223,11 @@ func TestCreateRemoteBucket(t *testing.T) {
 		}
 		for _, test := range tests {
 			err := api.CreateBucket(baseParams, test.bck, test.props)
+			if err == nil {
+				continue
+			}
 			herr := cmn.Err2HTTPErr(err)
-			tassert.Fatalf(t, herr != nil, "expected ErrHTTP")
+			tassert.Fatalf(t, herr != nil, "expected ErrHTTP, got %v (bucket %q)", err, test.bck)
 			if test.exists {
 				tassert.Fatalf(t, strings.Contains(herr.Message, "already exists"),
 					"expecting \"already exists\", got %+v", herr)

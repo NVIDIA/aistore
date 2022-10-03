@@ -37,22 +37,25 @@ const (
 	// would rather be avoided or, alternatively, when an error it returns
 	// (if it returns one) can be disregarded.
 
-	// LsNoHeadRemB tells AIS not to execute HEAD request, for the reasons that
-	// may include cleanup and eviction of any kind, and/or when the bucket simply
-	// must exist in AIS.
+	// LsDontHeadRemote tells AIS not to execute HEAD request (for reasons that may
+	// include cleanup and eviction of any kind, and/or when the bucket imust simply exist in AIS).
 	// See also:
 	// * `cmn/feat/feat.go` source, and the (configurable) capability
 	//    to disable on-the-fly creation of remote buckets altogether.
-	LsNoHeadRemB
+	LsDontHeadRemote
 
-	// LsTryHeadRemB is introduced primarily to support GCP buckets with
-	// ACL policies that allow public anonymous access.
+	// LsTryHeadRemote is introduced primarily to support GCP buckets with
+	// ACL policies that allow public _anonymous_ access.
 	//
 	// It appears that sometimes those policies do honor HEAD(bucket),
-	// while other times they don't failing the request with 401 or 403 status.
+	// while other times they don't, failing the request with 401 or 403 status.
 	// See also:
 	// * at https://cloud.google.com/storage/docs/access-control/making-data-public
-	LsTryHeadRemB
+	LsTryHeadRemote
+
+	// To list remote buckets that, if not be present in AIS, shall not be added to AIS
+	// (TODO: reserved for future use)
+	LsDontAddRemote
 
 	// cache list-objects results and use this cache to speed-up
 	UseListObjsCache

@@ -17,18 +17,22 @@ const (
 	// NOTE: making an s/_/-/ naming exception because of the namesake CLI usage
 	QparamNewCustom = "set-new-custom"
 
-	// Bucket related query params.
+	// Main bucket query params.
 	QparamProvider  = "provider" // aka backend provider or, simply, backend
 	QparamNamespace = "namespace"
-	QparamBckTo     = "bck_to"
-	QparamKeepBckMD = "keep_bck_md"
+
+	// e.g., usage: copy bucket
+	QparamBckTo = "bck_to"
 
 	// Do not add remote bucket to cluster's BMD e.g. when checking existence
 	// via api.HeadBucket
 	// By default, when existence of a remote buckets is confirmed the bucket's
 	// metadata gets automatically (and transactionally) added to the cluster's BMD.
 	// This query parameter can be used to override the default behavior.
-	QparamDontAddBckMD = "dont_add_remote_bck_md"
+	QparamDontAddRemote = "dont_add_remote_bck_md"
+
+	// When evicting, keep remote bucket in BMD (i.e., evict data only)
+	QparamKeepRemote = "keep_bck_md"
 
 	// NOTE: "presence" in a given cluster shall not be be confused with "existence" (possibly, remote).
 	// See also:

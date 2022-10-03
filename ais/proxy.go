@@ -536,8 +536,14 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		}
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: apc.AceObjLIST, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
-		if bckArgs.noHeadRemB = lsmsg.IsFlagSet(apc.LsNoHeadRemB); !bckArgs.noHeadRemB {
-			bckArgs.tryHeadRemB = lsmsg.IsFlagSet(apc.LsTryHeadRemB)
+
+		// mutually exclusive
+		debug.Assert(!(lsmsg.IsFlagSet(apc.LsDontHeadRemote) && lsmsg.IsFlagSet(apc.LsTryHeadRemote)))
+		// TODO: the capability to list remote buckets without adding them to BMD
+		debug.Assert(!lsmsg.IsFlagSet(apc.LsDontAddRemote), "not implemented yet")
+
+		if bckArgs.dontHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote); !bckArgs.dontHeadRemote {
+			bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsTryHeadRemote)
 		}
 		if bck, err = bckArgs.initAndTry(qbck.Name); err == nil {
 			begin := mono.NanoTime()
@@ -730,7 +736,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	bckArgs.createAIS = false
 	if msg.Action == apc.ActEvictRemoteBck {
 		var errCode int
-		bckArgs.noHeadRemB = true
+		bckArgs.dontHeadRemote = true
 		bck, errCode, err = bckArgs.init(bck.Name)
 		if err != nil {
 			if errCode != http.StatusNotFound && !cmn.IsErrRemoteBckNotFound(err) {
@@ -749,7 +755,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
-		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepBckMD))
+		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if bck.IsHDFS() || keepMD {
 			if err := p.destroyBucketData(msg, bck); err != nil {
@@ -1481,18 +1487,18 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD,
 		dpq: apireq.dpq, query: apireq.query}
 
-	// TODO -- FIXME: bckArgs.noHeadRemB = cos.IsParseBool(apireq.dpq.dontAddMD) // QparamDontAddBckMD
+	bckArgs.dontAddRemote = cos.IsParseBool(apireq.dpq.dontAddRemote) // QparamDontAddRemote
 
 	// present-only [+ bucket summary]
 	if apireq.dpq.fltPresence != "" {
 		wantBckSummary = true
 		fltPresence, _ = strconv.Atoi(apireq.dpq.fltPresence)
-		// bckArgs.noHeadRemB == false will have an effect of adding an (existing)
+		// bckArgs.dontHeadRemote == false will have an effect of adding an (existing)
 		// bucket to the cluster's BMD - right here and now, ie., on the fly.
 		// This could be easily prevented but then again, it is currently impossible
 		// to run xactions on buckets that are not present.
 		// See also: comments to `QparamFltPresence` and `apc.Flt*` enum
-		bckArgs.noHeadRemB = bckArgs.noHeadRemB || apc.IsFltPresent(fltPresence)
+		bckArgs.dontHeadRemote = bckArgs.dontHeadRemote || apc.IsFltPresent(fltPresence)
 	}
 	bckArgs.createAIS = false
 
@@ -1523,6 +1529,11 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	// [filter] when the bucket that must be present is not
 	if apc.IsFltPresent(fltPresence) {
+		toHdr(bck, hdr, info)
+		return
+	}
+	if bckArgs.dontAddRemote {
+		debug.Assert(bckArgs.exists)
 		toHdr(bck, hdr, info)
 		return
 	}

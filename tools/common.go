@@ -77,7 +77,7 @@ func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 		}
 	}
 	baseParams := api.BaseParams{Client: gctx.Client, URL: proxyURL, Token: LoggedUserToken}
-	_, err := api.HeadBucket(baseParams, bck, true /*dontAddBckMD*/)
+	_, err := api.HeadBucket(baseParams, bck, true /*dontAddRemote*/)
 	if err == nil {
 		return true, nil
 	}

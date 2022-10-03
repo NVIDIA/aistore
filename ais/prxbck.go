@@ -38,12 +38,14 @@ type bckInitArgs struct {
 	reqBody []byte          // request body of original request
 	perms   apc.AccessAttrs // apc.AceGET, apc.AcePATCH etc.
 
-	// flags
-	skipBackend bool // initialize bucket via `bck.InitNoBackend`
-	createAIS   bool // create ais bucket on the fly
-	noHeadRemB  bool // do not handle `ErrRemoteBckNotFound` by adding remote bucket on the fly
-	tryHeadRemB bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemB)
-	isPresent   bool // the bucket is confirmed to be present (in the cluster's BMD)
+	// control flags
+	skipBackend    bool // initialize bucket via `bck.InitNoBackend`
+	createAIS      bool // create ais bucket on the fly
+	dontAddRemote  bool // do not create (ie., add -> BMD) remote bucket on the fly
+	dontHeadRemote bool // do not HEAD remote bucket (to find out whether it exists and/or get properties)
+	tryHeadRemote  bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemote)
+	isPresent      bool // the bucket is confirmed to be present (in the cluster's BMD)
+	exists         bool // remote bucket is confirmed to be exist
 }
 
 ////////////////
@@ -157,6 +159,7 @@ func (args *bckInitArgs) access(bck *cluster.Bck) (errCode int, err error) {
 // NOTE: on error the method calls `p.writeErr` - make sure _not_ to do the same in the caller
 func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error) {
 	var errCode int
+	// 1. init bucket
 	bck, errCode, err = args.init(bucket)
 	if err == nil {
 		return
@@ -165,25 +168,30 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}
-	if !cmn.IsErrBucketNought(err) {
-		args.p.writeErr(args.w, args.r, err, http.StatusBadRequest)
-		return
-	}
-	// create ais bucket on the fly?
-	if cmn.IsErrBckNotFound(err) /* ais bucket not found*/ && !args.createAIS {
-		args.p.writeErr(args.w, args.r, err, errCode)
-		return
-	}
-	// remote
-	if cmn.IsErrRemoteBckNotFound(err) {
-		// if `feat.NoHeadRemB` (feature) is globally enabled use `api.CreateBucket` to add
-		// TODO -- FIXME: add || cos.IsParseBool(args.dpq.dontAddMD)
-		if cmn.Features.IsSet(feat.NoHeadRemB) || args.noHeadRemB {
+	// 2. handle two specific errors
+	switch {
+	case cmn.IsErrBckNotFound(err):
+		debug.Assert(bck.IsAIS())
+		if !args.createAIS {
+			args.p.writeErr(args.w, args.r, err, errCode)
+			return
+		}
+	case cmn.IsErrRemoteBckNotFound(err):
+		debug.Assert(bck.IsRemote())
+		// when remote bucket lookup is not permitted
+		if cmn.Features.IsSet(feat.DontHeadRemote) || args.dontHeadRemote {
+			// NOTE: if `feat.DontHeadRemote` is globally enabled use `api.CreateBucket` to override
 			args.p.writeErrSilent(args.w, args.r, err, errCode)
 			return
 		}
+	default:
+		debug.Assertf(false, "%q: unexpected %v(%d)", args.bck, err, errCode)
+		args.p.writeErr(args.w, args.r, err, errCode)
+		return
 	}
-	// otherwise, try create remote bucket on the fly (ie., add to BMD)
+
+	// 3. go ahead to create as bucket OR
+	// lookup and then maybe add remote bucket to BMD - on the fly
 	bck, err = args.try()
 	return
 }
@@ -211,8 +219,8 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 		return
 	}
 
-	// In case of HDFS if the bucket does not exist in BMD there is no point
-	// in checking if it exists remotely if we don't have `ref_directory`.
+	// if HDFS bucket is not present in the BMD there is no point
+	// in checking if it exists remotely (in re: `ref_directory`)
 	if args.bck.IsHDFS() {
 		err = cmn.NewErrBckNotFound(args.bck.Bucket())
 		errCode = http.StatusNotFound
@@ -224,50 +232,59 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 		return
 	}
 
-	// From this point on it's the primary - lookup via random target and try bucket add to BMD.
+	// am primary from this point on
 	bck = args.bck
-	action := apc.ActCreateBck
-
+	var (
+		action    = apc.ActCreateBck
+		remoteHdr http.Header
+	)
 	if backend := bck.Backend(); backend != nil {
 		bck = backend
 	}
 	if bck.IsAIS() {
 		glog.Warningf("%s: %q doesn't exist, proceeding to create", args.p.si, args.bck)
+		goto creadd
 	}
 
-	var remoteProps http.Header
+	// lookup remote
 	if bck.IsRemote() {
 		action = apc.ActAddRemoteBck
-		if remoteProps, errCode, err = args._lookup(bck); err != nil {
+		if remoteHdr, errCode, err = args.lookup(bck); err != nil {
 			bck = nil
 			return
 		}
 	}
-
+	// validate ht://
 	if bck.IsHTTP() {
 		if args.origURLBck != "" {
-			remoteProps.Set(apc.HdrOrigURLBck, args.origURLBck)
+			remoteHdr.Set(apc.HdrOrigURLBck, args.origURLBck)
 		} else if origURL := args.getOrigURL(); origURL != "" {
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				errCode = http.StatusBadRequest
 				return bck, errCode, err
 			}
-			remoteProps.Set(apc.HdrOrigURLBck, hbo.OrigURLBck)
+			remoteHdr.Set(apc.HdrOrigURLBck, hbo.OrigURLBck)
 		} else {
 			err = fmt.Errorf("failed to initialize bucket %q: missing HTTP URL", args.bck)
 			errCode = http.StatusBadRequest
 			return
 		}
-		debug.Assert(remoteProps.Get(apc.HdrOrigURLBck) != "")
+		debug.Assert(remoteHdr.Get(apc.HdrOrigURLBck) != "")
 	}
-
-	if err = args.p.createBucket(&apc.ActionMsg{Action: action}, bck, remoteProps); err != nil {
-		errCode = crerrStatus(err)
+	// return ok if explicitly asked not to add
+	args.exists = true
+	if args.dontAddRemote {
+		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
 		return
 	}
 
-	// Init the bucket after having successfully added it to the BMD.
+creadd: // add/create
+	if err = args.p.createBucket(&apc.ActionMsg{Action: action}, bck, remoteHdr); err != nil {
+		errCode = crerrStatus(err)
+		return
+	}
+	// init the bucket after having successfully added it to the BMD
 	if err = bck.Init(args.p.owner.bmd); err != nil {
 		errCode = http.StatusInternalServerError
 		err = cmn.NewErrFailedTo(args.p, "add-remote", bck, err, errCode)
@@ -286,20 +303,23 @@ func (args *bckInitArgs) getOrigURL() (ourl string) {
 	return
 }
 
-// NOTE: alternatively, skip HEAD altogether when lsDontHeadRemoteBucket
-func (args *bckInitArgs) _lookup(bck *cluster.Bck) (hdr http.Header, code int, err error) {
+func (args *bckInitArgs) lookup(bck *cluster.Bck) (hdr http.Header, code int, err error) {
 	q := url.Values{}
 	if bck.IsHTTP() {
 		origURL := args.getOrigURL()
 		q.Set(apc.QparamOrigURL, origURL)
 	}
-	if args.tryHeadRemB {
+	if args.tryHeadRemote {
 		q.Set(apc.QparamSilent, "true")
 	}
 	hdr, code, err = args.p.headRemoteBck(bck.Bucket(), q)
-	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && args.tryHeadRemB {
-		glog.Warningf("proceeding to add cloud bucket %s to the BMD after having failed HEAD request", bck)
-		glog.Warningf("%s properties: using all defaults", bck)
+	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && args.tryHeadRemote {
+		if args.dontAddRemote {
+			return
+		}
+		// NOTE: assuming OK
+		glog.Warningf("proceeding to add cloud bucket %s to the BMD after having: %v(%d)", bck, err, code)
+		glog.Warningf("%s properties: using all cluster defaults", bck)
 		hdr = make(http.Header, 2)
 		hdr.Set(apc.HdrBackendProvider, bck.Provider)
 		hdr.Set(apc.HdrBucketVerEnabled, "false")
