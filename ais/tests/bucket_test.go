@@ -88,8 +88,7 @@ func TestListBuckets(t *testing.T) {
 			}
 			tassert.CheckError(t, err)
 		} else if cmn.IsCloudProvider(provider) && !configured {
-			tlog.Logf("%q is not configured: expecting list-buckets to fail, got %v\n", provider, remoteBuckets)
-			// TODO -- FIXME: t.Fatalf("%q is not configured: expecting list-buckets to fail, got %v\n", provider, remoteBuckets)
+			t.Fatalf("%q is not configured: expecting list-buckets to fail, got %v\n", provider, remoteBuckets)
 		}
 		if len(remoteBuckets) != len(bcks.Select(query)) {
 			t.Fatalf("%s: remote buckets: %d != %d\n", provider, len(remoteBuckets), len(bcks.Select(query)))

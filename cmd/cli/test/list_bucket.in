@@ -8,12 +8,12 @@ ais ls ais://$BUCKET_1 --props=all
 ais ls ais://$BUCKET_1/
 
 ais ls aws://$BUCKET_1/ // FAIL "cloud bucket"
-ais ls az:// // FAIL "backend"
-ais ls azure:// // FAIL "backend"
+ais ls az:// --all // FAIL "backend"
+ais ls azure:// --all // FAIL "backend"
 
 ais ls #ns // IGNORE
 ais ls @ // IGNORE
-ais ls @uuid --all // FAIL "remote cluster "uuid" "
+
 ais ls ais://#ns // IGNORE
 ais ls ais://#ns/tmp // FAIL "bucket "ais://#ns/tmp" does not exist"
 ais ls ais://@uuid#ns --all // FAIL "remote"

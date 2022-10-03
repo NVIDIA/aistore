@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool) cmn.Bcks {
@@ -167,21 +168,27 @@ func TestNamespace(t *testing.T) {
 			m2.initWithCleanup()
 
 			origBuckets := listAllBuckets(t, baseParams, test.remote)
+			if len(origBuckets) > 0 {
+				tlog.Logf("orig %+v\n", origBuckets)
+			}
 			err := api.CreateBucket(baseParams, m1.bck, nil)
 			tassert.CheckFatal(t, err)
+			defer func() {
+				err = api.DestroyBucket(baseParams, m1.bck)
+				tassert.CheckFatal(t, err)
+			}()
+
 			err = api.CreateBucket(baseParams, m2.bck, nil)
 			tassert.CheckFatal(t, err)
-
 			defer func() {
 				err := api.DestroyBucket(baseParams, m2.bck)
-				tassert.CheckFatal(t, err)
-				err = api.DestroyBucket(baseParams, m1.bck)
 				tassert.CheckFatal(t, err)
 			}()
 
 			// Test listing buckets
 			newBuckets := listAllBuckets(t, baseParams, test.remote)
-			tassert.Fatalf(
+			tlog.Logf("new %+v\n", newBuckets)
+			tassert.Errorf(
 				t, len(newBuckets)-len(origBuckets) == 2,
 				"number of buckets (%d) should be equal to %d", len(newBuckets), len(origBuckets)+2,
 			)
@@ -192,7 +199,8 @@ func TestNamespace(t *testing.T) {
 			// Now remote bucket(s) should be present in BMD
 			locBuckets := listAllBuckets(t, baseParams, false)
 			tassert.CheckFatal(t, err)
-			tassert.Fatalf(
+			tlog.Logf("in BMD %+v\n", locBuckets)
+			tassert.Errorf(
 				t, len(locBuckets) == len(newBuckets),
 				"number of buckets (%d) should be equal to %d", len(locBuckets), len(newBuckets),
 			)

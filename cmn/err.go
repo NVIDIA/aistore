@@ -130,6 +130,7 @@ type (
 	}
 	ErrMissingBackend struct {
 		Provider string
+		Msg      string
 	}
 	ErrETL struct {
 		Reason string
@@ -522,8 +523,11 @@ func (e *ErrInitBackend) Error() string {
 }
 
 func (e *ErrMissingBackend) Error() string {
-	return fmt.Sprintf(
-		"%q backend is missing in the cluster configuration. Hint: consider redeploying with -override_backends command-line and the corresponding build tag.", e.Provider)
+	if e.Msg != "" {
+		return e.Msg
+	}
+	const redeploy = "(hint: consider redeploying with '-override_backends' command-line and the corresponding build tag)"
+	return fmt.Sprintf("%q backend is missing %s", e.Provider, redeploy)
 }
 
 // ErrETL

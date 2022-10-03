@@ -333,7 +333,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		addCachedCol = false
 	}
 	if flagIsSet(c, listAnonymousFlag) {
-		msg.SetFlag(apc.LsTryHeadRemB)
+		msg.SetFlag(apc.LsTryHeadRemote)
 	}
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)

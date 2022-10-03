@@ -1502,45 +1502,67 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 		config = cmn.GCO.Get()
 	)
 	if qbck.Provider != "" {
-		bcks, code, err = t._listBcks(qbck, config)
-		if err != nil {
-			err = cmn.NewErrFailedTo(t, "list buckets", qbck.String(), err, code)
-			t.writeErr(w, r, err, code)
-			return
+		if qbck.IsAIS() || qbck.IsHTTP() {
+			bmd := t.owner.bmd.get()
+			bcks = bmd.Select(qbck)
+		} else {
+			bcks, code, err = t._listBcks(qbck, config)
+			if err != nil {
+				if _, ok := err.(*cmn.ErrMissingBackend); !ok {
+					err = cmn.NewErrFailedTo(t, "list buckets", qbck.String(), err, code)
+				}
+				t.writeErr(w, r, err, code)
+				return
+			}
 		}
 	} else /* all providers */ {
+		bmd := t.owner.bmd.get()
 		for provider := range apc.Providers {
 			var buckets cmn.Bcks
 			qbck.Provider = provider
-			buckets, code, err = t._listBcks(qbck, config)
-			if err != nil {
-				err = cmn.NewErrFailedTo(t, "list buckets", qbck.String(), err, code)
-				if provider == apc.AIS {
-					t.writeErr(w, r, err, code)
-					return
-				}
-				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Warning(err)
+
+			if qbck.IsAIS() || qbck.IsHTTP() {
+				buckets = bmd.Select(qbck)
+			} else {
+				buckets, code, err = t._listBcks(qbck, config)
+				if err != nil {
+					if _, ok := err.(*cmn.ErrMissingBackend); !ok {
+						t.writeErr(w, r, err, code)
+						return
+					}
 				}
 			}
 			bcks = append(bcks, buckets...)
 		}
 	}
+
 	sort.Sort(bcks)
 	t.writeJSON(w, r, bcks, "list-buckets")
 }
 
-func (t *target) _listBcks(qbck *cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks, errCode int, err error) {
-	_, ok := cfg.Backend.Providers[qbck.Provider]
-	// HDFS doesn't support listing remote buckets (there are no remote buckets).
-	if (!ok && !qbck.IsRemoteAIS()) || qbck.IsHDFS() {
-		bmd := t.owner.bmd.get()
-		names = bmd.Select(qbck)
-	} else {
-		bck := cluster.NewBck("", qbck.Provider, qbck.Ns)
-		names, errCode, err = t.Backend(bck).ListBuckets(*qbck)
-		sort.Sort(names)
+func (t *target) _listBcks(qbck *cmn.QueryBcks, config *cmn.Config) (bcks cmn.Bcks, errCode int, err error) {
+	debug.Assert(!qbck.IsAIS())
+	// must be configured
+	if qbck.IsCloud() || qbck.IsHDFS() {
+		if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
+			err = &cmn.ErrMissingBackend{Provider: qbck.Provider}
+			return
+		}
+	} else if qbck.IsRemoteAIS() {
+		if _, ok := config.Backend.ProviderConf(apc.AIS); !ok {
+			err = &cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters attached"}
+			return
+		}
 	}
+
+	if qbck.IsHDFS() { // excepting HDFS that cannot list
+		bmd := t.owner.bmd.get()
+		bcks = bmd.Select(qbck)
+		return
+	}
+	bck := cluster.NewBck("", qbck.Provider, qbck.Ns)
+	bcks, errCode, err = t.Backend(bck).ListBuckets(*qbck)
+	sort.Sort(bcks)
 	return
 }
 

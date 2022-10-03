@@ -188,9 +188,11 @@ clean-client-bindings: ## Remove all generated client binding files
 #
 # go modules
 #
-.PHONY: mod mod-clean mod-tidy
+.PHONY: mod-all mod-clean mod-tidy
 
-mod: mod-clean mod-tidy
+mod-all: mod-clean mod-tidy
+	@echo "CLI ..." && cd cmd/cli && $(MAKE) mod-tidy
+	@echo "aisfs ..." && cd cmd/aisfs && $(MAKE) mod-tidy
 
 # cleanup go-mod cache
 mod-clean:

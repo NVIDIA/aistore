@@ -426,6 +426,7 @@ func (qbck QueryBcks) String() string {
 
 func (qbck *QueryBcks) IsAIS() bool       { b := (*Bck)(qbck); return b.IsAIS() }
 func (qbck *QueryBcks) IsHDFS() bool      { b := (*Bck)(qbck); return b.IsHDFS() }
+func (qbck *QueryBcks) IsHTTP() bool      { b := (*Bck)(qbck); return b.IsHTTP() }
 func (qbck *QueryBcks) IsRemoteAIS() bool { b := (*Bck)(qbck); return b.IsRemoteAIS() }
 func (qbck *QueryBcks) IsCloud() bool     { return IsCloudProvider(qbck.Provider) }
 

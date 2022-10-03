@@ -1842,7 +1842,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		bmd     = p.owner.bmd.get()
 		present bool
 	)
-	if qbck.IsAIS() {
+	if qbck.IsAIS() || qbck.IsHTTP() || qbck.IsHDFS() {
 		bcks := bmd.Select(qbck)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
@@ -1856,23 +1856,6 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	}
 	if present {
 		bcks := bmd.Select(qbck)
-		if len(bcks) == 0 {
-			// an optional and very limited check to find out why
-			if qbck.IsCloud() || qbck.IsHDFS() {
-				config := cmn.GCO.Get()
-				if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
-					err := &cmn.ErrMissingBackend{Provider: qbck.Provider}
-					p.writeErrf(w, r, "cannot list %q bucket: %v", qbck, err)
-					return
-				}
-			} else if qbck.IsRemoteAIS() {
-				config := cmn.GCO.Get()
-				if _, ok := config.Backend.ProviderConf(apc.AIS); !ok {
-					p.writeErrf(w, r, "cannot list %q bucket: no remote ais clusters attached", qbck)
-					return
-				}
-			}
-		}
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}

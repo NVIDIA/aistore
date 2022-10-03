@@ -644,8 +644,7 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 
 	resp, res.err = client.Do(req)
 	if res.err != nil {
-		res.details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err %v",
-			sid, args.req.Method, args.req.URL(), res.err)
+		res.details = fmt.Sprintf("Failed to call %s (%s %s): %v", sid, args.req.Method, args.req.URL(), res.err)
 		return
 	}
 	defer resp.Body.Close()
