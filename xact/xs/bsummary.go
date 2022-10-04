@@ -34,14 +34,14 @@ type (
 	bsummFactory struct {
 		xreg.RenewBase
 		xctn *bsummXact
-		msg  *apc.BckSummMsg
+		msg  *cmn.BsummCtrlMsg
 	}
 	bsummXact struct {
 		xact.Base
 		t              cluster.Target
-		msg            *apc.BckSummMsg
+		msg            *cmn.BsummCtrlMsg
 		res            atomic.Pointer
-		summaries      cmn.BckSummaries
+		summaries      cmn.AllBsummResults
 		totalDisksSize uint64
 	}
 )
@@ -57,7 +57,7 @@ var (
 //////////////////
 
 func (*bsummFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	msg := args.Custom.(*apc.BckSummMsg)
+	msg := args.Custom.(*cmn.BsummCtrlMsg)
 	p := &bsummFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: msg}
 	return p
 }
@@ -99,7 +99,7 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	listRemote := si.ID() == r.t.SID() // we only want a single target listing remote bucket
 
 	if !r.Bck().IsQuery() {
-		r.summaries = make(cmn.BckSummaries, 0, 1)
+		r.summaries = make(cmn.AllBsummResults, 0, 1)
 		err = r.runBck(r.Bck(), listRemote)
 	} else {
 		var (
@@ -110,7 +110,7 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 		if provider := qbck.Provider; provider != "" {
 			pq = &provider
 		}
-		r.summaries = make(cmn.BckSummaries, 0, 8)
+		r.summaries = make(cmn.AllBsummResults, 0, 8)
 
 		// TODO: currently, summarizing only the _present_ buckets
 		// (see apc.QparamFltPresence and commentary)
@@ -127,8 +127,8 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 
 func (r *bsummXact) runBck(bck *cluster.Bck, listRemote bool) (err error) {
 	var (
-		msg  apc.BckSummMsg
-		summ = cmn.NewBckSumm(bck.Bucket(), r.totalDisksSize)
+		msg  cmn.BsummCtrlMsg
+		summ = cmn.NewBsummResult(bck.Bucket(), r.totalDisksSize)
 	)
 	cos.CopyStruct(&msg, r.msg) // each bucket to have it's own copy of the msg (we may update it)
 	if bck.IsRemote() {
@@ -147,7 +147,7 @@ func (r *bsummXact) runBck(bck *cluster.Bck, listRemote bool) (err error) {
 }
 
 // TODO: `msg.Fast` might be a bit crude, usability-wise - consider adding (best effort) max-time limitation
-func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BckSumm, msg *apc.BckSummMsg) (err error) {
+func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.BsummCtrlMsg) (err error) {
 	summ.Bck.Copy(bck.Bucket())
 
 	// 1. always estimate on-disk size (is fast)

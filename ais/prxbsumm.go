@@ -20,7 +20,7 @@ import (
 )
 
 func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, amsg *apc.ActionMsg, dpq *dpq) {
-	var msg apc.BckSummMsg
+	var msg cmn.BsummCtrlMsg
 	if err := cos.MorphMarshal(amsg.Value, &msg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
@@ -50,7 +50,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 }
 
 // 4 (four) steps
-func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn.BckSummaries, err error) {
+func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (summaries cmn.AllBsummResults, err error) {
 	var (
 		q      = make(url.Values, 4)
 		config = cmn.GCO.Get()
@@ -93,12 +93,12 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn
 	q.Set(apc.QparamTaskAction, apc.TaskResult)
 	q.Set(apc.QparamSilent, "true")
 	args.req.Query = q
-	args.cresv = cresBsumm{} // -> cmn.BckSummaries
+	args.cresv = cresBsumm{} // -> cmn.AllBsummResults
 	results = p.bcastGroup(args)
 	freeBcArgs(args)
 
 	// 5. summarize
-	summaries = make(cmn.BckSummaries, 0, 8)
+	summaries = make(cmn.AllBsummResults, 0, 8)
 	dsize := make(map[string]uint64, len(results))
 	for _, res := range results {
 		if res.err != nil {
@@ -106,7 +106,7 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BckSummMsg) (summaries cmn
 			freeBcastRes(results)
 			return nil, err
 		}
-		tgtsumm, tid := res.v.(*cmn.BckSummaries), res.si.ID()
+		tgtsumm, tid := res.v.(*cmn.AllBsummResults), res.si.ID()
 		for _, summ := range *tgtsumm {
 			dsize[tid] = summ.TotalSize.Disks
 			summaries = summaries.Aggregate(summ)
@@ -143,12 +143,12 @@ func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (bool /*all don
 }
 
 // NOTE: always executes a /fast/ version of the bucket summary
-func (p *proxy) bsummDoWait(bck *cluster.Bck, out *cmn.BckSumm, fltPresence int) error {
+func (p *proxy) bsummDoWait(bck *cluster.Bck, out *cmn.BsummResult, fltPresence int) error {
 	var (
 		max   = cmn.Timeout.MaxKeepalive()
 		sleep = cos.ProbingFrequency(max)
 		qbck  = (*cmn.QueryBcks)(bck)
-		msg   = &apc.BckSummMsg{ObjCached: true, BckPresent: apc.IsFltPresent(fltPresence), Fast: true}
+		msg   = &cmn.BsummCtrlMsg{ObjCached: true, BckPresent: apc.IsFltPresent(fltPresence), Fast: true}
 	)
 	if _, err := p.bsummDo(qbck, msg); err != nil {
 		return err

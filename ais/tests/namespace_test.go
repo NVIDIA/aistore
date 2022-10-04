@@ -221,7 +221,7 @@ func TestNamespace(t *testing.T) {
 			)
 
 			// Test bucket summary
-			var summaries cmn.BckSummaries
+			var summaries cmn.AllBsummResults
 			for _, bck := range locBuckets {
 				summ, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(bck), nil)
 				tassert.CheckFatal(t, err)

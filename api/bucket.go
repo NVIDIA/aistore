@@ -101,7 +101,7 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketPr
 // - is obtained via GetBucketInfo() API
 // - delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
 // The API utilizes HEAD method (compare with HeadBucket above)
-func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketProps, info *cmn.BckSumm, err error) {
+func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketProps, info *cmn.BsummResult, err error) {
 	var (
 		resp *wrappedResp
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -122,7 +122,7 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketPr
 		p = &cmn.BucketProps{}
 		err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketProps)), p)
 		if err == nil {
-			info = &cmn.BckSumm{}
+			info = &cmn.BsummResult{}
 			err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketSumm)), info)
 		}
 		return
@@ -193,14 +193,14 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 // GetBucketSummary returns bucket summaries (i.e., capcity ulitization stats and
 // numbers of objects) for the specified bucket or buckets, as per `cmn.QueryBcks` query.
 // E.g., an empty bucket query corresponds to all buckets present in the cluster's metadata.
-func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BckSummMsg) (cmn.BckSummaries, error) {
+func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (cmn.AllBsummResults, error) {
 	if msg == nil {
-		msg = &apc.BckSummMsg{ObjCached: true, BckPresent: true} // NOTE the defaults
+		msg = &cmn.BsummCtrlMsg{ObjCached: true, BckPresent: true} // NOTE the defaults
 	}
 	bp.Method = http.MethodGet
 
 	reqParams := AllocRp()
-	summaries := cmn.BckSummaries{}
+	summaries := cmn.AllBsummResults{}
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(qbck.Name)

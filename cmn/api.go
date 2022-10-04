@@ -109,9 +109,17 @@ type (
 	}
 )
 
-// Bucket summary (result) for a given bucket
+// Bucket Summary
 type (
-	BckSumm struct {
+	// control message to generate bucket summary or summaries (above)
+	BsummCtrlMsg struct {
+		UUID       string `json:"uuid"`
+		Fast       bool   `json:"fast"`
+		ObjCached  bool   `json:"cached"`
+		BckPresent bool   `json:"present"`
+	}
+	// "summarized" result for a given bucket
+	BsummResult struct {
 		Bck
 		ObjCount struct {
 			Present uint64 `json:"obj_count_present,string"`
@@ -131,7 +139,7 @@ type (
 		UsedPct      uint64 `json:"used_pct"`
 		IsBckPresent bool   `json:"is_present"` // in BMD
 	}
-	BckSummaries []*BckSumm
+	AllBsummResults []*BsummResult
 )
 
 // Multi-object (list|range) operations
@@ -321,20 +329,20 @@ func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 //
 
 // interface guard
-var _ sort.Interface = (*BckSummaries)(nil)
+var _ sort.Interface = (*AllBsummResults)(nil)
 
-func NewBckSumm(bck *Bck, totalDisksSize uint64) (bs *BckSumm) {
-	bs = &BckSumm{Bck: *bck}
+func NewBsummResult(bck *Bck, totalDisksSize uint64) (bs *BsummResult) {
+	bs = &BsummResult{Bck: *bck}
 	bs.TotalSize.Disks = totalDisksSize
 	bs.ObjSize.Min = math.MaxInt64
 	return
 }
 
-func (s BckSummaries) Len() int           { return len(s) }
-func (s BckSummaries) Less(i, j int) bool { return s[i].Bck.Less(&s[j].Bck) }
-func (s BckSummaries) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s AllBsummResults) Len() int           { return len(s) }
+func (s AllBsummResults) Less(i, j int) bool { return s[i].Bck.Less(&s[j].Bck) }
+func (s AllBsummResults) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-func (s BckSummaries) Aggregate(from *BckSumm) BckSummaries {
+func (s AllBsummResults) Aggregate(from *BsummResult) AllBsummResults {
 	for _, to := range s {
 		if to.Bck.Equal(&from.Bck) {
 			aggr(from, to)
@@ -345,7 +353,7 @@ func (s BckSummaries) Aggregate(from *BckSumm) BckSummaries {
 	return s
 }
 
-func aggr(from, to *BckSumm) {
+func aggr(from, to *BsummResult) {
 	if from.ObjSize.Min < to.ObjSize.Min {
 		to.ObjSize.Min = from.ObjSize.Min
 	}
@@ -359,7 +367,7 @@ func aggr(from, to *BckSumm) {
 	to.TotalSize.RemoteObjs += from.TotalSize.RemoteObjs
 }
 
-func (s BckSummaries) Finalize(dsize map[string]uint64, testingEnv bool) {
+func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 	var totalDisksSize uint64
 	for _, tsiz := range dsize {
 		totalDisksSize += tsiz

@@ -26,17 +26,17 @@ import (
 // context structure to gather all (or most) of the relevant state in one place
 // (compare with txnServerCtx)
 type txnClientCtx struct {
-	p       *proxy
-	uuid    string
-	smap    *smapX
-	msg     *aisMsg
-	path    string
-	timeout struct {
+	p        *proxy
+	smap     *smapX
+	msg      *aisMsg
+	uuid     string
+	path     string
+	req      cmn.HreqArgs
+	selected cluster.Nodes
+	timeout  struct {
 		netw time.Duration
 		host time.Duration
 	}
-	req      cmn.HreqArgs
-	selected cluster.Nodes
 }
 
 // TODO: IC(c.uuid) vs _committed_ xactID (currently asserted)

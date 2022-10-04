@@ -48,10 +48,10 @@ const bmdCopies = 2 // local copies
 
 type (
 	bucketMD struct {
-		cluster.BMD
-		vstr  string      // itoa(Version), to have it handy for http redirects
 		cksum *cos.Cksum  // BMD checksum
 		_sgl  *memsys.SGL // jsp-formatted
+		vstr  string      // itoa(Version), to have it handy for http redirects
+		cluster.BMD
 	}
 	bmdOwner interface {
 		sync.Locker
@@ -64,8 +64,8 @@ type (
 		modify(*bmdModifier) (*bucketMD, error)
 	}
 	bmdOwnerBase struct {
-		sync.Mutex
 		bmd atomic.Pointer
+		sync.Mutex
 	}
 	bmdOwnerPrx struct {
 		bmdOwnerBase

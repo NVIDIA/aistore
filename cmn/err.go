@@ -57,9 +57,9 @@ type (
 
 	ErrFailedTo struct {
 		actor  any    // most of the time it's this (target|proxy) node but may also be some other "actor"
-		action string // not necessarily msg.Action
 		what   any    // not necessarily LOM
 		err    error  // original error that can be Unwrap-ed
+		action string // not necessarily msg.Action
 		status int    // http status, if available
 	}
 	ErrUnsupp struct {
@@ -116,9 +116,9 @@ type (
 		d1, d2 uint64 // lom.md.(bucket-ID) and lom.bck.(bucket-ID), respectively
 	}
 	ErrAborted struct {
+		err  error
 		what string
 		ctx  string
-		err  error
 		//
 		timestamp time.Time
 	}
@@ -196,7 +196,7 @@ func NewErrFailedTo(actor any, action string, what any, err error, errCode ...in
 	if e, ok := err.(*ErrFailedTo); ok {
 		return e
 	}
-	e := &ErrFailedTo{actor, action, what, err, 0}
+	e := &ErrFailedTo{actor: actor, action: action, what: what, err: err, status: 0}
 	if actor == nil {
 		e.actor = thisNodeName
 	}

@@ -51,9 +51,9 @@ import (
 
 type (
 	smapX struct {
-		cluster.Smap
-		vstr string      // itoa(Version)
 		_sgl *memsys.SGL // jsp-formatted
+		vstr string      // itoa(Version)
+		cluster.Smap
 	}
 	smapOwner struct {
 		sync.Mutex

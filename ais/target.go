@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,15 +40,12 @@ import (
 	"github.com/NVIDIA/aistore/fs/health"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
-	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/volume"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 const dbName = "ais.db"
@@ -103,11 +99,14 @@ func (b backends) init(t *target, starting bool) {
 	}
 }
 
-// 3rd part cloud: empty stubs unless populated via build tags
-// NOTE: write access to backends - other than at target startup is also invoked
-// via primary (proxy) startup - see earlystart.go for "choosing remote backends".
+// - remote (e.g. cloud) backends  w/ empty stubs unless populated via build tags
+// - write access to backends: 1) target startup, and 2) via primary startup
+// - lookup "choosing remote backends"
 func (b backends) initExt(t *target, starting bool) (err error) {
-	config := cmn.GCO.Get()
+	var (
+		all    []string
+		config = cmn.GCO.Get()
+	)
 	for provider := range b {
 		if provider == apc.HTTP || provider == apc.AIS { // always present
 			continue
@@ -119,7 +118,6 @@ func (b backends) initExt(t *target, starting bool) (err error) {
 			delete(b, provider)
 		}
 	}
-	var all []string
 	for provider := range config.Backend.Providers {
 		var add string
 		switch provider {
@@ -174,9 +172,9 @@ func _overback(err error) error {
 	return nil
 }
 
-///////////////////
-// target runner //
-///////////////////
+//
+// the target
+//
 
 func (t *target) init(config *cmn.Config) {
 	t.initNetworks()
@@ -424,6 +422,20 @@ func (t *target) Run() error {
 	return err
 }
 
+func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
+	// with no cluster-wide UUID it's a local run
+	if args.UUID == "" {
+		args.UUID = cos.GenUUID()
+		regMsg := xactRegMsg{UUID: args.UUID, Kind: apc.ActResilver, Srcs: []string{t.si.ID()}}
+		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
+		t.bcastAsyncIC(msg)
+	}
+	if wg != nil {
+		wg.Done() // compare w/ xact.GoRunW(()
+	}
+	t.res.RunResilver(args)
+}
+
 func (t *target) endStartupStandby() (err error) {
 	smap := t.owner.smap.get()
 	if err = smap.validate(); err != nil {
@@ -562,392 +574,6 @@ func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpecget(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodGet)
-	}
-}
-
-///////////////////////
-// httpbck* handlers //
-///////////////////////
-
-// GET /v1/buckets[/bucket-name]
-func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
-	var bckName string
-	apiItems, err := t.apiItems(w, r, 0, true, apc.URLPathBuckets.L)
-	if err != nil {
-		return
-	}
-	msg, err := t.readAisMsg(w, r)
-	if err != nil {
-		return
-	}
-	t.ensureLatestBMD(msg, r)
-
-	if len(apiItems) > 0 {
-		bckName = apiItems[0]
-	}
-	switch msg.Action {
-	case apc.ActList:
-		dpq := dpqAlloc()
-		if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
-			dpqFree(dpq)
-			t.writeErr(w, r, err)
-			return
-		}
-		qbck, err := newQbckFromQ(bckName, nil, dpq)
-		dpqFree(dpq)
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-		// list buckets if `qbck` is indeed a bucket-query
-		if !qbck.IsBucket() {
-			t.listBuckets(w, r, qbck)
-			return
-		}
-		bck := cluster.CloneBck((*cmn.Bck)(qbck))
-		if err := bck.Init(t.owner.bmd); err != nil {
-			if cmn.IsErrRemoteBckNotFound(err) {
-				t.BMDVersionFixup(r)
-				err = bck.Init(t.owner.bmd)
-			}
-			if err != nil {
-				t.writeErr(w, r, err)
-				return
-			}
-		}
-		begin := mono.NanoTime()
-		if ok := t.listObjects(w, r, bck, msg); !ok {
-			return
-		}
-		delta := mono.SinceNano(begin)
-		t.statsT.AddMany(
-			cos.NamedVal64{Name: stats.ListCount, Value: 1},
-			cos.NamedVal64{Name: stats.ListLatency, Value: delta},
-		)
-	case apc.ActSummaryBck:
-		var (
-			bsumMsg apc.BckSummMsg
-			query   = r.URL.Query()
-		)
-		qbck, err := newQbckFromQ(bckName, query, nil)
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-		if err := cos.MorphMarshal(msg.Value, &bsumMsg); err != nil {
-			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-			return
-		}
-		// if in fact it is a specific named bucket
-		bck := (*cluster.Bck)(qbck)
-		if qbck.IsBucket() {
-			if err := bck.Init(t.owner.bmd); err != nil {
-				if cmn.IsErrRemoteBckNotFound(err) {
-					t.BMDVersionFixup(r)
-					err = bck.Init(t.owner.bmd)
-				}
-				if err != nil {
-					t.writeErr(w, r, err)
-					return
-				}
-			}
-		}
-		t.bsumm(w, r, query, msg.Action, bck, &bsumMsg)
-	default:
-		t.writeErrAct(w, r, msg.Action)
-	}
-}
-
-// listObjects returns a list of objects in a bucket (with optional prefix).
-func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
-	var msg *apc.ListObjsMsg
-	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
-		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
-		return
-	}
-	if !bck.IsAIS() && !msg.IsFlagSet(apc.LsObjCached) {
-		maxCloudPageSize := t.Backend(bck).MaxPageSize()
-		if msg.PageSize > maxCloudPageSize {
-			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxCloudPageSize)
-			return false
-		}
-		if msg.PageSize == 0 {
-			msg.PageSize = maxCloudPageSize
-		}
-	}
-	debug.Assert(msg.PageSize != 0)
-	debug.Assert(cos.IsValidUUID(msg.UUID))
-
-	rns := xreg.RenewObjList(t, bck, msg.UUID, msg)
-	xctn := rns.Entry.Get()
-	// Double check that xaction has not gone before starting page read.
-	// Restart xaction if needed.
-	if rns.Err == xs.ErrGone {
-		rns = xreg.RenewObjList(t, bck, msg.UUID, msg)
-		xctn = rns.Entry.Get()
-	}
-	if rns.Err != nil {
-		t.writeErr(w, r, rns.Err)
-		return
-	}
-	if !rns.IsRunning() {
-		go xctn.Run(nil)
-	}
-
-	resp := xctn.(*xs.ObjListXact).Do(msg)
-	if resp.Err != nil {
-		t.writeErr(w, r, resp.Err, resp.Status)
-		return false
-	}
-
-	debug.Assert(resp.Status == http.StatusOK)
-	debug.Assert(resp.BckList.UUID != "")
-
-	if fs.MarkerExists(fname.RebalanceMarker) || reb.IsActiveGFN() {
-		resp.BckList.Flags |= cmn.ObjListFlagRebalance
-	}
-
-	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
-}
-
-func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck, msg *apc.BckSummMsg) {
-	var (
-		taskAction = q.Get(apc.QparamTaskAction)
-		silent     = cos.IsParseBool(q.Get(apc.QparamSilent))
-	)
-	if taskAction == apc.TaskStart {
-		if action != apc.ActSummaryBck {
-			t.writeErrAct(w, r, action)
-			return
-		}
-		rns := xreg.RenewBckSummary(t, bck, msg)
-		if rns.Err != nil {
-			t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	xctn := xreg.GetXact(msg.UUID)
-
-	// never started
-	if xctn == nil {
-		err := cmn.NewErrNotFound("%s: x-%s[%s] failed to start or never started", t, apc.ActSummaryBck, msg.UUID)
-		if silent {
-			t.writeErrSilent(w, r, err, http.StatusNotFound)
-		} else {
-			t.writeErr(w, r, err, http.StatusNotFound)
-		}
-		return
-	}
-
-	// still running
-	if !xctn.Finished() {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	// finished
-	result, err := xctn.Result()
-	if err != nil {
-		if cmn.IsErrBucketNought(err) {
-			t.writeErr(w, r, err, http.StatusGone)
-		} else {
-			t.writeErr(w, r, err)
-		}
-		return
-	}
-	if taskAction == apc.TaskResult {
-		// return the final result only if it is requested explicitly
-		t.writeJSON(w, r, result, "bucket-summary")
-	}
-}
-
-// DELETE { action } /v1/buckets/bucket-name
-// (evict | delete) (list | range)
-func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
-	msg := aisMsg{}
-	if err := readJSON(w, r, &msg); err != nil {
-		return
-	}
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
-	defer apiReqFree(apireq)
-	if err := t.parseReq(w, r, apireq); err != nil {
-		return
-	}
-	if err := apireq.bck.Init(t.owner.bmd); err != nil {
-		if cmn.IsErrRemoteBckNotFound(err) {
-			t.BMDVersionFixup(r)
-			err = apireq.bck.Init(t.owner.bmd)
-		}
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-	}
-
-	switch msg.Action {
-	case apc.ActEvictRemoteBck:
-		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
-		// HDFS buckets will always keep metadata so they can re-register later
-		if apireq.bck.IsHDFS() || keepMD {
-			nlp := apireq.bck.GetNameLockPair()
-			nlp.Lock()
-			defer nlp.Unlock()
-
-			err := fs.DestroyBucket(msg.Action, apireq.bck.Bucket(), apireq.bck.Props.BID)
-			if err != nil {
-				t.writeErr(w, r, err)
-				return
-			}
-			// Recreate bucket directories (now empty), since bck is still in BMD
-			errs := fs.CreateBucket(msg.Action, apireq.bck.Bucket(), false /*nilbmd*/)
-			if len(errs) > 0 {
-				debug.AssertNoErr(errs[0])
-				t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck
-			}
-		}
-	case apc.ActDeleteObjects, apc.ActEvictObjects:
-		lrMsg := &cmn.SelectObjsMsg{}
-		if err := cos.MorphMarshal(msg.Value, lrMsg); err != nil {
-			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-			return
-		}
-		rns := xreg.RenewEvictDelete(msg.UUID, t, msg.Action /*xaction kind*/, apireq.bck, lrMsg)
-		if rns.Err != nil {
-			t.writeErr(w, r, rns.Err)
-			return
-		}
-		xctn := rns.Entry.Get()
-		xctn.AddNotif(&xact.NotifXact{
-			NotifBase: nl.NotifBase{
-				When: cluster.UponTerm,
-				Dsts: []string{equalIC},
-				F:    t.callerNotifyFin,
-			},
-			Xact: xctn,
-		})
-		go xctn.Run(nil)
-	default:
-		t.writeErrAct(w, r, msg.Action)
-	}
-}
-
-// POST /v1/buckets/bucket-name
-func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	msg, err := t.readAisMsg(w, r)
-	if err != nil {
-		return
-	}
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
-	defer apiReqFree(apireq)
-	if err := t.parseReq(w, r, apireq); err != nil {
-		return
-	}
-
-	t.ensureLatestBMD(msg, r)
-
-	if err := apireq.bck.Init(t.owner.bmd); err != nil {
-		if cmn.IsErrRemoteBckNotFound(err) {
-			t.BMDVersionFixup(r)
-			err = apireq.bck.Init(t.owner.bmd)
-		}
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-	}
-
-	switch msg.Action {
-	case apc.ActPrefetchObjects:
-		var (
-			err   error
-			lrMsg = &cmn.SelectObjsMsg{}
-		)
-		if !apireq.bck.IsRemote() {
-			t.writeErrf(w, r, "%s: expecting remote bucket, got %s, action=%s",
-				t.si, apireq.bck, msg.Action)
-			return
-		}
-		if err = cos.MorphMarshal(msg.Value, lrMsg); err != nil {
-			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-			return
-		}
-		rns := xreg.RenewPrefetch(msg.UUID, t, apireq.bck, lrMsg)
-		xctn := rns.Entry.Get()
-		go xctn.Run(nil)
-	default:
-		t.writeErrAct(w, r, msg.Action)
-	}
-}
-
-// HEAD /v1/buckets/bucket-name
-func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	var (
-		bucketProps cos.StrKVs
-		err         error
-		code        int
-		ctx         = context.Background()
-		hdr         = w.Header()
-	)
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
-	defer apiReqFree(apireq)
-	if err = t.parseReq(w, r, apireq); err != nil {
-		return
-	}
-	inBMD := true
-	if err = apireq.bck.Init(t.owner.bmd); err != nil {
-		if !cmn.IsErrRemoteBckNotFound(err) { // is ais
-			t.writeErr(w, r, err)
-			return
-		}
-		inBMD = false
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		pid := apireq.query.Get(apc.QparamProxyID)
-		glog.Infof("%s %s <= %s", r.Method, apireq.bck, pid)
-	}
-
-	debug.Assert(!apireq.bck.IsAIS())
-
-	if apireq.bck.IsHTTP() {
-		originalURL := apireq.query.Get(apc.QparamOrigURL)
-		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
-		if !inBMD && originalURL == "" {
-			err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
-			t.writeErrSilent(w, r, err, http.StatusNotFound)
-			return
-		}
-	}
-	// + cloud
-	bucketProps, code, err = t.Backend(apireq.bck).HeadBucket(ctx, apireq.bck)
-	if err != nil {
-		if !inBMD {
-			if code == http.StatusNotFound {
-				err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
-				t.writeErrSilent(w, r, err, code)
-			} else {
-				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", apireq.bck, err, code)
-				if cos.IsParseBool(apireq.query.Get(apc.QparamSilent)) {
-					t.writeErrSilent(w, r, err, code)
-				} else {
-					t.writeErr(w, r, err, code)
-				}
-			}
-			return
-		}
-		glog.Warningf("%s: bucket %s, err: %v(%d)", t, apireq.bck, err, code)
-		bucketProps = make(cos.StrKVs)
-		bucketProps[apc.HdrBackendProvider] = apireq.bck.Provider
-		bucketProps[apc.HdrRemoteOffline] = strconv.FormatBool(apireq.bck.IsRemote())
-	}
-	for k, v := range bucketProps {
-		if k == apc.HdrBucketVerEnabled && apireq.bck.Props != nil {
-			if curr := strconv.FormatBool(apireq.bck.VersionConf().Enabled); curr != v {
-				// e.g., change via vendor-provided CLI and similar
-				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t, apireq.bck, v, curr)
-			}
-		}
-		hdr.Set(k, v)
 	}
 }
 
@@ -1494,78 +1120,6 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 	return
 }
 
-func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks) {
-	var (
-		bcks   cmn.Bcks
-		code   int
-		err    error
-		config = cmn.GCO.Get()
-	)
-	if qbck.Provider != "" {
-		if qbck.IsAIS() || qbck.IsHTTP() {
-			bmd := t.owner.bmd.get()
-			bcks = bmd.Select(qbck)
-		} else {
-			bcks, code, err = t._listBcks(qbck, config)
-			if err != nil {
-				if _, ok := err.(*cmn.ErrMissingBackend); !ok {
-					err = cmn.NewErrFailedTo(t, "list buckets", qbck.String(), err, code)
-				}
-				t.writeErr(w, r, err, code)
-				return
-			}
-		}
-	} else /* all providers */ {
-		bmd := t.owner.bmd.get()
-		for provider := range apc.Providers {
-			var buckets cmn.Bcks
-			qbck.Provider = provider
-
-			if qbck.IsAIS() || qbck.IsHTTP() {
-				buckets = bmd.Select(qbck)
-			} else {
-				buckets, code, err = t._listBcks(qbck, config)
-				if err != nil {
-					if _, ok := err.(*cmn.ErrMissingBackend); !ok {
-						t.writeErr(w, r, err, code)
-						return
-					}
-				}
-			}
-			bcks = append(bcks, buckets...)
-		}
-	}
-
-	sort.Sort(bcks)
-	t.writeJSON(w, r, bcks, "list-buckets")
-}
-
-func (t *target) _listBcks(qbck *cmn.QueryBcks, config *cmn.Config) (bcks cmn.Bcks, errCode int, err error) {
-	debug.Assert(!qbck.IsAIS())
-	// must be configured
-	if qbck.IsCloud() || qbck.IsHDFS() {
-		if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
-			err = &cmn.ErrMissingBackend{Provider: qbck.Provider}
-			return
-		}
-	} else if qbck.IsRemoteAIS() {
-		if _, ok := config.Backend.ProviderConf(apc.AIS); !ok {
-			err = &cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters attached"}
-			return
-		}
-	}
-
-	if qbck.IsHDFS() { // excepting HDFS that cannot list
-		bmd := t.owner.bmd.get()
-		bcks = bmd.Select(qbck)
-		return
-	}
-	bck := cluster.NewBck("", qbck.Provider, qbck.Ns)
-	bcks, errCode, err = t.Backend(bck).ListBuckets(*qbck)
-	sort.Sort(bcks)
-	return
-}
-
 func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (newHandle string,
 	errCode int, err error) {
 	var (
@@ -1711,11 +1265,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 	return aisErrCode, aisErr
 }
 
-///////////////////
-// RENAME OBJECT //
-///////////////////
-
-// TODO: consider unifying with Promote
+// rename obj (TODO: consider unifying with Promote)
 func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
 	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
 	defer apiReqFree(apireq)
@@ -1781,18 +1331,4 @@ func (t *target) fsErr(err error, filepath string) {
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsT.AddMany(cos.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})
 	t.fshc.OnErr(filepath)
-}
-
-func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
-	// with no cluster-wide UUID it's a local run
-	if args.UUID == "" {
-		args.UUID = cos.GenUUID()
-		regMsg := xactRegMsg{UUID: args.UUID, Kind: apc.ActResilver, Srcs: []string{t.si.ID()}}
-		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
-		t.bcastAsyncIC(msg)
-	}
-	if wg != nil {
-		wg.Done() // compare w/ xact.GoRunW(()
-	}
-	t.res.RunResilver(args)
 }

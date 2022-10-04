@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -50,29 +50,27 @@ type (
 		keepalive
 	}
 	palive struct {
-		p *proxy
-		keepalive
+		p          *proxy
 		stoppedCh  chan struct{}
 		toRemoveCh chan string
+		keepalive
 	}
 	keepalive struct {
-		name         string
 		k            keepaliver
 		kt           KeepaliveTracker
-		tt           *timeoutTracker
 		statsT       stats.Tracker
+		tt           *timeoutTracker
 		controlCh    chan controlSignal
-		inProgress   atomic.Int64 // A toggle used only by the primary proxy.
 		startedUp    *atomic.Bool
-		tickerPaused atomic.Bool
-
-		// cached config
+		name         string
+		inProgress   atomic.Int64 // toggle used only by the primary
 		maxKeepalive int64
 		interval     time.Duration
+		tickerPaused atomic.Bool
 	}
 	timeoutTracker struct {
-		mu           sync.Mutex
 		timeoutStats map[string]*timeoutStats
+		mu           sync.Mutex
 	}
 	timeoutStats struct {
 		srtt    int64 // smoothed round-trip time in ns
@@ -80,8 +78,8 @@ type (
 		timeout int64 // in ns
 	}
 	controlSignal struct {
-		msg string
 		err error
+		msg string
 	}
 
 	KeepaliveTracker interface {
@@ -613,11 +611,11 @@ func (k *keepalive) paused() bool { return k.tickerPaused.Load() }
 ///////////////
 
 // HBTracker tracks the timestamp of the last time a message is received from a server.
-// Timeout: a message is not received within the interval.
+// Timeout: a message is not received within the `interval`.
 type HBTracker struct {
-	mtx      sync.RWMutex
 	last     map[string]int64
-	interval time.Duration // expected to hear from the server within the interval
+	interval time.Duration
+	mtx      sync.RWMutex
 }
 
 // NewKeepaliveTracker returns a keepalive tracker based on the parameters given.
@@ -664,8 +662,8 @@ func (hb *HBTracker) changed(_ uint8, interval time.Duration) bool {
 // Timeout: last received is more than the 'factor' of current average.
 type (
 	AvgTracker struct {
-		mtx    sync.RWMutex
 		rec    map[string]avgTrackerRec
+		mtx    sync.RWMutex
 		factor uint8
 	}
 	avgTrackerRec struct {

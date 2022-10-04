@@ -139,17 +139,17 @@ type (
 	// node <=> node cluster-info exchange
 	clusterInfo struct {
 		Smap struct {
-			Version int64  `json:"version,string"`
-			UUID    string `json:"uuid"`
 			Primary struct {
 				PubURL  string `json:"pub_url"`
 				CtrlURL string `json:"control_url"`
 				ID      string `json:"id"`
 			}
-		} `json:"smap"`
-		BMD struct {
 			Version int64  `json:"version,string"`
 			UUID    string `json:"uuid"`
+		} `json:"smap"`
+		BMD struct {
+			UUID    string `json:"uuid"`
+			Version int64  `json:"version,string"`
 		} `json:"bmd"`
 		RMD struct {
 			Version int64 `json:"version,string"`
@@ -429,7 +429,7 @@ type (
 	cresIC struct{} // -> icBundle
 	cresBM struct{} // -> bucketMD
 
-	cresBsumm struct{} // -> cmn.BckSummaries
+	cresBsumm struct{} // -> cmn.AllBsummResults
 )
 
 var (
@@ -487,7 +487,7 @@ func (c cresIC) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jr
 func (cresBM) newV() any                              { return &bucketMD{} }
 func (c cresBM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBsumm) newV() any                              { return &cmn.BckSummaries{} }
+func (cresBsumm) newV() any                              { return &cmn.AllBsummResults{} }
 func (c cresBsumm) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 ////////////////

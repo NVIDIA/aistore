@@ -35,19 +35,19 @@ import (
 // context structure to gather all (or most) of the relevant state in one place
 // (compare with txnClientCtx)
 type txnServerCtx struct {
-	uuid    string
-	timeout struct {
-		netw time.Duration
-		host time.Duration
-	}
-	phase      string
+	t          *target
 	msg        *aisMsg
-	callerName string
-	callerID   string
 	bck        *cluster.Bck // aka bckFrom
 	bckTo      *cluster.Bck
 	query      url.Values
-	t          *target
+	uuid       string
+	phase      string
+	callerName string
+	callerID   string
+	timeout    struct {
+		netw time.Duration
+		host time.Duration
+	}
 }
 
 // TODO: return xaction ID (xactID) where applicable

@@ -52,6 +52,7 @@ type (
 
 	// global configuration
 	ClusterConfig struct {
+		Ext         any             `json:"ext,omitempty"` // within meta-version extensions
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
 		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
 		EC          ECConf          `json:"ec" allow:"cluster"`
@@ -82,8 +83,6 @@ type (
 		LastUpdated string `json:"lastupdate_time"`       // timestamp
 		UUID        string `json:"uuid"`                  // UUID
 		Version     int64  `json:"config_version,string"` // version
-		// within meta-version extensions
-		Ext any `json:"ext,omitempty"`
 	}
 	ConfigToUpdate struct {
 		// ClusterConfig
@@ -320,8 +319,8 @@ type (
 	}
 
 	RebalanceConf struct {
-		DestRetryTime cos.Duration `json:"dest_retry_time"`   // max wait for ACKs & neighbors to complete
 		Compression   string       `json:"compression"`       // enum { CompressAlways, ... } in api/apc/compression.go
+		DestRetryTime cos.Duration `json:"dest_retry_time"`   // max wait for ACKs & neighbors to complete
 		SbundleMult   int          `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
 		Enabled       bool         `json:"enabled"`           // true=auto-rebalance | manual rebalancing
 	}
@@ -443,8 +442,8 @@ type (
 	// config for one keepalive tracker
 	// all type of trackers share the same struct, not all fields are used by all trackers
 	KeepaliveTrackerConf struct {
-		Interval cos.Duration `json:"interval"` // keepalive interval
 		Name     string       `json:"name"`     // "heartbeat", "average"
+		Interval cos.Duration `json:"interval"` // keepalive interval
 		Factor   uint8        `json:"factor"`   // only average
 	}
 	KeepaliveTrackerConfToUpdate struct {

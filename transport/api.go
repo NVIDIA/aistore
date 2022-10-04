@@ -58,11 +58,11 @@ type (
 	// object header
 	ObjHdr struct {
 		Bck      cmn.Bck
-		ObjAttrs cmn.ObjAttrs // attributes/metadata of the object that's being transmitted
 		ObjName  string
-		SID      string // sender node ID
-		Opaque   []byte // custom control (optional)
-		Opcode   int    // (see reserved range above)
+		SID      string       // sender node ID
+		Opaque   []byte       // custom control (optional)
+		ObjAttrs cmn.ObjAttrs // attributes/metadata of the object that's being transmitted
+		Opcode   int          // (see reserved range above)
 	}
 	// object to transmit
 	Obj struct {

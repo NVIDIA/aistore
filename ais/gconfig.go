@@ -26,13 +26,13 @@ import (
 
 type (
 	globalConfig struct {
+		_sgl *memsys.SGL
 		cmn.ClusterConfig
-		_sgl *memsys.SGL // jsp-formatted
 	}
 	configOwner struct {
-		sync.Mutex
-		immSize     int64
 		globalFpath string
+		immSize     int64
+		sync.Mutex
 	}
 
 	configModifier struct {

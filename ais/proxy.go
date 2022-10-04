@@ -50,12 +50,12 @@ type (
 	}
 	reverseProxy struct {
 		cloud   *httputil.ReverseProxy // unmodified GET requests => storage.googleapis.com
+		nodes   sync.Map               // map of reverse proxies keyed by node DaemonIDs
 		primary struct {
+			rp  *httputil.ReverseProxy
+			url string
 			sync.Mutex
-			rp  *httputil.ReverseProxy // modify cluster-level md => current primary gateway
-			url string                 // URL of the current primary
 		}
-		nodes sync.Map // map of reverse proxies keyed by node DaemonIDs
 	}
 
 	singleRProxy struct {
@@ -68,14 +68,14 @@ type (
 		htrun
 		authn      *authManager
 		metasyncer *metasyncer
+		ic         ic
+		qm         lsobjMem
 		rproxy     reverseProxy
 		notifs     notifs
-		ic         ic
 		reg        struct {
-			mtx  sync.RWMutex
 			pool nodeRegPool
+			mtx  sync.RWMutex
 		}
-		qm lsobjMem
 	}
 )
 
@@ -1472,7 +1472,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		info           *cmn.BckSumm
+		info           *cmn.BsummResult
 		hdr            = w.Header()
 		apireq         = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
 		fltPresence    int  // operate on present-only or otherwise (as per apc.Flt* enum)
@@ -1507,7 +1507,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if wantBckSummary {
-		info = &cmn.BckSumm{IsBckPresent: false}
+		info = &cmn.BsummResult{IsBckPresent: false}
 	}
 	if bckArgs.isPresent {
 		if wantBckSummary {
@@ -1556,7 +1556,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	toHdr(bck, hdr, info)
 }
 
-func toHdr(bck *cluster.Bck, hdr http.Header, info *cmn.BckSumm) {
+func toHdr(bck *cluster.Bck, hdr http.Header, info *cmn.BsummResult) {
 	if bck.Props == nil {
 		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(&cmn.BucketProps{}))
 	} else {
