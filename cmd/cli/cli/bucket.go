@@ -179,12 +179,13 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		return
 	}
 	if len(bcks) == 0 && apc.IsFltPresent(fltPresence) {
-		s := qbck.String()
-		if s != "" {
-			s = " " + s
+		const hint = "To list _all_ buckets, use the '--%s' option.\n"
+		if qbck.IsEmpty() {
+			fmt.Fprintf(c.App.Writer, "No buckets in the cluster. "+hint, allObjsOrBcksFlag.Name)
+		} else {
+			fmt.Fprintf(c.App.Writer, "No %q matching buckets in the cluster. "+hint, qbck, allObjsOrBcksFlag.Name)
 		}
-		fmt.Fprintf(c.App.Writer, "No%s buckets in the cluster. To list _all_ buckets, use '--%s' option.\n",
-			s, allObjsOrBcksFlag.Name)
+		return
 	}
 	for _, provider := range selectProviders(bcks) {
 		listBckTable(c, provider, bcks, filter, fltPresence)

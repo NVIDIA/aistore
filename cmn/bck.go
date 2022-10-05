@@ -201,10 +201,11 @@ func (b Bck) String() string {
 		}
 		return b.Provider + apc.BckProviderSeparator + b.Name
 	}
-	if b.Provider == "" {
-		return fmt.Sprintf("%s/%s", b.Ns, b.Name)
+	p := b.Provider
+	if p == "" {
+		p = apc.NormalizeProvider("")
 	}
-	return fmt.Sprintf("%s%s%s/%s", b.Provider, apc.BckProviderSeparator, b.Ns, b.Name)
+	return fmt.Sprintf("%s%s%s/%s", p, apc.BckProviderSeparator, b.Ns, b.Name)
 }
 
 // unique name => Bck (use MakeUname above to perform the reverse translation)
@@ -415,10 +416,14 @@ func (qbck QueryBcks) String() string {
 		return ""
 	}
 	if qbck.Name == "" {
-		if qbck.Ns.IsGlobal() {
-			return qbck.Provider + apc.BckProviderSeparator
+		p := qbck.Provider
+		if p == "" {
+			p = apc.NormalizeProvider("")
 		}
-		return fmt.Sprintf("%s%s%s", qbck.Provider, apc.BckProviderSeparator, qbck.Ns)
+		if qbck.Ns.IsGlobal() {
+			return p + apc.BckProviderSeparator
+		}
+		return fmt.Sprintf("%s%s%s", p, apc.BckProviderSeparator, qbck.Ns)
 	}
 	b := Bck(qbck)
 	return b.String()

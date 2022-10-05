@@ -121,6 +121,9 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// there's a difference between looking for all (any) provider vs a specific one -
+// in the former case the fact that (the corresponding backend is not configured)
+// is not an error
 func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks) {
 	var (
 		bcks   cmn.Bcks
@@ -151,7 +154,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 			} else {
 				buckets, code, err = t.blist(qbck, config, bmd)
 				if err != nil {
-					if _, ok := err.(*cmn.ErrMissingBackend); !ok { // compare with the above
+					if _, ok := err.(*cmn.ErrMissingBackend); !ok { // note on top of this func
 						t.writeErr(w, r, err, code)
 						return
 					}
@@ -172,10 +175,11 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 			err = &cmn.ErrMissingBackend{Provider: qbck.Provider}
 			return
 		}
-	} else if qbck.IsRemoteAIS() { // at least one remote ais must be attached
+	} else if qbck.IsRemoteAIS() && qbck.Ns.IsAnyRemote() {
 		if _, ok := config.Backend.ProviderConf(apc.AIS); !ok {
 			glog.Warning(&cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters"})
 			return
+			// otherwise go ahead and try to list below
 		}
 	}
 	if qbck.IsHDFS() { // excepting HDFS (that cannot list buckets)
