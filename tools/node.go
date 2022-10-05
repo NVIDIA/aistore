@@ -717,67 +717,74 @@ func _joinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.D
 	return
 }
 
-func _nextNode(smap *cluster.Smap, idsToIgnore cos.StrSet) (string, string, bool) {
+func _nextNode(smap *cluster.Smap, idsToIgnore cos.StrSet) (sid string, isproxy, exists bool) {
 	for _, d := range smap.Pmap {
 		if !idsToIgnore.Contains(d.ID()) {
-			return d.ID(), d.PubNet.URL, true
+			sid = d.ID()
+			isproxy, exists = true, true
+			return
 		}
 	}
 	for _, d := range smap.Tmap {
 		if !idsToIgnore.Contains(d.ID()) {
-			return d.ID(), d.PubNet.URL, true
+			sid = d.ID()
+			isproxy, exists = false, true
+			return
 		}
 	}
-
-	return "", "", false
+	return
 }
 
-func _waitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64,
-	idsToIgnore cos.StrSet) error {
+func _waitMapVersionSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.Smap, ver int64, ignore cos.StrSet) error {
 	var (
 		prevSid string
-		orig    = idsToIgnore.Clone()
+		orig    = ignore.Clone()
 	)
 	for {
-		sid, _, exists := _nextNode(smap, idsToIgnore)
+		sid, isproxy, exists := _nextNode(smap, ignore)
 		if !exists {
 			break
 		}
 		if sid == prevSid {
 			time.Sleep(time.Second)
 		}
-		daemonSmap, err := api.GetNodeClusterMap(baseParams, sid)
+		sname := cluster.Tname(sid)
+		if isproxy {
+			sname = cluster.Pname(sid)
+		}
+		newSmap, err := api.GetNodeClusterMap(bp, sid)
 		if err != nil && !cos.IsRetriableConnErr(err) &&
 			!cmn.IsStatusServiceUnavailable(err) && !cmn.IsStatusBadGateway(err) /* retry as well */ {
 			return err
 		}
-		if err == nil && daemonSmap.Version > prevVersion {
-			idsToIgnore.Add(sid)
-			if daemonSmap.Version > smap.Version {
-				*smap = *daemonSmap
+		if err == nil && newSmap.Version > ver {
+			ignore.Add(sid)
+			if newSmap.Version > smap.Version {
+				*smap = *newSmap
 			}
-			if daemonSmap.Version > prevVersion+1 {
-				// update Smap to a newer version and restart waiting
-				if prevVersion < 0 {
-					ctx.Log("%s (from node %s)\n", daemonSmap.StringEx(), sid)
+			if newSmap.Version > ver+1 {
+				// update Smap to a newer version
+				if ver < 0 {
+					ctx.Log("%s from %s\n", newSmap.StringEx(), sname)
 				} else {
-					ctx.Log("Updating Smap v%d to %s (from node %s)\n", prevVersion, daemonSmap.StringEx(), sid)
+					ctx.Log("Updating Smap v%d to %s from %s\n", ver, newSmap.StringEx(), sname)
 				}
-				*smap = *daemonSmap
-				prevVersion = smap.Version - 1
-				idsToIgnore = orig.Clone()
-				idsToIgnore.Add(sid)
+				*smap = *newSmap
+				ver = smap.Version - 1
+				ignore = orig.Clone()
+				ignore.Add(sid)
 			}
 			continue
 		}
 		if time.Now().After(timeout) {
-			return fmt.Errorf("timed out waiting for node %s to sync Smap > v%d", sid, prevVersion)
+			return fmt.Errorf("timed out waiting for %s to sync Smap > v%d", sname, ver)
 		}
-		if daemonSmap != nil {
-			if snode := daemonSmap.GetNode(sid); snode != nil {
-				ctx.Log("Waiting for %s(%s) to sync Smap > v%d\n", snode.StringEx(), daemonSmap, prevVersion)
+		if newSmap != nil {
+			if snode := newSmap.GetNode(sid); snode != nil {
+				ctx.Log("Waiting for %s(%s) to sync Smap > v%d\n", snode.StringEx(), newSmap, ver)
 			} else {
-				ctx.Log("Waiting for node %s(%s) to sync Smap > v%d\n", sid, daemonSmap, prevVersion)
+				ctx.Log("Waiting for %s(%s) to sync Smap > v%d\n", sname, newSmap, ver)
+				ctx.Log("(Warning: %s hasn't joined yet - not present)\n", sname)
 			}
 		}
 		prevSid = sid

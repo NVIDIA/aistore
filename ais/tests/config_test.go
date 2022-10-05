@@ -235,10 +235,10 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		origProxyCnt  = smap.CountActiveProxies()
 		origTargetCnt = smap.CountActiveTargets()
 	)
+	// 1. Kill random non-primary
 	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
-	// 1. Kill a random proxy
 	tlog.Logf("Killing %s\n", proxy.StringEx())
 	cmd, err := tools.KillNode(proxy)
 	tassert.CheckFatal(t, err)
@@ -249,8 +249,15 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		})
 	})
 
+	time.Sleep(time.Second)
 	smap, err = tools.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
+	if smap.Primary.ID() == proxy.ID() {
+		time.Sleep(time.Second)
+		_ = tools.RestoreNode(cmd, false, apc.Proxy)
+		time.Sleep(time.Second)
+		t.Fatalf("failed to kill %s, %s", proxy, smap.StringEx())
+	}
 
 	// 2. After proxy is killed, update cluster configuration
 	newECEnabled := !config.EC.Enabled
