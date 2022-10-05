@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -62,61 +61,123 @@ func TestHTTPProviderBucket(t *testing.T) {
 
 func TestListBuckets(t *testing.T) {
 	var (
-		bck = cmn.Bck{
-			Name:     t.Name() + "Bucket",
-			Provider: apc.AIS,
-		}
+		bck        = cmn.Bck{Name: t.Name() + "Bucket", Provider: apc.AIS}
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
+		pnums      = make(map[string]cmn.Bcks)
 	)
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{}, apc.FltExists)
 	tassert.CheckFatal(t, err)
 
-	for _, bck := range bcks {
-		fmt.Fprintf(os.Stdout, "  provider: %s, name: %s, ns: %s\n", bck.Provider, bck.Name, bck.Ns)
+	for provider := range apc.Providers {
+		qbck := cmn.QueryBcks{Provider: provider}
+		bcks := bcks.Select(qbck)
+		tlog.Logf("%s:\t%2d bucket%s\n", apc.ToScheme(provider), len(bcks), cos.Plural(len(bcks)))
+		pnums[provider] = bcks
 	}
 	config := tools.GetClusterConfig(t)
-	for _, provider := range []string{apc.AWS, apc.GCP, apc.Azure, apc.HDFS} {
+	// tests: vs configured backend vs count
+	for provider := range apc.Providers {
 		_, configured := config.Backend.Providers[provider]
-		query := cmn.QueryBcks{Provider: provider}
-		remoteBuckets, err := api.ListBuckets(baseParams, query, apc.FltExists)
+		qbck := cmn.QueryBcks{Provider: provider}
+		bcks, err := api.ListBuckets(baseParams, qbck, apc.FltExists)
 		if err != nil {
 			if !configured {
 				continue
 			}
 			tassert.CheckError(t, err)
 		} else if cmn.IsCloudProvider(provider) && !configured {
-			t.Fatalf("%q is not configured: expecting list-buckets to fail, got %v\n", provider, remoteBuckets)
+			t.Fatalf("%s is not configured: expecting list-buckets to fail, got %v\n", provider, bcks)
 		}
-		if len(remoteBuckets) != len(bcks.Select(query)) {
-			t.Fatalf("%s: remote buckets: %d != %d\n", provider, len(remoteBuckets), len(bcks.Select(query)))
+		if num := len(bcks.Select(qbck)); len(bcks) != num {
+			t.Fatalf("%s: num buckets(1): %d != %d\n", provider, len(bcks), num)
+		}
+		if len(bcks) != len(pnums[provider]) {
+			t.Fatalf("%s: num buckets(2): %d != %d\n", provider, len(bcks), len(pnums[provider]))
 		}
 	}
 
-	// NsGlobal
-	query := cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsGlobal}
-	aisBuckets, err := api.ListBuckets(baseParams, query, apc.FltExists)
-	tassert.CheckError(t, err)
-	if len(aisBuckets) != len(bcks.Select(query)) {
-		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(query)))
+	// tests: vs present vs exist-outside, etc.
+	for provider := range apc.Providers {
+		if _, configured := config.Backend.Providers[provider]; !configured {
+			continue
+		}
+		qbck := cmn.QueryBcks{Provider: provider}
+		presbcks, err := api.ListBuckets(baseParams, qbck, apc.FltPresent)
+		tassert.CheckFatal(t, err)
+		if qbck.Provider == apc.AIS {
+			tassert.Fatalf(t, len(presbcks) > 0, "at least one ais bucket must be present")
+			continue
+		}
+		// making it present if need be
+		if len(presbcks) == 0 {
+			if len(pnums[provider]) == 0 {
+				continue
+			}
+			bcks, i := pnums[provider], 0
+			if len(bcks) > 1 {
+				i = rand.Intn(len(bcks))
+			}
+			pbck := bcks[i]
+			_, err := api.HeadBucket(baseParams, pbck, false /* don't add */)
+			tassert.CheckFatal(t, err)
+
+			presbcks, err = api.ListBuckets(baseParams, qbck, apc.FltPresent)
+			tassert.CheckFatal(t, err)
+
+			tlog.Logf("%s: now present %s\n", provider, pbck)
+			t.Cleanup(func() {
+				err = api.EvictRemoteBucket(baseParams, pbck, false /*keep md*/)
+				tassert.CheckFatal(t, err)
+				tlog.Logf("[cleanup] %s evicted\n", pbck)
+			})
+		}
+
+		b := presbcks[0]
+		err = api.EvictRemoteBucket(baseParams, b, false /*keep md*/)
+		tassert.CheckFatal(t, err)
+
+		evbcks, err := api.ListBuckets(baseParams, qbck, apc.FltPresent)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(presbcks) == len(evbcks)+1, "%s: expected one bucket less present after evicting %s (%d, %d)",
+			provider, b, len(presbcks), len(evbcks))
+
+		outbcks, err := api.ListBuckets(baseParams, qbck, apc.FltExistsOutside)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(outbcks) > 0, "%s: expected at least one (evicted) bucket to \"exist outside\"", provider)
+
+		allbcks, err := api.ListBuckets(baseParams, qbck, apc.FltExistsNoProps)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(allbcks) == len(outbcks)+len(presbcks)-1,
+			"%s: expected present + outside == all (%d, %d, %d)", provider, len(presbcks)-1, len(outbcks), len(allbcks))
+
+		_, err = api.HeadBucket(baseParams, b, false /* don't add */)
+		tassert.CheckFatal(t, err)
+		presbcks2, err := api.ListBuckets(baseParams, qbck, apc.FltPresentNoProps)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(presbcks2) == len(presbcks), "%s: expected num present back to original (%d, %d)",
+			provider, len(presbcks2), len(presbcks))
 	}
 
-	// NsAnyRemote
-	query = cmn.QueryBcks{Ns: cmn.NsAnyRemote}
-	bcks, err = api.ListBuckets(baseParams, query, apc.FltExists)
+	// tests: NsGlobal
+	qbck := cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsGlobal}
+	aisBuckets, err := api.ListBuckets(baseParams, qbck, apc.FltExists)
 	tassert.CheckError(t, err)
-	query = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
-	aisBuckets, err = api.ListBuckets(baseParams, query, apc.FltExists)
-	if tools.RemoteCluster.UUID == "" {
-		// TODO -- FIXME: ditto (returning empty slice)
-		tassert.Errorf(t, err == nil || strings.Contains(err.Error(), "remote"), "%q: %v", tools.RemoteCluster.UUID, err)
-	} else {
-		tassert.CheckError(t, err)
-		if len(aisBuckets) != len(bcks.Select(query)) {
-			t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(query)))
-		}
+	if len(aisBuckets) != len(bcks.Select(qbck)) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(qbck)))
+	}
+
+	// tests: NsAnyRemote
+	qbck = cmn.QueryBcks{Ns: cmn.NsAnyRemote}
+	bcks, err = api.ListBuckets(baseParams, qbck, apc.FltExists)
+	tassert.CheckError(t, err)
+	qbck = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
+	aisBuckets, err = api.ListBuckets(baseParams, qbck, apc.FltExists)
+	tassert.CheckError(t, err)
+	if len(aisBuckets) != len(bcks.Select(qbck)) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(qbck)))
 	}
 }
 
@@ -126,12 +187,8 @@ func TestDefaultBucketProps(t *testing.T) {
 		proxyURL     = tools.RandomProxyURL(t)
 		baseParams   = tools.BaseAPIParams(proxyURL)
 		globalConfig = tools.GetClusterConfig(t)
-		bck          = cmn.Bck{
-			Name:     testBucketName,
-			Provider: apc.AIS,
-		}
+		bck          = cmn.Bck{Name: testBucketName, Provider: apc.AIS}
 	)
-
 	tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled":     "true",
 		"ec.data_slices": strconv.FormatUint(dataSlices, 10),
@@ -158,10 +215,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Name:     testBucketName,
-			Provider: apc.AIS,
-		}
+		bck        = cmn.Bck{Name: testBucketName, Provider: apc.AIS}
 	)
 	propsToSet := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{

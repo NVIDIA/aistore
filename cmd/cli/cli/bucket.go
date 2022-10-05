@@ -108,20 +108,16 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 // Rename ais bucket
 func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	var xactID string
-
 	if _, err = headBucket(fromBck, true /* don't add */); err != nil {
 		return
 	}
-
 	if xactID, err = api.RenameBucket(apiBP, fromBck, toBck); err != nil {
 		return
 	}
-
 	if !flagIsSet(c, waitFlag) {
 		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Renaming bucket", fromBck, toBck, apc.ActMoveBck, toBck)
 		return
 	}
-
 	fmt.Fprintf(c.App.Writer, fmtXactStarted, "Renaming bucket", fromBck, toBck)
 	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", fromBck, toBck)
@@ -134,16 +130,13 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 // Copy ais bucket
 func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (err error) {
 	var xactID string
-
 	if xactID, err = api.CopyBucket(apiBP, fromBck, toBck, msg); err != nil {
 		return
 	}
-
 	if !flagIsSet(c, waitFlag) {
 		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Copying bucket", fromBck, toBck, apc.ActCopyBck, toBck)
 		return
 	}
-
 	fmt.Fprintf(c.App.Writer, fmtXactStarted, "Copying bucket", fromBck, toBck)
 	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "copy", fromBck, toBck)
@@ -236,7 +229,7 @@ func listBckTableNoSummary(c *cli.Context, provider string, filtered []cmn.Bck, 
 	}
 	for _, bck := range filtered {
 		var (
-			info  cmn.BckSumm
+			info  cmn.BsummResult
 			props *cmn.BucketProps
 		)
 		if apc.IsFltPresent(fltPresence) {

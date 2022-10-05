@@ -324,9 +324,9 @@ func showBucketSummary(c *cli.Context) error {
 }
 
 // NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets`)
-func getSummaries(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.BckSummaries, err error) {
+func getSummaries(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.AllBsummResults, err error) {
 	fDetails := func() (err error) {
-		msg := &apc.BckSummMsg{ObjCached: cachedObjs, BckPresent: !allBuckets, Fast: false}
+		msg := &cmn.BsummCtrlMsg{ObjCached: cachedObjs, BckPresent: !allBuckets, Fast: false}
 		summaries, err = api.GetBucketSummary(apiBP, qbck, msg)
 		return
 	}

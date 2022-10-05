@@ -398,7 +398,7 @@ type (
 	ListBucketsTemplateHelper struct {
 		Bck   cmn.Bck
 		Props *cmn.BucketProps
-		Info  *cmn.BckSumm
+		Info  *cmn.BsummResult
 	}
 )
 

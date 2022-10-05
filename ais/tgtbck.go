@@ -151,7 +151,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 			} else {
 				buckets, code, err = t.blist(qbck, config, bmd)
 				if err != nil {
-					if _, ok := err.(*cmn.ErrMissingBackend); !ok {
+					if _, ok := err.(*cmn.ErrMissingBackend); !ok { // compare with the above
 						t.writeErr(w, r, err, code)
 						return
 					}
@@ -174,7 +174,7 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 		}
 	} else if qbck.IsRemoteAIS() { // at least one remote ais must be attached
 		if _, ok := config.Backend.ProviderConf(apc.AIS); !ok {
-			err = &cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters"}
+			glog.Warning(&cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters"})
 			return
 		}
 	}
