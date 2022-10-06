@@ -524,13 +524,12 @@ func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, 
 	return access, newIdx, nil
 }
 
-func parseFeatureFlags(v string) feat.Flags { // TODO -- FIXME: use feat.StrToFeat, support comma-separated list of feat
-	for i, name := range supportedFeat {
-		if v == name {
-			return 1 << i
-		}
+// TODO -- FIXME: support mult-value comma-separated
+func parseFeatureFlags(v string) (feat.Flags, error) {
+	if v == "" || v == "none" {
+		return 0, nil
 	}
-	return 0
+	return feat.StrToFeat(v)
 }
 
 // TODO: support `allow` and `deny` verbs/operations on existing access permissions

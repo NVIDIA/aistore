@@ -95,9 +95,13 @@ func setCluConfigHandler(c *cli.Context) error {
 		}
 	}
 	for k, v := range nvs {
+		// TODO: revisit
 		if k == "features" {
-			fmt.Fprintf(c.App.Writer, "v=%q\n", v)
-			nvs[k] = parseFeatureFlags(v).Value()
+			featfl, err := parseFeatureFlags(v)
+			if err != nil {
+				return fmt.Errorf("invalid feature flag %q", v)
+			}
+			nvs[k] = featfl.Value()
 		}
 	}
 
