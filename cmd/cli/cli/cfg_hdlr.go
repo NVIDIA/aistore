@@ -94,8 +94,14 @@ func setCluConfigHandler(c *cli.Context) error {
 			return fmt.Errorf("invalid property name %q", k)
 		}
 	}
+	for k, v := range nvs {
+		if k == "features" {
+			fmt.Fprintf(c.App.Writer, "v=%q\n", v)
+			nvs[k] = parseFeatureFlags(v).Value()
+		}
+	}
 
-	// assorted named fields that'll require (cluster | node) restart
+	// assorted named fields that require (cluster | node) restart
 	// for the change to take an effect
 	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
 		msg := fmt.Sprintf("restart required for the change '%s=%s' to take an effect\n", name, nvs[name])

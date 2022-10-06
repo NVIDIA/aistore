@@ -33,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/xact"
@@ -521,6 +522,15 @@ func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, 
 		return 0, newIdx, err
 	}
 	return access, newIdx, nil
+}
+
+func parseFeatureFlags(v string) feat.Flags { // TODO -- FIXME: use feat.StrToFeat, support comma-separated list of feat
+	for i, name := range supportedFeat {
+		if v == name {
+			return 1 << i
+		}
+	}
+	return 0
 }
 
 // TODO: support `allow` and `deny` verbs/operations on existing access permissions

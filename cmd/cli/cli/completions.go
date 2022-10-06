@@ -37,6 +37,8 @@ const (
 
 var (
 	supportedBool = []string{"true", "false"}
+	// TODO -- FIXME: m.b. feat.All
+	supportedFeat = []string{"EnforceIntraClusterAccess", "DontHeadRemote", "SkipVC", "DontAutoDetectFshare", "ProvideS3APIViaRoot"}
 	propCmpls     = map[string][]string{
 		apc.PropBucketAccessAttrs:             apc.SupportedPermissions(),
 		apc.HdrObjCksumType:                   cos.SupportedChecksums(),
@@ -65,6 +67,7 @@ var (
 		"replication.on_cold_get":             supportedBool,
 		"replication.on_lru_eviction":         supportedBool,
 		"replication.on_put":                  supportedBool,
+		"features":                            supportedFeat,
 	}
 )
 

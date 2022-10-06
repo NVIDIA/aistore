@@ -571,8 +571,8 @@ var Timeout = &timeout{
 // read-mostly feature flags (ditto)
 var Features feat.Flags
 
-// assorted named fields that MAY require (cluster | node) restart for changes to make an effect
-var ConfigRestartRequired = []string{"cplane_operation", "max_keepalive", "features", "auth", "memsys", "net"}
+// assorted named fields that require (cluster | node) restart for changes to make an effect
+var ConfigRestartRequired = []string{"auth", "memsys", "net"}
 
 // dsort
 const (
