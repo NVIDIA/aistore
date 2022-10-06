@@ -30,7 +30,7 @@ const fmtErrBO = "bucket and object names are required to complete multipart upl
 // Body is empty, everything in the query params and the header.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html
 // TODO: not implemented yet
-func (*target) putObjMptCopy(w http.ResponseWriter, r *http.Request, items []string) {
+func (*target) putMptCopy(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		err := fmt.Errorf(fmtErrBO, items)
 		s3.WriteErr(w, r, err, 0)
@@ -46,7 +46,7 @@ func (*target) putObjMptCopy(w http.ResponseWriter, r *http.Request, items []str
 // either not present (s3cmd) or cannot be trusted (aws s3api).
 //
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
-func (t *target) putObjMptPart(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *cluster.Bck) {
+func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *cluster.Bck) {
 	if len(items) < 2 {
 		err := fmt.Errorf(fmtErrBO, items)
 		s3.WriteErr(w, r, err, 0)

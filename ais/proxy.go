@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
@@ -211,8 +212,8 @@ func (p *proxy) Run() error {
 		{r: "/" + apc.AZScheme, h: p.easyURLHandler, net: accessNetPublic},
 		{r: "/" + apc.AISScheme, h: p.easyURLHandler, net: accessNetPublic},
 
-		// everything else
-		{r: "/", h: p.httpCloudHandler, net: accessNetPublic},
+		// ht:// _or_ S3 compatibility, depending on feature flag
+		{r: "/", h: p.rootHandler, net: accessNetPublic},
 	}
 	p.registerNetworkHandlers(networkHandlers)
 
@@ -2705,13 +2706,36 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// http reverse-proxy handler, to handle unmodified requests
-// (not to confuse with p.rproxy)
-func (p *proxy) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) rootHandler(w http.ResponseWriter, r *http.Request) {
+	const fs3 = "/" + apc.S3
 	if !p.ClusterStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
+
+	// by default, s3 is serviced at `/s3`
+	// with `/` root reserved for vanilla http locations via ht:// mechanism
+	config := cmn.GCO.Get()
+	cmn.Features = config.Features
+	if !cmn.Features.IsSet(feat.ProvideS3APIViaRoot) {
+		p.htHandler(w, r)
+		return
+	}
+
+	// prepend /s3 and handle
+	switch {
+	case r.URL.Path == "" || r.URL.Path == "/":
+		r.URL.Path = fs3
+	case r.URL.Path[0] == '/':
+		r.URL.Path = fs3 + r.URL.Path
+	default:
+		r.URL.Path = fs3 + "/" + r.URL.Path
+	}
+	p.s3Handler(w, r)
+}
+
+// GET | HEAD vanilla http(s) location via `ht://` bucket with the corresponding `OrigURLBck`
+func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Scheme == "" {
 		p.writeErrURL(w, r)
 		return

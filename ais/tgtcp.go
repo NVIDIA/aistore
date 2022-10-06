@@ -859,6 +859,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 	if err != nil {
 		return
 	}
+
 	if !t.NodeStarted() { // starting up
 		debug.Assert(msg.Action != apc.ActAttachRemote && msg.Action != apc.ActDetachRemote)
 		return

@@ -646,14 +646,14 @@ func GetClusterConfig(t *testing.T) (config *cmn.Config) {
 func SetClusterConfig(t *testing.T, nvs cos.StrKVs) {
 	proxyURL := GetPrimaryURL()
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.SetClusterConfig(baseParams, nvs)
+	err := api.SetClusterConfig(baseParams, nvs, false /*transient*/)
 	tassert.CheckError(t, err)
 }
 
 func SetClusterConfigUsingMsg(t *testing.T, toUpdate *cmn.ConfigToUpdate) {
 	proxyURL := GetPrimaryURL()
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.SetClusterConfigUsingMsg(baseParams, toUpdate)
+	err := api.SetClusterConfigUsingMsg(baseParams, toUpdate, false /*transient*/)
 	tassert.CheckFatal(t, err)
 }
 

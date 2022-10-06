@@ -56,17 +56,17 @@ func IsAzureURL(u *url.URL) bool {
 // WARNING: `ReparseQuery` might affect non-tensorflow clients using S3-compatible API
 // with AIStore. To be used with caution.
 func ReparseQuery(r *http.Request) {
-	if strings.ContainsRune(r.URL.Path, '?') {
-		q := r.URL.Query()
-		tmpURL, err := url.Parse(r.URL.Path)
-		debug.AssertNoErr(err)
-		for k, v := range tmpURL.Query() {
-			q.Add(k, strings.Join(v, ","))
-		}
-
-		r.URL.Path = tmpURL.Path
-		r.URL.RawQuery = q.Encode()
+	if !strings.ContainsRune(r.URL.Path, '?') {
+		return
 	}
+	q := r.URL.Query()
+	tmpURL, err := url.Parse(r.URL.Path)
+	debug.AssertNoErr(err)
+	for k, v := range tmpURL.Query() {
+		q.Add(k, strings.Join(v, ","))
+	}
+	r.URL.Path = tmpURL.Path
+	r.URL.RawQuery = q.Encode()
 }
 
 // JoinWords uses forward slash to join any number of words into a single path.

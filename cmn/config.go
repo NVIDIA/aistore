@@ -556,7 +556,8 @@ type (
 	}
 )
 
-// most often used timeouts: assign at startup to reduce the number of GCO.Get() calls
+// read-mostly and most often used timeouts: assign at startup to reduce the number of GCO.Get() calls
+// updating is done on a best-effort basis (but always upon receiving/updating cluster config)
 type timeout struct {
 	cplane    time.Duration // Config.Timeout.CplaneOperation
 	keepalive time.Duration // ditto MaxKeepalive
@@ -567,10 +568,10 @@ var Timeout = &timeout{
 	keepalive: 2*time.Second + time.Millisecond,
 }
 
-// read-only feature flags
+// read-mostly feature flags (ditto)
 var Features feat.Flags
 
-// assorted named fields that'll require (cluster | node) restart for the change to take an effect
+// assorted named fields that MAY require (cluster | node) restart for changes to make an effect
 var ConfigRestartRequired = []string{"cplane_operation", "max_keepalive", "features", "auth", "memsys", "net"}
 
 // dsort
@@ -1545,9 +1546,9 @@ func (c *TimeoutConf) Validate() error {
 }
 
 // once upon startup
-func (d *timeout) setReadOnly(config *Config) {
-	d.cplane = config.Timeout.CplaneOperation.D()
-	d.keepalive = config.Timeout.MaxKeepalive.D()
+func (d *timeout) Set(cluconf *ClusterConfig) {
+	d.cplane = cluconf.Timeout.CplaneOperation.D()
+	d.keepalive = cluconf.Timeout.MaxKeepalive.D()
 }
 
 func (d *timeout) CplaneOperation() time.Duration { return d.cplane }
@@ -1739,7 +1740,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	// readonly config which can be updated but
 	// for the change to take an effect the cluster (or the node) must be restarted
 	Features = config.Features
-	Timeout.setReadOnly(config)
+	Timeout.Set(&config.ClusterConfig)
 
 	config.SetRole(daeRole)
 

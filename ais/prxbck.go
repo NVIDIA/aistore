@@ -178,9 +178,12 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 		}
 	case cmn.IsErrRemoteBckNotFound(err):
 		debug.Assert(bck.IsRemote())
-		// when remote bucket lookup is not permitted
+		// when remote-bucket lookup is not permitted
 		if cmn.Features.IsSet(feat.DontHeadRemote) || args.dontHeadRemote {
-			// NOTE: if `feat.DontHeadRemote` is globally enabled use `api.CreateBucket` to override
+			// - update global
+			// - if `feat.DontHeadRemote` is globally enabled you could still use
+			// `api.CreateBucket` to override (or disable it via `api.SetClusterConfig`)
+			cmn.Features = cmn.GCO.Get().Features
 			args.p.writeErrSilent(args.w, args.r, err, errCode)
 			return
 		}

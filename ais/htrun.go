@@ -1526,6 +1526,10 @@ func (h *htrun) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 	}
 	err = cmn.GCO.Update(&newConfig.ClusterConfig)
 	debug.AssertNoErr(err)
+
+	// update assorted read-mostly knobs
+	cmn.Features = newConfig.Features
+	cmn.Timeout.Set(&newConfig.ClusterConfig)
 	return
 }
 

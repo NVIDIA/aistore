@@ -1,4 +1,4 @@
-// Package feat
+// Package feat: global runtime-configurable feature flags
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
@@ -10,35 +10,35 @@ import (
 
 type Flags uint64
 
+// NOTE: when/if making any changes make absolutely sure to keep the enum below and `all` in-sync :NOTE
+
 const (
 	EnforceIntraClusterAccess Flags = 1 << iota
 	DontHeadRemote                  // see also api/apc/lsmsg.go, and in particular `LsDontHeadRemote`
 	SkipVC                          // skip loading existing object's metadata, Version and Checksum in particular
 	DontAutoDetectFshare            // when promoting NFS shares to AIS
+	ProvideS3APIViaRoot             // handle s3 compat via `aistore-hostname/` (default: `aistore-hostname/s3`)
 )
 
-var all = []struct {
-	name  string
-	value Flags
-}{
-	{name: "EnforceIntraClusterAccess", value: EnforceIntraClusterAccess},
-	{name: "DontHeadRemote", value: DontHeadRemote},
-	{name: "SkipVC", value: SkipVC},
-	{name: "DontAutoDetectFshare", value: DontAutoDetectFshare},
+var all = []string{
+	"EnforceIntraClusterAccess",
+	"DontHeadRemote",
+	"SkipVC",
+	"DontAutoDetectFshare",
+	"ProvideS3APIViaRoot",
 }
 
-func (cflags Flags) IsSet(flag Flags) bool { return cflags&flag == flag }
-func (cflags Flags) Value() string         { return strconv.FormatUint(uint64(cflags), 10) }
+func (featfl Flags) IsSet(flag Flags) bool { return featfl&flag == flag }
+func (featfl Flags) Value() string         { return strconv.FormatUint(uint64(featfl), 10) }
 
-func (cflags Flags) String() (s string) {
-	for _, flag := range all {
-		if cflags&flag.value != flag.value {
-			continue
+func (featfl Flags) String() (s string) {
+	for i, name := range all {
+		if featfl&(1<<i) != 0 {
+			s += name + ","
 		}
-		if s != "" {
-			s += ", "
-		}
-		s += flag.name
 	}
-	return
+	if s == "" {
+		return "feature flags: none"
+	}
+	return "feature flags: " + s[:len(s)-1]
 }

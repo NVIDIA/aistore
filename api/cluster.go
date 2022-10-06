@@ -7,7 +7,6 @@ package api
 import (
 	"net/http"
 	"net/url"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -182,13 +181,13 @@ func SetPrimaryProxy(bp BaseParams, newPrimaryID string, force bool) error {
 // SetClusterConfig given key-value pairs of cluster configuration parameters,
 // sets the cluster-wide configuration accordingly. Setting cluster-wide
 // configuration requires sending the request to a proxy.
-func SetClusterConfig(bp BaseParams, nvs cos.StrKVs, transient ...bool) error {
-	q := url.Values{}
+func SetClusterConfig(bp BaseParams, nvs cos.StrKVs, transient bool) error {
+	q := make(url.Values, len(nvs))
 	for key, val := range nvs {
-		q.Add(key, val)
+		q.Set(key, val)
 	}
-	if len(transient) > 0 {
-		q.Add(apc.ActTransient, strconv.FormatBool(transient[0]))
+	if transient {
+		q.Set(apc.ActTransient, "true")
 	}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
@@ -204,14 +203,13 @@ func SetClusterConfig(bp BaseParams, nvs cos.StrKVs, transient ...bool) error {
 
 // SetClusterConfigUsingMsg sets the cluster-wide configuration
 // using the `cmn.ConfigToUpdate` parameter provided.
-func SetClusterConfigUsingMsg(bp BaseParams, configToUpdate *cmn.ConfigToUpdate, transient ...bool) error {
-	q := url.Values{}
-	msg := apc.ActionMsg{
-		Action: apc.ActSetConfig,
-		Value:  configToUpdate,
-	}
-	if len(transient) > 0 {
-		q.Add(apc.ActTransient, strconv.FormatBool(transient[0]))
+func SetClusterConfigUsingMsg(bp BaseParams, configToUpdate *cmn.ConfigToUpdate, transient bool) error {
+	var (
+		q   url.Values
+		msg = apc.ActionMsg{Action: apc.ActSetConfig, Value: configToUpdate}
+	)
+	if transient {
+		q.Set(apc.ActTransient, "true")
 	}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
@@ -279,7 +277,7 @@ func GetBMD(bp BaseParams) (*cluster.BMD, error) {
 }
 
 func AttachRemoteAIS(bp BaseParams, alias, u string) error {
-	q := make(url.Values)
+	q := make(url.Values, 4)
 	q.Set(apc.QparamWhat, apc.GetWhatRemoteAIS)
 	q.Set(alias, u)
 	bp.Method = http.MethodPut
@@ -293,7 +291,7 @@ func AttachRemoteAIS(bp BaseParams, alias, u string) error {
 }
 
 func DetachRemoteAIS(bp BaseParams, alias string) error {
-	q := make(url.Values)
+	q := make(url.Values, 2)
 	q.Set(apc.QparamWhat, apc.GetWhatRemoteAIS)
 	q.Set(alias, "")
 	bp.Method = http.MethodPut

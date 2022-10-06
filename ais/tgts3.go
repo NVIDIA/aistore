@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-// PUT s3/bckName/objName
+// [METHOD] /s3
 func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.apiItems(w, r, 0, true, apc.URLPathS3.L)
 	if err != nil {
@@ -34,7 +34,7 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		t.getObjS3(w, r, apiItems)
 	case http.MethodPut:
-		t.putObjS3(w, r, apiItems)
+		t.putCopyMpt(w, r, apiItems)
 	case http.MethodDelete:
 		q := r.URL.Query()
 		if q.Has(s3.QparamMptUploadID) {
@@ -49,7 +49,34 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Create a new object by copying the data from another bucket/object.
+// PUT /s3/<bucket-name>/<object-name>
+// [switch] mpt | put | copy
+func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, items []string) {
+	if cs := fs.GetCapStatus(); cs.OOS {
+		s3.WriteErr(w, r, cs.Err, http.StatusInsufficientStorage)
+		return
+	}
+	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	if err != nil {
+		s3.WriteErr(w, r, err, errCode)
+		return
+	}
+	q := r.URL.Query()
+	switch {
+	case q.Has(s3.QparamMptPartNo) && q.Has(s3.QparamMptUploadID):
+		if r.Header.Get(cos.S3HdrObjSrc) != "" {
+			t.putMptCopy(w, r, items)
+		} else {
+			t.putMptPart(w, r, items, q, bck)
+		}
+	case r.Header.Get(cos.S3HdrObjSrc) == "":
+		t.putObjS3(w, r, items, bck)
+	default:
+		t.copyObjS3(w, r, items)
+	}
+}
+
+// Copy object (maybe from another bucket)
 func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3Obj, 0)
@@ -124,7 +151,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	sgl.Free()
 }
 
-func (t *target) doPutObjS3(w http.ResponseWriter, r *http.Request, items []string, bck *cluster.Bck) {
+func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string, bck *cluster.Bck) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3Obj, 0)
 		return
@@ -171,34 +198,7 @@ func (t *target) doPutObjS3(w http.ResponseWriter, r *http.Request, items []stri
 	s3.SetETag(w.Header(), lom)
 }
 
-// PUT s3/bckName/objName
-func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	if cs := fs.GetCapStatus(); cs.OOS {
-		s3.WriteErr(w, r, cs.Err, http.StatusInsufficientStorage)
-		return
-	}
-	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
-		return
-	}
-	q := r.URL.Query()
-	if q.Has(s3.QparamMptPartNo) && q.Has(s3.QparamMptUploadID) {
-		if r.Header.Get(cos.S3HdrObjSrc) != "" {
-			t.putObjMptCopy(w, r, items)
-		} else {
-			t.putObjMptPart(w, r, items, q, bck)
-		}
-		return
-	}
-	if r.Header.Get(cos.S3HdrObjSrc) == "" {
-		t.doPutObjS3(w, r, items, bck)
-		return
-	}
-	t.copyObjS3(w, r, items)
-}
-
-// GET s3/<bucket-name[/<object-name>
+// GET s3/<bucket-name[/<object-name>]
 func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket := items[0]
 	bck, err, errCode := cluster.InitByNameOnly(bucket, t.owner.bmd)
@@ -239,7 +239,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	dpqFree(dpq)
 }
 
-// HEAD s3/bckName/objName (TODO: s3.HdrMptCnt)
+// HEAD /s3/<bucket-name>/<object-name> (TODO: s3.HdrMptCnt)
 // See: https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
 func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
@@ -308,7 +308,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	// s3 obj Metadata map[string]*string
 }
 
-// DEL s3/bckName/objName
+// DELETE /s3/<bucket-name>/<object-name>
 func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
@@ -340,7 +340,7 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 	ec.ECM.CleanupObject(lom)
 }
 
-// POST s3/bckName/objName
+// POST /s3/<bucket-name>/<object-name>
 func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
