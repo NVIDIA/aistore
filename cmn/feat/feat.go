@@ -26,11 +26,11 @@ const (
 )
 
 var All = []string{
-	"EnforceIntraClusterAccess",
-	"DontHeadRemote",
-	"SkipVC",
-	"DontAutoDetectFshare",
-	"ProvideS3APIViaRoot",
+	"Enforce-IntraCluster-Access",
+	"Do-not-HEAD-Remote-Bucket",
+	"Skip-Loading-VersionChecksum-MD",
+	"Do-not-Auto-Detect-FileShare",
+	"Provide-S3-API-via-Root",
 }
 
 func (f Flags) IsSet(flag Flags) bool { return cos.BitFlags(f).IsSet(cos.BitFlags(flag)) }
