@@ -546,11 +546,14 @@ func showClusterConfig(c *cli.Context, section string) error {
 	if err != nil {
 		return err
 	}
+
 	if useJSON && section != "" {
-		warn := fmt.Sprintf("cannot show config section (or selection) %q in JSON - not implemented yet.", section)
-		actionWarn(c, warn)
+		if printCluConfSectionJSON(c, cluConfig, section) {
+			return nil
+		}
 		useJSON = false
 	}
+
 	if useJSON {
 		return tmpls.DisplayOutput(cluConfig, c.App.Writer, "", nil, useJSON)
 	}
@@ -608,13 +611,21 @@ func showNodeConfig(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
+
+		if scope == cfgScopeInherited && useJSON && section != "" {
+			if printCluConfSectionJSON(c, cluConf, section) {
+				return nil
+			}
+		}
+
 		flatDaemon := flattenConfig(config.ClusterConfig, section)
 		flatCluster := flattenConfig(cluConf, section)
 		data.ClusterConfig = diffConfigs(flatDaemon, flatCluster)
 	}
 
 	if useJSON && section != "" {
-		warn := fmt.Sprintf("cannot show config section (or selection) %q in JSON - not implemented yet.", section)
+		// TODO: reuse `printCluConfSectionJSON`
+		warn := fmt.Sprintf("cannot show node config section (or selection) %q in JSON.", section)
 		actionWarn(c, warn)
 		useJSON = false
 	}

@@ -41,7 +41,7 @@ var (
 	propCmpls     = map[string][]string{
 		apc.PropBucketAccessAttrs:             apc.SupportedPermissions(),
 		apc.HdrObjCksumType:                   cos.SupportedChecksums(),
-		"features":                            append(feat.All, NilValue),
+		feat.FeaturesPropName:                 append(feat.All, NilValue),
 		"write_policy.data":                   apc.SupportedWritePolicy,
 		"write_policy.md":                     apc.SupportedWritePolicy,
 		"ec.compression":                      apc.SupportedCompression,
@@ -74,7 +74,9 @@ func lastValueIsAccess(c *cli.Context) bool {
 	return lastValueIs(c, propCmpls[apc.PropBucketAccessAttrs])
 }
 
-func lastValueIsFeatures(c *cli.Context) bool { return lastValueIs(c, propCmpls["features"]) }
+func lastValueIsFeatures(c *cli.Context) bool {
+	return lastValueIs(c, propCmpls[feat.FeaturesPropName])
+}
 
 // Returns true if the last arg is any of the enumerated constants
 func lastValueIs(c *cli.Context, values []string) bool {
@@ -97,7 +99,7 @@ func accessCompletions(c *cli.Context) {
 
 // Completes command line with not-yet-typed feature constant
 func featureCompletions(c *cli.Context) {
-	enumCompletions(c, propCmpls["features"])
+	enumCompletions(c, propCmpls[feat.FeaturesPropName])
 }
 
 func enumCompletions(c *cli.Context, values []string) {

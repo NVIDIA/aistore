@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -370,7 +371,7 @@ func makePairs(args []string) (nvs cos.StrKVs, err error) {
 		} else if i < ll-2 && args[i+1] == keyAndValueSeparator {
 			nvs[args[i]] = args[i+2]
 			i += 3
-		} else if args[i] == "features" && i < ll-1 {
+		} else if args[i] == feat.FeaturesPropName && i < ll-1 {
 			nvs[args[i]] = strings.Join(args[i+1:], ",") // NOTE: only features nothing else in the tail
 			return
 		} else {
@@ -965,6 +966,24 @@ func diffConfigs(actual, original nvpairList) []propDiff {
 		return diff[i].Name < diff[j].Name
 	})
 	return diff
+}
+
+func printCluConfSectionJSON(c *cli.Context, cluConfig *cmn.ClusterConfig, section string) (done bool) {
+	out, err := jsoniter.MarshalIndent(cluConfig, "", "    ")
+	if err != nil {
+		return
+	}
+	beg := regexp.MustCompile("[ \t]+\"" + section + ".*\": {")
+	end := regexp.MustCompile("},")
+	from := beg.FindIndex(out)
+	if from != nil {
+		to := end.FindIndex(out[from[1]:])
+		if to != nil {
+			fmt.Fprintln(c.App.Writer, "\n"+string(out[from[0]:from[1]+to[1]-1])+"\n")
+			return true
+		}
+	}
+	return
 }
 
 // First, request cluster's config from the primary node that contains

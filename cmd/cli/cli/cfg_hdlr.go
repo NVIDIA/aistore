@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
@@ -95,7 +96,7 @@ func setCluConfigHandler(c *cli.Context) error {
 		}
 	}
 	for k, v := range nvs {
-		if k == "features" {
+		if k == feat.FeaturesPropName {
 			featfl, err := parseFeatureFlags(v)
 			if err != nil {
 				return fmt.Errorf("invalid feature flag %q", v)
