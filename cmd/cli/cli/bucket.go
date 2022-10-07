@@ -24,8 +24,6 @@ import (
 )
 
 const (
-	emptyOrigin = "none"
-
 	// max wait time for a function finishes before printing "Please wait"
 	longCommandTime = 10 * time.Second
 
@@ -67,12 +65,8 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 		}
 		return fmt.Errorf("failed to create %q: %v", bck, err)
 	}
-	if props == nil {
-		fmt.Fprintf(c.App.Writer,
-			"%q created (see %s/blob/master/docs/bucket.md#default-bucket-properties)\n", bck, cmn.GitHubHome)
-	} else {
-		fmt.Fprintf(c.App.Writer, "%q created\n", bck.DisplayName())
-	}
+	// NOTE: see docs/bucket.md#default-bucket-properties
+	fmt.Fprintf(c.App.Writer, "%q created\n", bck.DisplayName())
 	return
 }
 
@@ -457,7 +451,7 @@ func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) (err error) {
 		goto validate
 	}
 
-	if v != emptyOrigin {
+	if v != NilValue {
 		if originBck, err = parseBckURI(c, v, true /*requireProviderInURI*/); err != nil {
 			return fmt.Errorf("invalid %q: %v", apc.PropBackendBck, err)
 		}
@@ -476,25 +470,6 @@ validate:
 			apc.PropBackendBckName, apc.PropBackendBckProvider)
 	}
 	return err
-}
-
-// Sets bucket properties
-func setBucketProps(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (err error) {
-	if _, err = api.SetBucketProps(apiBP, bck, props); err != nil {
-		return
-	}
-	fmt.Fprintln(c.App.Writer, "Bucket props successfully updated")
-	return
-}
-
-// Resets bucket props
-func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
-	if _, err = api.ResetBucketProps(apiBP, bck); err != nil {
-		return
-	}
-
-	fmt.Fprintln(c.App.Writer, "Bucket props successfully reset to cluster defaults")
-	return
 }
 
 // Get bucket props
@@ -578,11 +553,11 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	}
 	var baseMsg string
 	if copies > 1 {
-		baseMsg = fmt.Sprintf("Configured %q as %d-way mirror,", bck, copies)
+		baseMsg = fmt.Sprintf("Configured %s as %d-way mirror, ", bck.DisplayName(), copies)
 	} else {
-		baseMsg = fmt.Sprintf("Configured %q for single-replica (no redundancy),", bck)
+		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy), ", bck.DisplayName())
 	}
-	fmt.Fprintln(c.App.Writer, baseMsg, xactProgressMsg(xactID))
+	actionDone(c, baseMsg+xactProgressMsg(xactID))
 	return
 }
 
@@ -592,8 +567,8 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	if xactID, err = api.ECEncodeBucket(apiBP, bck, data, parity); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %s, ", bck.DisplayName())
-	fmt.Fprintln(c.App.Writer, xactProgressMsg(xactID))
+	msg := fmt.Sprintf("Erasure-coding bucket %s, ", bck.DisplayName())
+	actionDone(c, msg+xactProgressMsg(xactID))
 	return
 }
 

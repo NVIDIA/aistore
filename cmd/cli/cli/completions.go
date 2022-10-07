@@ -41,6 +41,7 @@ var (
 	propCmpls     = map[string][]string{
 		apc.PropBucketAccessAttrs:             apc.SupportedPermissions(),
 		apc.HdrObjCksumType:                   cos.SupportedChecksums(),
+		"features":                            append(feat.All, NilValue),
 		"write_policy.data":                   apc.SupportedWritePolicy,
 		"write_policy.md":                     apc.SupportedWritePolicy,
 		"ec.compression":                      apc.SupportedCompression,
@@ -66,50 +67,63 @@ var (
 		"replication.on_cold_get":             supportedBool,
 		"replication.on_lru_eviction":         supportedBool,
 		"replication.on_put":                  supportedBool,
-		"features":                            feat.All,
 	}
 )
 
-// Returns true if the last argument is any of permission constants
 func lastValueIsAccess(c *cli.Context) bool {
+	return lastValueIs(c, propCmpls[apc.PropBucketAccessAttrs])
+}
+
+func lastValueIsFeatures(c *cli.Context) bool { return lastValueIs(c, propCmpls["features"]) }
+
+// Returns true if the last arg is any of the enumerated constants
+func lastValueIs(c *cli.Context, values []string) bool {
 	if c.NArg() == 0 {
 		return false
 	}
 	lastArg := argLast(c)
-	for _, access := range propCmpls[apc.PropBucketAccessAttrs] {
-		if access == lastArg {
+	for _, v := range values {
+		if v == lastArg {
 			return true
 		}
 	}
 	return false
 }
 
-// Completes command line with not-yet-used permission constants
-func accessCompletions(c *cli.Context) bool {
+// Completes command line with not-yet-typed permission constant
+func accessCompletions(c *cli.Context) {
+	enumCompletions(c, propCmpls[apc.PropBucketAccessAttrs])
+}
+
+// Completes command line with not-yet-typed feature constant
+func featureCompletions(c *cli.Context) {
+	enumCompletions(c, propCmpls["features"])
+}
+
+func enumCompletions(c *cli.Context, values []string) {
 	typedList := c.Args()
-	printed := 0
-	for _, access := range propCmpls[apc.PropBucketAccessAttrs] {
-		found := false
-		for _, typed := range typedList {
-			if access == typed {
-				found = true
-				break
+outer:
+	for _, v := range values {
+		for _, typedV := range typedList {
+			if v == typedV {
+				continue outer
 			}
 		}
-		if !found {
-			fmt.Println(access)
-		}
+		fmt.Println(v)
 	}
-	return printed == 0
 }
 
 func propValueCompletion(c *cli.Context) bool {
 	if c.NArg() == 0 {
 		return false
 	}
-	lastIsAccess := lastValueIsAccess(c)
-	if lastIsAccess {
-		return accessCompletions(c)
+	if lastValueIsAccess(c) {
+		accessCompletions(c)
+		return true
+	}
+	if lastValueIsFeatures(c) {
+		featureCompletions(c)
+		return true
 	}
 	list, ok := propCmpls[argLast(c)]
 	if !ok {
@@ -118,7 +132,7 @@ func propValueCompletion(c *cli.Context) bool {
 	for _, val := range list {
 		fmt.Println(val)
 	}
-	return !lastIsAccess
+	return true
 }
 
 func daemonCompletions(what daemonKindCompletion) cli.BashCompleteFunc {

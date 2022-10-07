@@ -212,6 +212,8 @@ const (
 	// Default values for long running operations
 	refreshRateDefault = time.Second
 	countDefault       = 1
+
+	NilValue = "none" // TODO: completion sorting order
 )
 
 const sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"

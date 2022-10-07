@@ -7,18 +7,22 @@ package feat
 import (
 	"errors"
 	"strconv"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-type Flags uint64
+type Flags cos.BitFlags
+
+const FeaturesPropName = "features"
 
 // NOTE: when/if making any changes make absolutely sure to keep the enum below and `All` in-sync :NOTE
 
 const (
-	EnforceIntraClusterAccess Flags = 1 << iota
-	DontHeadRemote                  // see also api/apc/lsmsg.go, and in particular `LsDontHeadRemote`
-	SkipVC                          // skip loading existing object's metadata, Version and Checksum in particular
-	DontAutoDetectFshare            // when promoting NFS shares to AIS
-	ProvideS3APIViaRoot             // handle s3 compat via `aistore-hostname/` (default: `aistore-hostname/s3`)
+	EnforceIntraClusterAccess = Flags(1 << iota)
+	DontHeadRemote            // see also api/apc/lsmsg.go, and in particular `LsDontHeadRemote`
+	SkipVC                    // skip loading existing object's metadata, Version and Checksum in particular
+	DontAutoDetectFshare      // when promoting NFS shares to AIS
+	ProvideS3APIViaRoot       // handle s3 compat via `aistore-hostname/` (default: `aistore-hostname/s3`)
 )
 
 var All = []string{
@@ -29,10 +33,14 @@ var All = []string{
 	"ProvideS3APIViaRoot",
 }
 
-func (featfl Flags) IsSet(flag Flags) bool { return featfl&flag == flag }
-func (featfl Flags) Value() string         { return strconv.FormatUint(uint64(featfl), 10) }
+func (f Flags) IsSet(flag Flags) bool { return cos.BitFlags(f).IsSet(cos.BitFlags(flag)) }
+func (f Flags) Set(flags Flags) Flags { return Flags(cos.BitFlags(f).Set(cos.BitFlags(flags))) }
+func (f Flags) Value() string         { return strconv.FormatUint(uint64(f), 10) }
 
 func StrToFeat(s string) (Flags, error) {
+	if s == "" || s == "none" {
+		return 0, nil
+	}
 	for i, name := range All {
 		if s == name {
 			return 1 << i, nil
@@ -41,9 +49,9 @@ func StrToFeat(s string) (Flags, error) {
 	return 0, errors.New("unknown feature flag '" + s + "'")
 }
 
-func (featfl Flags) String() (s string) {
+func (f Flags) String() (s string) {
 	for i, name := range All {
-		if featfl&(1<<i) != 0 {
+		if f&(1<<i) != 0 {
 			s += name + ","
 		}
 	}

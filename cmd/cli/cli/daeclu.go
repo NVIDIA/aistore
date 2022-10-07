@@ -240,7 +240,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 			switch err := err.(type) {
 			case *cmn.ErrHTTP:
 				if err.Status == http.StatusNotFound {
-					fmt.Fprintln(c.App.Writer, "Rebalance has not started yet.")
+					fmt.Fprintln(c.App.Writer, "Rebalance is not running or hasn't started yet.")
 					return nil
 				}
 				return err

@@ -78,7 +78,7 @@ type (
 		Memsys      MemsysConf      `json:"memsys"`
 		TCB         TCBConf         `json:"tcb"`                             // transform/copy bucket
 		WritePolicy WritePolicyConf `json:"write_policy"`                    // write {immediate, delayed, never}
-		Features    feat.Flags      `json:"features,string" allow:"cluster"` // (to flip assorted defaults)
+		Features    feat.Flags      `json:"features,string" allow:"cluster"` // (to flip assorted defaults) (NOTE: cmn. FeaturesPropName)
 		// read-only
 		LastUpdated string `json:"lastupdate_time"`       // timestamp
 		UUID        string `json:"uuid"`                  // UUID

@@ -427,7 +427,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	// Full bucket copy
 	if listObjs == "" && tmplObjs == "" {
 		if dryRun {
-			fmt.Fprintln(c.App.Writer, "Copying the whole bucket.")
+			actionDone(c, "[dry-run] Copying the entire bucket")
 		}
 		return fullBckCopy(c, bckFrom, bckTo)
 	}
@@ -437,11 +437,13 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, errFmtExclusive, listFlag.Name, templateFlag.Name)
 	}
 	if dryRun {
+		var msg string
 		if listObjs != "" {
-			fmt.Fprintf(c.App.Writer, "Copying only objects %q.\n", listObjs)
+			msg = fmt.Sprintf("[dry-run] Copying %q ...\n", listObjs)
 		} else {
-			fmt.Fprintf(c.App.Writer, "Copying the objects that match the pattern %q.\n", tmplObjs)
+			msg = fmt.Sprintf("[dry-run] Copying objects that match the pattern %q ...\n", tmplObjs)
 		}
+		actionDone(c, msg)
 	}
 	return multiObjBckCopy(c, bckFrom, bckTo, listObjs, tmplObjs)
 }
@@ -507,12 +509,16 @@ func evictHandler(c *cli.Context) (err error) {
 	return multiObjOp(c, commandEvict)
 }
 
-func resetPropsHandler(c *cli.Context) (err error) {
+func resetPropsHandler(c *cli.Context) error {
 	bck, err := parseBckURI(c, c.Args().First())
 	if err != nil {
 		return err
 	}
-	return resetBucketProps(c, bck)
+	if _, err := api.ResetBucketProps(apiBP, bck); err != nil {
+		return err
+	}
+	actionDone(c, "Bucket props successfully reset to cluster defaults")
+	return nil
 }
 
 func lruBucketHandler(c *cli.Context) (err error) {
@@ -580,14 +586,12 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, upd
 		displayPropsEqMsg(c, bck)
 		return nil
 	}
-
-	if err = setBucketProps(c, bck, updateProps); err != nil {
-		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET -v\"",
-			cliName, commandShow, subcmdShowBucket)
+	if _, err = api.SetBucketProps(apiBP, bck, updateProps); err != nil {
+		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET -v\"", cliName, commandShow, subcmdShowBucket)
 		return newAdditionalInfoError(err, helpMsg)
 	}
-
 	showDiff(c, currProps, allNewProps)
+	actionDone(c, "\nBucket props successfully updated.")
 	return nil
 }
 

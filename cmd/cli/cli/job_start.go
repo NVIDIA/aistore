@@ -22,15 +22,13 @@ import (
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xact"
-	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v2"
 )
 
 const (
-	dlWarningFmt  = "Warning: %d of %d download jobs failed, for details run `ais show job download %s -v`.\n"
-	dlProgressFmt = "Run `ais show job download %s --progress` to monitor the progress.\n"
+	dlWarningFmt = "%d of %d download jobs failed, for details run `ais show job download %s -v`"
 )
 
 var (
@@ -239,9 +237,9 @@ func startDownloadHandler(c *cli.Context) error {
 		if !cmn.IsStatusNotFound(err) {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer,
-			"Warning: destination bucket %q doesn't exist. A bucket with default properties will be created!\n",
-			basePayload.Bck)
+		warn := fmt.Sprintf("destination bucket %s doesn't exist. Bucket with default properties will be created.",
+			basePayload.Bck.DisplayName())
+		actionWarn(c, warn)
 	}
 
 	// Heuristics to determine the download type.
@@ -265,10 +263,9 @@ func startDownloadHandler(c *cli.Context) error {
 				return err
 			}
 			if !p.BackendBck.Equal(&source.backend.bck) {
-				color.New(color.FgYellow).Fprintf(c.App.ErrWriter,
-					"Warning: bucket %q does not have Cloud bucket %q as its *backend* - proceeding to download anyway\n",
-					basePayload.Bck, source.backend.bck,
-				)
+				warn := fmt.Sprintf("%s does not have Cloud bucket %q as its *backend* - proceeding to download anyway.",
+					basePayload.Bck, source.backend.bck)
+				actionWarn(c, warn)
 				dlType = downloader.DlTypeSingle
 			}
 		} else if source.backend.prefix == "" {
@@ -373,11 +370,22 @@ func wtDownload(c *cli.Context, id string) error {
 		return err
 	}
 	if resp.ErrorCnt != 0 {
-		fmt.Fprintf(c.App.ErrWriter, dlWarningFmt, resp.ErrorCnt, resp.ScheduledCnt, id)
+		warn := fmt.Sprintf(dlWarningFmt, resp.ErrorCnt, resp.ScheduledCnt, id)
+		actionWarn(c, warn)
 	} else {
-		fmt.Fprintf(c.App.Writer, "All files (%d files) successfully downloaded.\n", resp.FinishedCnt)
+		actionDownloaded(c, resp.FinishedCnt)
 	}
 	return nil
+}
+
+func actionDownloaded(c *cli.Context, cnt int) {
+	var msg string
+	if cnt == 1 {
+		msg = "File successfully downloaded"
+	} else {
+		msg = fmt.Sprintf("All %d files successfully downloaded", cnt)
+	}
+	actionDone(c, msg)
 }
 
 func bgDownload(c *cli.Context, id string) (err error) {
@@ -403,11 +411,13 @@ func bgDownload(c *cli.Context, id string) (err error) {
 	}
 
 	if resp.ErrorCnt != 0 {
-		fmt.Fprintf(c.App.ErrWriter, dlWarningFmt, resp.ErrorCnt, resp.ScheduledCnt, id)
+		warn := fmt.Sprintf(dlWarningFmt, resp.ErrorCnt, resp.ScheduledCnt, id)
+		actionWarn(c, warn)
 	} else if resp.FinishedTime.UnixNano() != 0 {
-		fmt.Fprintf(c.App.Writer, "All files (%d files) successfully downloaded.\n", resp.FinishedCnt)
+		actionDownloaded(c, resp.FinishedCnt)
 	} else {
-		fmt.Fprintf(c.App.Writer, dlProgressFmt, id)
+		msg := fmt.Sprintf("Run `ais show job download %s --progress` to monitor the progress", id)
+		fmt.Fprintln(c.App.Writer, msg)
 	}
 	return err
 }
@@ -505,8 +515,9 @@ func startLRUHandler(c *cli.Context) (err error) {
 	}
 
 	if flagIsSet(c, forceFlag) {
-		warning := "forcing LRU will evict any bucket ignoring `lru.enabled` property"
-		if ok := confirm(c, "Would you like to continue?", warning); !ok {
+		warn := fmt.Sprintf("LRU with '--%s' option will evict buckets _ignoring_ their respective `lru.enabled` properties.",
+			forceFlag.Name)
+		if ok := confirm(c, "Would you like to continue?", warn); !ok {
 			return
 		}
 	}

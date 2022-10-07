@@ -226,7 +226,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 		}
 		if flagIsSet(c, rmRfFlag) {
 			if !flagIsSet(c, yesFlag) {
-				warn := fmt.Sprintf("will remove all objects from %s. The operation cannot be undone!\n", bck)
+				warn := fmt.Sprintf("will remove all objects from %s. The operation cannot be undone!", bck)
 				if ok := confirm(c, "Proceed?", warn); !ok {
 					return nil
 				}

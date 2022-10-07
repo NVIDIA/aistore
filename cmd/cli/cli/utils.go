@@ -355,7 +355,7 @@ func makeList(list string) []string {
 	return cleanList
 }
 
-// Converts a list of "key value" and "key=value" into map
+// Convert a list of "key value" and "key=value" pairs into a map
 func makePairs(args []string) (nvs cos.StrKVs, err error) {
 	var (
 		i  int
@@ -370,6 +370,9 @@ func makePairs(args []string) (nvs cos.StrKVs, err error) {
 		} else if i < ll-2 && args[i+1] == keyAndValueSeparator {
 			nvs[args[i]] = args[i+2]
 			i += 3
+		} else if args[i] == "features" && i < ll-1 {
+			nvs[args[i]] = strings.Join(args[i+1:], ",") // NOTE: only features nothing else in the tail
+			return
 		} else {
 			// last name without a value
 			if i == ll-1 {
@@ -444,8 +447,7 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 			}
 		default:
 			if c.NArg() > 1 {
-				fmt.Fprintf(c.App.ErrWriter,
-					"Warning: %q is a non bucket-scope xaction, ignoring bucket name\n", xactKind)
+				actionWarn(c, "\""+xactKind+"\" is a non bucket-scope xaction, ignoring bucket name.")
 			}
 		}
 	}
@@ -524,12 +526,19 @@ func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, 
 	return access, newIdx, nil
 }
 
-// TODO -- FIXME: support mult-value comma-separated
-func parseFeatureFlags(v string) (feat.Flags, error) {
-	if v == "" || v == "none" {
+func parseFeatureFlags(v string) (res feat.Flags, err error) {
+	if v == "" || v == NilValue {
 		return 0, nil
 	}
-	return feat.StrToFeat(v)
+	values := strings.Split(v, ",")
+	for _, v := range values {
+		var f feat.Flags
+		if f, err = feat.StrToFeat(v); err != nil {
+			return
+		}
+		res |= f // TODO -- FIXME: use res.Set(f)
+	}
+	return
 }
 
 // TODO: support `allow` and `deny` verbs/operations on existing access permissions
@@ -856,12 +865,11 @@ func readValue(c *cli.Context, prompt string) string {
 }
 
 func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
+	var err error
 	prompt += " [Y/N]"
 	if len(warning) != 0 {
-		fmt.Fprintln(c.App.Writer, "Warning:", warning[0])
+		actionWarn(c, warning[0])
 	}
-
-	var err error
 	for {
 		response := strings.ToLower(readValue(c, prompt))
 		if ok, err = cos.ParseBool(response); err != nil {
@@ -1147,8 +1155,9 @@ func updateLongRunParams(c *cli.Context) error {
 	if flagIsSet(c, countFlag) {
 		params.count = parseIntFlag(c, countFlag)
 		if params.count <= 0 {
-			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: %q set to %d, but expected value >= 1. Assuming %q = %d.\n",
+			warn := fmt.Sprintf("%q set to %d, but expected value >= 1. Assuming %q = %d",
 				countFlag.Name, params.count, countFlag.Name, countDefault)
+			actionWarn(c, warn)
 			params.count = countDefault
 		}
 	}
@@ -1349,3 +1358,6 @@ func preparseBckObjURI(uri string) string {
 	}
 	return uri // unchanged
 }
+
+func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }
+func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg) }

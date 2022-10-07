@@ -217,9 +217,9 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
 	if err = api.SetObjectCustomProps(apiBP, bck, objName, props, setNewCustom); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer,
-		"Custom props successfully updated (use `ais show object %s/%s --props=all` to show the updates).\n",
+	msg := fmt.Sprintf("Custom props successfully updated (use `ais show object %s/%s --props=all` to show the updates).",
 		bck, objName)
+	actionDone(c, msg)
 	return nil
 }
 

@@ -1,6 +1,7 @@
 Bucket 's3://$BUCKET/' created
-Bucket props successfully updated
 "checksum.type" set to:"md5" (was:"xxhash")
+
+Bucket props successfully updated.
 1
 0123456789
 Bucket 's3://$BUCKET/' removed

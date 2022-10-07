@@ -370,8 +370,8 @@ func loginUserHandler(c *cli.Context) (err error) {
 	}
 	tokenFile, err := tokfile(c)
 	if err == nil {
-		msg := fmt.Sprintf("token %q exists - overwriting\n", tokenFile)
-		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
+		msg := fmt.Sprintf("token %q exists - overwriting.\n", tokenFile)
+		actionWarn(c, msg)
 	} else if !os.IsNotExist(err) {
 		return err
 	}

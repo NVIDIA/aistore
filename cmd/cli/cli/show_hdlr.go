@@ -547,8 +547,8 @@ func showClusterConfig(c *cli.Context, section string) error {
 		return err
 	}
 	if useJSON && section != "" {
-		msg := fmt.Sprintf("cannot show %q selection in JSON - not implemented yet\n", section)
-		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
+		warn := fmt.Sprintf("cannot show config section (or selection) %q in JSON - not implemented yet.", section)
+		actionWarn(c, warn)
 		useJSON = false
 	}
 	if useJSON {
@@ -614,8 +614,8 @@ func showNodeConfig(c *cli.Context) error {
 	}
 
 	if useJSON && section != "" {
-		msg := fmt.Sprintf("cannot show %q selection in JSON - not implemented yet\n", section)
-		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
+		warn := fmt.Sprintf("cannot show config section (or selection) %q in JSON - not implemented yet.", section)
+		actionWarn(c, warn)
 		useJSON = false
 	}
 	return tmpls.DisplayOutput(data, c.App.Writer, tmpls.DaemonConfigTmpl, nil, useJSON)

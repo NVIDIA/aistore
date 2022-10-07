@@ -95,7 +95,6 @@ func setCluConfigHandler(c *cli.Context) error {
 		}
 	}
 	for k, v := range nvs {
-		// TODO: revisit
 		if k == "features" {
 			featfl, err := parseFeatureFlags(v)
 			if err != nil {
@@ -108,17 +107,18 @@ func setCluConfigHandler(c *cli.Context) error {
 	// assorted named fields that require (cluster | node) restart
 	// for the change to take an effect
 	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
-		msg := fmt.Sprintf("restart required for the change '%s=%s' to take an effect\n", name, nvs[name])
-		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
+		warn := fmt.Sprintf("cluster restart required for the change '%s=%s' to take an effect.", name, nvs[name])
+		actionWarn(c, warn)
 	}
 	// TODO: check that transient works
 	if err := api.SetClusterConfig(apiBP, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
-	s, err := jsoniter.MarshalIndent(nvs, "", "    ")
-	debug.AssertNoErr(err)
-	fmt.Fprintf(c.App.Writer, "%s\n", string(s))
-	fmt.Fprintln(c.App.Writer, "\ncluster config updated")
+	if err := showClusterConfigHandler(c); err != nil {
+		fmt.Fprintln(c.App.ErrWriter, redErr(err))
+	} else {
+		actionDone(c, "Cluster config updated")
+	}
 	return nil
 }
 
@@ -172,8 +172,8 @@ func setNodeConfigHandler(c *cli.Context) error {
 	// assorted named fields that'll require (cluster | node) restart
 	// for the change to take an effect
 	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
-		msg := fmt.Sprintf("restart required for the change '%s=%s' to take an effect\n", name, nvs[name])
-		fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg)
+		warn := fmt.Sprintf("node %q restart required for the change '%s=%s' to take an effect.", daemonID, name, nvs[name])
+		actionWarn(c, warn)
 	}
 
 	if err := api.SetDaemonConfig(apiBP, daemonID, nvs, flagIsSet(c, transientFlag)); err != nil {
