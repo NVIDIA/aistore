@@ -969,21 +969,54 @@ func diffConfigs(actual, original nvpairList) []propDiff {
 }
 
 func printCluConfSectionJSON(c *cli.Context, cluConfig *cmn.ClusterConfig, section string) (done bool) {
+	var (
+		beg       = regexp.MustCompile(`\s+"` + section + `\S*": {`)
+		end       = regexp.MustCompile(`}[,|$]`)
+		nst       = regexp.MustCompile(`\s+"\S+": {`)
+		nonstruct = regexp.MustCompile(`\s+"` + section + `\S*": ".+"[,\n\r]{1}`)
+	)
 	out, err := jsoniter.MarshalIndent(cluConfig, "", "    ")
 	if err != nil {
 		return
 	}
-	beg := regexp.MustCompile("[ \t]+\"" + section + ".*\": {")
-	end := regexp.MustCompile("},")
+
 	from := beg.FindIndex(out)
-	if from != nil {
-		to := end.FindIndex(out[from[1]:])
-		if to != nil {
-			fmt.Fprintln(c.App.Writer, "\n"+string(out[from[0]:from[1]+to[1]-1])+"\n")
-			return true
+	if from == nil {
+		loc := nonstruct.FindIndex(out)
+		if loc == nil {
+			return
 		}
+		res := out[loc[0] : loc[1]-1]
+		fmt.Fprintln(c.App.Writer, "{"+string(res)+"\n}")
+		return true
 	}
-	return
+
+	to := end.FindIndex(out[from[1]:])
+	if to == nil {
+		return
+	}
+	res := out[from[0] : from[1]+to[1]-1]
+
+	if nst.FindIndex(res[from[1]-from[0]+1:]) != nil {
+		// resort to counting nested structures
+		var cnt, off int
+		res = out[from[0]:]
+		for off = 0; off < len(res); off++ {
+			if res[off] == '{' {
+				cnt++
+			} else if res[off] == '}' {
+				cnt--
+				if cnt == 0 {
+					res = out[from[0] : from[0]+off+1]
+					goto done
+				}
+			}
+		}
+		return
+	}
+done:
+	fmt.Fprintln(c.App.Writer, string(res)+"\n")
+	return true
 }
 
 // First, request cluster's config from the primary node that contains
