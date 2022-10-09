@@ -415,7 +415,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 	}
 
 	tmpl := tmpls.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.B2S(totalSize, 2) + "\n"
-	if err = tmpls.DisplayOutput(extSizes, c.App.Writer, tmpl, nil, false); err != nil {
+	if err = tmpls.Print(extSizes, c.App.Writer, tmpl, nil, false); err != nil {
 		return
 	}
 
@@ -769,7 +769,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		return handleObjHeadError(err, bck, object)
 	}
 	if flagIsSet(c, jsonFlag) {
-		return tmpls.DisplayOutput(objProps, c.App.Writer, tmpls.PropsSimpleTmpl, nil, true)
+		return tmpls.Print(objProps, c.App.Writer, tmpls.PropsSimpleTmpl, nil, true)
 	}
 	if flagIsSet(c, allPropsFlag) {
 		propsFlag = apc.GetPropsAll
@@ -794,7 +794,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		return propNVs[i].Name < propNVs[j].Name
 	})
 
-	return tmpls.DisplayOutput(propNVs, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
+	return tmpls.Print(propNVs, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
 }
 
 func propVal(op *cmn.ObjectProps, name string) (v string) {

@@ -242,9 +242,9 @@ func listBckTableNoSummary(c *cli.Context, provider string, filtered []cmn.Bck, 
 		data = append(data, tmpls.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: &info})
 	}
 	if hideHeader {
-		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBodyNoSummary, nil, false)
+		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsBodyNoSummary, nil, false)
 	} else {
-		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, nil, false)
+		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, nil, false)
 	}
 	if !hideFooter {
 		var s string
@@ -291,9 +291,9 @@ func listBckTableWithSummary(c *cli.Context, provider string, filtered []cmn.Bck
 	}
 
 	if hideHeader {
-		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsBody, altMap, false)
+		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsBody, altMap, false)
 	} else {
-		tmpls.DisplayOutput(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
+		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
 	}
 	if !hideFooter && footer.nbp > 1 {
 		var s string
@@ -491,7 +491,7 @@ func showBucketProps(c *cli.Context) (err error) {
 		return
 	}
 	if flagIsSet(c, jsonFlag) {
-		return tmpls.DisplayOutput(p, c.App.Writer, "", nil, true)
+		return tmpls.Print(p, c.App.Writer, "", nil, true)
 	}
 	defProps, err := defaultBckProps(bck)
 	if err != nil {
@@ -542,7 +542,7 @@ func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section stri
 		}
 	}
 
-	return tmpls.DisplayOutput(propList, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
+	return tmpls.Print(propList, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
 }
 
 // Configure bucket as n-way mirror
@@ -602,7 +602,7 @@ func printObjProps(c *cli.Context, entries []*cmn.LsObjEntry, objectFilter *obje
 	if flagIsSet(c, sizeInBytesFlag) {
 		altMap = tmpls.AltFuncMapSizeBytes()
 	}
-	err := tmpls.DisplayOutput(matched, c.App.Writer, tmpl, altMap, false)
+	err := tmpls.Print(matched, c.App.Writer, tmpl, altMap, false)
 	if err != nil {
 		return err
 	}
@@ -612,7 +612,7 @@ func printObjProps(c *cli.Context, entries []*cmn.LsObjEntry, objectFilter *obje
 			fmt.Fprintln(c.App.Writer, unmatched+" none")
 		} else {
 			tmpl = unmatched + "\n" + tmpl
-			err = tmpls.DisplayOutput(other, c.App.Writer, tmpl, altMap, false)
+			err = tmpls.Print(other, c.App.Writer, tmpl, altMap, false)
 		}
 	}
 	return err

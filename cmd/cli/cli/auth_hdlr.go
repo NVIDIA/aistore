@@ -478,7 +478,7 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	return tmpls.DisplayOutput(list, c.App.Writer, tmpls.AuthNClusterTmpl, nil, false)
+	return tmpls.Print(list, c.App.Writer, tmpls.AuthNClusterTmpl, nil, false)
 }
 
 func showAuthSingleRole(c *cli.Context, roleID string) error {
@@ -488,9 +488,9 @@ func showAuthSingleRole(c *cli.Context, roleID string) error {
 	}
 	// verbose is the implicit default when showing one
 	if flagIsSet(c, nonverboseFlag) {
-		return tmpls.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, tmpls.AuthNRoleTmpl, nil, false)
+		return tmpls.Print([]*authn.Role{rInfo}, c.App.Writer, tmpls.AuthNRoleTmpl, nil, false)
 	}
-	return tmpls.DisplayOutput(rInfo, c.App.Writer, tmpls.AuthNRoleVerboseTmpl, nil, false)
+	return tmpls.Print(rInfo, c.App.Writer, tmpls.AuthNRoleVerboseTmpl, nil, false)
 }
 func showAuthAllRoles(c *cli.Context) error {
 	list, err := authn.GetAllRoles(authParams)
@@ -513,12 +513,12 @@ func showAuthAllRoles(c *cli.Context) error {
 				if i > 0 {
 					fmt.Fprintln(c.App.Writer)
 				}
-				tmpls.DisplayOutput(rInfo, c.App.Writer, tmpls.AuthNRoleVerboseTmpl, nil, false)
+				tmpls.Print(rInfo, c.App.Writer, tmpls.AuthNRoleVerboseTmpl, nil, false)
 			}
 		}
 		return nil
 	}
-	return tmpls.DisplayOutput(list, c.App.Writer, tmpls.AuthNRoleTmpl, nil, false)
+	return tmpls.Print(list, c.App.Writer, tmpls.AuthNRoleTmpl, nil, false)
 }
 
 func showAuthRoleHandler(c *cli.Context) (err error) {
@@ -545,12 +545,12 @@ func showAuthUserHandler(c *cli.Context) (err error) {
 					if i > 0 {
 						fmt.Fprintln(c.App.Writer)
 					}
-					tmpls.DisplayOutput(uInfo, c.App.Writer, tmpls.AuthNUserVerboseTmpl, nil, false)
+					tmpls.Print(uInfo, c.App.Writer, tmpls.AuthNUserVerboseTmpl, nil, false)
 				}
 			}
 			return nil
 		}
-		return tmpls.DisplayOutput(list, c.App.Writer, tmpls.AuthNUserTmpl, nil, false)
+		return tmpls.Print(list, c.App.Writer, tmpls.AuthNUserTmpl, nil, false)
 	}
 	uInfo, err := authn.GetUser(authParams, userID)
 	if err != nil {
@@ -558,9 +558,9 @@ func showAuthUserHandler(c *cli.Context) (err error) {
 	}
 	// verbose is the implicit default when showing one
 	if flagIsSet(c, nonverboseFlag) {
-		return tmpls.DisplayOutput([]*authn.User{uInfo}, c.App.Writer, tmpls.AuthNUserTmpl, nil, false)
+		return tmpls.Print([]*authn.User{uInfo}, c.App.Writer, tmpls.AuthNUserTmpl, nil, false)
 	}
-	return tmpls.DisplayOutput(uInfo, c.App.Writer, tmpls.AuthNUserVerboseTmpl, nil, false)
+	return tmpls.Print(uInfo, c.App.Writer, tmpls.AuthNUserVerboseTmpl, nil, false)
 }
 
 func addAuthRoleHandler(c *cli.Context) error {
@@ -705,9 +705,9 @@ func showAuthConfigHandler(c *cli.Context) (err error) {
 	}
 	useJSON := flagIsSet(c, jsonFlag)
 	if useJSON {
-		return tmpls.DisplayOutput(conf, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
+		return tmpls.Print(conf, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
 	}
-	return tmpls.DisplayOutput(list, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
+	return tmpls.Print(list, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
 }
 
 func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {

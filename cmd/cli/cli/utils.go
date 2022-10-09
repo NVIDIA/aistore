@@ -968,14 +968,22 @@ func diffConfigs(actual, original nvpairList) []propDiff {
 	return diff
 }
 
-func printCluConfSectionJSON(c *cli.Context, cluConfig *cmn.ClusterConfig, section string) (done bool) {
+func printSectionJSON(c *cli.Context, in any, section string) (done bool) {
+	debug.Assert(section != "")
+	if done = _printSection(c, in, section); !done {
+		actionWarn(c, "config section (or section prefix) \""+section+"\" not found.")
+	}
+	return
+}
+
+func _printSection(c *cli.Context, in any, section string) (done bool) {
 	var (
 		beg       = regexp.MustCompile(`\s+"` + section + `\S*": {`)
 		end       = regexp.MustCompile(`}[,|$]`)
 		nst       = regexp.MustCompile(`\s+"\S+": {`)
 		nonstruct = regexp.MustCompile(`\s+"` + section + `\S*": ".+"[,\n\r]{1}`)
 	)
-	out, err := jsoniter.MarshalIndent(cluConfig, "", "    ")
+	out, err := jsoniter.MarshalIndent(in, "", "    ")
 	if err != nil {
 		return
 	}
@@ -1413,3 +1421,11 @@ func preparseBckObjURI(uri string) string {
 
 func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }
 func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg) }
+
+func actionCptn(c *cli.Context, prefix, msg string) {
+	if prefix == "" {
+		fmt.Fprintln(c.App.Writer, fcyan(msg))
+	} else {
+		fmt.Fprintln(c.App.Writer, fcyan(prefix)+msg)
+	}
+}

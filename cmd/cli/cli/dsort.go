@@ -432,7 +432,7 @@ func dsortJobsList(c *cli.Context, regex string) error {
 		return list[i].StartedTime.Before(list[j].StartedTime)
 	})
 
-	return tmpls.DisplayOutput(list, c.App.Writer, tmpls.DSortListTmpl, nil, false)
+	return tmpls.Print(list, c.App.Writer, tmpls.DSortListTmpl, nil, false)
 }
 
 func dsortJobStatus(c *cli.Context, id string) error {

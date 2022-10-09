@@ -316,7 +316,7 @@ func downloadJobsList(c *cli.Context, regex string) error {
 	if err != nil {
 		return err
 	}
-	return tmpls.DisplayOutput(list, c.App.Writer, tmpls.DownloadListTmpl, nil, false)
+	return tmpls.Print(list, c.App.Writer, tmpls.DownloadListTmpl, nil, false)
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {

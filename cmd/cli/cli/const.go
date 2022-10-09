@@ -602,7 +602,7 @@ var (
 
 	transientFlag = cli.BoolFlag{
 		Name:  "transient",
-		Usage: "to update config temporarily",
+		Usage: "update config in memory without storing the change(s) on disk",
 	}
 
 	setNewCustomMDFlag = cli.BoolFlag{

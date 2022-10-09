@@ -96,11 +96,11 @@ const (
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n"
 
-	DaemonConfigTmpl = "{{ if .ClusterConfig }}PROPERTY\t VALUE\t DEFAULT\n{{range $item := .ClusterConfig }}" +
+	DaemonConfigTmpl = "{{ if .ClusterConfigDiff }}PROPERTY\t VALUE\t DEFAULT\n{{range $item := .ClusterConfigDiff }}" +
 		"{{ $item.Name }}\t {{ $item.Current }}\t {{ $item.Old }}\n" +
 		"{{end}}\n{{end}}" +
-		"{{ if .LocalConfig }}PROPERTY\t VALUE\n" +
-		"{{range $item := .LocalConfig }}" +
+		"{{ if .LocalConfigPairs }}PROPERTY\t VALUE\n" +
+		"{{range $item := .LocalConfigPairs }}" +
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n{{end}}"
 
@@ -518,9 +518,9 @@ func fmtDaemonID(id string, smap cluster.Smap) string {
 
 func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }
 
-// Displays the output in either JSON or tabular form
-// if formatJSON == true, outputTemplate is omitted
-func DisplayOutput(object any, writer io.Writer, outputTemplate string, altMap template.FuncMap, useJSON bool) error {
+// Main function to print formatted output
+// NOTE: if useJSON, outputTemplate is ignored
+func Print(object any, writer io.Writer, outputTemplate string, altMap template.FuncMap, useJSON bool) error {
 	if useJSON {
 		if o, ok := object.(forMarshaler); ok {
 			object = o.forMarshal()

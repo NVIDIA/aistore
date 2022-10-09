@@ -69,7 +69,7 @@ func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, use
 		Smap:         smap,
 		ExtendedURLs: extendedURLs,
 	}
-	return tmpls.DisplayOutput(body, c.App.Writer, tmpls.SmapTmpl, nil, useJSON)
+	return tmpls.Print(body, c.App.Writer, tmpls.SmapTmpl, nil, useJSON)
 }
 
 func getBMD(c *cli.Context) error {
@@ -79,7 +79,7 @@ func getBMD(c *cli.Context) error {
 		return err
 	}
 	if useJSON {
-		return tmpls.DisplayOutput(bmd, c.App.Writer, "", nil, useJSON)
+		return tmpls.Print(bmd, c.App.Writer, "", nil, useJSON)
 	}
 
 	tw := &tabwriter.Writer{}
@@ -123,20 +123,20 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, cluConfig *cmn.Clus
 		},
 	}
 	if res, proxyOK := pmapStatus[daemonID]; proxyOK {
-		return tmpls.DisplayOutput(res, c.App.Writer, tmpls.NewProxyTable(res, smap).Template(hideHeader), nil, useJSON)
+		return tmpls.Print(res, c.App.Writer, tmpls.NewProxyTable(res, smap).Template(hideHeader), nil, useJSON)
 	} else if res, targetOK := tmapStatus[daemonID]; targetOK {
-		return tmpls.DisplayOutput(res, c.App.Writer, tmpls.NewTargetTable(res).Template(hideHeader), nil, useJSON)
+		return tmpls.Print(res, c.App.Writer, tmpls.NewTargetTable(res).Template(hideHeader), nil, useJSON)
 	} else if daemonID == apc.Proxy {
 		template := tmpls.NewProxiesTable(&body.Status, smap).Template(hideHeader)
-		return tmpls.DisplayOutput(body, c.App.Writer, template, nil, useJSON)
+		return tmpls.Print(body, c.App.Writer, template, nil, useJSON)
 	} else if daemonID == apc.Target {
-		return tmpls.DisplayOutput(body, c.App.Writer,
+		return tmpls.Print(body, c.App.Writer,
 			tmpls.NewTargetsTable(&body.Status).Template(hideHeader), nil, useJSON)
 	} else if daemonID == "" {
 		template := tmpls.NewProxiesTable(&body.Status, smap).Template(false) + "\n" +
 			tmpls.NewTargetsTable(&body.Status).Template(false) + "\n" +
 			tmpls.ClusterSummary
-		return tmpls.DisplayOutput(body, c.App.Writer, template, nil, useJSON)
+		return tmpls.Print(body, c.App.Writer, template, nil, useJSON)
 	}
 	return fmt.Errorf("%s is not a valid DAEMON_ID nor DAEMON_TYPE", daemonID)
 }
@@ -166,9 +166,9 @@ func daemonDiskStats(c *cli.Context, daemonID string) error {
 	}
 
 	if hideHeader {
-		err = tmpls.DisplayOutput(diskStats, c.App.Writer, tmpls.DiskStatBodyTmpl, nil, useJSON)
+		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatBodyTmpl, nil, useJSON)
 	} else {
-		err = tmpls.DisplayOutput(diskStats, c.App.Writer, tmpls.DiskStatsFullTmpl, nil, useJSON)
+		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatsFullTmpl, nil, useJSON)
 	}
 	if err != nil {
 		return err

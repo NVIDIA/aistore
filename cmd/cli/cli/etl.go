@@ -275,7 +275,7 @@ func etlListHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	return tmpls.DisplayOutput(list, c.App.Writer, tmpls.TransformListTmpl, nil, false)
+	return tmpls.Print(list, c.App.Writer, tmpls.TransformListTmpl, nil, false)
 }
 
 func etlSourceHandler(c *cli.Context) (err error) {

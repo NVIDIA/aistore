@@ -291,7 +291,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 
 		bckSums = append(bckSums, stats)
 	}
-	return tmpls.DisplayOutput(bckSums, c.App.Writer, tmpls.BucketSummaryValidateTmpl, nil, false)
+	return tmpls.Print(bckSums, c.App.Writer, tmpls.BucketSummaryValidateTmpl, nil, false)
 }
 
 func summaryBucketHandler(c *cli.Context) (err error) {
@@ -320,7 +320,7 @@ func showBucketSummary(c *cli.Context) error {
 	if flagIsSet(c, sizeInBytesFlag) {
 		altMap = tmpls.AltFuncMapSizeBytes()
 	}
-	return tmpls.DisplayOutput(summaries, c.App.Writer, tmpls.BucketsSummariesTmpl, altMap, false)
+	return tmpls.Print(summaries, c.App.Writer, tmpls.BucketsSummariesTmpl, altMap, false)
 }
 
 // NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets`)

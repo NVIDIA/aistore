@@ -452,7 +452,7 @@ func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck)
 
 	useJSON := flagIsSet(c, jsonFlag)
 	if useJSON {
-		return tmpls.DisplayOutput(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
+		return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
 	}
 
 	if canVerbose && flagIsSet(c, verboseFlag) {
@@ -462,22 +462,22 @@ func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck)
 		} else {
 			props = flattenXactStats(dts[0].XactSnaps[0])
 		}
-		return tmpls.DisplayOutput(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
+		return tmpls.Print(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
 	}
 
 	hideHeader := flagIsSet(c, noHeaderFlag)
 	switch xactKind {
 	case apc.ActECGet:
 		// TODO: hideHeader
-		return tmpls.DisplayOutput(dts, c.App.Writer, tmpls.XactionECGetBodyTmpl, nil, useJSON)
+		return tmpls.Print(dts, c.App.Writer, tmpls.XactionECGetBodyTmpl, nil, useJSON)
 	case apc.ActECPut:
 		// TODO: ditto
-		return tmpls.DisplayOutput(dts, c.App.Writer, tmpls.XactionECPutBodyTmpl, nil, useJSON)
+		return tmpls.Print(dts, c.App.Writer, tmpls.XactionECPutBodyTmpl, nil, useJSON)
 	default:
 		if hideHeader {
-			return tmpls.DisplayOutput(dts, c.App.Writer, tmpls.XactionsBodyNoHeaderTmpl, nil, useJSON)
+			return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyNoHeaderTmpl, nil, useJSON)
 		}
-		return tmpls.DisplayOutput(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
+		return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
 	}
 }
 
@@ -548,17 +548,17 @@ func showClusterConfig(c *cli.Context, section string) error {
 	}
 
 	if useJSON && section != "" {
-		if printCluConfSectionJSON(c, cluConfig, section) {
+		if printSectionJSON(c, cluConfig, section) {
 			return nil
 		}
 		useJSON = false
 	}
 
 	if useJSON {
-		return tmpls.DisplayOutput(cluConfig, c.App.Writer, "", nil, useJSON)
+		return tmpls.Print(cluConfig, c.App.Writer, "", nil, useJSON)
 	}
 	flat := flattenConfig(cluConfig, section)
-	return tmpls.DisplayOutput(flat, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	return tmpls.Print(flat, c.App.Writer, tmpls.ConfigTmpl, nil, false)
 }
 
 func showNodeConfig(c *cli.Context) error {
@@ -575,14 +575,15 @@ func showNodeConfig(c *cli.Context) error {
 	if node = smap.GetNode(daemonID); node == nil {
 		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
 	}
+	sname := node.StringEx()
 	config, err := api.GetDaemonConfig(apiBP, node)
 	if err != nil {
 		return err
 	}
 
 	data := struct {
-		ClusterConfig []propDiff
-		LocalConfig   nvpairList
+		ClusterConfigDiff []propDiff
+		LocalConfigPairs  nvpairList
 	}{}
 	for _, a := range c.Args().Tail() {
 		if a == scopeAll || a == cfgScopeInherited || a == cfgScopeLocal {
@@ -600,36 +601,68 @@ func showNodeConfig(c *cli.Context) error {
 			section = a
 		}
 	}
-	if scope == "" {
-		scope = cfgScopeAll
+
+	if useJSON {
+		warn := "option '--" + strings.Split(jsonFlag.Name, ",")[0] +
+			"' won't show node <=> cluster configuration differences, if any."
+		switch scope {
+		case cfgScopeLocal:
+			if section == "" {
+				return tmpls.Print(&config.LocalConfig, c.App.Writer, "", nil, true /* use JSON*/)
+			}
+			if !printSectionJSON(c, &config.LocalConfig, section) {
+				fmt.Fprintln(c.App.Writer)
+			}
+			return nil
+		case cfgScopeInherited:
+			actionWarn(c, warn)
+			if section == "" {
+				return tmpls.Print(&config.ClusterConfig, c.App.Writer, "", nil, true)
+			}
+			if !printSectionJSON(c, &config.ClusterConfig, section) {
+				fmt.Fprintln(c.App.Writer)
+			}
+			return nil
+		default: // cfgScopeAll
+			if section == "" {
+				actionCptn(c, sname, " local config:")
+				if err := tmpls.Print(&config.LocalConfig, c.App.Writer, "", nil, true); err != nil {
+					return err
+				}
+				fmt.Fprintln(c.App.Writer)
+				actionCptn(c, sname, " inherited config:")
+				actionWarn(c, warn)
+				return tmpls.Print(&config.ClusterConfig, c.App.Writer, "", nil, true)
+			}
+			// fall through on purpose
+		}
 	}
-	if scope == cfgScopeAll || scope == cfgScopeLocal {
-		data.LocalConfig = flattenConfig(config.LocalConfig, section)
-	}
-	if scope == cfgScopeAll || scope == cfgScopeInherited {
+
+	useJSON = false
+
+	// fill-in `data`
+	switch scope {
+	case cfgScopeLocal:
+		data.LocalConfigPairs = flattenConfig(config.LocalConfig, section)
+	default: // cfgScopeInherited | cfgScopeAll
 		cluConf, err := api.GetClusterConfig(apiBP)
 		if err != nil {
 			return err
 		}
-
-		if scope == cfgScopeInherited && useJSON && section != "" {
-			if printCluConfSectionJSON(c, cluConf, section) {
-				return nil
-			}
-		}
-
-		flatDaemon := flattenConfig(config.ClusterConfig, section)
+		// diff cluster <=> this node
+		flatNode := flattenConfig(config.ClusterConfig, section)
 		flatCluster := flattenConfig(cluConf, section)
-		data.ClusterConfig = diffConfigs(flatDaemon, flatCluster)
+		data.ClusterConfigDiff = diffConfigs(flatNode, flatCluster)
+		if scope == cfgScopeAll {
+			data.LocalConfigPairs = flattenConfig(config.LocalConfig, section)
+		}
 	}
-
-	if useJSON && section != "" {
-		// TODO: reuse `printCluConfSectionJSON`
-		warn := fmt.Sprintf("cannot show node config section (or selection) %q in JSON.", section)
-		actionWarn(c, warn)
-		useJSON = false
+	// show "flat" diff-s
+	if len(data.LocalConfigPairs) == 0 && len(data.ClusterConfigDiff) == 0 {
+		fmt.Fprintf(c.App.Writer, "PROPERTY\t VALUE\n\n")
+		return nil
 	}
-	return tmpls.DisplayOutput(data, c.App.Writer, tmpls.DaemonConfigTmpl, nil, useJSON)
+	return tmpls.Print(data, c.App.Writer, tmpls.DaemonConfigTmpl, nil, useJSON)
 }
 
 func showDaemonLogHandler(c *cli.Context) (err error) {
@@ -747,7 +780,7 @@ func showMpathHandler(c *cli.Context) error {
 		return mpls[i].DaemonID < mpls[j].DaemonID // ascending by node id
 	})
 	useJSON := flagIsSet(c, jsonFlag)
-	return tmpls.DisplayOutput(mpls, c.App.Writer, tmpls.TargetMpathListTmpl, nil, useJSON)
+	return tmpls.Print(mpls, c.App.Writer, tmpls.TargetMpathListTmpl, nil, useJSON)
 }
 
 func fmtStatValue(name string, value int64, human bool) string {
@@ -771,7 +804,7 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 		return err
 	}
 	if flagIsSet(c, jsonFlag) {
-		return tmpls.DisplayOutput(stats, c.App.Writer, tmpls.ConfigTmpl, nil, true)
+		return tmpls.Print(stats, c.App.Writer, tmpls.ConfigTmpl, nil, true)
 	}
 
 	human := !flagIsSet(c, rawFlag)
@@ -805,7 +838,7 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 			mID++
 		}
 	}
-	return tmpls.DisplayOutput(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
 }
 
 func showClusterTotalStats(c *cli.Context) (err error) {
@@ -816,7 +849,7 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 
 	useJSON := flagIsSet(c, jsonFlag)
 	if useJSON {
-		return tmpls.DisplayOutput(st, c.App.Writer, tmpls.TargetMpathListTmpl, nil, useJSON)
+		return tmpls.Print(st, c.App.Writer, tmpls.TargetMpathListTmpl, nil, useJSON)
 	}
 
 	human := !flagIsSet(c, rawFlag)
@@ -853,7 +886,7 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 		return props[i].Name < props[j].Name
 	})
 
-	return tmpls.DisplayOutput(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
 }
 
 func showClusterStatsHandler(c *cli.Context) (err error) {
