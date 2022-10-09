@@ -721,7 +721,7 @@ func determineClusterURL(cfg *config.Config) string {
 			return cfg.Cluster.DefaultDockerHost
 		}
 
-		debug.AssertMsg(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
+		debug.Assert(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
 
 		proxyGateway, err := docker.ClusterEndpoint(clustersIDs[0])
 		if err != nil {

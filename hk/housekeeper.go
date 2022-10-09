@@ -172,9 +172,9 @@ func (hk *housekeeper) Run() (err error) {
 			hk.updateTimer()
 		case req := <-hk.workCh:
 			if req.registering {
-				debug.AssertMsg(req.f != nil, req.name)
-				debug.AssertMsg(req.initialInterval != UnregInterval, req.name) // cannot reg w/unreg
-				debug.AssertMsg(hk.byName(req.name) == -1, req.name)            // duplicate name
+				debug.Assert(req.f != nil, req.name)
+				debug.Assert(req.initialInterval != UnregInterval, req.name) // cannot reg w/unreg
+				debug.Assert(hk.byName(req.name) == -1, req.name)            // duplicate name
 
 				initialInterval := req.initialInterval
 				if req.initialInterval == 0 {
@@ -187,7 +187,7 @@ func (hk *housekeeper) Run() (err error) {
 				if idx >= 0 {
 					heap.Remove(hk.actions, idx)
 				} else {
-					debug.AssertMsg(false, req.name)
+					debug.Assert(false, req.name)
 					glog.Warningln(req.name, "already removed")
 				}
 			}

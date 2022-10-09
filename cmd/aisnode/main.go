@@ -18,8 +18,8 @@ var (
 )
 
 func main() {
-	debug.AssertMsg(build != "", "missing build")
-	debug.AssertMsg(buildtime != "", "missing build time")
+	debug.Assert(build != "", "missing build")
+	debug.Assert(buildtime != "", "missing build time")
 	ecode := ais.Run(cmn.VersionAIStore+"."+build, buildtime)
 	os.Exit(ecode)
 }

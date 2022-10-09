@@ -44,7 +44,7 @@ func init() {
 	all = make(map[string]runtime, 2)
 	for _, r := range []runtime{py38{}, py310{}} {
 		if _, ok := all[r.Name()]; ok {
-			debug.AssertMsg(false, "duplicate type "+r.Name())
+			debug.Assert(false, "duplicate type "+r.Name())
 		} else {
 			all[r.Name()] = r
 		}

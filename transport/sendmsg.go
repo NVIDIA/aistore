@@ -33,7 +33,7 @@ var _ streamer = (*MsgStream)(nil)
 
 func (s *MsgStream) terminate(err error, reason string) (actReason string, actErr error) {
 	ok := s.term.done.CAS(false, true)
-	debug.AssertMsg(ok, s.String())
+	debug.Assert(ok, s.String())
 
 	s.term.mu.Lock()
 	if s.term.err == nil {

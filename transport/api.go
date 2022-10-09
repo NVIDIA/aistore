@@ -158,7 +158,7 @@ func (s *Stream) Send(obj *Obj) (err error) {
 			debug.Assert(obj.IsHeaderOnly())
 		} else if obj.IsHeaderOnly() {
 			val := reflect.ValueOf(obj.Reader)
-			debug.AssertMsg(val.IsNil(), obj.String())
+			debug.Assert(val.IsNil(), obj.String())
 		}
 	})
 

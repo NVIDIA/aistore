@@ -422,7 +422,7 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 				1, metric{Type: statsd.Counter, Name: "count", Value: val})
 		}
 	default:
-		debug.AssertMsg(false, v.kind)
+		debug.Assert(false, v.kind)
 	}
 }
 
@@ -576,19 +576,19 @@ func (tracker statsTracker) register(node *cluster.Snode, name, kind string, isC
 			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbytes")
 		} else {
-			debug.AssertMsg(strings.HasSuffix(name, ".n"), name)
+			debug.Assert(strings.HasSuffix(name, ".n"), name)
 			v.label.comm = strings.TrimSuffix(name, ".n")
 			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "count")
 		}
 	case KindLatency:
-		debug.AssertMsg(strings.Contains(name, ".ns"), name)
+		debug.Assert(strings.Contains(name, ".ns"), name)
 		v.label.comm = strings.TrimSuffix(name, ".ns")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "ms")
 	case KindThroughput, KindComputedThroughput:
-		debug.AssertMsg(strings.HasSuffix(name, ".bps"), name)
+		debug.Assert(strings.HasSuffix(name, ".bps"), name)
 		v.label.comm = strings.TrimSuffix(name, ".bps")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbps")
@@ -692,7 +692,7 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 		}
 		// 3. publish
 		desc, ok := r.Core.promDesc[name]
-		debug.AssertMsg(ok, name)
+		debug.Assert(ok, name)
 		m, err := prometheus.NewConstMetric(desc, promMetricType, fv)
 		debug.AssertNoErr(err)
 		ch <- m

@@ -66,7 +66,7 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
 
 func (lom *LOM) InitCT(ct *CT) {
 	debug.Assert(ct.contentType == fs.ObjectType)
-	debug.AssertMsg(ct.bck.Props != nil, ct.bck.String()+" must be initialized")
+	debug.Assert(ct.bck.Props != nil, ct.bck.String()+" must be initialized")
 	lom.FQN = ct.fqn
 	lom.HrwFQN = ct.hrwFQN
 	lom.mpathInfo = ct.mpathInfo

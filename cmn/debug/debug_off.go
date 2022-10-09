@@ -22,7 +22,6 @@ func Func(_ func()) {}
 
 func Assert(_ bool, _ ...any)            {}
 func AssertFunc(_ func() bool, _ ...any) {}
-func AssertMsg(_ bool, _ string)         {}
 func AssertNoErr(_ error)                {}
 func Assertf(_ bool, _ string, _ ...any) {}
 

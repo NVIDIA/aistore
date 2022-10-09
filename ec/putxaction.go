@@ -117,8 +117,8 @@ func (r *XactPut) newPutJogger(mpath string) *putJogger {
 }
 
 func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
-	debug.AssertMsg(req.Action == ActDelete || req.Action == ActSplit, req.Action)
-	debug.AssertMsg(req.ErrCh == nil, "ec-put does not support ErrCh")
+	debug.Assert(req.Action == ActDelete || req.Action == ActSplit, req.Action)
+	debug.Assert(req.ErrCh == nil, "ec-put does not support ErrCh")
 	if !r.ecRequestsEnabled() {
 		return ErrorECDisabled
 	}

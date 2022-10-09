@@ -605,7 +605,7 @@ func (h *DaemonStatusTemplateHelper) toSlice(jtag string) []string {
 					set.Add(fmtRebStatus(s.RebSnap))
 				}
 			default:
-				debug.AssertMsg(false, jtag)
+				debug.Assert(false, jtag)
 			}
 		}
 	}

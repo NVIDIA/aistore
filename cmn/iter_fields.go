@@ -166,7 +166,7 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 			dirtyField = field.dirty
 		} else if srcValField.Kind() != reflect.Struct {
 			// We require that not-omitted fields have JSON tag.
-			debug.AssertMsg(jsonTagPresent, prefix+"["+fieldName+"]")
+			debug.Assert(jsonTagPresent, prefix+"["+fieldName+"]")
 
 			// Set value for the field
 			name := prefix + fieldName
@@ -246,7 +246,7 @@ func copyProps(src, dst any, asType string) (err error) {
 		}
 
 		t, ok := dstVal.Type().FieldByName(fieldName)
-		debug.AssertMsg(ok, fieldName)
+		debug.Assert(ok, fieldName)
 		// NOTE: the tag is used exclusively to enforce local vs global scope of the config var
 		allowed := t.Tag.Get("allow")
 		if allowed != "" && allowed != asType {

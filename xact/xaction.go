@@ -68,8 +68,8 @@ func GoRunW(xctn cluster.Xact) {
 //////////////
 
 func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {
-	debug.AssertMsg(kind == apc.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
-	debug.AssertMsg(IsValidKind(kind), kind)
+	debug.Assert(kind == apc.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
+	debug.Assert(IsValidKind(kind), kind)
 	xctn.id, xctn.kind = id, kind
 	xctn.abort.ch = make(chan error, 1)
 	if bck != nil {
@@ -86,7 +86,7 @@ func (xctn *Base) Finished() bool                  { return xctn.eutime.Load() !
 
 func (xctn *Base) Running() (yes bool) {
 	yes = xctn.sutime.Load() != 0 && !xctn.Finished() && !xctn.IsAborted()
-	debug.AssertMsg(!yes || xctn.ID() != "", xctn.String())
+	debug.Assert(!yes || xctn.ID() != "", xctn.String())
 	return
 }
 
@@ -138,7 +138,7 @@ func (xctn *Base) Abort(err error) (ok bool) {
 		}
 	}
 	xctn.abort.mu.Lock()
-	debug.AssertMsg(xctn.abort.err == nil, xctn.String())
+	debug.Assert(xctn.abort.err == nil, xctn.String())
 	xctn.abort.err = err
 	xctn.abort.ch <- err
 	close(xctn.abort.ch)
@@ -298,7 +298,7 @@ func (xctn *Base) InObjs() int64  { return xctn.stats.inobjs.Load() }
 func (xctn *Base) InBytes() int64 { return xctn.stats.inbytes.Load() }
 
 func (xctn *Base) InObjsAdd(cnt int, size int64) {
-	debug.AssertMsg(size >= 0, xctn.String()) // "unsized" is caller's responsibility
+	debug.Assert(size >= 0, xctn.String()) // "unsized" is caller's responsibility
 	xctn.stats.inobjs.Add(int64(cnt))
 	xctn.stats.inbytes.Add(size)
 }
@@ -347,7 +347,7 @@ func CompareRebIDs(someID, fltID string) int {
 		return -1 // m.b. less than
 	}
 	bi, err := S2RebID(fltID)
-	debug.AssertMsg(err == nil, fltID)
+	debug.Assert(err == nil, fltID)
 	if ai < bi {
 		return -1
 	}

@@ -873,7 +873,7 @@ func (c *BackendConf) setProvider(provider string) {
 	case apc.AWS, apc.Azure, apc.GCP, apc.HDFS:
 		ns = NsGlobal
 	default:
-		debug.AssertMsg(false, "unknown backend provider "+provider)
+		debug.Assert(false, "unknown backend provider "+provider)
 	}
 	if c.Providers == nil {
 		c.Providers = map[string]Ns{}

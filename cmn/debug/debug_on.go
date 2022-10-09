@@ -92,7 +92,7 @@ func _panic(a ...any) {
 		msg += fmt.Sprint(a...) + ": "
 	}
 	buffer := bytes.NewBuffer(make([]byte, 0, 1024))
-	fmt.Fprint(buffer, msg)
+	buffer.WriteString(msg)
 	for i := 2; i < 9; i++ {
 		if _, file, line, ok := runtime.Caller(i); !ok {
 			break
@@ -124,12 +124,6 @@ func AssertFunc(f func() bool, a ...any) {
 	}
 }
 
-func AssertMsg(cond bool, msg string) {
-	if !cond {
-		_panic(msg)
-	}
-}
-
 func AssertNoErr(err error) {
 	if err != nil {
 		_panic(err)
@@ -145,12 +139,12 @@ func Assertf(cond bool, f string, a ...any) {
 
 func AssertMutexLocked(m *sync.Mutex) {
 	state := reflect.ValueOf(m).Elem().FieldByName("state")
-	AssertMsg(state.Int()&1 == 1, "Mutex not Locked")
+	Assert(state.Int()&1 == 1, "Mutex not Locked")
 }
 
 func AssertRWMutexLocked(m *sync.RWMutex) {
 	state := reflect.ValueOf(m).Elem().FieldByName("w").FieldByName("state")
-	AssertMsg(state.Int()&1 == 1, "RWMutex not Locked")
+	Assert(state.Int()&1 == 1, "RWMutex not Locked")
 }
 
 func AssertRWMutexRLocked(m *sync.RWMutex) {
@@ -160,7 +154,7 @@ func AssertRWMutexRLocked(m *sync.RWMutex) {
 	//  tries to lock the mutex. The writer announces it by manipulating `rc`
 	//  (to be specific, decreases `rc` by `maxReaders`). Therefore, to check if
 	//  there are any readers still holding lock we need to check both cases.
-	AssertMsg(rc > 0 || (0 > rc && rc > -maxReaders), "RWMutex not RLocked")
+	Assert(rc > 0 || (0 > rc && rc > -maxReaders), "RWMutex not RLocked")
 }
 
 func FailTypeCast(a any) {

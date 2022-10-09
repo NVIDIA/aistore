@@ -99,7 +99,7 @@ func (lom *LOM) CopyAttrs(oah cmn.ObjAttrsHolder, skipCksum bool) {
 
 // special a) when a new version is being created b) for usage in unit tests
 func (lom *LOM) SizeBytes(special ...bool) int64 {
-	debug.AssertMsg(len(special) > 0 || lom.loaded(), lom.String())
+	debug.Assert(len(special) > 0 || lom.loaded(), lom.String())
 	return lom.md.Size
 }
 
@@ -370,7 +370,7 @@ func (lom *LOM) Load(cacheit, locked bool) (err error) {
 		return
 	}
 	bid := lom.Bprops().BID
-	debug.AssertMsg(bid != 0, lom.FullName())
+	debug.Assert(bid != 0, lom.FullName())
 	if bid == 0 {
 		return
 	}

@@ -1055,7 +1055,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			return
 		}
 	default:
-		debug.AssertMsg(false, aoi.op)
+		debug.Assert(false, aoi.op)
 	}
 
 	delta := time.Since(aoi.started)

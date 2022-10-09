@@ -493,7 +493,7 @@ func (k *keepalive) do(smap *smapX, si *cluster.Snode) (stopped bool) {
 	if daemon.stopping.Load() {
 		return
 	}
-	debug.AssertMsg(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
+	debug.Assert(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
 	glog.Warningf("%s => %s keepalive failed: %v(%d)", si, cluster.Pname(pid), err, status)
 
 	var (

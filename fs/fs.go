@@ -849,7 +849,7 @@ func BeginDD(action string, flags uint64, mpath string) (mi *MountpathInfo, numA
 	availableCopy := _cloneOne(availablePaths)
 	mi = availableCopy[cleanMpath]
 	ok := mi.setFlags(flags)
-	debug.AssertMsg(ok, mi.String()) // NOTE: under lock
+	debug.Assert(ok, mi.String()) // NOTE: under lock
 	putAvailMPI(availableCopy)
 	numAvail = len(availableCopy) - 1
 	return
@@ -1009,11 +1009,11 @@ func moveMarkers(available MPI, from *MountpathInfo) {
 
 	// NOTE: `from` path must no longer be in the available mountpaths
 	_, ok := available[from.Path]
-	debug.AssertMsg(!ok, from.String())
+	debug.Assert(!ok, from.String())
 	for _, mpath := range available {
 		ok = true
 		for _, fi := range finfos {
-			debug.AssertMsg(!fi.IsDir(), fname.MarkersDir+"/"+fi.Name()) // marker is file
+			debug.Assert(!fi.IsDir(), fname.MarkersDir+"/"+fi.Name()) // marker is file
 			var (
 				fromPath = filepath.Join(from.Path, fname.MarkersDir, fi.Name())
 				toPath   = filepath.Join(mpath.Path, fname.MarkersDir, fi.Name())

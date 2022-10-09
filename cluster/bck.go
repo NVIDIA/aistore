@@ -63,7 +63,7 @@ func (b *Bck) Clone() cmn.Bck { return cmn.Bck(*b) }
 func CloneBck(bck *cmn.Bck) *Bck {
 	b := *bck
 	normp, err := cmn.NormalizeProvider(bck.Provider)
-	debug.AssertMsg(err == nil, bck.Provider)
+	debug.Assert(err == nil, bck.Provider)
 	b.Provider = normp
 	return (*Bck)(&b)
 }

@@ -542,7 +542,7 @@ func (ss *startupSema) waitForStartup() {
 	for total := time.Duration(0); !ss.started.Load(); total += sleep {
 		time.Sleep(sleep)
 		// should never happen even on slowest machines
-		debug.AssertMsg(total < timeout, errmsg)
+		debug.Assert(total < timeout, errmsg)
 		if total >= timeout && total < timeout+sleep*2 {
 			glog.Errorln(errmsg)
 		}

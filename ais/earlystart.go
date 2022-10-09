@@ -572,7 +572,7 @@ func (p *proxy) discoverMeta(smap *smapX) {
 		config := cmn.GCO.Get()
 		if config.Version < svm.Config.version() {
 			if !cos.IsValidUUID(svm.Config.UUID) {
-				debug.AssertMsg(false, svm.Config.String())
+				debug.Assert(false, svm.Config.String())
 				cos.ExitLogf("%s: invalid config UUID: %s", p.si, svm.Config)
 			}
 			if cos.IsValidUUID(config.UUID) && config.UUID != svm.Config.UUID {

@@ -135,7 +135,7 @@ func RegWithHK() {
 func GetXact(uuid string) (xctn cluster.Xact) { return dreg.getXact(uuid) }
 
 func (r *registry) getXact(uuid string) (xctn cluster.Xact) {
-	debug.AssertMsg(cos.IsValidUUID(uuid) || xact.IsValidRebID(uuid), uuid)
+	debug.Assert(cos.IsValidUUID(uuid) || xact.IsValidRebID(uuid), uuid)
 	e := &r.entries
 	e.mtx.RLock()
 outer:
@@ -284,12 +284,12 @@ func (r *registry) abort(args abortArgs) {
 		}
 		abort := false
 		if args.mountpaths {
-			debug.AssertMsg(args.ty == "", args.ty)
+			debug.Assert(args.ty == "", args.ty)
 			if xact.IsMountpath(xctn.Kind()) {
 				abort = true
 			}
 		} else if len(args.bcks) > 0 {
-			debug.AssertMsg(args.ty == "", args.ty)
+			debug.Assert(args.ty == "", args.ty)
 			for _, bck := range args.bcks {
 				if xctn.Bck() != nil && bck.Equal(xctn.Bck(), true /*sameID*/, true /*same backend*/) {
 					abort = true
@@ -544,7 +544,7 @@ func (e *entries) del(id string) {
 	for idx, entry := range e.all {
 		xctn := entry.Get()
 		if xctn.ID() == id {
-			debug.AssertMsg(xctn.Finished(), xctn.String())
+			debug.Assert(xctn.Finished(), xctn.String())
 			nlen := len(e.all) - 1
 			e.all[idx] = e.all[nlen]
 			e.all = e.all[:nlen]
@@ -554,7 +554,7 @@ func (e *entries) del(id string) {
 	for idx, entry := range e.active {
 		xctn := entry.Get()
 		if xctn.ID() == id {
-			debug.AssertMsg(xctn.Finished(), xctn.String())
+			debug.Assert(xctn.Finished(), xctn.String())
 			nlen := len(e.active) - 1
 			e.active[idx] = e.active[nlen]
 			e.active = e.active[:nlen]
@@ -732,7 +732,7 @@ func (flt *XactFilter) String() string {
 }
 
 func (flt XactFilter) matches(xctn cluster.Xact) (yes bool) {
-	debug.AssertMsg(xact.IsValidKind(xctn.Kind()), xctn.String())
+	debug.Assert(xact.IsValidKind(xctn.Kind()), xctn.String())
 	// running?
 	if flt.OnlyRunning != nil {
 		if *flt.OnlyRunning != xctn.Running() {
@@ -741,15 +741,15 @@ func (flt XactFilter) matches(xctn cluster.Xact) (yes bool) {
 	}
 	// same ID?
 	if flt.ID != "" {
-		debug.AssertMsg(cos.IsValidUUID(flt.ID) || xact.IsValidRebID(flt.ID), flt.ID)
+		debug.Assert(cos.IsValidUUID(flt.ID) || xact.IsValidRebID(flt.ID), flt.ID)
 		if yes = xctn.ID() == flt.ID; yes {
-			debug.AssertMsg(xctn.Kind() == flt.Kind, xctn.String()+" vs same ID "+flt.String())
+			debug.Assert(xctn.Kind() == flt.Kind, xctn.String()+" vs same ID "+flt.String())
 		}
 		return
 	}
 	// kind?
 	if flt.Kind != "" {
-		debug.AssertMsg(xact.IsValidKind(flt.Kind), flt.Kind)
+		debug.Assert(xact.IsValidKind(flt.Kind), flt.Kind)
 		if xctn.Kind() != flt.Kind {
 			return false
 		}

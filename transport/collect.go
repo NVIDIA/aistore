@@ -68,7 +68,7 @@ func (gc *collector) run() (err error) {
 			s, add := ctrl.s, ctrl.add
 			_, ok = gc.streams[s.lid]
 			if add {
-				debug.AssertMsg(!ok, s.lid)
+				debug.Assert(!ok, s.lid)
 				gc.streams[s.lid] = s
 				heap.Push(gc, s)
 			} else if ok {

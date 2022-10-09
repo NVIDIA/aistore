@@ -187,7 +187,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 			mpw := &msgpackWriter{}
 			mpw.init(wi)
 		default:
-			debug.AssertMsg(false, msg.Mime)
+			debug.Assert(false, msg.Mime)
 			return
 		}
 	}

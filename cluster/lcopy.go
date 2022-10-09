@@ -23,7 +23,7 @@ func (lom *LOM) whingeCopy() (yes bool) {
 		return
 	}
 	msg := fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %+v)", lom, lom.FQN, lom.HrwFQN, lom.md.copies)
-	debug.AssertMsg(false, msg)
+	debug.Assert(false, msg)
 	glog.Error(msg)
 	return true
 }

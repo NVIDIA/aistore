@@ -143,7 +143,7 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 
 // main method: replicate onto a given (and different) mountpath
 func (r *XactPut) Repl(lom *cluster.LOM) {
-	debug.AssertMsg(!r.Finished(), r.String())
+	debug.Assert(!r.Finished(), r.String())
 	total := r.total.Inc()
 
 	pending, max := int(r.Pending()), r.mirror.Burst

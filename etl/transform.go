@@ -166,7 +166,7 @@ func InitCode(t cluster.Target, msg *InitCodeMsg) error {
 		replacer = strings.NewReplacer(ftp...)
 	)
 	r, exists := runtime.Get(msg.Runtime)
-	debug.AssertMsg(exists, msg.Runtime) // must've been checked by proxy
+	debug.Assert(exists, msg.Runtime) // must've been checked by proxy
 
 	podSpec := replacer.Replace(r.PodSpec())
 

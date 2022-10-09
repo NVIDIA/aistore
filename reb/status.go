@@ -44,7 +44,7 @@ func (reb *Reb) RebStatus(status *Status) {
 		if status.Running {
 			if marked.Xact.ID() != xreb.ID() {
 				id, _ := xact.S2RebID(marked.Xact.ID())
-				debug.AssertMsg(id > xreb.RebID(), marked.Xact.String()+" vs "+xreb.String())
+				debug.Assert(id > xreb.RebID(), marked.Xact.String()+" vs "+xreb.String())
 				glog.Warningf("%s: must be transitioning (renewing) from %s (stage %s) to %s",
 					reb.t, xreb, stages[status.Stage], marked.Xact)
 				status.Running = false // not yet
