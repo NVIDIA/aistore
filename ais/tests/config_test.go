@@ -249,10 +249,9 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		})
 	})
 
-	time.Sleep(time.Second)
 	smap, err = tools.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
-	if smap.Primary.ID() == proxy.ID() {
+	if err != nil || smap.Primary.ID() == proxy.ID() {
 		time.Sleep(time.Second)
 		_ = tools.RestoreNode(cmd, false, apc.Proxy)
 		time.Sleep(time.Second)
@@ -261,6 +260,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 
 	// 2. After proxy is killed, update cluster configuration
 	newECEnabled := !config.EC.Enabled
+	tlog.Logf("Globally changing ec.enabled to %t (%s)\n", newECEnabled, smap.StringEx())
 	tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled": strconv.FormatBool(newECEnabled),
 	})

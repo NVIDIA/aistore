@@ -1834,7 +1834,7 @@ func TestICDecommission(t *testing.T) {
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 	m.proxyURL = psi.URL(cmn.NetPublic)
-	tlog.Logf("Monitoring node: %s\n", psi)
+	tlog.Logf("Monitoring node: %s\n", psi.StringEx())
 	icNode := tools.GetICProxy(t, m.smap, psi.ID())
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)

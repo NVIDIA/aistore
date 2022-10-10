@@ -36,7 +36,6 @@ const (
 	//	2. local docker instance		- works
 	// 	3. AWS-deployed cluster 		- not tested (but runs mainly with Ansible)
 	MockDaemonID       = "MOCK"
-	proxyChangeLatency = 2 * time.Minute
 	dsortFinishTimeout = 6 * time.Minute
 
 	waitClusterStartup = 20 * time.Second
@@ -137,14 +136,20 @@ func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLim
 
 func GetPrimaryURL() string {
 	primary, err := GetPrimaryProxy(proxyURLReadOnly)
-	if err != nil {
-		fmt.Printf("Warning: GetPrimaryProxy [%v] - retrying once...\n", err)
+	if err == nil {
+		return primary.URL(cmn.NetPublic)
+	}
+	fmt.Printf("Warning: GetPrimaryProxy [%v] - retrying once...\n", err)
+	if currSmap == nil {
 		time.Sleep(time.Second)
 		primary, err = GetPrimaryProxy(proxyURLReadOnly)
-		if err != nil {
-			fmt.Printf("Warning: GetPrimaryProxy [%v] - returning global %q\n", err, proxyURLReadOnly)
-			return proxyURLReadOnly
-		}
+	} else {
+		proxyURL := currSmap.Primary.URL(cmn.NetPublic)
+		primary, err = GetPrimaryProxy(proxyURL)
+	}
+	if err != nil {
+		fmt.Printf("Warning: GetPrimaryProxy [%v] - returning global %q\n", err, proxyURLReadOnly)
+		return proxyURLReadOnly
 	}
 	return primary.URL(cmn.NetPublic)
 }
@@ -624,7 +629,9 @@ func GetDaemonConfig(t *testing.T, node *cluster.Snode) *cmn.Config {
 
 func GetClusterMap(tb testing.TB, url string) *cluster.Smap {
 	smap, err := waitForStartup(BaseAPIParams(url), tb)
-	_ = err // the caller must check smap for nil
+	if err == nil && (currSmap == nil || currSmap.Version < smap.Version) {
+		currSmap = smap
+	}
 	return smap
 }
 

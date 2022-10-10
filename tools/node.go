@@ -79,17 +79,17 @@ func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID 
 	return rebID, newSmap
 }
 
-func ClearMaintenance(baseParams api.BaseParams, tsi *cluster.Snode) {
+func ClearMaintenance(bp api.BaseParams, tsi *cluster.Snode) {
 	val := &apc.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: true}
 	// it can fail if the node is not under maintenance but it is OK
-	_, _ = api.StopMaintenance(baseParams, val)
+	_, _ = api.StopMaintenance(bp, val)
 }
 
 func RandomProxyURL(ts ...*testing.T) (url string) {
 	var (
-		baseParams = BaseAPIParams(proxyURLReadOnly)
-		smap, err  = waitForStartup(baseParams)
-		retries    = 3
+		bp        = BaseAPIParams(proxyURLReadOnly)
+		smap, err = waitForStartup(bp)
+		retries   = 3
 	)
 	if err == nil {
 		return getRandomProxyURL(smap)
@@ -102,8 +102,8 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 		if retries == 0 {
 			return ""
 		}
-		baseParams = BaseAPIParams(url)
-		if smap, err = waitForStartup(baseParams); err == nil {
+		bp = BaseAPIParams(url)
+		if smap, err = waitForStartup(bp); err == nil {
 			return getRandomProxyURL(smap)
 		}
 		retries--
@@ -169,27 +169,30 @@ func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxy
 // It returns the smap which satisfies those requirements.
 // NOTE: Upon successful return from this function cluster state might have already changed.
 func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int, ignoreIDs ...string) (*cluster.Smap, error) {
-	var (
-		lastVersion                               int64
-		smapChangeDeadline, timeStart, opDeadline time.Time
-
-		expPrx = nodesCnt(pcnt)
-		expTgt = nodesCnt(tcnt)
-
-		baseParams = BaseAPIParams(proxyURL)
-		loopCnt    int
-		satisfied  bool
+	const (
+		maxSleep = 7 * time.Second
+		maxWait  = 2 * time.Minute
 	)
-
-	timeStart = time.Now()
-	smapChangeDeadline = timeStart.Add(2 * proxyChangeLatency)
-	opDeadline = timeStart.Add(3 * proxyChangeLatency)
-
-	tlog.Logf("Waiting for: %q(p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVer)
-
-	// Repeat until success or timeout.
+	var (
+		expPrx  = nodesCnt(pcnt)
+		expTgt  = nodesCnt(tcnt)
+		bp      = BaseAPIParams(proxyURL)
+		lastVer int64
+		loopCnt int
+	)
+	if expPrx == 0 && expTgt == 0 {
+		tlog.Logf("Waiting for %q (Smap > v%d)\n", reason, origVer)
+	} else {
+		tlog.Logf("Waiting for %q (p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVer)
+	}
+	started := time.Now()
+	deadline := started.Add(maxWait)
+	opDeadline := started.Add(2 * maxWait)
 	for {
-		smap, err := api.GetClusterMap(baseParams)
+		var (
+			smap, err = api.GetClusterMap(bp)
+			ok        bool
+		)
 		if err != nil {
 			if !cos.IsRetriableConnErr(err) {
 				return nil, err
@@ -197,37 +200,33 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			tlog.Logf("%v\n", err)
 			goto next
 		}
-		satisfied = expTgt.satisfied(smap.CountActiveTargets()) &&
-			expPrx.satisfied(smap.CountActiveProxies()) &&
+		ok = expTgt.satisfied(smap.CountActiveTargets()) && expPrx.satisfied(smap.CountActiveProxies()) &&
 			smap.Version > origVer
-		if !satisfied {
-			if d := time.Since(timeStart); d > 7*time.Second {
-				p := "primary"
-				if smap.Primary.PubNet.URL != proxyURL {
-					p = proxyURL
-				}
-				tlog.Logf("Polling %s[%s] for (t=%d, p=%d, Smap > v%d)\n", p, smap, expTgt, expPrx, origVer)
+		if ok && time.Since(started) < time.Second {
+			time.Sleep(time.Second)
+			lastVer = smap.Version
+			continue
+		}
+		if !ok {
+			if time.Since(started) > maxSleep {
+				pid := pidFromURL(smap, proxyURL)
+				tlog.Logf("Polling %s(%s) for (t=%d, p=%d, Smap > v%d)\n",
+					cluster.Pname(pid), smap.StringEx(), expTgt, expPrx, origVer)
 			}
 		}
-		if smap.Version != lastVersion {
-			smapChangeDeadline = cos.MinTime(time.Now().Add(proxyChangeLatency), opDeadline)
+		if smap.Version != lastVer && lastVer != 0 {
+			deadline = cos.MinTime(time.Now().Add(maxWait), opDeadline)
 		}
 		// if the primary's map changed to the state we want, wait for the map get populated
-		if satisfied {
+		if ok {
 			syncedSmap := &cluster.Smap{}
 			cos.CopyStruct(syncedSmap, smap)
 
 			// skip primary proxy and mock targets
-			var proxyID string
-			for _, p := range smap.Pmap {
-				if p.PubNet.URL == proxyURL {
-					proxyID = p.ID()
-				}
-			}
-
+			proxyID := pidFromURL(smap, proxyURL)
 			idsToIgnore := cos.NewStrSet(MockDaemonID, proxyID)
 			idsToIgnore.Add(ignoreIDs...)
-			err = _waitMapVersionSync(baseParams, gctx, smapChangeDeadline, syncedSmap, origVer, idsToIgnore)
+			err = waitSmapSync(bp, gctx, deadline, syncedSmap, origVer, idsToIgnore)
 			if err != nil {
 				tlog.Logf("Failed waiting for cluster state: %v (%s, %s, %v, %v)\n",
 					err, smap, syncedSmap, origVer, idsToIgnore)
@@ -235,36 +234,43 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			}
 
 			if syncedSmap.Version != smap.Version {
-				if !expTgt.satisfied(smap.CountActiveTargets()) ||
-					!expPrx.satisfied(smap.CountActiveProxies()) {
-					return nil,
-						fmt.Errorf("%s changed after sync (to %s) and does not satisfy the state",
-							smap, syncedSmap)
+				if !expTgt.satisfied(smap.CountActiveTargets()) || !expPrx.satisfied(smap.CountActiveProxies()) {
+					return nil, fmt.Errorf("%s changed after sync (to %s) and does not satisfy the state",
+						smap, syncedSmap)
 				}
 				tlog.Logf("%s changed after sync (to %s) but satisfies the state\n", smap, syncedSmap)
 			}
-
+			if currSmap == nil || currSmap.Version < smap.Version {
+				currSmap = smap
+			}
 			return smap, nil
 		}
-
-		lastVersion = smap.Version
+		lastVer = smap.Version
 		loopCnt++
 	next:
-		if time.Now().After(smapChangeDeadline) {
+		if time.Now().After(deadline) {
 			break
 		}
-		// sleep longer each iter (up to a certain limit)
-		time.Sleep(cos.MinDuration(time.Second*time.Duration(loopCnt), time.Second*7))
+		time.Sleep(cos.MinDuration(time.Second*time.Duration(loopCnt), maxSleep))
 	}
 
 	return nil, fmt.Errorf("timed out waiting for the cluster to stabilize")
+}
+
+func pidFromURL(smap *cluster.Smap, proxyURL string) string {
+	for _, p := range smap.Pmap {
+		if p.PubNet.URL == proxyURL {
+			return p.ID()
+		}
+	}
+	return ""
 }
 
 func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, err error) {
 	return WaitForClusterState(proxyURL, "new smap version", prevVersion, 0, 0)
 }
 
-func WaitForResilvering(t *testing.T, baseParams api.BaseParams, target *cluster.Snode) {
+func WaitForResilvering(t *testing.T, bp api.BaseParams, target *cluster.Snode) {
 	args := api.XactReqArgs{Kind: apc.ActResilver, Timeout: resilverTimeout}
 	if target != nil {
 		args.DaemonID = target.ID()
@@ -272,7 +278,7 @@ func WaitForResilvering(t *testing.T, baseParams api.BaseParams, target *cluster
 	} else {
 		time.Sleep(4 * time.Second)
 	}
-	err := api.WaitForXactionNode(baseParams, args, _xactSnapFinished)
+	err := api.WaitForXactionNode(bp, args, _xactSnapFinished)
 	tassert.CheckFatal(t, err)
 }
 
@@ -347,7 +353,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 	return
 }
 
-func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) (pid int, cmd RestoreCmd, err error) {
+func ShutdownNode(_ *testing.T, bp api.BaseParams, node *cluster.Snode) (pid int, cmd RestoreCmd, err error) {
 	restoreNodesOnce.Do(func() {
 		initNodeCmd()
 	})
@@ -370,7 +376,7 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 	}
 
 	actValue := &apc.ActValRmNode{DaemonID: daemonID}
-	_, err = api.ShutdownNode(baseParams, actValue)
+	_, err = api.ShutdownNode(bp, actValue)
 	return
 }
 
@@ -385,11 +391,14 @@ func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 	}
 
 	tlog.Logf("Restoring %s: %s %+v\n", tag, cmd.Cmd, cmd.Args)
-	_, err := startNode(cmd.Cmd, cmd.Args, asPrimary)
+	pid, err := startNode(cmd.Cmd, cmd.Args, asPrimary)
+	if err == nil && pid <= 0 {
+		err = fmt.Errorf("RestoreNode: invalid process ID %d", pid)
+	}
 	return err
 }
 
-func startNode(cmd string, args []string, asPrimary bool) (pid int, err error) {
+func startNode(cmd string, args []string, asPrimary bool) (int, error) {
 	ncmd := exec.Command(cmd, args...)
 	// When using Ctrl-C on test, children (restored daemons) should not be
 	// killed as well.
@@ -398,18 +407,17 @@ func startNode(cmd string, args []string, asPrimary bool) (pid int, err error) {
 		Setpgid: true,
 	}
 	if asPrimary {
-		// Sets the environment variable to start as primary proxy to true
+		// Sets the environment variable to start as primary
 		environ := os.Environ()
 		environ = append(environ, fmt.Sprintf("%s=true", env.AIS.IsPrimary))
 		ncmd.Env = environ
 	}
-
-	if err = ncmd.Start(); err != nil {
-		return
+	if err := ncmd.Start(); err != nil {
+		return 0, err
 	}
-	pid = ncmd.Process.Pid
-	err = ncmd.Process.Release()
-	return
+	pid := ncmd.Process.Pid
+	err := ncmd.Process.Release() // TODO -- FIXME: needed?
+	return pid, err
 }
 
 func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *cmn.LocalConfig) int {
@@ -444,6 +452,7 @@ func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *
 	cmd := getAISNodeCmd(t)
 	pid, err := startNode(cmd, args, false)
 	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, pid > 0, "invalid process ID %d", pid)
 	return pid
 }
 
@@ -647,11 +656,10 @@ retry:
 	}
 }
 
-func WaitNodeAdded(baseParams api.BaseParams, nodeID string) (*cluster.Smap, error) {
-	i := 0
-
+func WaitNodeAdded(bp api.BaseParams, nodeID string) (*cluster.Smap, error) {
+	var i int
 retry:
-	smap, err := api.GetClusterMap(baseParams)
+	smap, err := api.GetClusterMap(bp)
 	if err != nil {
 		return nil, err
 	}
@@ -670,20 +678,17 @@ retry:
 
 func WaitNodeReady(url string, opts ...*WaitRetryOpts) (err error) {
 	var (
-		i          = 0
-		baseParams = BaseAPIParams(url)
-
+		bp            = BaseAPIParams(url)
 		retries       = maxNodeRetry
 		retryInterval = nodeRetryInterval
+		i             int
 	)
-
 	if len(opts) > 0 && opts[0] != nil {
 		retries = opts[0].MaxRetries
 		retryInterval = opts[0].Interval
 	}
-
 while503:
-	err = api.Health(baseParams)
+	err = api.Health(bp)
 	if err == nil {
 		return nil
 	}
@@ -699,19 +704,19 @@ while503:
 }
 
 func _joinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Duration) (rebID string, err error) {
-	baseParams := api.BaseParams{Client: ctx.Client, URL: proxyURL, Token: LoggedUserToken}
-	smap, err := api.GetClusterMap(baseParams)
+	bp := api.BaseParams{Client: ctx.Client, URL: proxyURL, Token: LoggedUserToken}
+	smap, err := api.GetClusterMap(bp)
 	if err != nil {
 		return "", err
 	}
-	if rebID, _, err = api.JoinCluster(baseParams, node); err != nil {
+	if rebID, _, err = api.JoinCluster(bp, node); err != nil {
 		return
 	}
 
 	// If node is already in cluster we should not wait for map version
 	// sync because update will not be scheduled
 	if node := smap.GetNode(node.ID()); node == nil {
-		err = _waitMapVersionSync(baseParams, ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStrSet())
+		err = waitSmapSync(bp, ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStrSet())
 		return
 	}
 	return
@@ -735,7 +740,7 @@ func _nextNode(smap *cluster.Smap, idsToIgnore cos.StrSet) (sid string, isproxy,
 	return
 }
 
-func _waitMapVersionSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.Smap, ver int64, ignore cos.StrSet) error {
+func waitSmapSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.Smap, ver int64, ignore cos.StrSet) error {
 	var (
 		prevSid string
 		orig    = ignore.Clone()
@@ -795,9 +800,9 @@ func _waitMapVersionSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *c
 // Quick remove node from SMap
 func _removeNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) error {
 	var (
-		baseParams = api.BaseParams{Client: ctx.Client, URL: proxyURL, Token: LoggedUserToken}
-		smap, err  = api.GetClusterMap(baseParams)
-		node       = smap.GetNode(sid)
+		bp        = api.BaseParams{Client: ctx.Client, URL: proxyURL, Token: LoggedUserToken}
+		smap, err = api.GetClusterMap(bp)
+		node      = smap.GetNode(sid)
 	)
 	if err != nil {
 		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
@@ -807,7 +812,7 @@ func _removeNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) 
 	}
 	tlog.Logf("Remove %s from %s\n", node.StringEx(), smap)
 
-	err = api.RemoveNodeFromSmap(baseParams, sid)
+	err = api.RemoveNodeFromSmap(bp, sid)
 	if err != nil {
 		return err
 	}
@@ -815,7 +820,7 @@ func _removeNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) 
 	// If node does not exist in cluster we should not wait for map version
 	// sync because update will not be scheduled.
 	if node != nil {
-		return _waitMapVersionSync(baseParams, ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStrSet(node.ID()))
+		return waitSmapSync(bp, ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStrSet(node.ID()))
 	}
 	return nil
 }

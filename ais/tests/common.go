@@ -89,7 +89,6 @@ func (m *ioContext) saveCluState(proxyURL string) {
 }
 
 func (m *ioContext) waitAndCheckCluState() {
-	time.Sleep(2 * time.Second)
 	smap, err := tools.WaitForClusterState(
 		m.proxyURL,
 		"cluster state",

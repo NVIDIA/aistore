@@ -57,6 +57,8 @@ var (
 	pmapReadOnly     cluster.NodeMap // initial proxy map - it is read-only variable
 	testClusterType  ClusterType     // AIS cluster type - it is read-only variable
 
+	currSmap *cluster.Smap
+
 	restoreNodesOnce sync.Once             // Ensures that the initialization happens only once.
 	restoreNodes     map[string]RestoreCmd // initial proxy and target nodes => command to restore them
 
