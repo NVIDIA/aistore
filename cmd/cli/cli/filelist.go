@@ -114,40 +114,35 @@ func generateFileList(path, trimPrefix, appendPrefix string, recursive bool) ([]
 	mask := ""
 	info, err := os.Stat(path)
 	if err != nil {
-		// files from a directory by mask.
-		// path must end with a mask that contains '*' or '?'
+		// the path must end with a base containing '*' and/or '?'
 		mask = filepath.Base(path)
-		if strings.Contains(mask, "*") || strings.Contains(mask, "?") {
-			path = filepath.Dir(path)
-			info, err = os.Stat(path)
-			if err != nil {
-				return nil, fmt.Errorf("path %q does not exist", path)
-			}
-			if !info.IsDir() {
-				return nil, fmt.Errorf("path %q is not a directory", path)
-			}
-		} else {
+		wild := strings.Contains(mask, "*") || strings.Contains(mask, "?")
+		if !wild {
+			return nil, fmt.Errorf("path %s does not exist and is not a pattern (%q)", path, mask)
+		}
+		path = filepath.Dir(path)
+		info, err = os.Stat(path)
+		if err != nil {
 			return nil, fmt.Errorf("path %q does not exist", path)
 		}
-	} else if info.IsDir() {
-		// the entire directory. Mask '*' is applied automatically
-		mask = "*"
+		if !info.IsDir() {
+			return nil, fmt.Errorf("path %q is not a directory", path)
+		}
 	} else {
-		// one file without custom name.
-		if trimPrefix == "" {
-			// if trim prefix not specified by a caller, default is to just cat everything but base
-			trimPrefix = filepath.Dir(path)
+		if !info.IsDir() { // one file without custom name
+			if trimPrefix == "" {
+				// if trim prefix is not specified the default is to cut everything
+				// leaving only the base
+				trimPrefix = filepath.Dir(path)
+			}
+			objName := cutPrefixFromPath(path, trimPrefix)
+			fo := fileToObj{name: appendPrefix + objName, path: path, size: info.Size()}
+			files := []fileToObj{fo}
+			return files, nil
 		}
-		objName := cutPrefixFromPath(path, trimPrefix)
 
-		fo := fileToObj{
-			name: appendPrefix + objName,
-			path: path,
-			size: info.Size(),
-		}
-
-		files := []fileToObj{fo}
-		return files, nil
+		// otherwise, the entire directory (note that '*' is applied automatically)
+		mask = "*"
 	}
 
 	// if trim prefix not specified by a called, cut the whole path from object name and use what's

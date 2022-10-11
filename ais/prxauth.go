@@ -47,12 +47,12 @@ func newAuthManager() *authManager {
 // from expired tokens
 func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *tokenList) {
 	a.Lock()
-	if newRevoked.Version == 0 {
-		// manually revoked
+	switch {
+	case newRevoked.Version == 0: // manually revoked
 		a.version++
-	} else if newRevoked.Version > a.version {
+	case newRevoked.Version > a.version:
 		a.version = newRevoked.Version
-	} else {
+	default:
 		glog.Errorf("Current token list v%d is greater than received v%d", a.version, newRevoked.Version)
 		a.Unlock()
 		return

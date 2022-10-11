@@ -429,28 +429,28 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				)
 			}
 
-			// If we timed out or were stopped but we didn't manage to pull the
-			// writer then this means that someone else did it and we barely
-			// missed. In this case we should wait for the job to be finished -
-			// in case of being stopped we should receive error anyway.
-			if !pulled {
-				if timed || stopped {
-					writer.wg.Wait()
-				}
-			} else {
-				// We managed to pull the writer, we can safely return error.
+			// If we timed out or were stopped but failed to pull the
+			// writer then someone else should've done it and we barely
+			// missed. In this case we should wait for the job to finish
+			// (when stopped we should receive error anyway).
+
+			if pulled { // managed to pull the writer, can safely return error
 				var err error
-				if stopped {
+				switch {
+				case stopped:
 					err = cmn.NewErrAborted("wait for remote content", "", nil)
-				} else if timed {
+				case timed:
 					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)",
 						ds.m.ctx.node.ID(), daemonID)
-				} else {
+				default:
 					cos.AssertMsg(false, "pulled but not stopped or timed?!")
 				}
 				return 0, err
 			}
 
+			if timed || stopped {
+				writer.wg.Wait()
+			}
 			return writer.n, writer.err
 		}
 

@@ -1381,12 +1381,14 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	q.Set(apc.QparamPrepare, "true")
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
-	if cluMeta, err := p.cluMeta(cmetaFillOpt{skipSmap: true}); err == nil {
-		args.req.Body = cos.MustMarshal(cluMeta)
-	} else {
-		p.writeErr(w, r, err)
+
+	cluMeta, errM := p.cluMeta(cmetaFillOpt{skipSmap: true})
+	if errM != nil {
+		p.writeErr(w, r, errM)
 		return
 	}
+	args.req.Body = cos.MustMarshal(cluMeta)
+
 	args.to = cluster.AllNodes
 	results := p.bcastGroup(args)
 	freeBcArgs(args)

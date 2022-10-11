@@ -261,17 +261,19 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	if bck.IsHTTP() {
 		if args.origURLBck != "" {
 			remoteHdr.Set(apc.HdrOrigURLBck, args.origURLBck)
-		} else if origURL := args.getOrigURL(); origURL != "" {
+		} else {
+			origURL := args.getOrigURL()
+			if origURL == "" {
+				err = fmt.Errorf("failed to initialize bucket %q: missing HTTP URL", args.bck)
+				errCode = http.StatusBadRequest
+				return
+			}
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				errCode = http.StatusBadRequest
 				return bck, errCode, err
 			}
 			remoteHdr.Set(apc.HdrOrigURLBck, hbo.OrigURLBck)
-		} else {
-			err = fmt.Errorf("failed to initialize bucket %q: missing HTTP URL", args.bck)
-			errCode = http.StatusBadRequest
-			return
 		}
 		debug.Assert(remoteHdr.Get(apc.HdrOrigURLBck) != "")
 	}

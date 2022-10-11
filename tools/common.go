@@ -70,11 +70,10 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 
 func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 	if bck.IsQuery() {
-		if tb != nil {
-			tassert.CheckFatal(tb, fmt.Errorf("expecting a named bucket, got %q", bck))
-		} else {
+		if tb == nil {
 			return false, fmt.Errorf("expecting a named bucket, got %q", bck)
 		}
+		tassert.CheckFatal(tb, fmt.Errorf("expecting a named bucket, got %q", bck))
 	}
 	baseParams := api.BaseParams{Client: gctx.Client, URL: proxyURL, Token: LoggedUserToken}
 	_, err := api.HeadBucket(baseParams, bck, true /*dontAddRemote*/)
@@ -85,11 +84,10 @@ func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 	errHTTP, ok := err.(*cmn.ErrHTTP)
 	if !ok {
 		err = fmt.Errorf("expected an error of the type *cmn.ErrHTTP, got %v(%T)", err, err)
-		if tb != nil {
-			tassert.CheckFatal(tb, err)
-		} else {
+		if tb == nil {
 			return false, err
 		}
+		tassert.CheckFatal(tb, err)
 	}
 	return errHTTP.Status == http.StatusNotFound, err
 }

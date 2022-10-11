@@ -67,13 +67,12 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if dlBodyBase.ProgressInterval != "" {
-			if dur, err := time.ParseDuration(dlBodyBase.ProgressInterval); err == nil {
-				progressInterval = dur
-			} else {
-				t.writeErrf(w, r, "%s: invalid progress interval %q, err: %v",
-					t.si, dlBodyBase.ProgressInterval, err)
+			dur, err := time.ParseDuration(dlBodyBase.ProgressInterval)
+			if err != nil {
+				t.writeErrf(w, r, "%s: invalid progress interval %q: %v", t, dlBodyBase.ProgressInterval, err)
 				return
 			}
+			progressInterval = dur
 		}
 
 		bck := cluster.CloneBck(&dlBodyBase.Bck)

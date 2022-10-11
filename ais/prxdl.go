@@ -237,11 +237,8 @@ func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if dlBase.ProgressInterval != "" {
-		if dur, err := time.ParseDuration(dlBase.ProgressInterval); err == nil {
-			progressInterval = dur
-		} else {
-			p.writeErrf(w, r, "%s: invalid progress interval %q, err: %v",
-				p.si, dlBase.ProgressInterval, err)
+		if progressInterval, err = time.ParseDuration(dlBase.ProgressInterval); err != nil {
+			p.writeErrf(w, r, "%s: invalid progress interval %q: %v", p, dlBase.ProgressInterval, err)
 			return
 		}
 	}
@@ -250,7 +247,7 @@ func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 
 	if errCode, err := p.broadcastStartDownloadRequest(r, id, body); err != nil {
-		p.writeErrStatusf(w, r, errCode, "Error starting download: %v.", err.Error())
+		p.writeErrStatusf(w, r, errCode, "Error starting download: %v", err)
 		return
 	}
 	nl := downloader.NewDownloadNL(id, string(dlb.Type), &smap.Smap, progressInterval)

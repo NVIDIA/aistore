@@ -1716,23 +1716,22 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	// form (in accordance with the associated ClusterConfig.JspOpts()).
 	globalFpath := filepath.Join(config.ConfigDir, fname.GlobalConfig)
 	if _, err := jsp.LoadMeta(globalFpath, &config.ClusterConfig); err != nil {
-		const txt = "load global config"
-		if os.IsNotExist(err) {
-			const itxt = "load initial global config"
-			// initial (plain-text)
-			glog.Warningf("%s %q", itxt, globalConfPath)
-			_, err = jsp.Load(globalConfPath, &config.ClusterConfig, jsp.Plain())
-			if err != nil {
-				return fmt.Errorf("failed to %s %q: %v", itxt, globalConfPath, err)
-			}
-			debug.Assert(config.Version == 0)
-			globalFpath = globalConfPath
-		} else {
+		if !os.IsNotExist(err) {
 			if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
 				glog.Errorf(FmtErrBackwardCompat, err)
 			}
-			return fmt.Errorf("failed to %s %q: %v", txt, globalConfPath, err)
+			return fmt.Errorf("failed to load global config %q: %v", globalConfPath, err)
 		}
+
+		// initial plain-text
+		const itxt = "load initial global config"
+		glog.Warningf("%s %q", itxt, globalConfPath)
+		_, err = jsp.Load(globalConfPath, &config.ClusterConfig, jsp.Plain())
+		if err != nil {
+			return fmt.Errorf("failed to %s %q: %v", itxt, globalConfPath, err)
+		}
+		debug.Assert(config.Version == 0)
+		globalFpath = globalConfPath
 	} else {
 		debug.Assert(config.Version > 0 && config.UUID != "")
 	}

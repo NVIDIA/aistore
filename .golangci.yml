@@ -71,21 +71,21 @@ linters-settings:
     ignore-generated-header: true
     severity: warning
     rules:
-      # name: early-return
       # name: import-shadowing
       # name: unhandled-error
       # name: line-length-limit
-      - name: if-return
       - name: blank-imports
       - name: context-as-argument
       - name: context-keys-type
       - name: dot-imports
+      - name: early-return
       - name: error-naming
       - name: error-strings
       - name: exported
+      - name: if-return
+      - name: imports-blacklist
       - name: increment-decrement
       - name: indent-error-flow
-      - name: imports-blacklist
       - name: modifies-value-receiver
       - name: package-comments
       - name: range

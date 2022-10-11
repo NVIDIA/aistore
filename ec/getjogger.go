@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -558,13 +558,14 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 			}
 			if sgl, ok := ctx.slices[i].writer.(*memsys.SGL); ok {
 				srcReaders[i] = memsys.NewReader(sgl)
-			} else if ctx.slices[i].workFQN != "" {
+			} else {
+				if ctx.slices[i].workFQN == "" {
+					return restored, fmt.Errorf("invalid writer: %T", ctx.slices[i].writer)
+				}
 				srcReaders[i], err = cos.NewFileHandle(ctx.slices[i].workFQN)
 				if err != nil {
 					return restored, err
 				}
-			} else {
-				return restored, fmt.Errorf("invalid writer: %T", ctx.slices[i].writer)
 			}
 			continue
 		}
@@ -578,10 +579,12 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 			if err != nil {
 				return restored, err
 			}
-		} else if sgl, ok := restored[i].obj.(*memsys.SGL); ok {
-			srcReaders[i] = memsys.NewReader(sgl)
 		} else {
-			return restored, fmt.Errorf("empty slice %s[%d]", ctx.lom, i)
+			sgl, ok := restored[i].obj.(*memsys.SGL)
+			if !ok {
+				return restored, fmt.Errorf("empty slice %s[%d]", ctx.lom, i)
+			}
+			srcReaders[i] = memsys.NewReader(sgl)
 		}
 	}
 

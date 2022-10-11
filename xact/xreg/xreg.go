@@ -597,25 +597,24 @@ func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string, oth
 //     descriptors in xact.Table
 func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, otherBck ...*cluster.Bck) error {
 	var (
-		nd          *xact.Descriptor // the one that wants to run
-		adminReqAct bool             // admin-requested action that'd generate protential conflict
+		nd    *xact.Descriptor // the one that wants to run
+		admin bool             // admin-requested action that'd generate protential conflict
 	)
-	debug.Assert(tsi.Type() == apc.Target) // TODO: extend to proxies
-	switch {
-	case action == apc.ActStartMaintenance, action == apc.ActShutdownNode:
+	switch action {
+	case apc.ActStartMaintenance, apc.ActShutdownNode:
 		nd = &xact.Descriptor{}
-		adminReqAct = true
+		admin = true
 	default:
-		if d, ok := xact.Table[action]; ok {
-			nd = &d
-		} else {
+		d, ok := xact.Table[action]
+		if !ok {
 			return nil
 		}
+		nd = &d
 	}
 	var locked bool
 	for kind, d := range xact.Table {
 		// note that rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
-		conflict := (d.MassiveBck && adminReqAct) ||
+		conflict := (d.MassiveBck && admin) ||
 			(d.Rebalance && nd.MassiveBck) || (d.Resilver && nd.MassiveBck)
 		if !conflict {
 			continue

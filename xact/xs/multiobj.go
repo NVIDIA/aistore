@@ -298,11 +298,10 @@ func (*prfFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 func (p *prfFactory) Start() error {
 	b := p.Bck
 	if err := b.Init(p.Args.T.Bowner()); err != nil {
-		if cmn.IsErrRemoteBckNotFound(err) {
-			glog.Warning(err) // may show up later via ais/prxtrybck.go logic
-		} else {
+		if !cmn.IsErrRemoteBckNotFound(err) {
 			return err
 		}
+		glog.Warning(err) // may show up later via ais/prxtrybck.go logic
 	} else if b.IsAIS() {
 		glog.Errorf("bucket %q: can only prefetch remote buckets", b)
 		return fmt.Errorf("bucket %q: can only prefetch remote buckets", b)
@@ -344,18 +343,19 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 		if !cmn.IsObjNotExist(err) {
 			return
 		}
-	} else if lom.VersionConf().ValidateWarmGet {
-		if equal, _, err := r.t.CompareObjects(r.ctx, lom); equal || err != nil {
-			return
-		}
-	} else {
+	} else if !lom.VersionConf().ValidateWarmGet {
 		return // simply exists
 	}
-	// NOTE: not setting atime as prefetching does not mean the object is being accessed.
-	//       On the other hand, zero atime makes the object's lifespan in the cache too short - the first
-	//       housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
-	//       (see cluster/lom_cache_hk.go).
-	// NOTE: minimal locking, optimistic concurrency
+
+	if equal, _, err := r.t.CompareObjects(r.ctx, lom); equal || err != nil {
+		return
+	}
+
+	// NOTE 1: minimal locking, optimistic concurrency
+	// NOTE 2: not setting atime as prefetching does not mean the object is being accessed.
+	// On the other hand, zero atime makes the object's lifespan in the cache too short - the first
+	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
+	// (see cluster/lom_cache_hk.go).
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 	if _, err := r.t.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock); err != nil {
 		if err != cmn.ErrSkip {

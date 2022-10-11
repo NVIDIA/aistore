@@ -262,13 +262,12 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	err = lom.Load(true /*cache it*/, false /*locked*/)
 	if err != nil {
 		exists = false
-		if cmn.IsObjNotExist(err) {
-			if bck.IsAIS() {
-				s3.WriteErr(w, r, cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName()), 0)
-				return
-			}
-		} else {
+		if !cmn.IsObjNotExist(err) {
 			s3.WriteErr(w, r, err, 0)
+			return
+		}
+		if bck.IsAIS() {
+			s3.WriteErr(w, r, cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName()), 0)
 			return
 		}
 	}

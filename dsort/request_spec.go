@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  *
  */
 
@@ -286,10 +286,11 @@ func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) 
 	template := strings.TrimSpace(inputFormat)
 	if pit.Template, err = cos.ParseBashTemplate(template); err == nil {
 		pit.Type = templBash
-	} else if pit.Template, err = cos.ParseAtTemplate(template); err == nil {
-		pit.Type = templAt
 	} else {
-		return nil, errInvalidInputTemplate
+		if pit.Template, err = cos.ParseAtTemplate(template); err != nil {
+			return nil, errInvalidInputTemplate
+		}
+		pit.Type = templAt
 	}
 	return
 }
