@@ -210,8 +210,12 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 		if !ok {
 			if time.Since(started) > maxSleep {
 				pid := pidFromURL(smap, proxyURL)
-				tlog.Logf("Polling %s(%s) for (t=%d, p=%d, Smap > v%d)\n",
-					cluster.Pname(pid), smap.StringEx(), expTgt, expPrx, origVer)
+				if expPrx == 0 && expTgt == 0 {
+					tlog.Logf("Polling %s(%s) for (Smap > v%d)\n", cluster.Pname(pid), smap.StringEx(), origVer)
+				} else {
+					tlog.Logf("Polling %s(%s) for (t=%d, p=%d, Smap > v%d)\n",
+						cluster.Pname(pid), smap.StringEx(), expTgt, expPrx, origVer)
+				}
 			}
 		}
 		if smap.Version != lastVer && lastVer != 0 {
@@ -228,20 +232,12 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			idsToIgnore.Add(ignoreIDs...)
 			err = waitSmapSync(bp, gctx, deadline, syncedSmap, origVer, idsToIgnore)
 			if err != nil {
-				tlog.Logf("Failed waiting for cluster state: %v (%s, %s, %v, %v)\n",
+				tlog.Logf("Failed waiting for cluster state condition: %v (%s, %s, %v, %v)\n",
 					err, smap, syncedSmap, origVer, idsToIgnore)
 				return nil, err
 			}
-
-			if syncedSmap.Version != smap.Version {
-				if !expTgt.satisfied(smap.CountActiveTargets()) || !expPrx.satisfied(smap.CountActiveProxies()) {
-					return nil, fmt.Errorf("%s changed after sync (to %s) and does not satisfy the state",
-						smap, syncedSmap)
-				}
-				tlog.Logf("%s changed after sync (to %s) but satisfies the state\n", smap, syncedSmap)
-			}
-			if currSmap == nil || currSmap.Version < smap.Version {
-				currSmap = smap
+			if !expTgt.satisfied(smap.CountActiveTargets()) || !expPrx.satisfied(smap.CountActiveProxies()) {
+				return nil, fmt.Errorf("%s updated and does not satisfy the state condition anymore", smap.StringEx())
 			}
 			return smap, nil
 		}
@@ -765,17 +761,13 @@ func waitSmapSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.
 		if err == nil && newSmap.Version > ver {
 			ignore.Add(sid)
 			if newSmap.Version > smap.Version {
-				*smap = *newSmap
+				ctx.Log("Updating %s to %s from %s\n", smap, newSmap.StringEx(), sname)
+				cos.CopyStruct(smap, newSmap)
 			}
 			if newSmap.Version > ver+1 {
-				// update Smap to a newer version
-				if ver < 0 {
-					ctx.Log("%s from %s\n", newSmap.StringEx(), sname)
-				} else {
-					ctx.Log("Updating Smap v%d to %s from %s\n", ver, newSmap.StringEx(), sname)
-				}
-				*smap = *newSmap
-				ver = smap.Version - 1
+				// reset
+				ctx.Log("Updating Smap state cond v%d to v%d from %s\n", ver, newSmap.Version-1, sname)
+				ver = newSmap.Version - 1
 				ignore = orig.Clone()
 				ignore.Add(sid)
 			}
@@ -793,6 +785,9 @@ func waitSmapSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.
 			}
 		}
 		prevSid = sid
+	}
+	if currSmap == nil || currSmap.Version < smap.Version {
+		currSmap = smap
 	}
 	return nil
 }

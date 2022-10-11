@@ -405,7 +405,7 @@ func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object
 // WaitForDSortToFinish waits until all dSorts jobs finished without failure or
 // all jobs abort.
 func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err error) {
-	tlog.Logln("waiting for distributed sort to finish...")
+	tlog.Logln("Waiting for distributed sort to finish...")
 
 	baseParams := BaseAPIParams(proxyURL)
 	deadline := time.Now().Add(dsortFinishTimeout)
@@ -689,12 +689,12 @@ func waitForStartup(baseParams api.BaseParams, ts ...testing.TB) (*cluster.Smap,
 		smap, err := api.GetClusterMap(baseParams)
 		if err != nil {
 			if api.HTTPStatus(err) == http.StatusServiceUnavailable {
-				tlog.Logln("waiting for the cluster to start up...")
+				tlog.Logln("Waiting for the cluster to start up...")
 				time.Sleep(waitClusterStartup)
 				continue
 			}
 
-			tlog.Logf("unable to get usable cluster map, err: %v\n", err)
+			tlog.Logf("Unable to get usable cluster map, err: %v\n", err)
 			if len(ts) > 0 {
 				tassert.CheckFatal(ts[0], err)
 			}
