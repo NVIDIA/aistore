@@ -178,7 +178,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 		expTgt  = nodesCnt(tcnt)
 		bp      = BaseAPIParams(proxyURL)
 		lastVer int64
-		loopCnt int
+		iter    int
 	)
 	if expPrx == 0 && expTgt == 0 {
 		tlog.Logf("Waiting for %q (Smap > v%d)\n", reason, origVer)
@@ -246,15 +246,15 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			return smap, nil
 		}
 		lastVer = smap.Version
-		loopCnt++
+		iter++
 	next:
 		if time.Now().After(deadline) {
 			break
 		}
-		time.Sleep(cos.MinDuration(time.Second*time.Duration(loopCnt), maxSleep))
+		time.Sleep(cos.MinDuration(time.Second*time.Duration(iter), maxSleep))
 	}
 
-	return nil, fmt.Errorf("timed out waiting for the cluster to stabilize")
+	return nil, errors.New("timed out waiting for the cluster to stabilize")
 }
 
 func pidFromURL(smap *cluster.Smap, proxyURL string) string {

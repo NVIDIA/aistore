@@ -143,9 +143,13 @@ func GetPrimaryURL() string {
 	if currSmap == nil {
 		time.Sleep(time.Second)
 		primary, err = GetPrimaryProxy(proxyURLReadOnly)
-	} else {
-		proxyURL := currSmap.Primary.URL(cmn.NetPublic)
+	} else if proxyURL := currSmap.Primary.URL(cmn.NetPublic); proxyURL != proxyURLReadOnly {
 		primary, err = GetPrimaryProxy(proxyURL)
+	} else {
+		var psi *cluster.Snode
+		if psi, err = currSmap.GetRandProxy(true /*exclude primary*/); err == nil {
+			primary, err = GetPrimaryProxy(psi.URL(cmn.NetPublic))
+		}
 	}
 	if err != nil {
 		fmt.Printf("Warning: GetPrimaryProxy [%v] - returning global %q\n", err, proxyURLReadOnly)
@@ -160,6 +164,9 @@ func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
 		return nil, err
+	}
+	if currSmap == nil || currSmap.Version < smap.Version {
+		currSmap = smap
 	}
 	return smap.Primary, err
 }
