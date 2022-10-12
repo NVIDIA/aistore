@@ -156,11 +156,11 @@ func (r *ObjListXact) init() error {
 		return nil
 	}
 	// Start fs.WalkBck, so that by the time we read the next page `r.pageCh` is already populated.
-	r._initTraverse()
+	r.initWalk()
 	return nil
 }
 
-func (r *ObjListXact) _initTraverse() {
+func (r *ObjListXact) initWalk() {
 	if r.walkStopCh != nil {
 		r.walkStopCh.Close()
 		r.walkWg.Wait()
@@ -171,7 +171,7 @@ func (r *ObjListXact) _initTraverse() {
 	r.walkStopCh = cos.NewStopCh()
 	r.walkWg.Add(1)
 
-	go r.traverse(r.msg.Clone())
+	go r.walk(r.msg.Clone())
 }
 
 func (r *ObjListXact) Run(*sync.WaitGroup) {
@@ -216,11 +216,36 @@ func (r *ObjListXact) doPage() *Resp {
 	r.IncPending()
 	defer r.DecPending()
 
-	if err := r.genNextPage(r.msg.ContinuationToken, r.msg.PageSize); err != nil {
-		return &Resp{Status: http.StatusInternalServerError, Err: err}
+	if r.listRemote {
+		if r.msg.ContinuationToken == "" || r.msg.ContinuationToken != r.token {
+			// For remote buckets, we can't hope to extract the next-to-list object from the continuation token
+			// - hence, keeping and returning the entire last page.
+			r.token = r.msg.ContinuationToken
+			if err := r.nextPageR(); err != nil {
+				return &Resp{Status: http.StatusInternalServerError, Err: err}
+			}
+		}
+		page := &cmn.ListObjects{UUID: r.msg.UUID, Entries: r.lastPage, ContinuationToken: r.nextToken}
+		return &Resp{Lst: page, Status: http.StatusOK}
 	}
-	lst := r.getPage(r.msg.ContinuationToken, r.msg.PageSize)
-	return &Resp{Lst: lst, Status: http.StatusOK}
+
+	if r.msg.ContinuationToken == "" || r.msg.ContinuationToken != r.token {
+		r.nextPageA()
+	}
+	var (
+		cnt  = r.msg.PageSize
+		idx  = r.findToken(r.msg.ContinuationToken)
+		lst  = r.lastPage[idx:]
+		page *cmn.ListObjects
+	)
+	debug.Assert(uint(len(lst)) >= cnt || r.walkDone)
+	if uint(len(lst)) >= cnt {
+		entries := lst[:cnt]
+		page = &cmn.ListObjects{UUID: r.msg.UUID, Entries: entries, ContinuationToken: entries[cnt-1].Name}
+	} else {
+		page = &cmn.ListObjects{UUID: r.msg.UUID, Entries: lst}
+	}
+	return &Resp{Lst: page, Status: http.StatusOK}
 }
 
 func (r *ObjListXact) walkCallback(*cluster.LOM) { r.ObjsAdd(1, 0) }
@@ -233,27 +258,6 @@ func (r *ObjListXact) walkCtx() context.Context {
 	)
 }
 
-func (r *ObjListXact) nextPageA(cnt uint) error {
-	if r.isPageCached(r.token, cnt) {
-		return nil
-	}
-	for read := uint(0); read < cnt; {
-		obj, ok := <-r.pageCh
-		if !ok {
-			r.walkDone = true
-			break
-		}
-		// Skip all objects until the requested continuation token.
-		// TODO -- FIXME: revisit
-		if cmn.TokenGreaterEQ(r.token, obj.Name) {
-			continue
-		}
-		read++
-		r.lastPage = append(r.lastPage, obj)
-	}
-	return nil
-}
-
 // Returns the index of the first object in the page that follows the continuation `token`
 func (r *ObjListXact) findToken(token string) uint {
 	if r.listRemote && r.token == token {
@@ -264,7 +268,7 @@ func (r *ObjListXact) findToken(token string) uint {
 	}))
 }
 
-func (r *ObjListXact) isPageCached(token string, cnt uint) bool {
+func (r *ObjListXact) havePage(token string, cnt uint) bool {
 	if r.walkDone {
 		return true
 	}
@@ -272,7 +276,7 @@ func (r *ObjListXact) isPageCached(token string, cnt uint) bool {
 	return idx+cnt < uint(len(r.lastPage))
 }
 
-func (r *ObjListXact) nextPageRemote() error {
+func (r *ObjListXact) nextPageR() error {
 	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.bck, r.msg)
 	lst, err := walk.NextRemoteObjPage()
 	if err != nil {
@@ -284,56 +288,44 @@ func (r *ObjListXact) nextPageRemote() error {
 	}
 	r.lastPage = lst.Entries
 	r.nextToken = lst.ContinuationToken
-	r.lastPage = append(r.lastPage, lst.Entries...)
 	return nil
 }
 
-func (r *ObjListXact) getPage(token string, cnt uint) *cmn.ListObjects {
-	debug.Assert(cos.IsValidUUID(r.msg.UUID))
-	if r.listRemote {
-		return &cmn.ListObjects{UUID: r.msg.UUID, Entries: r.lastPage, ContinuationToken: r.nextToken}
-	}
-	var (
-		idx  = r.findToken(token)
-		list = r.lastPage[idx:]
-	)
-	debug.Assert(uint(len(list)) >= cnt || r.walkDone)
-	if uint(len(list)) >= cnt {
-		entries := list[:cnt]
-		return &cmn.ListObjects{UUID: r.msg.UUID, Entries: entries, ContinuationToken: entries[cnt-1].Name}
-	}
-	return &cmn.ListObjects{Entries: list, UUID: r.msg.UUID}
-}
-
-func (r *ObjListXact) genNextPage(token string, cnt uint) error {
-	if token != "" && token == r.token {
-		return nil
-	}
-
-	// For remote buckets, it is not possible to extract the object name from the continuation token.
-	// Hence, keeping the entire last page.
-	if r.listRemote {
-		r.token = token
-		return r.nextPageRemote()
-	}
-
-	if r.token > token {
-		r._initTraverse() // NOTE: restart traversing as we cannot go back in time :(
+func (r *ObjListXact) nextPageA() {
+	if r.token > r.msg.ContinuationToken {
+		r.initWalk() // NOTE: restart bucket traversing as we cannot go back :(
 		r.lastPage = r.lastPage[:0]
 	} else {
 		if r.walkDone {
-			return nil
+			return
 		}
-		r.discardObsolete(token)
+		r.shiftLastPage(r.msg.ContinuationToken)
 	}
-	r.token = token
-	return r.nextPageA(cnt)
+	r.token = r.msg.ContinuationToken
+
+	if r.havePage(r.token, r.msg.PageSize) {
+		return
+	}
+	for cnt := uint(0); cnt < r.msg.PageSize; {
+		obj, ok := <-r.pageCh
+		if !ok {
+			r.walkDone = true
+			break
+		}
+		// Skip all objects until the requested continuation token.
+		// TODO -- FIXME: revisit
+		if cmn.TokenGreaterEQ(r.token, obj.Name) {
+			continue
+		}
+		cnt++
+		r.lastPage = append(r.lastPage, obj)
+	}
 }
 
-// Removes from local cache the objects that have been already sent.
-// Used only for AIS buckets and cached == true requests (in all other cases
-// the continuation token, in general, does not contain the object's name)
-func (r *ObjListXact) discardObsolete(token string) {
+// Removes objects that have been already sent. Is used only for AIS buckets
+// and/or (cached == true) requests - in all other cases continuation token,
+// in general, does not contain object name.
+func (r *ObjListXact) shiftLastPage(token string) {
 	if token == "" || len(r.lastPage) == 0 {
 		return
 	}
@@ -353,7 +345,7 @@ func (r *ObjListXact) discardObsolete(token string) {
 	r.lastPage = r.lastPage[:l-j]
 }
 
-func (r *ObjListXact) traverse(msg *apc.ListObjsMsg) {
+func (r *ObjListXact) walk(msg *apc.ListObjsMsg) {
 	wi := objwalk.NewWalkInfo(r.walkCtx(), r.t, msg)
 	defer r.walkWg.Done()
 	cb := func(fqn string, de fs.DirEntry) error {
