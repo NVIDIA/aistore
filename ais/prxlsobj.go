@@ -261,9 +261,8 @@ func (b *lsobjBuffers) last(id, token string) string {
 	if len(buffer.currentBuff) == 0 {
 		return token
 	}
-
 	last := buffer.currentBuff[len(buffer.currentBuff)-1].Name
-	if cmn.TokenIncludesObject(token, last) {
+	if cmn.TokenGreaterEQ(token, last) {
 		return token
 	}
 	return last

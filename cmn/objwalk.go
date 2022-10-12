@@ -141,11 +141,9 @@ func MergeObjLists(lists []*ListObjects, maxSize uint) *ListObjects {
 	return resList
 }
 
-// Returns true if the (continuation) token includes the object's name
-// (in other words, the object is already listed and must be skipped)
-func TokenIncludesObject(token, objName string) bool {
-	return strings.Compare(token, objName) >= 0
-}
+// Returns true if the continuation token >= object's name (in other words, the object is
+// already listed and must be skipped). Note that string `>=` is lexicographic.
+func TokenGreaterEQ(token, objName string) bool { return token >= objName }
 
 // Every directory has to either:
 // - be contained in prefix (for levels lower than prefix: prefix="abcd/def", directory="abcd")

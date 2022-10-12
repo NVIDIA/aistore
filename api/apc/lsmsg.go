@@ -97,7 +97,7 @@ const (
 	GetPropsCopies   = "copies"
 	GetPropsEC       = "ec"
 	GetPropsCustom   = "custom"
-	GetPropsLocation = "location"
+	GetPropsLocation = "location" // advanced usage
 )
 
 const PropsLocationSepa = ":"
@@ -112,7 +112,7 @@ var (
 
 type ListObjsMsg struct {
 	UUID              string `json:"uuid"`               // ID to identify a single multi-page request
-	Props             string `json:"props"`              // e.g. "checksum,size" (see Get* enum above)
+	Props             string `json:"props"`              // object props to return, e.g. "checksum,size,custom" (Get* enum above)
 	TimeFormat        string `json:"time_format"`        // RFC822 is the default
 	Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
 	StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)

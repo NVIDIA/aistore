@@ -237,13 +237,13 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 	}
 
 	debug.Assert(resp.Status == http.StatusOK)
-	debug.Assert(resp.BckList.UUID != "")
+	debug.Assert(resp.Lst.UUID != "")
 
 	if fs.MarkerExists(fname.RebalanceMarker) || reb.IsActiveGFN() {
-		resp.BckList.Flags |= cmn.ObjListFlagRebalance
+		resp.Lst.Flags |= cmn.ObjListFlagRebalance
 	}
 
-	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
+	return t.writeMsgPack(w, r, resp.Lst, "list_objects")
 }
 
 func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck, msg *cmn.BsummCtrlMsg) {

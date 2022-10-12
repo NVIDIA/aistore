@@ -70,37 +70,26 @@ func (w *Walk) NextObjPage() (*cmn.ListObjects, error) {
 	return lst, nil
 }
 
-// NextRemoteObjPage reads a page of objects in a cloud bucket. If cached object requested,
-// the function returns only local data without talking to the backend provider.
-// After reading cloud object list, the function fills it with information
-// that is available only locally(copies, targetURL etc).
+// Gets next page from the remote bucket's "list-objects" result set.
 func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
-	debug.Assert(!w.msg.IsFlagSet(apc.LsObjCached))
-
-	// TODO -- FIXME: needed?
-	msg := &apc.ListObjsMsg{}
-	cos.CopyStruct(msg, w.msg)
-
-	lst, _, err := w.t.Backend(w.bck).ListObjects(w.bck, msg)
-	if err != nil {
-		return nil, err
-	}
 	var (
-		localID         = w.t.SID()
 		smap            = w.t.Sowner().Get()
 		postCallback, _ = w.ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
 	)
-	for _, e := range lst.Entries {
-		si, err := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)
+	debug.Assert(!w.msg.IsFlagSet(apc.LsObjCached))
+	lst, _, err := w.t.Backend(w.bck).ListObjects(w.bck, w.msg)
+	if err != nil {
+		return nil, err
+	}
+	for _, obj := range lst.Entries {
+		si, err := cluster.HrwTarget(w.bck.MakeUname(obj.Name), smap)
 		if err != nil {
 			return nil, err
 		}
-
-		// TODO -- FIXME: check
-		if si.ID() != localID {
+		if si.ID() != w.t.SID() {
 			continue
 		}
-		lom := cluster.AllocLOM(e.Name)
+		lom := cluster.AllocLOM(obj.Name)
 		if err := lom.InitBck(w.bck.Bucket()); err != nil {
 			cluster.FreeLOM(lom)
 			if cmn.IsErrBucketNought(err) {
@@ -113,8 +102,8 @@ func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
 			continue
 		}
 
-		setWanted(e, lom, w.msg.TimeFormat, w.wanted)
-		e.SetPresent()
+		setWanted(obj, lom, w.msg.TimeFormat, w.wanted)
+		obj.SetPresent()
 
 		if postCallback != nil {
 			postCallback(lom)

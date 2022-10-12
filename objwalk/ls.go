@@ -91,7 +91,7 @@ func (wi *WalkInfo) match(lom *cluster.LOM) bool {
 	if !cmn.ObjNameContainsPrefix(lom.ObjName, wi.msg.Prefix) {
 		return false
 	}
-	if wi.msg.ContinuationToken != "" && cmn.TokenIncludesObject(wi.msg.ContinuationToken, lom.ObjName) {
+	if wi.msg.ContinuationToken != "" && cmn.TokenGreaterEQ(wi.msg.ContinuationToken, lom.ObjName) {
 		return false
 	}
 	return true
