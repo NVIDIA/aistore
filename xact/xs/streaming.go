@@ -39,13 +39,13 @@ type (
 	streamingF struct {
 		xreg.RenewBase
 		xctn cluster.Xact
-		kind string
 		dm   *bundle.DataMover
+		kind string
 	}
 	streamingX struct {
+		p   *streamingF
+		err cos.ErrValue
 		xact.DemandBase
-		p     *streamingF
-		err   cos.ErrValue
 		wiCnt atomic.Int32
 	}
 )

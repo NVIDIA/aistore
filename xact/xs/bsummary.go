@@ -37,11 +37,11 @@ type (
 		msg  *cmn.BsummCtrlMsg
 	}
 	bsummXact struct {
+		t         cluster.Target
+		msg       *cmn.BsummCtrlMsg
+		res       atomic.Pointer
+		summaries cmn.AllBsummResults
 		xact.Base
-		t              cluster.Target
-		msg            *cmn.BsummCtrlMsg
-		res            atomic.Pointer
-		summaries      cmn.AllBsummResults
 		totalDisksSize uint64
 	}
 )

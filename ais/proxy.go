@@ -2612,8 +2612,7 @@ func (p *proxy) _becomePre(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPresent(p.si) {
 		cos.Assertf(false, "%s must always be present in the %s", p.si, clone.pp())
 	}
-
-	if ctx.sid != "" && clone.containsID(ctx.sid) {
+	if ctx.sid != "" && clone.GetNode(ctx.sid) != nil {
 		// decision is made: going ahead to remove
 		glog.Infof("%s: removing failed primary %s", p, ctx.sid)
 		clone.delProxy(ctx.sid)
@@ -2804,7 +2803,7 @@ func (p *proxy) smapOnUpdate(newSmap, oldSmap *smapX) {
 	// reverse proxy structure.
 	p.rproxy.nodes.Range(func(key, _ any) bool {
 		nodeID := key.(string)
-		if oldSmap.containsID(nodeID) && !newSmap.containsID(nodeID) {
+		if oldSmap.GetNode(nodeID) != nil && newSmap.GetNode(nodeID) == nil {
 			p.rproxy.nodes.Delete(nodeID)
 		}
 		return true

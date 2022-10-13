@@ -132,7 +132,9 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 	}
 
 	jogger, ok := r.putJoggers[lom.MpathInfo().Path]
-	cos.AssertMsg(ok, "Invalid mountpath given in EC request")
+	if !ok {
+		cos.AssertMsg(false, "invalid "+lom.MpathInfo().String())
+	}
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)
 	}

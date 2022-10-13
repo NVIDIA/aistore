@@ -443,7 +443,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)",
 						ds.m.ctx.node.ID(), daemonID)
 				default:
-					cos.AssertMsg(false, "pulled but not stopped or timed?!")
+					cos.AssertMsg(false, "pulled but not stopped or timed?")
 				}
 				return 0, err
 			}

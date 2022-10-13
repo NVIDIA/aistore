@@ -128,7 +128,9 @@ func (d *Snode) String() string { return d.Name() }
 
 func (d *Snode) SetName() {
 	name := d.StringEx()
-	cos.AssertMsg(d.name == "" || d.name == name, d.name+" vs. "+name)
+	if d.name != "" && d.name != name {
+		cos.AssertMsg(false, d.name+" vs. "+name)
+	}
 	d.name = name
 }
 

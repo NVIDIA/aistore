@@ -28,17 +28,17 @@ const (
 
 type (
 	bckRename struct {
-		xact.Base
 		t       cluster.Target
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 		rebID   string
+		xact.Base
 	}
 	bmvFactory struct {
 		xreg.RenewBase
 		xctn  *bckRename
-		phase string
 		args  *xreg.BckRenameArgs
+		phase string
 	}
 	TestBmvFactory = bmvFactory
 )

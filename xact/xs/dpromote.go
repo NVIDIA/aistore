@@ -29,12 +29,11 @@ type (
 		args *cluster.PromoteArgs
 	}
 	XactDirPromote struct {
-		xact.BckJog
-		dir  string
 		args *cluster.PromoteArgs
 		smap *cluster.Smap
-		// set separately in the commit phase prior to Run
-		confirmedFshare bool
+		dir  string
+		xact.BckJog
+		confirmedFshare bool // set separately in the commit phase prior to Run
 	}
 )
 

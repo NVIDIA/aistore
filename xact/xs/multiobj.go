@@ -60,12 +60,12 @@ type (
 	evdFactory struct {
 		xreg.RenewBase
 		xctn *evictDelete
-		kind string
 		msg  *cmn.SelectObjsMsg
+		kind string
 	}
 	evictDelete struct {
-		xact.Base
 		lriterator
+		xact.Base
 	}
 	prfFactory struct {
 		xreg.RenewBase
@@ -73,8 +73,8 @@ type (
 		msg  *cmn.SelectObjsMsg
 	}
 	prefetch struct {
-		xact.Base
 		lriterator
+		xact.Base
 	}
 
 	TestXFactory struct{ prfFactory } // tests only

@@ -189,9 +189,9 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		return size, errors.WithStack(err)
 	}
 
-	cos.Assertf(contentPath != "", "shardName: %s; recordName: %s", args.shardName, args.recordName)
-	cos.Assert(storeType != "")
-
+	if contentPath == "" || storeType == "" {
+		cos.Assertf(false, "shardName: %q, recordName: %q, storeType: %q", args.shardName, args.recordName, storeType)
+	}
 	rm.Records.Insert(&Record{
 		Key:      key,
 		Name:     recordUniqueName,

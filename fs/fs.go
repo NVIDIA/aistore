@@ -141,9 +141,7 @@ func (mi *MountpathInfo) IsAnySet(flags uint64) bool {
 	return cos.IsAnySetfAtomic(&mi.flags, flags)
 }
 
-func (mi *MountpathInfo) String() string { return mi._string() }
-
-func (mi *MountpathInfo) _string() string {
+func (mi *MountpathInfo) String() string {
 	if mi.info == "" {
 		switch len(mi.Disks) {
 		case 0:
@@ -488,7 +486,7 @@ func (mi *MountpathInfo) _addEnabled(tid string, availablePaths MPI, config *cmn
 		}
 	}
 	mi._setDisks(disks)
-	_ = mi._string()
+	_ = mi.String() // assign mi.info if not yet
 	availablePaths[mi.Path] = mi
 	return nil
 }

@@ -30,13 +30,13 @@ type (
 		args *xreg.TCObjsArgs
 	}
 	XactTCObjs struct {
-		streamingX
-		args    *xreg.TCObjsArgs
-		workCh  chan *cmn.TCObjsMsg
 		pending struct {
 			sync.RWMutex
 			m map[string]*tcowi
 		}
+		args   *xreg.TCObjsArgs
+		workCh chan *cmn.TCObjsMsg
+		streamingX
 	}
 	tcowi struct {
 		r   *XactTCObjs

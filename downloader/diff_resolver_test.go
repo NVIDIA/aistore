@@ -185,7 +185,7 @@ func TestDiffResolver(t *testing.T) {
 					tassert.Errorf(t, result.Dst != nil, "destination has not been set for skip")
 				case downloader.DiffResolverEOF:
 				default:
-					cos.Assertf(false, "%d", result.Action)
+					cos.Assertf(false, "invalid diff-resolver action %d", result.Action)
 				}
 			}
 
