@@ -27,7 +27,7 @@ type (
 		smap      *cluster.Smap
 		postCb    PostCallbackFunc
 		markerDir string
-		msg       apc.ListObjsMsg
+		msg       *apc.ListObjsMsg
 		wanted    cos.BitFlags
 	}
 )
@@ -55,11 +55,13 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) (w
 		smap:      t.Sowner().Get(),
 		postCb:    postCb,
 		markerDir: markerDir,
+		msg:       msg,
 	}
 	wi.wanted = wanted(msg)
-	wi.msg = *msg
 	return
 }
+
+func (wi *WalkInfo) LsMsg() *apc.ListObjsMsg { return wi.msg }
 
 // Checks if the directory should be processed by cache list call
 // Does checks:

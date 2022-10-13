@@ -37,7 +37,7 @@ func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.L
 func (w *Walk) NextObjPage() (*cmn.ListObjects, error) {
 	var (
 		lst = &cmn.ListObjects{}
-		wi  = NewWalkInfo(w.ctx, w.t, w.msg)
+		wi  = NewWalkInfo(w.ctx, w.t, w.msg.Clone())
 	)
 
 	cb := func(fqn string, de fs.DirEntry) error {

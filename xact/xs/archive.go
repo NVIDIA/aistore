@@ -64,23 +64,21 @@ type (
 		shard sglShard
 	}
 	archwi struct { // archival work item; implements lrwi
-		r   *XactCreateArchMultiObj
-		msg *cmn.ArchiveMsg
-		lom *cluster.LOM // of the archive
-		fqn string       // workFQN --/--
-		fh  *os.File     // --/--
-		tsi *cluster.Snode
-		// writing
-		wmu    sync.Mutex
-		writer archWriter
-		cksum  cos.CksumHashSize
-		err    error
-		errCnt atomic.Int32
+		writer    archWriter
+		err       error
+		r         *XactCreateArchMultiObj
+		msg       *cmn.ArchiveMsg
+		tsi       *cluster.Snode
+		lom       *cluster.LOM // of the archive
+		fqn       string       // workFQN --/--
+		fh        *os.File     // --/--
+		cksum     cos.CksumHashSize
+		appendPos int64 // append to existing archive
+		wmu       sync.Mutex
+		errCnt    atomic.Int32
 		// finishing
 		refc       atomic.Int32
 		finalizing atomic.Bool
-		// append to archive
-		appendPos int64 // for calculate stats correctly on append operation
 	}
 	XactCreateArchMultiObj struct {
 		streamingX

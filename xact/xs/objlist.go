@@ -44,28 +44,29 @@ type (
 		msg  *apc.ListObjsMsg
 	}
 	ObjListXact struct {
+		t         cluster.Target
+		bck       *cluster.Bck
+		msg       *apc.ListObjsMsg
+		msgCh     chan *apc.ListObjsMsg // incoming requests
+		respCh    chan *Resp            // responses - next pages
+		stopCh    *cos.StopCh           // to stop xaction
+		token     string                // continuation token -> last responded page
+		nextToken string                // next continuation token -> next pages
+		lastPage  []*cmn.LsObjEntry     // last page contents
+		walk      struct {
+			pageCh chan *cmn.LsObjEntry // channel to accumulate listed object entries
+			stopCh *cos.StopCh          // to abort bucket walk
+			wi     *objwalk.WalkInfo    // walking context
+			wg     sync.WaitGroup       // to wait until the walk finishes
+			done   bool                 // done walking
+		}
 		xact.DemandBase
-		t   cluster.Target
-		bck *cluster.Bck
-		msg *apc.ListObjsMsg
-
-		msgCh  chan *apc.ListObjsMsg // Incoming requests.
-		respCh chan *Resp            // Outgoing responses.
-		stopCh *cos.StopCh           // Informs about stopped xact.
-
-		pageCh     chan *cmn.LsObjEntry // channel to accumulate listed object entries
-		lastPage   []*cmn.LsObjEntry    // last page
-		walkStopCh *cos.StopCh          // to abort file walk
-		token      string               // the continuation token for the last sent page (for re-requests)
-		nextToken  string               // continuation token returned by Cloud to get the next page
-		walkWg     sync.WaitGroup       // to wait until walk finishes
-		walkDone   bool                 // true: done walking or Cloud returned all objects
-		listRemote bool                 // single-target rule
+		listRemote bool // (single-target rule)
 	}
 	Resp struct {
+		Err    error
 		Lst    *cmn.ListObjects
 		Status int
-		Err    error
 	}
 	archEntry struct { // File inside an archive
 		name string
@@ -124,56 +125,6 @@ func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *apc.ListObjsMsg, uuid st
 
 func (r *ObjListXact) String() string { return fmt.Sprintf("%s: %s", r.t, &r.DemandBase) }
 
-// skip on-demand idle-ness check
-func (r *ObjListXact) Abort(err error) (ok bool) {
-	if ok = r.Base.Abort(err); ok {
-		r.Finish(err)
-	}
-	return
-}
-
-func (r *ObjListXact) Do(msg *apc.ListObjsMsg) *Resp {
-	// The guarantee here is that we either put something on the channel and our
-	// request will be processed (since the `msgCh` is unbuffered) or we receive
-	// message that the xaction has been stopped.
-	select {
-	case r.msgCh <- msg:
-		return <-r.respCh
-	case <-r.stopCh.Listen():
-		return &Resp{Err: ErrGone}
-	}
-}
-
-func (r *ObjListXact) init() error {
-	if r.bck.IsRemote() && !r.msg.IsFlagSet(apc.LsObjCached) {
-		_, err := cluster.HrwTargetTask(r.msg.UUID, r.t.Sowner().Get())
-		if err != nil {
-			return err
-		}
-		r.listRemote = true // TODO -- FIXME: si.ID() == r.t.SID() // we only want a single target listing remote bucket
-	}
-	if r.listRemote {
-		return nil
-	}
-	// Start fs.WalkBck, so that by the time we read the next page `r.pageCh` is already populated.
-	r.initWalk()
-	return nil
-}
-
-func (r *ObjListXact) initWalk() {
-	if r.walkStopCh != nil {
-		r.walkStopCh.Close()
-		r.walkWg.Wait()
-	}
-
-	r.pageCh = make(chan *cmn.LsObjEntry, cacheSize)
-	r.walkDone = false
-	r.walkStopCh = cos.NewStopCh()
-	r.walkWg.Add(1)
-
-	go r.walk(r.msg.Clone())
-}
-
 func (r *ObjListXact) Run(*sync.WaitGroup) {
 	if verbose {
 		glog.Infoln(r.String())
@@ -197,19 +148,65 @@ func (r *ObjListXact) Run(*sync.WaitGroup) {
 	}
 }
 
-func (r *ObjListXact) stopWalk() {
-	if r.walkStopCh != nil {
-		r.walkStopCh.Close()
-		r.walkWg.Wait()
-	}
-}
-
 func (r *ObjListXact) stop(err error) {
 	r.DemandBase.Stop()
 	r.stopCh.Close()
 	close(r.respCh) // not closing `r.msgCh` to avoid potential "closed channel" situation
-	r.stopWalk()
+	if r.walk.stopCh != nil {
+		r.walk.stopCh.Close()
+		r.walk.wg.Wait()
+	}
 	r.Finish(err)
+}
+
+// skip on-demand idle-ness check
+func (r *ObjListXact) Abort(err error) (ok bool) {
+	if ok = r.Base.Abort(err); ok {
+		r.Finish(err)
+	}
+	return
+}
+
+func (r *ObjListXact) init() error {
+	if r.bck.IsRemote() && !r.msg.IsFlagSet(apc.LsObjCached) {
+		_, err := cluster.HrwTargetTask(r.msg.UUID, r.t.Sowner().Get())
+		if err != nil {
+			return err
+		}
+		r.listRemote = true // TODO -- FIXME: si.ID() == r.t.SID() // we only want a single target listing remote bucket
+	}
+	if r.listRemote {
+		return nil
+	}
+	// Start fs.WalkBck, so that by the time we read the next page `r.pageCh` is already populated.
+	r.initWalk()
+	return nil
+}
+
+func (r *ObjListXact) initWalk() {
+	if r.walk.stopCh != nil {
+		r.walk.stopCh.Close()
+		r.walk.wg.Wait()
+	}
+
+	r.walk.pageCh = make(chan *cmn.LsObjEntry, cacheSize)
+	r.walk.done = false
+	r.walk.stopCh = cos.NewStopCh()
+	r.walk.wg.Add(1)
+
+	go r.doWalk(r.msg.Clone())
+}
+
+func (r *ObjListXact) Do(msg *apc.ListObjsMsg) *Resp {
+	// The guarantee here is that we either put something on the channel and our
+	// request will be processed (since the `msgCh` is unbuffered) or we receive
+	// message that the xaction has been stopped.
+	select {
+	case r.msgCh <- msg:
+		return <-r.respCh
+	case <-r.stopCh.Listen():
+		return &Resp{Err: ErrGone}
+	}
 }
 
 func (r *ObjListXact) doPage() *Resp {
@@ -238,7 +235,7 @@ func (r *ObjListXact) doPage() *Resp {
 		lst  = r.lastPage[idx:]
 		page *cmn.ListObjects
 	)
-	debug.Assert(uint(len(lst)) >= cnt || r.walkDone)
+	debug.Assert(uint(len(lst)) >= cnt || r.walk.done)
 	if uint(len(lst)) >= cnt {
 		entries := lst[:cnt]
 		page = &cmn.ListObjects{UUID: r.msg.UUID, Entries: entries, ContinuationToken: entries[cnt-1].Name}
@@ -248,13 +245,13 @@ func (r *ObjListXact) doPage() *Resp {
 	return &Resp{Lst: page, Status: http.StatusOK}
 }
 
-func (r *ObjListXact) walkCallback(*cluster.LOM) { r.ObjsAdd(1, 0) }
+func (r *ObjListXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) }
 
 func (r *ObjListXact) walkCtx() context.Context {
 	return context.WithValue(
 		context.Background(),
 		objwalk.CtxPostCallbackKey,
-		objwalk.PostCallbackFunc(r.walkCallback),
+		objwalk.PostCallbackFunc(r.objsAdd),
 	)
 }
 
@@ -269,7 +266,7 @@ func (r *ObjListXact) findToken(token string) uint {
 }
 
 func (r *ObjListXact) havePage(token string, cnt uint) bool {
-	if r.walkDone {
+	if r.walk.done {
 		return true
 	}
 	idx := r.findToken(token)
@@ -284,7 +281,7 @@ func (r *ObjListXact) nextPageR() error {
 		return err
 	}
 	if lst.ContinuationToken == "" {
-		r.walkDone = true
+		r.walk.done = true
 	}
 	r.lastPage = lst.Entries
 	r.nextToken = lst.ContinuationToken
@@ -293,10 +290,10 @@ func (r *ObjListXact) nextPageR() error {
 
 func (r *ObjListXact) nextPageA() {
 	if r.token > r.msg.ContinuationToken {
-		r.initWalk() // NOTE: restart bucket traversing as we cannot go back :(
+		r.initWalk() // TODO: re-initWalk - restart traversing :(
 		r.lastPage = r.lastPage[:0]
 	} else {
-		if r.walkDone {
+		if r.walk.done {
 			return
 		}
 		r.shiftLastPage(r.msg.ContinuationToken)
@@ -307,9 +304,9 @@ func (r *ObjListXact) nextPageA() {
 		return
 	}
 	for cnt := uint(0); cnt < r.msg.PageSize; {
-		obj, ok := <-r.pageCh
+		obj, ok := <-r.walk.pageCh
 		if !ok {
-			r.walkDone = true
+			r.walk.done = true
 			break
 		}
 		// Skip all objects until the requested continuation token.
@@ -345,62 +342,67 @@ func (r *ObjListXact) shiftLastPage(token string) {
 	r.lastPage = r.lastPage[:l-j]
 }
 
-func (r *ObjListXact) walk(msg *apc.ListObjsMsg) {
-	wi := objwalk.NewWalkInfo(r.walkCtx(), r.t, msg)
-	defer r.walkWg.Done()
-	cb := func(fqn string, de fs.DirEntry) error {
-		entry, err := wi.Callback(fqn, de)
-		if err != nil || entry == nil {
-			return err
-		}
-		if entry.Name <= msg.StartAfter {
-			return nil
-		}
-		select {
-		case r.pageCh <- entry:
-			/* do nothing */
-		case <-r.walkStopCh.Listen():
-			return errStopped
-		}
-		if !msg.IsFlagSet(apc.LsArchDir) {
-			return nil
-		}
-		archList, err := listArchive(fqn)
-		if archList == nil || err != nil {
-			return err
-		}
-		for _, archEntry := range archList {
-			e := &cmn.LsObjEntry{
-				Name:  path.Join(entry.Name, archEntry.name),
-				Flags: entry.Flags | apc.EntryInArch,
-				Size:  int64(archEntry.size),
-			}
-			select {
-			case r.pageCh <- e:
-				/* do nothing */
-			case <-r.walkStopCh.Listen():
-				return errStopped
-			}
-		}
-		return nil
-	}
+func (r *ObjListXact) doWalk(msg *apc.ListObjsMsg) {
+	r.walk.wi = objwalk.NewWalkInfo(r.walkCtx(), r.t, msg)
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: cb, Sorted: true},
+		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
 	opts.ValidateCallback = func(fqn string, de fs.DirEntry) error {
 		if de.IsDir() {
-			return wi.ProcessDir(fqn)
+			return r.walk.wi.ProcessDir(fqn)
 		}
 		return nil
 	}
-
 	if err := fs.WalkBck(opts); err != nil {
 		if err != filepath.SkipDir && err != errStopped {
 			glog.Errorf("%s walk failed, err %v", r, err)
 		}
 	}
-	close(r.pageCh)
+	close(r.walk.pageCh)
+	r.walk.wg.Done()
+}
+
+func (r *ObjListXact) cb(fqn string, de fs.DirEntry) error {
+	entry, err := r.walk.wi.Callback(fqn, de)
+	if err != nil || entry == nil {
+		return err
+	}
+	msg := r.walk.wi.LsMsg()
+	if entry.Name <= msg.StartAfter {
+		return nil
+	}
+
+	select {
+	case r.walk.pageCh <- entry:
+		/* do nothing */
+	case <-r.walk.stopCh.Listen():
+		return errStopped
+	}
+
+	if !msg.IsFlagSet(apc.LsArchDir) {
+		return nil
+	}
+
+	// arch
+	archList, err := listArchive(fqn)
+	if archList == nil || err != nil {
+		return err
+	}
+	for _, archEntry := range archList {
+		e := &cmn.LsObjEntry{
+			Name:  path.Join(entry.Name, archEntry.name),
+			Flags: entry.Flags | apc.EntryInArch,
+			Size:  int64(archEntry.size),
+		}
+		select {
+		case r.walk.pageCh <- e:
+			/* do nothing */
+		case <-r.walk.stopCh.Listen():
+			return errStopped
+		}
+	}
+	return nil
 }
 
 func listArchive(fqn string) ([]*archEntry, error) {
