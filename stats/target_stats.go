@@ -7,6 +7,7 @@ package stats
 
 import (
 	"strconv"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -141,9 +142,14 @@ func (r *Trunner) reg(name, kind string) { r.Core.Tracker.register(r.T.Snode(), 
 
 func nameRbps(disk string) string { return "disk." + disk + ".read.bps" }
 func nameRavg(disk string) string { return "disk." + disk + ".avg.rsize" }
-func nameWbps(disk string) string { return "disk." + disk + ".read.bps" }
+func nameWbps(disk string) string { return "disk." + disk + ".write.bps" }
 func nameWavg(disk string) string { return "disk." + disk + ".avg.wsize" }
 func nameUtil(disk string) string { return "disk." + disk + ".util" }
+
+// log vs idle logic
+func isDiskUtilMetric(name string) bool {
+	return strings.HasPrefix(name, "disk.") && strings.HasSuffix(name, ".util")
+}
 
 func (r *Trunner) RegDiskMetrics(disk string) {
 	s, n := r.Core.Tracker, nameRbps(disk)
@@ -232,7 +238,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	// 2 copy stats, reset latencies, send via StatsD if configured
 	r.Core.updateUptime(uptime)
 	r.Core.promLock()
-	idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime})
+	idle := r.Core.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
 	r.Core.promUnlock()
 	if now >= r.nextLogTime && !idle {
 		ln := cos.MustMarshalToString(r.ctracker)

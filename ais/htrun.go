@@ -1275,9 +1275,9 @@ func _msdetail(ver int64, msg *aisMsg, caller string) (d string) {
 		d = " from " + caller
 	}
 	if msg.Action != "" || msg.UUID != "" {
-		d += fmt.Sprintf(" (local: v%d, action: %q, uuid: %q)", ver, msg.Action, msg.UUID)
+		d += fmt.Sprintf(" (up from v%d, action %q, uuid %q)", ver, msg.Action, msg.UUID)
 	} else {
-		d += fmt.Sprintf(" (local: v%d)", ver)
+		d += fmt.Sprintf(" (up from v%d)", ver)
 	}
 	return
 }

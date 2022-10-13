@@ -58,7 +58,7 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.Core.updateUptime(uptime)
 	r.Core.promLock()
-	idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime})
+	idle := r.Core.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
 	r.Core.promUnlock()
 	if now >= r.nextLogTime && !idle {
 		b := cos.MustMarshal(r.ctracker)

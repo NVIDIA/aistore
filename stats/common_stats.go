@@ -163,6 +163,17 @@ var (
 	_ Tracker = (*Trunner)(nil)
 )
 
+var ignoreIdle = []string{"kalive", Uptime, "disk."}
+
+func ignore(s string) bool {
+	for _, p := range ignoreIdle {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
 //
 // private types
 //
@@ -236,16 +247,6 @@ func roundMBs(val int64) (mbs float64) {
 	num := int(mbs + 0.5)
 	mbs = float64(num) / 100
 	return
-}
-
-// helper not to log idle: when the only updated vars are those that match "idle" prefixes
-func match(s string, prefs []string) bool {
-	for _, p := range prefs {
-		if strings.HasPrefix(s, p) {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *CoreStats) init(node *cluster.Snode, size int) {
@@ -413,10 +414,10 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 		v.Value += val
 		v.Unlock()
 		// NOTE:
-		//      - currently only counters;
-		//      - non-empty suffix forces an immediate Tx with no aggregation (see below);
-		//      - suffix is an arbitrary string that can be defined at runtime;
-		//      - e.g. usage: per-mountpath error counters.
+		// - currently only counters;
+		// - non-empty suffix forces an immediate Tx with no aggregation (see below);
+		// - suffix is an arbitrary string that can be defined at runtime;
+		// - e.g. usage: per-mountpath error counters.
 		if !s.isPrometheus() && nameSuffix != "" {
 			s.statsdC.Send(v.label.comm+"."+nameSuffix,
 				1, metric{Type: statsd.Counter, Name: "count", Value: val})
@@ -426,8 +427,8 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	}
 }
 
-func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) {
-	idle = true
+func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil int64) bool {
+	idle := true
 	s.sgl.Reset()
 	for name, v := range s.Tracker {
 		switch v.kind {
@@ -437,14 +438,14 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			if v.numSamples > 0 {
 				lat = v.Value / v.numSamples
 				ctracker[name] = copyValue{lat}
-				if !match(name, idlePrefs) {
+				if !ignore(name) {
 					idle = false
 				}
 			}
 			v.Value = 0
 			v.numSamples = 0
 			v.Unlock()
-			// NOTE: ns to ms and not reporting zeros
+			// NOTE: ns => ms, and not reporting zeros
 			millis := cos.DivRound(lat, int64(time.Millisecond))
 			if !s.isPrometheus() && millis > 0 && strings.HasSuffix(name, ".ns") {
 				s.statsdC.AppMetric(metric{Type: statsd.Timer, Name: v.label.stsd, Value: float64(millis)}, s.sgl)
@@ -458,7 +459,9 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 					throughput /= cos.MaxI64(int64(s.statsTime.Seconds()), 1)
 				}
 				ctracker[name] = copyValue{throughput}
-				idle = false
+				if !ignore(name) {
+					idle = false
+				}
 				v.Value = 0
 			}
 			v.Unlock()
@@ -473,7 +476,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 				cnt = v.Value
 				if prev, ok := ctracker[name]; !ok || prev.Value != cnt {
 					ctracker[name] = copyValue{cnt}
-					if !match(name, idlePrefs) {
+					if !ignore(name) {
 						idle = false
 					}
 				} else {
@@ -499,6 +502,9 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			if !s.isPrometheus() {
 				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: float64(v.Value)}, s.sgl)
 			}
+			if isDiskUtilMetric(name) && v.Value > diskLowUtil {
+				idle = false
+			}
 		default:
 			ctracker[name] = copyValue{v.Value} // KindSpecial/KindDelta as is and wo/ lock
 		}
@@ -506,7 +512,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 	if !s.isPrometheus() {
 		s.statsdC.SendSGL(s.sgl)
 	}
-	return
+	return idle
 }
 
 // serves to satisfy REST API what=stats query
