@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -158,8 +157,8 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 		if bremote {
 			objList, _, err = r.t.Backend(bck).ListObjects(bck, msg)
 		} else {
-			walk := objwalk.NewWalk(r.ctx, r.t, bck, msg)
-			objList, err = walk.NextPageA()
+			npg := newNpgCtx(r.ctx, r.t, bck, msg)
+			objList, err = npg.nextPageA()
 		}
 		if err != nil {
 			return err

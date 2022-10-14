@@ -1,9 +1,9 @@
-// Package objwalk provides common context and helper methods for object listing and
-// object querying.
+// Package xs contains most of the supported eXtended actions (xactions) with some
+// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package objwalk
+package xs
 
 import (
 	"context"
@@ -17,15 +17,17 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
+// common context and helper methods for object listing
+
 type (
 	ctxKey           int
-	PostCallbackFunc func(lom *cluster.LOM)
+	postCallbackFunc func(lom *cluster.LOM)
 
 	// used to traverse local filesystem and collect objects info
-	WalkInfo struct {
+	walkInfo struct {
 		t         cluster.Target
 		smap      *cluster.Smap
-		postCb    PostCallbackFunc
+		postCb    postCallbackFunc
 		markerDir string
 		msg       *apc.LsoMsg
 		wanted    cos.BitFlags
@@ -33,16 +35,16 @@ type (
 )
 
 const (
-	CtxPostCallbackKey ctxKey = iota
+	ctxPostCallbackKey ctxKey = iota
 )
 
 func isOK(status uint16) bool { return status == apc.LocOK }
 
 // TODO: `msg.StartAfter`
-func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.LsoMsg) (wi *WalkInfo) {
+func newWalkInfo(ctx context.Context, t cluster.Target, msg *apc.LsoMsg) (wi *walkInfo) {
 	var (
 		markerDir string
-		postCb, _ = ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
+		postCb, _ = ctx.Value(ctxPostCallbackKey).(postCallbackFunc)
 	)
 	if msg.ContinuationToken != "" { // marker is always a filename
 		markerDir = filepath.Dir(msg.ContinuationToken)
@@ -50,7 +52,7 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.LsoMsg) (wi *Wa
 			markerDir = ""
 		}
 	}
-	wi = &WalkInfo{
+	wi = &walkInfo{
 		t:         t,
 		smap:      t.Sowner().Get(),
 		postCb:    postCb,
@@ -61,14 +63,14 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.LsoMsg) (wi *Wa
 	return
 }
 
-func (wi *WalkInfo) LsMsg() *apc.LsoMsg { return wi.msg }
+func (wi *walkInfo) lsmsg() *apc.LsoMsg { return wi.msg }
 
 // Checks if the directory should be processed by cache list call
 // Does checks:
 //   - Object name must start with prefix (if it is set)
 //   - Object name is not in early processed directories by the previous call:
 //     paging support
-func (wi *WalkInfo) ProcessDir(fqn string) error {
+func (wi *walkInfo) processDir(fqn string) error {
 	ct, err := cluster.NewCTFromFQN(fqn, nil)
 	if err != nil {
 		return nil
@@ -89,7 +91,7 @@ func (wi *WalkInfo) ProcessDir(fqn string) error {
 }
 
 // Returns true if LOM is to be included in the result set.
-func (wi *WalkInfo) match(lom *cluster.LOM) bool {
+func (wi *walkInfo) match(lom *cluster.LOM) bool {
 	if !cmn.ObjNameContainsPrefix(lom.ObjName, wi.msg.Prefix) {
 		return false
 	}
@@ -100,7 +102,7 @@ func (wi *WalkInfo) match(lom *cluster.LOM) bool {
 }
 
 // new entry to be added to the listed page
-func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsoEntry) {
+func (wi *walkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsoEntry) {
 	e = &cmn.LsoEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return
@@ -112,12 +114,8 @@ func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsoEntry) {
 	return
 }
 
-// By default, Callback performs a number of syscalls to load object metadata.
-// A note in re cmn.LsNameOnly (usage below):
-//
-//	the flag cmn.LsNameOnly optimizes-out loading object metadata. If defined,
-//	the function returns (only the) name and status.
-func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEntry, err error) {
+// Performs a number of syscalls to load object metadata.
+func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEntry, err error) {
 	if de.IsDir() {
 		return
 	}
@@ -127,7 +125,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEntry, e
 	return
 }
 
-func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.LsoEntry, error) {
+func (wi *walkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.LsoEntry, error) {
 	status := uint16(apc.LocOK)
 	if err := lom.InitFQN(fqn, nil); err != nil {
 		return nil, err
@@ -148,7 +146,7 @@ func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.LsoEntry, error) {
 		status = apc.LocMisplacedMountpath
 	}
 
-	// shortcut #1: name-only (NOTE: won't show misplaced and copies)
+	// shortcut #1: name-only optimizes-out loading md (NOTE: won't show misplaced and copies)
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		if !isOK(status) {
 			return nil, nil

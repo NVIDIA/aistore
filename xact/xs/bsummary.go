@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -159,8 +158,8 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	// 2. walk local pages
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
 	for {
-		walk := objwalk.NewWalk(context.Background(), r.t, bck, lsmsg)
-		lst, err := walk.NextPageA()
+		npg := newNpgCtx(context.Background(), r.t, bck, lsmsg)
+		lst, err := npg.nextPageA()
 		if err != nil {
 			return err
 		}
@@ -186,11 +185,11 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	}
 	debug.Assert(bck.IsRemote())
 
-	// 3. walk remote
+	// 3. npg remote
 	lsmsg = &apc.LsoMsg{Props: apc.GetPropsSize}
 	for {
-		walk := objwalk.NewWalk(context.Background(), r.t, bck, lsmsg)
-		lst, err := walk.NextPageR()
+		npg := newNpgCtx(context.Background(), r.t, bck, lsmsg)
+		lst, err := npg.nextPageR()
 		if err != nil {
 			return err
 		}

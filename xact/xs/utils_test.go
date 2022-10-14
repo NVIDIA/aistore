@@ -1,8 +1,8 @@
-// Package objwalk_test contains a few basic list-concatenation unit tests.
+// Package xs_test - basic list-concatenation unit tests.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package objwalk_test
+package xs_test
 
 import (
 	"testing"

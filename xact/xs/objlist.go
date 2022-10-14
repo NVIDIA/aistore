@@ -29,7 +29,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/vmihailenco/msgpack"
@@ -39,7 +38,7 @@ import (
 // in passthrough mode. It just restarts `walk` if needed.
 // Xaction is created once per bucket list request (per UUID)
 type (
-	olFactory struct {
+	lsoFactory struct {
 		xreg.RenewBase
 		xctn *LsoXact
 		msg  *apc.LsoMsg
@@ -57,7 +56,7 @@ type (
 		walk      struct {
 			pageCh chan *cmn.LsoEntry // channel to accumulate listed object entries
 			stopCh *cos.StopCh        // to abort bucket walk
-			wi     *objwalk.WalkInfo  // walking context
+			wi     *walkInfo          // walking context
 			wg     sync.WaitGroup     // to wait until the walk finishes
 			done   bool               // done walking
 		}
@@ -85,23 +84,23 @@ var (
 // interface guard
 var (
 	_ cluster.Xact   = (*LsoXact)(nil)
-	_ xreg.Renewable = (*olFactory)(nil)
+	_ xreg.Renewable = (*lsoFactory)(nil)
 )
 
-func (*olFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &olFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: args.Custom.(*apc.LsoMsg)}
+func (*lsoFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &lsoFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: args.Custom.(*apc.LsoMsg)}
 	return p
 }
 
-func (p *olFactory) Start() error {
+func (p *lsoFactory) Start() error {
 	p.xctn = newXact(p.T, p.Bck, p.msg, p.UUID())
 	return nil
 }
 
-func (*olFactory) Kind() string        { return apc.ActList }
-func (p *olFactory) Get() cluster.Xact { return p.xctn }
+func (*lsoFactory) Kind() string        { return apc.ActList }
+func (p *lsoFactory) Get() cluster.Xact { return p.xctn }
 
-func (p *olFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
+func (p *lsoFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
 	return xreg.WprUse, nil
 }
@@ -237,11 +236,11 @@ func (r *LsoXact) doPage() *ListObjsRsp {
 
 func (r *LsoXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) }
 
-func (r *LsoXact) walkCtx() context.Context {
+func (r *LsoXact) context() context.Context {
 	return context.WithValue(
 		context.Background(),
-		objwalk.CtxPostCallbackKey,
-		objwalk.PostCallbackFunc(r.objsAdd),
+		ctxPostCallbackKey,
+		postCallbackFunc(r.objsAdd),
 	)
 }
 
@@ -264,8 +263,8 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 }
 
 func (r *LsoXact) nextPageR() error {
-	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.bck, r.msg)
-	lst, err := walk.NextPageR()
+	npg := newNpgCtx(r.context(), r.t, r.bck, r.msg)
+	lst, err := npg.nextPageR()
 	if err != nil {
 		r.nextToken = ""
 		return err
@@ -333,14 +332,14 @@ func (r *LsoXact) shiftLastPage(token string) {
 }
 
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
-	r.walk.wi = objwalk.NewWalkInfo(r.walkCtx(), r.t, msg)
+	r.walk.wi = newWalkInfo(r.context(), r.t, msg)
 	opts := &fs.WalkBckOpts{
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
 	opts.ValidateCallback = func(fqn string, de fs.DirEntry) error {
 		if de.IsDir() {
-			return r.walk.wi.ProcessDir(fqn)
+			return r.walk.wi.processDir(fqn)
 		}
 		return nil
 	}
@@ -354,11 +353,11 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 }
 
 func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
-	entry, err := r.walk.wi.Callback(fqn, de)
+	entry, err := r.walk.wi.callback(fqn, de)
 	if err != nil || entry == nil {
 		return err
 	}
-	msg := r.walk.wi.LsMsg()
+	msg := r.walk.wi.lsmsg()
 	if entry.Name <= msg.StartAfter {
 		return nil
 	}

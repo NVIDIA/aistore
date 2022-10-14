@@ -1,11 +1,11 @@
-// Package objwalk provides common context and helper methods for object listing and
-// object querying.
+// Package xs contains most of the supported eXtended actions (xactions) with some
+// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package objwalk
+package xs
 
-// This source contains core next-page and next-remote-page methods for list-objects operations.
+// core next-page and next-remote-page methods for object listing
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-type Walk struct {
+type npgCtx struct {
 	ctx    context.Context
 	t      cluster.Target
 	bck    *cluster.Bck
@@ -26,21 +26,21 @@ type Walk struct {
 	wanted cos.BitFlags
 }
 
-func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.LsoMsg) (w *Walk) {
-	w = &Walk{ctx: ctx, t: t, bck: bck, msg: msg}
+func newNpgCtx(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.LsoMsg) (w *npgCtx) {
+	w = &npgCtx{ctx: ctx, t: t, bck: bck, msg: msg}
 	w.wanted = wanted(msg)
 	return
 }
 
 // limited usage: bucket summary, multi-obj
-func (w *Walk) NextPageA() (*cmn.LsoResult, error) {
+func (w *npgCtx) nextPageA() (*cmn.LsoResult, error) {
 	var (
 		lst = &cmn.LsoResult{}
-		wi  = NewWalkInfo(w.ctx, w.t, w.msg.Clone())
+		wi  = newWalkInfo(w.ctx, w.t, w.msg.Clone())
 	)
 
 	cb := func(fqn string, de fs.DirEntry) error {
-		entry, err := wi.Callback(fqn, de)
+		entry, err := wi.callback(fqn, de)
 		if entry == nil && err == nil {
 			return nil
 		}
@@ -57,7 +57,7 @@ func (w *Walk) NextPageA() (*cmn.LsoResult, error) {
 	opts.WalkOpts.Bck.Copy(w.bck.Bucket())
 	opts.ValidateCallback = func(fqn string, de fs.DirEntry) error {
 		if de.IsDir() {
-			return wi.ProcessDir(fqn)
+			return wi.processDir(fqn)
 		}
 		return nil
 	}
@@ -70,20 +70,20 @@ func (w *Walk) NextPageA() (*cmn.LsoResult, error) {
 }
 
 // Returns the next page from the remote bucket's "list-objects" result set.
-func (w *Walk) NextPageR() (*cmn.LsoResult, error) {
+func (w *npgCtx) nextPageR() (*cmn.LsoResult, error) {
 	debug.Assert(!w.msg.IsFlagSet(apc.LsObjCached))
 	lst, _, err := w.t.Backend(w.bck).ListObjects(w.bck, w.msg)
 	if err != nil {
 		return nil, err
 	}
-	err = w.Populate(lst)
+	err = w.populate(lst)
 	return lst, err
 }
 
-func (w *Walk) Populate(lst *cmn.LsoResult) error {
+func (w *npgCtx) populate(lst *cmn.LsoResult) error {
 	var (
 		smap            = w.t.Sowner().Get()
-		postCallback, _ = w.ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
+		postCallback, _ = w.ctx.Value(ctxPostCallbackKey).(postCallbackFunc)
 	)
 	for _, obj := range lst.Entries {
 		si, err := cluster.HrwTarget(w.bck.MakeUname(obj.Name), smap)

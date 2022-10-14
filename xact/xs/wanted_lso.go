@@ -1,9 +1,9 @@
-// Package objwalk provides common context and helper methods for object listing and
-// object querying.
+// Package xs contains most of the supported eXtended actions (xactions) with some
+// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
 /*
  * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
  */
-package objwalk
+package xs
 
 import (
 	"fmt"
@@ -14,6 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
+
+// `apc.LsoMsg` flags
 
 var (
 	allmap map[string]cos.BitFlags

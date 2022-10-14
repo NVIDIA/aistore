@@ -27,7 +27,7 @@ func Xreg() {
 	xreg.RegBckXact(&evdFactory{kind: apc.ActDeleteObjects})
 	xreg.RegBckXact(&prfFactory{})
 
-	xreg.RegBckXact(&olFactory{})
+	xreg.RegBckXact(&lsoFactory{})
 	xreg.RegNonBckXact(&bsummFactory{})
 
 	xreg.RegBckXact(&proFactory{})
