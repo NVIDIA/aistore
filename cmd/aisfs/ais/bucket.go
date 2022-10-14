@@ -61,7 +61,7 @@ func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err 
 }
 
 func (bck *bucketAPI) ListObjects(prefix, token string, pageSize uint) (objs []*Object, nextToken string, err error) {
-	selectMsg := &apc.ListObjsMsg{
+	selectMsg := &apc.LsoMsg{
 		Prefix:            prefix,
 		Props:             apc.GetPropsSize,
 		PageSize:          pageSize,

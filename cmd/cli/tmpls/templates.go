@@ -435,7 +435,7 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 	return total
 }
 
-func fmtObjStatus(obj *cmn.LsObjEntry) string {
+func fmtObjStatus(obj *cmn.LsoEntry) string {
 	switch obj.Status() {
 	case apc.LocOK:
 		return "ok"
@@ -453,7 +453,7 @@ func fmtObjStatus(obj *cmn.LsObjEntry) string {
 	}
 }
 
-func fmtObjIsCached(obj *cmn.LsObjEntry) string {
+func fmtObjIsCached(obj *cmn.LsoEntry) string {
 	return FmtBool(obj.CheckExists())
 }
 

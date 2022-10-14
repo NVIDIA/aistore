@@ -240,7 +240,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		return
 	}
 	bckSums := make([]*bucketHealth, 0)
-	msg := &apc.ListObjsMsg{Flags: apc.LsAll}
+	msg := &apc.LsoMsg{Flags: apc.LsAll}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsCached)
 	for _, bck := range bckList {
 		if queryBcks.Name != "" && !queryBcks.Equal(&bck) {
@@ -248,8 +248,8 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		}
 		var (
 			p       *cmn.BucketProps
-			objList *cmn.ListObjects
-			obj     *cmn.LsObjEntry
+			objList *cmn.LsoResult
+			obj     *cmn.LsoEntry
 		)
 		if p, err = headBucket(bck, true /* don't add */); err != nil {
 			return
@@ -261,7 +261,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 			return err
 		}
 
-		updateStats := func(obj *cmn.LsObjEntry) {
+		updateStats := func(obj *cmn.LsoEntry) {
 			if obj == nil {
 				return
 			}
