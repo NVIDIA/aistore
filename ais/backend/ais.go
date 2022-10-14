@@ -308,7 +308,7 @@ func extractErrCode(e error) (int, error) {
 /////////////////////
 
 func (*AISBackendProvider) Provider() string  { return apc.AIS }
-func (*AISBackendProvider) MaxPageSize() uint { return apc.DefaultListPageSizeAIS }
+func (*AISBackendProvider) MaxPageSize() uint { return apc.DefaultPageSizeAIS }
 
 func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
 	debug.Assert(false) // Bucket creation happens only with reverse proxy to AIS cluster.
@@ -341,7 +341,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	return
 }
 
-func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects,
+func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult,
 	errCode int, err error) {
 	var aisCluster *remAISCluster
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {

@@ -224,7 +224,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 // LIST OBJECTS //
 //////////////////
 
-func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects, errCode int, err error) {
+func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult, errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
 
 	var (
@@ -253,11 +253,11 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (ls
 		err := cmn.NewErrFailedTo(apc.Azure, "list objects of", cloudBck.Name, azureErrStatus(resp.StatusCode()))
 		return nil, resp.StatusCode(), err
 	}
-	lst = &cmn.ListObjects{Entries: make([]*cmn.LsObjEntry, 0, len(resp.Segment.BlobItems))}
+	lst = &cmn.LsoResult{Entries: make([]*cmn.LsoEntry, 0, len(resp.Segment.BlobItems))}
 	for idx := range resp.Segment.BlobItems {
 		var (
 			blob  = &resp.Segment.BlobItems[idx]
-			entry = &cmn.LsObjEntry{Name: blob.Name}
+			entry = &cmn.LsoEntry{Name: blob.Name}
 		)
 		if blob.Properties.ContentLength != nil && msg.WantProp(apc.GetPropsSize) {
 			entry.Size = *blob.Properties.ContentLength

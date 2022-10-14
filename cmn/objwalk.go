@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func SortObjList(bckEntries []*LsObjEntry) {
+func SortLso(bckEntries []*LsoEntry) {
 	entryLess := func(i, j int) bool {
 		if bckEntries[i].Name == bckEntries[j].Name {
 			return bckEntries[i].Flags&apc.EntryStatusMask < bckEntries[j].Flags&apc.EntryStatusMask
@@ -23,7 +23,7 @@ func SortObjList(bckEntries []*LsObjEntry) {
 	sort.Slice(bckEntries, entryLess)
 }
 
-func dedupObjList(bckEntries []*LsObjEntry, maxSize uint) ([]*LsObjEntry, string) {
+func dedupLso(bckEntries []*LsoEntry, maxSize uint) ([]*LsoEntry, string) {
 	objCount := uint(len(bckEntries))
 
 	j := 0
@@ -51,17 +51,17 @@ func dedupObjList(bckEntries []*LsObjEntry, maxSize uint) ([]*LsObjEntry, string
 	return bckEntries[:j], token
 }
 
-// ConcatObjLists takes a slice of object lists and concatenates them: all lists
+// ConcatLso takes a slice of object lists and concatenates them: all lists
 // are appended to the first one.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func ConcatObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
+func ConcatLso(lists []*LsoResult, maxSize uint) (objs *LsoResult) {
 	if len(lists) == 0 {
-		return &ListObjects{}
+		return &LsoResult{}
 	}
 
-	objs = &ListObjects{}
-	objs.Entries = make([]*LsObjEntry, 0)
+	objs = &LsoResult{}
+	objs.Entries = make([]*LsoEntry, 0)
 
 	for _, l := range lists {
 		objs.Flags |= l.Flags
@@ -75,14 +75,14 @@ func ConcatObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
 	// For corner case: we have objects with replicas on page threshold
 	// we have to sort taking status into account. Otherwise wrong
 	// one(Status=moved) may get into the response
-	SortObjList(objs.Entries)
+	SortLso(objs.Entries)
 
 	// Remove duplicates
-	objs.Entries, objs.ContinuationToken = dedupObjList(objs.Entries, maxSize)
+	objs.Entries, objs.ContinuationToken = dedupLso(objs.Entries, maxSize)
 	return
 }
 
-// MergeObjLists takes a few object lists and merges its content: properties
+// MergeLso takes a few object lists and merges its content: properties
 // of objects with the same name are merged.
 // The function is used to merge eg. the requests from targets for a cloud
 // bucket list: each target reads cloud list page and fills with available info.
@@ -90,20 +90,20 @@ func ConcatObjLists(lists []*ListObjects, maxSize uint) (objs *ListObjects) {
 // them to get single list with merged information for each object.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func MergeObjLists(lists []*ListObjects, maxSize uint) *ListObjects {
+func MergeLso(lists []*LsoResult, maxSize uint) *LsoResult {
 	if len(lists) == 0 {
-		return &ListObjects{}
+		return &LsoResult{}
 	}
 	resList := lists[0]
 	continuationToken := resList.ContinuationToken
 	if len(lists) == 1 {
-		SortObjList(resList.Entries)
-		resList.Entries, _ = dedupObjList(resList.Entries, maxSize)
+		SortLso(resList.Entries)
+		resList.Entries, _ = dedupLso(resList.Entries, maxSize)
 		resList.ContinuationToken = continuationToken
 		return resList
 	}
 
-	lst := make(map[string]*LsObjEntry, len(resList.Entries))
+	lst := make(map[string]*LsoEntry, len(resList.Entries))
 	for _, l := range lists {
 		resList.Flags |= l.Flags
 		if continuationToken < l.ContinuationToken {
@@ -127,7 +127,7 @@ func MergeObjLists(lists []*ListObjects, maxSize uint) *ListObjects {
 	}
 
 	if len(lst) == 0 {
-		return &ListObjects{}
+		return &LsoResult{}
 	}
 
 	// cleanup and sort
@@ -135,8 +135,8 @@ func MergeObjLists(lists []*ListObjects, maxSize uint) *ListObjects {
 	for _, v := range lst {
 		resList.Entries = append(resList.Entries, v)
 	}
-	SortObjList(resList.Entries)
-	resList.Entries, _ = dedupObjList(resList.Entries, maxSize)
+	SortLso(resList.Entries)
+	resList.Entries, _ = dedupLso(resList.Entries, maxSize)
 	resList.ContinuationToken = continuationToken
 	return resList
 }

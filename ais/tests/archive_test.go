@@ -298,7 +298,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			api.WaitForXactionIdle(baseParams, flt)
 
 			tlog.Logf("List %s\n", toBck)
-			msg := &apc.ListObjsMsg{Prefix: "test_"}
+			msg := &apc.LsoMsg{Prefix: "test_"}
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
 			tassert.CheckFatal(t, err)
@@ -414,7 +414,7 @@ func TestAppendToArch(t *testing.T) {
 			wargs := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
-			lsmsg := &apc.ListObjsMsg{Prefix: "test_lst"}
+			lsmsg := &apc.LsoMsg{Prefix: "test_lst"}
 			lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, toBck, lsmsg, 0)
 			tassert.CheckFatal(t, err)

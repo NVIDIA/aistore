@@ -27,7 +27,7 @@ type (
 		smap      *cluster.Smap
 		postCb    PostCallbackFunc
 		markerDir string
-		msg       *apc.ListObjsMsg
+		msg       *apc.LsoMsg
 		wanted    cos.BitFlags
 	}
 )
@@ -39,7 +39,7 @@ const (
 func isOK(status uint16) bool { return status == apc.LocOK }
 
 // TODO: `msg.StartAfter`
-func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) (wi *WalkInfo) {
+func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.LsoMsg) (wi *WalkInfo) {
 	var (
 		markerDir string
 		postCb, _ = ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
@@ -61,7 +61,7 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *apc.ListObjsMsg) (w
 	return
 }
 
-func (wi *WalkInfo) LsMsg() *apc.ListObjsMsg { return wi.msg }
+func (wi *WalkInfo) LsMsg() *apc.LsoMsg { return wi.msg }
 
 // Checks if the directory should be processed by cache list call
 // Does checks:
@@ -100,8 +100,8 @@ func (wi *WalkInfo) match(lom *cluster.LOM) bool {
 }
 
 // new entry to be added to the listed page
-func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsObjEntry) {
-	e = &cmn.LsObjEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
+func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsoEntry) {
+	e = &cmn.LsoEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return
 	}
@@ -117,7 +117,7 @@ func (wi *WalkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsObjEntry) {
 //
 //	the flag cmn.LsNameOnly optimizes-out loading object metadata. If defined,
 //	the function returns (only the) name and status.
-func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.LsObjEntry, err error) {
+func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEntry, err error) {
 	if de.IsDir() {
 		return
 	}
@@ -127,7 +127,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (entry *cmn.LsObjEntry,
 	return
 }
 
-func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.LsObjEntry, error) {
+func (wi *WalkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.LsoEntry, error) {
 	status := uint16(apc.LocOK)
 	if err := lom.InitFQN(fqn, nil); err != nil {
 		return nil, err

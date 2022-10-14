@@ -380,7 +380,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	// NOTE: not waiting here for apc.ActPutCopies
 
 	tlog.Logf("List %s\n", m.bck)
-	msg := &apc.ListObjsMsg{Props: apc.GetPropsName}
+	msg := &apc.LsoMsg{Props: apc.GetPropsName}
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objList.Entries) == m.num, "expecting %d entries, have %d",
@@ -404,7 +404,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	api.WaitForXactionIdle(baseParams, args)
 
 	tlog.Logf("List %s new versions\n", m.bck)
-	msg = &apc.ListObjsMsg{}
+	msg = &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsAll...)
 	objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -625,7 +625,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 	m.puts()
 
 	tlog.Logf("Listing %q objects\n", m.bck)
-	msg := &apc.ListObjsMsg{Prefix: m.prefix}
+	msg := &apc.LsoMsg{Prefix: m.prefix}
 	msg.AddProps(apc.GetPropsVersion, apc.GetPropsSize)
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -653,7 +653,7 @@ func TestListObjectsSmoke(t *testing.T) {
 			}
 
 			iters = 5
-			msg   = &apc.ListObjsMsg{PageSize: 10}
+			msg   = &apc.LsoMsg{PageSize: 10}
 		)
 
 		m.initWithCleanup()
@@ -684,7 +684,7 @@ func TestListObjectsGoBack(t *testing.T) {
 				fileSize: 128,
 			}
 
-			msg = &apc.ListObjsMsg{PageSize: 50}
+			msg = &apc.LsoMsg{PageSize: 50}
 		)
 
 		if !bck.IsAIS() {
@@ -698,8 +698,8 @@ func TestListObjectsGoBack(t *testing.T) {
 		}
 		var (
 			tokens          []string
-			entries         []*cmn.LsObjEntry
-			expectedEntries []*cmn.LsObjEntry
+			entries         []*cmn.LsoEntry
+			expectedEntries []*cmn.LsoEntry
 		)
 		tlog.Logln("listing couple pages to move iterator on targets")
 		for page := 0; page < m.num/int(msg.PageSize); page++ {
@@ -718,8 +718,8 @@ func TestListObjectsGoBack(t *testing.T) {
 			entries = append(entries, objPage.Entries...)
 		}
 
-		cmn.SortObjList(entries)
-		cmn.SortObjList(expectedEntries)
+		cmn.SortLso(entries)
+		cmn.SortLso(expectedEntries)
 
 		tassert.Fatalf(
 			t, len(expectedEntries) == m.num,
@@ -768,10 +768,10 @@ func TestListObjectsRerequestPage(t *testing.T) {
 		}
 		var (
 			err     error
-			objList *cmn.ListObjects
+			objList *cmn.LsoResult
 
 			totalCnt = 0
-			msg      = &apc.ListObjsMsg{PageSize: 10}
+			msg      = &apc.LsoMsg{PageSize: 10}
 		)
 		tlog.Logln("starting rerequesting routine...")
 		for {
@@ -820,7 +820,7 @@ func TestListObjectsStartAfter(t *testing.T) {
 		middleObjName := objList.Entries[m.num/2-1].Name
 		tlog.Logf("start listing bucket after: %q...\n", middleObjName)
 
-		msg := &apc.ListObjsMsg{PageSize: 10, StartAfter: middleObjName}
+		msg := &apc.LsoMsg{PageSize: 10, StartAfter: middleObjName}
 		objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
 		if bck.IsAIS() {
 			tassert.CheckFatal(t, err)
@@ -857,8 +857,8 @@ func TestListObjectsProps(t *testing.T) {
 		if m.bck.IsRemote() {
 			defer m.del()
 		}
-		checkProps := func(useCache bool, props []string, f func(entry *cmn.LsObjEntry)) {
-			msg := &apc.ListObjsMsg{PageSize: 100}
+		checkProps := func(useCache bool, props []string, f func(entry *cmn.LsoEntry)) {
+			msg := &apc.LsoMsg{PageSize: 100}
 			if useCache {
 				msg.SetFlag(apc.UseListObjsCache)
 			}
@@ -877,7 +877,7 @@ func TestListObjectsProps(t *testing.T) {
 
 		for _, useCache := range []bool{false, true} {
 			tlog.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
-			checkProps(useCache, []string{}, func(entry *cmn.LsObjEntry) {
+			checkProps(useCache, []string{}, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
@@ -888,7 +888,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefault, func(entry *cmn.LsObjEntry) {
+			checkProps(useCache, apc.GetPropsDefault, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
@@ -899,7 +899,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.LsObjEntry) {
+			checkProps(useCache, []string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				if bck.IsAIS() {
 					tassert.Errorf(t, entry.Version != "", "version is not set")
@@ -912,7 +912,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying small subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsSize}, func(entry *cmn.LsObjEntry) {
+			checkProps(useCache, []string{apc.GetPropsSize}, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 
 				tassert.Errorf(t, entry.Version == "", "version is set")
@@ -923,7 +923,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying all props...\n", useCache)
-			checkProps(useCache, apc.GetPropsAll, func(entry *cmn.LsObjEntry) {
+			checkProps(useCache, apc.GetPropsAll, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				if bck.IsAIS() {
 					tassert.Errorf(t, entry.Version != "", "version is not set")
@@ -958,7 +958,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 		tlog.Logf("list remote objects with evict=%t\n", evict)
 		m.remotePuts(evict)
 
-		msg := &apc.ListObjsMsg{PageSize: 10, Flags: apc.LsObjCached}
+		msg := &apc.LsoMsg{PageSize: 10, Flags: apc.LsObjCached}
 		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if evict {
@@ -998,7 +998,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 			}
 
 			totalCnt = 0
-			msg      = &apc.ListObjsMsg{PageSize: 100}
+			msg      = &apc.LsoMsg{PageSize: 100}
 		)
 
 		if !bck.IsAIS() {
@@ -1038,7 +1038,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 				num:      rand.Intn(5000) + 1000,
 				fileSize: 128,
 			}
-			msg = &apc.ListObjsMsg{Flags: apc.LsObjCached}
+			msg = &apc.LsoMsg{Flags: apc.LsObjCached}
 		)
 
 		if !bck.IsAIS() {
@@ -1151,7 +1151,7 @@ func TestListObjects(t *testing.T) {
 				wg.Wait()
 
 				// Confirm PUTs by listing objects.
-				msg := &apc.ListObjsMsg{PageSize: test.pageSize}
+				msg := &apc.LsoMsg{PageSize: test.pageSize}
 				msg.AddProps(apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsSize)
 				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck))
 				lst, err := api.ListObjects(baseParams, bck, msg, 0)
@@ -1161,7 +1161,7 @@ func TestListObjects(t *testing.T) {
 					t.Errorf("continuation token was unexpectedly set to: %s", lst.ContinuationToken)
 				}
 
-				empty := &cmn.LsObjEntry{}
+				empty := &cmn.LsoEntry{}
 				for _, entry := range lst.Entries {
 					e, exists := objs.Load(entry.Name)
 					if !exists {
@@ -1207,7 +1207,7 @@ func TestListObjects(t *testing.T) {
 					prefix := key.(string)
 					expectedObjCount := value.(int)
 
-					msg := &apc.ListObjsMsg{
+					msg := &apc.LsoMsg{
 						Prefix: prefix,
 					}
 					lst, err = api.ListObjects(baseParams, bck, msg, 0)
@@ -1349,7 +1349,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				}
 				t.Run(test.name, func(t *testing.T) {
 					tlog.Logf("Prefix: %q, Expected objects: %d\n", test.prefix, test.expected)
-					msg := &apc.ListObjsMsg{PageSize: test.pageSize, Prefix: test.prefix}
+					msg := &apc.LsoMsg{PageSize: test.pageSize, Prefix: test.prefix}
 					tlog.Logf(
 						"list_objects %s [prefix: %q, page_size: %d]\n",
 						bck, msg.Prefix, msg.PageSize,
@@ -1396,7 +1396,7 @@ func TestListObjectsCache(t *testing.T) {
 			for iter := 0; iter < totalIters; iter++ {
 				var (
 					started = time.Now()
-					msg     = &apc.ListObjsMsg{PageSize: uint(rand.Intn(20)) + 4}
+					msg     = &apc.LsoMsg{PageSize: uint(rand.Intn(20)) + 4}
 				)
 				if useCache {
 					msg.SetFlag(apc.UseListObjsCache)
@@ -1787,7 +1787,7 @@ func TestRemoteBucketMirror(t *testing.T) {
 	})
 
 	// list
-	msg := &apc.ListObjsMsg{Prefix: m.prefix, Props: apc.GetPropsName}
+	msg := &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
@@ -2217,7 +2217,7 @@ func TestCopyBucket(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
 			var (
-				srcBckList *cmn.ListObjects
+				srcBckList *cmn.LsoResult
 
 				objCnt = 100
 				srcm   = &ioContext{
@@ -2382,7 +2382,7 @@ func TestCopyBucket(t *testing.T) {
 				dstmProps, err := api.HeadBucket(baseParams, dstm.bck, true /* don't add */)
 				tassert.CheckFatal(t, err)
 
-				msg := &apc.ListObjsMsg{}
+				msg := &apc.LsoMsg{}
 				msg.AddProps(apc.GetPropsVersion)
 				if test.dstRemote {
 					msg.Flags = apc.LsObjCached
@@ -2736,7 +2736,7 @@ func TestBackendBucket(t *testing.T) {
 
 	m.remotePuts(false /*evict*/)
 
-	msg := &apc.ListObjsMsg{Prefix: m.prefix}
+	msg := &apc.LsoMsg{Prefix: m.prefix}
 	remoteObjList, err := api.ListObjects(baseParams, remoteBck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(remoteObjList.Entries) > 0, "empty object list")
@@ -2777,7 +2777,7 @@ func TestBackendBucket(t *testing.T) {
 	)
 
 	// Check if cached listing works correctly.
-	cacheMsg := &apc.ListObjsMsg{Flags: apc.LsObjCached, Prefix: m.prefix}
+	cacheMsg := &apc.LsoMsg{Flags: apc.LsObjCached, Prefix: m.prefix}
 	aisObjList, err = api.ListObjects(baseParams, aisBck, cacheMsg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
@@ -2963,7 +2963,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	}
 	m.gets()
 
-	msg := &apc.ListObjsMsg{}
+	msg := &apc.LsoMsg{}
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bckObjs.Entries) == 0 {
@@ -3142,7 +3142,7 @@ func TestBucketListAndSummary(t *testing.T) {
 					}
 				}
 			} else {
-				msg := &apc.ListObjsMsg{}
+				msg := &apc.LsoMsg{}
 				if test.cached {
 					msg.Flags = apc.LsObjCached
 				}

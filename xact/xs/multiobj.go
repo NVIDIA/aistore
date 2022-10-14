@@ -136,7 +136,7 @@ func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate,
 
 func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) error {
 	var (
-		objList *cmn.ListObjects
+		objList *cmn.LsoResult
 		err     error
 		bck     = r.xctn.Bck()
 	)
@@ -150,7 +150,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 		return fmt.Errorf("cannot list bucket %s for prefix %q (plain HTTP buckets are not list-able) - use alternative templating",
 			bck, prefix)
 	}
-	msg := &apc.ListObjsMsg{Prefix: prefix, Props: apc.GetPropsStatus}
+	msg := &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsStatus}
 	for {
 		if r.xctn.IsAborted() || r.xctn.Finished() {
 			break
@@ -159,7 +159,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 			objList, _, err = r.t.Backend(bck).ListObjects(bck, msg)
 		} else {
 			walk := objwalk.NewWalk(r.ctx, r.t, bck, msg)
-			objList, err = walk.NextObjPage()
+			objList, err = walk.NextPageA()
 		}
 		if err != nil {
 			return err

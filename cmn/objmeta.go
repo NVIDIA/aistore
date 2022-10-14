@@ -36,7 +36,7 @@ const (
 
 // object properties
 // NOTE: embeds system `ObjAttrs` that in turn includes custom user-defined
-// NOTE: compare with `apc.ListObjsMsg`
+// NOTE: compare with `apc.LsoMsg`
 type ObjectProps struct {
 	Bck Bck `json:"bucket"`
 	ObjAttrs

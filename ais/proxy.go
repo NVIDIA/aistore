@@ -501,7 +501,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	ctype := r.Header.Get(cos.HdrContentType)
 	if r.ContentLength == 0 && !strings.HasPrefix(ctype, cos.ContentJSON) {
 		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
-		msg = &apc.ActionMsg{Action: apc.ActList, Value: &apc.ListObjsMsg{}}
+		msg = &apc.ActionMsg{Action: apc.ActList, Value: &apc.LsoMsg{}}
 	} else if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
@@ -528,7 +528,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		// list objects
 		var (
 			err   error
-			lsmsg apc.ListObjsMsg
+			lsmsg apc.LsoMsg
 			bck   = cluster.CloneBck((*cmn.Bck)(qbck))
 		)
 		if err = cos.MorphMarshal(msg.Value, &lsmsg); err != nil {
@@ -1315,7 +1315,7 @@ func crerrStatus(err error) (errCode int) {
 	return
 }
 
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg, lsmsg *apc.ListObjsMsg, beg int64) {
+func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg, lsmsg *apc.LsoMsg, beg int64) {
 	var (
 		smap           = p.owner.smap.get()
 		listRemote     bool
@@ -1358,7 +1358,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	}
 
 	var (
-		lst *cmn.ListObjects
+		lst *cmn.LsoResult
 		err error
 	)
 	if listRemote {
@@ -1932,11 +1932,11 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 // lsObjsA reads object list from all targets, combines, sorts and returns
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *cmn.ListObjects, err error) {
+func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoResult, err error) {
 	var (
 		aisMsg    *aisMsg
 		args      *bcastArgs
-		entries   []*cmn.LsObjEntry
+		entries   []*cmn.LsoEntry
 		results   sliceResults
 		smap      = p.owner.smap.get()
 		cacheID   = cacheReqID{bck: bck.Bucket(), prefix: lsmsg.Prefix}
@@ -1946,7 +1946,7 @@ func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *c
 		flags     uint32
 	)
 	if lsmsg.PageSize == 0 {
-		lsmsg.PageSize = apc.DefaultListPageSizeAIS
+		lsmsg.PageSize = apc.DefaultPageSizeAIS
 	}
 	pageSize := lsmsg.PageSize
 
@@ -1983,7 +1983,7 @@ func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *c
 	}
 	args.timeout = apc.LongTimeout
 	args.smap = smap
-	args.cresv = cresBL{} // -> cmn.ListObjects
+	args.cresv = cresBL{} // -> cmn.LsoResult
 
 	// Combine the results.
 	results = p.bcastGroup(args)
@@ -1994,7 +1994,7 @@ func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.ListObjsMsg) (allEntries *c
 			freeBcastRes(results)
 			return nil, err
 		}
-		objList := res.v.(*cmn.ListObjects)
+		objList := res.v.(*cmn.LsoResult)
 		flags |= objList.Flags
 		p.qm.b.set(lsmsg.UUID, res.si.ID(), objList.Entries, pageSize)
 	}
@@ -2011,14 +2011,14 @@ end:
 		// Since cache keeps entries with whole subset props we must create copy
 		// of the entries with smaller subset of props (if we would change the
 		// props of the `entries` it would also affect entries inside cache).
-		propsEntries := make([]*cmn.LsObjEntry, len(entries))
+		propsEntries := make([]*cmn.LsoEntry, len(entries))
 		for idx := range entries {
 			propsEntries[idx] = entries[idx].CopyWithProps(props)
 		}
 		entries = propsEntries
 	}
 
-	allEntries = &cmn.ListObjects{
+	allEntries = &cmn.LsoResult{
 		UUID:    lsmsg.UUID,
 		Entries: entries,
 		Flags:   flags,
@@ -2029,7 +2029,7 @@ end:
 	return allEntries, nil
 }
 
-func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg, wantOnlyRemote bool) (allEntries *cmn.ListObjects, err error) {
+func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.LsoMsg, wantOnlyRemote bool) (allEntries *cmn.LsoResult, err error) {
 	if lsmsg.StartAfter != "" {
 		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", lsmsg.StartAfter)
 	}
@@ -2057,7 +2057,7 @@ func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg, wantOnlyR
 				cargs.si = si
 				cargs.req = args.req
 				cargs.timeout = reqTimeout
-				cargs.cresv = cresBL{} // -> cmn.ListObjects
+				cargs.cresv = cresBL{} // -> cmn.LsoResult
 			}
 			res := p.call(cargs)
 			freeCargs(cargs)
@@ -2068,14 +2068,14 @@ func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg, wantOnlyR
 	} else {
 		args.timeout = reqTimeout
 		args.smap = smap
-		args.cresv = cresBL{} // -> cmn.ListObjects
+		args.cresv = cresBL{} // -> cmn.LsoResult
 		results = p.bcastGroup(args)
 	}
 
 	freeBcArgs(args)
 
 	// Combine the results.
-	resLists := make([]*cmn.ListObjects, 0, len(results))
+	resLists := make([]*cmn.LsoResult, 0, len(results))
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
 			continue
@@ -2085,11 +2085,11 @@ func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.ListObjsMsg, wantOnlyR
 			freeBcastRes(results)
 			return nil, err
 		}
-		resLists = append(resLists, res.v.(*cmn.ListObjects))
+		resLists = append(resLists, res.v.(*cmn.LsoResult))
 	}
 	freeBcastRes(results)
 
-	allEntries = cmn.MergeObjLists(resLists, 0)
+	allEntries = cmn.MergeLso(resLists, 0)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Objects after merge: %d, token: %q", len(allEntries.Entries), allEntries.ContinuationToken)
 	}

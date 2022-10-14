@@ -115,7 +115,7 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, err
 func (*gcpProvider) Provider() string { return apc.GCP }
 
 // https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters
-func (*gcpProvider) MaxPageSize() uint { return 1000 }
+func (*gcpProvider) MaxPageSize() uint { return apc.DefaultPageSizeCloud }
 
 ///////////////////
 // CREATE BUCKET //
@@ -151,7 +151,7 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects, errCode int, err error) {
+func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult, errCode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
@@ -175,10 +175,10 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (ls
 		return
 	}
 
-	lst = &cmn.ListObjects{Entries: make([]*cmn.LsObjEntry, 0, len(objs))}
+	lst = &cmn.LsoResult{Entries: make([]*cmn.LsoEntry, 0, len(objs))}
 	lst.ContinuationToken = nextPageToken
 	for _, attrs := range objs {
-		entry := &cmn.LsObjEntry{}
+		entry := &cmn.LsoEntry{}
 		entry.Name = attrs.Name
 		if msg.WantProp(apc.GetPropsSize) {
 			entry.Size = attrs.Size

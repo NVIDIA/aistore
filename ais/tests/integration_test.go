@@ -1181,7 +1181,7 @@ func TestAtimeRebalance(t *testing.T) {
 	// Get atime in a format that includes nanoseconds to properly check if it
 	// was updated in atime cache (if it wasn't, then the returned atime would
 	// be different from the original one, but the difference could be very small).
-	msg := &apc.ListObjsMsg{TimeFormat: time.StampNano}
+	msg := &apc.LsoMsg{TimeFormat: time.StampNano}
 	msg.AddProps(apc.GetPropsAtime, apc.GetPropsStatus)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 	lst, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -1206,7 +1206,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
-	msg = &apc.ListObjsMsg{TimeFormat: time.StampNano}
+	msg = &apc.LsoMsg{TimeFormat: time.StampNano}
 	msg.AddProps(apc.GetPropsAtime, apc.GetPropsStatus)
 	lstReb, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -1357,7 +1357,7 @@ func TestAtimePrefetch(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	timeFormat := time.RFC3339Nano
-	msg := &apc.ListObjsMsg{Props: apc.GetPropsAtime, TimeFormat: timeFormat, Prefix: objPath}
+	msg := &apc.LsoMsg{Props: apc.GetPropsAtime, TimeFormat: timeFormat, Prefix: objPath}
 	lst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != numObjs {

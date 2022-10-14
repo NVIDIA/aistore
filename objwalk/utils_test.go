@@ -47,13 +47,13 @@ func TestConcatObjLists(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var (
-				lists          = make([]*cmn.ListObjects, 0, len(test.objCounts))
+				lists          = make([]*cmn.LsoResult, 0, len(test.objCounts))
 				expectedObjCnt = 0
 			)
 			for _, objCount := range test.objCounts {
-				list := &cmn.ListObjects{}
+				list := &cmn.LsoResult{}
 				for i := 0; i < objCount; i++ {
-					list.Entries = append(list.Entries, &cmn.LsObjEntry{
+					list.Entries = append(list.Entries, &cmn.LsoEntry{
 						Name: trand.String(5),
 					})
 				}
@@ -62,7 +62,7 @@ func TestConcatObjLists(t *testing.T) {
 			}
 			expectedObjCnt = cos.Min(expectedObjCnt, int(test.maxSize))
 
-			objs := cmn.ConcatObjLists(lists, test.maxSize)
+			objs := cmn.ConcatLso(lists, test.maxSize)
 			tassert.Errorf(
 				t, test.maxSize == 0 || len(objs.Entries) == expectedObjCnt,
 				"number of objects (%d) is different than expected (%d)", len(objs.Entries), expectedObjCnt,

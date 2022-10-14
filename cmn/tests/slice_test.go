@@ -14,14 +14,14 @@ import (
 )
 
 type discardEntriesTestCase struct {
-	entries []*cmn.LsObjEntry
+	entries []*cmn.LsoEntry
 	size    int
 }
 
-func generateEntries(size int) []*cmn.LsObjEntry {
-	result := make([]*cmn.LsObjEntry, 0, size)
+func generateEntries(size int) []*cmn.LsoEntry {
+	result := make([]*cmn.LsoEntry, 0, size)
 	for i := 0; i < size; i++ {
-		result = append(result, &cmn.LsObjEntry{Name: fmt.Sprintf("%d", i)})
+		result = append(result, &cmn.LsoEntry{Name: fmt.Sprintf("%d", i)})
 	}
 	return result
 }
@@ -40,7 +40,7 @@ func TestDiscardFirstEntries(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Logf("testcase %d/%d", len(tc.entries), tc.size)
-		original := append([]*cmn.LsObjEntry(nil), tc.entries...)
+		original := append([]*cmn.LsoEntry(nil), tc.entries...)
 		entries := discardFirstEntries(tc.entries, tc.size)
 		expSize := cos.Max(0, len(original)-tc.size)
 		tassert.Errorf(t, len(entries) == expSize, "incorrect size. expected %d; got %d", expSize, len(entries))
@@ -51,7 +51,7 @@ func TestDiscardFirstEntries(t *testing.T) {
 	}
 }
 
-func discardFirstEntries(entries []*cmn.LsObjEntry, n int) []*cmn.LsObjEntry {
+func discardFirstEntries(entries []*cmn.LsoEntry, n int) []*cmn.LsoEntry {
 	if n == 0 {
 		return entries
 	}

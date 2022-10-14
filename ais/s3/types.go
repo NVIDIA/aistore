@@ -105,7 +105,7 @@ type (
 
 func ObjName(items []string) string { return path.Join(items[1:]...) }
 
-func FillMsgFromS3Query(query url.Values, msg *apc.ListObjsMsg) {
+func FillMsgFromS3Query(query url.Values, msg *apc.LsoMsg) {
 	mxStr := query.Get("max-keys")
 	if pageSize, err := strconv.Atoi(mxStr); err == nil && pageSize > 0 {
 		msg.PageSize = uint(pageSize)
@@ -138,11 +138,11 @@ func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
 	debug.AssertNoErr(err)
 }
 
-func (r *ListObjectResult) Add(entry *cmn.LsObjEntry, lsmsg *apc.ListObjsMsg) {
+func (r *ListObjectResult) Add(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) {
 	r.Contents = append(r.Contents, entryToS3(entry, lsmsg))
 }
 
-func entryToS3(entry *cmn.LsObjEntry, lsmsg *apc.ListObjsMsg) *ObjInfo {
+func entryToS3(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) *ObjInfo {
 	objInfo := &ObjInfo{
 		Key:          entry.Name,
 		LastModified: entry.Atime,
@@ -157,7 +157,7 @@ func entryToS3(entry *cmn.LsObjEntry, lsmsg *apc.ListObjsMsg) *ObjInfo {
 	return objInfo
 }
 
-func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.ListObjects, lsmsg *apc.ListObjsMsg) {
+func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.LsoResult, lsmsg *apc.LsoMsg) {
 	r.KeyCount = len(bckList.Entries)
 	r.IsTruncated = bckList.ContinuationToken != ""
 	r.ContinuationToken = bckList.ContinuationToken

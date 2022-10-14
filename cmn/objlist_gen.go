@@ -9,159 +9,7 @@ import (
 )
 
 // DecodeMsg implements msgp.Decodable
-func (z *ListObjects) DecodeMsg(dc *msgp.Reader) (err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, err = dc.ReadMapHeader()
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, err = dc.ReadMapKeyPtr()
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch msgp.UnsafeString(field) {
-		case "UUID":
-			z.UUID, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "UUID")
-				return
-			}
-		case "ContinuationToken":
-			z.ContinuationToken, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "ContinuationToken")
-				return
-			}
-		case "Entries":
-			var zb0002 uint32
-			zb0002, err = dc.ReadArrayHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "Entries")
-				return
-			}
-			if cap(z.Entries) >= int(zb0002) {
-				z.Entries = (z.Entries)[:zb0002]
-			} else {
-				z.Entries = make([]*LsObjEntry, zb0002)
-			}
-			for za0001 := range z.Entries {
-				if dc.IsNil() {
-					err = dc.ReadNil()
-					if err != nil {
-						err = msgp.WrapError(err, "Entries", za0001)
-						return
-					}
-					z.Entries[za0001] = nil
-				} else {
-					if z.Entries[za0001] == nil {
-						z.Entries[za0001] = new(LsObjEntry)
-					}
-					err = z.Entries[za0001].DecodeMsg(dc)
-					if err != nil {
-						err = msgp.WrapError(err, "Entries", za0001)
-						return
-					}
-				}
-			}
-		case "Flags":
-			z.Flags, err = dc.ReadUint32()
-			if err != nil {
-				err = msgp.WrapError(err, "Flags")
-				return
-			}
-		default:
-			err = dc.Skip()
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z *ListObjects) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 4
-	// write "UUID"
-	err = en.Append(0x84, 0xa4, 0x55, 0x55, 0x49, 0x44)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.UUID)
-	if err != nil {
-		err = msgp.WrapError(err, "UUID")
-		return
-	}
-	// write "ContinuationToken"
-	err = en.Append(0xb1, 0x43, 0x6f, 0x6e, 0x74, 0x69, 0x6e, 0x75, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x6f, 0x6b, 0x65, 0x6e)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.ContinuationToken)
-	if err != nil {
-		err = msgp.WrapError(err, "ContinuationToken")
-		return
-	}
-	// write "Entries"
-	err = en.Append(0xa7, 0x45, 0x6e, 0x74, 0x72, 0x69, 0x65, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteArrayHeader(uint32(len(z.Entries)))
-	if err != nil {
-		err = msgp.WrapError(err, "Entries")
-		return
-	}
-	for za0001 := range z.Entries {
-		if z.Entries[za0001] == nil {
-			err = en.WriteNil()
-			if err != nil {
-				return
-			}
-		} else {
-			err = z.Entries[za0001].EncodeMsg(en)
-			if err != nil {
-				err = msgp.WrapError(err, "Entries", za0001)
-				return
-			}
-		}
-	}
-	// write "Flags"
-	err = en.Append(0xa5, 0x46, 0x6c, 0x61, 0x67, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint32(z.Flags)
-	if err != nil {
-		err = msgp.WrapError(err, "Flags")
-		return
-	}
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *ListObjects) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.UUID) + 18 + msgp.StringPrefixSize + len(z.ContinuationToken) + 8 + msgp.ArrayHeaderSize
-	for za0001 := range z.Entries {
-		if z.Entries[za0001] == nil {
-			s += msgp.NilSize
-		} else {
-			s += z.Entries[za0001].Msgsize()
-		}
-	}
-	s += 6 + msgp.Uint32Size
-	return
-}
-
-// DecodeMsg implements msgp.Decodable
-func (z *LsObjEntry) DecodeMsg(dc *msgp.Reader) (err error) {
+func (z *LsoEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -244,7 +92,7 @@ func (z *LsObjEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *LsObjEntry) EncodeMsg(en *msgp.Writer) (err error) {
+func (z *LsoEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(9)
 	var zb0001Mask uint16 /* 9 bits */
@@ -398,7 +246,159 @@ func (z *LsObjEntry) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *LsObjEntry) Msgsize() (s int) {
+func (z *LsoEntry) Msgsize() (s int) {
 	s = 1 + 2 + msgp.StringPrefixSize + len(z.Name) + 3 + msgp.StringPrefixSize + len(z.Checksum) + 2 + msgp.StringPrefixSize + len(z.Atime) + 2 + msgp.StringPrefixSize + len(z.Version) + 2 + msgp.StringPrefixSize + len(z.Location) + 2 + msgp.StringPrefixSize + len(z.Custom) + 2 + msgp.Int64Size + 2 + msgp.Int16Size + 2 + msgp.Uint16Size
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *LsoResult) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "UUID":
+			z.UUID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "UUID")
+				return
+			}
+		case "ContinuationToken":
+			z.ContinuationToken, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "ContinuationToken")
+				return
+			}
+		case "Entries":
+			var zb0002 uint32
+			zb0002, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Entries")
+				return
+			}
+			if cap(z.Entries) >= int(zb0002) {
+				z.Entries = (z.Entries)[:zb0002]
+			} else {
+				z.Entries = make([]*LsoEntry, zb0002)
+			}
+			for za0001 := range z.Entries {
+				if dc.IsNil() {
+					err = dc.ReadNil()
+					if err != nil {
+						err = msgp.WrapError(err, "Entries", za0001)
+						return
+					}
+					z.Entries[za0001] = nil
+				} else {
+					if z.Entries[za0001] == nil {
+						z.Entries[za0001] = new(LsoEntry)
+					}
+					err = z.Entries[za0001].DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "Entries", za0001)
+						return
+					}
+				}
+			}
+		case "Flags":
+			z.Flags, err = dc.ReadUint32()
+			if err != nil {
+				err = msgp.WrapError(err, "Flags")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *LsoResult) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 4
+	// write "UUID"
+	err = en.Append(0x84, 0xa4, 0x55, 0x55, 0x49, 0x44)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.UUID)
+	if err != nil {
+		err = msgp.WrapError(err, "UUID")
+		return
+	}
+	// write "ContinuationToken"
+	err = en.Append(0xb1, 0x43, 0x6f, 0x6e, 0x74, 0x69, 0x6e, 0x75, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x6f, 0x6b, 0x65, 0x6e)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.ContinuationToken)
+	if err != nil {
+		err = msgp.WrapError(err, "ContinuationToken")
+		return
+	}
+	// write "Entries"
+	err = en.Append(0xa7, 0x45, 0x6e, 0x74, 0x72, 0x69, 0x65, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.Entries)))
+	if err != nil {
+		err = msgp.WrapError(err, "Entries")
+		return
+	}
+	for za0001 := range z.Entries {
+		if z.Entries[za0001] == nil {
+			err = en.WriteNil()
+			if err != nil {
+				return
+			}
+		} else {
+			err = z.Entries[za0001].EncodeMsg(en)
+			if err != nil {
+				err = msgp.WrapError(err, "Entries", za0001)
+				return
+			}
+		}
+	}
+	// write "Flags"
+	err = en.Append(0xa5, 0x46, 0x6c, 0x61, 0x67, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint32(z.Flags)
+	if err != nil {
+		err = msgp.WrapError(err, "Flags")
+		return
+	}
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *LsoResult) Msgsize() (s int) {
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.UUID) + 18 + msgp.StringPrefixSize + len(z.ContinuationToken) + 8 + msgp.ArrayHeaderSize
+	for za0001 := range z.Entries {
+		if z.Entries[za0001] == nil {
+			s += msgp.NilSize
+		} else {
+			s += z.Entries[za0001].Msgsize()
+		}
+	}
+	s += 6 + msgp.Uint32Size
 	return
 }

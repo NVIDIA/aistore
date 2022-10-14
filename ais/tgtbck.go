@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"runtime"
 	"sort"
 	"strconv"
 
@@ -196,7 +197,7 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
 func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
-	var msg *apc.ListObjsMsg
+	var msg *apc.LsoMsg
 	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
 		return
@@ -211,15 +212,14 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 			msg.PageSize = maxCloudPageSize
 		}
 	}
-	debug.Assert(msg.PageSize != 0)
-	debug.Assert(cos.IsValidUUID(msg.UUID))
+	debug.Assert(msg.PageSize > 0 && msg.PageSize < 100000 && cos.IsValidUUID(msg.UUID))
 
-	rns := xreg.RenewObjList(t, bck, msg.UUID, msg)
+	rns := xreg.RenewLso(t, bck, msg.UUID, msg)
 	xctn := rns.Entry.Get()
 	// Double check that xaction has not gone before starting page read.
 	// Restart xaction if needed.
 	if rns.Err == xs.ErrGone {
-		rns = xreg.RenewObjList(t, bck, msg.UUID, msg)
+		rns = xreg.RenewLso(t, bck, msg.UUID, msg)
 		xctn = rns.Entry.Get()
 	}
 	if rns.Err != nil {
@@ -228,19 +228,19 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 	}
 	if !rns.IsRunning() {
 		go xctn.Run(nil)
+		runtime.Gosched()
 	}
-
-	resp := xctn.(*xs.ObjListXact).Do(msg)
+	xls := xctn.(*xs.LsoXact)
+	resp := xls.Do(msg) // NOTE: blocking request/response
 	if resp.Err != nil {
 		t.writeErr(w, r, resp.Err, resp.Status)
 		return false
 	}
+	debug.Assert(resp.Lst.UUID == msg.UUID)
 
-	debug.Assert(resp.Status == http.StatusOK)
-	debug.Assert(resp.Lst.UUID != "")
-
+	// TODO: `Flags` have limited usability, consider to remove
 	if fs.MarkerExists(fname.RebalanceMarker) || reb.IsActiveGFN() {
-		resp.Lst.Flags |= cmn.ObjListFlagRebalance
+		resp.Lst.Flags = 1
 	}
 
 	return t.writeMsgPack(w, r, resp.Lst, "list_objects")

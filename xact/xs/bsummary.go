@@ -157,10 +157,10 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	}
 
 	// 2. walk local pages
-	lsmsg := &apc.ListObjsMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
+	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
 	for {
 		walk := objwalk.NewWalk(context.Background(), r.t, bck, lsmsg)
-		lst, err := walk.NextObjPage()
+		lst, err := walk.NextPageA()
 		if err != nil {
 			return err
 		}
@@ -187,10 +187,10 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	debug.Assert(bck.IsRemote())
 
 	// 3. walk remote
-	lsmsg = &apc.ListObjsMsg{Props: apc.GetPropsSize}
+	lsmsg = &apc.LsoMsg{Props: apc.GetPropsSize}
 	for {
 		walk := objwalk.NewWalk(context.Background(), r.t, bck, lsmsg)
-		lst, err := walk.NextRemoteObjPage()
+		lst, err := walk.NextPageR()
 		if err != nil {
 			return err
 		}

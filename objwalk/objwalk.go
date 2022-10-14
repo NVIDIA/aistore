@@ -22,21 +22,20 @@ type Walk struct {
 	ctx    context.Context
 	t      cluster.Target
 	bck    *cluster.Bck
-	msg    *apc.ListObjsMsg
+	msg    *apc.LsoMsg
 	wanted cos.BitFlags
 }
 
-func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.ListObjsMsg) (w *Walk) {
+func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *apc.LsoMsg) (w *Walk) {
 	w = &Walk{ctx: ctx, t: t, bck: bck, msg: msg}
 	w.wanted = wanted(msg)
 	return
 }
 
-// NextObjPage can be used when there's no need to retain results for a longer period of time
-// (use it when the results are needed immediately)
-func (w *Walk) NextObjPage() (*cmn.ListObjects, error) {
+// limited usage: bucket summary, multi-obj
+func (w *Walk) NextPageA() (*cmn.LsoResult, error) {
 	var (
-		lst = &cmn.ListObjects{}
+		lst = &cmn.LsoResult{}
 		wi  = NewWalkInfo(w.ctx, w.t, w.msg.Clone())
 	)
 
@@ -70,21 +69,26 @@ func (w *Walk) NextObjPage() (*cmn.ListObjects, error) {
 	return lst, nil
 }
 
-// Gets next page from the remote bucket's "list-objects" result set.
-func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
-	var (
-		smap            = w.t.Sowner().Get()
-		postCallback, _ = w.ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
-	)
+// Returns the next page from the remote bucket's "list-objects" result set.
+func (w *Walk) NextPageR() (*cmn.LsoResult, error) {
 	debug.Assert(!w.msg.IsFlagSet(apc.LsObjCached))
 	lst, _, err := w.t.Backend(w.bck).ListObjects(w.bck, w.msg)
 	if err != nil {
 		return nil, err
 	}
+	err = w.Populate(lst)
+	return lst, err
+}
+
+func (w *Walk) Populate(lst *cmn.LsoResult) error {
+	var (
+		smap            = w.t.Sowner().Get()
+		postCallback, _ = w.ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
+	)
 	for _, obj := range lst.Entries {
 		si, err := cluster.HrwTarget(w.bck.MakeUname(obj.Name), smap)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if si.ID() != w.t.SID() {
 			continue
@@ -93,7 +97,7 @@ func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
 		if err := lom.InitBck(w.bck.Bucket()); err != nil {
 			cluster.FreeLOM(lom)
 			if cmn.IsErrBucketNought(err) {
-				return nil, err
+				return err
 			}
 			continue
 		}
@@ -110,6 +114,5 @@ func (w *Walk) NextRemoteObjPage() (*cmn.ListObjects, error) {
 		}
 		cluster.FreeLOM(lom)
 	}
-
-	return lst, nil
+	return nil
 }

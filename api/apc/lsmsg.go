@@ -10,7 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// ListObjsMsg flags
+// LsoMsg flags
 const (
 	// Applies to objects from the buckets with remote backends (e.g., to optimize-out listing remotes)
 	// See related Flt* enum
@@ -63,7 +63,8 @@ const (
 
 // List objects default page size
 const (
-	DefaultListPageSizeAIS = 10000
+	DefaultPageSizeAIS   = 10000
+	DefaultPageSizeCloud = 1000
 )
 
 const (
@@ -85,7 +86,7 @@ const (
 	EntryStatusMask = (1 << EntryStatusBits) - 1 // mask for N low bits
 )
 
-// ListObjsMsg and HEAD(object) enum (NOTE: compare with `cmn.ObjectProps`)
+// LsoMsg and HEAD(object) enum (NOTE: compare with `cmn.ObjectProps`)
 const (
 	GetPropsName     = "name"
 	GetPropsSize     = "size"
@@ -110,7 +111,7 @@ var (
 		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation)
 )
 
-type ListObjsMsg struct {
+type LsoMsg struct {
 	UUID              string `json:"uuid"`               // ID to identify a single multi-page request
 	Props             string `json:"props"`              // object props to return, e.g. "checksum,size,custom" (Get* enum above)
 	TimeFormat        string `json:"time_format"`        // RFC822 is the default
@@ -122,10 +123,10 @@ type ListObjsMsg struct {
 }
 
 /////////////////
-// ListObjsMsg //
+// LsoMsg //
 /////////////////
 
-func (lsmsg *ListObjsMsg) WantOnlyRemoteProps() bool {
+func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
 	for _, name := range GetPropsAll {
 		if !lsmsg.WantProp(name) {
 			continue
@@ -138,11 +139,11 @@ func (lsmsg *ListObjsMsg) WantOnlyRemoteProps() bool {
 }
 
 // WantProp returns true if msg request requires to return propName property.
-func (lsmsg *ListObjsMsg) WantProp(propName string) bool {
+func (lsmsg *LsoMsg) WantProp(propName string) bool {
 	return strings.Contains(lsmsg.Props, propName)
 }
 
-func (lsmsg *ListObjsMsg) AddProps(propNames ...string) {
+func (lsmsg *LsoMsg) AddProps(propNames ...string) {
 	for _, propName := range propNames {
 		if lsmsg.WantProp(propName) {
 			continue
@@ -154,7 +155,7 @@ func (lsmsg *ListObjsMsg) AddProps(propNames ...string) {
 	}
 }
 
-func (lsmsg *ListObjsMsg) PropsSet() (s cos.StrSet) {
+func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
 	props := strings.Split(lsmsg.Props, ",")
 	s = make(cos.StrSet, len(props))
 	for _, p := range props {
@@ -163,11 +164,11 @@ func (lsmsg *ListObjsMsg) PropsSet() (s cos.StrSet) {
 	return s
 }
 
-func (lsmsg *ListObjsMsg) SetFlag(flag uint64)         { lsmsg.Flags |= flag }
-func (lsmsg *ListObjsMsg) IsFlagSet(flags uint64) bool { return lsmsg.Flags&flags == flags }
+func (lsmsg *LsoMsg) SetFlag(flag uint64)         { lsmsg.Flags |= flag }
+func (lsmsg *LsoMsg) IsFlagSet(flags uint64) bool { return lsmsg.Flags&flags == flags }
 
-func (lsmsg *ListObjsMsg) Clone() *ListObjsMsg {
-	c := &ListObjsMsg{}
+func (lsmsg *LsoMsg) Clone() *LsoMsg {
+	c := &LsoMsg{}
 	cos.CopyStruct(c, lsmsg)
 	return c
 }

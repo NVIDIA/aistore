@@ -64,7 +64,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 		}
 		proxyURL    = tools.RandomProxyURL(t)
 		baseParams  = tools.BaseAPIParams(proxyURL)
-		origEntries = make(map[string]*cmn.LsObjEntry, 1500)
+		origEntries = make(map[string]*cmn.LsoEntry, 1500)
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -72,7 +72,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 	m.puts()
 	// 1. Perform list-object and populate entries map
-	msg := &apc.ListObjsMsg{}
+	msg := &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsSize)
 	lst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -209,7 +209,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tools.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
-	msgList := &apc.ListObjsMsg{Prefix: objPath}
+	msgList := &apc.LsoMsg{Prefix: objPath}
 	lst, err := api.ListObjects(baseParams, bck, msgList, 0)
 	tassert.CheckError(t, err)
 	if lst != nil && len(lst.Entries) != objCount {
@@ -503,7 +503,7 @@ func TestShutdownListObjects(t *testing.T) {
 		}
 		proxyURL    = tools.RandomProxyURL(t)
 		baseParams  = tools.BaseAPIParams(proxyURL)
-		origEntries = make(map[string]*cmn.LsObjEntry, 1500)
+		origEntries = make(map[string]*cmn.LsoEntry, 1500)
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -512,7 +512,7 @@ func TestShutdownListObjects(t *testing.T) {
 	m.puts()
 
 	// 1. Perform list-object and populate entries map.
-	msg := &apc.ListObjsMsg{}
+	msg := &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsCopies, apc.GetPropsSize)
 	lst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)

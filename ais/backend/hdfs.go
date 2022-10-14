@@ -114,11 +114,11 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs
 // LIST OBJECTS //
 //////////////////
 
-func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects, errCode int, err error) {
+func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult, errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 
 	h := cmn.BackendHelpers.HDFS
-	lst = &cmn.ListObjects{Entries: make([]*cmn.LsObjEntry, 0, msg.PageSize)}
+	lst = &cmn.LsoResult{Entries: make([]*cmn.LsoEntry, 0, msg.PageSize)}
 	err = hp.c.Walk(bck.Props.Extra.HDFS.RefDirectory, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			if cos.IsEOF(err) {
@@ -148,7 +148,7 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst
 		if fi.IsDir() {
 			return nil
 		}
-		entry := &cmn.LsObjEntry{
+		entry := &cmn.LsoEntry{
 			Name:    objName,
 			Version: "",
 		}

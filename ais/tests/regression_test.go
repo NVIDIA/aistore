@@ -72,7 +72,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 
 	m.puts()
 
-	msg := &apc.ListObjsMsg{Props: apc.GetPropsLocation}
+	msg := &apc.LsoMsg{Props: apc.GetPropsLocation}
 	lst, err := api.ListObjects(baseParams, m.bck, msg, uint(m.num))
 	tassert.CheckFatal(t, err)
 
@@ -159,7 +159,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 
 	m.puts()
 
-	listObjectsMsg := &apc.ListObjsMsg{Props: apc.GetPropsLocation, Flags: apc.LsObjCached}
+	listObjectsMsg := &apc.LsoMsg{Props: apc.GetPropsLocation, Flags: apc.LsObjCached}
 	lst, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -383,7 +383,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 		t.Fatalf("renamed ais bucket %s does not exist after rename", rtd.renamedBck)
 	}
 
-	lst, err := api.ListObjects(baseParams, rtd.renamedBck, &apc.ListObjsMsg{}, 0)
+	lst, err := api.ListObjects(baseParams, rtd.renamedBck, &apc.LsoMsg{}, 0)
 	tassert.CheckFatal(t, err)
 	unique := make(map[string]bool)
 	for _, e := range lst.Entries {
@@ -797,7 +797,7 @@ func TestDeleteList(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that all the files have been deleted
-		msg := &apc.ListObjsMsg{Prefix: prefix}
+		msg := &apc.LsoMsg{Prefix: prefix}
 		bktlst, err := api.ListObjects(baseParams, b, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
@@ -910,13 +910,13 @@ func TestDeleteRange(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that the correct files have been deleted
-		msg := &apc.ListObjsMsg{Prefix: prefix}
+		msg := &apc.LsoMsg{Prefix: prefix}
 		bktlst, err := api.ListObjects(baseParams, b, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != objCnt-smallrangesize {
 			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), objCnt-smallrangesize)
 		}
-		filemap := make(map[string]*cmn.LsObjEntry)
+		filemap := make(map[string]*cmn.LsoEntry)
 		for _, entry := range bktlst.Entries {
 			filemap[entry.Name] = entry
 		}
@@ -1017,7 +1017,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
-	msg := &apc.ListObjsMsg{Prefix: objNamePrefix}
+	msg := &apc.LsoMsg{Prefix: objNamePrefix}
 	lst, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != expectedRemaining {
@@ -1025,7 +1025,7 @@ func TestStressDeleteRange(t *testing.T) {
 			len(lst.Entries), expectedRemaining)
 	}
 
-	objNames := make(map[string]*cmn.LsObjEntry)
+	objNames := make(map[string]*cmn.LsoEntry)
 	for _, entry := range lst.Entries {
 		objNames[entry.Name] = entry
 	}
@@ -1048,7 +1048,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// 5. Check to see that all files have been deleted
-	msg = &apc.ListObjsMsg{Prefix: objNamePrefix}
+	msg = &apc.LsoMsg{Prefix: objNamePrefix}
 	lst, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != 0 {

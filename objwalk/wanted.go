@@ -26,7 +26,7 @@ func init() {
 	}
 }
 
-func wanted(msg *apc.ListObjsMsg) (flags cos.BitFlags) {
+func wanted(msg *apc.LsoMsg) (flags cos.BitFlags) {
 	for prop, fl := range allmap {
 		if msg.WantProp(prop) {
 			flags = flags.Set(fl)
@@ -35,7 +35,7 @@ func wanted(msg *apc.ListObjsMsg) (flags cos.BitFlags) {
 	return
 }
 
-func setWanted(e *cmn.LsObjEntry, lom *cluster.LOM, tmformat string, wanted cos.BitFlags) {
+func setWanted(e *cmn.LsoEntry, lom *cluster.LOM, tmformat string, wanted cos.BitFlags) {
 	for name, fl := range allmap {
 		if !wanted.IsSet(fl) {
 			continue

@@ -71,7 +71,7 @@ func NewAWS(t cluster.Target) (cluster.BackendProvider, error) {
 func (*awsProvider) Provider() string { return apc.AWS }
 
 // https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html#cli-usage-pagination-serverside
-func (*awsProvider) MaxPageSize() uint { return 1000 }
+func (*awsProvider) MaxPageSize() uint { return apc.DefaultPageSizeCloud }
 
 ///////////////////
 // CREATE BUCKET //
@@ -135,7 +135,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs, er
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (lst *cmn.ListObjects, errCode int, err error) {
+func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		h        = cmn.BackendHelpers.Amazon
@@ -165,9 +165,9 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.ListObjsMsg) (ls
 		return
 	}
 
-	lst = &cmn.ListObjects{Entries: make([]*cmn.LsObjEntry, 0, len(resp.Contents))}
+	lst = &cmn.LsoResult{Entries: make([]*cmn.LsoEntry, 0, len(resp.Contents))}
 	for _, key := range resp.Contents {
-		entry := &cmn.LsObjEntry{Name: *key.Key}
+		entry := &cmn.LsoEntry{Name: *key.Key}
 		if msg.WantProp(apc.GetPropsSize) {
 			entry.Size = *key.Size
 		}

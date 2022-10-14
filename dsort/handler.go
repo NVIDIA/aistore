@@ -834,7 +834,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	// 	Client: http.DefaultClient,
 	// 	URL:    ctx.smap.Get().Primary.URL(cmn.NetIntraControl),
 	// }
-	// msg := &apc.ListObjsMsg{Props: "size,status"}
+	// msg := &apc.LsoMsg{Props: "size,status"}
 	// objList, err := api.ListObjects(baseParams, parsedRS.Bucket, msg, 0)
 	// if err != nil {
 	// 	return "", err

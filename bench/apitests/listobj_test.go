@@ -82,7 +82,7 @@ func BenchmarkListObject(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				msg := &apc.ListObjsMsg{PageSize: test.pageSize}
+				msg := &apc.LsoMsg{PageSize: test.pageSize}
 				if test.useCache {
 					msg.SetFlag(apc.UseListObjsCache)
 				}

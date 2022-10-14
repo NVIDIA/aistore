@@ -379,7 +379,7 @@ func listObjCallback(ctx *api.ProgressContext) {
 
 // listObjectNames returns a slice of object names of all objects that match the prefix in a bucket.
 func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]string, error) {
-	msg := &apc.ListObjsMsg{Prefix: prefix, PageSize: apc.DefaultListPageSizeAIS}
+	msg := &apc.LsoMsg{Prefix: prefix, PageSize: apc.DefaultPageSizeAIS}
 	ctx := api.NewProgressContext(listObjCallback, longListTime)
 	objList, err := api.ListObjectsWithOpts(baseParams, bck, msg, 0, ctx)
 	if err != nil {

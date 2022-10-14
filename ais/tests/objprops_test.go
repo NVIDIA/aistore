@@ -35,7 +35,7 @@ func propsStats(t *testing.T, proxyURL string) (objChanged, bytesChanged int64) 
 }
 
 func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions map[string]string,
-	msg *apc.ListObjsMsg, versionEnabled bool, cksumType string) (newVersions map[string]string) {
+	msg *apc.LsoMsg, versionEnabled bool, cksumType string) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tlog.Logln("Updating...")
 	r, err := readers.NewRandReader(int64(fileSize), cksumType)
@@ -105,7 +105,7 @@ func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[st
 	}
 }
 
-func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]string, msg *apc.ListObjsMsg, versionEnabled bool) {
+func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]string, msg *apc.LsoMsg, versionEnabled bool) {
 	// generate object list to evict 1/3rd of all objects - random selection
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
@@ -175,7 +175,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	}
 }
 
-func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[string]string, msg *apc.ListObjsMsg, versionEnabled bool) {
+func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[string]string, msg *apc.LsoMsg, versionEnabled bool) {
 	tlog.Logf("Reading...\n")
 	propsReadObjects(t, proxyURL, bck, objs)
 	tlog.Logf("Checking object properties...\n")
@@ -208,7 +208,7 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 	}
 }
 
-func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *apc.ListObjsMsg,
+func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[string]string, msg *apc.LsoMsg,
 	versionEnabled bool, cksumType string) {
 	baseParams := tools.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bck, objects)
@@ -316,7 +316,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 	}
 	m.puts()
 	// Read object versions.
-	msg := &apc.ListObjsMsg{}
+	msg := &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsVersion, apc.GetPropsAtime, apc.GetPropsStatus)
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	if reslist == nil {
@@ -600,7 +600,7 @@ func TestObjProps(t *testing.T) {
 	}
 }
 
-func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.ListObjsMsg) *cmn.ListObjects {
+func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.LsoMsg) *cmn.LsoResult {
 	if msg == nil {
 		tlog.Logf("LIST %s []\n", bck)
 	} else if msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "" {

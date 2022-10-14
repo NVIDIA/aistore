@@ -332,16 +332,16 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 }
 
 // ListObjects returns a list of objects in a bucket - a slice of structures in the
-// `cmn.ListObjects` that look like `cmn.LsObjEntry`.
+// `cmn.LsoResult` that look like `cmn.LsoEntry`.
 //
 // The `numObjects` argument is the maximum number of objects to be returned
 // (where 0 (zero) means returning all objects in the bucket).
 //
-// This API supports numerous options and flags. In particular, `apc.ListObjsMsg`
+// This API supports numerous options and flags. In particular, `apc.LsoMsg`
 // supports "opening" objects formatted as one of the supported
 // archival types and include contents of archived directories in generated
 // result sets.
-// In addition, `apc.ListObjsMsg` provides options (flags) to optimize ListObjects
+// In addition, `apc.LsoMsg` provides options (flags) to optimize ListObjects
 // performance, to list anonymous public-access Cloud buckets, and more.
 // For detals, see: `api/apc/lsmsg.go` source.
 //
@@ -352,13 +352,13 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 // See also:
 // - `ListObjectsPage` below.
 // - usage examples, see CLI docs under docs/cli.
-func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObj uint) (*cmn.ListObjects, error) {
+func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj uint) (*cmn.LsoResult, error) {
 	return ListObjectsWithOpts(bp, bck, lsmsg, numObj, nil)
 }
 
 // additional argument may include "progress-bar" context
-func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, numObj uint,
-	progress *ProgressContext) (lst *cmn.ListObjects, err error) {
+func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj uint,
+	progress *ProgressContext) (lst *cmn.LsoResult, err error) {
 	var (
 		q    url.Values
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -366,16 +366,16 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, num
 			cos.HdrAccept:      []string{cos.ContentMsgPack},
 			cos.HdrContentType: []string{cos.ContentJSON},
 		}
-		nextPage = &cmn.ListObjects{}
+		nextPage = &cmn.LsoResult{}
 		toRead   = numObj
 		listAll  = numObj == 0
 	)
 	bp.Method = http.MethodGet
 	if lsmsg == nil {
-		lsmsg = &apc.ListObjsMsg{}
+		lsmsg = &apc.LsoMsg{}
 	}
 	q = bck.AddToQuery(q)
-	lst = &cmn.ListObjects{}
+	lst = &cmn.LsoResult{}
 	lsmsg.UUID = ""
 	lsmsg.ContinuationToken = ""
 
@@ -457,13 +457,13 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg, num
 // On success the function updates `lsmsg.ContinuationToken` which client then can reuse
 // to fetch the next page.
 // See also: CLI and CLI usage examples
-// See also: `apc.ListObjsMsg`
+// See also: `apc.LsoMsg`
 // See also: `api.ListObjectsInvalidateCache`
 // See also: `api.ListObjects`
-func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg) (*cmn.ListObjects, error) {
+func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg) (*cmn.LsoResult, error) {
 	bp.Method = http.MethodGet
 	if lsmsg == nil {
-		lsmsg = &apc.ListObjsMsg{}
+		lsmsg = &apc.LsoMsg{}
 	}
 	actMsg := apc.ActionMsg{Action: apc.ActList, Value: lsmsg}
 	reqParams := AllocRp()
@@ -479,7 +479,7 @@ func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.ListObjsMsg) (*cmn.L
 	}
 
 	// NOTE: No need to preallocate bucket entries slice, we use msgpack so it will do it for us!
-	page := &cmn.ListObjects{}
+	page := &cmn.LsoResult{}
 	err := reqParams.DoHTTPReqResp(page)
 	FreeRp(reqParams)
 	if err != nil {

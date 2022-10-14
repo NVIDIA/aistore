@@ -297,12 +297,12 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 		s3.WriteErr(w, r, err, errCode)
 		return
 	}
-	lsmsg := &apc.ListObjsMsg{UUID: cos.GenUUID(), TimeFormat: time.RFC3339}
+	lsmsg := &apc.LsoMsg{UUID: cos.GenUUID(), TimeFormat: time.RFC3339}
 	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion)
 	s3.FillMsgFromS3Query(r.URL.Query(), lsmsg)
 
 	var (
-		lst        *cmn.ListObjects
+		lst        *cmn.LsoResult
 		listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
 	)
 	if listRemote {

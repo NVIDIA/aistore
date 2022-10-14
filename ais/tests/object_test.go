@@ -204,7 +204,7 @@ func TestHttpProviderObjectGet(t *testing.T) {
 	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpAnotherObjectOutput, "bad content (expected:%s got:%s)", httpAnotherObjectOutput, w.String())
 
 	// list object should contain both the objects
-	reslist, err := api.ListObjects(baseParams, hbo.Bck, &apc.ListObjsMsg{}, 0)
+	reslist, err := api.ListObjects(baseParams, hbo.Bck, &apc.LsoMsg{}, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(reslist.Entries) == 2, "should have exactly 2 entries in bucket")
 
@@ -450,7 +450,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 		fileName   = "mytestobj1.txt"
 		dataLocal  = []byte("im local")
 		dataRemote = []byte("I'm from the cloud!")
-		msg        = &apc.ListObjsMsg{Props: "size,status", Prefix: "my"}
+		msg        = &apc.LsoMsg{Props: "size,status", Prefix: "my"}
 		found      = false
 	)
 
@@ -1488,7 +1488,7 @@ func TestOperationsWithRanges(t *testing.T) {
 						err    error
 						xactID string
 						kind   string
-						msg    = &apc.ListObjsMsg{Prefix: "test/"}
+						msg    = &apc.LsoMsg{Prefix: "test/"}
 					)
 					if evict {
 						xactID, err = api.EvictRange(baseParams, b, test.rangeStr)
@@ -1521,7 +1521,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					tlog.Logf("  %d objects have been deleted/evicted\n", test.delta)
 				}
 
-				msg := &apc.ListObjsMsg{Prefix: "test/"}
+				msg := &apc.LsoMsg{Prefix: "test/"}
 				lst, err := api.ListObjects(baseParams, b, msg, 0)
 				tassert.CheckFatal(t, err)
 

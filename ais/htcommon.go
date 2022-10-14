@@ -36,7 +36,7 @@ const ua = "aisnode"
 
 const unknownDaemonID = "unknown"
 
-const msgpObjListBufSize = 32 * cos.KiB
+const msgpLsoBufSize = 32 * cos.KiB
 
 const whatRenamedLB = "renamedlb"
 
@@ -419,7 +419,7 @@ func freeBcastRes(results sliceResults) {
 
 type (
 	cresCM struct{} // -> cluMeta
-	cresBL struct{} // -> cmn.ListObjects
+	cresBL struct{} // -> cmn.LsoResult
 	cresSM struct{} // -> smapX
 	cresND struct{} // -> cluster.Snode
 	cresBA struct{} // -> cmn.BackendInfoAIS
@@ -452,7 +452,7 @@ func (res *callResult) jread(body io.Reader) { res.err = jsoniter.NewDecoder(bod
 func (res *callResult) mread(body io.Reader) {
 	vv, ok := res.v.(msgp.Decodable)
 	debug.Assert(ok)
-	buf, slab := memsys.PageMM().AllocSize(msgpObjListBufSize)
+	buf, slab := memsys.PageMM().AllocSize(msgpLsoBufSize)
 	res.err = vv.DecodeMsg(msgp.NewReaderBuf(body, buf))
 	slab.Free(buf)
 }
@@ -460,7 +460,7 @@ func (res *callResult) mread(body io.Reader) {
 func (cresCM) newV() any                              { return &cluMeta{} }
 func (c cresCM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBL) newV() any                              { return &cmn.ListObjects{} }
+func (cresBL) newV() any                              { return &cmn.LsoResult{} }
 func (c cresBL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
 
 func (cresSM) newV() any                              { return &smapX{} }
