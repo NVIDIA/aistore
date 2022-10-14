@@ -467,7 +467,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 	}
 }
 
-func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
+func (ds *dsorterGeneral) makeRecvRequestFunc() transport.RecvObj {
 	errHandler := func(err error, node *cluster.Snode, o *transport.Obj) {
 		*o = transport.Obj{Hdr: o.Hdr}
 		o.Hdr.Opaque = []byte(err.Error())
@@ -584,7 +584,7 @@ func (ds *dsorterGeneral) postExtraction() {
 	ds.mw.stopWatchingReserved()
 }
 
-func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
+func (ds *dsorterGeneral) makeRecvResponseFunc() transport.RecvObj {
 	metrics := ds.m.Metrics.Creation
 	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()

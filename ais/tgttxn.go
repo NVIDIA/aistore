@@ -776,7 +776,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 		xactID = xctn.ID()
 		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
 
-		xarch := xctn.(*xs.XactCreateArchMultiObj)
+		xarch := xctn.(*xs.XactArch)
 		// finalize the message and begin local transaction
 		archMsg.TxnUUID = c.uuid
 		archMsg.FromBckName = bckFrom.Name

@@ -147,7 +147,7 @@ func (reb *Reb) regRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
 		cos.ExitLogf("%v", err)
 	}
-	if err := transport.HandleObjStream(trnamePsh, reb.recvStageNtfn /*ReceiveObj*/); err != nil {
+	if err := transport.HandleObjStream(trnamePsh, reb.recvStageNtfn /*RecvObj*/); err != nil {
 		cos.ExitLogf("%v", err)
 	}
 }

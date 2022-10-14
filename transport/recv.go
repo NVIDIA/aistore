@@ -49,8 +49,8 @@ type (
 	}
 	handler struct {
 		mm          *memsys.MMSA
-		rxObj       ReceiveObj
-		rxMsg       ReceiveMsg
+		rxObj       RecvObj
+		rxMsg       RecvMsg
 		sessions    sync.Map
 		oldSessions sync.Map
 		hkName      string
@@ -394,7 +394,7 @@ func UID2SessID(uid uint64) (xxh, sessID uint64) {
 // 1) reads and discards all the data from `r` - the `objReader`;
 // 2) frees this objReader back to the `recvPool`.
 // As such, this function is intended for usage only and exclusively by
-// `transport.ReceiveObj` implementations.
+// `transport.RecvObj` implementations.
 func DrainAndFreeReader(r io.Reader) {
 	if r == nil {
 		return

@@ -66,7 +66,7 @@ type (
 	archwi struct { // archival work item; implements lrwi
 		writer    archWriter
 		err       error
-		r         *XactCreateArchMultiObj
+		r         *XactArch
 		msg       *cmn.ArchiveMsg
 		tsi       *cluster.Snode
 		lom       *cluster.LOM // of the archive
@@ -80,7 +80,7 @@ type (
 		refc       atomic.Int32
 		finalizing atomic.Bool
 	}
-	XactCreateArchMultiObj struct {
+	XactArch struct {
 		streamingX
 		bckFrom *cluster.Bck
 		workCh  chan *cmn.ArchiveMsg
@@ -94,7 +94,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*XactCreateArchMultiObj)(nil)
+	_ cluster.Xact   = (*XactArch)(nil)
 	_ xreg.Renewable = (*archFactory)(nil)
 	_ lrwi           = (*archwi)(nil)
 
@@ -115,11 +115,14 @@ func (*archFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 
 func (p *archFactory) Start() error {
 	workCh := make(chan *cmn.ArchiveMsg, maxNumInParallel)
-	r := &XactCreateArchMultiObj{streamingX: streamingX{p: &p.streamingF}, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
+	r := &XactArch{streamingX: streamingX{p: &p.streamingF}, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xctn = r
 	r.DemandBase.Init(p.UUID(), apc.ActArchive, p.Bck, 0 /*use default*/)
-	if err := p.newDM("arch", r.recv, 0); err != nil {
+
+	bmd := p.Args.T.Bowner().Get()
+	trname := fmt.Sprintf("arch-%s-%s-%d", p.Bck.Provider, p.Bck.Name, bmd.Version) // NOTE: (bmd.Version)
+	if err := p.newDM(trname, r.recv, 0 /*pdu*/); err != nil {
 		return err
 	}
 	r.p.dm.SetXact(r)
@@ -129,11 +132,11 @@ func (p *archFactory) Start() error {
 	return nil
 }
 
-////////////////////////////
-// XactCreateArchMultiObj //
-////////////////////////////
+//////////////
+// XactArch //
+//////////////
 
-func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
+func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 	lom := cluster.AllocLOM(msg.ArchName)
 	if err = lom.InitBck(&msg.ToBck); err != nil {
 		r.raiseErr(err, 0, msg.ContinueOnError)
@@ -196,12 +199,12 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	return
 }
 
-func (r *XactCreateArchMultiObj) Do(msg *cmn.ArchiveMsg) {
+func (r *XactArch) Do(msg *cmn.ArchiveMsg) {
 	r.IncPending()
 	r.workCh <- msg
 }
 
-func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
+func (r *XactArch) Run(wg *sync.WaitGroup) {
 	var err error
 	glog.Infoln(r.Name())
 	wg.Done()
@@ -259,25 +262,26 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 		}
 	}
 fin:
-	err = r.streamingX.fin(err)
-	if err != nil {
-		// cleanup: close and rm unfinished archives (NOTE: see finalize)
-		r.pending.Lock()
-		for uuid, wi := range r.pending.m {
-			if wi.finalizing.Load() {
-				continue
-			}
-			if wi.fh != nil && wi.appendPos == 0 {
-				cos.Close(wi.fh)
-				cos.RemoveFile(wi.fqn)
-			}
-			delete(r.pending.m, uuid)
-		}
-		r.pending.Unlock()
+	if r.streamingX.fin(err) == nil {
+		return
 	}
+
+	// [cleanup] close and rm unfinished archives (compare w/ `finalize`)
+	r.pending.Lock()
+	for uuid, wi := range r.pending.m {
+		if wi.finalizing.Load() {
+			continue
+		}
+		if wi.fh != nil && wi.appendPos == 0 {
+			cos.Close(wi.fh)
+			cos.RemoveFile(wi.fqn)
+		}
+		delete(r.pending.m, uuid)
+	}
+	r.pending.Unlock()
 }
 
-func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
+func (r *XactArch) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 	o := transport.AllocSend()
 	hdr := &o.Hdr
 	{
@@ -292,7 +296,7 @@ func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.Rea
 	r.p.dm.Send(o, fh, wi.tsi)
 }
 
-func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	r.IncPending()
 	defer func() {
 		r.DecPending()
@@ -324,7 +328,7 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 	return nil
 }
 
-func (r *XactCreateArchMultiObj) finalize(wi *archwi) {
+func (r *XactArch) finalize(wi *archwi) {
 	if q := wi.quiesce(); q == cluster.QuiAborted {
 		r.raiseErr(cmn.NewErrAborted(r.Name(), "", nil), 0, wi.msg.ContinueOnError)
 	} else if q == cluster.QuiTimeout {
@@ -345,7 +349,7 @@ func (r *XactCreateArchMultiObj) finalize(wi *archwi) {
 	}
 }
 
-func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
+func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	var size int64
 	wi.writer.fini()
 	if size, err = wi.finalize(); err != nil {

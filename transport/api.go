@@ -91,8 +91,8 @@ type (
 	StreamCollector struct{}
 
 	// Rx callbacks
-	ReceiveObj func(hdr ObjHdr, object io.Reader, err error) error
-	ReceiveMsg func(msg Msg, err error) error
+	RecvObj func(hdr ObjHdr, object io.Reader, err error) error
+	RecvMsg func(msg Msg, err error) error
 )
 
 ///////////////////
@@ -214,7 +214,7 @@ func (s *MsgStream) Fin() {
 // receive-side API //
 //////////////////////
 
-func HandleObjStream(trname string, rxObj ReceiveObj, mems ...*memsys.MMSA) error {
+func HandleObjStream(trname string, rxObj RecvObj, mems ...*memsys.MMSA) error {
 	var mm *memsys.MMSA
 	if len(mems) > 0 {
 		mm = mems[0]
@@ -225,7 +225,7 @@ func HandleObjStream(trname string, rxObj ReceiveObj, mems ...*memsys.MMSA) erro
 	return h.handle()
 }
 
-func HandleMsgStream(trname string, rxMsg ReceiveMsg) error {
+func HandleMsgStream(trname string, rxMsg RecvMsg) error {
 	mm := memsys.ByteMM()
 	h := &handler{trname: trname, rxMsg: rxMsg, hkName: MsgURLPath(trname), mm: mm}
 	return h.handle()

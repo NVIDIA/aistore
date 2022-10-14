@@ -719,7 +719,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	}
 }
 
-func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
+func makeRecvFunc(t *testing.T) (*int64, transport.RecvObj) {
 	totalReceived := new(int64)
 	return totalReceived, func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil || cos.IsEOF(err))

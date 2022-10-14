@@ -652,7 +652,7 @@ func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x any, er
 	}
 }
 
-func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
+func (m *Manager) makeRecvShardFunc() transport.RecvObj {
 	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		defer transport.DrainAndFreeReader(object)
 		if err != nil {

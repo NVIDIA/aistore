@@ -545,7 +545,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 
 func (*dsorterMem) postExtraction() {}
 
-func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
+func (ds *dsorterMem) makeRecvRequestFunc() transport.RecvObj {
 	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()
 		defer func() {
@@ -574,7 +574,7 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 	}
 }
 
-func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
+func (ds *dsorterMem) makeRecvResponseFunc() transport.RecvObj {
 	metrics := ds.m.Metrics.Creation
 	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
 		ds.m.inFlightInc()

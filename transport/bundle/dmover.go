@@ -26,14 +26,14 @@ type (
 		t    cluster.Target
 		data struct {
 			trname  string
-			recv    transport.ReceiveObj
+			recv    transport.RecvObj
 			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
 			streams *Streams
 			client  transport.Client
 		}
 		ack struct {
 			trname  string
-			recv    transport.ReceiveObj
+			recv    transport.RecvObj
 			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraControl
 			streams *Streams
 			client  transport.Client
@@ -53,7 +53,7 @@ type (
 	}
 	// additional (and optional) params for new data mover
 	Extra struct {
-		RecvAck     transport.ReceiveObj
+		RecvAck     transport.RecvObj
 		Compression string
 		Multiplier  int
 		SizePDU     int32
@@ -68,7 +68,7 @@ var _ cluster.DataMover = (*DataMover)(nil)
 // is saved to local drives(e.g, PUT the object to the Cloud as well).
 // For DMs that do not create new objects(e.g, rebalance), owt should
 // be set to `OwtMigrate`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
-func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, owt cmn.OWT, extra Extra) (*DataMover, error) {
+func NewDataMover(t cluster.Target, trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) (*DataMover, error) {
 	dm := &DataMover{t: t, config: cmn.GCO.Get(), mem: t.PageMM()}
 	dm.owt = owt
 	dm.multiplier = extra.Multiplier
@@ -154,7 +154,22 @@ func (dm *DataMover) Open() {
 	dm.stage.opened.Store(true)
 }
 
-func (dm *DataMover) IsOpen() bool { return dm.stage.opened.Load() }
+func (dm *DataMover) IsOpen() bool        { return dm.stage.opened.Load() }
+func (dm *DataMover) Smap() *cluster.Smap { return dm.data.streams.Smap() }
+
+func (dm *DataMover) String() string {
+	s := "pre-or-post-"
+	switch {
+	case dm.stage.opened.Load():
+		s = "open-"
+	case dm.stage.regred.Load():
+		s = "reg-" // not open yet or closed but not unreg-ed yet
+	}
+	if dm.data.streams.UsePDU() {
+		return "dm-pdu-" + s + dm.data.streams.Trname()
+	}
+	return "dm-" + s + dm.data.streams.Trname()
+}
 
 // quiesce *local* Rx
 func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
@@ -214,7 +229,7 @@ func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *clus
 
 func (dm *DataMover) Bcast(obj *transport.Obj) (err error) {
 	smap := dm.data.streams.Smap()
-	if smap.CountTargets() > 1 {
+	if smap.CountActiveTargets() > 1 {
 		err = dm.data.streams.Send(obj, nil)
 	}
 	return

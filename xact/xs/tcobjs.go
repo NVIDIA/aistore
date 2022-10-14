@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -72,7 +73,9 @@ func (p *tcoFactory) Start() error {
 	if p.kind == apc.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize
 	}
-	if err := p.newDM("tco", r.recv, sizePDU); err != nil {
+	bmd := p.Args.T.Bowner().Get()
+	trname := fmt.Sprintf("tco-%s-%s-%d", p.Bck.Provider, p.Bck.Name, bmd.Version) // NOTE: (bmd.Version)
+	if err := p.newDM(trname, r.recv, sizePDU); err != nil {
 		return err
 	}
 	p.dm.SetXact(r)

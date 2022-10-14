@@ -113,7 +113,7 @@ type (
 		txnBckBase
 	}
 	txnArchMultiObj struct {
-		xarch *xs.XactCreateArchMultiObj
+		xarch *xs.XactArch
 		msg   *cmn.ArchiveMsg
 		txnBckBase
 	}
@@ -572,8 +572,7 @@ func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 // txnCreateArchMultiObj //
 ///////////////////////////
 
-func newTxnArchMultiObj(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactCreateArchMultiObj,
-	msg *cmn.ArchiveMsg) (txn *txnArchMultiObj) {
+func newTxnArchMultiObj(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactArch, msg *cmn.ArchiveMsg) (txn *txnArchMultiObj) {
 	txn = &txnArchMultiObj{xarch: xarch, msg: msg}
 	txn.init(bckFrom)
 	txn.fillFromCtx(c)

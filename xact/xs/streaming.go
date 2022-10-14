@@ -50,9 +50,9 @@ type (
 	}
 )
 
-///////////////////////////
-// (common factory part) //
-///////////////////////////
+//
+// (common factory part)
+//
 
 func (p *streamingF) Kind() string      { return p.kind }
 func (p *streamingF) Get() cluster.Xact { return p.xctn }
@@ -62,14 +62,11 @@ func (p *streamingF) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-// NOTE: transport endpoint `trname` identifies the flow and must be identical across all participating targets
-func (p *streamingF) newDM(prefix string, recv transport.ReceiveObj, sizePDU int32) (err error) {
-	bmd := p.Args.T.Bowner().Get()
-	trname := fmt.Sprintf("%s-%s-%s-%d", prefix, p.Bck.Provider, p.Bck.Name, bmd.Version)
-
-	// NOTE: stream-bundle multiplier always 1 (see also: `SbundleMult`)
-	dmExtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
-	p.dm, err = bundle.NewDataMover(p.Args.T, trname, recv, cmn.OwtPut, dmExtra)
+// NOTE 1: transport endpoint `trname` identifies the flow and must be identical across all participating targets
+// NOTE 2: stream-bundle multiplier always 1 (see also: `SbundleMult`)
+func (p *streamingF) newDM(trname string, recv transport.RecvObj, sizePDU int32) (err error) {
+	dmxtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
+	p.dm, err = bundle.NewDataMover(p.Args.T, trname, recv, cmn.OwtPut, dmxtra)
 	if err != nil {
 		return
 	}
@@ -86,9 +83,11 @@ func (p *streamingF) newDM(prefix string, recv transport.ReceiveObj, sizePDU int
 	return
 }
 
-///////////////////////////
-// (common xaction part) //
-///////////////////////////
+//
+// (common xaction part)
+//
+
+func (r *streamingX) String() string { return r.DemandBase.String() + "-" + r.p.dm.String() }
 
 // limited pre-run abort
 func (r *streamingX) TxnAbort() {
@@ -132,6 +131,11 @@ func (r *streamingX) eoi(uuid string, tsi *cluster.Snode) {
 
 func (r *streamingX) fin(err error) error {
 	if r.DemandBase.Finished() {
+		// aborted?
+		if r.p.dm.IsOpen() {
+			r.p.dm.Close(err)
+		}
+		r.p.dm.UnregRecv()
 		return err
 	}
 	r.DemandBase.Stop()
