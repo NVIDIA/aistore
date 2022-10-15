@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/dbdriver"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 )
 
 const secretKeyPodEnv = "SECRETKEY" // via https://kubernetes.io/docs/concepts/configuration/secret
@@ -82,7 +82,7 @@ func main() {
 		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
 	dbPath := filepath.Join(configDir, fname.AuthNDB)
-	driver, err := dbdriver.NewBuntDB(dbPath)
+	driver, err := kvdb.NewBuntDB(dbPath)
 	if err != nil {
 		cos.ExitLogf("Failed to init local database: %v", err)
 	}

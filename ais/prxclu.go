@@ -397,14 +397,14 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	p.owner.smap.Lock()
+	p.owner.smap.mu.Lock()
 	update, err := p.handleJoinKalive(nsi, regReq.Smap, apiOp, nsi.Flags)
 	if !nsi.IsProxy() && p.NodeStarted() {
 		if p.owner.rmd.rebalance.CAS(false, regReq.RebInterrupted) && regReq.RebInterrupted {
 			glog.Errorf("%s: target %s reports interrupted rebalance", p, nsi.StringEx())
 		}
 	}
-	p.owner.smap.Unlock()
+	p.owner.smap.mu.Unlock()
 	if err != nil {
 		p.writeErr(w, r, err)
 		return

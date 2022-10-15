@@ -30,8 +30,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
@@ -375,7 +375,7 @@ func (t *target) Run() error {
 
 	t.backend.init(t, true /*starting*/)
 
-	db, err := dbdriver.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
+	db, err := kvdb.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
 	if err != nil {
 		glog.Errorf("Failed to initialize DB: %v", err)
 		return err

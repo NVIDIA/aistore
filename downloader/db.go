@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/dbdriver"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 )
 
 const (
@@ -31,13 +31,13 @@ var errJobNotFound = errors.New("job not found")
 
 type downloaderDB struct {
 	mtx    sync.RWMutex
-	driver dbdriver.Driver
+	driver kvdb.Driver
 
 	errCache      map[string][]TaskErrInfo // memory cache for errors, see: errCacheSize
 	taskInfoCache map[string][]TaskDlInfo  // memory cache for tasks, see: taskInfoCacheSize
 }
 
-func newDownloadDB(driver dbdriver.Driver) *downloaderDB {
+func newDownloadDB(driver kvdb.Driver) *downloaderDB {
 	return &downloaderDB{
 		driver:        driver,
 		errCache:      make(map[string][]TaskErrInfo, 10),
@@ -48,7 +48,7 @@ func newDownloadDB(driver dbdriver.Driver) *downloaderDB {
 func (db *downloaderDB) errors(id string) (errors []TaskErrInfo, err error) {
 	key := path.Join(downloaderErrors, id)
 	if err := db.driver.Get(downloaderCollection, key, &errors); err != nil {
-		if !dbdriver.IsErrNotFound(err) {
+		if !kvdb.IsErrNotFound(err) {
 			glog.Error(err)
 			return nil, err
 		}
@@ -95,7 +95,7 @@ func (db *downloaderDB) persistError(id, objName, errMsg string) {
 func (db *downloaderDB) tasks(id string) (tasks []TaskDlInfo, err error) {
 	key := path.Join(downloaderTasks, id)
 	if err := db.driver.Get(downloaderCollection, key, &tasks); err != nil {
-		if !dbdriver.IsErrNotFound(err) {
+		if !kvdb.IsErrNotFound(err) {
 			glog.Error(err)
 			return nil, err
 		}

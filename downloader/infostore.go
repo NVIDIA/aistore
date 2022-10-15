@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dbdriver"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/hk"
 )
 
 var (
 	// global downloader info store
-	db          dbdriver.Driver
+	db          kvdb.Driver
 	dlStore     *infoStore
 	dlStoreOnce sync.Once
 )
@@ -32,15 +32,15 @@ type (
 	}
 )
 
-func SetDB(dbdrv dbdriver.Driver) { db = dbdrv }
+func SetDB(dbdrv kvdb.Driver) { db = dbdrv }
 
-func initInfoStore(db dbdriver.Driver) {
+func initInfoStore(db kvdb.Driver) {
 	dlStoreOnce.Do(func() {
 		dlStore = newInfoStore(db)
 	})
 }
 
-func newInfoStore(driver dbdriver.Driver) *infoStore {
+func newInfoStore(driver kvdb.Driver) *infoStore {
 	db := newDownloadDB(driver)
 	is := &infoStore{
 		downloaderDB: db,

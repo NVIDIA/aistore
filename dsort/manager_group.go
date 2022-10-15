@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/dbdriver"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/hk"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
@@ -30,15 +30,15 @@ var Managers *ManagerGroup
 type ManagerGroup struct {
 	mtx      sync.Mutex // Synchronizes reading managers field and db access
 	managers map[string]*Manager
-	db       dbdriver.Driver
+	db       kvdb.Driver
 }
 
-func InitManagers(db dbdriver.Driver) {
+func InitManagers(db kvdb.Driver) {
 	Managers = NewManagerGroup(db, false)
 }
 
 // NewManagerGroup returns new, initialized manager group.
-func NewManagerGroup(db dbdriver.Driver, skipHk bool) *ManagerGroup {
+func NewManagerGroup(db kvdb.Driver, skipHk bool) *ManagerGroup {
 	mg := &ManagerGroup{
 		managers: make(map[string]*Manager, 1),
 		db:       db,
@@ -187,7 +187,7 @@ func (mg *ManagerGroup) housekeep() time.Duration {
 
 	records, err := mg.db.GetAll(dsortCollection, managersKey)
 	if err != nil {
-		if dbdriver.IsErrNotFound(err) {
+		if kvdb.IsErrNotFound(err) {
 			return regularInterval
 		}
 

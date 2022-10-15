@@ -1,15 +1,14 @@
-// Package dbdriver provides a local database server for the AIStore object storage.
+// Package kvdb provides a local key/value database server for AIS.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package dbdriver
+package kvdb
 
 import (
 	"fmt"
 	"strings"
 )
 
-// General info:
 // ## Collection ##
 //   For some databases(e.g., 'buntdb' or 'pudge') the collection is a pure
 //   virtual stuff: it is just a prefix of a key in database. But it seems
@@ -23,7 +22,7 @@ import (
 //   trailing '*' is added automatically
 // ## Errors ##
 //   Different databases use different ways to returns erros. A driver must
-//   convert original ones to `dbdriver` package errors for clients.
+//   standardize across.
 
 const CollectionSepa = "##"
 

@@ -202,7 +202,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	)
 
 	// 1: init Smap to accept reg-s
-	p.owner.smap.Lock()
+	p.owner.smap.mu.Lock()
 	si := p.si.Clone()
 	smap.Primary = si
 	smap.addProxy(si)
@@ -210,7 +210,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		smap.UUID = loadedSmap.UUID
 	}
 	p.owner.smap.put(smap)
-	p.owner.smap.Unlock()
+	p.owner.smap.mu.Unlock()
 
 	p.markNodeStarted()
 
@@ -240,7 +240,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 			before, after cluMeta
 			added         int
 		)
-		p.owner.smap.Lock()
+		p.owner.smap.mu.Lock()
 		clone := p.owner.smap.get().clone()
 		if loadedSmap != nil {
 			added, _ = clone.merge(loadedSmap, true /*override (IP, port) duplicates*/)
@@ -257,7 +257,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 
 		uuid, created = smap.UUID, smap.CreationTime
 		p.owner.smap.put(smap)
-		p.owner.smap.Unlock()
+		p.owner.smap.mu.Unlock()
 
 		msg := p.newAmsgStr(metaction1, after.BMD)
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{after.BMD, msg})
@@ -272,10 +272,10 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		glog.Infof("%s: no registrations yet", p.si.StringEx())
 		if loadedSmap != nil {
 			glog.Infof("%s: keep going w/ local %s", p.si.StringEx(), loadedSmap.StringEx())
-			p.owner.smap.Lock()
+			p.owner.smap.mu.Lock()
 			smap = loadedSmap
 			p.owner.smap.put(smap)
-			p.owner.smap.Unlock()
+			p.owner.smap.mu.Unlock()
 		}
 	}
 
@@ -283,10 +283,10 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	p.discoverMeta(smap)
 
 	// 4: still primary?
-	p.owner.smap.Lock()
+	p.owner.smap.mu.Lock()
 	smap = p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
-		p.owner.smap.Unlock()
+		p.owner.smap.mu.Unlock()
 		glog.Infof("%s: registering with primary %s", p.si.StringEx(), smap.Primary.StringEx())
 		if err := p.secondaryStartup(smap); err != nil {
 			cos.ExitLogf("FATAL: %v", err)
@@ -322,7 +322,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	if err := p.owner.smap.persist(smap); err != nil {
 		cos.ExitLogf("%s (primary), err: %v", p.si, err)
 	}
-	p.owner.smap.Unlock()
+	p.owner.smap.mu.Unlock()
 
 	// 6. initialize BMD
 	bmd := p.owner.bmd.get().clone()
@@ -455,16 +455,16 @@ until:
 	}
 	debug.AssertNoErr(smap.validate())
 	//
-	// NOTE: under Smap lock to serialize vs node joins (see httpclupost)
+	// NOTE: under Smap lock to serialize vs node joins (see `httpclupost`)
 	//
-	p.owner.smap.Lock()
+	p.owner.smap.mu.Lock()
 	if !p.owner.rmd.rebalance.CAS(true, false) {
-		p.owner.smap.Unlock() // nothing to do
+		p.owner.smap.mu.Unlock() // nothing to do
 		return
 	}
 	smap = p.owner.smap.get()
 	if smap.version() != ver {
-		p.owner.smap.Unlock()
+		p.owner.smap.mu.Unlock()
 		goto until
 	}
 	if smap.CountActiveTargets() < 2 {
@@ -484,7 +484,7 @@ until:
 	}
 	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
 	p.owner.rmd.startup.Store(false)
-	p.owner.smap.Unlock()
+	p.owner.smap.mu.Unlock()
 
 	wg.Wait()
 	glog.Errorf("%s: resuming global rebalance (%s, %s)", p.si.StringEx(), smap.StringEx(), rmd.String())
@@ -623,7 +623,7 @@ func (p *proxy) discoverMeta(smap *smapX) {
 			p.si.StringEx(), smap.StringEx(), svm.Smap.StringEx())
 	}
 merge:
-	p.owner.smap.Lock()
+	p.owner.smap.mu.Lock()
 	clone := p.owner.smap.get().clone()
 	if !eq {
 		glog.Infof("%s: merge local %s <== %s", p.si.StringEx(), clone, svm.Smap)
@@ -636,7 +636,7 @@ merge:
 	}
 	clone.Version = cos.MaxI64(clone.version(), svm.Smap.version()) + 1
 	p.owner.smap.put(clone)
-	p.owner.smap.Unlock()
+	p.owner.smap.mu.Unlock()
 	glog.Infof("%s: merged %s", p.si.StringEx(), clone.pp())
 }
 

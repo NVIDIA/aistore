@@ -27,17 +27,12 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-////////////////////////////////
-// notification receiver      //
-// see also cluster/notif.go //
-//////////////////////////////
-
-// TODO: cmn.UponProgress as periodic (byte-count, object-count)
+// Notification "receiver"
+// TODO: UponProgress as periodic (byte-count, object-count)
 // TODO: batch housekeeping for pending notifications
 // TODO: add an option to enforce 'if one notifier fails all fail'
 // TODO: housekeeping: broadcast in a separate goroutine
 
-// notification category
 const (
 	notifsName       = "p-notifs"
 	notifsHousekeepT = 2 * time.Minute
@@ -46,8 +41,8 @@ const (
 
 type (
 	listeners struct {
-		sync.RWMutex
 		m map[string]nl.NotifListener // [UUID => NotifListener]
+		sync.RWMutex
 	}
 
 	notifs struct {
@@ -55,11 +50,12 @@ type (
 		nls *listeners // running
 		fin *listeners // finished
 
-		mu       sync.Mutex
 		added    []nl.NotifListener // reusable slice of `nl` to add to `nls`
 		removed  []nl.NotifListener // reusable slice of `nl` to remove from `nls`
 		finished []nl.NotifListener // reusable slice of `nl` to add to `fin`
-		smapVer  int64
+
+		smapVer int64
+		mu      sync.Mutex
 	}
 	jsonNotifs struct {
 		Running  []*notifListenMsg `json:"running"`
@@ -67,10 +63,6 @@ type (
 	}
 
 	nlFilter xreg.XactFilter
-
-	//
-	// notification messages
-	//
 
 	// receiver to start listening
 	notifListenMsg struct {
@@ -142,7 +134,7 @@ func (l *listeners) exists(uuid string) (ok bool) {
 }
 
 // returns a listener that matches the filter condition.
-// for finished xaction listeners, returns latest listener (i.e. having highest finish time)
+// for finished xaction listeners, returns latest listener (i.e. the one that finished most recently)
 func (l *listeners) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
 	l.RLock()
 	defer l.RUnlock()

@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dbdriver"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -26,7 +26,7 @@ import (
 type mgr struct {
 	clientHTTP  *http.Client
 	clientHTTPS *http.Client
-	db          dbdriver.Driver
+	db          kvdb.Driver
 }
 
 var (
@@ -44,7 +44,7 @@ var (
 )
 
 // If user DB exists, loads the data from the file and decrypts passwords
-func newMgr(driver dbdriver.Driver) (*mgr, error) {
+func newMgr(driver kvdb.Driver) (*mgr, error) {
 	timeout := time.Duration(Conf.Timeout.Default)
 	clientHTTP := cmn.NewClient(cmn.TransportArgs{Timeout: timeout})
 	clientHTTPS := cmn.NewClient(cmn.TransportArgs{
@@ -516,7 +516,7 @@ func isSamePassword(password, hashed string) bool {
 }
 
 // If the DB is empty, the function prefills some data
-func initializeDB(driver dbdriver.Driver) error {
+func initializeDB(driver kvdb.Driver) error {
 	users, err := driver.List(usersCollection, "")
 	if err != nil || len(users) != 0 {
 		// return on erros or when DB is already initialized

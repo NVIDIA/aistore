@@ -1,7 +1,6 @@
-// Package stats provides methods and functionality to register, track, log,
-// and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
+// Package mock provides a variety of mock implementations used for testing.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package mock
 

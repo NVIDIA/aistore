@@ -56,17 +56,17 @@ type (
 		cluster.Smap
 	}
 	smapOwner struct {
-		sync.Mutex
-		smap      atomic.Pointer
-		listeners *smapLis
-		immSize   int64
-		fpath     string
+		smap    atomic.Pointer
+		sls     *sls
+		fpath   string
+		immSize int64
+		mu      sync.Mutex
 	}
-	smapLis struct {
-		sync.RWMutex
+	sls struct {
 		listeners map[string]cluster.Slistener
 		postCh    chan int64
 		wg        sync.WaitGroup
+		mu        sync.RWMutex
 		running   atomic.Bool
 	}
 	smapModifier struct {
@@ -105,7 +105,7 @@ const clusterMap = "Smap"
 var (
 	_ revs                  = (*smapX)(nil)
 	_ cluster.Sowner        = (*smapOwner)(nil)
-	_ cluster.SmapListeners = (*smapLis)(nil)
+	_ cluster.SmapListeners = (*sls)(nil)
 )
 
 // as revs
@@ -435,8 +435,8 @@ func (m *smapX) clearNodeFlags(id string, flags cos.BitFlags) {
 
 func newSmapOwner(config *cmn.Config) *smapOwner {
 	return &smapOwner{
-		listeners: newSmapListeners(),
-		fpath:     filepath.Join(config.ConfigDir, fname.Smap),
+		sls:   newSmapListeners(),
+		fpath: filepath.Join(config.ConfigDir, fname.Smap),
 	}
 }
 
@@ -455,7 +455,7 @@ func (r *smapOwner) load(smap *smapX) (loaded bool, err error) {
 }
 
 func (r *smapOwner) Get() *cluster.Smap               { return &r.get().Smap }
-func (r *smapOwner) Listeners() cluster.SmapListeners { return r.listeners }
+func (r *smapOwner) Listeners() cluster.SmapListeners { return r.sls }
 
 //
 // private
@@ -465,7 +465,7 @@ func (r *smapOwner) put(smap *smapX) {
 	smap.InitDigests()
 	smap.vstr = strconv.FormatInt(smap.Version, 10)
 	r.smap.Store(unsafe.Pointer(smap))
-	r.listeners.notify(smap.version())
+	r.sls.notify(smap.version())
 }
 
 func (r *smapOwner) get() (smap *smapX) {
@@ -477,7 +477,7 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, payload msPay
 		debug.Assertf(false, "%s: %s is invalid: %v", si, newSmap, err)
 		return
 	}
-	r.Lock()
+	r.mu.Lock()
 	smap := r.Get()
 	if nsi := newSmap.GetNode(si.ID()); nsi != nil && si.Flags != nsi.Flags {
 		glog.Warningf("%s changing flags from %#b to %#b", si, si.Flags, nsi.Flags)
@@ -490,7 +490,7 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, payload msPay
 				// NOTE: considered benign in most cases
 				err = newErrDowngrade(si, smap.String(), newSmap.String())
 			}
-			r.Unlock()
+			r.mu.Unlock()
 			return
 		}
 	}
@@ -500,7 +500,7 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, payload msPay
 	if err == nil {
 		r.put(newSmap)
 	}
-	r.Unlock()
+	r.mu.Unlock()
 	return
 }
 
@@ -537,8 +537,8 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 }
 
 func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
-	r.Lock()
-	defer r.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	ctx.smap = r.get()
 	clone = ctx.smap.clone()
 	if err = ctx.pre(ctx, clone); err != nil {
@@ -572,18 +572,18 @@ func (r *smapOwner) modify(ctx *smapModifier) error {
 }
 
 /////////////
-// smapLis //
+// sls //
 /////////////
 
-func newSmapListeners() *smapLis {
-	sls := &smapLis{
+func newSmapListeners() *sls {
+	sls := &sls{
 		listeners: make(map[string]cluster.Slistener, 8),
 		postCh:    make(chan int64, 8),
 	}
 	return sls
 }
 
-func (sls *smapLis) run() {
+func (sls *sls) run() {
 	// drain
 	for len(sls.postCh) > 0 {
 		<-sls.postCh
@@ -594,13 +594,13 @@ func (sls *smapLis) run() {
 		if ver == -1 {
 			break
 		}
-		sls.RLock()
+		sls.mu.RLock()
 		for _, l := range sls.listeners {
 			// NOTE: Reg() or Unreg() from inside ListenSmapChanged() callback
 			//       may cause a trivial deadlock
 			l.ListenSmapChanged()
 		}
-		sls.RUnlock()
+		sls.mu.RUnlock()
 	}
 	// drain
 	for len(sls.postCh) > 0 {
@@ -608,23 +608,22 @@ func (sls *smapLis) run() {
 	}
 }
 
-func (sls *smapLis) Reg(sl cluster.Slistener) {
+func (sls *sls) Reg(sl cluster.Slistener) {
 	cos.Assert(sl.String() != "")
-	sls.Lock()
+	sls.mu.Lock()
 	_, ok := sls.listeners[sl.String()]
-	cos.Assert(!ok)
+	debug.Assert(!ok)
 	sls.listeners[sl.String()] = sl
 	if len(sls.listeners) == 1 {
 		sls.wg.Add(1)
 		go sls.run()
 		sls.wg.Wait()
 	}
-	sls.Unlock()
-	glog.Infof("registered %s listener %q", clusterMap, sl)
+	sls.mu.Unlock()
 }
 
-func (sls *smapLis) Unreg(sl cluster.Slistener) {
-	sls.Lock()
+func (sls *sls) Unreg(sl cluster.Slistener) {
+	sls.mu.Lock()
 	_, ok := sls.listeners[sl.String()]
 	cos.Assert(ok)
 	delete(sls.listeners, sl.String())
@@ -632,10 +631,10 @@ func (sls *smapLis) Unreg(sl cluster.Slistener) {
 		sls.running.Store(false)
 		sls.postCh <- -1
 	}
-	sls.Unlock()
+	sls.mu.Unlock()
 }
 
-func (sls *smapLis) notify(ver int64) {
+func (sls *sls) notify(ver int64) {
 	cos.Assert(ver >= 0)
 	if sls.running.Load() {
 		sls.postCh <- ver

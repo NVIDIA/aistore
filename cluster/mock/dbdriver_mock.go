@@ -1,6 +1,6 @@
-// Package dbdriver provides a local database server for the AIStore object storage.
+// Package mock provides a variety of mock implementations used for testing.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package mock
 
@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dbdriver"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -20,13 +20,13 @@ type DBDriver struct {
 }
 
 // interface guard
-var _ dbdriver.Driver = (*DBDriver)(nil)
+var _ kvdb.Driver = (*DBDriver)(nil)
 
-func NewDBDriver() dbdriver.Driver { return &DBDriver{values: make(map[string]string)} }
-func (*DBDriver) Close() error     { return nil }
+func NewDBDriver() kvdb.Driver { return &DBDriver{values: make(map[string]string)} }
+func (*DBDriver) Close() error { return nil }
 
 func (*DBDriver) makePath(collection, key string) string {
-	return collection + dbdriver.CollectionSepa + key
+	return collection + kvdb.CollectionSepa + key
 }
 
 func (bd *DBDriver) Set(collection, key string, object any) error {
@@ -56,7 +56,7 @@ func (bd *DBDriver) GetString(collection, key string) (string, error) {
 	name := bd.makePath(collection, key)
 	value, ok := bd.values[name]
 	if !ok {
-		return "", dbdriver.NewErrNotFound(collection, key)
+		return "", kvdb.NewErrNotFound(collection, key)
 	}
 	return value, nil
 }
@@ -67,7 +67,7 @@ func (bd *DBDriver) Delete(collection, key string) error {
 	name := bd.makePath(collection, key)
 	_, ok := bd.values[name]
 	if !ok {
-		return dbdriver.NewErrNotFound(collection, key)
+		return kvdb.NewErrNotFound(collection, key)
 	}
 	delete(bd.values, name)
 	return nil
@@ -83,7 +83,7 @@ func (bd *DBDriver) List(collection, pattern string) ([]string, error) {
 	filter = bd.makePath(collection, pattern)
 	for k := range bd.values {
 		if strings.HasPrefix(k, filter) {
-			_, key := dbdriver.ParsePath(k)
+			_, key := kvdb.ParsePath(k)
 			if key != "" {
 				keys = append(keys, k)
 			}
@@ -116,7 +116,7 @@ func (bd *DBDriver) GetAll(collection, pattern string) (map[string]string, error
 	filter = bd.makePath(collection, pattern)
 	for k, v := range bd.values {
 		if strings.HasPrefix(k, filter) {
-			_, key := dbdriver.ParsePath(k)
+			_, key := kvdb.ParsePath(k)
 			if key != "" {
 				values[key] = v
 			}

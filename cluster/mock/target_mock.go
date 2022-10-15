@@ -1,4 +1,4 @@
-// Package mock provides mock implementation for cluster interfaces.
+// Package mock provides a variety of mock implementations used for testing.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */

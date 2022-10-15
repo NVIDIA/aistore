@@ -23,7 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
-	"github.com/NVIDIA/aistore/filter"
+	"github.com/NVIDIA/aistore/cmn/prob"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -72,7 +72,7 @@ type (
 		t         cluster.Target
 		dm        *bundle.DataMover
 		pushes    *bundle.Streams // broadcast notifications
-		filterGFN *filter.Filter
+		filterGFN *prob.Filter
 		smap      atomic.Pointer // new smap which will be soon live
 		lomacks   [cos.MultiSyncMapCount]*lomAcks
 		awaiting  struct {
@@ -123,7 +123,7 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 	})
 	reb := &Reb{
 		t:         t,
-		filterGFN: filter.NewDefaultFilter(),
+		filterGFN: prob.NewDefaultFilter(),
 		stages:    newNodeStages(),
 		ecClient:  ecClient,
 	}

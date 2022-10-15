@@ -1,8 +1,8 @@
-// Package dbdriver provides a local database server for the AIStore object storage.
+// Package kvdb provides a local key/value database server for AIS.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package dbdriver
+package kvdb
 
 import (
 	"strings"
@@ -47,7 +47,6 @@ func NewBuntDB(path string) (*BuntDriver, error) {
 	return &BuntDriver{driver: driver}, nil
 }
 
-// Convert original DB error to `dbdriver` package ones for clients
 func buntToCommonErr(err error, collection, key string) error {
 	if err == buntdb.ErrNotFound {
 		return NewErrNotFound(collection, key)

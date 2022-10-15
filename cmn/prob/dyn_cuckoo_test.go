@@ -1,14 +1,15 @@
-// Package filter implements fully features dynamic probabilistic filter.
+// Package prob implements fully features dynamic probabilistic filter.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package filter
+package prob_test
 
 import (
 	"math/rand"
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cmn/prob"
 	"github.com/NVIDIA/aistore/tools/trand"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -37,7 +38,7 @@ func genKeys(keysNum int) [][]byte {
 }
 
 var _ = Describe("Filter", func() {
-	filter := NewFilter(testFilterInitSize)
+	filter := prob.NewFilter(testFilterInitSize)
 
 	BeforeEach(func() {
 		filter.Reset()
@@ -90,7 +91,7 @@ var _ = Describe("Filter", func() {
 func BenchmarkInsert(b *testing.B) {
 	b.Run("preallocated", func(b *testing.B) {
 		keys := genKeys(b.N)
-		filter := NewFilter(uint(b.N))
+		filter := prob.NewFilter(uint(b.N))
 
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
@@ -100,7 +101,7 @@ func BenchmarkInsert(b *testing.B) {
 
 	b.Run("empty", func(b *testing.B) {
 		keys := genKeys(b.N)
-		filter := NewFilter(10)
+		filter := prob.NewFilter(10)
 
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
@@ -112,7 +113,7 @@ func BenchmarkInsert(b *testing.B) {
 func BenchmarkLookup(b *testing.B) {
 	b.Run("single filter", func(b *testing.B) {
 		keys := genKeys(b.N)
-		filter := NewFilter(uint(b.N))
+		filter := prob.NewFilter(uint(b.N))
 		for n := 0; n < b.N; n++ {
 			filter.Insert(keys[n])
 		}
@@ -125,7 +126,7 @@ func BenchmarkLookup(b *testing.B) {
 
 	b.Run("multiple filters", func(b *testing.B) {
 		keys := genKeys(b.N)
-		filter := NewFilter(10)
+		filter := prob.NewFilter(10)
 		for n := 0; n < b.N; n++ {
 			filter.Insert(keys[n])
 		}
@@ -140,7 +141,7 @@ func BenchmarkLookup(b *testing.B) {
 func BenchmarkDelete(b *testing.B) {
 	b.Run("single filter", func(b *testing.B) {
 		keys := genKeys(b.N)
-		filter := NewFilter(uint(b.N))
+		filter := prob.NewFilter(uint(b.N))
 		for n := 0; n < b.N; n++ {
 			filter.Insert(keys[n])
 		}
@@ -153,7 +154,7 @@ func BenchmarkDelete(b *testing.B) {
 
 	b.Run("multiple filters", func(b *testing.B) {
 		keys := genKeys(b.N)
-		filter := NewFilter(10)
+		filter := prob.NewFilter(10)
 		for n := 0; n < b.N; n++ {
 			filter.Insert(keys[n])
 		}
@@ -168,7 +169,7 @@ func BenchmarkDelete(b *testing.B) {
 func BenchmarkInsertAndDeleteAndLookupParallel(b *testing.B) {
 	b.Run("preallocated", func(b *testing.B) {
 		keys := genKeys(b.N)
-		filter := NewFilter(uint(b.N))
+		filter := prob.NewFilter(uint(b.N))
 
 		b.ResetTimer()
 
@@ -197,7 +198,7 @@ func BenchmarkInsertAndDeleteAndLookupParallel(b *testing.B) {
 
 	b.Run("empty", func(b *testing.B) {
 		keys := genKeys(b.N)
-		filter := NewFilter(10)
+		filter := prob.NewFilter(10)
 
 		b.ResetTimer()
 
