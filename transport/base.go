@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -74,7 +74,7 @@ type (
 		dstURL    string
 		dstID     string
 		lid       string // log prefix
-		maxheader []byte // max header buffer
+		maxheader []byte // header buf must be large enough to accommodate max-size for this stream
 		header    []byte // object header (slice of the maxheader with bucket/objName, etc. fields packed/serialized)
 		term      struct {
 			err    error
@@ -101,7 +101,7 @@ type (
 // streamBase //
 ////////////////
 
-func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) {
+func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) {
 	var sid string
 	u, err := url.Parse(dstURL)
 	cos.AssertNoErr(err)
@@ -146,8 +146,12 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 
 	s.lid = fmt.Sprintf("s-%s%s[%d]=>%s", s.trname, sid, s.sessID, dstID)
 
-	s.maxheader, _ = s.mm.AllocSize(int64(maxHeaderSize)) // must be large enough to accommodate max-size
-	s.sessST.Store(inactive)                              // initiate HTTP session upon the first arrival
+	if extra.MaxHdrSize == 0 {
+		s.maxheader, _ = s.mm.AllocSize(dfltMaxHdr)
+	} else {
+		s.maxheader, _ = s.mm.AllocSize(int64(extra.MaxHdrSize))
+	}
+	s.sessST.Store(inactive) // initiate HTTP session upon the first arrival
 	return
 }
 

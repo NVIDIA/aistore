@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -52,6 +52,7 @@ type (
 		SenderID     string        // e.g., xaction ID (optional)
 		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
 		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be below MaxSizePDU; unknown size _requires_ PDUs
+		MaxHdrSize   int32         // overrides `dfltMaxHdr` if specified
 	}
 	EndpointStats map[uint64]*Stats // all stats for a given (network, trname) endpoint indexed by session ID
 
@@ -105,7 +106,7 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	} else if extra.Config == nil {
 		extra.Config = cmn.GCO.Get()
 	}
-	s = &Stream{streamBase: *newStreamBase(client, dstURL, dstID, extra)}
+	s = &Stream{streamBase: *newBase(client, dstURL, dstID, extra)}
 	s.streamBase.streamer = s
 	s.callback = extra.Callback
 	if extra.Compressed() {
@@ -180,7 +181,7 @@ func (s *Stream) Fin() {
 
 func NewMsgStream(client Client, dstURL, dstID string) (s *MsgStream) {
 	extra := &Extra{Config: cmn.GCO.Get()}
-	s = &MsgStream{streamBase: *newStreamBase(client, dstURL, dstID, extra)}
+	s = &MsgStream{streamBase: *newBase(client, dstURL, dstID, extra)}
 	s.streamBase.streamer = s
 
 	burst := burst(extra.Config)      // num messages the caller can post without blocking

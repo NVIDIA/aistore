@@ -111,7 +111,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	stats := statsif.(*Stats)
 
 	// receive loop
-	hbuf, _ := h.mm.AllocSize(int64(maxHeaderSize))
+	hbuf, _ := h.mm.AllocSize(dfltMaxHdr)
 	it := &iterator{handler: h, body: reader, hbuf: hbuf, stats: stats}
 	err = it.rxloop(uid, loghdr)
 

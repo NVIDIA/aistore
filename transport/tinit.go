@@ -20,15 +20,14 @@ import (
 
 // transport defaults
 const (
-	dfltMaxHeaderSize = memsys.PageSize // max header buffer size (see: maxHeaderSize, config.Transport.MaxHeaderSize)
-	dfltBurstNum      = 32              // burst size (see: config.Transport.Burst)
-	dfltTick          = time.Second
-	dfltIdleTeardown  = 4 * time.Second // (see config.Transport.IdleTeardown)
+	dfltBurstNum     = 32 // burst size (see: config.Transport.Burst)
+	dfltTick         = time.Second
+	dfltIdleTeardown = 4 * time.Second // (see config.Transport.IdleTeardown)
 )
 
 var (
-	maxHeaderSize int
-	verbose       bool
+	dfltMaxHdr int64 // memsys.PageSize or cluster-configurable (`config.Transport.MaxHeaderSize`)
+	verbose    bool
 )
 
 func init() {
@@ -39,9 +38,9 @@ func init() {
 }
 
 func Init(st cos.StatsTracker, config *cmn.Config) *StreamCollector {
-	maxHeaderSize = dfltMaxHeaderSize
+	dfltMaxHdr = memsys.PageSize
 	if config.Transport.MaxHeaderSize > 0 {
-		maxHeaderSize = config.Transport.MaxHeaderSize
+		dfltMaxHdr = int64(config.Transport.MaxHeaderSize)
 	}
 
 	statsTracker = st

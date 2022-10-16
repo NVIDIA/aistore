@@ -341,7 +341,7 @@ func (s *Stream) dryrun() {
 	var (
 		body = io.NopCloser(s)
 		h    = &handler{trname: s.trname, mm: memsys.PageMM()}
-		it   = iterator{handler: h, body: body, hbuf: make([]byte, maxHeaderSize)}
+		it   = iterator{handler: h, body: body, hbuf: make([]byte, dfltMaxHdr)}
 	)
 	for {
 		hlen, flags, err := it.nextProtoHdr(s.String())

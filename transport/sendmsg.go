@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -126,7 +126,7 @@ func (s *MsgStream) dryrun() {
 	var (
 		body = io.NopCloser(s)
 		h    = &handler{trname: s.trname, mm: memsys.ByteMM()}
-		it   = iterator{handler: h, body: body, hbuf: make([]byte, maxHeaderSize)}
+		it   = iterator{handler: h, body: body, hbuf: make([]byte, dfltMaxHdr)}
 	)
 	for {
 		hlen, flags, err := it.nextProtoHdr(s.String())
