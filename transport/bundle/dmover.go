@@ -182,12 +182,12 @@ func (dm *DataMover) CloseIf(err error) {
 }
 
 func (dm *DataMover) Close(err error) {
+	debug.Assert(dm.stage.opened.Load())
 	dm._close(err)
 	dm.stage.opened.Store(false)
 }
 
 func (dm *DataMover) _close(err error) {
-	debug.Assert(dm.stage.opened.Load())
 	if err == nil && dm.xctn != nil {
 		if dm.xctn.IsAborted() {
 			err = cmn.NewErrAborted(dm.xctn.Name(), "dm-close", dm.xctn.AbortErr())
