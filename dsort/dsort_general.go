@@ -349,7 +349,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				beforeRecv int64
 				beforeSend int64
 
-				wg      = cos.NewTimeoutGroup()
+				twg     = cos.NewTimeoutGroup()
 				writer  = ds.newStreamWriter(rec.MakeUniqueName(obj), w)
 				metrics = ds.m.Metrics.Creation
 
@@ -385,17 +385,17 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 						cos.NamedVal64{Name: stats.DSortCreationReqLatency, Value: int64(delta)},
 					)
 				}
-				wg.Done()
+				twg.Done()
 			}
 
-			wg.Add(1)
+			twg.Add(1)
 			if err := ds.streams.request.Send(o, nil, toNode); err != nil {
 				return 0, errors.WithStack(err)
 			}
 
 			// Send should be synchronous to make sure that 'wait timeout' is
-			// calculated only for receive side.
-			wg.Wait()
+			// calculated only for the receive side.
+			twg.Wait()
 
 			if cbErr != nil {
 				return 0, errors.WithStack(cbErr)

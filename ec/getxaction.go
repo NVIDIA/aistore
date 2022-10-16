@@ -142,13 +142,14 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
-	return &getJogger{
+	j := &getJogger{
 		parent: r,
 		mpath:  mpath,
 		client: client,
 		workCh: make(chan *request, requestBufSizeFS),
-		stopCh: cos.NewStopCh(),
 	}
+	j.stopCh.Init()
+	return j
 }
 
 func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {

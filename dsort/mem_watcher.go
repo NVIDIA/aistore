@@ -24,7 +24,7 @@ const (
 type singleMemoryWatcher struct {
 	wg     *sync.WaitGroup
 	ticker *time.Ticker
-	stopCh *cos.StopCh
+	stopCh cos.StopCh
 }
 
 // memoryWatcher is responsible for monitoring memory changes and decide
@@ -40,11 +40,9 @@ type memoryWatcher struct {
 }
 
 func newSingleMemoryWatcher(interval time.Duration) *singleMemoryWatcher {
-	return &singleMemoryWatcher{
-		wg:     &sync.WaitGroup{},
-		ticker: time.NewTicker(interval),
-		stopCh: cos.NewStopCh(),
-	}
+	smw := &singleMemoryWatcher{wg: &sync.WaitGroup{}, ticker: time.NewTicker(interval)}
+	smw.stopCh.Init()
+	return smw
 }
 
 func newMemoryWatcher(m *Manager, maxMemoryUsage uint64) *memoryWatcher {

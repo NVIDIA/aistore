@@ -28,7 +28,7 @@ type (
 	// are dlTasks.
 	jogger struct {
 		mpath       string
-		terminateCh *cos.StopCh // synchronizes termination
+		terminateCh cos.StopCh // synchronizes termination
 		parent      *dispatcher
 
 		q *queue
@@ -40,13 +40,10 @@ type (
 	}
 )
 
-func newJogger(d *dispatcher, mpath string) *jogger {
-	return &jogger{
-		mpath:       mpath,
-		parent:      d,
-		q:           newQueue(),
-		terminateCh: cos.NewStopCh(),
-	}
+func newJogger(d *dispatcher, mpath string) (j *jogger) {
+	j = &jogger{mpath: mpath, parent: d, q: newQueue()}
+	j.terminateCh.Init()
+	return
 }
 
 func (j *jogger) jog() {

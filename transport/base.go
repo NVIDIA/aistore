@@ -64,10 +64,10 @@ type (
 	}
 	streamBase struct {
 		streamer  streamer
-		client    Client      // stream's http client
-		stopCh    *cos.StopCh // stop/abort stream
-		lastCh    *cos.StopCh // end-of-stream
-		pdu       *spdu       // PDU buffer
+		client    Client     // stream's http client
+		stopCh    cos.StopCh // stop/abort stream
+		lastCh    cos.StopCh // end-of-stream
+		pdu       *spdu      // PDU buffer
 		mm        *memsys.MMSA
 		postCh    chan struct{} // to indicate that workCh has work
 		trname    string        // http endpoint: (trname, dstURL, dstID)
@@ -111,8 +111,8 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 	s.sessID = nextSID.Inc()
 	s.trname = path.Base(u.Path)
 
-	s.lastCh = cos.NewStopCh()
-	s.stopCh = cos.NewStopCh()
+	s.lastCh.Init()
+	s.stopCh.Init()
 	s.postCh = make(chan struct{}, 1)
 
 	s.mm = memsys.PageMM()

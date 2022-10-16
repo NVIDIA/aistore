@@ -48,7 +48,7 @@ type (
 
 		putCh  chan *request // top priority operation (object PUT)
 		xactCh chan *request // low priority operation (ec-encode)
-		stopCh *cos.StopCh   // jogger management channel: to stop it
+		stopCh cos.StopCh    // jogger management channel: to stop it
 
 		toDisk bool // use files or SGL
 	}

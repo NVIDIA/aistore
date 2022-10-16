@@ -22,7 +22,7 @@ type (
 	collector struct {
 		streams map[string]*streamBase
 		ticker  *time.Ticker
-		stopCh  *cos.StopCh
+		stopCh  cos.StopCh
 		ctrlCh  chan ctrl
 		heap    []*streamBase
 	}

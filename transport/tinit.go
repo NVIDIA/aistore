@@ -47,11 +47,11 @@ func Init(st cos.StatsTracker, config *cmn.Config) *StreamCollector {
 	statsTracker = st
 	// real stream collector
 	gc = &collector{
-		stopCh:  cos.NewStopCh(),
 		ctrlCh:  make(chan ctrl, 64),
 		streams: make(map[string]*streamBase, 64),
 		heap:    make([]*streamBase, 0, 64), // min-heap sorted by stream.time.ticks
 	}
+	gc.stopCh.Init()
 	heap.Init(gc)
 
 	sc = &StreamCollector{}

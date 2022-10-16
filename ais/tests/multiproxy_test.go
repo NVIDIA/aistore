@@ -1591,7 +1591,8 @@ func icStressMonitorXactMultiICFail(t *testing.T) {
 	m.puts()
 
 	// 2. Kill and restore random IC members in background
-	stopCh := cos.NewStopCh()
+	stopCh := &cos.StopCh{}
+	stopCh.Init()
 	krWg := &sync.WaitGroup{}
 	krWg.Add(1)
 	go killRestoreIC(t, smap, stopCh, krWg)

@@ -49,7 +49,7 @@ type (
 		msg       *apc.LsoMsg
 		msgCh     chan *apc.LsoMsg  // incoming requests
 		respCh    chan *ListObjsRsp // responses - next pages
-		stopCh    *cos.StopCh       // to stop xaction
+		stopCh    cos.StopCh        // to stop xaction
 		token     string            // continuation token -> last responded page
 		nextToken string            // next continuation token -> next pages
 		lastPage  []*cmn.LsoEntry   // last page contents
@@ -114,8 +114,8 @@ func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *apc.LsoMsg, uuid string)
 		msg:    lsmsg,
 		msgCh:  make(chan *apc.LsoMsg),  // unbuffered
 		respCh: make(chan *ListObjsRsp), // ditto
-		stopCh: cos.NewStopCh(),
 	}
+	xctn.stopCh.Init()
 	debug.Assert(lsmsg.PageSize > 0 && lsmsg.PageSize < 100000)
 	xctn.lastPage = make([]*cmn.LsoEntry, 0, lsmsg.PageSize)
 	xctn.DemandBase.Init(uuid, apc.ActList, bck, totallyIdle)

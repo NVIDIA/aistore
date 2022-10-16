@@ -107,13 +107,14 @@ func NewPutXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactPut {
 }
 
 func (r *XactPut) newPutJogger(mpath string) *putJogger {
-	return &putJogger{
+	j := &putJogger{
 		parent: r,
 		mpath:  mpath,
 		putCh:  make(chan *request, requestBufSizeFS),
 		xactCh: make(chan *request, requestBufSizeEncode),
-		stopCh: cos.NewStopCh(),
 	}
+	j.stopCh.Init()
+	return j
 }
 
 func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {

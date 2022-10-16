@@ -259,11 +259,11 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	hdr.Bck.Copy(lom.Bucket())
 	sw := &slice{
 		writer: writer,
-		wg:     cos.NewTimeoutGroup(),
+		twg:    cos.NewTimeoutGroup(),
 		lom:    lom,
 	}
 
-	sw.wg.Add(1)
+	sw.twg.Add(1)
 	r.regWriter(uname, sw)
 
 	if glog.FastV(4, glog.SmoduleEC) {
@@ -274,7 +274,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 		return 0, err
 	}
 	c := cmn.GCO.Get()
-	if sw.wg.WaitTimeout(c.Timeout.SendFile.D()) {
+	if sw.twg.WaitTimeout(c.Timeout.SendFile.D()) {
 		r.unregWriter(uname)
 		return 0, fmt.Errorf("timed out waiting for %s is read", uname)
 	}
@@ -382,7 +382,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 // * reader - response body
 func _writerReceive(writer *slice, exists bool, objAttrs cmn.ObjAttrs, reader io.Reader) (err error) {
 	if !exists {
-		writer.wg.Done()
+		writer.twg.Done()
 		return ErrorNotFound
 	}
 
@@ -393,7 +393,7 @@ func _writerReceive(writer *slice, exists bool, objAttrs cmn.ObjAttrs, reader io
 		writer.version = objAttrs.Ver
 	}
 
-	writer.wg.Done()
+	writer.twg.Done()
 	slab.Free(buf)
 	return err
 }

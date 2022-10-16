@@ -35,7 +35,7 @@ type (
 	DemandBase struct {
 		hkName string
 		idle   struct {
-			ticks *cos.StopCh
+			ticks cos.StopCh
 			d     time.Duration
 			last  int64 // mono.NanoTime
 		}
@@ -59,7 +59,7 @@ func (r *DemandBase) Init(uuid, kind string, bck *cluster.Bck, idle time.Duratio
 	if idle > 0 {
 		r.idle.d = idle
 	}
-	r.idle.ticks = cos.NewStopCh()
+	r.idle.ticks.Init()
 	r.InitBase(uuid, kind, bck)
 	r._initIdle()
 	return

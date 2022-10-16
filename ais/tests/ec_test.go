@@ -1162,9 +1162,10 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	var (
 		numCreated = 0
-		abortCh    = cos.NewStopCh()
+		abortCh    = &cos.StopCh{}
 		wgPut      = &sync.WaitGroup{}
 	)
+	abortCh.Init()
 	wgPut.Add(1)
 
 	go func() {

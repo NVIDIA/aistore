@@ -62,7 +62,7 @@ type (
 	JoggerGroup struct {
 		wg          *errgroup.Group
 		joggers     map[string]*jogger
-		finishedCh  *cos.StopCh // when all joggers are done
+		finishedCh  cos.StopCh // when all joggers are done
 		finishedCnt atomic.Uint32
 	}
 
@@ -74,7 +74,7 @@ type (
 		opts      *JoggerGroupOpts
 		mi        *fs.MountpathInfo
 		config    *cmn.Config
-		stopCh    *cos.StopCh
+		stopCh    cos.StopCh
 		bufs      [][]byte
 		num       int64
 	}
@@ -111,11 +111,8 @@ func NewJoggerGroup(opts *JoggerGroupOpts, selectedMpaths ...string) *JoggerGrou
 			}
 		}
 	}
-	jg := &JoggerGroup{
-		wg:         wg,
-		joggers:    joggers,
-		finishedCh: cos.NewStopCh(),
-	}
+	jg := &JoggerGroup{wg: wg, joggers: joggers}
+	jg.finishedCh.Init()
 	opts.onFinish = jg.markFinished
 
 	// NOTE: this jogger group is a no-op
@@ -152,7 +149,7 @@ func (jg *JoggerGroup) markFinished() {
 	}
 }
 
-func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.MountpathInfo) *jogger {
+func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.MountpathInfo) (j *jogger) {
 	var syncGroup *joggerSyncGroup
 	if opts.Parallel > 1 {
 		var (
@@ -170,15 +167,15 @@ func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.MountpathInfo)
 			syncGroup.sema <- i
 		}
 	}
-
-	return &jogger{
+	j = &jogger{
 		ctx:       ctx,
 		opts:      opts,
 		mi:        mi,
 		config:    cmn.GCO.Get(),
-		stopCh:    cos.NewStopCh(),
 		syncGroup: syncGroup,
 	}
+	j.stopCh.Init()
+	return
 }
 
 func (j *jogger) run() error {

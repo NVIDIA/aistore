@@ -75,16 +75,12 @@ type (
 	}
 
 	concAdjuster struct {
-		mu sync.RWMutex
-
-		stopCh *cos.StopCh
-
-		defaultLimit int // default limit for new mpath adjusters
-		adjusters    map[string]*mpathAdjuster
-
-		// Determines how many goroutines should be allowed per one function call.
-		goroutineLimitCoef int
+		adjusters          map[string]*mpathAdjuster
 		gorountinesSema    *cos.DynSemaphore
+		defaultLimit       int // default limit for new mpath adjusters
+		goroutineLimitCoef int // num goroutines should be allowed per one function call.
+		mu                 sync.RWMutex
+		stopCh             cos.StopCh
 	}
 )
 
@@ -107,7 +103,7 @@ func newMpathAdjuster(limit, maxLimit int) *mpathAdjuster {
 	}
 }
 
-func newConcAdjuster(maxLimit, goroutineLimitCoef int) *concAdjuster {
+func newConcAdjuster(maxLimit, goroutineLimitCoef int) (ca *concAdjuster) {
 	availablePaths := fs.GetAvail()
 	adjusters := make(map[string]*mpathAdjuster, len(availablePaths))
 	if maxLimit == 0 {
@@ -117,14 +113,14 @@ func newConcAdjuster(maxLimit, goroutineLimitCoef int) *concAdjuster {
 	for _, mpathInfo := range availablePaths {
 		adjusters[mpathInfo.Path] = newMpathAdjuster(limit, maxLimit)
 	}
-
-	return &concAdjuster{
-		stopCh:             cos.NewStopCh(),
+	ca = &concAdjuster{
 		defaultLimit:       limit,
 		adjusters:          adjusters,
 		goroutineLimitCoef: goroutineLimitCoef,
 		gorountinesSema:    cos.NewDynSemaphore(goroutineLimitCoef * len(availablePaths) * limit),
 	}
+	ca.stopCh.Init()
+	return
 }
 
 func (ca *concAdjuster) start() {

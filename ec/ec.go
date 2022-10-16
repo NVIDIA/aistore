@@ -154,7 +154,7 @@ type (
 		obj     cos.ReadOpenCloser // the whole object or its replica
 		reader  cos.ReadOpenCloser // used in encoding - a slice of `obj`
 		writer  io.Writer          // for parity slices and downloading slices from other targets when restoring
-		wg      *cos.TimeoutGroup  // for synchronous download (for restore)
+		twg     *cos.TimeoutGroup  // for synchronous download (when restoring from slices)
 		lom     *cluster.LOM       // for xattrs
 		n       int64              // number of byte sent/received
 		refCnt  atomic.Int32       // number of references

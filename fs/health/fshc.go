@@ -37,7 +37,7 @@ type (
 	FSHC struct {
 		dispatcher fspathDispatcher // listener is notified upon mountpath events (disabled, etc.)
 		fileListCh chan string
-		stopCh     *cos.StopCh
+		stopCh     cos.StopCh
 	}
 )
 
@@ -48,12 +48,10 @@ type (
 // interface guard
 var _ cos.Runner = (*FSHC)(nil)
 
-func NewFSHC(dispatcher fspathDispatcher) *FSHC {
-	return &FSHC{
-		dispatcher: dispatcher,
-		fileListCh: make(chan string, 100),
-		stopCh:     cos.NewStopCh(),
-	}
+func NewFSHC(dispatcher fspathDispatcher) (f *FSHC) {
+	f = &FSHC{dispatcher: dispatcher, fileListCh: make(chan string, 100)}
+	f.stopCh.Init()
+	return
 }
 
 func (*FSHC) Name() string { return "fshc" }

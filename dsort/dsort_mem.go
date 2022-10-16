@@ -337,8 +337,9 @@ func (ds *dsorterMem) createShardsLocally() error {
 		mem    sys.MemStat
 		wg     = &sync.WaitGroup{}
 		errCh  = make(chan error, 2)
-		stopCh = cos.NewStopCh()
+		stopCh = &cos.StopCh{}
 	)
+	stopCh.Init()
 	defer stopCh.Close()
 
 	if err := mem.Get(); err != nil {

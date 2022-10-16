@@ -34,7 +34,7 @@ type (
 		mpath  string // Mountpath that the jogger manages
 
 		workCh chan *request // Channel to request TOP priority operation (restore)
-		stopCh *cos.StopCh   // Jogger management channel: to stop it
+		stopCh cos.StopCh    // Jogger management channel: to stop it
 	}
 	restoreCtx struct {
 		lom      *cluster.LOM         // replica
@@ -363,13 +363,13 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 			}
 			writer = &slice{
 				writer:  fh,
-				wg:      wgSlices,
+				twg:     wgSlices,
 				workFQN: fqn,
 			}
 		} else {
 			writer = &slice{
 				writer: mm.NewSGL(cos.KiB * 512),
-				wg:     wgSlices,
+				twg:    wgSlices,
 			}
 		}
 		ctx.slices[v.SliceID-1] = writer

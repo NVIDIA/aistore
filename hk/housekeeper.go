@@ -46,7 +46,7 @@ type (
 	timedActions []timedAction
 
 	housekeeper struct {
-		stopCh   *cos.StopCh
+		stopCh   cos.StopCh
 		sigCh    chan os.Signal
 		actions  *timedActions
 		timer    *time.Timer
@@ -76,10 +76,10 @@ func Init(stopping *atomic.Bool) {
 func _init(mustRun bool) {
 	DefaultHK = &housekeeper{
 		workCh:  make(chan request, 512),
-		stopCh:  cos.NewStopCh(),
 		sigCh:   make(chan os.Signal, 1),
 		actions: &timedActions{},
 	}
+	DefaultHK.stopCh.Init()
 	if mustRun {
 		DefaultHK.running.Store(false)
 	} else {

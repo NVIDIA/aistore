@@ -33,7 +33,7 @@ type (
 		opts      *WorkerGroupOpts
 		mpathInfo *fs.MountpathInfo
 		workCh    chan cluster.LIF
-		stopCh    *cos.StopCh
+		stopCh    cos.StopCh
 	}
 )
 
@@ -76,13 +76,14 @@ func (wg *WorkerGroup) Stop() (n int) {
 	return
 }
 
-func newWorker(opts *WorkerGroupOpts, mpathInfo *fs.MountpathInfo) *worker {
-	return &worker{
+func newWorker(opts *WorkerGroupOpts, mpathInfo *fs.MountpathInfo) (w *worker) {
+	w = &worker{
 		opts:      opts,
 		mpathInfo: mpathInfo,
 		workCh:    make(chan cluster.LIF, opts.QueueSize),
-		stopCh:    cos.NewStopCh(),
 	}
+	w.stopCh.Init()
+	return
 }
 
 func (w *worker) work() error {
