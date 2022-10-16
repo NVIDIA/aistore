@@ -571,9 +571,9 @@ func (r *smapOwner) modify(ctx *smapModifier) error {
 	return nil
 }
 
-/////////////
+/////////
 // sls //
-/////////////
+/////////
 
 func newSmapListeners() *sls {
 	sls := &sls{

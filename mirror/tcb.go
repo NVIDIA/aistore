@@ -141,9 +141,7 @@ func (r *XactTCB) Name() string {
 // limited pre-run abort
 func (r *XactTCB) TxnAbort() {
 	err := cmn.NewErrAborted(r.Name(), "txn-abort", nil)
-	if r.dm.IsOpen() {
-		r.dm.Close(err)
-	}
+	r.dm.CloseIf(err)
 	r.dm.UnregRecv()
 	r.Base.Finish(err)
 }

@@ -92,9 +92,7 @@ func (r *streamingX) String() string { return r.DemandBase.String() + "-" + r.p.
 // limited pre-run abort
 func (r *streamingX) TxnAbort() {
 	err := cmn.NewErrAborted(r.Name(), "txn-abort", nil)
-	if r.p.dm.IsOpen() {
-		r.p.dm.Close(err)
-	}
+	r.p.dm.CloseIf(err)
 	r.p.dm.UnregRecv()
 	r.Base.Finish(err)
 }
@@ -132,9 +130,7 @@ func (r *streamingX) eoi(uuid string, tsi *cluster.Snode) {
 func (r *streamingX) fin(err error) error {
 	if r.DemandBase.Finished() {
 		// aborted?
-		if r.p.dm.IsOpen() {
-			r.p.dm.Close(err)
-		}
+		r.p.dm.CloseIf(err)
 		r.p.dm.UnregRecv()
 		return err
 	}

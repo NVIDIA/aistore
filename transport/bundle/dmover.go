@@ -154,7 +154,6 @@ func (dm *DataMover) Open() {
 	dm.stage.opened.Store(true)
 }
 
-func (dm *DataMover) IsOpen() bool        { return dm.stage.opened.Load() }
 func (dm *DataMover) Smap() *cluster.Smap { return dm.data.streams.Smap() }
 
 func (dm *DataMover) String() string {
@@ -176,8 +175,19 @@ func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
 	return dm.xctn.Quiesce(d, dm.quicb)
 }
 
+func (dm *DataMover) CloseIf(err error) {
+	if dm.stage.opened.CAS(true, false) {
+		dm._close(err)
+	}
+}
+
 func (dm *DataMover) Close(err error) {
-	debug.Assert(dm.stage.opened.Load()) // Open() must've been called
+	dm._close(err)
+	dm.stage.opened.Store(false)
+}
+
+func (dm *DataMover) _close(err error) {
+	debug.Assert(dm.stage.opened.Load())
 	if err == nil && dm.xctn != nil {
 		if dm.xctn.IsAborted() {
 			err = cmn.NewErrAborted(dm.xctn.Name(), "dm-close", dm.xctn.AbortErr())
@@ -187,7 +197,6 @@ func (dm *DataMover) Close(err error) {
 	if dm.useACKs() {
 		dm.ack.streams.Close(err == nil)
 	}
-	dm.stage.opened.Store(false)
 }
 
 func (dm *DataMover) Abort() {

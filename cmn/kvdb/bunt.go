@@ -25,11 +25,9 @@ import (
 
 const autoShrinkSize = cos.MiB
 
-type (
-	BuntDriver struct {
-		driver *buntdb.DB
-	}
-)
+type BuntDriver struct {
+	driver *buntdb.DB
+}
 
 // interface guard
 var _ Driver = (*BuntDriver)(nil)
