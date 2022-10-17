@@ -340,7 +340,7 @@ func (s *Stream) inSend() bool { return s.sendoff.ins >= inHdr || s.sendoff.ins 
 func (s *Stream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		h    = &handler{trname: s.trname, mm: memsys.PageMM()}
+		h    = &handler{trname: s.trname}
 		it   = iterator{handler: h, body: body, hbuf: make([]byte, dfltMaxHdr)}
 	)
 	for {
@@ -349,7 +349,7 @@ func (s *Stream) dryrun() {
 			break
 		}
 		debug.AssertNoErr(err)
-		debug.Assert(flags&msgFlag == 0)
+		debug.Assert(flags&msgFl == 0)
 		obj, err := it.nextObj(s.String(), hlen)
 		if obj != nil {
 			cos.DrainReader(obj) // TODO: recycle `objReader` here

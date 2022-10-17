@@ -37,9 +37,12 @@ const (
 func ReservedOpcode(opc int) bool { return opc >= opcFin }
 
 const (
-	SizeUnknown    = -1
-	DefaultSizePDU = memsys.DefaultBufSize
-	MaxSizePDU     = memsys.MaxPageSlabSize
+	SizeUnknown = -1
+
+	dfltSizePDU    = memsys.DefaultBufSize
+	maxSizePDU     = memsys.MaxPageSlabSize
+	dfltSizeHeader = memsys.PageSize
+	maxSizeHeader  = memsys.MaxPageSlabSize
 )
 
 type (
@@ -51,7 +54,7 @@ type (
 		Compression  string        // see CompressAlways, etc. enum
 		SenderID     string        // e.g., xaction ID (optional)
 		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
-		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be below MaxSizePDU; unknown size _requires_ PDUs
+		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be below maxSizePDU; unknown size _requires_ PDUs
 		MaxHdrSize   int32         // overrides `dfltMaxHdr` if specified
 	}
 	EndpointStats map[uint64]*Stats // all stats for a given (network, trname) endpoint indexed by session ID
@@ -215,20 +218,13 @@ func (s *MsgStream) Fin() {
 // receive-side API //
 //////////////////////
 
-func HandleObjStream(trname string, rxObj RecvObj, mems ...*memsys.MMSA) error {
-	var mm *memsys.MMSA
-	if len(mems) > 0 {
-		mm = mems[0]
-	} else {
-		mm = memsys.PageMM()
-	}
-	h := &handler{trname: trname, rxObj: rxObj, hkName: ObjURLPath(trname), mm: mm}
+func HandleObjStream(trname string, rxObj RecvObj) error {
+	h := &handler{trname: trname, rxObj: rxObj, hkName: ObjURLPath(trname)}
 	return h.handle()
 }
 
 func HandleMsgStream(trname string, rxMsg RecvMsg) error {
-	mm := memsys.ByteMM()
-	h := &handler{trname: trname, rxMsg: rxMsg, hkName: MsgURLPath(trname), mm: mm}
+	h := &handler{trname: trname, rxMsg: rxMsg, hkName: MsgURLPath(trname)}
 	return h.handle()
 }
 

@@ -160,7 +160,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		}
 	}
 	if _, usePDU = nvs["unsized"]; usePDU {
-		extra.SizePDU = transport.DefaultSizePDU
+		extra.SizePDU = memsys.DefaultBufSize
 	}
 	_, _ = random.Read(wbuf)
 	sb := bundle.NewStreams(sowner, &lsnode, httpclient,

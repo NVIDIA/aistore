@@ -58,7 +58,7 @@ func (pdu *pdu) free(mm *memsys.MMSA) {
 //////////
 
 func newSendPDU(buf []byte) (p *spdu) {
-	debug.Assert(len(buf) >= cos.KiB && len(buf) <= MaxSizePDU)
+	debug.Assert(len(buf) >= cos.KiB && len(buf) <= maxSizePDU)
 	p = &spdu{pdu{buf: buf}}
 	p.reset()
 	return
@@ -111,13 +111,13 @@ func (pdu *rpdu) readHdr(loghdr string) (err error) {
 	if err != nil {
 		return
 	}
-	if pdu.flags&pduFlag == 0 || pdu.plen > MaxSizePDU || pdu.plen < 0 {
+	if pdu.flags&pduFl == 0 || pdu.plen > maxSizePDU || pdu.plen < 0 {
 		err = fmt.Errorf(fmterr, loghdr, pdu.plen, fl2s(pdu.flags))
 		debug.AssertNoErr(err)
 		return
 	}
 	pdu.woff = sizeProtoHdr
-	pdu.last = pdu.flags&lastPDU != 0
+	pdu.last = pdu.flags&pduLastFl != 0
 	debug.Assertf(pdu.plen > 0 || (pdu.plen == 0 && pdu.last), fmterr, loghdr, pdu.plen, fl2s(pdu.flags))
 	return
 }
@@ -128,7 +128,7 @@ func (pdu *rpdu) reset() {
 }
 
 func (pdu *rpdu) readFrom() (n int, err error) {
-	n, err = pdu.body.Read(pdu.buf[pdu.woff : sizeProtoHdr+pdu.plen]) // NOTE: MaxSizePDU
+	n, err = pdu.body.Read(pdu.buf[pdu.woff : sizeProtoHdr+pdu.plen]) // NOTE: maxSizePDU
 	pdu.woff += n
 	pdu.done = pdu.plength() == pdu.plen
 	if err != nil {
@@ -142,17 +142,17 @@ func (pdu *rpdu) readFrom() (n int, err error) {
 //
 
 func fl2s(flags uint64) (s string) {
-	if flags&msgFlag == 0 && flags&pduFlag == 0 {
+	if flags&msgFl == 0 && flags&pduFl == 0 {
 		s += "[obj]"
-	} else if flags&msgFlag != 0 {
+	} else if flags&msgFl != 0 {
 		s += "[msg]"
-	} else if flags&pduFlag != 0 {
+	} else if flags&pduFl != 0 {
 		s += "[pdu]"
 	}
-	if flags&firstPDU != 0 {
-		s += "[frs]"
+	if flags&pduStreamFl != 0 {
+		s += "[pdu-stream]"
 	}
-	if flags&lastPDU != 0 {
+	if flags&pduLastFl != 0 {
 		s += "[lst]"
 	}
 	return

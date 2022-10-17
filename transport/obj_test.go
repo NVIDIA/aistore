@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package transport_test
 
@@ -665,7 +665,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 			extra.Compression = apc.CompressAlways
 		}
 		if usePDU {
-			extra.SizePDU = transport.DefaultSizePDU
+			extra.SizePDU = memsys.DefaultBufSize
 		}
 	}
 	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), extra)

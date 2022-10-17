@@ -29,7 +29,7 @@ import (
 	"github.com/pierrec/lz4/v3"
 )
 
-const hkOld = time.Hour
+const sessionIsOld = time.Hour
 
 // private types
 type (
@@ -48,13 +48,13 @@ type (
 		off    int64
 	}
 	handler struct {
-		mm          *memsys.MMSA
 		rxObj       RecvObj
 		rxMsg       RecvMsg
 		sessions    sync.Map
 		oldSessions sync.Map
 		hkName      string
 		trname      string
+		now         int64
 	}
 
 	ErrDuplicateTrname struct {
@@ -63,9 +63,9 @@ type (
 )
 
 var (
-	nextSID  atomic.Int64        // next unique session ID
-	handlers map[string]*handler // by trname
-	mu       *sync.RWMutex       // ptotect handlers
+	nextSessionID atomic.Int64        // next unique session ID
+	handlers      map[string]*handler // by trname
+	mu            *sync.RWMutex       // ptotect handlers
 )
 
 // main Rx objects
@@ -111,18 +111,19 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	stats := statsif.(*Stats)
 
 	// receive loop
-	hbuf, _ := h.mm.AllocSize(dfltMaxHdr)
-	it := &iterator{handler: h, body: reader, hbuf: hbuf, stats: stats}
-	err = it.rxloop(uid, loghdr)
+	mm := memsys.PageMM()
+	it := &iterator{handler: h, body: reader, stats: stats}
+	it.hbuf, _ = mm.AllocSize(dfltMaxHdr)
+	err = it.rxloop(uid, loghdr, mm)
 
 	// cleanup
 	if lz4Reader != nil {
 		lz4Reader.Reset(nil)
 	}
 	if it.pdu != nil {
-		it.pdu.free(h.mm)
+		it.pdu.free(mm)
 	}
-	h.mm.Free(hbuf)
+	mm.Free(it.hbuf)
 
 	// if err != io.EOF {
 	if !cos.IsEOF(err) {
@@ -130,16 +131,9 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-////////////////////////
-// ErrDuplicateTrname //
-////////////////////////
-
-func (e *ErrDuplicateTrname) Error() string { return fmt.Sprintf("duplicate trname %q", e.trname) }
-func IsErrDuplicateTrname(e error) bool     { _, ok := e.(*ErrDuplicateTrname); return ok }
-
-/////////////
-// handler //
-/////////////
+////////////////
+// Rx handler //
+////////////////
 
 func (h *handler) handle() error {
 	mu.Lock()
@@ -149,37 +143,35 @@ func (h *handler) handle() error {
 	}
 	handlers[h.trname] = h
 	mu.Unlock()
-	hk.Reg(h.hkName+hk.NameSuffix, h.cleanupOldSessions, hkOld)
+	hk.Reg(h.hkName+hk.NameSuffix, h.cleanup, sessionIsOld)
 	return nil
 }
 
-func (h *handler) cleanupOldSessions() time.Duration {
-	now := mono.NanoTime()
-	f := func(key, value any) bool {
-		uid := key.(uint64)
-		timeClosed := value.(int64)
-		if time.Duration(now-timeClosed) > hkOld {
-			h.oldSessions.Delete(uid)
-			h.sessions.Delete(uid)
-		}
-		return true
-	}
-	h.oldSessions.Range(f)
-	return hkOld
+func (h *handler) cleanup() time.Duration {
+	h.now = mono.NanoTime()
+	h.oldSessions.Range(h.cl)
+	return sessionIsOld
 }
 
-//////////////
-// iterator //
-//////////////
+func (h *handler) cl(key, value any) bool {
+	timeClosed := value.(int64)
+	if time.Duration(h.now-timeClosed) > sessionIsOld {
+		uid := key.(uint64)
+		h.oldSessions.Delete(uid)
+		h.sessions.Delete(uid)
+	}
+	return true
+}
+
+//////////////////////////////////
+// next(obj, msg, pdu) iterator //
+//////////////////////////////////
 
 func (it *iterator) Read(p []byte) (n int, err error) { return it.body.Read(p) }
 
-func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
-	h := it.handler
+func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err error) {
 	for err == nil {
 		var (
-			obj   *objReader
-			msg   Msg
 			flags uint64
 			hlen  int
 		)
@@ -187,53 +179,77 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 		if err != nil {
 			break
 		}
-		if lh := len(it.hbuf); hlen > lh {
-			err = fmt.Errorf("sbr1 %s: hlen %d exceeds buflen=%d", loghdr, hlen, lh)
-			break
+		if hlen > len(it.hbuf) {
+			if hlen > maxSizeHeader {
+				err = fmt.Errorf("sbr1 %s: hlen %d exceeds maximum %d", loghdr, hlen, maxSizeHeader)
+				break
+			}
+			// grow
+			glog.Warningf("%s: header length %d exceeds the current buffer %d", loghdr, hlen, len(it.hbuf))
+			mm.Free(it.hbuf)
+			it.hbuf, _ = mm.AllocSize(cos.MinI64(int64(hlen)<<1, maxSizeHeader))
 		}
 		_ = it.stats.Offset.Add(int64(hlen + sizeProtoHdr))
-		if flags&msgFlag == 0 {
-			obj, err = it.nextObj(loghdr, hlen)
-			if obj != nil {
-				if flags&firstPDU != 0 && !obj.hdr.IsHeaderOnly() {
-					if it.pdu == nil {
-						buf, _ := h.mm.AllocSize(MaxSizePDU)
-						it.pdu = newRecvPDU(it.body, buf)
-					}
-					obj.pdu = it.pdu
-					obj.pdu.reset()
-				}
-				err = eofOK(err)
-				size, off := obj.hdr.ObjAttrs.Size, obj.off
-				if errCb := h.rxObj(obj.hdr, obj, err); errCb != nil {
-					err = errCb
-				}
-				// stats
-				if err == nil {
-					it.stats.Num.Inc()              // this stream stats
-					statsTracker.Add(InObjCount, 1) // stats/target_stats.go
-					if size >= 0 {
-						statsTracker.Add(InObjSize, size)
-					} else {
-						debug.Assert(size == SizeUnknown)
-						statsTracker.Add(InObjSize, obj.off-off)
-					}
-				}
-			} else if err != nil && err != io.EOF {
-				if errCb := h.rxObj(ObjHdr{}, nil, err); errCb != nil {
-					err = errCb
+		if flags&msgFl == 0 {
+			if flags&pduStreamFl != 0 {
+				if it.pdu == nil {
+					pbuf, _ := mm.AllocSize(maxSizePDU)
+					it.pdu = newRecvPDU(it.body, pbuf)
+				} else {
+					it.pdu.reset()
 				}
 			}
+			err = it.rxObj(loghdr, hlen)
 		} else {
-			msg, err = it.nextMsg(loghdr, hlen)
-			if err == nil {
-				err = h.rxMsg(msg, nil)
-			} else if err != io.EOF {
-				err = h.rxMsg(Msg{}, err)
-			}
+			err = it.rxMsg(loghdr, hlen)
 		}
 	}
+	h := it.handler
 	h.oldSessions.Store(uid, mono.NanoTime())
+	return
+}
+
+func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
+	var obj *objReader
+	h := it.handler
+	obj, err = it.nextObj(loghdr, hlen)
+	if obj != nil {
+		if !obj.hdr.IsHeaderOnly() {
+			obj.pdu = it.pdu
+		}
+		err = eofOK(err)
+		size, off := obj.hdr.ObjAttrs.Size, obj.off
+		if errCb := h.rxObj(obj.hdr, obj, err); errCb != nil {
+			err = errCb
+		}
+		// stats
+		if err == nil {
+			it.stats.Num.Inc()              // this stream stats
+			statsTracker.Add(InObjCount, 1) // stats/target_stats.go
+			if size >= 0 {
+				statsTracker.Add(InObjSize, size)
+			} else {
+				debug.Assert(size == SizeUnknown)
+				statsTracker.Add(InObjSize, obj.off-off)
+			}
+		}
+	} else if err != nil && err != io.EOF {
+		if errCb := h.rxObj(ObjHdr{}, nil, err); errCb != nil {
+			err = errCb
+		}
+	}
+	return
+}
+
+func (it *iterator) rxMsg(loghdr string, hlen int) (err error) {
+	var msg Msg
+	h := it.handler
+	msg, err = it.nextMsg(loghdr, hlen)
+	if err == nil {
+		err = h.rxMsg(msg, nil)
+	} else if err != io.EOF {
+		err = h.rxMsg(Msg{}, err)
+	}
 	return
 }
 
@@ -374,6 +390,19 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 		}
 	}
 	return
+}
+
+////////////////////////
+// ErrDuplicateTrname //
+////////////////////////
+
+func (e *ErrDuplicateTrname) Error() string {
+	return fmt.Sprintf("duplicate trname %q", e.trname)
+}
+
+func IsErrDuplicateTrname(e error) bool {
+	_, ok := e.(*ErrDuplicateTrname)
+	return ok
 }
 
 //

@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 // transport defaults
@@ -31,14 +30,14 @@ var (
 )
 
 func init() {
-	nextSID.Store(100)
-	handlers = make(map[string]*handler, 16)
+	nextSessionID.Store(100)
+	handlers = make(map[string]*handler, 32)
 	mu = &sync.RWMutex{}
 	verbose = bool(glog.FastV(4, glog.SmoduleTransport))
 }
 
 func Init(st cos.StatsTracker, config *cmn.Config) *StreamCollector {
-	dfltMaxHdr = memsys.PageSize
+	dfltMaxHdr = dfltSizeHeader
 	if config.Transport.MaxHeaderSize > 0 {
 		dfltMaxHdr = int64(config.Transport.MaxHeaderSize)
 	}

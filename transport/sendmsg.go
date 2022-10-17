@@ -11,7 +11,6 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 // message stream & private types
@@ -125,7 +124,7 @@ func (s *MsgStream) inSend() bool { return s.msgoff.ins == inHdr }
 func (s *MsgStream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		h    = &handler{trname: s.trname, mm: memsys.ByteMM()}
+		h    = &handler{trname: s.trname}
 		it   = iterator{handler: h, body: body, hbuf: make([]byte, dfltMaxHdr)}
 	)
 	for {
@@ -134,7 +133,7 @@ func (s *MsgStream) dryrun() {
 			break
 		}
 		debug.AssertNoErr(err)
-		debug.Assert(flags&msgFlag != 0)
+		debug.Assert(flags&msgFl != 0)
 		_, _ = it.nextMsg(s.String(), hlen)
 		if err != nil {
 			break

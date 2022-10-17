@@ -108,7 +108,7 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 
 	s = &streamBase{client: client, dstURL: dstURL, dstID: dstID}
 
-	s.sessID = nextSID.Inc()
+	s.sessID = nextSessionID.Inc()
 	s.trname = path.Base(u.Path)
 
 	s.lastCh.Init()
@@ -126,9 +126,9 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	}
 	// NOTE: PDU-based traffic - a MUST-have for "unsized" transmissions
 	if extra.UsePDU() {
-		if extra.SizePDU > MaxSizePDU {
+		if extra.SizePDU > maxSizePDU {
 			debug.Assert(false)
-			extra.SizePDU = MaxSizePDU
+			extra.SizePDU = maxSizePDU
 		}
 		buf, _ := s.mm.AllocSize(int64(extra.SizePDU))
 		s.pdu = newSendPDU(buf)

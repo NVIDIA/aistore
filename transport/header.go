@@ -21,12 +21,13 @@ import (
 // proto header
 const (
 	// flags
-	msgFlag  = uint64(1 << (63 - iota)) // message vs object demux
-	pduFlag                             // PDU
-	lastPDU                             // last PDU in a given obj/msg
-	firstPDU                            // first --/--
+	msgFl       = uint64(1 << (63 - iota)) // message vs object demux
+	pduFl                                  // is PDU
+	pduLastFl                              // is last PDU
+	pduStreamFl                            // PDU-based stream
 
-	allFlags = msgFlag | pduFlag | lastPDU | firstPDU // NOTE: update when adding flags
+	// NOTE: update when adding/changing flags :NOTE
+	allFlags = msgFl | pduFl | pduLastFl | pduStreamFl
 
 	// all 3 headers
 	sizeProtoHdr = cos.SizeofI64 * 2
@@ -37,12 +38,7 @@ const (
 ////////////////////////////////
 
 func insObjHeader(hbuf []byte, hdr *ObjHdr, usePDU bool) (off int) {
-	var flags uint64
-	if usePDU {
-		flags = firstPDU
-	} else {
-		debug.Assert(!hdr.IsUnsized())
-	}
+	debug.Assert(usePDU || !hdr.IsUnsized())
 	off = sizeProtoHdr
 	off = insString(off, hbuf, hdr.SID)
 	off = insUint16(off, hbuf, hdr.Opcode)
@@ -53,7 +49,10 @@ func insObjHeader(hbuf []byte, hdr *ObjHdr, usePDU bool) (off int) {
 	off = insString(off, hbuf, hdr.ObjName)
 	off = insBytes(off, hbuf, hdr.Opaque)
 	off = insAttrs(off, hbuf, &hdr.ObjAttrs)
-	word1 := uint64(off-sizeProtoHdr) | flags
+	word1 := uint64(off - sizeProtoHdr)
+	if usePDU {
+		word1 |= pduStreamFl
+	}
 	insUint64(0, hbuf, word1)
 	checksum := xoshiro256.Hash(word1)
 	insUint64(cos.SizeofI64, hbuf, checksum)
@@ -65,7 +64,7 @@ func insMsg(hbuf []byte, msg *Msg) (off int) {
 	off = insString(off, hbuf, msg.SID)
 	off = insUint16(off, hbuf, msg.Opcode)
 	off = insBytes(off, hbuf, msg.Body)
-	word1 := uint64(off-sizeProtoHdr) | msgFlag
+	word1 := uint64(off-sizeProtoHdr) | msgFl
 	insUint64(0, hbuf, word1)
 	checksum := xoshiro256.Hash(word1)
 	insUint64(cos.SizeofI64, hbuf, checksum)
@@ -74,9 +73,9 @@ func insMsg(hbuf []byte, msg *Msg) (off int) {
 
 func (pdu *spdu) insHeader() {
 	buf, plen := pdu.buf, pdu.plength()
-	word1 := uint64(plen) | pduFlag
+	word1 := uint64(plen) | pduFl
 	if pdu.last {
-		word1 |= lastPDU
+		word1 |= pduLastFl
 	}
 	insUint64(0, buf, word1)
 	checksum := xoshiro256.Hash(word1)
