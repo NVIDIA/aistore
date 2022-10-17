@@ -157,13 +157,12 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 
 	// 2. walk local pages
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
+	npg := newNpgCtx(context.Background(), r.t, bck, lsmsg)
 	for {
-		npg := newNpgCtx(context.Background(), r.t, bck, lsmsg)
-		lst, err := npg.nextPageA()
-		if err != nil {
+		if err := npg.nextPageA(); err != nil {
 			return err
 		}
-		for _, v := range lst.Entries {
+		for _, v := range npg.page.Entries {
 			summ.TotalSize.PresentObjs += uint64(v.Size)
 			if v.Size < summ.ObjSize.Min {
 				summ.ObjSize.Min = v.Size
@@ -173,11 +172,11 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 			}
 			summ.ObjCount.Present++
 		}
-		if lst.ContinuationToken == "" {
+		if npg.page.ContinuationToken == "" {
 			break
 		}
-		lst.Entries = nil
-		lsmsg.ContinuationToken = lst.ContinuationToken
+		npg.page.Entries = nil
+		lsmsg.ContinuationToken = npg.page.ContinuationToken
 	}
 
 	if msg.ObjCached {

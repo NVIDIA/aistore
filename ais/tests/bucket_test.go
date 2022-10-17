@@ -3142,7 +3142,7 @@ func TestBucketListAndSummary(t *testing.T) {
 					}
 				}
 			} else {
-				msg := &apc.LsoMsg{}
+				msg := &apc.LsoMsg{PageSize: uint(cos.Min(m.num/3, 256))} // mult. pages
 				if test.cached {
 					msg.Flags = apc.LsObjCached
 				}

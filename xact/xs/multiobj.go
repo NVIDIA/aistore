@@ -135,35 +135,34 @@ func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate,
 
 func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) error {
 	var (
-		objList *cmn.LsoResult
+		lst     *cmn.LsoResult
 		err     error
+		msg     = &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsStatus}
 		bck     = r.xctn.Bck()
+		npg     = newNpgCtx(r.ctx, r.t, bck, msg)
+		bremote = bck.IsRemote()
 	)
 	if err := bck.Init(r.t.Bowner()); err != nil {
 		return err
 	}
-	bremote := bck.IsRemote()
 	if !bremote {
 		smap = nil // not needed
-	} else if bck.IsHTTP() {
-		return fmt.Errorf("cannot list bucket %s for prefix %q (plain HTTP buckets are not list-able) - use alternative templating",
-			bck, prefix)
 	}
-	msg := &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsStatus}
 	for {
 		if r.xctn.IsAborted() || r.xctn.Finished() {
 			break
 		}
 		if bremote {
-			objList, _, err = r.t.Backend(bck).ListObjects(bck, msg)
+			lst, _, err = r.t.Backend(bck).ListObjects(bck, msg)
 		} else {
-			npg := newNpgCtx(r.ctx, r.t, bck, msg)
-			objList, err = npg.nextPageA()
+			npg.page.Entries = nil
+			err = npg.nextPageA()
+			lst = &npg.page
 		}
 		if err != nil {
 			return err
 		}
-		for _, be := range objList.Entries {
+		for _, be := range lst.Entries {
 			if !be.IsStatusOK() {
 				continue
 			}
@@ -180,13 +179,12 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 				cluster.FreeLOM(lom)
 			}
 		}
-
-		// Stop when the last page is reached.
-		if objList.ContinuationToken == "" {
+		// last page listed
+		if lst.ContinuationToken == "" {
 			break
 		}
-		// Update `ContinuationToken` for the next request.
-		msg.ContinuationToken = objList.ContinuationToken
+		// token for the next page
+		msg.ContinuationToken = lst.ContinuationToken
 	}
 	return nil
 }

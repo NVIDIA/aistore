@@ -25,7 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
-func TestCopyObjRange(t *testing.T) {
+func TestCopyMultiObjSimple(t *testing.T) {
 	const (
 		objCnt      = 100
 		copyCnt     = 20
