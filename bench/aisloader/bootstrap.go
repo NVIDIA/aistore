@@ -630,16 +630,12 @@ func setupBucket(runParams *params) error {
 	if runParams.bck.Name == "" {
 		runParams.bck.Name = cos.RandStringStrong(8)
 		fmt.Printf("New bucket name %q\n", runParams.bck.Name)
-	} else if bck, objName, err := cmn.ParseBckObjectURI(runParams.bck.Name, cmn.ParseURIOpts{}); err == nil {
+	} else if nbck, objName, err := cmn.ParseBckObjectURI(runParams.bck.Name, cmn.ParseURIOpts{}); err == nil {
 		if objName != "" {
 			return fmt.Errorf("expecting bucket name or a bucket URI with no object name in it: %s => [%v, %s]",
-				runParams.bck, bck, objName)
+				runParams.bck, nbck, objName)
 		}
-		if runParams.bck.Provider != "" && runParams.bck.Provider != bck.Provider {
-			fmt.Printf("Warning: redundant provider via both parsed bucket URI %v and the command line %s\n",
-				bck, runParams.bck.Provider)
-		}
-		runParams.bck = bck
+		runParams.bck = nbck
 	}
 	exists, err := api.QueryBuckets(runParams.bp, cmn.QueryBcks(runParams.bck), apc.FltExists)
 	if err != nil {
