@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"context"
 	"errors"
 	"sync"
 	gatomic "sync/atomic"
@@ -79,6 +78,8 @@ func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
 ///////////////
 // bsummXact //
 ///////////////
+
+func (r *bsummXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) }
 
 func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	var (
@@ -157,7 +158,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 
 	// 2. walk local pages
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
-	npg := newNpgCtx(context.Background(), r.t, bck, lsmsg)
+	npg := newNpgCtx(r.t, bck, lsmsg, r.objsAdd)
 	for {
 		if err := npg.nextPageA(); err != nil {
 			return err
@@ -187,7 +188,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	// 3. npg remote
 	lsmsg = &apc.LsoMsg{Props: apc.GetPropsSize}
 	for {
-		npg := newNpgCtx(context.Background(), r.t, bck, lsmsg)
+		npg := newNpgCtx(r.t, bck, lsmsg, nil /*lomVisitedCb*/)
 		lst, err := npg.nextPageR()
 		if err != nil {
 			return err

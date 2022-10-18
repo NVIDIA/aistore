@@ -9,7 +9,6 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -236,14 +235,6 @@ func (r *LsoXact) doPage() *ListObjsRsp {
 
 func (r *LsoXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) }
 
-func (r *LsoXact) context() context.Context {
-	return context.WithValue(
-		context.Background(),
-		ctxPostCallbackKey,
-		postCallbackFunc(r.objsAdd),
-	)
-}
-
 // Returns the index of the first object in the page that follows the continuation `token`
 func (r *LsoXact) findToken(token string) uint {
 	if r.listRemote() && r.token == token {
@@ -263,7 +254,7 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 }
 
 func (r *LsoXact) nextPageR() error {
-	npg := newNpgCtx(r.context(), r.t, r.bck, r.msg)
+	npg := newNpgCtx(r.t, r.bck, r.msg, r.objsAdd)
 	lst, err := npg.nextPageR()
 	if err != nil {
 		r.nextToken = ""
@@ -332,7 +323,7 @@ func (r *LsoXact) shiftLastPage(token string) {
 }
 
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
-	r.walk.wi = newWalkInfo(r.context(), r.t, msg)
+	r.walk.wi = newWalkInfo(r.t, msg, r.objsAdd)
 	opts := &fs.WalkBckOpts{
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Sorted: true},
 	}

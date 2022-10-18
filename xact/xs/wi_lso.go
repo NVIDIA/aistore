@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"context"
 	"path/filepath"
 	"strings"
 
@@ -20,46 +19,36 @@ import (
 // common context and helper methods for object listing
 
 type (
-	ctxKey           int
-	postCallbackFunc func(lom *cluster.LOM)
+	lomVisitedCb func(lom *cluster.LOM)
 
-	// used to traverse local filesystem and collect objects info
+	// context used to `list` objects in local filesystems
 	walkInfo struct {
-		t         cluster.Target
-		smap      *cluster.Smap
-		postCb    postCallbackFunc
-		markerDir string
-		msg       *apc.LsoMsg
-		wanted    cos.BitFlags
+		t            cluster.Target
+		smap         *cluster.Smap
+		lomVisitedCb lomVisitedCb
+		markerDir    string
+		msg          *apc.LsoMsg
+		wanted       cos.BitFlags
 	}
-)
-
-const (
-	ctxPostCallbackKey ctxKey = iota
 )
 
 func isOK(status uint16) bool { return status == apc.LocOK }
 
 // TODO: `msg.StartAfter`
-func newWalkInfo(ctx context.Context, t cluster.Target, msg *apc.LsoMsg) (wi *walkInfo) {
-	var (
-		markerDir string
-		postCb, _ = ctx.Value(ctxPostCallbackKey).(postCallbackFunc)
-	)
+func newWalkInfo(t cluster.Target, msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
+	wi = &walkInfo{
+		t:            t,
+		smap:         t.Sowner().Get(),
+		lomVisitedCb: lomVisitedCb,
+		msg:          msg,
+		wanted:       wanted(msg),
+	}
 	if msg.ContinuationToken != "" { // marker is always a filename
-		markerDir = filepath.Dir(msg.ContinuationToken)
-		if markerDir == "." {
-			markerDir = ""
+		wi.markerDir = filepath.Dir(msg.ContinuationToken)
+		if wi.markerDir == "." {
+			wi.markerDir = ""
 		}
 	}
-	wi = &walkInfo{
-		t:         t,
-		smap:      t.Sowner().Get(),
-		postCb:    postCb,
-		markerDir: markerDir,
-		msg:       msg,
-	}
-	wi.wanted = wanted(msg)
 	return
 }
 
@@ -108,8 +97,8 @@ func (wi *walkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsoEntry) {
 		return
 	}
 	setWanted(e, lom, wi.msg.TimeFormat, wi.wanted)
-	if wi.postCb != nil {
-		wi.postCb(lom)
+	if wi.lomVisitedCb != nil {
+		wi.lomVisitedCb(lom)
 	}
 	return
 }

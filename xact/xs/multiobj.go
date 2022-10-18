@@ -135,11 +135,11 @@ func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate,
 
 func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) error {
 	var (
-		lst     *cmn.LsoResult
 		err     error
+		lst     *cmn.LsoResult
 		msg     = &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsStatus}
 		bck     = r.xctn.Bck()
-		npg     = newNpgCtx(r.ctx, r.t, bck, msg)
+		npg     = newNpgCtx(r.t, bck, msg, nil /*lomVisitedCb*/)
 		bremote = bck.IsRemote()
 	)
 	if err := bck.Init(r.t.Bowner()); err != nil {
