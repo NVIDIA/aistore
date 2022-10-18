@@ -364,7 +364,7 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg
 		errCode, err = extractErrCode(err)
 		return
 	}
-	// Restore original request UUID (UUID of the remote cluster is already inside `ContinuationToken`).
+	// Restore the original request UUID (UUID of the remote cluster is already inside `ContinuationToken`).
 	lst.UUID = msg.UUID
 	return
 }

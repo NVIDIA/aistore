@@ -179,13 +179,13 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 		if err != nil {
 			break
 		}
-		if hlen > len(it.hbuf) {
+		if hlen > cap(it.hbuf) {
 			if hlen > maxSizeHeader {
 				err = fmt.Errorf("sbr1 %s: hlen %d exceeds maximum %d", loghdr, hlen, maxSizeHeader)
 				break
 			}
 			// grow
-			glog.Warningf("%s: header length %d exceeds the current buffer %d", loghdr, hlen, len(it.hbuf))
+			glog.Warningf("%s: header length %d exceeds the current buffer %d", loghdr, hlen, cap(it.hbuf))
 			mm.Free(it.hbuf)
 			it.hbuf, _ = mm.AllocSize(cos.MinI64(int64(hlen)<<1, maxSizeHeader))
 		}
@@ -281,9 +281,24 @@ func (it *iterator) nextObj(loghdr string, hlen int) (obj *objReader, err error)
 	n, err = it.Read(it.hbuf[:hlen])
 	if n < hlen {
 		if err == nil {
-			err = fmt.Errorf("sbr4 %s: failed to receive obj hdr (%d < %d)", loghdr, n, hlen)
+			// [retry] insist on receiving the full length
+			var m int
+			for i := 0; i < maxInReadRetries; i++ {
+				runtime.Gosched()
+				m, err = it.Read(it.hbuf[n:hlen])
+				if err != nil {
+					break
+				}
+				n += m
+				if n == hlen {
+					break
+				}
+			}
 		}
-		return
+		if n < hlen {
+			err = fmt.Errorf("sbr4 %s: failed to receive obj hdr (%d < %d)", loghdr, n, hlen)
+			return
+		}
 	}
 	hdr := ExtObjHeader(it.hbuf, hlen)
 	if hdr.isFin() {

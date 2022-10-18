@@ -50,6 +50,7 @@ type (
 		multiplier  int
 		owt         cmn.OWT
 		sizePDU     int32
+		maxHdrSize  int32
 	}
 	// additional (and optional) params for new data mover
 	Extra struct {
@@ -57,6 +58,7 @@ type (
 		Compression string
 		Multiplier  int
 		SizePDU     int32
+		MaxHdrSize  int32
 	}
 )
 
@@ -72,7 +74,7 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.RecvObj, owt
 	dm := &DataMover{t: t, config: cmn.GCO.Get(), mem: t.PageMM()}
 	dm.owt = owt
 	dm.multiplier = extra.Multiplier
-	dm.sizePDU = extra.SizePDU
+	dm.sizePDU, dm.maxHdrSize = extra.SizePDU, extra.MaxHdrSize
 	switch extra.Compression {
 	case "":
 		dm.compression = apc.CompressNever
@@ -129,6 +131,7 @@ func (dm *DataMover) Open() {
 			Config:      dm.config,
 			MMSA:        dm.mem,
 			SizePDU:     dm.sizePDU,
+			MaxHdrSize:  dm.maxHdrSize,
 		},
 		Ntype:        cluster.Targets,
 		Multiplier:   dm.multiplier,

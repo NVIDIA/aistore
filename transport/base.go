@@ -37,6 +37,8 @@ const (
 	inEOB
 )
 
+const maxInReadRetries = 64 // Tx: lz4 stream read; Rx: partial object header
+
 // termination: reasons
 const (
 	reasonError   = "error"

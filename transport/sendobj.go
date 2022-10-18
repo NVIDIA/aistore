@@ -418,7 +418,7 @@ func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	var (
 		sendoff = &lz4s.s.sendoff
 		last    = sendoff.obj.Hdr.isFin()
-		retry   = 64 // insist on returning n > 0 (note that lz4 compresses /blocks/)
+		retry   = maxInReadRetries // insist on returning n > 0 (note that lz4 compresses /blocks/)
 	)
 	if lz4s.sgl.Len() > 0 {
 		lz4s.zw.Flush()
