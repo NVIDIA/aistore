@@ -1936,7 +1936,7 @@ func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.Ls
 	var (
 		aisMsg    *aisMsg
 		args      *bcastArgs
-		entries   []*cmn.LsoEntry
+		entries   cmn.LsoEntries
 		results   sliceResults
 		smap      = p.owner.smap.get()
 		cacheID   = cacheReqID{bck: bck.Bucket(), prefix: lsmsg.Prefix}
@@ -2011,7 +2011,7 @@ end:
 		// Since cache keeps entries with whole subset props we must create copy
 		// of the entries with smaller subset of props (if we would change the
 		// props of the `entries` it would also affect entries inside cache).
-		propsEntries := make([]*cmn.LsoEntry, len(entries))
+		propsEntries := make(cmn.LsoEntries, len(entries))
 		for idx := range entries {
 			propsEntries[idx] = entries[idx].CopyWithProps(props)
 		}

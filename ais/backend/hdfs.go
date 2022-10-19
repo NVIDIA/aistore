@@ -118,7 +118,7 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 
 	h := cmn.BackendHelpers.HDFS
-	lst = &cmn.LsoResult{Entries: make([]*cmn.LsoEntry, 0, msg.PageSize)}
+	lst = &cmn.LsoResult{Entries: make(cmn.LsoEntries, 0, msg.PageSize)}
 	err = hp.c.Walk(bck.Props.Extra.HDFS.RefDirectory, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			if cos.IsEOF(err) {

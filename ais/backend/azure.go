@@ -253,7 +253,7 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cm
 		err := cmn.NewErrFailedTo(apc.Azure, "list objects of", cloudBck.Name, azureErrStatus(resp.StatusCode()))
 		return nil, resp.StatusCode(), err
 	}
-	lst = &cmn.LsoResult{Entries: make([]*cmn.LsoEntry, 0, len(resp.Segment.BlobItems))}
+	lst = &cmn.LsoResult{Entries: make(cmn.LsoEntries, 0, len(resp.Segment.BlobItems))}
 	for idx := range resp.Segment.BlobItems {
 		var (
 			blob  = &resp.Segment.BlobItems[idx]

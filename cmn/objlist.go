@@ -19,25 +19,27 @@ import (
 // contains file and directory metadata as per the ListObjsMsg
 // `Flags` is a bit field where ibits 0-2 are reserved for object status
 // (all statuses are mutually exclusive)
-type LsoEntry struct {
-	Name     string `json:"name" msg:"n"`                            // object name
-	Checksum string `json:"checksum,omitempty" msg:"cs,omitempty"`   // checksum
-	Atime    string `json:"atime,omitempty" msg:"a,omitempty"`       // last access time; formatted as ListObjsMsg.TimeFormat
-	Version  string `json:"version,omitempty" msg:"v,omitempty"`     // e.g., GCP int64 generation, AWS version (string), etc.
-	Location string `json:"location,omitempty" msg:"t,omitempty"`    // [tnode:mountpath]
-	Custom   string `json:"custom-md,omitempty" msg:"m,omitempty"`   // custom metadata: ETag, MD5, CRC, user-defined ...
-	Size     int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes
-	Copies   int16  `json:"copies,omitempty" msg:"c,omitempty"`      // ## copies (NOTE: for non-replicated object copies == 1)
-	Flags    uint16 `json:"flags,omitempty" msg:"f,omitempty"`
-}
+type (
+	LsoEntry struct {
+		Name     string `json:"name" msg:"n"`                            // object name
+		Checksum string `json:"checksum,omitempty" msg:"cs,omitempty"`   // checksum
+		Atime    string `json:"atime,omitempty" msg:"a,omitempty"`       // last access time; formatted as ListObjsMsg.TimeFormat
+		Version  string `json:"version,omitempty" msg:"v,omitempty"`     // e.g., GCP int64 generation, AWS version (string), etc.
+		Location string `json:"location,omitempty" msg:"t,omitempty"`    // [tnode:mountpath]
+		Custom   string `json:"custom-md,omitempty" msg:"m,omitempty"`   // custom metadata: ETag, MD5, CRC, user-defined ...
+		Size     int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes
+		Copies   int16  `json:"copies,omitempty" msg:"c,omitempty"`      // ## copies (NOTE: for non-replicated object copies == 1)
+		Flags    uint16 `json:"flags,omitempty" msg:"f,omitempty"`
+	}
 
-// LsoResult carries the results of api.LsoResult and friends
-type LsoResult struct {
-	UUID              string      `json:"uuid"`
-	ContinuationToken string      `json:"continuation_token"`
-	Entries           []*LsoEntry `json:"entries"`
-	Flags             uint32      `json:"flags"`
-}
+	// LsoResult carries the results of `api.ListObjects`, `BackendProvider.ListObjects`, and friends
+	LsoResult struct {
+		UUID              string      `json:"uuid"`
+		ContinuationToken string      `json:"continuation_token"`
+		Entries           []*LsoEntry `json:"entries"`
+		Flags             uint32      `json:"flags"`
+	}
+)
 
 ////////////////
 // LsoEntry //

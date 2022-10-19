@@ -13,7 +13,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func SortLso(bckEntries []*LsoEntry) {
+type LsoEntries []*LsoEntry // separately from (code-generated) objlist* - no need to msgpack
+
+func SortLso(bckEntries LsoEntries) {
 	entryLess := func(i, j int) bool {
 		if bckEntries[i].Name == bckEntries[j].Name {
 			return bckEntries[i].Flags&apc.EntryStatusMask < bckEntries[j].Flags&apc.EntryStatusMask
@@ -23,7 +25,7 @@ func SortLso(bckEntries []*LsoEntry) {
 	sort.Slice(bckEntries, entryLess)
 }
 
-func dedupLso(bckEntries []*LsoEntry, maxSize uint) ([]*LsoEntry, string) {
+func dedupLso(bckEntries LsoEntries, maxSize uint) (LsoEntries, string) {
 	objCount := uint(len(bckEntries))
 
 	j := 0
@@ -61,7 +63,7 @@ func ConcatLso(lists []*LsoResult, maxSize uint) (objs *LsoResult) {
 	}
 
 	objs = &LsoResult{}
-	objs.Entries = make([]*LsoEntry, 0)
+	objs.Entries = make(LsoEntries, 0)
 
 	for _, l := range lists {
 		objs.Flags |= l.Flags

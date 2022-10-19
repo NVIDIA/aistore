@@ -698,8 +698,8 @@ func TestListObjectsGoBack(t *testing.T) {
 		}
 		var (
 			tokens          []string
-			entries         []*cmn.LsoEntry
-			expectedEntries []*cmn.LsoEntry
+			entries         cmn.LsoEntries
+			expectedEntries cmn.LsoEntries
 		)
 		tlog.Logln("listing couple pages to move iterator on targets")
 		for page := 0; page < m.num/int(msg.PageSize); page++ {

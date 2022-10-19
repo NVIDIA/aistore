@@ -14,12 +14,12 @@ import (
 )
 
 type discardEntriesTestCase struct {
-	entries []*cmn.LsoEntry
+	entries cmn.LsoEntries
 	size    int
 }
 
-func generateEntries(size int) []*cmn.LsoEntry {
-	result := make([]*cmn.LsoEntry, 0, size)
+func generateEntries(size int) cmn.LsoEntries {
+	result := make(cmn.LsoEntries, 0, size)
 	for i := 0; i < size; i++ {
 		result = append(result, &cmn.LsoEntry{Name: fmt.Sprintf("%d", i)})
 	}
@@ -40,7 +40,7 @@ func TestDiscardFirstEntries(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Logf("testcase %d/%d", len(tc.entries), tc.size)
-		original := append([]*cmn.LsoEntry(nil), tc.entries...)
+		original := append(cmn.LsoEntries(nil), tc.entries...)
 		entries := discardFirstEntries(tc.entries, tc.size)
 		expSize := cos.Max(0, len(original)-tc.size)
 		tassert.Errorf(t, len(entries) == expSize, "incorrect size. expected %d; got %d", expSize, len(entries))
@@ -51,7 +51,7 @@ func TestDiscardFirstEntries(t *testing.T) {
 	}
 }
 
-func discardFirstEntries(entries []*cmn.LsoEntry, n int) []*cmn.LsoEntry {
+func discardFirstEntries(entries cmn.LsoEntries, n int) cmn.LsoEntries {
 	if n == 0 {
 		return entries
 	}

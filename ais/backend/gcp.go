@@ -175,7 +175,7 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cm
 		return
 	}
 
-	lst = &cmn.LsoResult{Entries: make([]*cmn.LsoEntry, 0, len(objs))}
+	lst = &cmn.LsoResult{Entries: make(cmn.LsoEntries, 0, len(objs))}
 	lst.ContinuationToken = nextPageToken
 	for _, attrs := range objs {
 		entry := &cmn.LsoEntry{}

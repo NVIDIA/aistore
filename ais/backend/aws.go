@@ -165,7 +165,7 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cm
 		return
 	}
 
-	lst = &cmn.LsoResult{Entries: make([]*cmn.LsoEntry, 0, len(resp.Contents))}
+	lst = &cmn.LsoResult{Entries: make(cmn.LsoEntries, 0, len(resp.Contents))}
 	for _, key := range resp.Contents {
 		entry := &cmn.LsoEntry{Name: *key.Key}
 		if msg.WantProp(apc.GetPropsSize) {

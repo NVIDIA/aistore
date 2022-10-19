@@ -11,7 +11,7 @@ import (
 )
 
 var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
-	makeEntries := func(xs ...string) (entries []*cmn.LsoEntry) {
+	makeEntries := func(xs ...string) (entries cmn.LsoEntries) {
 		for _, x := range xs {
 			entries = append(entries, &cmn.LsoEntry{
 				Name: x,
@@ -20,7 +20,7 @@ var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
 		return
 	}
 
-	extractNames := func(entries []*cmn.LsoEntry) (xs []string) {
+	extractNames := func(entries cmn.LsoEntries) (xs []string) {
 		for _, entry := range entries {
 			xs = append(xs, entry.Name)
 		}
@@ -67,7 +67,7 @@ var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
 		It("should correctly handle empty last page", func() {
 			cache.set(id, "", makeEntries("a", "b", "c"), 3)
 			cache.set(id, "c", makeEntries("d", "e", "f"), 3)
-			cache.set(id, "f", []*cmn.LsoEntry{}, 4)
+			cache.set(id, "f", cmn.LsoEntries{}, 4)
 
 			entries, hasEnough := cache.get(id, "", 10)
 			Expect(hasEnough).To(BeTrue())
@@ -240,11 +240,11 @@ var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
 				// Get entries with prefix `a`.
 				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "a"}, "", 1)
 				Expect(hasEnough).To(BeTrue())
-				Expect(entries).To(Equal([]*cmn.LsoEntry{}))
+				Expect(entries).To(Equal(cmn.LsoEntries{}))
 
 				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "a"}, "", 2)
 				Expect(hasEnough).To(BeTrue())
-				Expect(entries).To(Equal([]*cmn.LsoEntry{}))
+				Expect(entries).To(Equal(cmn.LsoEntries{}))
 
 				// Make interval "last".
 				cache.set(id, "y", makeEntries(), 1)
@@ -261,7 +261,7 @@ var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
 				// Get entries with prefix `ya`.
 				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "ya"}, "", 1)
 				Expect(hasEnough).To(BeTrue())
-				Expect(entries).To(Equal([]*cmn.LsoEntry{}))
+				Expect(entries).To(Equal(cmn.LsoEntries{}))
 			})
 
 			It("should correctly behave in `id='bck'` cache if prefix is contained in interval but there aren't matching entries", func() {
@@ -276,11 +276,11 @@ var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
 				// contained in the interval but there is no such entries.
 				entries, hasEnough = cache.get(prefixID, "", 2)
 				Expect(hasEnough).To(BeTrue())
-				Expect(entries).To(Equal([]*cmn.LsoEntry{}))
+				Expect(entries).To(Equal(cmn.LsoEntries{}))
 
 				entries, hasEnough = cache.get(prefixID, "a", 2)
 				Expect(hasEnough).To(BeTrue())
-				Expect(entries).To(Equal([]*cmn.LsoEntry{}))
+				Expect(entries).To(Equal(cmn.LsoEntries{}))
 			})
 
 			It("should correctly behave in `id='bck'` cache if prefix is out of the interval", func() {
