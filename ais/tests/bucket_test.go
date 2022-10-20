@@ -879,7 +879,6 @@ func TestListObjectsProps(t *testing.T) {
 			tlog.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
 			checkProps(useCache, []string{}, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, entry.Atime != "", "atime is not set")
 
@@ -890,7 +889,6 @@ func TestListObjectsProps(t *testing.T) {
 			tlog.Logf("[cache=%t] trying default subset of props...\n", useCache)
 			checkProps(useCache, apc.GetPropsDefault, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, entry.Atime != "", "atime is not set")
 
@@ -906,7 +904,6 @@ func TestListObjectsProps(t *testing.T) {
 				}
 				tassert.Errorf(t, entry.Copies > 0, "copies is not set")
 
-				tassert.Errorf(t, entry.Size == 0, "size is set")
 				tassert.Errorf(t, entry.Atime == "", "atime is set")
 				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
 			})
@@ -915,8 +912,6 @@ func TestListObjectsProps(t *testing.T) {
 			checkProps(useCache, []string{apc.GetPropsSize}, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 
-				tassert.Errorf(t, entry.Version == "", "version is set")
-				tassert.Errorf(t, entry.Checksum == "", "checksum is set")
 				tassert.Errorf(t, entry.Atime == "", "atime is set")
 				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
 				tassert.Errorf(t, entry.Copies == 0, "copies is set")
@@ -3087,19 +3082,19 @@ func TestBucketListAndSummary(t *testing.T) {
 						Provider: test.provider,
 					},
 
-					num: 2234,
+					num: 12345,
 				}
 				baseParams = tools.BaseAPIParams()
 			)
 			bckTest := cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}
 			if !bckTest.IsAIS() {
-				m.num = 123
+				m.num = 1234
 			}
 
 			cacheSize := m.num / 2 // determines number of objects which should be cached
 
 			m.initWithCleanupAndSaveState()
-			m.expectTargets(2)
+			m.expectTargets(1)
 
 			expectedFiles := m.num
 			if bckTest.IsAIS() {

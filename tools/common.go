@@ -80,7 +80,6 @@ func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-
 	errHTTP, ok := err.(*cmn.ErrHTTP)
 	if !ok {
 		err = fmt.Errorf("expected an error of the type *cmn.ErrHTTP, got %v(%T)", err, err)
@@ -89,7 +88,11 @@ func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 		}
 		tassert.CheckFatal(tb, err)
 	}
-	return errHTTP.Status == http.StatusNotFound, err
+	if errHTTP.Status != http.StatusNotFound {
+		err = fmt.Errorf("expected status 404, got %+v", errHTTP)
+		tassert.CheckFatal(tb, err) // warning?
+	}
+	return false, err
 }
 
 func isRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
