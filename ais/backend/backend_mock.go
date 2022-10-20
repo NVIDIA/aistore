@@ -39,8 +39,8 @@ func (*mockBP) HeadBucket(_ ctx, bck *cluster.Bck) (cos.StrKVs, int, error) {
 	return cos.StrKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
-func (*mockBP) ListObjects(bck *cluster.Bck, _ *apc.LsoMsg) (*cmn.LsoResult, int, error) {
-	return nil, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
+func (*mockBP) ListObjects(bck *cluster.Bck, _ *apc.LsoMsg, _ *cmn.LsoResult) (int, error) {
+	return http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
 // cannot fail - return empty list

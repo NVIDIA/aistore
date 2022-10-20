@@ -224,18 +224,14 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 // LIST OBJECTS //
 //////////////////
 
-func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult, errCode int, err error) {
+func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
-
 	var (
 		h        = cmn.BackendHelpers.Azure
 		cloudBck = bck.RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		marker   = azblob.Marker{}
-		opts     = azblob.ListBlobsSegmentOptions{
-			Prefix:     msg.Prefix,
-			MaxResults: int32(msg.PageSize),
-		}
+		opts     = azblob.ListBlobsSegmentOptions{Prefix: msg.Prefix, MaxResults: int32(msg.PageSize)}
 	)
 	if verbose {
 		glog.Infof("list_objects %s", cloudBck.Name)
@@ -246,36 +242,35 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cm
 
 	resp, err := cntURL.ListBlobsFlatSegment(azctx, marker, opts)
 	if err != nil {
-		status, err := azureErrorToAISError(err, cloudBck, "")
-		return nil, status, err
+		return azureErrorToAISError(err, cloudBck, "")
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
 		err := cmn.NewErrFailedTo(apc.Azure, "list objects of", cloudBck.Name, azureErrStatus(resp.StatusCode()))
-		return nil, resp.StatusCode(), err
+		return resp.StatusCode(), err
 	}
-	lst = &cmn.LsoResult{Entries: make(cmn.LsoEntries, 0, len(resp.Segment.BlobItems))}
+
+	l := len(resp.Segment.BlobItems)
+	for i := len(lst.Entries); i < l; i++ {
+		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
+	}
 	for idx := range resp.Segment.BlobItems {
 		var (
 			blob  = &resp.Segment.BlobItems[idx]
-			entry = &cmn.LsoEntry{Name: blob.Name}
+			entry = lst.Entries[idx]
 		)
-		if blob.Properties.ContentLength != nil && msg.WantProp(apc.GetPropsSize) {
+		if blob.Properties.ContentLength != nil {
 			entry.Size = *blob.Properties.ContentLength
 		}
-		if msg.WantProp(apc.GetPropsVersion) {
-			// NOTE: here and elsewhere (below), use Etag as the version
-			if v, ok := h.EncodeVersion(string(blob.Properties.Etag)); ok {
-				entry.Version = v
-			}
+		// NOTE: here and elsewhere (below), use Etag as the version
+		if v, ok := h.EncodeVersion(string(blob.Properties.Etag)); ok {
+			entry.Version = v
 		}
-		if msg.WantProp(apc.GetPropsChecksum) {
-			if v, ok := h.EncodeCksum(blob.Properties.ContentMD5); ok {
-				entry.Checksum = v
-			}
+		if v, ok := h.EncodeCksum(blob.Properties.ContentMD5); ok {
+			entry.Checksum = v
 		}
-
-		lst.Entries = append(lst.Entries, entry)
 	}
+	lst.Entries = lst.Entries[:l]
+
 	if resp.NextMarker.Val != nil {
 		lst.ContinuationToken = *resp.NextMarker.Val
 	}

@@ -153,9 +153,13 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 			break
 		}
 		if bremote {
-			lst, _, err = r.t.Backend(bck).ListObjects(bck, msg)
+			lst = &cmn.LsoResult{Entries: allocLsoEntries()}
+			_, err = r.t.Backend(bck).ListObjects(bck, msg, lst)
+			if err != nil {
+				freeLsoEntries(lst.Entries)
+			}
 		} else {
-			npg.page.Entries = nil
+			npg.page.Entries = allocLsoEntries()
 			err = npg.nextPageA()
 			lst = &npg.page
 		}
@@ -167,18 +171,21 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 				continue
 			}
 			if r.xctn.IsAborted() || r.xctn.Finished() {
+				freeLsoEntries(lst.Entries)
 				return nil
 			}
 			lom := cluster.AllocLOM(be.Name)
 			err := r.do(lom, wi, smap)
 			if err != nil {
 				cluster.FreeLOM(lom)
+				freeLsoEntries(lst.Entries)
 				return err
 			}
 			if r.freeLOM {
 				cluster.FreeLOM(lom)
 			}
 		}
+		freeLsoEntries(lst.Entries)
 		// last page listed
 		if lst.ContinuationToken == "" {
 			break

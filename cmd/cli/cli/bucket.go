@@ -378,7 +378,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 
 			// print exact number of objects if it is `limit`ed: in case of
 			// limit > page size, the last page is printed partially
-			var toPrint []*cmn.LsoEntry
+			var toPrint cmn.LsoEntries
 			if limit > 0 && toShow < len(objList.Entries) {
 				toPrint = objList.Entries[:toShow]
 			} else {
@@ -593,7 +593,7 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 	return bcks[0], bcks[1], nil
 }
 
-func printObjProps(c *cli.Context, entries []*cmn.LsoEntry, objectFilter *objectListFilter, props string, addCachedCol bool) error {
+func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectListFilter, props string, addCachedCol bool) error {
 	var (
 		altMap         template.FuncMap
 		tmpl           = objPropsTemplate(c, props, addCachedCol)
@@ -699,7 +699,7 @@ func (o *objectListFilter) matchesAll(obj *cmn.LsoEntry) bool {
 	return true
 }
 
-func (o *objectListFilter) filter(entries []*cmn.LsoEntry) (matching, rest []cmn.LsoEntry) {
+func (o *objectListFilter) filter(entries cmn.LsoEntries) (matching, rest []cmn.LsoEntry) {
 	for _, obj := range entries {
 		if o.matchesAll(obj) {
 			matching = append(matching, *obj)

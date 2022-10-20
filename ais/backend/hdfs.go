@@ -114,12 +114,14 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs
 // LIST OBJECTS //
 //////////////////
 
-func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult, errCode int, err error) {
+func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (int, error) {
+	var (
+		h   = cmn.BackendHelpers.HDFS
+		idx int
+	)
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 
-	h := cmn.BackendHelpers.HDFS
-	lst = &cmn.LsoResult{Entries: make(cmn.LsoEntries, 0, msg.PageSize)}
-	err = hp.c.Walk(bck.Props.Extra.HDFS.RefDirectory, func(path string, fi os.FileInfo, err error) error {
+	err := hp.c.Walk(bck.Props.Extra.HDFS.RefDirectory, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			if cos.IsEOF(err) {
 				return nil
@@ -148,13 +150,16 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn
 		if fi.IsDir() {
 			return nil
 		}
-		entry := &cmn.LsoEntry{
-			Name:    objName,
-			Version: "",
+
+		var entry *cmn.LsoEntry
+		if idx < len(lst.Entries) {
+			entry = lst.Entries[idx]
+		} else {
+			entry = &cmn.LsoEntry{Name: objName}
+			lst.Entries = append(lst.Entries, entry)
 		}
-		if msg.WantProp(apc.GetPropsSize) {
-			entry.Size = fi.Size()
-		}
+		idx++
+		entry.Size = fi.Size()
 		if msg.WantProp(apc.GetPropsChecksum) {
 			fr, err := hp.c.Open(path)
 			if err != nil {
@@ -169,18 +174,17 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn
 				entry.Checksum = v
 			}
 		}
-		lst.Entries = append(lst.Entries, entry)
 		return nil
 	})
 	if err != nil {
-		errCode, err = hdfsErrorToAISError(err)
-		return nil, errCode, err
+		return hdfsErrorToAISError(err)
 	}
+	lst.Entries = lst.Entries[:idx]
 	// Set continuation token only if we reached the page size.
 	if uint(len(lst.Entries)) >= msg.PageSize {
 		lst.ContinuationToken = lst.Entries[len(lst.Entries)-1].Name
 	}
-	return lst, 0, nil
+	return 0, nil
 }
 
 // `hdfs.Walk` does not correctly handle `SkipDir` if the `fi` is non-directory.

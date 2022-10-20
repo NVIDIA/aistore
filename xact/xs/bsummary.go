@@ -160,6 +160,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
 	npg := newNpgCtx(r.t, bck, lsmsg, r.objsAdd)
 	for {
+		npg.page.Entries = allocLsoEntries()
 		if err := npg.nextPageA(); err != nil {
 			return err
 		}
@@ -173,10 +174,10 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 			}
 			summ.ObjCount.Present++
 		}
+		freeLsoEntries(npg.page.Entries)
 		if npg.page.ContinuationToken == "" {
 			break
 		}
-		npg.page.Entries = nil
 		lsmsg.ContinuationToken = npg.page.ContinuationToken
 	}
 
@@ -189,7 +190,8 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	lsmsg = &apc.LsoMsg{Props: apc.GetPropsSize}
 	for {
 		npg := newNpgCtx(r.t, bck, lsmsg, nil /*lomVisitedCb*/)
-		lst, err := npg.nextPageR()
+		nentries := allocLsoEntries()
+		lst, err := npg.nextPageR(nentries)
 		if err != nil {
 			return err
 		}
@@ -197,11 +199,10 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 			summ.TotalSize.RemoteObjs += uint64(v.Size)
 			summ.ObjCount.Remote++
 		}
-		if lst.ContinuationToken == "" {
+		freeLsoEntries(lst.Entries)
+		if lsmsg.ContinuationToken = lst.ContinuationToken; lsmsg.ContinuationToken == "" {
 			break
 		}
-		lst.Entries = nil
-		lsmsg.ContinuationToken = lst.ContinuationToken
 	}
 	return nil
 }

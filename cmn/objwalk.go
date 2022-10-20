@@ -25,32 +25,31 @@ func SortLso(bckEntries LsoEntries) {
 	sort.Slice(bckEntries, entryLess)
 }
 
-func dedupLso(bckEntries LsoEntries, maxSize uint) (LsoEntries, string) {
-	objCount := uint(len(bckEntries))
-
-	j := 0
-	token := ""
-	for _, obj := range bckEntries {
-		if j > 0 && bckEntries[j-1].Name == obj.Name {
+func dedupLso(entries LsoEntries, maxSize uint) ([]*LsoEntry, string) {
+	var (
+		token    string
+		j        int
+		objCount = uint(len(entries))
+	)
+	for _, obj := range entries {
+		if j > 0 && entries[j-1].Name == obj.Name {
 			continue
 		}
-		bckEntries[j] = obj
+		entries[j] = obj
 		j++
 
 		if maxSize > 0 && j == int(maxSize) {
 			break
 		}
 	}
-
-	// Set extra infos to nil to avoid memory leaks
-	// see NOTE on https://github.com/golang/go/wiki/SliceTricks
+	// nullify discarded entries to avoid leaks (e.g. https://github.com/golang/go/wiki/SliceTricks)
 	for i := j; i < int(objCount); i++ {
-		bckEntries[i] = nil
+		entries[i] = nil
 	}
 	if maxSize > 0 && objCount >= maxSize {
-		token = bckEntries[j-1].Name
+		token = entries[j-1].Name
 	}
-	return bckEntries[:j], token
+	return entries[:j], token
 }
 
 // ConcatLso takes a slice of object lists and concatenates them: all lists

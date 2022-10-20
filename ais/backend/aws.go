@@ -135,7 +135,9 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs, er
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult, errCode int, err error) {
+// NOTE: asking for the remote s3 version might be extremely taxing, performance wise!!!
+
+func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
 		svc      *s3.S3
 		h        = cmn.BackendHelpers.Amazon
@@ -165,24 +167,23 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cm
 		return
 	}
 
-	lst = &cmn.LsoResult{Entries: make(cmn.LsoEntries, 0, len(resp.Contents))}
-	for _, key := range resp.Contents {
-		entry := &cmn.LsoEntry{Name: *key.Key}
-		if msg.WantProp(apc.GetPropsSize) {
-			entry.Size = *key.Size
-		}
-		if msg.WantProp(apc.GetPropsChecksum) {
-			if v, ok := h.EncodeCksum(key.ETag); ok {
-				entry.Checksum = v
-			}
-		}
-
-		lst.Entries = append(lst.Entries, entry)
+	l := len(resp.Contents)
+	for i := len(lst.Entries); i < l; i++ {
+		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
 	}
+	for i, key := range resp.Contents {
+		entry := lst.Entries[i]
+		entry.Name = *key.Key
+		entry.Size = *key.Size
+		if v, ok := h.EncodeCksum(key.ETag); ok {
+			entry.Checksum = v
+		}
+	}
+	lst.Entries = lst.Entries[:l]
+
 	if verbose {
 		glog.Infof("[list_objects] count %d", len(lst.Entries))
 	}
-
 	if *resp.IsTruncated {
 		lst.ContinuationToken = *resp.NextContinuationToken
 	}
@@ -191,9 +192,9 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cm
 		return
 	}
 
-	// If version is requested, read versions page by page and stop when there
-	// is nothing to read or the version page marker is greater than object page marker.
-	// Page is limited with 500+ items, so reading them is slow.
+	// NOTE: (slow path)
+	// If version is requested, read versions page by page and stop at the end
+	// _or_ the version page marker is greater than the object page marker.
 	if msg.WantProp(apc.GetPropsVersion) {
 		var (
 			versions   = make(map[string]string, len(lst.Entries))
@@ -210,13 +211,10 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cm
 			if keyMarker != "" {
 				verParams.KeyMarker = aws.String(keyMarker)
 			}
-
 			verResp, err := svc.ListObjectVersions(verParams)
 			if err != nil {
-				errCode, err := awsErrorToAISError(err, cloudBck)
-				return nil, errCode, err
+				return awsErrorToAISError(err, cloudBck)
 			}
-
 			for _, vers := range verResp.Versions {
 				if *(vers.IsLatest) {
 					if v, ok := h.EncodeVersion(vers.VersionId); ok {
@@ -224,11 +222,9 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cm
 					}
 				}
 			}
-
 			if !(*verResp.IsTruncated) {
 				break
 			}
-
 			keyMarker = *verResp.NextKeyMarker
 		}
 		for _, entry := range lst.Entries {

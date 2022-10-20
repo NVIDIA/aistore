@@ -116,7 +116,7 @@ func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *apc.LsoMsg, uuid string)
 	}
 	xctn.stopCh.Init()
 	debug.Assert(lsmsg.PageSize > 0 && lsmsg.PageSize < 100000)
-	xctn.lastPage = make(cmn.LsoEntries, 0, lsmsg.PageSize)
+	xctn.lastPage = allocLsoEntries()
 	xctn.DemandBase.Init(uuid, apc.ActList, bck, totallyIdle)
 	return xctn
 }
@@ -155,6 +155,10 @@ func (r *LsoXact) stop(err error) {
 	if r.walk.stopCh != nil {
 		r.walk.stopCh.Close()
 		r.walk.wg.Wait()
+	}
+	if r.lastPage != nil {
+		freeLsoEntries(r.lastPage)
+		r.lastPage = nil
 	}
 	r.Finish(err)
 }
@@ -255,7 +259,8 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 
 func (r *LsoXact) nextPageR() error {
 	npg := newNpgCtx(r.t, r.bck, r.msg, r.objsAdd)
-	lst, err := npg.nextPageR()
+	nentries := allocLsoEntries()
+	lst, err := npg.nextPageR(nentries)
 	if err != nil {
 		r.nextToken = ""
 		return err
@@ -263,14 +268,22 @@ func (r *LsoXact) nextPageR() error {
 	if lst.ContinuationToken == "" {
 		r.walk.done = true
 	}
+	freeLsoEntries(r.lastPage)
 	r.lastPage = lst.Entries
 	r.nextToken = lst.ContinuationToken
 	return nil
 }
 
+func (r *LsoXact) gcLastPage(from, to int) {
+	for i := from; i < to; i++ {
+		r.lastPage[i] = nil
+	}
+}
+
 func (r *LsoXact) nextPageA() {
 	if r.token > r.msg.ContinuationToken {
 		r.initWalk() // restart traversing the bucket (TODO: cache more and try to scroll back)
+		r.gcLastPage(0, len(r.lastPage))
 		r.lastPage = r.lastPage[:0]
 	} else {
 		if r.walk.done {
@@ -278,8 +291,8 @@ func (r *LsoXact) nextPageA() {
 		}
 		r.shiftLastPage(r.msg.ContinuationToken)
 	}
-	r.token = r.msg.ContinuationToken
 
+	r.token = r.msg.ContinuationToken
 	if r.havePage(r.token, r.msg.PageSize) {
 		return
 	}
@@ -307,18 +320,22 @@ func (r *LsoXact) shiftLastPage(token string) {
 		return
 	}
 	j := r.findToken(token)
-	// Entire cache is "after" page marker, keep the whole cache
+	// the page is "after" the token - keep it
 	if j == 0 {
 		return
 	}
 	l := uint(len(r.lastPage))
-	// All the cache data have been sent to clients, clean it up
+
+	// (all sent)
 	if j == l {
+		r.gcLastPage(0, int(l))
 		r.lastPage = r.lastPage[:0]
 		return
 	}
-	// To reuse local cache, copy items and fix the slice
+
+	// otherwise, shift the not-yet-transmitted entries and fix the slice
 	copy(r.lastPage[0:], r.lastPage[j:])
+	r.gcLastPage(int(l-j), int(l))
 	r.lastPage = r.lastPage[:l-j]
 }
 

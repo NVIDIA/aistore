@@ -151,7 +151,7 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult, errCode int, err error) {
+func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
@@ -175,26 +175,23 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg) (lst *cm
 		return
 	}
 
-	lst = &cmn.LsoResult{Entries: make(cmn.LsoEntries, 0, len(objs))}
 	lst.ContinuationToken = nextPageToken
-	for _, attrs := range objs {
-		entry := &cmn.LsoEntry{}
-		entry.Name = attrs.Name
-		if msg.WantProp(apc.GetPropsSize) {
-			entry.Size = attrs.Size
-		}
-		if msg.WantProp(apc.GetPropsChecksum) {
-			if v, ok := h.EncodeCksum(attrs.MD5); ok {
-				entry.Checksum = v
-			}
-		}
-		if msg.WantProp(apc.GetPropsVersion) {
-			if v, ok := h.EncodeVersion(attrs.Generation); ok {
-				entry.Version = v
-			}
-		}
-		lst.Entries = append(lst.Entries, entry)
+
+	l := len(objs)
+	for i := len(lst.Entries); i < l; i++ {
+		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
 	}
+	for i, attrs := range objs {
+		entry := lst.Entries[i]
+		entry.Name, entry.Size = attrs.Name, attrs.Size
+		if v, ok := h.EncodeCksum(attrs.MD5); ok {
+			entry.Checksum = v
+		}
+		if v, ok := h.EncodeVersion(attrs.Generation); ok {
+			entry.Version = v
+		}
+	}
+	lst.Entries = lst.Entries[:l]
 	if verbose {
 		glog.Infof("[list_objects] count %d", len(lst.Entries))
 	}

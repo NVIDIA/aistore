@@ -341,8 +341,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	return
 }
 
-func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg) (lst *cmn.LsoResult,
-	errCode int, err error) {
+func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var aisCluster *remAISCluster
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
@@ -350,20 +349,20 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg
 	remoteMsg := msg.Clone()
 	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, m.MaxPageSize())
 
-	// TODO: Currently we cannot remember the `UUID` from remote cluster and
-	// embed it into `ContinuationToken`. The problem is that when local data
-	// is needed then all targets list cloud objects and currently we don't
-	// support listing objects (AIS bucket) with same `UUID` from multiple clients.
-	// Clearing `remoteMsg.UUID` is necessary otherwise the remote cluster
-	// will think that it already knows this UUID and problems will arise.
+	// TODO: Currently, we are not encoding xaction (aka request) `UUID` from the remote cluster
+	// in the `ContinuationToken` (see note below).
 	remoteMsg.UUID = ""
 
 	bck := remoteBck.Clone()
 	unsetUUID(&bck)
-	if lst, err = api.ListObjectsPage(aisCluster.bp, bck, remoteMsg); err != nil {
+
+	var lstRes *cmn.LsoResult
+	if lstRes, err = api.ListObjectsPage(aisCluster.bp, bck, remoteMsg); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}
+	*lst = *lstRes
+
 	// Restore the original request UUID (UUID of the remote cluster is already inside `ContinuationToken`).
 	lst.UUID = msg.UUID
 	return

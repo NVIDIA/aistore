@@ -19,6 +19,7 @@ type npgCtx struct {
 	bck  *cluster.Bck
 	wi   walkInfo
 	page cmn.LsoResult
+	idx  int
 }
 
 func newNpgCtx(t cluster.Target, bck *cluster.Bck, msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (npg *npgCtx) {
@@ -37,9 +38,8 @@ func newNpgCtx(t cluster.Target, bck *cluster.Bck, msg *apc.LsoMsg, lomVisitedCb
 
 // limited usage: bucket summary, multi-obj
 func (npg *npgCtx) nextPageA() error {
-	debug.Assert(npg.page.Entries == nil)
 	npg.page.UUID = npg.wi.msg.UUID
-
+	npg.idx = 0
 	opts := &fs.WalkBckOpts{
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: npg.cb, Sorted: true},
 	}
@@ -50,7 +50,13 @@ func (npg *npgCtx) nextPageA() error {
 		}
 		return nil
 	}
-	return fs.WalkBck(opts)
+	err := fs.WalkBck(opts)
+	if err != nil {
+		freeLsoEntries(npg.page.Entries)
+	} else {
+		npg.page.Entries = npg.page.Entries[:npg.idx]
+	}
+	return err
 }
 
 func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
@@ -61,15 +67,23 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 	if err != nil {
 		return cmn.NewErrAborted(npg.wi.t.String()+" ResultSetXact", "query", err)
 	}
-	npg.page.Entries = append(npg.page.Entries, entry)
+	if npg.idx < len(npg.page.Entries) {
+		*npg.page.Entries[npg.idx] = *entry
+	} else {
+		debug.Assert(npg.idx == len(npg.page.Entries))
+		npg.page.Entries = append(npg.page.Entries, entry)
+	}
+	npg.idx++
 	return nil
 }
 
 // Returns the next page from the remote bucket's "list-objects" result set.
-func (npg *npgCtx) nextPageR() (*cmn.LsoResult, error) {
+func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (*cmn.LsoResult, error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
-	lst, _, err := npg.wi.t.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg)
+	lst := &cmn.LsoResult{Entries: nentries}
+	_, err := npg.wi.t.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
 	if err != nil {
+		freeLsoEntries(nentries)
 		return nil, err
 	}
 	err = npg.populate(lst)
