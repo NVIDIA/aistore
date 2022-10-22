@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -28,30 +29,31 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack"
 )
 
-// Xaction is on-demand one to avoid creating a new xaction per page even
-// in passthrough mode. It just restarts `walk` if needed.
-// Xaction is created once per bucket list request (per UUID)
+// `on-demand` per list-objects request
 type (
 	lsoFactory struct {
-		xreg.RenewBase
-		xctn *LsoXact
-		msg  *apc.LsoMsg
+		streamingF
+		msg *apc.LsoMsg
 	}
 	LsoXact struct {
-		t         cluster.Target
-		bck       *cluster.Bck
+		streamingX
 		msg       *apc.LsoMsg
-		msgCh     chan *apc.LsoMsg  // incoming requests
-		respCh    chan *ListObjsRsp // responses - next pages
-		stopCh    cos.StopCh        // to stop xaction
-		token     string            // continuation token -> last responded page
-		nextToken string            // next continuation token -> next pages
-		lastPage  cmn.LsoEntries    // last page contents
+		msgCh     chan *apc.LsoMsg // incoming requests
+		respCh    chan *LsoRsp     // responses - next pages
+		remtCh    chan *LsoRsp     // remote paging by the responsible target
+		stopCh    cos.StopCh       // to stop xaction
+		token     string           // continuation token -> last responded page
+		nextToken string           // next continuation token -> next pages
+		lastPage  cmn.LsoEntries   // last page contents
+		lensgl    int64            // sgl.Len()
 		walk      struct {
 			pageCh chan *cmn.LsoEntry // channel to accumulate listed object entries
 			stopCh *cos.StopCh        // to abort bucket walk
@@ -59,9 +61,8 @@ type (
 			wg     sync.WaitGroup     // to wait until the walk finishes
 			done   bool               // done walking
 		}
-		xact.DemandBase
 	}
-	ListObjsRsp struct {
+	LsoRsp struct {
 		Err    error
 		Lst    *cmn.LsoResult
 		Status int
@@ -87,41 +88,38 @@ var (
 )
 
 func (*lsoFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &lsoFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: args.Custom.(*apc.LsoMsg)}
+	p := &lsoFactory{
+		streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: apc.ActList},
+		msg:        args.Custom.(*apc.LsoMsg),
+	}
+	debug.Assert(p.Bck.Props != nil && p.msg.PageSize > 0 && p.msg.PageSize < 100000)
 	return p
 }
 
 func (p *lsoFactory) Start() error {
-	p.xctn = newXact(p.T, p.Bck, p.msg, p.UUID())
+	r := &LsoXact{
+		streamingX: streamingX{p: &p.streamingF},
+		msg:        p.msg,
+		msgCh:      make(chan *apc.LsoMsg), // unbuffered
+		respCh:     make(chan *LsoRsp),     // ditto
+		remtCh:     make(chan *LsoRsp),     // ditto
+	}
+	r.lastPage = allocLsoEntries()
+	r.stopCh.Init()
+	totallyIdle := cmn.GCO.Get().Timeout.MaxHostBusy.D()
+	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, totallyIdle)
+
+	if r.listRemote() {
+		trname := "lso-" + p.UUID()
+		if err := p.newDM(trname, r.recv, 0 /*pdu*/); err != nil {
+			return err
+		}
+		p.dm.SetXact(r)
+		p.dm.Open()
+	}
+	p.xctn = r
 	return nil
 }
-
-func (*lsoFactory) Kind() string        { return apc.ActList }
-func (p *lsoFactory) Get() cluster.Xact { return p.xctn }
-
-func (p *lsoFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
-	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
-	return xreg.WprUse, nil
-}
-
-func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *apc.LsoMsg, uuid string) *LsoXact {
-	debug.Assert(bck.Props != nil)
-	totallyIdle := cmn.GCO.Get().Timeout.MaxHostBusy.D()
-	xctn := &LsoXact{
-		t:      t,
-		bck:    bck,
-		msg:    lsmsg,
-		msgCh:  make(chan *apc.LsoMsg),  // unbuffered
-		respCh: make(chan *ListObjsRsp), // ditto
-	}
-	xctn.stopCh.Init()
-	debug.Assert(lsmsg.PageSize > 0 && lsmsg.PageSize < 100000)
-	xctn.lastPage = allocLsoEntries()
-	xctn.DemandBase.Init(uuid, apc.ActList, bck, totallyIdle)
-	return xctn
-}
-
-func (r *LsoXact) String() string { return fmt.Sprintf("%s: %s", r.t, &r.DemandBase) }
 
 func (r *LsoXact) Run(*sync.WaitGroup) {
 	if verbose {
@@ -149,21 +147,53 @@ func (r *LsoXact) Run(*sync.WaitGroup) {
 }
 
 func (r *LsoXact) stop(err error) {
+	if r.listRemote() {
+		r.streamingX.fin(err, false /*postponeUnregRx below*/)
+		r.stopCh.Close()
+		r.lastmsg()
+		r.postponeUnregRx()
+		goto ex
+	}
+
 	r.DemandBase.Stop()
 	r.stopCh.Close()
-	close(r.respCh) // not closing `r.msgCh` to avoid potential "closed channel" situation
-	if r.walk.stopCh != nil {
-		r.walk.stopCh.Close()
-		r.walk.wg.Wait()
-	}
+
+	r.walk.stopCh.Close()
+	r.walk.wg.Wait()
+	r.lastmsg()
+	r.Finish(err)
+ex:
 	if r.lastPage != nil {
 		freeLsoEntries(r.lastPage)
 		r.lastPage = nil
 	}
-	r.Finish(err)
 }
 
-// skip on-demand idle-ness check
+func (r *LsoXact) lastmsg() {
+	select {
+	case <-r.msgCh:
+		r.respCh <- &LsoRsp{Err: ErrGone}
+	default:
+		break
+	}
+	close(r.respCh)
+}
+
+// compare w/ streaming
+func (r *LsoXact) postponeUnregRx() { hk.Reg(r.ID()+hk.NameSuffix, r.fcleanup, time.Second/2) }
+
+func (r *LsoXact) fcleanup() (d time.Duration) {
+	d = hk.UnregInterval
+	if r.wiCnt.Load() > 0 {
+		d = waitUnregRecv
+	} else {
+		close(r.remtCh)
+		close(r.msgCh)
+	}
+	return
+}
+
+// skip on-demand idleness check
 func (r *LsoXact) Abort(err error) (ok bool) {
 	if ok = r.Base.Abort(err); ok {
 		r.Finish(err)
@@ -171,15 +201,10 @@ func (r *LsoXact) Abort(err error) (ok bool) {
 	return
 }
 
-func (r *LsoXact) listRemote() bool { return r.bck.IsRemote() && !r.msg.IsFlagSet(apc.LsObjCached) }
+func (r *LsoXact) listRemote() bool { return r.p.Bck.IsRemote() && !r.msg.IsFlagSet(apc.LsObjCached) }
 
-// Start fs.WalkBck, so that by the time we read the next page `r.pageCh` is already populated.
+// Start `fs.WalkBck`, so that by the time we read the next page `r.pageCh` is already populated.
 func (r *LsoXact) initWalk() {
-	if r.walk.stopCh != nil {
-		r.walk.stopCh.Close()
-		r.walk.wg.Wait()
-	}
-
 	r.walk.pageCh = make(chan *cmn.LsoEntry, pageChSize)
 	r.walk.done = false
 	r.walk.stopCh = cos.NewStopCh()
@@ -189,7 +214,7 @@ func (r *LsoXact) initWalk() {
 	runtime.Gosched()
 }
 
-func (r *LsoXact) Do(msg *apc.LsoMsg) *ListObjsRsp {
+func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
 	// The guarantee here is that we either put something on the channel and our
 	// request will be processed (since the `msgCh` is unbuffered) or we receive
 	// message that the xaction has been stopped.
@@ -197,11 +222,11 @@ func (r *LsoXact) Do(msg *apc.LsoMsg) *ListObjsRsp {
 	case r.msgCh <- msg:
 		return <-r.respCh
 	case <-r.stopCh.Listen():
-		return &ListObjsRsp{Err: ErrGone}
+		return &LsoRsp{Err: ErrGone}
 	}
 }
 
-func (r *LsoXact) doPage() *ListObjsRsp {
+func (r *LsoXact) doPage() *LsoRsp {
 	r.IncPending()
 	defer r.DecPending()
 
@@ -211,11 +236,11 @@ func (r *LsoXact) doPage() *ListObjsRsp {
 			// continuation token, keeping and returning the entire last page
 			r.token = r.msg.ContinuationToken
 			if err := r.nextPageR(); err != nil {
-				return &ListObjsRsp{Status: http.StatusInternalServerError, Err: err}
+				return &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 			}
 		}
 		page := &cmn.LsoResult{UUID: r.msg.UUID, Entries: r.lastPage, ContinuationToken: r.nextToken}
-		return &ListObjsRsp{Lst: page, Status: http.StatusOK}
+		return &LsoRsp{Lst: page, Status: http.StatusOK}
 	}
 
 	if r.msg.ContinuationToken == "" || r.msg.ContinuationToken != r.token {
@@ -234,7 +259,7 @@ func (r *LsoXact) doPage() *ListObjsRsp {
 	} else {
 		page = &cmn.LsoResult{UUID: r.msg.UUID, Entries: lst}
 	}
-	return &ListObjsRsp{Lst: page, Status: http.StatusOK}
+	return &LsoRsp{Lst: page, Status: http.StatusOK}
 }
 
 func (r *LsoXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) }
@@ -258,20 +283,96 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 }
 
 func (r *LsoXact) nextPageR() error {
-	npg := newNpgCtx(r.t, r.bck, r.msg, r.objsAdd)
-	nentries := allocLsoEntries()
-	lst, err := npg.nextPageR(nentries)
+	var (
+		page     *cmn.LsoResult
+		npg      = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.objsAdd)
+		tsi, err = cluster.HrwTargetTask(r.msg.UUID, r.p.dm.Smap())
+	)
+	if err != nil {
+		goto ex
+	}
+
+	r.wiCnt.Inc()
+	if tsi.ID() == r.p.T.SID() {
+		nentries := allocLsoEntries()
+		page, err = npg.nextPageR(nentries)
+		if r.p.dm.Smap().CountActiveTargets() > 1 {
+			if err == nil {
+				err = r.bcast(page)
+			} else {
+				r.sendTerm(r.msg.UUID, nil, err)
+			}
+		}
+	} else {
+		select {
+		case rsp := <-r.remtCh:
+			if rsp == nil {
+				err = ErrGone
+			} else if rsp.Err != nil {
+				err = rsp.Err
+			} else {
+				page = rsp.Lst
+				err = npg.populate(page)
+			}
+		case <-r.stopCh.Listen():
+			err = ErrGone
+		}
+	}
+	r.wiCnt.Dec()
+ex:
 	if err != nil {
 		r.nextToken = ""
 		return err
 	}
-	if lst.ContinuationToken == "" {
+	if page.ContinuationToken == "" {
 		r.walk.done = true
 	}
 	freeLsoEntries(r.lastPage)
-	r.lastPage = lst.Entries
-	r.nextToken = lst.ContinuationToken
+	r.lastPage = page.Entries
+	r.nextToken = page.ContinuationToken
 	return nil
+}
+
+func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
+	var (
+		mm        = r.p.T.PageMM()
+		siz       = cos.MaxI64(r.lensgl, 32*cos.KiB)
+		buf, slab = mm.AllocSize(siz)
+		sgl       = mm.NewSGL(siz, slab.Size())
+		mw        = msgp.NewWriterBuf(sgl, buf)
+	)
+	if err = page.EncodeMsg(mw); err == nil {
+		err = mw.Flush()
+	}
+	r.lensgl = sgl.Len()
+	if err != nil {
+		return
+	}
+	o := transport.AllocSend()
+	{
+		o.Hdr.Bck = r.p.Bck.Clone()
+		o.Hdr.ObjName = r.Name()
+		o.Hdr.Opaque = []byte(r.p.UUID())
+		o.Hdr.ObjAttrs.Size = sgl.Len()
+	}
+	o.Callback, o.CmplArg = r.sentCb, sgl // cleanup
+	o.Reader = sgl
+	roc := memsys.NewReader(sgl)
+	r.p.dm.Bcast(o, roc)
+
+	slab.Free(buf)
+	return
+}
+
+func (r *LsoXact) sentCb(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
+	if err == nil {
+		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
+	} else if bool(glog.FastV(4, glog.SmoduleXs)) || !cos.IsRetriableConnErr(err) {
+		glog.Errorf("%s: failed to send [%+v]: %v", r.p.T, hdr, err)
+	}
+	sgl, ok := arg.(*memsys.SGL)
+	debug.Assertf(ok, "%T", arg)
+	sgl.Free()
 }
 
 func (r *LsoXact) gcLastPage(from, to int) {
@@ -282,7 +383,10 @@ func (r *LsoXact) gcLastPage(from, to int) {
 
 func (r *LsoXact) nextPageA() {
 	if r.token > r.msg.ContinuationToken {
-		r.initWalk() // restart traversing the bucket (TODO: cache more and try to scroll back)
+		// restart traversing the bucket (TODO: cache more and try to scroll back)
+		r.walk.stopCh.Close()
+		r.walk.wg.Wait()
+		r.initWalk()
 		r.gcLastPage(0, len(r.lastPage))
 		r.lastPage = r.lastPage[:0]
 	} else {
@@ -291,8 +395,8 @@ func (r *LsoXact) nextPageA() {
 		}
 		r.shiftLastPage(r.msg.ContinuationToken)
 	}
-
 	r.token = r.msg.ContinuationToken
+
 	if r.havePage(r.token, r.msg.PageSize) {
 		return
 	}
@@ -302,8 +406,7 @@ func (r *LsoXact) nextPageA() {
 			r.walk.done = true
 			break
 		}
-		// Skip all objects until the requested continuation token.
-		// TODO -- FIXME: revisit
+		// Skip until the requested continuation token (TODO: revisit)
 		if cmn.TokenGreaterEQ(r.token, obj.Name) {
 			continue
 		}
@@ -312,15 +415,14 @@ func (r *LsoXact) nextPageA() {
 	}
 }
 
-// Removes objects that have been already sent. Is used only for AIS buckets
-// and/or (cached == true) requests - in all other cases continuation token,
-// in general, does not contain object name.
+// Removes entries that were already sent to clients.
+// Is used only for AIS buckets and (cached == true) requests.
 func (r *LsoXact) shiftLastPage(token string) {
 	if token == "" || len(r.lastPage) == 0 {
 		return
 	}
 	j := r.findToken(token)
-	// the page is "after" the token - keep it
+	// the page is "after" the token - keep it all
 	if j == 0 {
 		return
 	}
@@ -340,7 +442,7 @@ func (r *LsoXact) shiftLastPage(token string) {
 }
 
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
-	r.walk.wi = newWalkInfo(r.t, msg, r.objsAdd)
+	r.walk.wi = newWalkInfo(r.p.T, msg, r.objsAdd)
 	opts := &fs.WalkBckOpts{
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Sorted: true},
 	}
@@ -401,6 +503,10 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 	}
 	return nil
 }
+
+//
+// listing archives
+//
 
 func listArchive(fqn string) ([]*archEntry, error) {
 	var arch string
@@ -514,4 +620,44 @@ func listMsgpack(readerAt cos.ReadReaderAt) ([]*archEntry, error) {
 		fileList = append(fileList, e)
 	}
 	return fileList, nil
+}
+
+//
+// streaming receive: remote pages
+//
+
+func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+	debug.Assert(r.listRemote())
+	r.IncPending()
+	defer func() {
+		r.DecPending()
+		transport.DrainAndFreeReader(objReader)
+	}()
+
+	if hdr.Opcode == opcodeAbrt {
+		err = errors.New(hdr.ObjName) // see `sendTerm`
+	}
+	if err != nil && !cos.IsEOF(err) {
+		glog.Error(err)
+		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
+		return err
+	}
+
+	debug.Assert(hdr.Opcode == 0)
+	var (
+		page      = &cmn.LsoResult{}
+		buf, slab = r.p.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
+		mr        = msgp.NewReaderBuf(objReader, buf)
+	)
+	err = page.DecodeMsg(mr)
+	if err == nil {
+		r.remtCh <- &LsoRsp{Lst: page, Status: http.StatusOK}
+	} else {
+		glog.Errorf("%s: failed to recv [%s: %s] num=%d from %s (%s, %s): %v",
+			r.p.T, page.UUID, page.ContinuationToken, len(page.Entries),
+			hdr.SID, hdr.Bck.DisplayName(), string(hdr.Opaque), err)
+		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
+	}
+	slab.Free(buf)
+	return err
 }

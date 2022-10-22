@@ -81,7 +81,7 @@ func Test_MsgDryRun(t *testing.T) {
 			}
 			stream := transport.NewMsgStream(nil, "dry-msg"+strconv.Itoa(idx), cos.GenTie())
 			for tsize < total {
-				msize := myrand.Intn(memsys.PageSize - 64) // <= s.maxheader, zero-length OK
+				msize := myrand.Intn(memsys.PageSize - 64) // <= s.maxhdr, zero-length OK
 				if off+msize > len(buf) {
 					off = 0
 				}

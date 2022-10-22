@@ -131,7 +131,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			if r.IsAborted() || err != nil {
 				goto fin
 			}
-			r.eoi(wi.msg.TxnUUID, nil)
+			r.sendTerm(wi.msg.TxnUUID, nil, nil)
 			r.DecPending()
 		case <-r.IdleTimer():
 			goto fin
@@ -143,7 +143,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		}
 	}
 fin:
-	err = r.fin(err)
+	err = r.fin(err, true /*unreg Rx*/)
 	if err != nil {
 		// cleanup: destroy destination iff it was created by this copy
 		r.pending.Lock()
@@ -165,7 +165,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		glog.Error(err)
 		return err
 	}
-	if hdr.Opcode == OpcTxnDone {
+	if hdr.Opcode == opcodeDone {
 		txnUUID := string(hdr.Opaque)
 		r.pending.RLock()
 		wi, ok := r.pending.m[txnUUID]

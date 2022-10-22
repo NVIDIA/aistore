@@ -203,13 +203,13 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 		return
 	}
 	if !bck.IsAIS() && !msg.IsFlagSet(apc.LsObjCached) {
-		maxCloudPageSize := t.Backend(bck).MaxPageSize()
-		if msg.PageSize > maxCloudPageSize {
-			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxCloudPageSize)
+		maxRemotePageSize := t.Backend(bck).MaxPageSize()
+		if msg.PageSize > maxRemotePageSize {
+			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxRemotePageSize)
 			return false
 		}
 		if msg.PageSize == 0 {
-			msg.PageSize = maxCloudPageSize
+			msg.PageSize = maxRemotePageSize
 		}
 	}
 	debug.Assert(msg.PageSize > 0 && msg.PageSize < 100000 && cos.IsValidUUID(msg.UUID))

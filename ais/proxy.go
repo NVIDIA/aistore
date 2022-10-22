@@ -1337,7 +1337,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	}
 
 	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
-	wantOnlyRemote = lsmsg.WantOnlyRemoteProps()
+	wantOnlyRemote = false // lsmsg.WantOnlyRemoteProps() // TODO -- FIXME: add into lsmsg and handle @ targets
 	if lsmsg.UUID == "" {
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()
@@ -1362,7 +1362,14 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		err error
 	)
 	if listRemote {
-		lst, err = p.lsObjsRemote(bck, lsmsg, wantOnlyRemote)
+		if lsmsg.StartAfter != "" {
+			// TODO: remote AIS first, then Cloud
+			err = fmt.Errorf("list-objects option --start_after (%s) not yet supported for remote buckets (%s)",
+				lsmsg.StartAfter, bck)
+			p.writeErr(w, r, err, http.StatusNotImplemented)
+			return
+		}
+		lst, err = p.lsObjsR(bck, lsmsg, wantOnlyRemote)
 		// TODO: `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
 		// cached objects. This isn't easy as we basically need to start a new
@@ -1983,7 +1990,7 @@ func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.Ls
 	}
 	args.timeout = apc.LongTimeout
 	args.smap = smap
-	args.cresv = cresBL{} // -> cmn.LsoResult
+	args.cresv = cresLso{} // -> cmn.LsoResult
 
 	// Combine the results.
 	results = p.bcastGroup(args)
@@ -2029,10 +2036,7 @@ end:
 	return allEntries, nil
 }
 
-func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.LsoMsg, wantOnlyRemote bool) (allEntries *cmn.LsoResult, err error) {
-	if lsmsg.StartAfter != "" {
-		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", lsmsg.StartAfter)
-	}
+func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, wantOnlyRemote bool) (allEntries *cmn.LsoResult, err error) {
 	var (
 		smap       = p.owner.smap.get()
 		config     = cmn.GCO.Get()
@@ -2057,7 +2061,7 @@ func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.LsoMsg, wantOnlyRemote
 				cargs.si = si
 				cargs.req = args.req
 				cargs.timeout = reqTimeout
-				cargs.cresv = cresBL{} // -> cmn.LsoResult
+				cargs.cresv = cresLso{} // -> cmn.LsoResult
 			}
 			res := p.call(cargs)
 			freeCargs(cargs)
@@ -2068,7 +2072,7 @@ func (p *proxy) lsObjsRemote(bck *cluster.Bck, lsmsg *apc.LsoMsg, wantOnlyRemote
 	} else {
 		args.timeout = reqTimeout
 		args.smap = smap
-		args.cresv = cresBL{} // -> cmn.LsoResult
+		args.cresv = cresLso{} // -> cmn.LsoResult
 		results = p.bcastGroup(args)
 	}
 

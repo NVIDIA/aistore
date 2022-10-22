@@ -10,6 +10,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+const MsgpLsoBufSize = 32 * cos.KiB
+
 //
 // NOTE: changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md for details.
 // NOTE: all json tags except `Flags` must belong to the (apc.GetPropsName, apc.GetPropsSize, etc.) enumeration

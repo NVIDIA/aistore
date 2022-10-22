@@ -45,6 +45,8 @@ const (
 	maxSizeHeader  = memsys.MaxPageSlabSize
 )
 
+const sizeofh = int(unsafe.Sizeof(Obj{}))
+
 type (
 	// advanced usage: additional stream control
 	Extra struct {
@@ -149,7 +151,7 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 //     network errors that may cause sudden and instant termination of the underlying
 //     stream(s).
 func (s *Stream) Send(obj *Obj) (err error) {
-	debug.Assert(len(obj.Hdr.Opaque) < len(s.maxheader)-int(unsafe.Sizeof(Obj{}))) // must fit
+	debug.Assertf(len(obj.Hdr.Opaque) < len(s.maxhdr)-sizeofh, "(%d, %d)", len(obj.Hdr.Opaque), len(s.maxhdr))
 
 	if err = s.startSend(obj); err != nil {
 		s.doCmpl(obj, err) // take a shortcut
@@ -198,7 +200,7 @@ func NewMsgStream(client Client, dstURL, dstID string) (s *MsgStream) {
 }
 
 func (s *MsgStream) Send(msg *Msg) (err error) {
-	debug.Assert(len(msg.Body) < len(s.maxheader)-int(unsafe.Sizeof(Msg{})))
+	debug.Assert(len(msg.Body) < len(s.maxhdr)-int(unsafe.Sizeof(Msg{})))
 	if err = s.startSend(msg); err != nil {
 		return
 	}

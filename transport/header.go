@@ -89,7 +89,7 @@ func insString(off int, to []byte, str string) int {
 
 func insBytes(off int, to, b []byte) int {
 	l := len(b)
-	debug.Assert(l < 65536)
+	debug.Assert(l <= 65535, "the field is uint16")
 	binary.BigEndian.PutUint16(to[off:], uint16(l))
 	off += cos.SizeofI16
 	n := copy(to[off:], b)

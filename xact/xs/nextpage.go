@@ -86,11 +86,14 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (*cmn.LsoResult, error) {
 		freeLsoEntries(nentries)
 		return nil, err
 	}
+	debug.Assert(lst.UUID == "" || lst.UUID == npg.wi.msg.UUID)
+	lst.UUID = npg.wi.msg.UUID
 	err = npg.populate(lst)
 	return lst, err
 }
 
 func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
+	post := npg.wi.lomVisitedCb
 	for _, obj := range lst.Entries {
 		si, err := cluster.HrwTarget(npg.bck.MakeUname(obj.Name), npg.wi.smap)
 		if err != nil {
@@ -115,8 +118,8 @@ func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
 		setWanted(obj, lom, npg.wi.msg.TimeFormat, npg.wi.wanted)
 		obj.SetPresent()
 
-		if npg.wi.lomVisitedCb != nil {
-			npg.wi.lomVisitedCb(lom)
+		if post != nil {
+			post(lom)
 		}
 		cluster.FreeLOM(lom)
 	}

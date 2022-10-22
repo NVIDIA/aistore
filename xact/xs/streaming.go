@@ -26,7 +26,10 @@ import (
 // multi-object on-demand (transactional) xactions - common logic
 //
 
-const OpcTxnDone = 27182
+const (
+	opcodeDone = iota + 27182
+	opcodeAbrt
+)
 
 const (
 	waitRegRecv   = 4 * time.Second
@@ -62,8 +65,9 @@ func (p *streamingF) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-// NOTE 1: transport endpoint `trname` identifies the flow and must be identical across all participating targets
-// NOTE 2: stream-bundle multiplier always 1 (see also: `SbundleMult`)
+// NOTE:
+// - transport endpoint `trname` identifies the flow and must be identical across all participating targets
+// - stream-bundle multiplier always 1 (see also: `SbundleMult`)
 func (p *streamingF) newDM(trname string, recv transport.RecvObj, sizePDU int32) (err error) {
 	dmxtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
 	p.dm, err = bundle.NewDataMover(p.Args.T, trname, recv, cmn.OwtPut, dmxtra)
@@ -87,7 +91,13 @@ func (p *streamingF) newDM(trname string, recv transport.RecvObj, sizePDU int32)
 // (common xaction part)
 //
 
-func (r *streamingX) String() string { return r.DemandBase.String() + "-" + r.p.dm.String() }
+func (r *streamingX) String() (s string) {
+	s = r.DemandBase.String()
+	if r.p.dm == nil {
+		return
+	}
+	return s + "-" + r.p.dm.String()
+}
 
 // limited pre-run abort
 func (r *streamingX) TxnAbort() {
@@ -115,25 +125,31 @@ func (r *streamingX) raiseErr(err error, errCode int, contOnErr bool) {
 	r.err.Store(err)
 }
 
-// send EOI (end of iteration)
-func (r *streamingX) eoi(uuid string, tsi *cluster.Snode) {
+func (r *streamingX) sendTerm(uuid string, tsi *cluster.Snode, err error) {
 	o := transport.AllocSend()
-	o.Hdr.Opcode = OpcTxnDone
+	o.Hdr.SID = r.p.T.SID()
 	o.Hdr.Opaque = []byte(uuid)
+	if err == nil {
+		o.Hdr.Opcode = opcodeDone
+	} else {
+		o.Hdr.Opcode = opcodeAbrt
+		o.Hdr.ObjName = err.Error()
+	}
 	if tsi != nil {
 		r.p.dm.Send(o, nil, tsi) // to the responsible target
 	} else {
-		r.p.dm.Bcast(o) // to all
+		r.p.dm.Bcast(o, nil) // to all
 	}
 }
 
-func (r *streamingX) fin(err error) error {
+func (r *streamingX) fin(err error, unreg bool) error {
 	if r.DemandBase.Finished() {
-		// aborted?
+		// must be aborted
 		r.p.dm.CloseIf(err)
 		r.p.dm.UnregRecv()
 		return err
 	}
+
 	r.DemandBase.Stop()
 	if err == nil {
 		err = r.err.Err()
@@ -145,12 +161,18 @@ func (r *streamingX) fin(err error) error {
 		err = cmn.NewErrAborted(r.Name(), "streaming-fin", err)
 	}
 	r.p.dm.Close(err)
-	hk.Reg(r.ID()+hk.NameSuffix, r.unreg, waitUnregRecv)
 	r.Finish(err)
+
+	if unreg {
+		r.postponeUnregRx()
+	}
 	return err
 }
 
-func (r *streamingX) unreg() (d time.Duration) {
+// compare w/ lso
+func (r *streamingX) postponeUnregRx() { hk.Reg(r.ID()+hk.NameSuffix, r.wurr, waitUnregRecv) }
+
+func (r *streamingX) wurr() (d time.Duration) {
 	d = hk.UnregInterval
 	if r.wiCnt.Load() > 0 {
 		d = waitUnregRecv

@@ -894,7 +894,7 @@ func (h *htrun) apiItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
 func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v msgp.Encodable, tag string) (ok bool) {
 	var (
 		err       error
-		buf, slab = h.gmm.AllocSize(msgpLsoBufSize) // max size
+		buf, slab = h.gmm.AllocSize(cmn.MsgpLsoBufSize) // max size
 		mw        = msgp.NewWriterBuf(w, buf)
 	)
 	w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)

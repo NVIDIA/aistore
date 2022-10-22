@@ -65,20 +65,20 @@ type (
 		idleTick()
 	}
 	streamBase struct {
-		streamer  streamer
-		client    Client     // stream's http client
-		stopCh    cos.StopCh // stop/abort stream
-		lastCh    cos.StopCh // end-of-stream
-		pdu       *spdu      // PDU buffer
-		mm        *memsys.MMSA
-		postCh    chan struct{} // to indicate that workCh has work
-		trname    string        // http endpoint: (trname, dstURL, dstID)
-		dstURL    string
-		dstID     string
-		lid       string // log prefix
-		maxheader []byte // header buf must be large enough to accommodate max-size for this stream
-		header    []byte // object header (slice of the maxheader with bucket/objName, etc. fields packed/serialized)
-		term      struct {
+		streamer streamer
+		client   Client     // stream's http client
+		stopCh   cos.StopCh // stop/abort stream
+		lastCh   cos.StopCh // end-of-stream
+		pdu      *spdu      // PDU buffer
+		mm       *memsys.MMSA
+		postCh   chan struct{} // to indicate that workCh has work
+		trname   string        // http endpoint: (trname, dstURL, dstID)
+		dstURL   string
+		dstID    string
+		lid      string // log prefix
+		maxhdr   []byte // header buf must be large enough to accommodate max-size for this stream
+		header   []byte // object header (slice of the maxhdr with bucket/objName, etc. fields packed/serialized)
+		term     struct {
 			err    error
 			reason string
 			mu     sync.Mutex
@@ -149,9 +149,10 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	s.lid = fmt.Sprintf("s-%s%s[%d]=>%s", s.trname, sid, s.sessID, dstID)
 
 	if extra.MaxHdrSize == 0 {
-		s.maxheader, _ = s.mm.AllocSize(dfltMaxHdr)
+		s.maxhdr, _ = s.mm.AllocSize(dfltMaxHdr)
 	} else {
-		s.maxheader, _ = s.mm.AllocSize(int64(extra.MaxHdrSize))
+		s.maxhdr, _ = s.mm.AllocSize(int64(extra.MaxHdrSize))
+		cos.AssertMsg(extra.MaxHdrSize <= 0xffff, "the field is uint16") // same comment in header.go
 	}
 	s.sessST.Store(inactive) // initiate HTTP session upon the first arrival
 	return

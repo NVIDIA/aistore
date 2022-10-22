@@ -294,7 +294,7 @@ func (z *SGL) Bytes() (b []byte) {
 // In the most common write-once-read-many usage scenario, SGL can be simultaneously
 // read via multiple concurrent Readers.
 //
-// See also: SGL.Reset() and SGL.Open()
+// See related sgl methods: `Reset` and `Open`
 
 func NewReader(z *SGL) *Reader                      { return &Reader{z, 0} }
 func (r *Reader) Open() (cos.ReadOpenCloser, error) { return NewReader(r.z), nil }

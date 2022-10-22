@@ -228,8 +228,8 @@ repeat:
 			}
 			return s.deactivate()
 		}
-		l := insObjHeader(s.maxheader, &obj.Hdr, s.usePDU())
-		s.header = s.maxheader[:l]
+		l := insObjHeader(s.maxhdr, &obj.Hdr, s.usePDU())
+		s.header = s.maxhdr[:l]
 		s.sendoff.ins = inHdr
 		return s.sendHdr(b)
 	case <-s.stopCh.Listen():
@@ -384,7 +384,7 @@ func (s *Stream) closeAndFree() {
 	close(s.workCh)
 	close(s.cmplCh)
 
-	s.mm.Free(s.maxheader)
+	s.mm.Free(s.maxhdr)
 	if s.pdu != nil {
 		s.pdu.free(s.mm)
 	}

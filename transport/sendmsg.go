@@ -84,8 +84,8 @@ repeat:
 			}
 			return s.deactivate()
 		}
-		l := insMsg(s.maxheader, &s.msgoff.msg)
-		s.header = s.maxheader[:l]
+		l := insMsg(s.maxhdr, &s.msgoff.msg)
+		s.header = s.maxhdr[:l]
 		s.msgoff.ins = inHdr
 		return s.send(b)
 	case <-s.stopCh.Listen():
@@ -156,7 +156,7 @@ func (s *MsgStream) drain(error) {
 func (s *MsgStream) closeAndFree() {
 	close(s.workCh)
 
-	s.mm.Free(s.maxheader)
+	s.mm.Free(s.maxhdr)
 }
 
 // gc: post idle tick if idle

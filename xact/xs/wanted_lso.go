@@ -45,7 +45,7 @@ func setWanted(e *cmn.LsoEntry, lom *cluster.LOM, tmformat string, wanted cos.Bi
 		switch name {
 		case apc.GetPropsName:
 		case apc.GetPropsStatus:
-		case apc.GetPropsCached:
+		case apc.GetPropsCached: // via obj.SetPresent()
 
 		case apc.GetPropsSize:
 			e.Size = lom.SizeBytes()

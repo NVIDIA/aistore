@@ -355,10 +355,11 @@ var (
 		Name:  "start-after",
 		Usage: "list bucket's content alphabetically starting with the first name _after_ the specified",
 	}
-	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count (0 - unlimited)", Value: 0}
-	pageSizeFlag = cli.IntFlag{Name: "page-size",
-		Usage: "maximum number of object names per page",
-		Value: 1000,
+	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object name count (0 - unlimited)", Value: 0}
+	pageSizeFlag = cli.IntFlag{
+		Name:  "page-size",
+		Usage: "maximum number of names per page (0 - the maximum is defined by the corresponding backend)",
+		Value: 0,
 	}
 	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}

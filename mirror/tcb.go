@@ -186,7 +186,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 
 	o := transport.AllocSend()
 	o.Hdr.Opcode = OpcTxnDone
-	r.dm.Bcast(o)
+	r.dm.Bcast(o, nil)
 
 	// NOTE: ref-counted quiescence, fairly short (optimal) waiting
 	config := cmn.GCO.Get()

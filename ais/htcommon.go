@@ -36,8 +36,6 @@ const ua = "aisnode"
 
 const unknownDaemonID = "unknown"
 
-const msgpLsoBufSize = 32 * cos.KiB
-
 const whatRenamedLB = "renamedlb"
 
 const (
@@ -419,7 +417,6 @@ func freeBcastRes(results sliceResults) {
 
 type (
 	cresCM struct{} // -> cluMeta
-	cresBL struct{} // -> cmn.LsoResult
 	cresSM struct{} // -> smapX
 	cresND struct{} // -> cluster.Snode
 	cresBA struct{} // -> cmn.BackendInfoAIS
@@ -429,12 +426,13 @@ type (
 	cresIC struct{} // -> icBundle
 	cresBM struct{} // -> bucketMD
 
+	cresLso   struct{} // -> cmn.LsoResult
 	cresBsumm struct{} // -> cmn.AllBsummResults
 )
 
 var (
 	_ cresv = cresCM{}
-	_ cresv = cresBL{}
+	_ cresv = cresLso{}
 	_ cresv = cresSM{}
 	_ cresv = cresND{}
 	_ cresv = cresBA{}
@@ -452,7 +450,7 @@ func (res *callResult) jread(body io.Reader) { res.err = jsoniter.NewDecoder(bod
 func (res *callResult) mread(body io.Reader) {
 	vv, ok := res.v.(msgp.Decodable)
 	debug.Assert(ok)
-	buf, slab := memsys.PageMM().AllocSize(msgpLsoBufSize)
+	buf, slab := memsys.PageMM().AllocSize(cmn.MsgpLsoBufSize)
 	res.err = vv.DecodeMsg(msgp.NewReaderBuf(body, buf))
 	slab.Free(buf)
 }
@@ -460,8 +458,8 @@ func (res *callResult) mread(body io.Reader) {
 func (cresCM) newV() any                              { return &cluMeta{} }
 func (c cresCM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBL) newV() any                              { return &cmn.LsoResult{} }
-func (c cresBL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
+func (cresLso) newV() any                              { return &cmn.LsoResult{} }
+func (c cresLso) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
 
 func (cresSM) newV() any                              { return &smapX{} }
 func (c cresSM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }

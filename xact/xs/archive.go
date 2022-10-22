@@ -245,7 +245,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				wi.finalizing.Store(true)
 				go r.finalize(wi) // NOTE async
 			} else {
-				r.eoi(wi.msg.TxnUUID, wi.tsi)
+				r.sendTerm(wi.msg.TxnUUID, wi.tsi, nil)
 				r.pending.Lock()
 				delete(r.pending.m, msg.TxnUUID)
 				r.wiCnt.Dec()
@@ -262,7 +262,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 		}
 	}
 fin:
-	if r.streamingX.fin(err) == nil {
+	if r.streamingX.fin(err, true /*unreg Rx*/) == nil {
 		return
 	}
 
@@ -318,7 +318,7 @@ func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) er
 	debug.Assert(wi.tsi.ID() == r.p.T.SID() && wi.msg.TxnUUID == txnUUID)
 
 	// NOTE: best-effort via ref-counting
-	if hdr.Opcode == OpcTxnDone {
+	if hdr.Opcode == opcodeDone {
 		refc := wi.refc.Dec()
 		debug.Assert(refc >= 0)
 		return nil

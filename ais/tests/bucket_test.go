@@ -829,8 +829,11 @@ func TestListObjectsStartAfter(t *testing.T) {
 				"unexpected number of entries (got: %d, expected: %d)",
 				len(objList.Entries), m.num/2,
 			)
+		} else if err != nil {
+			herr := cmn.Err2HTTPErr(err)
+			tlog.Logf("Error is expected here, got %q\n", herr)
 		} else {
-			tassert.Errorf(t, err != nil, "expected error to occur")
+			tassert.Errorf(t, false, "expected an error, got nil")
 		}
 	})
 }

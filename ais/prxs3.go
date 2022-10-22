@@ -306,7 +306,7 @@ func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string)
 		listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
 	)
 	if listRemote {
-		lst, err = p.lsObjsRemote(bck, lsmsg, false /*wantOnlyRemote*/) // atime
+		lst, err = p.lsObjsR(bck, lsmsg, false /*wantOnlyRemote*/) // atime
 	} else {
 		lst, err = p.lsObjsA(bck, lsmsg)
 	}
