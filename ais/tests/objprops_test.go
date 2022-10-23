@@ -297,7 +297,55 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 	close(errCh)
 }
 
-func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType string) {
+func TestObjPropsVersion(t *testing.T) {
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+
+	for _, versioning := range []bool{false, true} {
+		t.Run(fmt.Sprintf("enabled=%t", versioning), func(t *testing.T) {
+			propsVersionAllProviders(t, versioning)
+		})
+	}
+}
+
+func propsVersionAllProviders(t *testing.T, versioning bool) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		config := tools.GetClusterConfig(t)
+
+		oldChkVersion := config.Versioning.ValidateWarmGet
+		oldVersioning := config.Versioning.Enabled
+
+		newConfig := make(cos.StrKVs)
+		if oldVersioning != versioning {
+			newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(versioning)
+		}
+		warmCheck := versioning
+		if oldChkVersion != warmCheck {
+			newConfig["versioning.validate_warm_get"] = strconv.FormatBool(warmCheck)
+		}
+		if len(newConfig) != 0 {
+			tools.SetClusterConfig(t, newConfig)
+		}
+
+		defer func() {
+			// restore configuration
+			newConfig := make(cos.StrKVs)
+			oldWarmCheck := oldChkVersion && oldVersioning
+			if oldWarmCheck != warmCheck {
+				newConfig["versioning.validate_warm_get"] = strconv.FormatBool(oldWarmCheck)
+			}
+			if oldVersioning != versioning {
+				newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(oldVersioning)
+			}
+			if len(newConfig) != 0 {
+				tools.SetClusterConfig(t, newConfig)
+			}
+		}()
+
+		propsVersion(t, bck.Clone(), bck.Props.Versioning.Enabled, bck.Props.Cksum.Type)
+	})
+}
+
+func propsVersion(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType string) {
 	var (
 		m = ioContext{
 			t:                   t,
@@ -312,7 +360,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 
 	m.initWithCleanup()
 	if m.bck.IsRemote() {
-		m.del()
+		m.del(-1 /* delete all */)
 	}
 	m.puts()
 	// Read object versions.
@@ -367,54 +415,6 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 
 	// cleanup
 	propsCleanupObjects(t, proxyURL, bck, newVersions)
-}
-
-func propsMainTest(t *testing.T, versioning bool) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		config := tools.GetClusterConfig(t)
-
-		oldChkVersion := config.Versioning.ValidateWarmGet
-		oldVersioning := config.Versioning.Enabled
-
-		newConfig := make(cos.StrKVs)
-		if oldVersioning != versioning {
-			newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(versioning)
-		}
-		warmCheck := versioning
-		if oldChkVersion != warmCheck {
-			newConfig["versioning.validate_warm_get"] = strconv.FormatBool(warmCheck)
-		}
-		if len(newConfig) != 0 {
-			tools.SetClusterConfig(t, newConfig)
-		}
-
-		defer func() {
-			// restore configuration
-			newConfig := make(cos.StrKVs)
-			oldWarmCheck := oldChkVersion && oldVersioning
-			if oldWarmCheck != warmCheck {
-				newConfig["versioning.validate_warm_get"] = strconv.FormatBool(oldWarmCheck)
-			}
-			if oldVersioning != versioning {
-				newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(oldVersioning)
-			}
-			if len(newConfig) != 0 {
-				tools.SetClusterConfig(t, newConfig)
-			}
-		}()
-
-		propsTestCore(t, bck.Clone(), bck.Props.Versioning.Enabled, bck.Props.Cksum.Type)
-	})
-}
-
-func TestObjPropsVersion(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-
-	for _, versioning := range []bool{false, true} {
-		t.Run(fmt.Sprintf("enabled=%t", versioning), func(t *testing.T) {
-			propsMainTest(t, versioning)
-		})
-	}
 }
 
 func TestObjProps(t *testing.T) {

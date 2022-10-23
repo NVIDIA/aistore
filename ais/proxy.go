@@ -1316,11 +1316,7 @@ func crerrStatus(err error) (errCode int) {
 }
 
 func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg, lsmsg *apc.LsoMsg, beg int64) {
-	var (
-		smap           = p.owner.smap.get()
-		listRemote     bool
-		wantOnlyRemote bool
-	)
+	smap := p.owner.smap.get()
 	if smap.CountActiveTargets() < 1 {
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
 		return
@@ -1336,15 +1332,19 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		lsmsg.SetFlag(apc.LsObjCached)
 	}
 
-	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
-	wantOnlyRemote = false // lsmsg.WantOnlyRemoteProps() // TODO -- FIXME: add into lsmsg and handle @ targets
+	listRemote := bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
+	wantOnlyRemote := lsmsg.WantOnlyRemoteProps()
 	if lsmsg.UUID == "" {
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()
 		if listRemote && wantOnlyRemote {
-			// single random target
-			si, _ := smap.GetRandTarget()
-			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bucket())
+			// one designated target
+			tsi, err := cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap)
+			if err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, cluster.NodeMap{tsi.ID(): tsi}, bck.Bucket())
 		} else {
 			// bcast
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())

@@ -37,8 +37,9 @@ const (
 	// would rather be avoided or, alternatively, when an error it returns
 	// (if it returns one) can be disregarded.
 
-	// LsDontHeadRemote tells AIS not to execute HEAD request (for reasons that may
-	// include cleanup and eviction of any kind, and/or when the bucket imust simply exist in AIS).
+	// LsDontHeadRemote tells AIS _not_ to execute HEAD request on the remote bucket.
+	// The reasons may include cleanup/eviction of any kind, prior knowledge that the bucket
+	// must simply exist in AIS, and more.
 	// See also:
 	// * `cmn/feat/feat.go` source, and the (configurable) capability
 	//    to disable on-the-fly creation of remote buckets altogether.

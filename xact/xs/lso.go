@@ -284,19 +284,20 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 
 func (r *LsoXact) nextPageR() error {
 	var (
-		page     *cmn.LsoResult
-		npg      = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.objsAdd)
-		tsi, err = cluster.HrwTargetTask(r.msg.UUID, r.p.dm.Smap())
+		page *cmn.LsoResult
+		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.objsAdd)
 	)
+	tsi, err := cluster.HrwTargetTask(r.msg.UUID, r.p.dm.Smap())
 	if err != nil {
 		goto ex
 	}
 
 	r.wiCnt.Inc()
 	if tsi.ID() == r.p.T.SID() {
+		wantOnlyRemote := r.msg.WantOnlyRemoteProps()
 		nentries := allocLsoEntries()
 		page, err = npg.nextPageR(nentries)
-		if r.p.dm.Smap().CountActiveTargets() > 1 {
+		if !wantOnlyRemote && r.p.dm.Smap().CountActiveTargets() > 1 {
 			if err == nil {
 				err = r.bcast(page)
 			} else {
@@ -304,6 +305,7 @@ func (r *LsoXact) nextPageR() error {
 			}
 		}
 	} else {
+		debug.Assert(!r.msg.WantOnlyRemoteProps())
 		select {
 		case rsp := <-r.remtCh:
 			if rsp == nil {

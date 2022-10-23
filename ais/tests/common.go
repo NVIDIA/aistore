@@ -141,7 +141,7 @@ func (m *ioContext) initWithCleanup() {
 
 	if m.bck.IsRemote() {
 		if m.deleteRemoteBckObjs {
-			m.del(-1 /*delete all*/, 1 /* including not present*/)
+			m.del(-1 /*delete all*/, 0 /* lsmsg.Flags */)
 		} else {
 			tools.EvictRemoteBucket(m.t, m.proxyURL, m.bck) // evict from AIStore
 		}
@@ -360,14 +360,9 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 func (m *ioContext) del(opts ...int) {
 	const maxErrCount = 100
 	var (
-		httpErr    *cmn.ErrHTTP
-		optCnt     = -1 // (variadic opts)
-		baseParams = tools.BaseAPIParams()
-		lsmsg      = &apc.LsoMsg{
-			Prefix: m.prefix,
-			Props:  apc.GetPropsName,
-			Flags:  apc.LsDontHeadRemote, // don't lookup unless overridden via variadic (see below)
-		}
+		httpErr     *cmn.ErrHTTP
+		toRemoveCnt = -1 // remove all
+		baseParams  = tools.BaseAPIParams()
 	)
 	// checks, params
 	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(m.bck), apc.FltExists)
@@ -375,13 +370,22 @@ func (m *ioContext) del(opts ...int) {
 	if !exists {
 		return
 	}
+
+	// list
+	lsmsg := &apc.LsoMsg{
+		Prefix: m.prefix,
+		Props:  apc.GetPropsName,
+		Flags:  apc.LsDontHeadRemote, // don't lookup unless overridden via variadic (see below)
+	}
 	if len(opts) > 0 {
-		optCnt = opts[0]
+		toRemoveCnt = opts[0]
 		if len(opts) > 1 {
-			lsmsg.Flags = 0
+			lsmsg.Flags = uint64(opts[1]) // do HEAD(remote-bucket)
 		}
 	}
-	// list
+	if toRemoveCnt < 0 && m.prefix != "" {
+		lsmsg.Prefix = "" // all means all
+	}
 	objList, err := api.ListObjects(baseParams, m.bck, lsmsg, 0)
 	if err != nil {
 		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
@@ -397,8 +401,8 @@ func (m *ioContext) del(opts ...int) {
 
 	// delete
 	toRemove := objList.Entries
-	if optCnt >= 0 {
-		toRemove = toRemove[:optCnt]
+	if toRemoveCnt >= 0 {
+		toRemove = toRemove[:toRemoveCnt]
 	}
 	if len(toRemove) == 0 {
 		return
