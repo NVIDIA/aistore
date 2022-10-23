@@ -242,7 +242,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			m.initWithCleanup()
 			m.puts()
 			if m.bck.IsRemote() {
-				defer m.del()
+				defer m.del(-1)
 			}
 			toBck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 			tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)

@@ -361,7 +361,7 @@ func (m *ioContext) del(opts ...int) {
 	const maxErrCount = 100
 	var (
 		httpErr     *cmn.ErrHTTP
-		toRemoveCnt = -1 // remove all
+		toRemoveCnt = -1 // remove all or opts[0]
 		baseParams  = tools.BaseAPIParams()
 	)
 	// checks, params

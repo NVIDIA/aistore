@@ -353,6 +353,9 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg
 	// in the `ContinuationToken` (see note below).
 	remoteMsg.UUID = ""
 
+	// likewise, let remote ais gateway decide
+	remoteMsg.SID = ""
+
 	bck := remoteBck.Clone()
 	unsetUUID(&bck)
 

@@ -60,6 +60,13 @@ const (
 
 	// cache list-objects results and use this cache to speed-up
 	UseListObjsCache
+
+	// For remote buckets - list only remote props (aka `wantOnlyRemote`). When false,
+	// the default that's being used is: `WantOnlyRemoteProps` - see below.
+	// When true, the request gets executed in a pass-through fashion whereby a single ais target
+	// simply forwards it to the associated remote backend and delivers the results as is to the
+	// requesting proxy and, subsequently, to client.
+	LsWantOnlyRemoteProps
 )
 
 // List objects default page size
@@ -119,6 +126,7 @@ type LsoMsg struct {
 	Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
 	StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
 	ContinuationToken string `json:"continuation_token"` // BucketList.ContinuationToken
+	SID               string `json:"target"`             // selected target to solely execute backend.list-objects
 	Flags             uint64 `json:"flags,string"`       // enum {LsObjCached, ...} - see above
 	PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 }
@@ -128,6 +136,12 @@ type LsoMsg struct {
 /////////////////
 
 func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
+	// case 1: set by the user
+	if lsmsg.IsFlagSet(LsWantOnlyRemoteProps) {
+		return true
+	}
+	// case 2: anything outside the subset (name, size, checksum, and version)
+	// (e.g., atime) requires loading local metadata
 	for _, name := range GetPropsAll {
 		if !lsmsg.WantProp(name) {
 			continue

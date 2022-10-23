@@ -214,6 +214,16 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 	}
 	debug.Assert(msg.PageSize > 0 && msg.PageSize < 100000 && cos.IsValidUUID(msg.UUID))
 
+	// (advanced) user-selected target to execute remote ls
+	if msg.SID != "" {
+		smap := t.owner.smap.get()
+		if smap.GetTarget(msg.SID) == nil {
+			err := &errNodeNotFound{"list-objects failure", msg.SID, t.si, smap}
+			t.writeErr(w, r, err)
+			return
+		}
+	}
+
 	rns := xreg.RenewLso(t, bck, msg.UUID, msg)
 	xctn := rns.Entry.Get()
 	// Double check that xaction has not gone before starting page read.

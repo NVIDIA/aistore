@@ -283,17 +283,21 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 }
 
 func (r *LsoXact) nextPageR() error {
+	debug.Assert(r.msg.SID != "")
 	var (
 		page *cmn.LsoResult
 		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.objsAdd)
+		smap = r.p.dm.Smap()
+		tsi  = smap.GetTarget(r.msg.SID)
+		err  error
 	)
-	tsi, err := cluster.HrwTargetTask(r.msg.UUID, r.p.dm.Smap())
-	if err != nil {
+	if tsi == nil {
+		err = fmt.Errorf("%s: lost or missing target ID=%q (%s)", r, r.msg.SID, smap)
 		goto ex
 	}
 
 	r.wiCnt.Inc()
-	if tsi.ID() == r.p.T.SID() {
+	if r.msg.SID == r.p.T.SID() {
 		wantOnlyRemote := r.msg.WantOnlyRemoteProps()
 		nentries := allocLsoEntries()
 		page, err = npg.nextPageR(nentries)

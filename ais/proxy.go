@@ -1316,34 +1316,32 @@ func crerrStatus(err error) (errCode int) {
 }
 
 func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg, lsmsg *apc.LsoMsg, beg int64) {
+	const tag = "list-objects"
 	smap := p.owner.smap.get()
 	if smap.CountActiveTargets() < 1 {
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
 		return
 	}
-	// If props were not explicitly specified return the default ones.
+	// not (explicitly) specified props default to the default ones
 	if lsmsg.Props == "" {
 		lsmsg.AddProps(apc.GetPropsDefault...)
 	}
 
-	// Vanilla HTTP buckets do not support remote listing.
-	// LsArchDir needs files locally to read archive content.
+	// HTTP "buckets" do not support remote listing. LsArchDir, on the other hand,
+	// needs locality to list archived content.
 	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
 		lsmsg.SetFlag(apc.LsObjCached)
 	}
 
-	listRemote := bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
-	wantOnlyRemote := lsmsg.WantOnlyRemoteProps()
+	tsi, listRemote, wantOnlyRemote, err := p.lsoFlowControls(bck, lsmsg, smap)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
 	if lsmsg.UUID == "" {
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()
-		if listRemote && wantOnlyRemote {
-			// one designated target
-			tsi, err := cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap)
-			if err != nil {
-				p.writeErr(w, r, err)
-				return
-			}
+		if wantOnlyRemote {
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, cluster.NodeMap{tsi.ID(): tsi}, bck.Bucket())
 		} else {
 			// bcast
@@ -1357,15 +1355,12 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		return
 	}
 
-	var (
-		lst *cmn.LsoResult
-		err error
-	)
+	var lst *cmn.LsoResult
 	if listRemote {
 		if lsmsg.StartAfter != "" {
 			// TODO: remote AIS first, then Cloud
-			err = fmt.Errorf("list-objects option --start_after (%s) not yet supported for remote buckets (%s)",
-				lsmsg.StartAfter, bck)
+			err = fmt.Errorf("%s option --start_after (%s) not yet supported for remote buckets (%s)",
+				tag, lsmsg.StartAfter, bck)
 			p.writeErr(w, r, err, http.StatusNotImplemented)
 			return
 		}
@@ -1384,10 +1379,10 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	debug.Assert(lst != nil)
 
 	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
-		if !p.writeMsgPack(w, r, lst, "list-objects") {
+		if !p.writeMsgPack(w, r, lst, tag) {
 			return
 		}
-	} else if !p.writeJSON(w, r, lst, "list-objects") {
+	} else if !p.writeJSON(w, r, lst, tag) {
 		return
 	}
 
@@ -1401,6 +1396,38 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		cos.NamedVal64{Name: stats.ListCount, Value: 1},
 		cos.NamedVal64{Name: stats.ListLatency, Value: delta},
 	)
+}
+
+// list-objects flow control helper
+func (p *proxy) lsoFlowControls(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *cluster.Snode,
+	listRemote, wantOnlyRemote bool, err error) {
+	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
+	if !listRemote {
+		return
+	}
+	wantOnlyRemote = lsmsg.WantOnlyRemoteProps() // system default unless set by user
+
+	// designate one target to carry-out backend.list-objects
+	if lsmsg.SID != "" {
+		tsi = smap.GetTarget(lsmsg.SID)
+		if tsi == nil {
+			err = &errNodeNotFound{"list-objects failure", lsmsg.SID, p.si, smap}
+			if smap.CountActiveTargets() == 1 {
+				// (walk an extra mile)
+				orig := err
+				tsi, err = cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap)
+				if err == nil {
+					glog.Warningf("ignoring [%v] - utilizing the last (or the only) active target %s", orig, tsi)
+					lsmsg.SID = tsi.ID()
+				}
+			}
+		}
+		return
+	}
+	if tsi, err = cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap); err == nil {
+		lsmsg.SID = tsi.ID()
+	}
+	return
 }
 
 // POST { action } /v1/objects/bucket-name[/object-name]
