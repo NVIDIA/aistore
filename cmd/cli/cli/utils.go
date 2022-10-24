@@ -820,9 +820,9 @@ func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
 }
 
 func bckPropList(props *cmn.BucketProps, verbose bool) (propList nvpairList) {
-	if !verbose {
+	if !verbose { // i.e., compact
 		propList = nvpairList{
-			{"created", time.Unix(0, props.Created).Format(time.RFC3339)},
+			{"created", fmtBucketCreatedTime(props.Created)},
 			{"provider", props.Provider},
 			{"access", props.Access.Describe()},
 			{"checksum", props.Cksum.String()},
@@ -839,9 +839,14 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList nvpairList) {
 		}
 	} else {
 		err := cmn.IterFields(props, func(tag string, field cmn.IterField) (error, bool) {
-			value := fmt.Sprintf("%v", field.Value())
-			if tag == apc.PropBucketAccessAttrs {
+			var value string
+			switch tag {
+			case apc.PropBucketCreated:
+				value = fmtBucketCreatedTime(props.Created)
+			case apc.PropBucketAccessAttrs:
 				value = props.Access.Describe()
+			default:
+				value = fmt.Sprintf("%v", field.Value())
 			}
 			propList = append(propList, nvpair{Name: tag, Value: value})
 			return nil, false
@@ -853,6 +858,27 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList nvpairList) {
 		return propList[i].Name < propList[j].Name
 	})
 	return
+}
+
+func fmtBucketCreatedTime(created int64) string {
+	if created == 0 {
+		return tmpls.NotSetVal
+	}
+	return time.Unix(0, created).Format(time.RFC3339)
+}
+
+// compare with tmpls.isUnsetTime() and fmtBucketCreatedTime() above
+func isUnsetTime(c *cli.Context, ts string) bool {
+	t, err := time.Parse(time.RFC822, ts)
+	if err != nil {
+		actionWarn(c, fmt.Sprintf("failed to parse %q using RFC822", ts))
+		return false
+	}
+	if t.IsZero() {
+		return true
+	}
+	tss := t.String()
+	return strings.HasPrefix(tss, "1969") || strings.HasPrefix(tss, "1970")
 }
 
 func readValue(c *cli.Context, prompt string) string {

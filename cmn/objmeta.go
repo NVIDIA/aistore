@@ -90,7 +90,12 @@ func (oa *ObjAttrs) AtimeUnix() int64          { return oa.Atime }
 func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
 func (oa *ObjAttrs) SetCksum(ty, val string)   { oa.Cksum = cos.NewCksum(ty, val) }
 
+//
 // custom metadata
+//
+
+func CustomMD2S(md cos.StrKVs) string { return fmt.Sprintf("%+v", md) }
+
 func (oa *ObjAttrs) GetCustomMD() cos.StrKVs   { return oa.CustomMD }
 func (oa *ObjAttrs) SetCustomMD(md cos.StrKVs) { oa.CustomMD = md }
 

@@ -527,9 +527,11 @@ func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section stri
 					continue
 				}
 				if def.Name == apc.PropBucketCreated {
-					ts, err := cos.S2UnixNano(p.Value)
-					if err == nil {
-						p.Value = cos.FormatUnixNano(ts, "" /*RFC822*/)
+					if p.Value != tmpls.NotSetVal {
+						created, err := cos.S2UnixNano(p.Value)
+						if err == nil {
+							p.Value = fmtBucketCreatedTime(created)
+						}
 					}
 					propList[idx] = p
 				}

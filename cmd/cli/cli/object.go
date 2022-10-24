@@ -803,20 +803,6 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	return tmpls.Print(propNVs, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
 }
 
-// compare with tmpls.isUnsetTime()
-func isUnsetTime(c *cli.Context, ts string) bool {
-	t, err := time.Parse(time.RFC822, ts)
-	if err != nil {
-		actionWarn(c, fmt.Sprintf("failed to parse %q using RFC822", ts))
-		return false
-	}
-	if t.IsZero() {
-		return true
-	}
-	tss := t.String()
-	return strings.HasPrefix(tss, "1969") || strings.HasPrefix(tss, "1970")
-}
-
 func propVal(op *cmn.ObjectProps, name string) (v string) {
 	switch name {
 	case apc.GetPropsName:
@@ -846,6 +832,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 		if custom := op.GetCustomMD(); len(custom) == 0 {
 			v = tmpls.NotSetVal
 		} else {
+			// TODO: formatting consistency across (list-objects, head-object, etc.)
 			v = fmt.Sprintf("%+v", custom)
 		}
 	case apc.GetPropsLocation:

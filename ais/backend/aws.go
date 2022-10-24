@@ -112,12 +112,6 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs, er
 	region = *svc.Config.Region
 	debug.Assert(region != "")
 
-	inputVersion := &s3.GetBucketVersioningInput{Bucket: aws.String(cloudBck.Name)}
-	result, err := svc.GetBucketVersioning(inputVersion)
-	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck)
-		return
-	}
 	bckProps = make(cos.StrKVs, 4)
 	bckProps[apc.HdrBackendProvider] = apc.AWS
 	bckProps[apc.HdrS3Region] = region
@@ -125,9 +119,12 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs, er
 	if bck.Props != nil {
 		bckProps[apc.HdrS3Endpoint] = bck.Props.Extra.AWS.Endpoint
 	}
-	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(
-		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
-	)
+	versioned, errV := getBucketVersioning(svc, cloudBck)
+	if errV != nil {
+		errCode, err = awsErrorToAISError(errV, cloudBck)
+		return
+	}
+	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(versioned)
 	return
 }
 
@@ -177,6 +174,7 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn
 		entry.Size = *key.Size
 		if v, ok := h.EncodeCksum(key.ETag); ok {
 			entry.Checksum = v
+			// TODO: entry.Custom here and elsewhere
 		}
 	}
 	lst.Entries = lst.Entries[:l]
@@ -192,44 +190,33 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn
 		return
 	}
 
-	// NOTE: (slow path)
-	// If version is requested, read versions page by page and stop at the end
-	// _or_ the version page marker is greater than the object page marker.
-	if msg.WantProp(apc.GetPropsVersion) {
-		var (
-			versions   = make(map[string]string, len(lst.Entries))
-			keyMarker  = ""
-			lastMarker = lst.Entries[len(lst.Entries)-1].Name
-		)
-
-		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
-		if msg.Prefix != "" {
-			verParams.Prefix = aws.String(msg.Prefix)
+	// versioning
+	if !bck.Props.Versioning.Enabled {
+		return
+	}
+	if !msg.WantProp(apc.GetPropsVersion) {
+		return
+	}
+	// NOTE: this s3 bucket appears to be versioned and the call to `ListObjectVersions` - is slow.
+	// That is exactly why if user did not explicitly request versioning we simply return (above).
+	// But if they did -
+	// for each already listed object, we set the `ListObjectVersionsInput.Prefix` to the object's
+	// full name and then read its versions looking for the latest.
+	verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
+	for _, entry := range lst.Entries {
+		verParams.Prefix = aws.String(entry.Name)
+		verResp, err := svc.ListObjectVersions(verParams)
+		if err != nil {
+			return awsErrorToAISError(err, cloudBck)
 		}
-
-		for keyMarker <= lastMarker {
-			if keyMarker != "" {
-				verParams.KeyMarker = aws.String(keyMarker)
+		for _, vers := range verResp.Versions {
+			if *(vers.Key) != entry.Name {
+				continue
 			}
-			verResp, err := svc.ListObjectVersions(verParams)
-			if err != nil {
-				return awsErrorToAISError(err, cloudBck)
-			}
-			for _, vers := range verResp.Versions {
-				if *(vers.IsLatest) {
-					if v, ok := h.EncodeVersion(vers.VersionId); ok {
-						versions[*(vers.Key)] = v
-					}
+			if *(vers.IsLatest) {
+				if v, ok := h.EncodeVersion(vers.VersionId); ok {
+					entry.Version = v
 				}
-			}
-			if !(*verResp.IsTruncated) {
-				break
-			}
-			keyMarker = *verResp.NextKeyMarker
-		}
-		for _, entry := range lst.Entries {
-			if version, ok := versions[entry.Name]; ok {
-				entry.Version = version
 			}
 		}
 	}
@@ -543,6 +530,16 @@ func _session(endpoint string) *session.Session {
 		SharedConfigState: session.SharedConfigEnable,
 		Config:            config,
 	}))
+}
+
+func getBucketVersioning(svc *s3.S3, bck *cmn.Bck) (enabled bool, errV error) {
+	input := &s3.GetBucketVersioningInput{Bucket: aws.String(bck.Name)}
+	result, err := svc.GetBucketVersioning(input)
+	if err != nil {
+		return false, err
+	}
+	enabled = result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled
+	return
 }
 
 func getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
