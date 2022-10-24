@@ -465,11 +465,15 @@ func FmtBool(t bool) string {
 	return "no"
 }
 
+// see also cli.isUnsetTime
 func isUnsetTime(t time.Time) bool {
 	return t.IsZero()
 }
 
 func fmtTime(t time.Time) string {
+	if t.IsZero() {
+		return NotSetVal
+	}
 	return t.Format("01-02 15:04:05")
 }
 

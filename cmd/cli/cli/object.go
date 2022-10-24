@@ -762,11 +762,14 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	var (
 		propsFlag     []string
 		selectedProps []string
+		fltPresence   = apc.FltPresentAnywhere
 	)
-	// TODO -- FIXME: apc.FltPresentAnywhere hardcoded
-	objProps, err := api.HeadObject(apiBP, bck, object, apc.FltPresentAnywhere)
+	if flagIsSet(c, objNotCachedFlag) {
+		fltPresence = apc.FltExists
+	}
+	objProps, err := api.HeadObject(apiBP, bck, object, fltPresence)
 	if err != nil {
-		return handleObjHeadError(err, bck, object)
+		return handleObjHeadError(err, bck, object, fltPresence)
 	}
 	if flagIsSet(c, jsonFlag) {
 		return tmpls.Print(objProps, c.App.Writer, tmpls.PropsSimpleTmpl, nil, true)
@@ -787,6 +790,9 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	propNVs := make(nvpairList, 0, len(selectedProps))
 	for _, name := range selectedProps {
 		if v := propVal(objProps, name); v != "" {
+			if name == apc.GetPropsAtime && isUnsetTime(c, v) {
+				v = tmpls.NotSetVal
+			}
 			propNVs = append(propNVs, nvpair{name, v})
 		}
 	}
@@ -795,6 +801,20 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	})
 
 	return tmpls.Print(propNVs, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
+}
+
+// compare with tmpls.isUnsetTime()
+func isUnsetTime(c *cli.Context, ts string) bool {
+	t, err := time.Parse(time.RFC822, ts)
+	if err != nil {
+		actionWarn(c, fmt.Sprintf("failed to parse %q using RFC822", ts))
+		return false
+	}
+	if t.IsZero() {
+		return true
+	}
+	tss := t.String()
+	return strings.HasPrefix(tss, "1969") || strings.HasPrefix(tss, "1970")
 }
 
 func propVal(op *cmn.ObjectProps, name string) (v string) {
@@ -837,9 +857,13 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 }
 
 // This function is needed to print a nice error message for the user
-func handleObjHeadError(err error, bck cmn.Bck, object string) error {
+func handleObjHeadError(err error, bck cmn.Bck, object string, fltPresence int) error {
+	var hint string
 	if cmn.IsStatusNotFound(err) {
-		return fmt.Errorf("%q not found in %s", object, bck)
+		if apc.IsFltPresent(fltPresence) {
+			hint = fmt.Sprintf(" (hint: try '--%s' option)", objNotCachedFlag.GetName())
+		}
+		return fmt.Errorf("%q not found in %s%s", object, bck.DisplayName(), hint)
 	}
 	return err
 }

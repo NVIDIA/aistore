@@ -440,11 +440,15 @@ var (
 	// See also: apc.Flt* enum.
 	checkObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "check if object from a remote bucket is present (ie., cached) in the cluster",
+		Usage: "check if object from a remote bucket is present (aka \"cached\")",
 	}
 	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "list only cached (ie., stored in AIS) objects from a remote bucket",
+		Usage: "list only those objects from a remote bucket that are present (\"cached\")",
+	}
+	objNotCachedFlag = cli.BoolFlag{
+		Name:  "not-cached",
+		Usage: "list or show properties of all objects from a remote bucket, including those that are not present (not \"cached\")",
 	}
 
 	// to anonymously list public-access Cloud buckets

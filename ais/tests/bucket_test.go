@@ -902,9 +902,8 @@ func TestListObjectsProps(t *testing.T) {
 			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
 			checkProps(useCache, []string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-				if bck.IsAIS() {
-					// TODO -- FIXME
-					tassert.Errorf(t, true || entry.Version != "", "version is not set")
+				if bck.IsAIS() || bck.Provider == apc.GCP {
+					tassert.Errorf(t, entry.Version != "", "version is not set: "+m.bck.DisplayName()+"/"+entry.Name)
 				}
 				tassert.Errorf(t, entry.Copies > 0, "copies is not set")
 
@@ -924,9 +923,8 @@ func TestListObjectsProps(t *testing.T) {
 			tlog.Logf("[cache=%t] trying all props...\n", useCache)
 			checkProps(useCache, apc.GetPropsAll, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				if bck.IsAIS() {
-					// TODO -- FIXME
-					tassert.Errorf(t, true || entry.Version != "", "version is not set")
+				if bck.IsAIS() || bck.Provider == apc.GCP {
+					tassert.Errorf(t, entry.Version != "", "version is not set: "+m.bck.DisplayName()+"/"+entry.Name)
 				}
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, entry.Atime != "", "atime is not set")
@@ -1165,7 +1163,7 @@ func TestListObjects(t *testing.T) {
 				for _, entry := range lst.Entries {
 					e, exists := objs.Load(entry.Name)
 					if !exists {
-						t.Errorf("failed to locate object %s in bucket %s", entry.Name, bck)
+						t.Errorf("failed to locate %s/%s in bucket %s", bck.DisplayName(), entry.Name, bck)
 						continue
 					}
 
@@ -1177,12 +1175,13 @@ func TestListObjects(t *testing.T) {
 						)
 					}
 
-					if entry.Checksum == empty.Checksum ||
+					if entry.Version == empty.Version {
+						t.Errorf("%s/%s version is empty (not set)", bck.DisplayName(), entry.Name)
+					} else if entry.Checksum == empty.Checksum ||
 						entry.Atime == empty.Atime ||
-						// TODO -- FIXME entry.Version == empty.Version ||
 						entry.Flags == empty.Flags ||
 						entry.Copies == empty.Copies {
-						t.Errorf("some fields of object %q, have default values: %#v", entry.Name, entry)
+						t.Errorf("some fields of %s/%s are empty (not set): %#v", bck.DisplayName(), entry.Name, entry)
 					}
 				}
 

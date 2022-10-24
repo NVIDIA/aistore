@@ -67,6 +67,7 @@ var (
 		subcmdShowObject: {
 			objPropsFlag,
 			allPropsFlag,
+			objNotCachedFlag,
 			noHeaderFlag,
 			jsonFlag,
 		},
