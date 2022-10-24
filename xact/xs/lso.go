@@ -179,13 +179,13 @@ func (r *LsoXact) lastmsg() {
 	close(r.respCh)
 }
 
-// compare w/ streaming
+// compare w/ streaming (TODO: unify)
 func (r *LsoXact) postponeUnregRx() { hk.Reg(r.ID()+hk.NameSuffix, r.fcleanup, time.Second/2) }
 
 func (r *LsoXact) fcleanup() (d time.Duration) {
 	d = hk.UnregInterval
 	if r.wiCnt.Load() > 0 {
-		d = waitUnregRecv
+		d = time.Second
 	} else {
 		close(r.remtCh)
 		close(r.msgCh)

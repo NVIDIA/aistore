@@ -210,13 +210,13 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn
 			return awsErrorToAISError(err, cloudBck)
 		}
 		for _, vers := range verResp.Versions {
-			if *(vers.Key) != entry.Name {
+			if latest := *(vers.IsLatest); !latest {
 				continue
 			}
-			if *(vers.IsLatest) {
-				if v, ok := h.EncodeVersion(vers.VersionId); ok {
-					entry.Version = v
-				}
+			if key := *(vers.Key); key == entry.Name {
+				v, ok := h.EncodeVersion(vers.VersionId)
+				debug.Assert(ok, entry.Name+": "+*(vers.VersionId))
+				entry.Version = v
 			}
 		}
 	}
