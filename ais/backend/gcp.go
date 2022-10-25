@@ -274,7 +274,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 		oa.SetCustomKey(cmn.ETag, v)
 	}
 	oa.SetCustomKey(cmn.LastModified, fmtTime(attrs.Updated))
-	// unlike other custom attrs, "Content-Type" one is not getting stored w/ LOM
+	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
 	// - only shown via list-objects and HEAD when not present
 	oa.SetCustomKey(cos.HdrContentType, attrs.ContentType)
 	if verbose {

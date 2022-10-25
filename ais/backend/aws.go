@@ -296,7 +296,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 			oa.SetCustomKey(cmn.MD5ObjMD, v)
 		}
 	}
-	// unlike other custom attrs, "Content-Type" one is not getting stored w/ LOM
+	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
 	// - only shown via list-objects and HEAD when not present
 	if v := headOutput.ContentType; v != nil {
 		oa.SetCustomKey(cos.HdrContentType, *v)

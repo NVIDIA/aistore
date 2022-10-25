@@ -320,7 +320,7 @@ var (
 
 	objPropsFlag = cli.StringFlag{
 		Name:  "props",
-		Usage: "comma-separated list of object properties including name, size, version, copies, EC data and parity info, custom props (to include all properties, use '--props all')",
+		Usage: "comma-separated list of object properties including name, size, version, copies, EC data and parity info, custom metadata, location, and more; to include all properties, type '--props all'",
 		Value: strings.Join(apc.GetPropsDefault, ","),
 	}
 	objPropsLsFlag = cli.StringFlag{

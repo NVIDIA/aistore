@@ -7,4 +7,4 @@ ais bucket mv ais://$BUCKET_1/ ais://$BUCKET_1/ // FAIL "cannot mv bucket "ais:/
 
 ais bucket rm ais://$BUCKET_1 ais://$BUCKET_3 // IGNORE
 
-ais bucket mv az://bucket ais://new_bucket // FAIL "bucket "azure://bucket" does not exist"
+ais bucket mv az://bucket ais://new_bucket // FAIL "does not exist"
