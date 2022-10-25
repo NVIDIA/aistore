@@ -27,7 +27,8 @@ const (
 
 	// system-supported custom attrs
 	// NOTE: for provider specific HTTP headers, see cmn/cos/const_http.go
-	VersionObjMD = "remote-version"
+
+	VersionObjMD = "version" // "generation" for GCP, "version" for AWS but only if the bucket is versioned, etc.
 	CRC32CObjMD  = cos.ChecksumCRC32C
 	MD5ObjMD     = cos.ChecksumMD5
 	ETag         = cos.HdrETag

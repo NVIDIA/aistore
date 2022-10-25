@@ -191,9 +191,11 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn
 		if v, ok := h.EncodeVersion(attrs.Generation); ok {
 			entry.Version = v
 		}
+		// custom
 		if msg.WantProp(apc.GetPropsCustom) {
 			custom[cmn.ETag], _ = h.EncodeCksum(attrs.Etag)
-			custom[cmn.LastModified] = attrs.Updated.Format(time.RFC3339)
+			custom[cmn.LastModified] = fmtTime(attrs.Updated)
+			custom[cos.HdrContentType] = attrs.ContentType
 			entry.Custom = cmn.CustomMD2S(custom)
 		}
 	}
@@ -268,6 +270,13 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
 		oa.SetCustomKey(cmn.CRC32CObjMD, v)
 	}
+	if v, ok := h.EncodeCksum(attrs.Etag); ok {
+		oa.SetCustomKey(cmn.ETag, v)
+	}
+	oa.SetCustomKey(cmn.LastModified, fmtTime(attrs.Updated))
+	// unlike other custom attrs, "Content-Type" one is not getting stored w/ LOM
+	// - only shown via list-objects and HEAD when not present
+	oa.SetCustomKey(cos.HdrContentType, attrs.ContentType)
 	if verbose {
 		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
 	}
@@ -355,6 +364,7 @@ func setCustomGs(lom *cluster.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Ck
 	if v, ok := h.EncodeCksum(attrs.Etag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 	}
+	lom.SetCustomKey(cmn.LastModified, fmtTime(attrs.Updated))
 	return
 }
 

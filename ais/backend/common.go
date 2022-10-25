@@ -7,6 +7,7 @@ package backend
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -33,6 +34,8 @@ func setSize(ctx context.Context, size int64) {
 		v.(cos.SetSizeFunc)(size)
 	}
 }
+
+func fmtTime(t time.Time) string { return t.Format(time.RFC3339) }
 
 func calcPageSize(pageSize, maxPageSize uint) uint {
 	if pageSize == 0 {

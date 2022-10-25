@@ -781,6 +781,10 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	}
 	if len(propsFlag) == 0 {
 		selectedProps = apc.GetPropsDefault
+		// to better represent remote obj that may not have any local presence
+		if flagIsSet(c, objNotCachedFlag) && !cos.StringInSlice(apc.GetPropsCustom, selectedProps) {
+			selectedProps = append(selectedProps, apc.GetPropsCustom)
+		}
 	} else if cos.StringInSlice("all", propsFlag) {
 		selectedProps = apc.GetPropsAll
 	} else {

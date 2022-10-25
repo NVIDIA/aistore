@@ -179,7 +179,7 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn
 		if msg.WantProp(apc.GetPropsCustom) {
 			custom[cmn.ETag] = entry.Checksum
 			mtime := *(key.LastModified)
-			custom[cmn.LastModified] = mtime.Format(time.RFC3339) // see also `HeadObject`
+			custom[cmn.LastModified] = fmtTime(mtime)
 			entry.Custom = cmn.CustomMD2S(custom)
 		}
 	}
@@ -296,13 +296,17 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 			oa.SetCustomKey(cmn.MD5ObjMD, v)
 		}
 	}
+	// unlike other custom attrs, "Content-Type" one is not getting stored w/ LOM
+	// - only shown via list-objects and HEAD when not present
 	if v := headOutput.ContentType; v != nil {
 		oa.SetCustomKey(cos.HdrContentType, *v)
 	}
-	if oa.Atime == 0 {
-		if v := headOutput.LastModified; v != nil {
-			oa.Atime = v.UnixNano()
+	if v := headOutput.LastModified; v != nil {
+		mtime := *(headOutput.LastModified)
+		if oa.Atime == 0 {
+			oa.Atime = mtime.UnixNano()
 		}
+		oa.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	}
 	if verbose {
 		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
@@ -369,13 +373,14 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 			lom.SetCksum(cos.NewCksum(*cksumType, *cksumValue))
 		}
 	}
-	expCksum = setCustomS3(lom, obj)
+
+	expCksum = getobjCustom(lom, obj)
 
 	setSize(ctx, *obj.ContentLength)
 	return wrapReader(ctx, obj.Body), expCksum, 0, nil
 }
 
-func setCustomS3(lom *cluster.LOM, obj *s3.GetObjectOutput) (expCksum *cos.Cksum) {
+func getobjCustom(lom *cluster.LOM, obj *s3.GetObjectOutput) (expCksum *cos.Cksum) {
 	h := cmn.BackendHelpers.Amazon
 	if v, ok := h.EncodeVersion(obj.VersionId); ok {
 		lom.SetVersion(v)
@@ -386,6 +391,8 @@ func setCustomS3(lom *cluster.LOM, obj *s3.GetObjectOutput) (expCksum *cos.Cksum
 		expCksum = cos.NewCksum(cos.ChecksumMD5, v)
 		lom.SetCustomKey(cmn.MD5ObjMD, v)
 	}
+	mtime := *(obj.LastModified)
+	lom.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	return
 }
 
