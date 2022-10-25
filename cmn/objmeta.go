@@ -33,6 +33,10 @@ const (
 	ETag         = cos.HdrETag
 
 	OrigURLObjMD = "orig_url"
+
+	// additional backend
+	LastModified    = "LastModified"
+	ContentEncoding = "ContentEncoding"
 )
 
 // object properties

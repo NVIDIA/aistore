@@ -199,13 +199,13 @@ func (b Bck) String() string {
 		if b.Provider == "" {
 			return b.Name
 		}
-		return b.Provider + apc.BckProviderSeparator + b.Name
+		return apc.ToScheme(b.Provider) + apc.BckProviderSeparator + b.Name
 	}
 	p := b.Provider
 	if p == "" {
 		p = apc.NormalizeProvider("")
 	}
-	return fmt.Sprintf("%s%s%s/%s", p, apc.BckProviderSeparator, b.Ns, b.Name)
+	return fmt.Sprintf("%s%s%s/%s", apc.ToScheme(p), apc.BckProviderSeparator, b.Ns, b.Name)
 }
 
 // unique name => Bck (use MakeUname above to perform the reverse translation)

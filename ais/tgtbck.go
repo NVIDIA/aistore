@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
@@ -224,18 +225,20 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 		}
 	}
 
-	rns := xreg.RenewLso(t, bck, msg.UUID, msg)
-	xctn := rns.Entry.Get()
-	// Double check that xaction has not gone before starting page read.
-	// Restart xaction if needed.
-	if rns.Err == xs.ErrGone {
+	var (
+		xctn cluster.Xact
+		rns  = xreg.RenewLso(t, bck, msg.UUID, msg)
+	)
+	// check that xaction hasn't finished prior to this page read, restart if needed
+	if rns.Err == xs.ErrGone || transport.IsErrDuplicateTrname(rns.Err) {
+		runtime.Gosched()
 		rns = xreg.RenewLso(t, bck, msg.UUID, msg)
-		xctn = rns.Entry.Get()
 	}
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)
 		return
 	}
+	xctn = rns.Entry.Get()
 	if !rns.IsRunning() {
 		go xctn.Run(nil)
 		runtime.Gosched()

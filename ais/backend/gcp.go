@@ -181,6 +181,7 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn
 	for i := len(lst.Entries); i < l; i++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
 	}
+	var custom = cos.StrKVs{}
 	for i, attrs := range objs {
 		entry := lst.Entries[i]
 		entry.Name, entry.Size = attrs.Name, attrs.Size
@@ -189,6 +190,11 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn
 		}
 		if v, ok := h.EncodeVersion(attrs.Generation); ok {
 			entry.Version = v
+		}
+		if msg.WantProp(apc.GetPropsCustom) {
+			custom[cmn.ETag], _ = h.EncodeCksum(attrs.Etag)
+			custom[cmn.LastModified] = attrs.Updated.Format(time.RFC3339)
+			entry.Custom = cmn.CustomMD2S(custom)
 		}
 	}
 	lst.Entries = lst.Entries[:l]

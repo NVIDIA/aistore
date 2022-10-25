@@ -792,6 +792,11 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	errCode, err := t.DeleteObject(lom, evict)
+	if errCode == http.StatusServiceUnavailable {
+		// (googleapi: "Error 503: We encountered an internal error. Please try again.")
+		time.Sleep(time.Second)
+		errCode, err = t.DeleteObject(lom, evict)
+	}
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			t.writeErrSilentf(w, r, http.StatusNotFound, "object %s/%s doesn't exist", lom.Bucket(), lom.ObjName)

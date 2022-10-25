@@ -168,13 +168,19 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn
 	for i := len(lst.Entries); i < l; i++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
 	}
+	var custom = cos.StrKVs{}
 	for i, key := range resp.Contents {
 		entry := lst.Entries[i]
 		entry.Name = *key.Key
 		entry.Size = *key.Size
 		if v, ok := h.EncodeCksum(key.ETag); ok {
 			entry.Checksum = v
-			// TODO: entry.Custom here and elsewhere
+		}
+		if msg.WantProp(apc.GetPropsCustom) {
+			custom[cmn.ETag] = entry.Checksum
+			mtime := *(key.LastModified)
+			custom[cmn.LastModified] = mtime.Format(time.RFC3339) // see also `HeadObject`
+			entry.Custom = cmn.CustomMD2S(custom)
 		}
 	}
 	lst.Entries = lst.Entries[:l]

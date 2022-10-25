@@ -832,8 +832,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 		if custom := op.GetCustomMD(); len(custom) == 0 {
 			v = tmpls.NotSetVal
 		} else {
-			// TODO: formatting consistency across (list-objects, head-object, etc.)
-			v = fmt.Sprintf("%+v", custom)
+			v = cmn.CustomMD2S(custom)
 		}
 	case apc.GetPropsLocation:
 		v = op.Location

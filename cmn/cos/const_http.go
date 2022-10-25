@@ -41,12 +41,11 @@ const (
 	S3HdrContentSHA256 = "x-amz-content-sha256"
 	S3HdrBckRegion     = "x-amz-bucket-region"
 
-	S3ChecksumCRC32   = "x-amz-checksum-crc32"
-	S3ChecksumCRC32C  = "x-amz-checksum-crc32c"
-	S3ChecksumSHA1    = "x-amz-checksum-sha1"
-	S3ChecksumSHA256  = "x-amz-checksum-sha256"
-	S3ContentEncoding = "Content-Encoding"
-	S3LastModified    = "Last-Modified"
+	S3ChecksumCRC32  = "x-amz-checksum-crc32"
+	S3ChecksumCRC32C = "x-amz-checksum-crc32c"
+	S3ChecksumSHA1   = "x-amz-checksum-sha1"
+	S3ChecksumSHA256 = "x-amz-checksum-sha256"
+	S3LastModified   = "Last-Modified"
 
 	S3MetadataChecksumType = "x-amz-meta-ais-cksum-type"
 	S3MetadataChecksumVal  = "x-amz-meta-ais-cksum-val"
