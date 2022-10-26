@@ -50,7 +50,7 @@ type (
 			ntargets    int  // expected number of targets in a starting-up cluster
 			skipStartup bool // determines if primary should skip waiting for targets to join
 		}
-		transient        bool // false: make cmn.ConfigCLI settings permanent, true: leave them transient
+		transient        bool // true: keep command-line provided `-config-custom` settings in memory only
 		overrideBackends bool // if true primary will metasync backends from deployment-time plain-text config
 		target           struct {
 			// do not try to auto-join cluster upon startup - stand by and wait for admin request
@@ -90,7 +90,7 @@ func init() {
 	flag.StringVar(&daemon.cli.confCustom, "config_custom", "",
 		"\"key1=value1,key2=value2\" formatted string to override selected entries in config")
 	flag.BoolVar(&daemon.cli.transient, "transient", false,
-		"false: store customized (via config_custom) configuration\ntrue: runtime only (non-persistent)")
+		"false: store customized (via '-config_custom') configuration\ntrue: keep '-config_custom' settings in memory only (non-persistent)")
 	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
 	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "configure remote backends at deployment time (potentially, override previously stored configuration)")
 
