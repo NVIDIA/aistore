@@ -176,6 +176,11 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 	case apc.ActPrefetchObjects:
 		args := &cmn.SelectObjsMsg{}
 		rns := xreg.RenewPrefetch(xactMsg.ID, t, bck, args)
+		if rns.Err != nil {
+			glog.Errorf("%s: %s %v", t, bck, rns.Err)
+			debug.AssertNoErr(rns.Err)
+			return rns.Err
+		}
 		xctn := rns.Entry.Get()
 		xctn.AddNotif(&xact.NotifXact{
 			NotifBase: nl.NotifBase{

@@ -30,7 +30,7 @@ A cluster deployed in `debug` mode will produce a log like this:
 As this only enables general debug asserts and logs it is also possible to enable verbose logging per package.
 To do that deploy cluster with eg. `AIS_DEBUG="fs=4,reb=4"` what means that packages `fs` and `reb` will have logging level set to `4` (generally used for verbose logging).
 
-> See `cmn/debug/debug_on.go` for the list off all package names, including `fs` and `reb` mentioned above.
+> See `cmn/debug/debug_on.go` for the list of all package names, including `fs` and `reb` mentioned above.
 
 ## Scripts
 

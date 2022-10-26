@@ -1214,6 +1214,11 @@ func (t *target) putMirror(lom *cluster.LOM) {
 		return
 	}
 	rns := xreg.RenewPutMirror(t, lom)
+	if rns.Err != nil {
+		glog.Errorf("%s: %s %v", t, lom, rns.Err)
+		debug.AssertNoErr(rns.Err)
+		return
+	}
 	xctn := rns.Entry.Get()
 	xputlrep := xctn.(*mirror.XactPut)
 	xputlrep.Repl(lom)

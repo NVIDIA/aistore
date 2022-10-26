@@ -3092,7 +3092,8 @@ func TestBucketListAndSummary(t *testing.T) {
 			)
 			bckTest := cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}
 			if !bckTest.IsAIS() {
-				m.num = 1234
+				m.num /= 10
+				m.del(-1 /* delete all */)
 			}
 
 			cacheSize := m.num / 2 // determines number of objects which should be cached

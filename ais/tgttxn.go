@@ -431,6 +431,7 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 		}
 		rns := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, apc.ActCommit)
 		if rns.Err != nil {
+			glog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err // must not happen at commit time
 		}
 		xctn := rns.Entry.Get()
@@ -556,6 +557,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
 			txnTcb.xtcb.TxnAbort()
+			glog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()
@@ -589,6 +591,7 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlp
 	custom := &xreg.TCBArgs{Phase: apc.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
 	rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, custom)
 	if err = rns.Err; err != nil {
+		glog.Errorf("%s: %q %+v %v", t, c.uuid, msg, rns.Err)
 		return
 	}
 	xctn := rns.Entry.Get()
@@ -636,6 +639,7 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
 		rns := xreg.RenewTCObjs(t, c.uuid, c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
+			glog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)
 			return xactID, rns.Err
 		}
 		xctn := rns.Entry.Get()
@@ -711,6 +715,7 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 		}
 		rns := xreg.RenewECEncode(t, c.bck, c.uuid, apc.ActCommit)
 		if rns.Err != nil {
+			glog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()
@@ -770,6 +775,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 
 		rns := xreg.RenewPutArchive(c.uuid, t, bckFrom)
 		if rns.Err != nil {
+			glog.Errorf("%s: %q %+v %v", t, c.uuid, archMsg, rns.Err)
 			return xactID, rns.Err
 		}
 		xctn := rns.Entry.Get()
@@ -941,6 +947,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 
 		rns := xreg.RenewPromote(t, c.uuid, c.bck, txnPrm.msg)
 		if rns.Err != nil {
+			glog.Errorf("%s: %s %v", t, txnPrm, rns.Err)
 			return "", rns.Err
 		}
 		xprm := rns.Entry.Get().(*xs.XactDirPromote)

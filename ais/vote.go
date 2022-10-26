@@ -173,7 +173,11 @@ func (p *proxy) proxyElection(vr *VoteRecord) {
 		return
 	}
 	rns := xreg.RenewElection()
-	debug.AssertNoErr(rns.Err)
+	if rns.Err != nil {
+		glog.Errorf("%s: %+v %v", p, vr, rns.Err)
+		debug.AssertNoErr(rns.Err)
+		return
+	}
 	if rns.IsRunning() {
 		return
 	}
