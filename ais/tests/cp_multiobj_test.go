@@ -7,20 +7,18 @@ package integration
 import (
 	"fmt"
 	"math/rand"
-	"sync/atomic"
 	"testing"
-	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
-	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
@@ -127,23 +125,36 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			{true}, {false},
 		}
 	)
+	if m.bck.IsRemoteAIS() { // see TODO below
+		subtests = []struct {
+			list bool
+		}{
+			{mono.NanoTime()&0x1 != 0},
+		}
+	}
 	for _, test := range subtests {
 		tname := "list"
 		if !test.list {
 			tname = "range"
 		}
 		t.Run(tname, func(t *testing.T) {
-			if m.bck.IsRemote() {
-				m.num = objCnt / 3
+			// TODO -- FIXME: swapping the source and the destination here because
+			// of the current unidirectional limitation: ais => remote ais
+			if m.bck.IsRemoteAIS() {
+				m.bck, toBck = toBck, m.bck
+				tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 			}
+
 			m.initWithCleanup()
 			m.puts()
-			if m.bck.IsRemote() {
+			if m.bck.IsCloud() {
 				defer m.del()
 			}
+			// TODO -- FIXME: create ais destination on the fly (feature)
 			if !toBck.Equal(&m.bck) && toBck.IsAIS() {
 				tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 			}
+			tlog.Logf("Start copying multiple objects %s => %s ...\n", m.bck, toBck)
 			var erv atomic.Value
 			if test.list {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
@@ -151,23 +162,27 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 					for j := 0; j < numToCopy; j++ {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
-					go func(list []string) {
+					go func(list []string, iter int) {
 						msg := cmn.TCObjsMsg{SelectObjsMsg: cmn.SelectObjsMsg{ObjNames: list}, ToBck: toBck}
 						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
 							erv.Store(err)
+						} else {
+							tlog.Logf("%2d: cp list %d objects\n", iter, numToCopy)
 						}
-					}(list)
+					}(list, i)
 				}
 			} else {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
 					start := rand.Intn(m.num - numToCopy)
-					go func(start int) {
+					go func(start, iter int) {
 						template := fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
 						msg := cmn.TCObjsMsg{SelectObjsMsg: cmn.SelectObjsMsg{Template: template}, ToBck: toBck}
 						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
 							erv.Store(err)
+						} else {
+							tlog.Logf("%2d: cp range [%s]\n", iter, template)
 						}
-					}(start)
+					}(start, i)
 				}
 			}
 			if erv.Load() != nil {
@@ -180,96 +195,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("%s => %s: copied %d objects\n", m.bck, toBck, len(objList.Entries))
+			tlog.Logf("Total (`ls %s/%s*`): %d objects\n", toBck, m.prefix, len(objList.Entries))
 		})
-	}
-}
-
-func TestETLMultiObj(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
-	tetl.CheckNoRunningETLContainers(t, baseParams)
-
-	const (
-		objCnt      = 50
-		copyCnt     = 20
-		rangeStart  = 10
-		transformer = tetl.MD5
-		etlCommType = etl.Hpush
-		objSize     = cos.KiB
-		cksumType   = cos.ChecksumMD5
-	)
-	var (
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
-
-		bck   = cmn.Bck{Name: "etloffline", Provider: apc.AIS}
-		toBck = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.AIS}
-	)
-
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
-
-	for i := 0; i < objCnt; i++ {
-		r, _ := readers.NewRandReader(objSize, cksumType)
-		err := api.PutObject(api.PutObjectArgs{
-			BaseParams: baseParams,
-			Bck:        bck,
-			Object:     fmt.Sprintf("test/a-%04d", i),
-			Reader:     r,
-			Size:       objSize,
-		})
-		tassert.CheckFatal(t, err)
-	}
-
-	uuid := tetl.Init(t, baseParams, transformer, etlCommType)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
-
-	for _, ty := range []string{"range", "list"} {
-		t.Run(ty, func(t *testing.T) {
-			testETLMultiObj(t, uuid, bck, toBck, "test/a-"+fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1), ty)
-		})
-	}
-}
-
-func testETLMultiObj(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRange, opType string) {
-	pt, err := cos.ParseBashTemplate(fileRange)
-	tassert.CheckFatal(t, err)
-
-	var (
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
-
-		objList        = pt.ToSlice()
-		objCnt         = len(objList)
-		requestTimeout = 30 * time.Second
-		tcoMsg         = cmn.TCObjsMsg{
-			TCBMsg: apc.TCBMsg{
-				ID:             uuid,
-				RequestTimeout: cos.Duration(requestTimeout),
-			},
-			ToBck: toBck,
-		}
-	)
-	if opType == "list" {
-		tcoMsg.SelectObjsMsg.ObjNames = objList
-	} else {
-		tcoMsg.SelectObjsMsg.Template = fileRange
-	}
-
-	tlog.Logf("Start offline ETL %q\n", uuid)
-	xactID, err := api.ETLMultiObj(baseParams, fromBck, tcoMsg)
-	tassert.CheckFatal(t, err)
-
-	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActETLObjects}
-	err = api.WaitForXactionIdle(baseParams, wargs)
-	tassert.CheckFatal(t, err)
-
-	list, err := api.ListObjects(baseParams, toBck, nil, 0)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
-	for _, objName := range objList {
-		err := api.DeleteObject(baseParams, toBck, objName)
-		tassert.CheckError(t, err)
-		tlog.Logf("%s/%s\n", toBck.Name, objName)
 	}
 }

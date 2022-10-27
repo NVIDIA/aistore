@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -89,8 +90,12 @@ func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 		tassert.CheckFatal(tb, err)
 	}
 	if errHTTP.Status != http.StatusNotFound {
-		err = fmt.Errorf("expected status 404, got %+v", errHTTP)
-		tassert.CheckFatal(tb, err) // warning?
+		err = fmt.Errorf("tools.BucketExists: expected status 404 (NotFound), got [%s]", errHTTP.Message)
+		if tb != nil {
+			tassert.CheckFatal(tb, err)
+		} else {
+			cos.Exitf("%v", err)
+		}
 	}
 	return false, err
 }
