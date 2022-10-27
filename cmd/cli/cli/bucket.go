@@ -159,21 +159,39 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error) {
 	var (
 		regex  *regexp.Regexp
-		filter = func(_ cmn.Bck) bool { return true }
+		fmatch = func(_ cmn.Bck) bool { return true }
 	)
 	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {
 		regex, err = regexp.Compile(regexStr)
 		if err != nil {
 			return
 		}
-		filter = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
+		fmatch = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
 	}
 	bcks, err := api.ListBuckets(apiBP, qbck, fltPresence)
 	if err != nil {
 		return
 	}
+
+	// NOTE:
+	// typing `ls ais://@` (with an '@' symbol) to query remote ais buckets may not be
+	// very obvious (albeit documented); thus, for the sake of usability making
+	// an exception - extending ais queries to include remote ais
+
+	if qbck.Provider == apc.AIS || qbck.Provider == "" {
+		if !qbck.IsRemoteAIS() {
+			if _, err := api.GetRemoteAIS(apiBP); err == nil {
+				qrais := qbck
+				qrais.Ns = cmn.NsAnyRemote
+				if brais, err := api.ListBuckets(apiBP, qrais, fltPresence); err == nil {
+					bcks = append(bcks, brais...)
+				}
+			}
+		}
+	}
+
 	if len(bcks) == 0 && apc.IsFltPresent(fltPresence) {
-		const hint = "To list _all_ buckets, use the '--%s' option.\n"
+		const hint = "Use '--%s' option to list _all_ buckets.\n"
 		if qbck.IsEmpty() {
 			fmt.Fprintf(c.App.Writer, "No buckets in the cluster. "+hint, allObjsOrBcksFlag.Name)
 		} else {
@@ -181,32 +199,48 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		}
 		return
 	}
-	for _, provider := range selectProviders(bcks) {
-		listBckTable(c, provider, bcks, filter, fltPresence)
+	var total int
+	for _, provider := range selectProvidersExclRais(bcks) {
+		qbck = cmn.QueryBcks{Provider: provider}
+		if provider == apc.AIS {
+			qbck.Ns = cmn.NsGlobal // "local" cluster
+		}
+		cnt := listBckTable(c, qbck, bcks, fmatch, fltPresence)
+		if cnt > 0 {
+			fmt.Fprintln(c.App.Writer)
+			total += cnt
+		}
+	}
+	// finally, list remote ais buckets, if any
+	qbck = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
+	cnt := listBckTable(c, qbck, bcks, fmatch, fltPresence)
+	if cnt > 0 || total == 0 {
 		fmt.Fprintln(c.App.Writer)
 	}
 	return
 }
 
 // `ais ls`, `ais ls s3:` and similar
-func listBckTable(c *cli.Context, provider string, bcks cmn.Bcks, matches func(cmn.Bck) bool, fltPresence int) {
+func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, matches func(cmn.Bck) bool,
+	fltPresence int) (cnt int) {
 	filtered := make(cmn.Bcks, 0, len(bcks))
 	for _, bck := range bcks {
-		if bck.Provider == provider && matches(bck) {
+		if qbck.Contains(&bck) && matches(bck) {
 			filtered = append(filtered, bck)
 		}
 	}
-	if len(filtered) == 0 {
+	if cnt = len(filtered); cnt == 0 {
 		return
 	}
 	if flagIsSet(c, bckSummaryFlag) {
-		listBckTableWithSummary(c, provider, filtered, fltPresence)
+		listBckTableWithSummary(c, qbck, filtered, fltPresence)
 	} else {
-		listBckTableNoSummary(c, provider, filtered, fltPresence)
+		listBckTableNoSummary(c, qbck, filtered, fltPresence)
 	}
+	return
 }
 
-func listBckTableNoSummary(c *cli.Context, provider string, filtered []cmn.Bck, fltPresence int) {
+func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
 	var (
 		bmd        *cluster.BMD
 		err        error
@@ -246,18 +280,23 @@ func listBckTableNoSummary(c *cli.Context, provider string, filtered []cmn.Bck, 
 	} else {
 		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, nil, false)
 	}
-	if !hideFooter {
-		var s string
-		if !apc.IsFltPresent(fltPresence) {
-			s = fmt.Sprintf(" (%d present)", footer.nbp)
-		}
-		foot := fmt.Sprintf("Total: [%s bucket%s: %d%s] ========",
-			apc.DisplayProvider(provider), cos.Plural(footer.nb), footer.nb, s)
-		fmt.Fprintln(c.App.Writer, fcyan(foot))
+	if hideFooter {
+		return
 	}
+
+	var s string
+	if !apc.IsFltPresent(fltPresence) {
+		s = fmt.Sprintf(" (%d present)", footer.nbp)
+	}
+	p := apc.DisplayProvider(qbck.Provider)
+	if qbck.IsRemoteAIS() {
+		p = "Remote " + p
+	}
+	foot := fmt.Sprintf("Total: [%s bucket%s: %d%s] ========", p, cos.Plural(footer.nb), footer.nb, s)
+	fmt.Fprintln(c.App.Writer, fcyan(foot))
 }
 
-func listBckTableWithSummary(c *cli.Context, provider string, filtered []cmn.Bck, fltPresence int) {
+func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
 	var (
 		footer     lsbFooter
 		altMap     template.FuncMap
@@ -295,16 +334,22 @@ func listBckTableWithSummary(c *cli.Context, provider string, filtered []cmn.Bck
 	} else {
 		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
 	}
-	if !hideFooter && footer.nbp > 1 {
-		var s string
-		if !apc.IsFltPresent(fltPresence) {
-			s = fmt.Sprintf(" (%d present)", footer.nbp)
-		}
-		foot := fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
-			apc.DisplayProvider(provider), cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj,
-			cos.UnsignedB2S(footer.size, 2), footer.pct)
-		fmt.Fprintln(c.App.Writer, fcyan(foot))
+
+	if hideFooter || footer.nbp <= 1 {
+		return
 	}
+	var s string
+	if !apc.IsFltPresent(fltPresence) {
+		s = fmt.Sprintf(" (%d present)", footer.nbp)
+	}
+	p := apc.DisplayProvider(qbck.Provider)
+	if qbck.IsRemoteAIS() {
+		p = "Remote " + p // TODO -- FIXME: use qbck.DisplayProvider here and elsewhere
+	}
+	foot := fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
+		p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj,
+		cos.UnsignedB2S(footer.size, 2), footer.pct)
+	fmt.Fprintln(c.App.Writer, fcyan(foot))
 }
 
 func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {

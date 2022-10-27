@@ -178,7 +178,8 @@ func (n Ns) Validate() error {
 
 func (n Ns) Contains(other Ns) bool {
 	if n.IsGlobal() {
-		return true // If query is empty (global) we accept any namespace
+		// If query is empty (ie., global) we accept any non-remote namespace
+		return !other.IsRemote()
 	}
 	if n.IsAnyRemote() {
 		return other.IsRemote()
@@ -281,6 +282,14 @@ func (b *Bck) DisplayName() string {
 		return sch + apc.BckProviderSeparator + b.Name
 	}
 	return fmt.Sprintf("%s%s%s/%s", sch, apc.BckProviderSeparator, b.Ns, b.Name)
+}
+
+func (b *Bck) DisplayProvider() (p string) {
+	p = apc.DisplayProvider(b.Provider)
+	if b.IsRemoteAIS() {
+		p = "Remote " + p
+	}
+	return
 }
 
 func (b *Bck) IsEmpty() bool {
@@ -421,9 +430,9 @@ func (qbck QueryBcks) String() string {
 			p = apc.NormalizeProvider("")
 		}
 		if qbck.Ns.IsGlobal() {
-			return p + apc.BckProviderSeparator
+			return apc.ToScheme(p) + apc.BckProviderSeparator
 		}
-		return fmt.Sprintf("%s%s%s", p, apc.BckProviderSeparator, qbck.Ns)
+		return fmt.Sprintf("%s%s%s", apc.ToScheme(p), apc.BckProviderSeparator, qbck.Ns)
 	}
 	b := Bck(qbck)
 	return b.String()
@@ -434,6 +443,8 @@ func (qbck *QueryBcks) IsHDFS() bool      { b := (*Bck)(qbck); return b.IsHDFS()
 func (qbck *QueryBcks) IsHTTP() bool      { b := (*Bck)(qbck); return b.IsHTTP() }
 func (qbck *QueryBcks) IsRemoteAIS() bool { b := (*Bck)(qbck); return b.IsRemoteAIS() }
 func (qbck *QueryBcks) IsCloud() bool     { return IsCloudProvider(qbck.Provider) }
+
+func (qbck *QueryBcks) DisplayProvider() string { b := (*Bck)(qbck); return b.DisplayProvider() }
 
 func (qbck *QueryBcks) IsEmpty() bool { b := (*Bck)(qbck); return b.IsEmpty() }
 

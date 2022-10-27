@@ -1418,15 +1418,21 @@ func parseHexOrUint(s string) (uint64, error) {
 	return strconv.ParseUint(s, 10, 64)
 }
 
-func selectProviders(bcks cmn.Bcks) (sorted []string) {
+// NOTE: as provider, AIS can be (local cluster | remote cluster) -
+// return only the former and handle remote case separately
+func selectProvidersExclRais(bcks cmn.Bcks) (sorted []string) {
 	sorted = make([]string, 0, len(apc.Providers))
 	for p := range apc.Providers {
 		for _, bck := range bcks {
-			debug.Assert(apc.IsProvider(bck.Provider))
-			if bck.Provider == p {
-				sorted = append(sorted, p)
-				break
+			if bck.Provider != p {
+				continue
 			}
+			if bck.IsAIS() {
+				sorted = append(sorted, p)
+			} else if p != apc.AIS {
+				sorted = append(sorted, p)
+			}
+			break
 		}
 	}
 	sort.Strings(sorted)

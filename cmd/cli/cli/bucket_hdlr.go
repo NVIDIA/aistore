@@ -235,14 +235,14 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 		Misplaced     uint64
 		MissingCopies uint64
 	}
-	bckList, err := api.ListBuckets(apiBP, queryBcks, apc.FltPresent)
+	bcks, err := api.ListBuckets(apiBP, queryBcks, apc.FltPresent)
 	if err != nil {
 		return
 	}
 	bckSums := make([]*bucketHealth, 0)
 	msg := &apc.LsoMsg{Flags: apc.LsAll}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsCached)
-	for _, bck := range bckList {
+	for _, bck := range bcks {
 		if queryBcks.Name != "" && !queryBcks.Equal(&bck) {
 			continue
 		}
