@@ -373,6 +373,10 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg
 
 func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if !qbck.Ns.IsAnyRemote() {
+		// user may have provided an alias
+		if aisCluster, errV := m.remoteCluster(qbck.Ns.UUID); errV == nil {
+			qbck.Ns.UUID = aisCluster.uuid
+		}
 		bcks, err = m._listBcks(qbck.Ns.UUID, qbck)
 	} else {
 		for uuid := range m.remote {

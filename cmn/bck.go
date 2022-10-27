@@ -184,6 +184,9 @@ func (n Ns) Contains(other Ns) bool {
 	if n.IsAnyRemote() {
 		return other.IsRemote()
 	}
+	if n.UUID == other.UUID && n.Name == "" {
+		return true
+	}
 	return n == other
 }
 

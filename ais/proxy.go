@@ -1882,6 +1882,9 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}
+	// TODO: for remote AIS queries, consider fixing-up user-sent `qbck`
+	// in re (alias vs UUID) - the cost is one extra call to `getRemoteAISInfo`;
+	// also note RawQuery below
 
 	// present-only filtering
 	if dpq.fltPresence != "" {
