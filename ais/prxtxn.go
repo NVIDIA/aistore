@@ -156,6 +156,11 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHdr htt
 			// backend versioning always takes precedence
 			bprops.Versioning.Enabled = remoteProps.Versioning.Enabled
 		}
+		if bck.IsRemoteAIS() && false {
+			// TODO -- FIXME always store in BMD with the remote cluster's UUID (and not alias)
+			bck.Ns.UUID = remoteHdr.Get(apc.HdrRemAisUUID)
+			debug.Assert(cos.IsValidUUID(bck.Ns.UUID), bck.Ns.UUID)
+		}
 	case backend != nil: // remote backend exists
 		if bprops == nil {
 			bprops = defaultBckProps(bckPropsArgs{bck: bck})

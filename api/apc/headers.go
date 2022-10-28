@@ -28,6 +28,11 @@ const (
 	// including BucketProps.Extra.HTTP
 	HdrOrigURLBck = HeaderPrefix + "original-url"
 
+	// remote AIS
+	HdrRemAisUUID  = HeaderPrefix + "remote-ais-uuid"
+	HdrRemAisAlias = HeaderPrefix + "remote-ais-alias"
+	HdrRemAisURL   = HeaderPrefix + "remote-ais-url"
+
 	HdrRemoteOffline = HeaderPrefix + "remote-offline" // When accessing cached remote bucket with no backend connectivity.
 
 	// Object props headers

@@ -694,7 +694,7 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 }
 
 func showRemoteAISHandler(c *cli.Context) (err error) {
-	aisCloudInfo, err := api.GetRemoteAIS(apiBP)
+	remClusters, err := api.GetRemoteAIS(apiBP)
 	if err != nil {
 		return err
 	}
@@ -703,22 +703,22 @@ func showRemoteAISHandler(c *cli.Context) (err error) {
 	if !flagIsSet(c, noHeaderFlag) {
 		fmt.Fprintln(tw, "UUID\tURL\tAlias\tPrimary\tSmap\tTargets\tOnline")
 	}
-	for uuid, info := range aisCloudInfo {
+	for uuid, remAis := range remClusters {
 		online := "no"
-		if info.Online {
+		if remAis.Online {
 			online = "yes"
 		}
-		if info.Smap > 0 {
+		if remAis.Smap > 0 {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\tv%d\t%d\t%s\n",
-				uuid, info.URL, info.Alias, info.Primary, info.Smap, info.Targets, online)
+				uuid, remAis.URL, remAis.Alias, remAis.Primary, remAis.Smap, remAis.Targets, online)
 		} else {
-			url := info.URL
+			url := remAis.URL
 			if url[0] == '[' {
 				url = strings.Replace(url, "[", "<", 1)
 				url = strings.Replace(url, "]", ">", 1)
 			}
 			fmt.Fprintf(tw, "<%s>\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				uuid, url, info.Alias, "n/a", "n/a", "n/a", online)
+				uuid, url, remAis.Alias, "n/a", "n/a", "n/a", online)
 		}
 	}
 	tw.Flush()

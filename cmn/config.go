@@ -144,7 +144,7 @@ type (
 		// 3rd party Cloud(s) -- set during validation
 		Providers map[string]Ns `json:"-"`
 	}
-	RemoteAISInfo struct {
+	RemoteAIS struct {
 		URL     string `json:"url"`
 		Alias   string `json:"alias"`
 		Primary string `json:"primary"`
@@ -154,7 +154,7 @@ type (
 	}
 
 	BackendConfAIS map[string][]string // cluster alias -> [urls...]
-	BackendInfoAIS map[string]*RemoteAISInfo
+	BackendInfoAIS map[string]*RemoteAIS
 
 	BackendConfHDFS struct {
 		Addresses           []string `json:"addresses"`

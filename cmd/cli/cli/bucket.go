@@ -178,14 +178,12 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 	// very obvious (albeit documented); thus, for the sake of usability making
 	// an exception - extending ais queries to include remote ais
 
-	if qbck.Provider == apc.AIS || qbck.Provider == "" {
-		if !qbck.IsRemoteAIS() {
-			if _, err := api.GetRemoteAIS(apiBP); err == nil {
-				qrais := qbck
-				qrais.Ns = cmn.NsAnyRemote
-				if brais, err := api.ListBuckets(apiBP, qrais, fltPresence); err == nil {
-					bcks = append(bcks, brais...)
-				}
+	if !qbck.IsRemoteAIS() && (qbck.Provider == apc.AIS || qbck.Provider == "") {
+		if _, err := api.GetRemoteAIS(apiBP); err == nil {
+			qrais := qbck
+			qrais.Ns = cmn.NsAnyRemote
+			if brais, err := api.ListBuckets(apiBP, qrais, fltPresence); err == nil && len(brais) > 0 {
+				bcks = append(bcks, brais...)
 			}
 		}
 	}
@@ -290,7 +288,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 	}
 	p := apc.DisplayProvider(qbck.Provider)
 	if qbck.IsRemoteAIS() {
-		p = "Remote " + p
+		p = qbck.DisplayProvider()
 	}
 	foot := fmt.Sprintf("Total: [%s bucket%s: %d%s] ========", p, cos.Plural(footer.nb), footer.nb, s)
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
@@ -344,7 +342,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	}
 	p := apc.DisplayProvider(qbck.Provider)
 	if qbck.IsRemoteAIS() {
-		p = "Remote " + p // TODO -- FIXME: use qbck.DisplayProvider here and elsewhere
+		p = qbck.DisplayProvider()
 	}
 	foot := fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
 		p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj,
@@ -535,9 +533,31 @@ func showBucketProps(c *cli.Context) (err error) {
 	if p, err = headBucket(bck, true /* don't add */); err != nil {
 		return
 	}
+
+	if bck.IsRemoteAIS() {
+		if remClusters, err := api.GetRemoteAIS(apiBP); err == nil && remClusters != nil {
+			for uuid, remAis := range remClusters {
+				if remAis.Alias != bck.Ns.UUID && uuid != bck.Ns.UUID {
+					continue
+				}
+				altbck := bck
+				if remAis.Alias == bck.Ns.UUID {
+					altbck.Ns.UUID = uuid
+				} else {
+					altbck.Ns.UUID = remAis.Alias
+				}
+				fmt.Fprintf(c.App.Writer, "remote cluster alias:\t\t%s\n", fcyan(remAis.Alias))
+				fmt.Fprintf(c.App.Writer, "remote cluster UUID:\t\t%s\n", fcyan(uuid))
+				fmt.Fprintf(c.App.Writer, "alternative bucket name:\t%s\n\n", fcyan(altbck.String()))
+				break
+			}
+		}
+	}
+
 	if flagIsSet(c, jsonFlag) {
 		return tmpls.Print(p, c.App.Writer, "", nil, true)
 	}
+
 	defProps, err := defaultBckProps(bck)
 	if err != nil {
 		return err

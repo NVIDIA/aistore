@@ -5,7 +5,7 @@
 package ais
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"net/url"
 	"sync"
@@ -193,8 +193,8 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 		return
 	}
 
-	// 3. go ahead to create as bucket OR
-	// lookup and then maybe add remote bucket to BMD - on the fly
+	// 3. create ais bucket _or_ lookup and, if confirmed, add remote bucket to the BMD
+	// (see also: "on the fly")
 	bck, err = args.try()
 	return
 }
@@ -245,54 +245,56 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 		bck = backend
 	}
 	if bck.IsAIS() {
-		glog.Warningf("%s: %q doesn't exist, proceeding to create", args.p.si, args.bck)
+		glog.Warningf("%s: %q doesn't exist, proceeding to create", args.p, args.bck)
 		goto creadd
 	}
 
 	// lookup remote
-	if bck.IsRemote() {
-		action = apc.ActAddRemoteBck
-		if remoteHdr, errCode, err = args.lookup(bck); err != nil {
-			bck = nil
-			return
-		}
+	debug.Assert(bck.IsRemote())
+	action = apc.ActAddRemoteBck
+	if remoteHdr, errCode, err = args.lookup(bck); err != nil {
+		bck = nil
+		return
 	}
-	// validate ht://
+
+	// orig-url for the ht:// bucket
 	if bck.IsHTTP() {
 		if args.origURLBck != "" {
 			remoteHdr.Set(apc.HdrOrigURLBck, args.origURLBck)
 		} else {
-			origURL := args.getOrigURL()
+			var (
+				hbo     *cmn.HTTPBckObj
+				origURL = args.getOrigURL()
+			)
 			if origURL == "" {
-				err = fmt.Errorf("failed to initialize bucket %q: missing HTTP URL", args.bck)
-				errCode = http.StatusBadRequest
+				err = cmn.NewErrFailedTo(args.p, "initialize", args.bck, errors.New("missing HTTP URL"))
 				return
 			}
-			hbo, err := cmn.NewHTTPObjPath(origURL)
-			if err != nil {
-				errCode = http.StatusBadRequest
-				return bck, errCode, err
+			if hbo, err = cmn.NewHTTPObjPath(origURL); err != nil {
+				return
 			}
 			remoteHdr.Set(apc.HdrOrigURLBck, hbo.OrigURLBck)
 		}
-		debug.Assert(remoteHdr.Get(apc.HdrOrigURLBck) != "")
 	}
-	// return ok if explicitly asked not to add
+
+	// when explicitly asked _not_ to
 	args.exists = true
 	if args.dontAddRemote {
 		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
 		return
 	}
 
-creadd: // add/create
+	// add/create
+creadd:
 	if err = args.p.createBucket(&apc.ActionMsg{Action: action}, bck, remoteHdr); err != nil {
 		errCode = crerrStatus(err)
 		return
 	}
-	// init the bucket after having successfully added it to the BMD
+	// finally, initialize the newly added/created
 	if err = bck.Init(args.p.owner.bmd); err != nil {
+		debug.AssertNoErr(err)
 		errCode = http.StatusInternalServerError
-		err = cmn.NewErrFailedTo(args.p, "add-remote", bck, err, errCode)
+		err = cmn.NewErrFailedTo(args.p, "post create-bucket init", bck, err, errCode)
 	}
 	bck = args.bck
 	return

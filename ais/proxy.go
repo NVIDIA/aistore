@@ -1831,19 +1831,16 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 		return err
 	}
 
-	aisConf := cmn.BackendConfAIS{}
-	cos.MustMorphMarshal(v, &aisConf)
-	urls, exists := aisConf[remoteUUID]
+	aisBackendConf := cmn.BackendConfAIS{}
+	cos.MustMorphMarshal(v, &aisBackendConf)
+	urls, exists := aisBackendConf[remoteUUID]
 	if !exists {
-		// TODO: this is a temp workaround - proxy should store UUIDs
-		// and aliases, not just aliases (see #1136)
-		aisInfo, err := p.getRemoteAISInfo()
-		var remoteAlias *cmn.RemoteAISInfo
-		if err == nil {
-			remoteAlias = (*aisInfo)[remoteUUID]
-		}
-		if remoteAlias != nil {
-			urls, exists = aisConf[remoteAlias.Alias]
+		// one extra call to resolve remote UUID <=> alias
+		// TODO -- FIXME: cache UUID and alias pairs (#1136)
+		if remClusters, err := p.getRemoteAISInfo(); err == nil {
+			if remAis := (*remClusters)[remoteUUID]; remAis != nil {
+				urls, exists = aisBackendConf[remAis.Alias]
+			}
 		}
 	}
 	if !exists {
@@ -1852,7 +1849,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 		return err
 	}
 
-	cos.Assert(len(urls) > 0)
+	debug.Assert(len(urls) > 0)
 	u, err := url.Parse(urls[0])
 	if err != nil {
 		p.writeErr(w, r, err)
