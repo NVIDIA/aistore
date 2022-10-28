@@ -386,7 +386,7 @@ func makePairs(args []string) (nvs cos.StrKVs, err error) {
 	return
 }
 
-func parseAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
+func parseRemAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
 	var parts []string
 	if c.NArg() == 0 {
 		err = missingArgumentsError(c, aliasURLPairArgument)
@@ -403,7 +403,9 @@ func parseAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
 	}
 	alias, remAisURL = parts[0], parts[1]
 ret:
-	_, err = url.ParseRequestURI(remAisURL)
+	if _, err = url.ParseRequestURI(remAisURL); err == nil {
+		err = cmn.ValidateRemAlias(alias)
+	}
 	return
 }
 

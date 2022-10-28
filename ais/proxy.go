@@ -1029,15 +1029,18 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 		p.writeErr(w, r, err)
 		return
 	}
+
 	if bck.IsRemoteAIS() {
-		// forward to remote AIS as is, with distinct exception
 		switch msg.Action {
-		case apc.ActInvalListCache:
-		default:
+		case apc.ActInvalListCache: // drop
+		default: // forward to remote AIS as is
 			p.reverseReqRemote(w, r, msg, bck.Bucket())
 			return
 		}
 	}
+
+	// POST /bucket operations (this cluster)
+
 	if msg.Action == apc.ActCreateBck {
 		p.hpostCreateBucket(w, r, query, msg, bck)
 		return
@@ -1821,7 +1824,7 @@ func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID st
 
 func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck *cmn.Bck) (err error) {
 	var (
-		remoteUUID    = bck.Ns.UUID
+		aliasOrUUID   = bck.Ns.UUID
 		query         = r.URL.Query()
 		v, configured = cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
 	)
@@ -1833,18 +1836,18 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 
 	aisBackendConf := cmn.BackendConfAIS{}
 	cos.MustMorphMarshal(v, &aisBackendConf)
-	urls, exists := aisBackendConf[remoteUUID]
+	urls, exists := aisBackendConf[aliasOrUUID]
 	if !exists {
-		// one extra call to resolve remote UUID <=> alias
-		// TODO -- FIXME: cache UUID and alias pairs (#1136)
-		if remClusters, err := p.getRemoteAISInfo(); err == nil {
-			if remAis := (*remClusters)[remoteUUID]; remAis != nil {
+		// call any target to resolve remote uuid <=> alias
+		// TODO: cache (alias, uuid) pairs - all proxies
+		if remClusters, err := p.getBackendInfoAIS(); err == nil {
+			if remAis := (*remClusters)[aliasOrUUID]; remAis != nil {
 				urls, exists = aisBackendConf[remAis.Alias]
 			}
 		}
 	}
 	if !exists {
-		err = cmn.NewErrNotFound("%s: remote UUID/alias %q", p.si, remoteUUID)
+		err = cmn.NewErrNotFound("%s: remote UUID/alias %q", p.si, aliasOrUUID)
 		p.writeErr(w, r, err)
 		return err
 	}
@@ -1865,7 +1868,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	query = cmn.DelBckFromQuery(query)
 	query = bck.AddToQuery(query)
 	r.URL.RawQuery = query.Encode()
-	p.reverseRequest(w, r, remoteUUID, u)
+	p.reverseRequest(w, r, aliasOrUUID, u)
 	return nil
 }
 

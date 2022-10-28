@@ -277,29 +277,28 @@ func GetBMD(bp BaseParams) (*cluster.BMD, error) {
 }
 
 func AttachRemoteAIS(bp BaseParams, alias, u string) error {
-	q := make(url.Values, 4)
-	q.Set(apc.QparamWhat, apc.GetWhatRemoteAIS)
-	q.Set(alias, u)
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathCluAttach.S
-		reqParams.Query = q
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
+		reqParams.Header = http.Header{
+			apc.HdrRemAisAlias: []string{alias},
+			apc.HdrRemAisURL:   []string{u},
+		}
 	}
 	return reqParams.DoHTTPRequest()
 }
 
 func DetachRemoteAIS(bp BaseParams, alias string) error {
-	q := make(url.Values, 2)
-	q.Set(apc.QparamWhat, apc.GetWhatRemoteAIS)
-	q.Set(alias, "")
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathCluDetach.S
-		reqParams.Query = q
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
+		reqParams.Header = http.Header{apc.HdrRemAisAlias: []string{alias}}
 	}
 	err := reqParams.DoHTTPRequest()
 	FreeRp(reqParams)

@@ -70,12 +70,12 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case apc.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
 	case apc.GetWhatRemoteAIS:
-		remoteAIS, err := p.getRemoteAISInfo()
+		remClusters, err := p.getBackendInfoAIS()
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		p.writeJSON(w, r, remoteAIS, what)
+		p.writeJSON(w, r, remClusters, what)
 	case apc.GetWhatTargetIPs:
 		// Return comma-separated IPs of the targets.
 		// It can be used to easily fill the `--noproxy` parameter in cURL.
@@ -164,7 +164,7 @@ func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what
 	_ = p.writeJSON(w, r, out, what)
 }
 
-func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
+func (p *proxy) getBackendInfoAIS() (*cmn.BackendInfoAIS, error) {
 	smap := p.owner.smap.get()
 	si, errT := smap.GetRandTarget()
 	if errT != nil {
@@ -1158,10 +1158,11 @@ func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, actio
 		}
 	}
 	ctx := &configModifier{
-		pre:   p.attachDetachRemoteAIS,
+		pre:   p.attachDetachRemAIS,
 		final: p._syncConfFinal,
 		msg:   &apc.ActionMsg{Action: action},
 		query: query,
+		hdr:   r.Header,
 		wait:  true,
 	}
 	if _, err := p.owner.config.modify(ctx); err != nil {
@@ -1169,68 +1170,49 @@ func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, actio
 	}
 }
 
-func (p *proxy) attachDetachRemoteAIS(ctx *configModifier, config *globalConfig) (changed bool, err error) {
+func (p *proxy) attachDetachRemAIS(ctx *configModifier, config *globalConfig) (bool, error) {
 	var (
 		aisConf cmn.BackendConfAIS
-		errMsg  string
 		action  = ctx.msg.Action
-		query   = ctx.query
 		v, ok   = config.Backend.ProviderConf(apc.AIS)
 	)
 	if !ok || v == nil {
 		if action == apc.ActDetachRemote {
-			err = fmt.Errorf("%s: remote cluster config is empty", p.si)
-			return
+			return false, fmt.Errorf("%s: remote cluster config is empty", p.si)
 		}
 		aisConf = make(cmn.BackendConfAIS)
 	} else {
 		aisConf = cmn.BackendConfAIS{}
 		cos.MustMorphMarshal(v, &aisConf)
 	}
-	// detach
+
+	alias := ctx.hdr.Get(apc.HdrRemAisAlias)
 	if action == apc.ActDetachRemote {
-		for alias := range query {
-			if alias == apc.QparamWhat {
-				continue
-			}
-			if _, ok := aisConf[alias]; ok {
-				changed = true
-				delete(aisConf, alias)
-			}
+		if _, ok := aisConf[alias]; !ok {
+			return false, cmn.NewErrFailedTo(p, action, "remote cluster", errors.New("not found"), http.StatusNotFound)
 		}
-		if !changed {
-			errMsg = "remote cluster does not exist"
+		delete(aisConf, alias)
+	} else {
+		debug.Assert(action == apc.ActAttachRemote)
+		u := ctx.hdr.Get(apc.HdrRemAisURL)
+		detail := fmt.Sprintf("remote cluster [%s => %v]", alias, u)
+		parsed, err := url.ParseRequestURI(u)
+		if err != nil {
+			return false, cmn.NewErrFailedTo(p, action, detail, err)
 		}
-		goto rret
-	}
-	// attach
-	for alias, urls := range query {
-		if alias == apc.QparamWhat {
-			continue
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return false, cmn.NewErrFailedTo(p, action, detail, errors.New("invalid URL scheme"))
 		}
-		for _, u := range urls {
-			if _, err := url.ParseRequestURI(u); err != nil {
-				return false, fmt.Errorf("%s: cannot attach remote cluster: %v", p, err)
-			}
-			changed = true
+		glog.Infof("%s: %s %s", p, action, detail)
+		if confURLs, ok := aisConf[alias]; ok {
+			aisConf[alias] = append(confURLs, u)
+		} else {
+			aisConf[alias] = []string{u}
 		}
-		if changed {
-			if confURLs, ok := aisConf[alias]; ok {
-				aisConf[alias] = append(confURLs, urls...)
-			} else {
-				aisConf[alias] = urls
-			}
-		}
-	}
-	if !changed {
-		errMsg = "empty URL list"
-	}
-rret:
-	if errMsg != "" {
-		return false, fmt.Errorf("%s: %s remote cluster: %s", p, action, errMsg)
 	}
 	config.Backend.ProviderConf(apc.AIS, aisConf)
-	return
+
+	return true, nil
 }
 
 // Callback: remove the node from the cluster if rebalance finished successfully

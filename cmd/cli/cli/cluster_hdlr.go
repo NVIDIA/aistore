@@ -175,12 +175,9 @@ var (
 )
 
 func attachRemoteAISHandler(c *cli.Context) (err error) {
-	alias, url, err := parseAliasURL(c)
+	alias, url, err := parseRemAliasURL(c)
 	if err != nil {
 		return
-	}
-	if alias == apc.QparamWhat {
-		return fmt.Errorf("cannot use %q as an alias", apc.QparamWhat)
 	}
 	if err = api.AttachRemoteAIS(apiBP, alias, url); err != nil {
 		return

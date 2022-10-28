@@ -325,8 +325,8 @@ func (args *bckInitArgs) lookup(bck *cluster.Bck) (hdr http.Header, code int, er
 			return
 		}
 		// NOTE: assuming OK
-		glog.Warningf("proceeding to add cloud bucket %s to the BMD after having: %v(%d)", bck, err, code)
-		glog.Warningf("%s properties: using all cluster defaults", bck)
+		glog.Warningf("Proceeding to add remote bucket %s to the BMD after getting err: %v(%d)", bck, err, code)
+		glog.Warningf("Using all cluster defaults for %s property values", bck)
 		hdr = make(http.Header, 2)
 		hdr.Set(apc.HdrBackendProvider, bck.Provider)
 		hdr.Set(apc.HdrBucketVerEnabled, "false")

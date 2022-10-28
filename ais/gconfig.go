@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -43,6 +44,7 @@ type (
 		toUpdate  *cmn.ConfigToUpdate
 		msg       *apc.ActionMsg
 		query     url.Values
+		hdr       http.Header
 		wait      bool
 	}
 )

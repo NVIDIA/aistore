@@ -73,10 +73,9 @@ func (m *AISBackendProvider) Apply(v any, action string) error {
 	var (
 		cfg         = cmn.GCO.Get()
 		clusterConf = cmn.BackendConfAIS{}
-		err         = cos.MorphMarshal(v, &clusterConf)
 	)
-	if err != nil {
-		return fmt.Errorf("invalid ais cloud config (%+v, %T), err: %v", v, v, err)
+	if err := cos.MorphMarshal(v, &clusterConf); err != nil {
+		return fmt.Errorf("invalid ais backend config (%+v, %T), err: %v", v, v, err)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -92,6 +91,13 @@ func (m *AISBackendProvider) Apply(v any, action string) error {
 			}
 		}
 		return nil
+	}
+
+	// validate aliases
+	for alias := range clusterConf {
+		if err := cmn.ValidateRemAlias(alias); err != nil {
+			return err
+		}
 	}
 
 	// init and attach
@@ -124,44 +130,41 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.Ba
 		})
 	)
 	cia = make(cmn.BackendInfoAIS, len(m.remote))
+
 	m.mu.RLock()
-	defer m.mu.RUnlock()
 	for uuid, remAis := range m.remote {
 		var (
 			aliases []string
-			info    = &cmn.RemoteAIS{}
+			out     = &cmn.RemoteAIS{} // remAis (type) external representation
+			client  = httpClient
 		)
-		client := httpClient
 		if cos.IsHTTPS(remAis.url) {
 			client = httpsClient
 		}
-		info.URL = remAis.url
+		out.URL = remAis.url
 		for a, u := range m.alias {
 			if uuid == u {
 				aliases = append(aliases, a)
 			}
 		}
-		if len(aliases) == 1 {
-			info.Alias = aliases[0]
-		} else if len(aliases) > 1 {
-			info.Alias = fmt.Sprintf("%v", aliases)
-		}
+		out.Alias = strings.Join(aliases, cmn.RemAisAliasSeparator)
+
 		// online?
 		if smap, err := api.GetClusterMap(api.BaseParams{Client: client, URL: remAis.url, UA: ua}); err == nil {
 			if smap.UUID != uuid {
-				glog.Errorf("%s: unexpected (or changed) uuid %q", remAis, smap.UUID)
+				glog.Errorf("%s: UUID has changed %q", remAis, smap.UUID)
 				continue
 			}
-			info.Online = true
+			out.Online = true
 			if smap.Version < remAis.smap.Version {
 				glog.Errorf("%s: detected older Smap %s - proceeding to override anyway", remAis, smap)
 			}
 			remAis.smap = smap
 		}
-		info.Primary = remAis.smap.Primary.String()
-		info.Smap = remAis.smap.Version
-		info.Targets = int32(remAis.smap.CountActiveTargets())
-		cia[uuid] = info
+		out.Primary = remAis.smap.Primary.String()
+		out.Smap = remAis.smap.Version
+		out.Targets = int32(remAis.smap.CountActiveTargets())
+		cia[uuid] = out
 	}
 	// defunct
 	for alias, clusterURLs := range clusterConf {
@@ -173,6 +176,8 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.Ba
 			}
 		}
 	}
+	m.mu.RUnlock()
+
 	return
 }
 
@@ -367,7 +372,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	// an extra
 	bckProps[apc.HdrBackendProvider] = apc.AIS
 	bckProps[apc.HdrRemAisUUID] = remAis.uuid
-	bckProps[apc.HdrRemAisAlias] = strings.Join(aliases, ",") // TODO -- FIXME
+	bckProps[apc.HdrRemAisAlias] = strings.Join(aliases, cmn.RemAisAliasSeparator)
 	bckProps[apc.HdrRemAisURL] = remAis.url
 
 	return

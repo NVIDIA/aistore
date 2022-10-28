@@ -29,6 +29,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const RemAisAliasSeparator = ","
+
 type (
 	Validator interface {
 		Validate() error
@@ -146,7 +148,7 @@ type (
 	}
 	RemoteAIS struct {
 		URL     string `json:"url"`
-		Alias   string `json:"alias"`
+		Alias   string `json:"alias"` // multiple as strings.Join(RemAisAliasSeparator)
 		Primary string `json:"primary"`
 		Smap    int64  `json:"smap"`
 		Targets int32  `json:"targets"`
@@ -1806,6 +1808,16 @@ func loadOverrideConfig(configDir string) (toUpdate *ConfigToUpdate, err error) 
 	_, err = jsp.LoadMeta(path.Join(configDir, fname.OverrideConfig), toUpdate)
 	if os.IsNotExist(err) {
 		err = nil
+	}
+	return
+}
+
+func ValidateRemAlias(alias string) (err error) {
+	if alias == apc.QparamWhat {
+		return fmt.Errorf("cannot use %q as an alias", apc.QparamWhat)
+	}
+	if !cos.IsAlphaPlus(alias, false /*. allowed*/) {
+		err = fmt.Errorf("alias %q is invalid: use only letters, numbers, dashes (-), and underscores (_)", alias)
 	}
 	return
 }
