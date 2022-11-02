@@ -2042,7 +2042,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination again - already in progress
-	tlog.Logf("try rename %s => %s\n", srcBck, dstBck1)
+	tlog.Logf("try renaming %s => %s\n", srcBck, dstBck1)
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("multiple rename operations on same bucket should fail")
@@ -2061,7 +2061,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltPresent)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.AIS}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	if tools.BucketsContain(bcks, cmn.QueryBcks(srcBck)) {
