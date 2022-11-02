@@ -75,16 +75,10 @@ func freeInitBckArgs(a *bckInitArgs) {
 //
 
 // args.init initializes bucket and checks access permissions.
-func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, err error) {
-	if args.bck == nil {
-		args.bck, err = newBckFromQ(bckName, args.query, args.dpq)
-		if err != nil {
-			errCode = http.StatusBadRequest
-			return
-		}
-	}
+func (args *bckInitArgs) init() (errCode int, err error) {
+	debug.Assert(args.bck != nil)
 
-	bck = args.bck
+	bck := args.bck
 	if err = args._checkRemoteBckPermissions(); err != nil {
 		errCode = http.StatusBadRequest
 		return
@@ -102,7 +96,6 @@ func (args *bckInitArgs) init(bckName string) (bck *cluster.Bck, errCode int, er
 		return
 	}
 
-	args.bck = bck
 	args.isPresent = true
 
 	// if permissions are not explicitly specified check the default (msg.Action => permissions)
@@ -157,11 +150,12 @@ func (args *bckInitArgs) access(bck *cluster.Bck) (errCode int, err error) {
 
 // initAndTry initializes bucket and then _tries_ to add it if it doesn't exist.
 // NOTE: on error the method calls `p.writeErr` - make sure _not_ to do the same in the caller
-func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error) {
+func (args *bckInitArgs) initAndTry() (bck *cluster.Bck, err error) {
 	var errCode int
+
 	// 1. init bucket
-	bck, errCode, err = args.init(bucket)
-	if err == nil {
+	bck = args.bck
+	if errCode, err = args.init(); err == nil {
 		return
 	}
 	if errCode != http.StatusNotFound {

@@ -31,7 +31,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
 		bckArgs.dontHeadRemote = msg.BckPresent
-		if _, err := bckArgs.initAndTry(qbck.Name); err != nil {
+		if _, err := bckArgs.initAndTry(); err != nil {
 			return
 		}
 	}
