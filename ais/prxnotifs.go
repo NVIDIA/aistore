@@ -85,76 +85,6 @@ var (
 	_ json.Unmarshaler = (*notifListenMsg)(nil)
 )
 
-///////////////
-// listeners //
-///////////////
-
-func newListeners() *listeners { return &listeners{m: make(map[string]nl.NotifListener, 64)} }
-func (l *listeners) len() int  { return len(l.m) }
-
-func (l *listeners) entry(uuid string) (entry nl.NotifListener, exists bool) {
-	l.RLock()
-	entry, exists = l.m[uuid]
-	l.RUnlock()
-	return
-}
-
-func (l *listeners) add(nl nl.NotifListener, locked bool) (exists bool) {
-	if !locked {
-		l.Lock()
-	}
-	if _, exists = l.m[nl.UUID()]; !exists {
-		l.m[nl.UUID()] = nl
-	}
-	if !locked {
-		l.Unlock()
-	}
-	return
-}
-
-func (l *listeners) del(nl nl.NotifListener, locked bool) (ok bool) {
-	if !locked {
-		l.Lock()
-	} else {
-		debug.AssertRWMutexLocked(&l.RWMutex)
-	}
-	if _, ok = l.m[nl.UUID()]; ok {
-		delete(l.m, nl.UUID())
-	}
-	if !locked {
-		l.Unlock()
-	}
-	return
-}
-
-// PRECONDITION: `l` should be under lock.
-func (l *listeners) exists(uuid string) (ok bool) {
-	_, ok = l.m[uuid]
-	return
-}
-
-// returns a listener that matches the filter condition.
-// for finished xaction listeners, returns latest listener (i.e. the one that finished most recently)
-func (l *listeners) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
-	l.RLock()
-	defer l.RUnlock()
-
-	var ftime int64
-	for _, listener := range l.m {
-		if listener.EndTime() < ftime {
-			continue
-		}
-		if flt.match(listener) {
-			ftime = listener.EndTime()
-			nl, exists = listener, true
-		}
-		if exists && !listener.Finished() {
-			return
-		}
-	}
-	return
-}
-
 ////////////
 // notifs //
 ////////////
@@ -172,69 +102,7 @@ func (n *notifs) init(p *proxy) {
 	n.p.Sowner().Listeners().Reg(n)
 }
 
-func (n *notifs) String() string {
-	l, f := n.nls.len(), n.fin.len() // not r-locking
-	return fmt.Sprintf("%s (nls=%d, fin=%d)", notifsName, l, f)
-}
-
-// start listening
-func (n *notifs) add(nl nl.NotifListener) (err error) {
-	debug.Assert(cos.IsValidUUID(nl.UUID()) || xact.IsValidRebID(nl.UUID()))
-	if nl.ActiveCount() == 0 {
-		return fmt.Errorf("cannot add %q with no active notifiers", nl)
-	}
-	if exists := n.nls.add(nl, false /*locked*/); exists {
-		return
-	}
-	nl.SetAddedTime()
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infoln("add " + nl.String())
-	}
-	return
-}
-
-func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
-	ok = n.nls.del(nl, locked /*locked*/)
-	if ok && bool(glog.FastV(4, glog.SmoduleAIS)) {
-		glog.Infoln("del " + nl.String())
-	}
-	return
-}
-
-func (n *notifs) entry(uuid string) (nl.NotifListener, bool) {
-	entry, exists := n.nls.entry(uuid)
-	if exists {
-		return entry, true
-	}
-	entry, exists = n.fin.entry(uuid)
-	if exists {
-		return entry, true
-	}
-	return nil, false
-}
-
-func (n *notifs) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
-	if flt.ID != "" {
-		return n.entry(flt.ID)
-	}
-	nl, exists = n.nls.find(flt)
-	if exists || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
-		return
-	}
-	nl, exists = n.fin.find(flt)
-	return
-}
-
-func (n *notifs) size() (size int) {
-	n.nls.RLock()
-	n.fin.RLock()
-	size = n.nls.len() + n.fin.len()
-	n.fin.RUnlock()
-	n.nls.RUnlock()
-	return
-}
-
-// verb /v1/notifs/[progress|finished]
+// verb /v1/notifs/[progress|finished] - apc.Progress and apc.Finished, respectively
 func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
 		notifMsg = &cluster.NotifMsg{}
@@ -252,6 +120,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+
 	if apiItems[0] != apc.Progress && apiItems[0] != apc.Finished {
 		n.p.writeErrf(w, r, "Invalid route /notifs/%s", apiItems[0])
 		return
@@ -341,6 +210,68 @@ func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []
 	if done {
 		n.done(nl)
 	}
+	return
+}
+
+func (n *notifs) String() string {
+	l, f := n.nls.len(), n.fin.len() // not r-locking
+	return fmt.Sprintf("%s (nls=%d, fin=%d)", notifsName, l, f)
+}
+
+// start listening
+func (n *notifs) add(nl nl.NotifListener) (err error) {
+	debug.Assert(cos.IsValidUUID(nl.UUID()) || xact.IsValidRebID(nl.UUID()))
+	if nl.ActiveCount() == 0 {
+		return fmt.Errorf("cannot add %q with no active notifiers", nl)
+	}
+	if exists := n.nls.add(nl, false /*locked*/); exists {
+		return
+	}
+	nl.SetAddedTime()
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infoln("add " + nl.String())
+	}
+	return
+}
+
+func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
+	ok = n.nls.del(nl, locked /*locked*/)
+	if ok && bool(glog.FastV(4, glog.SmoduleAIS)) {
+		glog.Infoln("del " + nl.String())
+	}
+	return
+}
+
+func (n *notifs) entry(uuid string) (nl.NotifListener, bool) {
+	entry, exists := n.nls.entry(uuid)
+	if exists {
+		return entry, true
+	}
+	entry, exists = n.fin.entry(uuid)
+	if exists {
+		return entry, true
+	}
+	return nil, false
+}
+
+func (n *notifs) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
+	if flt.ID != "" {
+		return n.entry(flt.ID)
+	}
+	nl, exists = n.nls.find(flt)
+	if exists || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
+		return
+	}
+	nl, exists = n.fin.find(flt)
+	return
+}
+
+func (n *notifs) size() (size int) {
+	n.nls.RLock()
+	n.fin.RLock()
+	size = n.nls.len() + n.fin.len()
+	n.fin.RUnlock()
+	n.nls.RUnlock()
 	return
 }
 
@@ -665,6 +596,80 @@ fin:
 	return
 }
 
+///////////////
+// listeners //
+///////////////
+
+func newListeners() *listeners { return &listeners{m: make(map[string]nl.NotifListener, 64)} }
+func (l *listeners) len() int  { return len(l.m) }
+
+func (l *listeners) entry(uuid string) (entry nl.NotifListener, exists bool) {
+	l.RLock()
+	entry, exists = l.m[uuid]
+	l.RUnlock()
+	return
+}
+
+func (l *listeners) add(nl nl.NotifListener, locked bool) (exists bool) {
+	if !locked {
+		l.Lock()
+	}
+	if _, exists = l.m[nl.UUID()]; !exists {
+		l.m[nl.UUID()] = nl
+	}
+	if !locked {
+		l.Unlock()
+	}
+	return
+}
+
+func (l *listeners) del(nl nl.NotifListener, locked bool) (ok bool) {
+	if !locked {
+		l.Lock()
+	} else {
+		debug.AssertRWMutexLocked(&l.RWMutex)
+	}
+	if _, ok = l.m[nl.UUID()]; ok {
+		delete(l.m, nl.UUID())
+	}
+	if !locked {
+		l.Unlock()
+	}
+	return
+}
+
+// PRECONDITION: `l` should be under lock.
+func (l *listeners) exists(uuid string) (ok bool) {
+	_, ok = l.m[uuid]
+	return
+}
+
+// returns a listener that matches the filter condition.
+// for finished xaction listeners, returns latest listener (i.e. the one that finished most recently)
+func (l *listeners) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
+	l.RLock()
+	defer l.RUnlock()
+
+	var ftime int64
+	for _, listener := range l.m {
+		if listener.EndTime() < ftime {
+			continue
+		}
+		if flt.match(listener) {
+			ftime = listener.EndTime()
+			nl, exists = listener, true
+		}
+		if exists && !listener.Finished() {
+			return
+		}
+	}
+	return
+}
+
+////////////////////
+// notifListenMsg //
+////////////////////
+
 func newNLMsg(nl nl.NotifListener) *notifListenMsg {
 	return &notifListenMsg{nl: nl}
 }
@@ -711,6 +716,8 @@ func (nf *nlFilter) match(nl nl.NotifListener) bool {
 	}
 	return false
 }
+
+// yet another call-retrying utility (TODO: unify)
 
 func withRetry(timeout time.Duration, cond func() bool) (ok bool) {
 	sleep := cos.ProbingFrequency(timeout)
