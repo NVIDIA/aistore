@@ -69,6 +69,15 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 	return "", errors.New("error generating bucket name: too many tries gave no result")
 }
 
+func BucketsContain(bcks cmn.Bcks, qbck cmn.QueryBcks) bool {
+	for _, bck := range bcks {
+		if qbck.Equal(&bck) || qbck.Contains(&bck) {
+			return true
+		}
+	}
+	return false
+}
+
 func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 	if bck.IsQuery() {
 		if tb == nil {

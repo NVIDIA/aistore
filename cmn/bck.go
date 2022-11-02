@@ -520,15 +520,6 @@ func (bcks Bcks) Select(query QueryBcks) (filtered Bcks) {
 	return filtered
 }
 
-func (bcks Bcks) Contains(query QueryBcks) bool {
-	for _, bck := range bcks {
-		if query.Equal(&bck) || query.Contains(&bck) {
-			return true
-		}
-	}
-	return false
-}
-
 func (bcks Bcks) Equal(other Bcks) bool {
 	if len(bcks) != len(other) {
 		return false

@@ -323,9 +323,9 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 
 	err = api.DestroyBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
-	names, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltExists)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltExists)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, !names.Contains(cmn.QueryBcks(bck)), "expected bucket to not be listed")
+	tassert.Fatalf(t, !tools.BucketsContain(bcks, cmn.QueryBcks(bck)), "expected bucket to not be listed")
 }
 
 func TestOverwriteLomCache(t *testing.T) {
@@ -1883,7 +1883,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
-	if !bcks.Contains(cmn.QueryBcks(dstBck)) {
+	if !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck)) {
 		t.Error("new bucket not found in buckets list")
 	}
 
@@ -1988,7 +1988,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.AIS}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
-	if !bcks.Contains(cmn.QueryBcks(m.bck)) || !bcks.Contains(cmn.QueryBcks(tmpBck)) {
+	if !tools.BucketsContain(bcks, cmn.QueryBcks(m.bck)) || !tools.BucketsContain(bcks, cmn.QueryBcks(tmpBck)) {
 		t.Errorf("one of the buckets (%s, %s) was not found in the list %+v", m.bck, tmpBck, bcks)
 	}
 
@@ -2064,13 +2064,13 @@ func TestRenameBucketTwice(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
-	if bcks.Contains(cmn.QueryBcks(srcBck)) {
+	if tools.BucketsContain(bcks, cmn.QueryBcks(srcBck)) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !bcks.Contains(cmn.QueryBcks(dstBck1)) {
+	if !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck1)) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if bcks.Contains(cmn.QueryBcks(dstBck2)) {
+	if tools.BucketsContain(bcks, cmn.QueryBcks(dstBck2)) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }
@@ -2511,9 +2511,9 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.CheckError(t, err)
 	tassert.Errorf(t, snaps.IsAborted(), "failed to abort copy-bucket (%s)", xactID)
 
-	bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
 	tassert.CheckError(t, err)
-	tassert.Errorf(t, !bck.Contains(cmn.QueryBcks(dstBck)), "should not contain destination bucket %s", dstBck)
+	tassert.Errorf(t, !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck)), "should not contain destination bucket %s", dstBck)
 }
 
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
@@ -2609,9 +2609,9 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.AIS}, apc.FltExists)
 	tassert.CheckFatal(t, err)
 
-	tassert.Fatalf(t, !bcks.Contains(cmn.QueryBcks(src)), "expected %s to not exist (be renamed from), got %v", src, bcks)
-	tassert.Fatalf(t, bcks.Contains(cmn.QueryBcks(dst1)), "expected %s to exist (be renamed to), got %v", dst1, bcks)
-	tassert.Fatalf(t, !bcks.Contains(cmn.QueryBcks(dst2)), "expected %s to not exist (got %v)", dst2, bcks)
+	tassert.Fatalf(t, !tools.BucketsContain(bcks, cmn.QueryBcks(src)), "expected %s to not exist (be renamed from), got %v", src, bcks)
+	tassert.Fatalf(t, tools.BucketsContain(bcks, cmn.QueryBcks(dst1)), "expected %s to exist (be renamed to), got %v", dst1, bcks)
+	tassert.Fatalf(t, !tools.BucketsContain(bcks, cmn.QueryBcks(dst2)), "expected %s to not exist (got %v)", dst2, bcks)
 
 	list, err := api.ListObjects(baseParams, dst1, nil, 0)
 	tassert.CheckFatal(t, err)
@@ -2692,13 +2692,13 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltExists)
 	tassert.CheckFatal(t, err)
 
-	if bcks.Contains(cmn.QueryBcks(srcBck)) {
+	if tools.BucketsContain(bcks, cmn.QueryBcks(srcBck)) {
 		t.Error("source bucket found in buckets list")
 	}
-	if !bcks.Contains(cmn.QueryBcks(dstBck1)) {
+	if !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck1)) {
 		t.Error("destination bucket not found in buckets list")
 	}
-	if bcks.Contains(cmn.QueryBcks(dstBck2)) {
+	if tools.BucketsContain(bcks, cmn.QueryBcks(dstBck2)) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }
