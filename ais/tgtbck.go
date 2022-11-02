@@ -64,8 +64,10 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		// list buckets if `qbck` is indeed a bucket-query
+		// list buckets if `qbck` indicates a bucket-type query
+		// (see api.ListBuckets and the line below)
 		if !qbck.IsBucket() {
+			qbck.Name = msg.Name
 			t.listBuckets(w, r, qbck)
 			return
 		}

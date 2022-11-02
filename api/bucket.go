@@ -153,13 +153,7 @@ func headerr2msg(bck cmn.Bck, err error) error {
 // `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... }
 // (ListBuckets must not be confused with `ListObjects()` and friends below).
 func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, error) {
-	var (
-		bcks = cmn.Bcks{}
-		path = apc.URLPathBuckets.S
-		body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActList})
-		q    = make(url.Values, 4)
-	)
-	debug.Assert(fltPresence >= apc.FltExists && fltPresence <= apc.FltExistsOutside)
+	q := make(url.Values, 4)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
 	q = qbck.AddToQuery(q)
 
@@ -167,11 +161,15 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = path
-		reqParams.Body = body
+		reqParams.Path = apc.URLPathBuckets.S
+		// NOTE: the name
+		// - qbck.IsBucket() to differentiate list-objects vs list-buckets operations
+		// - list-buckets own correctness (see QueryBuckets below)
+		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActList, Name: qbck.Name})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
+	bcks := cmn.Bcks{}
 	err := reqParams.DoHTTPReqResp(&bcks)
 	FreeRp(reqParams)
 	if err != nil {
@@ -180,14 +178,11 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 	return bcks, nil
 }
 
-// QueryBuckets queries cluster for buckets that satisfy the (`qbck`) criteria,
-// and returns true if the selection contains at least one bucket that does.
+// QueryBuckets is a little convenience helper. It returns true if the selection contains
+// at least one bucket that satisfies the (qbck) criteria.
 func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, error) {
 	bcks, err := ListBuckets(bp, qbck, fltPresence)
-	if err != nil {
-		return false, err
-	}
-	return bcks.Contains(qbck), nil
+	return len(bcks) > 0, err
 }
 
 // GetBucketSummary returns bucket summaries (i.e., capcity ulitization stats and

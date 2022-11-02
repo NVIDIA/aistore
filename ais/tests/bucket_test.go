@@ -1974,32 +1974,30 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	m.setNonDefaultBucketProps()
+	srcProps, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
+	tassert.CheckFatal(t, err)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, tmpBck, nil)
 
-	// Rename it
-	tlog.Logf("try rename %s => %s\n", m.bck, tmpBck)
-	_, err := api.RenameBucket(baseParams, m.bck, tmpBck)
-	if err == nil {
-		t.Fatal("expected error on renaming already existing bucket")
+	// rename
+	tlog.Logf("try rename %s => %s (that already exists)\n", m.bck, tmpBck)
+	if _, err := api.RenameBucket(baseParams, m.bck, tmpBck); err == nil {
+		t.Fatal("expected an error renaming already existing bucket")
 	}
 
-	// Check if the old bucket still appears in the list
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(m.bck), apc.FltPresent)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.AIS}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	if !bcks.Contains(cmn.QueryBcks(m.bck)) || !bcks.Contains(cmn.QueryBcks(tmpBck)) {
-		t.Error("one of the buckets was not found in buckets list")
+		t.Errorf("one of the buckets (%s, %s) was not found in the list %+v", m.bck, tmpBck, bcks)
 	}
-
-	srcProps, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
-	tassert.CheckFatal(t, err)
 
 	dstProps, err := api.HeadBucket(baseParams, tmpBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	if srcProps.Equal(dstProps) {
-		t.Fatalf("source and destination bucket props match, even though they should not: %v - %v", srcProps, dstProps)
+		t.Fatalf("source and destination props (checksums, in particular) are not expected to match: %v vs %v",
+			srcProps.Cksum, dstProps.Cksum)
 	}
 }
 

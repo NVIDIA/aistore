@@ -517,8 +517,10 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case apc.ActList:
-		// list buckets if `qbck` is indeed a bucket-query
+		// list buckets if `qbck` indicates a bucket-type query
+		// (see api.ListBuckets and the line below)
 		if !qbck.IsBucket() {
+			qbck.Name = msg.Name
 			if err := p.checkAccess(w, r, nil, apc.AceListBuckets); err == nil {
 				p.listBuckets(w, r, qbck, msg, dpq)
 			}
