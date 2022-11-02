@@ -86,7 +86,7 @@ func (b backends) init(t *target, starting bool) {
 
 	config := cmn.GCO.Get()
 	if aisConf, ok := config.Backend.ProviderConf(apc.AIS); ok {
-		if err := ais.Apply(aisConf, "init"); err != nil {
+		if err := ais.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t, err)
 		} else {
 			glog.Infof("%s: remote-ais %v", t, aisConf)

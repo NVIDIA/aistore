@@ -144,7 +144,7 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case apc.ActSetConfig: // set-config #2 - via action message
-		t.setDaemonConfigMsg(w, r, msg)
+		t.setDaemonConfigMsg(w, r, msg, r.URL.Query())
 	case apc.ActResetConfig:
 		if err := t.owner.config.resetDaemonConfig(); err != nil {
 			t.writeErr(w, r, err)
@@ -234,12 +234,15 @@ func (t *target) _setPrim(ctx *smapModifier, clone *smapX) (err error) {
 }
 
 func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	getWhat := r.URL.Query().Get(apc.QparamWhat)
-	httpdaeWhat := "httpdaeget-" + getWhat
+	var (
+		query       = r.URL.Query()
+		getWhat     = query.Get(apc.QparamWhat)
+		httpdaeWhat = "httpdaeget-" + getWhat
+	)
 	switch getWhat {
 	case apc.GetWhatConfig, apc.GetWhatSmap, apc.GetWhatBMD, apc.GetWhatSmapVote,
 		apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats:
-		t.htrun.httpdaeget(w, r)
+		t.htrun.httpdaeget(w, r, query)
 	case apc.GetWhatSysInfo:
 		tsysinfo := apc.TSysInfo{MemCPUInfo: sys.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
@@ -274,17 +277,26 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		fs.FillDiskStats(diskStats)
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case apc.GetWhatRemoteAIS:
-		conf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
+		var (
+			aisBackend = t.backend[apc.AIS].(*backend.AISBackendProvider)
+			refresh    = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
+		)
+		if !refresh {
+			t.writeJSON(w, r, aisBackend.GetInfoInternal(), httpdaeWhat)
+			return
+		}
+
+		anyConf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
 		if !ok {
 			t.writeJSON(w, r, cmn.BackendInfoAIS{}, httpdaeWhat)
 			return
 		}
-		clusterConf, ok := conf.(cmn.BackendConfAIS)
+		aisBackendConf, ok := anyConf.(cmn.BackendConfAIS)
 		debug.Assert(ok)
-		aisCloud := t.backend[apc.AIS].(*backend.AISBackendProvider)
-		t.writeJSON(w, r, aisCloud.GetInfo(clusterConf), httpdaeWhat)
+
+		t.writeJSON(w, r, aisBackend.GetInfo(aisBackendConf), httpdaeWhat)
 	default:
-		t.htrun.httpdaeget(w, r)
+		t.htrun.httpdaeget(w, r, query)
 	}
 }
 
@@ -853,39 +865,45 @@ func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD) {
 	}
 }
 
+// compare w/ p.receiveConfig
 func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	oldConfig := cmn.GCO.Get()
-	err = t.htrun.receiveConfig(newConfig, msg, payload, caller)
-	if err != nil {
+	if err = t._recvCfg(newConfig, msg, payload, caller); err != nil {
 		return
 	}
 
-	if !t.NodeStarted() { // starting up
-		debug.Assert(msg.Action != apc.ActAttachRemote && msg.Action != apc.ActDetachRemote)
-		return
-	}
-	if msg.Action == apc.ActAttachRemote || msg.Action == apc.ActDetachRemote {
-		// NOTE: apply the entire config: add new and _refresh_ existing
-		aisConf, ok := newConfig.Backend.ProviderConf(apc.AIS)
-		debug.Assert(ok)
-		aisCloud := t.backend[apc.AIS].(*backend.AISBackendProvider)
-		err = aisCloud.Apply(aisConf, msg.Action)
-		if err != nil {
-			glog.Errorf("%s: %v - proceeding anyway...", t, err)
+	if !t.NodeStarted() {
+		if msg.Action == apc.ActAttachRemAis || msg.Action == apc.ActDetachRemAis {
+			glog.Errorf("%s: cannot handle %s (%s => %s) - starting up...", t, msg, oldConfig, newConfig)
 		}
 		return
 	}
+
+	// specific remais update
+	if msg.Action == apc.ActAttachRemAis || msg.Action == apc.ActDetachRemAis {
+		return t.attachDetachRemAis(newConfig, msg)
+	}
+
 	if !newConfig.Backend.EqualRemAIS(&oldConfig.Backend) {
 		t.backend.init(t, false /*starting*/) // re-init from scratch
 		return
 	}
 	// NOTE: primary command-line flag `-override_backends` allows to update
 	// (via build tags - see AIS_BACKEND_PROVIDERS) remote backends at deployment time.
-	// See also: arlystart.go
+	// See also: earlystart.go
 	if !newConfig.Backend.EqualClouds(&oldConfig.Backend) {
 		t.backend.initExt(t, false /*starting*/)
 	}
 	return
+}
+
+// NOTE: apply the entire config: add new and update existing entries (remote clusters)
+func (t *target) attachDetachRemAis(newConfig *globalConfig, msg *aisMsg) (err error) {
+	aisConf, ok := newConfig.Backend.ProviderConf(apc.AIS)
+	debug.Assert(ok)
+
+	aisBackend := t.backend[apc.AIS].(*backend.AISBackendProvider)
+	return aisBackend.Apply(aisConf, msg.Action, &newConfig.ClusterConfig)
 }
 
 // POST /v1/metasync

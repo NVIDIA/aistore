@@ -220,9 +220,7 @@ func initRemoteCluster() {
 		if !clusterInfo.Online {
 			continue
 		}
-		// TODO: use actual UUID (for now it doesn't work correctly as
-		//  proxy may not have full information about the remote cluster)
-		RemoteCluster.UUID = clusterInfo.Alias
+		RemoteCluster.UUID = clusterInfo.Alias // TODO -- FIXME: soon
 		RemoteCluster.Alias = clusterInfo.Alias
 		RemoteCluster.URL = clusterInfo.URL
 		break

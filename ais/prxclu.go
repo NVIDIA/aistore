@@ -49,7 +49,10 @@ func (p *proxy) clusterHandler(w http.ResponseWriter, r *http.Request) {
 //
 
 func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
-	what := r.URL.Query().Get(apc.QparamWhat)
+	var (
+		query = r.URL.Query()
+		what  = query.Get(apc.QparamWhat)
+	)
 	// always allow as the flow involves intra-cluster redirect
 	// (ref 1377 for more context)
 	if what == apc.GetWhatXactStatus {
@@ -64,13 +67,13 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case apc.GetWhatStats:
 		p.queryClusterStats(w, r, what)
 	case apc.GetWhatSysInfo:
-		p.queryClusterSysinfo(w, r, what)
+		p.queryClusterSysinfo(w, r, what, query)
 	case apc.GetWhatQueryXactStats:
 		p.queryXaction(w, r, what)
 	case apc.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
 	case apc.GetWhatRemoteAIS:
-		remClusters, err := p.getBackendInfoAIS()
+		remClusters, err := p.getBackendInfoAIS(true /*refresh*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -103,7 +106,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		}
 		p.writeJSON(w, r, config, what)
 	case apc.GetWhatBMD, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatSmap:
-		p.htrun.httpdaeget(w, r)
+		p.htrun.httpdaeget(w, r, query)
 	default:
 		p.writeErrf(w, r, fmtUnknownQue, what)
 	}
@@ -145,17 +148,20 @@ func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string
 	p.writeJSON(w, r, targetResults, what)
 }
 
-func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string) {
-	config := cmn.GCO.Get()
-	timeout := config.Client.Timeout.D()
-	proxyResults, err := p.cluSysinfo(r, timeout, cluster.Proxies)
+func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	var (
+		config  = cmn.GCO.Get()
+		timeout = config.Client.Timeout.D()
+	)
+	proxyResults, err := p.cluSysinfo(r, timeout, cluster.Proxies, query)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 	out := &apc.ClusterSysInfoRaw{}
 	out.Proxy = proxyResults
-	targetResults, err := p.cluSysinfo(r, timeout, cluster.Targets)
+
+	targetResults, err := p.cluSysinfo(r, timeout, cluster.Targets, query)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -164,11 +170,15 @@ func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what
 	_ = p.writeJSON(w, r, out, what)
 }
 
-func (p *proxy) getBackendInfoAIS() (*cmn.BackendInfoAIS, error) {
+func (p *proxy) getBackendInfoAIS(refresh bool) (*cmn.BackendInfoAIS, error) {
 	smap := p.owner.smap.get()
 	si, errT := smap.GetRandTarget()
 	if errT != nil {
 		return nil, errT
+	}
+	q := url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
+	if refresh {
+		q[apc.QparamClusterInfo] = []string{"true"} // reconnect and get remote Smap
 	}
 	cargs := allocCargs()
 	{
@@ -176,21 +186,27 @@ func (p *proxy) getBackendInfoAIS() (*cmn.BackendInfoAIS, error) {
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Path:   apc.URLPathDae.S,
-			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}},
+			Query:  q,
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 		cargs.cresv = cresBA{} // -> cmn.BackendInfoAIS
 	}
-	res := p.call(cargs)
-	v, err := res.v.(*cmn.BackendInfoAIS), res.toErr()
+	var (
+		v   *cmn.BackendInfoAIS
+		res = p.call(cargs)
+		err = res.toErr()
+	)
+	if err == nil {
+		v = res.v.(*cmn.BackendInfoAIS)
+	}
 	freeCargs(cargs)
 	freeCR(res)
 	return v, err
 }
 
-func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cos.JSONRawMsgs, error) {
+func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int, query url.Values) (cos.JSONRawMsgs, error) {
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathDae.S, Query: r.URL.Query()}
+	args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathDae.S, Query: query}
 	args.timeout = timeout
 	args.to = to
 	results := p.bcastGroup(args)
@@ -1128,13 +1144,12 @@ func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action strin
 		} else {
 			p.setCluCfgPersistent(w, r, toUpdate, msg)
 		}
-	case apc.ActAttachRemote, apc.ActDetachRemote:
-		query := r.URL.Query()
-		p.attachDetachRemote(w, r, action, query)
+	case apc.ActAttachRemAis, apc.ActDetachRemAis:
+		p.attachDetachRemAis(w, r, action, r.URL.Query())
 	}
 }
 
-func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, action string, query url.Values) {
+func (p *proxy) attachDetachRemAis(w http.ResponseWriter, r *http.Request, action string, query url.Values) {
 	what := query.Get(apc.QparamWhat)
 	if what != apc.GetWhatRemoteAIS {
 		p.writeErr(w, r, fmt.Errorf(fmtUnknownQue, what))
@@ -1158,26 +1173,30 @@ func (p *proxy) attachDetachRemote(w http.ResponseWriter, r *http.Request, actio
 		}
 	}
 	ctx := &configModifier{
-		pre:   p.attachDetachRemAIS,
+		pre:   p._remaisConf,
 		final: p._syncConfFinal,
 		msg:   &apc.ActionMsg{Action: action},
 		query: query,
 		hdr:   r.Header,
 		wait:  true,
 	}
-	if _, err := p.owner.config.modify(ctx); err != nil {
+	newConfig, err := p.owner.config.modify(ctx)
+	if err != nil {
 		p.writeErr(w, r, err)
+	} else if newConfig != nil {
+		go p._remais(newConfig)
 	}
 }
 
-func (p *proxy) attachDetachRemAIS(ctx *configModifier, config *globalConfig) (bool, error) {
+// (executes as "pre" phase of modifying global config)
+func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, error) {
 	var (
 		aisConf cmn.BackendConfAIS
 		action  = ctx.msg.Action
 		v, ok   = config.Backend.ProviderConf(apc.AIS)
 	)
 	if !ok || v == nil {
-		if action == apc.ActDetachRemote {
+		if action == apc.ActDetachRemAis {
 			return false, fmt.Errorf("%s: remote cluster config is empty", p.si)
 		}
 		aisConf = make(cmn.BackendConfAIS)
@@ -1187,15 +1206,41 @@ func (p *proxy) attachDetachRemAIS(ctx *configModifier, config *globalConfig) (b
 	}
 
 	alias := ctx.hdr.Get(apc.HdrRemAisAlias)
-	if action == apc.ActDetachRemote {
+	if action == apc.ActDetachRemAis {
 		if _, ok := aisConf[alias]; !ok {
-			return false, cmn.NewErrFailedTo(p, action, "remote cluster", errors.New("not found"), http.StatusNotFound)
+			return false,
+				cmn.NewErrFailedTo(p, action, "remote cluster", errors.New("not found"), http.StatusNotFound)
 		}
 		delete(aisConf, alias)
 	} else {
-		debug.Assert(action == apc.ActAttachRemote)
+		debug.Assert(action == apc.ActAttachRemAis)
 		u := ctx.hdr.Get(apc.HdrRemAisURL)
-		detail := fmt.Sprintf("remote cluster [%s => %v]", alias, u)
+		detail := fmt.Sprintf("remote cluster [alias %s => %v]", alias, u)
+
+		// validation rules:
+		// rule #1: no two remote ais clusters can share the same alias (TODO: allow configuring multiple URLs per)
+		for a, urls := range aisConf {
+			if a != alias {
+				continue
+			}
+			errmsg := fmt.Sprintf("%s: %s is already attached", p.si, detail)
+			if !cos.StringInSlice(u, urls) {
+				return false, errors.New(errmsg)
+			}
+			glog.Warning(errmsg + " - proceeding anyway")
+		}
+		// rule #2: aliases and UUIDs are two distinct non-overlapping sets
+		p.remais.mu.RLock()
+		for a, uuid := range p.remais.aliases {
+			debug.Assert(a != alias) // above
+			if alias == uuid {
+				p.remais.mu.RUnlock()
+				return false, fmt.Errorf("%s: alias %q cannot be equal UUID of an already attached cluster [%s => %s]",
+					p.si, alias, a, uuid)
+			}
+		}
+		p.remais.mu.RUnlock()
+
 		parsed, err := url.ParseRequestURI(u)
 		if err != nil {
 			return false, cmn.NewErrFailedTo(p, action, detail, err)
@@ -1204,11 +1249,7 @@ func (p *proxy) attachDetachRemAIS(ctx *configModifier, config *globalConfig) (b
 			return false, cmn.NewErrFailedTo(p, action, detail, errors.New("invalid URL scheme"))
 		}
 		glog.Infof("%s: %s %s", p, action, detail)
-		if confURLs, ok := aisConf[alias]; ok {
-			aisConf[alias] = append(confURLs, u)
-		} else {
-			aisConf[alias] = []string{u}
-		}
+		aisConf[alias] = []string{u}
 	}
 	config.Backend.ProviderConf(apc.AIS, aisConf)
 

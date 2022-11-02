@@ -33,10 +33,11 @@ type (
 		bp   api.BaseParams
 	}
 	AISBackendProvider struct {
-		t      cluster.Target
-		mu     *sync.RWMutex
-		remote map[string]*remAis // by UUID:  1 to 1
-		alias  map[string]string  // by alias: many to 1 UUID
+		t             cluster.Target
+		remote        map[string]*remAis // by UUID:  1 to 1
+		alias         map[string]string  // by alias: many to 1 UUID
+		mu            sync.RWMutex
+		appliedCfgVer int64
 	}
 )
 
@@ -49,7 +50,6 @@ var _ cluster.BackendProvider = (*AISBackendProvider)(nil)
 func NewAIS(t cluster.Target) *AISBackendProvider {
 	return &AISBackendProvider{
 		t:      t,
-		mu:     &sync.RWMutex{},
 		remote: make(map[string]*remAis),
 		alias:  make(map[string]string),
 	}
@@ -69,19 +69,25 @@ func (r *remAis) String() string {
 //       in addition to the basic GetObj, et al.
 
 // apply new or updated (attach, detach) cmn.BackendConfAIS configuration
-func (m *AISBackendProvider) Apply(v any, action string) error {
-	var (
-		cfg         = cmn.GCO.Get()
-		clusterConf = cmn.BackendConfAIS{}
-	)
+func (m *AISBackendProvider) Apply(v any, action string, cfg *cmn.ClusterConfig) error {
+	clusterConf := cmn.BackendConfAIS{}
 	if err := cos.MorphMarshal(v, &clusterConf); err != nil {
 		return fmt.Errorf("invalid ais backend config (%+v, %T), err: %v", v, v, err)
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
+	err := m._apply(cfg, clusterConf, action)
+	if err == nil {
+		m.appliedCfgVer = cfg.Version
+	}
+	m.mu.Unlock()
+
+	return err
+}
+
+func (m *AISBackendProvider) _apply(cfg *cmn.ClusterConfig, clusterConf cmn.BackendConfAIS, action string) error {
 	// detach
-	if action == apc.ActDetachRemote {
+	if action == apc.ActDetachRemAis {
 		for alias, uuid := range m.alias {
 			if _, ok := clusterConf[alias]; !ok {
 				if _, ok = clusterConf[uuid]; !ok {
@@ -116,9 +122,35 @@ func (m *AISBackendProvider) Apply(v any, action string) error {
 	return nil
 }
 
+// TODO -- FIXME: include appliedCfgVer in the response
+
+// return (m.remote + m.alias) in-memory info wo/ connecting to remote cluster(s)
+// (compare with GetInfo() below)
+func (m *AISBackendProvider) GetInfoInternal() (cia cmn.BackendInfoAIS) {
+	m.mu.RLock()
+	cia = make(cmn.BackendInfoAIS, len(m.remote))
+	for uuid, remAis := range m.remote {
+		var (
+			aliases []string
+			out     = &cmn.RemoteAIS{UUID: uuid} // remAis (type) external representation
+		)
+		out.URL = remAis.url
+		for a, u := range m.alias {
+			if uuid == u {
+				aliases = append(aliases, a)
+			}
+		}
+		out.Alias = strings.Join(aliases, cmn.RemAisAliasSeparator)
+		cia[uuid] = out
+	}
+	defer m.mu.RUnlock()
+	return
+}
+
 // At the same time a cluster may have registered both types of remote AIS
-// clusters(HTTP and HTTPS). So, the method must use both kind of clients and
+// clusters(HTTP and HTTPS). So, the method must use both kinds of clients and
 // select the correct one at the moment it sends a request.
+// See also: GetInfoInternal()
 func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.BackendInfoAIS) {
 	var (
 		cfg         = cmn.GCO.Get()
@@ -129,13 +161,12 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.Ba
 			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})
 	)
-	cia = make(cmn.BackendInfoAIS, len(m.remote))
-
 	m.mu.RLock()
+	cia = make(cmn.BackendInfoAIS, len(m.remote))
 	for uuid, remAis := range m.remote {
 		var (
 			aliases []string
-			out     = &cmn.RemoteAIS{} // remAis (type) external representation
+			out     = &cmn.RemoteAIS{UUID: uuid} // remAis (type) external representation
 			client  = httpClient
 		)
 		if cos.IsHTTPS(remAis.url) {
@@ -185,7 +216,7 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.Ba
 // same time. So, the method must use both kind of clients and select the
 // correct one at the moment it sends a request. First successful request
 // saves the good client for the future usage.
-func (r *remAis) init(alias string, confURLs []string, cfg *cmn.Config) (offline bool, err error) {
+func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (offline bool, err error) {
 	var (
 		url           string
 		remSmap, smap *cluster.Smap
@@ -410,17 +441,21 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg
 
 func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if !qbck.Ns.IsAnyRemote() {
-		// user may have provided an alias
-		if remAis, errV := m.getRemAis(qbck.Ns.UUID); errV == nil {
-			qbck.Ns.UUID = remAis.uuid
-		}
-		bcks, err = m._listBcks(qbck.Ns.UUID, qbck)
+		// caller provided uuid (or alias)
+		bcks, err = m.blist(qbck.Ns.UUID, qbck)
 	} else {
-		for uuid := range m.remote {
-			remoteBcks, tryErr := m._listBcks(uuid, qbck)
+		// all attached
+		m.mu.RLock()
+		uuids := make([]string, 0, len(m.remote))
+		for u := range m.remote {
+			uuids = append(uuids, u)
+		}
+		m.mu.RUnlock()
+		for _, uuid := range uuids {
+			remoteBcks, errV := m.blist(uuid, qbck)
 			bcks = append(bcks, remoteBcks...)
-			if tryErr != nil {
-				err = tryErr
+			if errV != nil && err == nil {
+				err = errV
 			}
 		}
 	}
@@ -431,7 +466,7 @@ func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, err
 // TODO: remote AIS clusters provide native frontend API with additional capabilities
 // in part including apc.Flt* location specifier.
 // Here we hardcode its value to keep ListBuckets() consistent across backends.
-func (m *AISBackendProvider) _listBcks(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error) {
+func (m *AISBackendProvider) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error) {
 	var (
 		remAis      *remAis
 		remoteQuery = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: qbck.Ns.Name}}
@@ -445,7 +480,7 @@ func (m *AISBackendProvider) _listBcks(uuid string, qbck cmn.QueryBcks) (bcks cm
 		return nil, err
 	}
 	for i, bck := range bcks {
-		bck.Ns.UUID = uuid // if `uuid` is alias we need to preserve it
+		bck.Ns.UUID = uuid // if user-provided `uuid` is in fact an alias - keep it
 		bcks[i] = bck
 	}
 	return bcks, nil

@@ -77,6 +77,11 @@ type (
 			pool nodeRegPool
 			mtx  sync.RWMutex
 		}
+		remais struct {
+			aliases cos.StrKVs
+			backend cmn.BackendInfoAIS
+			mu      sync.RWMutex
+		}
 	}
 )
 
@@ -784,7 +789,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			// After successful removal of local copy of a bucket, remove the bucket from remote.
-			p.reverseReqRemote(w, r, msg, bck.Bucket())
+			p.reverseReqRemote(w, r, msg, bck.Bucket(), apireq.query)
 			return
 		}
 		if err := p.destroyBucket(msg, bck); err != nil {
@@ -1036,7 +1041,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 		switch msg.Action {
 		case apc.ActInvalListCache: // drop
 		default: // forward to remote AIS as is
-			p.reverseReqRemote(w, r, msg, bck.Bucket())
+			p.reverseReqRemote(w, r, msg, bck.Bucket(), query)
 			return
 		}
 	}
@@ -1824,32 +1829,34 @@ func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID st
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck *cmn.Bck) (err error) {
+func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck *cmn.Bck, query url.Values) (err error) {
 	var (
+		detail        string
+		backend       = cmn.BackendConfAIS{}
 		aliasOrUUID   = bck.Ns.UUID
-		query         = r.URL.Query()
 		v, configured = cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
 	)
-
 	if !configured {
 		p.writeErrMsg(w, r, "no remote ais clusters attached")
 		return err
 	}
 
-	aisBackendConf := cmn.BackendConfAIS{}
-	cos.MustMorphMarshal(v, &aisBackendConf)
-	urls, exists := aisBackendConf[aliasOrUUID]
+	cos.MustMorphMarshal(v, &backend)
+	urls, exists := backend[aliasOrUUID]
 	if !exists {
-		// call any target to resolve remote uuid <=> alias
-		// TODO: cache (alias, uuid) pairs - all proxies
-		if remClusters, err := p.getBackendInfoAIS(); err == nil {
-			if remAis := (*remClusters)[aliasOrUUID]; remAis != nil {
-				urls, exists = aisBackendConf[remAis.Alias]
+		p.remais.mu.RLock()
+		for alias, uuid := range p.remais.aliases {
+			if alias == aliasOrUUID || uuid == aliasOrUUID {
+				urls = []string{p.remais.backend[uuid].URL}
+				exists = true
+				break
 			}
+			detail += alias + "=>" + uuid + ";"
 		}
+		p.remais.mu.RUnlock()
 	}
 	if !exists {
-		err = cmn.NewErrNotFound("%s: remote UUID/alias %q", p.si, aliasOrUUID)
+		err = cmn.NewErrNotFound("%s: remote UUID/alias %q (%s, %s)", p.si, aliasOrUUID, backend, detail)
 		p.writeErr(w, r, err)
 		return err
 	}
@@ -2306,7 +2313,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		fallthrough // fallthrough
 	case apc.GetWhatConfig, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats:
-		p.htrun.httpdaeget(w, r)
+		p.htrun.httpdaeget(w, r, query)
 	case apc.GetWhatSysInfo:
 		p.writeJSON(w, r, sys.GetMemCPU(), what)
 	case apc.GetWhatSmap:
@@ -2347,7 +2354,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 		p.writeJSON(w, r, msg, what)
 	default:
-		p.htrun.httpdaeget(w, r)
+		p.htrun.httpdaeget(w, r, query)
 	}
 }
 
@@ -2373,7 +2380,7 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case apc.ActSetConfig: // set-config #2 - via action message
-		p.setDaemonConfigMsg(w, r, msg)
+		p.setDaemonConfigMsg(w, r, msg, query)
 	case apc.ActResetConfig:
 		if err := p.owner.config.resetDaemonConfig(); err != nil {
 			p.writeErr(w, r, err)
@@ -2797,9 +2804,64 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 	p.writeErrf(w, r, "%q provider doesn't support %q", apc.HTTP, r.Method)
 }
 
-/////////////////
-// METASYNC RX //
-/////////////////
+//
+// metasync Rx
+//
+
+// compare w/ t.receiveConfig
+func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
+	oldConfig := cmn.GCO.Get()
+	if err = p._recvCfg(newConfig, msg, payload, caller); err != nil {
+		return
+	}
+
+	if !p.NodeStarted() {
+		if msg.Action == apc.ActAttachRemAis || msg.Action == apc.ActDetachRemAis {
+			glog.Warningf("%s: cannot handle %s (%s => %s) - starting up...", p, msg, oldConfig, newConfig)
+		}
+		return
+	}
+
+	if msg.Action != apc.ActAttachRemAis && msg.Action != apc.ActDetachRemAis &&
+		newConfig.Backend.EqualRemAIS(&oldConfig.Backend) {
+		return // nothing to do
+	}
+
+	go p._remais(newConfig)
+	return
+}
+
+// calls a random target to get-backend-info-ais (aka getBackendInfoAIS) to refresh local cache
+func (p *proxy) _remais(newConfig *globalConfig) {
+	time.Sleep(newConfig.Timeout.MaxKeepalive.D()) // TODO -- FIXME: synchronize via `appliedCfgVer`
+
+	remClusters, errV := p.getBackendInfoAIS(false /*refresh*/)
+	if errV != nil {
+		glog.Error(cmn.NewErrFailedTo(p, "apply config (in re \"remote clusters\")", newConfig, errV))
+		return
+	}
+	debug.Assert(remClusters != nil)
+
+	// refresh under wlock
+	p.remais.mu.Lock()
+	p.remais.backend = *remClusters
+	if p.remais.aliases == nil {
+		p.remais.aliases = make(cos.StrKVs, len(p.remais.backend)+2)
+	} else {
+		for a := range p.remais.aliases {
+			delete(p.remais.aliases, a)
+		}
+	}
+	for _, remais := range p.remais.backend {
+		aliases := strings.Split(remais.Alias, cmn.RemAisAliasSeparator)
+		for _, a := range aliases {
+			p.remais.aliases[a] = remais.UUID
+		}
+	}
+	p.remais.mu.Unlock()
+
+	glog.Infof("%s: remais %v", p, p.remais.aliases)
+}
 
 func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
 	rmd := p.owner.rmd.get()

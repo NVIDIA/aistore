@@ -57,8 +57,8 @@ const (
 	ActPrefetchObjects = "prefetch-listrange"
 	ActArchive         = "archive" // see ArchiveMsg
 
-	ActAttachRemote = "attach"
-	ActDetachRemote = "detach"
+	ActAttachRemAis = "attach"
+	ActDetachRemAis = "detach"
 
 	// Node maintenance & cluster membership (see the corresponding URL path words below)
 	ActStartMaintenance   = "start-maintenance"     // put into maintenance state

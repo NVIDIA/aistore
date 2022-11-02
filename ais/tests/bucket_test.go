@@ -2135,6 +2135,11 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	xactID, err := api.RenameBucket(baseParams, bck, dstBck)
+	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
+		// can retry
+		xactID, err = api.RenameBucket(baseParams, bck, dstBck)
+	}
+
 	tassert.CheckFatal(t, err)
 	xargs := api.XactReqArgs{ID: xactID}
 	_, err = api.WaitForXactionIC(baseParams, xargs)

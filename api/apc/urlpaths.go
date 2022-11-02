@@ -111,8 +111,8 @@ var (
 	URLPathCluKalive  = urlpath(Version, Cluster, Keepalive)
 	URLPathCluDaemon  = urlpath(Version, Cluster, Daemon)
 	URLPathCluSetConf = urlpath(Version, Cluster, ActSetConfig)
-	URLPathCluAttach  = urlpath(Version, Cluster, ActAttachRemote)
-	URLPathCluDetach  = urlpath(Version, Cluster, ActDetachRemote)
+	URLPathCluAttach  = urlpath(Version, Cluster, ActAttachRemAis)
+	URLPathCluDetach  = urlpath(Version, Cluster, ActDetachRemAis)
 
 	URLPathDae          = urlpath(Version, Daemon)
 	URLPathDaeProxy     = urlpath(Version, Daemon, Proxy)

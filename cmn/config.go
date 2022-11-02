@@ -148,7 +148,8 @@ type (
 	}
 	RemoteAIS struct {
 		URL     string `json:"url"`
-		Alias   string `json:"alias"` // multiple as strings.Join(RemAisAliasSeparator)
+		Alias   string `json:"alias"` // NOTE: strings.Join(aliases, RemAisAliasSeparator)
+		UUID    string `json:"uuid"`  // Smap.UUID
 		Primary string `json:"primary"`
 		Smap    int64  `json:"smap"`
 		Targets int32  `json:"targets"`

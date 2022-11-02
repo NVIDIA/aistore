@@ -275,7 +275,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		wg         = cos.NewLimitedWaitGroup(20, 0)
 	)
 	if !m.silent {
-		tlog.Logf("remote PUT %d objects => %s\n", objCnt, m.bck)
+		tlog.Logf("remote PUT %d objects (size=%s) => %s\n", objCnt, cos.B2S(int64(m.fileSize), 1), m.bck)
 	}
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)

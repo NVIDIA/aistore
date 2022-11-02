@@ -861,7 +861,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 		m = ioContext{
 			t:        t,
 			bck:      bck,
-			num:      5,
+			num:      10,
 			fileSize: largeFileSize,
 			prefix:   "evict/obj-",
 		}

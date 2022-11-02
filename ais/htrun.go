@@ -427,9 +427,9 @@ func (h *htrun) tryLoadSmap() (_ *smapX, reliable bool) {
 	return smap, reliable
 }
 
-func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
+func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, query url.Values) {
 	var (
-		transient = cos.IsParseBool(r.URL.Query().Get(apc.ActTransient))
+		transient = cos.IsParseBool(query.Get(apc.ActTransient))
 		toUpdate  = &cmn.ConfigToUpdate{}
 	)
 	if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
@@ -698,7 +698,7 @@ func (h *htrun) callerNotifyProgress(n cluster.Notif) {
 	h.callerNotify(n, nil, apc.Progress)
 }
 
-func (h *htrun) callerNotify(n cluster.Notif, err error, kind string) {
+func (h *htrun) callerNotify(n cluster.Notif, err error, upon string) {
 	var (
 		smap  = h.owner.smap.get()
 		dsts  = n.Subscribers()
@@ -706,7 +706,7 @@ func (h *htrun) callerNotify(n cluster.Notif, err error, kind string) {
 		args  = allocBcArgs()
 		nodes = args.selected
 	)
-	debug.Assert(kind == apc.Progress || kind == apc.Finished)
+	debug.Assert(upon == apc.Progress || upon == apc.Finished)
 	if len(dsts) == 1 && dsts[0] == equalIC {
 		for pid, psi := range smap.Pmap {
 			if smap.IsIC(psi) && pid != h.si.ID() && !psi.IsAnySet(cluster.NodeFlagsMaintDecomm) {
@@ -731,7 +731,7 @@ func (h *htrun) callerNotify(n cluster.Notif, err error, kind string) {
 		glog.Errorf("%s: have no nodes to send notification %s", h.si, &msg)
 		return
 	}
-	path := apc.URLPathNotifs.Join(kind)
+	path := apc.URLPathNotifs.Join(upon)
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: path, Body: cos.MustMarshal(&msg)}
 	args.network = cmn.NetIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
@@ -989,10 +989,10 @@ func _checkAction(msg *apc.ActionMsg, expectedActions ...string) (err error) {
 // Common HTTP req handlers //
 //////////////////////////////
 
-func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request) {
+func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Values) {
 	var (
 		body any
-		what = r.URL.Query().Get(apc.QparamWhat)
+		what = query.Get(apc.QparamWhat)
 	)
 	switch what {
 	case apc.GetWhatConfig:
@@ -1508,7 +1508,7 @@ func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
 	return
 }
 
-func (h *htrun) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
+func (h *htrun) _recvCfg(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	config := cmn.GCO.Get()
 	glog.Infof("receive %s%s", newConfig, _msdetail(config.Version, msg, caller))
 
