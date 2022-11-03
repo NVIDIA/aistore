@@ -137,6 +137,7 @@ func (d *Snode) SetName() {
 const (
 	PnamePrefix = "p["
 	TnamePrefix = "t["
+	SnameSuffix = "]"
 )
 
 func Pname(pid string) string { return PnamePrefix + pid + "]" }

@@ -146,9 +146,9 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 				retries = int(retry503 / retrySleep)
 			}
 		} else {
-			var httpErr *cmn.ErrHTTP
-			if jsonErr := jsoniter.Unmarshal(msg, &httpErr); jsonErr == nil {
-				return httpErr
+			var herr *cmn.ErrHTTP
+			if jsonErr := jsoniter.Unmarshal(msg, &herr); jsonErr == nil {
+				return herr
 			}
 		}
 		if i < retries {

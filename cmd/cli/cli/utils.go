@@ -685,13 +685,13 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) 
 	if p, err = api.HeadBucket(apiBP, bck, dontAddBckMD); err == nil {
 		return
 	}
-	if httpErr, ok := err.(*cmn.ErrHTTP); ok {
-		if httpErr.Status == http.StatusNotFound {
+	if herr, ok := err.(*cmn.ErrHTTP); ok {
+		if herr.Status == http.StatusNotFound {
 			err = fmt.Errorf("bucket %q does not exist", bck)
-		} else if httpErr.Message != "" {
-			err = errors.New(httpErr.Message)
+		} else if herr.Message != "" {
+			err = errors.New(herr.Message)
 		} else {
-			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck, httpErr.Message)
+			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck, herr.Message)
 		}
 	} else {
 		err = fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)

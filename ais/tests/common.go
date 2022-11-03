@@ -360,7 +360,7 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 func (m *ioContext) del(opts ...int) {
 	const maxErrCount = 100
 	var (
-		httpErr     *cmn.ErrHTTP
+		herr        *cmn.ErrHTTP
 		toRemoveCnt = -1 // remove all or opts[0]
 		baseParams  = tools.BaseAPIParams()
 	)
@@ -388,7 +388,7 @@ func (m *ioContext) del(opts ...int) {
 	}
 	objList, err := api.ListObjects(baseParams, m.bck, lsmsg, 0)
 	if err != nil {
-		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
+		if errors.As(err, &herr) && herr.Status == http.StatusNotFound {
 			return
 		}
 		emsg := err.Error()
@@ -627,12 +627,12 @@ func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *apc
 // background: shuffle=on increases the chance to have still-running rebalance
 // at the beginning of a new rename, rebalance, copy-bucket and similar
 func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
-	httpErr, ok := err.(*cmn.ErrHTTP)
+	herr, ok := err.(*cmn.ErrHTTP)
 	if !ok {
 		return false
 	}
 	// TODO: improve checking for cmn.ErrLimitedCoexistence
-	if !strings.Contains(httpErr.Message, "is currently running,") {
+	if !strings.Contains(herr.Message, "is currently running,") {
 		return false
 	}
 	tlog.Logln("Warning: wait for unfinished rebalance(?)")

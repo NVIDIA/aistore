@@ -551,12 +551,12 @@ func WaitForResilver(t *testing.T, baseParams api.BaseParams, timeouts ...time.D
 		if err == nil {
 			return
 		}
-		if httpErr, ok := err.(*cmn.ErrHTTP); ok {
-			if httpErr.Status == http.StatusNotFound { // keep waiting for timeout
+		if herr, ok := err.(*cmn.ErrHTTP); ok {
+			if herr.Status == http.StatusNotFound { // keep waiting for timeout
 				time.Sleep(xactPollSleep)
 				continue
 			}
-			tassert.CheckFatal(t, httpErr)
+			tassert.CheckFatal(t, herr)
 		} else {
 			tassert.CheckFatal(t, err)
 		}
@@ -676,11 +676,11 @@ func CheckErrIsNotFound(t *testing.T, err error) {
 		t.Fatalf("expected error")
 		return
 	}
-	httpErr, ok := err.(*cmn.ErrHTTP)
+	herr, ok := err.(*cmn.ErrHTTP)
 	tassert.Fatalf(t, ok, "expected an error of the type *cmn.ErrHTTP, got %v(%T)", err, err)
 	tassert.Fatalf(
-		t, httpErr.Status == http.StatusNotFound,
-		"expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status,
+		t, herr.Status == http.StatusNotFound,
+		"expected status: %d, got: %d.", http.StatusNotFound, herr.Status,
 	)
 }
 

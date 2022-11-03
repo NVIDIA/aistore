@@ -73,11 +73,11 @@ func (fs *aisfs) ReadFile(_ context.Context, req *fuseops.ReadFileOp) (err error
 
 	var (
 		ioErr   *ais.ErrIO
-		httpErr *cmn.ErrHTTP
+		herr *cmn.ErrHTTP
 	)
-	if errors.As(err, &ioErr) && errors.As(ioErr.Err, &httpErr) {
+	if errors.As(err, &ioErr) && errors.As(ioErr.Err, &herr) {
 		// Forget file on 404 error
-		if httpErr.Status == http.StatusNotFound {
+		if herr.Status == http.StatusNotFound {
 			fhandle.file.parent.ForgetFile(filepath.Base(fhandle.file.Path()))
 			return syscall.ENOENT
 		}

@@ -174,10 +174,9 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {
 			glog.Warningf("%s [retries: %d/%d]: timeout (%v) - increasing and retrying...",
 				t, i, retryCnt, timeout)
 			timeout = time.Duration(float64(timeout) * reqTimeoutFactor)
-		} else if httpErr := cmn.Err2HTTPErr(err); httpErr != nil {
-			glog.Warningf("%s [retries: %d/%d]: failed to perform request: %v (code: %d)", t, i, retryCnt, err,
-				httpErr.Status)
-			if _, exists := terminalStatuses[httpErr.Status]; exists {
+		} else if herr := cmn.Err2HTTPErr(err); herr != nil {
+			glog.Warningf("%s [retries: %d/%d]: failed to perform request: %v (code: %d)", t, i, retryCnt, err, herr.Status)
+			if _, exists := terminalStatuses[herr.Status]; exists {
 				// Nothing we can do...
 				return err
 			}

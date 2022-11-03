@@ -70,8 +70,8 @@ func HTTPStatus(err error) int {
 	if err == nil {
 		return http.StatusOK
 	}
-	if httpErr := cmn.Err2HTTPErr(err); httpErr != nil {
-		return httpErr.Status
+	if herr := cmn.Err2HTTPErr(err); herr != nil {
+		return herr.Status
 	}
 	return -1 // invalid
 }
@@ -200,9 +200,9 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 	})
 	resp = rr.resp
 	if err != nil && resp != nil {
-		httpErr := cmn.NewErrHTTP(req, err, resp.StatusCode)
-		httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
-		err = httpErr
+		herr := cmn.NewErrHTTP(req, err, resp.StatusCode)
+		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
+		err = herr
 	}
 	return
 }
@@ -281,18 +281,18 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 	}
 	if reqParams.BaseParams.Method == http.MethodHead {
 		if msg := resp.Header.Get(apc.HdrError); msg != "" {
-			httpErr := cmn.NewErrHTTP(nil, errors.New(msg), resp.StatusCode)
-			httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
-			return httpErr
+			herr := cmn.NewErrHTTP(nil, errors.New(msg), resp.StatusCode)
+			herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
+			return herr
 		}
 	}
 	var (
-		httpErr *cmn.ErrHTTP
-		msg, _  = io.ReadAll(resp.Body)
+		herr   *cmn.ErrHTTP
+		msg, _ = io.ReadAll(resp.Body)
 	)
 	if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {
-		if jsonErr := jsoniter.Unmarshal(msg, &httpErr); jsonErr == nil {
-			return httpErr
+		if jsonErr := jsoniter.Unmarshal(msg, &herr); jsonErr == nil {
+			return herr
 		}
 	}
 	strMsg := string(msg)
@@ -302,9 +302,9 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 	}
 	// HEAD request does not return the body - create http error
 	// 503 is also to be preserved
-	httpErr = cmn.NewErrHTTP(nil, errors.New(strMsg), resp.StatusCode)
-	httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
-	return httpErr
+	herr = cmn.NewErrHTTP(nil, errors.New(strMsg), resp.StatusCode)
+	herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
+	return herr
 }
 
 /////////////

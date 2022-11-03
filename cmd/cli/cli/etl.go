@@ -351,7 +351,7 @@ func etlStopHandler(c *cli.Context) (err error) {
 
 	for _, id := range etls {
 		if err := api.ETLStop(apiBP, id); err != nil {
-			if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
+			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 				color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL %q not found", id)
 				continue
 			}
@@ -369,7 +369,7 @@ func etlStartHandler(c *cli.Context) (err error) {
 	}
 	etlID := c.Args()[0]
 	if err := api.ETLStart(apiBP, etlID); err != nil {
-		if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
+		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 			color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL %q not found", etlID)
 		}
 		return err
@@ -504,9 +504,9 @@ func etlBucketHandler(c *cli.Context) (err error) {
 }
 
 func handleETLHTTPError(err error, etlID string) error {
-	if httpErr, ok := err.(*cmn.ErrHTTP); ok {
+	if herr, ok := err.(*cmn.ErrHTTP); ok {
 		// TODO: How to find out if it's transformation not found, and not object not found?
-		if httpErr.Status == http.StatusNotFound && strings.Contains(httpErr.Error(), etlID) {
+		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlID) {
 			return fmt.Errorf("ETL %q not found; try starting new ETL with:\nais %s %s <spec>", etlID, commandETL, subcmdInit)
 		}
 	}

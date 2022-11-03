@@ -203,8 +203,8 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHdr htt
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
-		pre:      _createBMDPre,
-		final:    p._syncBMDFinal,
+		pre:      bmodCreate,
+		final:    p.bmodSync,
 		wait:     waitmsync,
 		msg:      &c.msg.ActionMsg,
 		txnID:    c.uuid,
@@ -223,7 +223,7 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHdr htt
 	return err
 }
 
-func _createBMDPre(ctx *bmdModifier, clone *bucketMD) (err error) {
+func bmodCreate(ctx *bmdModifier, clone *bucketMD) (err error) {
 	bck := ctx.bcks[0]
 	added := clone.add(bck, ctx.setProps)
 	if !added {
@@ -232,7 +232,7 @@ func _createBMDPre(ctx *bmdModifier, clone *bucketMD) (err error) {
 	return
 }
 
-func _destroyBMDPre(ctx *bmdModifier, clone *bucketMD) error {
+func bmodRm(ctx *bmdModifier, clone *bucketMD) error {
 	bck := ctx.bcks[0]
 	if _, present := clone.Get(bck); !present {
 		return cmn.NewErrBckNotFound(bck.Bucket())
@@ -274,8 +274,8 @@ func (p *proxy) makeNCopies(msg *apc.ActionMsg, bck *cluster.Bck) (xactID string
 		},
 	}
 	ctx := &bmdModifier{
-		pre:           _mirrorBMDPre,
-		final:         p._syncBMDFinal,
+		pre:           bmodMirror,
+		final:         p.bmodSync,
 		wait:          waitmsync,
 		msg:           &c.msg.ActionMsg,
 		txnID:         c.uuid,
@@ -303,7 +303,7 @@ func (p *proxy) makeNCopies(msg *apc.ActionMsg, bck *cluster.Bck) (xactID string
 	return
 }
 
-func _mirrorBMDPre(ctx *bmdModifier, clone *bucketMD) error {
+func bmodMirror(ctx *bmdModifier, clone *bucketMD) error {
 	var (
 		bck             = ctx.bcks[0]
 		bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
@@ -365,8 +365,8 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
-		pre:      p._setPropsPre,
-		final:    p._syncBMDFinal,
+		pre:      p.bmodSetProps,
+		final:    p.bmodSync,
 		wait:     waitmsync,
 		msg:      msg,
 		txnID:    c.uuid,
@@ -397,7 +397,8 @@ func (p *proxy) setBucketProps(msg *apc.ActionMsg, bck *cluster.Bck, nprops *cmn
 	return c.commit(bck, c.cmtTout(waitmsync))
 }
 
-func (p *proxy) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error) {
+// compare w/ bmodUpdateProps
+func (p *proxy) bmodSetProps(ctx *bmdModifier, clone *bucketMD) (err error) {
 	var (
 		targetCnt       int
 		bck             = ctx.bcks[0]
@@ -443,8 +444,8 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (x
 
 	// 3. update BMD locally & metasync updated BMD
 	bmdCtx := &bmdModifier{
-		pre:          _renameBMDPre,
-		final:        p._syncBMDFinal,
+		pre:          bmodMv,
+		final:        p.bmodSync,
 		msg:          msg,
 		txnID:        c.uuid,
 		bcks:         []*cluster.Bck{bckFrom, bckTo},
@@ -505,7 +506,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (x
 	return
 }
 
-func _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
+func bmodMv(ctx *bmdModifier, clone *bucketMD) error {
 	var (
 		bckFrom, bckTo  = ctx.bcks[0], ctx.bcks[1]
 		bprops, present = clone.Get(bckFrom)
@@ -544,8 +545,8 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg, dryRun bool
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
-		pre:   _b2bBMDPre,
-		final: p._syncBMDFinal,
+		pre:   bmodTCB,
+		final: p.bmodSync,
 		msg:   msg,
 		txnID: c.uuid,
 		bcks:  []*cluster.Bck{bckFrom, bckTo},
@@ -617,7 +618,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActionMsg) (xactID 
 	return
 }
 
-func _b2bBMDPre(ctx *bmdModifier, clone *bucketMD) error {
+func bmodTCB(ctx *bmdModifier, clone *bucketMD) error {
 	var (
 		bckFrom, bckTo  = ctx.bcks[0], ctx.bcks[1]
 		bprops, present = clone.Get(bckFrom) // TODO: Bucket could be removed during begin.
@@ -699,8 +700,8 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActionMsg) (xactID string, e
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
-		pre:           _updatePropsBMDPre,
-		final:         p._syncBMDFinal,
+		pre:           bmodUpdateProps,
+		final:         p.bmodSync,
 		bcks:          []*cluster.Bck{bck},
 		wait:          waitmsync,
 		msg:           &c.msg.ActionMsg,
@@ -726,7 +727,8 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActionMsg) (xactID string, e
 	return
 }
 
-func _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) error {
+// compare w/ bmodSetProps
+func bmodUpdateProps(ctx *bmdModifier, clone *bucketMD) error {
 	var (
 		bck             = ctx.bcks[0]
 		bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
@@ -869,8 +871,8 @@ func (p *proxy) destroyBucket(msg *apc.ActionMsg, bck *cluster.Bck) error {
 
 	// 2. Distribute new BMD
 	ctx := &bmdModifier{
-		pre:   _destroyBMDPre,
-		final: p._syncBMDFinal,
+		pre:   bmodRm,
+		final: p.bmodSync,
 		msg:   msg,
 		txnID: c.uuid,
 		wait:  waitmsync,
@@ -1019,8 +1021,8 @@ func (p *proxy) prepTxnClient(msg *apc.ActionMsg, bck *cluster.Bck, waitmsync bo
 // rollback create-bucket
 func (p *proxy) undoCreateBucket(msg *apc.ActionMsg, bck *cluster.Bck) {
 	ctx := &bmdModifier{
-		pre:   _destroyBMDPre,
-		final: p._syncBMDFinal,
+		pre:   bmodRm,
+		final: p.bmodSync,
 		msg:   msg,
 		bcks:  []*cluster.Bck{bck},
 	}
@@ -1032,8 +1034,8 @@ func (p *proxy) undoCreateBucket(msg *apc.ActionMsg, bck *cluster.Bck) {
 // rollback make-n-copies
 func (p *proxy) undoUpdateCopies(msg *apc.ActionMsg, bck *cluster.Bck, propsToUpdate *cmn.BucketPropsToUpdate) {
 	ctx := &bmdModifier{
-		pre:           _updatePropsBMDPre,
-		final:         p._syncBMDFinal,
+		pre:           bmodUpdateProps,
+		final:         p.bmodSync,
 		msg:           msg,
 		propsToUpdate: propsToUpdate,
 		bcks:          []*cluster.Bck{bck},

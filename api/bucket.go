@@ -133,20 +133,20 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketPr
 
 // fill-in error message (HEAD response will never contain one)
 func headerr2msg(bck cmn.Bck, err error) error {
-	httpErr := cmn.Err2HTTPErr(err)
-	if httpErr == nil {
+	herr := cmn.Err2HTTPErr(err)
+	if herr == nil {
 		debug.FailTypeCast(err)
 		return err
 	}
-	switch httpErr.Status {
+	switch herr.Status {
 	case http.StatusUnauthorized:
-		httpErr.Message = fmt.Sprintf("Bucket %q unauthorized access", bck)
+		herr.Message = fmt.Sprintf("Bucket %q unauthorized access", bck)
 	case http.StatusForbidden:
-		httpErr.Message = fmt.Sprintf("Bucket %q access denied", bck)
+		herr.Message = fmt.Sprintf("Bucket %q access denied", bck)
 	case http.StatusGone:
-		httpErr.Message = fmt.Sprintf("Bucket %q has been removed from the backend", bck)
+		herr.Message = fmt.Sprintf("Bucket %q has been removed from the backend", bck)
 	}
-	return httpErr
+	return herr
 }
 
 // ListBuckets returns buckets for provided query, where

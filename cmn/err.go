@@ -882,9 +882,9 @@ func IsStatusGone(err error) (yes bool) {
 
 func S2HTTPErr(r *http.Request, msg string, status int) *ErrHTTP {
 	if msg != "" {
-		var httpErr ErrHTTP
-		if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
-			return &httpErr
+		var herr ErrHTTP
+		if err := jsoniter.UnmarshalFromString(msg, &herr); err == nil {
+			return &herr
 		}
 	}
 	return NewErrHTTP(r, errors.New(msg), status)
@@ -921,21 +921,21 @@ func err2HTTP(err error) (*ErrHTTP, bool) {
 // sends HTTP response header with the provided status
 // (alloc/free via mem-pool)
 func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[status[, silent]]*/) {
-	if httpErr, allocated := err2HTTP(err); httpErr != nil {
-		httpErr.Status = http.StatusBadRequest
+	if herr, allocated := err2HTTP(err); herr != nil {
+		herr.Status = http.StatusBadRequest
 		if len(opts) > 0 && opts[0] > http.StatusBadRequest {
-			httpErr.Status = opts[0]
+			herr.Status = opts[0]
 		}
-		httpErr.write(w, r, len(opts) > 1 /*silent*/)
+		herr.write(w, r, len(opts) > 1 /*silent*/)
 		if allocated {
-			FreeHterr(httpErr)
+			FreeHterr(herr)
 		}
 		return
 	}
 	var (
-		httpErr = allocHterr()
-		l       = len(opts)
-		status  = http.StatusBadRequest
+		herr   = allocHterr()
+		l      = len(opts)
+		status = http.StatusBadRequest
 	)
 	if IsErrNotFound(err) {
 		status = http.StatusNotFound
@@ -944,9 +944,9 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 	} else if errf, ok := err.(*ErrFailedTo); ok {
 		status = errf.status
 	}
-	httpErr.init(r, err, status)
-	httpErr.write(w, r, l > 1)
-	FreeHterr(httpErr)
+	herr.init(r, err, status)
+	herr.write(w, r, l > 1)
+	FreeHterr(herr)
 }
 
 // Create ErrHTTP (based on `msg` and `opts`) and write it into HTTP response.
@@ -955,9 +955,9 @@ func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int
 	if len(opts) > 0 {
 		errCode = opts[0]
 	}
-	httpErr := InitErrHTTP(r, errors.New(msg), errCode)
-	httpErr.write(w, r, len(opts) > 1 /*silent*/)
-	FreeHterr(httpErr)
+	herr := InitErrHTTP(r, errors.New(msg), errCode)
+	herr.write(w, r, len(opts) > 1 /*silent*/)
+	FreeHterr(herr)
 }
 
 // 405 Method Not Allowed, see: https://tools.ietf.org/html/rfc2616#section-10.4.6

@@ -1357,7 +1357,7 @@ func (p *proxy) metasyncRMD(ctx *rmdModifier, clone *rebMD) {
 	}
 }
 
-func (p *proxy) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
+func (p *proxy) bmodSync(ctx *bmdModifier, clone *bucketMD) {
 	debug.Assert(clone._sgl != nil)
 	msg := p.newAmsg(ctx.msg, clone, ctx.txnID)
 	wg := p.metasyncer.sync(revsPair{clone, msg})

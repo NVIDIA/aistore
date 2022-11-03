@@ -352,7 +352,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 	xactArgs := api.XactReqArgs{Kind: apc.ActMoveBck, Bck: rtd.renamedBck, Timeout: rebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, xactArgs)
 	if err != nil {
-		if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
+		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 			smap := tools.GetClusterMap(t, proxyURL)
 			if smap.CountActiveTargets() == 1 {
 				err = nil

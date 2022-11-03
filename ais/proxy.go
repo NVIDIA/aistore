@@ -2269,8 +2269,8 @@ func (p *proxy) daemonHandler(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) handlePendingRenamedLB(renamedBucket string) {
 	ctx := &bmdModifier{
-		pre:   p._pendingRnPre,
-		final: p._syncBMDFinal,
+		pre:   p.bmodPostMv,
+		final: p.bmodSync,
 		msg:   &apc.ActionMsg{Value: apc.ActMoveBck},
 		bcks:  []*cluster.Bck{cluster.NewBck(renamedBucket, apc.AIS, cmn.NsGlobal)},
 	}
@@ -2278,7 +2278,7 @@ func (p *proxy) handlePendingRenamedLB(renamedBucket string) {
 	debug.AssertNoErr(err)
 }
 
-func (p *proxy) _pendingRnPre(ctx *bmdModifier, clone *bucketMD) error {
+func (p *proxy) bmodPostMv(ctx *bmdModifier, clone *bucketMD) error {
 	var (
 		bck            = ctx.bcks[0]
 		props, present = clone.Get(bck)

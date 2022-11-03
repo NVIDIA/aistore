@@ -207,8 +207,8 @@ func GetDaemonStatus(bp BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonS
 		daeInfo = &stats.DaemonStatus{Snode: node, Status: StatusOffline}
 		if errors.Is(err, context.DeadlineExceeded) {
 			daeInfo.Status = StatusTimedOut
-		} else if httpErr := cmn.Err2HTTPErr(err); httpErr != nil {
-			daeInfo.Status = fmt.Sprintf("error: %d", httpErr.Status)
+		} else if herr := cmn.Err2HTTPErr(err); herr != nil {
+			daeInfo.Status = fmt.Sprintf("error: %d", herr.Status)
 		}
 	}
 	return daeInfo, err

@@ -305,8 +305,8 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	for _, bck := range filtered {
 		props, info, err := api.GetBucketInfo(apiBP, bck, fltPresence)
 		if err != nil {
-			if httpErr, ok := err.(*cmn.ErrHTTP); ok {
-				fmt.Fprintf(c.App.Writer, "  %s, err: %s\n", bck.DisplayName(), httpErr.Message)
+			if herr, ok := err.(*cmn.ErrHTTP); ok {
+				fmt.Fprintf(c.App.Writer, "  %s, err: %s\n", bck.DisplayName(), herr.Message)
 			}
 			continue
 		}

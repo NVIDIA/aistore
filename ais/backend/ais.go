@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 )
+
+// NOTE: some of the methods here are part of the of the *extended* native AIS API outside
+// generic `BackendProvider` (see cluster/backend.go)
+
+// TODO:
+// - include `appliedCfgVer` in the GetInfo* response (to synchronize p._remais, etc.)
+// - periodically refresh remote Smap
+// - use m.remote[uuid].smap to load balance and retry disconnects
 
 const ua = "aisnode/backend"
 
@@ -44,10 +53,14 @@ type (
 // interface guard
 var _ cluster.BackendProvider = (*AISBackendProvider)(nil)
 
-// TODO: house-keep refreshing remote Smap
-// TODO: utilize m.remote[uuid].smap to load balance and retry disconnects
+var (
+	preg, treg *regexp.Regexp
+)
 
 func NewAIS(t cluster.Target) *AISBackendProvider {
+	suff := regexp.QuoteMeta(cluster.SnameSuffix)
+	preg = regexp.MustCompile(regexp.QuoteMeta(cluster.PnamePrefix) + `\S*` + suff + ": ")
+	treg = regexp.MustCompile(regexp.QuoteMeta(cluster.TnamePrefix) + `\S*` + suff + ": ")
 	return &AISBackendProvider{
 		t:      t,
 		remote: make(map[string]*remAis),
@@ -65,8 +78,28 @@ func (r *remAis) String() string {
 	return fmt.Sprintf("remote cluster (url: %s, aliases: %q, uuid: %v, smap: %s)", r.url, aliases, r.smap.UUID, r.smap)
 }
 
-// NOTE: this and the next method are part of the of the *extended* AIS cloud API
-//       in addition to the basic GetObj, et al.
+func unsetUUID(bck *cmn.Bck) { bck.Ns.UUID = "" }
+
+func extractErrCode(e error, uuid string) (int, error) {
+	if e == nil {
+		return http.StatusOK, nil
+	}
+	herr := cmn.Err2HTTPErr(e)
+	if herr == nil {
+		return http.StatusInternalServerError, e
+	}
+	if uuid != "" {
+		msg := herr.Message
+		loc := preg.FindStringIndex(msg)
+		if loc == nil {
+			loc = treg.FindStringIndex(msg)
+		}
+		if loc != nil && loc[1] > loc[0]+2 {
+			herr.Message = msg[loc[0]:loc[1]-2] + "@" + uuid + ": " + msg[loc[1]:]
+		}
+	}
+	return herr.Status, herr
+}
 
 // apply new or updated (attach, detach) cmn.BackendConfAIS configuration
 func (m *AISBackendProvider) Apply(v any, action string, cfg *cmn.ClusterConfig) error {
@@ -121,8 +154,6 @@ func (m *AISBackendProvider) _apply(cfg *cmn.ClusterConfig, clusterConf cmn.Back
 	}
 	return nil
 }
-
-// TODO -- FIXME: include appliedCfgVer in the response
 
 // return (m.remote + m.alias) in-memory info wo/ connecting to remote cluster(s)
 // (compare with GetInfo() below)
@@ -349,18 +380,6 @@ func (m *AISBackendProvider) resolve(uuid string) (*remAis, string, error) {
 	return remAis, uuid, nil
 }
 
-func unsetUUID(bck *cmn.Bck) { bck.Ns.UUID = "" }
-
-func extractErrCode(e error) (int, error) {
-	if e == nil {
-		return http.StatusOK, nil
-	}
-	if httpErr := cmn.Err2HTTPErr(e); httpErr != nil {
-		return httpErr.Status, httpErr
-	}
-	return http.StatusInternalServerError, e
-}
-
 /////////////////////
 // BackendProvider //
 /////////////////////
@@ -391,7 +410,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	bck := remoteBck.Clone()
 	unsetUUID(&bck)
 	if p, err = api.HeadBucket(remAis.bp, bck, false /*dontAddRemote*/); err != nil {
-		errCode, err = extractErrCode(err)
+		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
 
@@ -417,8 +436,9 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg
 	remoteMsg := msg.Clone()
 	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, m.MaxPageSize())
 
-	// TODO: Currently, we are not encoding xaction (aka request) `UUID` from the remote cluster
-	// in the `ContinuationToken` (see note below).
+	// TODO:
+	// Currently, not encoding xaction (aka request) `UUID` from the remote cluster
+	// in the `ContinuationToken` (note below).
 	remoteMsg.UUID = ""
 
 	// likewise, let remote ais gateway decide
@@ -429,7 +449,7 @@ func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg
 
 	var lstRes *cmn.LsoResult
 	if lstRes, err = api.ListObjectsPage(remAis.bp, bck, remoteMsg); err != nil {
-		errCode, err = extractErrCode(err)
+		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
 	*lst = *lstRes
@@ -443,29 +463,39 @@ func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, err
 	if !qbck.Ns.IsAnyRemote() {
 		// caller provided uuid (or alias)
 		bcks, err = m.blist(qbck.Ns.UUID, qbck)
-	} else {
-		// all attached
-		m.mu.RLock()
-		uuids := make([]string, 0, len(m.remote))
-		for u := range m.remote {
-			uuids = append(uuids, u)
-		}
-		m.mu.RUnlock()
-		for _, uuid := range uuids {
-			remoteBcks, errV := m.blist(uuid, qbck)
-			bcks = append(bcks, remoteBcks...)
-			if errV != nil && err == nil {
-				err = errV
-			}
+		errCode, err = extractErrCode(err, qbck.Ns.UUID)
+		return
+	}
+	// all attached
+	m.mu.RLock()
+	uuids := make([]string, 0, len(m.remote))
+	for u := range m.remote {
+		uuids = append(uuids, u)
+	}
+	m.mu.RUnlock()
+	if len(uuids) == 0 {
+		return
+	}
+	for _, uuid := range uuids {
+		remoteBcks, errV := m.blist(uuid, qbck)
+		bcks = append(bcks, remoteBcks...)
+		if errV != nil && err == nil {
+			err = errV
 		}
 	}
-	errCode, err = extractErrCode(err)
+	if len(uuids) == 1 {
+		errCode, err = extractErrCode(err, uuids[0])
+	} else {
+		errCode, err = extractErrCode(err, "")
+	}
 	return
 }
 
-// TODO: remote AIS clusters provide native frontend API with additional capabilities
-// in part including apc.Flt* location specifier.
-// Here we hardcode its value to keep ListBuckets() consistent across backends.
+// NOTE:
+// remote AIS clusters provide native frontend with additional capabilities which
+// also include apc.Flt* _location_ specifier. Here we simply hardcode the `apc.FltExists`
+// to keep `ListBuckets` consistent across (aws, gcp, etc.) backends.
+
 func (m *AISBackendProvider) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error) {
 	var (
 		remAis      *remAis
@@ -476,7 +506,7 @@ func (m *AISBackendProvider) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bc
 	}
 	bcks, err = api.ListBuckets(remAis.bp, remoteQuery, apc.FltExists)
 	if err != nil {
-		_, err = extractErrCode(err)
+		_, err = extractErrCode(err, uuid)
 		return nil, err
 	}
 	for i, bck := range bcks {
@@ -501,7 +531,7 @@ func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs,
 	}
 	unsetUUID(&remoteBck)
 	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent); err != nil {
-		errCode, err = extractErrCode(err)
+		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
 	oa = &cmn.ObjAttrs{}
@@ -521,7 +551,7 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM, owt cmn.OWT) (errCo
 	}
 	unsetUUID(&remoteBck)
 	if r, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName); err != nil {
-		return extractErrCode(err)
+		return extractErrCode(err, remAis.uuid)
 	}
 	params := cluster.AllocPutObjParams()
 	{
@@ -532,7 +562,7 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM, owt cmn.OWT) (errCo
 	}
 	err = m.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
-	return extractErrCode(err)
+	return extractErrCode(err, remAis.uuid)
 }
 
 func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum, errCode int, err error) {
@@ -546,7 +576,7 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadClo
 	}
 	unsetUUID(&remoteBck)
 	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent); err != nil {
-		errCode, err = extractErrCode(err)
+		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
 	oa := lom.ObjAttrs()
@@ -556,7 +586,7 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadClo
 	lom.SetCksum(nil)
 	// reader
 	r, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName)
-	errCode, err = extractErrCode(err)
+	errCode, err = extractErrCode(err, remAis.uuid)
 	return
 }
 
@@ -580,12 +610,12 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 		Size:       uint64(lom.SizeBytes(true)), // _special_ because it's still workfile.
 	}
 	if err = api.PutObject(args); err != nil {
-		errCode, err = extractErrCode(err)
+		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
 	// TODO: piggy-back props on PUT request to optimize-out HEAD call
 	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent); err != nil {
-		errCode, err = extractErrCode(err)
+		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
 	oa := lom.ObjAttrs()
@@ -604,5 +634,5 @@ func (m *AISBackendProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error
 	}
 	unsetUUID(&remoteBck)
 	err = api.DeleteObject(remAis.bp, remoteBck, lom.ObjName)
-	return extractErrCode(err)
+	return extractErrCode(err, remAis.uuid)
 }

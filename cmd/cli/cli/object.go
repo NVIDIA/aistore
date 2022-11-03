@@ -997,7 +997,7 @@ func multiObjOp(c *cli.Context, command string) error {
 				continue
 			}
 			if err := api.EvictObject(apiBP, bck, objName); err != nil {
-				if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
+				if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 					err = fmt.Errorf("object %s/%s does not exist (ie., not present or \"cached\")",
 						bck.DisplayName(), objName)
 				}

@@ -1147,15 +1147,15 @@ func (res *callResult) toErr() error {
 		return nil
 	}
 	// cmn.ErrHTTP
-	if httpErr := cmn.Err2HTTPErr(res.err); httpErr != nil {
+	if herr := cmn.Err2HTTPErr(res.err); herr != nil {
 		// add status, details
 		if res.status >= http.StatusBadRequest {
-			httpErr.Status = res.status
+			herr.Status = res.status
 		}
-		if httpErr.Message == "" {
-			httpErr.Message = res.details
+		if herr.Message == "" {
+			herr.Message = res.details
 		}
-		return httpErr
+		return herr
 	}
 	// res => cmn.ErrHTTP
 	if res.status >= http.StatusBadRequest {
@@ -1175,9 +1175,9 @@ func (res *callResult) errorf(format string, a ...any) error {
 	debug.Assert(res.err != nil)
 	// add formatted
 	msg := fmt.Sprintf(format, a...)
-	if httpErr := cmn.Err2HTTPErr(res.err); httpErr != nil {
-		httpErr.Message = msg + ": " + httpErr.Message
-		res.err = httpErr
+	if herr := cmn.Err2HTTPErr(res.err); herr != nil {
+		herr.Message = msg + ": " + herr.Message
+		res.err = herr
 	} else {
 		res.err = errors.New(msg + ": " + res.err.Error())
 	}

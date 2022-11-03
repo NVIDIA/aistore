@@ -45,7 +45,7 @@ func (bck *bucketAPI) APIParams() api.BaseParams { return bck.apiParams }
 func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err error) {
 	objProps, err := api.HeadObject(bck.apiParams, bck.Bck(), objName, 0 /*fltPresence*/)
 	if err != nil {
-		if httpErr := cmn.Err2HTTPErr(err); httpErr != nil && httpErr.Status == http.StatusNotFound {
+		if herr := cmn.Err2HTTPErr(err); herr != nil && herr.Status == http.StatusNotFound {
 			return nil, false, nil
 		}
 		return nil, false, newBucketIOError(err, "HeadObject")
