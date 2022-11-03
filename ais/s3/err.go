@@ -38,7 +38,15 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, errCode int) {
 		in = cmn.InitErrHTTP(r, err, errCode)
 		allocated = true
 	}
-	out.Code, out.Message = in.TypeCode, in.Message
+	out.Message = in.Message
+	switch {
+	case cmn.IsErrBucketAlreadyExists(err):
+		out.Code = "BucketAlreadyExists"
+	case cmn.IsErrBckNotFound(err):
+		out.Code = "NoSuchBucket"
+	default:
+		out.Code = in.TypeCode
+	}
 	sgl := memsys.PageMM().NewSGL(0)
 	out.mustMarshal(sgl)
 

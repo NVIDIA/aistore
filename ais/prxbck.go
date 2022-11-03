@@ -38,7 +38,8 @@ type bckInitArgs struct {
 	reqBody []byte          // request body of original request
 	perms   apc.AccessAttrs // apc.AceGET, apc.AcePATCH etc.
 
-	// control flags
+	// 5 user or caller-provided control flags followed by
+	// 2 result flags
 	skipBackend    bool // initialize bucket via `bck.InitNoBackend`
 	createAIS      bool // create ais bucket on the fly
 	dontAddRemote  bool // do not create (ie., add -> BMD) remote bucket on the fly
@@ -148,8 +149,11 @@ func (args *bckInitArgs) access(bck *cluster.Bck) (errCode int, err error) {
 	return
 }
 
-// initAndTry initializes bucket and then _tries_ to add it if it doesn't exist.
-// NOTE: on error the method calls `p.writeErr` - make sure _not_ to do the same in the caller
+// initAndTry initializes the bucket.
+// If the bucket doesn't exist it _may_ try to add it to the BMD (i.e., create on the fly).
+// NOTE:
+// - on error the method calls `p.writeErr` - make sure _not_ to do the same in the caller
+// - for remais buckets: user-provided alias(***)
 func (args *bckInitArgs) initAndTry() (bck *cluster.Bck, err error) {
 	var errCode int
 

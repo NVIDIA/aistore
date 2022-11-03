@@ -156,11 +156,10 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHdr htt
 			// backend versioning always takes precedence
 			bprops.Versioning.Enabled = remoteProps.Versioning.Enabled
 		}
-		if bck.IsRemoteAIS() && false {
-			// always store in BMD with the remote cluster UUID
-			// (and not its alias)
-			bck.Ns.UUID = remoteHdr.Get(apc.HdrRemAisUUID)
-			debug.Assert(cos.IsValidUUID(bck.Ns.UUID), bck.Ns.UUID)
+		if bck.IsRemoteAIS() {
+			// TODO -- FIXME: store in BMD with the remais UUID (and not alias)
+			uuid := remoteHdr.Get(apc.HdrRemAisUUID)
+			debug.Assert(cos.IsValidUUID(uuid), uuid)
 		}
 	case backend != nil: // remote backend exists
 		if bprops == nil {
@@ -169,17 +168,17 @@ func (p *proxy) createBucket(msg *apc.ActionMsg, bck *cluster.Bck, remoteHdr htt
 		cloudProps, present := bmd.Get(backend)
 		debug.Assert(present)
 		bprops.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
-	case bck.IsRemote(): // cannot create remote bucket (NIE/NSY)
-		if bck.IsHTTP() {
-			return cmn.NewErrNotImpl("create", "bucket for HTTP provider")
-		}
+	case bck.IsRemote(): // can't create cloud buckets (NIE/NSY)
 		if bck.IsCloud() {
 			return cmn.NewErrNotImpl("create", bck.Provider+"(cloud) bucket")
 		}
+		if bck.IsHTTP() {
+			return cmn.NewErrNotImpl("create", "bucket for HTTP provider")
+		}
+		// can do remote ais though
 		if !bck.IsRemoteAIS() {
 			return cmn.NewErrUnsupp("create", bck.Provider+":// bucket")
 		}
-		// can do remote ais
 	}
 
 	if bprops == nil { // inherit (all) cluster defaults

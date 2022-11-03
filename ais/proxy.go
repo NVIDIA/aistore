@@ -1030,8 +1030,10 @@ func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bucket string) {
-	query := r.URL.Query()
-	bck, err := newBckFromQ(bucket, query, nil)
+	var (
+		query    = r.URL.Query()
+		bck, err = newBckFromQ(bucket, query, nil)
+	)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1891,9 +1893,6 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
 	}
-	// TODO: for remote AIS queries, consider fixing-up user-sent `qbck`
-	// in re (alias vs UUID) - the cost is one extra call to `getRemoteAISInfo`;
-	// also note RawQuery below
 
 	// present-only filtering
 	if dpq.fltPresence != "" {

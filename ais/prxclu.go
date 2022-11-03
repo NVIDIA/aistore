@@ -25,9 +25,9 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-////////////////////////////
-// http /cluster handlers //
-////////////////////////////
+//
+// v1/cluster handlers
+//
 
 func (p *proxy) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
