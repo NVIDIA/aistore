@@ -53,7 +53,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 	parts = strings.SplitN(uri, apc.BckObjnameSeparator, 2)
 	if len(parts[0]) > 0 && (parts[0][0] == apc.NsUUIDPrefix || parts[0][0] == apc.NsNamePrefix) {
 		bck.Ns = ParseNsUname(parts[0])
-		if err := bck.Ns.Validate(); err != nil {
+		if err := bck.Ns.validate(); err != nil {
 			return bck, "", err
 		}
 		if !opts.IsQuery && bck.Provider == "" {

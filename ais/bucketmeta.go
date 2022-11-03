@@ -477,8 +477,10 @@ func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
 	props = args.bck.Bucket().DefaultProps()
 	props.SetProvider(args.bck.Provider)
 	switch {
-	case args.bck.IsAIS() || args.bck.Backend() != nil:
+	case args.bck.IsAIS():
 		debug.Assert(args.hdr == nil)
+	case args.bck.Backend() != nil:
+		debug.Assertf(args.hdr == nil, "%s, hdr=%+v", args.bck, args.hdr)
 	case args.bck.IsHDFS():
 		props.Versioning.Enabled = false
 		if args.hdr != nil {

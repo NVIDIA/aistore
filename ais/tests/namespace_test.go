@@ -19,10 +19,17 @@ func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool,
 	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.AIS}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 	if includeRemote {
-		remoteBuckets, err := api.ListBuckets(baseParams,
+		allRemaisBuckets, err := api.ListBuckets(baseParams,
 			cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}, fltPresence)
 		tassert.CheckFatal(t, err)
-		buckets = append(buckets, remoteBuckets...)
+
+		filtered := cmn.Bcks{}
+		for _, bck := range allRemaisBuckets {
+			if bck.Ns.UUID != tools.RemoteCluster.Alias || bck.Ns.UUID == tools.RemoteCluster.UUID {
+				filtered = append(filtered, bck)
+			}
+		}
+		buckets = append(buckets, filtered...)
 
 		// Make sure that listing with specific UUID also works and have similar outcome.
 		remoteClusterBuckets, err := api.ListBuckets(baseParams,
@@ -30,13 +37,13 @@ func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool,
 			fltPresence)
 		tassert.CheckFatal(t, err)
 
-		// can't use `remoteClusterBuckets.Equal(remoteBuckets)` because of
-		// alias vs Ns.UUID dichotomy
-
-		tassert.Errorf(t, len(remoteClusterBuckets) == len(remoteBuckets),
-			"namespace %q => %v, while %q => %v where presence=%d",
+		// TODO -- FIXME: do intead smth like: `remoteClusterBuckets.Equal(allRemaisBuckets)`
+		tassert.Errorf(
+			t, len(remoteClusterBuckets) == len(allRemaisBuckets),
+			"specific namespace %q => %v, while all-remote %q => %v, where presence=%d\n",
 			cmn.Ns{UUID: tools.RemoteCluster.UUID}, remoteClusterBuckets,
-			cmn.NsAnyRemote, remoteBuckets, fltPresence)
+			cmn.NsAnyRemote, allRemaisBuckets, fltPresence,
+		)
 	}
 	return buckets
 }
@@ -95,7 +102,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
-					UUID: tools.RemoteCluster.UUID,
+					UUID: tools.RemoteCluster.Alias,
 					Name: cmn.NsGlobal.Name,
 				},
 			},
@@ -115,7 +122,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
-					UUID: tools.RemoteCluster.UUID,
+					UUID: tools.RemoteCluster.Alias,
 					Name: "ns1",
 				},
 			},
@@ -127,7 +134,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
-					UUID: tools.RemoteCluster.UUID,
+					UUID: tools.RemoteCluster.Alias,
 					Name: "ns1",
 				},
 			},
@@ -135,7 +142,7 @@ func TestNamespace(t *testing.T) {
 				Name:     "tmp",
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
-					UUID: tools.RemoteCluster.UUID,
+					UUID: tools.RemoteCluster.Alias,
 					Name: "ns2",
 				},
 			},
@@ -202,12 +209,10 @@ func TestNamespace(t *testing.T) {
 			locBuckets := listAllBuckets(t, baseParams, test.remote, apc.FltPresent)
 			tassert.CheckFatal(t, err)
 			tlog.Logf("present in BMD %+v\n", locBuckets)
-			if len(locBuckets) != len(newBuckets) { // TODO -- FIXME: alias vs Ns.UUID
-				tlog.Logf("*** Warning: number of buckets (%d: %v) should be (%d: %v)\n",
-					len(locBuckets), locBuckets,
-					len(newBuckets), newBuckets,
-				)
-			}
+			tassert.Errorf(
+				t, len(locBuckets) == len(newBuckets), "number of buckets (%d: %v) should be (%d: %v)\n",
+				len(locBuckets), locBuckets, len(newBuckets), newBuckets,
+			)
 
 			// Test listing objects
 			objects, err := api.ListObjects(baseParams, m1.bck, nil, 0)
@@ -238,6 +243,11 @@ func TestNamespace(t *testing.T) {
 
 			bck1Found, bck2Found := false, false
 			for _, summary := range summaries {
+				// TODO -- FIXME: `Bck.Equal()` must work with respect to (alias => UUID) dichotomy
+				if summary.Bck.Ns.UUID == tools.RemoteCluster.UUID {
+					summary.Bck.Ns.UUID = tools.RemoteCluster.Alias
+				}
+
 				if summary.Bck.Equal(&m1.bck) {
 					bck1Found = true
 					tassert.Errorf(
@@ -252,8 +262,8 @@ func TestNamespace(t *testing.T) {
 					)
 				}
 			}
-			tassert.Errorf(t, bck1Found, "Bucket %s not found in summary", m1.bck)
-			tassert.Errorf(t, bck2Found, "Bucket %s not found in summary", m2.bck)
+			tassert.Errorf(t, bck1Found, "%s not found in %v summ", m1.bck, summaries)
+			tassert.Errorf(t, bck2Found, "%s not found in %v summ", m2.bck, summaries)
 			m1.gets()
 			m2.gets()
 
@@ -338,7 +348,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 		m = ioContext{
 			t:   t,
 			num: 100,
-			bck: cmn.Bck{Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}},
+			bck: cmn.Bck{Ns: cmn.Ns{UUID: tools.RemoteCluster.Alias}},
 		}
 	)
 

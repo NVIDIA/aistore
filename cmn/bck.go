@@ -163,7 +163,7 @@ func (n Ns) Uname() string {
 	return string(b)
 }
 
-func (n Ns) Validate() error {
+func (n Ns) validate() error {
 	if n.IsGlobal() {
 		return nil
 	}
@@ -176,7 +176,7 @@ func (n Ns) Validate() error {
 	)
 }
 
-func (n Ns) Contains(other Ns) bool {
+func (n Ns) contains(other Ns) bool {
 	if n.IsGlobal() {
 		// If query is empty (ie., global) we accept any non-remote namespace
 		return !other.IsRemote()
@@ -261,7 +261,7 @@ func (b *Bck) Less(other *Bck) bool {
 func (b *Bck) Validate() (err error) {
 	err = b.ValidateName()
 	if err == nil {
-		err = b.Ns.Validate()
+		err = b.Ns.validate()
 	}
 	return
 }
@@ -470,7 +470,7 @@ func (qbck *QueryBcks) Validate() (err error) {
 		}
 	}
 	if qbck.Ns != NsGlobal && qbck.Ns != NsAnyRemote {
-		return qbck.Ns.Validate()
+		return qbck.Ns.validate()
 	}
 	return nil
 }
@@ -489,7 +489,7 @@ func (qbck QueryBcks) Contains(other *Bck) bool {
 		return qbck.Equal(other)
 	}
 	ok := qbck.Provider == other.Provider || qbck.Provider == ""
-	return ok && qbck.Ns.Contains(other.Ns)
+	return ok && qbck.Ns.contains(other.Ns)
 }
 
 //////////

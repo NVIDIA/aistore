@@ -7,7 +7,6 @@ package cluster
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -92,38 +91,18 @@ func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 }
 
 func (lom *LOM) String() string {
-	if lom.info != "" {
-		return lom.info
+	if lom.info == "" {
+		lom.info = "o[" + lom.bck.Name + "/" + lom.ObjName + lom.str() + "]"
 	}
-	return lom._string(bool(glog.FastV(4, glog.SmoduleCluster)))
+	return lom.info
 }
 
-func (lom *LOM) StringEx() string { return lom._string(true) }
-
-func (lom *LOM) _string(verbose bool) string {
-	var a, s string
-	if verbose {
-		s = "o[" + lom.bck.String() + "/" + lom.ObjName
-		if lom.mpathInfo != nil {
-			s += ", " + lom.mpathInfo.String()
-		}
-		if lom.md.Size != 0 {
-			s += " size=" + cos.B2S(lom.md.Size, 1)
-		}
-		if lom.md.Ver != "" {
-			s += " ver=" + lom.md.Ver
-		}
-		if lom.md.Cksum != nil {
-			s += " " + lom.md.Cksum.String()
-		}
-	} else {
-		s = "o[" + lom.bck.Name + "/" + lom.ObjName
-	}
+func (lom *LOM) str() (a string) {
 	if lom.loaded() {
 		if lom.IsCopy() {
-			a += "(copy)"
+			a = "(copy)"
 		} else if !lom.IsHRW() {
-			a += "(misplaced)"
+			a = "(misplaced)"
 		}
 		if n := lom.NumCopies(); n > 1 {
 			a += fmt.Sprintf("(%dc)", n)
@@ -134,8 +113,24 @@ func (lom *LOM) _string(verbose bool) string {
 			a += "(not-hrw)"
 		}
 	}
-	lom.info = s + a + "]"
-	return lom.info
+	return
+}
+
+func (lom *LOM) StringEx() string {
+	s := "o[" + lom.bck.String() + "/" + lom.ObjName
+	if lom.mpathInfo != nil {
+		s += ", " + lom.mpathInfo.String()
+	}
+	if lom.md.Size != 0 {
+		s += " size=" + cos.B2S(lom.md.Size, 1)
+	}
+	if lom.md.Ver != "" {
+		s += " ver=" + lom.md.Ver
+	}
+	if lom.md.Cksum != nil {
+		s += " " + lom.md.Cksum.String()
+	}
+	return s + lom.str() + "]"
 }
 
 // allocates and copies metadata (in particular, atime and uname)

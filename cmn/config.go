@@ -931,6 +931,16 @@ func (c *BackendConf) EqualRemAIS(o *BackendConf) bool {
 	return true
 }
 
+func (c BackendConfAIS) String() (s string) {
+	for a, urls := range c {
+		if len(s) > 0 {
+			s += "; "
+		}
+		s += fmt.Sprintf("[%s => %v]", a, urls)
+	}
+	return
+}
+
 //////////////
 // DiskConf //
 //////////////
@@ -1554,8 +1564,8 @@ func (d *timeout) Set(cluconf *ClusterConfig) {
 	d.keepalive = cluconf.Timeout.MaxKeepalive.D()
 }
 
-func (d *timeout) CplaneOperation() time.Duration { return d.cplane }
-func (d *timeout) MaxKeepalive() time.Duration    { return d.keepalive }
+func (d *timeout) CplaneOperation() time.Duration { debug.Assert(d.cplane > 0); return d.cplane }
+func (d *timeout) MaxKeepalive() time.Duration    { debug.Assert(d.keepalive > 0); return d.keepalive }
 
 ////////////////////
 // DownloaderConf //

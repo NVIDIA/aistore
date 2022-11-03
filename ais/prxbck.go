@@ -149,10 +149,10 @@ func (args *bckInitArgs) access(bck *cluster.Bck) (errCode int, err error) {
 	return
 }
 
-// initAndTry initializes the bucket.
-// If the bucket doesn't exist it _may_ try to add it to the BMD (i.e., create on the fly).
+// initAndTry initializes the bucket (proxy-only, as the filename implies).
+// The method _may_ try to add it to the BMD if the bucket doesn't exist.
 // NOTE:
-// - on error the method calls `p.writeErr` - make sure _not_ to do the same in the caller
+// - on error it calls `p.writeErr` and friends, so make sure _not_ to do the same in the caller
 // - for remais buckets: user-provided alias(***)
 func (args *bckInitArgs) initAndTry() (bck *cluster.Bck, err error) {
 	var errCode int

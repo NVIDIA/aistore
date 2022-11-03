@@ -541,9 +541,12 @@ func showConfigHandler(c *cli.Context) (err error) {
 	return showNodeConfig(c)
 }
 
-func showClusterConfig(c *cli.Context, section string) error {
-	useJSON := flagIsSet(c, jsonFlag)
-	cluConfig, err := api.GetClusterConfig(apiBP)
+func showClusterConfig(c *cli.Context, what string) error {
+	var (
+		section        = strings.Split(what, "=")[0] // when called to show set-config result
+		useJSON        = flagIsSet(c, jsonFlag)
+		cluConfig, err = api.GetClusterConfig(apiBP)
+	)
 	if err != nil {
 		return err
 	}
@@ -594,12 +597,15 @@ func showNodeConfig(c *cli.Context) error {
 			scope = a
 		} else {
 			if scope == "" {
-				return incorrectUsageMsg(c, "... %s ...", section)
+				return incorrectUsageMsg(c, "... %v ...", c.Args().Tail())
 			}
 			if section != "" {
 				return incorrectUsageMsg(c, "... %s %s ...", section, a)
 			}
 			section = a
+			if i := strings.IndexByte(section, '='); i > 0 {
+				section = section[:i] // when called to show set-config result (same as above)
+			}
 		}
 	}
 

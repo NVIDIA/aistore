@@ -466,6 +466,7 @@ func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, err
 		errCode, err = extractErrCode(err, qbck.Ns.UUID)
 		return
 	}
+
 	// all attached
 	m.mu.RLock()
 	uuids := make([]string, 0, len(m.remote))

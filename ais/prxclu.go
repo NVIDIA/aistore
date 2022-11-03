@@ -188,7 +188,7 @@ func (p *proxy) getBackendInfoAIS(refresh bool) (*cmn.BackendInfoAIS, error) {
 			Path:   apc.URLPathDae.S,
 			Query:  q,
 		}
-		cargs.timeout = cmn.Timeout.CplaneOperation()
+		cargs.timeout = cmn.Timeout.MaxKeepalive()
 		cargs.cresv = cresBA{} // -> cmn.BackendInfoAIS
 	}
 	var (
