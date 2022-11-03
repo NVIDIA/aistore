@@ -362,7 +362,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 	} else {
 		tlog.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
 	}
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(rtd.bck), apc.FltPresent)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: rtd.bck.Provider}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	if len(bcks) != rtd.numBuckets {

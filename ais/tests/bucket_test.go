@@ -1880,7 +1880,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltPresent)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: apc.AIS}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	if !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck)) {
