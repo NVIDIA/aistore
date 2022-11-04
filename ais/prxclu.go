@@ -170,7 +170,7 @@ func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what
 	_ = p.writeJSON(w, r, out, what)
 }
 
-func (p *proxy) getRemAises(refresh bool) (*apc.RemAises, error) {
+func (p *proxy) getRemAises(refresh bool) (*cluster.Remotes, error) {
 	smap := p.owner.smap.get()
 	si, errT := smap.GetRandTarget()
 	if errT != nil {
@@ -192,12 +192,12 @@ func (p *proxy) getRemAises(refresh bool) (*apc.RemAises, error) {
 		cargs.cresv = cresBA{} // -> cmn.BackendInfoAIS
 	}
 	var (
-		v   *apc.RemAises
+		v   *cluster.Remotes
 		res = p.call(cargs)
 		err = res.toErr()
 	)
 	if err == nil {
-		v = res.v.(*apc.RemAises)
+		v = res.v.(*cluster.Remotes)
 	}
 	freeCargs(cargs)
 	freeCR(res)

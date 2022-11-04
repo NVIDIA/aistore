@@ -288,7 +288,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 		anyConf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
 		if !ok {
-			t.writeJSON(w, r, apc.RemAises{}, httpdaeWhat)
+			t.writeJSON(w, r, cluster.Remotes{}, httpdaeWhat)
 			return
 		}
 		aisBackendConf, ok := anyConf.(cmn.BackendConfAIS)

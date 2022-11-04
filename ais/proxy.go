@@ -78,7 +78,7 @@ type (
 			mtx  sync.RWMutex
 		}
 		remais struct {
-			apc.RemAises
+			cluster.Remotes
 			aliases cos.StrKVs
 			mu      sync.RWMutex
 		}
@@ -2857,7 +2857,7 @@ retry:
 		goto retry
 	}
 
-	p.remais.RemAises = *all
+	p.remais.Remotes = *all
 	p.remais.aliases = make(cos.StrKVs, 4)
 	for _, remais := range p.remais.A {
 		aliases := strings.Split(remais.Alias, cmn.RemAisAliasSeparator)

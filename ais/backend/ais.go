@@ -158,13 +158,13 @@ func (m *AISBackendProvider) _apply(cfg *cmn.ClusterConfig, clusterConf cmn.Back
 // return (m.remote + m.alias) in-memory info wo/ connecting to remote cluster(s)
 // (compare with GetInfo() below)
 // TODO: caller to pass its cached version to optimize-out allocations
-func (m *AISBackendProvider) GetInfoInternal() (res apc.RemAises) {
+func (m *AISBackendProvider) GetInfoInternal() (res cluster.Remotes) {
 	m.mu.RLock()
-	res.A = make([]*apc.RemAis, 0, len(m.remote))
+	res.A = make([]*cluster.RemAis, 0, len(m.remote))
 	for uuid, remAis := range m.remote {
 		var (
 			aliases []string
-			out     = &apc.RemAis{UUID: uuid}
+			out     = &cluster.RemAis{UUID: uuid}
 		)
 		out.URL = remAis.url
 		for a, u := range m.alias {
@@ -185,7 +185,7 @@ func (m *AISBackendProvider) GetInfoInternal() (res apc.RemAises) {
 // select the correct one at the moment it sends a request.
 // See also: GetInfoInternal()
 // TODO: ditto
-func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res apc.RemAises) {
+func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res cluster.Remotes) {
 	var (
 		cfg         = cmn.GCO.Get()
 		httpClient  = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout.D()})
@@ -196,11 +196,11 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res apc.Re
 		})
 	)
 	m.mu.RLock()
-	res.A = make([]*apc.RemAis, 0, len(m.remote))
+	res.A = make([]*cluster.RemAis, 0, len(m.remote))
 	for uuid, remAis := range m.remote {
 		var (
 			aliases []string
-			out     = &apc.RemAis{UUID: uuid}
+			out     = &cluster.RemAis{UUID: uuid}
 			client  = httpClient
 		)
 		if cos.IsHTTPS(remAis.url) {
@@ -226,16 +226,14 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res apc.Re
 			}
 			remAis.smap = smap
 		}
-		out.Primary = remAis.smap.Primary.String()
-		out.Smap = remAis.smap.Version
-		out.Targets = int32(remAis.smap.CountActiveTargets())
+		out.Smap = remAis.smap
 		res.A = append(res.A, out)
 	}
 	// defunct
 	for alias, clusterURLs := range clusterConf {
 		if _, ok := m.alias[alias]; !ok {
 			if _, ok = m.remote[alias]; !ok {
-				out := &apc.RemAis{Alias: alias, Primary: "<defunct>"}
+				out := &cluster.RemAis{Alias: alias, UUID: "<defunct>"}
 				out.URL = fmt.Sprintf("%v", clusterURLs)
 				res.A = append(res.A, out)
 			}

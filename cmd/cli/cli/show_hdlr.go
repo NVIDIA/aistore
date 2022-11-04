@@ -104,6 +104,8 @@ var (
 		},
 		subcmdShowRemoteAIS: {
 			noHeaderFlag,
+			verboseFlag,
+			jsonFlag,
 		},
 		subcmdShowLog: {
 			logSevFlag,
@@ -234,7 +236,7 @@ var (
 		ArgsUsage:    "",
 		Flags:        showCmdsFlags[subcmdShowRemoteAIS],
 		Action:       showRemoteAISHandler,
-		BashComplete: daemonCompletions(completeTargets),
+		BashComplete: daemonCompletions(completeTargets), // NOTE: not using remais.smap yet
 	}
 
 	showCmdLog = cli.Command{
@@ -699,7 +701,7 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 	return api.GetDaemonLog(apiBP, node, args)
 }
 
-func showRemoteAISHandler(c *cli.Context) (err error) {
+func showRemoteAISHandler(c *cli.Context) error {
 	all, err := api.GetRemoteAIS(apiBP)
 	if err != nil {
 		return err
@@ -709,25 +711,36 @@ func showRemoteAISHandler(c *cli.Context) (err error) {
 	if !flagIsSet(c, noHeaderFlag) {
 		fmt.Fprintln(tw, "UUID\tURL\tAlias\tPrimary\tSmap\tTargets\tOnline")
 	}
-	for _, remais := range all.A {
+	for _, ra := range all.A {
 		online := "no"
-		if remais.Online {
+		if ra.Online {
 			online = "yes"
 		}
-		if remais.Smap > 0 {
+		if ra.Smap != nil {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\tv%d\t%d\t%s\n",
-				remais.UUID, remais.URL, remais.Alias, remais.Primary, remais.Smap, remais.Targets, online)
+				ra.UUID, ra.URL, ra.Alias, ra.Smap.Primary, ra.Smap.Version, ra.Smap.CountTargets(), online)
 		} else {
-			url := remais.URL
+			url := ra.URL
 			if url[0] == '[' {
 				url = strings.Replace(url, "[", "<", 1)
 				url = strings.Replace(url, "]", ">", 1)
 			}
-			fmt.Fprintf(tw, "<%s>\t%s\t%s\t%s\t%s\t%s\t%s\n", remais.UUID, url, remais.Alias, "n/a", "n/a", "n/a", online)
+			fmt.Fprintf(tw, "<%s>\t%s\t%s\t%s\t%s\t%s\t%s\n", ra.UUID, url, ra.Alias, "n/a", "n/a", "n/a", online)
 		}
 	}
 	tw.Flush()
-	return
+
+	if flagIsSet(c, verboseFlag) {
+		for _, ra := range all.A {
+			fmt.Fprintln(c.App.Writer)
+			actionCptn(c, ra.Alias+"["+ra.UUID+"]", " cluster map:")
+			err := clusterSmap(c, ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))
+			if err != nil {
+				actionWarn(c, err.Error())
+			}
+		}
+	}
+	return nil
 }
 
 func showMpathHandler(c *cli.Context) error {
