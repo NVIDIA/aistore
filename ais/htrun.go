@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -63,8 +64,8 @@ type htrun struct {
 		etl    etlOwner // ditto
 	}
 	startup struct {
-		cluster atomic.Bool // determines if the cluster has started up
-		node    atomic.Bool // determines time when the node started up
+		cluster atomic.Int64 // mono.NanoTime() since cluster startup, zero prior to that
+		node    atomic.Int64 // ditto - for the node
 	}
 	gmm                 *memsys.MMSA // system pagesize-based memory manager and slab allocator
 	smm                 *memsys.MMSA // system MMSA for small-size allocations
@@ -142,24 +143,25 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 
 // usage: [API call => handler => ClusterStartedWithRetry ]
 func (h *htrun) ClusterStartedWithRetry() bool {
-	if h.startup.cluster.Load() {
+	if clutime := h.startup.cluster.Load(); clutime > 0 {
 		return true
 	}
 	if !h.NodeStarted() {
 		return false
 	}
 	time.Sleep(time.Second)
-	if !h.startup.cluster.Load() {
+	clutime := h.startup.cluster.Load()
+	if clutime == 0 {
 		glog.ErrorDepth(1, fmt.Sprintf("%s: cluster is starting up (?)", h.si))
 	}
-	return h.startup.cluster.Load()
+	return clutime > 0
 }
 
-func (h *htrun) ClusterStarted() bool { return h.startup.cluster.Load() }
-func (h *htrun) markClusterStarted()  { h.startup.cluster.Store(true) }
+func (h *htrun) ClusterStarted() bool { return h.startup.cluster.Load() > 0 }
+func (h *htrun) markClusterStarted()  { h.startup.cluster.Store(mono.NanoTime()) }
 
-func (h *htrun) NodeStarted() bool { return h.startup.node.Load() }
-func (h *htrun) markNodeStarted()  { h.startup.node.Store(true) }
+func (h *htrun) NodeStarted() bool { return h.startup.node.Load() > 0 }
+func (h *htrun) markNodeStarted()  { h.startup.node.Store(mono.NanoTime()) }
 
 func (h *htrun) registerNetworkHandlers(networkHandlers []networkHandler) {
 	var (

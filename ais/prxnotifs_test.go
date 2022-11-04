@@ -84,7 +84,7 @@ var _ = Describe("Notifications xaction test", func() {
 			smap := &smapX{Smap: cluster.Smap{Version: 1}}
 			n.p.htrun.owner.smap = newSmapOwner(cmn.GCO.Get())
 			n.p.htrun.owner.smap.put(smap)
-			n.p.htrun.startup.cluster = *atomic.NewBool(true)
+			n.p.htrun.startup.cluster = *atomic.NewInt64(1)
 			return n
 		}
 

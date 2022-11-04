@@ -2836,12 +2836,16 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 	return
 }
 
-// calls a random target to get-backend-info-ais (aka getBackendInfoAIS) to refresh local cache
+// refresh local p.remais cache via intra-cluster call to a random target
 func (p *proxy) _remais(newConfig *globalConfig) {
 	var (
 		sleep   = newConfig.Timeout.CplaneOperation.D()
-		retries = 3
+		retries = 4
 	)
+	if clutime := p.startup.cluster.Load(); clutime < int64(time.Minute) {
+		sleep = newConfig.Timeout.MaxKeepalive.D()
+		retries = 5
+	}
 retry:
 	time.Sleep(sleep)
 	all, err := p.getRemAises(false /*refresh*/)
@@ -2853,7 +2857,8 @@ retry:
 	if p.remais.Ver >= all.Ver && retries > 0 {
 		p.remais.mu.Unlock()
 		retries--
-		glog.Warningf("%s: retrying remais ver=%d (remains %d)", p, all.Ver, retries-1)
+		glog.Errorf("%s: retrying remais ver=%d (%d attempts)", p, all.Ver, retries-1)
+		sleep = newConfig.Timeout.CplaneOperation.D()
 		goto retry
 	}
 
