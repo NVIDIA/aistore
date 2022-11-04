@@ -742,14 +742,14 @@ func suggestUpdatableAuthNConfig(c *cli.Context) {
 }
 
 func suggestRemote(_ *cli.Context) {
-	remClusters, err := api.GetRemoteAIS(apiBP)
+	all, err := api.GetRemoteAIS(apiBP)
 	if err != nil {
 		return
 	}
-	for uuid, remAis := range remClusters {
-		fmt.Println(uuid)
-		if remAis.Alias != "" {
-			fmt.Println(remAis.Alias)
+	for _, remais := range all.A {
+		fmt.Println(remais.UUID)
+		if remais.Alias != "" {
+			fmt.Println(remais.Alias)
 		}
 	}
 }

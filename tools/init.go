@@ -131,7 +131,7 @@ func InitLocalCluster() {
 
 	err := InitCluster(proxyURL, clusterType)
 	if err == nil {
-		initRemoteCluster() // remote AIS that optionally may be run locally as well and used for testing
+		initRemAis() // remote AIS that optionally may be run locally as well and used for testing
 		return
 	}
 	fmt.Printf("Error: %s\n\n", strings.TrimSuffix(err.Error(), "\n"))
@@ -208,15 +208,15 @@ func initPmap() {
 	pmapReadOnly = smap.Pmap
 }
 
-func initRemoteCluster() {
-	aisInfo, err := api.GetRemoteAIS(BaseAPIParams(proxyURLReadOnly))
+func initRemAis() {
+	all, err := api.GetRemoteAIS(BaseAPIParams(proxyURLReadOnly))
 	if err != nil {
 		if !errors.Is(err, io.EOF) {
 			fmt.Fprintf(os.Stderr, "failed to query remote ais cluster: %v\n", err)
 		}
 		return
 	}
-	for _, clusterInfo := range aisInfo {
+	for _, clusterInfo := range all.A {
 		if !clusterInfo.Online {
 			continue
 		}

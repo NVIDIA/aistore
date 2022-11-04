@@ -73,12 +73,12 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case apc.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
 	case apc.GetWhatRemoteAIS:
-		remClusters, err := p.getBackendInfoAIS(true /*refresh*/)
+		all, err := p.getRemAises(true /*refresh*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		p.writeJSON(w, r, remClusters, what)
+		p.writeJSON(w, r, all, what)
 	case apc.GetWhatTargetIPs:
 		// Return comma-separated IPs of the targets.
 		// It can be used to easily fill the `--noproxy` parameter in cURL.
@@ -170,7 +170,7 @@ func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what
 	_ = p.writeJSON(w, r, out, what)
 }
 
-func (p *proxy) getBackendInfoAIS(refresh bool) (*cmn.BackendInfoAIS, error) {
+func (p *proxy) getRemAises(refresh bool) (*apc.RemAises, error) {
 	smap := p.owner.smap.get()
 	si, errT := smap.GetRandTarget()
 	if errT != nil {
@@ -178,7 +178,7 @@ func (p *proxy) getBackendInfoAIS(refresh bool) (*cmn.BackendInfoAIS, error) {
 	}
 	q := url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
 	if refresh {
-		q[apc.QparamClusterInfo] = []string{"true"} // reconnect and get remote Smap
+		q[apc.QparamClusterInfo] = []string{"true"} // handshake to check connectivity and get remote Smap
 	}
 	cargs := allocCargs()
 	{
@@ -192,12 +192,12 @@ func (p *proxy) getBackendInfoAIS(refresh bool) (*cmn.BackendInfoAIS, error) {
 		cargs.cresv = cresBA{} // -> cmn.BackendInfoAIS
 	}
 	var (
-		v   *cmn.BackendInfoAIS
+		v   *apc.RemAises
 		res = p.call(cargs)
 		err = res.toErr()
 	)
 	if err == nil {
-		v = res.v.(*cmn.BackendInfoAIS)
+		v = res.v.(*apc.RemAises)
 	}
 	freeCargs(cargs)
 	freeCR(res)

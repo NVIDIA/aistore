@@ -535,19 +535,19 @@ func showBucketProps(c *cli.Context) (err error) {
 	}
 
 	if bck.IsRemoteAIS() {
-		if remClusters, err := api.GetRemoteAIS(apiBP); err == nil && remClusters != nil {
-			for uuid, remAis := range remClusters {
-				if remAis.Alias != bck.Ns.UUID && uuid != bck.Ns.UUID {
+		if all, err := api.GetRemoteAIS(apiBP); err == nil {
+			for _, remais := range all.A {
+				if remais.Alias != bck.Ns.UUID && remais.UUID != bck.Ns.UUID {
 					continue
 				}
 				altbck := bck
-				if remAis.Alias == bck.Ns.UUID {
-					altbck.Ns.UUID = uuid
+				if remais.Alias == bck.Ns.UUID {
+					altbck.Ns.UUID = remais.UUID
 				} else {
-					altbck.Ns.UUID = remAis.Alias
+					altbck.Ns.UUID = remais.Alias
 				}
-				fmt.Fprintf(c.App.Writer, "remote cluster alias:\t\t%s\n", fcyan(remAis.Alias))
-				fmt.Fprintf(c.App.Writer, "remote cluster UUID:\t\t%s\n", fcyan(uuid))
+				fmt.Fprintf(c.App.Writer, "remote cluster alias:\t\t%s\n", fcyan(remais.Alias))
+				fmt.Fprintf(c.App.Writer, "remote cluster UUID:\t\t%s\n", fcyan(remais.UUID))
 				fmt.Fprintf(c.App.Writer, "alternative bucket name:\t%s\n\n", fcyan(altbck.String()))
 				break
 			}

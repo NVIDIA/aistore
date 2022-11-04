@@ -134,7 +134,7 @@ func GetTargetDiskStats(bp BaseParams, targetID string) (diskStats ios.AllDiskSt
 	return
 }
 
-func GetRemoteAIS(bp BaseParams) (aisInfo cmn.BackendInfoAIS, err error) {
+func GetRemoteAIS(bp BaseParams) (remais apc.RemAises, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -142,7 +142,7 @@ func GetRemoteAIS(bp BaseParams) (aisInfo cmn.BackendInfoAIS, err error) {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
 	}
-	err = reqParams.DoHTTPReqResp(&aisInfo)
+	err = reqParams.DoHTTPReqResp(&remais)
 	FreeRp(reqParams)
 	return
 }

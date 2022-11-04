@@ -78,8 +78,8 @@ type (
 			mtx  sync.RWMutex
 		}
 		remais struct {
+			apc.RemAises
 			aliases cos.StrKVs
-			backend cmn.BackendInfoAIS
 			mu      sync.RWMutex
 		}
 	}
@@ -1849,7 +1849,13 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 		p.remais.mu.RLock()
 		for alias, uuid := range p.remais.aliases {
 			if alias == aliasOrUUID || uuid == aliasOrUUID {
-				urls = []string{p.remais.backend[uuid].URL}
+				for _, remais := range p.remais.A {
+					if remais.UUID == uuid {
+						urls = []string{remais.URL}
+						break
+					}
+				}
+				debug.Assert(len(urls) == 1)
 				exists = true
 				break
 			}
@@ -2832,26 +2838,28 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 
 // calls a random target to get-backend-info-ais (aka getBackendInfoAIS) to refresh local cache
 func (p *proxy) _remais(newConfig *globalConfig) {
-	time.Sleep(newConfig.Timeout.MaxKeepalive.D()) // TODO -- FIXME: synchronize via `appliedCfgVer`
-
-	remClusters, errV := p.getBackendInfoAIS(false /*refresh*/)
-	if errV != nil {
-		glog.Error(cmn.NewErrFailedTo(p, "apply config (in re \"remote clusters\")", newConfig, errV))
+	var (
+		sleep   = newConfig.Timeout.CplaneOperation.D()
+		retries = 3
+	)
+retry:
+	time.Sleep(sleep)
+	all, err := p.getRemAises(false /*refresh*/)
+	if err != nil {
+		glog.Error(cmn.NewErrFailedTo(p, "apply config (in re \"remote clusters\")", newConfig, err))
 		return
 	}
-	debug.Assert(remClusters != nil)
-
-	// refresh under wlock
 	p.remais.mu.Lock()
-	p.remais.backend = *remClusters
-	if p.remais.aliases == nil {
-		p.remais.aliases = make(cos.StrKVs, len(p.remais.backend)+2)
-	} else {
-		for a := range p.remais.aliases {
-			delete(p.remais.aliases, a)
-		}
+	if p.remais.Ver >= all.Ver && retries > 0 {
+		p.remais.mu.Unlock()
+		retries--
+		glog.Warningf("%s: retrying remais ver=%d (remains %d)", p, all.Ver, retries-1)
+		goto retry
 	}
-	for _, remais := range p.remais.backend {
+
+	p.remais.RemAises = *all
+	p.remais.aliases = make(cos.StrKVs, 4)
+	for _, remais := range p.remais.A {
 		aliases := strings.Split(remais.Alias, cmn.RemAisAliasSeparator)
 		for _, a := range aliases {
 			p.remais.aliases[a] = remais.UUID

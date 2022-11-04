@@ -467,7 +467,7 @@ func (c cresSM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jr
 func (cresND) newV() any                              { return &cluster.Snode{} }
 func (c cresND) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBA) newV() any                              { return &cmn.BackendInfoAIS{} }
+func (cresBA) newV() any                              { return &apc.RemAises{} }
 func (c cresBA) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 func (cresEI) newV() any                              { return &etl.InfoList{} }

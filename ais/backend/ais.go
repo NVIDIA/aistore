@@ -157,13 +157,14 @@ func (m *AISBackendProvider) _apply(cfg *cmn.ClusterConfig, clusterConf cmn.Back
 
 // return (m.remote + m.alias) in-memory info wo/ connecting to remote cluster(s)
 // (compare with GetInfo() below)
-func (m *AISBackendProvider) GetInfoInternal() (cia cmn.BackendInfoAIS) {
+// TODO: caller to pass its cached version to optimize-out allocations
+func (m *AISBackendProvider) GetInfoInternal() (res apc.RemAises) {
 	m.mu.RLock()
-	cia = make(cmn.BackendInfoAIS, len(m.remote))
+	res.A = make([]*apc.RemAis, 0, len(m.remote))
 	for uuid, remAis := range m.remote {
 		var (
 			aliases []string
-			out     = &cmn.RemoteAIS{UUID: uuid} // remAis (type) external representation
+			out     = &apc.RemAis{UUID: uuid}
 		)
 		out.URL = remAis.url
 		for a, u := range m.alias {
@@ -172,9 +173,10 @@ func (m *AISBackendProvider) GetInfoInternal() (cia cmn.BackendInfoAIS) {
 			}
 		}
 		out.Alias = strings.Join(aliases, cmn.RemAisAliasSeparator)
-		cia[uuid] = out
+		res.A = append(res.A, out)
 	}
-	defer m.mu.RUnlock()
+	res.Ver = m.appliedCfgVer
+	m.mu.RUnlock()
 	return
 }
 
@@ -182,7 +184,8 @@ func (m *AISBackendProvider) GetInfoInternal() (cia cmn.BackendInfoAIS) {
 // clusters(HTTP and HTTPS). So, the method must use both kinds of clients and
 // select the correct one at the moment it sends a request.
 // See also: GetInfoInternal()
-func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.BackendInfoAIS) {
+// TODO: ditto
+func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res apc.RemAises) {
 	var (
 		cfg         = cmn.GCO.Get()
 		httpClient  = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout.D()})
@@ -193,11 +196,11 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.Ba
 		})
 	)
 	m.mu.RLock()
-	cia = make(cmn.BackendInfoAIS, len(m.remote))
+	res.A = make([]*apc.RemAis, 0, len(m.remote))
 	for uuid, remAis := range m.remote {
 		var (
 			aliases []string
-			out     = &cmn.RemoteAIS{UUID: uuid} // remAis (type) external representation
+			out     = &apc.RemAis{UUID: uuid}
 			client  = httpClient
 		)
 		if cos.IsHTTPS(remAis.url) {
@@ -226,20 +229,19 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.Ba
 		out.Primary = remAis.smap.Primary.String()
 		out.Smap = remAis.smap.Version
 		out.Targets = int32(remAis.smap.CountActiveTargets())
-		cia[uuid] = out
+		res.A = append(res.A, out)
 	}
 	// defunct
 	for alias, clusterURLs := range clusterConf {
 		if _, ok := m.alias[alias]; !ok {
 			if _, ok = m.remote[alias]; !ok {
-				info := &cmn.RemoteAIS{}
-				info.URL = fmt.Sprintf("%v", clusterURLs)
-				cia[alias] = info
+				out := &apc.RemAis{Alias: alias, Primary: "<defunct>"}
+				out.URL = fmt.Sprintf("%v", clusterURLs)
+				res.A = append(res.A, out)
 			}
 		}
 	}
 	m.mu.RUnlock()
-
 	return
 }
 

@@ -146,24 +146,12 @@ type (
 		// 3rd party Cloud(s) -- set during validation
 		Providers map[string]Ns `json:"-"`
 	}
-	RemoteAIS struct {
-		URL     string `json:"url"`
-		Alias   string `json:"alias"` // NOTE: strings.Join(aliases, RemAisAliasSeparator)
-		UUID    string `json:"uuid"`  // Smap.UUID
-		Primary string `json:"primary"`
-		Smap    int64  `json:"smap"`
-		Targets int32  `json:"targets"`
-		Online  bool   `json:"online"`
-	}
-
-	BackendConfAIS map[string][]string // cluster alias -> [urls...]
-	BackendInfoAIS map[string]*RemoteAIS
-
 	BackendConfHDFS struct {
 		Addresses           []string `json:"addresses"`
 		User                string   `json:"user"`
 		UseDatanodeHostname bool     `json:"use_datanode_hostname"`
 	}
+	BackendConfAIS map[string][]string // cluster alias -> [urls...]
 
 	MirrorConf struct {
 		Copies  int64 `json:"copies"`       // num copies
