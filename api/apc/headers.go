@@ -55,6 +55,10 @@ const (
 	// Reverse proxy headers.
 	HdrNodeID  = HeaderPrefix + "node-id"
 	HdrNodeURL = HeaderPrefix + "node-url"
+
+	// uptimes, respectively
+	HdrNodeUptime    = HeaderPrefix + "node-uptime"
+	HdrClusterUptime = HeaderPrefix + "cluster-uptime"
 )
 
 // AuthN consts

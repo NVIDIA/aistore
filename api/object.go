@@ -205,7 +205,7 @@ func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, object string, custom cos.
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -219,7 +219,7 @@ func DeleteObject(bp BaseParams, bck cmn.Bck, object string) error {
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = bck.AddToQuery(nil)
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -236,7 +236,7 @@ func EvictObject(bp BaseParams, bck cmn.Bck, object string) error {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -479,7 +479,7 @@ func FlushObject(args FlushArgs) error {
 		reqParams.Query = q
 		reqParams.Header = header
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -496,7 +496,7 @@ func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -514,7 +514,7 @@ func Promote(args *PromoteArgs) (xactID string, err error) {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
-	err = reqParams.DoHTTPReqResp(&xactID)
+	err = reqParams.DoReqResp(&xactID)
 	FreeRp(reqParams)
 	return
 }

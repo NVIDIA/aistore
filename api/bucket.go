@@ -49,7 +49,7 @@ func patchBucketProps(bp BaseParams, bck cmn.Bck, body []byte, query ...url.Valu
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err = reqParams.DoHTTPReqResp(&xactID)
+	err = reqParams.DoReqResp(&xactID)
 	FreeRp(reqParams)
 	return
 }
@@ -170,7 +170,7 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 		reqParams.Query = q
 	}
 	bcks := cmn.Bcks{}
-	err := reqParams.DoHTTPReqResp(&bcks)
+	err := reqParams.DoReqResp(&bcks)
 	FreeRp(reqParams)
 	if err != nil {
 		return nil, err
@@ -233,7 +233,7 @@ func CreateBucket(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) er
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -249,7 +249,7 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -278,7 +278,7 @@ func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xac
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err = reqParams.DoHTTPReqResp(&xactID)
+	err = reqParams.DoReqResp(&xactID)
 	FreeRp(reqParams)
 	return
 }
@@ -299,7 +299,7 @@ func RenameBucket(bp BaseParams, fromBck, toBck cmn.Bck) (xactID string, err err
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err = reqParams.DoHTTPReqResp(&xactID)
+	err = reqParams.DoReqResp(&xactID)
 	FreeRp(reqParams)
 	return
 }
@@ -321,7 +321,7 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(q)
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -404,7 +404,7 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj u
 
 		// Retry with increasing timeout.
 		for i := 0; i < 5; i++ {
-			if err = reqParams.DoHTTPReqResp(page); err != nil {
+			if err = reqParams.DoReqResp(page); err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					client := *reqParams.BaseParams.Client
 					client.Timeout = 2 * client.Timeout
@@ -475,7 +475,7 @@ func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg) (*cmn.LsoRes
 
 	// NOTE: No need to preallocate bucket entries slice, we use msgpack so it will do it for us!
 	page := &cmn.LsoResult{}
-	err := reqParams.DoHTTPReqResp(page)
+	err := reqParams.DoReqResp(page)
 	FreeRp(reqParams)
 	if err != nil {
 		return nil, err
@@ -500,7 +500,7 @@ func ListObjectsInvalidateCache(bp BaseParams, bck cmn.Bck) error {
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActInvalListCache})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -517,7 +517,7 @@ func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xactID string, err err
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
-	err = reqParams.DoHTTPReqResp(&xactID)
+	err = reqParams.DoReqResp(&xactID)
 	FreeRp(reqParams)
 	return
 }
@@ -538,7 +538,7 @@ func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int) (xactID string
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
-	err = reqParams.DoHTTPReqResp(&xactID)
+	err = reqParams.DoReqResp(&xactID)
 	FreeRp(reqParams)
 	return
 }

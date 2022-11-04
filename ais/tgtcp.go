@@ -936,6 +936,9 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if responded := t.healthByExternalWD(w, r); responded {
 		return
 	}
+
+	t.uptime2hdr(w.Header())
+
 	// cluster info piggy-back
 	query := r.URL.Query()
 	getCii := cos.IsParseBool(query.Get(apc.QparamClusterInfo))

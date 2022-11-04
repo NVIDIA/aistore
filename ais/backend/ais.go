@@ -220,7 +220,6 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res cluste
 				glog.Errorf("%s: UUID has changed %q", remAis, smap.UUID)
 				continue
 			}
-			out.Online = true
 			if smap.Version < remAis.smap.Version {
 				glog.Errorf("%s: detected older Smap %s - proceeding to override anyway", remAis, smap)
 			}

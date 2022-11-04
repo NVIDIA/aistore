@@ -107,7 +107,7 @@ func DownloadGetList(bp BaseParams, regex string) (dlList downloader.DlJobInfos,
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err = reqParams.DoHTTPReqResp(&dlList)
+	err = reqParams.DoReqResp(&dlList)
 	FreeRp(reqParams)
 	sort.Sort(dlList)
 	return
@@ -123,7 +123,7 @@ func AbortDownload(bp BaseParams, id string) error {
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -138,18 +138,18 @@ func RemoveDownload(bp BaseParams, id string) error {
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
 
 func (reqParams *ReqParams) doDlDownloadRequest() (string, error) {
 	var resp downloader.DlPostResp
-	err := reqParams.DoHTTPReqResp(&resp)
+	err := reqParams.DoReqResp(&resp)
 	return resp.ID, err
 }
 
 func (reqParams *ReqParams) doDlStatusRequest() (resp downloader.DlStatusResp, err error) {
-	err = reqParams.DoHTTPReqResp(&resp)
+	err = reqParams.DoReqResp(&resp)
 	return resp, err
 }

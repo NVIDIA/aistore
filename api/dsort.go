@@ -23,7 +23,7 @@ func StartDSort(bp BaseParams, rs dsort.RequestSpec) (string, error) {
 		reqParams.Body = cos.MustMarshal(rs)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err := reqParams.DoHTTPReqResp(&id)
+	err := reqParams.DoReqResp(&id)
 	FreeRp(reqParams)
 	return id, err
 }
@@ -36,7 +36,7 @@ func AbortDSort(bp BaseParams, managerUUID string) error {
 		reqParams.Path = apc.URLPathdSortAbort.S
 		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -49,7 +49,7 @@ func MetricsDSort(bp BaseParams, managerUUID string) (metrics map[string]*dsort.
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
-	err = reqParams.DoHTTPReqResp(&metrics)
+	err = reqParams.DoReqResp(&metrics)
 	FreeRp(reqParams)
 	return metrics, err
 }
@@ -62,7 +62,7 @@ func RemoveDSort(bp BaseParams, managerUUID string) error {
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -75,7 +75,7 @@ func ListDSort(bp BaseParams, regex string) (jobsInfos []*dsort.JobInfo, err err
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Query = url.Values{apc.QparamRegex: []string{regex}}
 	}
-	err = reqParams.DoHTTPReqResp(&jobsInfos)
+	err = reqParams.DoReqResp(&jobsInfos)
 	FreeRp(reqParams)
 	return jobsInfos, err
 }

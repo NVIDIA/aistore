@@ -903,6 +903,9 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
+
+	p.uptime2hdr(w.Header())
+
 	query := r.URL.Query()
 	prr := cos.IsParseBool(query.Get(apc.QparamPrimaryReadyReb))
 	if !prr {
@@ -2840,11 +2843,10 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 func (p *proxy) _remais(newConfig *globalConfig) {
 	var (
 		sleep   = newConfig.Timeout.CplaneOperation.D()
-		retries = 4
-	)
-	if clutime := p.startup.cluster.Load(); clutime < int64(time.Minute) {
-		sleep = newConfig.Timeout.MaxKeepalive.D()
 		retries = 5
+	)
+	if clutime := p.startup.cluster.Load(); clutime < int64(newConfig.Timeout.Startup) {
+		sleep = 2 * newConfig.Timeout.MaxKeepalive.D()
 	}
 retry:
 	time.Sleep(sleep)

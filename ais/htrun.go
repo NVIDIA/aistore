@@ -1905,6 +1905,12 @@ func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyP
 	return
 }
 
+func (h *htrun) uptime2hdr(hdr http.Header) {
+	now := mono.NanoTime()
+	hdr.Set(apc.HdrNodeUptime, strconv.FormatInt(now-h.startup.node.Load(), 10))
+	hdr.Set(apc.HdrClusterUptime, strconv.FormatInt(now-h.startup.cluster.Load(), 10))
+}
+
 // NOTE: not checking vs Smap (yet)
 func isT2TPut(hdr http.Header) bool { return hdr != nil && hdr.Get(apc.HdrT2TPutterID) != "" }
 

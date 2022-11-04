@@ -85,7 +85,7 @@ func StartXaction(bp BaseParams, args XactReqArgs) (id string, err error) {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
-	err = reqParams.DoHTTPReqResp(&id)
+	err = reqParams.DoReqResp(&id)
 	FreeRp(reqParams)
 	return id, err
 }
@@ -105,7 +105,7 @@ func AbortXaction(bp BaseParams, args XactReqArgs) error {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -135,7 +135,7 @@ func QueryXactionSnaps(bp BaseParams, args XactReqArgs) (xs NodesXactMultiSnap, 
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatQueryXactStats}}
 	}
-	err = reqParams.DoHTTPReqResp(&xs)
+	err = reqParams.DoReqResp(&xs)
 	FreeRp(reqParams)
 	return xs, err
 }
@@ -156,7 +156,7 @@ func GetXactionStatus(bp BaseParams, args XactReqArgs) (status *nl.NotifStatus, 
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatXactStatus}}
 	}
-	err = reqParams.DoHTTPReqResp(status)
+	err = reqParams.DoReqResp(status)
 	FreeRp(reqParams)
 	return
 }

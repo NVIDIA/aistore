@@ -26,7 +26,7 @@ func ETLInit(bp BaseParams, msg etl.InitMsg) (id string, err error) {
 		reqParams.Path = apc.URLPathETL.S
 		reqParams.Body = cos.MustMarshal(msg)
 	}
-	err = reqParams.DoHTTPReqResp(&id)
+	err = reqParams.DoReqResp(&id)
 	FreeRp(reqParams)
 	return id, err
 }
@@ -38,7 +38,7 @@ func ETLList(bp BaseParams) (list []etl.Info, err error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathETL.S
 	}
-	err = reqParams.DoHTTPReqResp(&list)
+	err = reqParams.DoReqResp(&list)
 	FreeRp(reqParams)
 	return list, err
 }
@@ -56,7 +56,7 @@ func ETLLogs(bp BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
-	err = reqParams.DoHTTPReqResp(&logs)
+	err = reqParams.DoReqResp(&logs)
 	FreeRp(reqParams)
 	return logs, err
 }
@@ -69,7 +69,7 @@ func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err err
 		reqParams.BaseParams = params
 		reqParams.Path = path
 	}
-	err = reqParams.DoHTTPReqResp(&healths)
+	err = reqParams.DoReqResp(&healths)
 	FreeRp(reqParams)
 	return healths, err
 }
@@ -82,7 +82,7 @@ func ETLDelete(bp BaseParams, id string) (err error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
-	err = reqParams.DoHTTPRequest()
+	err = reqParams.DoRequest()
 	FreeRp(reqParams)
 	return
 }
@@ -143,7 +143,7 @@ func etlPostAction(bp BaseParams, id, action string) (err error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathETL.Join(id, action)
 	}
-	err = reqParams.DoHTTPRequest()
+	err = reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -172,7 +172,7 @@ func ETLBucket(bp BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg) (xactI
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err = reqParams.DoHTTPReqResp(&xactID)
+	err = reqParams.DoReqResp(&xactID)
 	FreeRp(reqParams)
 	return
 }

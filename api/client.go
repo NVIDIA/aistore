@@ -129,20 +129,34 @@ func FreeRp(reqParams *ReqParams) {
 	reqParamPool.Put(reqParams)
 }
 
-// uses do() to make request; if successful, checks, drains, and closes the response body
-func (reqParams *ReqParams) DoHTTPRequest() error {
+// uses do() to make the request; if successful, checks, drains, and closes the response body
+func (reqParams *ReqParams) DoRequest() error {
 	resp, err := reqParams.do()
 	if err != nil {
 		return err
 	}
+	return reqParams.cdc(resp)
+}
+
+// same as above except that it also returns response header
+func (reqParams *ReqParams) DoRequestHdr() (http.Header, error) {
+	resp, err := reqParams.do()
+	if err != nil {
+		return nil, err
+	}
+	return resp.Header, reqParams.cdc(resp)
+}
+
+// check, drain and close
+func (reqParams *ReqParams) cdc(resp *http.Response) (err error) {
 	err = reqParams.checkResp(resp)
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()
-	return err
+	return
 }
 
-// uses doResp() to make request and decode response into `v`
-func (reqParams *ReqParams) DoHTTPReqResp(v any) error {
+// (see below)
+func (reqParams *ReqParams) DoReqResp(v any) error {
 	_, err := reqParams.doResp(v)
 	return err
 }

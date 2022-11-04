@@ -30,7 +30,7 @@ func AddUser(bp api.BaseParams, newUser *User) error {
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func UpdateUser(bp api.BaseParams, user *User) error {
@@ -44,7 +44,7 @@ func UpdateUser(bp api.BaseParams, user *User) error {
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func DeleteUser(bp api.BaseParams, userID string) error {
@@ -55,7 +55,7 @@ func DeleteUser(bp api.BaseParams, userID string) error {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathUsers.Join(userID)
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 // Authorize a user and return a user token in case of success.
@@ -72,7 +72,7 @@ func LoginUser(bp api.BaseParams, userID, pass, clusterID string, expire *time.D
 		reqParams.Body = cos.MustMarshal(rec)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err = reqParams.DoHTTPReqResp(&token)
+	err = reqParams.DoReqResp(&token)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func RegisterCluster(bp api.BaseParams, cluSpec CluACL) error {
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func UpdateCluster(bp api.BaseParams, cluSpec CluACL) error {
@@ -108,7 +108,7 @@ func UpdateCluster(bp api.BaseParams, cluSpec CluACL) error {
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func UnregisterCluster(bp api.BaseParams, spec CluACL) error {
@@ -119,7 +119,7 @@ func UnregisterCluster(bp api.BaseParams, spec CluACL) error {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClusters.Join(spec.ID)
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func GetRegisteredClusters(bp api.BaseParams, spec CluACL) ([]*CluACL, error) {
@@ -135,7 +135,7 @@ func GetRegisteredClusters(bp api.BaseParams, spec CluACL) ([]*CluACL, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
-	err := reqParams.DoHTTPReqResp(clusters)
+	err := reqParams.DoReqResp(clusters)
 
 	rec := make([]*CluACL, 0, len(clusters.M))
 	for _, clu := range clusters.M {
@@ -158,7 +158,7 @@ func GetRole(bp api.BaseParams, roleID string) (*Role, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = cos.JoinWords(apc.URLPathRoles.S, roleID)
 	}
-	err := reqParams.DoHTTPReqResp(&rInfo)
+	err := reqParams.DoReqResp(&rInfo)
 	return rInfo, err
 }
 
@@ -172,7 +172,7 @@ func GetAllRoles(bp api.BaseParams) ([]*Role, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
-	err := reqParams.DoHTTPReqResp(&roles)
+	err := reqParams.DoReqResp(&roles)
 
 	less := func(i, j int) bool { return roles[i].ID < roles[j].ID }
 	sort.Slice(roles, less)
@@ -188,7 +188,7 @@ func GetAllUsers(bp api.BaseParams) ([]*User, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathUsers.S
 	}
-	err := reqParams.DoHTTPReqResp(&users)
+	err := reqParams.DoReqResp(&users)
 
 	list := make([]*User, 0, len(users))
 	for _, info := range users {
@@ -213,7 +213,7 @@ func GetUser(bp api.BaseParams, userID string) (*User, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = cos.JoinWords(apc.URLPathUsers.S, userID)
 	}
-	err := reqParams.DoHTTPReqResp(&uInfo)
+	err := reqParams.DoReqResp(&uInfo)
 	return uInfo, err
 }
 
@@ -228,7 +228,7 @@ func AddRole(bp api.BaseParams, roleSpec *Role) error {
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func UpdateRole(bp api.BaseParams, roleSpec *Role) error {
@@ -242,7 +242,7 @@ func UpdateRole(bp api.BaseParams, roleSpec *Role) error {
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func DeleteRole(bp api.BaseParams, role string) error {
@@ -253,7 +253,7 @@ func DeleteRole(bp api.BaseParams, role string) error {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathRoles.Join(role)
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func RevokeToken(bp api.BaseParams, token string) error {
@@ -267,7 +267,7 @@ func RevokeToken(bp api.BaseParams, token string) error {
 		reqParams.Path = apc.URLPathTokens.S
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func GetConfig(bp api.BaseParams) (*Config, error) {
@@ -279,7 +279,7 @@ func GetConfig(bp api.BaseParams) (*Config, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathDae.S
 	}
-	err := reqParams.DoHTTPReqResp(&conf)
+	err := reqParams.DoReqResp(&conf)
 	return conf, err
 }
 
@@ -293,5 +293,5 @@ func SetConfig(bp api.BaseParams, conf *ConfigToUpdate) error {
 		reqParams.Path = apc.URLPathDae.S
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -709,23 +710,30 @@ func showRemoteAISHandler(c *cli.Context) error {
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 	if !flagIsSet(c, noHeaderFlag) {
-		fmt.Fprintln(tw, "UUID\tURL\tAlias\tPrimary\tSmap\tTargets\tOnline")
+		fmt.Fprintln(tw, "UUID\tURL\tAlias\tPrimary\tSmap\tTargets\tUptime")
 	}
 	for _, ra := range all.A {
-		online := "no"
-		if ra.Online {
-			online = "yes"
+		uptime := "n/a"
+		bp := api.BaseParams{
+			Client: defaultHTTPClient,
+			URL:    ra.URL,
+			Token:  loggedUserToken,
+			UA:     ua,
+		}
+		if clutime, _, err := api.HealthUptime(bp); err == nil {
+			ns, _ := strconv.ParseInt(clutime, 10, 64)
+			uptime = time.Duration(ns).String()
 		}
 		if ra.Smap != nil {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\tv%d\t%d\t%s\n",
-				ra.UUID, ra.URL, ra.Alias, ra.Smap.Primary, ra.Smap.Version, ra.Smap.CountTargets(), online)
+				ra.UUID, ra.URL, ra.Alias, ra.Smap.Primary, ra.Smap.Version, ra.Smap.CountTargets(), uptime)
 		} else {
 			url := ra.URL
 			if url[0] == '[' {
 				url = strings.Replace(url, "[", "<", 1)
 				url = strings.Replace(url, "]", ">", 1)
 			}
-			fmt.Fprintf(tw, "<%s>\t%s\t%s\t%s\t%s\t%s\t%s\n", ra.UUID, url, ra.Alias, "n/a", "n/a", "n/a", online)
+			fmt.Fprintf(tw, "<%s>\t%s\t%s\t%s\t%s\t%s\t%s\n", ra.UUID, url, ra.Alias, "n/a", "n/a", "n/a", uptime)
 		}
 	}
 	tw.Flush()

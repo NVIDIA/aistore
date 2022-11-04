@@ -95,7 +95,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 		Body:       jsonDaemonInfo,
 		Header:     http.Header{cos.HdrContentType: []string{cos.ContentJSON}},
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 type voteRetryMockTarget struct {

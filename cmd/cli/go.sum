@@ -50,6 +50,8 @@ github.com/NVIDIA/aistore v0.0.0-20221104004323-e2857f276fdc h1:RyhSHJF53YdQ0+Ts
 github.com/NVIDIA/aistore v0.0.0-20221104004323-e2857f276fdc/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
 github.com/NVIDIA/aistore v0.0.0-20221104141437-9b4731d9ad08 h1:Nrov8ZeBi1bOS4dZGsR4DHTVQ4MQSwcpjtmHRVF2D9s=
 github.com/NVIDIA/aistore v0.0.0-20221104141437-9b4731d9ad08/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
+github.com/NVIDIA/aistore v0.0.0-20221104172055-37d577e6acdc h1:cTbjGGklm152Ol9B02V9F71ZmNO5v+WAF0ivYJ2M45A=
+github.com/NVIDIA/aistore v0.0.0-20221104172055-37d577e6acdc/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
 github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46/go.mod h1:3wb06e3pkSAbeQ52E9H9iFoQsEEwGN64994WTCIhntQ=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=

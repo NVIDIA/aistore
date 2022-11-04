@@ -28,26 +28,39 @@ func GetProxyReadiness(bp BaseParams) error {
 		reqParams.Path = apc.URLPathHealth.S
 		reqParams.Query = q
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
 
 func Health(bp BaseParams, readyToRebalance ...bool) error {
+	reqParams := mkhealth(bp, readyToRebalance...)
+	err := reqParams.DoRequest()
+	FreeRp(reqParams)
+	return err
+}
+
+func HealthUptime(bp BaseParams, readyToRebalance ...bool) (string, string, error) {
+	reqParams := mkhealth(bp, readyToRebalance...)
+	hdr, err := reqParams.DoRequestHdr()
+	clutime, nutime := hdr.Get(apc.HdrClusterUptime), hdr.Get(apc.HdrNodeUptime)
+	FreeRp(reqParams)
+	return clutime, nutime, err
+}
+
+func mkhealth(bp BaseParams, readyToRebalance ...bool) (reqParams *ReqParams) {
 	var q url.Values
 	bp.Method = http.MethodGet
 	if len(readyToRebalance) > 0 && readyToRebalance[0] {
 		q = url.Values{apc.QparamPrimaryReadyReb: []string{"true"}}
 	}
-	reqParams := AllocRp()
+	reqParams = AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathHealth.S
 		reqParams.Query = q
 	}
-	err := reqParams.DoHTTPRequest()
-	FreeRp(reqParams)
-	return err
+	return
 }
 
 // GetClusterMap retrieves AIStore cluster map.
@@ -59,7 +72,7 @@ func GetClusterMap(bp BaseParams) (smap *cluster.Smap, err error) {
 		reqParams.Path = apc.URLPathDae.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatSmap}}
 	}
-	err = reqParams.DoHTTPReqResp(&smap)
+	err = reqParams.DoReqResp(&smap)
 	FreeRp(reqParams)
 	return
 }
@@ -74,7 +87,7 @@ func GetNodeClusterMap(bp BaseParams, sid string) (smap *cluster.Smap, err error
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatSmap}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{sid}}
 	}
-	err = reqParams.DoHTTPReqResp(&smap)
+	err = reqParams.DoReqResp(&smap)
 	FreeRp(reqParams)
 	return
 }
@@ -88,7 +101,7 @@ func GetClusterSysInfo(bp BaseParams) (info apc.ClusterSysInfo, err error) {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatSysInfo}}
 	}
-	err = reqParams.DoHTTPReqResp(&info)
+	err = reqParams.DoReqResp(&info)
 	FreeRp(reqParams)
 	return
 }
@@ -103,7 +116,7 @@ func GetClusterStats(bp BaseParams) (res stats.ClusterStats, err error) {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStats}}
 	}
-	err = reqParams.DoHTTPReqResp(&rawStats)
+	err = reqParams.DoReqResp(&rawStats)
 	FreeRp(reqParams)
 	if err != nil {
 		return
@@ -129,7 +142,7 @@ func GetTargetDiskStats(bp BaseParams, tid string) (res ios.AllDiskStats, err er
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatDiskStats}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{tid}}
 	}
-	err = reqParams.DoHTTPReqResp(&res)
+	err = reqParams.DoReqResp(&res)
 	FreeRp(reqParams)
 	return
 }
@@ -142,7 +155,7 @@ func GetRemoteAIS(bp BaseParams) (remais cluster.Remotes, err error) {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
 	}
-	err = reqParams.DoHTTPReqResp(&remais)
+	err = reqParams.DoReqResp(&remais)
 	FreeRp(reqParams)
 	return
 }
@@ -158,7 +171,7 @@ func JoinCluster(bp BaseParams, nodeInfo *cluster.Snode) (rebID, sid string, err
 		reqParams.Body = cos.MustMarshal(nodeInfo)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err = reqParams.DoHTTPReqResp(&info)
+	err = reqParams.DoReqResp(&info)
 	FreeRp(reqParams)
 	return info.RebalanceID, info.DaemonID, err
 }
@@ -173,7 +186,7 @@ func SetPrimaryProxy(bp BaseParams, newPrimaryID string, force bool) error {
 	if force {
 		reqParams.Query = url.Values{apc.QparamForce: []string{"true"}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -196,7 +209,7 @@ func SetClusterConfig(bp BaseParams, nvs cos.StrKVs, transient bool) error {
 		reqParams.Path = apc.URLPathCluSetConf.S
 		reqParams.Query = q
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -220,7 +233,7 @@ func SetClusterConfigUsingMsg(bp BaseParams, configToUpdate *cmn.ConfigToUpdate,
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -235,7 +248,7 @@ func ResetClusterConfig(bp BaseParams) error {
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActResetConfig})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -250,7 +263,7 @@ func GetClusterConfig(bp BaseParams) (*cmn.ClusterConfig, error) {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatClusterConfig}}
 	}
-	err := reqParams.DoHTTPReqResp(cluConfig)
+	err := reqParams.DoReqResp(cluConfig)
 	FreeRp(reqParams)
 	if err != nil {
 		return nil, err
@@ -268,7 +281,7 @@ func GetBMD(bp BaseParams) (*cluster.BMD, error) {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatBMD}}
 	}
-	err := reqParams.DoHTTPReqResp(bmd)
+	err := reqParams.DoReqResp(bmd)
 	FreeRp(reqParams)
 	if err != nil {
 		return nil, err
@@ -288,7 +301,7 @@ func AttachRemoteAIS(bp BaseParams, alias, u string) error {
 			apc.HdrRemAisURL:   []string{u},
 		}
 	}
-	return reqParams.DoHTTPRequest()
+	return reqParams.DoRequest()
 }
 
 func DetachRemoteAIS(bp BaseParams, alias string) error {
@@ -300,7 +313,7 @@ func DetachRemoteAIS(bp BaseParams, alias string) error {
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
 		reqParams.Header = http.Header{apc.HdrRemAisAlias: []string{alias}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -322,7 +335,7 @@ func StartMaintenance(bp BaseParams, actValue *apc.ActValRmNode) (xid string, er
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err = reqParams.DoHTTPReqResp(&xid)
+	err = reqParams.DoReqResp(&xid)
 	FreeRp(reqParams)
 	return xid, err
 }
@@ -340,7 +353,7 @@ func DecommissionNode(bp BaseParams, actValue *apc.ActValRmNode) (xid string, er
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err = reqParams.DoHTTPReqResp(&xid)
+	err = reqParams.DoReqResp(&xid)
 	FreeRp(reqParams)
 	return xid, err
 }
@@ -358,7 +371,7 @@ func StopMaintenance(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err = reqParams.DoHTTPReqResp(&xid)
+	err = reqParams.DoReqResp(&xid)
 	FreeRp(reqParams)
 	return xid, err
 }
@@ -374,7 +387,7 @@ func ShutdownCluster(bp BaseParams) error {
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -393,7 +406,7 @@ func DecommissionCluster(bp BaseParams, rmUserData bool) error {
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	if cos.IsEOF(err) {
 		err = nil
@@ -415,7 +428,7 @@ func ShutdownNode(bp BaseParams, actValue *apc.ActValRmNode) (id string, err err
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err = reqParams.DoHTTPReqResp(&id)
+	err = reqParams.DoReqResp(&id)
 	FreeRp(reqParams)
 	return id, err
 }
@@ -429,7 +442,7 @@ func RemoveNodeFromSmap(bp BaseParams, sid string) error {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathCluDaemon.Join(sid)
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }

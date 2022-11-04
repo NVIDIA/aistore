@@ -44,7 +44,7 @@ func GetMountpaths(bp BaseParams, node *cluster.Snode) (mpl *apc.MountpathList, 
 			apc.HdrNodeURL: []string{node.URL(cmn.NetPublic)},
 		}
 	}
-	err = reqParams.DoHTTPReqResp(&mpl)
+	err = reqParams.DoReqResp(&mpl)
 	FreeRp(reqParams)
 	return mpl, err
 }
@@ -64,7 +64,7 @@ func AttachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, force
 		}
 		reqParams.Query = url.Values{apc.QparamForce: []string{strconv.FormatBool(force)}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -82,7 +82,7 @@ func EnableMountpath(bp BaseParams, node *cluster.Snode, mountpath string) error
 			cos.HdrContentType: []string{cos.ContentJSON},
 		}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -104,7 +104,7 @@ func DetachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dontR
 		}
 		reqParams.Query = q
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -126,7 +126,7 @@ func DisableMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dont
 		}
 		reqParams.Query = q
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -141,7 +141,7 @@ func GetDaemonConfig(bp BaseParams, node *cluster.Snode) (config *cmn.Config, er
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatConfig}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	err = reqParams.DoHTTPReqResp(&config)
+	err = reqParams.DoReqResp(&config)
 	FreeRp(reqParams)
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, 
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStats}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	err = reqParams.DoHTTPReqResp(&ds)
+	err = reqParams.DoReqResp(&ds)
 	FreeRp(reqParams)
 	return ds, err
 }
@@ -184,7 +184,7 @@ func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) error {
 		reqParams.Query = q
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	err := reqParams.DoHTTPReqResp(w)
+	err := reqParams.DoReqResp(w)
 	FreeRp(reqParams)
 	return err
 }
@@ -199,7 +199,7 @@ func GetDaemonStatus(bp BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonS
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatDaemonStatus}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	err = reqParams.DoHTTPReqResp(&daeInfo)
+	err = reqParams.DoReqResp(&daeInfo)
 	FreeRp(reqParams)
 	if err == nil {
 		daeInfo.Status = StatusOnline
@@ -231,7 +231,7 @@ func SetDaemonConfig(bp BaseParams, nodeID string, nvs cos.StrKVs, transient ...
 		reqParams.Query = query
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{nodeID}}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }
@@ -249,7 +249,7 @@ func ResetDaemonConfig(bp BaseParams, nodeID string) error {
 			cos.HdrContentType: []string{cos.ContentJSON},
 		}
 	}
-	err := reqParams.DoHTTPRequest()
+	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
 }

@@ -622,7 +622,7 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]any) {
 		Path:       apc.URLPathDae.S,
 		Query:      url.Values{apc.QparamWhat: {apc.GetWhatStats}},
 	}
-	err := reqParams.DoHTTPReqResp(&stats)
+	err := reqParams.DoReqResp(&stats)
 	tassert.CheckFatal(t, err)
 	return
 }

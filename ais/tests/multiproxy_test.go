@@ -643,7 +643,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 			Body:       jsonMap,
 			Header:     http.Header{cos.HdrContentType: []string{cos.ContentJSON}},
 		}
-		err = reqParams.DoHTTPRequest()
+		err = reqParams.DoRequest()
 		tassert.CheckFatal(t, err)
 		n--
 	}
@@ -1257,7 +1257,7 @@ func networkFailurePrimary(t *testing.T) {
 			apc.QparamPrimaryCandidate: {newPrimaryURL},
 		},
 	}
-	err = reqParams.DoHTTPRequest()
+	err = reqParams.DoRequest()
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(

@@ -216,14 +216,12 @@ func initRemAis() {
 		}
 		return
 	}
-	for _, clusterInfo := range all.A {
-		if !clusterInfo.Online {
-			continue
-		}
-		RemoteCluster.UUID = clusterInfo.Alias // TODO -- FIXME: soon
-		RemoteCluster.Alias = clusterInfo.Alias
-		RemoteCluster.URL = clusterInfo.URL
-		break
+	cos.AssertMsg(len(all.A) < 2, "multi-remote clustering is not implemented yet")
+	if len(all.A) == 1 {
+		remais := all.A[0]
+		RemoteCluster.UUID = remais.Alias // TODO -- FIXME: soon
+		RemoteCluster.Alias = remais.Alias
+		RemoteCluster.URL = remais.URL
 	}
 }
 
