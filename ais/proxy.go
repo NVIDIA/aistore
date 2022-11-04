@@ -75,12 +75,11 @@ type (
 		notifs     notifs
 		reg        struct {
 			pool nodeRegPool
-			mtx  sync.RWMutex
+			mu   sync.RWMutex
 		}
 		remais struct {
 			cluster.Remotes
-			aliases cos.StrKVs
-			mu      sync.RWMutex
+			mu sync.RWMutex
 		}
 	}
 )
@@ -1836,7 +1835,6 @@ func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID st
 
 func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck *cmn.Bck, query url.Values) (err error) {
 	var (
-		detail        string
 		backend       = cmn.BackendConfAIS{}
 		aliasOrUUID   = bck.Ns.UUID
 		v, configured = cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
@@ -1850,24 +1848,17 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	urls, exists := backend[aliasOrUUID]
 	if !exists {
 		p.remais.mu.RLock()
-		for alias, uuid := range p.remais.aliases {
-			if alias == aliasOrUUID || uuid == aliasOrUUID {
-				for _, remais := range p.remais.A {
-					if remais.UUID == uuid {
-						urls = []string{remais.URL}
-						break
-					}
-				}
-				debug.Assert(len(urls) == 1)
+		for _, remais := range p.remais.A {
+			if remais.Alias == aliasOrUUID || remais.UUID == aliasOrUUID {
+				urls = []string{remais.URL}
 				exists = true
 				break
 			}
-			detail += alias + "=>" + uuid + ";"
 		}
 		p.remais.mu.RUnlock()
 	}
 	if !exists {
-		err = cmn.NewErrNotFound("%s: remote UUID/alias %q (%s, %s)", p.si, aliasOrUUID, backend, detail)
+		err = cmn.NewErrNotFound("%s: remote UUID/alias %q (%s)", p.si, aliasOrUUID, backend)
 		p.writeErr(w, r, err)
 		return err
 	}
@@ -2855,6 +2846,7 @@ retry:
 		glog.Error(cmn.NewErrFailedTo(p, "apply config (in re \"remote clusters\")", newConfig, err))
 		return
 	}
+	over := p.remais.Ver
 	p.remais.mu.Lock()
 	if p.remais.Ver >= all.Ver && retries > 0 {
 		p.remais.mu.Unlock()
@@ -2863,18 +2855,11 @@ retry:
 		sleep = newConfig.Timeout.CplaneOperation.D()
 		goto retry
 	}
-
 	p.remais.Remotes = *all
-	p.remais.aliases = make(cos.StrKVs, 4)
-	for _, remais := range p.remais.A {
-		aliases := strings.Split(remais.Alias, cmn.RemAisAliasSeparator)
-		for _, a := range aliases {
-			p.remais.aliases[a] = remais.UUID
-		}
-	}
+	nver := p.remais.Ver
 	p.remais.mu.Unlock()
 
-	glog.Infof("%s: remais %v", p, p.remais.aliases)
+	glog.Infof("%s: remais v%d => v%d", p, over, nver)
 }
 
 func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {

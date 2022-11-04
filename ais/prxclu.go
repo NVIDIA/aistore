@@ -331,9 +331,9 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		nsi = regReq.SI
 		if !p.ClusterStarted() {
-			p.reg.mtx.Lock()
+			p.reg.mu.Lock()
 			p.reg.pool = append(p.reg.pool, regReq)
-			p.reg.mtx.Unlock()
+			p.reg.mu.Unlock()
 		}
 	case apc.Keepalive: // keep-alive
 		if cmn.ReadJSON(w, r, &regReq) != nil {
@@ -1188,7 +1188,8 @@ func (p *proxy) attachDetachRemAis(w http.ResponseWriter, r *http.Request, actio
 	}
 }
 
-// (executes as "pre" phase of modifying global config)
+// the flow: attach/detach remais => modify cluster config => _remaisConf as the pre phase
+// of the transaction
 func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, error) {
 	var (
 		aisConf cmn.BackendConfAIS
@@ -1231,12 +1232,12 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 		}
 		// rule #2: aliases and UUIDs are two distinct non-overlapping sets
 		p.remais.mu.RLock()
-		for a, uuid := range p.remais.aliases {
-			debug.Assert(a != alias) // above
-			if alias == uuid {
+		for _, remais := range p.remais.A {
+			debug.Assert(remais.Alias != alias)
+			if alias == remais.UUID {
 				p.remais.mu.RUnlock()
 				return false, fmt.Errorf("%s: alias %q cannot be equal UUID of an already attached cluster [%s => %s]",
-					p.si, alias, a, uuid)
+					p.si, alias, remais.Alias, remais.UUID)
 			}
 		}
 		p.remais.mu.RUnlock()

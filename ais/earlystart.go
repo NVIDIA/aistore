@@ -367,10 +367,10 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	}
 
 	// Clear regpool
-	p.reg.mtx.Lock()
+	p.reg.mu.Lock()
 	p.reg.pool = p.reg.pool[:0]
 	p.reg.pool = nil
-	p.reg.mtx.Unlock()
+	p.reg.mu.Unlock()
 
 	// 10. resume rebalance if needed
 	if config.Rebalance.Enabled {
@@ -807,8 +807,8 @@ func (p *proxy) bcastMaxVerBestEffort(smap *smapX) *smapX {
 func (p *proxy) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 	*after = *before
 
-	p.reg.mtx.RLock()
-	defer p.reg.mtx.RUnlock()
+	p.reg.mu.RLock()
+	defer p.reg.mu.RUnlock()
 	if len(p.reg.pool) == 0 {
 		goto ret
 	}

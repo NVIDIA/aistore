@@ -29,8 +29,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const RemAisAliasSeparator = ","
-
 type (
 	Validator interface {
 		Validate() error

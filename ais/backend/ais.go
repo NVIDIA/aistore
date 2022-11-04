@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -43,8 +42,8 @@ type (
 	}
 	AISBackendProvider struct {
 		t             cluster.Target
-		remote        map[string]*remAis // by UUID:  1 to 1
-		alias         map[string]string  // by alias: many to 1 UUID
+		remote        map[string]*remAis // by UUID
+		alias         cos.StrKVs         // alias => UUID
 		mu            sync.RWMutex
 		appliedCfgVer int64
 	}
@@ -64,18 +63,19 @@ func NewAIS(t cluster.Target) *AISBackendProvider {
 	return &AISBackendProvider{
 		t:      t,
 		remote: make(map[string]*remAis),
-		alias:  make(map[string]string),
+		alias:  make(cos.StrKVs),
 	}
 }
 
 func (r *remAis) String() string {
-	var aliases []string
-	for alias, uuid := range r.m.alias {
+	var alias string
+	for a, uuid := range r.m.alias {
 		if uuid == r.smap.UUID {
-			aliases = append(aliases, alias)
+			alias = a
+			break
 		}
 	}
-	return fmt.Sprintf("remote cluster (url: %s, aliases: %q, uuid: %v, smap: %s)", r.url, aliases, r.smap.UUID, r.smap)
+	return fmt.Sprintf("remote cluster (%s, %q, %q, %s)", r.url, alias, r.smap.UUID, r.smap)
 }
 
 func unsetUUID(bck *cmn.Bck) { bck.Ns.UUID = "" }
@@ -162,17 +162,13 @@ func (m *AISBackendProvider) GetInfoInternal() (res cluster.Remotes) {
 	m.mu.RLock()
 	res.A = make([]*cluster.RemAis, 0, len(m.remote))
 	for uuid, remAis := range m.remote {
-		var (
-			aliases []string
-			out     = &cluster.RemAis{UUID: uuid}
-		)
-		out.URL = remAis.url
+		out := &cluster.RemAis{UUID: uuid, URL: remAis.url}
 		for a, u := range m.alias {
 			if uuid == u {
-				aliases = append(aliases, a)
+				out.Alias = a
+				break
 			}
 		}
-		out.Alias = strings.Join(aliases, cmn.RemAisAliasSeparator)
 		res.A = append(res.A, out)
 	}
 	res.Ver = m.appliedCfgVer
@@ -199,20 +195,18 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res cluste
 	res.A = make([]*cluster.RemAis, 0, len(m.remote))
 	for uuid, remAis := range m.remote {
 		var (
-			aliases []string
-			out     = &cluster.RemAis{UUID: uuid}
-			client  = httpClient
+			out    = &cluster.RemAis{UUID: uuid, URL: remAis.url}
+			client = httpClient
 		)
 		if cos.IsHTTPS(remAis.url) {
 			client = httpsClient
 		}
-		out.URL = remAis.url
 		for a, u := range m.alias {
 			if uuid == u {
-				aliases = append(aliases, a)
+				out.Alias = a
+				break
 			}
 		}
-		out.Alias = strings.Join(aliases, cmn.RemAisAliasSeparator)
 
 		// online?
 		if smap, err := api.GetClusterMap(api.BaseParams{Client: client, URL: remAis.url, UA: ua}); err == nil {
@@ -347,16 +341,17 @@ func (m *AISBackendProvider) getRemAis(aliasOrUUID string) (remAis *remAis, err 
 	return
 }
 
-func (m *AISBackendProvider) headRemAis(aliasOrUUID string) (remAis *remAis, uuid string, aliases []string, err error) {
+func (m *AISBackendProvider) headRemAis(aliasOrUUID string) (remAis *remAis, alias, uuid string, err error) {
 	m.mu.RLock()
 	remAis, uuid, err = m.resolve(aliasOrUUID)
 	if err != nil {
 		m.mu.RUnlock()
 		return
 	}
-	for alias, id := range m.alias {
-		if id == uuid {
-			aliases = append(aliases, alias)
+	for a, u := range m.alias {
+		if u == uuid {
+			alias = a
+			break
 		}
 	}
 	m.mu.RUnlock()
@@ -397,12 +392,11 @@ func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error)
 // For similar limitations, see also ListBuckets() below.
 func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	var (
-		remAis  *remAis
-		p       *cmn.BucketProps
-		uuid    string
-		aliases []string
+		remAis      *remAis
+		p           *cmn.BucketProps
+		alias, uuid string
 	)
-	if remAis, uuid, aliases, err = m.headRemAis(remoteBck.Ns.UUID); err != nil {
+	if remAis, alias, uuid, err = m.headRemAis(remoteBck.Ns.UUID); err != nil {
 		return
 	}
 	debug.Assert(uuid == remAis.uuid)
@@ -421,7 +415,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	// an extra
 	bckProps[apc.HdrBackendProvider] = apc.AIS
 	bckProps[apc.HdrRemAisUUID] = remAis.uuid
-	bckProps[apc.HdrRemAisAlias] = strings.Join(aliases, cmn.RemAisAliasSeparator)
+	bckProps[apc.HdrRemAisAlias] = alias
 	bckProps[apc.HdrRemAisURL] = remAis.url
 
 	return

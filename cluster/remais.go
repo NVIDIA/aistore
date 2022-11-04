@@ -7,8 +7,8 @@ package cluster
 type (
 	RemAis struct {
 		URL   string `json:"url"`
-		Alias string `json:"alias"` // NOTE: strings.Join(aliases, RemAisAliasSeparator)
-		UUID  string `json:"uuid"`  // Smap.UUID
+		Alias string `json:"alias"`
+		UUID  string `json:"uuid"` // Smap.UUID
 		Smap  *Smap  `json:"smap"`
 	}
 	Remotes struct {
