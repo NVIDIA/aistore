@@ -1867,6 +1867,11 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 				}
 			}
 			p.remais.mu.RUnlock()
+
+			if p.forwardCP(w, r, msg, bck.Name) {
+				return
+			}
+
 			glog.Errorf("%s: retrying remais ver=%d (%d attempts)", p, p.remais.Ver, retries-1)
 			time.Sleep(sleep)
 			retries--
