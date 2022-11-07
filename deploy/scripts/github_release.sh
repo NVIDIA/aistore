@@ -1,4 +1,6 @@
 #!/bin/bash
+set -ex
+
 function upload() {
   bin_name=$1
   upload_name=$2
@@ -9,16 +11,18 @@ function upload() {
   popd
 
   echo "Computing checksum..."
-  cksum="/tmp/${upload_name}.sha256"
-  sha256sum  "/tmp/${upload_name}" > ${cksum} || exit 1
+  pushd /tmp
+  cksum="${upload_name}.sha256"
+  sha256sum  "${upload_name}" > ${cksum} || exit 1
+  popd
 
   echo "Uploading release asset: ${upload_name}"
   GH_ASSET="https://uploads.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/${GITHUB_RELEASE_ID}/assets?name=${upload_name}"
-  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_ASSET -T "/tmp/${upload_name}}" | jq
+  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_ASSET -T "/tmp/${upload_name}" | jq
 
   echo "Uploading the asset's checksum: ${upload_name}.sha256"
   GH_CHECKSUM="https://uploads.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/${GITHUB_RELEASE_ID}/assets?name=${upload_name}.sha256"
-  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_CHECKSUM -T $cksum | jq
+  curl --progress-bar -H "Authorization: token ${GITHUB_OAUTH_TOKEN}" -H "Content-Type: application/octet-stream" $GH_CHECKSUM -T "/tmp/${cksum}" | jq
 }
 
 GITHUB_OWNER="NVIDIA"
