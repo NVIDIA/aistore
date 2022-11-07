@@ -219,7 +219,7 @@ func initRemAis() {
 	cos.AssertMsg(len(all.A) < 2, "multi-remote clustering is not implemented yet")
 	if len(all.A) == 1 {
 		remais := all.A[0]
-		RemoteCluster.UUID = remais.Alias // TODO -- FIXME: soon
+		RemoteCluster.UUID = remais.UUID
 		RemoteCluster.Alias = remais.Alias
 		RemoteCluster.URL = remais.URL
 	}

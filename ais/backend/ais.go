@@ -334,6 +334,13 @@ ad:
 	return
 }
 
+func (m *AISBackendProvider) A2U(aliasOrUUID string) string {
+	if remAis, err := m.getRemAis(aliasOrUUID); err == nil {
+		return remAis.uuid
+	}
+	return aliasOrUUID
+}
+
 func (m *AISBackendProvider) getRemAis(aliasOrUUID string) (remAis *remAis, err error) {
 	m.mu.RLock()
 	remAis, _, err = m.resolve(aliasOrUUID)

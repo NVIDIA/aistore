@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
@@ -80,6 +81,7 @@ type (
 		remais struct {
 			cluster.Remotes
 			mu sync.RWMutex
+			in atomic.Bool
 		}
 	}
 )
@@ -525,6 +527,9 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		// (see api.ListBuckets and the line below)
 		if !qbck.IsBucket() {
 			qbck.Name = msg.Name
+			if qbck.IsRemoteAIS() {
+				qbck.Ns.UUID = p.a2u(qbck.Ns.UUID)
+			}
 			if err := p.checkAccess(w, r, nil, apc.AceListBuckets); err == nil {
 				p.listBuckets(w, r, qbck, msg, dpq)
 			}
@@ -1837,7 +1842,10 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	var (
 		backend       = cmn.BackendConfAIS{}
 		aliasOrUUID   = bck.Ns.UUID
-		v, configured = cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
+		config        = cmn.GCO.Get()
+		sleep         = config.Timeout.CplaneOperation.D()
+		retries       = 2
+		v, configured = config.Backend.ProviderConf(apc.AIS)
 	)
 	if !configured {
 		p.writeErrMsg(w, r, "no remote ais clusters attached")
@@ -1847,15 +1855,27 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	cos.MustMorphMarshal(v, &backend)
 	urls, exists := backend[aliasOrUUID]
 	if !exists {
-		p.remais.mu.RLock()
-		for _, remais := range p.remais.A {
-			if remais.Alias == aliasOrUUID || remais.UUID == aliasOrUUID {
-				urls = []string{remais.URL}
-				exists = true
+	retry:
+		for retries > 0 {
+			p.remais.mu.RLock()
+			for _, remais := range p.remais.A {
+				if remais.Alias == aliasOrUUID || remais.UUID == aliasOrUUID {
+					urls = []string{remais.URL}
+					p.remais.mu.RUnlock()
+					exists = true
+					break retry
+				}
+			}
+			p.remais.mu.RUnlock()
+			glog.Errorf("%s: retrying remais ver=%d (%d attempts)", p, p.remais.Ver, retries-1)
+			time.Sleep(sleep)
+			retries--
+			v, _ = cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
+			cos.MustMorphMarshal(v, &backend)
+			if urls, exists = backend[aliasOrUUID]; exists {
 				break
 			}
 		}
-		p.remais.mu.RUnlock()
 	}
 	if !exists {
 		err = cmn.NewErrNotFound("%s: remote UUID/alias %q (%s)", p.si, aliasOrUUID, backend)
@@ -2832,33 +2852,40 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 
 // refresh local p.remais cache via intra-cluster call to a random target
 func (p *proxy) _remais(newConfig *globalConfig) {
+	if !p.remais.in.CAS(false, true) {
+		return
+	}
 	var (
-		sleep   = newConfig.Timeout.CplaneOperation.D()
-		retries = 5
+		sleep      = newConfig.Timeout.CplaneOperation.D()
+		retries    = 5
+		over, nver int64
 	)
 	if clutime := p.startup.cluster.Load(); clutime < int64(newConfig.Timeout.Startup) {
 		sleep = 2 * newConfig.Timeout.MaxKeepalive.D()
 	}
-retry:
-	time.Sleep(sleep)
-	all, err := p.getRemAises(false /*refresh*/)
-	if err != nil {
-		glog.Error(cmn.NewErrFailedTo(p, "apply config (in re \"remote clusters\")", newConfig, err))
-		return
-	}
-	over := p.remais.Ver
-	p.remais.mu.Lock()
-	if p.remais.Ver >= all.Ver && retries > 0 {
+	for ; retries > 0; retries-- {
+		time.Sleep(sleep)
+		all, err := p.getRemAises(false /*refresh*/)
+		if err != nil {
+			glog.Errorf("%s: failed to get remais (%d attempts)", p, retries-1)
+			continue
+		}
+		p.remais.mu.Lock()
+		if over <= 0 {
+			over = p.remais.Ver
+		}
+		if p.remais.Ver < all.Ver {
+			p.remais.Remotes = *all
+			nver = p.remais.Ver
+			p.remais.mu.Unlock()
+			break
+		}
 		p.remais.mu.Unlock()
-		retries--
 		glog.Errorf("%s: retrying remais ver=%d (%d attempts)", p, all.Ver, retries-1)
 		sleep = newConfig.Timeout.CplaneOperation.D()
-		goto retry
 	}
-	p.remais.Remotes = *all
-	nver := p.remais.Ver
-	p.remais.mu.Unlock()
 
+	p.remais.in.Store(false)
 	glog.Infof("%s: remais v%d => v%d", p, over, nver)
 }
 

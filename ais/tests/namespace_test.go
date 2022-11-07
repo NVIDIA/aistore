@@ -243,9 +243,11 @@ func TestNamespace(t *testing.T) {
 
 			bck1Found, bck2Found := false, false
 			for _, summary := range summaries {
-				// TODO -- FIXME: `Bck.Equal()` must work with respect to (alias => UUID) dichotomy
-				if summary.Bck.Ns.UUID == tools.RemoteCluster.UUID {
-					summary.Bck.Ns.UUID = tools.RemoteCluster.Alias
+				if m1.bck.Ns.UUID == tools.RemoteCluster.Alias {
+					m1.bck.Ns.UUID = tools.RemoteCluster.UUID
+				}
+				if m2.bck.Ns.UUID == tools.RemoteCluster.Alias {
+					m2.bck.Ns.UUID = tools.RemoteCluster.UUID
 				}
 
 				if summary.Bck.Equal(&m1.bck) {

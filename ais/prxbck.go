@@ -39,7 +39,7 @@ type bckInitArgs struct {
 	perms   apc.AccessAttrs // apc.AceGET, apc.AcePATCH etc.
 
 	// 5 user or caller-provided control flags followed by
-	// 2 result flags
+	// 3 result flags
 	skipBackend    bool // initialize bucket via `bck.InitNoBackend`
 	createAIS      bool // create ais bucket on the fly
 	dontAddRemote  bool // do not create (ie., add -> BMD) remote bucket on the fly
@@ -47,6 +47,7 @@ type bckInitArgs struct {
 	tryHeadRemote  bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemote)
 	isPresent      bool // the bucket is confirmed to be present (in the cluster's BMD)
 	exists         bool // remote bucket is confirmed to be exist
+	modified       bool // bucket-defining control structure got modified
 }
 
 ////////////////
@@ -75,11 +76,38 @@ func freeInitBckArgs(a *bckInitArgs) {
 // lookup and add buckets on the fly
 //
 
+func (p *proxy) a2u(aliasOrUUID string) string {
+	p.remais.mu.RLock()
+	for _, remais := range p.remais.A {
+		if aliasOrUUID == remais.Alias || aliasOrUUID == remais.UUID {
+			return remais.UUID
+		}
+	}
+	p.remais.mu.RUnlock()
+	return aliasOrUUID
+}
+
 // args.init initializes bucket and checks access permissions.
 func (args *bckInitArgs) init() (errCode int, err error) {
 	debug.Assert(args.bck != nil)
 
 	bck := args.bck
+
+	// remote ais aliasing
+	if bck.IsRemoteAIS() {
+		if uuid := args.p.a2u(bck.Ns.UUID); uuid != bck.Ns.UUID {
+			args.modified = true
+			// care of targets
+			query := args.query
+			if query == nil {
+				query = args.r.URL.Query()
+			}
+			bck.Ns.UUID = uuid
+			query.Set(apc.QparamNamespace, bck.Ns.Uname())
+			args.r.URL.RawQuery = query.Encode()
+		}
+	}
+
 	if err = args._checkRemoteBckPermissions(); err != nil {
 		errCode = http.StatusBadRequest
 		return
