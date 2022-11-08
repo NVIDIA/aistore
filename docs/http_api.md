@@ -89,6 +89,13 @@ In particular, all API requests that operate on a bucket carry the bucket's spec
 
 > The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](/docs/cli.md).
 
+6. And finally, **HTTP request and response headers**
+
+All supported query parameters and all HTTP headers are enumerated and commented in the following two sources, respectively:
+
+* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/master/api/apc/query.go)
+* [REST API Headers](https://github.com/NVIDIA/aistore/blob/master/api/apc/headers.go)
+
 ## Easy URL
 
 "Easy URL" is a simple alternative mapping of the AIS API to handle URLs paths that look as follows:
@@ -155,7 +162,7 @@ The operations that query cluster-wide information and/or involve or otherwise a
 | Decommission entire cluster | PUT {"action": "decommission"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "decommission"}' 'http://G-primary/v1/cluster'` | `api.DecommissionCluster` |
 | Shutdown ais node | PUT {"action": "shutdown-node", "value": {"sid": daemonID}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown-node", "value": {"sid": "43888:8083"}}' 'http://G/v1/cluster'` | `api.ShutdownNode` |
 | Decommission entire cluster | PUT {"action": "decommission"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "decommission"}' 'http://G-primary/v1/cluster'` | `api.DecommissionCluster` |
-| Query cluster health | GET /v1/health | (to be added) | `api.Health` |
+| Query cluster health | GET /v1/health | See [Probing liveness and readiness](#probing-liveness-and-readiness) section below | `api.Health` |
 | Set primary proxy | PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT 'http://G-primary/v1/cluster/proxy/26869:8080'` | `api.SetPrimaryProxy` |
 | Force-Set primary proxy (NOTE: advanced usage only!) | PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"` <sup id="a6">[6](#ft6)</sup>| `api.SetPrimaryProxy` |
 | Get cluster configuration | (to be added) | (to be added) | `api.GetClusterConfig` |
@@ -194,6 +201,46 @@ The operations that are limited in scope to a single specified node and that usu
 | Get target IO (aka disk) statistics | (to be added) | (to be added) | `api.GetTargetDiskStats` |
 | Set (i.e., update) node config | (to be added) | (to be added) | `api.SetDaemonConfig` |
 | Reset AIS node configuration | PUT {"action": "reset-config"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-config"}' 'http://G-or-T/v1/daemon'` | `api.ResetDaemonConfig` |
+
+### Probing liveness and readiness
+
+In this section, two quick `curl` examples. Notice response headers that show both the cluster and the responding node's respective uptimes (in nanoseconds):
+
+```console
+$ curl -i http://localhost:8080//v1/health
+HTTP/1.1 200 OK
+Ais-Cluster-Uptime: 295433144686
+Ais-Node-Uptime: 310453738871
+Date: Tue, 08 Nov 2022 14:11:57 GMT
+Content-Length: 0
+```
+
+And here's a health probe executed during cluster startup:
+
+```console
+$ curl -i http://localhost:8080//v1/health?prr=true
+HTTP/1.1 503 Service Unavailable
+Ais-Cluster-Uptime: 5578879646
+Ais-Node-Uptime: 20603416072
+Content-Type: application/json
+X-Content-Type-Options: nosniff
+Date: Tue, 08 Nov 2022 14:17:59 GMT
+Content-Length: 221
+
+{"message":"p[lgGp8080] primary is not ready yet to start rebalance (started=true, starting-up=true)","method":"GET","url_path":"//v1/health","remote_addr":"127.0.0.1:42720","caller":"","node":"p[lgGp8080]","status":503}
+```
+
+An additional query parameter `prr=true` requests (an additional) check whether the cluster is ready to rebalance itself upon any *membership changes*.
+
+Unless cluster rebalancing was previously interrupted, there's usually a few seconds interval of time between the following two events:
+
+* ready to run traffic
+* ready to run traffic and, simultaneously, globally rebalance if new nodes join (or existing nodes leave) the cluster
+
+To the (fully expected) question of where the `prr` query comes from - all supported query parameters and all HTTP headers are enumerated and commented in the following two sources:
+
+* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/master/api/apc/query.go)
+* [REST API Headers](https://github.com/NVIDIA/aistore/blob/master/api/apc/headers.go)
 
 ### Mountpaths and Disks
 
