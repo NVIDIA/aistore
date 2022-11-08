@@ -75,7 +75,7 @@ function check_python_formatting {
   fi
 
   i=0
-  black . --check --diff --quiet --exclude "/docs/examples/"
+  black . --check --diff --quiet --extend-exclude "/docs/examples/"
   if [[ $? -ne 0 ]]; then
     printf "\nIncorrect python formatting. Run make fmt-fix to fix it.\n\n" >&2
     exit 1
@@ -83,7 +83,7 @@ function check_python_formatting {
 }
 
 function python_black_fix {
-  black . --quiet --exclude "/docs/examples/"
+  black . --quiet --extend-exclude "/docs/examples/"
 }
 
 function perror {
