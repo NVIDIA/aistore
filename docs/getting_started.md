@@ -20,14 +20,12 @@ For datasets, say, below 50TB a single host may suffice and should, therefore, b
 
 ## Prerequisites
 
-AIStore runs on commodity Linux machines with no special hardware requirements whatsoever.
-
-> It is expected that within a given cluster, all AIS target machines are identical, hardware-wise.
+AIStore runs on commodity Linux machines with no special requirements whatsoever. It is expected that within a given cluster, all AIS [targets](/docs/overview.md#key-concepts-and-diagrams) are identical, hardware-wise.
 
 * [Linux](#Linux) (with `GCC`, `sysstat` and `attr` packages, and kernel 4.15+) or [macOS](#macOS)
-* [Go 1.19 or later](https://golang.org/dl/) (and look for go1.19)
+* [Go 1.19 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see next section)
-* Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
+* Optionally, Amazon (AWS), Google Cloud Platform (GCP), and/or Azure Cloud Storage accounts.
 
 > See also: `CROSS_COMPILE` comment below.
 
@@ -92,8 +90,9 @@ To run AIStore from source, you'd typically need **Go**: compiler, linker, tools
 
 To install Go(lang) on Linux:
 
-* download the latest `go1.18.x.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
+* download the latest `go1.19.<x>.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
 * follow [installation instructions](https://go.dev/doc/install)
+* or simply run: `tar -C /usr/local -xzf go1.19.<x>.linux-amd64.tar.gz`
 
 Next, if not done yet, export the [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 
