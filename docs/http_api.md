@@ -48,11 +48,13 @@ $ curl -X GET http://G-or-T/v1/daemon?what=config
 
 This command queries one of the AIS nodes (denoted as `G-or-T`) for its configuration. The query - as well as most of other control plane queries - results in a JSON-formatted output that can be viewed with any compatible JSON viewer.
 
-Notice the 5 (five) ubiquitous elements in the `curl` command line above:
+Notice the 6 (six) elements that usually accompany any RESTful operation:
 
-1. **Option**
+1. Command line **option** or flag.
 
-In particular, note the '-X` (`--request`) and `-L` (`--location`) options. Run `curl --help` for help.
+In particular, note the '-X` (or `--request`) and `-L` (`--location`) options that `curl` supports. Those are important.
+
+Run `curl --help` for help.
 
 2. **HTTP verb** aka method, one of: `PUT`, `GET`, `HEAD`, `POST`, `DELETE`, or `PATCH`.
 
@@ -77,7 +79,9 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 
 and more.
 
-> For the most updated **URL paths**, please see [`api/apc/urlpaths.go`](https://github.com/NVIDIA/aistore/blob/master/api/apc/urlpaths.go) source.
+For the most recently updated **URL paths**, please see:
+
+* [`api/apc/urlpaths.go`](https://github.com/NVIDIA/aistore/blob/master/api/apc/urlpaths.go)
 
 5. **URL query**, e. g., `?what=config`.
 
@@ -151,11 +155,13 @@ In other words, AIS [api](https://github.com/NVIDIA/aistore/tree/master/api) is 
 
 ### Cluster Operations
 
-The operations that query cluster-wide information and/or involve or otherwise affect, directly or indirectly, all clustered nodes:
+This and the next section reference a variety of URL paths (e.g., `/v1/cluster`). For the most recently updated list of all URLs, see:
+
+* [`api/apc/urlpaths.go`](https://github.com/NVIDIA/aistore/blob/master/api/apc/urlpaths.go)
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
-| Add a node to cluster | (to be added) | (to be added) | `api.JoinCluster` |
+| Add a node to cluster | POST /v1/cluster/join-by-admin | (to be added) | `api.JoinCluster` |
 | Put node in maintenance (that is, safely and temporarily remove the node from the cluster _upon rebalancing_ the node's data between remaining nodes) | (to be added) | (to be added) | `api.StartMaintenance` |
 | Take node out of maintenance | (to be added) | (to be added) | `api.StopMaintenance` |
 | Decommission a node | (to be added) | (to be added) | `api.Decommission` |
@@ -165,8 +171,8 @@ The operations that query cluster-wide information and/or involve or otherwise a
 | Query cluster health | GET /v1/health | See [Probing liveness and readiness](#probing-liveness-and-readiness) section below | `api.Health` |
 | Set primary proxy | PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT 'http://G-primary/v1/cluster/proxy/26869:8080'` | `api.SetPrimaryProxy` |
 | Force-Set primary proxy (NOTE: advanced usage only!) | PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"` <sup id="a6">[6](#ft6)</sup>| `api.SetPrimaryProxy` |
-| Get cluster configuration | (to be added) | (to be added) | `api.GetClusterConfig` |
-| Get `BMD` | (to be added) | (to be added) | `api.GetBMD` |
+| Get cluster configuration | GET /v1/cluster | See [Querying information](#querying-information) section below | `api.GetClusterConfig` |
+| Get `BMD` ("bucket metadata") | GET /v1/cluster or GET /v1/daemon | See [Querying information](#querying-information) section below | `api.GetBMD` |
 | Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "set-config", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](/docs/configuration.md) | `api.SetClusterConfigUsingMsg` |
 | Set cluster-wide configuration **via URL query** | PUT /v1/cluster/set-config/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/set-config?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](/docs/configuration.md) | `api.SetClusterConfig` |
 | Reset cluster-wide configuration | PUT {"action": "reset-config"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-config"}' 'http://G/v1/cluster'` | `api.ResetClusterConfig` |
@@ -174,16 +180,16 @@ The operations that query cluster-wide information and/or involve or otherwise a
 | Rebalance cluster | PUT {"action": "start", "value": {"kind": "rebalance"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "value": {"kind": "rebalance"}}' 'http://G/v1/cluster'` | `api.StartXaction` |
 | Resilver cluster | PUT {"action": "start", "value": {"kind": "resilver"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "value": {"kind": "resilver"}}' 'http://G/v1/cluster'` | `api.StartXaction` |
 | Abort global (automated or manually started) rebalance (proxy) | PUT {"action": "stop", "value": {"kind": "rebalance"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "stop", "value": {"kind": "rebalance"}}' 'http://G/v1/cluster'` |  |
-| Unregister storage target (NOTE: advanced usage only - use Maintenance API instead!) | DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE 'http://G/v1/cluster/daemon/15205:8083'` | n/a |
-| Register storage target (NOTE: advanced usage only - use JoinCluster API instead!)| POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"daemon_type": "target", "node_ip_addr": "172.16.175.41", "daemon_port": "8083", "direct_url": "http://172.16.175.41:8083"}' 'http://localhost:8083/v1/cluster/register'` | n/a |
-| Register proxy (aka "gateway") | POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"daemon_type": "proxy", "node_ip_addr": "172.16.175.41", "daemon_port": "8083", "direct_url": "http://172.16.175.41:8083"}' 'http://localhost:8083/v1/cluster/register'` | n/a |
-| Get Cluster Map | (to be added) | (to be added) | `api.GetClusterMap` |
-| Get Cluster Map from a specific node (any node in the cluster) | (to be added) | (to be added) | `api.GetNodeClusterMap` |
-| Get Cluster System information | (to be added) | (to be added) | `api.GetClusterSysInfo` |
-| Get Cluster statistics | (to be added) | (to be added) | `api.GetClusterStats` |
-| Get remote AIS-cluster information (access URL, primary gateway, cluster map version, and more) | (to be added) | (to be added) | `api.GetRemoteAIS` |
-| Attach remote AIS cluster | (to be added) | (to be added) | `api.AttachRemoteAIS` |
-| Detach remote AIS cluster | (to be added) | (to be added) | `api.DetachRemoteAIS` |
+| Remove storage target from the cluster (NOTE: advanced usage only - use Maintenance API instead!) | DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE 'http://G/v1/cluster/daemon/15205:8083'` | n/a |
+| Join storage target (NOTE: advanced usage only - use JoinCluster API instead!)| POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"daemon_type": "target", "node_ip_addr": "172.16.175.41", "daemon_port": "8083", "direct_url": "http://172.16.175.41:8083"}' 'http://localhost:8083/v1/cluster/register'` | n/a |
+| Join proxy (aka "gateway") | POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"daemon_type": "proxy", "node_ip_addr": "172.16.175.41", "daemon_port": "8083", "direct_url": "http://172.16.175.41:8083"}' 'http://localhost:8083/v1/cluster/register'` | n/a |
+| Get Cluster Map | (to be added) | See [Querying information](#querying-information) section below | `api.GetClusterMap` |
+| Get Cluster Map from a specific node (any node in the cluster) | See [Querying information](#querying-information) section below | (to be added) | `api.GetNodeClusterMap` |
+| Get Cluster System information | GET /v1/cluster | See [Querying information](#querying-information) section below | `api.GetClusterSysInfo` |
+| Get Cluster statistics | GET /v1/cluster | See [Querying information](#querying-information) section below | `api.GetClusterStats` |
+| Get remote AIS-cluster information (access URL, primary gateway, cluster map version, and more) | GET /v1/cluster | See [Querying information](#querying-information) section below | `api.GetRemoteAIS` |
+| Attach remote AIS cluster | PUT /v1/cluster/attach | (to be added) | `api.AttachRemoteAIS` |
+| Detach remote AIS cluster | PUT /v1/cluster/detach | (to be added) | `api.DetachRemoteAIS` |
 
 ### Node Operations
 
@@ -191,6 +197,7 @@ The operations that are limited in scope to a single specified node and that usu
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
+| Get node log | GET /v1/daemon | See [Querying information](#querying-information) section below | `api.GetDaemonLog` |
 | Resilver storage target | PUT {"action": "start", "value": {"kind": "resilver", "node": targetID}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "value": {"kind": "resilver", "node": "43888:8083"}}' 'http://G/v1/cluster'` | `api.StartXaction` |
 | Get target IO (aka disk) statistics | (to be added) | (to be added) | `api.GetTargetDiskStats` |
 | Get node log | (to be added) | (to be added) | `api.GetDaemonLog` |
@@ -330,7 +337,6 @@ The term we use in the code and elsewhere is [xaction](/docs/overview.md#termino
 | Wait for xaction to finish | (to be added) | (to be added) | `api.WaitForXaction` |
 | Wait for xaction to become idle | (to be added) | (to be added) | `api.WaitForXactionIdle` |
 
-
 ## Backend Provider
 
 Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in another AIS cluster, or - the 3rd option - be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an AIS bucket that happen to share the same name? To resolve all potential naming, and (arguably, more importantly) partition namespace with respect to both physical isolation and QoS, AIS introduces the concept of *provider*.
@@ -385,26 +391,98 @@ NAME             SIZE            CHECKSUM                                VERSION
 README.md        9.97KiB         a56d5e9f313480b7bbe41256012fb7b0        1658425395717602
 ```
 
-
 ## Querying information
 
-AIStore provides an extensive list of RESTful operations to retrieve cluster current state:
+A typical query is a GET request that includes `?what=<...>` (HTTP) query. For the most recently updated `what=` enumeration, see:
 
-| Operation | HTTP action | Example |
+* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/master/api/apc/query.go)
+
+Notice that many cluster-level operations can be designated to both the entire cluster or any specific node. For instance, for the current cluster map we can use `GET /v1/cluster?what=smap` and `GET /v1/daemon?what=smap`. This is because each node in the cluster would have a replica (of the map), and it also may be useful to find out the current cluster map of the node that's joining right now, and so on.
+
+Querying statistics would be another typical example whereby `GET /v1/daemon?what=stats` reports runtime stats of a specific node, while `GET /v1/cluster?what=stats` returns a combined JSON table that includes all of the above.
+
+Table-summary follows below but first, let's look at examples.
+
+For instance, if we want to show all remote clusters [attached](/docs/providers.md#remote-ais-cluster) to our cluster, we do something like:
+
+```console
+$ curl -L http://localhost:8080//v1/cluster?what=remote | jq
+{
+  "a": [
+    {
+      "url": "http://127.0.0.1:11080",
+      "alias": "remais",
+      "uuid": "cKEuiUYz-l",
+      "smap": {
+        "pmap": {
+          "Cifp11080": {
+            "public_net": {
+              "node_ip_addr": "127.0.0.1",
+              "daemon_port": "11080",
+              "direct_url": "http://127.0.0.1:11080"
+            },
+   ...
+   ...
+            "daemon_type": "target",
+            "daemon_id": "pWWt11081",
+            "flags": 0
+          }
+        },
+        "uuid": "cKEuiUYz-l",
+        "creation_time": "2022-11-08 09:07:08.009409455 -0500 EST m=+16.021127017",
+        "version": "14"
+      }
+    }
+  ],
+  "ver": 3
+```
+
+The result in this case includes the cluster's URL, alias, UUID and Smap - for each remote cluster.
+
+Another useful query could be retrieving log information from any selected node (notice `/daemon` in the URL path):
+
+```console
+curl -L -i http://localhost:8081//v1/daemon?what=log | less
+
+HTTP/1.1 200 OK
+Date: Tue, 08 Nov 2022 17:03:03 GMT
+Content-Type: text/plain; charset=utf-8
+Transfer-Encoding: chunked
+
+Started up at 2022/11/08 11:33:54, host u2204, go1.19.3 for linux/amd64
+I 11:33:54.537821 config.go:1774 log.dir: "/tmp/ais/1/log"; l4.proto: tcp; pub port: 8081; verbosity: 3
+I 11:33:54.537990 config.go:1776 config: "/root/.ais1/.ais.conf"; stats_time: 10s; authentication: false; backends: [ais aws gcp]
+I 11:33:54.538001 daemon.go:177 Version 3.12-rc1.c5a523de4, build time 2022-11-08T11:33:50-0500, debug true
+I 11:33:54.538005 daemon.go:185 CPUs(16, runtime=16)
+I 11:33:54.538165 util.go:39 Verifying type of deployment (HOSTNAME: "", K8S_NODE_NAME: "")
+I 11:33:54.538169 util.go:46 Couldn't initiate a K8s client, assuming non-Kubernetes deployment
+...
+I 11:33:55.564338 htrun.go:1637 t[CJet8081]: joined cluster via http://127.0.0.1:9080
+...
+```
+
+This (log observing operation) could be especially handy for (low-level) troubleshooting of any kind. Just another tool to use.
+
+Following is a brief summary of the majority of supported monitoring operations that query the current state and status of both the entire cluster (via `/cluster` URL) or any given node (via `/daemon`).
+
+| Query <what> | HTTP action | Example |
 |--- | --- | ---|
-| Get cluster map | GET /v1/daemon | `curl -X GET http://G/v1/daemon?what=smap` |
-| Get proxy/target configuration| GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=config` |
-| Get proxy/target snode | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=snode` |
-| Get proxy/target status | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=status` |
-| Get cluster statistics (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=stats` |
-| Get target statistics | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=stats` |
-| Get process info for all nodes in cluster (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=sysinfo` |
-| Get proxy/target system info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=sysinfo` |
+| Cluster map | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=smap` |
+| Cluster map | GET /v1/daemon | `curl -X GET http://G/v1/daemon?what=smap` |
+| Node configuration| GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=config` |
+| Remote clusters | GET /v1/cluster | `curl -X GET http://G-or-T/v1/cluster?what=remote` |
+| Node information | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=snode` |
+| Node status | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=status` |
+| Cluster statistics (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=stats` |
+| Node statistics | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=stats` |
+| System info for all nodes in cluster | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=sysinfo` |
+| Node system info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=sysinfo` |
+| Node log | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=log` |
 | Get xactions' statistics (proxy) [More](/xact/README.md)| GET /v1/cluster | `curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "stats", "name": "xactionname", "value":{"bucket":"bckname"}}' 'http://G/v1/cluster?what=xaction'` |
-| Get list of target's filesystems (target) | GET /v1/daemon?what=mountpaths | `curl -X GET http://T/v1/daemon?what=mountpaths` |
-| Get list of all targets' filesystems (proxy) | GET /v1/cluster?what=mountpaths | `curl -X GET http://G/v1/cluster?what=mountpaths` |
-| Get bucket list from a given target | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=bucketmd` |
-| Get IPs of all targets | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=target_ips` |
+| List of target's filesystems | GET /v1/daemon?what=mountpaths | `curl -X GET http://T/v1/daemon?what=mountpaths` |
+| List of all target filesystems | GET /v1/cluster?what=mountpaths | `curl -X GET http://G/v1/cluster?what=mountpaths` |
+| Comma-separated list of IPs of all targets (compare with `?what=snode` above) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=target_ips` |
+| `BMD` (bucket metadata) | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=bmd` |
 
 ### Example: querying runtime statistics
 
@@ -412,7 +490,7 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 $ curl -X GET http://G/v1/cluster?what=stats
 ```
 
-This single command causes execution of multiple `GET ?what=stats` requests within the AIStore cluster, and results in a JSON-formatted consolidated output that contains both http proxy and storage targets request counters, as well as per-target used/available capacities. For example:
+Execution flow for this single command causes intra-cluster broadcast whereby requesting proxy (which could be any proxy in the cluster) consolidates all  results from all other nodes in a JSON-formatted output. The latter contains both http proxy and storage targets request counters, per-target used/available capacities, and more. For example:
 
 ![AIStore statistics](images/ais-get-stats.png)
 
