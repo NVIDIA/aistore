@@ -4,15 +4,21 @@
 - [Prerequisites](#prerequisites)
 - [Makefile](#Makefile)
 - [Files](#files)
-- [Trying AIStore on Minikube](#trying-aistore-on-minikube)
-- [Developing AIStore on Minikube](#developing-aistore-on-minikube)
-- [Troubleshooting Minikube](#troubleshooting-minikube)
+- [Trying AIStore on minikube](#trying-aistore-on-minikube)
+- [Developing AIStore on minikube](#developing-aistore-on-minikube)
+- [Troubleshooting minikube](#troubleshooting-minikube)
 
 ## Introduction
 
-[Minikube](https://minikube.sigs.k8s.io/docs) allows one to run Kubernetes in a local environment like your laptop for testing out applications in a native Kubernetes environment. It can only be used for single-node Kubernetes cluster. It supports a range of drivers like Virtualbox, KVM, Docker, etc. Virtualbox and KVM require a hypervisor.  However, if you choose to use docker on a Linux machine there is no need for a hypervisor.
+[Minikube](https://minikube.sigs.k8s.io/docs) allows one to run Kubernetes locally (like on your laptop) thus providing for testing out applications in a native Kubernetes environment.
 
-Our [scripts](/deploy/dev/k8s) use Docker as the driver. This document shows how to deploy AIStore on Minikube and use it for some of its features like ETL(transformers) etc. or to develop new features on it.
+* [Minikube GitHub](https://github.com/kubernetes/minikube)
+
+Minikube can only be used for a single-node Kubernetes cluster. It supports a range of drivers like Virtualbox, KVM, Docker, etc.
+
+Virtualbox and KVM require a hypervisor. However, if you choose to use docker on a Linux machine there is no need for a hypervisor.
+
+Our [scripts](/deploy/dev/k8s) use Docker as the driver. This document shows how to deploy AIStore on minikube and use it for some of its features like ETL(transformers) etc. or to develop new features on it.
 
 ## Prerequisites
 
@@ -26,7 +32,7 @@ $ # relogin if needed
 $ sudo service docker start
 ```
 
->  **Note:  Running Minikube on a VPN might be [problematic](https://minikube.sigs.k8s.io/docs/handbook/vpn_and_proxy/). For smoother
+>  **Note:  Running minikube on a VPN might be [problematic](https://minikube.sigs.k8s.io/docs/handbook/vpn_and_proxy/). For smoother
    operations try running with VPN disabled.**
 
 All commands below are running from the same directory i.e `${AISTORE_ROOT}/deploy/dev/k8s`
@@ -37,8 +43,8 @@ All commands below are running from the same directory i.e `${AISTORE_ROOT}/depl
 | --- | --- |
 | `make try` | start minikube and run a basic version of AIStore inside it ([ref](#trying-aistore-on-minikube)) |
 | `make dev` | deploy multi-proxy/target AIStore with other utilities ([ref](#developing-aistore-on-minikube)) |
-| `make minimal` | start a minimal AIStore deployment on already running Minikube|
-| `redeploy-ais` | skips the Minikube and Docker registry deployment in `make dev` |
+| `make minimal` | start a minimal AIStore deployment on an already running minikube|
+| `redeploy-ais` | skips the minikube and Docker registry deployment in `make dev` |
 | `make stop-ais` | stop running AIStore pods  |
 | `make stop`| stop and deletes AIStore pods, minikube cluster |
 
@@ -47,32 +53,31 @@ All commands below are running from the same directory i.e `${AISTORE_ROOT}/depl
 | --- | --- |
 | [Dockerfile](/deploy/dev/k8s/Dockerfile) | build AIStore node docker image on `Ubuntu 22.04` |
 
-## Trying AIStore on Minikube
-
+## Trying AIStore on minikube
 
 ### Deploy
 
-You can start Minikube with a basic version of AIStore (1-proxy and 1-target) running inside of it with the `make try` command.
+You can start minikube with a basic version of AIStore (1-proxy and 1-target) running inside of it with the `make try` command.
 
 ```console
-$ # navigate to this directory 
+$ # navigate to this directory
 $ # cd ${AISTORE_ROOT}/deploy/dev/k8s
 $
 $ make try
-$ 
-$ # you can also set the CPU and MEMORY allocated to Minikube by
+$
+$ # you can also set the CPU and MEMORY allocated to minikube by
 $ CPU=8 MEMORY=16000 make -e try
 ```
 
 
 ### Stopping and cleanup
-To stop AIS nodes running inside of Minikube, deleting all the pods and minikube itself, you can run the `stop` target of the [Makefile](/deploy/dev/k8s/Makefile).
+To stop AIS nodes running inside of minikube, deleting all the pods and minikube itself, you can run the `stop` target of the [Makefile](/deploy/dev/k8s/Makefile).
 
 ```console
 $ make stop
 ```
 
-## Developing AIStore on Minikube
+## Developing AIStore on minikube
 
 
 ### Deploy
@@ -83,21 +88,17 @@ The `dev` target of [Makefile](/deploy/dev/k8s/Makefile) allows you to customize
 $ make redeploy-ais
 ```
 
-To update the aisnode images, or to redeploy AIStore, execute the `make ais-redeploy` argument, as shown below. This will skip the Minikube and Docker registry deployment.
-
-```console
-$ ./dev.sh redeploy
-```
+To update the aisnode images, or to redeploy AIStore, execute the `make ais-redeploy` argument, as shown below. This will skip the minikube and Docker registry deployment.
 
 ### Stopping and cleanup
 
-The `stop-ais` target stops the AIStore cluster while keeping Minikube still running.
+The `stop-ais` target stops the AIStore cluster while keeping minikube still running.
 
 ```console
 $ make stop-ais
 ```
 
-For stopping and deleting the Minikube cluster
+For stopping and deleting the minikube cluster
 
 ```console
 $ make stop
@@ -105,7 +106,7 @@ $ make stop
 
 NOTE: If the default jupyter local directory was overwritten while deploying, ensure `JUPYTER_LOCAL_DIR` is pointing to the correct directory when performing a cleanup.
 
-## Troubleshooting Minikube
+## Troubleshooting minikube
 
 See [known issues](https://minikube.sigs.k8s.io/docs/drivers/docker/#known-issues) with using Docker driver.
 
@@ -124,7 +125,7 @@ minikube config set cpus 4
 ❗  These changes will take effect upon a minikube delete and then a minikube start
 minikube config set memory 12000
 ❗  These changes will take effect upon a minikube delete and then a minikube start
-minikube start --driver=docker 
+minikube start --driver=docker
 😄  minikube v1.26.0 on Ubuntu 20.04
 ✨  Using the docker driver based on user configuration
 📌  Using Docker driver with root privileges

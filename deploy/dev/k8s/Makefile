@@ -10,7 +10,8 @@ REGISTRY_URL ?= docker.io
 IMAGE_REPO=aistorage/aisnode-minikube
 IMAGE_TAG=latest
 
-# Run AIStore with 1 proxy 1 target on already running Minikube
+# Run AIStore cluster consisting of 1 proxy/gateway and 1 target
+# Note that minikube must be already running
 minimal:
 	@ ./minimal.sh
 
@@ -18,7 +19,7 @@ minimal:
 try: stop
 	@ minikube config set cpus $(CPU)
 	@ minikube config set memory $(MEMORY)
-	@ minikube start --driver=docker 
+	@ minikube start --driver=docker
 	@ ./minimal.sh
 
 #  Gives you the ability to configure everything
@@ -29,18 +30,18 @@ dev:
 	  ./utils/minikube_registry.sh && \
 	  ./utils/deploy_ais.sh
 
-# This will skip the Minikube and Docker registry deployment
+# This will skip the minikube and Docker registry deployment
 redeploy-ais:
 	@ ./utils/disable_vpn.sh && \
 	  ./utils/deploy_ais.sh
 
-# Stops AIS running on Minikube
+# Stops AIS running on minikube
 stop-ais:
 	@ kubectl delete pod -l type=aisproxy
 	@ kubectl delete pod -l type=aistarget
 
-# Stops AIS cluster as well as Minikube
-stop: 
+# Stops AIS cluster as well as minikube
+stop:
 	@ minikube delete
 
 docker-build:
