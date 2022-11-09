@@ -381,7 +381,7 @@ var (
 	paritySlicesFlag  = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
 	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
 	compactPropFlag   = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
-	nameOnlyFlag      = cli.BoolFlag{Name: "name-only", Usage: "show only object names (for best performance)"}
+	nameOnlyFlag      = cli.BoolFlag{Name: "name-only", Usage: "fast request to retrieve only the names of objects in the bucket; if defined, all comma-separated fields in the '--props' flag will be ignored with only two exceptions: 'name' and 'status'"}
 
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}

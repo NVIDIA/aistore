@@ -113,7 +113,6 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 		cmd.Name = newName[0]
 	}
 	if !silentAlias {
-		cmd.Category = "ALIASES"
 		cmd.Usage = fmt.Sprintf("(alias for %q) %s", aliasFor, cmd.Usage)
 	}
 

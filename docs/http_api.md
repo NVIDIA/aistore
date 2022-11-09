@@ -126,19 +126,19 @@ In other words, the supported URL paths include:
 
 ```console
 # Example: GET
-$ curl -L -X GET 'http://aistore/gs/my-google-bucket/abc-train-0001.tar'
+$ curl -s -L -X GET 'http://aistore/gs/my-google-bucket/abc-train-0001.tar -o abc-train-0001.tar'
 
   # Using conventional AIS RESTful API, the same exact GET operation will look as follows:
-  $ curl -L -X GET 'http://aistore/v1/objects/my-google-bucket/abc-train-0001.tar?provider=gs'
+  $ curl -s -L -X GET 'http://aistore/v1/objects/my-google-bucket/abc-train-0001.tar?provider=gs -o abc-train-0001.tar'
 
 # Example: PUT
-$ curl -L -X PUT 'http://aistore/gs/my-google-bucket/abc-train-9999.tar -T /tmp/9999.tar'
+$ curl -s -L -X PUT 'http://aistore/gs/my-google-bucket/abc-train-9999.tar -T /tmp/9999.tar'
 
   # For comparison, the same without using "easy URL":
-  $ curl -L -X PUT 'http://aistore/v1/objects/my-google-bucket/abc-train-9999.tar?provider=gs -T /tmp/9999.tar'
+  $ curl -s -L -X PUT 'http://aistore/v1/objects/my-google-bucket/abc-train-9999.tar?provider=gs -T /tmp/9999.tar'
 
 # Example: LIST (i.e., `list-objects`)
-$ curl -L -X GET 'http://aistore/gs/my-google-bucket' | jq
+$ curl -s -L -X GET 'http://aistore/gs/my-google-bucket' | jq
 ```
 
 > AIS provides S3 compatibility layer via its "/s3" endpoint. [S3 compatibility](/docs/s3compat.md) shall not be confused with "easy URL" mapping, whereby a path (e.g.) "gs/mybucket/myobject" gets replaced with "v1/objects/mybucket/myobject?provider=gcp" with _no_ other changes to the request and response parameters and components.
@@ -265,24 +265,33 @@ These APIs also require specific node ID (to identify the target in the cluster 
 
 ### Bucket and Object Operations
 
+Many of the operations on buckets and objects support numerous options. Not all of these options are listed in the table below; in fact, the table may serve as a quick summary but may also lag behind the latest released version of AIStore.
+
+Thirdly, some of the operations are further documented in separate sections below, including:
+
+* [Listing buckets](#listing-buckets)
+* [Listing objects](#listing-objects)
+
+and more.
+
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
-| List buckets aka `list-buckets` (not to confuse with `list-objects` below) | GET {"action": "list"} /v1/buckets/ | `curl -L -X GET  -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://G/v1/buckets/'`. More examples in the section [Listing buckets](#listing-buckets) below | `api.ListBuckets` |
+| List buckets aka `list-buckets` (not to confuse with `list-objects` below) | GET {"action": "list"} /v1/buckets/ | `curl -s -L -X GET  -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://G/v1/buckets/'`. More examples in the section [Listing buckets](#listing-buckets) below | `api.ListBuckets` |
 | Create [bucket](/docs/bucket.md) | POST {"action": "create-bck"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "create-bck"}' 'http://G/v1/buckets/abc'` | `api.CreateBucket` |
 | Destroy [bucket](/docs/bucket.md) | DELETE {"action": "destroy-bck"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroy-bck"}' 'http://G/v1/buckets/abc'` | `api.DestroyBucket` |
 | Rename ais [bucket](/docs/bucket.md) | POST {"action": "move-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "move-bck" }' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.RenameBucket` |
 | Copy [bucket](/docs/bucket.md) | POST {"action": "copy-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "copy-bck", }}}' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.CopyBucket` |
 | Rename/move object (ais buckets only) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mybucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> | `api.RenameObject` |
-| Check if an object from a remote bucket *is present*  | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` | `api.HeadObject` |
-| GET object | GET /v1/objects/bucket-name/object-name | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=s3' -o myobject` <sup id="a1">[1](#ft1)</sup> | `api.GetObject`, `api.GetObjectWithValidation`, `api.GetObjectReader`, `api.GetObjectWithResp` |
-| Read range | GET /v1/objects/bucket-name/object-name | `curl -L -X GET -H 'Range: bytes=1024-1535' 'http://G/v1/objects/myS3bucket/myobject?provider=s3' -o myobject`<br> Note: For more information about the HTTP Range header, see [this](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)  | `` |
-| List objects (`list-objects`) in a given [bucket](/docs/bucket.md) | GET {"action": "list", "value": { properties-and-options... }} /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"action": "list", "value":{"props": "size"}}' 'http://G/v1/buckets/myS3bucket'` <sup id="a2">[2](#ft2)</sup> | `api.ListObjects` (see also `api.ListObjectsPage`) |
-| Get [bucket properties](/docs/bucket.md#bucket-properties) | HEAD /v1/buckets/bucket-name | `curl -L --head 'http://G/v1/buckets/mybucket'` | `api.HeadBucket` |
-| Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject'` | `api.HeadObject` |
+| Check if an object from a remote bucket *is present*  | HEAD /v1/objects/bucket-name/object-name | `curl -s -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` | `api.HeadObject` |
+| GET object | GET /v1/objects/bucket-name/object-name | `curl -s -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=s3' -o myobject` <sup id="a1">[1](#ft1)</sup> | `api.GetObject`, `api.GetObjectWithValidation`, `api.GetObjectReader`, `api.GetObjectWithResp` |
+| Read range | GET /v1/objects/bucket-name/object-name | `curl -s -L -X GET -H 'Range: bytes=1024-1535' 'http://G/v1/objects/myS3bucket/myobject?provider=s3' -o myobject`<br> Note: For more information about the HTTP Range header, see [this](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)  | `` |
+| List objects (`list-objects`) in a given [bucket](/docs/bucket.md) | GET {"action": "list", "value": { properties-and-options... }} /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"action": "list", "value":{"props": "size"}}' 'http://G/v1/buckets/myS3bucket'` <sup id="a2">[2](#ft2)</sup> | `api.ListObjects` (see also `api.ListObjectsPage` and section [Listing objects](#listing-objects) below |
+| Get [bucket properties](/docs/bucket.md#bucket-properties) | HEAD /v1/buckets/bucket-name | `curl -s -L --head 'http://G/v1/buckets/mybucket'` | `api.HeadBucket` |
+| Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -s -L --head 'http://G/v1/objects/mybucket/myobject'` | `api.HeadObject` |
 | Set object's custom (user-defined) properties | (to be added) | (to be added) | `api.SetObjectCustomProps` |
-| PUT object | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject' -T filenameToUpload` | `api.PutObject` |
-| APPEND to object | PUT /v1/objects/bucket-name/object-name?appendty=append&handle= | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=append&handle=' -T filenameToUpload-partN`  <sup>[8](#ft8)</sup> | `api.AppendObject` |
-| Finalize APPEND | PUT /v1/objects/bucket-name/object-name?appendty=flush&handle=obj-handle | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=flush&handle=obj-handle'`  <sup>[8](#ft8)</sup> | `api.FlushObject` |
+| PUT object | PUT /v1/objects/bucket-name/object-name | `curl -s -L -X PUT 'http://G/v1/objects/myS3bucket/myobject' -T filenameToUpload` | `api.PutObject` |
+| APPEND to object | PUT /v1/objects/bucket-name/object-name?appendty=append&handle= | `curl -s -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=append&handle=' -T filenameToUpload-partN`  <sup>[8](#ft8)</sup> | `api.AppendObject` |
+| Finalize APPEND | PUT /v1/objects/bucket-name/object-name?appendty=flush&handle=obj-handle | `curl -s -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=flush&handle=obj-handle'`  <sup>[8](#ft8)</sup> | `api.FlushObject` |
 | Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L 'http://G/v1/objects/mybucket/myobject'` | `api.DeleteObject` |
 | Set [bucket properties](/docs/bucket.md#bucket-properties) (proxy) | PATCH {"action": "set-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"set-bprops", "value": {"checksum": {"type": "sha256"}, "mirror": {"enable": true}, "force": false}' 'http://G/v1/buckets/abc'`  <sup id="a9">[9](#ft9)</sup> | `api.SetBucketProps` |
 | Reset [bucket properties](/docs/bucket.md#bucket-properties) (proxy) | PATCH {"action": "reset-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"reset-bprops"}' 'http://G/v1/buckets/abc'` | `api.ResetBucketProps` |
@@ -295,7 +304,7 @@ These APIs also require specific node ID (to identify the target in the cluster 
 #### Example 1. List all buckets in the [global namespace](/docs/providers.md):
 
 ```console
-$ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets' | jq
+$ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets' | jq
 [
   {
     "name": "abc",
@@ -327,7 +336,7 @@ $ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'ht
 #### Example 2. List only those buckets in the global namespace that are **present** in the cluster:
 
 ```console
-$ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets?presence=2' | jq
+$ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets?presence=2' | jq
 [
   {
     "name": "abc",
@@ -368,7 +377,7 @@ In other words, `remais` in this example is, simultaneously, a user-given name t
 ```console
 # 3.1. List remote ais://@remais/... buckets that are present in our cluster:
 
-$ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets?provider=ais&namespace=@remais&presence=2' | jq
+$ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets?provider=ais&namespace=@remais&presence=2' | jq
 [
   {
     "name": "abc",
@@ -386,7 +395,7 @@ This is the only bucket from the remote AIS cluster with UUID "ihGdxzrC3" that w
 
 # 3.2. List all remote ais://@remais/... buckets:
 
-$ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets?provider=ais&namespace=@remais' | jq
+$ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets?provider=ais&namespace=@remais' | jq
 [
   {
     "name": "abc",
@@ -410,6 +419,95 @@ $ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'ht
 The results include two remote buckets: `ais://@remais/abc` and `ais://@remais/xyz`.
 
 And again, to read, write and otherwise reference these buckets we could (in this case) use `@remais` and `@ihGdxzrC3` interchangeably.
+
+### Listing objects
+
+#### Example 1. List `ais://abc` and use all defaults for the numerous supported (listing) options:
+
+```console
+$ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets/abc?provider=ais' | jq
+{
+  "uuid": "J-6ynHbFVx",
+  "continuation_token": "",
+  "entries": [
+    {
+      "name": "LICENSE",
+      "checksum": "ed5b3e74f9f3516a",
+      "atime": "09 Nov 22 18:52 EST",
+      "size": "1075",
+      "flags": 64
+    }
+  ],
+  "flags": 0
+}
+```
+
+As far as "numerous supported options", JSON message '{"action": "list"}' in the `curl` command line translates as:
+
+```json
+{
+   "action": "list",
+   "value": {
+	   "props":	"name, size",
+	   "start_after":"",
+	   "pagesize":	0,
+	   "flags":	"0",
+	   "uuid":	"",
+	   "time_format	":"",
+	   "prefix":	"",
+	   "continuation_token":"",
+	   "target":	"",
+   },
+}
+```
+
+Each of these value fields - "props", "flags", etc. - has its own utility. For closely related reference, see e.g.:
+
+* [CLI to list objects](/docs/cli/bucket.md#list-objects)
+
+#### Example 2. Same as above using alternative [easy URL](#easy-url) notation:
+
+```console
+$ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/ais/abc' | jq
+
+#### Example 3. Compare the following two command lines that look almost identical but produce different results.
+
+But first, let's do this:
+
+```console
+$ ais put LICENSE gs://nv
+$ ais object evict gs://nv/LICENSE
+```
+
+And now, list objects in a Cloud bucket called `gs://nv`:
+
+```console
+# 3.1. List only those objects that are _present_ or (same) cached in the cluster:
+
+$ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list", "value": {"flags": "1"}}' 'http://localhost:8080/gs/nv' | jq
+{
+  "uuid": "P0CeeasVj",
+  "continuation_token": "",
+  "entries": null,
+  "flags": 0
+}
+
+# 3.2. List _all_  objects:
+$ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list", "value": {"flags": "0"}}' 'http://localhost:8080/gs/nv' | jq
+{
+  "uuid": "Tk0eebFnx",
+  "continuation_token": "",
+  "entries": [
+    {
+      "name": "LICENSE",
+      "checksum": "f70a21a0c5fa26a93820b0bef5be7619",
+      "version": "1668040083889738",
+      "size": "1075"
+    }
+  ],
+  "flags": 0
+}
+```
 
 ### Storage Services
 
@@ -476,10 +574,10 @@ For even more information, CLI examples, and the most recent updates, please see
 
 ```console
 # List a given AWS bucket
-$ curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=aws'
+$ curl -s -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=aws'
 
 # Using locally deployed AIS, get archived file from a remote named tar:
-$ curl -L -X GET 'http://localhost:8080/v1/objects/myGCPbucket/train-1234.tar?provider=gcp&archpath=567.jpg' --output /tmp/567.jpg
+$ curl -s -L -X GET 'http://localhost:8080/v1/objects/myGCPbucket/train-1234.tar?provider=gcp&archpath=567.jpg' --output /tmp/567.jpg
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100   201  100   201    0     0   196k      0 --:--:-- --:--:-- --:--:--  196k
@@ -527,7 +625,7 @@ Table-summary follows below but first, let's look at examples.
 For instance, if we want to show all remote clusters [attached](/docs/providers.md#remote-ais-cluster) to our cluster, we do something like:
 
 ```console
-$ curl -L http://localhost:8080//v1/cluster?what=remote | jq
+$ curl -s -L http://localhost:8080//v1/cluster?what=remote | jq
 {
   "a": [
     {
@@ -563,7 +661,7 @@ The result in this case includes the cluster's URL, alias, UUID and Smap - for e
 Another useful query could be retrieving log information from any selected node (notice `/daemon` in the URL path):
 
 ```console
-curl -L -i http://localhost:8081//v1/daemon?what=log | less
+curl -s -L -i http://localhost:8081//v1/daemon?what=log | less
 
 HTTP/1.1 200 OK
 Date: Tue, 08 Nov 2022 17:03:03 GMT

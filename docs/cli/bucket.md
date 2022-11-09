@@ -186,9 +186,9 @@ List all buckets for the `ais` provider and `uuid#namespace` namespace.
 
 ## List objects
 
-`ais ls BUCKET` (or, same, `ais bucket ls BUCKET`)
+`ais ls <BUCKET>` (or, same, `ais bucket ls <BUCKET>`)
 
-List all objects contained in `BUCKET` bucket.
+List all or some objects in `<BUCKET>`.
 
 ### Options
 
@@ -196,23 +196,26 @@ comma-separated list of object properties including name, size, version, ##copie
 
 | Name | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--regex` | `string` | Pattern for matching object names | `""` |
-| `--template` | `string` | Template for matching object names, e.g.: 'shard-{900..999}.tar' | `""` |
-| `--prefix` | `string` | Prefix for matching object names | `""` |
-| `--paged` | `bool` | Fetch and print objects page by page | `false` |
-| `--max-pages` | `int` | Max. number of pages to list | `0` |
-| `--page-size` | `int` | Max. number of object names per page | `1000` |
-| `--props` | `string` | Comma-separated list of object properties including: name, size, version, copies, EC data and parity info, custom props (to include all properties, use `--props all`) | `"name,size"` |
-| `--limit` | `int` | Max. number of object names to list | `0` |
-| `--show-unmatched` | `bool` | List objects that were not matched by regex and template | `false` |
-| `--all` | `bool` | Show all objects, including misplaced, duplicated, etc. | `false` |
-| `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically | `""` |
-| `--no-headers` | `bool` | Display tables without headers | `false` |
+| `--regex` | `string` | regular expression to match and select items in question | `""` |
+| `--template` | `string` | template for matching object names, e.g.: 'shard-{900..999}.tar' | `""` |
+| `--prefix` | `string` | list objects matching a given prefix | `""` |
+| `--page-size` | `int` | maximum number of names per page (0 - the maximum is defined by the corresponding backend) | `0` |
+| `--props` | `string` | comma-separated list of object properties including name, size, version, copies, EC data and parity info, custom metadata, location, and more; to include all properties, type '--props all' (default: "name,size") | `"name,size"` |
+| `--limit` | `int` | limit object name count (0 - unlimited) | `0` |
+| `--show-unmatched` | `bool` | list objects that were not matched by regex and/or template | `false` |
+| `--all` | `bool` | depending on context: all objects (including misplaced ones and copies) _or_ all buckets (including remote buckets that are not present in the cluster) | `false` |
+| -no-headers, --no-header, -H | `bool` | display tables without headers | `false` |
+| --no-footers, --no-footer | `bool` | display tables without footers | `false` |
+| `--paged` | `bool` | list objects page by page, one page at a time (see also '--page-size' and '--limit') | `false` |
+| `--max-pages` | `int` | display up to this number pages of bucket objects (default: 0) | `0` |
+| `--marker` | `string` | list bucket's content alphabetically starting with the first name _after_ the specified | `""` |
 | `--start-after` | `string` | Object name (marker) after which the listing should start | `""` |
-| `--cached` | `bool` | List only those objects from a remote bucket that are present (ie., cached) in the cluster | `false` |
-| `--anonymous` | `bool` | List public-access Cloud buckets that may disallow certain operations (e.g., `HEAD(bucket)`) | `false` |
-| `--archive` | `bool` | List archived content | `false` |
-| `--name-only` | `bool` | Lightweight and fast request to retrieve only the names of objects in the bucket. If defined, all comma-separated fields in the `--props` flag are ignored with only two exceptions: `name` and `status` | `false` |
+| `--cached` | `bool` | list only those objects from a remote bucket that are present ("cached") | `false` |
+| `--anonymous` | `bool` | list public-access Cloud buckets that may disallow certain operations (e.g., `HEAD(bucket)`) | `false` |
+| `--archive` | `bool` | list archived content | `false` |
+| `--summary` | `bool` | show bucket sizes and used capacity; by default, applies only to the buckets that are _present_ in the cluster (use '--all' option to override) | `false` |
+| `--bytes` | `bool` | show sizes in bytes (ie., do not convert to KiB, MiB, GiB, etc.) | `false` |
+| `--name-only` | `bool` | fast request to retrieve only the names of objects in the bucket; if defined, all comma-separated fields in the `--props` flag will be ignored with only two exceptions: `name` and `status` | `false` |
 
 ### Examples
 
