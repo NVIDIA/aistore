@@ -164,21 +164,21 @@ func (r *Trunner) RegDiskMetrics(disk string) {
 }
 
 func (r *Trunner) RegMetrics(node *cluster.Snode) {
-	debug.Assert(node == r.T.Snode())
-
-	r.reg(PutLatency, KindLatency)
-	r.reg(AppendLatency, KindLatency)
 	r.reg(GetColdCount, KindCounter)
 	r.reg(GetColdSize, KindCounter)
-	r.reg(GetThroughput, KindThroughput)
 	r.reg(LruEvictSize, KindCounter)
 	r.reg(LruEvictCount, KindCounter)
 	r.reg(CleanupStoreSize, KindCounter)
 	r.reg(CleanupStoreCount, KindCounter)
 	r.reg(VerChangeCount, KindCounter)
 	r.reg(VerChangeSize, KindCounter)
+
+	r.reg(PutLatency, KindLatency)
+	r.reg(AppendLatency, KindLatency)
 	r.reg(GetRedirLatency, KindLatency)
 	r.reg(PutRedirLatency, KindLatency)
+
+	r.reg(GetThroughput, KindThroughput)
 
 	// errors
 	r.reg(ErrCksumCount, KindCounter)

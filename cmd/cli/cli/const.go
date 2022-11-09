@@ -211,6 +211,7 @@ const (
 
 	// Default values for long running operations
 	refreshRateDefault = time.Second
+	refreshRateMinDur  = time.Second
 	countDefault       = 1
 
 	NilValue = "none" // TODO: completion sorting order

@@ -63,8 +63,6 @@ const (
 	incorrectCmdDistance = 3
 )
 
-const refreshRateMinDur = time.Second
-
 var (
 	clusterURL        string
 	defaultHTTPClient *http.Client

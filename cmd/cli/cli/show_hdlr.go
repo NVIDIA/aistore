@@ -20,7 +20,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -825,11 +827,47 @@ func appendStatToProps(props nvpairList, name string, value int64, prefix, filte
 	return append(props, nvpair{Name: name, Value: fmtStatValue(name, value, human)})
 }
 
-func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
+func showClusterStatsHandler(c *cli.Context) error {
+	smap, err := api.GetClusterMap(apiBP)
+	if err != nil {
+		return err
+	}
+	var (
+		node     *cluster.Snode
+		daemonID = argDaemonID(c)
+	)
+	if daemonID != "" {
+		node = smap.GetNode(daemonID)
+	}
+
+	var (
+		refresh     = flagIsSet(c, refreshFlag)
+		sleep       = calcRefreshRate(c)
+		averageOver = cos.MinDuration(cos.MaxDuration(sleep/2, 2*time.Second), 10*time.Second)
+	)
+	sleep = cos.MaxDuration(10*time.Millisecond, sleep-averageOver)
+	for {
+		if node != nil {
+			err = showDaemonStats(c, node, averageOver)
+		} else {
+			err = showClusterTotalStats(c, averageOver)
+		}
+		if err != nil || !refresh {
+			return err
+		}
+
+		time.Sleep(sleep)
+	}
+}
+
+func showDaemonStats(c *cli.Context, node *cluster.Snode, averageOver time.Duration) error {
 	stats, err := api.GetDaemonStats(apiBP, node)
 	if err != nil {
 		return err
 	}
+
+	daemonBps(node, stats, averageOver)
+
 	if flagIsSet(c, jsonFlag) {
 		return tmpls.Print(stats, c.App.Writer, tmpls.ConfigTmpl, nil, true)
 	}
@@ -868,11 +906,13 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
 }
 
-func showClusterTotalStats(c *cli.Context) (err error) {
+func showClusterTotalStats(c *cli.Context, averageOver time.Duration) (err error) {
 	st, err := api.GetClusterStats(apiBP)
 	if err != nil {
 		return err
 	}
+
+	clusterBps(st, averageOver)
 
 	useJSON := flagIsSet(c, jsonFlag)
 	if useJSON {
@@ -916,31 +956,35 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
 }
 
-func showClusterStatsHandler(c *cli.Context) (err error) {
-	smap, err := api.GetClusterMap(apiBP)
-	if err != nil {
-		return err
-	}
-	var (
-		node     *cluster.Snode
-		daemonID = argDaemonID(c)
-	)
-	if daemonID != "" {
-		node = smap.GetNode(daemonID)
-	}
-	refresh := flagIsSet(c, refreshFlag)
-	sleep := calcRefreshRate(c)
+func clusterBps(st stats.ClusterStats, averageOver time.Duration) {
+	time.Sleep(averageOver)
+	st2, _ := api.GetClusterStats(apiBP)
+	for tid, tgt := range st.Target {
+		for k, v := range tgt.Tracker {
+			if !stats.IsKindThroughput(k) {
+				continue
+			}
+			tgt2 := st2.Target[tid]
+			v2 := tgt2.Tracker[k]
+			throughput := (v2.Value - v.Value) / cos.MaxI64(int64(averageOver.Seconds()), 1)
 
-	for {
-		if node != nil {
-			err = showDaemonStats(c, node)
-		} else {
-			err = showClusterTotalStats(c)
+			v.Value = throughput
+			tgt.Tracker[k] = v
 		}
-		if err != nil || !refresh {
-			return err
-		}
+	}
+}
 
-		time.Sleep(sleep)
+func daemonBps(node *cluster.Snode, ds *stats.DaemonStats, averageOver time.Duration) {
+	time.Sleep(averageOver)
+	ds2, _ := api.GetDaemonStats(apiBP, node)
+	for k, v := range ds.Tracker {
+		if !stats.IsKindThroughput(k) {
+			continue
+		}
+		v2 := ds2.Tracker[k]
+		throughput := (v2.Value - v.Value) / cos.MaxI64(int64(averageOver.Seconds()), 1)
+
+		v.Value = throughput
+		ds.Tracker[k] = v
 	}
 }

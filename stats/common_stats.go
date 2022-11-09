@@ -48,10 +48,19 @@ const (
 	KindGauge   = "gauge"
 	// + semantics
 	KindLatency            = "latency"
-	KindThroughput         = "bw"
-	KindComputedThroughput = "compbw"
+	KindThroughput         = "bw"     // currently, only GetThroughput - see NOTE below
+	KindComputedThroughput = "compbw" // disk(s) read/write throughputs
 	KindSpecial            = "special"
 )
+
+// NOTE:
+//
+// What's reported by api.GetClusterStats and api.GetDaemonStats is the cumulative byte number.
+// It is the client's own responsibility to compute the actual throughput as only the client
+// knows when exactly it was querying the previous time.
+//
+// Also, compare with copyT() below that runs periodically and is used to log statistics.
+func IsKindThroughput(name string) bool { return name == GetThroughput }
 
 // number-of-goroutines watermarks expressed as multipliers over the number of available logical CPUs (GOMAXPROCS)
 const (
