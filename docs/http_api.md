@@ -267,7 +267,7 @@ These APIs also require specific node ID (to identify the target in the cluster 
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
-| List [bucket](/docs/bucket.md) names | GET {"action": "list"} /v1/buckets/ | `curl -L -X GET  -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://G/v1/buckets/'` | `api.ListBuckets` |
+| List buckets aka `list-buckets` (not to confuse with `list-objects` below) | GET {"action": "list"} /v1/buckets/ | `curl -L -X GET  -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://G/v1/buckets/'`. More examples in the section [Listing buckets](#listing-buckets) below | `api.ListBuckets` |
 | Create [bucket](/docs/bucket.md) | POST {"action": "create-bck"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "create-bck"}' 'http://G/v1/buckets/abc'` | `api.CreateBucket` |
 | Destroy [bucket](/docs/bucket.md) | DELETE {"action": "destroy-bck"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroy-bck"}' 'http://G/v1/buckets/abc'` | `api.DestroyBucket` |
 | Rename ais [bucket](/docs/bucket.md) | POST {"action": "move-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "move-bck" }' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.RenameBucket` |
@@ -276,7 +276,7 @@ These APIs also require specific node ID (to identify the target in the cluster 
 | Check if an object from a remote bucket *is present*  | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` | `api.HeadObject` |
 | GET object | GET /v1/objects/bucket-name/object-name | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=s3' -o myobject` <sup id="a1">[1](#ft1)</sup> | `api.GetObject`, `api.GetObjectWithValidation`, `api.GetObjectReader`, `api.GetObjectWithResp` |
 | Read range | GET /v1/objects/bucket-name/object-name | `curl -L -X GET -H 'Range: bytes=1024-1535' 'http://G/v1/objects/myS3bucket/myobject?provider=s3' -o myobject`<br> Note: For more information about the HTTP Range header, see [this](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)  | `` |
-| List objects in a given [bucket](/docs/bucket.md) | GET {"action": "list", "value": { properties-and-options... }} /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"action": "list", "value":{"props": "size"}}' 'http://G/v1/buckets/myS3bucket'` <sup id="a2">[2](#ft2)</sup> | `api.ListObjects` (see also `api.ListObjectsPage`) |
+| List objects (`list-objects`) in a given [bucket](/docs/bucket.md) | GET {"action": "list", "value": { properties-and-options... }} /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"action": "list", "value":{"props": "size"}}' 'http://G/v1/buckets/myS3bucket'` <sup id="a2">[2](#ft2)</sup> | `api.ListObjects` (see also `api.ListObjectsPage`) |
 | Get [bucket properties](/docs/bucket.md#bucket-properties) | HEAD /v1/buckets/bucket-name | `curl -L --head 'http://G/v1/buckets/mybucket'` | `api.HeadBucket` |
 | Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject'` | `api.HeadObject` |
 | Set object's custom (user-defined) properties | (to be added) | (to be added) | `api.SetObjectCustomProps` |
@@ -289,6 +289,127 @@ These APIs also require specific node ID (to identify the target in the cluster 
 | [Evict](/docs/bucket.md#prefetchevict-objects) object | DELETE '{"action": "evict-listrange"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict-listrange"}' 'http://G/v1/objects/mybucket/myobject'` | `api.EvictObject` |
 | [Evict](/docs/bucket.md#evict-bucket) remote bucket | DELETE {"action": "evict-remote-bck"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evict-remote-bck"}' 'http://G/v1/buckets/myS3bucket'` | `api.EvictRemoteBucket` |
 | Promote file or directory | POST {"action": "promote", "name": "/home/user/dirname", "value": {"target": "234ed78", "recurs": true, "keep": true}} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote", "name":"/user/dir", "value": {"target": "234ed78", "trim_prefix": "/user/", "recurs": true, "keep": true} }' 'http://G/v1/buckets/abc'` <sup>[7](#ft7)</sup>| `api.PromoteFileOrDir` |
+
+### Listing buckets
+
+#### Example 1. List all buckets in the [global namespace](/docs/providers.md):
+
+```console
+$ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets' | jq
+[
+  {
+    "name": "abc",
+    "provider": "ais",
+    "namespace": {
+      "uuid": "",
+      "name": ""
+    }
+  },
+    "name": "jonh-s3-bucket",
+    "provider": "aws",
+    "namespace": {
+      "uuid": "",
+      "name": ""
+    }
+  },
+  {
+    "name": "my-gs-bucket",
+    "provider": "gcp",
+    "namespace": {
+      "uuid": "",
+      "name": ""
+    }
+  },
+...
+]
+```
+
+#### Example 2. List only those buckets in the global namespace that are **present** in the cluster:
+
+```console
+$ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets?presence=2' | jq
+[
+  {
+    "name": "abc",
+    "provider": "ais",
+    "namespace": {
+      "uuid": "",
+      "name": ""
+    }
+  }
+  {
+    "name": "my-gs-bucket",
+    "provider": "gcp",
+    "namespace": {
+      "uuid": "",
+      "name": ""
+    }
+  },
+]
+
+```
+
+The `presence=` query parameter tells AIStore to look only for the buckets that are **present** in the AIS bucket metadata called `BMD`.
+
+Remote buckets (such as, for instance, `s3://jonh-s3-bucket` above) may not be present but they will still be fully accessible - both readable and writeable, assuming, of course, that the cluster is provided with right credentials.
+
+> That's because AIS supports on-the-fly bucket creation. When user references a new bucket, AIS looks it up behind the scenes, confirms its existence and accessibility, and updates its own cluster-wide global metadata that contains bucket definitions, associated management policies, and properties.
+
+Further, all supported query parameters are enumerated and commented in the following source:
+
+* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/master/api/apc/query.go)
+
+#### Examples 3.1 and 3.2. Listing buckets in remote namespaces
+
+In the two examples below, we list buckets in the remote AIS cluster that we have previously [attached](/docs/providers.md#remote-ais-cluster) (which is not shown here). We have attached it and called `remais`.
+
+In other words, `remais` in this example is, simultaneously, a user-given name to reference remote AIS cluster, and a namespace for this cluster's buckets - all of them.
+
+```console
+# 3.1. List remote ais://@remais/... buckets that are present in our cluster:
+
+$ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets?provider=ais&namespace=@remais&presence=2' | jq
+[
+  {
+    "name": "abc",
+    "provider": "ais",
+    "namespace": {
+      "uuid": "ihGdxzrC3",
+      "name": ""
+    }
+  }
+]
+
+The result (above) translates as `ais://@remais/abc` or - same - `ais://@ihGdxzrC3/abc`.
+
+This is the only bucket from the remote AIS cluster with UUID "ihGdxzrC3" that we currently have in our cluster.
+
+# 3.2. List all remote ais://@remais/... buckets:
+
+$ curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/v1/buckets?provider=ais&namespace=@remais' | jq
+[
+  {
+    "name": "abc",
+    "provider": "ais",
+    "namespace": {
+      "uuid": "remais",
+      "name": ""
+    }
+  },
+  {
+    "name": "xyz",
+    "provider": "ais",
+    "namespace": {
+      "uuid": "remais",
+      "name": ""
+    }
+  }
+]
+```
+
+The results include two remote buckets: `ais://@remais/abc` and `ais://@remais/xyz`.
+
+And again, to read, write and otherwise reference these buckets we could (in this case) use `@remais` and `@ihGdxzrC3` interchangeably.
 
 ### Storage Services
 

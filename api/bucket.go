@@ -162,8 +162,8 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.S
-		// NOTE: the name
-		// - qbck.IsBucket() to differentiate list-objects vs list-buckets operations
+		// NOTE: bucket name
+		// - qbck.IsBucket() to differentiate between list-objects and list-buckets (operations)
 		// - list-buckets own correctness (see QueryBuckets below)
 		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActList, Name: qbck.Name})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}

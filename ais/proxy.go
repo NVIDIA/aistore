@@ -2862,11 +2862,14 @@ func (p *proxy) _remais(newConfig *globalConfig) {
 	}
 	var (
 		sleep      = newConfig.Timeout.CplaneOperation.D()
+		maxsleep   = newConfig.Timeout.MaxKeepalive.D()
 		retries    = 5
 		over, nver int64
 	)
-	if clutime := p.startup.cluster.Load(); clutime < int64(newConfig.Timeout.Startup) {
-		sleep = 2 * newConfig.Timeout.MaxKeepalive.D()
+	if clutime := p.startup.cluster.Load(); clutime < int64(maxsleep) {
+		sleep = 4 * maxsleep
+	} else if clutime < int64(newConfig.Timeout.Startup) {
+		sleep = 2 * maxsleep
 	}
 	for ; retries > 0; retries-- {
 		time.Sleep(sleep)
