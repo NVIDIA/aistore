@@ -444,7 +444,7 @@ $ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 
 
 As far as "numerous supported options", JSON message '{"action": "list"}' in the `curl` command line translates as:
 
-```json
+```console
 {
    "action": "list",
    "value": {
