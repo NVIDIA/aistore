@@ -469,8 +469,9 @@ Each of these value fields - "props", "flags", etc. - has its own utility. For c
 
 ```console
 $ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://localhost:8080/ais/abc' | jq
+```
 
-#### Example 3. Compare the following two command lines that look almost identical but produce different results.
+#### Example 3. Compare the following two `curl` commands that look almost identical but produce different results.
 
 But first, let's do this:
 
@@ -479,7 +480,7 @@ $ ais put LICENSE gs://nv
 $ ais object evict gs://nv/LICENSE
 ```
 
-And now, list objects in a Cloud bucket called `gs://nv`:
+And now, use `curl` to list objects in a Cloud bucket called `gs://nv`:
 
 ```console
 # 3.1. List only those objects that are _present_ or (same) cached in the cluster:
