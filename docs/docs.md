@@ -13,7 +13,9 @@ redirect_from:
 - [In-depth overview](/docs/overview.md)
 - [Getting started](/docs/getting_started.md)
 - [CLI](/docs/cli.md)
-- [Buckets](/docs/bucket.md)
+- [Documentation](/docs/)
+- [Blogs](https://aiatscale.org/blog)
+- [Deployment](https://github.com/NVIDIA/aistore/tree/master/deploy)
 
 ### Guides and References
 
