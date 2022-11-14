@@ -2,10 +2,10 @@
 set -e
 
 # Command line options and their respective defaults
-tmpdir="/tmp" 			# temp directory, e.g. $HOME/tmp
-dstdir="/usr/local/bin"		# installation destination
-previous="false"        	# install from the release _prior_ to the latest
-completions="false"        	# install and enable _only_ CLI autocompletions (skip installing binaries)
+tmpdir="/tmp" 		# temp directory, e.g. $HOME/tmp
+dstdir="/usr/local/bin"	# installation destination
+completions="false"	# install and enable _only_ CLI autocompletions (ie., skip installing binaries)
+release="latest" 	# e.g., 3.10, 3.11, latest (default: latest)
 
 script=$(basename $0)
 
@@ -21,8 +21,8 @@ USAGE:
 OPTIONS:
   --tmpdir <dir>  	work directory, e.g. $HOME/tmp
   --dstdir <dir>  	installation destination
-  --previous      	install from the release _prior_ to the latest
-  --completions		install and enable _only_ CLI autocompletions (skip installing binaries)
+  --release      	e.g., 3.10, 3.11, latest (default: latest)
+  --completions		install and enable _only_ CLI autocompletions (ie., skip installing binaries)
   -h, --help      	show this help
 "
 
@@ -32,7 +32,7 @@ while (( "$#" )); do
 
     --tmpdir) tmpdir=$2; shift; shift;;
     --dstdir) dstdir=$2; shift; shift;;
-    --previous) previous="true"; shift;;
+    --release) release=$2; shift; shift;;
     --completions) completions="true"; shift;;
     *) echo "fatal: unknown argument '${1}'"; exit 1;;
   esac
@@ -88,27 +88,22 @@ if [ ! -w "$dstdir" ]; then
   exit 1
 fi
 
-
 echo "Installing aisloader => $dstdir/aisloader"
-if [[ ${previous} == "true" ]]; then
-  reltag="3.11"
-  curl -Lo aisloader https://github.com/NVIDIA/aistore/releases/download/$reltag/aisloader-linux-amd64
+if [[ ${release} != "latest" ]]; then
+  curl -Lo aisloader https://github.com/NVIDIA/aistore/releases/download/$release/aisloader-linux-amd64
   chmod +x aisloader
 else
-  reltag="v1.3.12"
-  curl -LO https://github.com/NVIDIA/aistore/releases/download/$reltag/aisloader-linux-amd64.tar.gz
+  curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/aisloader-linux-amd64.tar.gz
   tar -xzvf aisloader-linux-amd64.tar.gz
 fi
 $SUDO mv ./aisloader $dstdir/.
 
 echo "Installing CLI => $dstdir/ais"
-if [[ ${previous} == "true" ]]; then
-  reltag="3.11"
-  curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$reltag/ais-linux-amd64
+if [[ ${release} != "latest" ]]; then
+  curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/ais-linux-amd64
   chmod +x ais
 else
-  reltag="v1.3.12"
-  curl -LO https://github.com/NVIDIA/aistore/releases/download/$reltag/ais-linux-amd64.tar.gz
+  curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/ais-linux-amd64.tar.gz
   tar -xzvf ais-linux-amd64.tar.gz
 fi
 $SUDO mv ./ais $dstdir/.
