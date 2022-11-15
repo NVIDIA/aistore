@@ -79,7 +79,7 @@ func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
 // bsummXact //
 ///////////////
 
-func (r *bsummXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) }
+func (r *bsummXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) } // TODO -- FIXME: add size
 
 func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	var (
@@ -189,7 +189,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	// 3. npg remote
 	lsmsg = &apc.LsoMsg{Props: apc.GetPropsSize}
 	for {
-		npg := newNpgCtx(r.t, bck, lsmsg, nil /*lomVisitedCb*/)
+		npg := newNpgCtx(r.t, bck, lsmsg, noopCb)
 		nentries := allocLsoEntries()
 		lst, err := npg.nextPageR(nentries)
 		if err != nil {

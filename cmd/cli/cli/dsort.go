@@ -409,12 +409,7 @@ func printCondensedStats(w io.Writer, id string) error {
 	return nil
 }
 
-func dsortJobsList(c *cli.Context, regex string) error {
-	list, err := api.ListDSort(apiBP, regex)
-	if err != nil {
-		return err
-	}
-
+func dsortJobsList(c *cli.Context, list []*dsort.JobInfo) error {
 	sort.Slice(list, func(i int, j int) bool {
 		if list[i].IsRunning() && !list[j].IsRunning() {
 			return true

@@ -139,7 +139,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 		lst     *cmn.LsoResult
 		msg     = &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsStatus}
 		bck     = r.xctn.Bck()
-		npg     = newNpgCtx(r.t, bck, msg, nil /*lomVisitedCb*/)
+		npg     = newNpgCtx(r.t, bck, msg, noopCb)
 		bremote = bck.IsRemote()
 	)
 	if err := bck.Init(r.t.Bowner()); err != nil {

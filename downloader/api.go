@@ -381,18 +381,19 @@ func (b *DlMultiBody) ExtractPayload() (cos.StrKVs, error) {
 			}
 		}
 	case []any:
-		// process list of links
+		// process all links
 		for _, val := range ty {
 			switch link := val.(type) {
 			case string:
 				objName := path.Base(link)
 				if objName == "." || objName == "/" {
-					// should we continue and let the use worry about this after?
-					return nil, fmt.Errorf("can not extract a valid `object_name` from the provided download 'link': %q", link)
+					err := fmt.Errorf("failed to extract object name from the download %q", link)
+					// TODO: ignore and continue?
+					return nil, err
 				}
 				objects[objName] = link
 			default:
-				return nil, fmt.Errorf("values in array should be strings, found: %T", link)
+				return nil, fmt.Errorf("expected download link to be a string, got: %T", link)
 			}
 		}
 	default:

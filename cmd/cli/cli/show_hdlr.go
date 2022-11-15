@@ -67,6 +67,20 @@ var (
 			logFlag,
 			jsonFlag,
 		},
+		subcmdShowXaction: {
+			jsonFlag,
+			allXactionsFlag,
+			activeFlag,
+			noHeaderFlag,
+			verboseFlag,
+		},
+		subcmdShowJob: {
+			jsonFlag,
+			allXactionsFlag,
+			activeFlag,
+			noHeaderFlag,
+			verboseFlag,
+		},
 		subcmdShowObject: {
 			objPropsFlag,
 			allPropsFlag,
@@ -85,13 +99,6 @@ var (
 		),
 		subcmdBMD: {
 			jsonFlag,
-		},
-		subcmdShowXaction: {
-			jsonFlag,
-			allXactionsFlag,
-			activeFlag,
-			noHeaderFlag,
-			verboseFlag,
 		},
 		subcmdShowRebalance: {
 			refreshFlag,
@@ -253,13 +260,15 @@ var (
 
 	showCmdJob = cli.Command{
 		Name:  subcmdShowJob,
-		Usage: "show running and completed jobs (xactions)",
+		Usage: "show running and completed (batch) jobs",
 		Subcommands: []cli.Command{
 			showCmdDownload,
 			showCmdDsort,
 			showCmdXaction,
-			appendSubcommand(makeAlias(showCmdETL, "", true, commandETL), logsCmdETL),
+			appendSubcommand(makeAlias(showCmdETL, "", true, commandETL), logsCmdETL), // TODO: usability
 		},
+		Flags:  showCmdsFlags[subcmdShowJob],
+		Action: showJobsHandler,
 	}
 	showCmdDownload = cli.Command{
 		Name:         subcmdShowDownload,
@@ -332,7 +341,43 @@ func showDisksHandler(c *cli.Context) (err error) {
 	return daemonDiskStats(c, daemonID)
 }
 
-func showDownloadsHandler(c *cli.Context) (err error) {
+func showJobsHandler(c *cli.Context) error {
+	var (
+		nonxact bool
+		useJSON = flagIsSet(c, jsonFlag)
+	)
+	downloads, err := api.DownloadGetList(apiBP, "")
+	if err != nil {
+		actionWarn(c, err.Error())
+	} else if len(downloads) > 0 {
+		actionCptn(c, "", "Downloads:")
+		err = tmpls.Print(downloads, c.App.Writer, tmpls.DownloadListTmpl, nil, useJSON)
+		if err != nil {
+			actionWarn(c, err.Error())
+		}
+		nonxact = true
+	}
+
+	dsorts, err := api.ListDSort(apiBP, "")
+	if err != nil {
+		return err
+	} else if len(dsorts) > 0 {
+		actionCptn(c, "", "DSorts:")
+		err = dsortJobsList(c, dsorts) // TODO -- FIXME: useJSON, verbose, finished|all - here and elsewhere
+		if err != nil {
+			actionWarn(c, err.Error())
+		}
+		nonxact = true
+	}
+
+	if nonxact {
+		actionCptn(c, "", "Xactions:")
+	}
+	err = _showXactList(c, "" /*nodeID*/, "" /*xactID*/, "" /*xactKind*/, cmn.Bck{})
+	return err
+}
+
+func showDownloadsHandler(c *cli.Context) error {
 	id := c.Args().First()
 
 	if c.NArg() < 1 { // list all download jobs
@@ -343,11 +388,15 @@ func showDownloadsHandler(c *cli.Context) (err error) {
 	return downloadJobStatus(c, id)
 }
 
-func showDsortHandler(c *cli.Context) (err error) {
+func showDsortHandler(c *cli.Context) error {
 	id := c.Args().First()
 
 	if c.NArg() < 1 { // list all dsort jobs
-		return dsortJobsList(c, parseStrFlag(c, regexFlag))
+		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag))
+		if err != nil {
+			return err
+		}
+		return dsortJobsList(c, list)
 	}
 
 	// display status of a dsort job with given id

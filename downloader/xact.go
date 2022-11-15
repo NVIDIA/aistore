@@ -117,31 +117,30 @@ const (
 	actList   = "LIST"
 )
 
+// Downloader cannot use global HTTP client because it must work with
+// an arbitrary (HTTP) server. Downloader selects client by
+// server's URL. Certification check is disabled always for now and
+// does not depend on cluster settings.
 var (
-	// Downloader cannot use global HTTP client because it must work with
-	// arbitrary server. The downloader chooses the correct client by
-	// server's URL. Certification check is disabled always for now and
-	// does not depend on cluster settings.
 	httpClient  = cmn.NewClient(cmn.TransportArgs{})
-	httpsClient = cmn.NewClient(cmn.TransportArgs{
-		UseHTTPS:   true,
-		SkipVerify: true,
-	})
-	instance atomic.Int64
+	httpsClient = cmn.NewClient(cmn.TransportArgs{UseHTTPS: true, SkipVerify: true})
+	instance    atomic.Int64
 )
 
 type (
-	// Downloader implements xact.Demand interface.
-	// Upon getting requests via AIS download endpoint,
-	// Downloader dispatches these requests to the corresponding jogger.
-	Downloader struct {
+	factory struct {
+		xreg.RenewBase
+		xctn   *Xact
+		statsT stats.Tracker
+	}
+	Xact struct {
 		xact.DemandBase
 		t          cluster.Target
 		statsT     stats.Tracker
 		dispatcher *dispatcher
 	}
 
-	// The result of calling one of Downloader's exposed methods is encapsulated
+	// The result of calling one of Downloader's public methods is encapsulated
 	// in a response object, which is used to communicate the outcome of the
 	// request.
 	response struct {
@@ -150,7 +149,7 @@ type (
 		statusCode int
 	}
 
-	// Calling Downloader's exposed methods results in creation of a request
+	// Calling Downloader's public methods results in creation of a request
 	// for admin related tasks (i.e. aborting and status updates). These
 	// objects are used by Downloader to process the request, and are then
 	// dispatched to the correct jogger to be handled.
@@ -166,119 +165,71 @@ type (
 		r        io.Reader
 		reporter func(n int64)
 	}
-
-	dowFactory struct {
-		xreg.RenewBase
-		xctn   *Downloader
-		statsT stats.Tracker
-	}
 )
 
 // interface guard
 var (
-	_ xact.Demand    = (*Downloader)(nil)
-	_ xreg.Renewable = (*dowFactory)(nil)
+	_ xact.Demand    = (*Xact)(nil)
+	_ xreg.Renewable = (*factory)(nil)
 	_ io.ReadCloser  = (*progressReader)(nil)
 )
 
 func Xreg() {
-	xreg.RegNonBckXact(&dowFactory{})
-}
-
-func clientForURL(u string) *http.Client {
-	if cos.IsHTTPS(u) {
-		return httpsClient
-	}
-	return httpClient
+	xreg.RegNonBckXact(&factory{})
 }
 
 /////////////
-// request //
+// factory //
 /////////////
 
-func (req *request) write(value any, err error, statusCode int) {
-	req.response = &response{
-		value:      value,
-		err:        err,
-		statusCode: statusCode,
-	}
+func (*factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+	return &factory{RenewBase: xreg.RenewBase{Args: args}, statsT: args.Custom.(stats.Tracker)}
 }
 
-func (req *request) writeErrResp(err error, statusCode int) {
-	req.write(nil, err, statusCode)
-}
-
-func (req *request) writeResp(value any) {
-	req.write(value, nil, http.StatusOK)
-}
-
-////////////////////
-// progressReader //
-////////////////////
-
-func (pr *progressReader) Read(p []byte) (n int, err error) {
-	n, err = pr.r.Read(p)
-	pr.reporter(int64(n))
-	return
-}
-
-func (pr *progressReader) Close() error {
-	pr.r = nil
-	pr.reporter = nil
-	return nil
-}
-
-////////////////
-// dowFactory //
-////////////////
-
-func (*dowFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &dowFactory{RenewBase: xreg.RenewBase{Args: args}, statsT: args.Custom.(stats.Tracker)}
-}
-
-func (p *dowFactory) Start() error {
-	xdl := newDownloader(p.T, p.statsT)
+func (p *factory) Start() error {
+	xdl := newXact(p.T, p.statsT)
 	p.xctn = xdl
 	go xdl.Run(nil)
 	return nil
 }
-func (*dowFactory) Kind() string        { return apc.ActDownload }
-func (p *dowFactory) Get() cluster.Xact { return p.xctn }
 
-func (*dowFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
+func (*factory) Kind() string        { return apc.ActDownload }
+func (p *factory) Get() cluster.Xact { return p.xctn }
+
+func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-////////////////
-// Downloader //
-////////////////
+//////////
+// Xact //
+//////////
 
-func (*Downloader) Name() string {
+func (*Xact) Name() string {
 	i := strconv.FormatInt(instance.Load(), 10)
 	return "downloader" + i
 }
 
-func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
-	d = &Downloader{t: t, statsT: statsT}
+func newXact(t cluster.Target, statsT stats.Tracker) (d *Xact) {
+	d = &Xact{t: t, statsT: statsT}
 	d.dispatcher = newDispatcher(d)
 	d.DemandBase.Init(cos.GenUUID(), apc.Download, nil /*bck*/, 0 /*use default*/)
 	instance.Inc()
 	return
 }
 
-func (d *Downloader) Run(*sync.WaitGroup) {
+func (d *Xact) Run(*sync.WaitGroup) {
 	glog.Infof("starting %s", d.Name())
 	err := d.dispatcher.run()
 	d.stop(err)
 }
 
 // stop terminates the downloader and all dependent entities.
-func (d *Downloader) stop(err error) {
+func (d *Xact) stop(err error) {
 	d.DemandBase.Stop()
 	d.Finish(err)
 }
 
-func (d *Downloader) Download(dJob DlJob) (resp any, statusCode int, err error) {
+func (d *Xact) Download(dJob DlJob) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	dlStore.setJob(dJob.ID(), dJob)
@@ -295,27 +246,28 @@ func (d *Downloader) Download(dJob DlJob) (resp any, statusCode int, err error) 
 	}
 }
 
-func (d *Downloader) AbortJob(id string) (resp any, statusCode int, err error) {
+func (d *Xact) AbortJob(id string) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
 		action: actAbort,
 		id:     id,
 	}
-	return d.dispatcher.dispatchAdminReq(req)
+	return d.dispatcher.adminReq(req)
 }
 
-func (d *Downloader) RemoveJob(id string) (resp any, statusCode int, err error) {
+func (d *Xact) RemoveJob(id string) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
 		action: actRemove,
 		id:     id,
 	}
-	return d.dispatcher.dispatchAdminReq(req)
+	return d.dispatcher.adminReq(req)
 }
 
-func (d *Downloader) JobStatus(id string, onlyActive bool) (resp any, statusCode int, err error) {
+// TODO -- FIXME: remove from xaction, make public/static
+func (d *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
@@ -323,28 +275,44 @@ func (d *Downloader) JobStatus(id string, onlyActive bool) (resp any, statusCode
 		id:         id,
 		onlyActive: onlyActive,
 	}
-	return d.dispatcher.dispatchAdminReq(req)
+	return d.dispatcher.adminReq(req)
 }
 
-func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp any, statusCode int, err error) {
-	d.IncPending()
-	defer d.DecPending()
-	req := &request{
-		action: actList,
-		regex:  regex,
-	}
-	return d.dispatcher.dispatchAdminReq(req)
-}
-
-func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
+func (d *Xact) checkJob(req *request) (*downloadJobInfo, error) {
 	jInfo, err := dlStore.getJob(req.id)
 	if err != nil {
 		debug.Assert(errors.Is(err, errJobNotFound))
 		err := cmn.NewErrNotFound("%s: download job %q", d.t, req.id)
-		req.writeErrResp(err, http.StatusNotFound)
+		req.errRsp(err, http.StatusNotFound)
 		return nil, err
 	}
 	return jInfo, nil
 }
 
-func (d *Downloader) Snap() cluster.XactSnap { return d.DemandBase.ExtSnap() }
+func (d *Xact) Snap() cluster.XactSnap { return d.DemandBase.ExtSnap() }
+
+/////////////
+// request //
+/////////////
+
+func (req *request) rsp(value any, err error, statusCode int) {
+	req.response = &response{value: value, err: err, statusCode: statusCode}
+}
+func (req *request) errRsp(err error, statusCode int) { req.rsp(nil, err, statusCode) }
+func (req *request) okRsp(value any)                  { req.rsp(value, nil, http.StatusOK) }
+
+////////////////////
+// progressReader //
+////////////////////
+
+func (pr *progressReader) Read(p []byte) (n int, err error) {
+	n, err = pr.r.Read(p)
+	pr.reporter(int64(n))
+	return
+}
+
+func (pr *progressReader) Close() error {
+	pr.r = nil
+	pr.reporter = nil
+	return nil
+}

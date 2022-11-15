@@ -262,7 +262,9 @@ func (r *LsoXact) doPage() *LsoRsp {
 	return &LsoRsp{Lst: page, Status: http.StatusOK}
 }
 
-func (r *LsoXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) }
+// `ais show job` will report the sum of non-replicated obj numbers and
+// sum of obj sizes - for all visited objects
+func (r *LsoXact) objsAdd(lom *cluster.LOM) { r.ObjsAdd(1, lom.SizeBytes()) }
 
 // Returns the index of the first object in the page that follows the continuation `token`
 func (r *LsoXact) findToken(token string) uint {

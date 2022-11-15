@@ -21,7 +21,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func (p *proxy) broadcastDownloadAdminRequest(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
+func (p *proxy) dladmin(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
 	var (
 		notFoundCnt int
 		err         error
@@ -88,6 +88,9 @@ func (p *proxy) broadcastDownloadAdminRequest(method, path string, msg *download
 			// If ID is empty, return the list of downloads
 			aggregate := make(map[string]*downloader.DlJobInfo)
 			for _, resp := range validResponses {
+				if len(resp.bytes) == 0 {
+					continue
+				}
 				var parsedResp map[string]*downloader.DlJobInfo
 				if err := jsoniter.Unmarshal(resp.bytes, &parsedResp); err != nil {
 					return nil, http.StatusInternalServerError, err
@@ -127,7 +130,7 @@ func (p *proxy) broadcastDownloadAdminRequest(method, path string, msg *download
 	}
 }
 
-func (p *proxy) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (errCode int, err error) {
+func (p *proxy) dlstart(r *http.Request, id string, body []byte) (errCode int, err error) {
 	query := r.URL.Query()
 	query.Set(apc.QparamUUID, id)
 	args := allocBcArgs()
@@ -199,7 +202,7 @@ func (p *proxy) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
 	if payload.ID != "" && p.ic.redirectToIC(w, r) {
 		return
 	}
-	resp, statusCode, err := p.broadcastDownloadAdminRequest(r.Method, r.URL.Path, payload)
+	resp, statusCode, err := p.dladmin(r.Method, r.URL.Path, payload)
 	if err != nil {
 		p.writeErr(w, r, err, statusCode)
 		return
@@ -246,7 +249,7 @@ func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	id := cos.GenUUID()
 	smap := p.owner.smap.get()
 
-	if errCode, err := p.broadcastStartDownloadRequest(r, id, body); err != nil {
+	if errCode, err := p.dlstart(r, id, body); err != nil {
 		p.writeErrStatusf(w, r, errCode, "Error starting download: %v", err)
 		return
 	}

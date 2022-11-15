@@ -32,8 +32,19 @@ const (
 	internalErrorMsg = "internal server error"
 )
 
-// List of HTTP status codes on which we should
-// not retry and just mark job as failed.
+type singleObjectTask struct {
+	parent      *Xact
+	job         DlJob
+	obj         dlObj
+	started     atomic.Time
+	ended       atomic.Time
+	currentSize atomic.Int64       // current file size (updated as the download progresses)
+	totalSize   atomic.Int64       // total size (nonzero iff Content-Length header was provided by the source)
+	downloadCtx context.Context    // w/ cancel function
+	cancel      context.CancelFunc // to cancel the download after the request commences
+}
+
+// List of HTTP status codes which we shouldn't retry (just report the job failed).
 var terminalStatuses = map[int]struct{}{
 	http.StatusNotFound:          {},
 	http.StatusPaymentRequired:   {},
@@ -45,22 +56,9 @@ var terminalStatuses = map[int]struct{}{
 	http.StatusGone:              {},
 }
 
-type (
-	singleObjectTask struct {
-		parent *Downloader
-		job    DlJob
-		obj    dlObj
-
-		started atomic.Time
-		ended   atomic.Time
-
-		currentSize atomic.Int64 // The current size of the file (updated as the download progresses).
-		totalSize   atomic.Int64 // The total size of the file (nonzero only if Content-Length header was provided by the source of the file).
-
-		downloadCtx context.Context    // Context with cancel function.
-		cancel      context.CancelFunc // Used to cancel the download after the request commences.
-	}
-)
+//////////////////////
+// singleObjectTask //
+//////////////////////
 
 func (t *singleObjectTask) init() {
 	// NOTE: `cancel` is called on abort or when download finishes.

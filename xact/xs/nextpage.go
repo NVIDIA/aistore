@@ -22,13 +22,13 @@ type npgCtx struct {
 	idx  int
 }
 
-func newNpgCtx(t cluster.Target, bck *cluster.Bck, msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (npg *npgCtx) {
+func newNpgCtx(t cluster.Target, bck *cluster.Bck, msg *apc.LsoMsg, cb lomVisitedCb) (npg *npgCtx) {
 	npg = &npgCtx{
 		bck: bck,
 		wi: walkInfo{
 			t:            t,
 			msg:          msg.Clone(),
-			lomVisitedCb: lomVisitedCb,
+			lomVisitedCb: cb,
 			wanted:       wanted(msg),
 			smap:         t.Sowner().Get(),
 		},

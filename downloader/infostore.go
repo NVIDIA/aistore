@@ -61,7 +61,7 @@ func (is *infoStore) getJob(id string) (*downloadJobInfo, error) {
 }
 
 func (is *infoStore) getList(descRegex *regexp.Regexp) []*downloadJobInfo {
-	jobsInfo := make([]*downloadJobInfo, 0)
+	var jobsInfo []*downloadJobInfo
 
 	is.RLock()
 	for _, dji := range is.jobInfo {

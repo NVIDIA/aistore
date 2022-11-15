@@ -1,6 +1,6 @@
 // Package downloader implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package downloader
 
@@ -27,7 +27,7 @@ import (
 
 type (
 	dispatcher struct {
-		parent *Downloader
+		parent *Xact
 
 		startupSema startupSema        // Semaphore which synchronizes goroutines at dispatcher startup.
 		joggers     map[string]*jogger // mpath -> jogger
@@ -45,26 +45,26 @@ type (
 	}
 )
 
-func newDispatcher(parent *Downloader) *dispatcher {
-	initInfoStore(db) // it will be initialized only once
+////////////////
+// dispatcher //
+////////////////
+
+func newDispatcher(parent *Xact) *dispatcher {
+	initInfoStore(db) // initialize only once // TODO -- FIXME: why here?
 
 	return &dispatcher{
-		parent: parent,
-
+		parent:      parent,
 		startupSema: startupSema{},
 		joggers:     make(map[string]*jogger, 8),
-
-		downloadCh: make(chan DlJob),
-
-		stopCh:   cos.NewStopCh(),
-		abortJob: make(map[string]*cos.StopCh, 100),
+		downloadCh:  make(chan DlJob),
+		stopCh:      cos.NewStopCh(),
+		abortJob:    make(map[string]*cos.StopCh, 100),
 	}
 }
 
 func (d *dispatcher) run() (err error) {
 	var (
-		// Number of concurrent job dispatches - it basically limits the number
-		// of goroutines so they won't go out of hand.
+		// limit the number of concurrent job dispatches (goroutines)
 		sema       = cos.NewSemaphore(5 * fs.NumAvail())
 		group, ctx = errgroup.WithContext(context.Background())
 	)
@@ -72,20 +72,20 @@ func (d *dispatcher) run() (err error) {
 	for mpath := range availablePaths {
 		d.addJogger(mpath)
 	}
-	// Release semaphore and allow other goroutines to work.
+	// allow other goroutines to run
 	d.startupSema.markStarted()
 
-Loop:
+mloop:
 	for {
 		select {
 		case <-d.parent.IdleTimer():
-			glog.Infof("%s has timed out. Exiting...", d.parent.Name())
-			break Loop
+			glog.Infof("%s timed out. Exiting...", d.parent.Name())
+			break mloop
 		case errCause := <-d.parent.ChanAbort():
-			glog.Infof("%s has been aborted (cause %v). Exiting...", d.parent.Name(), errCause)
-			break Loop
+			glog.Infof("%s aborted (cause %v). Exiting...", d.parent.Name(), errCause)
+			break mloop
 		case <-ctx.Done():
-			break Loop
+			break mloop
 		case job := <-d.downloadCh:
 			// Start dispatching each job in new goroutine to make sure that
 			// all joggers are busy downloading the tasks (jobs with limits
@@ -97,12 +97,12 @@ Loop:
 			select {
 			case <-d.parent.IdleTimer():
 				glog.Infof("%s has timed out. Exiting...", d.parent.Name())
-				break Loop
+				break mloop
 			case errCause := <-d.parent.ChanAbort():
 				glog.Infof("%s has been aborted (cause %v). Exiting...", d.parent.Name(), errCause)
-				break Loop
+				break mloop
 			case <-ctx.Done():
-				break Loop
+				break mloop
 			case <-sema.TryAcquire():
 				group.Go(func() error {
 					defer sema.Release()
@@ -392,7 +392,7 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok 
 	}
 }
 
-func (d *dispatcher) dispatchAdminReq(req *request) (resp any, statusCode int, err error) {
+func (d *dispatcher) adminReq(req *request) (resp any, statusCode int, err error) {
 	debug.Infof("Admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 
 	// Need to make sure that the dispatcher has fully initialized and started,
@@ -406,8 +406,6 @@ func (d *dispatcher) dispatchAdminReq(req *request) (resp any, statusCode int, e
 		d.handleAbort(req)
 	case actRemove:
 		d.handleRemove(req)
-	case actList:
-		_handleList(req)
 	default:
 		debug.Assertf(false, "%v; %v", req, req.action)
 	}
@@ -424,12 +422,12 @@ func (d *dispatcher) handleRemove(req *request) {
 	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
 	dlInfo := jInfo.ToDlJobInfo()
 	if dlInfo.JobRunning() {
-		req.writeErrResp(fmt.Errorf("download job with id = %s is still running", jInfo.ID), http.StatusBadRequest)
+		req.errRsp(fmt.Errorf("download job with id = %s is still running", jInfo.ID), http.StatusBadRequest)
 		return
 	}
 
 	dlStore.delJob(req.id)
-	req.writeResp(nil)
+	req.okRsp(nil)
 }
 
 func (d *dispatcher) handleAbort(req *request) {
@@ -445,7 +443,7 @@ func (d *dispatcher) handleAbort(req *request) {
 	}
 
 	dlStore.setAborted(req.id)
-	req.writeResp(nil)
+	req.okRsp(nil)
 }
 
 func (d *dispatcher) handleStatus(req *request) {
@@ -463,34 +461,24 @@ func (d *dispatcher) handleStatus(req *request) {
 	if !req.onlyActive {
 		finishedTasks, err = dlStore.getTasks(req.id)
 		if err != nil {
-			req.writeErrResp(err, http.StatusInternalServerError)
+			req.errRsp(err, http.StatusInternalServerError)
 			return
 		}
 
 		dlErrors, err = dlStore.getErrors(req.id)
 		if err != nil {
-			req.writeErrResp(err, http.StatusInternalServerError)
+			req.errRsp(err, http.StatusInternalServerError)
 			return
 		}
 		sort.Sort(TaskErrByName(dlErrors))
 	}
 
-	req.writeResp(&DlStatusResp{
+	req.okRsp(&DlStatusResp{
 		DlJobInfo:     jInfo.ToDlJobInfo(),
 		CurrentTasks:  currentTasks,
 		FinishedTasks: finishedTasks,
 		Errs:          dlErrors,
 	})
-}
-
-func _handleList(req *request) {
-	records := dlStore.getList(req.regex)
-	respMap := make(map[string]DlJobInfo)
-	for _, r := range records {
-		respMap[r.ID] = r.ToDlJobInfo()
-	}
-
-	req.writeResp(respMap)
 }
 
 func (d *dispatcher) activeTasks(reqID string) []TaskDlInfo {
@@ -526,9 +514,11 @@ func (d *dispatcher) waitFor(jobID string) {
 	}
 }
 
-func (ss *startupSema) markStarted() {
-	ss.started.Store(true)
-}
+/////////////////
+// startupSema //
+/////////////////
+
+func (ss *startupSema) markStarted() { ss.started.Store(true) }
 
 func (ss *startupSema) waitForStartup() {
 	const (

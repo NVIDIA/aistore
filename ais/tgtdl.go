@@ -22,7 +22,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// NOTE: This request is internal so we can have asserts there.
 // [METHOD] /v1/download
 func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -33,13 +32,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	if !t.ensureIntraControl(w, r, false /* from primary */) {
 		return
 	}
-	rns := xreg.RenewDownloader(t, t.statsT)
-	if rns.Err != nil {
-		t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
-		return
-	}
-	xctn := rns.Entry.Get()
-	downloaderXact := xctn.(*downloader.Downloader)
+
 	switch r.Method {
 	case http.MethodPost:
 		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
@@ -80,7 +73,13 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		dlJob, err := downloader.ParseStartDownloadRequest(t, bck, uuid, dlb, downloaderXact)
+
+		dlxact, err := t.renewdl()
+		if err != nil {
+			t.writeErr(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		dlJob, err := downloader.ParseStartDownloadRequest(t, bck, uuid, dlb, dlxact)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -98,7 +97,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 				P:        t.callerNotifyProgress,
 			},
 		}, dlJob)
-		response, statusCode, respErr = downloaderXact.Download(dlJob)
+		response, statusCode, respErr = dlxact.Download(dlJob)
 	case http.MethodGet:
 		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
@@ -112,8 +111,16 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
+
 		if payload.ID != "" {
-			response, statusCode, respErr = downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
+			// TODO -- FIXME: don't renew
+			dlxact, err := t.renewdl()
+			if err != nil {
+				t.writeErr(w, r, err, http.StatusInternalServerError)
+				return
+			}
+
+			response, statusCode, respErr = dlxact.JobStatus(payload.ID, payload.OnlyActiveTasks)
 		} else {
 			var (
 				regex *regexp.Regexp
@@ -125,13 +132,19 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			response, statusCode, respErr = downloaderXact.ListJobs(regex)
+			response, statusCode, respErr = downloader.ListJobs(regex)
 		}
 	case http.MethodDelete:
 		items, err := t.apiItems(w, r, 1, false, apc.URLPathDownload.L)
 		if err != nil {
 			return
 		}
+		actdelete := items[0]
+		if actdelete != apc.Abort && actdelete != apc.Remove {
+			t.writeErrAct(w, r, actdelete)
+			return
+		}
+
 		payload := &downloader.DlAdminBody{}
 		if err = cmn.ReadJSON(w, r, payload); err != nil {
 			return
@@ -142,14 +155,15 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		switch items[0] {
-		case apc.Abort:
-			response, statusCode, respErr = downloaderXact.AbortJob(payload.ID)
-		case apc.Remove:
-			response, statusCode, respErr = downloaderXact.RemoveJob(payload.ID)
-		default:
-			t.writeErrAct(w, r, items[0])
+		dlxact, err := t.renewdl()
+		if err != nil {
+			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
+		}
+		if actdelete == apc.Abort {
+			response, statusCode, respErr = dlxact.AbortJob(payload.ID)
+		} else { // apc.Remove
+			response, statusCode, respErr = dlxact.RemoveJob(payload.ID)
 		}
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
@@ -160,11 +174,16 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, respErr, statusCode)
 		return
 	}
-
 	if response != nil {
-		b := cos.MustMarshal(response)
-		if _, err := w.Write(b); err != nil {
-			glog.Errorf("Failed to write to HTTP response, err: %v", err)
-		}
+		w.Write(cos.MustMarshal(response))
 	}
+}
+
+func (t *target) renewdl() (*downloader.Xact, error) {
+	rns := xreg.RenewDownloader(t, t.statsT)
+	if rns.Err != nil {
+		return nil, rns.Err
+	}
+	xctn := rns.Entry.Get()
+	return xctn.(*downloader.Xact), nil
 }

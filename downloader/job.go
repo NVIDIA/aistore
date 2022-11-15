@@ -76,7 +76,7 @@ type (
 		timeout     time.Duration
 		description string
 		t           *throttler
-		dlXact      *Downloader
+		dlXact      *Xact
 
 		// notif
 		notif *NotifDownload
@@ -137,7 +137,7 @@ type (
 // baseDlJob //
 ///////////////
 
-func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits DlLimits, dlXact *Downloader) *baseDlJob {
+func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits DlLimits, dlXact *Xact) *baseDlJob {
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
@@ -236,7 +236,7 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	return objs, true, nil
 }
 
-func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMultiBody, dlXact *Downloader) (*multiDlJob, error) {
+func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMultiBody, dlXact *Xact) (*multiDlJob, error) {
 	var (
 		objs cos.StrKVs
 		err  error
@@ -256,7 +256,7 @@ func (j *multiDlJob) String() (s string) {
 	return "multi-" + j.baseDlJob.String()
 }
 
-func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSingleBody, dlXact *Downloader) (*singleDlJob, error) {
+func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSingleBody, dlXact *Xact) (*singleDlJob, error) {
 	var (
 		objs cos.StrKVs
 		err  error
@@ -281,7 +281,7 @@ func (j *singleDlJob) String() (s string) {
 ////////////////
 
 // NOTE: the sizes of objects to be downloaded will be unknown.
-func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Downloader) (job *rangeDlJob, err error) {
+func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Xact) (job *rangeDlJob, err error) {
 	job = &rangeDlJob{}
 	if job.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
 		return
@@ -345,7 +345,7 @@ func (j *rangeDlJob) getNextObjs() error {
 // backendDlJob //
 //////////////////
 
-func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Downloader) (*backendDlJob, error) {
+func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Xact) (*backendDlJob, error) {
 	if !bck.IsRemote() {
 		return nil, errors.New("bucket download requires a remote bucket")
 	} else if bck.IsHTTP() {

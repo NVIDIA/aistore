@@ -24,7 +24,14 @@ import (
 
 const headReqTimeout = 5 * time.Second
 
-var errInvalidTarget = errors.New("invalid target")
+var errInvalidTarget = errors.New("downloader: invalid target")
+
+func clientForURL(u string) *http.Client {
+	if cos.IsHTTPS(u) {
+		return httpsClient
+	}
+	return httpClient
+}
 
 func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
 	var (
@@ -108,7 +115,7 @@ func NormalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartDownloadRequest(t cluster.Target, bck *cluster.Bck, id string, dlb DlBody, dlXact *Downloader) (DlJob, error) {
+func ParseStartDownloadRequest(t cluster.Target, bck *cluster.Bck, id string, dlb DlBody, dlXact *Xact) (DlJob, error) {
 	switch dlb.Type {
 	case DlTypeBackend:
 		dp := &DlBackendBody{}
