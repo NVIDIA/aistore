@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/dloader"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -40,8 +40,8 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		var (
 			uuid             = r.URL.Query().Get(apc.QparamUUID)
-			dlb              = downloader.DlBody{}
-			progressInterval = downloader.DownloadProgressInterval
+			dlb              = dloader.Body{}
+			progressInterval = dloader.DownloadProgressInterval
 		)
 		if uuid == "" {
 			debug.Assert(false)
@@ -52,7 +52,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dlBodyBase := downloader.DlBase{}
+		dlBodyBase := dloader.Base{}
 		if err := jsoniter.Unmarshal(dlb.RawMessage, &dlBodyBase); err != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "download message", cos.BHead(dlb.RawMessage), err)
 			t.writeErr(w, r, err)
@@ -74,12 +74,12 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dlxact, err := t.renewdl()
+		xdl, err := t.renewdl()
 		if err != nil {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		dlJob, err := downloader.ParseStartDownloadRequest(t, bck, uuid, dlb, dlxact)
+		dlJob, err := dloader.ParseStartRequest(t, bck, uuid, dlb, xdl)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -88,7 +88,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("Downloading: %s", dlJob.ID())
 		}
 
-		dlJob.AddNotif(&downloader.NotifDownload{
+		dlJob.AddNotif(&dloader.NotifDownload{
 			NotifBase: nl.NotifBase{
 				When:     cluster.UponProgress,
 				Interval: progressInterval,
@@ -97,12 +97,12 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 				P:        t.callerNotifyProgress,
 			},
 		}, dlJob)
-		response, statusCode, respErr = dlxact.Download(dlJob)
+		response, statusCode, respErr = xdl.Download(dlJob)
 	case http.MethodGet:
 		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
 		}
-		payload := &downloader.DlAdminBody{}
+		payload := &dloader.AdminBody{}
 		if err := cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
@@ -114,25 +114,23 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		if payload.ID != "" {
 			// TODO -- FIXME: don't renew
-			dlxact, err := t.renewdl()
+			xdl, err := t.renewdl()
 			if err != nil {
 				t.writeErr(w, r, err, http.StatusInternalServerError)
 				return
 			}
-
-			response, statusCode, respErr = dlxact.JobStatus(payload.ID, payload.OnlyActiveTasks)
+			response, statusCode, respErr = xdl.JobStatus(payload.ID, payload.OnlyActive)
 		} else {
-			var (
-				regex *regexp.Regexp
-				err   error
-			)
+			var regex *regexp.Regexp
 			if payload.Regex != "" {
-				if regex, err = regexp.CompilePOSIX(payload.Regex); err != nil {
+				rgx, err := regexp.CompilePOSIX(payload.Regex)
+				if err != nil {
 					t.writeErr(w, r, err)
 					return
 				}
+				regex = rgx
 			}
-			response, statusCode, respErr = downloader.ListJobs(regex)
+			response, statusCode, respErr = dloader.ListJobs(regex)
 		}
 	case http.MethodDelete:
 		items, err := t.apiItems(w, r, 1, false, apc.URLPathDownload.L)
@@ -145,7 +143,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		payload := &downloader.DlAdminBody{}
+		payload := &dloader.AdminBody{}
 		if err = cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
@@ -155,15 +153,15 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dlxact, err := t.renewdl()
+		xdl, err := t.renewdl()
 		if err != nil {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
 		if actdelete == apc.Abort {
-			response, statusCode, respErr = dlxact.AbortJob(payload.ID)
+			response, statusCode, respErr = xdl.AbortJob(payload.ID)
 		} else { // apc.Remove
-			response, statusCode, respErr = dlxact.RemoveJob(payload.ID)
+			response, statusCode, respErr = xdl.RemoveJob(payload.ID)
 		}
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
@@ -179,11 +177,11 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *target) renewdl() (*downloader.Xact, error) {
+func (t *target) renewdl() (*dloader.Xact, error) {
 	rns := xreg.RenewDownloader(t, t.statsT)
 	if rns.Err != nil {
 		return nil, rns.Err
 	}
 	xctn := rns.Entry.Get()
-	return xctn.(*downloader.Xact), nil
+	return xctn.(*dloader.Xact), nil
 }

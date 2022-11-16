@@ -1,8 +1,8 @@
-// Package downloader implements functionality to download resources into AIS cluster from external source.
+// Package dloader_test is a unit test
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader_test
+package dloader_test
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/dloader"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -32,7 +32,7 @@ func TestNormalizeObjName(t *testing.T) {
 	}
 
 	for _, test := range normalizeObjTests {
-		actual, err := downloader.NormalizeObjName(test.objName)
+		actual, err := dloader.NormalizeObjName(test.objName)
 		if err != nil {
 			t.Errorf("Unexpected error while normalizing %s: %v", test.objName, err)
 		}
@@ -47,7 +47,7 @@ func TestCompareObject(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
 		src = prepareObject(t)
-		dst = &downloader.DstElement{
+		dst = &dloader.DstElement{
 			Link: "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
 		}
 	)
@@ -61,25 +61,25 @@ func TestCompareObject(t *testing.T) {
 	}
 	src.SetSize(10)
 	src.SetCustomMD(customMD)
-	equal, err := downloader.CompareObjects(src, dst)
+	equal, err := dloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that objects are still not equal after size update.
 	src.SetSize(65)
-	equal, err = downloader.CompareObjects(src, dst)
+	equal, err = dloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that correct CRC doesn't make them equal
 	customMD[cmn.CRC32CObjMD] = "30a991bd"
-	equal, err = downloader.CompareObjects(src, dst)
+	equal, err = dloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that the same provider still doesn't make them equal
 	customMD[cmn.SourceObjMD] = apc.GCP
-	equal, err = downloader.CompareObjects(src, dst)
+	equal, err = dloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
@@ -87,7 +87,7 @@ func TestCompareObject(t *testing.T) {
 	src.SetCustomKey(cmn.VersionObjMD, "1503349750687573")
 	src.SetCustomKey(cmn.MD5ObjMD, "7b01d3eacc5869db6eb9137f15335d27")
 	customMD[cmn.VersionObjMD] = "1503349750687573"
-	equal, err = downloader.CompareObjects(src, dst)
+	equal, err = dloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, equal, "expected the objects to be equal")
 }

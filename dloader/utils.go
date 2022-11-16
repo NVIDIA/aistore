@@ -1,8 +1,8 @@
-// Package downloader implements functionality to download resources into AIS cluster from external source.
+// Package dloader implements functionality to download resources into AIS cluster from external source.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package dloader
 
 import (
 	"context"
@@ -115,10 +115,10 @@ func NormalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartDownloadRequest(t cluster.Target, bck *cluster.Bck, id string, dlb DlBody, dlXact *Xact) (DlJob, error) {
+func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, dlXact *Xact) (job, error) {
 	switch dlb.Type {
-	case DlTypeBackend:
-		dp := &DlBackendBody{}
+	case TypeBackend:
+		dp := &BackendBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
 		if err != nil {
 			return nil, err
@@ -127,8 +127,8 @@ func ParseStartDownloadRequest(t cluster.Target, bck *cluster.Bck, id string, dl
 			return nil, err
 		}
 		return newBackendDlJob(t, id, bck, dp, dlXact)
-	case DlTypeMulti:
-		dp := &DlMultiBody{}
+	case TypeMulti:
+		dp := &MultiBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
 		if err != nil {
 			return nil, err
@@ -137,8 +137,8 @@ func ParseStartDownloadRequest(t cluster.Target, bck *cluster.Bck, id string, dl
 			return nil, err
 		}
 		return newMultiDlJob(t, id, bck, dp, dlXact)
-	case DlTypeRange:
-		dp := &DlRangeBody{}
+	case TypeRange:
+		dp := &RangeBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
 		if err != nil {
 			return nil, err
@@ -147,8 +147,8 @@ func ParseStartDownloadRequest(t cluster.Target, bck *cluster.Bck, id string, dl
 			return nil, err
 		}
 		return newRangeDlJob(t, id, bck, dp, dlXact)
-	case DlTypeSingle:
-		dp := &DlSingleBody{}
+	case TypeSingle:
+		dp := &SingleBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
 		if err != nil {
 			return nil, err

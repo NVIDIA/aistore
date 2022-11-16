@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/dloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
 )
@@ -407,7 +407,7 @@ var (
 	syncFlag             = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
 	progressIntervalFlag = cli.StringFlag{
 		Name:  "progress-interval",
-		Value: downloader.DownloadProgressInterval.String(),
+		Value: dloader.DownloadProgressInterval.String(),
 		Usage: "progress interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h' (e.g. '10s')",
 	}
 	// dSort

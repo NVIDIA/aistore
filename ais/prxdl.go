@@ -17,25 +17,25 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/dloader"
 	jsoniter "github.com/json-iterator/go"
 )
 
-func (p *proxy) dladmin(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
+func (p *proxy) dladmin(method, path string, msg *dloader.AdminBody) ([]byte, int, error) {
 	var (
 		notFoundCnt int
 		err         error
 	)
-	if msg.ID != "" && method == http.MethodGet && msg.OnlyActiveTasks {
+	if msg.ID != "" && method == http.MethodGet && msg.OnlyActive {
 		if stats, exists := p.notifs.queryStats(msg.ID); exists {
-			var resp *downloader.DlStatusResp
+			var resp *dloader.StatusResp
 			stats.Range(func(_ string, status any) bool {
 				var (
-					dlStatus *downloader.DlStatusResp
+					dlStatus *dloader.StatusResp
 					ok       bool
 				)
-				if dlStatus, ok = status.(*downloader.DlStatusResp); !ok {
-					dlStatus = &downloader.DlStatusResp{}
+				if dlStatus, ok = status.(*dloader.StatusResp); !ok {
+					dlStatus = &dloader.StatusResp{}
 					if err := cos.MorphMarshal(status, dlStatus); err != nil {
 						debug.AssertNoErr(err)
 						return false
@@ -86,12 +86,12 @@ func (p *proxy) dladmin(method, path string, msg *downloader.DlAdminBody) ([]byt
 	case http.MethodGet:
 		if msg.ID == "" {
 			// If ID is empty, return the list of downloads
-			aggregate := make(map[string]*downloader.DlJobInfo)
+			aggregate := make(map[string]*dloader.Job)
 			for _, resp := range validResponses {
 				if len(resp.bytes) == 0 {
 					continue
 				}
-				var parsedResp map[string]*downloader.DlJobInfo
+				var parsedResp map[string]*dloader.Job
 				if err := jsoniter.Unmarshal(resp.bytes, &parsedResp); err != nil {
 					return nil, http.StatusInternalServerError, err
 				}
@@ -103,7 +103,7 @@ func (p *proxy) dladmin(method, path string, msg *downloader.DlAdminBody) ([]byt
 				}
 			}
 
-			listDownloads := make(downloader.DlJobInfos, 0, len(aggregate))
+			listDownloads := make(dloader.JobInfos, 0, len(aggregate))
 			for _, v := range aggregate {
 				listDownloads = append(listDownloads, v)
 			}
@@ -111,9 +111,9 @@ func (p *proxy) dladmin(method, path string, msg *downloader.DlAdminBody) ([]byt
 			return result, http.StatusOK, nil
 		}
 
-		var stResp *downloader.DlStatusResp
+		var stResp *dloader.StatusResp
 		for _, resp := range validResponses {
-			status := downloader.DlStatusResp{}
+			status := dloader.StatusResp{}
 			if err := jsoniter.Unmarshal(resp.bytes, &status); err != nil {
 				return nil, http.StatusInternalServerError, err
 			}
@@ -170,7 +170,7 @@ func (p *proxy) downloadHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/download?id=...
 // DELETE /v1/download/{abort, remove}?id=...
 func (p *proxy) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
-	payload := &downloader.DlAdminBody{}
+	payload := &dloader.AdminBody{}
 	if !p.ClusterStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -218,11 +218,11 @@ func (p *proxy) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
 func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	var (
 		body             []byte
-		dlb              downloader.DlBody
-		dlBase           downloader.DlBase
+		dlb              dloader.Body
+		dlBase           dloader.Base
 		err              error
 		ok               bool
-		progressInterval = downloader.DownloadProgressInterval
+		progressInterval = dloader.DownloadProgressInterval
 	)
 
 	if _, err = p.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
@@ -230,12 +230,11 @@ func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if body, err = io.ReadAll(r.Body); err != nil {
-		p.writeErrStatusf(w, r, http.StatusInternalServerError,
-			"Error starting download: %v.", err.Error())
+		p.writeErrStatusf(w, r, http.StatusInternalServerError, "Error starting download: %v", err.Error())
 		return
 	}
 
-	if dlb, dlBase, ok = p.validateStartDownloadRequest(w, r, body); !ok {
+	if dlb, dlBase, ok = p.validateStartDownload(w, r, body); !ok {
 		return
 	}
 
@@ -246,24 +245,22 @@ func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	id := cos.GenUUID()
-	smap := p.owner.smap.get()
+	// const prefix to visually differentiate xactions and dl. jobs
+	jobID := "dlj-" + cos.GenUUID()
 
-	if errCode, err := p.dlstart(r, id, body); err != nil {
+	if errCode, err := p.dlstart(r, jobID, body); err != nil {
 		p.writeErrStatusf(w, r, errCode, "Error starting download: %v", err)
 		return
 	}
-	nl := downloader.NewDownloadNL(id, string(dlb.Type), &smap.Smap, progressInterval)
+	smap := p.owner.smap.get()
+	nl := dloader.NewDownloadNL(jobID, string(dlb.Type), &smap.Smap, progressInterval)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
-	_respWithID(w, id)
+	_respWithID(w, jobID)
 }
 
-// Helper methods
-
-func (p *proxy) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request,
-	body []byte) (dlb downloader.DlBody, dlBase downloader.DlBase, ok bool) {
+func (p *proxy) validateStartDownload(w http.ResponseWriter, r *http.Request, body []byte) (dlb dloader.Body, dlBase dloader.Base, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "download request", cos.BHead(body), err)
 		p.writeErr(w, r, err)
@@ -285,7 +282,7 @@ func (p *proxy) validateStartDownloadRequest(w http.ResponseWriter, r *http.Requ
 
 func _respWithID(w http.ResponseWriter, id string) {
 	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
-	b := cos.MustMarshal(downloader.DlPostResp{ID: id})
+	b := cos.MustMarshal(dloader.DlPostResp{ID: id})
 	_, err := w.Write(b)
 	debug.AssertNoErr(err)
 }

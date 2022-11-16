@@ -1,8 +1,8 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package dloader implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package dloader
 
 import (
 	"encoding/json"
@@ -21,20 +21,20 @@ import (
 )
 
 const (
-	DlTypeSingle  DlType = "single"
-	DlTypeRange   DlType = "range"
-	DlTypeMulti   DlType = "multi"
-	DlTypeBackend DlType = "backend"
+	TypeSingle  Type = "single"
+	TypeRange   Type = "range"
+	TypeMulti   Type = "multi"
+	TypeBackend Type = "backend"
 
 	DownloadProgressInterval = 10 * time.Second
 )
 
 type (
-	DlType string
+	Type string
 
 	// NOTE: Changing this structure requires changes in `MarshalJSON` and `UnmarshalJSON` methods.
-	DlBody struct {
-		Type DlType `json:"type"`
+	Body struct {
+		Type Type `json:"type"`
 		json.RawMessage
 	}
 
@@ -44,7 +44,7 @@ type (
 	}
 
 	// Summary info of the download job
-	DlJobInfo struct {
+	Job struct {
 		ID            string    `json:"id"`
 		Description   string    `json:"description"`
 		FinishedCnt   int       `json:"finished_cnt"`
@@ -58,10 +58,10 @@ type (
 		FinishedTime  time.Time `json:"finished_time"`
 	}
 
-	DlJobInfos []*DlJobInfo
+	JobInfos []*Job
 
-	DlStatusResp struct {
-		DlJobInfo
+	StatusResp struct {
+		Job
 		CurrentTasks  []TaskDlInfo  `json:"current_tasks,omitempty"`
 		FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
 		Errs          []TaskErrInfo `json:"download_errors,omitempty"`
@@ -69,11 +69,11 @@ type (
 )
 
 func IsType(a string) bool {
-	b := DlType(a)
-	return b == DlTypeMulti || b == DlTypeBackend || b == DlTypeSingle || b == DlTypeRange
+	b := Type(a)
+	return b == TypeMulti || b == TypeBackend || b == TypeSingle || b == TypeRange
 }
 
-func (j *DlJobInfo) Aggregate(rhs *DlJobInfo) {
+func (j *Job) Aggregate(rhs *Job) {
 	j.FinishedCnt += rhs.FinishedCnt
 	j.ScheduledCnt += rhs.ScheduledCnt
 	j.SkippedCnt += rhs.SkippedCnt
@@ -94,7 +94,7 @@ func (j *DlJobInfo) Aggregate(rhs *DlJobInfo) {
 	}
 }
 
-func (db DlBody) MarshalJSON() ([]byte, error) {
+func (db Body) MarshalJSON() ([]byte, error) {
 	b, err := db.RawMessage.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -104,15 +104,15 @@ func (db DlBody) MarshalJSON() ([]byte, error) {
 	return []byte(s), nil
 }
 
-func (db *DlBody) UnmarshalJSON(b []byte) error {
-	db.Type = DlType(jsoniter.Get(b, "type").ToString())
+func (db *Body) UnmarshalJSON(b []byte) error {
+	db.Type = Type(jsoniter.Get(b, "type").ToString())
 	if db.Type == "" {
 		return errors.New("'type' field is empty")
 	}
 	return db.RawMessage.UnmarshalJSON(b)
 }
 
-func (j DlJobInfo) JobFinished() bool {
+func (j Job) JobFinished() bool {
 	if cos.IsTimeZero(j.FinishedTime) {
 		return false
 	}
@@ -120,11 +120,11 @@ func (j DlJobInfo) JobFinished() bool {
 	return true
 }
 
-func (j DlJobInfo) JobRunning() bool {
+func (j Job) JobRunning() bool {
 	return !j.JobFinished()
 }
 
-func (j DlJobInfo) TotalCnt() int {
+func (j Job) TotalCnt() int {
 	if j.Total > 0 {
 		return j.Total
 	}
@@ -132,16 +132,16 @@ func (j DlJobInfo) TotalCnt() int {
 }
 
 // DoneCnt returns number of tasks that have finished (either successfully or with an error).
-func (j DlJobInfo) DoneCnt() int { return j.FinishedCnt + j.ErrorCnt }
+func (j Job) DoneCnt() int { return j.FinishedCnt + j.ErrorCnt }
 
 // PendingCnt returns number of tasks which are currently being processed.
-func (j DlJobInfo) PendingCnt() int {
+func (j Job) PendingCnt() int {
 	pending := j.TotalCnt() - j.DoneCnt()
 	cos.Assert(pending >= 0)
 	return pending
 }
 
-func (j DlJobInfo) String() string {
+func (j Job) String() string {
 	var sb strings.Builder
 
 	sb.WriteString(j.ID)
@@ -160,11 +160,11 @@ func (j DlJobInfo) String() string {
 	return sb.String()
 }
 
-func (d DlJobInfos) Len() int {
+func (d JobInfos) Len() int {
 	return len(d)
 }
 
-func (d DlJobInfos) Less(i, j int) bool {
+func (d JobInfos) Less(i, j int) bool {
 	di, dj := d[i], d[j]
 	if di.JobRunning() && dj.JobFinished() {
 		return true
@@ -176,39 +176,39 @@ func (d DlJobInfos) Less(i, j int) bool {
 	return di.StartedTime.Before(dj.StartedTime)
 }
 
-func (d DlJobInfos) Swap(i, j int) {
+func (d JobInfos) Swap(i, j int) {
 	d[i], d[j] = d[j], d[i]
 }
 
-func (d *DlStatusResp) Aggregate(rhs DlStatusResp) *DlStatusResp {
+func (d *StatusResp) Aggregate(rhs StatusResp) *StatusResp {
 	if d == nil {
-		r := DlStatusResp{}
+		r := StatusResp{}
 		err := cos.MorphMarshal(rhs, &r)
 		cos.AssertNoErr(err)
 		return &r
 	}
 
-	d.DlJobInfo.Aggregate(&rhs.DlJobInfo)
+	d.Job.Aggregate(&rhs.Job)
 	d.CurrentTasks = append(d.CurrentTasks, rhs.CurrentTasks...)
 	d.FinishedTasks = append(d.FinishedTasks, rhs.FinishedTasks...)
 	d.Errs = append(d.Errs, rhs.Errs...)
 	return d
 }
 
-type DlLimits struct {
+type Limits struct {
 	Connections  int `json:"connections"`
 	BytesPerHour int `json:"bytes_per_hour"`
 }
 
-type DlBase struct {
-	Description      string   `json:"description"`
-	Bck              cmn.Bck  `json:"bucket"`
-	Timeout          string   `json:"timeout"`
-	ProgressInterval string   `json:"progress_interval"`
-	Limits           DlLimits `json:"limits"`
+type Base struct {
+	Description      string  `json:"description"`
+	Bck              cmn.Bck `json:"bucket"`
+	Timeout          string  `json:"timeout"`
+	ProgressInterval string  `json:"progress_interval"`
+	Limits           Limits  `json:"limits"`
 }
 
-func (b *DlBase) Validate() error {
+func (b *Base) Validate() error {
 	if b.Bck.Name == "" {
 		return errors.New("missing 'bucket.name'")
 	}
@@ -226,13 +226,13 @@ func (b *DlBase) Validate() error {
 	return nil
 }
 
-type DlSingleObj struct {
+type SingleObj struct {
 	ObjName    string `json:"object_name"`
 	Link       string `json:"link"`
 	FromRemote bool   `json:"from_remote"`
 }
 
-func (b *DlSingleObj) Validate() error {
+func (b *SingleObj) Validate() error {
 	if b.ObjName == "" {
 		objName := path.Base(b.Link)
 		if objName == "." || objName == "/" {
@@ -250,13 +250,13 @@ func (b *DlSingleObj) Validate() error {
 }
 
 // Internal status/delete request body
-type DlAdminBody struct {
-	ID              string `json:"id"`
-	Regex           string `json:"regex"`
-	OnlyActiveTasks bool   `json:"only_active_tasks"` // Skips detailed info about tasks finished/errored
+type AdminBody struct {
+	ID         string `json:"id"`
+	Regex      string `json:"regex"`
+	OnlyActive bool   `json:"only_active_tasks"` // Skips detailed info about tasks finished/errored
 }
 
-func (b *DlAdminBody) Validate(requireID bool) error {
+func (b *AdminBody) Validate(requireID bool) error {
 	if b.ID != "" && b.Regex != "" {
 		return fmt.Errorf("regex %q and UUID %q cannot be defined together (choose one or the other)",
 			apc.QparamRegex, apc.QparamUUID)
@@ -298,44 +298,44 @@ type TaskErrInfo struct {
 }
 
 // Single request
-type DlSingleBody struct {
-	DlBase
-	DlSingleObj
+type SingleBody struct {
+	Base
+	SingleObj
 }
 
-func (b *DlSingleBody) Validate() error {
-	if err := b.DlBase.Validate(); err != nil {
+func (b *SingleBody) Validate() error {
+	if err := b.Base.Validate(); err != nil {
 		return err
 	}
-	return b.DlSingleObj.Validate()
+	return b.SingleObj.Validate()
 }
 
-func (b *DlSingleBody) ExtractPayload() (cos.StrKVs, error) {
+func (b *SingleBody) ExtractPayload() (cos.StrKVs, error) {
 	objects := make(cos.StrKVs, 1)
 	objects[b.ObjName] = b.Link
 	return objects, nil
 }
 
-func (b *DlSingleBody) Describe() string {
+func (b *SingleBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}
 	return fmt.Sprintf("%s -> %s/%s", b.Link, b.Bck, b.ObjName)
 }
 
-func (b *DlSingleBody) String() string {
+func (b *SingleBody) String() string {
 	return fmt.Sprintf("Link: %q, Bucket: %q, ObjName: %q.", b.Link, b.Bck, b.ObjName)
 }
 
 // Range request
-type DlRangeBody struct {
-	DlBase
+type RangeBody struct {
+	Base
 	Template string `json:"template"`
 	Subdir   string `json:"subdir"`
 }
 
-func (b *DlRangeBody) Validate() error {
-	if err := b.DlBase.Validate(); err != nil {
+func (b *RangeBody) Validate() error {
+	if err := b.Base.Validate(); err != nil {
 		return err
 	}
 	if b.Template == "" {
@@ -344,31 +344,31 @@ func (b *DlRangeBody) Validate() error {
 	return nil
 }
 
-func (b *DlRangeBody) Describe() string {
+func (b *RangeBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}
 	return fmt.Sprintf("%s -> %s", b.Template, b.Bck)
 }
 
-func (b *DlRangeBody) String() string {
+func (b *RangeBody) String() string {
 	return fmt.Sprintf("bucket: %q, template: %q", b.Bck, b.Template)
 }
 
 // Multi request
-type DlMultiBody struct {
-	DlBase
+type MultiBody struct {
+	Base
 	ObjectsPayload any `json:"objects"`
 }
 
-func (b *DlMultiBody) Validate() error {
+func (b *MultiBody) Validate() error {
 	if b.ObjectsPayload == nil {
 		return errors.New("body should not be empty")
 	}
-	return b.DlBase.Validate()
+	return b.Base.Validate()
 }
 
-func (b *DlMultiBody) ExtractPayload() (cos.StrKVs, error) {
+func (b *MultiBody) ExtractPayload() (cos.StrKVs, error) {
 	objects := make(cos.StrKVs, 10)
 	switch ty := b.ObjectsPayload.(type) {
 	case map[string]any:
@@ -402,28 +402,28 @@ func (b *DlMultiBody) ExtractPayload() (cos.StrKVs, error) {
 	return objects, nil
 }
 
-func (b *DlMultiBody) Describe() string {
+func (b *MultiBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}
 	return fmt.Sprintf("multi-download -> %s", b.Bck)
 }
 
-func (b *DlMultiBody) String() string {
+func (b *MultiBody) String() string {
 	return fmt.Sprintf("bucket: %q", b.Bck)
 }
 
 // Backend download request
-type DlBackendBody struct {
-	DlBase
+type BackendBody struct {
+	Base
 	Sync   bool   `json:"sync"`
 	Prefix string `json:"prefix"`
 	Suffix string `json:"suffix"`
 }
 
-func (b *DlBackendBody) Validate() error { return b.DlBase.Validate() }
+func (b *BackendBody) Validate() error { return b.Base.Validate() }
 
-func (b *DlBackendBody) Describe() string {
+func (b *BackendBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}

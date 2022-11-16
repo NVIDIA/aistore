@@ -1,8 +1,8 @@
-// Package downloader implements functionality to download resources into AIS cluster from external source.
+// Package dloader implements functionality to download resources into AIS cluster from external source.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package dloader
 
 import (
 	"errors"
@@ -229,16 +229,16 @@ func (d *Xact) stop(err error) {
 	d.Finish(err)
 }
 
-func (d *Xact) Download(dJob DlJob) (resp any, statusCode int, err error) {
+func (d *Xact) Download(job job) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
-	dlStore.setJob(dJob.ID(), dJob)
+	dlStore.setJob(job.ID(), job)
 	select {
-	case d.dispatcher.downloadCh <- dJob:
+	case d.dispatcher.workCh <- job:
 		return nil, http.StatusOK, nil
 	default:
 		select {
-		case d.dispatcher.downloadCh <- dJob:
+		case d.dispatcher.workCh <- job:
 			return nil, http.StatusOK, nil
 		case <-time.After(cmn.Timeout.CplaneOperation()):
 			return "downloader job queue is full", http.StatusTooManyRequests, nil
@@ -249,20 +249,16 @@ func (d *Xact) Download(dJob DlJob) (resp any, statusCode int, err error) {
 func (d *Xact) AbortJob(id string) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
-	req := &request{
-		action: actAbort,
-		id:     id,
-	}
+
+	req := &request{action: actAbort, id: id}
 	return d.dispatcher.adminReq(req)
 }
 
 func (d *Xact) RemoveJob(id string) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
-	req := &request{
-		action: actRemove,
-		id:     id,
-	}
+
+	req := &request{action: actRemove, id: id}
 	return d.dispatcher.adminReq(req)
 }
 
@@ -270,11 +266,8 @@ func (d *Xact) RemoveJob(id string) (resp any, statusCode int, err error) {
 func (d *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
-	req := &request{
-		action:     actStatus,
-		id:         id,
-		onlyActive: onlyActive,
-	}
+
+	req := &request{action: actStatus, id: id, onlyActive: onlyActive}
 	return d.dispatcher.adminReq(req)
 }
 

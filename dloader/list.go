@@ -1,14 +1,14 @@
-// Package downloader implements functionality to download resources into AIS cluster from external source.
+// Package dloader implements functionality to download resources into AIS cluster from external source.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package dloader
 
 import "regexp"
 
-func ListJobs(regex *regexp.Regexp) (resp any, statusCode int, err error) {
+func ListJobs(regex *regexp.Regexp) (any, int, error) {
 	var (
-		respMap map[string]DlJobInfo
+		respMap map[string]Job
 		records []*downloadJobInfo
 		req     = &request{action: actList, regex: regex}
 	)
@@ -19,7 +19,7 @@ func ListJobs(regex *regexp.Regexp) (resp any, statusCode int, err error) {
 		req.okRsp(respMap)
 		goto ex
 	}
-	respMap = make(map[string]DlJobInfo, len(records))
+	respMap = make(map[string]Job, len(records))
 	for _, r := range records {
 		respMap[r.ID] = r.ToDlJobInfo()
 	}

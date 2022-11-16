@@ -1,8 +1,8 @@
-// Package downloader implements functionality to download resources into AIS cluster from external source.
+// Package dloader implements functionality to download resources into AIS cluster from external source.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package dloader
 
 import (
 	"regexp"
@@ -74,7 +74,7 @@ func (is *infoStore) getList(descRegex *regexp.Regexp) []*downloadJobInfo {
 	return jobsInfo
 }
 
-func (is *infoStore) setJob(id string, job DlJob) {
+func (is *infoStore) setJob(id string, job job) {
 	jInfo := &downloadJobInfo{
 		ID:          job.ID(),
 		Total:       job.Len(),

@@ -1,8 +1,8 @@
-// Package downloader implements functionality to download resources into AIS cluster from external source.
+// Package dloader implements functionality to download resources into AIS cluster from external source.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package dloader
 
 import (
 	"sync"
@@ -18,8 +18,8 @@ type (
 
 	queue struct {
 		sync.RWMutex
-		ch chan *singleObjectTask // for pending downloads
-		m  map[string]queueEntry  // jobID -> set of request uid
+		ch chan *singleTask      // for pending downloads
+		m  map[string]queueEntry // jobID -> set of request uid
 	}
 
 	// Each jogger corresponds to an mpath. All types of download requests
@@ -30,13 +30,10 @@ type (
 		mpath       string
 		terminateCh cos.StopCh // synchronizes termination
 		parent      *dispatcher
-
-		q *queue
-
-		mtx sync.RWMutex
-		// lock protected
-		task      *singleObjectTask // currently running download task
-		stopAgent bool
+		q           *queue
+		mtx         sync.RWMutex
+		task        *singleTask // currently running download task
+		stopAgent   bool
 	}
 )
 
@@ -87,7 +84,7 @@ func (j *jogger) jog() {
 		j.task = nil
 		j.mtx.Unlock()
 		if exists := j.q.delete(t); exists {
-			j.parent.parent.DecPending()
+			j.parent.xdl.DecPending()
 		}
 	}
 
@@ -111,17 +108,19 @@ func (j *jogger) stop() {
 }
 
 // Returns channel which task should be put into.
-func (j *jogger) putCh(t *singleObjectTask) chan<- *singleObjectTask {
+func (j *jogger) putCh(t *singleTask) chan<- *singleTask {
 	ok, ch := j.q.putCh(t)
 	if ok {
-		j.parent.parent.IncPending()
+		j.parent.xdl.IncPending()
 	}
 	return ch
 }
 
-func (j *jogger) getTask() (t *singleObjectTask) {
+func (j *jogger) getTask(jobID string) (task *singleTask) {
 	j.mtx.RLock()
-	t = j.task
+	if j.task != nil && j.task.jobID() == jobID {
+		task = j.task
+	}
 	j.mtx.RUnlock()
 	return
 }
@@ -132,7 +131,7 @@ func (j *jogger) abortJob(id string) {
 
 	// Remove pending tasks in queue.
 	cnt := j.q.removeJob(id)
-	j.parent.parent.SubPending(cnt)
+	j.parent.xdl.SubPending(cnt)
 
 	// Abort currently running task, if belongs to a given job.
 	if j.task != nil && j.task.jobID() == id {
@@ -140,40 +139,40 @@ func (j *jogger) abortJob(id string) {
 	}
 }
 
-func (j *jogger) checkTaskExists(t *singleObjectTask) (exists bool) {
+func (j *jogger) checkTaskExists(t *singleTask) (exists bool) {
 	j.q.RLock()
 	defer j.q.RUnlock()
 	return j.q.exists(t.jobID(), t.uid())
 }
 
-// Returns `true` if there is any pending task for a given job (either running
-// or still in queue), `false` otherwise.
+// Returns true if there is any pending task for a given job (either running or in queue),
+// false otherwise.
 func (j *jogger) pending(id string) bool {
-	task := j.getTask()
-	return (task != nil && task.jobID() == id) || j.q.pending(id)
+	task := j.getTask(id)
+	return task != nil || j.q.pending(id)
 }
 
 func newQueue() *queue {
 	return &queue{
-		ch: make(chan *singleObjectTask, queueChSize),
+		ch: make(chan *singleTask, queueChSize),
 		m:  make(map[string]queueEntry),
 	}
 }
 
-func (q *queue) putCh(t *singleObjectTask) (ok bool, ch chan<- *singleObjectTask) {
+func (q *queue) putCh(t *singleTask) (ok bool, ch chan<- *singleTask) {
 	q.Lock()
 	defer q.Unlock()
 	if q.stopped() || q.exists(t.jobID(), t.uid()) {
 		// If task already exists or the queue was stopped we should just omit it
 		// hence return channel which immediately accepts and omits the task.
-		return false, make(chan *singleObjectTask, 1)
+		return false, make(chan *singleTask, 1)
 	}
 	q.putToSet(t.jobID(), t.uid())
 	return true, q.ch
 }
 
 // get retrieves first task in the queue.
-func (q *queue) get() (foundTask *singleObjectTask) {
+func (q *queue) get() (foundTask *singleTask) {
 	t, ok := <-q.ch
 	if !ok {
 		return nil
@@ -185,7 +184,7 @@ func (q *queue) get() (foundTask *singleObjectTask) {
 	return t
 }
 
-func (q *queue) delete(t *singleObjectTask) bool {
+func (q *queue) delete(t *singleTask) bool {
 	q.Lock()
 	deleted := q.removeFromSet(t.jobID(), t.uid())
 	q.Unlock()

@@ -1,15 +1,15 @@
-// Package downloader implements functionality to download resources into AIS cluster from external source.
+// Package dloader_test is a unit test
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader_test
+package dloader_test
 
 import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/dloader"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
@@ -29,11 +29,11 @@ type (
 		name     string
 		src      []obj
 		dst      []obj
-		expected []downloader.DiffResolverResult
+		expected []dloader.DiffResolverResult
 	}
 )
 
-func (*mockDiffResolverCtx) CompareObjects(*cluster.LOM, *downloader.DstElement) (bool, error) {
+func (*mockDiffResolverCtx) CompareObjects(*cluster.LOM, *dloader.DstElement) (bool, error) {
 	return true, nil
 }
 
@@ -47,100 +47,100 @@ func TestDiffResolver(t *testing.T) {
 			name:     "empty",
 			src:      []obj{},
 			dst:      []obj{},
-			expected: []downloader.DiffResolverResult{{Action: downloader.DiffResolverEOF}},
+			expected: []dloader.DiffResolverResult{{Action: dloader.DiffResolverEOF}},
 		},
 		{
 			name: "all_send",
 			src:  []obj{{name: "a"}, {name: "b"}, {name: "c"}},
 			dst:  []obj{},
-			expected: []downloader.DiffResolverResult{
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverEOF},
+			expected: []dloader.DiffResolverResult{
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverEOF},
 			},
 		},
 		{
 			name: "all_recv",
 			src:  []obj{},
 			dst:  []obj{{name: "a"}, {name: "b"}, {name: "c"}},
-			expected: []downloader.DiffResolverResult{
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverEOF},
+			expected: []dloader.DiffResolverResult{
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverEOF},
 			},
 		},
 		{
 			name: "mixed_send_recv",
 			src:  []obj{{name: "a"}, {name: "c"}},
 			dst:  []obj{{name: "b"}, {name: "d"}},
-			expected: []downloader.DiffResolverResult{
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverEOF},
+			expected: []dloader.DiffResolverResult{
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverEOF},
 			},
 		},
 		{
 			name: "all_send_then_all_recv",
 			src:  []obj{{name: "a"}, {name: "b"}, {name: "c"}},
 			dst:  []obj{{name: "d"}, {name: "e"}},
-			expected: []downloader.DiffResolverResult{
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverEOF},
+			expected: []dloader.DiffResolverResult{
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverEOF},
 			},
 		},
 		{
 			name: "all_recv_then_all_send",
 			src:  []obj{{name: "d"}, {name: "e"}},
 			dst:  []obj{{name: "a"}, {name: "b"}, {name: "c"}},
-			expected: []downloader.DiffResolverResult{
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverEOF},
+			expected: []dloader.DiffResolverResult{
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverEOF},
 			},
 		},
 		{
 			name: "all_delete",
 			src:  []obj{{name: "a", remote: true}, {name: "b", remote: true}},
 			dst:  []obj{},
-			expected: []downloader.DiffResolverResult{
-				{Action: downloader.DiffResolverDelete},
-				{Action: downloader.DiffResolverDelete},
-				{Action: downloader.DiffResolverEOF},
+			expected: []dloader.DiffResolverResult{
+				{Action: dloader.DiffResolverDelete},
+				{Action: dloader.DiffResolverDelete},
+				{Action: dloader.DiffResolverEOF},
 			},
 		},
 		{
 			name: "mixed_send_delete",
 			src:  []obj{{name: "a"}, {name: "b", remote: true}, {name: "c"}, {name: "d", remote: true}},
 			dst:  []obj{},
-			expected: []downloader.DiffResolverResult{
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverDelete},
-				{Action: downloader.DiffResolverSend},
-				{Action: downloader.DiffResolverDelete},
-				{Action: downloader.DiffResolverEOF},
+			expected: []dloader.DiffResolverResult{
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverDelete},
+				{Action: dloader.DiffResolverSend},
+				{Action: dloader.DiffResolverDelete},
+				{Action: dloader.DiffResolverEOF},
 			},
 		},
 		{
 			name: "all_skip_then_all_recv",
 			src:  []obj{{name: "a", remote: true}, {name: "b", remote: true}},
 			dst:  []obj{{name: "a"}, {name: "b"}, {name: "c"}, {name: "d"}},
-			expected: []downloader.DiffResolverResult{
-				{Action: downloader.DiffResolverSkip},
-				{Action: downloader.DiffResolverSkip},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverRecv},
-				{Action: downloader.DiffResolverEOF},
+			expected: []dloader.DiffResolverResult{
+				{Action: dloader.DiffResolverSkip},
+				{Action: dloader.DiffResolverSkip},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverRecv},
+				{Action: dloader.DiffResolverEOF},
 			},
 		},
 	}
@@ -148,7 +148,7 @@ func TestDiffResolver(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := &mockDiffResolverCtx{}
-			dr := downloader.NewDiffResolver(ctx)
+			dr := dloader.NewDiffResolver(ctx)
 			dr.Start()
 			for _, s := range test.src {
 				lom := &cluster.LOM{ObjName: s.name}
@@ -159,7 +159,7 @@ func TestDiffResolver(t *testing.T) {
 			}
 			dr.CloseSrc()
 			for _, d := range test.dst {
-				dr.PushDst(&downloader.BackendResource{ObjName: d.name})
+				dr.PushDst(&dloader.BackendResource{ObjName: d.name})
 			}
 			dr.CloseDst()
 
@@ -174,16 +174,16 @@ func TestDiffResolver(t *testing.T) {
 				)
 				tassert.Fatalf(t, result.Err == nil, "error has been set")
 				switch result.Action {
-				case downloader.DiffResolverRecv:
+				case dloader.DiffResolverRecv:
 					tassert.Errorf(t, result.Dst != nil, "destination has not been set for recv")
-				case downloader.DiffResolverSend:
+				case dloader.DiffResolverSend:
 					tassert.Errorf(t, result.Src != nil, "source has not been set for send")
-				case downloader.DiffResolverDelete:
+				case dloader.DiffResolverDelete:
 					tassert.Errorf(t, result.Src != nil, "source has not been set for delete")
-				case downloader.DiffResolverSkip:
+				case dloader.DiffResolverSkip:
 					tassert.Errorf(t, result.Src != nil, "source has not been set for skip")
 					tassert.Errorf(t, result.Dst != nil, "destination has not been set for skip")
-				case downloader.DiffResolverEOF:
+				case dloader.DiffResolverEOF:
 				default:
 					cos.Assertf(false, "invalid diff-resolver action %d", result.Action)
 				}
@@ -193,7 +193,7 @@ func TestDiffResolver(t *testing.T) {
 			for i := 0; i < 2; i++ {
 				result, err := dr.Next()
 				tassert.CheckFatal(t, err)
-				tassert.Errorf(t, result.Action == downloader.DiffResolverEOF, "eof not followed by eof")
+				tassert.Errorf(t, result.Action == dloader.DiffResolverEOF, "eof not followed by eof")
 			}
 		})
 	}

@@ -1,8 +1,8 @@
-// Package downloader implements functionality to download resources into AIS cluster from external source.
+// Package dloader implements functionality to download resources into AIS cluster from external source.
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package dloader
 
 import (
 	"context"
@@ -27,17 +27,13 @@ import (
 
 type (
 	dispatcher struct {
-		parent *Xact
-
-		startupSema startupSema        // Semaphore which synchronizes goroutines at dispatcher startup.
-		joggers     map[string]*jogger // mpath -> jogger
-
-		mtx      sync.RWMutex           // Protects map defined below.
-		abortJob map[string]*cos.StopCh // jobID -> abort job chan
-
-		downloadCh chan DlJob
-
-		stopCh *cos.StopCh
+		xdl         *Xact
+		startupSema startupSema            // Semaphore which synchronizes goroutines at dispatcher startup.
+		joggers     map[string]*jogger     // mpath -> jogger
+		mtx         sync.RWMutex           // Protects map defined below.
+		abortJob    map[string]*cos.StopCh // jobID -> abort job chan
+		workCh      chan job
+		stopCh      *cos.StopCh
 	}
 
 	startupSema struct {
@@ -49,14 +45,14 @@ type (
 // dispatcher //
 ////////////////
 
-func newDispatcher(parent *Xact) *dispatcher {
+func newDispatcher(xdl *Xact) *dispatcher {
 	initInfoStore(db) // initialize only once // TODO -- FIXME: why here?
 
 	return &dispatcher{
-		parent:      parent,
+		xdl:         xdl,
 		startupSema: startupSema{},
 		joggers:     make(map[string]*jogger, 8),
-		downloadCh:  make(chan DlJob),
+		workCh:      make(chan job),
 		stopCh:      cos.NewStopCh(),
 		abortJob:    make(map[string]*cos.StopCh, 100),
 	}
@@ -78,15 +74,15 @@ func (d *dispatcher) run() (err error) {
 mloop:
 	for {
 		select {
-		case <-d.parent.IdleTimer():
-			glog.Infof("%s timed out. Exiting...", d.parent.Name())
+		case <-d.xdl.IdleTimer():
+			glog.Infof("%s timed out. Exiting...", d.xdl.Name())
 			break mloop
-		case errCause := <-d.parent.ChanAbort():
-			glog.Infof("%s aborted (cause %v). Exiting...", d.parent.Name(), errCause)
+		case errCause := <-d.xdl.ChanAbort():
+			glog.Infof("%s aborted (cause %v). Exiting...", d.xdl.Name(), errCause)
 			break mloop
 		case <-ctx.Done():
 			break mloop
-		case job := <-d.downloadCh:
+		case job := <-d.workCh:
 			// Start dispatching each job in new goroutine to make sure that
 			// all joggers are busy downloading the tasks (jobs with limits
 			// may not saturate the full downloader throughput).
@@ -95,11 +91,11 @@ mloop:
 			d.mtx.Unlock()
 
 			select {
-			case <-d.parent.IdleTimer():
-				glog.Infof("%s has timed out. Exiting...", d.parent.Name())
+			case <-d.xdl.IdleTimer():
+				glog.Infof("%s has timed out. Exiting...", d.xdl.Name())
 				break mloop
-			case errCause := <-d.parent.ChanAbort():
-				glog.Infof("%s has been aborted (cause %v). Exiting...", d.parent.Name(), errCause)
+			case errCause := <-d.xdl.ChanAbort():
+				glog.Infof("%s has been aborted (cause %v). Exiting...", d.xdl.Name(), errCause)
 				break mloop
 			case <-ctx.Done():
 				break mloop
@@ -146,7 +142,7 @@ func (d *dispatcher) cleanupJob(jobID string) {
 }
 
 // forward request to designated jogger
-func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
+func (d *dispatcher) dispatchDownload(job job) (ok bool) {
 	defer func() {
 		debug.Infof("Waiting for job %q", job.ID())
 		d.waitFor(job.ID())
@@ -281,28 +277,23 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 				continue
 			}
 
-			t := &singleObjectTask{
-				parent: d.parent,
-				obj:    obj,
-				job:    job,
-			}
-
+			task := &singleTask{xdl: d.xdl, obj: obj, job: job}
 			if result.Action == DiffResolverErr {
-				t.markFailed(result.Err.Error())
+				task.markFailed(result.Err.Error())
 				continue
 			}
 
 			if result.Action == DiffResolverDelete {
 				cos.Assert(job.Sync())
-				if _, err := d.parent.t.EvictObject(result.Src); err != nil {
-					t.markFailed(err.Error())
+				if _, err := d.xdl.t.EvictObject(result.Src); err != nil {
+					task.markFailed(err.Error())
 				} else {
 					dlStore.incFinished(job.ID())
 				}
 				continue
 			}
 
-			ok, err := d.blockingDispatchDownloadSingle(t)
+			ok, err := d.doSingle(task)
 			if err != nil {
 				glog.Errorf("%s failed to download %s: %v", job, obj.objName, err)
 				dlStore.setAborted(job.ID()) // TODO -- FIXME: pass (report, handle) error, here and elsewhere
@@ -334,7 +325,7 @@ func (d *dispatcher) jobAbortedCh(jobID string) *cos.StopCh {
 	return abCh
 }
 
-func (d *dispatcher) checkAbortedJob(job DlJob) bool {
+func (d *dispatcher) checkAbortedJob(job job) bool {
 	select {
 	case <-d.jobAbortedCh(job.ID()).Listen():
 		return true
@@ -353,9 +344,9 @@ func (d *dispatcher) checkAborted() bool {
 }
 
 // returns false if dispatcher encountered hard error, true otherwise
-func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok bool, err error) {
+func (d *dispatcher) doSingle(task *singleTask) (ok bool, err error) {
 	bck := cluster.CloneBck(task.job.Bck())
-	if err := bck.Init(d.parent.t.Bowner()); err != nil {
+	if err := bck.Init(d.xdl.t.Bowner()); err != nil {
 		return true, err
 	}
 
@@ -414,7 +405,7 @@ func (d *dispatcher) adminReq(req *request) (resp any, statusCode int, err error
 }
 
 func (d *dispatcher) handleRemove(req *request) {
-	jInfo, err := d.parent.checkJob(req)
+	jInfo, err := d.xdl.checkJob(req)
 	if err != nil {
 		return
 	}
@@ -431,7 +422,7 @@ func (d *dispatcher) handleRemove(req *request) {
 }
 
 func (d *dispatcher) handleAbort(req *request) {
-	_, err := d.parent.checkJob(req)
+	_, err := d.xdl.checkJob(req)
 	if err != nil {
 		return
 	}
@@ -452,7 +443,7 @@ func (d *dispatcher) handleStatus(req *request) {
 		dlErrors      []TaskErrInfo
 	)
 
-	jInfo, err := d.parent.checkJob(req)
+	jInfo, err := d.xdl.checkJob(req)
 	if err != nil {
 		return
 	}
@@ -473,8 +464,8 @@ func (d *dispatcher) handleStatus(req *request) {
 		sort.Sort(TaskErrByName(dlErrors))
 	}
 
-	req.okRsp(&DlStatusResp{
-		DlJobInfo:     jInfo.ToDlJobInfo(),
+	req.okRsp(&StatusResp{
+		Job:           jInfo.ToDlJobInfo(),
 		CurrentTasks:  currentTasks,
 		FinishedTasks: finishedTasks,
 		Errs:          dlErrors,
@@ -484,8 +475,8 @@ func (d *dispatcher) handleStatus(req *request) {
 func (d *dispatcher) activeTasks(reqID string) []TaskDlInfo {
 	currentTasks := make([]TaskDlInfo, 0, len(d.joggers))
 	for _, j := range d.joggers {
-		task := j.getTask()
-		if task != nil && task.jobID() == reqID {
+		task := j.getTask(reqID)
+		if task != nil {
 			currentTasks = append(currentTasks, task.ToTaskDlInfo())
 		}
 	}

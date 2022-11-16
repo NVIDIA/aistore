@@ -32,7 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/dloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/etl"
@@ -382,7 +382,7 @@ func (t *target) Run() error {
 	}
 	defer cos.Close(db)
 
-	downloader.SetDB(db)
+	dloader.SetDB(db)
 
 	// transactions
 	t.transactions.init(t)

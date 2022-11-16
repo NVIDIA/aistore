@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package dloader
 
 import (
 	"net/http"
@@ -23,7 +23,7 @@ type (
 
 	NotifDownload struct {
 		nl.NotifBase
-		DlJob DlJob
+		job job
 	}
 )
 
@@ -41,7 +41,7 @@ func NewDownloadNL(uuid string, action string, smap *cluster.Smap,
 }
 
 func (*NotifDownloadListerner) UnmarshalStats(rawMsg []byte) (stats any, finished, aborted bool, err error) {
-	dlStatus := &DlStatusResp{}
+	dlStatus := &StatusResp{}
 	if err = jsoniter.Unmarshal(rawMsg, dlStatus); err != nil {
 		return
 	}
@@ -53,7 +53,7 @@ func (*NotifDownloadListerner) UnmarshalStats(rawMsg []byte) (stats any, finishe
 
 func (nd *NotifDownloadListerner) QueryArgs() cmn.HreqArgs {
 	args := cmn.HreqArgs{Method: http.MethodGet}
-	dlBody := DlAdminBody{
+	dlBody := AdminBody{
 		ID: nd.UUID(),
 	}
 	args.Path = apc.URLPathDownload.S
@@ -63,7 +63,7 @@ func (nd *NotifDownloadListerner) QueryArgs() cmn.HreqArgs {
 
 func (nd *NotifDownloadListerner) AbortArgs() cmn.HreqArgs {
 	args := cmn.HreqArgs{Method: http.MethodDelete}
-	dlBody := DlAdminBody{
+	dlBody := AdminBody{
 		ID: nd.UUID(),
 	}
 	args.Path = apc.URLPathDownloadAbort.S
@@ -76,8 +76,8 @@ func (nd *NotifDownloadListerner) AbortArgs() cmn.HreqArgs {
 //
 
 func (nd *NotifDownload) ToNotifMsg() cluster.NotifMsg {
-	msg := cluster.NotifMsg{UUID: nd.DlJob.ID(), Kind: apc.ActDownload}
-	stats, err := nd.DlJob.ActiveStats()
+	msg := cluster.NotifMsg{UUID: nd.job.ID(), Kind: apc.ActDownload}
+	stats, err := nd.job.ActiveStats()
 	if err != nil {
 		msg.ErrMsg = err.Error()
 	} else {

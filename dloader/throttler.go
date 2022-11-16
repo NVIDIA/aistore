@@ -1,8 +1,8 @@
-// Package downloader implements functionality to download resources into AIS cluster from external source.
+// Package dloader implements functionality to download resources into AIS cluster from external source.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package dloader
 
 import (
 	"context"
@@ -38,7 +38,7 @@ type (
 	}
 )
 
-func newThrottler(limits DlLimits) *throttler {
+func newThrottler(limits Limits) *throttler {
 	t := &throttler{}
 	if limits.Connections > 0 {
 		t.sema = cos.NewSemaphore(limits.Connections)
