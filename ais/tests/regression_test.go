@@ -174,7 +174,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 		if e.Location == "" {
 			t.Fatalf("[%#v]: location is empty", e)
 		}
-		tmp := strings.Split(e.Location, apc.PropsLocationSepa)
+		tmp := strings.Split(e.Location, apc.LocationPropSepa)
 		tid := cluster.N2ID(tmp[0])
 		targets[tid] = struct{}{}
 		tsi := smap.GetTarget(tid)
@@ -293,7 +293,7 @@ func TestRenameBucket(t *testing.T) {
 			tools.DestroyBucket(t, proxyURL, renamedBck) // cleanup post Ctrl-C etc.
 			defer tools.DestroyBucket(t, proxyURL, renamedBck)
 
-			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltPresent)
+			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: bck.Provider}, apc.FltPresent)
 			tassert.CheckFatal(t, err)
 
 			regData := regressionTestData{

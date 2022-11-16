@@ -551,7 +551,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 		// mutually exclusive
 		debug.Assert(!(lsmsg.IsFlagSet(apc.LsDontHeadRemote) && lsmsg.IsFlagSet(apc.LsTryHeadRemote)))
-		// TODO: the capability to list remote buckets without adding them to BMD
+		// TODO -- FIXME: the capability to list remote buckets without adding them to BMD
 		debug.Assert(!lsmsg.IsFlagSet(apc.LsDontAddRemote), "not implemented yet")
 
 		if bckArgs.dontHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote); !bckArgs.dontHeadRemote {
@@ -1344,6 +1344,8 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	// not (explicitly) specified props default to the default ones
 	if lsmsg.Props == "" {
 		lsmsg.AddProps(apc.GetPropsDefault...)
+	} else if lsmsg.WantOnlyName() {
+		lsmsg.SetFlag(apc.LsNameOnly)
 	}
 
 	// HTTP "buckets" do not support remote listing. LsArchDir, on the other hand,

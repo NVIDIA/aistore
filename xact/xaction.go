@@ -282,6 +282,9 @@ func (xctn *Base) ObjsAdd(cnt int, size int64) {
 	xctn.stats.bytes.Add(size)
 }
 
+// oft. used
+func (xctn *Base) LomAdd(lom *cluster.LOM) { xctn.ObjsAdd(1, lom.SizeBytes(true)) }
+
 // base stats: transmit
 func (xctn *Base) OutObjs() int64  { return xctn.stats.outobjs.Load() }
 func (xctn *Base) OutBytes() int64 { return xctn.stats.outbytes.Load() }

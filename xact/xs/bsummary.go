@@ -79,8 +79,6 @@ func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
 // bsummXact //
 ///////////////
 
-func (r *bsummXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) } // TODO -- FIXME: add size
-
 func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	var (
 		err error
@@ -158,7 +156,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 
 	// 2. walk local pages
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
-	npg := newNpgCtx(r.t, bck, lsmsg, r.objsAdd)
+	npg := newNpgCtx(r.t, bck, lsmsg, r.LomAdd)
 	for {
 		npg.page.Entries = allocLsoEntries()
 		if err := npg.nextPageA(); err != nil {

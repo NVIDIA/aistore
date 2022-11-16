@@ -10,6 +10,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+const (
+	LocationPropSepa = ":"
+	lsmsgPropsSepa   = ","
+)
+
 // LsoMsg flags
 const (
 	// Applies to objects from the buckets with remote backends (e.g., to optimize-out listing remotes)
@@ -109,8 +114,6 @@ const (
 	GetPropsLocation = "location" // advanced usage
 )
 
-const PropsLocationSepa = ":"
-
 // NOTE: update when changing any of the above :NOTE
 var (
 	GetPropsMinimal = []string{GetPropsName, GetPropsSize}
@@ -121,7 +124,7 @@ var (
 
 type LsoMsg struct {
 	UUID              string `json:"uuid"`               // ID to identify a single multi-page request
-	Props             string `json:"props"`              // object props to return, e.g. "checksum,size,custom" (Get* enum above)
+	Props             string `json:"props"`              // comma-delimited, e.g. "checksum,size,custom" (see GetProps* enum)
 	TimeFormat        string `json:"time_format"`        // RFC822 is the default
 	Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
 	StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
@@ -136,12 +139,11 @@ type LsoMsg struct {
 /////////////////
 
 func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
-	// case 1: set by the user
+	// set by user
 	if lsmsg.IsFlagSet(LsWantOnlyRemoteProps) {
 		return true
 	}
-	// case 2: anything outside the subset (name, size, checksum, and version)
-	// (e.g., atime) requires loading local metadata
+	// anything outside the subset (name, size, checksum, version)
 	for _, name := range GetPropsAll {
 		if !lsmsg.WantProp(name) {
 			continue
@@ -151,6 +153,13 @@ func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
 		}
 	}
 	return true
+}
+
+func (lsmsg *LsoMsg) WantOnlyName() bool {
+	if lsmsg.IsFlagSet(LsNameOnly) {
+		return true
+	}
+	return strings.IndexByte(lsmsg.Props, lsmsgPropsSepa[0]) < 0 && strings.Contains(lsmsg.Props, GetPropsName)
 }
 
 // WantProp returns true if msg request requires to return propName property.
@@ -164,14 +173,14 @@ func (lsmsg *LsoMsg) AddProps(propNames ...string) {
 			continue
 		}
 		if lsmsg.Props != "" {
-			lsmsg.Props += ","
+			lsmsg.Props += lsmsgPropsSepa
 		}
 		lsmsg.Props += propName
 	}
 }
 
 func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
-	props := strings.Split(lsmsg.Props, ",")
+	props := strings.Split(lsmsg.Props, lsmsgPropsSepa)
 	s = make(cos.StrSet, len(props))
 	for _, p := range props {
 		s.Add(p)

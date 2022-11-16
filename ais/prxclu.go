@@ -65,13 +65,13 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	}
 	switch what {
 	case apc.GetWhatStats:
-		p.queryClusterStats(w, r, what)
+		p.queryClusterStats(w, r, what, query)
 	case apc.GetWhatSysInfo:
 		p.queryClusterSysinfo(w, r, what, query)
 	case apc.GetWhatQueryXactStats:
-		p.queryXaction(w, r, what)
+		p.queryXaction(w, r, what, query)
 	case apc.GetWhatMountpaths:
-		p.queryClusterMountpaths(w, r, what)
+		p.queryClusterMountpaths(w, r, what, query)
 	case apc.GetWhatRemoteAIS:
 		all, err := p.getRemAises(true /*refresh*/)
 		if err != nil {
@@ -112,11 +112,10 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
+func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
 	var (
-		body  []byte
-		xflt  string
-		query = r.URL.Query()
+		body []byte
+		xflt string
 	)
 	switch what {
 	case apc.GetWhatQueryXactStats:
@@ -224,8 +223,8 @@ func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int, query
 	return sysInfoMap, nil
 }
 
-func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what string) {
-	targetStats, erred := p._queryTargets(w, r)
+func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	targetStats, erred := p._queryTargets(w, r, query)
 	if targetStats == nil || erred {
 		return
 	}
@@ -235,8 +234,8 @@ func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what s
 	_ = p.writeJSON(w, r, out, what)
 }
 
-func (p *proxy) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, what string) {
-	targetMountpaths, erred := p._queryTargets(w, r)
+func (p *proxy) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	targetMountpaths, erred := p._queryTargets(w, r, query)
 	if targetMountpaths == nil || erred {
 		return
 	}
@@ -247,7 +246,7 @@ func (p *proxy) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, w
 
 // helper methods for querying targets
 
-func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request) (cos.JSONRawMsgs, bool) {
+func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request, query url.Values) (cos.JSONRawMsgs, bool) {
 	var (
 		err  error
 		body []byte
@@ -260,7 +259,7 @@ func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request) (cos.JSONR
 		}
 	}
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathDae.S, Query: r.URL.Query(), Body: body}
+	args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathDae.S, Query: query, Body: body}
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	results := p.bcastGroup(args)
 	freeBcArgs(args)

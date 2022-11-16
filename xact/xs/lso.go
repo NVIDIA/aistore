@@ -264,8 +264,6 @@ func (r *LsoXact) doPage() *LsoRsp {
 
 // `ais show job` will report the sum of non-replicated obj numbers and
 // sum of obj sizes - for all visited objects
-func (r *LsoXact) objsAdd(lom *cluster.LOM) { r.ObjsAdd(1, lom.SizeBytes()) }
-
 // Returns the index of the first object in the page that follows the continuation `token`
 func (r *LsoXact) findToken(token string) uint {
 	if r.listRemote() && r.token == token {
@@ -288,7 +286,7 @@ func (r *LsoXact) nextPageR() error {
 	debug.Assert(r.msg.SID != "")
 	var (
 		page *cmn.LsoResult
-		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.objsAdd)
+		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.LomAdd)
 		smap = r.p.dm.Smap()
 		tsi  = smap.GetTarget(r.msg.SID)
 		err  error
@@ -450,7 +448,7 @@ func (r *LsoXact) shiftLastPage(token string) {
 }
 
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
-	r.walk.wi = newWalkInfo(r.p.T, msg, r.objsAdd)
+	r.walk.wi = newWalkInfo(r.p.T, msg, r.LomAdd)
 	opts := &fs.WalkBckOpts{
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Sorted: true},
 	}
