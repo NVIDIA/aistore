@@ -11,7 +11,9 @@ const (
 
 	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 	QparamUUID  = "uuid"  // xaction
-	QparamRegex = "regex" // dsort/dloader regex
+
+	QparamRegex      = "regex"       // dsort: list regex
+	QparamOnlyActive = "only_active" // dsort: list only active
 
 	// remove existing custom keys and store new custom metadata
 	// NOTE: making an s/_/-/ naming exception because of the namesake CLI usage

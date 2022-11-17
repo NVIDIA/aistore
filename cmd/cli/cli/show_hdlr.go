@@ -67,6 +67,7 @@ var (
 			refreshFlag,
 			verboseFlag,
 			logFlag,
+			activeFlag,
 			jsonFlag,
 		},
 		subcmdShowXaction: {
@@ -347,8 +348,9 @@ func showJobsHandler(c *cli.Context) error {
 	var (
 		nonxact bool
 		useJSON = flagIsSet(c, jsonFlag)
+		active  = flagIsSet(c, activeFlag)
 	)
-	downloads, err := api.DownloadGetList(apiBP, "", flagIsSet(c, activeFlag))
+	downloads, err := api.DownloadGetList(apiBP, "", active)
 	if err != nil {
 		actionWarn(c, err.Error())
 	} else if len(downloads) > 0 {
@@ -360,7 +362,7 @@ func showJobsHandler(c *cli.Context) error {
 		nonxact = true
 	}
 
-	dsorts, err := api.ListDSort(apiBP, "")
+	dsorts, err := api.ListDSort(apiBP, "", active)
 	if err != nil {
 		return err
 	} else if len(dsorts) > 0 {
@@ -395,10 +397,13 @@ func showDownloadsHandler(c *cli.Context) error {
 }
 
 func showDsortHandler(c *cli.Context) error {
-	id := c.Args().First()
-	useJSON := flagIsSet(c, jsonFlag)
+	var (
+		id      = c.Args().First()
+		useJSON = flagIsSet(c, jsonFlag)
+		active  = flagIsSet(c, activeFlag)
+	)
 	if c.NArg() < 1 { // list all dsort jobs
-		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag))
+		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag), active)
 		if err != nil {
 			return err
 		}

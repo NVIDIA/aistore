@@ -67,14 +67,18 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 	return manager, nil
 }
 
-func (mg *ManagerGroup) List(descRegex *regexp.Regexp) []JobInfo {
+func (mg *ManagerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInfo {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 
 	jobsInfos := make([]JobInfo, 0, len(mg.managers))
 	for _, v := range mg.managers {
 		if descRegex == nil || descRegex.MatchString(v.Metrics.Description) {
-			jobsInfos = append(jobsInfos, v.Metrics.ToJobInfo(v.ManagerUUID))
+			job := v.Metrics.ToJobInfo(v.ManagerUUID)
+			if onlyActive && job.IsFinished() {
+				continue
+			}
+			jobsInfos = append(jobsInfos, job)
 		}
 	}
 
@@ -91,7 +95,11 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) []JobInfo {
 			continue
 		}
 		if descRegex == nil || descRegex.MatchString(m.Metrics.Description) {
-			jobsInfos = append(jobsInfos, m.Metrics.ToJobInfo(m.ManagerUUID))
+			job := m.Metrics.ToJobInfo(m.ManagerUUID)
+			if onlyActive && job.IsFinished() {
+				continue
+			}
+			jobsInfos = append(jobsInfos, job)
 		}
 	}
 	sort.Slice(jobsInfos, func(i, j int) bool {

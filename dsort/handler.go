@@ -136,13 +136,16 @@ func ProxyGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/sort?regex=...
 func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
-	regexStr := query.Get(apc.QparamRegex)
-	if _, err := regexp.CompilePOSIX(regexStr); err != nil {
-		cmn.WriteErr(w, r, err)
-		return
+	var (
+		path     = apc.URLPathdSortList.S
+		regexStr = query.Get(apc.QparamRegex)
+	)
+	if regexStr != "" {
+		if _, err := regexp.CompilePOSIX(regexStr); err != nil {
+			cmn.WriteErr(w, r, err)
+			return
+		}
 	}
-
-	path := apc.URLPathdSortList.S
 	responses := broadcastTargets(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
 
 	resultList := make([]*JobInfo, 0)
@@ -151,22 +154,22 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Valu
 			glog.Error(r.err)
 			continue
 		}
+
 		var newMetrics []*JobInfo
 		err := jsoniter.Unmarshal(r.res, &newMetrics)
 		debug.AssertNoErr(err)
 
-		for _, v := range newMetrics {
+		for _, job := range newMetrics {
 			found := false
 			for _, oldMetric := range resultList {
-				if oldMetric.ID == v.ID {
-					oldMetric.Aggregate(v)
+				if oldMetric.ID == job.ID {
+					oldMetric.Aggregate(job)
 					found = true
 					break
 				}
 			}
-
 			if !found {
-				resultList = append(resultList, v)
+				resultList = append(resultList, job)
 			}
 		}
 	}
@@ -624,13 +627,15 @@ func removeSortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func listSortHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		query      = r.URL.Query()
+		regexStr   = query.Get(apc.QparamRegex)
+		onlyActive = cos.IsParseBool(query.Get(apc.QparamOnlyActive))
+		regex      *regexp.Regexp
+	)
 	if !checkHTTPMethod(w, r, http.MethodGet) {
 		return
 	}
-
-	// Fetch regex
-	regexStr := r.URL.Query().Get(apc.QparamRegex)
-	var regex *regexp.Regexp
 	if regexStr != "" {
 		var err error
 		if regex, err = regexp.CompilePOSIX(regexStr); err != nil {
@@ -639,7 +644,7 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body := cos.MustMarshal(Managers.List(regex))
+	body := cos.MustMarshal(Managers.List(regex, onlyActive))
 	if _, err := w.Write(body); err != nil {
 		glog.Error(err)
 		// When we fail write we cannot call InvalidHandler since it will be

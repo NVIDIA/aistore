@@ -131,7 +131,7 @@ var _ = Describe("ManagerGroup", func() {
 
 		It("should not clean anything when manager group is empty", func() {
 			Expect(mgrp.housekeep()).To(Equal(hk.DayInterval))
-			jobs := mgrp.List(nil)
+			jobs := mgrp.List(nil, false /*onlyActive*/)
 			Expect(jobs).To(HaveLen(0))
 		})
 
@@ -142,7 +142,7 @@ var _ = Describe("ManagerGroup", func() {
 			persistManager("uuid4", 1*time.Hour)
 
 			Expect(mgrp.housekeep()).To(Equal(hk.DayInterval))
-			jobs := mgrp.List(nil)
+			jobs := mgrp.List(nil, false /*onlyActive*/)
 			Expect(jobs).To(HaveLen(2))
 			Expect(jobs[0].ID).To(Equal("uuid3"))
 			Expect(jobs[1].ID).To(Equal("uuid4"))

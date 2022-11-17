@@ -1,7 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -287,19 +286,15 @@ func (m *Metrics) Marshal() []byte {
 
 // JobInfo is a struct that contains stats that represent the DSort run in a list
 type JobInfo struct {
-	ID string `json:"id"`
-
-	StartedTime time.Time `json:"started_time,omitempty"`
-	FinishTime  time.Time `json:"finish_time,omitempty"`
-
+	ID                string        `json:"id"`
+	Description       string        `json:"description"`
+	StartedTime       time.Time     `json:"started_time,omitempty"`
+	FinishTime        time.Time     `json:"finish_time,omitempty"`
 	ExtractedDuration time.Duration `json:"started_meta_sorting,omitempty"`
 	SortingDuration   time.Duration `json:"started_shard_creation,omitempty"`
 	CreationDuration  time.Duration `json:"finished_shard_creation,omitempty"`
-
-	Aborted  bool `json:"aborted"`
-	Archived bool `json:"archived"`
-
-	Description string `json:"description"`
+	Aborted           bool          `json:"aborted"`
+	Archived          bool          `json:"archived"`
 }
 
 func (m *Metrics) ToJobInfo(id string) JobInfo {

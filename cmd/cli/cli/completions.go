@@ -612,7 +612,7 @@ func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 		return
 	}
 
-	list, _ := api.ListDSort(apiBP, "")
+	list, _ := api.ListDSort(apiBP, "", false /*onlyActive*/)
 
 	for _, job := range list {
 		if filter(job) {

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -329,8 +328,7 @@ func (b *SingleObj) Validate() error {
 
 func (b *AdminBody) Validate(requireID bool) error {
 	if b.ID != "" && b.Regex != "" {
-		return fmt.Errorf("regex %q and UUID %q cannot be defined together (choose one or the other)",
-			apc.QparamRegex, apc.QparamUUID)
+		return fmt.Errorf("regex %q and job ID %q cannot be defined together (choose one or the other)", b.Regex, b.ID)
 	} else if b.Regex != "" {
 		if _, err := regexp.CompilePOSIX(b.Regex); err != nil {
 			return err
