@@ -131,7 +131,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				regex = rgx
 			}
-			response, statusCode, respErr = dloader.ListJobs(regex)
+			response, statusCode, respErr = dloader.ListJobs(regex, payload.OnlyActive)
 		}
 
 	case http.MethodDelete:

@@ -6,21 +6,21 @@ package dloader
 
 import "regexp"
 
-func ListJobs(regex *regexp.Regexp) (any, int, error) {
+func ListJobs(regex *regexp.Regexp, onlyActive bool) (any, int, error) {
 	var (
 		respMap map[string]Job
-		records []*dljob
-		req     = &request{action: actList, regex: regex}
+		jobs    []*dljob
+		req     = &request{action: actList, regex: regex, onlyActive: onlyActive}
 	)
 	if dlStore != nil {
-		records = dlStore.getList(req.regex)
+		jobs = dlStore.getList(req)
 	}
-	if len(records) == 0 {
+	if len(jobs) == 0 {
 		req.okRsp(respMap)
 		goto ex
 	}
-	respMap = make(map[string]Job, len(records))
-	for _, r := range records {
+	respMap = make(map[string]Job, len(jobs))
+	for _, r := range jobs {
 		respMap[r.ID] = r.clone()
 	}
 	req.okRsp(respMap)

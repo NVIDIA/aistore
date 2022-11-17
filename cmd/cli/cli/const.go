@@ -375,13 +375,15 @@ var (
 	}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "list objects page by page, one page at a time (see also '--page-size' and '--limit')"}
 	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
-	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}
-	keepMDFlag        = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
-	dataSlicesFlag    = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
-	paritySlicesFlag  = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
-	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
-	compactPropFlag   = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
-	nameOnlyFlag      = cli.BoolFlag{Name: "name-only", Usage: "fast request to retrieve only the names of objects in the bucket; if defined, all comma-separated fields in the '--props' flag will be ignored with only two exceptions: 'name' and 'status'"}
+
+	activeFlag = cli.BoolFlag{Name: "active", Usage: "show only running jobs and xactions"}
+
+	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
+	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
+	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
+	listBucketsFlag  = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
+	compactPropFlag  = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
+	nameOnlyFlag     = cli.BoolFlag{Name: "name-only", Usage: "fast request to retrieve only the names of objects in the bucket; if defined, all comma-separated fields in the '--props' flag will be ignored with only two exceptions: 'name' and 'status'"}
 
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}

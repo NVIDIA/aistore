@@ -48,6 +48,10 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/NVIDIA/aistore v1.3.16-0.20221117155057-2a8dca74b131 h1:Lkr9uESXjZmgfOVVnshVmctPCD5STankjXjb8E6ZiHA=
 github.com/NVIDIA/aistore v1.3.16-0.20221117155057-2a8dca74b131/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
+github.com/NVIDIA/aistore v1.3.16-0.20221117171648-fff0a763078b h1:yWG8HWxgZ3bozgCLEDiuxn/YZ6ubmJUE1dOWs6mmmwI=
+github.com/NVIDIA/aistore v1.3.16-0.20221117171648-fff0a763078b/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
+github.com/NVIDIA/aistore v1.3.16-0.20221117182104-3dfeea085a18 h1:GOuNbf+/B6+uIgoFbInxzS+T6SoFj/7MQYinUu84BbU=
+github.com/NVIDIA/aistore v1.3.16-0.20221117182104-3dfeea085a18/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
 github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46/go.mod h1:3wb06e3pkSAbeQ52E9H9iFoQsEEwGN64994WTCIhntQ=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=

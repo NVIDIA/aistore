@@ -69,7 +69,7 @@ func removeDownloadRegex(c *cli.Context) (err error) {
 		cnt    int
 		failed bool
 	)
-	dlList, err = api.DownloadGetList(apiBP, regex)
+	dlList, err = api.DownloadGetList(apiBP, regex, false /*onlyActive*/)
 	if err != nil {
 		return err
 	}

@@ -442,7 +442,6 @@ func (d *dispatcher) handleStatus(req *request) {
 		finishedTasks []TaskDlInfo
 		dlErrors      []TaskErrInfo
 	)
-
 	dljob, err := d.xdl.checkJob(req)
 	if err != nil {
 		return

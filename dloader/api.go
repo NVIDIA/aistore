@@ -43,7 +43,6 @@ type (
 		ID string `json:"id"`
 	}
 
-	// Represents download job
 	Job struct {
 		ID            string    `json:"id"`
 		XactID        string    `json:"xaction_id"`
@@ -67,12 +66,80 @@ type (
 		FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
 		Errs          []TaskErrInfo `json:"download_errors,omitempty"`
 	}
+
+	Limits struct {
+		Connections  int `json:"connections"`
+		BytesPerHour int `json:"bytes_per_hour"`
+	}
+
+	Base struct {
+		Description      string  `json:"description"`
+		Bck              cmn.Bck `json:"bucket"`
+		Timeout          string  `json:"timeout"`
+		ProgressInterval string  `json:"progress_interval"`
+		Limits           Limits  `json:"limits"`
+	}
+
+	SingleObj struct {
+		ObjName    string `json:"object_name"`
+		Link       string `json:"link"`
+		FromRemote bool   `json:"from_remote"`
+	}
+
+	AdminBody struct {
+		ID         string `json:"id"`
+		Regex      string `json:"regex"`
+		OnlyActive bool   `json:"only_active_tasks"` // Skips detailed info about tasks finished/errored
+	}
+
+	TaskDlInfo struct {
+		Name       string    `json:"name"`
+		Downloaded int64     `json:"downloaded,string"`
+		Total      int64     `json:"total,string,omitempty"`
+		StartTime  time.Time `json:"start_time,omitempty"`
+		EndTime    time.Time `json:"end_time,omitempty"`
+		Running    bool      `json:"running"`
+	}
+	TaskInfoByName []TaskDlInfo
+
+	TaskErrInfo struct {
+		Name string `json:"name"`
+		Err  string `json:"error"`
+	}
+	TaskErrByName []TaskErrInfo
+
+	BackendBody struct {
+		Base
+		Sync   bool   `json:"sync"`
+		Prefix string `json:"prefix"`
+		Suffix string `json:"suffix"`
+	}
+
+	SingleBody struct {
+		Base
+		SingleObj
+	}
+
+	RangeBody struct {
+		Base
+		Template string `json:"template"`
+		Subdir   string `json:"subdir"`
+	}
+
+	MultiBody struct {
+		Base
+		ObjectsPayload any `json:"objects"`
+	}
 )
 
 func IsType(a string) bool {
 	b := Type(a)
 	return b == TypeMulti || b == TypeBackend || b == TypeSingle || b == TypeRange
 }
+
+/////////
+// Job //
+/////////
 
 func (j *Job) Aggregate(rhs *Job) {
 	j.FinishedCnt += rhs.FinishedCnt
@@ -95,6 +162,63 @@ func (j *Job) Aggregate(rhs *Job) {
 	}
 }
 
+func _isRunning(fintime time.Time) bool { return cos.IsTimeZero(fintime) }
+
+func (j *Job) JobFinished() bool {
+	if _isRunning(j.FinishedTime) {
+		return false
+	}
+	debug.Assert(j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.DoneCnt()))
+	return true
+}
+
+func (j *Job) JobRunning() bool {
+	return !j.JobFinished()
+}
+
+func (j *Job) TotalCnt() int {
+	if j.Total > 0 {
+		return j.Total
+	}
+	return j.ScheduledCnt
+}
+
+// DoneCnt returns number of tasks that have finished (either successfully or with an error).
+func (j *Job) DoneCnt() int { return j.FinishedCnt + j.ErrorCnt }
+
+// PendingCnt returns number of tasks which are currently being processed.
+func (j *Job) PendingCnt() int {
+	pending := j.TotalCnt() - j.DoneCnt()
+	debug.Assert(pending >= 0)
+	return pending
+}
+
+func (j *Job) String() string {
+	var (
+		sb       strings.Builder
+		pending  = j.PendingCnt()
+		finished = j.JobFinished()
+	)
+	sb.WriteString(j.ID)
+	if j.Description != "" {
+		sb.WriteString(" (")
+		sb.WriteString(j.Description)
+		sb.WriteString(")")
+	}
+	sb.WriteString(": ")
+
+	if finished {
+		sb.WriteString("finished")
+	} else {
+		sb.WriteString(fmt.Sprintf("%d file%s still being downloaded", pending, cos.Plural(pending)))
+	}
+	return sb.String()
+}
+
+//////////
+// Body //
+//////////
+
 func (db Body) MarshalJSON() ([]byte, error) {
 	b, err := db.RawMessage.MarshalJSON()
 	if err != nil {
@@ -113,53 +237,9 @@ func (db *Body) UnmarshalJSON(b []byte) error {
 	return db.RawMessage.UnmarshalJSON(b)
 }
 
-func (j Job) JobFinished() bool {
-	if cos.IsTimeZero(j.FinishedTime) {
-		return false
-	}
-	cos.Assert(j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.DoneCnt()))
-	return true
-}
-
-func (j Job) JobRunning() bool {
-	return !j.JobFinished()
-}
-
-func (j Job) TotalCnt() int {
-	if j.Total > 0 {
-		return j.Total
-	}
-	return j.ScheduledCnt
-}
-
-// DoneCnt returns number of tasks that have finished (either successfully or with an error).
-func (j Job) DoneCnt() int { return j.FinishedCnt + j.ErrorCnt }
-
-// PendingCnt returns number of tasks which are currently being processed.
-func (j Job) PendingCnt() int {
-	pending := j.TotalCnt() - j.DoneCnt()
-	cos.Assert(pending >= 0)
-	return pending
-}
-
-func (j Job) String() string {
-	var sb strings.Builder
-
-	sb.WriteString(j.ID)
-	if j.Description != "" {
-		sb.WriteString(" (")
-		sb.WriteString(j.Description)
-		sb.WriteString(")")
-	}
-	sb.WriteString(": ")
-
-	if j.JobFinished() {
-		sb.WriteString("finished")
-	} else {
-		sb.WriteString(fmt.Sprintf("%d files still being downloaded", j.PendingCnt()))
-	}
-	return sb.String()
-}
+//////////////
+// JobInfos //
+//////////////
 
 func (d JobInfos) Len() int {
 	return len(d)
@@ -181,11 +261,15 @@ func (d JobInfos) Swap(i, j int) {
 	d[i], d[j] = d[j], d[i]
 }
 
+////////////////
+// StatusResp //
+////////////////
+
 func (d *StatusResp) Aggregate(rhs StatusResp) *StatusResp {
 	if d == nil {
 		r := StatusResp{}
 		err := cos.MorphMarshal(rhs, &r)
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 		return &r
 	}
 
@@ -196,18 +280,9 @@ func (d *StatusResp) Aggregate(rhs StatusResp) *StatusResp {
 	return d
 }
 
-type Limits struct {
-	Connections  int `json:"connections"`
-	BytesPerHour int `json:"bytes_per_hour"`
-}
-
-type Base struct {
-	Description      string  `json:"description"`
-	Bck              cmn.Bck `json:"bucket"`
-	Timeout          string  `json:"timeout"`
-	ProgressInterval string  `json:"progress_interval"`
-	Limits           Limits  `json:"limits"`
-}
+//////////
+// Base //
+//////////
 
 func (b *Base) Validate() error {
 	if b.Bck.Name == "" {
@@ -227,11 +302,9 @@ func (b *Base) Validate() error {
 	return nil
 }
 
-type SingleObj struct {
-	ObjName    string `json:"object_name"`
-	Link       string `json:"link"`
-	FromRemote bool   `json:"from_remote"`
-}
+///////////////
+// SingleObj //
+///////////////
 
 func (b *SingleObj) Validate() error {
 	if b.ObjName == "" {
@@ -250,12 +323,9 @@ func (b *SingleObj) Validate() error {
 	return nil
 }
 
-// Internal status/delete request body
-type AdminBody struct {
-	ID         string `json:"id"`
-	Regex      string `json:"regex"`
-	OnlyActive bool   `json:"only_active_tasks"` // Skips detailed info about tasks finished/errored
-}
+///////////////
+// AdminBody //
+///////////////
 
 func (b *AdminBody) Validate(requireID bool) error {
 	if b.ID != "" && b.Regex != "" {
@@ -271,38 +341,21 @@ func (b *AdminBody) Validate(requireID bool) error {
 	return nil
 }
 
-type TaskInfoByName []TaskDlInfo
+////////////////////
+// TaskInfoByName //
+////////////////////
 
 func (t TaskInfoByName) Len() int           { return len(t) }
 func (t TaskInfoByName) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t TaskInfoByName) Less(i, j int) bool { return t[i].Name < t[j].Name }
 
-// Info about a task that is currently or has been downloaded by one of the joggers
-type TaskDlInfo struct {
-	Name       string    `json:"name"`
-	Downloaded int64     `json:"downloaded,string"`
-	Total      int64     `json:"total,string,omitempty"`
-	StartTime  time.Time `json:"start_time,omitempty"`
-	EndTime    time.Time `json:"end_time,omitempty"`
-	Running    bool      `json:"running"`
-}
-
-type TaskErrByName []TaskErrInfo
-
 func (t TaskErrByName) Len() int           { return len(t) }
 func (t TaskErrByName) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t TaskErrByName) Less(i, j int) bool { return t[i].Name < t[j].Name }
 
-type TaskErrInfo struct {
-	Name string `json:"name"`
-	Err  string `json:"error"`
-}
-
-// Single request
-type SingleBody struct {
-	Base
-	SingleObj
-}
+////////////////
+// SingleBody //
+////////////////
 
 func (b *SingleBody) Validate() error {
 	if err := b.Base.Validate(); err != nil {
@@ -328,12 +381,9 @@ func (b *SingleBody) String() string {
 	return fmt.Sprintf("Link: %q, Bucket: %q, ObjName: %q.", b.Link, b.Bck, b.ObjName)
 }
 
-// Range request
-type RangeBody struct {
-	Base
-	Template string `json:"template"`
-	Subdir   string `json:"subdir"`
-}
+///////////////
+// RangeBody //
+///////////////
 
 func (b *RangeBody) Validate() error {
 	if err := b.Base.Validate(); err != nil {
@@ -356,11 +406,9 @@ func (b *RangeBody) String() string {
 	return fmt.Sprintf("bucket: %q, template: %q", b.Bck, b.Template)
 }
 
-// Multi request
-type MultiBody struct {
-	Base
-	ObjectsPayload any `json:"objects"`
-}
+///////////////
+// MultiBody //
+///////////////
 
 func (b *MultiBody) Validate() error {
 	if b.ObjectsPayload == nil {
@@ -414,13 +462,9 @@ func (b *MultiBody) String() string {
 	return fmt.Sprintf("bucket: %q", b.Bck)
 }
 
-// Backend download request
-type BackendBody struct {
-	Base
-	Sync   bool   `json:"sync"`
-	Prefix string `json:"prefix"`
-	Suffix string `json:"suffix"`
-}
+/////////////////
+// BackendBody //
+/////////////////
 
 func (b *BackendBody) Validate() error { return b.Base.Validate() }
 

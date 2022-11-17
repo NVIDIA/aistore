@@ -348,7 +348,7 @@ func showJobsHandler(c *cli.Context) error {
 		nonxact bool
 		useJSON = flagIsSet(c, jsonFlag)
 	)
-	downloads, err := api.DownloadGetList(apiBP, "")
+	downloads, err := api.DownloadGetList(apiBP, "", flagIsSet(c, activeFlag))
 	if err != nil {
 		actionWarn(c, err.Error())
 	} else if len(downloads) > 0 {

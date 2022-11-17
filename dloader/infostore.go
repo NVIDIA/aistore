@@ -5,7 +5,6 @@
 package dloader
 
 import (
-	"regexp"
 	"sync"
 	"time"
 
@@ -56,11 +55,14 @@ func (is *infoStore) getJob(id string) (*dljob, error) {
 	return nil, errJobNotFound
 }
 
-func (is *infoStore) getList(descRegex *regexp.Regexp) (jobs []*dljob) {
+func (is *infoStore) getList(req *request) (jobs []*dljob) {
 	is.RLock()
-	for _, dji := range is.dljobs {
-		if descRegex == nil || descRegex.MatchString(dji.Description) {
-			jobs = append(jobs, dji)
+	for _, job := range is.dljobs {
+		if req.onlyActive && !_isRunning(job.FinishedTime.Load()) {
+			continue
+		}
+		if req.regex == nil || req.regex.MatchString(job.Description) {
+			jobs = append(jobs, job)
 		}
 	}
 	is.RUnlock()

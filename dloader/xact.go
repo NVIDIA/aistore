@@ -241,36 +241,35 @@ func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
 
 func (xld *Xact) AbortJob(id string) (resp any, statusCode int, err error) {
 	xld.IncPending()
-	defer xld.DecPending()
-
 	req := &request{action: actAbort, id: id}
-	return xld.dispatcher.adminReq(req)
+	resp, statusCode, err = xld.dispatcher.adminReq(req)
+	xld.DecPending()
+	return
 }
 
 func (xld *Xact) RemoveJob(id string) (resp any, statusCode int, err error) {
 	xld.IncPending()
-	defer xld.DecPending()
-
 	req := &request{action: actRemove, id: id}
-	return xld.dispatcher.adminReq(req)
+	resp, statusCode, err = xld.dispatcher.adminReq(req)
+	xld.DecPending()
+	return
 }
 
-// TODO -- FIXME: remove from xaction, make public/static
 func (xld *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int, err error) {
 	xld.IncPending()
-	defer xld.DecPending()
-
 	req := &request{action: actStatus, id: id, onlyActive: onlyActive}
-	return xld.dispatcher.adminReq(req)
+	resp, statusCode, err = xld.dispatcher.adminReq(req)
+	xld.DecPending()
+	return
 }
 
 func (xld *Xact) checkJob(req *request) (*dljob, error) {
 	dljob, err := dlStore.getJob(req.id)
 	if err != nil {
 		debug.Assert(errors.Is(err, errJobNotFound))
-		err := cmn.NewErrNotFound("%s: download job %q", xld.t, req.id)
-		req.errRsp(err, http.StatusNotFound)
-		return nil, err
+		errV := cmn.NewErrNotFound("%s: download job %q", xld.t, req.id)
+		req.errRsp(errV, http.StatusNotFound)
+		return nil, errV
 	}
 	return dljob, nil
 }

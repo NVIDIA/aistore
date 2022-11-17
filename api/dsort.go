@@ -67,7 +67,7 @@ func RemoveDSort(bp BaseParams, managerUUID string) error {
 	return err
 }
 
-func ListDSort(bp BaseParams, regex string) (jobsInfos []*dsort.JobInfo, err error) {
+func ListDSort(bp BaseParams, regex string) (jobInfos []*dsort.JobInfo, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -75,7 +75,7 @@ func ListDSort(bp BaseParams, regex string) (jobsInfos []*dsort.JobInfo, err err
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Query = url.Values{apc.QparamRegex: []string{regex}}
 	}
-	err = reqParams.DoReqResp(&jobsInfos)
+	err = reqParams.DoReqResp(&jobInfos)
 	FreeRp(reqParams)
-	return jobsInfos, err
+	return
 }

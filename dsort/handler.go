@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -126,19 +127,16 @@ func ProxyGetHandler(w http.ResponseWriter, r *http.Request) {
 	managerUUID := query.Get(apc.QparamUUID)
 
 	if managerUUID == "" {
-		proxyListSortHandler(w, r)
+		proxyListSortHandler(w, r, query)
 		return
 	}
 
-	proxyMetricsSortHandler(w, r)
+	proxyMetricsSortHandler(w, r, query)
 }
 
 // GET /v1/sort?regex=...
-func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		query    = r.URL.Query()
-		regexStr = query.Get(apc.QparamRegex)
-	)
+func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
+	regexStr := query.Get(apc.QparamRegex)
 	if _, err := regexp.CompilePOSIX(regexStr); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
@@ -155,7 +153,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		var newMetrics []*JobInfo
 		err := jsoniter.Unmarshal(r.res, &newMetrics)
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 
 		for _, v := range newMetrics {
 			found := false
@@ -183,17 +181,15 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /v1/sort?id=...
-func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
+func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 	var (
 		smap        = ctx.smapOwner.Get()
-		query       = r.URL.Query()
+		allMetrics  = make(map[string]*Metrics, smap.CountActiveTargets())
 		managerUUID = query.Get(apc.QparamUUID)
 		path        = apc.URLPathdSortMetrics.Join(managerUUID)
 		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
+		notFound    int
 	)
-
-	notFound := 0
-	allMetrics := make(map[string]*Metrics, smap.CountActiveTargets())
 	for _, resp := range responses {
 		if resp.statusCode == http.StatusNotFound {
 			// Probably new target which does not know anything about this dsort op.
@@ -805,7 +801,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	)
 
 	dsorterMemThreshold, err := cos.S2B(parsedRS.DSorterMemThreshold)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 
 	query := make(url.Values)
 	query.Add(apc.QparamWhat, apc.GetWhatDaemonStatus)

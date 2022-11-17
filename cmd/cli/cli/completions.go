@@ -587,8 +587,7 @@ func suggestDownloadID(c *cli.Context, filter func(*dloader.Job) bool) {
 	if flagIsSet(c, allJobsFlag) {
 		return
 	}
-
-	list, _ := api.DownloadGetList(apiBP, "")
+	list, _ := api.DownloadGetList(apiBP, "", false /*onlyActive*/)
 	for _, job := range list {
 		if filter(job) {
 			fmt.Println(job.ID)
