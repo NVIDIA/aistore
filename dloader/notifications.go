@@ -23,7 +23,7 @@ type (
 
 	NotifDownload struct {
 		nl.NotifBase
-		job job
+		job jobif
 	}
 )
 

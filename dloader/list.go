@@ -9,7 +9,7 @@ import "regexp"
 func ListJobs(regex *regexp.Regexp) (any, int, error) {
 	var (
 		respMap map[string]Job
-		records []*downloadJobInfo
+		records []*dljob
 		req     = &request{action: actList, regex: regex}
 	)
 	if dlStore != nil {
@@ -21,7 +21,7 @@ func ListJobs(regex *regexp.Regexp) (any, int, error) {
 	}
 	respMap = make(map[string]Job, len(records))
 	for _, r := range records {
-		respMap[r.ID] = r.ToDlJobInfo()
+		respMap[r.ID] = r.clone()
 	}
 	req.okRsp(respMap)
 ex:

@@ -115,7 +115,7 @@ func NormalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, dlXact *Xact) (job, error) {
+func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, dlXact *Xact) (jobif, error) {
 	switch dlb.Type {
 	case TypeBackend:
 		dp := &BackendBody{}

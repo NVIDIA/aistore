@@ -98,6 +98,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			},
 		}, dlJob)
 		response, statusCode, respErr = xdl.Download(dlJob)
+
 	case http.MethodGet:
 		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
@@ -132,6 +133,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			response, statusCode, respErr = dloader.ListJobs(regex)
 		}
+
 	case http.MethodDelete:
 		items, err := t.apiItems(w, r, 1, false, apc.URLPathDownload.L)
 		if err != nil {

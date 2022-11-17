@@ -422,5 +422,5 @@ func showClusterRebalanceHandler(c *cli.Context) (err error) {
 	if xactID == "" && xactKind == "" {
 		xactKind = apc.ActRebalance
 	}
-	return _showXactList(c, nodeID, xactID, xactKind, bck)
+	return xactList(c, nodeID, xactID, xactKind, bck)
 }

@@ -59,6 +59,7 @@ var (
 			progressBarFlag,
 			refreshFlag,
 			verboseFlag,
+			jsonFlag,
 		},
 		subcmdShowDsort: {
 			regexFlag,
@@ -260,7 +261,7 @@ var (
 
 	showCmdJob = cli.Command{
 		Name:  subcmdShowJob,
-		Usage: "show running and completed (batch) jobs",
+		Usage: "show all running and finished jobs (use <TAB-TAB> to select specific category)",
 		Subcommands: []cli.Command{
 			showCmdDownload,
 			showCmdDsort,
@@ -350,7 +351,7 @@ func showJobsHandler(c *cli.Context) error {
 	if err != nil {
 		actionWarn(c, err.Error())
 	} else if len(downloads) > 0 {
-		actionCptn(c, "", "Downloads:")
+		actionCptn(c, "", "download jobs:")
 		err = tmpls.Print(downloads, c.App.Writer, tmpls.DownloadListTmpl, nil, useJSON)
 		if err != nil {
 			actionWarn(c, err.Error())
@@ -362,8 +363,11 @@ func showJobsHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	} else if len(dsorts) > 0 {
-		actionCptn(c, "", "DSorts:")
-		err = dsortJobsList(c, dsorts) // TODO -- FIXME: useJSON, verbose, finished|all - here and elsewhere
+		if nonxact {
+			fmt.Fprintln(c.App.Writer)
+		}
+		actionCptn(c, "", "dsort jobs:")
+		err = dsortJobsList(c, dsorts, useJSON)
 		if err != nil {
 			actionWarn(c, err.Error())
 		}
@@ -371,9 +375,10 @@ func showJobsHandler(c *cli.Context) error {
 	}
 
 	if nonxact {
-		actionCptn(c, "", "Xactions:")
+		fmt.Fprintln(c.App.Writer)
+		actionCptn(c, "", "eXtended actions (xactions):")
 	}
-	err = _showXactList(c, "" /*nodeID*/, "" /*xactID*/, "" /*xactKind*/, cmn.Bck{})
+	err = xactList(c, "" /*nodeID*/, "" /*xactID*/, "" /*xactKind*/, cmn.Bck{})
 	return err
 }
 
@@ -390,13 +395,13 @@ func showDownloadsHandler(c *cli.Context) error {
 
 func showDsortHandler(c *cli.Context) error {
 	id := c.Args().First()
-
+	useJSON := flagIsSet(c, jsonFlag)
 	if c.NArg() < 1 { // list all dsort jobs
 		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag))
 		if err != nil {
 			return err
 		}
-		return dsortJobsList(c, list)
+		return dsortJobsList(c, list, useJSON)
 	}
 
 	// display status of a dsort job with given id
@@ -433,10 +438,10 @@ func showXactionHandler(c *cli.Context) (err error) {
 	if errP != nil {
 		return errP
 	}
-	return _showXactList(c, nodeID, xactID, xactKind, bck)
+	return xactList(c, nodeID, xactID, xactKind, bck)
 }
 
-func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck) (err error) {
+func xactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck) (err error) {
 	latest := !flagIsSet(c, allXactionsFlag)
 	if xactID != "" {
 		latest = false

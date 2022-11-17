@@ -32,7 +32,7 @@ type (
 		joggers     map[string]*jogger     // mpath -> jogger
 		mtx         sync.RWMutex           // Protects map defined below.
 		abortJob    map[string]*cos.StopCh // jobID -> abort job chan
-		workCh      chan job
+		workCh      chan jobif
 		stopCh      *cos.StopCh
 	}
 
@@ -52,7 +52,7 @@ func newDispatcher(xdl *Xact) *dispatcher {
 		xdl:         xdl,
 		startupSema: startupSema{},
 		joggers:     make(map[string]*jogger, 8),
-		workCh:      make(chan job),
+		workCh:      make(chan jobif),
 		stopCh:      cos.NewStopCh(),
 		abortJob:    make(map[string]*cos.StopCh, 100),
 	}
@@ -142,7 +142,7 @@ func (d *dispatcher) cleanupJob(jobID string) {
 }
 
 // forward request to designated jogger
-func (d *dispatcher) dispatchDownload(job job) (ok bool) {
+func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 	defer func() {
 		debug.Infof("Waiting for job %q", job.ID())
 		d.waitFor(job.ID())
@@ -325,7 +325,7 @@ func (d *dispatcher) jobAbortedCh(jobID string) *cos.StopCh {
 	return abCh
 }
 
-func (d *dispatcher) checkAbortedJob(job job) bool {
+func (d *dispatcher) checkAbortedJob(job jobif) bool {
 	select {
 	case <-d.jobAbortedCh(job.ID()).Listen():
 		return true
@@ -405,15 +405,15 @@ func (d *dispatcher) adminReq(req *request) (resp any, statusCode int, err error
 }
 
 func (d *dispatcher) handleRemove(req *request) {
-	jInfo, err := d.xdl.checkJob(req)
+	dljob, err := d.xdl.checkJob(req)
 	if err != nil {
 		return
 	}
 
 	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
-	dlInfo := jInfo.ToDlJobInfo()
+	dlInfo := dljob.clone()
 	if dlInfo.JobRunning() {
-		req.errRsp(fmt.Errorf("download job with id = %s is still running", jInfo.ID), http.StatusBadRequest)
+		req.errRsp(fmt.Errorf("download job with id = %s is still running", dljob.ID), http.StatusBadRequest)
 		return
 	}
 
@@ -443,7 +443,7 @@ func (d *dispatcher) handleStatus(req *request) {
 		dlErrors      []TaskErrInfo
 	)
 
-	jInfo, err := d.xdl.checkJob(req)
+	dljob, err := d.xdl.checkJob(req)
 	if err != nil {
 		return
 	}
@@ -465,7 +465,7 @@ func (d *dispatcher) handleStatus(req *request) {
 	}
 
 	req.okRsp(&StatusResp{
-		Job:           jInfo.ToDlJobInfo(),
+		Job:           dljob.clone(),
 		CurrentTasks:  currentTasks,
 		FinishedTasks: finishedTasks,
 		Errs:          dlErrors,

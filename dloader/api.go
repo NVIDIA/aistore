@@ -43,10 +43,13 @@ type (
 		ID string `json:"id"`
 	}
 
-	// Summary info of the download job
+	// Represents download job
 	Job struct {
 		ID            string    `json:"id"`
+		XactID        string    `json:"xaction_id"`
 		Description   string    `json:"description"`
+		StartedTime   time.Time `json:"started_time"`
+		FinishedTime  time.Time `json:"finished_time"`
 		FinishedCnt   int       `json:"finished_cnt"`
 		ScheduledCnt  int       `json:"scheduled_cnt"` // tasks being processed or already processed by dispatched
 		SkippedCnt    int       `json:"skipped_cnt"`   // number of tasks skipped
@@ -54,8 +57,6 @@ type (
 		Total         int       `json:"total"`          // total number of tasks, negative if unknown
 		AllDispatched bool      `json:"all_dispatched"` // if true, dispatcher has already scheduled all tasks for given job
 		Aborted       bool      `json:"aborted"`
-		StartedTime   time.Time `json:"started_time"`
-		FinishedTime  time.Time `json:"finished_time"`
 	}
 
 	JobInfos []*Job

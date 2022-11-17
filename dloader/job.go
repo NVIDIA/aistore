@@ -28,9 +28,9 @@ const (
 
 // interface guard
 var (
-	_ job = (*sliceDlJob)(nil)
-	_ job = (*backendDlJob)(nil)
-	_ job = (*rangeDlJob)(nil)
+	_ jobif = (*sliceDlJob)(nil)
+	_ jobif = (*backendDlJob)(nil)
+	_ jobif = (*rangeDlJob)(nil)
 )
 
 type (
@@ -40,7 +40,7 @@ type (
 		fromRemote bool
 	}
 
-	job interface {
+	jobif interface {
 		ID() string
 		Bck() *cmn.Bck
 		Description() string
@@ -48,7 +48,7 @@ type (
 		ActiveStats() (*StatusResp, error)
 		String() string
 		Notif() cluster.Notif // notifications
-		AddNotif(n cluster.Notif, job job)
+		AddNotif(n cluster.Notif, job jobif)
 
 		// If total length (size) of download job is not known, -1 should be returned.
 		Len() int
@@ -109,27 +109,25 @@ type (
 		t                 cluster.Target
 		prefix            string
 		suffix            string
-		objs              []dlObj // objects' metas which are ready to be downloaded
 		continuationToken string
+		objs              []dlObj // objects' metas which are ready to be downloaded
 		sync              bool
 		done              bool
 	}
 
-	downloadJobInfo struct {
-		ID          string `json:"id"`
-		Description string `json:"description"`
-
-		FinishedCnt  atomic.Int32 `json:"finished"` // also includes skipped
-		ScheduledCnt atomic.Int32 `json:"scheduled"`
-		SkippedCnt   atomic.Int32 `json:"skipped"`
-		ErrorCnt     atomic.Int32 `json:"errors"`
-		Total        int          `json:"total"`
-
-		Aborted       atomic.Bool `json:"aborted"`
-		AllDispatched atomic.Bool `json:"all_dispatched"`
-
-		StartedTime  time.Time   `json:"started_time"`
-		FinishedTime atomic.Time `json:"finished_time"`
+	dljob struct {
+		ID            string       `json:"id"`
+		XactID        string       `json:"xaction_id"`
+		Description   string       `json:"description"`
+		StartedTime   time.Time    `json:"started_time"`
+		FinishedTime  atomic.Time  `json:"finished_time"`
+		FinishedCnt   atomic.Int32 `json:"finished"` // also includes skipped
+		ScheduledCnt  atomic.Int32 `json:"scheduled"`
+		SkippedCnt    atomic.Int32 `json:"skipped"`
+		ErrorCnt      atomic.Int32 `json:"errors"`
+		Total         int          `json:"total"`
+		Aborted       atomic.Bool  `json:"aborted"`
+		AllDispatched atomic.Bool  `json:"all_dispatched"`
 	}
 )
 
@@ -171,15 +169,15 @@ func (j *baseDlJob) String() (s string) {
 
 func (j *baseDlJob) Notif() cluster.Notif { return j.notif }
 
-func (j *baseDlJob) AddNotif(n cluster.Notif, job job) {
+func (j *baseDlJob) AddNotif(n cluster.Notif, job jobif) {
 	var ok bool
-	cos.Assert(j.notif == nil) // currently, "add" means "set"
+	debug.Assert(j.notif == nil) // currently, "add" means "set"
 	j.notif, ok = n.(*NotifDownload)
-	cos.Assert(ok)
+	debug.Assert(ok)
 	j.notif.job = job
-	cos.Assert(j.notif.F != nil)
+	debug.Assert(j.notif.F != nil)
 	if n.Upon(cluster.UponProgress) {
-		cos.Assert(j.notif.P != nil)
+		debug.Assert(j.notif.P != nil)
 	}
 }
 
@@ -424,35 +422,36 @@ func (j *backendDlJob) getNextObjs() error {
 	return nil
 }
 
-/////////////////////
-// downloadJobInfo //
-/////////////////////
+///////////
+// dljob //
+///////////
 
-func (d *downloadJobInfo) ToDlJobInfo() Job {
+func (j *dljob) clone() Job {
 	return Job{
-		ID:            d.ID,
-		Description:   d.Description,
-		FinishedCnt:   int(d.FinishedCnt.Load()),
-		ScheduledCnt:  int(d.ScheduledCnt.Load()),
-		SkippedCnt:    int(d.SkippedCnt.Load()),
-		ErrorCnt:      int(d.ErrorCnt.Load()),
-		Total:         d.Total,
-		AllDispatched: d.AllDispatched.Load(),
-		Aborted:       d.Aborted.Load(),
-		StartedTime:   d.StartedTime,
-		FinishedTime:  d.FinishedTime.Load(),
+		ID:            j.ID,
+		XactID:        j.XactID,
+		Description:   j.Description,
+		FinishedCnt:   int(j.FinishedCnt.Load()),
+		ScheduledCnt:  int(j.ScheduledCnt.Load()),
+		SkippedCnt:    int(j.SkippedCnt.Load()),
+		ErrorCnt:      int(j.ErrorCnt.Load()),
+		Total:         j.Total,
+		AllDispatched: j.AllDispatched.Load(),
+		Aborted:       j.Aborted.Load(),
+		StartedTime:   j.StartedTime,
+		FinishedTime:  j.FinishedTime.Load(),
 	}
 }
 
 // Used for debugging purposes to ensure integrity of the struct.
-func (d *downloadJobInfo) valid() (err error) {
-	if d.Aborted.Load() {
+func (j *dljob) valid() (err error) {
+	if j.Aborted.Load() {
 		return
 	}
-	if !d.AllDispatched.Load() {
+	if !j.AllDispatched.Load() {
 		return
 	}
-	if a, b, c := d.ScheduledCnt.Load(), d.FinishedCnt.Load(), d.ErrorCnt.Load(); a != b+c {
+	if a, b, c := j.ScheduledCnt.Load(), j.FinishedCnt.Load(), j.ErrorCnt.Load(); a != b+c {
 		err = fmt.Errorf("invalid: %d != %d + %d", a, b, c)
 	}
 	return

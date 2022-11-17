@@ -9,11 +9,9 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"strconv"
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -124,7 +122,6 @@ const (
 var (
 	httpClient  = cmn.NewClient(cmn.TransportArgs{})
 	httpsClient = cmn.NewClient(cmn.TransportArgs{UseHTTPS: true, SkipVerify: true})
-	instance    atomic.Int64
 )
 
 type (
@@ -204,41 +201,37 @@ func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 // Xact //
 //////////
 
-func (*Xact) Name() string {
-	i := strconv.FormatInt(instance.Load(), 10)
-	return "downloader" + i
-}
-
-func newXact(t cluster.Target, statsT stats.Tracker) (d *Xact) {
-	d = &Xact{t: t, statsT: statsT}
-	d.dispatcher = newDispatcher(d)
-	d.DemandBase.Init(cos.GenUUID(), apc.Download, nil /*bck*/, 0 /*use default*/)
-	instance.Inc()
+func newXact(t cluster.Target, statsT stats.Tracker) (xld *Xact) {
+	xld = &Xact{t: t, statsT: statsT}
+	xld.dispatcher = newDispatcher(xld)
+	xld.DemandBase.Init(cos.GenUUID(), apc.Download, nil /*bck*/, 0 /*use default*/)
 	return
 }
 
-func (d *Xact) Run(*sync.WaitGroup) {
-	glog.Infof("starting %s", d.Name())
-	err := d.dispatcher.run()
-	d.stop(err)
+func (xld *Xact) Run(*sync.WaitGroup) {
+	glog.Infof("starting %s", xld.Name())
+	err := xld.dispatcher.run()
+	xld.stop(err)
 }
 
 // stop terminates the downloader and all dependent entities.
-func (d *Xact) stop(err error) {
-	d.DemandBase.Stop()
-	d.Finish(err)
+func (xld *Xact) stop(err error) {
+	xld.DemandBase.Stop()
+	xld.Finish(err)
 }
 
-func (d *Xact) Download(job job) (resp any, statusCode int, err error) {
-	d.IncPending()
-	defer d.DecPending()
-	dlStore.setJob(job.ID(), job)
+func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
+	xld.IncPending()
+	defer xld.DecPending()
+
+	dlStore.setJob(job, xld.ID())
+
 	select {
-	case d.dispatcher.workCh <- job:
+	case xld.dispatcher.workCh <- job:
 		return nil, http.StatusOK, nil
 	default:
 		select {
-		case d.dispatcher.workCh <- job:
+		case xld.dispatcher.workCh <- job:
 			return nil, http.StatusOK, nil
 		case <-time.After(cmn.Timeout.CplaneOperation()):
 			return "downloader job queue is full", http.StatusTooManyRequests, nil
@@ -246,43 +239,43 @@ func (d *Xact) Download(job job) (resp any, statusCode int, err error) {
 	}
 }
 
-func (d *Xact) AbortJob(id string) (resp any, statusCode int, err error) {
-	d.IncPending()
-	defer d.DecPending()
+func (xld *Xact) AbortJob(id string) (resp any, statusCode int, err error) {
+	xld.IncPending()
+	defer xld.DecPending()
 
 	req := &request{action: actAbort, id: id}
-	return d.dispatcher.adminReq(req)
+	return xld.dispatcher.adminReq(req)
 }
 
-func (d *Xact) RemoveJob(id string) (resp any, statusCode int, err error) {
-	d.IncPending()
-	defer d.DecPending()
+func (xld *Xact) RemoveJob(id string) (resp any, statusCode int, err error) {
+	xld.IncPending()
+	defer xld.DecPending()
 
 	req := &request{action: actRemove, id: id}
-	return d.dispatcher.adminReq(req)
+	return xld.dispatcher.adminReq(req)
 }
 
 // TODO -- FIXME: remove from xaction, make public/static
-func (d *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int, err error) {
-	d.IncPending()
-	defer d.DecPending()
+func (xld *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int, err error) {
+	xld.IncPending()
+	defer xld.DecPending()
 
 	req := &request{action: actStatus, id: id, onlyActive: onlyActive}
-	return d.dispatcher.adminReq(req)
+	return xld.dispatcher.adminReq(req)
 }
 
-func (d *Xact) checkJob(req *request) (*downloadJobInfo, error) {
-	jInfo, err := dlStore.getJob(req.id)
+func (xld *Xact) checkJob(req *request) (*dljob, error) {
+	dljob, err := dlStore.getJob(req.id)
 	if err != nil {
 		debug.Assert(errors.Is(err, errJobNotFound))
-		err := cmn.NewErrNotFound("%s: download job %q", d.t, req.id)
+		err := cmn.NewErrNotFound("%s: download job %q", xld.t, req.id)
 		req.errRsp(err, http.StatusNotFound)
 		return nil, err
 	}
-	return jInfo, nil
+	return dljob, nil
 }
 
-func (d *Xact) Snap() cluster.XactSnap { return d.DemandBase.ExtSnap() }
+func (xld *Xact) Snap() cluster.XactSnap { return xld.DemandBase.ExtSnap() }
 
 /////////////
 // request //

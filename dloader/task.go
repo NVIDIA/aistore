@@ -34,7 +34,7 @@ const (
 
 type singleTask struct {
 	xdl         *Xact
-	job         job
+	job         jobif
 	obj         dlObj
 	started     atomic.Time
 	ended       atomic.Time

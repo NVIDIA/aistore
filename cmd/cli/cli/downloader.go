@@ -316,7 +316,26 @@ func downloadJobsList(c *cli.Context, regex string) error {
 	if err != nil {
 		return err
 	}
-	return tmpls.Print(list, c.App.Writer, tmpls.DownloadListTmpl, nil, false)
+
+	sort.Slice(list, func(i int, j int) bool {
+		if !list[i].JobFinished() && (list[j].JobFinished() || list[j].Aborted) {
+			return true
+		}
+		if (list[i].JobFinished() || list[i].Aborted) && !list[j].JobFinished() {
+			return false
+		}
+
+		if !list[i].JobFinished() && !list[j].JobFinished() {
+			return list[i].StartedTime.Before(list[j].StartedTime)
+		}
+		if list[i].JobFinished() && list[j].JobFinished() {
+			return list[i].FinishedTime.Before(list[j].StartedTime)
+		}
+
+		return true
+	})
+
+	return tmpls.Print(list, c.App.Writer, tmpls.DownloadListTmpl, nil, flagIsSet(c, jsonFlag))
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {
@@ -397,7 +416,8 @@ func printDownloadStatus(w io.Writer, d *dloader.StatusResp, verbose bool) {
 					fmt.Fprintln(w, cos.B2S(task.Downloaded, 2))
 				} else {
 					pctDownloaded := 100 * float64(task.Downloaded) / float64(task.Total)
-					fmt.Fprintf(w, "%s/%s (%.2f%%)\n", cos.B2S(task.Downloaded, 2), cos.B2S(task.Total, 2), pctDownloaded)
+					fmt.Fprintf(w, "%s/%s (%.2f%%)\n",
+						cos.B2S(task.Downloaded, 2), cos.B2S(task.Total, 2), pctDownloaded)
 				}
 			}
 		}

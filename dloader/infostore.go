@@ -21,16 +21,12 @@ var (
 	dlStoreOnce sync.Once
 )
 
-type (
-	infoStore struct {
-		*downloaderDB
-
-		// FIXME: jobInfo is stored only in memory, should be persisted at some point
-		// in case, for instance, of target's powercycle
-		jobInfo map[string]*downloadJobInfo
-		sync.RWMutex
-	}
-)
+// TODO: stored only in memory, should be persisted at some point (powercycle)
+type infoStore struct {
+	*downloaderDB
+	dljobs map[string]*dljob
+	sync.RWMutex
+}
 
 func SetDB(dbdrv kvdb.Driver) { db = dbdrv }
 
@@ -44,101 +40,98 @@ func newInfoStore(driver kvdb.Driver) *infoStore {
 	db := newDownloadDB(driver)
 	is := &infoStore{
 		downloaderDB: db,
-		jobInfo:      make(map[string]*downloadJobInfo),
+		dljobs:       make(map[string]*dljob),
 	}
 	hk.Reg("downloader"+hk.NameSuffix, is.housekeep, hk.DayInterval)
 	return is
 }
 
-func (is *infoStore) getJob(id string) (*downloadJobInfo, error) {
+func (is *infoStore) getJob(id string) (*dljob, error) {
 	is.RLock()
 	defer is.RUnlock()
 
-	if ji, ok := is.jobInfo[id]; ok {
+	if ji, ok := is.dljobs[id]; ok {
 		return ji, nil
 	}
 	return nil, errJobNotFound
 }
 
-func (is *infoStore) getList(descRegex *regexp.Regexp) []*downloadJobInfo {
-	var jobsInfo []*downloadJobInfo
-
+func (is *infoStore) getList(descRegex *regexp.Regexp) (jobs []*dljob) {
 	is.RLock()
-	for _, dji := range is.jobInfo {
+	for _, dji := range is.dljobs {
 		if descRegex == nil || descRegex.MatchString(dji.Description) {
-			jobsInfo = append(jobsInfo, dji)
+			jobs = append(jobs, dji)
 		}
 	}
 	is.RUnlock()
-
-	return jobsInfo
+	return
 }
 
-func (is *infoStore) setJob(id string, job job) {
-	jInfo := &downloadJobInfo{
+func (is *infoStore) setJob(job jobif, xactID string) {
+	dljob := &dljob{
 		ID:          job.ID(),
+		XactID:      xactID,
 		Total:       job.Len(),
 		Description: job.Description(),
 		StartedTime: time.Now(),
 	}
-
 	is.Lock()
-	is.jobInfo[id] = jInfo
+	is.dljobs[job.ID()] = dljob
 	is.Unlock()
 }
 
 func (is *infoStore) incFinished(id string) {
-	jInfo, err := is.getJob(id)
+	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	jInfo.FinishedCnt.Inc()
+	dljob.FinishedCnt.Inc()
 }
 
 func (is *infoStore) incSkipped(id string) {
-	jInfo, err := is.getJob(id)
+	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	jInfo.SkippedCnt.Inc()
-	jInfo.FinishedCnt.Inc()
+	dljob.SkippedCnt.Inc()
+	dljob.FinishedCnt.Inc()
 }
 
 func (is *infoStore) incScheduled(id string) {
-	jInfo, err := is.getJob(id)
+	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	jInfo.ScheduledCnt.Inc()
+	dljob.ScheduledCnt.Inc()
 }
 
 func (is *infoStore) incErrorCnt(id string) {
-	jInfo, err := is.getJob(id)
+	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	jInfo.ErrorCnt.Inc()
+	dljob.ErrorCnt.Inc()
 }
 
 func (is *infoStore) setAllDispatched(id string, dispatched bool) {
-	jInfo, err := is.getJob(id)
+	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	jInfo.AllDispatched.Store(dispatched)
+	dljob.AllDispatched.Store(dispatched)
 }
 
 func (is *infoStore) markFinished(id string) error {
-	jInfo, err := is.getJob(id)
+	dljob, err := is.getJob(id)
 	if err != nil {
 		debug.AssertNoErr(err)
 		return err
 	}
-	jInfo.FinishedTime.Store(time.Now())
-	return jInfo.valid()
+	dljob.FinishedTime.Store(time.Now())
+	return dljob.valid()
 }
 
 func (is *infoStore) setAborted(id string) {
-	jInfo, err := is.getJob(id)
+	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	jInfo.Aborted.Store(true)
+	dljob.Aborted.Store(true)
 	// NOTE: Don't set `FinishedTime` yet as we are not fully done.
 	//       The job now can be removed but there's no guarantee
 	//       that all tasks have been stopped and all resources were freed.
 }
 
 func (is *infoStore) delJob(id string) {
-	delete(is.jobInfo, id)
+	delete(is.dljobs, id)
 	is.downloaderDB.delete(id)
 }
 
@@ -146,8 +139,8 @@ func (is *infoStore) housekeep() time.Duration {
 	const interval = hk.DayInterval
 
 	is.Lock()
-	for id, jInfo := range is.jobInfo {
-		if time.Since(jInfo.FinishedTime.Load()) > interval {
+	for id, dljob := range is.dljobs {
+		if time.Since(dljob.FinishedTime.Load()) > interval {
 			is.delJob(id)
 		}
 	}
