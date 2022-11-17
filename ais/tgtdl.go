@@ -114,7 +114,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if payload.ID != "" {
-			// TODO -- FIXME: don't renew
+			// TODO -- FIXME: don't start new for the purposes of getting status
 			xdl, err := t.renewdl()
 			if err != nil {
 				t.writeErr(w, r, err, http.StatusInternalServerError)

@@ -109,8 +109,9 @@ const (
 		"{{$p.Name}}\t {{$p.Value}}\n" +
 		"{{end}}"
 
-	DownloadListHeader = "JOB ID\t STATUS\t ERRORS\t DESCRIPTION\n"
+	DownloadListHeader = "JOB ID\t XACTION\t STATUS\t ERRORS\t DESCRIPTION\n"
 	DownloadListBody   = "{{$value.ID}}\t " +
+		"{{$value.XactID}}\t " +
 		"{{if $value.Aborted}}Aborted" +
 		"{{else}}{{if $value.JobFinished}}Finished{{else}}{{$value.PendingCnt}} pending{{end}}" +
 		"{{end}}\t {{$value.ErrorCnt}}\t {{$value.Description}}\n"

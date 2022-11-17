@@ -58,6 +58,7 @@ var (
 			regexFlag,
 			progressBarFlag,
 			refreshFlag,
+			activeFlag,
 			verboseFlag,
 			jsonFlag,
 		},

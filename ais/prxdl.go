@@ -21,7 +21,113 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func (p *proxy) dladmin(method, path string, msg *dloader.AdminBody) ([]byte, int, error) {
+// [METHOD] /v1/download
+func (p *proxy) downloadHandler(w http.ResponseWriter, r *http.Request) {
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet, http.MethodDelete:
+		p.httpdladm(w, r)
+	case http.MethodPost:
+		p.httpdlpost(w, r)
+	default:
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
+	}
+}
+
+// httpDownloadAdmin is meant for aborting, removing and getting status updates for downloads.
+// GET /v1/download?id=...
+// DELETE /v1/download/{abort, remove}?id=...
+func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
+	payload := &dloader.AdminBody{}
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	if err := cmn.ReadJSON(w, r, &payload); err != nil {
+		return
+	}
+	if err := payload.Validate(r.Method == http.MethodDelete); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		items, err := cmn.MatchItems(r.URL.Path, 1, false, apc.URLPathDownload.L)
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+
+		if items[0] != apc.Abort && items[0] != apc.Remove {
+			p.writeErrAct(w, r, items[0])
+			return
+		}
+	}
+
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("httpDownloadAdmin payload %v", payload)
+	}
+	if payload.ID != "" && p.ic.redirectToIC(w, r) {
+		return
+	}
+	resp, statusCode, err := p.dladm(r.Method, r.URL.Path, payload)
+	if err != nil {
+		p.writeErr(w, r, err, statusCode)
+		return
+	}
+	w.Write(resp)
+}
+
+// POST /v1/download
+func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
+	var (
+		body             []byte
+		dlb              dloader.Body
+		dlBase           dloader.Base
+		err              error
+		ok               bool
+		progressInterval = dloader.DownloadProgressInterval
+	)
+
+	if _, err = p.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
+		return
+	}
+
+	if body, err = io.ReadAll(r.Body); err != nil {
+		p.writeErrStatusf(w, r, http.StatusInternalServerError, "Error starting download: %v", err.Error())
+		return
+	}
+
+	if dlb, dlBase, ok = p.validateStartDownload(w, r, body); !ok {
+		return
+	}
+
+	if dlBase.ProgressInterval != "" {
+		if progressInterval, err = time.ParseDuration(dlBase.ProgressInterval); err != nil {
+			p.writeErrf(w, r, "%s: invalid progress interval %q: %v", p, dlBase.ProgressInterval, err)
+			return
+		}
+	}
+
+	// const prefix to visually differentiate xactions and dl. jobs
+	jobID := "dlj-" + cos.GenUUID()
+
+	if errCode, err := p.dlstart(r, jobID, body); err != nil {
+		p.writeErrStatusf(w, r, errCode, "Error starting download: %v", err)
+		return
+	}
+	smap := p.owner.smap.get()
+	nl := dloader.NewDownloadNL(jobID, string(dlb.Type), &smap.Smap, progressInterval)
+	nl.SetOwner(equalIC)
+	p.ic.registerEqual(regIC{nl: nl, smap: smap})
+
+	_respWithID(w, jobID)
+}
+
+func (p *proxy) dladm(method, path string, msg *dloader.AdminBody) ([]byte, int, error) {
 	var (
 		notFoundCnt int
 		err         error
@@ -72,8 +178,7 @@ func (p *proxy) dladmin(method, path string, msg *dloader.AdminBody) ([]byte, in
 			continue
 		}
 		if res.status != http.StatusNotFound {
-			status, err := res.status, res.err
-			return nil, status, err
+			return nil, res.status, res.err
 		}
 		notFoundCnt++
 		err = res.err
@@ -125,7 +230,7 @@ func (p *proxy) dladmin(method, path string, msg *dloader.AdminBody) ([]byte, in
 		res := validResponses[0]
 		return res.bytes, res.status, res.err
 	default:
-		cos.AssertMsg(false, method)
+		debug.Assert(false, method)
 		return nil, http.StatusInternalServerError, nil
 	}
 }
@@ -148,116 +253,6 @@ func (p *proxy) dlstart(r *http.Request, id string, body []byte) (errCode int, e
 		return
 	}
 	return http.StatusOK, nil
-}
-
-// [METHOD] /v1/download
-func (p *proxy) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStarted() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		return
-	}
-	switch r.Method {
-	case http.MethodGet, http.MethodDelete:
-		p.httpDownloadAdmin(w, r)
-	case http.MethodPost:
-		p.httpDownloadPost(w, r)
-	default:
-		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
-	}
-}
-
-// httpDownloadAdmin is meant for aborting, removing and getting status updates for downloads.
-// GET /v1/download?id=...
-// DELETE /v1/download/{abort, remove}?id=...
-func (p *proxy) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
-	payload := &dloader.AdminBody{}
-	if !p.ClusterStarted() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		return
-	}
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
-		return
-	}
-	if err := payload.Validate(r.Method == http.MethodDelete); err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-
-	if r.Method == http.MethodDelete {
-		items, err := cmn.MatchItems(r.URL.Path, 1, false, apc.URLPathDownload.L)
-		if err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-
-		if items[0] != apc.Abort && items[0] != apc.Remove {
-			p.writeErrAct(w, r, items[0])
-			return
-		}
-	}
-
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("httpDownloadAdmin payload %v", payload)
-	}
-	if payload.ID != "" && p.ic.redirectToIC(w, r) {
-		return
-	}
-	resp, statusCode, err := p.dladmin(r.Method, r.URL.Path, payload)
-	if err != nil {
-		p.writeErr(w, r, err, statusCode)
-		return
-	}
-
-	_, err = w.Write(resp)
-	if err != nil {
-		glog.Errorf("Failed to write to http response: %v.", err)
-	}
-}
-
-// POST /v1/download
-func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
-	var (
-		body             []byte
-		dlb              dloader.Body
-		dlBase           dloader.Base
-		err              error
-		ok               bool
-		progressInterval = dloader.DownloadProgressInterval
-	)
-
-	if _, err = p.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
-		return
-	}
-
-	if body, err = io.ReadAll(r.Body); err != nil {
-		p.writeErrStatusf(w, r, http.StatusInternalServerError, "Error starting download: %v", err.Error())
-		return
-	}
-
-	if dlb, dlBase, ok = p.validateStartDownload(w, r, body); !ok {
-		return
-	}
-
-	if dlBase.ProgressInterval != "" {
-		if progressInterval, err = time.ParseDuration(dlBase.ProgressInterval); err != nil {
-			p.writeErrf(w, r, "%s: invalid progress interval %q: %v", p, dlBase.ProgressInterval, err)
-			return
-		}
-	}
-
-	// const prefix to visually differentiate xactions and dl. jobs
-	jobID := "dlj-" + cos.GenUUID()
-
-	if errCode, err := p.dlstart(r, jobID, body); err != nil {
-		p.writeErrStatusf(w, r, errCode, "Error starting download: %v", err)
-		return
-	}
-	smap := p.owner.smap.get()
-	nl := dloader.NewDownloadNL(jobID, string(dlb.Type), &smap.Smap, progressInterval)
-	nl.SetOwner(equalIC)
-	p.ic.registerEqual(regIC{nl: nl, smap: smap})
-
-	_respWithID(w, jobID)
 }
 
 func (p *proxy) validateStartDownload(w http.ResponseWriter, r *http.Request, body []byte) (dlb dloader.Body, dlBase dloader.Base, ok bool) {

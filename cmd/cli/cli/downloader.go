@@ -351,14 +351,13 @@ func downloadJobStatus(c *cli.Context, id string) error {
 		return nil
 	}
 
-	// without progress bar
-	verbose := flagIsSet(c, verboseFlag)
-	resp, err := api.DownloadStatus(apiBP, id, !verbose)
+	resp, err := api.DownloadStatus(apiBP, id, flagIsSet(c, activeFlag))
 	if err != nil {
 		return err
 	}
 
-	printDownloadStatus(c.App.Writer, resp, verbose)
+	// without progress bar
+	printDownloadStatus(c.App.Writer, resp, flagIsSet(c, verboseFlag))
 	return nil
 }
 

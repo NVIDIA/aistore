@@ -67,23 +67,18 @@ func DownloadMulti(bp BaseParams, description string, bck cmn.Bck, msg any, inte
 	return DownloadWithParam(bp, dloader.TypeMulti, dlBody)
 }
 
-func DownloadBackend(bp BaseParams, description string, bck cmn.Bck, prefix, suffix string,
-	intervals ...time.Duration) (string, error) {
+func DownloadBackend(bp BaseParams, descr string, bck cmn.Bck, prefix, suffix string, ivals ...time.Duration) (string, error) {
 	dlBody := dloader.BackendBody{Prefix: prefix, Suffix: suffix}
-	if len(intervals) > 0 {
-		dlBody.ProgressInterval = intervals[0].String()
+	if len(ivals) > 0 {
+		dlBody.ProgressInterval = ivals[0].String()
 	}
 	dlBody.Bck = bck
-	dlBody.Description = description
+	dlBody.Description = descr
 	return DownloadWithParam(bp, dloader.TypeBackend, dlBody)
 }
 
-func DownloadStatus(bp BaseParams, id string, onlyActive ...bool) (resp *dloader.StatusResp, err error) {
-	dlBody := dloader.AdminBody{ID: id}
-	if len(onlyActive) > 0 {
-		// only active downloaders - skip finished and aborted, omit errors
-		dlBody.OnlyActive = onlyActive[0]
-	}
+func DownloadStatus(bp BaseParams, id string, onlyActive bool) (resp *dloader.StatusResp, err error) {
+	dlBody := dloader.AdminBody{ID: id, OnlyActive: onlyActive}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -98,8 +93,8 @@ func DownloadStatus(bp BaseParams, id string, onlyActive ...bool) (resp *dloader
 	return
 }
 
-func DownloadGetList(bp BaseParams, regex string) (dlList dloader.JobInfos, err error) {
-	dlBody := dloader.AdminBody{Regex: regex}
+func DownloadGetList(bp BaseParams, regex string, onlyActive bool) (dlList dloader.JobInfos, err error) {
+	dlBody := dloader.AdminBody{Regex: regex, OnlyActive: onlyActive}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
