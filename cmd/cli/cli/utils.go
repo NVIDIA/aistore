@@ -46,7 +46,6 @@ import (
 )
 
 const (
-	infinity             = -1
 	keyAndValueSeparator = "="
 	fileStdIO            = "-"
 
@@ -1207,48 +1206,6 @@ func parseSource(rawURL string) (source dlSource, err error) {
 		link:    link,
 		backend: cloudSource,
 	}, err
-}
-
-///////////////////
-// longRunParams //
-///////////////////
-
-type longRunParams struct {
-	count       int
-	refreshRate time.Duration
-}
-
-func defaultLongRunParams() *longRunParams {
-	return &longRunParams{
-		count:       countDefault,
-		refreshRate: refreshRateDefault,
-	}
-}
-
-func (p *longRunParams) isInfiniteRun() bool {
-	return p.count == infinity
-}
-
-func updateLongRunParams(c *cli.Context) error {
-	params := c.App.Metadata[metadata].(*longRunParams)
-
-	if flagIsSet(c, refreshFlag) {
-		params.refreshRate = parseDurationFlag(c, refreshFlag)
-		// Run forever unless `count` is also specified
-		params.count = infinity
-	}
-
-	if flagIsSet(c, countFlag) {
-		params.count = parseIntFlag(c, countFlag)
-		if params.count <= 0 {
-			warn := fmt.Sprintf("%q set to %d, but expected value >= 1. Assuming %q = %d",
-				countFlag.Name, params.count, countFlag.Name, countDefault)
-			actionWarn(c, warn)
-			params.count = countDefault
-		}
-	}
-
-	return nil
 }
 
 ///////////////////

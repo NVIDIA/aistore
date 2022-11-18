@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,12 +34,20 @@ const (
 )
 
 // AISCLI represents an instance of an AIS command line interface
-type AISCLI struct {
-	app           *cli.App
-	outWriter     io.Writer
-	errWriter     io.Writer
-	longRunParams *longRunParams
-}
+type (
+	AISCLI struct {
+		app           *cli.App
+		outWriter     io.Writer
+		errWriter     io.Writer
+		longRunParams *longRunParams
+	}
+
+	longRunParams struct {
+		count       int
+		footer      int
+		refreshRate time.Duration
+	}
+)
 
 var (
 	cfg         *config.Config
@@ -57,7 +66,7 @@ func New(version, buildtime string) *AISCLI {
 		app:           cli.NewApp(),
 		outWriter:     os.Stdout,
 		errWriter:     os.Stderr,
-		longRunParams: defaultLongRunParams(),
+		longRunParams: &longRunParams{},
 	}
 	buildTime = buildtime
 	aisCLI.init(version)
@@ -65,16 +74,31 @@ func New(version, buildtime string) *AISCLI {
 }
 
 // Run runs the CLI
-func (aisCLI *AISCLI) Run(input []string) error {
-	if err := aisCLI.runOnce(input); err != nil {
+func (aisCLI *AISCLI) Run(args []string) error {
+	fixupRefresh(args)
+	if err := aisCLI.runOnce(args); err != nil {
 		return err
 	}
-
-	if aisCLI.longRunParams.isInfiniteRun() {
-		return aisCLI.runForever(input)
+	if !aisCLI.longRunParams.isSet() {
+		return nil
 	}
+	if aisCLI.longRunParams.isForever() {
+		return aisCLI.runForever(args)
+	}
+	return aisCLI.runNTimes(args)
+}
 
-	return aisCLI.runNTimes(input)
+// FIXME: a hack to circumvent time.ParseDuration not willing to accept integers as seconds
+func fixupRefresh(args []string) {
+	for i := range args {
+		if args[i] == "--refresh" && i < len(args)-1 {
+			rate := args[i+1]
+			if _, err := strconv.ParseInt(rate, 10, 64); err == nil {
+				args[i+1] += "s"
+			}
+			break
+		}
+	}
 }
 
 func (aisCLI *AISCLI) runOnce(input []string) error {
@@ -83,11 +107,11 @@ func (aisCLI *AISCLI) runOnce(input []string) error {
 
 func (aisCLI *AISCLI) runForever(input []string) error {
 	rate := aisCLI.longRunParams.refreshRate
-
 	for {
 		time.Sleep(rate)
-
-		_, _ = fmt.Fprintln(aisCLI.outWriter)
+		if aisCLI.longRunParams.footer > 0 {
+			fmt.Fprintln(aisCLI.outWriter, fcyan(strings.Repeat("-", aisCLI.longRunParams.footer)))
+		}
 		if err := aisCLI.runOnce(input); err != nil {
 			return err
 		}
@@ -95,13 +119,13 @@ func (aisCLI *AISCLI) runForever(input []string) error {
 }
 
 func (aisCLI *AISCLI) runNTimes(input []string) error {
-	n := aisCLI.longRunParams.count - 1
-	rate := aisCLI.longRunParams.refreshRate
-
-	for ; n > 0; n-- {
+	var (
+		countdown = aisCLI.longRunParams.count - 1
+		rate      = aisCLI.longRunParams.refreshRate
+	)
+	for ; countdown > 0; countdown-- {
 		time.Sleep(rate)
-
-		_, _ = fmt.Fprintln(aisCLI.outWriter)
+		fmt.Fprintln(aisCLI.outWriter, fcyan("--------"))
 		if err := aisCLI.runOnce(input); err != nil {
 			return err
 		}
@@ -299,4 +323,40 @@ func commandNotFoundHandler(c *cli.Context, cmd string) {
 	err := commandNotFoundError(c, cmd)
 	fmt.Fprint(c.App.ErrWriter, err.Error())
 	os.Exit(1)
+}
+
+///////////////////
+// longRunParams //
+///////////////////
+
+func (p *longRunParams) isForever() bool {
+	return p.count == countUnlimited
+}
+
+func (p *longRunParams) isSet() bool {
+	return p.refreshRate != 0
+}
+
+func setLongRunParams(c *cli.Context, footer ...int) {
+	params := c.App.Metadata[metadata].(*longRunParams)
+	if params.isSet() {
+		return
+	}
+	params.footer = 8
+	if len(footer) > 0 {
+		params.footer = footer[0]
+	}
+	if flagIsSet(c, refreshFlag) {
+		params.refreshRate = parseDurationFlag(c, refreshFlag)
+		params.count = countUnlimited // unless counted (below)
+	}
+	if flagIsSet(c, countFlag) {
+		params.count = parseIntFlag(c, countFlag)
+		if params.count <= 0 {
+			warn := fmt.Sprintf("option '--%s=%d' is invalid (must be >= 1). Proceeding with '--%s=%d' (default).",
+				countFlag.Name, params.count, countFlag.Name, countDefault)
+			actionWarn(c, warn)
+			params.count = countDefault
+		}
+	}
 }

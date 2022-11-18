@@ -213,8 +213,11 @@ const (
 	refreshRateDefault = time.Second
 	refreshRateMinDur  = time.Second
 	countDefault       = 1
+	countUnlimited     = -1
 
-	NilValue = "none" // TODO: completion sorting order
+	NilValue = "none"
+
+	validTimeUnits = `"ns", "us" (or "µs"), "ms", "s", "m", "h"`
 )
 
 const sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"
@@ -329,12 +332,23 @@ var (
 		Usage: objPropsFlag.Usage,
 		Value: strings.Join(apc.GetPropsMinimal, ","),
 	}
-	prefixFlag  = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}
+	prefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix to match"}
+
+	//
+	// longRunFlags
+	//
 	refreshFlag = cli.DurationFlag{
 		Name:  "refresh",
-		Usage: "refresh interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h'",
+		Usage: "refresh interval for continuous monitoring, valid time units: " + validTimeUnits,
 		Value: refreshRateDefault,
 	}
+	countFlag = cli.IntFlag{
+		Name:  "count",
+		Usage: "used together with '--" + refreshFlag.Name + "' to limit the number of generated reports",
+		Value: countDefault,
+	}
+	longRunFlags = []cli.Flag{refreshFlag, countFlag}
+
 	regexFlag       = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
 	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,no-header,H", Usage: "display tables without headers"}
@@ -388,9 +402,6 @@ var (
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}
 
-	// Daeclu
-	countFlag = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
-
 	// Download
 	descJobFlag          = cli.StringFlag{Name: "description,desc", Usage: "job description"}
 	timeoutFlag          = cli.StringFlag{Name: "timeout", Usage: "timeout, e.g. '30m'"}
@@ -410,7 +421,7 @@ var (
 	progressIntervalFlag = cli.StringFlag{
 		Name:  "progress-interval",
 		Value: dloader.DownloadProgressInterval.String(),
-		Usage: "progress interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h' (e.g. '10s')",
+		Usage: "progress interval for continuous monitoring, valid time units: " + validTimeUnits,
 	}
 	// dSort
 	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "file size in a shard"}
@@ -529,7 +540,8 @@ var (
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
 	expireFlag    = cli.DurationFlag{
 		Name:  "expire,e",
-		Usage: "token expiration time, '0' - for never-expiring token. Default expiration time is 24 hours",
+		Usage: "token expiration time, '0' - for never-expiring token. Valid time units: " + validTimeUnits,
+		Value: 24 * time.Hour,
 	}
 
 	// Copy Bucket
@@ -546,8 +558,11 @@ var (
 		Usage:    "unique ETL name (leaving this field empty will have unique ID auto-generated)",
 		Required: true,
 	}
-	etlBucketRequestTimeout = cli.DurationFlag{Name: "request-timeout", Usage: "timeout for a transformation of a single object"}
-	fromFileFlag            = cli.StringFlag{
+	etlBucketRequestTimeout = cli.DurationFlag{
+		Name:  "request-timeout",
+		Usage: "timeout for transforming a single object, valid time units: " + validTimeUnits,
+	}
+	fromFileFlag = cli.StringFlag{
 		Name:     "from-file",
 		Usage:    "absolute path to the file with the spec/code for ETL",
 		Required: true,
@@ -572,7 +587,7 @@ var (
 
 	waitTimeoutFlag = cli.DurationFlag{
 		Name:  "wait-timeout",
-		Usage: "determines how long ais target should wait for pod to become ready",
+		Usage: "ais target waiting time for POD to become ready, valid time units: " + validTimeUnits,
 	}
 	waitFlag = cli.BoolFlag{
 		Name:  "wait",
@@ -600,8 +615,6 @@ var (
 		Name:  "rm-user-data",
 		Usage: "remove all user data when decommissioning node from the cluster",
 	}
-
-	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 
 	baseLstRngFlags = []cli.Flag{
 		listFlag,

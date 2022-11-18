@@ -307,10 +307,7 @@ func showBucketSummary(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := updateLongRunParams(c); err != nil {
-		return err
-	}
-
+	setLongRunParams(c)
 	summaries, err := getSummaries(queryBcks, flagIsSet(c, listObjCachedFlag), flagIsSet(c, allObjsOrBcksFlag))
 	if err != nil {
 		return err

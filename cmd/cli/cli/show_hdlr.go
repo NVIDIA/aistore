@@ -54,36 +54,38 @@ var (
 			longRunFlags,
 			jsonFlag,
 		),
-		subcmdShowDownload: {
+		subcmdShowDownload: append(
+			longRunFlags,
 			regexFlag,
 			progressBarFlag,
-			refreshFlag,
 			activeFlag,
 			verboseFlag,
 			jsonFlag,
-		},
-		subcmdShowDsort: {
+		),
+		subcmdShowDsort: append(
+			longRunFlags,
 			regexFlag,
-			refreshFlag,
 			verboseFlag,
 			logFlag,
 			activeFlag,
 			jsonFlag,
-		},
-		subcmdShowXaction: {
+		),
+		subcmdShowXaction: append(
+			longRunFlags,
 			jsonFlag,
 			allXactionsFlag,
 			activeFlag,
 			noHeaderFlag,
 			verboseFlag,
-		},
-		subcmdShowJob: {
+		),
+		subcmdShowJob: append(
+			longRunFlags,
 			jsonFlag,
 			allXactionsFlag,
 			activeFlag,
 			noHeaderFlag,
 			verboseFlag,
-		},
+		),
 		subcmdShowObject: {
 			objPropsFlag,
 			allPropsFlag,
@@ -103,11 +105,11 @@ var (
 		subcmdBMD: {
 			jsonFlag,
 		},
-		subcmdShowRebalance: {
-			refreshFlag,
+		subcmdShowRebalance: append(
+			longRunFlags,
 			allXactionsFlag,
 			noHeaderFlag,
-		},
+		),
 		subcmdShowBucket: {
 			jsonFlag,
 			compactPropFlag,
@@ -338,9 +340,7 @@ func showDisksHandler(c *cli.Context) (err error) {
 	if _, err = fillMap(); err != nil {
 		return
 	}
-	if err = updateLongRunParams(c); err != nil {
-		return
-	}
+	setLongRunParams(c)
 	return daemonDiskStats(c, daemonID)
 }
 
@@ -350,6 +350,7 @@ func showJobsHandler(c *cli.Context) error {
 		useJSON = flagIsSet(c, jsonFlag)
 		active  = flagIsSet(c, activeFlag)
 	)
+	setLongRunParams(c, 72)
 	downloads, err := api.DownloadGetList(apiBP, "", active)
 	if err != nil {
 		actionWarn(c, err.Error())
@@ -388,6 +389,7 @@ func showJobsHandler(c *cli.Context) error {
 func showDownloadsHandler(c *cli.Context) error {
 	id := c.Args().First()
 
+	setLongRunParams(c, 72)
 	if c.NArg() < 1 { // list all download jobs
 		return downloadJobsList(c, parseStrFlag(c, regexFlag))
 	}
@@ -402,7 +404,8 @@ func showDsortHandler(c *cli.Context) error {
 		useJSON = flagIsSet(c, jsonFlag)
 		active  = flagIsSet(c, activeFlag)
 	)
-	if c.NArg() < 1 { // list all dsort jobs
+	setLongRunParams(c, 72)
+	if c.NArg() < 1 { // list all (active) dsort jobs
 		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag), active)
 		if err != nil {
 			return err
@@ -410,7 +413,7 @@ func showDsortHandler(c *cli.Context) error {
 		return dsortJobsList(c, list, useJSON)
 	}
 
-	// display status of a dsort job with given id
+	// status of the ID-ed dsort
 	return dsortJobStatus(c, id)
 }
 
@@ -426,16 +429,12 @@ func showClusterHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := updateLongRunParams(c); err != nil {
-		return err
-	}
+	setLongRunParams(c)
 	return clusterDaemonStatus(c, primarySmap, cluConfig, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 }
 
 func showStorageHandler(c *cli.Context) (err error) {
-	if err = updateLongRunParams(c); err != nil {
-		return
-	}
+	setLongRunParams(c)
 	return showDisksHandler(c)
 }
 
@@ -444,6 +443,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 	if errP != nil {
 		return errP
 	}
+	setLongRunParams(c, 72)
 	return xactList(c, nodeID, xactID, xactKind, bck)
 }
 
@@ -579,9 +579,7 @@ func showSmapHandler(c *cli.Context) (err error) {
 	if primarySmap, err = fillMap(); err != nil {
 		return
 	}
-	if err = updateLongRunParams(c); err != nil {
-		return
-	}
+	setLongRunParams(c)
 	return clusterSmap(c, primarySmap, daemonID, flagIsSet(c, jsonFlag))
 }
 
@@ -822,9 +820,7 @@ func showMpathHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = updateLongRunParams(c); err != nil {
-		return err
-	}
+	setLongRunParams(c)
 	if daemonID != "" {
 		tgt := smap.GetTarget(daemonID)
 		if tgt == nil {

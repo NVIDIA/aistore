@@ -46,13 +46,13 @@ var (
 )
 
 // Gets Smap from a given node (`daemonID`) and displays it
-func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, useJSON bool) error {
+func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, sid string, useJSON bool) error {
 	var (
 		smap = primarySmap
 		err  error
 	)
-	if daemonID != "" {
-		smap, err = api.GetNodeClusterMap(apiBP, daemonID)
+	if sid != "" {
+		smap, err = api.GetNodeClusterMap(apiBP, sid)
 		if err != nil {
 			return err
 		}
@@ -112,51 +112,50 @@ func getBMD(c *cli.Context) error {
 	return nil
 }
 
-// Displays the status of the cluster or node
-func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, cluConfig *cmn.ClusterConfig, daemonID string, useJSON, hideHeader bool) error {
+// Displays the status of the cluster or a node
+func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, sid string, useJSON, hideHeader bool) error {
 	body := tmpls.StatusTemplateHelper{
 		Smap:      smap,
-		CluConfig: cluConfig,
+		CluConfig: cfg,
 		Status: tmpls.DaemonStatusTemplateHelper{
 			Pmap: pmapStatus,
 			Tmap: tmapStatus,
 		},
 	}
-	if res, proxyOK := pmapStatus[daemonID]; proxyOK {
+	if res, proxyOK := pmapStatus[sid]; proxyOK {
 		return tmpls.Print(res, c.App.Writer, tmpls.NewProxyTable(res, smap).Template(hideHeader), nil, useJSON)
-	} else if res, targetOK := tmapStatus[daemonID]; targetOK {
+	} else if res, targetOK := tmapStatus[sid]; targetOK {
 		return tmpls.Print(res, c.App.Writer, tmpls.NewTargetTable(res).Template(hideHeader), nil, useJSON)
-	} else if daemonID == apc.Proxy {
+	} else if sid == apc.Proxy {
 		template := tmpls.NewProxiesTable(&body.Status, smap).Template(hideHeader)
 		return tmpls.Print(body, c.App.Writer, template, nil, useJSON)
-	} else if daemonID == apc.Target {
+	} else if sid == apc.Target {
 		return tmpls.Print(body, c.App.Writer,
 			tmpls.NewTargetsTable(&body.Status).Template(hideHeader), nil, useJSON)
-	} else if daemonID == "" {
+	} else if sid == "" {
 		template := tmpls.NewProxiesTable(&body.Status, smap).Template(false) + "\n" +
 			tmpls.NewTargetsTable(&body.Status).Template(false) + "\n" +
 			tmpls.ClusterSummary
 		return tmpls.Print(body, c.App.Writer, template, nil, useJSON)
 	}
-	return fmt.Errorf("%s is not a valid DAEMON_ID nor DAEMON_TYPE", daemonID)
+	return fmt.Errorf("%s is not a valid DAEMON_ID nor DAEMON_TYPE", sid)
 }
 
-// Displays the disk stats of a target
-func daemonDiskStats(c *cli.Context, daemonID string) error {
+func daemonDiskStats(c *cli.Context, sid string) error {
 	var (
 		useJSON    = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
 	)
-	if _, ok := pmapStatus[daemonID]; ok {
+	if _, ok := pmapStatus[sid]; ok {
 		return fmt.Errorf("daemon ID=%q is a proxy, but \"%s %s %s\" works only for targets",
-			daemonID, cliName, commandShow, subcmdShowDisk)
+			sid, cliName, commandShow, subcmdShowDisk)
 	}
-	if _, ok := tmapStatus[daemonID]; daemonID != "" && !ok {
-		return fmt.Errorf("target ID=%q does not exist", daemonID)
+	if _, ok := tmapStatus[sid]; sid != "" && !ok {
+		return fmt.Errorf("target ID=%q does not exist", sid)
 	}
 
-	targets := stats.DaemonStatusMap{daemonID: {}}
-	if daemonID == "" {
+	targets := stats.DaemonStatusMap{sid: {}}
+	if sid == "" {
 		targets = tmapStatus
 	}
 
