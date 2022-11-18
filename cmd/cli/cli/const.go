@@ -216,11 +216,14 @@ const (
 	countUnlimited     = -1
 
 	NilValue = "none"
-
-	validTimeUnits = `"ns", "us" (or "µs"), "ms", "s", "m", "h"`
 )
 
-const sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"
+const (
+	timeUnits = `"ns", "us" (or "µs"), "ms", "s", "m", "h"`
+	sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"
+)
+
+const nodeLogFlushName = "log.flush_time"
 
 // Argument placeholders in help messages
 // Name format: *Argument
@@ -339,7 +342,7 @@ var (
 	//
 	refreshFlag = cli.DurationFlag{
 		Name:  "refresh",
-		Usage: "refresh interval for continuous monitoring, valid time units: " + validTimeUnits,
+		Usage: "refresh interval for continuous monitoring, valid time units: " + timeUnits,
 		Value: refreshRateDefault,
 	}
 	countFlag = cli.IntFlag{
@@ -400,7 +403,12 @@ var (
 	nameOnlyFlag     = cli.BoolFlag{Name: "name-only", Usage: "fast request to retrieve only the names of objects in the bucket; if defined, all comma-separated fields in the '--props' flag will be ignored with only two exceptions: 'name' and 'status'"}
 
 	// Log severity (cmn.LogInfo, ....) enum
-	logSevFlag = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}
+	logSevFlag   = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}
+	logFlushFlag = cli.DurationFlag{
+		Name:  "log-flush",
+		Usage: "can be used in combination with '--" + refreshFlag.Name + "' to override configured '" + nodeLogFlushName + "'",
+		Value: 10 * time.Second,
+	}
 
 	// Download
 	descJobFlag          = cli.StringFlag{Name: "description,desc", Usage: "job description"}
@@ -421,7 +429,7 @@ var (
 	progressIntervalFlag = cli.StringFlag{
 		Name:  "progress-interval",
 		Value: dloader.DownloadProgressInterval.String(),
-		Usage: "progress interval for continuous monitoring, valid time units: " + validTimeUnits,
+		Usage: "progress interval for continuous monitoring, valid time units: " + timeUnits,
 	}
 	// dSort
 	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "file size in a shard"}
@@ -540,7 +548,7 @@ var (
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
 	expireFlag    = cli.DurationFlag{
 		Name:  "expire,e",
-		Usage: "token expiration time, '0' - for never-expiring token. Valid time units: " + validTimeUnits,
+		Usage: "token expiration time, '0' - for never-expiring token. Valid time units: " + timeUnits,
 		Value: 24 * time.Hour,
 	}
 
@@ -560,7 +568,7 @@ var (
 	}
 	etlBucketRequestTimeout = cli.DurationFlag{
 		Name:  "request-timeout",
-		Usage: "timeout for transforming a single object, valid time units: " + validTimeUnits,
+		Usage: "timeout for transforming a single object, valid time units: " + timeUnits,
 	}
 	fromFileFlag = cli.StringFlag{
 		Name:     "from-file",
@@ -587,7 +595,7 @@ var (
 
 	waitTimeoutFlag = cli.DurationFlag{
 		Name:  "wait-timeout",
-		Usage: "ais target waiting time for POD to become ready, valid time units: " + validTimeUnits,
+		Usage: "ais target waiting time for POD to become ready, valid time units: " + timeUnits,
 	}
 	waitFlag = cli.BoolFlag{
 		Name:  "wait",

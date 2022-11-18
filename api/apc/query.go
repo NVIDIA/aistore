@@ -50,7 +50,8 @@ const (
 	QparamOrigURL = "original_url"
 
 	// Log severity
-	QparamSev = "severity" // see { LogInfo, ...} enum
+	QparamLogSev = "severity" // see { LogInfo, ...} enum
+	QparamLogOff = "offset"
 
 	// Archive filename and format (mime type)
 	QparamArchpath = "archpath"
@@ -174,7 +175,7 @@ const (
 	GetWhatICBundle       = "ic_bundle"
 )
 
-// QparamSev enum.
+// QparamLogSev enum.
 const (
 	LogInfo = "info"
 	LogWarn = "warning"

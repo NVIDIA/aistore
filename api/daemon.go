@@ -29,6 +29,7 @@ const (
 type GetLogInput struct {
 	Writer   io.Writer
 	Severity string // one of: {cmn.LogInfo, ...}
+	Offset   int64
 }
 
 // GetMountpaths given the direct public URL of the target, returns the target's mountpaths or error.
@@ -169,12 +170,15 @@ func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, 
 }
 
 // GetDaemonLog returns log of a specific daemon in a cluster.
-func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) error {
+func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) (int64, error) {
 	w := args.Writer
-	q := url.Values{}
+	q := make(url.Values, 3)
 	q.Set(apc.QparamWhat, apc.GetWhatLog)
 	if args.Severity != "" {
-		q.Set(apc.QparamSev, args.Severity)
+		q.Set(apc.QparamLogSev, args.Severity)
+	}
+	if args.Offset != 0 {
+		q.Set(apc.QparamLogOff, strconv.FormatInt(args.Offset, 10))
 	}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -184,9 +188,12 @@ func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) error {
 		reqParams.Query = q
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	err := reqParams.DoReqResp(w)
+	wrap, err := reqParams.doResp(w)
 	FreeRp(reqParams)
-	return err
+	if err == nil {
+		return wrap.n, nil
+	}
+	return 0, err
 }
 
 // GetDaemonStatus returns information about specific node in a cluster.

@@ -46,6 +46,7 @@ type (
 		count       int
 		footer      int
 		refreshRate time.Duration
+		offset      int64
 	}
 )
 
@@ -337,10 +338,10 @@ func (p *longRunParams) isSet() bool {
 	return p.refreshRate != 0
 }
 
-func setLongRunParams(c *cli.Context, footer ...int) {
+func setLongRunParams(c *cli.Context, footer ...int) bool {
 	params := c.App.Metadata[metadata].(*longRunParams)
 	if params.isSet() {
-		return
+		return false
 	}
 	params.footer = 8
 	if len(footer) > 0 {
@@ -359,4 +360,15 @@ func setLongRunParams(c *cli.Context, footer ...int) {
 			params.count = countDefault
 		}
 	}
+	return true
+}
+
+func addLongRunOffset(c *cli.Context, off int64) {
+	params := c.App.Metadata[metadata].(*longRunParams)
+	params.offset += off
+}
+
+func getLongRunOffset(c *cli.Context) int64 {
+	params := c.App.Metadata[metadata].(*longRunParams)
+	return params.offset
 }

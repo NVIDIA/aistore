@@ -122,9 +122,11 @@ var (
 			verboseFlag,
 			jsonFlag,
 		},
-		subcmdShowLog: {
+		subcmdShowLog: append(
+			longRunFlags,
 			logSevFlag,
-		},
+			logFlushFlag,
+		),
 		subcmdShowClusterStats: {
 			jsonFlag,
 			rawFlag,
@@ -739,6 +741,9 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "daemon ID")
 	}
+
+	firstIteration := setLongRunParams(c, 0)
+
 	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return err
@@ -754,12 +759,38 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 		switch sev[0] {
 		case apc.LogInfo[0], apc.LogWarn[0], apc.LogErr[0]:
 		default:
-			return fmt.Errorf("invalid log severity, expecting empty or one of: %s, %s, %s",
+			return fmt.Errorf("invalid log severity, expecting empty string or one of: %s, %s, %s",
 				apc.LogInfo, apc.LogWarn, apc.LogErr)
 		}
 	}
-	args := api.GetLogInput{Writer: os.Stdout, Severity: sev}
-	return api.GetDaemonLog(apiBP, node, args)
+	if firstIteration && flagIsSet(c, logFlushFlag) {
+		var (
+			flushRate = parseDurationFlag(c, logFlushFlag)
+			nvs       = make(cos.StrKVs)
+		)
+		config, err := api.GetDaemonConfig(apiBP, node)
+		if err != nil {
+			return err
+		}
+		if config.Log.FlushTime.D() != flushRate {
+			nvs[nodeLogFlushName] = flushRate.String()
+			if err := api.SetDaemonConfig(apiBP, daemonID, nvs, true /*transient*/); err != nil {
+				return err
+			}
+			warn := fmt.Sprintf("run 'ais config node %s inherited %s %s' to change it back",
+				node.StringEx(), nodeLogFlushName, config.Log.FlushTime)
+			actionWarn(c, warn)
+			time.Sleep(2 * time.Second)
+			fmt.Fprintln(c.App.Writer)
+		}
+	}
+
+	args := api.GetLogInput{Writer: os.Stdout, Severity: sev, Offset: getLongRunOffset(c)}
+	readsize, err := api.GetDaemonLog(apiBP, node, args)
+	if err == nil {
+		addLongRunOffset(c, readsize)
+	}
+	return err
 }
 
 func showRemoteAISHandler(c *cli.Context) error {
