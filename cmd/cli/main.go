@@ -33,9 +33,7 @@ func main() {
 	if err := cli.Init(); err != nil {
 		exitf("%v", err)
 	}
-
-	aisCLI := cli.New(cmn.VersionCLI+"."+build, buildtime)
-	if err := aisCLI.Run(os.Args); err != nil {
+	if err := cli.Run(cmn.VersionCLI+"."+build, buildtime, os.Args); err != nil {
 		exitf("%v", err)
 	}
 }

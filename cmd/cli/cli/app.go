@@ -33,16 +33,14 @@ const (
    For more information, please refer to ` + cmn.GitHubHome + `/blob/master/cmd/cli/README.md`
 )
 
-// AISCLI represents an instance of an AIS command line interface
 type (
-	AISCLI struct {
-		app           *cli.App
-		outWriter     io.Writer
-		errWriter     io.Writer
-		longRunParams *longRunParams
+	acli struct {
+		app       *cli.App
+		outWriter io.Writer
+		errWriter io.Writer
+		longRun   *longRun
 	}
-
-	longRunParams struct {
+	longRun struct {
 		count       int
 		footer      int
 		refreshRate time.Duration
@@ -61,32 +59,28 @@ var (
 	fred, fcyan func(a ...any) string
 )
 
-// New returns a new, initialized AISCLI instance
-func New(version, buildtime string) *AISCLI {
-	aisCLI := AISCLI{
-		app:           cli.NewApp(),
-		outWriter:     os.Stdout,
-		errWriter:     os.Stderr,
-		longRunParams: &longRunParams{},
+// main method
+func Run(version, buildtime string, args []string) error {
+	a := acli{
+		app:       cli.NewApp(),
+		outWriter: os.Stdout,
+		errWriter: os.Stderr,
+		longRun:   &longRun{},
 	}
 	buildTime = buildtime
-	aisCLI.init(version)
-	return &aisCLI
-}
+	a.init(version)
 
-// Run runs the CLI
-func (aisCLI *AISCLI) Run(args []string) error {
 	fixupRefresh(args)
-	if err := aisCLI.runOnce(args); err != nil {
+	if err := a.runOnce(args); err != nil {
 		return err
 	}
-	if !aisCLI.longRunParams.isSet() {
+	if !a.longRun.isSet() {
 		return nil
 	}
-	if aisCLI.longRunParams.isForever() {
-		return aisCLI.runForever(args)
+	if a.longRun.isForever() {
+		return a.runForever(args)
 	}
-	return aisCLI.runNTimes(args)
+	return a.runNTimes(args)
 }
 
 // FIXME: a hack to circumvent time.ParseDuration not willing to accept integers as seconds
@@ -102,32 +96,32 @@ func fixupRefresh(args []string) {
 	}
 }
 
-func (aisCLI *AISCLI) runOnce(input []string) error {
-	return aisCLI.handleCLIError(aisCLI.app.Run(input))
+func (a *acli) runOnce(input []string) error {
+	return a.handleCLIError(a.app.Run(input))
 }
 
-func (aisCLI *AISCLI) runForever(input []string) error {
-	rate := aisCLI.longRunParams.refreshRate
+func (a *acli) runForever(input []string) error {
+	rate := a.longRun.refreshRate
 	for {
 		time.Sleep(rate)
-		if aisCLI.longRunParams.footer > 0 {
-			fmt.Fprintln(aisCLI.outWriter, fcyan(strings.Repeat("-", aisCLI.longRunParams.footer)))
+		if a.longRun.footer > 0 {
+			fmt.Fprintln(a.outWriter, fcyan(strings.Repeat("-", a.longRun.footer)))
 		}
-		if err := aisCLI.runOnce(input); err != nil {
+		if err := a.runOnce(input); err != nil {
 			return err
 		}
 	}
 }
 
-func (aisCLI *AISCLI) runNTimes(input []string) error {
+func (a *acli) runNTimes(input []string) error {
 	var (
-		countdown = aisCLI.longRunParams.count - 1
-		rate      = aisCLI.longRunParams.refreshRate
+		countdown = a.longRun.count - 1
+		rate      = a.longRun.refreshRate
 	)
 	for ; countdown > 0; countdown-- {
 		time.Sleep(rate)
-		fmt.Fprintln(aisCLI.outWriter, fcyan("--------"))
-		if err := aisCLI.runOnce(input); err != nil {
+		fmt.Fprintln(a.outWriter, fcyan("--------"))
+		if err := a.runOnce(input); err != nil {
 			return err
 		}
 	}
@@ -160,7 +154,7 @@ func redErr(err error) error {
 }
 
 // Formats the error message to a nice string
-func (aisCLI *AISCLI) handleCLIError(err error) error {
+func (a *acli) handleCLIError(err error) error {
 	if err == nil {
 		return nil
 	}
@@ -179,7 +173,7 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 	case *errUsage:
 		return err
 	case *errAdditionalInfo:
-		err.baseErr = aisCLI.handleCLIError(err.baseErr)
+		err.baseErr = a.handleCLIError(err.baseErr)
 		return err
 	default:
 		return redErr(err)
@@ -198,8 +192,8 @@ func onBeforeCommand(c *cli.Context) error {
 	return nil
 }
 
-func (aisCLI *AISCLI) init(version string) {
-	app := aisCLI.app
+func (a *acli) init(version string) {
+	app := a.app
 
 	fcyan = color.New(color.FgHiCyan).SprintFunc()
 	fred = color.New(color.FgHiRed).SprintFunc()
@@ -212,9 +206,9 @@ func (aisCLI *AISCLI) init(version string) {
 	app.Flags = []cli.Flag{cli.HelpFlag, noColorFlag}
 	app.CommandNotFound = commandNotFoundHandler
 	app.OnUsageError = incorrectUsageHandler
-	app.Metadata = map[string]any{metadata: aisCLI.longRunParams}
-	app.Writer = aisCLI.outWriter
-	app.ErrWriter = aisCLI.errWriter
+	app.Metadata = map[string]any{metadata: a.longRun}
+	app.Writer = a.outWriter
+	app.ErrWriter = a.errWriter
 	app.Before = onBeforeCommand // to disable colors if `no-colors' is set
 	app.Description = cliDescr
 	cli.VersionFlag = cli.BoolFlag{
@@ -222,11 +216,11 @@ func (aisCLI *AISCLI) init(version string) {
 		Usage: "print only the version",
 	}
 	initJobSubcmds()
-	aisCLI.setupCommands()
+	a.setupCommands()
 }
 
-func (aisCLI *AISCLI) setupCommands() {
-	app := aisCLI.app
+func (a *acli) setupCommands() {
+	app := a.app
 
 	// Note: order of commands below is the order shown in "ais help"
 	app.Commands = []cli.Command{
@@ -245,19 +239,19 @@ func (aisCLI *AISCLI) setupCommands() {
 		logCmd,
 		rebalanceCmd,
 		remClusterCmd,
-		aisCLI.getAliasCmd(),
+		a.getAliasCmd(),
 	}
 
 	if k8sDetected {
 		app.Commands = append(app.Commands, k8sCmd)
 	}
-	app.Commands = append(app.Commands, aisCLI.initAliases()...)
+	app.Commands = append(app.Commands, a.initAliases()...)
 	setupCommandHelp(app.Commands)
-	aisCLI.enableSearch()
+	a.enableSearch()
 }
 
-func (aisCLI *AISCLI) enableSearch() {
-	app := aisCLI.app
+func (a *acli) enableSearch() {
+	app := a.app
 	initSearch(app)
 	app.Commands = append(app.Commands, searchCommands...)
 }
@@ -326,20 +320,20 @@ func commandNotFoundHandler(c *cli.Context, cmd string) {
 	os.Exit(1)
 }
 
-///////////////////
-// longRunParams //
-///////////////////
+/////////////
+// longRun //
+/////////////
 
-func (p *longRunParams) isForever() bool {
+func (p *longRun) isForever() bool {
 	return p.count == countUnlimited
 }
 
-func (p *longRunParams) isSet() bool {
+func (p *longRun) isSet() bool {
 	return p.refreshRate != 0
 }
 
 func setLongRunParams(c *cli.Context, footer ...int) bool {
-	params := c.App.Metadata[metadata].(*longRunParams)
+	params := c.App.Metadata[metadata].(*longRun)
 	if params.isSet() {
 		return false
 	}
@@ -364,11 +358,11 @@ func setLongRunParams(c *cli.Context, footer ...int) bool {
 }
 
 func addLongRunOffset(c *cli.Context, off int64) {
-	params := c.App.Metadata[metadata].(*longRunParams)
+	params := c.App.Metadata[metadata].(*longRun)
 	params.offset += off
 }
 
 func getLongRunOffset(c *cli.Context) int64 {
-	params := c.App.Metadata[metadata].(*longRunParams)
+	params := c.App.Metadata[metadata].(*longRun)
 	return params.offset
 }

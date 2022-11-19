@@ -20,33 +20,33 @@ import (
 
 const invalidAlias = "alias must start with a letter and can only contain letters, numbers, hyphens (-), and underscores (_)"
 
-func (aisCLI *AISCLI) getAliasCmd() cli.Command {
+func (a *acli) getAliasCmd() cli.Command {
 	aliasCmd := cli.Command{
 		Name:   commandAlias,
 		Usage:  "manage top-level aliases",
-		Action: showCLIAliasHandler,
+		Action: showAliasHandler,
 		Subcommands: []cli.Command{
 			{
-				Name:   subcmdCLIAliasShow,
+				Name:   subcmdAliasShow,
 				Usage:  "display list of aliases",
-				Action: showCLIAliasHandler,
+				Action: showAliasHandler,
 			},
 			{
-				Name:      subcmdCLIAliasRm,
+				Name:      subcmdAliasRm,
 				Usage:     "remove existing alias",
 				ArgsUsage: aliasCmdArgument,
-				Action:    rmCLIAliasHandler,
+				Action:    rmAliasHandler,
 			},
 			{
-				Name:   subcmdCLIAliasReset,
+				Name:   subcmdAliasReset,
 				Usage:  "reset aliases to default",
-				Action: resetCLIAliasHandler,
+				Action: resetAliasHandler,
 			},
 			{
-				Name:      subcmdCLIAliasSet,
+				Name:      subcmdAliasSet,
 				Usage:     "add new or update existing alias",
 				ArgsUsage: aliasSetCmdArgument,
-				Action:    aisCLI.setCLIAliasHandler,
+				Action:    a.setAliasHandler,
 			},
 		},
 	}
@@ -54,9 +54,9 @@ func (aisCLI *AISCLI) getAliasCmd() cli.Command {
 }
 
 // initAliases reads cfg.Aliases and returns all aliases.
-func (aisCLI *AISCLI) initAliases() (aliasCmds []cli.Command) {
+func (a *acli) initAliases() (aliasCmds []cli.Command) {
 	for alias, orig := range cfg.Aliases {
-		cmd := aisCLI.resolveCmd(orig)
+		cmd := a.resolveCmd(orig)
 
 		if cmd != nil {
 			aliasCmds = append(aliasCmds, makeAlias(*cmd, orig, false, alias))
@@ -72,12 +72,12 @@ func validateAlias(alias string) (matched bool) {
 
 // resolveCmd() traverses the command tree and returns the cli.Command matching `args`
 // similar to cli.App.Command(), but looking through subcommands as well.
-func (aisCLI *AISCLI) resolveCmd(command string) *cli.Command {
+func (a *acli) resolveCmd(command string) *cli.Command {
 	if command == "" {
 		return nil
 	}
 	var (
-		app      = aisCLI.app
+		app      = a.app
 		args     = strings.Split(command, " ")
 		toplevel = args[0]
 		tlCmd    = app.Command(toplevel)
@@ -134,7 +134,7 @@ func appendSubcommand(cmd, subCmd cli.Command) cli.Command {
 	return cmd
 }
 
-func resetCLIAliasHandler(c *cli.Context) (err error) {
+func resetAliasHandler(c *cli.Context) (err error) {
 	cfg.Aliases = config.DefaultAliasConfig
 	if err := config.Save(cfg); err != nil {
 		return err
@@ -144,7 +144,7 @@ func resetCLIAliasHandler(c *cli.Context) (err error) {
 	return
 }
 
-func showCLIAliasHandler(c *cli.Context) (err error) {
+func showAliasHandler(c *cli.Context) (err error) {
 	aliases := make(nvpairList, 0, len(cfg.Aliases))
 	for k, v := range cfg.Aliases {
 		aliases = append(aliases, nvpair{Name: k, Value: v})
@@ -155,7 +155,7 @@ func showCLIAliasHandler(c *cli.Context) (err error) {
 	return tmpls.Print(aliases, c.App.Writer, tmpls.AliasTemplate, nil, false)
 }
 
-func rmCLIAliasHandler(c *cli.Context) (err error) {
+func rmAliasHandler(c *cli.Context) (err error) {
 	alias := c.Args().First()
 	if alias == "" {
 		return missingArgumentsError(c, "alias")
@@ -167,7 +167,7 @@ func rmCLIAliasHandler(c *cli.Context) (err error) {
 	return config.Save(cfg)
 }
 
-func (aisCLI *AISCLI) setCLIAliasHandler(c *cli.Context) (err error) {
+func (a *acli) setAliasHandler(c *cli.Context) (err error) {
 	alias := c.Args().First()
 	if alias == "" {
 		return missingArgumentsError(c, "alias")
@@ -187,7 +187,7 @@ func (aisCLI *AISCLI) setCLIAliasHandler(c *cli.Context) (err error) {
 		}
 		newCmd += arg
 	}
-	if cmd := aisCLI.resolveCmd(newCmd); cmd == nil {
+	if cmd := a.resolveCmd(newCmd); cmd == nil {
 		return fmt.Errorf("%q is not AIS command", newCmd)
 	}
 	cfg.Aliases[alias] = newCmd

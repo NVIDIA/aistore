@@ -193,13 +193,13 @@ const (
 	subcmdCode = "code"
 
 	// config subcommands
-	subcmdCLI           = "cli"
-	subcmdCLIShow       = commandShow
-	subcmdCLISet        = subcmdSetProps
-	subcmdCLIAliasShow  = commandShow
-	subcmdCLIAliasRm    = commandRemove
-	subcmdCLIAliasSet   = subcmdCLISet
-	subcmdCLIAliasReset = subcmdResetProps
+	subcmdCLI        = "cli"
+	subcmdCLIShow    = commandShow
+	subcmdCLISet     = subcmdSetProps
+	subcmdAliasShow  = commandShow
+	subcmdAliasRm    = commandRemove
+	subcmdAliasSet   = subcmdCLISet
+	subcmdAliasReset = subcmdResetProps
 )
 
 //
