@@ -219,8 +219,8 @@ const (
 )
 
 const (
-	timeUnits = `"ns", "us" (or "µs"), "ms", "s", "m", "h"`
-	sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"
+	timeUnits = `"ns", "us" (or "µs"), "ms", "s" (default), "m", "h"`
+	sizeUnits = `(IEC or SI units, e.g.: "b", "B", "KB", "KiB", "MiB", "mb", "g", "GB")`
 )
 
 const nodeLogFlushName = "log.flush_time"
@@ -340,15 +340,13 @@ var (
 	//
 	// longRunFlags
 	//
-	refreshFlag = cli.DurationFlag{
-		Name:  "refresh",
-		Usage: "refresh interval for continuous monitoring, valid time units: " + timeUnits,
-		Value: refreshRateDefault,
+	refreshFlag = DurationFlag{
+		Name:  "refresh,repeat",
+		Usage: "interval for continuous monitoring, valid time units: " + timeUnits,
 	}
 	countFlag = cli.IntFlag{
 		Name:  "count",
-		Usage: "used together with '--" + refreshFlag.Name + "' to limit the number of generated reports",
-		Value: countDefault,
+		Usage: "used together with '--" + firstName(refreshFlag.Name) + "' to limit the number of generated reports",
 	}
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 
@@ -404,33 +402,39 @@ var (
 
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag   = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}
-	logFlushFlag = cli.DurationFlag{
-		Name:  "log-flush",
-		Usage: "can be used in combination with '--" + refreshFlag.Name + "' to override configured '" + nodeLogFlushName + "'",
+	logFlushFlag = DurationFlag{
+		Name: "log-flush",
+		Usage: "can be used in combination with '--" + refreshFlag.Name +
+			"' to override configured '" + nodeLogFlushName + "'",
 		Value: 10 * time.Second,
 	}
 
 	// Download
-	descJobFlag          = cli.StringFlag{Name: "description,desc", Usage: "job description"}
-	timeoutFlag          = cli.StringFlag{Name: "timeout", Usage: "timeout, e.g. '30m'"}
+	descJobFlag = cli.StringFlag{Name: "description,desc", Usage: "job description"}
+
+	timeoutFlag = cli.StringFlag{ // TODO -- FIXME: must be DurationFlag
+		Name:  "timeout",
+		Usage: "timeout, valid time units: " + timeUnits,
+	}
+	progressIntervalFlag = cli.StringFlag{ // TODO ditto
+		Name:  "progress-interval",
+		Usage: "progress interval for continuous monitoring, valid time units: " + timeUnits,
+		Value: dloader.DownloadProgressInterval.String(),
+	}
+
 	limitConnectionsFlag = cli.IntFlag{
-		Name:  "limit-connections,conns",
-		Usage: "number of connections each target can make concurrently (each target can handle at most #mountpaths connections)",
+		Name:  "max-conns",
+		Usage: "max number of connections each target can make concurrently (up to num mountpaths)",
 	}
 	limitBytesPerHourFlag = cli.StringFlag{
-		Name:  "limit-bytes-per-hour,limit-bph,bph",
-		Usage: "number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can maximally download in hour",
+		Name:  "limit-bph",
+		Usage: "max downloaded size per target per hour " + sizeUnits,
 	}
 	objectsListFlag = cli.StringFlag{
 		Name:  "object-list,from",
-		Usage: "path to file containing JSON array of strings with object names to download",
+		Usage: "path to file containing JSON array of object names to download",
 	}
-	syncFlag             = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
-	progressIntervalFlag = cli.StringFlag{
-		Name:  "progress-interval",
-		Value: dloader.DownloadProgressInterval.String(),
-		Usage: "progress interval for continuous monitoring, valid time units: " + timeUnits,
-	}
+	syncFlag = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
 	// dSort
 	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "file size in a shard"}
 	logFlag      = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
@@ -546,7 +550,7 @@ var (
 	// AuthN
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file"}
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
-	expireFlag    = cli.DurationFlag{
+	expireFlag    = DurationFlag{
 		Name:  "expire,e",
 		Usage: "token expiration time, '0' - for never-expiring token. Valid time units: " + timeUnits,
 		Value: 24 * time.Hour,
@@ -566,7 +570,7 @@ var (
 		Usage:    "unique ETL name (leaving this field empty will have unique ID auto-generated)",
 		Required: true,
 	}
-	etlBucketRequestTimeout = cli.DurationFlag{
+	etlBucketRequestTimeout = DurationFlag{
 		Name:  "request-timeout",
 		Usage: "timeout for transforming a single object, valid time units: " + timeUnits,
 	}
@@ -593,7 +597,7 @@ var (
 		Usage: "receives and _transforms_ the payload",
 	}
 
-	waitTimeoutFlag = cli.DurationFlag{
+	waitTimeoutFlag = DurationFlag{
 		Name:  "wait-timeout",
 		Usage: "ais target waiting time for POD to become ready, valid time units: " + timeUnits,
 	}

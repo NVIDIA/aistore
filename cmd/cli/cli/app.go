@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -61,16 +60,10 @@ var (
 
 // main method
 func Run(version, buildtime string, args []string) error {
-	a := acli{
-		app:       cli.NewApp(),
-		outWriter: os.Stdout,
-		errWriter: os.Stderr,
-		longRun:   &longRun{},
-	}
+	a := acli{app: cli.NewApp(), outWriter: os.Stdout, errWriter: os.Stderr, longRun: &longRun{}}
 	buildTime = buildtime
 	a.init(version)
-
-	fixupRefresh(args)
+	// run
 	if err := a.runOnce(args); err != nil {
 		return err
 	}
@@ -83,37 +76,25 @@ func Run(version, buildtime string, args []string) error {
 	return a.runNTimes(args)
 }
 
-// FIXME: a hack to circumvent time.ParseDuration not willing to accept integers as seconds
-func fixupRefresh(args []string) {
-	for i := range args {
-		if args[i] == "--refresh" && i < len(args)-1 {
-			rate := args[i+1]
-			if _, err := strconv.ParseInt(rate, 10, 64); err == nil {
-				args[i+1] += "s"
-			}
-			break
-		}
-	}
+func (a *acli) runOnce(args []string) error {
+	err := a.app.Run(args)
+	return a.formatErr(err)
 }
 
-func (a *acli) runOnce(input []string) error {
-	return a.handleCLIError(a.app.Run(input))
-}
-
-func (a *acli) runForever(input []string) error {
+func (a *acli) runForever(args []string) error {
 	rate := a.longRun.refreshRate
 	for {
 		time.Sleep(rate)
 		if a.longRun.footer > 0 {
 			fmt.Fprintln(a.outWriter, fcyan(strings.Repeat("-", a.longRun.footer)))
 		}
-		if err := a.runOnce(input); err != nil {
+		if err := a.runOnce(args); err != nil {
 			return err
 		}
 	}
 }
 
-func (a *acli) runNTimes(input []string) error {
+func (a *acli) runNTimes(args []string) error {
 	var (
 		countdown = a.longRun.count - 1
 		rate      = a.longRun.refreshRate
@@ -121,7 +102,7 @@ func (a *acli) runNTimes(input []string) error {
 	for ; countdown > 0; countdown-- {
 		time.Sleep(rate)
 		fmt.Fprintln(a.outWriter, fcyan("--------"))
-		if err := a.runOnce(input); err != nil {
+		if err := a.runOnce(args); err != nil {
 			return err
 		}
 	}
@@ -153,8 +134,8 @@ func redErr(err error) error {
 	return errors.New(fred("Error: ") + msg)
 }
 
-// Formats the error message to a nice string
-func (a *acli) handleCLIError(err error) error {
+// Formats error message
+func (a *acli) formatErr(err error) error {
 	if err == nil {
 		return nil
 	}
@@ -166,14 +147,13 @@ func (a *acli) handleCLIError(err error) error {
 			env.AIS.Endpoint, config.Path())
 		return redErr(errors.New(errmsg))
 	}
-
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
 		return redErr(err)
 	case *errUsage:
 		return err
 	case *errAdditionalInfo:
-		err.baseErr = a.handleCLIError(err.baseErr)
+		err.baseErr = a.formatErr(err.baseErr)
 		return err
 	default:
 		return redErr(err)

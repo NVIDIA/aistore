@@ -49,8 +49,8 @@ If the `DESTINATION` bucket doesn't exist, a new bucket with the default propert
 | `--description, --desc` | `string` | Description of the download job | `""` |
 | `--timeout` | `string` | Timeout for request to external resource | `""` |
 | `--sync` | `bool` | Start a special kind of downloading job that synchronizes the contents of cached objects and remote objects in the cloud. In other words, in addition to downloading new objects from the cloud and updating versions of the existing objects, the sync option also entails the removal of objects that are not present (anymore) in the remote bucket | `false` |
-| `--limit-connections,--conns` | `int` | Number of connections each target can make concurrently (each target can handle at most #mountpaths connections) | `0` (unlimited - at most #mountpaths connections) |
-| `--limit-bytes-per-hour,--limit-bph,--bph` | `string` | Limit the number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can download per hour | `""` (unlimited) |
+| `--max-conns` | `int` | max number of connections each target can make concurrently (up to num mountpaths) | `0` (unlimited - at most #mountpaths connections) |
+| `--limit-bph` | `string` | max downloaded size per target per hour | `""` (unlimited) |
 | `--object-list,--from` | `string` | Path to file containing JSON array of strings with object names to download | `""` |
 | `--progress` | `bool` | Show download progress for each job and wait until all files are downloaded | `false` |
 | `--progress-interval` | `duration` | Progress interval for continuous monitoring. The usual unit suffixes are supported and include `s` (seconds) and `m` (minutes). Press `Ctrl+C` to stop. | `"10s"` |
