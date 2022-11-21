@@ -52,33 +52,41 @@ type (
 
 	// global configuration
 	ClusterConfig struct {
-		Ext         any             `json:"ext,omitempty"` // within meta-version extensions
-		Backend     BackendConf     `json:"backend" allow:"cluster"`
-		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
-		EC          ECConf          `json:"ec" allow:"cluster"`
-		Log         LogConf         `json:"log"`
-		Periodic    PeriodConf      `json:"periodic"`
-		Timeout     TimeoutConf     `json:"timeout"`
-		Client      ClientConf      `json:"client"`
-		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
-		Space       SpaceConf       `json:"space"`
-		LRU         LRUConf         `json:"lru"`
-		Disk        DiskConf        `json:"disk"`
-		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
-		Resilver    ResilverConf    `json:"resilver"`
-		Cksum       CksumConf       `json:"checksum"`
-		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
-		Net         NetConf         `json:"net"`
-		FSHC        FSHCConf        `json:"fshc"`
-		Auth        AuthConf        `json:"auth"`
-		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
-		Downloader  DownloaderConf  `json:"downloader"`
-		DSort       DSortConf       `json:"distributed_sort"`
-		Transport   TransportConf   `json:"transport"`
-		Memsys      MemsysConf      `json:"memsys"`
-		TCB         TCBConf         `json:"tcb"`                             // transform/copy bucket
-		WritePolicy WritePolicyConf `json:"write_policy"`                    // write {immediate, delayed, never}
-		Features    feat.Flags      `json:"features,string" allow:"cluster"` // (to flip assorted defaults) (NOTE: cmn. FeaturesPropName)
+		Ext        any            `json:"ext,omitempty"` // within meta-version extensions
+		Backend    BackendConf    `json:"backend" allow:"cluster"`
+		Mirror     MirrorConf     `json:"mirror" allow:"cluster"`
+		EC         ECConf         `json:"ec" allow:"cluster"`
+		Log        LogConf        `json:"log"`
+		Periodic   PeriodConf     `json:"periodic"`
+		Timeout    TimeoutConf    `json:"timeout"`
+		Client     ClientConf     `json:"client"`
+		Proxy      ProxyConf      `json:"proxy" allow:"cluster"`
+		Space      SpaceConf      `json:"space"`
+		LRU        LRUConf        `json:"lru"`
+		Disk       DiskConf       `json:"disk"`
+		Rebalance  RebalanceConf  `json:"rebalance" allow:"cluster"`
+		Resilver   ResilverConf   `json:"resilver"`
+		Cksum      CksumConf      `json:"checksum"`
+		Versioning VersionConf    `json:"versioning" allow:"cluster"`
+		Net        NetConf        `json:"net"`
+		FSHC       FSHCConf       `json:"fshc"`
+		Auth       AuthConf       `json:"auth"`
+		Keepalive  KeepaliveConf  `json:"keepalivetracker"`
+		Downloader DownloaderConf `json:"downloader"`
+		DSort      DSortConf      `json:"distributed_sort"`
+		Transport  TransportConf  `json:"transport"`
+		Memsys     MemsysConf     `json:"memsys"`
+
+		// Transform (offline) or Copy src Bucket => dst bucket
+		TCB TCBConf `json:"tcb"`
+
+		// metadata write policy: (immediate | delayed | never)
+		WritePolicy WritePolicyConf `json:"write_policy"`
+
+		// standalone enumerated features that can be configured
+		// to flip assorted global defaults (see cmn/feat/feat.go)
+		Features feat.Flags `json:"features,string" allow:"cluster"`
+
 		// read-only
 		LastUpdated string `json:"lastupdate_time"`       // timestamp
 		UUID        string `json:"uuid"`                  // UUID

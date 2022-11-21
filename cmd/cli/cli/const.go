@@ -196,6 +196,7 @@ const (
 	subcmdCLI        = "cli"
 	subcmdCLIShow    = commandShow
 	subcmdCLISet     = subcmdSetProps
+	subcmdCLIReset   = subcmdResetProps
 	subcmdAliasShow  = commandShow
 	subcmdAliasRm    = commandRemove
 	subcmdAliasSet   = subcmdCLISet

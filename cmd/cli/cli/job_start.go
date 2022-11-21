@@ -60,7 +60,7 @@ var (
 
 	jobStartSubcmds = cli.Command{
 		Name:  commandStart,
-		Usage: "start jobs in the cluster",
+		Usage: "start asynchronous batch job",
 		Subcommands: []cli.Command{
 			{
 				Name:         commandPrefetch,
@@ -72,7 +72,7 @@ var (
 			},
 			{
 				Name:      subcmdStartDownload,
-				Usage:     "start a download job (downloads objects from external source)",
+				Usage:     "downloads files and objects from external sources",
 				ArgsUsage: startDownloadArgument,
 				Flags:     startCmdsFlags[subcmdStartDownload],
 				Action:    startDownloadHandler,
@@ -92,7 +92,7 @@ var (
 			},
 			{
 				Name:         subcmdStgCleanup,
-				Usage:        "perform storage cleanup: remove deleted objects and old/obsolete workfiles",
+				Usage:        "cleanup storage: remove moved or deleted objects, remove old/obsolete workfiles",
 				ArgsUsage:    listAnyCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgCleanup],
 				Action:       cleanupStorageHandler,
@@ -100,7 +100,7 @@ var (
 			},
 			{
 				Name:  commandETL,
-				Usage: "start ETL job on the cluster",
+				Usage: "start ETL",
 				Subcommands: []cli.Command{
 					initCmdETL,
 					objCmdETL,
