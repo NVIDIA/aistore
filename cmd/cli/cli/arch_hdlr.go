@@ -55,7 +55,7 @@ var (
 				ArgsUsage:    "OBJECT_NAME",
 				Flags:        archCmdsFlags[subcmdList],
 				Action:       listArchHandler,
-				BashComplete: bucketCompletions(bckCompletionsOpts{withProviders: true}),
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 		},
 	}

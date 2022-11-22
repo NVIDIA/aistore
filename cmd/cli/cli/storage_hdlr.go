@@ -43,7 +43,7 @@ var (
 				ArgsUsage:    listAnyCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgValidate],
 				Action:       showMisplacedAndMore,
-				BashComplete: bucketCompletions(),
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			mpathCmd,
 			showCmdDisk,
@@ -53,7 +53,7 @@ var (
 				ArgsUsage:    listAnyCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgCleanup],
 				Action:       cleanupStorageHandler,
-				BashComplete: bucketCompletions(),
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 		},
 	}

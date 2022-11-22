@@ -175,7 +175,7 @@ var (
 		ArgsUsage:    objectArgument,
 		Flags:        showCmdsFlags[subcmdShowObject],
 		Action:       showObjectHandler,
-		BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
+		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
 	showCmdCluster = cli.Command{
 		Name:      subcmdShowCluster,
@@ -237,7 +237,7 @@ var (
 		ArgsUsage:    bucketAndPropsArgument,
 		Flags:        showCmdsFlags[subcmdShowBucket],
 		Action:       showBckPropsHandler,
-		BashComplete: bucketAndPropsCompletions,
+		BashComplete: bucketAndPropsCompletions, // bucketCompletions(),
 	}
 	showCmdConfig = cli.Command{
 		Name:         subcmdShowConfig,
@@ -325,7 +325,7 @@ var (
 		ArgsUsage:    listAnyCommandArgument,
 		Flags:        storageCmdFlags[subcmdStgSummary],
 		Action:       showBucketSummary,
-		BashComplete: bucketCompletions(),
+		BashComplete: bucketCompletions(bcmplop{}),
 	}
 	showCmdMpath = cli.Command{
 		Name:         subcmdShowMpath,

@@ -142,6 +142,9 @@ func (n Ns) String() (res string) {
 	if n.IsGlobal() {
 		return
 	}
+	if n.IsAnyRemote() {
+		return string(apc.NsUUIDPrefix)
+	}
 	if n.UUID != "" {
 		res += string(apc.NsUUIDPrefix) + n.UUID
 	}
@@ -323,14 +326,6 @@ func (b *Bck) MakeUname(objName string) string {
 // Is-Whats
 //
 
-func IsCloudProvider(p string) bool {
-	return p == apc.AWS || p == apc.GCP || p == apc.Azure
-}
-
-func IsRemoteProvider(p string) bool {
-	return IsCloudProvider(p) || p == apc.HDFS || p == apc.HTTP
-}
-
 func (n Ns) IsGlobal() bool    { return n == NsGlobal }
 func (n Ns) IsAnyRemote() bool { return n == NsAnyRemote }
 func (n Ns) IsRemote() bool    { return n.UUID != "" }
@@ -350,7 +345,7 @@ func (b *Bck) RemoteBck() *Bck {
 	if bck := b.Backend(); bck != nil {
 		return bck
 	}
-	if IsRemoteProvider(b.Provider) || b.IsRemoteAIS() {
+	if apc.IsRemoteProvider(b.Provider) || b.IsRemoteAIS() {
 		return b
 	}
 	return nil
@@ -365,18 +360,18 @@ func (b *Bck) IsHDFS() bool      { return b.Provider == apc.HDFS }
 func (b *Bck) IsHTTP() bool      { return b.Provider == apc.HTTP }
 
 func (b *Bck) IsRemote() bool {
-	return IsRemoteProvider(b.Provider) || b.IsRemoteAIS() || b.Backend() != nil
+	return apc.IsRemoteProvider(b.Provider) || b.IsRemoteAIS() || b.Backend() != nil
 }
 
 func (b *Bck) IsCloud() bool {
-	if IsCloudProvider(b.Provider) {
+	if apc.IsCloudProvider(b.Provider) {
 		return true
 	}
 	backend := b.Backend()
 	if backend == nil {
 		return false
 	}
-	return IsCloudProvider(backend.Provider)
+	return apc.IsCloudProvider(backend.Provider)
 }
 
 func (b *Bck) HasProvider() bool { return b.Provider != "" }
@@ -445,7 +440,7 @@ func (qbck *QueryBcks) IsAIS() bool       { b := (*Bck)(qbck); return b.IsAIS() 
 func (qbck *QueryBcks) IsHDFS() bool      { b := (*Bck)(qbck); return b.IsHDFS() }
 func (qbck *QueryBcks) IsHTTP() bool      { b := (*Bck)(qbck); return b.IsHTTP() }
 func (qbck *QueryBcks) IsRemoteAIS() bool { b := (*Bck)(qbck); return b.IsRemoteAIS() }
-func (qbck *QueryBcks) IsCloud() bool     { return IsCloudProvider(qbck.Provider) }
+func (qbck *QueryBcks) IsCloud() bool     { return apc.IsCloudProvider(qbck.Provider) }
 
 func (qbck *QueryBcks) DisplayProvider() string { b := (*Bck)(qbck); return b.DisplayProvider() }
 

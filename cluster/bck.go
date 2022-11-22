@@ -185,7 +185,7 @@ func (b *Bck) initFast(bowner Bowner) (err error) {
 		return
 	}
 	if backend := b.Backend(); backend != nil && backend.Props == nil {
-		debug.Assert(cmn.IsRemoteProvider(backend.Provider))
+		debug.Assert(apc.IsRemoteProvider(backend.Provider))
 		err = backend.init(bmd)
 	}
 	return
@@ -197,7 +197,7 @@ func (b *Bck) init(bmd *BMD) error {
 	if b.Provider == "" { // NOTE: ais:// is the default
 		b.Provider = apc.AIS
 		bmd.initBckGlobalNs(b)
-	} else if cmn.IsRemoteProvider(b.Provider) {
+	} else if apc.IsRemoteProvider(b.Provider) {
 		present := bmd.initBck(b)
 		debug.Assert(!b.IsHDFS() || !present || b.Props.Extra.HDFS.RefDirectory != "")
 	} else {
@@ -227,7 +227,7 @@ func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, err error, errCode
 			err = cmn.NewErrBckNotFound(bck.Bucket())
 			errCode = http.StatusNotFound
 		} else if backend := bck.Backend(); backend != nil && backend.Props == nil {
-			debug.Assert(cmn.IsRemoteProvider(backend.Provider))
+			debug.Assert(apc.IsRemoteProvider(backend.Provider))
 			err = backend.init(bmd)
 		}
 	} else {

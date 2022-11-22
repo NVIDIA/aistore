@@ -30,7 +30,7 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        storageSvcCmdsFlags[commandMirror],
 			Action:       setCopiesHandler,
-			BashComplete: bucketCompletions(),
+			BashComplete: bucketCompletions(bcmplop{}),
 		},
 		{
 			Name:         commandECEncode,
@@ -38,7 +38,7 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        storageSvcCmdsFlags[commandECEncode],
 			Action:       ecEncodeHandler,
-			BashComplete: bucketCompletions(),
+			BashComplete: bucketCompletions(bcmplop{}),
 		},
 	}
 )

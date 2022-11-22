@@ -285,45 +285,38 @@ func suggestUpdatableConfig(c *cli.Context) {
 	}
 }
 
-////////////
-// Bucket //
-////////////
+//
+// Bucket
+//
 
-type bckCompletionsOpts struct {
+type bcmplop struct {
 	additionalCompletions []cli.BashCompleteFunc
-	withProviders         bool
-	multiple              bool
-	separator             bool
 	provider              string
 
 	// Index in args array where first bucket name is.
 	// For command "ais bucket ls bck1 bck2" value should be set to 0
 	// For command "ais object put file bck1" value should be set to 1
 	firstBucketIdx int
+	multiple       bool
+	separator      bool
 }
 
 // The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
-// Buckets will also be listed after the first argument was given if true is passed to the 'multiple' param
-// Buckets will contain a path separator '/' if true is passed to the 'separator' param
-func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
+// Multiple buckets will also be listed if 'multiple'
+// Printed names will end with '/' if 'separator'
+func bucketCompletions(opts bcmplop) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		var (
-			multiple, separator, withProviders bool
-			argsProvider                       string
-			firstBucketIdx                     int
-			additionalCompletions              []cli.BashCompleteFunc
-
-			bucketsToPrint []cmn.Bck
-			providers      []string
+			multiple, separator   bool
+			argsProvider          string
+			firstBucketIdx        int
+			additionalCompletions []cli.BashCompleteFunc
+			buckets               []cmn.Bck
 		)
-
-		if len(args) > 0 {
-			multiple, separator, withProviders = args[0].multiple, args[0].separator, args[0].withProviders
-			argsProvider = args[0].provider
-			additionalCompletions = args[0].additionalCompletions
-			firstBucketIdx = args[0].firstBucketIdx
-		}
-
+		multiple, separator = opts.multiple, opts.separator
+		argsProvider = opts.provider
+		additionalCompletions = opts.additionalCompletions
+		firstBucketIdx = opts.firstBucketIdx
 		if c.NArg() > firstBucketIdx && !multiple {
 			if propValueCompletion(c) {
 				return
@@ -334,110 +327,61 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 			return
 		}
 
-		query := cmn.QueryBcks{
-			Provider: argsProvider,
+		query := cmn.QueryBcks{Provider: argsProvider}
+		buckets, err := api.ListBuckets(apiBP, query, apc.FltPresent) // NOTE: present only
+		if err != nil {
+			return
 		}
-
 		if query.Provider == "" {
 			config, err := api.GetClusterConfig(apiBP)
 			if err != nil {
 				return
 			}
-			providers = []string{apc.AIS, apc.HTTP}
 			for provider := range config.Backend.Conf {
-				providers = append(providers, provider)
-			}
-		} else {
-			providers = []string{query.Provider}
-		}
-
-		for _, provider := range providers {
-			query.Provider = provider
-			buckets, err := api.ListBuckets(apiBP, query, apc.FltPresent)
-			if err != nil {
-				return
-			}
-
-			bucketsToPrint = append(bucketsToPrint, buckets...)
-		}
-
-		sep := ""
-		if separator {
-			sep = "/"
-		}
-
-		printNotUsedBuckets := func(buckets []cmn.Bck) {
-			for _, bckToPrint := range buckets {
-				alreadyListed := false
-				if multiple {
-					for _, argBck := range c.Args() {
-						parsedArgBck, err := parseBckURI(c, argBck)
-						if err != nil {
-							return
-						}
-						if parsedArgBck.Equal(&bckToPrint) {
-							alreadyListed = true
-							break
-						}
-					}
-				}
-
-				if !alreadyListed {
-					var bckStr string
-					if bckToPrint.Ns.IsGlobal() {
-						bckStr = fmt.Sprintf("%s\\://%s", bckToPrint.Provider, bckToPrint.Name)
-					} else {
-						bckStr = fmt.Sprintf("%s\\://%s/%s", bckToPrint.Provider, bckToPrint.Ns, bckToPrint.Name)
-					}
-					fmt.Printf("%s%s\n", bckStr, sep)
+				if provider == apc.AIS {
+					qbck := cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
+					fmt.Println(qbck)
+				} else {
+					fmt.Printf("%s://\n", apc.ToScheme(provider))
 				}
 			}
 		}
-
-		if withProviders {
-			for _, p := range providers {
-				fmt.Printf("%s\\://\n", p)
-			}
-		}
-
-		printNotUsedBuckets(bucketsToPrint)
+		printNotUsedBuckets(c, buckets, separator, multiple)
 	}
 }
 
-// The function lists bucket names for commands that require old and new bucket name
-func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, separator bool,
-	provider ...string) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		if c.NArg() >= 2 {
-			for _, f := range additionalCompletions {
-				f(c)
+func printNotUsedBuckets(c *cli.Context, buckets []cmn.Bck, separator, multiple bool) {
+	var sep string
+	if separator {
+		sep = "/"
+	}
+mloop:
+	for _, b := range buckets {
+		if multiple {
+			for _, argBck := range c.Args() {
+				parsedArgBck, err := parseBckURI(c, argBck)
+				if err != nil {
+					return
+				}
+				if parsedArgBck.Equal(&b) {
+					continue mloop // already listed
+				}
 			}
-			return
 		}
-
-		if c.NArg() == 1 {
-			return
-		}
-
-		p := ""
-		if len(provider) > 0 {
-			p = provider[0]
-		}
-		bucketCompletions(bckCompletionsOpts{separator: separator, provider: p})(c)
+		fmt.Printf("%s%s\n", b.DisplayName(), sep)
 	}
 }
 
 func manyBucketsCompletions(additionalCompletions []cli.BashCompleteFunc, firstBckIdx, bucketsCnt int) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		if c.NArg() < firstBckIdx || c.NArg() >= firstBckIdx+bucketsCnt {
-			// If before a bucket completion, suggest different.
+			// suggest different if before bucket completion
 			for _, f := range additionalCompletions {
 				f(c)
 			}
 		}
-
 		if c.NArg() >= firstBckIdx && c.NArg() < firstBckIdx+bucketsCnt {
-			bucketCompletions(bckCompletionsOpts{firstBucketIdx: firstBckIdx, multiple: true})(c)
+			bucketCompletions(bcmplop{firstBucketIdx: firstBckIdx, multiple: true})(c)
 			return
 		}
 	}
@@ -472,7 +416,8 @@ func bpropsFilterExtra(c *cli.Context, tag string) bool {
 
 func bucketAndPropsCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		bucketCompletions()
+		f := bucketCompletions(bcmplop{})
+		f(c)
 		return
 	} else if c.NArg() == 1 {
 		var props []string
@@ -492,9 +437,9 @@ func bucketAndPropsCompletions(c *cli.Context) {
 	}
 }
 
-////////////
-// Object //
-////////////
+//
+// Object
+//
 
 func putPromoteObjectCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
@@ -502,31 +447,35 @@ func putPromoteObjectCompletions(c *cli.Context) {
 		return
 	}
 	if c.NArg() == 1 {
-		bucketCompletions(bckCompletionsOpts{separator: true, firstBucketIdx: 1 /* bucket arg after file arg*/})(c)
+		f := bucketCompletions(bcmplop{
+			separator:      true,
+			firstBucketIdx: 1 /* bucket arg after file arg*/},
+		)
+		f(c)
 		return
 	}
 }
 
-/////////////
-// Xaction //
-/////////////
+//
+// Xaction
+//
 
-func daemonXactionCompletions(ctx *cli.Context) {
-	if ctx.NArg() > 2 {
+func daemonXactionCompletions(c *cli.Context) {
+	if c.NArg() > 2 {
 		return
 	}
-	xactSet := ctx.NArg() != 0
-	xactName := ctx.Args().First()
-	if ctx.NArg() == 0 {
-		daemonCompletions(completeTargets)(ctx)
+	xactSet := c.NArg() != 0
+	xactName := c.Args().First()
+	if c.NArg() == 0 {
+		daemonCompletions(completeTargets)(c)
 	} else {
 		smap, err := api.GetClusterMap(cliAPIParams(clusterURL))
 		if err != nil {
 			return
 		}
-		if node := smap.GetTarget(ctx.Args().First()); node != nil {
+		if node := smap.GetTarget(c.Args().First()); node != nil {
 			xactSet = false
-			xactName = ctx.Args().Get(1)
+			xactName = c.Args().Get(1)
 		}
 	}
 	if !xactSet {
@@ -536,7 +485,7 @@ func daemonXactionCompletions(ctx *cli.Context) {
 		return
 	}
 	if xact.IsBckScope(xactName) {
-		bucketCompletions()(ctx)
+		bucketCompletions(bcmplop{})(c)
 		return
 	}
 }
@@ -553,7 +502,7 @@ func xactionCompletions(cmd string) func(ctx *cli.Context) {
 		}
 		xactName := c.Args().First()
 		if xact.IsBckScope(xactName) {
-			bucketCompletions()(c)
+			bucketCompletions(bcmplop{})(c)
 			return
 		}
 	}
@@ -564,9 +513,9 @@ func xactionDesc(onlyStartable bool) string {
 	return fmt.Sprintf("%s can be one of: %q", xactionArgument, strings.Join(xactKinds, ", "))
 }
 
-//////////////////////
-// Download / dSort //
-//////////////////////
+//
+// Download & dSort
+//
 
 func downloadIDAllCompletions(c *cli.Context) {
 	suggestDownloadID(c, func(*dloader.Job) bool { return true })

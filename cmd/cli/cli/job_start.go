@@ -68,7 +68,7 @@ var (
 				ArgsUsage:    bucketArgument,
 				Flags:        startCmdsFlags[commandPrefetch],
 				Action:       startPrefetchHandler,
-				BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
+				BashComplete: bucketCompletions(bcmplop{multiple: true}),
 			},
 			{
 				Name:      subcmdStartDownload,
@@ -96,7 +96,7 @@ var (
 				ArgsUsage:    listAnyCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgCleanup],
 				Action:       cleanupStorageHandler,
-				BashComplete: bucketCompletions(),
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			{
 				Name:  commandETL,

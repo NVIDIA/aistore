@@ -88,7 +88,7 @@ func TestListBuckets(t *testing.T) {
 				continue
 			}
 			tassert.CheckError(t, err)
-		} else if cmn.IsCloudProvider(provider) && !configured {
+		} else if apc.IsCloudProvider(provider) && !configured {
 			t.Fatalf("%s is not configured: expecting list-buckets to fail, got %v\n", provider, bcks)
 		}
 		if num := len(bcks.Select(qbck)); len(bcks) != num {

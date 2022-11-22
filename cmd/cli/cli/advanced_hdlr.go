@@ -57,7 +57,7 @@ var (
 				Usage:        "preload object metadata into in-memory cache",
 				ArgsUsage:    bucketArgument,
 				Action:       loadLomCacheHandler,
-				BashComplete: bucketCompletions(),
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			{
 				Name:         subcmdRmSmap,

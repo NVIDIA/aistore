@@ -57,7 +57,7 @@ func (m *BMD) numBuckets() (na, nar, nc, no int) {
 				} else {
 					na += len(buckets)
 				}
-			} else if cmn.IsCloudProvider(provider) {
+			} else if apc.IsCloudProvider(provider) {
 				nc += len(buckets)
 			} else {
 				no += len(buckets)

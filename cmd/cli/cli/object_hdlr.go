@@ -85,7 +85,7 @@ var (
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,
-		BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
+		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
 
 	objectCmdPut = cli.Command{
@@ -116,23 +116,20 @@ var (
 			bucketObjCmdEvict,
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
 			{
-				Name:      commandRename,
-				Usage:     "move/rename object",
-				ArgsUsage: "BUCKET/OBJECT_NAME NEW_OBJECT_NAME",
-				Flags:     objectCmdsFlags[commandRename],
-				Action:    mvObjectHandler,
-				BashComplete: oldAndNewBucketCompletions(
-					[]cli.BashCompleteFunc{}, true /* separator */, apc.AIS),
+				Name:         commandRename,
+				Usage:        "move/rename object",
+				ArgsUsage:    "BUCKET/OBJECT_NAME NEW_OBJECT_NAME",
+				Flags:        objectCmdsFlags[commandRename],
+				Action:       mvObjectHandler,
+				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
 			},
 			{
-				Name:      commandRemove,
-				Usage:     "remove object(s) from the specified bucket",
-				ArgsUsage: optionalObjectsArgument,
-				Flags:     objectCmdsFlags[commandRemove],
-				Action:    removeObjectHandler,
-				BashComplete: bucketCompletions(bckCompletionsOpts{
-					multiple: true, separator: true,
-				}),
+				Name:         commandRemove,
+				Usage:        "remove object(s) from the specified bucket",
+				ArgsUsage:    optionalObjectsArgument,
+				Flags:        objectCmdsFlags[commandRemove],
+				Action:       removeObjectHandler,
+				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
 			},
 			{
 				Name:         commandPromote,
@@ -155,7 +152,7 @@ var (
 				ArgsUsage:    objectArgument,
 				Flags:        objectCmdsFlags[commandCat],
 				Action:       catHandler,
-				BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
+				BashComplete: bucketCompletions(bcmplop{separator: true}),
 			},
 		},
 	}

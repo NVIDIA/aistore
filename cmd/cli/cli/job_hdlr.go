@@ -67,7 +67,7 @@ func xactionCmds() cli.Commands {
 		}
 		if xact.IsBckScope(xctn) {
 			cmd.ArgsUsage = bucketArgument
-			cmd.BashComplete = bucketCompletions()
+			cmd.BashComplete = bucketCompletions(bcmplop{})
 		}
 		cmds = append(cmds, cmd)
 	}
