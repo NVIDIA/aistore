@@ -157,11 +157,20 @@ func setCluConfigHandler(c *cli.Context) error {
 	if err := api.SetClusterConfig(apiBP, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
-	if err := showClusterConfigHandler(c); err != nil {
-		fmt.Fprintln(c.App.ErrWriter, redErr(err))
-	} else {
-		actionDone(c, "Cluster config updated")
+
+	// show
+	var listed = make(cos.StrKVs)
+	for what := range nvs {
+		section := strings.Split(what, ".")[0]
+		if listed.Contains(section) {
+			continue
+		}
+		listed[section] = ""
+		if err := showClusterConfig(c, section); err != nil {
+			fmt.Fprintln(c.App.ErrWriter, redErr(err))
+		}
 	}
+	actionDone(c, "Cluster config updated")
 	return nil
 }
 

@@ -222,13 +222,16 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 	return
 }
 
+// update dst with the values from src
 func copyProps(src, dst any, asType string) error {
 	var (
 		srcVal = reflect.ValueOf(src)
 		dstVal = reflect.ValueOf(dst).Elem()
 	)
 	debug.Assertf(cos.StringInSlice(asType, []string{apc.Daemon, apc.Cluster}), "unexpected config level: %s", asType)
-
+	if srcVal.Kind() == reflect.Ptr {
+		srcVal = srcVal.Elem()
+	}
 	for i := 0; i < srcVal.NumField(); i++ {
 		copyTag, ok := srcVal.Type().Field(i).Tag.Lookup("copy")
 		if ok && copyTag == "skip" {

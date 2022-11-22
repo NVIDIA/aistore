@@ -281,7 +281,7 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 }
 
 func (bp *BucketProps) Apply(propsToUpdate *BucketPropsToUpdate) {
-	err := copyProps(*propsToUpdate, bp, apc.Daemon)
+	err := copyProps(propsToUpdate, bp, apc.Daemon)
 	debug.AssertNoErr(err)
 }
 

@@ -220,7 +220,7 @@ func setConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config, asType str
 			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.Log.Level, err)
 		}
 	}
-	err = config.UpdateClusterConfig(*toUpdate, asType)
+	err = config.UpdateClusterConfig(toUpdate, asType)
 	return
 }
 

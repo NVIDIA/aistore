@@ -185,7 +185,6 @@ func startDownloadHandler(c *cli.Context) error {
 		progressInterval = parseStrFlag(c, progressIntervalFlag)
 		id               string
 	)
-
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "source", "destination")
 	}

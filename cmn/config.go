@@ -675,7 +675,7 @@ func (c *Config) SetRole(role string) {
 	c.role = role
 }
 
-func (c *Config) UpdateClusterConfig(updateConf ConfigToUpdate, asType string) (err error) {
+func (c *Config) UpdateClusterConfig(updateConf *ConfigToUpdate, asType string) (err error) {
 	err = c.ClusterConfig.Apply(updateConf, asType)
 	if err != nil {
 		return
@@ -694,7 +694,7 @@ func (c *Config) TestingEnv() bool {
 // ClusterConfig //
 ///////////////////
 
-func (c *ClusterConfig) Apply(updateConf ConfigToUpdate, asType string) error {
+func (c *ClusterConfig) Apply(updateConf *ConfigToUpdate, asType string) error {
 	return copyProps(updateConf, c, asType)
 }
 
@@ -1801,7 +1801,7 @@ func handleOverrideConfig(config *Config) error {
 		config.LocalConfig.FSP = *overrideConfig.FSP // override local config's fspaths
 		overrideConfig.FSP = nil
 	}
-	return config.UpdateClusterConfig(*overrideConfig, apc.Daemon)
+	return config.UpdateClusterConfig(overrideConfig, apc.Daemon)
 }
 
 func SaveOverrideConfig(configDir string, toUpdate *ConfigToUpdate) error {

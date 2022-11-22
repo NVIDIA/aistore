@@ -606,9 +606,8 @@ func showConfigHandler(c *cli.Context) (err error) {
 	return showNodeConfig(c)
 }
 
-func showClusterConfig(c *cli.Context, what string) error {
+func showClusterConfig(c *cli.Context, section string) error {
 	var (
-		section        = strings.Split(what, "=")[0] // when called to show set-config result
 		useJSON        = flagIsSet(c, jsonFlag)
 		cluConfig, err = api.GetClusterConfig(apiBP)
 	)
