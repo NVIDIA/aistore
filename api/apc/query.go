@@ -11,6 +11,7 @@ const (
 
 	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 	QparamUUID  = "uuid"  // xaction
+	QparamJobID = "jobid" // job
 
 	QparamRegex      = "regex"       // dsort: list regex
 	QparamOnlyActive = "only_active" // dsort: list only active

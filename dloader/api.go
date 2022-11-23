@@ -109,9 +109,9 @@ type (
 
 	BackendBody struct {
 		Base
-		Sync   bool   `json:"sync"`
 		Prefix string `json:"prefix"`
 		Suffix string `json:"suffix"`
+		Sync   bool   `json:"sync"`
 	}
 
 	SingleBody struct {

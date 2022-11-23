@@ -1122,8 +1122,7 @@ func (h *htrun) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode 
 	h.writeErrSilent(w, r, err, errCode)
 }
 
-func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int,
-	format string, a ...any) {
+func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int, format string, a ...any) {
 	err := fmt.Errorf(format, a...)
 	h.writeErrMsg(w, r, err.Error(), errCode)
 }

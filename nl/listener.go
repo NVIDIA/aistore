@@ -55,7 +55,7 @@ type NotifListener interface {
 	ActiveCount() int
 	HasFinished(node *cluster.Snode) bool
 	MarkFinished(node *cluster.Snode)
-	NodesTardy(durs ...time.Duration) (nodes cluster.NodeMap, tardy bool)
+	NodesTardy(periodicNotifTime time.Duration) (nodes cluster.NodeMap, tardy bool)
 }
 
 type (
@@ -181,19 +181,16 @@ func (nlb *NotifListenerBase) LastUpdated(si *cluster.Snode) int64 {
 	return nlb.lastUpdated[si.ID()]
 }
 
-func (nlb *NotifListenerBase) NodesTardy(durs ...time.Duration) (nodes cluster.NodeMap, tardy bool) {
-	dur := cmn.GCO.Get().Periodic.NotifTime.D()
-	if len(durs) > 0 {
-		dur = durs[0]
-	} else if nlb.ProgressInterval() != 0 {
-		dur = nlb.ProgressInterval()
+func (nlb *NotifListenerBase) NodesTardy(periodicNotifTime time.Duration) (nodes cluster.NodeMap, tardy bool) {
+	if nlb.ProgressInterval() != 0 {
+		periodicNotifTime = nlb.ProgressInterval()
 	}
 	nodes = make(cluster.NodeMap, nlb.ActiveCount())
 	now := mono.NanoTime()
 	for _, si := range nlb.ActiveSrcs {
 		ts := nlb.LastUpdated(si)
 		diff := time.Duration(now - ts)
-		if _, ok := nlb.Stats.Load(si.ID()); ok && diff < dur {
+		if _, ok := nlb.Stats.Load(si.ID()); ok && diff < periodicNotifTime {
 			continue
 		}
 		nodes.Add(si)

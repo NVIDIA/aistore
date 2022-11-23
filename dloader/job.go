@@ -42,6 +42,7 @@ type (
 
 	jobif interface {
 		ID() string
+		XactID() string
 		Bck() *cmn.Bck
 		Description() string
 		Timeout() time.Duration
@@ -76,7 +77,7 @@ type (
 		timeout     time.Duration
 		description string
 		t           *throttler
-		dlXact      *Xact
+		xdl         *Xact
 
 		// notif
 		notif *NotifDownload
@@ -116,18 +117,18 @@ type (
 	}
 
 	dljob struct {
-		ID            string       `json:"id"`
-		XactID        string       `json:"xaction_id"`
-		Description   string       `json:"description"`
-		StartedTime   time.Time    `json:"started_time"`
-		FinishedTime  atomic.Time  `json:"finished_time"`
-		FinishedCnt   atomic.Int32 `json:"finished"` // also includes skipped
-		ScheduledCnt  atomic.Int32 `json:"scheduled"`
-		SkippedCnt    atomic.Int32 `json:"skipped"`
-		ErrorCnt      atomic.Int32 `json:"errors"`
-		Total         int          `json:"total"`
-		Aborted       atomic.Bool  `json:"aborted"`
-		AllDispatched atomic.Bool  `json:"all_dispatched"`
+		ID            string
+		XactID        string
+		Description   string
+		StartedTime   time.Time
+		FinishedTime  atomic.Time
+		FinishedCnt   atomic.Int32
+		ScheduledCnt  atomic.Int32
+		SkippedCnt    atomic.Int32
+		ErrorCnt      atomic.Int32
+		Total         int
+		Aborted       atomic.Bool
+		AllDispatched atomic.Bool
 	}
 )
 
@@ -135,7 +136,7 @@ type (
 // baseDlJob //
 ///////////////
 
-func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits Limits, dlXact *Xact) *baseDlJob {
+func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits Limits, xdl *Xact) *baseDlJob {
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
@@ -149,11 +150,12 @@ func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc s
 		timeout:     td,
 		description: desc,
 		t:           newThrottler(limits),
-		dlXact:      dlXact,
+		xdl:         xdl,
 	}
 }
 
 func (j *baseDlJob) ID() string             { return j.id }
+func (j *baseDlJob) XactID() string         { return j.xdl.ID() }
 func (j *baseDlJob) Bck() *cmn.Bck          { return j.bck.Bucket() }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
@@ -182,7 +184,7 @@ func (j *baseDlJob) AddNotif(n cluster.Notif, job jobif) {
 }
 
 func (j *baseDlJob) ActiveStats() (*StatusResp, error) {
-	resp, _, err := j.dlXact.JobStatus(j.ID(), true /*onlyActive*/)
+	resp, _, err := j.xdl.JobStatus(j.ID(), true /*onlyActive*/)
 	if err != nil {
 		return nil, err
 	}
@@ -234,12 +236,12 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	return objs, true, nil
 }
 
-func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *MultiBody, dlXact *Xact) (*multiDlJob, error) {
+func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *MultiBody, xdl *Xact) (*multiDlJob, error) {
 	var (
 		objs cos.StrKVs
 		err  error
 	)
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
 	if objs, err = payload.ExtractPayload(); err != nil {
 		return nil, err
 	}
@@ -254,12 +256,12 @@ func (j *multiDlJob) String() (s string) {
 	return "multi-" + j.baseDlJob.String()
 }
 
-func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *SingleBody, dlXact *Xact) (*singleDlJob, error) {
+func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *SingleBody, xdl *Xact) (*singleDlJob, error) {
 	var (
 		objs cos.StrKVs
 		err  error
 	)
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
 	if objs, err = payload.ExtractPayload(); err != nil {
 		return nil, err
 	}
@@ -279,13 +281,13 @@ func (j *singleDlJob) String() (s string) {
 ////////////////
 
 // NOTE: the sizes of objects to be downloaded will be unknown.
-func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *RangeBody, dlXact *Xact) (job *rangeDlJob, err error) {
+func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *RangeBody, xdl *Xact) (job *rangeDlJob, err error) {
 	job = &rangeDlJob{}
 	if job.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
 		return
 	}
 	// TODO: job.Init instead, to avoid copying baseDlJob = *base
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
 	job.count, err = countObjects(t, job.pt, payload.Subdir, base.bck)
 	if err != nil {
 		return
@@ -343,13 +345,13 @@ func (j *rangeDlJob) getNextObjs() error {
 // backendDlJob //
 //////////////////
 
-func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *BackendBody, dlXact *Xact) (*backendDlJob, error) {
+func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *BackendBody, xdl *Xact) (*backendDlJob, error) {
 	if !bck.IsRemote() {
 		return nil, errors.New("bucket download requires a remote bucket")
 	} else if bck.IsHTTP() {
 		return nil, errors.New("bucket download does not support HTTP buckets")
 	}
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
 	job := &backendDlJob{
 		baseDlJob: *base,
 		t:         t,

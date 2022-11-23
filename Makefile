@@ -15,6 +15,8 @@ endif
 
 AISTORE_PATH = $(shell git rev-parse --show-toplevel)
 
+CLI_VERSION := $(shell ais version 2>/dev/null)
+
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
 
@@ -172,9 +174,12 @@ restart: kill run
 #
 .PHONY: kill clean clean-client-bindings
 
-kill: ## Kill all locally deployed targets and proxies
-	@which ais >/dev/null || echo "Warning: missing CLI (ais) executable for proper graceful shutdown"
+kill: ## Kill all locally deployed clusters (all targets and all proxies)
+ifndef CLI_VERSION
+	@echo "Warning: missing CLI (ais) executable for proper graceful shutdown"
+else
 	@ais job stop cluster 2>/dev/null || true
+endif
 	@"$(DEPLOY_DIR)/kill.sh"
 
 clean: ## Remove all AIS related files and binaries

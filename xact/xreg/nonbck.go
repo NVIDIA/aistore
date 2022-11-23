@@ -49,8 +49,8 @@ func RenewStoreCleanup(id string) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewDownloader(t cluster.Target, statsT stats.Tracker) RenewRes {
-	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, Custom: statsT}, nil)
+func RenewDownloader(t cluster.Target, statsT stats.Tracker, xactID string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, UUID: xactID, Custom: statsT}, nil)
 	return dreg.renew(e, nil)
 }
 

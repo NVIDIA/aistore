@@ -115,7 +115,7 @@ func NormalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, dlXact *Xact) (jobif, error) {
+func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, xdl *Xact) (jobif, error) {
 	switch dlb.Type {
 	case TypeBackend:
 		dp := &BackendBody{}
@@ -126,7 +126,7 @@ func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, 
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newBackendDlJob(t, id, bck, dp, dlXact)
+		return newBackendDlJob(t, id, bck, dp, xdl)
 	case TypeMulti:
 		dp := &MultiBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -136,7 +136,7 @@ func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, 
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newMultiDlJob(t, id, bck, dp, dlXact)
+		return newMultiDlJob(t, id, bck, dp, xdl)
 	case TypeRange:
 		dp := &RangeBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -146,7 +146,7 @@ func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, 
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newRangeDlJob(t, id, bck, dp, dlXact)
+		return newRangeDlJob(t, id, bck, dp, xdl)
 	case TypeSingle:
 		dp := &SingleBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -156,7 +156,7 @@ func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, 
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newSingleDlJob(t, id, bck, dp, dlXact)
+		return newSingleDlJob(t, id, bck, dp, xdl)
 	default:
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, backend)")
 	}

@@ -141,22 +141,22 @@ outer:
 	return true
 }
 
-// TODO: add more functionality similar to reverseToOwner
 func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	smap := ic.p.owner.smap.get()
-	if !smap.IsIC(ic.p.si) {
-		var node *cluster.Snode
-		for _, psi := range smap.Pmap {
-			if smap.IsIC(psi) {
-				node = psi
-				break
-			}
-		}
-		redirectURL := ic.p.redirectURL(r, node, time.Now(), cmn.NetIntraControl)
-		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-		return true
+	if smap.IsIC(ic.p.si) {
+		return false
 	}
-	return false
+
+	var node *cluster.Snode
+	for _, psi := range smap.Pmap {
+		if smap.IsIC(psi) {
+			node = psi
+			break
+		}
+	}
+	redirectURL := ic.p.redirectURL(r, node, time.Now(), cmn.NetIntraControl)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	return true
 }
 
 func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +208,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ic.p.notifs.syncStats(nl, interval)
+	ic.p.notifs.bcastGetStats(nl, interval)
 
 	status := nl.Status()
 	if err := nl.Err(); err != nil {

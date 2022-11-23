@@ -39,15 +39,13 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var (
-			uuid             = r.URL.Query().Get(apc.QparamUUID)
+			query            = r.URL.Query()
+			xactID           = query.Get(apc.QparamUUID)
+			jobID            = query.Get(apc.QparamJobID)
 			dlb              = dloader.Body{}
 			progressInterval = dloader.DownloadProgressInterval
 		)
-		if uuid == "" {
-			debug.Assert(false)
-			t.writeErrMsg(w, r, "missing UUID in query")
-			return
-		}
+		debug.Assertf(cos.IsValidUUID(xactID) && cos.IsValidUUID(jobID), "%q, %q", xactID, jobID)
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
 			return
 		}
@@ -74,21 +72,21 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		xdl, err := t.renewdl()
+		xdl, err := t.renewdl(xactID)
 		if err != nil {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		dlJob, err := dloader.ParseStartRequest(t, bck, uuid, dlb, xdl)
+		dljob, err := dloader.ParseStartRequest(t, bck, jobID, dlb, xdl)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Downloading: %s", dlJob.ID())
+			glog.Infof("Downloading: %s", dljob.ID())
 		}
 
-		dlJob.AddNotif(&dloader.NotifDownload{
+		dljob.AddNotif(&dloader.NotifDownload{
 			NotifBase: nl.NotifBase{
 				When:     cluster.UponProgress,
 				Interval: progressInterval,
@@ -96,42 +94,43 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 				F:        t.callerNotifyFin,
 				P:        t.callerNotifyProgress,
 			},
-		}, dlJob)
-		response, statusCode, respErr = xdl.Download(dlJob)
+		}, dljob)
+		response, statusCode, respErr = xdl.Download(dljob)
 
 	case http.MethodGet:
 		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
 		}
-		payload := &dloader.AdminBody{}
-		if err := cmn.ReadJSON(w, r, payload); err != nil {
+		msg := &dloader.AdminBody{}
+		if err := cmn.ReadJSON(w, r, msg); err != nil {
 			return
 		}
-		if err := payload.Validate(false /*requireID*/); err != nil {
+		if err := msg.Validate(false /*requireID*/); err != nil {
 			debug.Assert(false)
 			t.writeErr(w, r, err)
 			return
 		}
 
-		if payload.ID != "" {
-			// TODO -- FIXME: don't start new for the purposes of getting status
-			xdl, err := t.renewdl()
+		if msg.ID != "" {
+			xactID := r.URL.Query().Get(apc.QparamUUID)
+			debug.Assert(cos.IsValidUUID(xactID))
+			xdl, err := t.renewdl(xactID)
 			if err != nil {
 				t.writeErr(w, r, err, http.StatusInternalServerError)
 				return
 			}
-			response, statusCode, respErr = xdl.JobStatus(payload.ID, payload.OnlyActive)
+			response, statusCode, respErr = xdl.JobStatus(msg.ID, msg.OnlyActive)
 		} else {
 			var regex *regexp.Regexp
-			if payload.Regex != "" {
-				rgx, err := regexp.CompilePOSIX(payload.Regex)
+			if msg.Regex != "" {
+				rgx, err := regexp.CompilePOSIX(msg.Regex)
 				if err != nil {
 					t.writeErr(w, r, err)
 					return
 				}
 				regex = rgx
 			}
-			response, statusCode, respErr = dloader.ListJobs(regex, payload.OnlyActive)
+			response, statusCode, respErr = dloader.ListJobs(regex, msg.OnlyActive)
 		}
 
 	case http.MethodDelete:
@@ -155,7 +154,9 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		xdl, err := t.renewdl()
+		xactID := r.URL.Query().Get(apc.QparamUUID)
+		debug.Assertf(cos.IsValidUUID(xactID), "%q", xactID)
+		xdl, err := t.renewdl(xactID)
 		if err != nil {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
@@ -179,8 +180,8 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *target) renewdl() (*dloader.Xact, error) {
-	rns := xreg.RenewDownloader(t, t.statsT)
+func (t *target) renewdl(xactID string) (*dloader.Xact, error) {
+	rns := xreg.RenewDownloader(t, t.statsT, xactID)
 	if rns.Err != nil {
 		return nil, rns.Err
 	}

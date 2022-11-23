@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -184,7 +183,7 @@ func (*factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 }
 
 func (p *factory) Start() error {
-	xdl := newXact(p.T, p.statsT)
+	xdl := newXact(p.T, p.statsT, p.Args.UUID)
 	p.xctn = xdl
 	go xdl.Run(nil)
 	return nil
@@ -201,10 +200,10 @@ func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 // Xact //
 //////////
 
-func newXact(t cluster.Target, statsT stats.Tracker) (xld *Xact) {
+func newXact(t cluster.Target, statsT stats.Tracker, xactID string) (xld *Xact) {
 	xld = &Xact{t: t, statsT: statsT}
 	xld.dispatcher = newDispatcher(xld)
-	xld.DemandBase.Init(cos.GenUUID(), apc.Download, nil /*bck*/, 0 /*use default*/)
+	xld.DemandBase.Init(xactID, apc.Download, nil /*bck*/, 0 /*use default*/)
 	return
 }
 
@@ -224,15 +223,15 @@ func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
 	xld.IncPending()
 	defer xld.DecPending()
 
-	dlStore.setJob(job, xld.ID())
+	dljob := dlStore.setJob(job)
 
 	select {
 	case xld.dispatcher.workCh <- job:
-		return nil, http.StatusOK, nil
+		return dljob.ID, http.StatusOK, nil // TODO -- FIXME: dljob.clone() all the way to client (+below)
 	default:
 		select {
 		case xld.dispatcher.workCh <- job:
-			return nil, http.StatusOK, nil
+			return dljob.ID, http.StatusOK, nil
 		case <-time.After(cmn.Timeout.CplaneOperation()):
 			return "downloader job queue is full", http.StatusTooManyRequests, nil
 		}

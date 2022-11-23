@@ -6,6 +6,7 @@ package dloader
 
 import (
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -33,10 +34,9 @@ var (
 	_ cluster.Notif    = (*NotifDownload)(nil)
 )
 
-func NewDownloadNL(uuid string, action string, smap *cluster.Smap,
-	progressInterval time.Duration, bck ...*cmn.Bck) *NotifDownloadListerner {
+func NewDownloadNL(jobID, action string, smap *cluster.Smap, progressInterval time.Duration) *NotifDownloadListerner {
 	return &NotifDownloadListerner{
-		NotifListenerBase: *nl.NewNLB(uuid, action, smap, smap.Tmap.ActiveMap(), progressInterval, bck...),
+		NotifListenerBase: *nl.NewNLB(jobID, action, smap, smap.Tmap.ActiveMap(), progressInterval),
 	}
 }
 
@@ -52,20 +52,28 @@ func (*NotifDownloadListerner) UnmarshalStats(rawMsg []byte) (stats any, finishe
 }
 
 func (nd *NotifDownloadListerner) QueryArgs() cmn.HreqArgs {
-	args := cmn.HreqArgs{Method: http.MethodGet}
-	dlBody := AdminBody{
-		ID: nd.UUID(),
-	}
+	var (
+		xactID = "nqui-" + cos.GenUUID()
+		q      = url.Values{apc.QparamUUID: []string{xactID}} // compare w/ p.dladm
+		args   = cmn.HreqArgs{Method: http.MethodGet, Query: q}
+		dlBody = AdminBody{
+			ID: nd.UUID(), // jobID
+		}
+	)
 	args.Path = apc.URLPathDownload.S
 	args.Body = cos.MustMarshal(dlBody)
 	return args
 }
 
 func (nd *NotifDownloadListerner) AbortArgs() cmn.HreqArgs {
-	args := cmn.HreqArgs{Method: http.MethodDelete}
-	dlBody := AdminBody{
-		ID: nd.UUID(),
-	}
+	var (
+		xactID = "nabrt-" + cos.GenUUID()
+		q      = url.Values{apc.QparamUUID: []string{xactID}} // ditto
+		args   = cmn.HreqArgs{Method: http.MethodDelete, Query: q}
+		dlBody = AdminBody{
+			ID: nd.UUID(),
+		}
+	)
 	args.Path = apc.URLPathDownloadAbort.S
 	args.Body = cos.MustMarshal(dlBody)
 	return args

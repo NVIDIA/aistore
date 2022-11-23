@@ -350,7 +350,7 @@ func (n *notifs) housekeep() time.Duration {
 	}
 	n.nls.RUnlock()
 	for _, nl := range tempn {
-		n.syncStats(nl, notifsHousekeepT)
+		n.bcastGetStats(nl, notifsHousekeepT)
 	}
 	// cleanup temp cloned notifs
 	for u := range tempn {
@@ -359,14 +359,14 @@ func (n *notifs) housekeep() time.Duration {
 	return notifsHousekeepT
 }
 
-func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
+func (n *notifs) bcastGetStats(nl nl.NotifListener, dur time.Duration) {
 	var (
 		config           = cmn.GCO.Get()
 		progressInterval = config.Periodic.NotifTime.D()
 		done             bool
 	)
 	nl.RLock()
-	nodesTardy, syncRequired := nl.NodesTardy(dur...)
+	nodesTardy, syncRequired := nl.NodesTardy(dur)
 	nl.RUnlock()
 	if !syncRequired {
 		return
@@ -411,18 +411,6 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 	if done {
 		n.done(nl)
 	}
-}
-
-// Return stats from each node for a given UUID.
-func (n *notifs) queryStats(uuid string, durs ...time.Duration) (stats *nl.NodeStats, exists bool) {
-	var nl nl.NotifListener
-	nl, exists = n.entry(uuid)
-	if !exists {
-		return
-	}
-	n.syncStats(nl, durs...)
-	stats = nl.NodeStats()
-	return
 }
 
 func (n *notifs) getOwner(uuid string) (o string, exists bool) {

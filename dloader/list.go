@@ -20,8 +20,8 @@ func ListJobs(regex *regexp.Regexp, onlyActive bool) (any, int, error) {
 		goto ex
 	}
 	respMap = make(map[string]Job, len(jobs))
-	for _, r := range jobs {
-		respMap[r.ID] = r.clone()
+	for _, dljob := range jobs {
+		respMap[dljob.ID] = dljob.clone()
 	}
 	req.okRsp(respMap)
 ex:

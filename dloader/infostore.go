@@ -69,17 +69,18 @@ func (is *infoStore) getList(req *request) (jobs []*dljob) {
 	return
 }
 
-func (is *infoStore) setJob(job jobif, xactID string) {
-	dljob := &dljob{
+func (is *infoStore) setJob(job jobif) (njob *dljob) {
+	njob = &dljob{
 		ID:          job.ID(),
-		XactID:      xactID,
+		XactID:      job.XactID(),
 		Total:       job.Len(),
 		Description: job.Description(),
 		StartedTime: time.Now(),
 	}
 	is.Lock()
-	is.dljobs[job.ID()] = dljob
+	is.dljobs[job.ID()] = njob
 	is.Unlock()
+	return
 }
 
 func (is *infoStore) incFinished(id string) {

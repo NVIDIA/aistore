@@ -11,13 +11,13 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dloader"
+	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -41,15 +41,15 @@ func (p *proxy) downloadHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/download?id=...
 // DELETE /v1/download/{abort, remove}?id=...
 func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
-	payload := &dloader.AdminBody{}
 	if !p.ClusterStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
+	msg := &dloader.AdminBody{}
+	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := payload.Validate(r.Method == http.MethodDelete); err != nil {
+	if err := msg.Validate(r.Method == http.MethodDelete); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -66,56 +66,47 @@ func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("httpDownloadAdmin payload %v", payload)
-	}
-	if payload.ID != "" && p.ic.redirectToIC(w, r) {
+	if msg.ID != "" && p.ic.redirectToIC(w, r) {
 		return
 	}
-	resp, statusCode, err := p.dladm(r.Method, r.URL.Path, payload)
+	resp, statusCode, err := p.dladm(r.Method, r.URL.Path, msg)
 	if err != nil {
 		p.writeErr(w, r, err, statusCode)
-		return
+	} else {
+		w.Write(resp)
 	}
-	w.Write(resp)
 }
 
 // POST /v1/download
 func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
-	var (
-		body             []byte
-		dlb              dloader.Body
-		dlBase           dloader.Base
-		err              error
-		ok               bool
-		progressInterval = dloader.DownloadProgressInterval
-	)
-
-	if _, err = p.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
+	if _, err := p.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 		return
 	}
 
-	if body, err = io.ReadAll(r.Body); err != nil {
-		p.writeErrStatusf(w, r, http.StatusInternalServerError, "Error starting download: %v", err.Error())
+	jobID := "dlj-" + cos.GenUUID() // const prefix to visually differentiate xactions and dl. jobs
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		p.writeErrStatusf(w, r, http.StatusInternalServerError, "Error starting download: %v", err)
+		return
+	}
+	dlb, dlBase, ok := p.validateStartDownload(w, r, body)
+	if !ok {
 		return
 	}
 
-	if dlb, dlBase, ok = p.validateStartDownload(w, r, body); !ok {
-		return
-	}
-
+	var progressInterval = dloader.DownloadProgressInterval
 	if dlBase.ProgressInterval != "" {
-		if progressInterval, err = time.ParseDuration(dlBase.ProgressInterval); err != nil {
+		ival, err := time.ParseDuration(dlBase.ProgressInterval)
+		if err != nil {
 			p.writeErrf(w, r, "%s: invalid progress interval %q: %v", p, dlBase.ProgressInterval, err)
 			return
 		}
+		progressInterval = ival
 	}
 
-	// const prefix to visually differentiate xactions and dl. jobs
-	jobID := "dlj-" + cos.GenUUID()
-
-	if errCode, err := p.dlstart(r, jobID, body); err != nil {
+	xactID := cos.GenUUID()
+	if errCode, err := p.dlstart(r, xactID, jobID, body); err != nil {
 		p.writeErrStatusf(w, r, errCode, "Error starting download: %v", err)
 		return
 	}
@@ -124,54 +115,41 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
-	_respWithID(w, jobID)
+	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
+	b := cos.MustMarshal(dloader.DlPostResp{ID: jobID})
+	w.Write(b)
 }
 
 func (p *proxy) dladm(method, path string, msg *dloader.AdminBody) ([]byte, int, error) {
-	var (
-		notFoundCnt int
-		err         error
-	)
 	if msg.ID != "" && method == http.MethodGet && msg.OnlyActive {
-		if stats, exists := p.notifs.queryStats(msg.ID); exists {
-			var resp *dloader.StatusResp
-			stats.Range(func(_ string, status any) bool {
-				var (
-					dlStatus *dloader.StatusResp
-					ok       bool
-				)
-				if dlStatus, ok = status.(*dloader.StatusResp); !ok {
-					dlStatus = &dloader.StatusResp{}
-					if err := cos.MorphMarshal(status, dlStatus); err != nil {
-						debug.AssertNoErr(err)
-						return false
-					}
-				}
-				resp = resp.Aggregate(*dlStatus)
-				return true
-			})
-
-			respJSON := cos.MustMarshal(resp)
-			return respJSON, http.StatusOK, nil
+		nl, exists := p.notifs.entry(msg.ID)
+		if exists {
+			return p.dlstatus(nl)
 		}
 	}
 
 	var (
-		config = cmn.GCO.Get()
-		body   = cos.MustMarshal(msg)
-		args   = allocBcArgs()
+		config      = cmn.GCO.Get()
+		body        = cos.MustMarshal(msg)
+		args        = allocBcArgs()
+		xactID      = cos.GenUUID()
+		q           = url.Values{apc.QparamUUID: []string{xactID}}
+		notFoundCnt int
 	)
-	args.req = cmn.HreqArgs{Method: method, Path: path, Body: body, Query: url.Values{}}
+	args.req = cmn.HreqArgs{Method: method, Path: path, Body: body, Query: q}
 	args.timeout = config.Timeout.MaxHostBusy.D()
 	results := p.bcastGroup(args)
 	defer freeBcastRes(results)
 	freeBcArgs(args)
 	respCnt := len(results)
-
 	if respCnt == 0 {
 		return nil, http.StatusBadRequest, cmn.NewErrNoNodes(apc.Target)
 	}
-	validResponses := make([]*callResult, 0, respCnt) // TODO: avoid allocation
+
+	var (
+		validResponses = make([]*callResult, 0, respCnt) // TODO: avoid allocation
+		err            error
+	)
 	for _, res := range results {
 		if res.status == http.StatusOK {
 			validResponses = append(validResponses, res)
@@ -235,9 +213,36 @@ func (p *proxy) dladm(method, path string, msg *dloader.AdminBody) ([]byte, int,
 	}
 }
 
-func (p *proxy) dlstart(r *http.Request, id string, body []byte) (errCode int, err error) {
-	query := r.URL.Query()
-	query.Set(apc.QparamUUID, id)
+func (p *proxy) dlstatus(nl nl.NotifListener) ([]byte, int, error) {
+	// bcast
+	p.notifs.bcastGetStats(nl, cmn.GCO.Get().Periodic.NotifTime.D())
+	stats := nl.NodeStats()
+
+	var resp *dloader.StatusResp
+	stats.Range(func(_ string, status any) bool {
+		var (
+			dlStatus *dloader.StatusResp
+			ok       bool
+		)
+		if dlStatus, ok = status.(*dloader.StatusResp); !ok {
+			dlStatus = &dloader.StatusResp{}
+			if err := cos.MorphMarshal(status, dlStatus); err != nil {
+				debug.AssertNoErr(err)
+				return false
+			}
+		}
+		resp = resp.Aggregate(*dlStatus)
+		return true
+	})
+
+	respJSON := cos.MustMarshal(resp)
+	return respJSON, http.StatusOK, nil
+}
+
+func (p *proxy) dlstart(r *http.Request, xactID, jobID string, body []byte) (errCode int, err error) {
+	query := make(url.Values, 2)
+	query.Set(apc.QparamUUID, xactID)
+	query.Set(apc.QparamJobID, jobID)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body, Query: query}
 	config := cmn.GCO.Get()
@@ -273,11 +278,4 @@ func (p *proxy) validateStartDownload(w http.ResponseWriter, r *http.Request, bo
 		ok = true
 	}
 	return
-}
-
-func _respWithID(w http.ResponseWriter, id string) {
-	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
-	b := cos.MustMarshal(dloader.DlPostResp{ID: id})
-	_, err := w.Write(b)
-	debug.AssertNoErr(err)
 }
