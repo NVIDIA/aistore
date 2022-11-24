@@ -620,9 +620,9 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	}
 	var baseMsg string
 	if copies > 1 {
-		baseMsg = fmt.Sprintf("Configured %s as %d-way mirror, ", bck.DisplayName(), copies)
+		baseMsg = fmt.Sprintf("Configured %s as %d-way mirror. ", bck.DisplayName(), copies)
 	} else {
-		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy), ", bck.DisplayName())
+		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy). ", bck.DisplayName())
 	}
 	actionDone(c, baseMsg+xactProgressMsg(xactID))
 	return
@@ -634,7 +634,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	if xactID, err = api.ECEncodeBucket(apiBP, bck, data, parity); err != nil {
 		return
 	}
-	msg := fmt.Sprintf("Erasure-coding bucket %s, ", bck.DisplayName())
+	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.DisplayName())
 	actionDone(c, msg+xactProgressMsg(xactID))
 	return
 }

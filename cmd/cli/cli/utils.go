@@ -406,49 +406,67 @@ ret:
 	return
 }
 
-// Parses [TARGET_ID] [XACTION_ID|XACTION_NAME] [BUCKET]
+// Parses [TARGET_ID] [XACTION_ID|XACTION_KIND] [BUCKET]
 func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck cmn.Bck, err error) {
 	var smap *cluster.Smap
 	smap, err = api.GetClusterMap(apiBP)
 	if err != nil {
 		return
 	}
-	shift := 0
-	xactKind = argDaemonID(c)
+
+	var shift int
+	what := argDaemonID(c)
 	if node := smap.GetProxy(xactKind); node != nil {
-		return "", "", "", bck, fmt.Errorf("daemon %q is a proxy", xactKind)
+		return "", "", "", bck, fmt.Errorf("node %q is a proxy (expecting target, see --help)", what)
 	}
-	if node := smap.GetTarget(xactKind); node != nil {
-		nodeID = xactKind
-		xactKind = c.Args().Get(1)
+	if node := smap.GetTarget(what); node != nil {
+		nodeID = what
+		xactKind = c.Args().Get(1) // assuming ...
 		shift++
+	} else {
+		xactKind = what // unless determined otherwise below
 	}
 
-	uri := c.Args().Get(1 + shift)
-	if !xact.IsValidKind(xactKind) {
-		xactID = xactKind
-		xactKind = ""
-		uri = c.Args().Get(1 + shift)
-	} else if strings.Contains(xactKind, apc.BckProviderSeparator) {
+	var uri string
+	if strings.Contains(xactKind, apc.BckProviderSeparator) {
 		uri = xactKind
 		xactKind = ""
+	} else if !xact.IsValidKind(xactKind) && cos.IsValidUUID(xactKind) {
+		xactID = xactKind
+		xactKind = ""
 	}
-	if uri != "" {
-		switch xact.Table[xactKind].Scope {
-		case xact.ScopeBck:
-			// Bucket is optional.
-			if uri := c.Args().Get(1); uri != "" {
-				if bck, err = parseBckURI(c, uri); err != nil {
-					return "", "", "", bck, err
-				}
-				if _, err = headBucket(bck, true /* don't add */); err != nil {
-					return "", "", "", bck, err
-				}
+
+	what = c.Args().Get(1 + shift)
+	if what == "" {
+		return
+	}
+
+	if xactKind == "" && xact.IsValidKind(xactKind) {
+		xactKind = what
+	} else if strings.Contains(what, apc.BckProviderSeparator) {
+		uri = what
+	} else if xactID == "" && cos.IsValidUUID(what) {
+		xactID = what
+	}
+
+	if uri == "" || xactKind == "" {
+		return
+	}
+
+	switch xact.Table[xactKind].Scope {
+	case xact.ScopeBck:
+		// Bucket is optional.
+		if uri := c.Args().Get(1); uri != "" {
+			if bck, err = parseBckURI(c, uri); err != nil {
+				return "", "", "", bck, err
 			}
-		default:
-			if c.NArg() > 1 {
-				actionWarn(c, "\""+xactKind+"\" is a non bucket-scope xaction, ignoring bucket name.")
+			if _, err = headBucket(bck, true /* don't add */); err != nil {
+				return "", "", "", bck, err
 			}
+		}
+	default:
+		if c.NArg() > 1 {
+			actionWarn(c, "\""+xactKind+"\" is a non bucket-scope xaction, ignoring bucket name.")
 		}
 	}
 	return
@@ -1232,8 +1250,7 @@ func newProgIndicator(objName string) *progIndicator {
 
 // get xaction progress message
 func xactProgressMsg(xactID string) string {
-	return fmt.Sprintf("use '%s %s %s %s %s' to monitor progress",
-		cliName, commandJob, commandShow, subcmdXaction, xactID)
+	return fmt.Sprintf("To monitor the progress, run '%s %s %s %s %s'", cliName, commandShow, commandJob, subcmdXaction, xactID)
 }
 
 func flattenXactStats(snap *xact.SnapExt) nvpairList {

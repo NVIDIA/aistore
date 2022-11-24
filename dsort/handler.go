@@ -327,8 +327,8 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 ///// TARGET //////
 ///////////////////
 
-// SortHandler is the handler called for the HTTP endpoint /v1/sort.
-func SortHandler(w http.ResponseWriter, r *http.Request) {
+// [METHOD] /v1/sort
+func TargetHandler(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSort.L)
 	if err != nil {
 		return

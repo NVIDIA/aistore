@@ -471,7 +471,7 @@ func (t *target) initRecvHandlers() {
 		{r: apc.ObjStream, h: transport.RxAnyStream, net: accessControlData},
 
 		{r: apc.Download, h: t.downloadHandler, net: accessNetIntraControl},
-		{r: apc.Sort, h: dsort.SortHandler, net: accessControlData},
+		{r: apc.Sort, h: dsort.TargetHandler, net: accessControlData},
 		{r: apc.ETL, h: t.etlHandler, net: accessNetAll},
 
 		{r: "/" + apc.S3, h: t.s3Handler, net: accessNetPublicData},

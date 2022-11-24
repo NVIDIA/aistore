@@ -21,7 +21,6 @@ type (
 	NotifDownloadListerner struct {
 		nl.NotifListenerBase
 	}
-
 	NotifDownload struct {
 		nl.NotifBase
 		job jobif

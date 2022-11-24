@@ -154,9 +154,9 @@ func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err
 	}
 
 	if id != "" {
-		fmt.Fprintf(c.App.Writer, "Started %s %q, %s\n", xactKind, id, xactProgressMsg(id))
+		fmt.Fprintf(c.App.Writer, "Started xaction kind=%s, ID=%s. %s\n", xactKind, id, xactProgressMsg(id))
 	} else {
-		fmt.Fprintf(c.App.Writer, "Started %s\n", xactKind)
+		fmt.Fprintf(c.App.Writer, "Started xaction kind-%s\n", xactKind)
 	}
 
 	return
@@ -172,7 +172,7 @@ func isResilverNode(c *cli.Context, xactKind string) (sid string, err error) {
 	}
 	sid = c.Args().First()
 	if node := smap.GetTarget(sid); node == nil {
-		return "", fmt.Errorf("node %q is not a target. Run 'ais show cluster target' to see a list of all targets", sid)
+		return "", fmt.Errorf("node %s is not a target. Run 'ais show cluster target' to see a list of all targets", sid)
 	}
 	return
 }
@@ -262,7 +262,7 @@ func startDownloadHandler(c *cli.Context) error {
 				return err
 			}
 			if !p.BackendBck.Equal(&source.backend.bck) {
-				warn := fmt.Sprintf("%s does not have Cloud bucket %q as its *backend* - proceeding to download anyway.",
+				warn := fmt.Sprintf("%s does not have Cloud bucket %s as its *backend* - proceeding to download anyway.",
 					basePayload.Bck, source.backend.bck)
 				actionWarn(c, warn)
 				dlType = dloader.TypeSingle
@@ -303,7 +303,7 @@ func startDownloadHandler(c *cli.Context) error {
 				return err
 			}
 			if err := jsoniter.NewDecoder(file).Decode(&objects); err != nil {
-				return fmt.Errorf("%q file doesn't seem to contain JSON array of strings: %v", objectsListPath, err)
+				return fmt.Errorf("file %q doesn't seem to contain JSON array of strings: %v", objectsListPath, err)
 			}
 		}
 		for i, object := range objects {
@@ -336,7 +336,7 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Fprintln(c.App.Writer, id)
+	fmt.Fprintf(c.App.Writer, "Started download job %s\n", id)
 
 	if flagIsSet(c, progressBarFlag) {
 		return pbDownload(c, id)
@@ -415,8 +415,9 @@ func bgDownload(c *cli.Context, id string) (err error) {
 	} else if resp.FinishedTime.UnixNano() != 0 {
 		actionDownloaded(c, resp.FinishedCnt)
 	} else {
-		msg := fmt.Sprintf("Run `ais show job download %s --progress` to monitor the progress", id)
-		fmt.Fprintln(c.App.Writer, msg)
+		msg := fmt.Sprintf("To monitor the progress, run '%s %s %s %s %s --%s` ",
+			cliName, commandShow, commandJob, subcmdDownload, id, progressBarFlag.Name)
+		actionDone(c, msg)
 	}
 	return err
 }
@@ -441,7 +442,7 @@ func waitDownload(c *cli.Context, id string) (err error) {
 	}
 
 	if aborted {
-		return fmt.Errorf("download job with id %q was aborted", id)
+		return fmt.Errorf("download job %s was aborted", id)
 	}
 	return nil
 }
@@ -539,7 +540,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Started %s %q, %s\n", apc.ActLRU, id, xactProgressMsg(id))
+	fmt.Fprintf(c.App.Writer, "Started %s %s. %s\n", apc.ActLRU, id, xactProgressMsg(id))
 	return
 }
 

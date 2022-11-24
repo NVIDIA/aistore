@@ -58,10 +58,10 @@ func (is *infoStore) getJob(id string) (*dljob, error) {
 func (is *infoStore) getList(req *request) (jobs []*dljob) {
 	is.RLock()
 	for _, job := range is.dljobs {
-		if req.onlyActive && !_isRunning(job.FinishedTime.Load()) {
+		if req.onlyActive && !_isRunning(job.finishedTime.Load()) {
 			continue
 		}
-		if req.regex == nil || req.regex.MatchString(job.Description) {
+		if req.regex == nil || req.regex.MatchString(job.description) {
 			jobs = append(jobs, job)
 		}
 	}
@@ -71,11 +71,11 @@ func (is *infoStore) getList(req *request) (jobs []*dljob) {
 
 func (is *infoStore) setJob(job jobif) (njob *dljob) {
 	njob = &dljob{
-		ID:          job.ID(),
-		XactID:      job.XactID(),
-		Total:       job.Len(),
-		Description: job.Description(),
-		StartedTime: time.Now(),
+		id:          job.ID(),
+		xactID:      job.XactID(),
+		total:       job.Len(),
+		description: job.Description(),
+		startedTime: time.Now(),
 	}
 	is.Lock()
 	is.dljobs[job.ID()] = njob
@@ -86,32 +86,32 @@ func (is *infoStore) setJob(job jobif) (njob *dljob) {
 func (is *infoStore) incFinished(id string) {
 	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	dljob.FinishedCnt.Inc()
+	dljob.finishedCnt.Inc()
 }
 
 func (is *infoStore) incSkipped(id string) {
 	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	dljob.SkippedCnt.Inc()
-	dljob.FinishedCnt.Inc()
+	dljob.skippedCnt.Inc()
+	dljob.finishedCnt.Inc()
 }
 
 func (is *infoStore) incScheduled(id string) {
 	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	dljob.ScheduledCnt.Inc()
+	dljob.scheduledCnt.Inc()
 }
 
 func (is *infoStore) incErrorCnt(id string) {
 	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	dljob.ErrorCnt.Inc()
+	dljob.errorCnt.Inc()
 }
 
 func (is *infoStore) setAllDispatched(id string, dispatched bool) {
 	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	dljob.AllDispatched.Store(dispatched)
+	dljob.allDispatched.Store(dispatched)
 }
 
 func (is *infoStore) markFinished(id string) error {
@@ -120,14 +120,14 @@ func (is *infoStore) markFinished(id string) error {
 		debug.AssertNoErr(err)
 		return err
 	}
-	dljob.FinishedTime.Store(time.Now())
+	dljob.finishedTime.Store(time.Now())
 	return dljob.valid()
 }
 
 func (is *infoStore) setAborted(id string) {
 	dljob, err := is.getJob(id)
 	debug.AssertNoErr(err)
-	dljob.Aborted.Store(true)
+	dljob.aborted.Store(true)
 	// NOTE: Don't set `FinishedTime` yet as we are not fully done.
 	//       The job now can be removed but there's no guarantee
 	//       that all tasks have been stopped and all resources were freed.
@@ -143,7 +143,7 @@ func (is *infoStore) housekeep() time.Duration {
 
 	is.Lock()
 	for id, dljob := range is.dljobs {
-		if time.Since(dljob.FinishedTime.Load()) > interval {
+		if time.Since(dljob.finishedTime.Load()) > interval {
 			is.delJob(id)
 		}
 	}

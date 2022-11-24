@@ -1,6 +1,6 @@
 // Package dloader implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package dloader
 
@@ -38,8 +38,7 @@ type (
 	}
 )
 
-func newThrottler(limits Limits) *throttler {
-	t := &throttler{}
+func (t *throttler) init(limits Limits) {
 	if limits.Connections > 0 {
 		t.sema = cos.NewSemaphore(limits.Connections)
 	} else {
@@ -49,7 +48,6 @@ func newThrottler(limits Limits) *throttler {
 	if limits.BytesPerHour > 0 {
 		t.initThroughputThrottling(limits.BytesPerHour / 60)
 	}
-	return t
 }
 
 func (t *throttler) initThroughputThrottling(maxBytesPerMinute int) {

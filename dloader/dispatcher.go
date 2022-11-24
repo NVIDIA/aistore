@@ -413,7 +413,7 @@ func (d *dispatcher) handleRemove(req *request) {
 	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
 	job := dljob.clone()
 	if job.JobRunning() {
-		req.errRsp(fmt.Errorf("download job %q is still running", dljob.ID), http.StatusBadRequest)
+		req.errRsp(fmt.Errorf("download job %q is still running", dljob.id), http.StatusBadRequest)
 		return
 	}
 

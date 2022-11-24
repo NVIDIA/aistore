@@ -909,7 +909,7 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	}
 	basemsg := fmt.Sprintf("%s %s from %s", fileList, command, bck)
 	if xactID != "" {
-		basemsg += ", " + xactProgressMsg(xactID)
+		basemsg += ". " + xactProgressMsg(xactID)
 	}
 	fmt.Fprintln(c.App.Writer, basemsg)
 	return
@@ -963,7 +963,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	baseMsg := fmt.Sprintf("%s from %s objects in the range %q", command, bck, rangeStr)
 
 	if xactID != "" {
-		baseMsg += ", " + xactProgressMsg(xactID)
+		baseMsg += ". " + xactProgressMsg(xactID)
 	}
 	fmt.Fprintln(c.App.Writer, baseMsg)
 	return

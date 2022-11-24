@@ -72,15 +72,13 @@ type (
 	}
 
 	baseDlJob struct {
-		id          string
 		bck         *cluster.Bck
-		timeout     time.Duration
-		description string
-		t           *throttler
+		notif       *NotifDownload
 		xdl         *Xact
-
-		// notif
-		notif *NotifDownload
+		id          string
+		description string
+		timeout     time.Duration
+		throt       throttler
 	}
 
 	sliceDlJob struct {
@@ -89,10 +87,10 @@ type (
 		current int
 	}
 	multiDlJob struct {
-		*sliceDlJob
+		sliceDlJob
 	}
 	singleDlJob struct {
-		*sliceDlJob
+		sliceDlJob
 	}
 
 	rangeDlJob struct {
@@ -117,18 +115,18 @@ type (
 	}
 
 	dljob struct {
-		ID            string
-		XactID        string
-		Description   string
-		StartedTime   time.Time
-		FinishedTime  atomic.Time
-		FinishedCnt   atomic.Int32
-		ScheduledCnt  atomic.Int32
-		SkippedCnt    atomic.Int32
-		ErrorCnt      atomic.Int32
-		Total         int
-		Aborted       atomic.Bool
-		AllDispatched atomic.Bool
+		id            string
+		xactID        string
+		description   string
+		startedTime   time.Time
+		finishedTime  atomic.Time
+		finishedCnt   atomic.Int32
+		scheduledCnt  atomic.Int32
+		skippedCnt    atomic.Int32
+		errorCnt      atomic.Int32
+		total         int
+		aborted       atomic.Bool
+		allDispatched atomic.Bool
 	}
 )
 
@@ -136,21 +134,20 @@ type (
 // baseDlJob //
 ///////////////
 
-func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits Limits, xdl *Xact) *baseDlJob {
+func (j *baseDlJob) init(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits Limits, xdl *Xact) {
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
 		limits.BytesPerHour /= t.Sowner().Get().CountActiveTargets()
 	}
-
 	td, _ := time.ParseDuration(timeout)
-	return &baseDlJob{
-		id:          id,
-		bck:         bck,
-		timeout:     td,
-		description: desc,
-		t:           newThrottler(limits),
-		xdl:         xdl,
+	{
+		j.id = id
+		j.bck = bck
+		j.timeout = td
+		j.description = desc
+		j.throt.init(limits)
+		j.xdl = xdl
 	}
 }
 
@@ -192,7 +189,7 @@ func (j *baseDlJob) ActiveStats() (*StatusResp, error) {
 }
 
 func (*baseDlJob) checkObj(string) bool    { debug.Assert(false); return false }
-func (j *baseDlJob) throttler() *throttler { return j.t }
+func (j *baseDlJob) throttler() *throttler { return &j.throt }
 
 func (j *baseDlJob) cleanup() {
 	j.throttler().stop()
@@ -208,15 +205,13 @@ func (j *baseDlJob) cleanup() {
 // sliceDlJob -- multiDlJob -- singleDlJob
 //
 
-func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects cos.StrKVs) (*sliceDlJob, error) {
+func (j *sliceDlJob) init(t cluster.Target, bck *cluster.Bck, objects cos.StrKVs) error {
 	objs, err := buildDlObjs(t, bck, objects)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &sliceDlJob{
-		baseDlJob: *base,
-		objs:      objs,
-	}, nil
+	j.objs = objs
+	return nil
 }
 
 func (j *sliceDlJob) Len() int { return len(j.objs) }
@@ -236,40 +231,32 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	return objs, true, nil
 }
 
-func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *MultiBody, xdl *Xact) (*multiDlJob, error) {
-	var (
-		objs cos.StrKVs
-		err  error
-	)
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *MultiBody, xdl *Xact) (mj *multiDlJob, err error) {
+	var objs cos.StrKVs
+
+	mj = &multiDlJob{}
+	mj.baseDlJob.init(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+
 	if objs, err = payload.ExtractPayload(); err != nil {
 		return nil, err
 	}
-	sliceDlJob, err := newSliceDlJob(t, bck, base, objs)
-	if err != nil {
-		return nil, err
-	}
-	return &multiDlJob{sliceDlJob}, nil
+	err = mj.sliceDlJob.init(t, bck, objs)
+	return
 }
 
-func (j *multiDlJob) String() (s string) {
-	return "multi-" + j.baseDlJob.String()
-}
+func (j *multiDlJob) String() (s string) { return "multi-" + j.baseDlJob.String() }
 
-func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *SingleBody, xdl *Xact) (*singleDlJob, error) {
-	var (
-		objs cos.StrKVs
-		err  error
-	)
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *SingleBody, xdl *Xact) (sj *singleDlJob, err error) {
+	var objs cos.StrKVs
+
+	sj = &singleDlJob{}
+	sj.baseDlJob.init(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+
 	if objs, err = payload.ExtractPayload(); err != nil {
 		return nil, err
 	}
-	sliceDlJob, err := newSliceDlJob(t, bck, base, objs)
-	if err != nil {
-		return nil, err
-	}
-	return &singleDlJob{sliceDlJob}, nil
+	err = sj.sliceDlJob.init(t, bck, objs)
+	return
 }
 
 func (j *singleDlJob) String() (s string) {
@@ -281,21 +268,19 @@ func (j *singleDlJob) String() (s string) {
 ////////////////
 
 // NOTE: the sizes of objects to be downloaded will be unknown.
-func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *RangeBody, xdl *Xact) (job *rangeDlJob, err error) {
-	job = &rangeDlJob{}
-	if job.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
-		return
+func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *RangeBody, xdl *Xact) (rj *rangeDlJob, err error) {
+	rj = &rangeDlJob{}
+	if rj.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
+		return nil, err
 	}
-	// TODO: job.Init instead, to avoid copying baseDlJob = *base
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
-	job.count, err = countObjects(t, job.pt, payload.Subdir, base.bck)
-	if err != nil {
-		return
+	rj.baseDlJob.init(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+
+	if rj.count, err = countObjects(t, rj.pt, payload.Subdir, rj.bck); err != nil {
+		return nil, err
 	}
-	job.pt.InitIter()
-	job.baseDlJob = *base
-	job.t = t
-	job.dir = payload.Subdir
+	rj.pt.InitIter()
+	rj.t = t
+	rj.dir = payload.Subdir
 	return
 }
 
@@ -345,21 +330,21 @@ func (j *rangeDlJob) getNextObjs() error {
 // backendDlJob //
 //////////////////
 
-func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *BackendBody, xdl *Xact) (*backendDlJob, error) {
+func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *BackendBody, xdl *Xact) (bj *backendDlJob, err error) {
 	if !bck.IsRemote() {
 		return nil, errors.New("bucket download requires a remote bucket")
 	} else if bck.IsHTTP() {
 		return nil, errors.New("bucket download does not support HTTP buckets")
 	}
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
-	job := &backendDlJob{
-		baseDlJob: *base,
-		t:         t,
-		sync:      payload.Sync,
-		prefix:    payload.Prefix,
-		suffix:    payload.Suffix,
+	bj = &backendDlJob{}
+	bj.baseDlJob.init(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+	{
+		bj.t = t
+		bj.sync = payload.Sync
+		bj.prefix = payload.Prefix
+		bj.suffix = payload.Suffix
 	}
-	return job, nil
+	return
 }
 
 func (*backendDlJob) Len() int     { return -1 }
@@ -430,30 +415,30 @@ func (j *backendDlJob) getNextObjs() error {
 
 func (j *dljob) clone() Job {
 	return Job{
-		ID:            j.ID,
-		XactID:        j.XactID,
-		Description:   j.Description,
-		FinishedCnt:   int(j.FinishedCnt.Load()),
-		ScheduledCnt:  int(j.ScheduledCnt.Load()),
-		SkippedCnt:    int(j.SkippedCnt.Load()),
-		ErrorCnt:      int(j.ErrorCnt.Load()),
-		Total:         j.Total,
-		AllDispatched: j.AllDispatched.Load(),
-		Aborted:       j.Aborted.Load(),
-		StartedTime:   j.StartedTime,
-		FinishedTime:  j.FinishedTime.Load(),
+		ID:            j.id,
+		XactID:        j.xactID,
+		Description:   j.description,
+		FinishedCnt:   int(j.finishedCnt.Load()),
+		ScheduledCnt:  int(j.scheduledCnt.Load()),
+		SkippedCnt:    int(j.skippedCnt.Load()),
+		ErrorCnt:      int(j.errorCnt.Load()),
+		Total:         j.total,
+		AllDispatched: j.allDispatched.Load(),
+		Aborted:       j.aborted.Load(),
+		StartedTime:   j.startedTime,
+		FinishedTime:  j.finishedTime.Load(),
 	}
 }
 
 // Used for debugging purposes to ensure integrity of the struct.
 func (j *dljob) valid() (err error) {
-	if j.Aborted.Load() {
+	if j.aborted.Load() {
 		return
 	}
-	if !j.AllDispatched.Load() {
+	if !j.allDispatched.Load() {
 		return
 	}
-	if a, b, c := j.ScheduledCnt.Load(), j.FinishedCnt.Load(), j.ErrorCnt.Load(); a != b+c {
+	if a, b, c := j.scheduledCnt.Load(), j.finishedCnt.Load(), j.errorCnt.Load(); a != b+c {
 		err = fmt.Errorf("invalid: %d != %d + %d", a, b, c)
 	}
 	return

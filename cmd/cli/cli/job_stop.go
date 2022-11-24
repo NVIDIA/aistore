@@ -71,11 +71,11 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	}
 
 	if xactKind != "" && xactID != "" {
-		sid = fmt.Sprintf("%s, ID=%q", xactKind, xactID)
+		sid = fmt.Sprintf("xaction kind=%s, ID=%s", xactKind, xactID)
 	} else if xactKind != "" {
-		sid = xactKind
+		sid = fmt.Sprintf("xaction kind=%s", xactKind)
 	} else {
-		sid = fmt.Sprintf("xaction ID=%q", xactID)
+		sid = fmt.Sprintf("xaction ID=%s", xactID)
 	}
 	if bck.IsEmpty() {
 		fmt.Fprintf(c.App.Writer, "Stopped %s\n", sid)
@@ -96,7 +96,7 @@ func stopDownloadHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "download job %q successfully stopped\n", id)
+	fmt.Fprintf(c.App.Writer, "Stopped download job %s\n", id)
 	return
 }
 
@@ -111,6 +111,6 @@ func stopDsortHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s job %q successfully stopped\n", dsort.DSortName, id)
+	fmt.Fprintf(c.App.Writer, "Stopped %s job %s\n", dsort.DSortName, id)
 	return
 }
