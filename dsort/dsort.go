@@ -37,10 +37,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	DSortName          = "dSort"
-	DSortNameLowercase = "dsort"
-)
+const DSortName = "dsort"
+
+const PrefixJobID = "srt-"
 
 type (
 	dsorter interface {

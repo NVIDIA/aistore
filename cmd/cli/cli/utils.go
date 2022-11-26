@@ -431,8 +431,10 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 	if strings.Contains(xactKind, apc.BckProviderSeparator) {
 		uri = xactKind
 		xactKind = ""
-	} else if !xact.IsValidKind(xactKind) && cos.IsValidUUID(xactKind) {
-		xactID = xactKind
+	} else if !xact.IsValidKind(xactKind) {
+		if cos.IsValidUUID(xactKind) {
+			xactID = xactKind
+		}
 		xactKind = ""
 	}
 
@@ -441,7 +443,7 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 		return
 	}
 
-	if xactKind == "" && xact.IsValidKind(xactKind) {
+	if xactKind == "" && xact.IsValidKind(what) {
 		xactKind = what
 	} else if strings.Contains(what, apc.BckProviderSeparator) {
 		uri = what

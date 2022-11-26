@@ -46,7 +46,7 @@ func GenUUID() (uuid string) {
 }
 
 func IsValidUUID(uuid string) bool {
-	return len(uuid) >= lenShortID && isAlpha(uuid[0])
+	return len(uuid) >= lenShortID && isAlpha(uuid[0]) && IsAlphaPlus(uuid[1:], false)
 }
 
 // alpha-numeric++ including letters, numbers, dashes (-), and underscores (_)

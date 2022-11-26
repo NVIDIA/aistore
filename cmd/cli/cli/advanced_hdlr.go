@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file provides advanced commands that are useful for testing or development but not everyday use.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -39,7 +38,7 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:      commandGenShards,
-				Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", dsort.DSortName),
+				Usage:     "generate and write random shards (e.g.: \"ais://dsort-testing/shard-{001..999}.tar\" - generate 999 shards)",
 				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
 				Flags:     advancedCmdsFlags[commandGenShards],
 				Action:    genShardsHandler,

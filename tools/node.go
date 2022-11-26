@@ -766,7 +766,12 @@ func waitSmapSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.
 			}
 			if newSmap.Version > ver+1 {
 				// reset
-				ctx.Log("Updating Smap state cond v%d to v%d from %s\n", ver, newSmap.Version-1, sname)
+				if ver <= 0 {
+					ctx.Log("Received %s from %s\n", newSmap, sname)
+				} else {
+					ctx.Log("Received newer %s from %s, updated wait-for condition (%d => %d)\n",
+						newSmap, sname, ver, newSmap.Version)
+				}
 				ver = newSmap.Version - 1
 				ignore = orig.Clone()
 				ignore.Add(sid)

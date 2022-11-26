@@ -19,18 +19,20 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+type Type string
+
 const (
 	TypeSingle  Type = "single"
 	TypeRange   Type = "range"
 	TypeMulti   Type = "multi"
 	TypeBackend Type = "backend"
-
-	DownloadProgressInterval = 10 * time.Second
 )
 
-type (
-	Type string
+const PrefixJobID = "dnl-"
 
+const DownloadProgressInterval = 10 * time.Second
+
+type (
 	// NOTE: Changing this structure requires changes in `MarshalJSON` and `UnmarshalJSON` methods.
 	Body struct {
 		Type Type `json:"type"`

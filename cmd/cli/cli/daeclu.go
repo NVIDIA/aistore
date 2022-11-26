@@ -138,7 +138,7 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterCon
 			tmpls.ClusterSummary
 		return tmpls.Print(body, c.App.Writer, template, nil, useJSON)
 	}
-	return fmt.Errorf("%s is not a valid DAEMON_ID nor DAEMON_TYPE", sid)
+	return fmt.Errorf("%s is not a valid NODE_ID nor NODE_TYPE", sid)
 }
 
 func daemonDiskStats(c *cli.Context, sid string) error {

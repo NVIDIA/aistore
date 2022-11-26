@@ -31,8 +31,8 @@ import (
 
 const (
 	testIP            = "127.0.0.1"
-	testDir           = "/tmp/" + DSortNameLowercase + "_tests"
-	testBucket        = DSortNameLowercase + "_tests"
+	testDir           = "/tmp/" + DSortName + "_tests"
+	testBucket        = DSortName + "_tests"
 	globalManagerUUID = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 )
 

@@ -28,7 +28,7 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:         subcmdRemoveDownload,
-				Usage:        "remove finished download job(s) identified by job's ID or regular expression",
+				Usage:        "remove finished download job(s)",
 				ArgsUsage:    jobIDArgument,
 				Flags:        removeCmdsFlags[subcmdRemoveDownload],
 				Action:       removeDownloadHandler,
@@ -36,7 +36,7 @@ var (
 			},
 			{
 				Name:         subcmdRemoveDsort,
-				Usage:        fmt.Sprintf("remove finished %s job identified by the job's ID", dsort.DSortName),
+				Usage:        "remove finished " + dsort.DSortName + " job",
 				ArgsUsage:    jobIDArgument,
 				Flags:        removeCmdsFlags[subcmdRemoveDsort],
 				Action:       removeDsortHandler,

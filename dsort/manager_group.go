@@ -44,7 +44,7 @@ func NewManagerGroup(db kvdb.Driver, skipHk bool) *ManagerGroup {
 		db:       db,
 	}
 	if !skipHk {
-		hk.Reg(DSortNameLowercase+hk.NameSuffix, mg.housekeep, hk.DayInterval)
+		hk.Reg(DSortName+hk.NameSuffix, mg.housekeep, hk.DayInterval)
 	}
 	return mg
 }

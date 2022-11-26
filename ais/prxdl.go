@@ -83,7 +83,7 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobID := "dlj-" + cos.GenUUID() // const prefix to visually differentiate xactions and dl. jobs
+	jobID := dloader.PrefixJobID + cos.GenUUID() // prefix to visually differentiate vs. xaction IDs
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

@@ -312,7 +312,7 @@ func (b *downloaderPB) totalFilesCnt() int {
 }
 
 func downloadJobsList(c *cli.Context, regex string) error {
-	list, err := api.DownloadGetList(apiBP, regex, flagIsSet(c, activeFlag))
+	list, err := api.DownloadGetList(apiBP, regex, !flagIsSet(c, allJobsFlag))
 	if err != nil {
 		return err
 	}
@@ -351,7 +351,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 		return nil
 	}
 
-	resp, err := api.DownloadStatus(apiBP, id, flagIsSet(c, activeFlag))
+	resp, err := api.DownloadStatus(apiBP, id, !flagIsSet(c, allJobsFlag))
 	if err != nil {
 		return err
 	}

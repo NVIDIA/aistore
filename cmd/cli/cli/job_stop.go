@@ -28,7 +28,7 @@ var (
 			{
 				Name:         subcmdStopXaction,
 				Usage:        "stop xaction",
-				ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET]",
+				ArgsUsage:    "XACTION_ID|XACTION_KIND [BUCKET]",
 				Description:  xactionDesc(false),
 				Flags:        stopCmdsFlags[subcmdStopXaction],
 				Action:       stopXactionHandler,
@@ -44,7 +44,7 @@ var (
 			},
 			{
 				Name:         subcmdStopDsort,
-				Usage:        fmt.Sprintf("stop %s", dsort.DSortName),
+				Usage:        "stop " + dsort.DSortName + " job",
 				ArgsUsage:    jobIDArgument,
 				Action:       stopDsortHandler,
 				BashComplete: dsortIDRunningCompletions,

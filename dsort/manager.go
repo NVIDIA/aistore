@@ -32,9 +32,9 @@ import (
 
 const (
 	// Stream names
-	recvReqStreamNameFmt  = DSortNameLowercase + "-%s-recv_req"
-	recvRespStreamNameFmt = DSortNameLowercase + "-%s-recv_resp"
-	shardStreamNameFmt    = DSortNameLowercase + "-%s-shard"
+	recvReqStreamNameFmt  = DSortName + "-%s-recv_req"
+	recvRespStreamNameFmt = DSortName + "-%s-recv_resp"
+	shardStreamNameFmt    = DSortName + "-%s-shard"
 )
 
 // State of the cleans - see `cleanup` and `finalCleanup`

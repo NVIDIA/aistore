@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/dloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -58,7 +59,7 @@ var (
 			longRunFlags,
 			regexFlag,
 			progressBarFlag,
-			activeFlag,
+			allJobsFlag,
 			verboseFlag,
 			jsonFlag,
 		),
@@ -67,22 +68,21 @@ var (
 			regexFlag,
 			verboseFlag,
 			logFlag,
-			activeFlag,
+			allJobsFlag,
 			jsonFlag,
 		),
 		subcmdShowXaction: append(
 			longRunFlags,
 			jsonFlag,
 			allXactionsFlag,
-			activeFlag,
 			noHeaderFlag,
 			verboseFlag,
 		),
 		subcmdShowJob: append(
 			longRunFlags,
 			jsonFlag,
-			allXactionsFlag,
-			activeFlag,
+			allXactionsFlag, // NOTE: allXactionsFlag.Name == allJobsFlag.Name
+			regexFlag,
 			noHeaderFlag,
 			verboseFlag,
 		),
@@ -180,7 +180,7 @@ var (
 	showCmdCluster = cli.Command{
 		Name:      subcmdShowCluster,
 		Usage:     "show cluster details",
-		ArgsUsage: "[DAEMON_ID|DAEMON_TYPE|smap|bmd|config|stats]",
+		ArgsUsage: "[NODE_ID|NODE_TYPE|smap|bmd|config|stats]",
 		Flags:     showCmdsFlags[subcmdShowCluster],
 		Action:    showClusterHandler,
 		BashComplete: func(c *cli.Context) {
@@ -266,8 +266,9 @@ var (
 	}
 
 	showCmdJob = cli.Command{
-		Name:  subcmdShowJob,
-		Usage: "show all running and finished jobs (use <TAB-TAB> to select specific category)",
+		Name:      subcmdShowJob,
+		Usage:     "show running and/or finished jobs and xactions (or, use <TAB-TAB> to select a specific subcategory)",
+		ArgsUsage: "[TARGET_ID] [XACTION_ID|XACTION_KIND] [BUCKET]",
 		Subcommands: []cli.Command{
 			showCmdDownload,
 			showCmdDsort,
@@ -287,7 +288,7 @@ var (
 	}
 	showCmdDsort = cli.Command{
 		Name:      subcmdShowDsort,
-		Usage:     fmt.Sprintf("show information about %s jobs", dsort.DSortName),
+		Usage:     "show running and finished " + dsort.DSortName + " jobs",
 		ArgsUsage: optionalJobIDDaemonIDArgument,
 		Flags:     showCmdsFlags[subcmdShowDsort],
 		Action:    showDsortHandler,
@@ -302,8 +303,8 @@ var (
 	}
 	showCmdXaction = cli.Command{
 		Name:         subcmdShowXaction,
-		Usage:        "show xaction details",
-		ArgsUsage:    "[TARGET_ID] [XACTION_ID|XACTION_NAME] [BUCKET]",
+		Usage:        "show running and finished eXtended actions (xactions) by: target | xaction ID/kind | bucket",
+		ArgsUsage:    "[TARGET_ID] [XACTION_ID|XACTION_KIND] [BUCKET]",
 		Description:  xactionDesc(false),
 		Flags:        showCmdsFlags[subcmdShowXaction],
 		Action:       showXactionHandler,
@@ -348,12 +349,28 @@ func showDisksHandler(c *cli.Context) (err error) {
 
 func showJobsHandler(c *cli.Context) error {
 	var (
-		nonxact bool
-		useJSON = flagIsSet(c, jsonFlag)
-		active  = flagIsSet(c, activeFlag)
+		regex      = parseStrFlag(c, regexFlag)
+		useJSON    = flagIsSet(c, jsonFlag)
+		onlyActive = !flagIsSet(c, allJobsFlag)
+		nonxact    bool
 	)
 	setLongRunParams(c, 72)
-	downloads, err := api.DownloadGetList(apiBP, "", active)
+
+	_, xactID, _, _, err := parseXactionFromArgs(c)
+	if err != nil {
+		return err
+	}
+	if cos.IsValidUUID(xactID) {
+		if strings.HasPrefix(xactID, dloader.PrefixJobID) {
+			return downloadJobStatus(c, xactID /*jobID*/)
+		}
+		if strings.HasPrefix(xactID, dsort.PrefixJobID) {
+			return dsortJobStatus(c, xactID)
+		}
+		return showXactionHandler(c)
+	}
+
+	downloads, err := api.DownloadGetList(apiBP, regex, onlyActive)
 	if err != nil {
 		actionWarn(c, err.Error())
 	} else if len(downloads) > 0 {
@@ -365,7 +382,7 @@ func showJobsHandler(c *cli.Context) error {
 		nonxact = true
 	}
 
-	dsorts, err := api.ListDSort(apiBP, "", active)
+	dsorts, err := api.ListDSort(apiBP, regex, onlyActive)
 	if err != nil {
 		return err
 	} else if len(dsorts) > 0 {
@@ -384,8 +401,7 @@ func showJobsHandler(c *cli.Context) error {
 		fmt.Fprintln(c.App.Writer)
 		actionCptn(c, "", "eXtended actions (xactions):")
 	}
-	err = xactList(c, "" /*nodeID*/, "" /*xactID*/, "" /*xactKind*/, cmn.Bck{})
-	return err
+	return showXactionHandler(c)
 }
 
 func showDownloadsHandler(c *cli.Context) error {
@@ -402,13 +418,13 @@ func showDownloadsHandler(c *cli.Context) error {
 
 func showDsortHandler(c *cli.Context) error {
 	var (
-		id      = c.Args().First()
-		useJSON = flagIsSet(c, jsonFlag)
-		active  = flagIsSet(c, activeFlag)
+		id         = c.Args().First()
+		useJSON    = flagIsSet(c, jsonFlag)
+		onlyActive = !flagIsSet(c, allJobsFlag)
 	)
 	setLongRunParams(c, 72)
 	if c.NArg() < 1 { // list all (active) dsort jobs
-		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag), active)
+		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag), onlyActive)
 		if err != nil {
 			return err
 		}
@@ -440,10 +456,10 @@ func showStorageHandler(c *cli.Context) (err error) {
 	return showDisksHandler(c)
 }
 
-func showXactionHandler(c *cli.Context) (err error) {
-	nodeID, xactID, xactKind, bck, errP := parseXactionFromArgs(c)
-	if errP != nil {
-		return errP
+func showXactionHandler(c *cli.Context) error {
+	nodeID, xactID, xactKind, bck, err := parseXactionFromArgs(c)
+	if err != nil {
+		return err
 	}
 	setLongRunParams(c, 72)
 	return xactList(c, nodeID, xactID, xactKind, bck)
@@ -463,7 +479,9 @@ func xactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck) (err
 	if err != nil {
 		return
 	}
-	if flagIsSet(c, activeFlag) {
+
+	onlyActive := !flagIsSet(c, allXactionsFlag)
+	if onlyActive {
 		for tid, snaps := range xs {
 			if len(snaps) == 0 {
 				continue

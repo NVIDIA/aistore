@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	dsortDescAllPrefix = dsort.DSortNameLowercase + "-test-integration"
+	dsortDescAllPrefix = dsort.DSortName + "-test-integration"
 
 	scopeConfig = "config"
 	scopeSpec   = "spec"

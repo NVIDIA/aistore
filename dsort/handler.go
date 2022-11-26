@@ -62,7 +62,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 	}
 
 	var (
-		managerUUID = cos.GenUUID()
+		managerUUID = PrefixJobID + cos.GenUUID() // compare w/ p.httpdlpost
 		smap        = ctx.smapOwner.Get()
 	)
 	checkResponses := func(responses []response) error {

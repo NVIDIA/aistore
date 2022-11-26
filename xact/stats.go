@@ -91,9 +91,9 @@ func (b *SnapExt) Idle() bool {
 
 func (msg *QueryMsg) String() (s string) {
 	if msg.ID == "" {
-		s = fmt.Sprintf("xmsg-%s", msg.Kind)
+		s = fmt.Sprintf("x-%s", msg.Kind)
 	} else {
-		s = fmt.Sprintf("xmsg-%s[%s]", msg.Kind, msg.ID)
+		s = fmt.Sprintf("x-%s[%s]", msg.Kind, msg.ID)
 	}
 	if msg.Bck.IsEmpty() {
 		return

@@ -117,7 +117,7 @@ type dsortResult struct {
 
 func (d dsortResult) String() string {
 	if d.aborted {
-		return fmt.Sprintf("%s job was aborted", dsort.DSortName)
+		return dsort.DSortName + " job was aborted"
 	}
 
 	var sb strings.Builder

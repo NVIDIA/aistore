@@ -73,7 +73,7 @@ const (
 	commandRebalance = "rebalance"
 	commandMirror    = "mirror"
 
-	subcmdDsort      = dsort.DSortNameLowercase
+	subcmdDsort      = dsort.DSortName
 	subcmdSmap       = apc.GetWhatSmap
 	subcmdBMD        = apc.GetWhatBMD
 	subcmdMpath      = apc.GetWhatDiskStats
@@ -234,12 +234,12 @@ const (
 	keyValuePairsArgument       = "KEY=VALUE [KEY=VALUE...]"
 	aliasURLPairArgument        = "ALIAS=URL (or UUID=URL)"
 	aliasArgument               = "ALIAS (or UUID)"
-	daemonMountpathPairArgument = "DAEMON_ID=MOUNTPATH [DAEMON_ID=MOUNTPATH...]"
+	daemonMountpathPairArgument = "NODE_ID=MOUNTPATH [NODE_ID=MOUNTPATH...]"
 
 	// Job IDs (download, dsort)
 	jobIDArgument                 = "JOB_ID"
 	optionalJobIDArgument         = "[JOB_ID]"
-	optionalJobIDDaemonIDArgument = "[JOB_ID [DAEMON_ID]]"
+	optionalJobIDDaemonIDArgument = "[JOB_ID [NODE_ID]]"
 
 	// Buckets
 	bucketArgument         = "BUCKET"
@@ -256,11 +256,11 @@ const (
 	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
 
 	// Daemons
-	daemonIDArgument         = "DAEMON_ID"
-	optionalDaemonIDArgument = "[DAEMON_ID]"
+	daemonIDArgument         = "NODE_ID"
+	optionalDaemonIDArgument = "[NODE_ID]"
 	optionalTargetIDArgument = "[TARGET_ID]"
 	showConfigArgument       = "cli | cluster [CONFIG SECTION OR PREFIX] |\n" +
-		"      DAEMON_ID [ cluster | local | all [CONFIG SECTION OR PREFIX ] ]"
+		"      NODE_ID [ cluster | local | all [CONFIG SECTION OR PREFIX ] ]"
 	showClusterConfigArgument = "[CONFIG_SECTION]"
 	nodeConfigArgument        = daemonIDArgument + " " + keyValuePairsArgument
 	attachRemoteAISArgument   = aliasURLPairArgument
@@ -268,10 +268,10 @@ const (
 	joinNodeArgument          = "IP:PORT"
 	startDownloadArgument     = "SOURCE DESTINATION"
 	jsonSpecArgument          = "JSON_SPECIFICATION"
-	showStatsArgument         = "[DAEMON_ID] [STATS_FILTER]"
+	showStatsArgument         = "[NODE_ID] [STATS_FILTER]"
 
 	// Xactions
-	xactionArgument = "XACTION_NAME"
+	xactionArgument = "XACTION_KIND"
 
 	// List command
 	listAnyCommandArgument = "[PROVIDER://][BUCKET_NAME]"
@@ -313,10 +313,10 @@ const (
 
 var (
 	// scope = all
-	allXactionsFlag = cli.BoolFlag{Name: scopeAll, Usage: "show all xactions, including finished"}
-	allPropsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "show all object properties"}
-	allJobsFlag     = cli.BoolFlag{Name: scopeAll, Usage: "remove all finished jobs"}
-	allETLStopFlag  = cli.BoolFlag{Name: scopeAll, Usage: "stop all ETLs"}
+	allXactionsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all xactions, including finished"}
+	allPropsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "all object properties"}
+	allJobsFlag     = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
+	allETLStopFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all ETL jobs"}
 
 	allObjsOrBcksFlag = cli.BoolFlag{Name: scopeAll, Usage: "depending on context: all objects (including misplaced ones and copies) _or_ all buckets (including remote buckets that are not present in the cluster)"}
 
@@ -392,8 +392,6 @@ var (
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "list objects page by page, one page at a time (see also '--page-size' and '--limit')"}
 	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 
-	activeFlag = cli.BoolFlag{Name: "active", Usage: "show only running jobs and xactions"}
-
 	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
 	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
 	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
@@ -436,8 +434,9 @@ var (
 		Usage: "path to file containing JSON array of object names to download",
 	}
 	syncFlag = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
+
 	// dSort
-	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "file size in a shard"}
+	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files inside a shard"}
 	logFlag      = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
 	cleanupFlag  = cli.BoolFlag{
 		Name:  "cleanup",

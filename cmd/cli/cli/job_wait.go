@@ -36,7 +36,7 @@ var (
 			{
 				Name:         subcmdWaitXaction,
 				Usage:        "wait for an xaction to finish",
-				ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET]",
+				ArgsUsage:    "XACTION_ID|XACTION_KIND [BUCKET]",
 				Flags:        waitCmdsFlags[subcmdWaitXaction],
 				Action:       waitXactionHandler,
 				BashComplete: xactionCompletions(""),
@@ -51,7 +51,7 @@ var (
 			},
 			{
 				Name:         subcmdWaitDSort,
-				Usage:        fmt.Sprintf("wait for %s to finish", dsort.DSortName),
+				Usage:        "wait for " + dsort.DSortName + " job to finish",
 				ArgsUsage:    jobIDArgument,
 				Flags:        waitCmdsFlags[subcmdWaitDSort],
 				Action:       waitDSortHandler,

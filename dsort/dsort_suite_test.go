@@ -8,13 +8,11 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/xact/xreg"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 func init() {
-	xreg.Init()
 	hk.TestInit()
 }
 
