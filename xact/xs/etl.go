@@ -32,10 +32,6 @@ var (
 	_ xreg.Renewable = (*etlFactory)(nil)
 )
 
-////////////////
-// etlFactory //
-////////////////
-
 func (*etlFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 	return &etlFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
@@ -53,13 +49,10 @@ func (*etlFactory) Kind() string        { return apc.ActETLInline }
 func (p *etlFactory) Get() cluster.Xact { return p.xctn }
 
 func (*etlFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
-	// TODO: check xprev and reinforce
 	return xreg.WprKeepAndStartNew, nil
 }
 
-/////////////////
-// ETL xaction //
-/////////////////
+// (tests only)
 
 func newETL(id, kind string) (xctn *xactETL) {
 	xctn = &xactETL{}

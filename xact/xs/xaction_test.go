@@ -157,7 +157,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	xactBck := rnsRen.Entry.Get()
 	tassert.Errorf(t, rnsRen.Err == nil && xactBck != nil, "Xaction must be created")
 
-	xreg.AbortAll(errors.New("test-abort-g"), xact.ScopeG)
+	xreg.AbortAll(errors.New("test-abort-g"), xact.ScopeG, xact.ScopeGB)
 
 	tassert.Errorf(t, rnsLRU.Entry.Get().IsAborted(), "AbortAllGlobal: expected global xaction to be aborted")
 	tassert.Errorf(t, !xactBck.IsAborted(), "AbortAllGlobal: expected bucket xaction to be running: %s", xactBck)

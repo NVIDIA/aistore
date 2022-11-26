@@ -134,7 +134,7 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 		return fmt.Errorf(cmn.FmtErrUnknown, t, "xaction kind", xactMsg.Kind)
 	}
 
-	if dtor := xact.Table[xactMsg.Kind]; dtor.Scope == xact.ScopeBck && bck == nil {
+	if dtor := xact.Table[xactMsg.Kind]; dtor.Scope == xact.ScopeB && bck == nil {
 		return fmt.Errorf(erfmn, xactMsg.Kind)
 	}
 

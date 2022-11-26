@@ -51,12 +51,8 @@ type (
 func RegBckXact(entry Renewable) { dreg.regBckXact(entry) }
 
 func (r *registry) regBckXact(entry Renewable) {
-	debug.Assert(xact.Table[entry.Kind()].Scope == xact.ScopeBck)
-
-	// It is expected that registrations happen at the init time. Therefore, it
-	// is safe to assume that no `RenewXYZ` will happen before all xactions
-	// are registered. Thus, no locking is needed.
-	r.bckXacts[entry.Kind()] = entry
+	debug.Assert(xact.IsSameScope(entry.Kind(), xact.ScopeB, xact.ScopeGB))
+	r.bckXacts[entry.Kind()] = entry // no locking: all reg-s are done at init time
 }
 
 // RenewBucketXact is general function to renew bucket xaction without any

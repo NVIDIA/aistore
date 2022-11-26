@@ -78,10 +78,10 @@ type (
 	// Selects subset of xactions to abort.
 	abortArgs struct {
 		bcks       []*cluster.Bck // run on a slice of buckets
-		ty         string         // one of { ScopeG, ScopeBck, ... } enum
+		scope      []int          // one of { ScopeG, ScopeB, ... } enum
+		kind       string         // all of a kind
 		err        error          // original cause (or reason), e.g. cmn.ErrUserAbort
 		mountpaths bool           // mountpath xactions - see xact.Table
-		all        bool           // all or matching `ty` above, if defined
 	}
 
 	entries struct {
@@ -178,12 +178,12 @@ func AbortAllBuckets(err error, bcks ...*cluster.Bck) {
 
 // AbortAll waits until abort of all xactions is finished
 // Every abort is done asynchronously
-func AbortAll(err error, tys ...string) {
-	var ty string
-	if len(tys) > 0 {
-		ty = tys[0]
-	}
-	dreg.abort(abortArgs{ty: ty, err: err, all: true})
+func AbortAll(err error, scope ...int) {
+	dreg.abort(abortArgs{scope: scope, err: err})
+}
+
+func AbortKind(err error, kind string) {
+	dreg.abort(abortArgs{kind: kind, err: err})
 }
 
 func AbortAllMountpathsXactions() { dreg.abort(abortArgs{mountpaths: true}) }
@@ -282,23 +282,29 @@ func (r *registry) abort(args abortArgs) {
 		if xctn.Finished() {
 			return true
 		}
-		abort := false
-		if args.mountpaths {
-			debug.Assert(args.ty == "", args.ty)
+
+		var abort bool
+		switch {
+		case args.mountpaths:
+			debug.Assertf(args.scope == nil && args.kind == "", "scope %v, kind %q", args.scope, args.kind)
 			if xact.IsMountpath(xctn.Kind()) {
 				abort = true
 			}
-		} else if len(args.bcks) > 0 {
-			debug.Assert(args.ty == "", args.ty)
+		case len(args.bcks) > 0:
+			debug.Assertf(args.scope == nil && args.kind == "", "scope %v, kind %q", args.scope, args.kind)
 			for _, bck := range args.bcks {
 				if xctn.Bck() != nil && bck.Equal(xctn.Bck(), true /*sameID*/, true /*same backend*/) {
 					abort = true
 					break
 				}
 			}
-		} else if args.all {
-			abort = args.ty == "" || args.ty == xact.Table[xctn.Kind()].Scope
+		case args.kind != "":
+			debug.Assertf(args.scope == nil && len(args.bcks) == 0, "scope %v, bcks %v", args.scope, args.bcks)
+			abort = args.kind == xctn.Kind()
+		default:
+			abort = args.scope == nil || xact.IsSameScope(xctn.Kind(), args.scope...)
 		}
+
 		if abort {
 			xctn.Abort(args.err)
 		}
@@ -440,7 +446,7 @@ func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) 
 	}
 	// on-demand
 	if _, ok := xprev.(xact.Demand); ok {
-		if pdtor.Scope != xact.ScopeBck {
+		if pdtor.Scope != xact.ScopeB {
 			use = true
 			return
 		}
@@ -754,15 +760,15 @@ func (flt XactFilter) matches(xctn cluster.Xact) (yes bool) {
 		}
 	}
 	// bucket?
-	if xact.Table[xctn.Kind()].Scope != xact.ScopeBck {
-		return true // non-bucket x
+	if xact.Table[xctn.Kind()].Scope != xact.ScopeB {
+		return true // non single-bucket x
 	}
 	if flt.Bck == nil {
 		return true // the filter's not filtering out
 	}
 
 	if xctn.Bck() == nil {
-		return false // NOTE: ambiguity - cannot really compare
+		return false // ambiguity (cannot really compare)
 	}
 	return xctn.Bck().Equal(flt.Bck, true, true)
 }

@@ -1,6 +1,6 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
@@ -9,21 +9,23 @@ import (
 )
 
 const (
-	ScopeG   = "global"
-	ScopeT   = "target"
-	ScopeBck = "bucket"
-	ScopeO   = "other"
+	ScopeG  = iota + 1 // cluster
+	ScopeB             // bucket
+	ScopeGB            // (one bucket) | (all buckets)
+	ScopeT             // target
 )
 
 type (
 	Descriptor struct {
-		Scope      string          // ScopeG (global), etc. - the enum above
-		Access     apc.AccessAttrs // Access required by xctn (see: apc.Access*)
-		Startable  bool            // determines if this xaction can be started via API
-		Metasync   bool            // true: changes and metasyncs cluster-wide meta
-		Owned      bool            // true: JTX-owned
-		RefreshCap bool            // true: refresh capacity stats upon completion
-		Mountpath  bool            // true: mountpath-traversing (jogger-based) xaction
+		DisplayName string          // as implied
+		Access      apc.AccessAttrs // Access required by xctn (see: apc.Access*)
+		Scope       int             // ScopeG (global), etc. - the enum above
+		Startable   bool            // determines if this xaction can be started via API
+		Metasync    bool            // true: changes and metasyncs cluster-wide meta
+		Owned       bool            // true: JTX-owned
+		RefreshCap  bool            // true: refresh capacity stats upon completion
+		Mountpath   bool            // true: mountpath-traversing (jogger-based) xaction
+
 		// see xreg for "limited coexistence"
 		Rebalance  bool // moves data between nodes
 		Resilver   bool // moves data between mountpaths
@@ -36,39 +38,140 @@ type (
 // `Startable`, `Owned`, etc.
 var Table = map[string]Descriptor{
 	// bucket-less xactions that will typically have a 'cluster' scope (with resilver being a notable exception)
-	apc.ActLRU:          {Scope: ScopeG, Startable: true, Mountpath: true},
-	apc.ActStoreCleanup: {Scope: ScopeG, Startable: true, Mountpath: true},
-	apc.ActElection:     {Scope: ScopeG, Startable: false},
-	apc.ActResilver:     {Scope: ScopeT, Startable: true, Mountpath: true, Resilver: true},
-	apc.ActRebalance:    {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true, Rebalance: true},
-	apc.ActDownload:     {Scope: ScopeG, Startable: false, Mountpath: true},
-	apc.ActETLInline:    {Scope: ScopeG, Startable: false, Mountpath: false},
+	apc.ActElection:  {DisplayName: "elect-primary", Scope: ScopeG, Startable: false},
+	apc.ActRebalance: {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true, Rebalance: true},
+	apc.ActDownload:  {Scope: ScopeG, Startable: false, Mountpath: true},
+	apc.ActETLInline: {Scope: ScopeG, Startable: false, Mountpath: false},
 
-	// xactions that run on a given bucket or buckets
-	apc.ActECGet:           {Scope: ScopeBck, Startable: false},
-	apc.ActECPut:           {Scope: ScopeBck, Startable: false, Mountpath: true, RefreshCap: true},
-	apc.ActECRespond:       {Scope: ScopeBck, Startable: false},
-	apc.ActMakeNCopies:     {Scope: ScopeBck, Access: apc.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	apc.ActPutCopies:       {Scope: ScopeBck, Startable: false, Mountpath: true, RefreshCap: true},
-	apc.ActArchive:         {Scope: ScopeBck, Startable: false, RefreshCap: true},
-	apc.ActCopyObjects:     {Scope: ScopeBck, Startable: false, RefreshCap: true},
-	apc.ActETLObjects:      {Scope: ScopeBck, Startable: false, RefreshCap: true},
-	apc.ActMoveBck:         {Scope: ScopeBck, Access: apc.AceMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true, Rebalance: true, MassiveBck: true},
-	apc.ActCopyBck:         {Scope: ScopeBck, Access: apc.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true, MassiveBck: true},
-	apc.ActETLBck:          {Scope: ScopeBck, Access: apc.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true, MassiveBck: true},
-	apc.ActECEncode:        {Scope: ScopeBck, Access: apc.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true, MassiveBck: true},
-	apc.ActEvictObjects:    {Scope: ScopeBck, Access: apc.AceObjDELETE, Startable: false, RefreshCap: true, Mountpath: true},
-	apc.ActDeleteObjects:   {Scope: ScopeBck, Access: apc.AceObjDELETE, Startable: false, RefreshCap: true, Mountpath: true},
-	apc.ActLoadLomCache:    {Scope: ScopeBck, Startable: true, Mountpath: true},
-	apc.ActPrefetchObjects: {Scope: ScopeBck, Access: apc.AccessRW, RefreshCap: true, Startable: true},
-	apc.ActPromote:         {Scope: ScopeBck, Access: apc.AcePromote, Startable: false, RefreshCap: true},
-	apc.ActList:            {Scope: ScopeBck, Access: apc.AceObjLIST, Startable: false, Metasync: false, Owned: true},
-	apc.ActInvalListCache:  {Scope: ScopeBck, Access: apc.AceObjLIST, Startable: false},
+	// (one bucket) | (all buckets)
+	apc.ActLRU:          {DisplayName: "evict-lru", Scope: ScopeGB, Startable: true, Mountpath: true},
+	apc.ActStoreCleanup: {Scope: ScopeGB, Startable: true, Mountpath: true},
+	apc.ActSummaryBck: {
+		Scope:     ScopeGB,
+		Access:    apc.AceObjLIST | apc.AceBckHEAD,
+		Startable: false,
+		Metasync:  false,
+		Owned:     true,
+		Mountpath: true,
+	},
 
-	// other
-	apc.ActSummaryBck: {Scope: ScopeO, Access: apc.AceObjLIST | apc.AceBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
+	// one target
+	apc.ActResilver: {Scope: ScopeT, Startable: true, Mountpath: true, Resilver: true},
+
+	// xactions that run on (or in) a given bucket
+	apc.ActECGet:     {Scope: ScopeB, Startable: false},
+	apc.ActECPut:     {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true},
+	apc.ActECRespond: {Scope: ScopeB, Startable: false},
+	apc.ActMakeNCopies: {
+		DisplayName: "mirror",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW,
+		Startable:   true,
+		Metasync:    true,
+		Owned:       false,
+		RefreshCap:  true,
+		Mountpath:   true,
+	},
+	apc.ActPutCopies:   {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true},
+	apc.ActArchive:     {Scope: ScopeB, Startable: false, RefreshCap: true},
+	apc.ActCopyObjects: {DisplayName: "copy-objects", Scope: ScopeB, Startable: false, RefreshCap: true},
+	apc.ActETLObjects:  {DisplayName: "etl-objects", Scope: ScopeB, Startable: false, RefreshCap: true},
+	apc.ActMoveBck: {
+		DisplayName: "rename-bucket",
+		Scope:       ScopeB,
+		Access:      apc.AceMoveBucket,
+		Startable:   false,
+		Metasync:    true,
+		Owned:       false,
+		Mountpath:   true,
+		Rebalance:   true,
+		MassiveBck:  true,
+	},
+	apc.ActCopyBck: {
+		DisplayName: "copy-bucket",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW,
+		Startable:   false,
+		Metasync:    true,
+		Owned:       false,
+		RefreshCap:  true,
+		Mountpath:   true,
+		MassiveBck:  true,
+	},
+	apc.ActETLBck: {
+		DisplayName: "etl-bucket",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW,
+		Startable:   false,
+		Metasync:    true,
+		Owned:       false,
+		RefreshCap:  true,
+		Mountpath:   true,
+		MassiveBck:  true,
+	},
+	apc.ActECEncode: {
+		DisplayName: "ec-bucket",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW,
+		Startable:   true,
+		Metasync:    true,
+		Owned:       false,
+		RefreshCap:  true,
+		Mountpath:   true,
+		MassiveBck:  true,
+	},
+	apc.ActEvictObjects: {
+		DisplayName: "evict-objects",
+		Scope:       ScopeB,
+		Access:      apc.AceObjDELETE,
+		Startable:   false,
+		RefreshCap:  true,
+		Mountpath:   true,
+	},
+	apc.ActDeleteObjects: {
+		DisplayName: "delete-objects",
+		Scope:       ScopeB,
+		Access:      apc.AceObjDELETE,
+		Startable:   false,
+		RefreshCap:  true,
+		Mountpath:   true,
+	},
+	apc.ActPrefetchObjects: {DisplayName: "prefetch-objects", Scope: ScopeB, Access: apc.AccessRW, RefreshCap: true, Startable: true},
+	apc.ActPromote:         {DisplayName: "promote-files", Scope: ScopeB, Access: apc.AcePromote, Startable: false, RefreshCap: true},
+	apc.ActList:            {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Owned: true},
+
+	// cache management, internal usage
+	apc.ActLoadLomCache:   {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true, Mountpath: true},
+	apc.ActInvalListCache: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false},
 }
 
-func IsValidKind(kind string) bool { _, ok := Table[kind]; return ok }
-func IsBckScope(kind string) bool  { return Table[kind].Scope == ScopeBck }
 func IsMountpath(kind string) bool { return Table[kind].Mountpath }
+
+func IsValidKind(kindOrName string) bool {
+	dtor := getDtor(kindOrName)
+	return dtor != nil
+}
+
+func IsSameScope(kindOrName string, scs ...int) bool {
+	dtor := getDtor(kindOrName)
+	if dtor == nil {
+		return false
+	}
+	scope, scope2 := scs[0], 0
+	if len(scs) > 1 {
+		scope2 = scs[1]
+	}
+	return dtor.Scope == scope || dtor.Scope == scope2
+}
+
+func getDtor(kindOrName string) *Descriptor {
+	if dtor, ok := Table[kindOrName]; ok {
+		return &dtor
+	}
+	for _, dtor := range Table {
+		if dtor.DisplayName == kindOrName {
+			return &dtor
+		}
+	}
+	return nil
+}

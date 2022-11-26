@@ -46,14 +46,8 @@ github.com/Azure/go-autorest/logger v0.2.1/go.mod h1:T9E3cAhj2VqvPOtCYAvby9aBXkZ
 github.com/Azure/go-autorest/tracing v0.6.0/go.mod h1:+vhtPC754Xsa23ID7GlGsrdKBpUA79WCAKPPZVC2DeU=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/NVIDIA/aistore v1.3.16-0.20221123210530-36afbffc6a77 h1:SGapE6QJofbfSl8X8W7graw/021WA9kDwgFcpthf004=
-github.com/NVIDIA/aistore v1.3.16-0.20221123210530-36afbffc6a77/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
-github.com/NVIDIA/aistore v1.3.16-0.20221125162331-96f45005f0e8 h1:EaIemw0sZpuH2rhoA7R2MD3mkO0jVmtv5rDMKK6JZLM=
-github.com/NVIDIA/aistore v1.3.16-0.20221125162331-96f45005f0e8/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
-github.com/NVIDIA/aistore v1.3.16-0.20221125233026-78fd6646bb87 h1:QKDDo75aPjR8CUsQ6m4cl2pv9Ku4BNoQZ7p3fdA8uWA=
-github.com/NVIDIA/aistore v1.3.16-0.20221125233026-78fd6646bb87/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
-github.com/NVIDIA/aistore v1.3.16-0.20221126000206-634cdb5973cf h1:53qa2whYY4anzm30HE4xSJ2s9K1bK4SZ3Khpg0wTjTA=
-github.com/NVIDIA/aistore v1.3.16-0.20221126000206-634cdb5973cf/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
+github.com/NVIDIA/aistore v1.3.16-0.20221126043159-73936c1873a0 h1:CGnB+seO9omWlnTElsi4JrwpYt9V4hrgtleC6CSWf98=
+github.com/NVIDIA/aistore v1.3.16-0.20221126043159-73936c1873a0/go.mod h1:UyOKxDDhegQSrR/TaSs79eAucqEwFQlwc1PdqS805qM=
 github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46/go.mod h1:3wb06e3pkSAbeQ52E9H9iFoQsEEwGN64994WTCIhntQ=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=

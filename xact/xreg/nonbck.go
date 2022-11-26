@@ -14,12 +14,8 @@ import (
 )
 
 func RegNonBckXact(entry Renewable) {
-	debug.Assert(xact.Table[entry.Kind()].Scope != xact.ScopeBck)
-
-	// It is expected that registrations happen at the init time. Therefore, it
-	// is safe to assume that no `RenewXYZ` will happen before all xactions
-	// are registered. Thus, no locking is needed.
-	dreg.nonbckXacts[entry.Kind()] = entry
+	debug.Assert(!xact.IsSameScope(entry.Kind(), xact.ScopeB))
+	dreg.nonbckXacts[entry.Kind()] = entry // no locking: all reg-s are done at init time
 }
 
 func RenewRebalance(id int64) RenewRes {

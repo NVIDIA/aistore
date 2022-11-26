@@ -85,10 +85,11 @@ var (
 				Action:    startDsortHandler,
 			},
 			{
-				Name:   subcmdLRU,
-				Usage:  fmt.Sprintf("start %q xaction", apc.ActLRU),
-				Flags:  startCmdsFlags[subcmdLRU],
-				Action: startLRUHandler,
+				Name:         subcmdLRU,
+				Usage:        fmt.Sprintf("start %q xaction", apc.ActLRU),
+				Flags:        startCmdsFlags[subcmdLRU],
+				Action:       startLRUHandler,
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			{
 				Name:         subcmdStgCleanup,

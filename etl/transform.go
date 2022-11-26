@@ -298,8 +298,8 @@ func Stop(t cluster.Target, id string, errCause error) error {
 		UUID: id,
 	}
 
-	// Abort any running offline ETLs.
-	xreg.AbortAll(errCause, apc.ActETLBck)
+	// Abort all running offline ETLs.
+	xreg.AbortKind(errCause, apc.ActETLBck)
 
 	c, err := GetCommunicator(id, t.Snode())
 	if err != nil {
