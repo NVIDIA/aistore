@@ -188,7 +188,7 @@ func attachRemoteAISHandler(c *cli.Context) (err error) {
 
 func detachRemoteAISHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		err = missingArgumentsError(c, aliasArgument)
+		err = missingArgumentsError(c, c.Command.ArgsUsage)
 		return
 	}
 	alias := c.Args().Get(0)
@@ -275,7 +275,7 @@ func joinNodeHandler(c *cli.Context) (err error) {
 
 func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "daemon ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
@@ -366,7 +366,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 func setPrimaryHandler(c *cli.Context) error {
 	daemonID := argDaemonID(c)
 	if daemonID == "" {
-		return missingArgumentsError(c, "proxy daemon ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	primarySmap, err := fillMap()
 	if err != nil {

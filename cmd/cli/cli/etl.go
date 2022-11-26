@@ -280,7 +280,7 @@ func etlListHandler(c *cli.Context) (err error) {
 
 func etlSourceHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "ETL_ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	id := c.Args().Get(0)
 	msg, err := api.ETLGetInitMsg(apiBP, id)
@@ -300,7 +300,7 @@ func etlSourceHandler(c *cli.Context) (err error) {
 
 func etlLogsHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "ETL_ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	var (
@@ -365,7 +365,7 @@ func etlStopHandler(c *cli.Context) (err error) {
 
 func etlStartHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "ETL_ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	etlID := c.Args()[0]
 	if err := api.ETLStart(apiBP, etlID); err != nil {
@@ -380,9 +380,9 @@ func etlStartHandler(c *cli.Context) (err error) {
 
 func etlObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "ETL_ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	} else if c.NArg() == 1 {
-		return missingArgumentsError(c, "BUCKET/OBJECT_NAME")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	} else if c.NArg() == 2 {
 		return missingArgumentsError(c, "OUTPUT")
 	}
@@ -415,7 +415,7 @@ func etlObjectHandler(c *cli.Context) (err error) {
 
 func etlBucketHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "ETL_ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	} else if c.NArg() == 1 {
 		return missingArgumentsError(c, "BUCKET_FROM")
 	} else if c.NArg() == 2 {

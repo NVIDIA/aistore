@@ -52,7 +52,7 @@ func removeDownloadHandler(c *cli.Context) (err error) {
 		return removeDownloadRegex(c)
 	}
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "download job ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if err = api.RemoveDownload(apiBP, id); err != nil {
 		return
@@ -95,7 +95,7 @@ func removeDsortHandler(c *cli.Context) (err error) {
 	id := c.Args().First()
 
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, dsort.DSortName+" job ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	if err = api.RemoveDSort(apiBP, id); err != nil {

@@ -207,7 +207,7 @@ func mvObjectHandler(c *cli.Context) (err error) {
 
 func removeObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	if c.NArg() == 1 {
@@ -417,7 +417,7 @@ func promoteHandler(c *cli.Context) (err error) {
 
 func setCustomPropsHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	uri := c.Args().First()
 	bck, objName, err := parseBckObjectURI(c, uri, true /* optional objName */)

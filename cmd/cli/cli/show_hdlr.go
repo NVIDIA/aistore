@@ -756,7 +756,7 @@ func showNodeConfig(c *cli.Context) error {
 
 func showDaemonLogHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "daemon ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	firstIteration := setLongRunParams(c, 0)

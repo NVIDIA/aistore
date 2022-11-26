@@ -79,7 +79,7 @@ func mpathDisableHandler(c *cli.Context) (err error) { return mpathAction(c, apc
 
 func mpathAction(c *cli.Context, action string) error {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, daemonMountpathPairArgument)
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	smap, errMap := fillMap()
 	if errMap != nil {

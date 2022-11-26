@@ -186,7 +186,7 @@ func startDownloadHandler(c *cli.Context) error {
 		id               string
 	)
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "source", "destination")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if c.NArg() == 1 {
 		return missingArgumentsError(c, "destination")
@@ -453,7 +453,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 		specPath = parseStrFlag(c, specFileFlag)
 	)
 	if c.NArg() == 0 && specPath == "" {
-		return missingArgumentsError(c, "job specification")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	} else if c.NArg() > 0 && specPath != "" {
 		return &errUsage{
 			context:      c,
@@ -548,7 +548,7 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 	printDryRunHeader(c)
 
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket")
+		return incorrectUsageMsg(c, c.Command.ArgsUsage)
 	}
 	if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])

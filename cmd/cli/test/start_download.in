@@ -3,17 +3,17 @@ ais job rm download --all // IGNORE
 ais job start download gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz ais://$BUCKET // FAIL "too many arguments"
 
 ais job start download gs://minikube/iso/minikube-v0.23.2.iso.sha256 ais://$BUCKET --desc="minikube" // IGNORE
-ais job wait download $(ais show job download --regex="minikube" | awk 'NR==2 {print $1}')
+ais job wait download $(ais show job download --regex="minikube" --all | awk 'NR==2 {print $1}')
 ais show job download --regex="minikube" // IGNORE
-ais show job download $(ais show job download --regex="minikube" | awk 'NR==2 {print $1}')
+ais show job download $(ais show job download --regex="minikube" --all | awk 'NR==2 {print $1}')
 
 ais job start download "gs://minikube/iso/minikube-v0.23.{2..4}.iso.sha256" ais://$BUCKET --desc="minikube-range" // IGNORE
-ais job wait download $(ais show job download --regex="minikube-range" | awk 'NR==2 {print $1}')
+ais job wait download $(ais show job download --regex="minikube-range" --all | awk 'NR==2 {print $1}')
 ais show job download --regex="minikube" // IGNORE
-ais show job download $(ais show job download --regex="minikube-range" | awk 'NR==2 {print $1}')
+ais show job download $(ais show job download --regex="minikube-range" --all | awk 'NR==2 {print $1}')
 
 echo "[\"iso/minikube-v0.25.0.iso.sha256\", \"iso/minikube-v0.25.1.iso.sha256\"]" > /tmp/ais_test_dl_list.txt
 ais job start download gs://minikube ais://$BUCKET --object-list=/tmp/ais_test_dl_list.txt --desc="minikube-multi" // IGNORE
-ais job wait download $(ais show job download --regex="minikube-multi" | awk 'NR==2 {print $1}')
+ais job wait download $(ais show job download --regex="minikube-multi" --all | awk 'NR==2 {print $1}')
 ais show job download --regex="minikube" // IGNORE
-ais show job download $(ais show job download --regex="minikube-multi" | awk 'NR==2 {print $1}')
+ais show job download $(ais show job download --regex="minikube-multi" --all | awk 'NR==2 {print $1}')

@@ -31,7 +31,7 @@ var (
 
 	jobWaitSubcmds = cli.Command{
 		Name:  commandWait,
-		Usage: "wait for a specific task to finish",
+		Usage: "wait for a specific task",
 		Subcommands: []cli.Command{
 			{
 				Name:         subcmdWaitXaction,
@@ -43,7 +43,7 @@ var (
 			},
 			{
 				Name:         subcmdWaitDownload,
-				Usage:        "wait for a download to finish",
+				Usage:        "wait for download to finish",
 				ArgsUsage:    jobIDArgument,
 				Flags:        waitCmdsFlags[subcmdWaitDownload],
 				Action:       waitDownloadHandler,
@@ -63,7 +63,7 @@ var (
 
 func waitXactionHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "xaction name")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	_, xactID, xactKind, bck, err := parseXactionFromArgs(c)
@@ -90,7 +90,7 @@ func waitXactionHandler(c *cli.Context) error {
 
 func waitDownloadHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "job id")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	var (
@@ -130,7 +130,7 @@ func waitDownloadHandler(c *cli.Context) (err error) {
 
 func waitDSortHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "job id")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	var (

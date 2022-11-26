@@ -465,7 +465,7 @@ func evictHandler(c *cli.Context) (err error) {
 	printDryRunHeader(c)
 
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket name")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	// Bucket argument provided by the user.

@@ -57,7 +57,7 @@ var (
 func stopXactionHandler(c *cli.Context) (err error) {
 	var sid string
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "xaction name or id")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	_, xactID, xactKind, bck, err := parseXactionFromArgs(c)
@@ -89,7 +89,7 @@ func stopDownloadHandler(c *cli.Context) (err error) {
 	id := c.Args().First()
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "download job ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	if err = api.AbortDownload(apiBP, id); err != nil {
@@ -104,7 +104,7 @@ func stopDsortHandler(c *cli.Context) (err error) {
 	id := c.Args().First()
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, dsort.DSortName+" job ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	if err = api.AbortDSort(apiBP, id); err != nil {

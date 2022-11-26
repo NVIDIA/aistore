@@ -57,7 +57,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	)
 
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
+		return missingArgumentsError(c, "bucket/object", "output file")
 	}
 
 	uri := c.Args().Get(0)

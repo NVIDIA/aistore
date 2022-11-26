@@ -147,7 +147,7 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 		hideHeader = flagIsSet(c, noHeaderFlag)
 	)
 	if _, ok := pmapStatus[sid]; ok {
-		return fmt.Errorf("daemon ID=%q is a proxy, but \"%s %s %s\" works only for targets",
+		return fmt.Errorf("node %q is a proxy (hint: \"%s %s %s\" works only for targets)",
 			sid, cliName, commandShow, subcmdShowDisk)
 	}
 	if _, ok := tmapStatus[sid]; sid != "" && !ok {

@@ -292,8 +292,8 @@ const (
 	deleteAuthTokenArgument   = "TOKEN | TOKEN_FILE"
 
 	// Alias
-	aliasCmdArgument    = "AIS_COMMAND"
-	aliasSetCmdArgument = "ALIAS AIS_COMMAND"
+	aliasCmdArgument    = "COMMAND"
+	aliasSetCmdArgument = "ALIAS COMMAND"
 
 	// Search
 	searchArgument = "KEYWORD [KEYWORD...]"

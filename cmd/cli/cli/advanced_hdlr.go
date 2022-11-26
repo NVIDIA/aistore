@@ -185,7 +185,7 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 	var bck cmn.Bck
 
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket name")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	} else if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
 	}
@@ -199,7 +199,7 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 
 func removeNodeFromSmap(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing daemon ID")
+		return incorrectUsageMsg(c, c.Command.ArgsUsage)
 	} else if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
 	}

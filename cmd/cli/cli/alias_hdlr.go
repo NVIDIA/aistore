@@ -170,14 +170,14 @@ func rmAliasHandler(c *cli.Context) (err error) {
 func (a *acli) setAliasHandler(c *cli.Context) (err error) {
 	alias := c.Args().First()
 	if alias == "" {
-		return missingArgumentsError(c, "alias")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if !validateAlias(alias) {
 		return fmt.Errorf(invalidAlias)
 	}
 
 	if c.NArg() < 2 {
-		return missingArgumentsError(c, "command")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	oldCmd, ok := cfg.Aliases[alias]
 	newCmd := ""

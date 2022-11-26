@@ -165,7 +165,7 @@ func showConfigCompletions(c *cli.Context) {
 		}
 		return
 	}
-	if c.NArg() == 1 { // daemon id only
+	if c.NArg() == 1 { // node id only
 		fmt.Println(cfgScopeInherited)
 		fmt.Println(cfgScopeLocal)
 		return
@@ -199,7 +199,7 @@ func setNodeConfigCompletions(c *cli.Context) {
 		suggestDaemon(completeAllDaemons)
 		return
 	}
-	if c.NArg() == 1 { // daemon id only
+	if c.NArg() == 1 { // node id only
 		fmt.Println(cfgScopeInherited)
 		fmt.Println(cfgScopeLocal)
 		return
@@ -209,7 +209,7 @@ func setNodeConfigCompletions(c *cli.Context) {
 		v      any = &config.ClusterConfig
 		props      = cos.NewStrSet()
 	)
-	if c.NArg() == 2 { // daemon id and scope
+	if c.NArg() == 2 { // node id and scope
 		if argLast(c) == cfgScopeLocal {
 			v = &config.LocalConfig
 		} else if argLast(c) == cfgScopeInherited {

@@ -336,7 +336,7 @@ func addAuthUserHandler(c *cli.Context) (err error) {
 func deleteUserHandler(c *cli.Context) (err error) {
 	userName := c.Args().First()
 	if userName == "" {
-		return missingArgumentsError(c, "user name")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	return authn.DeleteUser(authParams, userName)
 }
@@ -344,7 +344,7 @@ func deleteUserHandler(c *cli.Context) (err error) {
 func deleteRoleHandler(c *cli.Context) (err error) {
 	role := c.Args().Get(0)
 	if role == "" {
-		return missingArgumentsError(c, "role")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	return authn.DeleteRole(authParams, role)
 }
@@ -435,7 +435,7 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 		return
 	}
 	if cluSpec.Alias == "" && cluSpec.ID == "" {
-		return missingArgumentsError(c, "cluster ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	list, err := authn.GetRegisteredClusters(authParams, cluSpec)
 	if err != nil {
@@ -463,7 +463,7 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 func deleteAuthClusterHandler(c *cli.Context) (err error) {
 	cid := c.Args().Get(0)
 	if cid == "" {
-		return missingArgumentsError(c, "cluster id")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	cluSpec := authn.CluACL{ID: cid}
 	return authn.UnregisterCluster(authParams, cluSpec)

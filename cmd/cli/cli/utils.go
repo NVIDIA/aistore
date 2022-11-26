@@ -386,7 +386,7 @@ func makePairs(args []string) (nvs cos.StrKVs, err error) {
 func parseRemAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
 	var parts []string
 	if c.NArg() == 0 {
-		err = missingArgumentsError(c, aliasURLPairArgument)
+		err = missingArgumentsError(c, c.Command.ArgsUsage)
 		return
 	}
 	if c.NArg() > 1 {

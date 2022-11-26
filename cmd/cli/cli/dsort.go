@@ -320,7 +320,7 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 		// Check if targets exist in the metric output.
 		for _, daemonID := range daemonIds {
 			if _, ok := resp[daemonID]; !ok {
-				return false, false, fmt.Errorf("invalid daemon id %q ", daemonID)
+				return false, false, fmt.Errorf("invalid node id %q ", daemonID)
 			}
 		}
 		// Filter metrics only for requested targets.
