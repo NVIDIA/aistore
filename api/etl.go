@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/etl"
 	jsoniter "github.com/json-iterator/go"
 )
 

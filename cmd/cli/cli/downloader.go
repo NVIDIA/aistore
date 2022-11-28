@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dloader"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -177,7 +177,7 @@ func (b *downloaderPB) start() (bool, error) {
 	return false, nil
 }
 
-func (b *downloaderPB) updateBars(downloadStatus *dloader.StatusResp) {
+func (b *downloaderPB) updateBars(downloadStatus *dload.StatusResp) {
 	fileStates := downloadStatus.CurrentTasks
 
 	b.updateFinishedFiles(fileStates)
@@ -198,7 +198,7 @@ func (b *downloaderPB) updateBars(downloadStatus *dloader.StatusResp) {
 	}
 }
 
-func (b *downloaderPB) updateFinishedFiles(fileStates []dloader.TaskDlInfo) {
+func (b *downloaderPB) updateFinishedFiles(fileStates []dload.TaskDlInfo) {
 	// The finished files are those that are in b.states, but were not included in CurrentTasks of the status response
 	fileStatesMap := make(cos.StrSet)
 	for _, file := range fileStates {
@@ -219,7 +219,7 @@ func (b *downloaderPB) updateFinishedFiles(fileStates []dloader.TaskDlInfo) {
 	}
 }
 
-func (b *downloaderPB) trackNewFile(state dloader.TaskDlInfo) {
+func (b *downloaderPB) trackNewFile(state dload.TaskDlInfo) {
 	bar := b.p.AddBar(
 		state.Total,
 		mpb.BarStyle("[=>-|"),
@@ -245,7 +245,7 @@ func (b *downloaderPB) trackNewFile(state dloader.TaskDlInfo) {
 	}
 }
 
-func (*downloaderPB) updateFileBar(newState dloader.TaskDlInfo, state *fileDownloadingState) {
+func (*downloaderPB) updateFileBar(newState dload.TaskDlInfo, state *fileDownloadingState) {
 	if (state.total == 0 && newState.Total != 0) || (state.total != newState.Total) {
 		state.total = newState.Total
 		state.bar.SetTotal(newState.Total, false)
@@ -340,7 +340,7 @@ func downloadJobsList(c *cli.Context, regex string) error {
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {
-	debug.Assert(strings.HasPrefix(id, dloader.PrefixJobID), id)
+	debug.Assert(strings.HasPrefix(id, dload.PrefixJobID), id)
 
 	// with progress bar
 	if flagIsSet(c, progressBarFlag) {
@@ -364,7 +364,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 	return nil
 }
 
-func printDownloadStatus(w io.Writer, d *dloader.StatusResp, verbose bool) {
+func printDownloadStatus(w io.Writer, d *dload.StatusResp, verbose bool) {
 	if d.Aborted {
 		fmt.Fprintln(w, "Download aborted")
 		return

@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dloader"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -42,15 +42,15 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			query            = r.URL.Query()
 			xactID           = query.Get(apc.QparamUUID)
 			jobID            = query.Get(apc.QparamJobID)
-			dlb              = dloader.Body{}
-			progressInterval = dloader.DownloadProgressInterval
+			dlb              = dload.Body{}
+			progressInterval = dload.DownloadProgressInterval
 		)
 		debug.Assertf(cos.IsValidUUID(xactID) && cos.IsValidUUID(jobID), "%q, %q", xactID, jobID)
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
 			return
 		}
 
-		dlBodyBase := dloader.Base{}
+		dlBodyBase := dload.Base{}
 		if err := jsoniter.Unmarshal(dlb.RawMessage, &dlBodyBase); err != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "download message", cos.BHead(dlb.RawMessage), err)
 			t.writeErr(w, r, err)
@@ -77,7 +77,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		dljob, err := dloader.ParseStartRequest(t, bck, jobID, dlb, xdl)
+		dljob, err := dload.ParseStartRequest(t, bck, jobID, dlb, xdl)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -86,7 +86,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("Downloading: %s", dljob.ID())
 		}
 
-		dljob.AddNotif(&dloader.NotifDownload{
+		dljob.AddNotif(&dload.NotifDownload{
 			NotifBase: nl.NotifBase{
 				When:     cluster.UponProgress,
 				Interval: progressInterval,
@@ -101,7 +101,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
 		}
-		msg := &dloader.AdminBody{}
+		msg := &dload.AdminBody{}
 		if err := cmn.ReadJSON(w, r, msg); err != nil {
 			return
 		}
@@ -130,7 +130,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				regex = rgx
 			}
-			response, statusCode, respErr = dloader.ListJobs(regex, msg.OnlyActive)
+			response, statusCode, respErr = dload.ListJobs(regex, msg.OnlyActive)
 		}
 
 	case http.MethodDelete:
@@ -144,7 +144,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		payload := &dloader.AdminBody{}
+		payload := &dload.AdminBody{}
 		if err = cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
@@ -180,11 +180,11 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *target) renewdl(xactID string) (*dloader.Xact, error) {
+func (t *target) renewdl(xactID string) (*dload.Xact, error) {
 	rns := xreg.RenewDownloader(t, t.statsT, xactID)
 	if rns.Err != nil {
 		return nil, rns.Err
 	}
 	xctn := rns.Entry.Get()
-	return xctn.(*dloader.Xact), nil
+	return xctn.(*dload.Xact), nil
 }

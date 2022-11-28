@@ -25,7 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"

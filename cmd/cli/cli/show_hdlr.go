@@ -22,8 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dloader"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dload"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -368,7 +368,7 @@ func showJobsHandler(c *cli.Context) error {
 	}
 
 	if cos.IsValidUUID(xactID) {
-		if strings.HasPrefix(xactID, dloader.PrefixJobID) {
+		if strings.HasPrefix(xactID, dload.PrefixJobID) {
 			return downloadJobStatus(c, xactID /*jobID*/)
 		}
 		if strings.HasPrefix(xactID, dsort.PrefixJobID) {

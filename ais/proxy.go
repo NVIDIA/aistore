@@ -34,7 +34,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"

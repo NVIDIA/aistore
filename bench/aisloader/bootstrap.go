@@ -64,7 +64,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"

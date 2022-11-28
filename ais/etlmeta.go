@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )

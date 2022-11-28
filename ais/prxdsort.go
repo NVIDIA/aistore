@@ -10,7 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
 // POST /v1/sort

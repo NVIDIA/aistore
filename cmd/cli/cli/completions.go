@@ -18,8 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/dloader"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dload"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -517,18 +517,18 @@ func xactionDesc(onlyStartable bool) string {
 //
 
 func downloadIDAllCompletions(c *cli.Context) {
-	suggestDownloadID(c, func(*dloader.Job) bool { return true })
+	suggestDownloadID(c, func(*dload.Job) bool { return true })
 }
 
 func downloadIDRunningCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*dloader.Job).JobRunning)
+	suggestDownloadID(c, (*dload.Job).JobRunning)
 }
 
 func downloadIDFinishedCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*dloader.Job).JobFinished)
+	suggestDownloadID(c, (*dload.Job).JobFinished)
 }
 
-func suggestDownloadID(c *cli.Context, filter func(*dloader.Job) bool) {
+func suggestDownloadID(c *cli.Context, filter func(*dload.Job) bool) {
 	if c.NArg() > 0 {
 		return
 	}

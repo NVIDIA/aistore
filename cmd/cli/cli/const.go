@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/dloader"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dload"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/urfave/cli"
 )
 
@@ -435,7 +435,7 @@ var (
 	progressIntervalFlag = cli.StringFlag{ // TODO ditto
 		Name:  "progress-interval",
 		Usage: "progress interval for continuous monitoring, valid time units: " + timeUnits,
-		Value: dloader.DownloadProgressInterval.String(),
+		Value: dload.DownloadProgressInterval.String(),
 	}
 
 	limitConnectionsFlag = cli.IntFlag{

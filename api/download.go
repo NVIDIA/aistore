@@ -12,13 +12,13 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dloader"
+	"github.com/NVIDIA/aistore/ext/dload"
 )
 
 func DownloadSingle(bp BaseParams, description string,
 	bck cmn.Bck, objName, link string, intervals ...time.Duration) (string, error) {
-	dlBody := dloader.SingleBody{
-		SingleObj: dloader.SingleObj{
+	dlBody := dload.SingleBody{
+		SingleObj: dload.SingleObj{
 			ObjName: objName,
 			Link:    link,
 		},
@@ -28,27 +28,27 @@ func DownloadSingle(bp BaseParams, description string,
 	}
 	dlBody.Bck = bck
 	dlBody.Description = description
-	return DownloadWithParam(bp, dloader.TypeSingle, &dlBody)
+	return DownloadWithParam(bp, dload.TypeSingle, &dlBody)
 }
 
 func DownloadRange(bp BaseParams, description string, bck cmn.Bck, template string, intervals ...time.Duration) (string, error) {
-	dlBody := dloader.RangeBody{Template: template}
+	dlBody := dload.RangeBody{Template: template}
 	if len(intervals) > 0 {
 		dlBody.ProgressInterval = intervals[0].String()
 	}
 	dlBody.Bck = bck
 	dlBody.Description = description
-	return DownloadWithParam(bp, dloader.TypeRange, dlBody)
+	return DownloadWithParam(bp, dload.TypeRange, dlBody)
 }
 
-func DownloadWithParam(bp BaseParams, dlt dloader.Type, body any) (id string, err error) {
+func DownloadWithParam(bp BaseParams, dlt dload.Type, body any) (id string, err error) {
 	bp.Method = http.MethodPost
 	msg := cos.MustMarshal(body)
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathDownload.S
-		reqParams.Body = cos.MustMarshal(dloader.Body{Type: dlt, RawMessage: msg})
+		reqParams.Body = cos.MustMarshal(dload.Body{Type: dlt, RawMessage: msg})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	id, err = reqParams.doDlDownloadRequest()
@@ -57,28 +57,28 @@ func DownloadWithParam(bp BaseParams, dlt dloader.Type, body any) (id string, er
 }
 
 func DownloadMulti(bp BaseParams, description string, bck cmn.Bck, msg any, intervals ...time.Duration) (string, error) {
-	dlBody := dloader.MultiBody{}
+	dlBody := dload.MultiBody{}
 	if len(intervals) > 0 {
 		dlBody.ProgressInterval = intervals[0].String()
 	}
 	dlBody.Bck = bck
 	dlBody.Description = description
 	dlBody.ObjectsPayload = msg
-	return DownloadWithParam(bp, dloader.TypeMulti, dlBody)
+	return DownloadWithParam(bp, dload.TypeMulti, dlBody)
 }
 
 func DownloadBackend(bp BaseParams, descr string, bck cmn.Bck, prefix, suffix string, ivals ...time.Duration) (string, error) {
-	dlBody := dloader.BackendBody{Prefix: prefix, Suffix: suffix}
+	dlBody := dload.BackendBody{Prefix: prefix, Suffix: suffix}
 	if len(ivals) > 0 {
 		dlBody.ProgressInterval = ivals[0].String()
 	}
 	dlBody.Bck = bck
 	dlBody.Description = descr
-	return DownloadWithParam(bp, dloader.TypeBackend, dlBody)
+	return DownloadWithParam(bp, dload.TypeBackend, dlBody)
 }
 
-func DownloadStatus(bp BaseParams, id string, onlyActive bool) (resp *dloader.StatusResp, err error) {
-	dlBody := dloader.AdminBody{ID: id, OnlyActive: onlyActive}
+func DownloadStatus(bp BaseParams, id string, onlyActive bool) (resp *dload.StatusResp, err error) {
+	dlBody := dload.AdminBody{ID: id, OnlyActive: onlyActive}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -87,14 +87,14 @@ func DownloadStatus(bp BaseParams, id string, onlyActive bool) (resp *dloader.St
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	resp = &dloader.StatusResp{}
+	resp = &dload.StatusResp{}
 	err = reqParams.DoReqResp(resp)
 	FreeRp(reqParams)
 	return
 }
 
-func DownloadGetList(bp BaseParams, regex string, onlyActive bool) (dlList dloader.JobInfos, err error) {
-	dlBody := dloader.AdminBody{Regex: regex, OnlyActive: onlyActive}
+func DownloadGetList(bp BaseParams, regex string, onlyActive bool) (dlList dload.JobInfos, err error) {
+	dlBody := dload.AdminBody{Regex: regex, OnlyActive: onlyActive}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -110,7 +110,7 @@ func DownloadGetList(bp BaseParams, regex string, onlyActive bool) (dlList dload
 }
 
 func AbortDownload(bp BaseParams, id string) error {
-	dlBody := dloader.AdminBody{ID: id}
+	dlBody := dload.AdminBody{ID: id}
 	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
@@ -125,7 +125,7 @@ func AbortDownload(bp BaseParams, id string) error {
 }
 
 func RemoveDownload(bp BaseParams, id string) error {
-	dlBody := dloader.AdminBody{ID: id}
+	dlBody := dload.AdminBody{ID: id}
 	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
@@ -140,7 +140,7 @@ func RemoveDownload(bp BaseParams, id string) error {
 }
 
 func (reqParams *ReqParams) doDlDownloadRequest() (string, error) {
-	var resp dloader.DlPostResp
+	var resp dload.DlPostResp
 	err := reqParams.DoReqResp(&resp)
 	return resp.ID, err
 }

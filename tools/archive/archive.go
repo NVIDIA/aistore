@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/extract"
 )
 
 type (

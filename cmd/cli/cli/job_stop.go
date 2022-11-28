@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/urfave/cli"
 )
 

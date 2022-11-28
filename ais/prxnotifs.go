@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/dloader"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
@@ -674,8 +674,8 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	if err = jsoniter.Unmarshal(data, &t); err != nil {
 		return
 	}
-	if dloader.IsType(t.Type) {
-		n.nl = &dloader.NotifDownloadListerner{}
+	if dload.IsType(t.Type) {
+		n.nl = &dload.NotifDownloadListerner{}
 	} else {
 		n.nl = &xact.NotifXactListener{}
 	}

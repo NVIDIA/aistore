@@ -9,8 +9,8 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/dloader"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dload"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/urfave/cli"
 )
 
@@ -64,7 +64,7 @@ func removeDownloadHandler(c *cli.Context) (err error) {
 
 func removeDownloadRegex(c *cli.Context) (err error) {
 	var (
-		dlList dloader.JobInfos
+		dlList dload.JobInfos
 		regex  = ".*"
 		cnt    int
 		failed bool

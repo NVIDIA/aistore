@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"

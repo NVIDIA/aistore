@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
 func StartDSort(bp BaseParams, rs dsort.RequestSpec) (string, error) {

@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"

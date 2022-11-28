@@ -24,7 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"

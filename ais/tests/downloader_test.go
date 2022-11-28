@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dloader"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -153,10 +153,10 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSki
 	}
 }
 
-func downloadObjectRemote(t *testing.T, body dloader.BackendBody, expectedFinished, expectedSkipped int) {
+func downloadObjectRemote(t *testing.T, body dload.BackendBody, expectedFinished, expectedSkipped int) {
 	baseParams := tools.BaseAPIParams()
 	body.Description = generateDownloadDesc()
-	id, err := api.DownloadWithParam(baseParams, dloader.TypeBackend, body)
+	id, err := api.DownloadWithParam(baseParams, dload.TypeBackend, body)
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, 2*time.Minute)
@@ -418,8 +418,8 @@ func TestDownloadTimeout(t *testing.T) {
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-	body := dloader.SingleBody{
-		SingleObj: dloader.SingleObj{
+	body := dload.SingleBody{
+		SingleObj: dload.SingleObj{
 			ObjName: objName,
 			Link:    link,
 		},
@@ -428,7 +428,7 @@ func TestDownloadTimeout(t *testing.T) {
 	body.Description = generateDownloadDesc()
 	body.Timeout = "1ms" // super small timeout to see if the request will be canceled
 
-	id, err := api.DownloadWithParam(baseParams, dloader.TypeSingle, body)
+	id, err := api.DownloadWithParam(baseParams, dload.TypeSingle, body)
 	tassert.CheckFatal(t, err)
 
 	time.Sleep(time.Second)
@@ -526,8 +526,8 @@ func TestDownloadRemote(t *testing.T) {
 			}
 
 			tlog.Logln("starting remote download...")
-			id, err := api.DownloadWithParam(baseParams, dloader.TypeBackend, dloader.BackendBody{
-				Base: dloader.Base{
+			id, err := api.DownloadWithParam(baseParams, dload.TypeBackend, dload.BackendBody{
+				Base: dload.Base{
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
 				},
@@ -552,8 +552,8 @@ func TestDownloadRemote(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			tlog.Logln("starting remote download...")
-			id, err = api.DownloadWithParam(baseParams, dloader.TypeBackend, dloader.BackendBody{
-				Base: dloader.Base{
+			id, err = api.DownloadWithParam(baseParams, dload.TypeBackend, dload.BackendBody{
+				Base: dload.Base{
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
 				},
@@ -979,8 +979,8 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		dlBody = dloader.BackendBody{
-			Base: dloader.Base{Bck: bck},
+		dlBody = dload.BackendBody{
+			Base: dload.Base{Bck: bck},
 		}
 		m = &ioContext{
 			t:                   t,
@@ -1039,8 +1039,8 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		dlBody = dloader.BackendBody{
-			Base: dloader.Base{Bck: bck},
+		dlBody = dload.BackendBody{
+			Base: dload.Base{Bck: bck},
 		}
 		m = &ioContext{
 			t:                   t,
@@ -1076,8 +1076,8 @@ func TestDownloadSync(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		dlBody = dloader.BackendBody{
-			Base: dloader.Base{Bck: bck},
+		dlBody = dload.BackendBody{
+			Base: dload.Base{Bck: bck},
 		}
 		m = &ioContext{
 			t:                   t,
@@ -1159,11 +1159,11 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
 
-	id, err := api.DownloadWithParam(baseParams, dloader.TypeRange, dloader.RangeBody{
-		Base: dloader.Base{
+	id, err := api.DownloadWithParam(baseParams, dload.TypeRange, dload.RangeBody{
+		Base: dload.Base{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
-			Limits: dloader.Limits{
+			Limits: dload.Limits{
 				Connections:  limitConnection,
 				BytesPerHour: 200 * cos.MiB,
 			},
@@ -1222,11 +1222,11 @@ func TestDownloadJobConcurrency(t *testing.T) {
 
 	tlog.Logln("Starting first download...")
 
-	id1, err := api.DownloadWithParam(baseParams, dloader.TypeRange, dloader.RangeBody{
-		Base: dloader.Base{
+	id1, err := api.DownloadWithParam(baseParams, dload.TypeRange, dload.RangeBody{
+		Base: dload.Base{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
-			Limits: dloader.Limits{
+			Limits: dload.Limits{
 				Connections:  1,
 				BytesPerHour: 100 * cos.MiB,
 			},
@@ -1240,11 +1240,11 @@ func TestDownloadJobConcurrency(t *testing.T) {
 
 	tlog.Logln("Starting second download...")
 
-	id2, err := api.DownloadWithParam(baseParams, dloader.TypeRange, dloader.RangeBody{
-		Base: dloader.Base{
+	id2, err := api.DownloadWithParam(baseParams, dload.TypeRange, dload.RangeBody{
+		Base: dload.Base{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
-			Limits: dloader.Limits{
+			Limits: dload.Limits{
 				BytesPerHour: 100 * cos.MiB,
 			},
 		},
@@ -1258,7 +1258,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	tlog.Logln("Waiting for checks...")
 	var (
 		concurrentJobs bool
-		resp1, resp2   *dloader.StatusResp
+		resp1, resp2   *dload.StatusResp
 	)
 	for i := 0; i < 10; i++ {
 		resp1, err = api.DownloadStatus(baseParams, id1, false /*onlyActive*/)
@@ -1311,15 +1311,15 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-	id, err := api.DownloadWithParam(baseParams, dloader.TypeSingle, dloader.SingleBody{
-		Base: dloader.Base{
+	id, err := api.DownloadWithParam(baseParams, dload.TypeSingle, dload.SingleBody{
+		Base: dload.Base{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
-			Limits: dloader.Limits{
+			Limits: dload.Limits{
 				BytesPerHour: softLimit,
 			},
 		},
-		SingleObj: dloader.SingleObj{
+		SingleObj: dload.SingleObj{
 			ObjName: "object",
 			Link:    link,
 		},

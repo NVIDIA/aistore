@@ -19,8 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dloader"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dload"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -221,12 +221,12 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	basePayload := dloader.Base{
+	basePayload := dload.Base{
 		Bck:              bck,
 		Timeout:          timeout,
 		Description:      description,
 		ProgressInterval: progressInterval,
-		Limits: dloader.Limits{
+		Limits: dload.Limits{
 			Connections:  parseIntFlag(c, limitConnectionsFlag),
 			BytesPerHour: int(limitBPH),
 		},
@@ -242,20 +242,20 @@ func startDownloadHandler(c *cli.Context) error {
 	}
 
 	// Heuristics to determine the download type.
-	var dlType dloader.Type
+	var dlType dload.Type
 	if objectsListPath != "" {
-		dlType = dloader.TypeMulti
+		dlType = dload.TypeMulti
 	} else if strings.Contains(source.link, "{") && strings.Contains(source.link, "}") {
-		dlType = dloader.TypeRange
+		dlType = dload.TypeRange
 	} else if source.backend.bck.IsEmpty() {
-		dlType = dloader.TypeSingle
+		dlType = dload.TypeSingle
 	} else {
 		cfg, err := getRandTargetConfig()
 		if err != nil {
 			return err
 		}
 		if _, ok := cfg.Backend.Providers[source.backend.bck.Provider]; ok { // backend is configured
-			dlType = dloader.TypeBackend
+			dlType = dload.TypeBackend
 
 			p, err := api.HeadBucket(apiBP, basePayload.Bck, false /* don't add */)
 			if err != nil {
@@ -265,7 +265,7 @@ func startDownloadHandler(c *cli.Context) error {
 				warn := fmt.Sprintf("%s does not have Cloud bucket %s as its *backend* - proceeding to download anyway.",
 					basePayload.Bck, source.backend.bck)
 				actionWarn(c, warn)
-				dlType = dloader.TypeSingle
+				dlType = dload.TypeSingle
 			}
 		} else if source.backend.prefix == "" {
 			return fmt.Errorf(
@@ -281,21 +281,21 @@ func startDownloadHandler(c *cli.Context) error {
 			}
 			// If `prefix` is not empty then possibly it is just a single object
 			// which we can download without cloud to be configured (web link).
-			dlType = dloader.TypeSingle
+			dlType = dload.TypeSingle
 		}
 	}
 
 	switch dlType {
-	case dloader.TypeSingle:
-		payload := dloader.SingleBody{
+	case dload.TypeSingle:
+		payload := dload.SingleBody{
 			Base: basePayload,
-			SingleObj: dloader.SingleObj{
+			SingleObj: dload.SingleObj{
 				Link:    source.link,
 				ObjName: pathSuffix, // in this case pathSuffix is a full name of the object
 			},
 		}
 		id, err = api.DownloadWithParam(apiBP, dlType, payload)
-	case dloader.TypeMulti:
+	case dload.TypeMulti:
 		var objects []string
 		{
 			file, err := os.Open(objectsListPath)
@@ -309,20 +309,20 @@ func startDownloadHandler(c *cli.Context) error {
 		for i, object := range objects {
 			objects[i] = source.link + "/" + object
 		}
-		payload := dloader.MultiBody{
+		payload := dload.MultiBody{
 			Base:           basePayload,
 			ObjectsPayload: objects,
 		}
 		id, err = api.DownloadWithParam(apiBP, dlType, payload)
-	case dloader.TypeRange:
-		payload := dloader.RangeBody{
+	case dload.TypeRange:
+		payload := dload.RangeBody{
 			Base:     basePayload,
 			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
 			Template: source.link,
 		}
 		id, err = api.DownloadWithParam(apiBP, dlType, payload)
-	case dloader.TypeBackend:
-		payload := dloader.BackendBody{
+	case dload.TypeBackend:
+		payload := dload.BackendBody{
 			Base:   basePayload,
 			Sync:   flagIsSet(c, syncFlag),
 			Prefix: source.backend.prefix,
@@ -394,7 +394,7 @@ func bgDownload(c *cli.Context, id string) (err error) {
 	)
 	var (
 		passed time.Duration
-		resp   *dloader.StatusResp
+		resp   *dload.StatusResp
 	)
 	// In a non-interactive mode, allow the downloader to start jobs before checking.
 	for passed < checkTimeout {

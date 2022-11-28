@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"

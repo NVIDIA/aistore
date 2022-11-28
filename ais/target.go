@@ -32,10 +32,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/dloader"
-	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/dload"
+	"github.com/NVIDIA/aistore/ext/dsort"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/health"
 	"github.com/NVIDIA/aistore/memsys"
@@ -382,7 +382,7 @@ func (t *target) Run() error {
 	}
 	defer cos.Close(db)
 
-	dloader.SetDB(db)
+	dload.SetDB(db)
 
 	// transactions
 	t.transactions.init(t)

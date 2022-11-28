@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dloader"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -45,7 +45,7 @@ func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	msg := &dloader.AdminBody{}
+	msg := &dload.AdminBody{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
@@ -83,7 +83,7 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobID := dloader.PrefixJobID + cos.GenUUID() // prefix to visually differentiate vs. xaction IDs
+	jobID := dload.PrefixJobID + cos.GenUUID() // prefix to visually differentiate vs. xaction IDs
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -95,7 +95,7 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var progressInterval = dloader.DownloadProgressInterval
+	var progressInterval = dload.DownloadProgressInterval
 	if dlBase.ProgressInterval != "" {
 		ival, err := time.ParseDuration(dlBase.ProgressInterval)
 		if err != nil {
@@ -111,16 +111,16 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	nl := dloader.NewDownloadNL(jobID, string(dlb.Type), &smap.Smap, progressInterval)
+	nl := dload.NewDownloadNL(jobID, string(dlb.Type), &smap.Smap, progressInterval)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
 	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
-	b := cos.MustMarshal(dloader.DlPostResp{ID: jobID})
+	b := cos.MustMarshal(dload.DlPostResp{ID: jobID})
 	w.Write(b)
 }
 
-func (p *proxy) dladm(method, path string, msg *dloader.AdminBody) ([]byte, int, error) {
+func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, error) {
 	if msg.ID != "" && method == http.MethodGet && msg.OnlyActive {
 		nl, exists := p.notifs.entry(msg.ID)
 		if exists {
@@ -169,12 +169,12 @@ func (p *proxy) dladm(method, path string, msg *dloader.AdminBody) ([]byte, int,
 	case http.MethodGet:
 		if msg.ID == "" {
 			// If ID is empty, return the list of downloads
-			aggregate := make(map[string]*dloader.Job)
+			aggregate := make(map[string]*dload.Job)
 			for _, resp := range validResponses {
 				if len(resp.bytes) == 0 {
 					continue
 				}
-				var parsedResp map[string]*dloader.Job
+				var parsedResp map[string]*dload.Job
 				if err := jsoniter.Unmarshal(resp.bytes, &parsedResp); err != nil {
 					return nil, http.StatusInternalServerError, err
 				}
@@ -186,7 +186,7 @@ func (p *proxy) dladm(method, path string, msg *dloader.AdminBody) ([]byte, int,
 				}
 			}
 
-			listDownloads := make(dloader.JobInfos, 0, len(aggregate))
+			listDownloads := make(dload.JobInfos, 0, len(aggregate))
 			for _, v := range aggregate {
 				listDownloads = append(listDownloads, v)
 			}
@@ -194,9 +194,9 @@ func (p *proxy) dladm(method, path string, msg *dloader.AdminBody) ([]byte, int,
 			return result, http.StatusOK, nil
 		}
 
-		var stResp *dloader.StatusResp
+		var stResp *dload.StatusResp
 		for _, resp := range validResponses {
-			status := dloader.StatusResp{}
+			status := dload.StatusResp{}
 			if err := jsoniter.Unmarshal(resp.bytes, &status); err != nil {
 				return nil, http.StatusInternalServerError, err
 			}
@@ -218,14 +218,14 @@ func (p *proxy) dlstatus(nl nl.NotifListener) ([]byte, int, error) {
 	p.notifs.bcastGetStats(nl, cmn.GCO.Get().Periodic.NotifTime.D())
 	stats := nl.NodeStats()
 
-	var resp *dloader.StatusResp
+	var resp *dload.StatusResp
 	stats.Range(func(_ string, status any) bool {
 		var (
-			dlStatus *dloader.StatusResp
+			dlStatus *dload.StatusResp
 			ok       bool
 		)
-		if dlStatus, ok = status.(*dloader.StatusResp); !ok {
-			dlStatus = &dloader.StatusResp{}
+		if dlStatus, ok = status.(*dload.StatusResp); !ok {
+			dlStatus = &dload.StatusResp{}
 			if err := cos.MorphMarshal(status, dlStatus); err != nil {
 				debug.AssertNoErr(err)
 				return false
@@ -260,7 +260,7 @@ func (p *proxy) dlstart(r *http.Request, xactID, jobID string, body []byte) (err
 	return http.StatusOK, nil
 }
 
-func (p *proxy) validateStartDownload(w http.ResponseWriter, r *http.Request, body []byte) (dlb dloader.Body, dlBase dloader.Base, ok bool) {
+func (p *proxy) validateStartDownload(w http.ResponseWriter, r *http.Request, body []byte) (dlb dload.Body, dlBase dload.Base, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "download request", cos.BHead(body), err)
 		p.writeErr(w, r, err)
