@@ -219,7 +219,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			// List or range operation on a given bucket.
-			return listOrRangeOp(c, commandRemove, bck)
+			return listOrRangeOp(c, bck)
 		}
 		if flagIsSet(c, rmRfFlag) {
 			if !flagIsSet(c, yesFlag) {

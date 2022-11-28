@@ -25,7 +25,7 @@ import (
 
 var (
 	// flags
-	etlSubcmdsFlags = map[string][]cli.Flag{
+	etlSubFlags = map[string][]cli.Flag{
 		subcmdCode: {
 			fromFileFlag,
 			depsFileFlag,
@@ -76,7 +76,7 @@ var (
 		ArgsUsage:    "[ETL_ID...]",
 		Action:       etlStopHandler,
 		BashComplete: etlIDCompletions,
-		Flags:        etlSubcmdsFlags[subcmdStop],
+		Flags:        etlSubFlags[subcmdStop],
 	}
 	startCmdETL = cli.Command{
 		Name:         subcmdStart,
@@ -84,7 +84,7 @@ var (
 		ArgsUsage:    "ETL_ID",
 		Action:       etlStartHandler,
 		BashComplete: etlIDCompletions,
-		Flags:        etlSubcmdsFlags[subcmdStart],
+		Flags:        etlSubFlags[subcmdStart],
 	}
 	initCmdETL = cli.Command{
 		Name: subcmdInit,
@@ -92,13 +92,13 @@ var (
 			{
 				Name:   subcmdSpec,
 				Usage:  "start ETL job with YAML Pod specification",
-				Flags:  etlSubcmdsFlags[subcmdSpec],
+				Flags:  etlSubFlags[subcmdSpec],
 				Action: etlInitSpecHandler,
 			},
 			{
 				Name:   subcmdCode,
 				Usage:  "start ETL job using the specified transforming function or script",
-				Flags:  etlSubcmdsFlags[subcmdCode],
+				Flags:  etlSubFlags[subcmdCode],
 				Action: etlInitCodeHandler,
 			},
 		},
@@ -115,7 +115,7 @@ var (
 		Usage:        "transform bucket and put results into another bucket",
 		ArgsUsage:    "ETL_ID SRC_BUCKET DST_BUCKET",
 		Action:       etlBucketHandler,
-		Flags:        etlSubcmdsFlags[subcmdBucket],
+		Flags:        etlSubFlags[subcmdBucket],
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
 	}
 	logsCmdETL = cli.Command{

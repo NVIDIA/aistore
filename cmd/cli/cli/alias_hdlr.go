@@ -119,11 +119,11 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 	// help is already added to the original, remove from cmd and all subcmds
 	cmd.HideHelp = true
 	if len(cmd.Subcommands) != 0 {
-		aliasSubcmds := make([]cli.Command, len(cmd.Subcommands))
+		aliasSub := make([]cli.Command, len(cmd.Subcommands))
 		for i := range cmd.Subcommands {
-			aliasSubcmds[i] = makeAlias(cmd.Subcommands[i], "", true)
+			aliasSub[i] = makeAlias(cmd.Subcommands[i], "", true)
 		}
-		cmd.Subcommands = aliasSubcmds
+		cmd.Subcommands = aliasSub
 	}
 
 	return cmd

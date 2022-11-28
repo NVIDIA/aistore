@@ -271,7 +271,7 @@ const (
 	showStatsArgument         = "[NODE_ID] [STATS_FILTER]"
 
 	// Xactions
-	xactionArgument = "XACTION_KIND"
+	xactionArgument = "XACTION"
 
 	// List command
 	listAnyCommandArgument = "[PROVIDER://][BUCKET_NAME]"
@@ -312,13 +312,17 @@ const (
 //
 
 var (
-	// scope = all
-	allXactionsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all xactions, including finished"}
+	// scope 'all'
+	allXactionsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all xactions, including finished and aborted"}
 	allPropsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "all object properties"}
-	allJobsFlag     = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
+	allJobsFlag     = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
 	allETLStopFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all ETL jobs"}
 
-	allObjsOrBcksFlag = cli.BoolFlag{Name: scopeAll, Usage: "depending on context: all objects (including misplaced ones and copies) _or_ all buckets (including remote buckets that are not present in the cluster)"}
+	allObjsOrBcksFlag = cli.BoolFlag{
+		Name: scopeAll,
+		Usage: "depending on context: all objects (including misplaced ones and copies) or " +
+			"all buckets (including remote buckets that are not present in the cluster)",
+	}
 
 	// coloring
 	noColorFlag = cli.BoolFlag{
@@ -327,8 +331,9 @@ var (
 	}
 
 	objPropsFlag = cli.StringFlag{
-		Name:  "props",
-		Usage: "comma-separated list of object properties including name, size, version, copies, EC data and parity info, custom metadata, location, and more; to include all properties, type '--props all'",
+		Name: "props",
+		Usage: "comma-separated list of object properties including name, size, version, copies, EC data and parity info, " +
+			"custom metadata, location, and more; to include all properties, type '--props all'",
 		Value: strings.Join(apc.GetPropsDefault, ","),
 	}
 	objPropsLsFlag = cli.StringFlag{
@@ -351,14 +356,16 @@ var (
 	}
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 
-	regexFlag       = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
-	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
-	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,no-header,H", Usage: "display tables without headers"}
-	noFooterFlag    = cli.BoolFlag{Name: "no-footers,no-footer", Usage: "display tables without footers"}
+	regexFlag    = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
+	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
+	noHeaderFlag = cli.BoolFlag{Name: "no-headers,no-header,H", Usage: "display tables without headers"}
+	noFooterFlag = cli.BoolFlag{Name: "no-footers,no-footer", Usage: "display tables without footers"}
+
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
 	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	nonverboseFlag  = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose"}
+
 	ignoreErrorFlag = cli.BoolFlag{
 		Name:  "ignore-error",
 		Usage: "ignore \"soft\" failures, such as \"bucket already exists\", etc.",
@@ -386,10 +393,14 @@ var (
 		Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts",
 	}
 	bckSummaryFlag = cli.BoolFlag{
-		Name:  "summary",
-		Usage: "show bucket sizes and used capacity; by default, applies only to the buckets that are _present_ in the cluster (use '--all' option to override)",
+		Name: "summary",
+		Usage: "show bucket sizes and used capacity; by default, applies only to the buckets that are _present_ in the cluster " +
+			"(use '--all' option to override)",
 	}
-	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "list objects page by page, one page at a time (see also '--page-size' and '--limit')"}
+	pagedFlag = cli.BoolFlag{
+		Name:  "paged",
+		Usage: "list objects page by page, one page at a time (see also '--page-size' and '--limit')",
+	}
 	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 
 	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
@@ -397,7 +408,13 @@ var (
 	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
 	listBucketsFlag  = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
 	compactPropFlag  = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
-	nameOnlyFlag     = cli.BoolFlag{Name: "name-only", Usage: "fast request to retrieve only the names of objects in the bucket; if defined, all comma-separated fields in the '--props' flag will be ignored with only two exceptions: 'name' and 'status'"}
+
+	nameOnlyFlag = cli.BoolFlag{
+		Name: "name-only",
+		Usage: "fast request to retrieve only the names of objects in the bucket; " +
+			"if defined, all comma-separated fields in the '--props' flag will be ignored with only two exceptions: " +
+			"'name' and 'status'",
+	}
 
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag   = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}
@@ -493,8 +510,9 @@ var (
 	targetIDFlag  = cli.StringFlag{Name: "target-id", Usage: "ais target designated to carry out the entire operation"}
 
 	notFshareFlag = cli.BoolFlag{
-		Name:  "not-file-share",
-		Usage: "each target must act autonomously skipping file-share auto-detection and promoting the entire source (as seen from _the_ target)",
+		Name: "not-file-share",
+		Usage: "each target must act autonomously skipping file-share auto-detection and promoting the entire source " +
+			"(as seen from the target)",
 	}
 
 	sizeInBytesFlag = cli.BoolFlag{

@@ -113,7 +113,7 @@ var (
 
 	bucketCmdLRU = cli.Command{
 		Name:         subcmdLRU,
-		Usage:        "show bucket's LRU settings; enable or disable LRU eviction",
+		Usage:        "show bucket's LRU configuration; enable or disable LRU eviction",
 		ArgsUsage:    optionalBucketArgument,
 		Flags:        bucketCmdsFlags[subcmdLRU],
 		Action:       lruBucketHandler,
@@ -482,7 +482,7 @@ func evictHandler(c *cli.Context) (err error) {
 					objName)
 			}
 			// List or range operation on a given bucket.
-			return listOrRangeOp(c, commandEvict, bck)
+			return listOrRangeOp(c, bck)
 		}
 		if objName == "" {
 			// Evict entire bucket.

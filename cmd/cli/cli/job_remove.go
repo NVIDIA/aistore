@@ -22,7 +22,7 @@ var (
 		subcmdRemoveDsort: {},
 	}
 
-	jobRemoveSubcmds = cli.Command{
+	jobRemoveSub = cli.Command{
 		Name:  commandRemove,
 		Usage: "remove finished jobs",
 		Subcommands: []cli.Command{

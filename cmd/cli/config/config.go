@@ -36,6 +36,7 @@ var (
 		"create": "bucket create",
 		"start":  "job start",
 		"stop":   "job stop",
+		"wait":   "job wait",
 	}
 )
 

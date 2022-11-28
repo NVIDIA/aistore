@@ -195,7 +195,7 @@ func (a *acli) init(version string) {
 		Name:  "version, V",
 		Usage: "print only the version",
 	}
-	initJobSubcmds()
+	initJobSub()
 	a.setupCommands()
 }
 
@@ -231,9 +231,8 @@ func (a *acli) setupCommands() {
 }
 
 func (a *acli) enableSearch() {
-	app := a.app
-	initSearch(app)
-	app.Commands = append(app.Commands, searchCommands...)
+	initSearch(a.app)
+	a.app.Commands = append(a.app.Commands, searchCommands...)
 }
 
 func setupCommandHelp(commands []cli.Command) {

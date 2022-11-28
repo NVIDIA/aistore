@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/stats"
@@ -349,17 +350,23 @@ func showDisksHandler(c *cli.Context) (err error) {
 
 func showJobsHandler(c *cli.Context) error {
 	var (
-		regex      = parseStrFlag(c, regexFlag)
-		useJSON    = flagIsSet(c, jsonFlag)
-		onlyActive = !flagIsSet(c, allJobsFlag)
-		nonxact    bool
+		regex   = parseStrFlag(c, regexFlag)
+		useJSON = flagIsSet(c, jsonFlag)
+		nonxact bool
 	)
 	setLongRunParams(c, 72)
 
-	_, xactID, _, _, err := parseXactionFromArgs(c)
+	nodeID, xactID, xactKind, _, err := parseXactionFromArgs(c)
 	if err != nil {
 		return err
 	}
+	if nodeID != "" || xactID != "" || xactKind != "" {
+		if last := argLast(c); strings.HasPrefix(last, "-") {
+			warn := fmt.Sprintf("misplaced %q (hint: expecting '... %s %s ...')", last, subcmdShowJob, last)
+			actionWarn(c, warn)
+		}
+	}
+
 	if cos.IsValidUUID(xactID) {
 		if strings.HasPrefix(xactID, dloader.PrefixJobID) {
 			return downloadJobStatus(c, xactID /*jobID*/)
@@ -370,6 +377,7 @@ func showJobsHandler(c *cli.Context) error {
 		return showXactionHandler(c)
 	}
 
+	onlyActive := !flagIsSet(c, allJobsFlag)
 	downloads, err := api.DownloadGetList(apiBP, regex, onlyActive)
 	if err != nil {
 		actionWarn(c, err.Error())
@@ -405,14 +413,13 @@ func showJobsHandler(c *cli.Context) error {
 }
 
 func showDownloadsHandler(c *cli.Context) error {
-	id := c.Args().First()
-
 	setLongRunParams(c, 72)
 	if c.NArg() < 1 { // list all download jobs
 		return downloadJobsList(c, parseStrFlag(c, regexFlag))
 	}
 
 	// display status of a download job with given id
+	id := c.Args().First()
 	return downloadJobStatus(c, id)
 }
 
@@ -465,22 +472,19 @@ func showXactionHandler(c *cli.Context) error {
 	return xactList(c, nodeID, xactID, xactKind, bck)
 }
 
-func xactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck) (err error) {
-	latest := !flagIsSet(c, allXactionsFlag)
-	if xactID != "" {
-		latest = false
-	}
-
-	var (
-		xs       api.NodesXactMultiSnap
-		xactArgs = api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, OnlyRunning: latest}
-	)
-	xs, err = api.QueryXactionSnaps(apiBP, xactArgs)
-	if err != nil {
-		return
-	}
-
+func xactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck) error {
 	onlyActive := !flagIsSet(c, allXactionsFlag)
+	if xactID != "" {
+		debug.Assert(cos.IsValidUUID(xactID), xactID)
+		onlyActive = false
+	}
+
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, OnlyRunning: onlyActive}
+	xs, err := api.QueryXactionSnaps(apiBP, xactArgs)
+	if err != nil {
+		return err
+	}
+
 	if onlyActive {
 		for tid, snaps := range xs {
 			if len(snaps) == 0 {
@@ -530,25 +534,29 @@ func xactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck) (err
 		return dts[i].DaemonID < dts[j].DaemonID // ascending by node id/name
 	})
 
-	// To display verbose stats the list must have less than 2 records
-	canVerbose := len(dts) == 0 || (len(dts) == 1 && len(dts[0].XactSnaps) < 2)
-	if !canVerbose && flagIsSet(c, verboseFlag) {
-		fmt.Fprintf(c.App.ErrWriter, "Option `--verbose` is ignored when multiple xactions are displayed.\n")
-	}
-
 	useJSON := flagIsSet(c, jsonFlag)
 	if useJSON {
 		return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
 	}
 
-	if canVerbose && flagIsSet(c, verboseFlag) {
-		var props nvpairList
-		if len(dts) == 0 || len(dts[0].XactSnaps) == 0 {
-			props = make(nvpairList, 0)
-		} else {
-			props = flattenXactStats(dts[0].XactSnaps[0])
+	var printedVerbose bool
+	if flagIsSet(c, verboseFlag) {
+		for _, di := range dts {
+			if len(dts[0].XactSnaps) == 0 {
+				continue
+			}
+			props := flattenXactStats(di.XactSnaps[0])
+			_, name := xact.GetKindName(di.XactSnaps[0].Kind)
+			debug.Assert(name != "", di.XactSnaps[0].Kind)
+			actionCptn(c, cluster.Tname(di.DaemonID), " "+name)
+			if err := tmpls.Print(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON); err != nil {
+				return err
+			}
+			printedVerbose = true
 		}
-		return tmpls.Print(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
+		if printedVerbose {
+			return nil
+		}
 	}
 
 	hideHeader := flagIsSet(c, noHeaderFlag)

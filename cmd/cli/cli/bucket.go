@@ -146,7 +146,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 		fmt.Fprintf(c.App.Writer, "EVICT: %q\n", bck.DisplayName())
 		return
 	}
-	if err = ensureHasProvider(bck, c.Command.Name); err != nil {
+	if err = ensureHasProvider(bck); err != nil {
 		return
 	}
 	if err = api.EvictRemoteBucket(apiBP, bck, flagIsSet(c, keepMDFlag)); err != nil {
@@ -624,7 +624,7 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	} else {
 		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy). ", bck.DisplayName())
 	}
-	actionDone(c, baseMsg+xactProgressMsg(xactID))
+	actionDone(c, baseMsg+toMonitorMsg(c, xactID))
 	return
 }
 
@@ -635,7 +635,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 		return
 	}
 	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.DisplayName())
-	actionDone(c, msg+xactProgressMsg(xactID))
+	actionDone(c, msg+toMonitorMsg(c, xactID))
 	return
 }
 

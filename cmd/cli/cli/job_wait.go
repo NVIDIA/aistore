@@ -29,7 +29,7 @@ var (
 		},
 	}
 
-	jobWaitSubcmds = cli.Command{
+	jobWaitSub = cli.Command{
 		Name:  commandWait,
 		Usage: "wait for a specific task",
 		Subcommands: []cli.Command{

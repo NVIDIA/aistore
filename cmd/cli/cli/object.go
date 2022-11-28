@@ -858,65 +858,65 @@ func handleObjHeadError(err error, bck cmn.Bck, object string, fltPresence int) 
 	return err
 }
 
-func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
+func listOrRangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
 		return incorrectUsageMsg(c, "flags %q and %q cannot be used together", listFlag.Name, templateFlag.Name)
 	}
 
 	if flagIsSet(c, listFlag) {
-		return listOp(c, command, bck)
+		return listOp(c, bck)
 	}
 	if flagIsSet(c, templateFlag) {
-		return rangeOp(c, command, bck)
+		return rangeOp(c, bck)
 	}
 	return
 }
 
 // List handler
-func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
+func listOp(c *cli.Context, bck cmn.Bck) (err error) {
 	var (
 		fileList = makeList(parseStrFlag(c, listFlag))
 		xactID   string
 	)
 
 	if flagIsSet(c, dryRunFlag) {
-		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.DisplayName()+"/%s\n", fileList)
+		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.DisplayName()+"/%s\n", fileList)
 		return nil
 	}
-
-	switch command {
+	var done string
+	switch c.Command.Name {
 	case commandRemove:
 		xactID, err = api.DeleteList(apiBP, bck, fileList)
-		command = "removed"
+		done = "removed"
 	case commandPrefetch:
-		if err = ensureHasProvider(bck, command); err != nil {
+		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
 		xactID, err = api.PrefetchList(apiBP, bck, fileList)
-		command += "ed"
+		done = "prefetched"
 	case commandEvict:
-		if err = ensureHasProvider(bck, command); err != nil {
+		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
 		xactID, err = api.EvictList(apiBP, bck, fileList)
-		command += "ed"
+		done = "evicted"
 	default:
-		err = fmt.Errorf(invalidCmdMsg, command)
+		debug.Assert(false, c.Command.Name)
 		return
 	}
 	if err != nil {
 		return
 	}
-	basemsg := fmt.Sprintf("%s %s from %s", fileList, command, bck)
+	basemsg := fmt.Sprintf("%s %s from %s", fileList, done, bck)
 	if xactID != "" {
-		basemsg += ". " + xactProgressMsg(xactID)
+		basemsg += ". " + toMonitorMsg(c, xactID)
 	}
 	fmt.Fprintln(c.App.Writer, basemsg)
 	return
 }
 
 // Range handler
-func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
+func rangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 	var (
 		rangeStr = parseStrFlag(c, templateFlag)
 		pt       cos.ParsedTemplate
@@ -930,40 +930,41 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 			return nil
 		}
 		objs := pt.ToSlice(dryRunExamplesCnt)
-		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.DisplayName()+"/%s", objs)
+		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.DisplayName()+"/%s", objs)
 		if pt.Count() > dryRunExamplesCnt {
 			fmt.Fprintf(c.App.Writer, "(and %d more)", pt.Count()-dryRunExamplesCnt)
 		}
 		return
 	}
-
-	switch command {
+	var done string
+	switch c.Command.Name {
 	case commandRemove:
 		xactID, err = api.DeleteRange(apiBP, bck, rangeStr)
-		command = "removed"
+		done = "removed"
 	case commandPrefetch:
-		if err = ensureHasProvider(bck, command); err != nil {
+		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
 		xactID, err = api.PrefetchRange(apiBP, bck, rangeStr)
-		command += "ed"
+		done = "prefetched"
 	case commandEvict:
-		if err = ensureHasProvider(bck, command); err != nil {
+		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
 		xactID, err = api.EvictRange(apiBP, bck, rangeStr)
-		command += "ed"
+		done = "evicted"
 	default:
-		return fmt.Errorf(invalidCmdMsg, command)
+		debug.Assert(false, c.Command.Name)
+		return nil
 	}
 	if err != nil {
 		return
 	}
 
-	baseMsg := fmt.Sprintf("%s from %s objects in the range %q", command, bck, rangeStr)
+	baseMsg := fmt.Sprintf("%s from %s objects in the range %q", done, bck, rangeStr)
 
 	if xactID != "" {
-		baseMsg += ". " + xactProgressMsg(xactID)
+		baseMsg += ". " + toMonitorMsg(c, xactID)
 	}
 	fmt.Fprintln(c.App.Writer, baseMsg)
 	return

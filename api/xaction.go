@@ -42,19 +42,18 @@ type (
 		ObjCount() int64
 	}
 
+	// either xaction ID or Kind must be specified
 	XactReqArgs struct {
-		// either xaction ID or Kind _must_ be specified
 		ID   string // xaction UUID
-		Kind string // xaction kind, see `xact.Table`)
-		// optional parameters to further narrow down or filter out xactions in question
-		DaemonID string    // node that runs this xaction
-		Bck      cmn.Bck   // bucket
-		Buckets  []cmn.Bck // list of buckets (e.g., copy-bucket, lru-evict, etc.)
-		// max time to wait and other "non-filters"
-		Timeout time.Duration
-		Force   bool // force
-		// more filters
-		OnlyRunning bool // look only for running xactions
+		Kind string // xaction kind or name (see `xact.Table`)
+
+		// optional parameters to further narrow down or filter-out xactions in question
+		DaemonID    string        // node that runs this xaction
+		Bck         cmn.Bck       // bucket
+		Buckets     []cmn.Bck     // list of buckets (e.g., copy-bucket, lru-evict, etc.)
+		Timeout     time.Duration // max time to wait and other "non-filters"
+		Force       bool          // force
+		OnlyRunning bool          // look only for running xactions
 	}
 )
 

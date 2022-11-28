@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	fmtRebalanceStarted = "Started rebalance %q, use 'ais show job xaction %s' to monitor progress\n"
+	fmtRebalanceStarted = "Started rebalance %q (to monitor, run 'ais show rebalance %s').\n"
 
 	roleProxyShort  = "p"
 	roleTargetShort = "t"

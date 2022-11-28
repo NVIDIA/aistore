@@ -21,7 +21,7 @@ var (
 		subcmdStopDsort:    {},
 	}
 
-	jobStopSubcmds = cli.Command{
+	jobStopSub = cli.Command{
 		Name:  commandStop,
 		Usage: "stop a running (batch) job",
 		Subcommands: []cli.Command{

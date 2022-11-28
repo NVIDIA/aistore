@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dloader"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -339,6 +340,8 @@ func downloadJobsList(c *cli.Context, regex string) error {
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {
+	debug.Assert(strings.HasPrefix(id, dloader.PrefixJobID), id)
+
 	// with progress bar
 	if flagIsSet(c, progressBarFlag) {
 		refreshRate := calcRefreshRate(c)
@@ -351,7 +354,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 		return nil
 	}
 
-	resp, err := api.DownloadStatus(apiBP, id, !flagIsSet(c, allJobsFlag))
+	resp, err := api.DownloadStatus(apiBP, id, false /*onlyActive*/)
 	if err != nil {
 		return err
 	}

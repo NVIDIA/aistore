@@ -58,7 +58,7 @@ var (
 		},
 	}
 
-	jobStartSubcmds = cli.Command{
+	jobStartSub = cli.Command{
 		Name:  commandStart,
 		Usage: "start asynchronous batch job",
 		Subcommands: []cli.Command{
@@ -86,7 +86,7 @@ var (
 			},
 			{
 				Name:         subcmdLRU,
-				Usage:        fmt.Sprintf("start %q xaction", apc.ActLRU),
+				Usage:        "start LRU eviction",
 				Flags:        startCmdsFlags[subcmdLRU],
 				Action:       startLRUHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
@@ -115,56 +115,55 @@ var (
 // xaction
 
 func startXactionHandler(c *cli.Context) (err error) {
-	xactKind := c.Command.Name
-	return startXactionKindHandler(c, xactKind)
+	xname := c.Command.Name
+	return startXactionKindHandler(c, xname)
 }
 
-func startXactionKindHandler(c *cli.Context, xactKind string) (err error) {
+func startXactionKindHandler(c *cli.Context, xname string) (err error) {
 	var (
 		bck cmn.Bck
 		sid string
 	)
-
-	if xact.IsBckScope(xactKind) {
+	if xact.IsSameScope(xname, xact.ScopeB, xact.ScopeGB) {
 		bck, err = parseBckURI(c, c.Args().First())
 		if err != nil {
 			return err
 		}
 	}
-	if sid, err = isResilverNode(c, xactKind); err != nil {
+	if sid, err = isResilverNode(c, xname); err != nil {
 		return err
 	}
 
-	return startXaction(c, xactKind, bck, sid)
+	return startXaction(c, xname, bck, sid)
 }
 
-func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err error) {
-	if xact.IsBckScope(xactKind) {
+func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) (err error) {
+	if !bck.IsEmpty() {
 		if _, err = headBucket(bck, false /* don't add */); err != nil {
 			return err
 		}
+	} else if xact.IsSameScope(xname, xact.ScopeB) {
+		return fmt.Errorf("%q requires bucket to run", xname)
 	}
 
 	var (
 		id       string
-		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck, DaemonID: sid}
+		xactArgs = api.XactReqArgs{Kind: xname, Bck: bck, DaemonID: sid}
 	)
-
 	if id, err = api.StartXaction(apiBP, xactArgs); err != nil {
 		return
 	}
-
 	if id != "" {
-		fmt.Fprintf(c.App.Writer, "Started xaction kind=%s, ID=%s. %s\n", xactKind, id, xactProgressMsg(id))
+		fmt.Fprintf(c.App.Writer, "Started %s[%s]. %s\n", xname, id, toMonitorMsg(c, id))
 	} else {
-		fmt.Fprintf(c.App.Writer, "Started xaction kind-%s\n", xactKind)
+		fmt.Fprintf(c.App.Writer, "Started %s. %s\n", xname, toMonitorMsg(c, xname))
 	}
 
 	return
 }
 
-func isResilverNode(c *cli.Context, xactKind string) (sid string, err error) {
-	if xactKind != apc.ActResilver || c.NArg() == 0 {
+func isResilverNode(c *cli.Context, xname string) (sid string, err error) {
+	if xname != apc.ActResilver || c.NArg() == 0 {
 		return "", nil
 	}
 	smap, err := api.GetClusterMap(apiBP)
@@ -541,7 +540,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Started %s %s. %s\n", apc.ActLRU, id, xactProgressMsg(id))
+	fmt.Fprintf(c.App.Writer, "Started %s %s. %s\n", apc.ActLRU, id, toMonitorMsg(c, id))
 	return
 }
 
@@ -566,7 +565,7 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 	}
 
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return listOrRangeOp(c, commandPrefetch, bck)
+		return listOrRangeOp(c, bck)
 	}
 
 	return missingArgumentsError(c, "object list or range")

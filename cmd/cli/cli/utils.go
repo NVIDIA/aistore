@@ -406,7 +406,8 @@ ret:
 	return
 }
 
-// Parses [TARGET_ID] [XACTION_ID|XACTION_KIND] [BUCKET]
+// Parse [TARGET_ID] [XACTION_ID|XACTION_KIND] [BUCKET]
+// Relying on xact.IsValidKind and similar to differentiate (best-effort guess, in effect)
 func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck cmn.Bck, err error) {
 	var smap *cluster.Smap
 	smap, err = api.GetClusterMap(apiBP)
@@ -424,7 +425,7 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 		xactKind = c.Args().Get(1) // assuming ...
 		shift++
 	} else {
-		xactKind = what // unless determined otherwise below
+		xactKind = what // unless determined otherwise (see next)
 	}
 
 	var uri string
@@ -455,35 +456,19 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 		return
 	}
 
-	switch xact.Table[xactKind].Scope {
-	case xact.ScopeBck:
-		// Bucket is optional.
-		if uri := c.Args().Get(1); uri != "" {
-			if bck, err = parseBckURI(c, uri); err != nil {
-				return "", "", "", bck, err
-			}
-			if _, err = headBucket(bck, true /* don't add */); err != nil {
-				return "", "", "", bck, err
-			}
+	// validate bucket
+	if xact.IsSameScope(xactKind, xact.ScopeB, xact.ScopeGB) {
+		if bck, err = parseBckURI(c, uri); err != nil {
+			return
 		}
-	default:
-		if c.NArg() > 1 {
-			actionWarn(c, "\""+xactKind+"\" is a non bucket-scope xaction, ignoring bucket name.")
+		if _, err = headBucket(bck, true /* don't add */); err != nil {
+			return
 		}
+	} else {
+		warn := fmt.Sprintf("%q is a non bucket-scope xaction, ignoring %q argument", xactKind, uri)
+		actionWarn(c, warn)
 	}
 	return
-}
-
-// Get list of xactions
-func listXactions(onlyStartable bool) []string {
-	xactKinds := make([]string, 0)
-	for kind, dtor := range xact.Table {
-		if !onlyStartable || (onlyStartable && dtor.Startable) {
-			xactKinds = append(xactKinds, kind)
-		}
-	}
-	sort.Strings(xactKinds)
-	return xactKinds
 }
 
 func isJSON(arg string) bool {
@@ -938,9 +923,9 @@ func isBucketEmpty(bck cmn.Bck) (bool, error) {
 	return len(objList.Entries) == 0, nil
 }
 
-func ensureHasProvider(bck cmn.Bck, cmd string) error {
+func ensureHasProvider(bck cmn.Bck) error {
 	if !apc.IsProvider(bck.Provider) {
-		return fmt.Errorf("missing backend provider in bucket %q for command %q", bck, cmd)
+		return fmt.Errorf("missing backend provider in %q", bck)
 	}
 	return nil
 }
@@ -1250,9 +1235,19 @@ func newProgIndicator(objName string) *progIndicator {
 	return &progIndicator{objName, atomic.NewInt64(0)}
 }
 
-// get xaction progress message
-func xactProgressMsg(xactID string) string {
-	return fmt.Sprintf("To monitor the progress, run '%s %s %s %s %s'", cliName, commandShow, commandJob, subcmdXaction, xactID)
+func toMonitorMsg(c *cli.Context, xjid string) string {
+	// use command search
+	cmds := findCmdMultiKeyAlt(commandShow, c.Command.Name)
+	if len(cmds) == 0 {
+		// generic
+		cmds = findCmdMultiKeyAlt(commandShow, subcmdXaction)
+	}
+	for _, cmd := range cmds {
+		if strings.HasPrefix(cmd, cliName+" "+commandShow+" ") {
+			return fmt.Sprintf("To monitor the progress, run '%s %s'", cmd, xjid)
+		}
+	}
+	return ""
 }
 
 func flattenXactStats(snap *xact.SnapExt) nvpairList {

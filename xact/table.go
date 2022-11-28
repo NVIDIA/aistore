@@ -5,6 +5,9 @@
 package xact
 
 import (
+	"fmt"
+	"sort"
+
 	"github.com/NVIDIA/aistore/api/apc"
 )
 
@@ -44,15 +47,16 @@ var Table = map[string]Descriptor{
 	apc.ActETLInline: {Scope: ScopeG, Startable: false, Mountpath: false},
 
 	// (one bucket) | (all buckets)
-	apc.ActLRU:          {DisplayName: "evict-lru", Scope: ScopeGB, Startable: true, Mountpath: true},
-	apc.ActStoreCleanup: {Scope: ScopeGB, Startable: true, Mountpath: true},
+	apc.ActLRU:          {DisplayName: "lru-eviction", Scope: ScopeGB, Startable: true, Mountpath: true},
+	apc.ActStoreCleanup: {DisplayName: "cleanup", Scope: ScopeGB, Startable: true, Mountpath: true},
 	apc.ActSummaryBck: {
-		Scope:     ScopeGB,
-		Access:    apc.AceObjLIST | apc.AceBckHEAD,
-		Startable: false,
-		Metasync:  false,
-		Owned:     true,
-		Mountpath: true,
+		DisplayName: "summary",
+		Scope:       ScopeGB,
+		Access:      apc.AceObjLIST | apc.AceBckHEAD,
+		Startable:   false,
+		Metasync:    false,
+		Owned:       true,
+		Mountpath:   true,
 	},
 
 	// one target
@@ -148,12 +152,49 @@ var Table = map[string]Descriptor{
 func IsMountpath(kind string) bool { return Table[kind].Mountpath }
 
 func IsValidKind(kindOrName string) bool {
-	dtor := getDtor(kindOrName)
+	_, dtor := getDtor(kindOrName)
 	return dtor != nil
 }
 
+func GetDescriptor(kindOrName string) (string, Descriptor, error) {
+	kind, dtor := getDtor(kindOrName)
+	if dtor == nil {
+		return "", Descriptor{}, fmt.Errorf("not found xaction %q", kindOrName)
+	}
+	return kind, *dtor, nil
+}
+
+func GetKindName(kindOrName string) (kind, name string) {
+	var dtor *Descriptor
+	kind, dtor = getDtor(kindOrName)
+	if dtor == nil {
+		return
+	}
+	name = dtor.DisplayName
+	if name == "" {
+		name = kind
+	}
+	return
+}
+
+func ListDisplayNames(onlyStartable bool) (names []string) {
+	names = make([]string, 0, len(Table))
+	for kind, dtor := range Table {
+		if onlyStartable && !dtor.Startable {
+			continue
+		}
+		if dtor.DisplayName != "" {
+			names = append(names, dtor.DisplayName)
+		} else {
+			names = append(names, kind)
+		}
+	}
+	sort.Strings(names)
+	return
+}
+
 func IsSameScope(kindOrName string, scs ...int) bool {
-	dtor := getDtor(kindOrName)
+	_, dtor := getDtor(kindOrName)
 	if dtor == nil {
 		return false
 	}
@@ -164,14 +205,14 @@ func IsSameScope(kindOrName string, scs ...int) bool {
 	return dtor.Scope == scope || dtor.Scope == scope2
 }
 
-func getDtor(kindOrName string) *Descriptor {
+func getDtor(kindOrName string) (string, *Descriptor) {
 	if dtor, ok := Table[kindOrName]; ok {
-		return &dtor
+		return kindOrName, &dtor
 	}
-	for _, dtor := range Table {
+	for kind, dtor := range Table {
 		if dtor.DisplayName == kindOrName {
-			return &dtor
+			return kind, &dtor
 		}
 	}
-	return nil
+	return "", nil
 }

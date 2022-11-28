@@ -464,8 +464,7 @@ func daemonXactionCompletions(c *cli.Context) {
 	if c.NArg() > 2 {
 		return
 	}
-	xactSet := c.NArg() != 0
-	xactName := c.Args().First()
+	xactSet, xactKind := c.NArg() != 0, c.Args().First()
 	if c.NArg() == 0 {
 		daemonCompletions(completeTargets)(c)
 	} else {
@@ -475,16 +474,17 @@ func daemonXactionCompletions(c *cli.Context) {
 		}
 		if node := smap.GetTarget(c.Args().First()); node != nil {
 			xactSet = false
-			xactName = c.Args().Get(1)
+			xactKind = c.Args().Get(1)
 		}
 	}
 	if !xactSet {
-		for kind := range xact.Table {
-			fmt.Println(kind)
+		xs := xact.ListDisplayNames(false /*onlyStartable*/)
+		for name := range xs {
+			fmt.Println(name)
 		}
 		return
 	}
-	if xact.IsBckScope(xactName) {
+	if xact.IsSameScope(xactKind, xact.ScopeB, xact.ScopeGB) {
 		bucketCompletions(bcmplop{})(c)
 		return
 	}
@@ -493,15 +493,14 @@ func daemonXactionCompletions(c *cli.Context) {
 func xactionCompletions(cmd string) func(ctx *cli.Context) {
 	return func(c *cli.Context) {
 		if c.NArg() == 0 {
-			for kind, dtor := range xact.Table {
-				if (cmd != apc.ActXactStart) || (cmd == apc.ActXactStart && dtor.Startable) {
-					fmt.Println(kind)
-				}
+			xs := xact.ListDisplayNames(cmd == apc.ActXactStart /*onlyStartable*/)
+			for name := range xs {
+				fmt.Println(name)
 			}
 			return
 		}
-		xactName := c.Args().First()
-		if xact.IsBckScope(xactName) {
+		name := c.Args().First()
+		if xact.IsSameScope(name, xact.ScopeB, xact.ScopeGB) {
 			bucketCompletions(bcmplop{})(c)
 			return
 		}
@@ -509,8 +508,8 @@ func xactionCompletions(cmd string) func(ctx *cli.Context) {
 }
 
 func xactionDesc(onlyStartable bool) string {
-	xactKinds := listXactions(onlyStartable)
-	return fmt.Sprintf("%s can be one of: %q", xactionArgument, strings.Join(xactKinds, ", "))
+	xs := xact.ListDisplayNames(onlyStartable)
+	return fmt.Sprintf("%s can be one of: %s", xactionArgument, strings.Join(xs, ", "))
 }
 
 //
