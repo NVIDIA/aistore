@@ -2868,9 +2868,10 @@ func (p *proxy) _remais(newConfig *globalConfig) {
 		retries    = 5
 		over, nver int64
 	)
-	if clutime := p.startup.cluster.Load(); clutime < int64(maxsleep) {
+	clutime := mono.Since(p.startup.cluster.Load())
+	if clutime < maxsleep {
 		sleep = 4 * maxsleep
-	} else if clutime < int64(newConfig.Timeout.Startup) {
+	} else if clutime < newConfig.Timeout.Startup.D() {
 		sleep = 2 * maxsleep
 	}
 	for ; retries > 0; retries-- {
