@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -63,14 +64,16 @@ func StartXaction(bp BaseParams, args XactReqArgs) (id string, err error) {
 		return id, fmt.Errorf("cannot start \"kind=%s\" xaction", args.Kind)
 	}
 	xactMsg := xact.QueryMsg{Kind: args.Kind, Bck: args.Bck, DaemonID: args.DaemonID}
-	if args.Kind == apc.ActLRU {
+
+	// TODO -- FIXME: remove
+	if strings.Contains(args.Kind, "lru") {
 		ext := &xact.QueryMsgLRU{}
 		if args.Buckets != nil {
 			xactMsg.Buckets = args.Buckets
 			ext.Force = args.Force
 		}
 		xactMsg.Ext = ext
-	} else if args.Kind == apc.ActStoreCleanup && args.Buckets != nil {
+	} else if strings.Contains(args.Kind, "cleanup") && args.Buckets != nil {
 		xactMsg.Buckets = args.Buckets
 	}
 

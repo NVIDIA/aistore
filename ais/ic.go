@@ -171,6 +171,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
+	msg.Kind, _ = xact.GetKindName(msg.Kind) // display name => kind
 	if msg.ID == "" && msg.Kind == "" {
 		ic.p.writeErrStatusf(w, r, http.StatusBadRequest, "invalid %s", msg)
 		return
@@ -191,7 +192,6 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: bck, OnlyRunning: msg.OnlyRunning}
 	withRetry(cmn.Timeout.CplaneOperation(), func() bool {
 		nl, exists = ic.p.notifs.find(flt)

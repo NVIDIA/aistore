@@ -45,6 +45,7 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &xactMsg) != nil {
 			return
 		}
+		debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
 		if xactMsg.Bck.Name != "" {
 			bck = cluster.CloneBck(&xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd); err != nil {
@@ -75,11 +76,13 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		switch msg.Action {
 		case apc.ActXactStart:
+			debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
 			if err := t.cmdXactStart(&xactMsg, bck); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		case apc.ActXactStop:
+			debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
 			err := cmn.ErrXactUserAbort
 			if msg.Name == cmn.ErrXactICNotifAbort.Error() {
 				err = cmn.ErrXactICNotifAbort

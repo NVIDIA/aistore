@@ -301,53 +301,49 @@ type bcmplop struct {
 	separator      bool
 }
 
+func (opts *bcmplop) buckets(c *cli.Context) {
+	var (
+		additionalCompletions []cli.BashCompleteFunc
+		buckets               []cmn.Bck
+	)
+	additionalCompletions = opts.additionalCompletions
+	if c.NArg() > opts.firstBucketIdx && !opts.multiple {
+		if propValueCompletion(c) {
+			return
+		}
+		for _, f := range additionalCompletions {
+			f(c)
+		}
+		return
+	}
+
+	query := cmn.QueryBcks{Provider: opts.provider}
+	buckets, err := api.ListBuckets(apiBP, query, apc.FltPresent) // NOTE: `present` only
+	if err != nil {
+		return
+	}
+	if query.Provider == "" {
+		config, err := api.GetClusterConfig(apiBP)
+		if err != nil {
+			return
+		}
+		for provider := range config.Backend.Conf {
+			if provider == apc.AIS {
+				qbck := cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
+				fmt.Println(qbck)
+			} else {
+				fmt.Printf("%s://\n", apc.ToScheme(provider))
+			}
+		}
+	}
+	printNotUsedBuckets(c, buckets, opts.separator, opts.multiple)
+}
+
 // The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
 // Multiple buckets will also be listed if 'multiple'
 // Printed names will end with '/' if 'separator'
 func bucketCompletions(opts bcmplop) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		var (
-			multiple, separator   bool
-			argsProvider          string
-			firstBucketIdx        int
-			additionalCompletions []cli.BashCompleteFunc
-			buckets               []cmn.Bck
-		)
-		multiple, separator = opts.multiple, opts.separator
-		argsProvider = opts.provider
-		additionalCompletions = opts.additionalCompletions
-		firstBucketIdx = opts.firstBucketIdx
-		if c.NArg() > firstBucketIdx && !multiple {
-			if propValueCompletion(c) {
-				return
-			}
-			for _, f := range additionalCompletions {
-				f(c)
-			}
-			return
-		}
-
-		query := cmn.QueryBcks{Provider: argsProvider}
-		buckets, err := api.ListBuckets(apiBP, query, apc.FltPresent) // NOTE: present only
-		if err != nil {
-			return
-		}
-		if query.Provider == "" {
-			config, err := api.GetClusterConfig(apiBP)
-			if err != nil {
-				return
-			}
-			for provider := range config.Backend.Conf {
-				if provider == apc.AIS {
-					qbck := cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
-					fmt.Println(qbck)
-				} else {
-					fmt.Printf("%s://\n", apc.ToScheme(provider))
-				}
-			}
-		}
-		printNotUsedBuckets(c, buckets, separator, multiple)
-	}
+	return opts.buckets
 }
 
 func printNotUsedBuckets(c *cli.Context, buckets []cmn.Bck, separator, multiple bool) {
@@ -479,8 +475,8 @@ func daemonXactionCompletions(c *cli.Context) {
 	}
 	if !xactSet {
 		xs := xact.ListDisplayNames(false /*onlyStartable*/)
-		for name := range xs {
-			fmt.Println(name)
+		for _, xname := range xs {
+			fmt.Println(xname)
 		}
 		return
 	}
@@ -490,26 +486,18 @@ func daemonXactionCompletions(c *cli.Context) {
 	}
 }
 
-func xactionCompletions(cmd string) func(ctx *cli.Context) {
-	return func(c *cli.Context) {
-		if c.NArg() == 0 {
-			xs := xact.ListDisplayNames(cmd == apc.ActXactStart /*onlyStartable*/)
-			for name := range xs {
-				fmt.Println(name)
-			}
-			return
+func xactCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		xs := xact.ListDisplayNames(false /*onlyStartable*/)
+		for _, xname := range xs {
+			fmt.Println(xname)
 		}
-		name := c.Args().First()
-		if xact.IsSameScope(name, xact.ScopeB, xact.ScopeGB) {
-			bucketCompletions(bcmplop{})(c)
-			return
-		}
+		return
 	}
-}
-
-func xactionDesc(onlyStartable bool) string {
-	xs := xact.ListDisplayNames(onlyStartable)
-	return fmt.Sprintf("%s can be one of: %s", xactionArgument, strings.Join(xs, ", "))
+	xname := c.Args().First()
+	if xact.IsSameScope(xname, xact.ScopeB, xact.ScopeGB) {
+		bucketCompletions(bcmplop{firstBucketIdx: 1})(c)
+	}
 }
 
 //

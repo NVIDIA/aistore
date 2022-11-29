@@ -9,7 +9,8 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/urfave/cli"
 )
@@ -32,7 +33,7 @@ var (
 				Description:  xactionDesc(false),
 				Flags:        stopCmdsFlags[subcmdStopXaction],
 				Action:       stopXactionHandler,
-				BashComplete: xactionCompletions(apc.ActXactStop),
+				BashComplete: xactCompletions,
 			},
 			{
 				Name:         subcmdStopDownload,
@@ -50,39 +51,78 @@ var (
 				BashComplete: dsortIDRunningCompletions,
 			},
 			makeAlias(stopCmdETL, "", true, commandETL),
+			{
+				Name:   commandRebalance,
+				Usage:  "stop rebalancing ais cluster",
+				Flags:  clusterCmdsFlags[commandStop],
+				Action: stopClusterRebalanceHandler,
+			},
 		},
 	}
 )
 
-func stopXactionHandler(c *cli.Context) (err error) {
-	var sid string
+func stopXactionHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-
+	// parse, validate
 	_, xactID, xactKind, bck, err := parseXactionFromArgs(c)
 	if err != nil {
 		return err
 	}
+	msg := formatStoppedMsg(xactID, xactKind, bck)
 
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
-	if err = api.AbortXaction(apiBP, xactArgs); err != nil {
-		return
+	// query
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind}
+	snap, err := getXactSnap(xactArgs)
+	if err != nil {
+		return fmt.Errorf("Cannot stop %s: %v", formatStoppedMsg(xactID, xactKind, bck), err)
+	}
+	if snap == nil {
+		fmt.Fprintf(c.App.Writer, "%s not found, nothing to do\n", msg)
+		return nil
 	}
 
-	if xactKind != "" && xactID != "" {
-		sid = fmt.Sprintf("xaction kind=%s, ID=%s", xactKind, xactID)
-	} else if xactKind != "" {
-		sid = fmt.Sprintf("xaction kind=%s", xactKind)
-	} else {
-		sid = fmt.Sprintf("xaction ID=%s", xactID)
+	// reformat
+	if xactID == "" {
+		xactID = snap.ID
 	}
-	if bck.IsEmpty() {
-		fmt.Fprintf(c.App.Writer, "Stopped %s\n", sid)
-	} else {
-		fmt.Fprintf(c.App.Writer, "Stopped %s, bucket=%s\n", sid, bck.DisplayName())
+	debug.Assertf(xactID == snap.ID, "%q, %q", xactID, snap.ID)
+	msg = formatStoppedMsg(xactID, xactKind, bck)
+
+	var s string
+	if snap.IsAborted() {
+		s = " (aborted)"
 	}
-	return
+	if snap.IsAborted() || snap.Finished() {
+		fmt.Fprintf(c.App.Writer, "%s is already finished%s, nothing to do\n", msg, s)
+		return nil
+	}
+
+	// abort
+	args := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
+	if err := api.AbortXaction(apiBP, args); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.App.Writer, "Stopped %s\n", msg)
+	return nil
+}
+
+func formatStoppedMsg(xactID, xactKind string, bck cmn.Bck) string {
+	var sb string
+	if !bck.IsEmpty() {
+		sb = fmt.Sprintf(", %s", bck.DisplayName())
+	}
+	switch {
+	case xactKind != "" && xactID != "":
+		return fmt.Sprintf("%s[%s%s]", xactKind, xactID, sb)
+	case xactKind != "" && sb != "":
+		return fmt.Sprintf("%s[%s]", xactKind, sb)
+	case xactKind != "":
+		return xactKind
+	default:
+		return fmt.Sprintf("xaction[%s%s]", xactID, sb)
+	}
 }
 
 func stopDownloadHandler(c *cli.Context) (err error) {

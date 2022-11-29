@@ -62,6 +62,19 @@ var (
 		},
 	}
 
+	startRebalance = cli.Command{
+		Name:   commandStart,
+		Usage:  "rebalance ais cluster",
+		Flags:  clusterCmdsFlags[commandStart],
+		Action: startClusterRebalanceHandler,
+	}
+	stopRebalance = cli.Command{
+		Name:   commandStop,
+		Usage:  "stop rebalancing ais cluster",
+		Flags:  clusterCmdsFlags[commandStop],
+		Action: stopClusterRebalanceHandler,
+	}
+
 	clusterCmd = cli.Command{
 		Name:  commandCluster,
 		Usage: "monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.",
@@ -85,18 +98,8 @@ var (
 			{
 				Name: subcmdRebalance,
 				Subcommands: []cli.Command{
-					{
-						Name:   commandStart,
-						Usage:  "rebalance ais cluster",
-						Flags:  clusterCmdsFlags[commandStart],
-						Action: startClusterRebalanceHandler,
-					},
-					{
-						Name:   commandStop,
-						Usage:  "stop rebalancing ais cluster",
-						Flags:  clusterCmdsFlags[commandStop],
-						Action: stopClusterRebalanceHandler,
-					},
+					startRebalance,
+					stopRebalance,
 					{
 						Name:         commandShow,
 						Usage:        "show ais cluster rebalance",
@@ -386,32 +389,22 @@ func startClusterRebalanceHandler(c *cli.Context) (err error) {
 	return startXactionKindHandler(c, apc.ActRebalance)
 }
 
-func stopClusterRebalanceHandler(c *cli.Context) (err error) {
+func stopClusterRebalanceHandler(c *cli.Context) error {
 	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance, OnlyRunning: true}
-	var xs api.NodesXactMultiSnap
-	xs, err = api.QueryXactionSnaps(apiBP, xactArgs)
+	snap, err := getXactSnap(xactArgs)
 	if err != nil {
-		return
+		return err
 	}
-	rebID := ""
-outer:
-	for _, snaps := range xs {
-		for _, snap := range snaps {
-			rebID = snap.ID
-			break outer
-		}
-	}
-
-	if rebID == "" {
+	if snap == nil {
 		return errors.New("rebalance is not running")
 	}
 
-	xactArgs = api.XactReqArgs{ID: rebID, Kind: apc.ActRebalance}
-	if err = api.AbortXaction(apiBP, xactArgs); err != nil {
-		return
+	xactArgs.ID, xactArgs.OnlyRunning = snap.ID, false
+	if err := api.AbortXaction(apiBP, xactArgs); err != nil {
+		return err
 	}
-	_, err = fmt.Fprintf(c.App.Writer, "Stopped %s %q\n", apc.ActRebalance, rebID)
-	return
+	fmt.Fprintf(c.App.Writer, "Stopped %s[%s]\n", apc.ActRebalance, snap.ID)
+	return nil
 }
 
 func showClusterRebalanceHandler(c *cli.Context) (err error) {

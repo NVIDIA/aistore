@@ -151,9 +151,9 @@ var Table = map[string]Descriptor{
 
 func IsMountpath(kind string) bool { return Table[kind].Mountpath }
 
-func IsValidKind(kindOrName string) bool {
-	_, dtor := getDtor(kindOrName)
-	return dtor != nil
+func IsValidKind(kind string) bool {
+	_, ok := Table[kind]
+	return ok
 }
 
 func GetDescriptor(kindOrName string) (string, Descriptor, error) {
@@ -165,6 +165,9 @@ func GetDescriptor(kindOrName string) (string, Descriptor, error) {
 }
 
 func GetKindName(kindOrName string) (kind, name string) {
+	if kindOrName == "" {
+		return
+	}
 	var dtor *Descriptor
 	kind, dtor = getDtor(kindOrName)
 	if dtor == nil {

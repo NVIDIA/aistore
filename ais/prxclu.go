@@ -123,6 +123,7 @@ func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string
 		if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 			return
 		}
+		xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // display name => kind
 		xflt = xactMsg.String()
 		body = cos.MustMarshal(xactMsg)
 	default:
@@ -854,6 +855,7 @@ func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *apc.Actio
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // display name => kind
 	// rebalance
 	if xactMsg.Kind == apc.ActRebalance {
 		p.rebalanceCluster(w, r)
@@ -896,6 +898,7 @@ func (p *proxy) xactStop(w http.ResponseWriter, r *http.Request, msg *apc.Action
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // display name => kind
 	body := cos.MustMarshal(apc.ActionMsg{Action: msg.Action, Value: xactMsg})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}

@@ -108,6 +108,12 @@ var (
 					bckCmdETL,
 				},
 			},
+			{
+				Name:   commandRebalance,
+				Usage:  "rebalance ais cluster",
+				Flags:  clusterCmdsFlags[commandStart],
+				Action: startClusterRebalanceHandler,
+			},
 		},
 	}
 )
