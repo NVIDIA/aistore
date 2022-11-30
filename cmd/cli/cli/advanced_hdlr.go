@@ -47,7 +47,7 @@ var (
 				Name:         apc.ActResilver,
 				Usage:        "start resilvering objects across all drives on one or all targets",
 				ArgsUsage:    optionalTargetIDArgument,
-				Flags:        startCmdsFlags[subcmdStartXaction],
+				Flags:        startCmdsFlags[subcmdXaction],
 				Action:       startXactionHandler,
 				BashComplete: daemonCompletions(completeTargets),
 			},

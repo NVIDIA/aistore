@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dload"
@@ -469,43 +468,26 @@ func showXactionHandler(c *cli.Context) error {
 		return err
 	}
 	setLongRunParams(c, 72)
-	return xactList(c, nodeID, xactID, xactKind, bck)
+	xactArgs := api.XactReqArgs{
+		ID:          xactID,
+		Kind:        xactKind,
+		DaemonID:    nodeID,
+		Bck:         bck,
+		OnlyRunning: !flagIsSet(c, allXactionsFlag),
+	}
+	return xactList(c, xactArgs)
 }
 
-func xactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck) error {
-	onlyActive := !flagIsSet(c, allXactionsFlag)
-	if xactID != "" {
-		debug.Assert(cos.IsValidUUID(xactID), xactID)
-		onlyActive = false
+func xactList(c *cli.Context, xactArgs api.XactReqArgs) error {
+	// override caller's choice on purpose
+	if xactArgs.ID != "" {
+		debug.Assert(cos.IsValidUUID(xactArgs.ID), xactArgs.ID)
+		xactArgs.OnlyRunning = false
 	}
 
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, OnlyRunning: onlyActive}
-	xs, err := api.QueryXactionSnaps(apiBP, xactArgs)
+	xs, err := queryXactions(xactArgs)
 	if err != nil {
 		return err
-	}
-
-	if onlyActive {
-		for tid, snaps := range xs {
-			if len(snaps) == 0 {
-				continue
-			}
-			runningStats := xs[tid][:0]
-			for _, xctn := range snaps {
-				if xctn.Running() {
-					runningStats = append(runningStats, xctn)
-				}
-			}
-			xs[tid] = runningStats
-		}
-	}
-
-	if nodeID != "" {
-		for tid := range xs {
-			if tid != nodeID {
-				delete(xs, tid)
-			}
-		}
 	}
 
 	dts := make([]daemonTemplateXactSnaps, len(xs))
@@ -560,7 +542,7 @@ func xactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck) erro
 	}
 
 	hideHeader := flagIsSet(c, noHeaderFlag)
-	switch xactKind {
+	switch xactArgs.Kind {
 	case apc.ActECGet:
 		// TODO: hideHeader
 		return tmpls.Print(dts, c.App.Writer, tmpls.XactionECGetBodyTmpl, nil, useJSON)

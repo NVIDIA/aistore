@@ -28,6 +28,10 @@ func xactionDesc(onlyStartable bool) string {
 }
 
 func toMonitorMsg(c *cli.Context, xjid string) string {
+	return toShowMsg(c, xjid, "To monitor the progress", false)
+}
+
+func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 	// use command search
 	cmds := findCmdMultiKeyAlt(commandShow, c.Command.Name)
 	if len(cmds) == 0 {
@@ -36,7 +40,14 @@ func toMonitorMsg(c *cli.Context, xjid string) string {
 	}
 	for _, cmd := range cmds {
 		if strings.HasPrefix(cmd, cliName+" "+commandShow+" ") {
-			return fmt.Sprintf("To monitor the progress, run '%s %s'", cmd, xjid)
+			var sid, sv string
+			if verbose {
+				sv = " -v"
+			}
+			if xjid != "" {
+				sid = " " + xjid
+			}
+			return fmt.Sprintf("%s, run '%s%s%s'", prompt, cmd, sid, sv)
 		}
 	}
 	return ""
@@ -123,7 +134,7 @@ func waitForXactionCompletion(apiBP api.BaseParams, args api.XactReqArgs) (err e
 }
 
 func flattenXactStats(snap *xact.SnapExt) nvpairList {
-	props := make(nvpairList, 0)
+	props := make(nvpairList, 0, 16)
 	if snap == nil {
 		return props
 	}
@@ -133,6 +144,10 @@ func flattenXactStats(snap *xact.SnapExt) nvpairList {
 		}
 		return t.Format("01-02 15:04:05")
 	}
+	_, xname := xact.GetKindName(snap.Kind)
+	if xname != snap.Kind {
+		props = append(props, nvpair{Name: ".display-name", Value: xname})
+	}
 	props = append(props,
 		// Start xaction properties with a dot to make them first alphabetically
 		nvpair{Name: ".id", Value: snap.ID},
@@ -141,14 +156,25 @@ func flattenXactStats(snap *xact.SnapExt) nvpairList {
 		nvpair{Name: ".start", Value: fmtTime(snap.StartTime)},
 		nvpair{Name: ".end", Value: fmtTime(snap.EndTime)},
 		nvpair{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
-
-		nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
-		nvpair{Name: "loc.obj.size", Value: formatStatHuman(".size", snap.Stats.Bytes)},
-		nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
-		nvpair{Name: "in.obj.size", Value: formatStatHuman(".size", snap.Stats.InBytes)},
-		nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
-		nvpair{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
 	)
+	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
+		props = append(props,
+			nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
+			nvpair{Name: "loc.obj.size", Value: formatStatHuman(".size", snap.Stats.Bytes)},
+		)
+	}
+	if snap.Stats.InObjs != 0 || snap.Stats.InBytes != 0 {
+		props = append(props,
+			nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
+			nvpair{Name: "in.obj.size", Value: formatStatHuman(".size", snap.Stats.InBytes)},
+		)
+	}
+	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
+		props = append(props,
+			nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
+			nvpair{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
+		)
+	}
 	if extStats, ok := snap.Ext.(map[string]any); ok {
 		for k, v := range extStats {
 			var value string
@@ -181,4 +207,45 @@ func getXactSnap(xactArgs api.XactReqArgs) (*xact.SnapExt, error) {
 		}
 	}
 	return nil, nil
+}
+
+func queryXactions(xactArgs api.XactReqArgs) (xs api.NodesXactMultiSnap, err error) {
+	xs, err = api.QueryXactionSnaps(apiBP, xactArgs)
+	if err != nil {
+		return
+	}
+	if xactArgs.OnlyRunning {
+		for tid, snaps := range xs {
+			if len(snaps) == 0 {
+				continue
+			}
+			runningStats := xs[tid][:0]
+			for _, xctn := range snaps {
+				if xctn.Running() {
+					runningStats = append(runningStats, xctn)
+				}
+			}
+			xs[tid] = runningStats
+		}
+	}
+
+	if xactArgs.DaemonID != "" {
+		var found bool
+		for tid := range xs {
+			if tid == xactArgs.DaemonID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+		// remove all other targets
+		for tid := range xs {
+			if tid != xactArgs.DaemonID {
+				delete(xs, tid)
+			}
+		}
+	}
+	return
 }

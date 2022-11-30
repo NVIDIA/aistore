@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -407,13 +408,19 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 	return nil
 }
 
-func showClusterRebalanceHandler(c *cli.Context) (err error) {
-	nodeID, xactID, xactKind, bck, errP := parseXactionFromArgs(c)
-	if errP != nil {
-		return errP
+func showClusterRebalanceHandler(c *cli.Context) error {
+	nodeID, xactID, xactKind, bck, err := parseXactionFromArgs(c)
+	if err != nil {
+		return err
 	}
-	if xactID == "" && xactKind == "" {
-		xactKind = apc.ActRebalance
+	debug.Assert(xactKind == "" || xactKind == apc.ActRebalance, xactKind)
+	debug.Assert(bck.IsEmpty(), bck.String())
+	xactKind = apc.ActRebalance
+	xactArgs := api.XactReqArgs{
+		ID:          xactID,
+		Kind:        xactKind,
+		DaemonID:    nodeID,
+		OnlyRunning: !flagIsSet(c, allXactionsFlag),
 	}
-	return xactList(c, nodeID, xactID, xactKind, bck)
+	return xactList(c, xactArgs)
 }

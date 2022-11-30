@@ -140,20 +140,6 @@ const (
 	subcmdStgMountpath = subcmdMountpath
 	subcmdStgCleanup   = "cleanup"
 
-	// Remove subcommands
-	subcmdRemoveDownload = subcmdDownload
-	subcmdRemoveDsort    = subcmdDsort
-
-	// Start subcommands
-	subcmdStartXaction  = subcmdXaction
-	subcmdStartDsort    = subcmdDsort
-	subcmdStartDownload = subcmdDownload
-
-	// Stop subcommands
-	subcmdStopXaction  = subcmdXaction
-	subcmdStopDsort    = subcmdDsort
-	subcmdStopDownload = subcmdDownload
-
 	// Bucket subcommands
 	subcmdSummary = "summary"
 
@@ -163,11 +149,6 @@ const (
 
 	// Archive subcommands
 	subcmdAppend = "append"
-
-	// Wait subcommands
-	subcmdWaitXaction  = subcmdXaction
-	subcmdWaitDownload = subcmdDownload
-	subcmdWaitDSort    = subcmdDsort
 
 	// AuthN subcommands
 	subcmdAuthAdd     = "add"
