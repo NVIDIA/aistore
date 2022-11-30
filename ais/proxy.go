@@ -1845,8 +1845,6 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 		backend       = cmn.BackendConfAIS{}
 		aliasOrUUID   = bck.Ns.UUID
 		config        = cmn.GCO.Get()
-		sleep         = config.Timeout.CplaneOperation.D()
-		retries       = 2
 		v, configured = config.Backend.ProviderConf(apc.AIS)
 	)
 	if !configured {
@@ -1857,31 +1855,25 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	cos.MustMorphMarshal(v, &backend)
 	urls, exists := backend[aliasOrUUID]
 	if !exists {
-	retry:
-		for retries > 0 {
-			p.remais.mu.RLock()
-			for _, remais := range p.remais.A {
-				if remais.Alias == aliasOrUUID || remais.UUID == aliasOrUUID {
-					urls = []string{remais.URL}
-					p.remais.mu.RUnlock()
-					exists = true
-					break retry
-				}
-			}
-			p.remais.mu.RUnlock()
-
-			if p.forwardCP(w, r, msg, bck.Name) {
-				return
-			}
-
-			glog.Errorf("%s: retrying remais ver=%d (%d attempts)", p, p.remais.Ver, retries-1)
-			time.Sleep(sleep)
-			retries--
-			v, _ = cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
-			cos.MustMorphMarshal(v, &backend)
-			if urls, exists = backend[aliasOrUUID]; exists {
+		var refreshed bool
+		if p.remais.Ver == 0 {
+			p._remais(&config.ClusterConfig, true)
+			refreshed = true
+		}
+	ml:
+		p.remais.mu.RLock()
+		for _, remais := range p.remais.A {
+			if remais.Alias == aliasOrUUID || remais.UUID == aliasOrUUID {
+				urls = []string{remais.URL}
+				exists = true
 				break
 			}
+		}
+		p.remais.mu.RUnlock()
+		if !exists && !refreshed {
+			p._remais(&config.ClusterConfig, true)
+			refreshed = true
+			goto ml
 		}
 	}
 	if !exists {
@@ -2853,26 +2845,30 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 		return // nothing to do
 	}
 
-	go p._remais(newConfig)
+	go p._remais(&newConfig.ClusterConfig, false)
 	return
 }
 
 // refresh local p.remais cache via intra-cluster call to a random target
-func (p *proxy) _remais(newConfig *globalConfig) {
+func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 	if !p.remais.in.CAS(false, true) {
 		return
 	}
 	var (
 		sleep      = newConfig.Timeout.CplaneOperation.D()
-		maxsleep   = newConfig.Timeout.MaxKeepalive.D()
 		retries    = 5
 		over, nver int64
 	)
-	clutime := mono.Since(p.startup.cluster.Load())
-	if clutime < maxsleep {
-		sleep = 4 * maxsleep
-	} else if clutime < newConfig.Timeout.Startup.D() {
-		sleep = 2 * maxsleep
+	if blocking {
+		retries = 1
+	} else {
+		maxsleep := newConfig.Timeout.MaxKeepalive.D()
+		clutime := mono.Since(p.startup.cluster.Load())
+		if clutime < maxsleep {
+			sleep = 4 * maxsleep
+		} else if clutime < newConfig.Timeout.Startup.D() {
+			sleep = 2 * maxsleep
+		}
 	}
 	for ; retries > 0; retries-- {
 		time.Sleep(sleep)

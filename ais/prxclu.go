@@ -1186,7 +1186,7 @@ func (p *proxy) attachDetachRemAis(w http.ResponseWriter, r *http.Request, actio
 	if err != nil {
 		p.writeErr(w, r, err)
 	} else if newConfig != nil {
-		go p._remais(newConfig)
+		go p._remais(&newConfig.ClusterConfig, false)
 	}
 }
 
