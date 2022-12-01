@@ -207,15 +207,15 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cos.S
 			select {
 			case <-etlTicker.C:
 				// Check number of objects transformed.
-				stats, err := api.GetXactionSnapsByID(baseParams, xactID)
+				xs, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
 				if err != nil {
-					tlog.Logf("Failed to get xaction stats; err %v\n", err)
+					tlog.Logf("Failed to get x-etl[%s] stats: %v\n", xactID, err)
 					continue
 				}
-				locObjs, outObjs, inObjs := stats.ObjCounts()
+				locObjs, outObjs, inObjs := xs.ObjCounts(xactID)
 				tlog.Logf("ETL %q progress: (objs=%d, outObjs=%d, inObjs=%d) out of %d objects\n",
 					xactID, locObjs, outObjs, inObjs, totalObj)
-				locBytes, outBytes, inBytes := stats.ByteCounts()
+				locBytes, outBytes, inBytes := xs.ByteCounts(xactID)
 				bps := float64(locBytes+outBytes) / time.Since(xactStart).Seconds()
 				bpsStr := fmt.Sprintf("%s/s", cos.B2S(int64(bps), 2))
 				tlog.Logf("ETL %q progress: (bytes=%d, outBytes=%d, inBytes=%d), %sBps\n",

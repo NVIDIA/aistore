@@ -209,7 +209,7 @@ func getXactSnap(xactArgs api.XactReqArgs) (*xact.SnapExt, error) {
 	return nil, nil
 }
 
-func queryXactions(xactArgs api.XactReqArgs) (xs api.NodesXactMultiSnap, err error) {
+func queryXactions(xactArgs api.XactReqArgs) (xs api.XactMultiSnap, err error) {
 	xs, err = api.QueryXactionSnaps(apiBP, xactArgs)
 	if err != nil {
 		return

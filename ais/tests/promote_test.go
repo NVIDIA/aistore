@@ -302,11 +302,19 @@ func (test *prmTests) wait(t *testing.T, xactID, tempdir string, target *cluster
 	}
 
 	// collect stats
-	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
+	xs, err := api.QueryXactionSnaps(baseParams, xargs)
 	tassert.CheckFatal(t, err)
-	locObjs, outObjs, inObjs = snaps.ObjCounts()
-	tlog.Logf("%s: (loc, out, in) = (%d, %d, %d)\n", xname, locObjs, outObjs, inObjs)
-	return
+	if xactID != "" {
+		locObjs, outObjs, inObjs = xs.ObjCounts(xactID)
+		tlog.Logf("%s[%s]: (loc, out, in) = (%d, %d, %d)\n", xname, xactID, locObjs, outObjs, inObjs)
+		return
+	}
+	uuids := xs.GetUUIDs()
+	for _, xactID := range uuids {
+		locObjs, outObjs, inObjs = xs.ObjCounts(xactID)
+		tlog.Logf("%s[%s]: (loc, out, in) = (%d, %d, %d)\n", xname, xactID, locObjs, outObjs, inObjs)
+	}
+	return 0, 0, 0
 }
 
 func countFiles(t *testing.T, dir string) (n, nsubdir int) {

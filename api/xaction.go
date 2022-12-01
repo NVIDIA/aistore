@@ -33,15 +33,7 @@ const (
 )
 
 type (
-	NodesXactSnap      map[string]*xact.SnapExt
-	NodesXactMultiSnap map[string][]*xact.SnapExt
-
-	XactStatsHelper interface {
-		Running() bool
-		Finished() bool
-		Aborted() bool
-		ObjCount() int64
-	}
+	XactMultiSnap map[string][]*xact.SnapExt // by target ID (tid)
 
 	// either xaction ID or Kind must be specified
 	XactReqArgs struct {
@@ -112,18 +104,8 @@ func AbortXaction(bp BaseParams, args XactReqArgs) error {
 	return err
 }
 
-// GetXactionSnapsByID gets all xaction snaps for a given xaction id.
-func GetXactionSnapsByID(bp BaseParams, xactID string) (nxs NodesXactSnap, err error) {
-	xs, err := QueryXactionSnaps(bp, XactReqArgs{ID: xactID})
-	if err != nil {
-		return
-	}
-	nxs = xs.nodesXactSnap(xactID)
-	return
-}
-
 // QueryXactionSnaps gets all xaction snaps based on the specified selection.
-func QueryXactionSnaps(bp BaseParams, args XactReqArgs) (xs NodesXactMultiSnap, err error) {
+func QueryXactionSnaps(bp BaseParams, args XactReqArgs) (xs XactMultiSnap, err error) {
 	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
@@ -189,13 +171,13 @@ func WaitForXactionIC(bp BaseParams, args XactReqArgs) (status *nl.NotifStatus, 
 // WaitForXactionNode waits for a given xaction to complete.
 // Use for xaction which can be launched on a single node and do not report their
 // statuses(e.g resilver) to IC or to check specific xaction states (e.g Idle).
-func WaitForXactionNode(bp BaseParams, args XactReqArgs, fn func(NodesXactMultiSnap) bool) error {
-	debug.Assert(args.Kind != "")
+func WaitForXactionNode(bp BaseParams, args XactReqArgs, fn func(XactMultiSnap) bool) error {
+	debug.Assert(args.Kind != "" || cos.IsValidUUID(args.ID))
 	_, err := waitX(bp, args, fn)
 	return err
 }
 
-func waitX(bp BaseParams, args XactReqArgs, fn func(NodesXactMultiSnap) bool) (status *nl.NotifStatus, err error) {
+func waitX(bp BaseParams, args XactReqArgs, fn func(XactMultiSnap) bool) (status *nl.NotifStatus, err error) {
 	var (
 		elapsed      time.Duration
 		begin        = mono.NanoTime()
@@ -209,7 +191,7 @@ func waitX(bp BaseParams, args XactReqArgs, fn func(NodesXactMultiSnap) bool) (s
 			status, err = GetXactionStatus(bp, args)
 			done = err == nil && status.Finished() && elapsed >= xactMinPollTime
 		} else {
-			var snaps NodesXactMultiSnap
+			var snaps XactMultiSnap
 			snaps, err = QueryXactionSnaps(bp, args)
 			done = err == nil && fn(snaps)
 		}
@@ -231,10 +213,11 @@ func waitX(bp BaseParams, args XactReqArgs, fn func(NodesXactMultiSnap) bool) (s
 
 // WaitForXactionIdle waits for a given on-demand xaction to be idle.
 func WaitForXactionIdle(bp BaseParams, args XactReqArgs) error {
-	idles := 0
+	var idles int
 	args.OnlyRunning = true
-	check := func(snaps NodesXactMultiSnap) bool {
-		if snaps.Idle() {
+	check := func(snaps XactMultiSnap) bool {
+		found, idle := snaps.isAllIdle(args.ID)
+		if idle || !found { // TODO -- FIXME: !found may translate as "hasn't started yet"
 			idles++
 			return idles >= numConsecutiveIdle
 		}
@@ -242,69 +225,6 @@ func WaitForXactionIdle(bp BaseParams, args XactReqArgs) error {
 		return false
 	}
 	return WaitForXactionNode(bp, args, check)
-}
-
-///////////////////
-// NodesXactSnap //
-///////////////////
-
-func (nxs NodesXactSnap) running() bool {
-	for _, snap := range nxs {
-		if snap.Running() {
-			return true
-		}
-	}
-	return false
-}
-
-func (nxs NodesXactSnap) Finished() bool { return !nxs.running() }
-
-func (nxs NodesXactSnap) IsAborted() bool {
-	for _, snap := range nxs {
-		if snap.IsAborted() {
-			return true
-		}
-	}
-	return false
-}
-
-func (nxs NodesXactSnap) ObjCounts() (locObjs, outObjs, inObjs int64) {
-	for _, snap := range nxs {
-		locObjs += snap.Stats.Objs
-		outObjs += snap.Stats.OutObjs
-		inObjs += snap.Stats.InObjs
-	}
-	return
-}
-
-func (nxs NodesXactSnap) ByteCounts() (locBytes, outBytes, inBytes int64) {
-	for _, snap := range nxs {
-		locBytes += snap.Stats.Bytes
-		outBytes += snap.Stats.OutBytes
-		inBytes += snap.Stats.InBytes
-	}
-	return
-}
-
-func (nxs NodesXactSnap) TotalRunningTime() time.Duration {
-	var (
-		start   = time.Now()
-		end     time.Time
-		running bool
-	)
-	for _, snap := range nxs {
-		running = running || snap.Running()
-		if snap.StartTime.Before(start) {
-			start = snap.StartTime
-		}
-		if snap.EndTime.After(end) {
-			end = snap.EndTime
-		}
-	}
-	if running {
-		end = time.Now()
-	}
-	return end.Sub(start)
 }
 
 // Wait for bucket summary:
@@ -359,64 +279,168 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v any) error {
 	return err
 }
 
-////////////////////////
-// NodesXactMultiSnap //
-////////////////////////
+///////////////////
+// XactMultiSnap //
+///////////////////
 
-func (xs NodesXactMultiSnap) Running() (tid string, xsnap *xact.SnapExt) {
-	var snaps []*xact.SnapExt
-	for tid, snaps = range xs {
-		for _, xsnap = range snaps {
+// NOTE: when xaction UUID is not specified: require the same kind _and_
+// a single running uuid (otherwise, IsAborted() et al. can only produce ambiguous results)
+func (xs XactMultiSnap) checkEmptyID(xactID string) error {
+	var kind, uuid string
+	if xactID != "" {
+		debug.Assert(cos.IsValidUUID(xactID), xactID)
+		return nil
+	}
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if kind == "" {
+				kind = xsnap.Kind
+			} else if kind != xsnap.Kind {
+				return fmt.Errorf("invalid multi-snap Kind: %q vs %q", kind, xsnap.Kind)
+			}
 			if xsnap.Running() {
-				return
+				if uuid == "" {
+					uuid = xsnap.ID
+				} else if uuid != xsnap.ID {
+					return fmt.Errorf("invalid multi-snap UUID: %q vs %q", uuid, xsnap.ID)
+				}
 			}
 		}
 	}
-	return "", nil
+	return nil
 }
 
-func (xs NodesXactMultiSnap) ObjCounts() (locObjs, outObjs, inObjs int64) {
-	for _, targetStats := range xs {
-		for _, snap := range targetStats {
-			locObjs += snap.Stats.Objs
-			outObjs += snap.Stats.OutObjs
-			inObjs += snap.Stats.InObjs
+func (xs XactMultiSnap) GetUUIDs() []string {
+	uuids := make(cos.StrSet, 2)
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			uuids[xsnap.ID] = struct{}{}
 		}
 	}
-	return
+	return uuids.ToSlice()
 }
 
-func (xs NodesXactMultiSnap) ByteCounts() (locBytes, outBytes, inBytes int64) {
-	for _, targetStats := range xs {
-		for _, snap := range targetStats {
-			locBytes += snap.Stats.Bytes
-			outBytes += snap.Stats.OutBytes
-			inBytes += snap.Stats.InBytes
-		}
+func (xs XactMultiSnap) RunningTarget(xactID string) (string /*tid*/, *xact.SnapExt, error) {
+	if err := xs.checkEmptyID(xactID); err != nil {
+		return "", nil, err
 	}
-	return
-}
-
-func (xs NodesXactMultiSnap) nodesXactSnap(xactID string) (nxs NodesXactSnap) {
-	nxs = make(NodesXactSnap)
 	for tid, snaps := range xs {
 		for _, xsnap := range snaps {
-			if xsnap.ID == xactID {
-				nxs[tid] = xsnap
-				break
+			if (xactID == xsnap.ID || xactID == "") && xsnap.Running() {
+				return tid, xsnap, nil
+			}
+		}
+	}
+	return "", nil, nil
+}
+
+func (xs XactMultiSnap) IsAborted(xactID string) (bool, error) {
+	if err := xs.checkEmptyID(xactID); err != nil {
+		return false, err
+	}
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if (xactID == xsnap.ID || xactID == "") && xsnap.IsAborted() {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func (xs XactMultiSnap) isAllIdle(xactID string) (found, idle bool) {
+	if xactID != "" {
+		debug.Assert(cos.IsValidUUID(xactID), xactID)
+		return xs.isOneIdle(xactID)
+	}
+	uuids := xs.GetUUIDs()
+	idle = true
+	for _, xactID = range uuids {
+		f, i := xs.isOneIdle(xactID)
+		found = found || f
+		idle = idle && i
+	}
+	return
+}
+
+func (xs XactMultiSnap) isOneIdle(xactID string) (found, idle bool) {
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xactID == xsnap.ID {
+				found = true
+				if xsnap.Started() && !xsnap.IsAborted() && !xsnap.Idle() {
+					return true, false
+				}
+			}
+		}
+	}
+	idle = true // read: not-idle not found
+	return
+}
+
+func (xs XactMultiSnap) ObjCounts(xactID string) (locObjs, outObjs, inObjs int64) {
+	if xactID == "" {
+		uuids := xs.GetUUIDs()
+		debug.Assert(len(uuids) == 1, uuids)
+		xactID = uuids[0]
+	}
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xactID == xsnap.ID {
+				locObjs += xsnap.Stats.Objs
+				outObjs += xsnap.Stats.OutObjs
+				inObjs += xsnap.Stats.InObjs
 			}
 		}
 	}
 	return
 }
 
-func (xs NodesXactMultiSnap) Idle() bool {
-	for _, xs := range xs {
-		for _, xsnap := range xs {
-			if !xsnap.Idle() {
-				return false
+func (xs XactMultiSnap) ByteCounts(xactID string) (locBytes, outBytes, inBytes int64) {
+	if xactID == "" {
+		uuids := xs.GetUUIDs()
+		debug.Assert(len(uuids) == 1, uuids)
+		xactID = uuids[0]
+	}
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xactID == xsnap.ID {
+				locBytes += xsnap.Stats.Bytes
+				outBytes += xsnap.Stats.OutBytes
+				inBytes += xsnap.Stats.InBytes
 			}
 		}
 	}
-	return true
+	return
+}
+
+func (xs XactMultiSnap) TotalRunningTime(xactID string) (time.Duration, error) {
+	debug.Assert(cos.IsValidUUID(xactID), xactID)
+	var (
+		start, end     time.Time
+		found, running bool
+	)
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xactID == xsnap.ID {
+				found = true
+				running = running || xsnap.Running()
+				if !xsnap.StartTime.IsZero() {
+					if start.IsZero() || xsnap.StartTime.Before(start) {
+						start = xsnap.StartTime
+					}
+				}
+				if !xsnap.EndTime.IsZero() && xsnap.EndTime.After(end) {
+					end = xsnap.EndTime
+				}
+			}
+		}
+	}
+	if !found {
+		return 0, errors.New("xaction [" + xactID + "] not found")
+	}
+	if running {
+		end = time.Now()
+	}
+	return end.Sub(start), nil
 }

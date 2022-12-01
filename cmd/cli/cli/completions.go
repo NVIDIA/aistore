@@ -488,13 +488,27 @@ func daemonXactionCompletions(c *cli.Context) {
 
 func xactCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		xs := xact.ListDisplayNames(false /*onlyStartable*/)
-		for _, xname := range xs {
-			fmt.Println(xname)
+		xs, err := queryXactions(api.XactReqArgs{OnlyRunning: true})
+		if err != nil {
+			actionWarn(c, "query-x returned "+err.Error())
+			return
 		}
-		return
+		var already = cos.StrSet{}
+		for _, snaps := range xs {
+			for _, snap := range snaps {
+				if _, ok := already[snap.Kind]; !ok {
+					xname, _ := xact.GetKindName(snap.Kind)
+					debug.Assert(xname != "")
+					fmt.Println(xname)
+					already[snap.Kind] = struct{}{}
+				}
+			}
+		}
 	}
+
 	xname := c.Args().First()
+	kind, _ := xact.GetKindName(xname)
+	debug.Assert(kind != "", xname)
 	if xact.IsSameScope(xname, xact.ScopeB, xact.ScopeGB) {
 		bucketCompletions(bcmplop{firstBucketIdx: 1})(c)
 	}

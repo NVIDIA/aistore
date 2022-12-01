@@ -489,16 +489,16 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		return nil
 	}
 
-	snaps, err := api.GetXactionSnapsByID(apiBP, xactID)
+	snaps, err := api.QueryXactionSnaps(apiBP, api.XactReqArgs{ID: xactID})
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
 
-	locObjs, outObjs, inObjs := snaps.ObjCounts()
+	locObjs, outObjs, inObjs := snaps.ObjCounts(xactID)
 	fmt.Fprintf(c.App.Writer, "ETL object snaps: locally transformed=%d, sent=%d, received=%d", locObjs, outObjs, inObjs)
-	locBytes, outBytes, inBytes := snaps.ByteCounts()
+	locBytes, outBytes, inBytes := snaps.ByteCounts(xactID)
 	fmt.Fprintf(c.App.Writer, "ETL byte snaps: locally transformed=%d, sent=%d, received=%d", locBytes, outBytes, inBytes)
 	return nil
 }

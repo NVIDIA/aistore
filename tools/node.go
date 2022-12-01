@@ -274,17 +274,17 @@ func WaitForResilvering(t *testing.T, bp api.BaseParams, target *cluster.Snode) 
 	} else {
 		time.Sleep(4 * time.Second)
 	}
-	err := api.WaitForXactionNode(bp, args, _xactSnapFinished)
-	tassert.CheckFatal(t, err)
-}
-
-func _xactSnapFinished(snaps api.NodesXactMultiSnap) bool {
-	tid, xsnap := snaps.Running()
-	if tid != "" {
-		tlog.Logf("t[%s]: x-%s[%s] is running\n", tid, xsnap.Kind, xsnap.ID)
-		return false
+	allFinished := func(snaps api.XactMultiSnap) bool {
+		tid, xsnap, err := snaps.RunningTarget("")
+		tassert.CheckFatal(t, err)
+		if tid != "" {
+			tlog.Logf("t[%s]: x-%s[%s] is running\n", tid, xsnap.Kind, xsnap.ID)
+			return false
+		}
+		return true
 	}
-	return true
+	err := api.WaitForXactionNode(bp, args, allFinished)
+	tassert.CheckFatal(t, err)
 }
 
 func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[*cluster.Snode][]string {

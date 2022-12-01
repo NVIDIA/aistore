@@ -13,6 +13,14 @@ import (
 )
 
 type (
+	Stats struct {
+		Objs     int64 `json:"loc-objs,string"`  // locally processed
+		Bytes    int64 `json:"loc-bytes,string"` //
+		OutObjs  int64 `json:"out-objs,string"`  // transmit
+		OutBytes int64 `json:"out-bytes,string"` //
+		InObjs   int64 `json:"in-objs,string"`   // receive
+		InBytes  int64 `json:"in-bytes,string"`
+	}
 	Snap struct {
 		StartTime time.Time `json:"start-time"`
 		EndTime   time.Time `json:"end-time"`
@@ -22,20 +30,11 @@ type (
 		Stats     Stats     `json:"stats"` // common stats counters (below)
 		AbortedX  bool      `json:"aborted"`
 	}
-
-	Stats struct {
-		Objs     int64 `json:"loc-objs,string"`  // locally processed
-		Bytes    int64 `json:"loc-bytes,string"` //
-		OutObjs  int64 `json:"out-objs,string"`  // transmit
-		OutBytes int64 `json:"out-bytes,string"` //
-		InObjs   int64 `json:"in-objs,string"`   // receive
-		InBytes  int64 `json:"in-bytes,string"`
-	}
-
 	SnapExt struct {
 		Ext any `json:"ext"`
 		Snap
 	}
+
 	BaseDemandStatsExt struct {
 		IsIdle bool `json:"is_idle"`
 	}
@@ -65,12 +64,13 @@ var _ cluster.XactSnap = (*Snap)(nil)
 //////////
 
 func (b *Snap) IsAborted() bool { return b.AbortedX }
-func (b *Snap) Running() bool   { return b.EndTime.IsZero() }
-func (b *Snap) Finished() bool  { return !b.EndTime.IsZero() }
+func (b *Snap) Started() bool   { return !b.StartTime.IsZero() }
+func (b *Snap) Running() bool   { return b.Started() && !b.IsAborted() && b.EndTime.IsZero() }
+func (b *Snap) Finished() bool  { return b.Started() && !b.EndTime.IsZero() }
 
 // Idle is:
 // - stat.IsIdle for on-demand xactions
-// - !stat.Running() for the rest of xactions
+// - !stat.Running() for all the rest
 // MorphMarshal cannot be used to read any stats as BaseDemandStatsExt because
 // upcasting is unsupported (uknown fields are forbidden).
 func (b *SnapExt) Idle() bool {

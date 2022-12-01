@@ -1704,7 +1704,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 	{
 		baseParams := tools.BaseAPIParams()
-		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
+		xactID, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 			Mirror: &cmn.MirrorConfToUpdate{
 				Enabled: api.Bool(true),
 			},
@@ -1717,7 +1717,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 		// Even though the bucket is empty, it can take a short while until the
 		// xaction is propagated and finished.
-		reqArgs := api.XactReqArgs{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: xactTimeout}
+		reqArgs := api.XactReqArgs{ID: xactID, Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: xactTimeout}
 		_, err = api.WaitForXactionIC(baseParams, reqArgs)
 		tassert.CheckFatal(t, err)
 	}
@@ -2463,13 +2463,13 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
+	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
 	tassert.CheckFatal(t, err)
-	objs, outObjs, inObjs := snaps.ObjCounts()
+	objs, outObjs, inObjs := snaps.ObjCounts(xactID)
 	tassert.Errorf(t, objs+outObjs == int64(m.num), "expected %d objects in total, got (objs=%d, outObjs=%d, inObjs=%d)",
 		m.num, objs, outObjs, inObjs)
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
-	locBytes, outBytes, inBytes := snaps.ByteCounts()
+	locBytes, outBytes, inBytes := snaps.ByteCounts(xactID)
 	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes in total, got (locBytes=%d, outBytes=%d, inBytes=%d)",
 		expectedBytesCnt, locBytes, outBytes, inBytes)
 }
@@ -2512,9 +2512,11 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.CheckError(t, err)
 
 	time.Sleep(time.Second)
-	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
+	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
 	tassert.CheckError(t, err)
-	tassert.Errorf(t, snaps.IsAborted(), "failed to abort copy-bucket (%s)", xactID)
+	aborted, err := snaps.IsAborted(xactID)
+	tassert.CheckError(t, err)
+	tassert.Errorf(t, aborted, "failed to abort copy-bucket (%s)", xactID)
 
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
 	tassert.CheckError(t, err)
@@ -2534,14 +2536,14 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
+	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
 	tassert.CheckFatal(t, err)
 
-	locObjs, outObjs, inObjs := snaps.ObjCounts()
+	locObjs, outObjs, inObjs := snaps.ObjCounts(xactID)
 	tassert.Errorf(t, locObjs+outObjs == int64(m.num), "expected %d objects, got (locObjs=%d, outObjs=%d, inObjs=%d)",
 		m.num, locObjs, outObjs, inObjs)
 
-	locBytes, outBytes, inBytes := snaps.ByteCounts()
+	locBytes, outBytes, inBytes := snaps.ByteCounts(xactID)
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
 	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes, got (locBytes=%d, outBytes=%d, inBytes=%d)",
 		expectedBytesCnt, locBytes, outBytes, inBytes)

@@ -234,9 +234,11 @@ def transform(input_bytes):
 			etlDoneCh.Close()
 			tassert.CheckFatal(t, err)
 
-			snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
+			snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
 			tassert.CheckFatal(t, err)
-			tlog.Logf("ETL Bucket took %s\n", snaps.TotalRunningTime())
+			total, err := snaps.TotalRunningTime(xactID)
+			tassert.CheckFatal(t, err)
+			tlog.Logf("Transforming bucket %s took %s\n", bckFrom.DisplayName(), total)
 
 			objList, err := api.ListObjects(baseParams, bckTo, nil, 0)
 			tassert.CheckFatal(t, err)

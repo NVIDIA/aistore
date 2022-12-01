@@ -348,8 +348,8 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 		actionDone(c, msg)
 		return nil
 	}
-	warn := fmt.Sprintf("The operation to start %s returned an empty UUID (no-op?). %s\n",
-		xname, toShowMsg(c, "", "To investigate", false))
+	warn := fmt.Sprintf("The operation returned an empty UUID (a no-op?). %s\n",
+		toShowMsg(c, "", "To investigate", false))
 	actionWarn(c, warn)
 	return nil
 }
