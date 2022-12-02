@@ -292,7 +292,7 @@ func (*notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr erro
 	if aborted {
 		nl.SetAborted()
 		if srcErr == nil {
-			detail := fmt.Sprintf("%s, node %s", nl, tsi)
+			detail := fmt.Sprintf("%s from %s", nl, tsi.StringEx())
 			srcErr = cmn.NewErrAborted(nl.String(), detail, nil)
 		}
 	}
@@ -350,7 +350,7 @@ func (n *notifs) housekeep() time.Duration {
 	}
 	n.fin.Unlock()
 
-	n.nls.RLock()
+	n.nls.RLock() // TODO: atomic instead
 	if n.nls.len() == 0 {
 		n.nls.RUnlock()
 		return notifsHousekeepT
@@ -370,6 +370,7 @@ func (n *notifs) housekeep() time.Duration {
 	return notifsHousekeepT
 }
 
+// conditional: ask targets iff they delayed updating
 func (n *notifs) bcastGetStats(nl nl.NotifListener, dur time.Duration) {
 	var (
 		config           = cmn.GCO.Get()

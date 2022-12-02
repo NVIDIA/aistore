@@ -1055,19 +1055,3 @@ func TestStressDeleteRange(t *testing.T) {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(lst.Entries))
 	}
 }
-
-func TestXactionNotFound(t *testing.T) {
-	var (
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
-	)
-	_, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: "dummy-" + cos.GenUUID()})
-	tools.CheckErrIsNotFound(t, err)
-}
-
-func TestXactionAllStatus(t *testing.T) {
-	xactArgs := api.XactReqArgs{Kind: apc.ActCopyBck}
-	vec, err := api.GetAllXactionStatus(baseParams, xactArgs)
-	tassert.CheckFatal(t, err)
-	tlog.Logf("%+v\n", vec)
-}

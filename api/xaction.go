@@ -135,17 +135,26 @@ func QueryXactionSnaps(bp BaseParams, args XactReqArgs) (xs XactMultiSnap, err e
 // if exists
 func GetOneXactionStatus(bp BaseParams, args XactReqArgs) (status *nl.NotifStatus, err error) {
 	status = &nl.NotifStatus{}
-	err = getXactStatus(status, apc.GetWhatOneXactStatus, bp, args)
+	q := url.Values{apc.QparamWhat: []string{apc.GetWhatOneXactStatus}}
+	err = getxst(status, q, bp, args)
 	return
 }
 
 // same as above, except that it returns _all_ matching xactions
-func GetAllXactionStatus(bp BaseParams, args XactReqArgs) (matching nl.NotifStatusVec, err error) {
-	err = getXactStatus(&matching, apc.GetWhatAllXactStatus, bp, args)
+func GetAllXactionStatus(bp BaseParams, args XactReqArgs, force bool) (matching nl.NotifStatusVec, err error) {
+	q := url.Values{apc.QparamWhat: []string{apc.GetWhatAllXactStatus}}
+	if force {
+		// (force just-in-time)
+		// for each args-selected xaction:
+		// check if any of the targets delayed updating the corresponding status,
+		// and query those targets directly
+		q.Set(apc.QparamForce, "true")
+	}
+	err = getxst(&matching, q, bp, args)
 	return
 }
 
-func getXactStatus(v any, what string, bp BaseParams, args XactReqArgs) (err error) {
+func getxst(v any, q url.Values, bp BaseParams, args XactReqArgs) (err error) {
 	bp.Method = http.MethodGet
 	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
@@ -157,7 +166,7 @@ func getXactStatus(v any, what string, bp BaseParams, args XactReqArgs) (err err
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = url.Values{apc.QparamWhat: []string{what}}
+		reqParams.Query = q
 	}
 	err = reqParams.DoReqResp(v)
 	FreeRp(reqParams)

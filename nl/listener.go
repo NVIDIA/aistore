@@ -91,7 +91,8 @@ type (
 	}
 
 	NotifStatus struct {
-		UUID     string `json:"uuid"`     // UUID of the xaction
+		Kind     string `json:"kind"`     // xaction kind
+		UUID     string `json:"uuid"`     // xaction UUID
 		ErrMsg   string `json:"err"`      // error
 		FinTime  int64  `json:"end_time"` // time xaction ended
 		AbortedX bool   `json:"aborted"`  // true if aborted
@@ -182,6 +183,7 @@ func (nlb *NotifListenerBase) LastUpdated(si *cluster.Snode) int64 {
 	return nlb.lastUpdated[si.ID()]
 }
 
+// under rlock
 func (nlb *NotifListenerBase) NodesTardy(periodicNotifTime time.Duration) (nodes cluster.NodeMap, tardy bool) {
 	if nlb.ProgressInterval() != 0 {
 		periodicNotifTime = nlb.ProgressInterval()
@@ -201,7 +203,7 @@ func (nlb *NotifListenerBase) NodesTardy(periodicNotifTime time.Duration) (nodes
 }
 
 func (nlb *NotifListenerBase) Status() *NotifStatus {
-	return &NotifStatus{UUID: nlb.UUID(), FinTime: nlb.FinTime.Load(), AbortedX: nlb.Aborted()}
+	return &NotifStatus{Kind: nlb.Kind(), UUID: nlb.UUID(), FinTime: nlb.FinTime.Load(), AbortedX: nlb.Aborted()}
 }
 
 func (nlb *NotifListenerBase) String() string {
@@ -246,8 +248,30 @@ func (nlb *NotifListenerBase) SetHrwOwner(smap *cluster.Smap) {
 // NotifStatus //
 /////////////////
 
-func (xs *NotifStatus) Finished() bool { return xs.FinTime > 0 }
-func (xs *NotifStatus) Aborted() bool  { return xs.AbortedX }
+func (ns *NotifStatus) Finished() bool { return ns.FinTime > 0 }
+func (ns *NotifStatus) Aborted() bool  { return ns.AbortedX }
+
+func (ns *NotifStatus) String() (s string) {
+	s = ns.Kind + "[" + ns.UUID + "]"
+	switch {
+	case ns.Aborted():
+		s += "-abrt"
+	case ns.Finished():
+		if ns.ErrMsg != "" {
+			s += "-" + ns.ErrMsg
+		} else {
+			s += "-done"
+		}
+	}
+	return
+}
+
+func (nsv NotifStatusVec) String() (s string) {
+	for _, ns := range nsv {
+		s += ns.String() + ", "
+	}
+	return s[:len(s)-2]
+}
 
 /////////////////
 //  NodeStats  //

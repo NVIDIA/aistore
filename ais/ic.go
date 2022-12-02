@@ -161,8 +161,7 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// TODO -- FIXME: add an option to refresh all matching nl(s) via ic.p.notifs.bcastGetStats()
-func (ic *ic) handleAllXactStatus(w http.ResponseWriter, r *http.Request) {
+func (ic *ic) handleAllXactStatus(w http.ResponseWriter, r *http.Request, query url.Values) {
 	msg := &xact.QueryMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -174,8 +173,28 @@ func (ic *ic) handleAllXactStatus(w http.ResponseWriter, r *http.Request) {
 	nls := ic.p.notifs.findAll(flt)
 
 	var vec nl.NotifStatusVec
-	for _, nl := range nls {
-		vec = append(vec, *nl.Status())
+
+	if cos.IsParseBool(query.Get(apc.QparamForce)) {
+		// (force just-in-time)
+		// for each args-selected xaction:
+		// check if any of the targets delayed updating the corresponding status,
+		// and query those targets directly
+		var (
+			config   = cmn.GCO.Get()
+			interval = config.Periodic.NotifTime.D()
+		)
+		for _, nl := range nls {
+			ic.p.notifs.bcastGetStats(nl, interval)
+			status := nl.Status()
+			if err := nl.Err(); err != nil {
+				status.ErrMsg = err.Error()
+			}
+			vec = append(vec, *status)
+		}
+	} else {
+		for _, nl := range nls {
+			vec = append(vec, *nl.Status())
+		}
 	}
 	w.Write(cos.MustMarshal(vec))
 }
@@ -226,6 +245,7 @@ func (ic *ic) handleOneXactStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// refresh NotifStatus
 	var (
 		config   = cmn.GCO.Get()
 		interval = config.Periodic.NotifTime.D()

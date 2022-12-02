@@ -66,7 +66,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 	switch what {
 	case apc.GetWhatAllXactStatus:
-		p.ic.handleAllXactStatus(w, r)
+		p.ic.handleAllXactStatus(w, r, query)
 	case apc.GetWhatStats:
 		p.queryClusterStats(w, r, what, query)
 	case apc.GetWhatSysInfo:
