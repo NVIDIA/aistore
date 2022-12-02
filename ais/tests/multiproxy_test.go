@@ -1498,7 +1498,7 @@ func icSyncOwnershipTable(t *testing.T) {
 
 	baseParams = tools.BaseAPIParams(newICNode.URL(cmn.NetPublic))
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck}
-	_, err = api.GetXactionStatus(baseParams, xactArgs)
+	_, err = api.GetOneXactionStatus(baseParams, xactArgs)
 	tassert.CheckError(t, err)
 
 	err = tools.RestoreNode(cmd, false, "proxy")
@@ -1513,7 +1513,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	tassert.Fatalf(t, smap.IsIC(cmd.Node), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
 
 	baseParams = tools.BaseAPIParams(cmd.Node.URL(cmn.NetPublic))
-	_, err = api.GetXactionStatus(baseParams, xactArgs)
+	_, err = api.GetOneXactionStatus(baseParams, xactArgs)
 	tassert.CheckError(t, err)
 }
 
@@ -1567,7 +1567,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		baseParams = tools.BaseAPIParams(cmd.Node.URL(cmn.NetPublic))
-		_, err = api.GetXactionStatus(baseParams, xactArgs)
+		_, err = api.GetOneXactionStatus(baseParams, xactArgs)
 		tassert.CheckError(t, err)
 	}
 }

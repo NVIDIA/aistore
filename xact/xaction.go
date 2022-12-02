@@ -338,6 +338,8 @@ func (xctn *Base) ToStats(stats *Stats) {
 	stats.InBytes = xctn.InBytes()
 }
 
+func IsValidUUID(id string) bool { return cos.IsValidUUID(id) || IsValidRebID(id) }
+
 // RebID helpers
 
 func RebID2S(id int64) string          { return fmt.Sprintf("g%d", id) }

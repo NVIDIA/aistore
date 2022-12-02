@@ -163,7 +163,8 @@ const (
 	GetWhatSmapVote      = "smapvote"
 	GetWhatSnode         = "snode"
 	GetWhatStats         = "stats"
-	GetWhatXactStatus    = "status" // IC status by uuid.
+	GetWhatOneXactStatus = "status"     // IC status by uuid (returns a single matching xaction or none)
+	GetWhatAllXactStatus = "status_all" // ditto - all matching xactions
 	GetWhatSysInfo       = "sysinfo"
 	GetWhatTargetIPs     = "target_ips" // comma-separated list of all target IPs (compare w/ GetWhatSnode)
 	GetWhatLog           = "log"

@@ -586,7 +586,7 @@ func _waitReToStart(baseParams api.BaseParams) {
 	for i := 0; i < retries; i++ {
 		for _, kind := range kinds {
 			args.Kind = kind
-			status, err := api.GetXactionStatus(baseParams, args)
+			status, err := api.GetOneXactionStatus(baseParams, args)
 			if err == nil {
 				if !status.Finished() {
 					return

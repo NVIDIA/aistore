@@ -2110,8 +2110,8 @@ func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, wantOnlyRemote bool
 	}
 
 	if wantOnlyRemote {
-		nl, exists := p.notifs.entry(lsmsg.UUID)
-		debug.Assert(exists)
+		nl := p.notifs.entry(lsmsg.UUID)
+		debug.Assert(nl != nil)
 		for _, si := range nl.Notifiers() {
 			cargs := allocCargs()
 			{

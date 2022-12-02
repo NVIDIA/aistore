@@ -24,11 +24,13 @@ import (
 )
 
 // Information Center (IC) is a group of proxies that take care of ownership of
-// jtx (Job, Task, eXtended action) entities. It manages the lifecycle of an entity (uuid),
-// and monitors its status (metadata). When an entity is created, it is registered with the
-// members of IC. The IC members monitor all the entities (by uuid) registered to them,
-// and act as information sources for those entities. Non-IC proxies redirect entity related
-// requests to one of the IC members.
+// (Job, Task, eXtended action) entities. IC manages their lifecycle and monitors
+// status. When a job, task or xaction is created, it gets registered with all IC
+// members. Henceforth, IC acts as information source as far as status (running,
+// aborted, finished), progress, and statistics.
+//
+// Non-IC AIS proxies, on the other hand, redirect all corresponding requests to
+// one (anyone) of the IC (proxy) members.
 
 const (
 	// Implies equal ownership by all IC members and applies to all async ops
@@ -159,14 +161,30 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
+// TODO -- FIXME: add an option to refresh all matching nl(s) via ic.p.notifs.bcastGetStats()
+func (ic *ic) handleAllXactStatus(w http.ResponseWriter, r *http.Request) {
+	msg := &xact.QueryMsg{}
+	if err := cmn.ReadJSON(w, r, msg); err != nil {
+		return
+	}
+	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: (*cluster.Bck)(&msg.Bck), OnlyRunning: msg.OnlyRunning}
+	if !msg.Bck.IsEmpty() {
+		flt.Bck = (*cluster.Bck)(&msg.Bck)
+	}
+	nls := ic.p.notifs.findAll(flt)
+
+	var vec nl.NotifStatusVec
+	for _, nl := range nls {
+		vec = append(vec, *nl.Status())
+	}
+	w.Write(cos.MustMarshal(vec))
+}
+
+func (ic *ic) handleOneXactStatus(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg      = &xact.QueryMsg{}
-		bck      *cluster.Bck
-		nl       nl.NotifListener
-		config   = cmn.GCO.Get()
-		interval = config.Periodic.NotifTime.D()
-		exists   bool
+		nl  nl.NotifListener
+		bck *cluster.Bck
+		msg = &xact.QueryMsg{}
 	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -194,10 +212,10 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: bck, OnlyRunning: msg.OnlyRunning}
 	withRetry(cmn.Timeout.CplaneOperation(), func() bool {
-		nl, exists = ic.p.notifs.find(flt)
-		return exists
+		nl = ic.p.notifs.find(flt)
+		return nl != nil
 	})
-	if !exists {
+	if nl == nil {
 		smap := ic.p.owner.smap.get()
 		ic.p.writeErrStatusSilentf(w, r, http.StatusNotFound, "%s, %s", smap.StrIC(ic.p.si), msg)
 		return
@@ -208,6 +226,10 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var (
+		config   = cmn.GCO.Get()
+		interval = config.Periodic.NotifTime.D()
+	)
 	ic.p.notifs.bcastGetStats(nl, interval)
 
 	status := nl.Status()

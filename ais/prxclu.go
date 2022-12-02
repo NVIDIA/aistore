@@ -55,15 +55,18 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	)
 	// always allow as the flow involves intra-cluster redirect
 	// (ref 1377 for more context)
-	if what == apc.GetWhatXactStatus {
-		p.ic.writeStatus(w, r)
+	if what == apc.GetWhatOneXactStatus {
+		p.ic.handleOneXactStatus(w, r)
 		return
 	}
 
 	if err := p.checkAccess(w, r, nil, apc.AceShowCluster); err != nil {
 		return
 	}
+
 	switch what {
+	case apc.GetWhatAllXactStatus:
+		p.ic.handleAllXactStatus(w, r)
 	case apc.GetWhatStats:
 		p.queryClusterStats(w, r, what, query)
 	case apc.GetWhatSysInfo:

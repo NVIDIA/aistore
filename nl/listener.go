@@ -96,6 +96,7 @@ type (
 		FinTime  int64  `json:"end_time"` // time xaction ended
 		AbortedX bool   `json:"aborted"`  // true if aborted
 	}
+	NotifStatusVec []NotifStatus
 )
 
 ///////////////////////

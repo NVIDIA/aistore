@@ -25,9 +25,9 @@ type (
 		Scope       int             // ScopeG (global), etc. - the enum above
 		Startable   bool            // determines if this xaction can be started via API
 		Metasync    bool            // true: changes and metasyncs cluster-wide meta
-		Owned       bool            // true: JTX-owned
-		RefreshCap  bool            // true: refresh capacity stats upon completion
-		Mountpath   bool            // true: mountpath-traversing (jogger-based) xaction
+		Owned       bool            // (for definition, see ais/ic.go)
+		RefreshCap  bool            // refresh capacity stats upon completion
+		Mountpath   bool            // is a mountpath-traversing ("jogger") xaction
 
 		// see xreg for "limited coexistence"
 		Rebalance  bool // moves data between nodes

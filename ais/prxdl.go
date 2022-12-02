@@ -122,8 +122,8 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, error) {
 	if msg.ID != "" && method == http.MethodGet && msg.OnlyActive {
-		nl, exists := p.notifs.entry(msg.ID)
-		if exists {
+		nl := p.notifs.entry(msg.ID)
+		if nl != nil {
 			return p.dlstatus(nl)
 		}
 	}

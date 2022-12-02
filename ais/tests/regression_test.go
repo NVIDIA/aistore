@@ -1064,3 +1064,10 @@ func TestXactionNotFound(t *testing.T) {
 	_, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: "dummy-" + cos.GenUUID()})
 	tools.CheckErrIsNotFound(t, err)
 }
+
+func TestXactionAllStatus(t *testing.T) {
+	xactArgs := api.XactReqArgs{Kind: apc.ActCopyBck}
+	vec, err := api.GetAllXactionStatus(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+	tlog.Logf("%+v\n", vec)
+}
