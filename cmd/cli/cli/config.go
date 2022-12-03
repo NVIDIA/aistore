@@ -153,7 +153,6 @@ func setCluConfigHandler(c *cli.Context) error {
 		warn := fmt.Sprintf("cluster restart required for the change '%s=%s' to take an effect.", name, nvs[name])
 		actionWarn(c, warn)
 	}
-	// TODO: check that transient works
 	if err := api.SetClusterConfig(apiBP, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}

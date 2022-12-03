@@ -933,8 +933,17 @@ func diffConfigs(actual, original nvpairList) []propDiff {
 }
 
 func printSectionJSON(c *cli.Context, in any, section string) (done bool) {
-	debug.Assert(section != "")
+	if i := strings.LastIndexByte(section, '.'); i > 0 {
+		section = section[:i]
+	}
 	if done = _printSection(c, in, section); !done {
+		// e.g. keepalivetracker.proxy.name
+		if i := strings.LastIndexByte(section, '.'); i > 0 {
+			section = section[:i]
+			done = _printSection(c, in, section)
+		}
+	}
+	if !done {
 		actionWarn(c, "config section (or section prefix) \""+section+"\" not found.")
 	}
 	return
@@ -943,7 +952,7 @@ func printSectionJSON(c *cli.Context, in any, section string) (done bool) {
 func _printSection(c *cli.Context, in any, section string) (done bool) {
 	var (
 		beg       = regexp.MustCompile(`\s+"` + section + `\S*": {`)
-		end       = regexp.MustCompile(`}[,|$]`)
+		end       = regexp.MustCompile(`},\n`)
 		nst       = regexp.MustCompile(`\s+"\S+": {`)
 		nonstruct = regexp.MustCompile(`\s+"` + section + `\S*": ".+"[,\n\r]{1}`)
 	)
@@ -987,6 +996,9 @@ func _printSection(c *cli.Context, in any, section string) (done bool) {
 		return
 	}
 done:
+	if l := len(res); res[l-1] == ',' {
+		res = res[:l-1]
+	}
 	fmt.Fprintln(c.App.Writer, string(res)+"\n")
 	return true
 }

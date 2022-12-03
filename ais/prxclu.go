@@ -102,12 +102,8 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		w.Write(buf.Bytes())
 
 	case apc.GetWhatClusterConfig:
-		config, err := p.owner.config.get()
-		if err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		p.writeJSON(w, r, config, what)
+		config := cmn.GCO.Get()
+		p.writeJSON(w, r, &config.ClusterConfig, what)
 	case apc.GetWhatBMD, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatSmap:
 		p.htrun.httpdaeget(w, r, query)
 	default:
@@ -825,14 +821,14 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 		p.writeErr(w, r, err)
 		return
 	}
-	q := url.Values{}
-	q.Add(apc.ActTransient, "true")
-
 	msg.Value = toUpdate
-	body := cos.MustMarshal(msg)
-
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body, Query: q}
+	args.req = cmn.HreqArgs{
+		Method: http.MethodPut,
+		Path:   apc.URLPathDae.S,
+		Body:   cos.MustMarshal(msg),
+		Query:  url.Values{apc.ActTransient: []string{"true"}},
+	}
 	p.bcastReqGroup(w, r, args, cluster.AllNodes)
 	freeBcArgs(args)
 }
