@@ -270,7 +270,7 @@ func (nsv NotifStatusVec) String() (s string) {
 	for _, ns := range nsv {
 		s += ns.String() + ", "
 	}
-	return s[:len(s)-2]
+	return s[:cos.Max(0, len(s)-2)]
 }
 
 /////////////////

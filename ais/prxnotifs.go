@@ -724,8 +724,7 @@ func (nf *nlFilter) match(nl nl.NotifListener) bool {
 	if nl.UUID() == nf.ID {
 		return true
 	}
-
-	if nl.Kind() == nf.Kind {
+	if nf.Kind == "" || nl.Kind() == nf.Kind {
 		if nf.Bck == nil || nf.Bck.IsEmpty() {
 			return true
 		}

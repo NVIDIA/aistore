@@ -27,11 +27,9 @@ const (
 	// max wait time for a function finishes before printing "Please wait"
 	longCommandTime = 10 * time.Second
 
-	fmtXactFailed    = "Failed to %s (%q => %q)\n"
-	fmtXactSucceeded = "Done.\n"
-
-	fmtXactStarted     = "%s (%q => %q) ...\n"
-	fmtXactStatusCheck = "%s (%q => %q) is in progress.\nTo check the status, run: ais show job xaction %s %s\n"
+	fmtXactFailed      = "Failed to %s (%q => %q)\n"
+	fmtXactSucceeded   = "Done.\n"
+	fmtXactWaitStarted = "%s %s => %s ...\n"
 )
 
 type (
@@ -100,44 +98,50 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 }
 
 // Rename ais bucket
-func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
-	var xactID string
-	if _, err = headBucket(fromBck, true /* don't add */); err != nil {
-		return
+func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
+	if _, err := headBucket(fromBck, true /* don't add */); err != nil {
+		return err
 	}
-	if xactID, err = api.RenameBucket(apiBP, fromBck, toBck); err != nil {
-		return
+	xactID, err := api.RenameBucket(apiBP, fromBck, toBck)
+	if err != nil {
+		return err
 	}
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Renaming bucket", fromBck, toBck, apc.ActMoveBck, toBck)
-		return
+		baseMsg := fmt.Sprintf("Renaming bucket %s => %s. ", fromBck, toBck)
+		actionDone(c, baseMsg+toMonitorMsg(c, xactID))
+		return nil
 	}
-	fmt.Fprintf(c.App.Writer, fmtXactStarted, "Renaming bucket", fromBck, toBck)
-	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
+
+	// wait
+	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Renaming bucket", fromBck, toBck)
+	if err := waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", fromBck, toBck)
-	} else {
-		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
+		return err
 	}
-	return
+	fmt.Fprint(c.App.Writer, fmtXactSucceeded)
+	return nil
 }
 
 // Copy ais bucket
-func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (err error) {
-	var xactID string
-	if xactID, err = api.CopyBucket(apiBP, fromBck, toBck, msg); err != nil {
-		return
+func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) error {
+	xactID, err := api.CopyBucket(apiBP, fromBck, toBck, msg)
+	if err != nil {
+		return err
 	}
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Copying bucket", fromBck, toBck, apc.ActCopyBck, toBck)
-		return
+		baseMsg := fmt.Sprintf("Copying bucket %s => %s. ", fromBck, toBck)
+		actionDone(c, baseMsg+toMonitorMsg(c, xactID))
+		return nil
 	}
-	fmt.Fprintf(c.App.Writer, fmtXactStarted, "Copying bucket", fromBck, toBck)
+
+	// wait
+	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying bucket", fromBck, toBck)
 	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "copy", fromBck, toBck)
-	} else {
-		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
+		return err
 	}
-	return
+	actionDone(c, fmtXactSucceeded)
+	return nil
 }
 
 // Evict remote bucket

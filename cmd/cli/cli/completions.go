@@ -488,22 +488,24 @@ func daemonXactionCompletions(c *cli.Context) {
 
 func xactCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		xs, err := queryXactions(api.XactReqArgs{OnlyRunning: true})
+		args := api.XactReqArgs{OnlyRunning: true}
+		vec, err := api.GetAllXactionStatus(apiBP, args, false /*force refresh*/)
 		if err != nil {
-			actionWarn(c, "query-x returned "+err.Error())
+			actionWarn(c, "api.GetAllXactionStatus: "+err.Error())
+			return
+		}
+		if len(vec) == 0 {
 			return
 		}
 		var already = cos.StrSet{}
-		for _, snaps := range xs {
-			for _, snap := range snaps {
-				if _, ok := already[snap.Kind]; !ok {
-					xname, _ := xact.GetKindName(snap.Kind)
-					debug.Assert(xname != "")
-					fmt.Println(xname)
-					already[snap.Kind] = struct{}{}
-				}
+		for _, ns := range vec {
+			if !already.Contains(ns.Kind) {
+				xname, _ := xact.GetKindName(ns.Kind)
+				fmt.Println(xname)
+				already.Add(ns.Kind)
 			}
 		}
+		return
 	}
 
 	xname := c.Args().First()
