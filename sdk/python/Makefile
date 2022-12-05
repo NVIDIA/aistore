@@ -37,11 +37,15 @@ dev_deps:
 
 .PHONY: python_tests
 python_tests: common_deps dev_deps
-	pytest -v tests --ignore=tests/test_etl_ops.py
+	pytest -v tests/integration --ignore=tests/integration/test_etl_ops.py
 
 .PHONY: python_etl_tests
 python_etl_tests: common_deps 
-	pytest -v -s tests/test_etl_ops.py
+	pytest -v -s tests/integration/test_etl_ops.py
+
+.PHONY: python_unit_tests
+python_unit_tests: common_deps
+	pytest -v tests/unit
 
 .PHONY: lint
 lint: common_deps

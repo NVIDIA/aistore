@@ -11,8 +11,8 @@ import time
 from aistore.client import Client
 from aistore.client.errors import AISError, ErrBckNotFound
 from aistore.client.etl_templates import MD5, ECHO
-from tests import CLUSTER_ENDPOINT
-from tests.utils import create_and_put_object, random_name
+from tests.integration import CLUSTER_ENDPOINT
+from tests.integration.utils import create_and_put_object, random_name
 
 # pylint: disable=unused-variable
 class TestETLOps(unittest.TestCase):

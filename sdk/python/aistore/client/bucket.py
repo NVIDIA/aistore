@@ -26,7 +26,14 @@ from aistore.client.const import (
 
 from aistore.client.errors import InvalidBckProvider
 from aistore.client.object import Object
-from aistore.client.types import ActionMsg, Bck, BucketEntry, BucketList, BucketLister
+from aistore.client.types import (
+    ActionMsg,
+    Bck,
+    BucketEntry,
+    BucketList,
+    BucketLister,
+    Namespace,
+)
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
@@ -39,11 +46,11 @@ class Bucket:
     Args:
         bck_name (str): name of bucket
         provider (str, optional): provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
-        ns (str, optional): namespace of bucket, defaults to ""
+        ns (Namespace, optional): namespace of bucket, defaults to None
     """
 
     def __init__(
-        self, client, bck_name: str, provider: str = ProviderAIS, ns: str = ""
+        self, client, bck_name: str, provider: str = ProviderAIS, ns: Namespace = None
     ):
         self._client = client
         self._bck = Bck(name=bck_name, provider=provider, ns=ns)
@@ -385,29 +392,25 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        value = {
-            "prefix": prefix,
-            "uuid": "",
-            "props": props,
-            "continuation_token": "",
-            "pagesize": page_size,
-        }
+        uuid = ""
+        continuation_token = ""
         obj_list = None
 
         while True:
             resp = self.list_objects(
                 prefix=prefix,
                 props=props,
-                uuid=value["uuid"],
-                continuation_token=value["continuation_token"],
+                page_size=page_size,
+                uuid=uuid,
+                continuation_token=continuation_token,
             )
             if obj_list:
                 obj_list = obj_list + resp.get_entries()
             obj_list = obj_list or resp.get_entries()
             if resp.continuation_token == "":
                 break
-            value["continuation_token"] = resp.continuation_token
-            value["uuid"] = resp.uuid
+            continuation_token = resp.continuation_token
+            uuid = resp.uuid
         return obj_list
 
     def transform(

@@ -8,7 +8,7 @@ import unittest
 from aistore.client.errors import ErrBckNotFound
 
 from aistore import Client
-from tests.utils import random_name
+from tests.integration.utils import random_name
 from . import CLUSTER_ENDPOINT
 
 

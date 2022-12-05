@@ -10,7 +10,7 @@ from aistore.client.errors import ErrBckNotFound
 
 from aistore import Client
 import requests
-from tests.utils import create_and_put_object, random_name
+from tests.integration.utils import create_and_put_object, random_name
 from . import CLUSTER_ENDPOINT, REMOTE_BUCKET
 
 

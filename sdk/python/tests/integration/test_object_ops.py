@@ -9,7 +9,7 @@ import unittest
 from aistore.client.errors import AISError, ErrBckNotFound
 
 from aistore import Client
-from tests.utils import create_and_put_object, random_name
+from tests.integration.utils import create_and_put_object, random_name
 from . import CLUSTER_ENDPOINT
 
 OBJ_READ_TYPE_ALL = "read_all"

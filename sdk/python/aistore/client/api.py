@@ -16,7 +16,7 @@ from aistore.client.const import (
     QParamProvider,
 )
 from aistore.client.cluster import Cluster
-from aistore.client.types import BucketLister, ObjStream
+from aistore.client.types import BucketLister, ObjStream, Namespace
 from aistore.client.utils import handle_errors
 from aistore.client.xaction import Xaction
 from aistore.client.etl import Etl
@@ -65,7 +65,7 @@ class Client:
             handle_errors(resp)
         return resp
 
-    def bucket(self, bck_name: str, provider: str = ProviderAIS, ns: str = ""):
+    def bucket(self, bck_name: str, provider: str = ProviderAIS, ns: Namespace = None):
         """
         Factory constructor for bucket object.
         Does not make any HTTP request, only instantiates a bucket object owned by the client.
@@ -73,6 +73,7 @@ class Client:
         Args:
             bck_name (str): Name of bucket (optional, defaults to "ais").
             provider (str): Provider of bucket (one of "ais", "aws", "gcp", ...).
+            ns (Namespace): Namespace of bucket (optional, defaults to None).
 
         Returns:
             The bucket object created.

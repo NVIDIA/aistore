@@ -6,9 +6,9 @@ Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import unittest
 from aistore import Client
 from aistore.client.errors import AISError, ErrBckNotFound
-from tests import CLUSTER_ENDPOINT
+from tests.integration import CLUSTER_ENDPOINT
 from aistore.pytorch import AISFileLister, AISFileLoader
-from tests.utils import create_and_put_object, random_name
+from tests.integration.utils import create_and_put_object, random_name
 
 # pylint: disable=unused-variable
 class TestPytorchPlugin(unittest.TestCase):
