@@ -634,7 +634,12 @@ func showClusterConfig(c *cli.Context, section string) error {
 		return tmpls.Print(cluConfig, c.App.Writer, "", nil, useJSON)
 	}
 	flat := flattenConfig(cluConfig, section)
-	return tmpls.Print(flat, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	err = tmpls.Print(flat, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	if err == nil && section == "" {
+		actionDone(c, fmt.Sprintf("(Hint: use '[SECTION] --%s' to show config section(s), see '--help' for details)",
+			firstName(jsonFlag.Name)))
+	}
+	return err
 }
 
 func showNodeConfig(c *cli.Context) error {

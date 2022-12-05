@@ -50,9 +50,8 @@ type (
 			ntargets    int  // expected number of targets in a starting-up cluster
 			skipStartup bool // determines if primary should skip waiting for targets to join
 		}
-		transient        bool // true: keep command-line provided `-config-custom` settings in memory only
-		overrideBackends bool // if true primary will metasync backends from deployment-time plain-text config
-		target           struct {
+		transient bool // true: keep command-line provided `-config-custom` settings in memory only
+		target    struct {
 			// do not try to auto-join cluster upon startup - stand by and wait for admin request
 			standby bool
 			// allow: disk sharing by multiple mountpaths and mountpaths with no disks whatsoever
@@ -92,7 +91,6 @@ func init() {
 	flag.BoolVar(&daemon.cli.transient, "transient", false,
 		"false: store customized (via '-config_custom') configuration\ntrue: keep '-config_custom' settings in memory only (non-persistent)")
 	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
-	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "configure remote backends at deployment time (potentially, override previously stored configuration)")
 
 	// target-only
 	flag.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")

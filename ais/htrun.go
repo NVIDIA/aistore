@@ -1554,9 +1554,9 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, msg *aisMsg, payload msPayload
 	if err = h.owner.config.persist(newConfig, payload); err != nil {
 		return
 	}
-	err = cmn.GCO.Update(&newConfig.ClusterConfig)
-	debug.AssertNoErr(err)
-
+	if err = cmn.GCO.Update(&newConfig.ClusterConfig); err != nil {
+		return
+	}
 	// update assorted read-mostly knobs
 	cmn.Features = newConfig.Features
 	cmn.Timeout.Set(&newConfig.ClusterConfig)

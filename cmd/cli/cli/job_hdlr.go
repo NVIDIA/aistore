@@ -745,7 +745,7 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, c.Command.ArgsUsage)
 	}
 	if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
+		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
 	bck, err := parseBckURI(c, c.Args().First())
 	if err != nil {

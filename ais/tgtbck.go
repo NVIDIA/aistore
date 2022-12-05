@@ -175,12 +175,12 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (bcks cmn.Bcks, errCode int, err error) {
 	debug.Assert(!qbck.IsAIS())
 	if qbck.IsCloud() || qbck.IsHDFS() { // must be configured
-		if _, ok := config.Backend.Providers[qbck.Provider]; !ok {
+		if config.Backend.Get(qbck.Provider) == nil {
 			err = &cmn.ErrMissingBackend{Provider: qbck.Provider}
 			return
 		}
 	} else if qbck.IsRemoteAIS() && qbck.Ns.IsAnyRemote() {
-		if _, ok := config.Backend.ProviderConf(apc.AIS); !ok {
+		if config.Backend.Get(apc.AIS) == nil {
 			glog.Warning(&cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters"})
 			return
 			// otherwise go ahead and try to list below
@@ -436,9 +436,9 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucketProps cos.StrKVs
 		err         error
-		code        int
 		ctx         = context.Background()
 		hdr         = w.Header()
+		code        int
 	)
 	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
 	defer apiReqFree(apireq)

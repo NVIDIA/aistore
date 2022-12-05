@@ -527,7 +527,7 @@ func showBucketProps(c *cli.Context) (err error) {
 	)
 
 	if c.NArg() > 2 {
-		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[2:])
+		return incorrectUsageMsg(c, "", c.Args()[2:])
 	}
 
 	section := c.Args().Get(1)

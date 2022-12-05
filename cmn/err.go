@@ -526,8 +526,7 @@ func (e *ErrMissingBackend) Error() string {
 	if e.Msg != "" {
 		return e.Msg
 	}
-	const redeploy = "(hint: consider redeploying with '-override_backends' command-line and the corresponding build tag)"
-	return fmt.Sprintf("%q backend is missing %s", e.Provider, redeploy)
+	return fmt.Sprintf("%q backend is missing in the cluster configuration", e.Provider)
 }
 
 // ErrETL

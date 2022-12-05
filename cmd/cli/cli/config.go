@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -43,6 +44,21 @@ var (
 		subcmdCLISet: {},
 	}
 )
+
+var examplesCluSetCfg = `
+Usage examples:
+- ais config cluster checksum.type=xxhash
+- ais config cluster checksum.type=md5 checksum.validate_warm_get=true
+- ais config cluster checksum --json
+  (see docs/cli for details)
+`
+
+var examplesNodeSetCfg = `
+Usage examples:
+- ais config node [NODE] inherited log.level=4
+- ais config node [NODE] inherited log
+  (see docs/cli for details)
+`
 
 var (
 	configCmd = cli.Command{
@@ -120,6 +136,7 @@ func setCluConfigHandler(c *cli.Context) error {
 		return
 	}, cmn.IterOpts{Allowed: apc.Cluster})
 	debug.AssertNoErr(err)
+
 	if cos.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
 		kvs = args
 	}
@@ -128,15 +145,42 @@ func setCluConfigHandler(c *cli.Context) error {
 	}
 	if nvs, err = makePairs(kvs); err != nil {
 		if strings.Contains(err.Error(), "key=value pair") {
-			return showClusterConfigHandler(c)
+			if err = showClusterConfigHandler(c); err != nil {
+				err = fmt.Errorf("%v%s", err, examplesCluSetCfg)
+			}
 		}
 		return err
 	}
 	for k := range nvs {
 		if !cos.StringInSlice(k, propList) {
-			return fmt.Errorf("invalid property name %q", k)
+			return fmt.Errorf("invalid property name %q%s", k, examplesCluSetCfg)
 		}
 	}
+
+	// E.g.:
+	// ais config cluster backend.conf='{"aws":{}}'
+	// ais config cluster backend.conf '{"gcp":{}, "aws":{}}'
+	// ais config cluster checksum.type='{"type":"md5"}'
+	var (
+		jsonVal = regexp.MustCompile(`^{.*}$`)
+		useMsg  bool
+	)
+	for _, v := range nvs {
+		if !jsonVal.MatchString(v) {
+			if useMsg {
+				return fmt.Errorf("cannot have both json-formatted and plain key=value args (%+v) in one command line", nvs)
+			}
+			continue
+		}
+		useMsg = true
+	}
+	if useMsg {
+		if err := setcfg(c, nvs); err != nil { // api.SetClusterConfigUsingMsg (vs. api.SetClusterConfig below)
+			return err
+		}
+		goto show
+	}
+
 	for k, v := range nvs {
 		if k == feat.FeaturesPropName {
 			featfl, err := parseFeatureFlags(v)
@@ -157,7 +201,7 @@ func setCluConfigHandler(c *cli.Context) error {
 		return err
 	}
 
-	// show
+show:
 	var listed = make(cos.StrKVs)
 	for what := range nvs {
 		section := strings.Split(what, ".")[0]
@@ -170,6 +214,31 @@ func setCluConfigHandler(c *cli.Context) error {
 		}
 	}
 	actionDone(c, "Cluster config updated")
+	return nil
+}
+
+// TODO: reflect
+func setcfg(c *cli.Context, nvs cos.StrKVs) error {
+	toUpdate := &cmn.ConfigToUpdate{}
+	for k, v := range nvs {
+		switch {
+		case k == "backend" || strings.HasPrefix(k, "backend."):
+			jsoniter.Unmarshal([]byte(v), &toUpdate.Backend)
+		case k == "mirror" || strings.HasPrefix(k, "mirror."):
+			jsoniter.Unmarshal([]byte(v), &toUpdate.Mirror)
+		case k == "ec" || strings.HasPrefix(k, "ec."):
+			jsoniter.Unmarshal([]byte(v), &toUpdate.Mirror)
+		case k == "log" || strings.HasPrefix(k, "log."):
+			jsoniter.Unmarshal([]byte(v), &toUpdate.Log)
+		case k == "checksum" || strings.HasPrefix(k, "checksum."):
+			jsoniter.Unmarshal([]byte(v), &toUpdate.Cksum)
+		default:
+			return fmt.Errorf("set config using msg: not implemented yet for %q", k) // TODO -- FIXME: reflect
+		}
+		if err := api.SetClusterConfigUsingMsg(apiBP, toUpdate, flagIsSet(c, transientFlag)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -210,13 +279,15 @@ func setNodeConfigHandler(c *cli.Context) error {
 
 	if nvs, err = makePairs(kvs); err != nil {
 		if strings.Contains(err.Error(), "key=value pair") {
-			return showNodeConfig(c)
+			if err = showNodeConfig(c); err != nil {
+				err = fmt.Errorf("%v%s", err, examplesNodeSetCfg)
+			}
 		}
 		return err
 	}
 	for k := range nvs {
 		if !cos.StringInSlice(k, propList) {
-			return fmt.Errorf("invalid property name %q", k)
+			return fmt.Errorf("invalid property name %q%s", k, examplesNodeSetCfg)
 		}
 	}
 

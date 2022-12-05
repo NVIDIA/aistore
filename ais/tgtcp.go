@@ -278,7 +278,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case apc.GetWhatRemoteAIS:
 		var (
-			aisBackend = t.backend[apc.AIS].(*backend.AISBackendProvider)
+			aisBackend = t.aisBackend()
 			refresh    = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
 		)
 		if !refresh {
@@ -286,15 +286,15 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		anyConf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
-		if !ok {
+		anyConf := cmn.GCO.Get().Backend.Get(apc.AIS)
+		if anyConf == nil {
 			t.writeJSON(w, r, cluster.Remotes{}, httpdaeWhat)
 			return
 		}
-		aisBackendConf, ok := anyConf.(cmn.BackendConfAIS)
+		aisConf, ok := anyConf.(cmn.BackendConfAIS)
 		debug.Assert(ok)
 
-		t.writeJSON(w, r, aisBackend.GetInfo(aisBackendConf), httpdaeWhat)
+		t.writeJSON(w, r, aisBackend.GetInfo(aisConf), httpdaeWhat)
 	default:
 		t.htrun.httpdaeget(w, r, query)
 	}
@@ -879,30 +879,29 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 		return
 	}
 
-	// specific remais update
+	// special: remais update
 	if msg.Action == apc.ActAttachRemAis || msg.Action == apc.ActDetachRemAis {
 		return t.attachDetachRemAis(newConfig, msg)
 	}
 
 	if !newConfig.Backend.EqualRemAIS(&oldConfig.Backend) {
-		t.backend.init(t, false /*starting*/) // re-init from scratch
-		return
-	}
-	// NOTE: primary command-line flag `-override_backends` allows to update
-	// (via build tags - see AIS_BACKEND_PROVIDERS) remote backends at deployment time.
-	// See also: earlystart.go
-	if !newConfig.Backend.EqualClouds(&oldConfig.Backend) {
-		t.backend.initExt(t, false /*starting*/)
+		if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
+			err = t.attachDetachRemAis(newConfig, msg)
+		} else {
+			t.backend[apc.AIS] = backend.NewAIS(t)
+		}
 	}
 	return
 }
 
 // NOTE: apply the entire config: add new and update existing entries (remote clusters)
 func (t *target) attachDetachRemAis(newConfig *globalConfig, msg *aisMsg) (err error) {
-	aisConf, ok := newConfig.Backend.ProviderConf(apc.AIS)
-	debug.Assert(ok)
-
-	aisBackend := t.backend[apc.AIS].(*backend.AISBackendProvider)
+	var (
+		aisBackend *backend.AISBackendProvider
+		aisConf    = newConfig.Backend.Get(apc.AIS)
+	)
+	debug.Assert(aisConf != nil)
+	aisBackend = t.aisBackend()
 	return aisBackend.Apply(aisConf, msg.Action, &newConfig.ClusterConfig)
 }
 

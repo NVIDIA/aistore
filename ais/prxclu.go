@@ -1195,9 +1195,9 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 	var (
 		aisConf cmn.BackendConfAIS
 		action  = ctx.msg.Action
-		v, ok   = config.Backend.ProviderConf(apc.AIS)
+		v       = config.Backend.Get(apc.AIS)
 	)
-	if !ok || v == nil {
+	if v == nil {
 		if action == apc.ActDetachRemAis {
 			return false, fmt.Errorf("%s: remote cluster config is empty", p.si)
 		}
@@ -1214,6 +1214,9 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 				cmn.NewErrFailedTo(p, action, "remote cluster", errors.New("not found"), http.StatusNotFound)
 		}
 		delete(aisConf, alias)
+		if len(aisConf) == 0 {
+			aisConf = nil // unconfigure
+		}
 	} else {
 		debug.Assert(action == apc.ActAttachRemAis)
 		u := ctx.hdr.Get(apc.HdrRemAisURL)
@@ -1253,7 +1256,7 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 		glog.Infof("%s: %s %s", p, action, detail)
 		aisConf[alias] = []string{u}
 	}
-	config.Backend.ProviderConf(apc.AIS, aisConf)
+	config.Backend.Set(apc.AIS, aisConf)
 
 	return true, nil
 }

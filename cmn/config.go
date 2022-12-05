@@ -820,7 +820,6 @@ func (c *BackendConf) Validate() (err error) {
 				if len(urls) == 0 {
 					return fmt.Errorf("no URL(s) to connect to remote AIS cluster %q", alias)
 				}
-				break
 			}
 			c.Conf[provider] = aisConf
 		case apc.HDFS:
@@ -878,12 +877,15 @@ func (c *BackendConf) setProvider(provider string) {
 	c.Providers[provider] = ns
 }
 
-func (c *BackendConf) ProviderConf(provider string, newConf ...any) (conf any, ok bool) {
-	if len(newConf) > 0 {
-		c.Conf[provider] = newConf[0]
+func (c *BackendConf) Get(provider string) (conf any) {
+	if c, ok := c.Conf[provider]; ok {
+		conf = c
 	}
-	conf, ok = c.Conf[provider]
 	return
+}
+
+func (c *BackendConf) Set(provider string, newConf any) {
+	c.Conf[provider] = newConf
 }
 
 func (c *BackendConf) EqualClouds(o *BackendConf) bool {

@@ -80,6 +80,15 @@ func (p *proxy) a2u(aliasOrUUID string) string {
 	p.remais.mu.RLock()
 	for _, remais := range p.remais.A {
 		if aliasOrUUID == remais.Alias || aliasOrUUID == remais.UUID {
+			p.remais.mu.RUnlock()
+			return remais.UUID
+		}
+	}
+	l := len(p.remais.old)
+	for i := l - 1; i >= 0; i-- {
+		remais := p.remais.old[i]
+		if aliasOrUUID == remais.Alias || aliasOrUUID == remais.UUID {
+			p.remais.mu.RUnlock()
 			return remais.UUID
 		}
 	}

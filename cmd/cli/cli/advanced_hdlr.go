@@ -187,7 +187,7 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	} else if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
+		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
 
 	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
@@ -201,7 +201,7 @@ func removeNodeFromSmap(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, c.Command.ArgsUsage)
 	} else if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
+		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
 	daemonID := argDaemonID(c)
 	smap, err := api.GetClusterMap(apiBP)

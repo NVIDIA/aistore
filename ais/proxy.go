@@ -80,8 +80,9 @@ type (
 		}
 		remais struct {
 			cluster.Remotes
-			mu sync.RWMutex
-			in atomic.Bool
+			old []*cluster.RemAis // to facilitate a2u resultion (and, therefore, offline access)
+			mu  sync.RWMutex
+			in  atomic.Bool
 		}
 	}
 )
@@ -551,7 +552,9 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 		// mutually exclusive
 		debug.Assert(!(lsmsg.IsFlagSet(apc.LsDontHeadRemote) && lsmsg.IsFlagSet(apc.LsTryHeadRemote)))
+		//
 		// TODO -- FIXME: the capability to list remote buckets without adding them to BMD
+		//
 		debug.Assert(!lsmsg.IsFlagSet(apc.LsDontAddRemote), "not implemented yet")
 
 		if bckArgs.dontHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote); !bckArgs.dontHeadRemote {
@@ -1842,12 +1845,12 @@ func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID st
 
 func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck *cmn.Bck, query url.Values) (err error) {
 	var (
-		backend       = cmn.BackendConfAIS{}
-		aliasOrUUID   = bck.Ns.UUID
-		config        = cmn.GCO.Get()
-		v, configured = config.Backend.ProviderConf(apc.AIS)
+		backend     = cmn.BackendConfAIS{}
+		aliasOrUUID = bck.Ns.UUID
+		config      = cmn.GCO.Get()
+		v           = config.Backend.Get(apc.AIS)
 	)
-	if !configured {
+	if v == nil {
 		p.writeErrMsg(w, r, "no remote ais clusters attached")
 		return err
 	}
@@ -2882,6 +2885,25 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 			over = p.remais.Ver
 		}
 		if p.remais.Ver < all.Ver {
+			// keep old/detached clusters to support access to existing ("cached") buckets
+			// i.e., the ability to resolve remote alias to Ns.UUID (see p.a2u)
+			for _, a := range p.remais.Remotes.A {
+				var found bool
+				for _, b := range p.remais.old {
+					if b.UUID == a.UUID {
+						*b = *a
+						found = true
+						break
+					}
+					if b.Alias == a.Alias {
+						glog.Errorf("duplicated remais alias: (%q, %q) vs (%q, %q)", a.UUID, a.Alias, b.UUID, b.Alias)
+					}
+				}
+				if !found {
+					p.remais.old = append(p.remais.old, a)
+				}
+			}
+
 			p.remais.Remotes = *all
 			nver = p.remais.Ver
 			p.remais.mu.Unlock()
@@ -3006,7 +3028,7 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, s
 	}
 	if bck.IsCloud() {
 		config := cmn.GCO.Get()
-		if _, ok := config.Backend.Providers[bck.Provider]; !ok {
+		if config.Backend.Get(bck.Provider) == nil {
 			err = &cmn.ErrMissingBackend{Provider: bck.Provider}
 			statusCode = http.StatusNotFound
 			err = cmn.NewErrFailedTo(p, "lookup Cloud bucket", bck, err, statusCode)

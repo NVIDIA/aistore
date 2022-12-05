@@ -24,6 +24,14 @@ const (
 	errFmtExclusive  = "flags %q and %q are mutually exclusive"
 )
 
+var examplesBckSetProps = `
+Usage examples:
+- ais bucket props set [BUCKET] checksum.type=xxhash
+- ais bucket props set ais://nnn checksum.type=md5 checksum.validate_warm_get=true
+- ais bucket props [BUCKET] checksum
+  (see docs/cli for details)
+`
+
 var (
 	// flags
 	bucketCmdsFlags = map[string][]cli.Flag{
@@ -567,7 +575,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 	}
 	newProps, err := parseBckPropsFromContext(c)
 	if err != nil {
-		return err
+		return fmt.Errorf("%v%s", err, examplesBckSetProps)
 	}
 	newProps.Force = flagIsSet(c, forceFlag)
 

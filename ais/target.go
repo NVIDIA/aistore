@@ -74,107 +74,85 @@ type (
 // interface guard
 var _ cos.Runner = (*target)(nil)
 
-//////////////
-// backends //
-//////////////
+//
+// target
+//
 
-func (b backends) init(t *target, starting bool) {
+func (t *target) initBackends() {
 	backend.Init()
 
-	ais := backend.NewAIS(t)
-	b[apc.AIS] = ais // ais cloud is always present
-
 	config := cmn.GCO.Get()
-	if aisConf, ok := config.Backend.ProviderConf(apc.AIS); ok {
-		if err := ais.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
+	aisBackend := backend.NewAIS(t)
+	t.backend[apc.AIS] = aisBackend                  // always present
+	t.backend[apc.HTTP] = backend.NewHTTP(t, config) // ditto
+
+	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
+		if err := aisBackend.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t, err)
 		} else {
 			glog.Infof("%s: remote-ais %v", t, aisConf)
 		}
 	}
 
-	b[apc.HTTP], _ = backend.NewHTTP(t, config)
-	if err := b.initExt(t, starting); err != nil {
+	if err := t._initBuiltin(); err != nil {
 		cos.ExitLogf("%v", err)
 	}
 }
 
+// init built-in (via build tags) backends
 // - remote (e.g. cloud) backends  w/ empty stubs unless populated via build tags
-// - write access to backends: 1) target startup, and 2) via primary startup
-// - lookup "choosing remote backends"
-func (b backends) initExt(t *target, starting bool) (err error) {
+// - enabled/disabled via config.Backend
+func (t *target) _initBuiltin() error {
 	var (
-		all    []string
-		config = cmn.GCO.Get()
+		enabled, disabled, notlinked []string
+		config                       = cmn.GCO.Get()
 	)
-	for provider := range b {
-		if provider == apc.HTTP || provider == apc.AIS { // always present
-			continue
-		}
-		if _, ok := config.Backend.Providers[provider]; !ok {
-			if !starting {
-				glog.Errorf("Warning: %s: delete %q backend", t, provider)
-			}
-			delete(b, provider)
-		}
-	}
-	for provider := range config.Backend.Providers {
-		var add string
+	for provider := range apc.Providers {
+		var (
+			add cluster.BackendProvider
+			err error
+		)
 		switch provider {
 		case apc.AWS:
-			if _, ok := b[provider]; !ok {
-				b[provider], err = backend.NewAWS(t)
-				add = provider
-			}
-		case apc.Azure:
-			if _, ok := b[provider]; !ok {
-				b[provider], err = backend.NewAzure(t)
-				add = provider
-			}
+			add, err = backend.NewAWS(t)
 		case apc.GCP:
-			if _, ok := b[provider]; !ok {
-				b[provider], err = backend.NewGCP(t)
-				add = provider
-			}
+			add, err = backend.NewGCP(t)
+		case apc.Azure:
+			add, err = backend.NewAzure(t)
 		case apc.HDFS:
-			if _, ok := b[provider]; !ok {
-				b[provider], err = backend.NewHDFS(t)
-				add = provider
-			}
+			add, err = backend.NewHDFS(t)
+		case apc.AIS, apc.HTTP:
+			continue
 		default:
-			err = fmt.Errorf(cmn.FmtErrUnknown, t, "backend provider", provider)
+			return fmt.Errorf(cmn.FmtErrUnknown, t, "backend provider", provider)
 		}
-		if err != nil {
-			err = _overback(err)
-		}
-		if err != nil {
-			return
-		}
-		if add != "" {
-			all = append(all, add)
-			if !starting {
-				glog.Errorf("Warning: %s: add %q backend", t, add)
-			}
-		}
-	}
-	glog.Infof("%s: linked backends %v (%t)", t, all, starting)
-	return
-}
+		t.backend[provider] = add
 
-func _overback(err error) error {
-	if _, ok := err.(*cmn.ErrInitBackend); !ok {
-		return err
+		configured := config.Backend.Get(provider) != nil
+		switch {
+		case err == nil && configured:
+			enabled = append(enabled, provider)
+		case err == nil && !configured:
+			disabled = append(disabled, provider)
+		case err != nil && configured:
+			notlinked = append(notlinked, provider)
+		}
 	}
-	if !daemon.cli.overrideBackends {
-		return fmt.Errorf("%v - consider using '-override_backends' command-line", err)
+	switch {
+	case len(notlinked) > 0:
+		glog.Errorf("%s backends: enabled %v, disabled %v, missing in the build %v", t, enabled, disabled, notlinked)
+	case len(disabled) > 0:
+		glog.Warningf("%s backends: enabled %v, disabled %v", t, enabled, disabled)
+	default:
+		glog.Infof("%s backends: %v", t, enabled)
 	}
-	glog.Warningf("%v - overriding, proceeding anyway", err)
 	return nil
 }
 
-//
-// the target
-//
+func (t *target) aisBackend() *backend.AISBackendProvider {
+	bendp := t.backend[apc.AIS]
+	return bendp.(*backend.AISBackendProvider)
+}
 
 func (t *target) init(config *cmn.Config) {
 	t.initNetworks()
@@ -373,7 +351,7 @@ func (t *target) Run() error {
 		}()
 	}
 
-	t.backend.init(t, true /*starting*/)
+	t.initBackends()
 
 	db, err := kvdb.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
 	if err != nil {

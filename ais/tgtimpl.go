@@ -41,8 +41,14 @@ func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Props != nil {
 		provider = bck.RemoteBck().Provider
 	}
-	if ext, ok := t.backend[provider]; ok {
-		return ext
+	config := cmn.GCO.Get()
+	if _, ok := config.Backend.Providers[provider]; ok {
+		bp, k := t.backend[provider]
+		debug.Assert(k, provider)
+		if bp != nil {
+			return bp
+		}
+		// nil when configured & not-built
 	}
 	c, _ := backend.NewDummyBackend(t)
 	return c

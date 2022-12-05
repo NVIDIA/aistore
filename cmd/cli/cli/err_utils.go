@@ -106,6 +106,11 @@ func cannotExecuteError(c *cli.Context, err error) *errUsage {
 }
 
 func incorrectUsageMsg(c *cli.Context, fmtString string, args ...any) *errUsage {
+	const incorrectUsageFmt = "too many arguments or unrecognized (or misplaced) option '%+v'"
+
+	if fmtString == "" {
+		fmtString = incorrectUsageFmt
+	}
 	msg := fmt.Sprintf(fmtString, args...)
 	return _errUsage(c, msg)
 }
