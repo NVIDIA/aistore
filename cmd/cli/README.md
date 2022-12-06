@@ -1,21 +1,8 @@
-Main documentation can be found [here](/docs/cli.md).
+CLI is a separate package, module (`go.mod`), and development intended to provide easy-to-use intuitive interface to AIStore.
 
-## Info For Developers
+To implement it, we utilized [urfave/cli](https://github.com/urfave/cli/blob/master/docs/v1/manual.md) open-source framework.
 
-AIS CLI utilizes [urfave/cli](https://github.com/urfave/cli/blob/master/docs/v1/manual.md) open-source framework.
+References:
 
-### Adding New Commands
-
-Currently, the CLI has the format of `ais <resource> <command>`.
-
-To add a new command to an existing resource:
-
-1. Create a subcommand entry for the command in the resource object
-2. Create an entry in the command's flag map for the new command
-3. Register flags in the subcommand object
-4. Register the handler function (named `XXXHandler`) in the subcommand object
-
-To add a new resource:
-
-1. Create a new Go file (named `xxx_hdlr.go`) with the name of the new resource and follow the format of existing files
-2. Once the new resource and its commands are implemented, make sure to register the new resource with the CLI (see `setupCommands()` in `app.go`)
+* [Main CLI readme](/docs/cli.md)
+* [CLI user documentation](/docs/cli)

@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -45,19 +46,27 @@ var (
 	}
 )
 
-var examplesCluSetCfg = `
+const examplesCluSetCfg = `
 Usage examples:
 - ais config cluster checksum.type=xxhash
 - ais config cluster checksum.type=md5 checksum.validate_warm_get=true
 - ais config cluster checksum --json
-  (see docs/cli for details)
+For more usage examples, see ` + cmn.GitHubHome + `/blob/master/docs/cli/config.md
 `
 
-var examplesNodeSetCfg = `
+const examplesNodeSetCfg = `
 Usage examples:
 - ais config node [NODE] inherited log.level=4
 - ais config node [NODE] inherited log
-  (see docs/cli for details)
+- ais config node [NODE] inherited disk.disk_util_high_wm=93
+For more usage examples, see ` + cmn.GitHubHome + `/blob/master/docs/cli/config.md
+`
+
+const localNodeCfgErr = `All nodes in a cluster inherit global (cluster) configuration,
+with the possibility to locally override most of the inherited values.
+In addition, each node has its own local config that only can be viewed but cannot be
+updated via CLI. To update local config, lookup it's location, edit the file
+(it's a plain text), and restart the node.
 `
 
 var (
@@ -157,26 +166,13 @@ func setCluConfigHandler(c *cli.Context) error {
 		}
 	}
 
-	// E.g.:
-	// ais config cluster backend.conf='{"aws":{}}'
-	// ais config cluster backend.conf '{"gcp":{}, "aws":{}}'
-	// ais config cluster checksum.type='{"type":"md5"}'
-	var (
-		jsonVal = regexp.MustCompile(`^{.*}$`)
-		useMsg  bool
-	)
-	for _, v := range nvs {
-		if !jsonVal.MatchString(v) {
-			if useMsg {
-				return fmt.Errorf("cannot have both json-formatted and plain key=value args (%+v) in one command line", nvs)
-			}
-			continue
-		}
-		useMsg = true
+	_, useMsg, err := isFmtJSON(nvs)
+	if err != nil {
+		return err
 	}
 	if useMsg {
 		if err := setcfg(c, nvs); err != nil { // api.SetClusterConfigUsingMsg (vs. api.SetClusterConfig below)
-			return err
+			return fmt.Errorf("%v%s", err, examplesCluSetCfg)
 		}
 		goto show
 	}
@@ -217,7 +213,26 @@ show:
 	return nil
 }
 
-// TODO: reflect
+// E.g.:
+// ais config cluster backend.conf='{"aws":{}}'
+// ais config cluster backend.conf '{"gcp":{}, "aws":{}}'
+// ais config cluster checksum.type='{"type":"md5"}'
+func isFmtJSON(nvs cos.StrKVs) (val string, ans bool, err error) {
+	jsonRe := regexp.MustCompile(`^{.*}$`)
+	for _, v := range nvs {
+		if !jsonRe.MatchString(v) {
+			if ans {
+				err = fmt.Errorf("cannot have both json-formatted and plain key=value args (%+v) in one command line", nvs)
+				return
+			}
+			continue
+		}
+		val, ans = v, true
+	}
+	return
+}
+
+// TODO: remove switch w/ assorted hardcoded sections - use reflection
 func setcfg(c *cli.Context, nvs cos.StrKVs) error {
 	toUpdate := &cmn.ConfigToUpdate{}
 	for k, v := range nvs {
@@ -227,13 +242,13 @@ func setcfg(c *cli.Context, nvs cos.StrKVs) error {
 		case k == "mirror" || strings.HasPrefix(k, "mirror."):
 			jsoniter.Unmarshal([]byte(v), &toUpdate.Mirror)
 		case k == "ec" || strings.HasPrefix(k, "ec."):
-			jsoniter.Unmarshal([]byte(v), &toUpdate.Mirror)
+			jsoniter.Unmarshal([]byte(v), &toUpdate.EC)
 		case k == "log" || strings.HasPrefix(k, "log."):
 			jsoniter.Unmarshal([]byte(v), &toUpdate.Log)
 		case k == "checksum" || strings.HasPrefix(k, "checksum."):
 			jsoniter.Unmarshal([]byte(v), &toUpdate.Cksum)
 		default:
-			return fmt.Errorf("set config using msg: not implemented yet for %q", k) // TODO -- FIXME: reflect
+			return fmt.Errorf("cannot update config using JSON-formatted %q - not implemented yet", k)
 		}
 		if err := api.SetClusterConfigUsingMsg(apiBP, toUpdate, flagIsSet(c, transientFlag)); err != nil {
 			return err
@@ -285,6 +300,9 @@ func setNodeConfigHandler(c *cli.Context) error {
 		}
 		return err
 	}
+	if daemonID != "" && c.Args().Get(1) == cfgScopeLocal {
+		return errors.New(localNodeCfgErr)
+	}
 	for k := range nvs {
 		if !cos.StringInSlice(k, propList) {
 			return fmt.Errorf("invalid property name %q%s", k, examplesNodeSetCfg)
@@ -298,9 +316,18 @@ func setNodeConfigHandler(c *cli.Context) error {
 		actionWarn(c, warn)
 	}
 
+	jsonval, useMsg, err := isFmtJSON(nvs)
+	if err != nil {
+		return err
+	}
+	if useMsg {
+		// have api.SetClusterConfigUsingMsg but not "api.SetDaemonConfigUsingMsg"
+		return fmt.Errorf("cannot update node configuration using JSON-formatted %q - not implemented yet", jsonval)
+	}
 	if err := api.SetDaemonConfig(apiBP, daemonID, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
+
 	s, err := jsoniter.MarshalIndent(nvs, "", "    ")
 	debug.AssertNoErr(err)
 	fmt.Fprintf(c.App.Writer, "%s\n", string(s))

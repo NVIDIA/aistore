@@ -29,7 +29,7 @@ const (
 	cliDescr = `If [Tab] completion doesn't work:
    * download ` + cmn.GitHubHome + `/tree/master/cmd/cli/autocomplete
    * and run 'install.sh'.
-   For more information, please refer to ` + cmn.GitHubHome + `/blob/master/cmd/cli/README.md`
+   To install CLI directly from GitHub, use ` + cmn.GitHubHome + `/blob/master/deploy/scripts/install_from_binaries.sh`
 )
 
 type (
