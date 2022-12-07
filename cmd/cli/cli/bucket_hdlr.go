@@ -306,6 +306,7 @@ func summaryBucketHandler(c *cli.Context) (err error) {
 	return showBucketSummary(c)
 }
 
+// (compare with listBckTableWithSummary)
 func showBucketSummary(c *cli.Context) error {
 	queryBcks, err := parseQueryBckURI(c, c.Args().First())
 	if err != nil {
@@ -324,7 +325,7 @@ func showBucketSummary(c *cli.Context) error {
 	return tmpls.Print(summaries, c.App.Writer, tmpls.BucketsSummariesTmpl, altMap, false)
 }
 
-// NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets`)
+// NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
 func getSummaries(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.AllBsummResults, err error) {
 	fDetails := func() (err error) {
 		msg := &cmn.BsummCtrlMsg{ObjCached: cachedObjs, BckPresent: !allBuckets, Fast: false}

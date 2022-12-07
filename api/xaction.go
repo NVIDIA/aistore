@@ -265,16 +265,17 @@ func WaitForXactionIdle(bp BaseParams, args XactReqArgs) error {
 //  3. Breaks loop on error
 //  4. If the destination returns status code StatusOK, it means the response
 //     contains the real data and the function returns the response to the caller
-func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v any) error {
+func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v *cmn.AllBsummResults) error {
 	var (
 		uuid   string
 		sleep  = xactMinPollTime
 		actMsg = apc.ActionMsg{Action: apc.ActSummaryBck, Value: msg}
+		body   = cos.MustMarshal(actMsg)
 	)
 	if reqParams.Query == nil {
 		reqParams.Query = url.Values{}
 	}
-	reqParams.Body = cos.MustMarshal(actMsg)
+	reqParams.Body = body
 	resp, err := reqParams.doResp(&uuid)
 	if err != nil {
 		return err
@@ -287,11 +288,12 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v any) error {
 	}
 	if msg.UUID == "" {
 		msg.UUID = uuid
+		body = cos.MustMarshal(actMsg)
 	}
 
 	// Poll async task for http.StatusOK completion
 	for {
-		reqParams.Body = cos.MustMarshal(actMsg)
+		reqParams.Body = body
 		resp, err = reqParams.doResp(v)
 		if err != nil {
 			return err

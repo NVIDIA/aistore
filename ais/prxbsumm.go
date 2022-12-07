@@ -142,7 +142,7 @@ func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (bool /*all don
 	return numDone == len(results), nil
 }
 
-// NOTE: always executes a /fast/ version of the bucket summary
+// NOTE: always executes the _fast_ version of the bucket summary
 func (p *proxy) bsummDoWait(bck *cluster.Bck, out *cmn.BsummResult, fltPresence int) error {
 	var (
 		max   = cmn.Timeout.MaxKeepalive()

@@ -298,6 +298,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
 }
 
+// (compare with showBucketSummary)
 func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
 	var (
 		footer     lsbFooter
@@ -340,7 +341,8 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	if hideFooter || footer.nbp <= 1 {
 		return
 	}
-	var s string
+
+	var s, foot string
 	if !apc.IsFltPresent(fltPresence) {
 		s = fmt.Sprintf(" (%d present)", footer.nbp)
 	}
@@ -348,9 +350,14 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	if qbck.IsRemoteAIS() {
 		p = qbck.DisplayProvider()
 	}
-	foot := fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
-		p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj,
-		cos.UnsignedB2S(footer.size, 2), footer.pct)
+	if footer.pobj+footer.robj != 0 {
+		foot = fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
+			p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj,
+			cos.UnsignedB2S(footer.size, 2), footer.pct)
+	} else {
+		foot = fmt.Sprintf("Total: [%s bucket%s: %d%s, apparent size %s, used capacity %d%%] ========",
+			p, cos.Plural(footer.nb), footer.nb, s, cos.UnsignedB2S(footer.size, 2), footer.pct)
+	}
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
 }
 
