@@ -134,7 +134,8 @@ class Object:
 
         url = f"/objects/{ self.bck.name }/{ self.obj_name }"
         if path:
-            data = open(path, "rb")
+            with open(path, "rb") as reader:
+                data = reader.read()
         else:
             data = content
         return self.bck.client.request(
