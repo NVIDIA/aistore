@@ -279,11 +279,12 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
+
 	xctn := xreg.GetXact(msg.UUID)
 
 	// never started
 	if xctn == nil {
-		err := cmn.NewErrNotFound("%s: x-%s[%s] failed to start or never started", t, apc.ActSummaryBck, msg.UUID)
+		err := cmn.NewErrNotFound("%s: x-%s[%s] (failed to start?)", t, apc.ActSummaryBck, msg.UUID)
 		if silent {
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {

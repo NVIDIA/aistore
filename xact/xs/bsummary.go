@@ -85,6 +85,11 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 		si  *cluster.Snode
 	)
 	rwg.Done()
+	if r.Bck() == nil || r.Bck().IsEmpty() {
+		glog.Infof("%s - all buckets", r.Name())
+	} else {
+		glog.Infof("%s - bucket(s) %s", r.Name(), r.Bck().Bucket())
+	}
 	if r.totalDisksSize, err = fs.GetTotalDisksSize(); err != nil {
 		r.updRes(err)
 		return
