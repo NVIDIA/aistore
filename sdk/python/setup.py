@@ -84,5 +84,6 @@ setup(
     install_requires=["requests", "packaging", "pydantic==1.9.0", "cloudpickle==2.0.0"],
     extras_require={
         "pytorch": ["torch", "torchdata"],
+        "botocore": ["wrapt"],
     },
 )

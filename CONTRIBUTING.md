@@ -63,6 +63,9 @@ $ make python_tests
 
 # Run Python ETL tests
 $ make python_etl_tests
+
+# Run Python botocore monkey patch tests
+$ make python_botocore_tests
 ```
 
 

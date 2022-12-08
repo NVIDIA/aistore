@@ -387,9 +387,26 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 
 ## Boto3 Compatibility
 
-Arguably, extremely few HTTP client-side libraries do _not_ follow [HTTP redirects](https://www.rfc-editor.org/rfc/rfc7231#page-54), and Amazon's [Boto3](https://github.com/boto/boto3) just happens to be one of those (libraries).
+Arguably, extremely few HTTP client-side libraries do _not_ follow [HTTP redirects](https://www.rfc-editor.org/rfc/rfc7231#page-54), and Amazon's [botocore](https://github.com/boto/botocore), used by [Boto3](https://github.com/boto/boto3), just happens to be one of those (libraries).
 
-For more (and deeper) context, see maybe the following `aws-cli` ticket and discussion at:
+AIStore provides a shim that you can use to alter `botocore` and `boto3`'s behavior to work as expected with AIStore.
+
+To use `boto3` or `botocore` as client libraries for AIStore:
+
+ - Install the [aistore python api](/docs/s3cmd.md) with the `botocore` extra.
+
+```shell
+$ pip install aistore[botocore]
+```
+
+ - Import `aistore.monkey.botocore` in your source code alongside `botocore` and / or `boto3`.
+
+```python
+import boto3
+from aistore.monkey import botocore
+```
+
+For more context, see perhaps the following `aws-cli` ticket and discussion at:
 
 * [Support S3 HTTP redirects to non-Amazon URI's](https://github.com/aws/aws-cli/issues/6559)
 

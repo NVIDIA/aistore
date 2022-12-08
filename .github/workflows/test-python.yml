@@ -43,3 +43,4 @@ jobs:
         run: |
           cd sdk/python
           make python_tests
+          make python_botocore_tests

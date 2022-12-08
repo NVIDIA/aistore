@@ -270,6 +270,22 @@ for url, file in dp_files:
     pass
 ```
 
+### An Alternative: Using Boto3 (and botocore)
+As an alternative to the [AIStore Python API](https://aiatscale.org/docs/python_api.md), you may prefer to use Amazon's popular [Boto3](https://github.com/boto/boto3) library, or possibly [botocore](https://github.com/boto/botocore), which *boto3* uses under the hood.
+
+By default, botocore doesn't handle [HTTP redirects](https://www.rfc-editor.org/rfc/rfc7231#page-54), which prevents you from using it with AIStore.
+
+To resolve this, install `aistore` with the `botocore` extra,  and then import `aistore.monkey.botocore` in your code. This will monkey patch HTTP redirect support into botocore.
+
+```shell
+$ pip install aistore[botocore]
+```
+
+```python
+import boto3
+from aistore.monkey import botocore
+```
+
 ## References
 
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
