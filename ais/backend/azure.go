@@ -31,7 +31,7 @@ type (
 	azureProvider struct {
 		u string
 		c *azblob.SharedKeyCredential
-		t cluster.Target
+		t cluster.TargetPut
 		s azblob.ServiceURL
 	}
 )
@@ -127,7 +127,7 @@ func azureURL() string {
 
 // Only one authentication way is supported: with Shared Credentials that
 // requires Account name and key.
-func NewAzure(t cluster.Target) (cluster.BackendProvider, error) {
+func NewAzure(t cluster.TargetPut) (cluster.BackendProvider, error) {
 	path := azureURL()
 	u, err := url.Parse(path)
 	if err != nil {

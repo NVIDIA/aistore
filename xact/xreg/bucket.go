@@ -32,6 +32,7 @@ type (
 	}
 
 	BckRenameArgs struct {
+		T       cluster.TargetExt
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
 		RebID   string
@@ -120,8 +121,9 @@ func RenewTCObjs(t cluster.Target, uuid, kind string, custom *TCObjsArgs) RenewR
 	return RenewBucketXact(kind, custom.BckFrom, Args{T: t, Custom: custom, UUID: uuid})
 }
 
-func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {
+func RenewBckRename(t cluster.TargetExt, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {
 	custom := &BckRenameArgs{
+		T:       t,
 		Phase:   phase,
 		RebID:   xact.RebID2S(rmdVersion),
 		BckFrom: bckFrom,

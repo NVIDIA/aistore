@@ -11,6 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 )
 
-func NewHDFS(_ cluster.Target) (cluster.BackendProvider, error) {
+func NewHDFS(_ cluster.TargetPut) (cluster.BackendProvider, error) {
 	return nil, newErrInitBackend(apc.HDFS)
 }

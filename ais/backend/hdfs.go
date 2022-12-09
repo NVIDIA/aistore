@@ -28,7 +28,7 @@ import (
 
 type (
 	hdfsProvider struct {
-		t cluster.Target
+		t cluster.TargetPut
 		c *hdfs.Client
 	}
 )
@@ -36,7 +36,7 @@ type (
 // interface guard
 var _ cluster.BackendProvider = (*hdfsProvider)(nil)
 
-func NewHDFS(t cluster.Target) (cluster.BackendProvider, error) {
+func NewHDFS(t cluster.TargetPut) (cluster.BackendProvider, error) {
 	var (
 		config   = cmn.GCO.Get()
 		anyConf  = config.Backend.Get(apc.HDFS)

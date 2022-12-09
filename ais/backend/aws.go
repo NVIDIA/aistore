@@ -45,7 +45,7 @@ const (
 
 type (
 	awsProvider struct {
-		t cluster.Target
+		t cluster.TargetPut
 	}
 	sessConf struct {
 		bck    *cmn.Bck
@@ -62,7 +62,7 @@ var (
 // interface guard
 var _ cluster.BackendProvider = (*awsProvider)(nil)
 
-func NewAWS(t cluster.Target) (cluster.BackendProvider, error) {
+func NewAWS(t cluster.TargetPut) (cluster.BackendProvider, error) {
 	clients = make(map[string]map[string]*s3.S3, 2)
 	s3Endpoint = os.Getenv(awsEnvS3Endpoint)
 	return &awsProvider{t: t}, nil

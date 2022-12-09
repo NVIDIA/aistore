@@ -22,48 +22,69 @@ import (
 // ais target: types and interfaces
 //
 
-type Node interface {
-	Snode() *Snode
-	Bowner() Bowner
-	Sowner() Sowner
-	ClusterStarted() bool
-	NodeStarted() bool
-	DataClient() *http.Client
-}
+type (
+	Node interface {
+		SID() string
+		String() string
+		Snode() *Snode
 
-// For implementations, see `ais/tgtimpl.go` and `ais/htrun.go`.
-type Target interface {
-	Node
-	SID() string
-	String() string
+		Bowner() Bowner
+		Sowner() Sowner
 
-	// Memory allocators.
-	PageMM() *memsys.MMSA
-	ByteMM() *memsys.MMSA
+		ClusterStarted() bool
+		NodeStarted() bool
+	}
 
-	// Backend provider(s) related functions.
-	Backend(*Bck) BackendProvider
-	CompareObjects(ctx context.Context, lom *LOM) (equal bool, errCode int, err error)
+	NodeMemCap interface {
+		Node
 
-	// Object related functions.
-	PutObject(lom *LOM, params *PutObjectParams) (err error)
-	FinalizeObj(lom *LOM, workFQN string, xctn Xact) (errCode int, err error)
-	EvictObject(lom *LOM) (errCode int, err error)
-	DeleteObject(lom *LOM, evict bool) (errCode int, err error)
-	CopyObject(lom *LOM, params *CopyObjectParams, dryRun bool) (int64, error)
-	GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
-	Promote(params PromoteParams) (errCode int, err error)
-	HeadObjT2T(lom *LOM, si *Snode) bool
+		// Memory allocators
+		PageMM() *memsys.MMSA
+		ByteMM() *memsys.MMSA
 
-	// File-system related functions.
-	FSHC(err error, path string)
-	OOS(*fs.CapStatus) fs.CapStatus
+		// Space
+		OOS(*fs.CapStatus) fs.CapStatus
+	}
 
-	// Other.
-	BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
-	RebalanceNamespace(si *Snode) (body []byte, errCode int, err error)
-	Health(si *Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
-}
+	// a node that can also write objects locally
+	TargetPut interface {
+		NodeMemCap
+
+		PutObject(lom *LOM, params *PutObjectParams) (err error)
+	}
+
+	// For implementations, see `ais/tgtimpl.go` and `ais/htrun.go`.
+	Target interface {
+		TargetPut
+
+		// (for intra-cluster data-net comm - no streams)
+		DataClient() *http.Client
+
+		// backend
+		Backend(*Bck) BackendProvider
+		CompareObjects(ctx context.Context, lom *LOM) (equal bool, errCode int, err error)
+
+		// core object
+		FinalizeObj(lom *LOM, workFQN string, xctn Xact) (errCode int, err error)
+		EvictObject(lom *LOM) (errCode int, err error)
+		DeleteObject(lom *LOM, evict bool) (errCode int, err error)
+		CopyObject(lom *LOM, params *CopyObjectParams, dryRun bool) (int64, error)
+		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
+		Promote(params PromoteParams) (errCode int, err error)
+		HeadObjT2T(lom *LOM, si *Snode) bool
+
+		// FS health and Health
+		FSHC(err error, path string)
+		Health(si *Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
+	}
+
+	TargetExt interface {
+		Target
+
+		// misc
+		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
+	}
+)
 
 // data path: control structures and types
 type (

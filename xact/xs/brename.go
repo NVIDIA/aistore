@@ -28,7 +28,7 @@ const (
 
 type (
 	bckRename struct {
-		t       cluster.Target
+		t       cluster.TargetExt
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 		rebID   string
@@ -37,7 +37,7 @@ type (
 	bmvFactory struct {
 		xreg.RenewBase
 		xctn  *bckRename
-		args  *xreg.BckRenameArgs
+		cargs *xreg.BckRenameArgs
 		phase string
 	}
 	TestBmvFactory = bmvFactory
@@ -50,7 +50,7 @@ var (
 )
 
 func (*bmvFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &bmvFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: args.Custom.(*xreg.BckRenameArgs)}
+	p := &bmvFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, cargs: args.Custom.(*xreg.BckRenameArgs)}
 	return p
 }
 
@@ -58,7 +58,8 @@ func (*bmvFactory) Kind() string        { return apc.ActMoveBck }
 func (p *bmvFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *bmvFactory) Start() error {
-	p.xctn = newBckRename(p.UUID(), p.Kind(), p.Bck, p.T, p.args.BckFrom, p.args.BckTo, p.args.RebID)
+	p.xctn = newBckRename(p.UUID(), p.Kind(), p.cargs.RebID, p.Bck, p.cargs.BckFrom, p.cargs.BckTo)
+	p.xctn.t = p.cargs.T // cluster.TargetExt
 	return nil
 }
 
@@ -66,29 +67,29 @@ func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	if p.phase == apc.ActBegin {
 		if !prevEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress",
-				p.Kind(), p.args.BckFrom, p.args.BckTo)
+				p.Kind(), p.cargs.BckFrom, p.cargs.BckTo)
 			return
 		}
 		// TODO: more checks
 	}
 	prev := prevEntry.(*bmvFactory)
-	bckEq := prev.args.BckTo.Equal(p.args.BckTo, false /*sameID*/, false /* same backend */)
+	bckEq := prev.cargs.BckTo.Equal(p.cargs.BckTo, false /*sameID*/, false /* same backend */)
 	if prev.phase == apc.ActBegin && p.phase == apc.ActCommit && bckEq {
 		prev.phase = apc.ActCommit // transition
 		wpr = xreg.WprUse
 		return
 	}
 	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(=>%s)",
-		p.Kind(), prev.args.BckFrom, prev.args.BckTo, prev.phase, p.phase, p.args.BckFrom)
+		p.Kind(), prev.cargs.BckFrom, prev.cargs.BckTo, prev.phase, p.phase, p.cargs.BckFrom)
 	return
 }
 
-func newBckRename(uuid, kind string, bck *cluster.Bck, t cluster.Target, bckFrom, bckTo *cluster.Bck, rebID string) (x *bckRename) {
+func newBckRename(uuid, kind, rebID string, bck, bckFrom, bckTo *cluster.Bck) (x *bckRename) {
 	// NOTE: `bck` = `bckTo` = (the new name) while `bckFrom` is the existing bucket to be renamed
 	debug.Assert(bck.Equal(bckTo, false, true), bck.String()+" vs "+bckTo.String())
 
 	debug.Assert(xact.IsValidRebID(rebID), rebID)
-	x = &bckRename{t: t, bckFrom: bckFrom, bckTo: bckTo, rebID: rebID}
+	x = &bckRename{bckFrom: bckFrom, bckTo: bckTo, rebID: rebID}
 	x.InitBase(uuid, kind, bck)
 	return
 }

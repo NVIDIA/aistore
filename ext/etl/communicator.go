@@ -59,12 +59,10 @@ type (
 
 	baseComm struct {
 		cluster.Slistener
-		t cluster.Target
-
+		t       cluster.Target
+		xctn    cluster.Xact
 		name    string
 		podName string
-
-		xctn cluster.Xact
 	}
 
 	pushComm struct {

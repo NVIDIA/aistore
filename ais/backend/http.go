@@ -23,7 +23,7 @@ import (
 
 type (
 	httpProvider struct {
-		t           cluster.Target
+		t           cluster.TargetPut
 		httpClient  *http.Client
 		httpsClient *http.Client
 	}
@@ -32,7 +32,7 @@ type (
 // interface guard
 var _ cluster.BackendProvider = (*httpProvider)(nil)
 
-func NewHTTP(t cluster.Target, config *cmn.Config) cluster.BackendProvider {
+func NewHTTP(t cluster.TargetPut, config *cmn.Config) cluster.BackendProvider {
 	hp := &httpProvider{t: t}
 	hp.httpClient = cmn.NewClient(cmn.TransportArgs{
 		Timeout:         config.Client.TimeoutLong.D(),

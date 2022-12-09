@@ -173,7 +173,7 @@ func (t *target) init(config *cmn.Config) {
 	t.initHostIP()
 	daemon.rg.add(t)
 
-	ts := &stats.Trunner{T: t} // iostat below
+	ts := stats.NewTrunner(t) // iostat below
 	startedUp := ts.Init(t)
 	daemon.rg.add(ts)
 	t.statsT = ts // stats tracker

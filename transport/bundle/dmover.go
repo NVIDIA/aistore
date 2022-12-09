@@ -23,7 +23,7 @@ import (
 
 type (
 	DataMover struct {
-		t    cluster.Target
+		t    cluster.Node
 		data struct {
 			trname  string
 			recv    transport.RecvObj

@@ -41,7 +41,7 @@ const (
 
 type (
 	gcpProvider struct {
-		t         cluster.Target
+		t         cluster.TargetPut
 		projectID string
 	}
 )
@@ -60,7 +60,7 @@ var (
 	_ cluster.BackendProvider = (*gcpProvider)(nil)
 )
 
-func NewGCP(t cluster.Target) (bp cluster.BackendProvider, err error) {
+func NewGCP(t cluster.TargetPut) (bp cluster.BackendProvider, err error) {
 	var (
 		projectID     string
 		credProjectID = readCredFile()

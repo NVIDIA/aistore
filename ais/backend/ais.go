@@ -41,7 +41,7 @@ type (
 		bp   api.BaseParams
 	}
 	AISBackendProvider struct {
-		t             cluster.Target
+		t             cluster.TargetPut
 		remote        map[string]*remAis // by UUID
 		alias         cos.StrKVs         // alias => UUID
 		mu            sync.RWMutex
@@ -56,7 +56,7 @@ var (
 	preg, treg *regexp.Regexp
 )
 
-func NewAIS(t cluster.Target) *AISBackendProvider {
+func NewAIS(t cluster.TargetPut) *AISBackendProvider {
 	suff := regexp.QuoteMeta(cluster.SnameSuffix)
 	preg = regexp.MustCompile(regexp.QuoteMeta(cluster.PnamePrefix) + `\S*` + suff + ": ")
 	treg = regexp.MustCompile(regexp.QuoteMeta(cluster.TnamePrefix) + `\S*` + suff + ": ")
