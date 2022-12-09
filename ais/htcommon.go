@@ -59,12 +59,12 @@ type (
 
 	// callResult contains HTTP response.
 	callResult struct {
-		v       any // Unmarshalled value (set only when requested, see: `callArgs.v`).
+		v       any // unmarshalled value (only when requested via `callArgs.v`)
 		err     error
 		si      *cluster.Snode
 		header  http.Header
 		details string
-		bytes   []byte // Raw bytes from response.
+		bytes   []byte // response bytes (raw)
 		status  int
 	}
 

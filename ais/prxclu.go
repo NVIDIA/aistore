@@ -67,12 +67,14 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	switch what {
 	case apc.GetWhatAllXactStatus:
 		p.ic.handleAllXactStatus(w, r, query)
+	case apc.GetWhatQueryXactStats:
+		p.queryXaction(w, r, what, query)
+	case apc.GetWhatAllRunningXacts:
+		p.getAllRunningXacts(w, r, what, query)
 	case apc.GetWhatStats:
 		p.queryClusterStats(w, r, what, query)
 	case apc.GetWhatSysInfo:
 		p.queryClusterSysinfo(w, r, what, query)
-	case apc.GetWhatQueryXactStats:
-		p.queryXaction(w, r, what, query)
 	case apc.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what, query)
 	case apc.GetWhatRemoteAIS:
@@ -111,29 +113,20 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// apc.GetWhatQueryXactStats (NOTE: may poll for quiescence)
 func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
-	var (
-		body []byte
-		xflt string
-	)
-	switch what {
-	case apc.GetWhatQueryXactStats:
-		var xactMsg xact.QueryMsg
-		if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
-			return
-		}
-		xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // display name => kind
-		xflt = xactMsg.String()
-		body = cos.MustMarshal(xactMsg)
-	default:
-		p.writeErrStatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
+	var xactMsg xact.QueryMsg
+	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 		return
 	}
+	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // convert display name => kind
+	body := cos.MustMarshal(xactMsg)
+
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathXactions.S, Body: body, Query: query}
 	args.to = cluster.Targets
 	config := cmn.GCO.Get()
-	args.timeout = config.Client.Timeout.D() // NOTE: may poll for quiescence
+	args.timeout = config.Client.Timeout.D() // quiescence
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	targetResults, erred := p._queryResults(w, r, results)
@@ -141,10 +134,48 @@ func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string
 		return
 	}
 	if len(targetResults) == 0 {
-		p.writeErrMsg(w, r, "xaction \""+xflt+"\" not found", http.StatusNotFound)
+		p.writeErrStatusf(w, r, http.StatusNotFound, "xaction %q not found", xactMsg.String())
 		return
 	}
 	p.writeJSON(w, r, targetResults, what)
+}
+
+// apc.GetWhatAllRunningXacts
+func (p *proxy) getAllRunningXacts(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	var xactMsg xact.QueryMsg
+	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
+		return
+	}
+	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // convert display name => kind
+	body := cos.MustMarshal(xactMsg)
+
+	args := allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathXactions.S, Body: body, Query: query}
+	args.to = cluster.Targets
+	results := p.bcastGroup(args)
+	freeBcArgs(args)
+
+	uniqueKindIDs := cos.StrSet{}
+	for _, res := range results {
+		if res.err != nil {
+			p.writeErr(w, r, res.toErr())
+			freeBcastRes(results)
+			return
+		}
+		if len(res.bytes) == 0 {
+			continue
+		}
+		var (
+			kindIDs []string
+			err     = jsoniter.Unmarshal(res.bytes, &kindIDs)
+		)
+		debug.AssertNoErr(err)
+		for _, ki := range kindIDs {
+			uniqueKindIDs.Set(ki)
+		}
+	}
+	freeBcastRes(results)
+	p.writeJSON(w, r, uniqueKindIDs.ToSlice(), what)
 }
 
 func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string, query url.Values) {

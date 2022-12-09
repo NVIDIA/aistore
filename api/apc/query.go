@@ -163,18 +163,20 @@ const (
 	GetWhatSmapVote      = "smapvote"
 	GetWhatSnode         = "snode"
 	GetWhatStats         = "stats"
-	GetWhatOneXactStatus = "status"     // IC status by uuid (returns a single matching xaction or none)
-	GetWhatAllXactStatus = "status_all" // ditto - all matching xactions
 	GetWhatSysInfo       = "sysinfo"
 	GetWhatTargetIPs     = "target_ips" // comma-separated list of all target IPs (compare w/ GetWhatSnode)
 	GetWhatLog           = "log"
+	// xactions
+	GetWhatOneXactStatus   = "status"      // IC status by uuid (returns a single matching xaction or none)
+	GetWhatAllXactStatus   = "status_all"  // ditto - all matching xactions
+	GetWhatXactStats       = "getxstats"   // stats: xaction by uuid
+	GetWhatQueryXactStats  = "qryxstats"   // stats: all matching xactions
+	GetWhatAllRunningXacts = "running_all" // ':'-separated kind/ID pairs (strings), e.g. "make-n-copies:fGhuvvn7t"
 )
 
 // Internal "what" values.
 const (
-	GetWhatXactStats      = "getxstats" // stats: xaction by uuid
-	GetWhatQueryXactStats = "qryxstats" // stats: all matching xactions
-	GetWhatICBundle       = "ic_bundle"
+	GetWhatICBundle = "ic_bundle"
 )
 
 // QparamLogSev enum.

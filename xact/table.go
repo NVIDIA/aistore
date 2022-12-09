@@ -18,6 +18,8 @@ const (
 	ScopeT             // target
 )
 
+const KindIDSepa = ":"
+
 type (
 	Descriptor struct {
 		DisplayName string          // as implied

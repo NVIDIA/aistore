@@ -183,7 +183,7 @@ func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
 	props := strings.Split(lsmsg.Props, lsmsgPropsSepa)
 	s = make(cos.StrSet, len(props))
 	for _, p := range props {
-		s.Add(p)
+		s.Set(p)
 	}
 	return s
 }

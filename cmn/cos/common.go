@@ -229,6 +229,10 @@ func (ss StrSet) ToSlice() []string {
 	return keys
 }
 
+func (ss StrSet) Set(key string) {
+	ss[key] = struct{}{}
+}
+
 func (ss StrSet) Add(keys ...string) {
 	for _, key := range keys {
 		ss[key] = struct{}{}
@@ -248,7 +252,7 @@ func (ss StrSet) Intersection(other StrSet) StrSet {
 	result := make(StrSet)
 	for key := range ss {
 		if other.Contains(key) {
-			result.Add(key)
+			result.Set(key)
 		}
 	}
 	return result

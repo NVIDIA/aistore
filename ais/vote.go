@@ -256,7 +256,7 @@ func (p *proxy) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.StrSe
 			if errors == nil {
 				errors = cos.NewStrSet(res.daemonID)
 			} else {
-				errors.Add(res.daemonID)
+				errors.Set(res.daemonID)
 			}
 			n++
 		} else {
@@ -315,7 +315,7 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 
 func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StrSet {
 	var (
-		errors = cos.NewStrSet()
+		errors = cos.StrSet{}
 		msg    = &VoteResultMessage{
 			VoteResult{
 				Candidate: vr.Candidate,
@@ -336,7 +336,7 @@ func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StrSet {
 			continue
 		}
 		glog.Warningf("%s: failed to confirm election with %s: %v", p, res.si, res.err)
-		errors.Add(res.si.ID())
+		errors.Set(res.si.ID())
 	}
 	freeBcastRes(results)
 	return errors

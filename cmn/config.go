@@ -715,7 +715,7 @@ func (c *LocalConfig) TestingEnv() bool {
 
 func (c *LocalConfig) AddPath(mpath string) {
 	debug.Assert(!c.TestingEnv())
-	c.FSP.Paths.Add(mpath)
+	c.FSP.Paths.Set(mpath)
 }
 
 func (c *LocalConfig) DelPath(mpath string) {
@@ -1419,7 +1419,7 @@ func (c *TestFSPConf) Validate(contextConfig *Config) (err error) {
 		if c.Instance > 0 {
 			mpath = filepath.Join(mpath, strconv.Itoa(c.Instance))
 		}
-		contextConfig.FSP.Paths.Add(mpath)
+		contextConfig.FSP.Paths.Set(mpath)
 	}
 	return nil
 }

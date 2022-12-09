@@ -127,6 +127,7 @@ var (
 				Flags:  clusterCmdsFlags[commandStart],
 				Action: startClusterRebalanceHandler,
 			},
+			// + startableXactions (below)
 		},
 	}
 )

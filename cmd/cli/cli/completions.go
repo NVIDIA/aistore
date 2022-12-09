@@ -185,7 +185,7 @@ func configSectionCompletions(_ *cli.Context, cfgScope string) {
 	}
 	err = cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 		section := strings.Split(uniqueTag, ".")[0]
-		props.Add(section)
+		props.Set(section)
 		return nil, false
 	})
 	debug.AssertNoErr(err)
@@ -216,7 +216,7 @@ func setNodeConfigCompletions(c *cli.Context) {
 			fmt.Println(subcmdReset)
 		}
 		err := cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
-			props.Add(uniqueTag)
+			props.Set(uniqueTag)
 			return nil, false
 		})
 		debug.AssertNoErr(err)
@@ -488,21 +488,18 @@ func daemonXactionCompletions(c *cli.Context) {
 
 func xactCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		args := api.XactReqArgs{OnlyRunning: true}
-		vec, err := api.GetAllXactionStatus(apiBP, args, false /*force refresh*/)
+		kindIDs, err := api.GetAllRunningXactions(apiBP, "")
 		if err != nil {
-			actionWarn(c, "api.GetAllXactionStatus: "+err.Error())
 			return
 		}
-		if len(vec) == 0 {
-			return
-		}
-		var already = cos.StrSet{}
-		for _, ns := range vec {
-			if !already.Contains(ns.Kind) {
-				xname, _ := xact.GetKindName(ns.Kind)
+		already := cos.StrSet{}
+		for _, ki := range kindIDs {
+			i := strings.IndexByte(ki, xact.KindIDSepa[0])
+			kind := ki[0:i] // TODO: use UUID as well
+			if !already.Contains(kind) {
+				xname, _ := xact.GetKindName(kind)
 				fmt.Println(xname)
-				already.Add(ns.Kind)
+				already.Set(kind)
 			}
 		}
 		return

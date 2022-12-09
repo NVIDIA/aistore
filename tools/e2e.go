@@ -75,9 +75,9 @@ func retrieveBackendProviders() []string {
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	set := cos.NewStrSet()
 	for b := range config.Backend.Providers {
-		set.Add(b)
+		set.Set(b)
 	}
-	set.Add(apc.AIS)
+	set.Set(apc.AIS)
 	backends := set.ToSlice()
 	sort.Strings(backends)
 	return backends

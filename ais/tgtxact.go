@@ -46,6 +46,17 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
+
+		if what == apc.GetWhatAllRunningXacts {
+			out := xreg.GetAllRunning(xactMsg.Kind)
+			t.writeJSON(w, r, out, what)
+			return
+		}
+		if what != apc.GetWhatQueryXactStats {
+			t.writeErrf(w, r, fmtUnknownQue, what)
+			return
+		}
+
 		if xactMsg.Bck.Name != "" {
 			bck = cluster.CloneBck(&xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd); err != nil {
@@ -112,11 +123,6 @@ func (t *target) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid 
 }
 
 func (t *target) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.XactFilter) {
-	debug.Assert(what == apc.GetWhatQueryXactStats)
-	if what != apc.GetWhatQueryXactStats {
-		t.writeErrf(w, r, fmtUnknownQue, what)
-		return
-	}
 	stats, err := xreg.GetSnap(xactQuery)
 	if err == nil {
 		t.writeJSON(w, r, stats, what)

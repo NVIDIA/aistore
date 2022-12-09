@@ -38,7 +38,7 @@ type (
 	// either xaction ID or Kind must be specified
 	XactReqArgs struct {
 		ID   string // xaction UUID
-		Kind string // xaction kind or name (see `xact.Table`)
+		Kind string // xaction kind _or_ name (see `xact.Table`)
 
 		// optional parameters to further narrow down or filter-out xactions in question
 		DaemonID    string        // node that runs this xaction
@@ -104,7 +104,30 @@ func AbortXaction(bp BaseParams, args XactReqArgs) error {
 	return err
 }
 
+//
+// querying and waiting
+//
+
+// returns unique ':'-separated kind/ID pairs (strings)
+// e.g.: [put-copies:D-ViE6HEL_j list:H96Y7bhR2s copy-bck:matRQMRes put-copies:pOibtHExY]
+func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err error) {
+	msg := xact.QueryMsg{Kind: kindOrName}
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathClu.S
+		reqParams.Body = cos.MustMarshal(msg)
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatAllRunningXacts}}
+	}
+	err = reqParams.DoReqResp(&out)
+	FreeRp(reqParams)
+	return
+}
+
 // QueryXactionSnaps gets all xaction snaps based on the specified selection.
+// NOTE: args.Kind can be either xaction kind or name - here and elsewhere
 func QueryXactionSnaps(bp BaseParams, args XactReqArgs) (xs XactMultiSnap, err error) {
 	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
@@ -121,7 +144,7 @@ func QueryXactionSnaps(bp BaseParams, args XactReqArgs) (xs XactMultiSnap, err e
 	}
 	err = reqParams.DoReqResp(&xs)
 	FreeRp(reqParams)
-	return xs, err
+	return
 }
 
 // GetOneXactionStatus queries one of the IC (proxy) members for status

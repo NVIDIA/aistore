@@ -152,6 +152,21 @@ outer:
 	return
 }
 
+func GetAllRunning(kind string) []string {
+	return dreg.entries.getAllRunning(kind)
+}
+
+func (e *entries) getAllRunning(kind string) (out []string) {
+	for _, entry := range e.active {
+		xctn := entry.Get()
+		k := xctn.Kind()
+		if (kind == "" || kind == k) && xctn.Running() {
+			out = append(out, k+xact.KindIDSepa+xctn.ID()) // e.g. "make-n-copies:fGhuvvn7t"
+		}
+	}
+	return
+}
+
 func GetRunning(flt XactFilter) Renewable { return dreg.getRunning(flt) }
 
 func (r *registry) getRunning(flt XactFilter) (entry Renewable) {
