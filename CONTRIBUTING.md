@@ -58,8 +58,11 @@ To run Python-related tests:
 ```console
 $ cd aistore/python
 
-# Run Python tests
+# Run all Python tests
 $ make python_tests
+
+# Run Python sdk tests
+$ make python_sdk_tests
 
 # Run Python ETL tests
 $ make python_etl_tests

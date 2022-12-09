@@ -139,8 +139,20 @@ test:short:python:
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - cd python
-    - make python_tests
+    - make python_sdk_tests
     - make python_botocore_tests
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+
+test:short:python-etl:
+  <<: *test_short_def
+  tags:
+    - ais-k8s
+  script:
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - cd python
+    - make python_etl_tests
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
@@ -265,10 +277,6 @@ test:long:aisloader:
     - git clone https://github.com/prometheus-operator/kube-prometheus.git
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
 
-.test_k8s_optional_template: &test_k8s_optional_def
-  <<: *test_short_optional_def
-  tags:
-    - ais-k8s
 
 .test_k8s_long_template: &test_k8s_long_def
   extends: .test_k8s_short_template
@@ -291,13 +299,6 @@ test:short:k8s:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-short
     - status=$? make kill && exit $status
-
-test:short:python:etl:
-  <<: *test_k8s_optional_def
-  script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
-    - cd python
-    - make python_etl_tests
 
 test:long:k8s:
   stage: test-long
