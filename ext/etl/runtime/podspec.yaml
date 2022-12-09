@@ -5,7 +5,7 @@ metadata:
 spec:
   containers:
     - name: server
-      image: aistore/runtime_python:<TAG>
+      image: aistorage/runtime_python:<TAG>
       imagePullPolicy: IfNotPresent
       ports:
         - name: default
@@ -35,7 +35,7 @@ spec:
           mountPath: "/runtime"
   initContainers:
     - name: server-deps
-      image: aistore/runtime_python:<TAG>
+      image: aistorage/runtime_python:<TAG>
       imagePullPolicy: IfNotPresent
       command:
         - 'sh'
