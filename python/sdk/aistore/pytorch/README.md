@@ -68,7 +68,7 @@ Iterable Datapipe that lists files from the AIS backends with the given URL  pre
 1) This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
 2) Input *must* be a list and direct URLs are not supported.
 3) `length` is -1 by default, all calls to `len()` are invalid as not all items are iterated at the start.
-4) This internally uses [AIStore Python SDK](https://gitlab-master.nvidia.com/aistorage/aistore/-/tree/master/sdk/python).
+4) This internally uses [AIStore Python SDK](https://gitlab-master.nvidia.com/aistorage/aistore/-/tree/master/python/sdk).
 
 ### AIS File Loader
 
@@ -76,7 +76,7 @@ Iterable Datapipe that loads files from the AIS backends with the given list of 
 **Note:** 
 1) This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
 2) Input *must* be a list and direct URLs are not supported.
-3) This internally uses [AIStore Python SDK](https://gitlab-master.nvidia.com/aistorage/aistore/-/tree/master/sdk/python).
+3) This internally uses [AIStore Python SDK](https://gitlab-master.nvidia.com/aistorage/aistore/-/tree/master/python/sdk).
 
 ### Example
 ```

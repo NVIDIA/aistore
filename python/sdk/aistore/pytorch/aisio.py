@@ -24,7 +24,7 @@ def _assert_aistore() -> None:
         raise ModuleNotFoundError(
             "Package `aistore` is required to be installed to use this datapipe."
             "Please run `pip install aistore` or `conda install aistore` to install the package"
-            "For more info visit: https://github.com/NVIDIA/aistore/blob/master/sdk/python/"
+            "For more info visit: https://github.com/NVIDIA/aistore/blob/master/python/sdk/"
         )
 
 

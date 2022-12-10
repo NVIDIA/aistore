@@ -37,7 +37,7 @@ AIS runs natively on Kubernetes and features open format - thus, the freedom to 
 
 For developers and data scientists, there's also:
 * native [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
-* native [Python API](/docs/python_api.md), and [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) that also contains PyTorch integration and usage examples.
+* native [Python API](/docs/python_api.md), and [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/sdk) that also contains PyTorch integration and usage examples.
 
 For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 
@@ -102,7 +102,7 @@ With a little effort, they all could be extracted and used outside.
 - [Technical Blog](https://aiatscale.org/blog)
 - API and SDK
   - [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api)
-  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) (and [pip package](https://pypi.org/project/aistore/))
+  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/sdk) (and [pip package](https://pypi.org/project/aistore/))
   - [REST API](/docs/http_api.md)
     - [Easy URL](/docs/easy_url.md)
 - Amazon S3

@@ -30,7 +30,7 @@ If you'd like to work with the current upstream (and don't mind the risk), insta
 ```console
 $ git clone https://github.com/NVIDIA/aistore.git
 
-$ cd aistore/sdk/python
+$ cd aistore/python/sdk
 
 $ pip install -e .
 ```
@@ -150,7 +150,7 @@ template = MD5.format(communication_type="hpush")
 client.etl().init_spec(template=template, etl_id="etl-spec")
 ```
 
-> Refer to more ETL templates [here](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/etl_templates.py).
+> Refer to more ETL templates [here](https://github.com/NVIDIA/aistore/blob/master/python/sdk/aistore/client/etl_templates.py).
 
 Once initialized, we can verify the ETLs are running with method `list()`:
 
@@ -226,23 +226,23 @@ client.etl().delete(etl_id="etl-spec")
 
 Deleting an ETL deletes all pods created by Kuberenetes for the ETL as well as any specifications for the ETL on Kubernetes. Consequently, deleted ETLs cannot be started again and will need to be re-initialized.
 
-> For an interactive demo, refer [here](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/sdk/sdk-etl-tutorial.ipynb).
+> For an interactive demo, refer [here](https://github.com/NVIDIA/aistore/blob/master/python/sdk/examples/sdk/sdk-etl-tutorial.ipynb).
 
 ### More Examples
 
-For more in-depth examples, please see [AIStore Python SDK Examples Directory](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/).
+For more in-depth examples, please see [AIStore Python SDK Examples Directory](https://github.com/NVIDIA/aistore/blob/master/python/sdk/examples/).
 
 
 ### API Documentation
 
 |Module|Summary|
 |--|--|
-|[api.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/api.py)|Contains `Client` class, which has methods for making HTTP requests to an AIStore server. Includes factory constructors for `Bucket`, `Cluster`, and `Xaction` classes.|
-|[cluster.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/cluster.py)|Contains `Cluster` class that represents a cluster bound to a client and contains all cluster-related operations, including checking the cluster's health and retrieving vital cluster information.|
-|[bucket.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/bucket.py)|Contains `Bucket` class that represents a bucket in an AIS cluster and contains all bucket-related operations, including (but not limited to) creating, deleting, evicting, renaming, copying.|
-|[object.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/object.py)|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) retreiving, adding and deleting objects.|
-|[xaction.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/xaction.py)|Contains class `Xaction` and all xaction-related operations.|
-|[etl.py](https://github.com/NVIDIA/aistore/blob/master/sdk/python/aistore/client/etl.py)|Contains class `Etl` and all ETL-related operations.|
+|[api.py](https://github.com/NVIDIA/aistore/blob/master/python/sdk/aistore/client/api.py)|Contains `Client` class, which has methods for making HTTP requests to an AIStore server. Includes factory constructors for `Bucket`, `Cluster`, and `Xaction` classes.|
+|[cluster.py](https://github.com/NVIDIA/aistore/blob/master/python/sdk/aistore/client/cluster.py)|Contains `Cluster` class that represents a cluster bound to a client and contains all cluster-related operations, including checking the cluster's health and retrieving vital cluster information.|
+|[bucket.py](https://github.com/NVIDIA/aistore/blob/master/python/sdk/aistore/client/bucket.py)|Contains `Bucket` class that represents a bucket in an AIS cluster and contains all bucket-related operations, including (but not limited to) creating, deleting, evicting, renaming, copying.|
+|[object.py](https://github.com/NVIDIA/aistore/blob/master/python/sdk/aistore/client/object.py)|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) retreiving, adding and deleting objects.|
+|[xaction.py](https://github.com/NVIDIA/aistore/blob/master/python/sdk/aistore/client/xaction.py)|Contains class `Xaction` and all xaction-related operations.|
+|[etl.py](https://github.com/NVIDIA/aistore/blob/master/python/sdk/aistore/client/etl.py)|Contains class `Etl` and all ETL-related operations.|
 
 For more information on API usage, refer to the [API reference documentation](https://aiatscale.org/docs/python_api.md).
 
