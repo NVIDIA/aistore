@@ -126,8 +126,8 @@ type (
 		Tracker   statsTracker
 		promDesc  promDesc
 		statsdC   *statsd.Client
-		statsTime time.Duration
 		sgl       *memsys.SGL
+		statsTime time.Duration
 		cmu       sync.RWMutex // ctracker vs Prometheus Collect()
 	}
 
@@ -202,14 +202,14 @@ type (
 	}
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
-		name        string
+		daemon      runnerHost
 		stopCh      chan struct{}
 		workCh      chan cos.NamedVal64
 		ticker      *time.Ticker
 		Core        *CoreStats  `json:"core"`
 		ctracker    copyTracker // to avoid making it at runtime
-		daemon      runnerHost
-		nextLogTime int64 // mono.NanoTime()
+		name        string      // this stats-runner's name
+		nextLogTime int64       // mono.NanoTime()
 		startedUp   atomic.Bool
 	}
 	// Stats are tracked via a map of stats names (key) to statsValue (values).

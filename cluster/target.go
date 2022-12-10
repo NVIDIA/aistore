@@ -44,27 +44,41 @@ type (
 
 		// Space
 		OOS(*fs.CapStatus) fs.CapStatus
+
+		// Running now
+		GetAllRunning(xactKind string) []string
 	}
 
-	// a node that can also write objects locally
+	// a node that can also write objects
 	TargetPut interface {
 		NodeMemCap
 
+		// local PUT
 		PutObject(lom *LOM, params *PutObjectParams) (err error)
 	}
 
-	// For implementations, see `ais/tgtimpl.go` and `ais/htrun.go`.
-	Target interface {
+	// local target node
+	TargetLoc interface {
 		TargetPut
+
+		// backend
+		Backend(*Bck) BackendProvider
+
+		// FS health and Health
+		FSHC(err error, path string)
+		Health(si *Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
+	}
+
+	// all of the above; for implementations, see `ais/tgtimpl.go` and `ais/htrun.go`
+	Target interface {
+		TargetLoc
 
 		// (for intra-cluster data-net comm - no streams)
 		DataClient() *http.Client
 
-		// backend
-		Backend(*Bck) BackendProvider
 		CompareObjects(ctx context.Context, lom *LOM) (equal bool, errCode int, err error)
 
-		// core object
+		// core object (+ PutObject above)
 		FinalizeObj(lom *LOM, workFQN string, xctn Xact) (errCode int, err error)
 		EvictObject(lom *LOM) (errCode int, err error)
 		DeleteObject(lom *LOM, evict bool) (errCode int, err error)
@@ -72,10 +86,6 @@ type (
 		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
 		Promote(params PromoteParams) (errCode int, err error)
 		HeadObjT2T(lom *LOM, si *Snode) bool
-
-		// FS health and Health
-		FSHC(err error, path string)
-		Health(si *Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
 	}
 
 	TargetExt interface {

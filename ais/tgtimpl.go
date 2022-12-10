@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // interface guard
@@ -29,6 +30,8 @@ var _ cluster.Target = (*target)(nil)
 func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *target) PageMM() *memsys.MMSA        { return t.gmm }
 func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
+
+func (*target) GetAllRunning(xactKind string) []string { return xreg.GetAllRunning(xactKind) }
 
 func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.IsRemoteAIS() {

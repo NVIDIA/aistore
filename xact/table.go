@@ -18,7 +18,10 @@ const (
 	ScopeT             // target
 )
 
-const KindIDSepa = ":"
+const (
+	LeftID  = "["
+	RightID = "]"
+)
 
 type (
 	Descriptor struct {

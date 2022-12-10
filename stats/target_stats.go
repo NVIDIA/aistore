@@ -78,13 +78,14 @@ const (
 
 type (
 	Trunner struct {
-		statsRunner
-		t       cluster.NodeMemCap
-		MPCap   fs.MPCap `json:"capacity"`
-		lines   []string
-		disk    ios.AllDiskStats
-		mem     sys.MemStat
-		standby bool
+		t           cluster.NodeMemCap
+		MPCap       fs.MPCap `json:"capacity"`
+		disk        ios.AllDiskStats
+		xln         string
+		statsRunner // the base (compare w/ Prunner)
+		lines       []string
+		mem         sys.MemStat
+		standby     bool
 	}
 )
 
@@ -221,7 +222,7 @@ func (r *Trunner) GetWhatStats() (ds *DaemonStats) {
 func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.lines = r.lines[:0]
 
-	// 1 collect disk stats and populate the tracker
+	// 1. collect disk stats and populate the tracker
 	fs.FillDiskStats(r.disk)
 	s := r.Core
 	for disk, stats := range r.disk {
@@ -276,7 +277,21 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		r.lines = append(r.lines, mm.Str(&r.mem))
 	}
 
-	// 5. log
+	// 6. running xactions
+	if !idle {
+		kindIds := r.t.GetAllRunning("")
+		if len(kindIds) > 0 {
+			ln := "running: " + strings.Join(kindIds, " ")
+			if ln != r.xln {
+				r.lines = append(r.lines, ln)
+				r.xln = ln
+			}
+		} else {
+			r.xln = ""
+		}
+	}
+
+	// 7. and, finally
 	for _, ln := range r.lines {
 		glog.Infoln(ln)
 	}

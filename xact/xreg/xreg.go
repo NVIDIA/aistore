@@ -6,6 +6,7 @@ package xreg
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -161,10 +162,11 @@ func (e *entries) getAllRunning(kind string) (out []string) {
 		xctn := entry.Get()
 		k := xctn.Kind()
 		if (kind == "" || kind == k) && xctn.Running() {
-			out = append(out, k+xact.KindIDSepa+xctn.ID()) // e.g. "make-n-copies:fGhuvvn7t"
+			xqn := k + xact.LeftID + xctn.ID() + xact.RightID // e.g. "make-n-copies[fGhuvvn7t]"
+			out = append(out, xqn)
 		}
 	}
-	return
+	return sort.StringSlice(out)
 }
 
 func GetRunning(flt XactFilter) Renewable { return dreg.getRunning(flt) }

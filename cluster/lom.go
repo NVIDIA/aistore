@@ -59,7 +59,7 @@ type (
 var (
 	lomLocker nameLocker
 	maxLmeta  atomic.Int64
-	T         Target
+	T         TargetLoc
 )
 
 // interface guard
@@ -69,7 +69,7 @@ var (
 	_ lifUnlocker        = (*LOM)(nil)
 )
 
-func Init(t Target) {
+func Init(t TargetLoc) {
 	initBckLocker()
 	if t == nil { // am proxy
 		return

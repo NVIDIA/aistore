@@ -171,7 +171,7 @@ const (
 	GetWhatAllXactStatus   = "status_all"  // ditto - all matching xactions
 	GetWhatXactStats       = "getxstats"   // stats: xaction by uuid
 	GetWhatQueryXactStats  = "qryxstats"   // stats: all matching xactions
-	GetWhatAllRunningXacts = "running_all" // ':'-separated kind/ID pairs (strings), e.g. "make-n-copies:fGhuvvn7t"
+	GetWhatAllRunningXacts = "running_all" // e.g. e.g.: put-copies[D-ViE6HEL_j] list[H96Y7bhR2s] ...
 )
 
 // Internal "what" values.

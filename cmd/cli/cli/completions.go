@@ -494,8 +494,8 @@ func xactCompletions(c *cli.Context) {
 		}
 		already := cos.StrSet{}
 		for _, ki := range kindIDs {
-			i := strings.IndexByte(ki, xact.KindIDSepa[0])
-			kind := ki[0:i] // TODO: use UUID as well
+			i := strings.IndexByte(ki, xact.LeftID[0])
+			kind := ki[0:i]
 			if !already.Contains(kind) {
 				xname, _ := xact.GetKindName(kind)
 				fmt.Println(xname)
