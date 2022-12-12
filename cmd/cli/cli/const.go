@@ -251,9 +251,6 @@ const (
 	jsonSpecArgument          = "JSON_SPECIFICATION"
 	showStatsArgument         = "[NODE_ID] [STATS_FILTER]"
 
-	// Xactions
-	xactionArgument = "XACTION"
-
 	// List command
 	listAnyCommandArgument = "[PROVIDER://][BUCKET_NAME]"
 	listObjCommandArgument = "[PROVIDER://]BUCKET_NAME"

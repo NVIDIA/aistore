@@ -27,13 +27,14 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// top level job cmd
+// top-level job command
 var (
 	jobCmd = cli.Command{
 		Name:        commandJob,
 		Usage:       "monitor, query, start/stop and manage jobs and eXtended actions (xactions)",
 		Subcommands: jobSub,
 	}
+	// NOTE: `appendJobSub` (below) expects jobSub[0] to be the `jobStartSub`
 	jobSub = []cli.Command{
 		jobStartSub,
 		jobStopSub,
@@ -132,98 +133,27 @@ var (
 	}
 )
 
-// job stop
+// ais stop | ais wait
 var (
-	stopCmdsFlags = map[string][]cli.Flag{
-		subcmdXaction:  {},
-		subcmdDownload: {},
-		subcmdDsort:    {},
-	}
-
 	jobStopSub = cli.Command{
-		Name:  commandStop,
-		Usage: "stop batch job",
-		Subcommands: []cli.Command{
-			{
-				Name:         subcmdXaction,
-				Usage:        "stop xaction",
-				ArgsUsage:    "XACTION | XACTION_ID [BUCKET]",
-				Description:  xactionDesc(false),
-				Flags:        stopCmdsFlags[subcmdXaction],
-				Action:       stopXactionHandler,
-				BashComplete: xactCompletions,
-			},
-			{
-				Name:         subcmdDownload,
-				Usage:        "stop download",
-				ArgsUsage:    jobIDArgument,
-				Flags:        stopCmdsFlags[subcmdDownload],
-				Action:       stopDownloadHandler,
-				BashComplete: downloadIDRunningCompletions,
-			},
-			{
-				Name:         subcmdDsort,
-				Usage:        "stop " + dsort.DSortName + " job",
-				ArgsUsage:    jobIDArgument,
-				Action:       stopDsortHandler,
-				BashComplete: dsortIDRunningCompletions,
-			},
-			{
-				Name:   commandRebalance,
-				Usage:  "stop rebalancing ais cluster",
-				Flags:  clusterCmdsFlags[commandStop],
-				Action: stopClusterRebalanceHandler,
-			},
-			makeAlias(stopCmdETL, "", true, commandETL),
-		},
-	}
-)
-
-// job wait
-var (
-	waitCmdsFlags = map[string][]cli.Flag{
-		subcmdXaction: {
-			timeoutFlag,
-		},
-		subcmdDownload: {
-			refreshFlag,
-			progressBarFlag,
-		},
-		subcmdDsort: {
-			refreshFlag,
-			progressBarFlag,
-		},
+		Name:         commandStop,
+		Usage:        "stop/abort a batch job or multiple jobs (use <TAB-TAB> to select)",
+		ArgsUsage:    "NAME [ID] [BUCKET]",
+		Action:       stopJobHandler,
+		BashComplete: runningJobCompletions,
 	}
 
+	waitCmdsFlags = []cli.Flag{
+		refreshFlag,
+		progressBarFlag,
+	}
 	jobWaitSub = cli.Command{
-		Name:  commandWait,
-		Usage: "wait for a specific task",
-		Subcommands: []cli.Command{
-			{
-				Name:         subcmdXaction,
-				Usage:        "wait for an xaction to finish",
-				ArgsUsage:    "XACTION_ID|XACTION_KIND [BUCKET]",
-				Flags:        waitCmdsFlags[subcmdXaction],
-				Action:       waitXactionHandler,
-				BashComplete: xactCompletions,
-			},
-			{
-				Name:         subcmdDownload,
-				Usage:        "wait for download to finish",
-				ArgsUsage:    jobIDArgument,
-				Flags:        waitCmdsFlags[subcmdDownload],
-				Action:       waitDownloadHandler,
-				BashComplete: downloadIDRunningCompletions,
-			},
-			{
-				Name:         subcmdDsort,
-				Usage:        "wait for " + dsort.DSortName + " job to finish",
-				ArgsUsage:    jobIDArgument,
-				Flags:        waitCmdsFlags[subcmdDsort],
-				Action:       waitDSortHandler,
-				BashComplete: dsortIDRunningCompletions,
-			},
-		},
+		Name:         commandWait,
+		Usage:        "wait for a specific batch job to complete (use <TAB-TAB> to select)",
+		ArgsUsage:    "NAME ID",
+		Flags:        waitCmdsFlags,
+		Action:       waitJobHandler,
+		BashComplete: runningJobCompletions,
 	}
 )
 
@@ -260,13 +190,14 @@ var (
 	}
 )
 
-func initJobSub() {
-	// add to `ais job start`
-	jobStartSub := jobSub[0].Subcommands
-	jobStartSub = append(jobStartSub, storageSvcCmds...)
-	jobStartSub = append(jobStartSub, startableXactions(jobStartSub)...)
+func appendJobSub(jobcmd *cli.Command) {
+	debug.Assert(jobcmd.Subcommands[0].Name == commandStart)
 
-	jobSub[0].Subcommands = jobStartSub
+	// append to `jobStartSub`, add to `ais start` (== `ais job start`)
+	cmds := jobcmd.Subcommands[0].Subcommands
+	cmds = append(cmds, storageSvcCmds...)
+	cmds = append(cmds, startableXactions(cmds)...)
+	jobcmd.Subcommands[0].Subcommands = cmds
 }
 
 func startableXactions(explDefinedCmds cli.Commands) cli.Commands {
@@ -770,22 +701,35 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 // job stop
 //
 
-func stopXactionHandler(c *cli.Context) error {
+func stopJobHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
+
+	// route the (4) special ones
+	switch c.Args().First() {
+	case subcmdDownload:
+		return stopDownloadHandler(c, 1 /*shift*/)
+	case subcmdDsort:
+		return stopDsortHandler(c, 1 /*shift*/)
+	case commandETL:
+		return etlStopHandler(c, 1 /*shift*/)
+	case commandRebalance:
+		return stopClusterRebalanceHandler(c)
+	}
+
 	// parse, validate
 	_, xactID, xactKind, bck, err := parseXactionFromArgs(c)
 	if err != nil {
 		return err
 	}
-	msg := formatStoppedMsg(xactID, xactKind, bck)
+	msg := formatXactMsg(xactID, xactKind, bck)
 
 	// query
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind}
 	snap, err := getXactSnap(xactArgs)
 	if err != nil {
-		return fmt.Errorf("Cannot stop %s: %v", formatStoppedMsg(xactID, xactKind, bck), err)
+		return fmt.Errorf("Cannot stop %s: %v", formatXactMsg(xactID, xactKind, bck), err)
 	}
 	if snap == nil {
 		fmt.Fprintf(c.App.Writer, "%s not found, nothing to do\n", msg)
@@ -797,7 +741,7 @@ func stopXactionHandler(c *cli.Context) error {
 		xactID = snap.ID
 	}
 	debug.Assertf(xactID == snap.ID, "%q, %q", xactID, snap.ID)
-	msg = formatStoppedMsg(xactID, xactKind, bck)
+	msg = formatXactMsg(xactID, xactKind, bck)
 
 	var s string
 	if snap.IsAborted() {
@@ -817,7 +761,7 @@ func stopXactionHandler(c *cli.Context) error {
 	return nil
 }
 
-func formatStoppedMsg(xactID, xactKind string, bck cmn.Bck) string {
+func formatXactMsg(xactID, xactKind string, bck cmn.Bck) string {
 	var sb string
 	if !bck.IsEmpty() {
 		sb = fmt.Sprintf(", %s", bck.DisplayName())
@@ -834,32 +778,26 @@ func formatStoppedMsg(xactID, xactKind string, bck cmn.Bck) string {
 	}
 }
 
-func stopDownloadHandler(c *cli.Context) (err error) {
-	id := c.Args().First()
-
-	if c.NArg() == 0 {
+func stopDownloadHandler(c *cli.Context, shift int) (err error) {
+	if c.NArg() < shift+1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-
+	id := c.Args().Get(shift)
 	if err = api.AbortDownload(apiBP, id); err != nil {
 		return
 	}
-
 	fmt.Fprintf(c.App.Writer, "Stopped download job %s\n", id)
 	return
 }
 
-func stopDsortHandler(c *cli.Context) (err error) {
-	id := c.Args().First()
-
-	if c.NArg() == 0 {
+func stopDsortHandler(c *cli.Context, shift int) (err error) {
+	if c.NArg() < shift+1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-
+	id := c.Args().Get(shift)
 	if err = api.AbortDSort(apiBP, id); err != nil {
 		return
 	}
-
 	fmt.Fprintf(c.App.Writer, "Stopped %s job %s\n", dsort.DSortName, id)
 	return
 }
@@ -868,113 +806,148 @@ func stopDsortHandler(c *cli.Context) (err error) {
 // job wait
 //
 
-func waitXactionHandler(c *cli.Context) error {
-	if c.NArg() == 0 {
+const wasFast = 30 * time.Second // TODO -- FIXME: reduce and flex
+
+func waitJobHandler(c *cli.Context) error {
+	id := c.Args().Get(1)
+	if id == "" {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-
-	_, xactID, xactKind, bck, err := parseXactionFromArgs(c)
-	if err != nil {
-		return err
+	switch c.Args().First() {
+	case subcmdDownload:
+		return waitDownloadHandler(c, id /* job ID */)
+	case subcmdDsort:
+		return waitDsortHandler(c, id /* job ID */)
+	default:
+		return waitXactionHandler(c, c.Args().Get(0), id /* xaction ID */)
 	}
-
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Timeout: parseDurationFlag(c, timeoutFlag)}
-	status, err := api.WaitForXactionIC(apiBP, xactArgs)
-	if err != nil {
-		return err
-	}
-	if status.Aborted() {
-		if xactID != "" {
-			return fmt.Errorf("xaction %q was aborted", xactID)
-		}
-		if bck.IsEmpty() {
-			return fmt.Errorf("xaction %q was aborted", xactKind)
-		}
-		return fmt.Errorf("xaction %q (bucket %q) was aborted", xactKind, bck)
-	}
-	return nil
 }
 
-func waitDownloadHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-
-	var (
-		aborted     bool
-		refreshRate = calcRefreshRate(c)
-		id          = c.Args()[0]
-	)
-
+func waitDownloadHandler(c *cli.Context, id string) error {
+	refreshRate := calcRefreshRate(c)
 	if flagIsSet(c, progressBarFlag) {
 		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err
 		}
-
-		fmt.Fprintln(c.App.Writer, downloadingResult)
+		actionDone(c, downloadingResult.String())
 		return nil
 	}
 
+	// poll at refresh rate
+	var (
+		qn    = fmt.Sprintf("%s[%s]", subcmdDownload, id)
+		total time.Duration
+	)
 	for {
-		resp, err := api.DownloadStatus(apiBP, id, true)
+		resp, err := api.DownloadStatus(apiBP, id, true /*onlyActive*/)
 		if err != nil {
 			return err
 		}
-
-		aborted = resp.Aborted
-		if aborted || resp.JobFinished() {
+		if resp.Aborted {
+			if total > wasFast {
+				fmt.Fprintln(c.App.Writer)
+			}
+			return fmt.Errorf("%s was aborted", qn)
+		}
+		if resp.JobFinished() {
 			break
+		}
+		if total += refreshRate; total > wasFast {
+			fmt.Fprint(c.App.Writer, ".")
 		}
 		time.Sleep(refreshRate)
 	}
-
-	if aborted {
-		return fmt.Errorf("download job with id %q was aborted", id)
+	if total > wasFast {
+		fmt.Fprintln(c.App.Writer)
 	}
+	actionDone(c, qn+" finished")
 	return nil
 }
 
-func waitDSortHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-
-	var (
-		aborted     bool
-		refreshRate = calcRefreshRate(c)
-		id          = c.Args()[0]
-	)
-
+func waitDsortHandler(c *cli.Context, id string) error {
+	refreshRate := calcRefreshRate(c)
 	if flagIsSet(c, progressBarFlag) {
 		dsortResult, err := newDSortPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(c.App.Writer, dsortResult)
+		actionDone(c, dsortResult.String())
 		return nil
 	}
 
+	// poll at refresh rate
+	var (
+		qn    = fmt.Sprintf("%s[%s]", subcmdDsort, id)
+		total time.Duration
+	)
 	for {
 		resp, err := api.MetricsDSort(apiBP, id)
 		if err != nil {
 			return err
 		}
-
 		finished := true
 		for _, targetMetrics := range resp {
-			aborted = aborted || targetMetrics.Aborted.Load()
+			if targetMetrics.Aborted.Load() {
+				if total > wasFast {
+					fmt.Fprintln(c.App.Writer)
+				}
+				return fmt.Errorf("%s was aborted", qn)
+			}
 			finished = finished && targetMetrics.Creation.Finished
 		}
-		if aborted || finished {
+		if finished {
 			break
 		}
 		time.Sleep(refreshRate)
+		if total += refreshRate; total > wasFast {
+			fmt.Fprint(c.App.Writer, ".")
+		}
 	}
+	if total > wasFast {
+		fmt.Fprintln(c.App.Writer)
+	}
+	actionDone(c, qn+" finished")
+	return nil
+}
 
-	if aborted {
-		return fmt.Errorf("dsort job with id %q was aborted", id)
+func waitXactionHandler(c *cli.Context, xname, xactID string) error {
+	var (
+		xactArgs    = api.XactReqArgs{Kind: xname}
+		refreshRate = calcRefreshRate(c)
+		qn          string
+		total       time.Duration
+	)
+	if bck, err := parseBckURI(c, xactID); err == nil {
+		xactArgs.Bck = bck
+		qn = formatXactMsg("", xname, bck)
+	} else {
+		xactArgs.ID = xactID
+		qn = formatXactMsg(xactID, xname, cmn.Bck{})
 	}
+	for {
+		status, err := api.GetOneXactionStatus(apiBP, xactArgs)
+		if err != nil {
+			return err
+		}
+		if status.Aborted() {
+			if total > wasFast {
+				fmt.Fprintln(c.App.Writer)
+			}
+			return fmt.Errorf("%s was aborted", qn)
+		}
+		if status.Finished() {
+			break
+		}
+		time.Sleep(refreshRate)
+		if total += refreshRate; total > wasFast {
+			fmt.Fprint(c.App.Writer, ".")
+		}
+	}
+	if total > wasFast {
+		fmt.Fprintln(c.App.Writer)
+	}
+	actionDone(c, qn+" finished")
 	return nil
 }
 
@@ -993,7 +966,6 @@ func removeDownloadHandler(c *cli.Context) (err error) {
 	if err = api.RemoveDownload(apiBP, id); err != nil {
 		return
 	}
-
 	fmt.Fprintf(c.App.Writer, "removed download job %q\n", id)
 	return
 }

@@ -22,9 +22,10 @@ import (
 	"github.com/urfave/cli"
 )
 
+// TODO -- FIXME: remove
 func xactionDesc(onlyStartable bool) string {
 	xs := xact.ListDisplayNames(onlyStartable)
-	return fmt.Sprintf("%s can be one of: %s", xactionArgument, strings.Join(xs, ", "))
+	return fmt.Sprintf("xaction can be one of: %s", strings.Join(xs, ", "))
 }
 
 func toMonitorMsg(c *cli.Context, xjid string) string {

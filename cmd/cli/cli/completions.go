@@ -486,7 +486,8 @@ func daemonXactionCompletions(c *cli.Context) {
 	}
 }
 
-func xactCompletions(c *cli.Context) {
+// complete to `action NAME [ID]`
+func runningJobCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
 		kindIDs, err := api.GetAllRunningXactions(apiBP, "")
 		if err != nil {
@@ -502,14 +503,42 @@ func xactCompletions(c *cli.Context) {
 				already.Set(kind)
 			}
 		}
+		// NOTE: dsort is the only exception - not an xaction
+		list, err := api.ListDSort(apiBP, "", true /*onlyActive*/)
+		if err != nil {
+			return
+		}
+		if len(list) > 0 {
+			fmt.Println(subcmdDsort)
+		}
 		return
 	}
 
+	// route the (4) special ones
+	switch c.Args().First() {
+	case subcmdDownload:
+		suggestDownloadID(c, (*dload.Job).JobRunning, 1 /*shift*/)
+		return
+	case subcmdDsort:
+		suggestDsortID(c, (*dsort.JobInfo).IsRunning, 1 /*shift*/)
+		return
+	case commandETL:
+		suggestEtlID(c, 1 /*shift*/)
+		return
+	case commandRebalance:
+		// global rebalance is global
+		return
+	}
+
+	// all other xactions
 	xname := c.Args().First()
-	kind, _ := xact.GetKindName(xname)
-	debug.Assert(kind != "", xname)
-	if xact.IsSameScope(xname, xact.ScopeB, xact.ScopeGB) {
-		bucketCompletions(bcmplop{firstBucketIdx: 1})(c)
+	xactIDs, err := api.GetAllRunningXactions(apiBP, xname)
+	if err != nil {
+		return
+	}
+	for _, ki := range xactIDs {
+		i := strings.IndexByte(ki, xact.LeftID[0])
+		fmt.Println(ki[i+1 : len(ki)-1]) // extract UUID from "xname[UUID]"
 	}
 }
 
@@ -518,19 +547,13 @@ func xactCompletions(c *cli.Context) {
 //
 
 func downloadIDAllCompletions(c *cli.Context) {
-	suggestDownloadID(c, func(*dload.Job) bool { return true })
+	suggestDownloadID(c, func(*dload.Job) bool { return true }, 0)
 }
 
-func downloadIDRunningCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*dload.Job).JobRunning)
-}
+func downloadIDFinishedCompletions(c *cli.Context) { suggestDownloadID(c, (*dload.Job).JobFinished, 0) }
 
-func downloadIDFinishedCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*dload.Job).JobFinished)
-}
-
-func suggestDownloadID(c *cli.Context, filter func(*dload.Job) bool) {
-	if c.NArg() > 0 {
+func suggestDownloadID(c *cli.Context, filter func(*dload.Job) bool, shift int) {
+	if c.NArg() > shift {
 		return
 	}
 	if flagIsSet(c, allJobsFlag) {
@@ -545,24 +568,16 @@ func suggestDownloadID(c *cli.Context, filter func(*dload.Job) bool) {
 }
 
 func dsortIDAllCompletions(c *cli.Context) {
-	suggestDsortID(c, func(*dsort.JobInfo) bool { return true })
+	suggestDsortID(c, func(*dsort.JobInfo) bool { return true }, 0)
 }
 
-func dsortIDRunningCompletions(c *cli.Context) {
-	suggestDsortID(c, (*dsort.JobInfo).IsRunning)
-}
+func dsortIDFinishedCompletions(c *cli.Context) { suggestDsortID(c, (*dsort.JobInfo).IsFinished, 0) }
 
-func dsortIDFinishedCompletions(c *cli.Context) {
-	suggestDsortID(c, (*dsort.JobInfo).IsFinished)
-}
-
-func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
-	if c.NArg() > 0 {
+func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool, shift int) {
+	if c.NArg() > shift {
 		return
 	}
-
 	list, _ := api.ListDSort(apiBP, "", false /*onlyActive*/)
-
 	for _, job := range list {
 		if filter(job) {
 			fmt.Println(job.ID)

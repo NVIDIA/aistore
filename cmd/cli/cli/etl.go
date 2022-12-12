@@ -142,15 +142,17 @@ var (
 )
 
 func etlIDCompletions(c *cli.Context) {
-	if c.NArg() != 0 {
+	suggestEtlID(c, 0)
+}
+
+func suggestEtlID(c *cli.Context, shift int) {
+	if c.NArg() > shift {
 		return
 	}
-
 	list, err := api.ETLList(apiBP)
 	if err != nil {
 		return
 	}
-
 	for _, l := range list {
 		fmt.Print(l.ID)
 	}
@@ -328,10 +330,10 @@ func etlLogsHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func etlStopHandler(c *cli.Context) (err error) {
+func etlStopHandler(c *cli.Context, shift int) (err error) {
 	var etls []string
 	if flagIsSet(c, allETLStopFlag) {
-		if c.NArg() != 0 {
+		if c.NArg() > shift {
 			return fmt.Errorf("specify either --all flag or ETL IDs")
 		}
 
@@ -343,10 +345,10 @@ func etlStopHandler(c *cli.Context) (err error) {
 			etls = append(etls, etlInfo.ID)
 		}
 	} else {
-		if c.NArg() == 0 {
+		if c.NArg() == shift {
 			return fmt.Errorf("either specify --all flag or provide at least one ETL ID")
 		}
-		etls = c.Args()
+		etls = c.Args()[shift:]
 	}
 
 	for _, id := range etls {

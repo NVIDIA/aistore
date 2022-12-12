@@ -58,6 +58,27 @@ var (
 	fred, fcyan func(a ...any) string
 )
 
+// `ais help`
+var helpCommand = cli.Command{
+	Name:      "help",
+	Usage:     "show a list of commands; show help for a given command",
+	ArgsUsage: "[COMMAND]",
+	Action: func(c *cli.Context) error {
+		args := c.Args()
+		if args.Present() {
+			return cli.ShowCommandHelp(c, args.First())
+		}
+
+		cli.ShowAppHelp(c)
+		return nil
+	},
+	BashComplete: func(c *cli.Context) {
+		for _, cmd := range c.App.Commands {
+			fmt.Println(cmd.Name)
+		}
+	},
+}
+
 // main method
 func Run(version, buildtime string, args []string) error {
 	a := acli{app: cli.NewApp(), outWriter: os.Stdout, errWriter: os.Stderr, longRun: &longRun{}}
@@ -195,7 +216,7 @@ func (a *acli) init(version string) {
 		Name:  "version, V",
 		Usage: "print only the version",
 	}
-	initJobSub()
+
 	a.setupCommands()
 }
 
@@ -203,6 +224,7 @@ func (a *acli) setupCommands() {
 	app := a.app
 
 	// Note: order of commands below is the order shown in "ais help"
+	appendJobSub(&jobCmd)
 	app.Commands = []cli.Command{
 		bucketCmd,
 		objectCmd,
@@ -265,27 +287,6 @@ func hasHelpFlag(commandFlags []cli.Flag, helpName string) bool {
 		}
 	}
 	return false
-}
-
-// This is a copy-paste from urfave/cli/help.go. It is done to remove the 'h' alias of the 'help' command
-var helpCommand = cli.Command{
-	Name:      "help",
-	Usage:     "show a list of commands; show help for a given command",
-	ArgsUsage: "[COMMAND]",
-	Action: func(c *cli.Context) error {
-		args := c.Args()
-		if args.Present() {
-			return cli.ShowCommandHelp(c, args.First())
-		}
-
-		cli.ShowAppHelp(c)
-		return nil
-	},
-	BashComplete: func(c *cli.Context) {
-		for _, cmd := range c.App.Commands {
-			fmt.Println(cmd.Name)
-		}
-	},
 }
 
 // Print error and terminate
