@@ -138,7 +138,7 @@ test:short:python:
     BUCKET: "ais://test"
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
-    - cd python/sdk
+    - cd python
     - make python_tests
     - make python_botocore_tests
   except:
@@ -296,7 +296,7 @@ test:short:python:etl:
   <<: *test_k8s_optional_def
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
-    - cd python/sdk
+    - cd python
     - make python_etl_tests
 
 test:long:k8s:

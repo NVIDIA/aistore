@@ -72,8 +72,8 @@ func (fs *aisfs) ReadFile(_ context.Context, req *fuseops.ReadFileOp) (err error
 	req.BytesRead, err = fhandle.readChunk(req.Dst, req.Offset)
 
 	var (
-		ioErr   *ais.ErrIO
-		herr *cmn.ErrHTTP
+		ioErr *ais.ErrIO
+		herr  *cmn.ErrHTTP
 	)
 	if errors.As(err, &ioErr) && errors.As(ioErr.Err, &herr) {
 		// Forget file on 404 error

@@ -35,7 +35,7 @@ jobs:
 
       - name: Python ETL Tests
         run: |
-          cd $GITHUB_WORKSPACE/python/sdk/
+          cd $GITHUB_WORKSPACE/python/
           export AIS_ENDPOINT="http://$(minikube ip):8080"
           make python_etl_tests
 

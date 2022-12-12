@@ -71,7 +71,7 @@ To create and put objects (dataset) in the bucket, I am going to be
 using [AIS
 CLI](https://github.com/NVIDIA/aistore/blob/master/docs/cli.md). But we
 can also use the [Python
-SDK](https://github.com/NVIDIA/aistore/tree/master/python/sdk) for the
+SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) for the
 same.
 
 ``` {.python}
@@ -194,7 +194,7 @@ for url, file in dp_files.load_from_tar():
     Providers](https://aiatscale.org/docs/providers)
 -   [AIStore Documentation](https://aiatscale.org/docs)
 -   [AIStore Python
-    SDK](https://github.com/NVIDIA/aistore/tree/master/python/sdk)
+    SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore)
 -   [Caltech 256 Dataset](https://authors.library.caltech.edu/7694/)
 -   [Getting started with
     AIStore](https://github.com/NVIDIA/aistore/blob/master/docs/getting_started.md)

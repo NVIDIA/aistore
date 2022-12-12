@@ -1,4 +1,4 @@
-name: python/sdk
+name: python/aistore
 on:
   push:
     branches:
@@ -41,6 +41,6 @@ jobs:
       
       - name: Run python tests
         run: |
-          cd python/sdk
+          cd python
           make python_tests
           make python_botocore_tests

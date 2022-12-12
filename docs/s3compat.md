@@ -399,11 +399,11 @@ To use `boto3` or `botocore` as client libraries for AIStore:
 $ pip install aistore[botocore]
 ```
 
- - Import `aistore.monkey.botocore` in your source code alongside `botocore` and / or `boto3`.
+ - Import `aistore.botocore_patch.botocore` in your source code alongside `botocore` and / or `boto3`.
 
 ```python
 import boto3
-from aistore.monkey import botocore
+from aistore.botocore_patch import botocore
 ```
 
 For more context, see perhaps the following `aws-cli` ticket and discussion at:
