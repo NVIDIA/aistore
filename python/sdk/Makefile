@@ -19,12 +19,21 @@ AIStore Python API is a growing set of client-side objects and methods to access
 
 endef
 export PREFIX
+
 BOTO_UNIT_TEST_COUNT := $(shell ls -1 tests/monkey/unit/test*py | wc -l)
 export AWS_SESSION_TOKEN := testing
 export AWS_DEFAULT_REGION := us-east-1
 export AWS_SECRET_ACCESS_KEY := testing
 export AWS_ACCESS_KEY_ID := testing
 export AWS_SECURITY_TOKEN := testing
+BOTO_VERSION_ARGS := ""
+ifdef BOTO3_VERSION
+	BOTO_VERSION_ARGS := " boto3==$(BOTO3_VERSION) "
+endif
+ifdef BOTOCORE_VERSION
+	BOTO_VERSION_ARGS := " $(BOTO_VERSION_ARGS) botocore==$(BOTOCORE_VERSION) "
+endif
+BOTO_VERSION_ARGS := $(patsubst "%",%,$(BOTO_VERSION_ARGS))
 
 .PHONY: all_deps
 all_deps: common_deps etl_deps dev_deps
@@ -43,7 +52,7 @@ dev_deps:
 
 .PHONY: botocore_deps
 botocore_deps:
-	$(PIP) install -r botocore_requirements.dev.txt
+	$(PIP) install --upgrade -r botocore_requirements.dev.txt $(BOTO_VERSION_ARGS)
 
 .PHONY: python_tests
 python_tests: common_deps dev_deps

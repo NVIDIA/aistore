@@ -8,12 +8,11 @@ from . import CLUSTER_ENDPOINT
 
 
 # pylint: disable=unused-variable
-class UnpatchedIntegrationTestCase(BotocoreBaseTest):
+class IntegrationTestCase(BotocoreBaseTest):
     """
-    Integration control case.
-
-    When botocore is unpatched, trying to use a real
-    live AIStore should throw a bunch of ClientErrors.
+    Run botocore against a real aistore, with
+    our patch in place, expecting it to handle
+    redirects for us without ClientErrors.
     """
 
     __test__ = True

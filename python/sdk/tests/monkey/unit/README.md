@@ -34,3 +34,14 @@ pytest -v -n $(MP_TESTCOUNT) --dist loadfile tests/monkey/unit
 ```
 
 ...which is one of the reasons why this test set is kept separate from those for the aistore SDK proper.
+
+## Testing different boto3 and botocore versions
+By default we pull in the latest `boto3` and `botocore` to test against (see `botocore_requirements.dev.txt`).
+
+You can alter this behavior by exporting `BOTO3_VERSION` and / or `BOTOCORE_VERSION` prior to running tests:
+
+```
+export BOTO3_VERSION=1.26.24
+export BOTOCORE_VERSION=1.29.24
+make python_botocore_tests
+```
