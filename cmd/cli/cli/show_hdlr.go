@@ -161,7 +161,7 @@ var (
 			if c.NArg() == 0 {
 				fmt.Printf("%s\n%s\n%s\n", subcmdShowDisk, subcmdShowMpath, subcmdStgSummary)
 			}
-			daemonCompletions(completeTargets)(c)
+			suggestTargetNodes(c)
 		},
 		Subcommands: []cli.Command{
 			showCmdDisk,
@@ -188,7 +188,7 @@ var (
 				fmt.Printf("%s\n%s\n%s\n%s\n%s\n%s\n",
 					apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
 			}
-			daemonCompletions(completeAllDaemons)(c)
+			suggestAllNodes(c)
 		},
 		Subcommands: []cli.Command{
 			{
@@ -197,7 +197,7 @@ var (
 				ArgsUsage:    optionalDaemonIDArgument,
 				Flags:        showCmdsFlags[subcmdSmap],
 				Action:       showSmapHandler,
-				BashComplete: daemonCompletions(completeAllDaemons),
+				BashComplete: suggestAllNodes,
 			},
 			{
 				Name:         subcmdBMD,
@@ -205,7 +205,7 @@ var (
 				ArgsUsage:    optionalDaemonIDArgument,
 				Flags:        showCmdsFlags[subcmdBMD],
 				Action:       showBMDHandler,
-				BashComplete: daemonCompletions(completeAllDaemons),
+				BashComplete: suggestAllNodes,
 			},
 			{
 				Name:      subcmdShowConfig,
@@ -220,7 +220,7 @@ var (
 				ArgsUsage:    showStatsArgument,
 				Flags:        showCmdsFlags[subcmdShowClusterStats],
 				Action:       showClusterStatsHandler,
-				BashComplete: daemonCompletions(completeAllDaemons),
+				BashComplete: suggestAllNodes,
 			},
 		},
 	}
@@ -253,7 +253,7 @@ var (
 		ArgsUsage:    "",
 		Flags:        showCmdsFlags[subcmdShowRemoteAIS],
 		Action:       showRemoteAISHandler,
-		BashComplete: daemonCompletions(completeTargets), // NOTE: not using remais.smap yet
+		BashComplete: suggestTargetNodes, // NOTE: not using remais.smap yet
 	}
 
 	showCmdLog = cli.Command{
@@ -262,18 +262,18 @@ var (
 		ArgsUsage:    daemonIDArgument,
 		Flags:        showCmdsFlags[subcmdShowLog],
 		Action:       showDaemonLogHandler,
-		BashComplete: daemonCompletions(completeAllDaemons),
+		BashComplete: suggestAllNodes,
 	}
 
 	showCmdJob = cli.Command{
 		Name:      subcmdShowJob,
-		Usage:     "show running and/or finished jobs and xactions (or, use <TAB-TAB> to select a specific subcategory)",
-		ArgsUsage: "[TARGET_ID] [XACTION_ID|XACTION_KIND] [BUCKET]",
+		Usage:     "show running and finished jobs (use <TAB-TAB> to select)",
+		ArgsUsage: "NAME [JOB_ID] [NODE_ID] [BUCKET]",
 		Subcommands: []cli.Command{
 			showCmdDownload,
 			showCmdDsort,
 			showCmdXaction,
-			appendSubcommand(makeAlias(showCmdETL, "", true, commandETL), logsCmdETL), // TODO: usability
+			appendSubcommand(makeAlias(showCmdETL, "", true, commandETL), logsCmdETL),
 		},
 		Flags:  showCmdsFlags[subcmdShowJob],
 		Action: showJobsHandler,
@@ -287,19 +287,12 @@ var (
 		BashComplete: downloadIDAllCompletions,
 	}
 	showCmdDsort = cli.Command{
-		Name:      subcmdShowDsort,
-		Usage:     "show running and finished " + dsort.DSortName + " jobs",
-		ArgsUsage: optionalJobIDDaemonIDArgument,
-		Flags:     showCmdsFlags[subcmdShowDsort],
-		Action:    showDsortHandler,
-		BashComplete: func(c *cli.Context) {
-			if c.NArg() == 0 {
-				dsortIDAllCompletions(c)
-			}
-			if c.NArg() == 1 {
-				daemonCompletions(completeTargets)(c)
-			}
-		},
+		Name:         subcmdShowDsort,
+		Usage:        "show running and finished " + dsort.DSortName + " jobs",
+		ArgsUsage:    optionalJobIDDaemonIDArgument,
+		Flags:        showCmdsFlags[subcmdShowDsort],
+		Action:       showDsortHandler,
+		BashComplete: dsortIDAllCompletions,
 	}
 	showCmdXaction = cli.Command{
 		Name:         subcmdShowXaction,
@@ -318,7 +311,7 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showCmdsFlags[subcmdShowDisk],
 		Action:       showDisksHandler,
-		BashComplete: daemonCompletions(completeTargets),
+		BashComplete: suggestTargetNodes,
 	}
 	showCmdStgSummary = cli.Command{
 		Name:         subcmdStgSummary,
@@ -334,7 +327,7 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showCmdsFlags[subcmdShowMpath],
 		Action:       showMpathHandler,
-		BashComplete: daemonCompletions(completeTargets),
+		BashComplete: suggestTargetNodes,
 	}
 )
 

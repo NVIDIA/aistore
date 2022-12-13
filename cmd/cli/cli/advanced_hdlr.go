@@ -37,8 +37,9 @@ var (
 		Usage: "special commands intended for development and advanced usage",
 		Subcommands: []cli.Command{
 			{
-				Name:      commandGenShards,
-				Usage:     "generate and write random shards (e.g.: \"ais://dsort-testing/shard-{001..999}.tar\" - generate 999 shards)",
+				Name: commandGenShards,
+				Usage: "generate and write random shards " +
+					"(e.g.: \"ais://dsort-testing/shard-{001..999}.tar\" - generate 999 shards)",
 				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
 				Flags:     advancedCmdsFlags[commandGenShards],
 				Action:    genShardsHandler,
@@ -49,7 +50,7 @@ var (
 				ArgsUsage:    optionalTargetIDArgument,
 				Flags:        startCmdsFlags[subcmdXaction],
 				Action:       startXactionHandler,
-				BashComplete: daemonCompletions(completeTargets),
+				BashComplete: suggestTargetNodes,
 			},
 			{
 				Name:         subcmdPreload,
@@ -63,7 +64,7 @@ var (
 				Usage:        "immediately remove node from cluster map (advanced usage - potential data loss)",
 				ArgsUsage:    daemonIDArgument,
 				Action:       removeNodeFromSmap,
-				BashComplete: daemonCompletions(completeAllDaemons),
+				BashComplete: suggestAllNodes,
 			},
 		},
 	}

@@ -39,7 +39,7 @@ var (
 					if c.NArg() != 0 {
 						return
 					}
-					suggestDaemon(completeAllDaemons)
+					suggestAllNodes(c)
 				},
 			},
 		},

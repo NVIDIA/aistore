@@ -128,7 +128,7 @@ var (
 				Flags:  clusterCmdsFlags[commandStart],
 				Action: startClusterRebalanceHandler,
 			},
-			// + startableXactions (below)
+			// NOTE: append all `startableXactions`
 		},
 	}
 )
@@ -138,7 +138,7 @@ var (
 	jobStopSub = cli.Command{
 		Name:         commandStop,
 		Usage:        "stop/abort a batch job or multiple jobs (use <TAB-TAB> to select)",
-		ArgsUsage:    "NAME [ID] [BUCKET]",
+		ArgsUsage:    "NAME [JOB_ID] [BUCKET]",
 		Action:       stopJobHandler,
 		BashComplete: runningJobCompletions,
 	}
@@ -150,7 +150,7 @@ var (
 	jobWaitSub = cli.Command{
 		Name:         commandWait,
 		Usage:        "wait for a specific batch job to complete (use <TAB-TAB> to select)",
-		ArgsUsage:    "NAME ID",
+		ArgsUsage:    "NAME JOB_ID",
 		Flags:        waitCmdsFlags,
 		Action:       waitJobHandler,
 		BashComplete: runningJobCompletions,
@@ -706,7 +706,7 @@ func stopJobHandler(c *cli.Context) error {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
-	// route the (4) special ones
+	// non-standard stop handlers
 	switch c.Args().First() {
 	case subcmdDownload:
 		return stopDownloadHandler(c, 1 /*shift*/)
@@ -718,41 +718,39 @@ func stopJobHandler(c *cli.Context) error {
 		return stopClusterRebalanceHandler(c)
 	}
 
-	// parse, validate
+	// 1. parse, validate
 	_, xactID, xactKind, bck, err := parseXactionFromArgs(c)
 	if err != nil {
 		return err
 	}
 	msg := formatXactMsg(xactID, xactKind, bck)
 
-	// query
+	// 2. query
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind}
 	snap, err := getXactSnap(xactArgs)
 	if err != nil {
 		return fmt.Errorf("Cannot stop %s: %v", formatXactMsg(xactID, xactKind, bck), err)
 	}
 	if snap == nil {
-		fmt.Fprintf(c.App.Writer, "%s not found, nothing to do\n", msg)
+		fmt.Fprintf(c.App.ErrWriter, "%s not found, nothing to do\n", msg)
 		return nil
 	}
 
-	// reformat
-	if xactID == "" {
-		xactID = snap.ID
-	}
-	debug.Assertf(xactID == snap.ID, "%q, %q", xactID, snap.ID)
-	msg = formatXactMsg(xactID, xactKind, bck)
+	// 3. reformat
+	xactID, xactKind = snap.ID, snap.Kind
+	_, xname := xact.GetKindName(xactKind)
+	msg = formatXactMsg(xactID, xname, snap.Bck)
 
 	var s string
 	if snap.IsAborted() {
 		s = " (aborted)"
 	}
 	if snap.IsAborted() || snap.Finished() {
-		fmt.Fprintf(c.App.Writer, "%s is already finished%s, nothing to do\n", msg, s)
+		fmt.Fprintf(c.App.ErrWriter, "%s is already finished%s, nothing to do\n", msg, s)
 		return nil
 	}
 
-	// abort
+	// 4. abort
 	args := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
 	if err := api.AbortXaction(apiBP, args); err != nil {
 		return err

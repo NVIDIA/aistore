@@ -598,14 +598,6 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	return nil, missingArgumentsError(c, "bucket")
 }
 
-func cliAPIParams(proxyURL string) api.BaseParams {
-	return api.BaseParams{
-		Client: defaultHTTPClient,
-		URL:    proxyURL,
-		Token:  loggedUserToken,
-	}
-}
-
 // NOTE:
 // 1. By default, AIStore adds remote buckets to the cluster metadata on the fly.
 // Remote bucket that was never accessed before just "shows up" when user performs

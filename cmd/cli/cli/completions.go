@@ -28,14 +28,6 @@ import (
 // Cluster / Daemon //
 //////////////////////
 
-type daemonKindCompletion int
-
-const (
-	completeTargets daemonKindCompletion = iota
-	completeProxies
-	completeAllDaemons
-)
-
 var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
@@ -137,23 +129,11 @@ func propValueCompletion(c *cli.Context) bool {
 	return true
 }
 
-func daemonCompletions(what daemonKindCompletion) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		if c.Command.Name != subcmdDsort && c.NArg() >= 1 {
-			// Daemon already given as argument
-			if c.NArg() >= 1 {
-				return
-			}
-		}
-		suggestDaemon(what)
-	}
-}
-
 func showConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
 		fmt.Println(subcmdCluster)
 		fmt.Println(subcmdCLI)
-		suggestDaemon(completeAllDaemons)
+		suggestAllNodes(c)
 		return
 	}
 	if c.Args().First() == subcmdCLI {
@@ -196,7 +176,7 @@ func configSectionCompletions(_ *cli.Context, cfgScope string) {
 
 func setNodeConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		suggestDaemon(completeAllDaemons)
+		suggestNode(allNodes)
 		return
 	}
 	if c.NArg() == 1 { // node id only
@@ -230,19 +210,29 @@ func setNodeConfigCompletions(c *cli.Context) {
 	suggestUpdatableConfig(c)
 }
 
-func suggestDaemon(what daemonKindCompletion) {
-	smap, err := api.GetClusterMap(cliAPIParams(clusterURL))
+const (
+	allTargets = iota
+	allProxies
+	allNodes
+)
+
+func suggestTargetNodes(*cli.Context) { suggestNode(allTargets) }
+func suggestProxyNodes(*cli.Context)  { suggestNode(allProxies) }
+func suggestAllNodes(*cli.Context)    { suggestNode(allNodes) }
+
+func suggestNode(ty int) {
+	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return
 	}
-	if what != completeTargets {
-		for dae := range smap.Pmap {
-			fmt.Println(cluster.Pname(dae))
+	if ty != allTargets {
+		for sid := range smap.Pmap {
+			fmt.Println(cluster.Pname(sid))
 		}
 	}
-	if what != completeProxies {
-		for dae := range smap.Tmap {
-			fmt.Println(cluster.Tname(dae))
+	if ty != allProxies {
+		for sid := range smap.Tmap {
+			fmt.Println(cluster.Tname(sid))
 		}
 	}
 }
@@ -462,9 +452,9 @@ func daemonXactionCompletions(c *cli.Context) {
 	}
 	xactSet, xactKind := c.NArg() != 0, c.Args().First()
 	if c.NArg() == 0 {
-		daemonCompletions(completeTargets)(c)
+		suggestTargetNodes(c)
 	} else {
-		smap, err := api.GetClusterMap(cliAPIParams(clusterURL))
+		smap, err := api.GetClusterMap(apiBP)
 		if err != nil {
 			return
 		}

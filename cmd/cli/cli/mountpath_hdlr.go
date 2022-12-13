@@ -42,7 +42,7 @@ var (
 				ArgsUsage:    daemonMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathAttach],
 				Action:       mpathAttachHandler,
-				BashComplete: daemonCompletions(completeTargets),
+				BashComplete: suggestTargetNodes,
 			},
 			{
 				Name:         subcmdMpathEnable,
@@ -50,7 +50,7 @@ var (
 				ArgsUsage:    daemonMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathEnable],
 				Action:       mpathEnableHandler,
-				BashComplete: daemonCompletions(completeTargets),
+				BashComplete: suggestTargetNodes,
 			},
 			{
 				Name:         subcmdMpathDetach,
@@ -58,7 +58,7 @@ var (
 				ArgsUsage:    daemonMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathDetach],
 				Action:       mpathDetachHandler,
-				BashComplete: daemonCompletions(completeTargets),
+				BashComplete: suggestTargetNodes,
 			},
 			{
 				Name:         subcmdMpathDisable,
@@ -66,7 +66,7 @@ var (
 				ArgsUsage:    daemonMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathDisable],
 				Action:       mpathDisableHandler,
-				BashComplete: daemonCompletions(completeTargets),
+				BashComplete: suggestTargetNodes,
 			},
 		},
 	}
