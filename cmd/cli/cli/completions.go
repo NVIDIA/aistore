@@ -176,7 +176,7 @@ func configSectionCompletions(_ *cli.Context, cfgScope string) {
 
 func setNodeConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		suggestNode(allNodes)
+		suggestNode(c, allNodes)
 		return
 	}
 	if c.NArg() == 1 { // node id only
@@ -216,14 +216,17 @@ const (
 	allNodes
 )
 
-func suggestTargetNodes(*cli.Context) { suggestNode(allTargets) }
-func suggestProxyNodes(*cli.Context)  { suggestNode(allProxies) }
-func suggestAllNodes(*cli.Context)    { suggestNode(allNodes) }
+func suggestTargetNodes(c *cli.Context) { suggestNode(c, allTargets) }
+func suggestProxyNodes(c *cli.Context)  { suggestNode(c, allProxies) }
+func suggestAllNodes(c *cli.Context)    { suggestNode(c, allNodes) }
 
-func suggestNode(ty int) {
+func suggestNode(c *cli.Context, ty int) {
 	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return
+	}
+	if sid := extractDaemonID(argLast(c)); smap.GetNode(sid) != nil {
+		return // node already selected
 	}
 	if ty != allTargets {
 		for sid := range smap.Pmap {

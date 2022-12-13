@@ -96,7 +96,22 @@ func argDaemonID(c *cli.Context) string {
 	return cluster.N2ID(daemonID)
 }
 
-func argLast(c *cli.Context) string { return c.Args().Get(c.NArg() - 1) }
+func extractDaemonID(arg string) (sid string) {
+	if !strings.HasPrefix(arg, cluster.PnamePrefix) && !strings.HasPrefix(arg, cluster.TnamePrefix) {
+		return
+	}
+	sid = strings.TrimPrefix(arg, cluster.PnamePrefix)
+	sid = strings.TrimPrefix(sid, cluster.TnamePrefix)
+	sid = strings.TrimSuffix(sid, cluster.SnameSuffix)
+	return
+}
+
+func argLast(c *cli.Context) (last string) {
+	if l := c.NArg(); l > 0 {
+		last = c.Args().Get(l - 1)
+	}
+	return
+}
 
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
 

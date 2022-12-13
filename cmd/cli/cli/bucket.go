@@ -273,6 +273,14 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 			footer.nbp++
 		}
 		if bck.IsHTTP() {
+			if bmd == nil {
+				bmd, err = api.GetBMD(apiBP)
+				if err != nil {
+					fmt.Fprintln(c.App.ErrWriter, err)
+					return
+				}
+			}
+			props, _ = bmd.Get(cluster.CloneBck(&bck))
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
 		data = append(data, tmpls.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: &info})
