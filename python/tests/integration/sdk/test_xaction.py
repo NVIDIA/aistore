@@ -8,13 +8,13 @@ import unittest
 from aistore.sdk.errors import ErrBckNotFound
 
 from aistore.sdk import Client
-from tests.utils import random_name
+from tests.utils import random_string
 from tests.integration import CLUSTER_ENDPOINT
 
 
 class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        self.bck_name = random_name()
+        self.bck_name = random_string()
 
         self.client = Client(CLUSTER_ENDPOINT)
 

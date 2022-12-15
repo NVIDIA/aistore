@@ -9,7 +9,7 @@ import unittest
 from aistore.sdk.errors import AISError, ErrBckNotFound
 
 from aistore.sdk import Client
-from tests.utils import create_and_put_object, random_name
+from tests.utils import create_and_put_object, random_string
 from tests.integration import CLUSTER_ENDPOINT
 
 OBJ_READ_TYPE_ALL = "read_all"
@@ -18,7 +18,7 @@ OBJ_READ_TYPE_CHUNK = "chunk"
 
 class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        self.bck_name = random_name()
+        self.bck_name = random_string()
 
         self.client = Client(CLUSTER_ENDPOINT)
 

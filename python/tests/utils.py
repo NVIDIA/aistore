@@ -5,7 +5,7 @@ import tempfile
 from aistore.sdk import Client
 
 # pylint: disable=unused-variable
-def random_name(length: int = 10):
+def random_string(length: int = 10):
     return "".join(random.choices(string.ascii_lowercase, k=length))
 
 

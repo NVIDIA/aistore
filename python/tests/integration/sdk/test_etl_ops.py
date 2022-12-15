@@ -12,18 +12,18 @@ from aistore.sdk import Client
 from aistore.sdk.errors import AISError, ErrBckNotFound
 from aistore.sdk.etl_templates import MD5, ECHO
 from tests.integration import CLUSTER_ENDPOINT
-from tests.utils import create_and_put_object, random_name
+from tests.utils import create_and_put_object, random_string
 
 
 # pylint: disable=unused-variable
 class TestETLOps(unittest.TestCase):
     def setUp(self) -> None:
-        self.bck_name = random_name()
-        self.etl_id_code = "etl-" + random_name(5)
-        self.etl_id_code_io = "etl-" + random_name(5)
-        self.etl_id_code_stream = "etl-" + random_name(5)
-        self.etl_id_spec = "etl-" + random_name(5)
-        self.etl_id_spec_comp = "etl-" + random_name(5)
+        self.bck_name = random_string()
+        self.etl_id_code = "etl-" + random_string(5)
+        self.etl_id_code_io = "etl-" + random_string(5)
+        self.etl_id_code_stream = "etl-" + random_string(5)
+        self.etl_id_spec = "etl-" + random_string(5)
+        self.etl_id_spec_comp = "etl-" + random_string(5)
         print("URL END PT ", CLUSTER_ENDPOINT)
         self.client = Client(CLUSTER_ENDPOINT)
 
@@ -110,7 +110,7 @@ class TestETLOps(unittest.TestCase):
         self.assertIsNotNone(self.client.etl().view(etl_id=self.etl_id_code))
         self.assertIsNotNone(self.client.etl().view(etl_id=self.etl_id_spec))
 
-        temp_bck1 = random_name()
+        temp_bck1 = random_string()
 
         # Transform Bucket with MD5 Template
         xaction_id = self.client.bucket(self.bck_name).transform(
@@ -133,7 +133,7 @@ class TestETLOps(unittest.TestCase):
         template = ECHO.format(communication_type="hpush")
         self.client.etl().init_spec(template=template, etl_id=self.etl_id_spec_comp)
 
-        temp_bck2 = random_name()
+        temp_bck2 = random_string()
 
         # Transform bucket with ECHO template
         xaction_id = self.client.bucket(self.bck_name).transform(
@@ -160,7 +160,7 @@ class TestETLOps(unittest.TestCase):
         # Transform w/ non-existent ETL ID raises exception
         with self.assertRaises(AISError):
             self.client.bucket(self.bck_name).transform(
-                etl_id="faulty-name", to_bck=random_name()
+                etl_id="faulty-name", to_bck=random_string()
             )
 
         # Stop ETLs

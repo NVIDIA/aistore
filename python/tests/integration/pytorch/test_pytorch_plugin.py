@@ -9,13 +9,13 @@ from aistore.sdk import Client
 from aistore.sdk.errors import AISError, ErrBckNotFound
 from aistore.pytorch import AISFileLister, AISFileLoader
 from tests.integration import CLUSTER_ENDPOINT
-from tests.utils import create_and_put_object, random_name
+from tests.utils import create_and_put_object, random_string
 
 
 # pylint: disable=unused-variable
 class TestPytorchPlugin(unittest.TestCase):
     def setUp(self) -> None:
-        self.bck_name = random_name()
+        self.bck_name = random_string()
         self.client = Client(CLUSTER_ENDPOINT)
         self.client.bucket(self.bck_name).create()
 

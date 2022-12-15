@@ -78,7 +78,7 @@ python_botocore_unit_tests: common_deps botocore_deps
 
 .PHONY: python_botocore_integration_tests
 python_botocore_integration_tests: common_deps botocore_deps
-	pytest -v tests/integration/botocore_patch
+	pytest -v tests/integration/botocore_patch tests/integration/boto3
 
 .PHONY: lint
 lint: common_deps

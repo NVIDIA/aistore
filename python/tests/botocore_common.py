@@ -11,7 +11,7 @@ import boto3
 from moto import mock_s3
 from botocore.exceptions import ClientError
 
-from tests.utils import random_name
+from tests.utils import random_string
 from tests.unit.botocore_patch import mock_s3_redirect
 
 
@@ -52,10 +52,10 @@ class BotocoreBaseTest(unittest.TestCase):
         self.endpoint_url = kwargs.get("endpoint_url", "http://localhost:8080/s3")
 
     def setUp(self):
-        self.control_bucket = random_name()
-        self.control_object = random_name()
-        self.another_bucket = random_name()
-        self.another_object = random_name()
+        self.control_bucket = random_string()
+        self.control_object = random_string()
+        self.another_bucket = random_string()
+        self.another_object = random_string()
 
         if self.use_moto:
             logging.debug("Using moto for S3 services")

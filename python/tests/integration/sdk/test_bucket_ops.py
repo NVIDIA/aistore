@@ -10,13 +10,13 @@ from aistore.sdk.errors import ErrBckNotFound
 
 from aistore.sdk import Client
 import requests
-from tests.utils import create_and_put_object, random_name
+from tests.utils import create_and_put_object, random_string
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
 
 
 class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        self.bck_name = random_name()
+        self.bck_name = random_string()
 
         self.client = Client(CLUSTER_ENDPOINT)
         self.buckets = []
