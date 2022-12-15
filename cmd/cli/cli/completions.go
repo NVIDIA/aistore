@@ -241,6 +241,22 @@ func suggestNode(c *cli.Context, ty int) {
 	}
 }
 
+func showClusterCompletions(c *cli.Context) {
+	switch c.NArg() {
+	case 0:
+		fmt.Println(apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
+	case 1:
+		switch c.Args().Get(0) {
+		case apc.Proxy:
+			suggestProxyNodes(c)
+		case apc.Target:
+			suggestTargetNodes(c)
+		default:
+			suggestAllNodes(c)
+		}
+	}
+}
+
 func setCluConfigCompletions(c *cli.Context) {
 	var (
 		config   cmn.Config

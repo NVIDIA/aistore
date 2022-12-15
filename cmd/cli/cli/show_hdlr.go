@@ -176,17 +176,12 @@ var (
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
 	showCmdCluster = cli.Command{
-		Name:      subcmdCluster,
-		Usage:     "show cluster details",
-		ArgsUsage: "[ NODE_ID | NODE_TYPE | smap | bmd | config | stats ]",
-		Flags:     showCmdsFlags[subcmdCluster],
-		Action:    showClusterHandler,
-		BashComplete: func(c *cli.Context) {
-			if c.NArg() == 0 {
-				fmt.Println(apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
-			}
-			suggestAllNodes(c)
-		},
+		Name:         subcmdCluster,
+		Usage:        "show cluster details",
+		ArgsUsage:    "[ NODE_ID | NODE_TYPE | smap | bmd | config | stats ]",
+		Flags:        showCmdsFlags[subcmdCluster],
+		Action:       showClusterHandler,
+		BashComplete: showClusterCompletions,
 		Subcommands: []cli.Command{
 			{
 				Name:         subcmdSmap,
@@ -428,10 +423,7 @@ func showDsortHandler(c *cli.Context, id string) error {
 }
 
 func showClusterHandler(c *cli.Context) error {
-	var (
-		daemonID         = argDaemonID(c.Args().First())
-		primarySmap, err = fillMap()
-	)
+	primarySmap, err := fillMap()
 	if err != nil {
 		return err
 	}
@@ -440,7 +432,13 @@ func showClusterHandler(c *cli.Context) error {
 		return err
 	}
 	setLongRunParams(c)
-	return clusterDaemonStatus(c, primarySmap, cluConfig, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+
+	if daemonID := argDaemonID(c.Args().Get(1)); daemonID != "" {
+		return clusterDaemonStatus(c, primarySmap, cluConfig, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+	}
+
+	what := c.Args().Get(0)
+	return clusterDaemonStatus(c, primarySmap, cluConfig, what, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 }
 
 func showStorageHandler(c *cli.Context) (err error) {
