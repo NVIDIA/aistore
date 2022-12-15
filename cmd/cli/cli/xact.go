@@ -13,10 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -46,70 +43,6 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 		}
 	}
 	return ""
-}
-
-// TODO -- FIXME: split in parts and remove
-func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck cmn.Bck, err error) {
-	var smap *cluster.Smap
-	smap, err = api.GetClusterMap(apiBP)
-	if err != nil {
-		return
-	}
-
-	var shift int
-	what := argDaemonID(c)
-	if node := smap.GetProxy(xactKind); node != nil {
-		return "", "", "", bck, fmt.Errorf("node %q is a proxy (expecting target, see --help)", what)
-	}
-	if node := smap.GetTarget(what); node != nil {
-		nodeID = what
-		xactKind = c.Args().Get(1) // assuming ...
-		shift++
-	} else {
-		xactKind = what // unless determined otherwise (see next)
-	}
-
-	var uri string
-	if strings.Contains(xactKind, apc.BckProviderSeparator) {
-		uri = xactKind
-		xactKind = ""
-	} else if !xact.IsValidKind(xactKind) {
-		if cos.IsValidUUID(xactKind) {
-			xactID = xactKind
-		}
-		xactKind = ""
-	}
-
-	what = c.Args().Get(1 + shift)
-	if what == "" {
-		return
-	}
-
-	if xactKind == "" && xact.IsValidKind(what) {
-		xactKind = what
-	} else if strings.Contains(what, apc.BckProviderSeparator) {
-		uri = what
-	} else if xactID == "" && cos.IsValidUUID(what) {
-		xactID = what
-	}
-
-	if uri == "" || xactKind == "" {
-		return
-	}
-
-	// validate bucket
-	if xact.IsSameScope(xactKind, xact.ScopeB, xact.ScopeGB) {
-		if bck, err = parseBckURI(c, uri, true /*require provider*/); err != nil {
-			return
-		}
-		if _, err = headBucket(bck, true /* don't add */); err != nil {
-			return
-		}
-	} else {
-		warn := fmt.Sprintf("%q is a non bucket-scope xaction, ignoring %q argument", xactKind, uri)
-		actionWarn(c, warn)
-	}
-	return
 }
 
 // Wait for xaction to run for completion, warn if aborted

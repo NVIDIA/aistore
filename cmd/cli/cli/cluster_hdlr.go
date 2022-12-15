@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -105,7 +104,7 @@ var (
 						Name:         commandShow,
 						Usage:        "show global rebalance",
 						Flags:        clusterCmdsFlags[commandShow],
-						BashComplete: suggestTargetNodes,
+						BashComplete: rebalanceCompletions,
 						Action:       showClusterRebalanceHandler,
 					},
 				},
@@ -287,7 +286,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	}
 	var (
 		action   = c.Command.Name
-		daemonID = argDaemonID(c)
+		daemonID = argDaemonID(c.Args().First())
 		node     = smap.GetNode(daemonID)
 	)
 	if node == nil {
@@ -368,7 +367,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 }
 
 func setPrimaryHandler(c *cli.Context) error {
-	daemonID := argDaemonID(c)
+	daemonID := argDaemonID(c.Args().First())
 	if daemonID == "" {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
@@ -409,16 +408,19 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 }
 
 func showClusterRebalanceHandler(c *cli.Context) error {
-	nodeID, xactID, xactKind, _, err := parseXactionFromArgs(c)
-	if err != nil {
-		return err
+	var (
+		id       = c.Args().Get(0)
+		daemonID = c.Args().Get(1)
+	)
+	if daemonID == "" && id != "" {
+		if strings.HasPrefix(id, cluster.TnamePrefix) {
+			daemonID, id = argDaemonID(id), ""
+		}
 	}
-	debug.Assert(xactKind == "" || xactKind == apc.ActRebalance, xactKind)
-	xactKind = apc.ActRebalance
 	xactArgs := api.XactReqArgs{
-		ID:          xactID,
-		Kind:        xactKind,
-		DaemonID:    nodeID,
+		ID:          id,
+		Kind:        apc.ActRebalance,
+		DaemonID:    daemonID,
 		OnlyRunning: !flagIsSet(c, allXactionsFlag),
 	}
 	return xactList(c, xactArgs, "")

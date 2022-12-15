@@ -81,7 +81,7 @@ func k8sShowSingleDaemon(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	daemonID := argDaemonID(c)
+	daemonID := argDaemonID(c.Args().First())
 	if node := smap.GetNode(daemonID); node == nil {
 		return fmt.Errorf("%s does not exist in the cluster (see 'ais show cluster')", daemonID)
 	}

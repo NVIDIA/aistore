@@ -91,19 +91,8 @@ type (
 	}
 )
 
-func argDaemonID(c *cli.Context) string {
-	daemonID := c.Args().First()
-	return cluster.N2ID(daemonID)
-}
-
-func extractDaemonID(arg string) (sid string) {
-	if !strings.HasPrefix(arg, cluster.PnamePrefix) && !strings.HasPrefix(arg, cluster.TnamePrefix) {
-		return
-	}
-	sid = strings.TrimPrefix(arg, cluster.PnamePrefix)
-	sid = strings.TrimPrefix(sid, cluster.TnamePrefix)
-	sid = strings.TrimSuffix(sid, cluster.SnameSuffix)
-	return
+func argDaemonID(arg string) string {
+	return cluster.N2ID(arg)
 }
 
 func argLast(c *cli.Context) (last string) {
@@ -277,21 +266,23 @@ func parseBckURI(c *cli.Context, uri string, requireProviderInURI bool) (cmn.Bck
 		bck := parseURLtoBck(uri)
 		return bck, nil
 	}
+
 	opts := cmn.ParseURIOpts{}
 	if cfg != nil && !requireProviderInURI {
 		opts.DefaultProvider = cfg.DefaultProvider
 	}
 	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
-	if err != nil {
-		return bck, err
-	}
-	if objName != "" {
-		return bck, objectNameArgumentNotSupported(c, objName)
-	}
-	if bck.Name == "" {
-		return bck, incorrectUsageMsg(c, "%q: missing bucket name", uri)
-	} else if err := bck.Validate(); err != nil {
-		return bck, cannotExecuteError(c, err)
+	switch {
+	case err != nil:
+		return cmn.Bck{}, err
+	case objName != "":
+		return cmn.Bck{}, objectNameArgumentNotSupported(c, objName)
+	case bck.Name == "":
+		return cmn.Bck{}, incorrectUsageMsg(c, "%q: missing bucket name", uri)
+	default:
+		if err = bck.Validate(); err != nil {
+			return cmn.Bck{}, cannotExecuteError(c, err)
+		}
 	}
 	return bck, nil
 }

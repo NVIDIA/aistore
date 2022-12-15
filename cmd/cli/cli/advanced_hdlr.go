@@ -204,7 +204,7 @@ func removeNodeFromSmap(c *cli.Context) (err error) {
 	} else if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
-	daemonID := argDaemonID(c)
+	daemonID := argDaemonID(c.Args().First())
 	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return err

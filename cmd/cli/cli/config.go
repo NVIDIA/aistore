@@ -14,7 +14,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
@@ -264,7 +263,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 	var (
 		config   cmn.Config
 		nvs      cos.StrKVs
-		daemonID     = argDaemonID(c)
+		daemonID     = argDaemonID(c.Args().First())
 		args         = c.Args()
 		v        any = &config.ClusterConfig
 		propList     = make([]string, 0, 48)
@@ -357,9 +356,8 @@ func resetConfigHandler(c *cli.Context) (err error) {
 func resetNodeConfigHandler(c *cli.Context) (err error) {
 	var (
 		sname    = c.Args().First()
-		daemonID = argDaemonID(c)
+		daemonID = argDaemonID(sname)
 	)
-	debug.Assert(cluster.N2ID(sname) == daemonID)
 	if err := api.ResetDaemonConfig(apiBP, daemonID); err != nil {
 		return err
 	}

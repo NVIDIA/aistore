@@ -299,7 +299,7 @@ var (
 )
 
 func showDisksHandler(c *cli.Context) (err error) {
-	daemonID := argDaemonID(c)
+	daemonID := argDaemonID(c.Args().First())
 	if _, err = fillMap(); err != nil {
 		return
 	}
@@ -320,10 +320,15 @@ func showJobsHandler(c *cli.Context) error {
 		if _, err = headBucket(bck, true /* don't add */); err != nil {
 			return err
 		}
-	} else if bck, err = parseBckURI(c, daemonID, true /*require provider*/); err == nil {
+	} else if bck, err = parseBckURI(c, daemonID, true); err == nil {
 		daemonID = ""
 		if _, err = headBucket(bck, true /* don't add */); err != nil {
 			return err
+		}
+	}
+	if daemonID == "" && id != "" {
+		if strings.HasPrefix(id, cluster.TnamePrefix) {
+			daemonID, id = argDaemonID(id), ""
 		}
 	}
 
@@ -377,9 +382,15 @@ func showJobsHandler(c *cli.Context) error {
 	}
 
 	var (
-		xactKind, _ = xact.GetKindName(name)
-		xactArgs    = api.XactReqArgs{ID: id, Kind: xactKind, DaemonID: daemonID, Bck: bck, OnlyRunning: onlyActive}
 		caption     string
+		xactKind, _ = xact.GetKindName(name)
+		xactArgs    = api.XactReqArgs{
+			ID:          id,
+			Kind:        xactKind,
+			DaemonID:    argDaemonID(daemonID),
+			Bck:         bck,
+			OnlyRunning: onlyActive,
+		}
 	)
 	if printed {
 		if onlyActive {
@@ -418,7 +429,7 @@ func showDsortHandler(c *cli.Context, id string) error {
 
 func showClusterHandler(c *cli.Context) error {
 	var (
-		daemonID         = argDaemonID(c)
+		daemonID         = argDaemonID(c.Args().First())
 		primarySmap, err = fillMap()
 	)
 	if err != nil {
@@ -550,7 +561,7 @@ func showBckPropsHandler(c *cli.Context) (err error) {
 func showSmapHandler(c *cli.Context) (err error) {
 	var (
 		primarySmap *cluster.Smap
-		daemonID    = argDaemonID(c)
+		daemonID    = argDaemonID(c.Args().First())
 	)
 	if primarySmap, err = fillMap(); err != nil {
 		return
@@ -612,7 +623,7 @@ func showNodeConfig(c *cli.Context) error {
 	var (
 		node           *cluster.Snode
 		section, scope string
-		daemonID       = argDaemonID(c)
+		daemonID       = argDaemonID(c.Args().First())
 		useJSON        = flagIsSet(c, jsonFlag)
 	)
 	smap, err := api.GetClusterMap(apiBP)
@@ -726,7 +737,7 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	daemonID := argDaemonID(c)
+	daemonID := argDaemonID(c.Args().First())
 	node := smap.GetNode(daemonID)
 	if node == nil {
 		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
@@ -822,7 +833,7 @@ func showRemoteAISHandler(c *cli.Context) error {
 
 func showMpathHandler(c *cli.Context) error {
 	var (
-		daemonID = argDaemonID(c)
+		daemonID = argDaemonID(c.Args().First())
 		nodes    []*cluster.Snode
 	)
 	smap, err := api.GetClusterMap(apiBP)
@@ -899,7 +910,7 @@ func showClusterStatsHandler(c *cli.Context) error {
 	}
 	var (
 		node     *cluster.Snode
-		daemonID = argDaemonID(c)
+		daemonID = argDaemonID(c.Args().First())
 	)
 	if daemonID != "" {
 		node = smap.GetNode(daemonID)

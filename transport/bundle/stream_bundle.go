@@ -151,17 +151,17 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*cl
 		err = fmt.Errorf("[%s/%s] sending unsized object supported only with PDUs", obj.Hdr.Bck, obj.Hdr.ObjName)
 	}
 
-	debug.AssertNoErr(err)
+	if err != nil {
+		glog.Error(err)
+		// compare w/ transport doCmpl()
+		_doCmpl(obj, roc, err)
+		return
+	}
 	if obj.Callback == nil {
 		obj.Callback = sb.extra.Callback
 	}
 	if obj.IsHeaderOnly() {
 		roc = nil
-	}
-	if err != nil {
-		// compare w/ transport doCmpl()
-		_doCmpl(obj, roc, err)
-		return
 	}
 
 	if nodes == nil {

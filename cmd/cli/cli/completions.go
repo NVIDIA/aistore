@@ -220,12 +220,13 @@ func suggestTargetNodes(c *cli.Context) { suggestNode(c, allTargets) }
 func suggestProxyNodes(c *cli.Context)  { suggestNode(c, allProxies) }
 func suggestAllNodes(c *cli.Context)    { suggestNode(c, allNodes) }
 
+// TODO -- FIXME: optimize-out api.GetClusterMap
 func suggestNode(c *cli.Context, ty int) {
 	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
 		return
 	}
-	if sid := extractDaemonID(argLast(c)); smap.GetNode(sid) != nil {
+	if sid := argDaemonID(argLast(c)); smap.GetNode(sid) != nil {
 		return // node already selected
 	}
 	if ty != allTargets {
@@ -449,7 +450,9 @@ func putPromoteObjectCompletions(c *cli.Context) {
 // Job
 //
 
-// complete to: `NAME [running job or xaction ID] [TARGET]` - in that sequence
+// complete to:
+// - NAME [running job or xaction ID] [TARGET], or
+// - NAME [TARGET]
 func runningJobCompletions(c *cli.Context) {
 	switch c.NArg() {
 	case 0: // 1. NAME
@@ -478,9 +481,6 @@ func runningJobCompletions(c *cli.Context) {
 		return
 	case 1: // ID
 		name := c.Args().Get(0)
-		if name == commandRebalance {
-			return
-		}
 		switch name {
 		case subcmdDownload:
 			suggestDownloadID(c, (*dload.Job).JobRunning, 1 /*shift*/)
@@ -497,12 +497,39 @@ func runningJobCompletions(c *cli.Context) {
 		if err != nil {
 			return
 		}
+		if len(xactIDs) == 0 {
+			suggestTargetNodes(c)
+			return
+		}
 		for _, ki := range xactIDs {
 			i := strings.IndexByte(ki, xact.LeftID[0])
 			fmt.Println(ki[i+1 : len(ki)-1]) // extract UUID from "name[UUID]"
 		}
 		return
 	case 2: // TARGET
+		suggestTargetNodes(c)
+	}
+}
+
+// - [running rebalance ID] [TARGET], or
+// - [TARGET]
+func rebalanceCompletions(c *cli.Context) {
+	switch c.NArg() {
+	case 0:
+		xactIDs, err := api.GetAllRunningXactions(apiBP, apc.ActRebalance)
+		if err != nil {
+			return
+		}
+		if len(xactIDs) == 0 {
+			suggestTargetNodes(c)
+			return
+		}
+		for _, ki := range xactIDs {
+			i := strings.IndexByte(ki, xact.LeftID[0])
+			fmt.Println(ki[i+1 : len(ki)-1]) // extract UUID from "name[UUID]"
+		}
+		return
+	case 1:
 		suggestTargetNodes(c)
 	}
 }
