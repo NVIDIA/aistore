@@ -628,7 +628,7 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		Desc: parseStrFlag(c, descRoleFlag),
 	}
 	if bucket != "" {
-		bck, err := parseBckURI(c, bucket)
+		bck, err := parseBckURI(c, bucket, true /*require provider*/)
 		if err != nil {
 			return nil, err
 		}

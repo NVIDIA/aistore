@@ -8,7 +8,7 @@ ais bucket cp ais://$BUCKET_1/ aiss://$BUCKET_2/ // FAIL "invalid backend provid
 ais bucket cp ais://$BUCKET_1 ais://$BUCKET_2 --force
 
 ais job wait copy-bck ais://$BUCKET_2
-ais show job copy-bck ais://$BUCKET_1
+ais show job copy-bck ais://$BUCKET_1 --all
 ais show job copy-bck
 ais show job copy-bck ais://$BUCKET_3 // FAIL "bucket "ais://$BUCKET_3" does not exist"
 

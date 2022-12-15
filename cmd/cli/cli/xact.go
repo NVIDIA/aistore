@@ -22,12 +22,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-// TODO -- FIXME: remove
-func xactionDesc(onlyStartable bool) string {
-	xs := xact.ListDisplayNames(onlyStartable)
-	return fmt.Sprintf("xaction can be one of: %s", strings.Join(xs, ", "))
-}
-
 func toMonitorMsg(c *cli.Context, xjid string) string {
 	return toShowMsg(c, xjid, "To monitor the progress", false)
 }
@@ -37,7 +31,7 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 	cmds := findCmdMultiKeyAlt(commandShow, c.Command.Name)
 	if len(cmds) == 0 {
 		// generic
-		cmds = findCmdMultiKeyAlt(commandShow, subcmdXaction)
+		cmds = findCmdMultiKeyAlt(commandShow, commandJob)
 	}
 	for _, cmd := range cmds {
 		if strings.HasPrefix(cmd, cliName+" "+commandShow+" ") {
@@ -54,8 +48,7 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 	return ""
 }
 
-// Parse [TARGET_ID] [XACTION_ID|XACTION_KIND] [BUCKET]
-// Relying on xact.IsValidKind and similar to differentiate (best-effort guess, in effect)
+// TODO -- FIXME: split in parts and remove
 func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck cmn.Bck, err error) {
 	var smap *cluster.Smap
 	smap, err = api.GetClusterMap(apiBP)
@@ -106,7 +99,7 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 
 	// validate bucket
 	if xact.IsSameScope(xactKind, xact.ScopeB, xact.ScopeGB) {
-		if bck, err = parseBckURI(c, uri); err != nil {
+		if bck, err = parseBckURI(c, uri, true /*require provider*/); err != nil {
 			return
 		}
 		if _, err = headBucket(bck, true /* don't add */); err != nil {

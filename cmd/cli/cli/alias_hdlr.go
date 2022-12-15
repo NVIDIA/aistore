@@ -129,11 +129,6 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 	return cmd
 }
 
-func appendSubcommand(cmd, subCmd cli.Command) cli.Command {
-	cmd.Subcommands = append(cmd.Subcommands, subCmd)
-	return cmd
-}
-
 func resetAliasHandler(c *cli.Context) (err error) {
 	cfg.Aliases = config.DefaultAliasConfig
 	if err := config.Save(cfg); err != nil {

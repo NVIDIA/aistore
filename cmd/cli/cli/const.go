@@ -118,29 +118,13 @@ const (
 	subcmdNodeDecommission    = "decommission"
 	subcmdClusterDecommission = "decommission"
 
-	// Show subcommands
-	subcmdShowDisk         = subcmdMpath
-	subcmdShowDownload     = subcmdDownload
-	subcmdShowDsort        = subcmdDsort
-	subcmdShowObject       = subcmdObject
-	subcmdShowXaction      = subcmdXaction
-	subcmdShowRebalance    = subcmdRebalance
-	subcmdShowBucket       = subcmdBucket
-	subcmdShowConfig       = subcmdConfig
-	subcmdShowLog          = subcmdLog
 	subcmdShowRemoteAIS    = "remote-cluster"
-	subcmdShowCluster      = subcmdCluster
 	subcmdShowClusterStats = "stats"
+	subcmdShowDisk         = subcmdMpath
+	subcmdStgValidate      = "validate"
+	subcmdStgCleanup       = "cleanup"
 
-	subcmdShowStorage  = commandStorage
-	subcmdShowMpath    = subcmdMountpath
-	subcmdShowJob      = commandJob
-	subcmdStgSummary   = subcmdSummary
-	subcmdStgValidate  = "validate"
-	subcmdStgMountpath = subcmdMountpath
-	subcmdStgCleanup   = "cleanup"
-
-	// Bucket subcommands
+	// Bucket and Storage subcommands
 	subcmdSummary = "summary"
 
 	// Bucket properties subcommands

@@ -186,7 +186,8 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 		s2 = fmt.Sprintf(", xaction ID %q", xactID)
 	}
 	// alternatively, print(fmtXactStatusCheck, apc.ActPromote, ...)
-	fmt.Fprintf(c.App.Writer, "%spromoted %q => %s%s\n", s1, fqn, bck.DisplayName(), s2)
+	msg := fmt.Sprintf("%spromoted %q => %s%s\n", s1, fqn, bck.DisplayName(), s2)
+	actionDone(c, msg)
 	return nil
 }
 

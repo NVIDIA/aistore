@@ -191,7 +191,7 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
 
-	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
+	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
 		return err
 	}
 

@@ -409,12 +409,11 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 }
 
 func showClusterRebalanceHandler(c *cli.Context) error {
-	nodeID, xactID, xactKind, bck, err := parseXactionFromArgs(c)
+	nodeID, xactID, xactKind, _, err := parseXactionFromArgs(c)
 	if err != nil {
 		return err
 	}
 	debug.Assert(xactKind == "" || xactKind == apc.ActRebalance, xactKind)
-	debug.Assert(bck.IsEmpty(), bck.String())
 	xactKind = apc.ActRebalance
 	xactArgs := api.XactReqArgs{
 		ID:          xactID,
@@ -422,5 +421,5 @@ func showClusterRebalanceHandler(c *cli.Context) error {
 		DaemonID:    nodeID,
 		OnlyRunning: !flagIsSet(c, allXactionsFlag),
 	}
-	return xactList(c, xactArgs)
+	return xactList(c, xactArgs, "")
 }

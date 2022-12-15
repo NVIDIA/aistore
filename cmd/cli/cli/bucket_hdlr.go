@@ -515,7 +515,7 @@ func evictHandler(c *cli.Context) (err error) {
 }
 
 func resetPropsHandler(c *cli.Context) error {
-	bck, err := parseBckURI(c, c.Args().First())
+	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
 	if err != nil {
 		return err
 	}
@@ -528,7 +528,7 @@ func resetPropsHandler(c *cli.Context) error {
 
 func lruBucketHandler(c *cli.Context) (err error) {
 	var p *cmn.BucketProps
-	bck, err := parseBckURI(c, c.Args().First())
+	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
 	if err != nil {
 		return err
 	}
@@ -567,7 +567,7 @@ func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (er
 
 func setPropsHandler(c *cli.Context) (err error) {
 	var currProps *cmn.BucketProps
-	bck, err := parseBckURI(c, c.Args().First())
+	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
 	if err != nil {
 		return err
 	}
@@ -592,7 +592,7 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, upd
 		return nil
 	}
 	if _, err = api.SetBucketProps(apiBP, bck, updateProps); err != nil {
-		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET -v\"", cliName, commandShow, subcmdShowBucket)
+		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET -v\"", cliName, commandShow, subcmdBucket)
 		return newAdditionalInfoError(err, helpMsg)
 	}
 	showDiff(c, currProps, allNewProps)

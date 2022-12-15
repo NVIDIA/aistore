@@ -546,7 +546,7 @@ func showBucketProps(c *cli.Context) (err error) {
 	}
 
 	section := c.Args().Get(1)
-	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
+	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
 		return
 	}
 	if p, err = headBucket(bck, true /* don't add */); err != nil {
@@ -670,7 +670,7 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 
 	bcks := make([]cmn.Bck, 0, 2)
 	for i := 0; i < 2; i++ {
-		bck, err := parseBckURI(c, c.Args().Get(i))
+		bck, err := parseBckURI(c, c.Args().Get(i), true /*require provider*/)
 		if err != nil {
 			return bckFrom, bckTo, err
 		}

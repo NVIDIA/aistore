@@ -21,8 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ext/dload"
-	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -42,7 +40,7 @@ type (
 
 var (
 	showCmdsFlags = map[string][]cli.Flag{
-		subcmdShowStorage: append(
+		commandStorage: append(
 			longRunFlags,
 			jsonFlag,
 		),
@@ -51,11 +49,11 @@ var (
 			jsonFlag,
 			noHeaderFlag,
 		),
-		subcmdShowMpath: append(
+		subcmdMountpath: append(
 			longRunFlags,
 			jsonFlag,
 		),
-		subcmdShowDownload: append(
+		subcmdDownload: append(
 			longRunFlags,
 			regexFlag,
 			progressBarFlag,
@@ -63,7 +61,7 @@ var (
 			verboseFlag,
 			jsonFlag,
 		),
-		subcmdShowDsort: append(
+		subcmdDsort: append(
 			longRunFlags,
 			regexFlag,
 			verboseFlag,
@@ -71,14 +69,14 @@ var (
 			allJobsFlag,
 			jsonFlag,
 		),
-		subcmdShowXaction: append(
+		subcmdXaction: append(
 			longRunFlags,
 			jsonFlag,
 			allXactionsFlag,
 			noHeaderFlag,
 			verboseFlag,
 		),
-		subcmdShowJob: append(
+		commandJob: append(
 			longRunFlags,
 			jsonFlag,
 			allXactionsFlag, // NOTE: allXactionsFlag.Name == allJobsFlag.Name
@@ -86,14 +84,14 @@ var (
 			noHeaderFlag,
 			verboseFlag,
 		),
-		subcmdShowObject: {
+		subcmdObject: {
 			objPropsFlag,
 			allPropsFlag,
 			objNotCachedFlag,
 			noHeaderFlag,
 			jsonFlag,
 		},
-		subcmdShowCluster: append(
+		subcmdCluster: append(
 			longRunFlags,
 			jsonFlag,
 			noHeaderFlag,
@@ -105,16 +103,16 @@ var (
 		subcmdBMD: {
 			jsonFlag,
 		},
-		subcmdShowRebalance: append(
+		subcmdRebalance: append(
 			longRunFlags,
 			allXactionsFlag,
 			noHeaderFlag,
 		),
-		subcmdShowBucket: {
+		subcmdBucket: {
 			jsonFlag,
 			compactPropFlag,
 		},
-		subcmdShowConfig: {
+		subcmdConfig: {
 			jsonFlag,
 		},
 		subcmdShowRemoteAIS: {
@@ -122,7 +120,7 @@ var (
 			verboseFlag,
 			jsonFlag,
 		},
-		subcmdShowLog: append(
+		subcmdLog: append(
 			longRunFlags,
 			logSevFlag,
 			logFlushFlag,
@@ -152,14 +150,14 @@ var (
 	}
 
 	showCmdStorage = cli.Command{
-		Name:      subcmdShowStorage,
+		Name:      commandStorage,
 		Usage:     "show storage usage and utilization, disks and mountpaths",
 		ArgsUsage: "[TARGET_ID]",
-		Flags:     showCmdsFlags[subcmdShowStorage],
+		Flags:     showCmdsFlags[commandStorage],
 		Action:    showStorageHandler,
 		BashComplete: func(c *cli.Context) {
 			if c.NArg() == 0 {
-				fmt.Printf("%s\n%s\n%s\n", subcmdShowDisk, subcmdShowMpath, subcmdStgSummary)
+				fmt.Println(subcmdShowDisk, subcmdMountpath, subcmdSummary)
 			}
 			suggestTargetNodes(c)
 		},
@@ -170,23 +168,22 @@ var (
 		},
 	}
 	showCmdObject = cli.Command{
-		Name:         subcmdShowObject,
+		Name:         subcmdObject,
 		Usage:        "show object details",
 		ArgsUsage:    objectArgument,
-		Flags:        showCmdsFlags[subcmdShowObject],
+		Flags:        showCmdsFlags[subcmdObject],
 		Action:       showObjectHandler,
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
 	showCmdCluster = cli.Command{
-		Name:      subcmdShowCluster,
+		Name:      subcmdCluster,
 		Usage:     "show cluster details",
-		ArgsUsage: "[NODE_ID|NODE_TYPE|smap|bmd|config|stats]",
-		Flags:     showCmdsFlags[subcmdShowCluster],
+		ArgsUsage: "[ NODE_ID | NODE_TYPE | smap | bmd | config | stats ]",
+		Flags:     showCmdsFlags[subcmdCluster],
 		Action:    showClusterHandler,
 		BashComplete: func(c *cli.Context) {
 			if c.NArg() == 0 {
-				fmt.Printf("%s\n%s\n%s\n%s\n%s\n%s\n",
-					apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
+				fmt.Println(apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
 			}
 			suggestAllNodes(c)
 		},
@@ -208,10 +205,10 @@ var (
 				BashComplete: suggestAllNodes,
 			},
 			{
-				Name:      subcmdShowConfig,
+				Name:      subcmdConfig,
 				Usage:     "show cluster configuration",
 				ArgsUsage: showClusterConfigArgument,
-				Flags:     showCmdsFlags[subcmdShowConfig],
+				Flags:     showCmdsFlags[subcmdConfig],
 				Action:    showClusterConfigHandler,
 			},
 			{
@@ -225,25 +222,25 @@ var (
 		},
 	}
 	showCmdRebalance = cli.Command{
-		Name:      subcmdShowRebalance,
+		Name:      subcmdRebalance,
 		Usage:     "show rebalance details",
 		ArgsUsage: noArguments,
-		Flags:     showCmdsFlags[subcmdShowRebalance],
+		Flags:     showCmdsFlags[subcmdRebalance],
 		Action:    showRebalanceHandler,
 	}
 	showCmdBucket = cli.Command{
-		Name:         subcmdShowBucket,
+		Name:         subcmdBucket,
 		Usage:        "show bucket properties",
 		ArgsUsage:    bucketAndPropsArgument,
-		Flags:        showCmdsFlags[subcmdShowBucket],
+		Flags:        showCmdsFlags[subcmdBucket],
 		Action:       showBckPropsHandler,
 		BashComplete: bucketAndPropsCompletions, // bucketCompletions(),
 	}
 	showCmdConfig = cli.Command{
-		Name:         subcmdShowConfig,
+		Name:         subcmdConfig,
 		Usage:        "show CLI, cluster, or node configurations (nodes inherit cluster and have local)",
 		ArgsUsage:    showConfigArgument,
-		Flags:        showCmdsFlags[subcmdShowConfig],
+		Flags:        showCmdsFlags[subcmdConfig],
 		Action:       showConfigHandler,
 		BashComplete: showConfigCompletions,
 	}
@@ -257,51 +254,21 @@ var (
 	}
 
 	showCmdLog = cli.Command{
-		Name:         subcmdShowLog,
+		Name:         subcmdLog,
 		Usage:        "show log",
 		ArgsUsage:    daemonIDArgument,
-		Flags:        showCmdsFlags[subcmdShowLog],
+		Flags:        showCmdsFlags[subcmdLog],
 		Action:       showDaemonLogHandler,
 		BashComplete: suggestAllNodes,
 	}
 
 	showCmdJob = cli.Command{
-		Name:      subcmdShowJob,
-		Usage:     "show running and finished jobs (use <TAB-TAB> to select)",
-		ArgsUsage: "NAME [JOB_ID] [NODE_ID] [BUCKET]",
-		Subcommands: []cli.Command{
-			showCmdDownload,
-			showCmdDsort,
-			showCmdXaction,
-			appendSubcommand(makeAlias(showCmdETL, "", true, commandETL), logsCmdETL),
-		},
-		Flags:  showCmdsFlags[subcmdShowJob],
-		Action: showJobsHandler,
-	}
-	showCmdDownload = cli.Command{
-		Name:         subcmdShowDownload,
-		Usage:        "show active downloads",
-		ArgsUsage:    optionalJobIDArgument,
-		Flags:        showCmdsFlags[subcmdShowDownload],
-		Action:       showDownloadsHandler,
-		BashComplete: downloadIDAllCompletions,
-	}
-	showCmdDsort = cli.Command{
-		Name:         subcmdShowDsort,
-		Usage:        "show running and finished " + dsort.DSortName + " jobs",
-		ArgsUsage:    optionalJobIDDaemonIDArgument,
-		Flags:        showCmdsFlags[subcmdShowDsort],
-		Action:       showDsortHandler,
-		BashComplete: dsortIDAllCompletions,
-	}
-	showCmdXaction = cli.Command{
-		Name:         subcmdShowXaction,
-		Usage:        "show running and finished eXtended actions (xactions) by: target | xaction ID/kind | bucket",
-		ArgsUsage:    "[TARGET_ID] [XACTION_ID|XACTION_KIND] [BUCKET]",
-		Description:  xactionDesc(false),
-		Flags:        showCmdsFlags[subcmdShowXaction],
-		Action:       showXactionHandler,
-		BashComplete: daemonXactionCompletions,
+		Name:         commandJob,
+		Usage:        "show running and finished jobs (use <TAB-TAB> to select, help to see options)",
+		ArgsUsage:    "NAME [JOB_ID] [NODE_ID] [BUCKET]",
+		Flags:        showCmdsFlags[commandJob],
+		Action:       showJobsHandler,
+		BashComplete: runningJobCompletions,
 	}
 
 	// `show storage` sub-commands
@@ -314,18 +281,18 @@ var (
 		BashComplete: suggestTargetNodes,
 	}
 	showCmdStgSummary = cli.Command{
-		Name:         subcmdStgSummary,
+		Name:         subcmdSummary,
 		Usage:        "show bucket sizes and %% of used capacity on a per-bucket basis",
 		ArgsUsage:    listAnyCommandArgument,
-		Flags:        storageCmdFlags[subcmdStgSummary],
+		Flags:        storageCmdFlags[subcmdSummary],
 		Action:       showBucketSummary,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
 	showCmdMpath = cli.Command{
-		Name:         subcmdShowMpath,
+		Name:         subcmdMountpath,
 		Usage:        "show target mountpaths",
 		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showCmdsFlags[subcmdShowMpath],
+		Flags:        showCmdsFlags[subcmdMountpath],
 		Action:       showMpathHandler,
 		BashComplete: suggestTargetNodes,
 	}
@@ -340,89 +307,104 @@ func showDisksHandler(c *cli.Context) (err error) {
 	return daemonDiskStats(c, daemonID)
 }
 
+// args: `NAME [running job or xaction ID] [TARGET]` (see `runningJobCompletions`)
 func showJobsHandler(c *cli.Context) error {
 	var (
-		regex   = parseStrFlag(c, regexFlag)
-		useJSON = flagIsSet(c, jsonFlag)
-		nonxact bool
+		name     = c.Args().Get(0)
+		id       = c.Args().Get(1)
+		daemonID = c.Args().Get(2)
 	)
+	bck, err := parseBckURI(c, id, true /*require provider*/)
+	if err == nil {
+		id = "" // arg 1 was in fact bucket
+		if _, err = headBucket(bck, true /* don't add */); err != nil {
+			return err
+		}
+	} else if bck, err = parseBckURI(c, daemonID, true /*require provider*/); err == nil {
+		daemonID = ""
+		if _, err = headBucket(bck, true /* don't add */); err != nil {
+			return err
+		}
+	}
+
 	setLongRunParams(c, 72)
 
-	nodeID, xactID, xactKind, _, err := parseXactionFromArgs(c)
-	if err != nil {
-		return err
-	}
-	if nodeID != "" || xactID != "" || xactKind != "" {
-		if last := argLast(c); strings.HasPrefix(last, "-") {
-			warn := fmt.Sprintf("misplaced %q (hint: expecting '... %s %s ...')", last, subcmdShowJob, last)
-			actionWarn(c, warn)
-		}
-	}
-
-	if cos.IsValidUUID(xactID) {
-		if strings.HasPrefix(xactID, dload.PrefixJobID) {
-			return downloadJobStatus(c, xactID /*jobID*/)
-		}
-		if strings.HasPrefix(xactID, dsort.PrefixJobID) {
-			return dsortJobStatus(c, xactID)
-		}
-		return showXactionHandler(c)
+	// special
+	switch name {
+	case subcmdDownload:
+		return showDownloadsHandler(c, id)
+	case subcmdDsort:
+		return showDsortHandler(c, id)
+	case commandETL:
+		return etlListHandler(c)
 	}
 
-	onlyActive := !flagIsSet(c, allJobsFlag)
-	downloads, err := api.DownloadGetList(apiBP, regex, onlyActive)
-	if err != nil {
-		actionWarn(c, err.Error())
-	} else if len(downloads) > 0 {
-		actionCptn(c, "", "download jobs:")
-		err = tmpls.Print(downloads, c.App.Writer, tmpls.DownloadListTmpl, nil, useJSON)
+	// `--all` or all the rest
+
+	var (
+		regex      = parseStrFlag(c, regexFlag)
+		useJSON    = flagIsSet(c, jsonFlag)
+		onlyActive = !flagIsSet(c, allJobsFlag)
+		printed    bool
+	)
+	if name == "" {
+		downloads, err := api.DownloadGetList(apiBP, regex, onlyActive)
 		if err != nil {
 			actionWarn(c, err.Error())
+		} else if len(downloads) > 0 {
+			actionCptn(c, "", "download jobs:")
+			err = tmpls.Print(downloads, c.App.Writer, tmpls.DownloadListTmpl, nil, useJSON)
+			if err != nil {
+				actionWarn(c, err.Error())
+			}
+			printed = true
 		}
-		nonxact = true
-	}
 
-	dsorts, err := api.ListDSort(apiBP, regex, onlyActive)
-	if err != nil {
-		return err
-	} else if len(dsorts) > 0 {
-		if nonxact {
-			fmt.Fprintln(c.App.Writer)
-		}
-		actionCptn(c, "", "dsort jobs:")
-		err = dsortJobsList(c, dsorts, useJSON)
+		dsorts, err := api.ListDSort(apiBP, regex, onlyActive)
 		if err != nil {
-			actionWarn(c, err.Error())
+			return err
+		} else if len(dsorts) > 0 {
+			if printed {
+				fmt.Fprintln(c.App.Writer)
+			}
+			actionCptn(c, "", "dsort jobs:")
+			err = dsortJobsList(c, dsorts, useJSON)
+			if err != nil {
+				actionWarn(c, err.Error())
+			}
+			printed = true
 		}
-		nonxact = true
 	}
 
-	if nonxact {
-		fmt.Fprintln(c.App.Writer)
-		actionCptn(c, "", "eXtended actions (xactions):")
+	var (
+		xactKind, _ = xact.GetKindName(name)
+		xactArgs    = api.XactReqArgs{ID: id, Kind: xactKind, DaemonID: daemonID, Bck: bck, OnlyRunning: onlyActive}
+		caption     string
+	)
+	if printed {
+		if onlyActive {
+			caption = "running jobs"
+		} else {
+			caption = "all jobs (including finished)"
+		}
 	}
-	return showXactionHandler(c)
+	return xactList(c, xactArgs, caption)
 }
 
-func showDownloadsHandler(c *cli.Context) error {
-	setLongRunParams(c, 72)
-	if c.NArg() < 1 { // list all download jobs
+func showDownloadsHandler(c *cli.Context, id string) error {
+	if id == "" { // list all download jobs
 		return downloadJobsList(c, parseStrFlag(c, regexFlag))
 	}
-
 	// display status of a download job with given id
-	id := c.Args().First()
 	return downloadJobStatus(c, id)
 }
 
-func showDsortHandler(c *cli.Context) error {
+func showDsortHandler(c *cli.Context, id string) error {
 	var (
-		id         = c.Args().First()
 		useJSON    = flagIsSet(c, jsonFlag)
 		onlyActive = !flagIsSet(c, allJobsFlag)
 	)
-	setLongRunParams(c, 72)
-	if c.NArg() < 1 { // list all (active) dsort jobs
+	if id == "" { // list all (active) dsort jobs
 		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag), onlyActive)
 		if err != nil {
 			return err
@@ -455,32 +437,23 @@ func showStorageHandler(c *cli.Context) (err error) {
 	return showDisksHandler(c)
 }
 
-func showXactionHandler(c *cli.Context) error {
-	nodeID, xactID, xactKind, bck, err := parseXactionFromArgs(c)
-	if err != nil {
-		return err
-	}
-	setLongRunParams(c, 72)
-	xactArgs := api.XactReqArgs{
-		ID:          xactID,
-		Kind:        xactKind,
-		DaemonID:    nodeID,
-		Bck:         bck,
-		OnlyRunning: !flagIsSet(c, allXactionsFlag),
-	}
-	return xactList(c, xactArgs)
-}
-
-func xactList(c *cli.Context, xactArgs api.XactReqArgs) error {
-	// override caller's choice on purpose
+func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption string) error {
+	// override the caller's choice if explicitly identified
 	if xactArgs.ID != "" {
-		debug.Assert(cos.IsValidUUID(xactArgs.ID), xactArgs.ID)
+		debug.Assert(xact.IsValidUUID(xactArgs.ID), xactArgs.ID)
 		xactArgs.OnlyRunning = false
 	}
 
 	xs, err := queryXactions(xactArgs)
 	if err != nil {
 		return err
+	}
+	var numSnaps int
+	for _, snaps := range xs {
+		numSnaps += len(snaps)
+	}
+	if caption != "" && numSnaps > 0 {
+		actionCptn(c, "", caption)
 	}
 
 	dts := make([]daemonTemplateXactSnaps, len(xs))

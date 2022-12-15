@@ -105,14 +105,14 @@ var (
 	}
 	objCmdETL = cli.Command{
 		Name:         subcmdObject,
-		Usage:        "transform an object",
+		Usage:        "transform object",
 		ArgsUsage:    "ETL_ID BUCKET/OBJECT_NAME OUTPUT",
 		Action:       etlObjectHandler,
 		BashComplete: etlIDCompletions,
 	}
 	bckCmdETL = cli.Command{
 		Name:         subcmdBucket,
-		Usage:        "transform bucket and put results into another bucket",
+		Usage:        "perform bucket-to-bucket transform (\"offline transformation\")",
 		ArgsUsage:    "ETL_ID SRC_BUCKET DST_BUCKET",
 		Action:       etlBucketHandler,
 		Flags:        etlSubFlags[subcmdBucket],
@@ -120,7 +120,7 @@ var (
 	}
 	logsCmdETL = cli.Command{
 		Name:         subcmdLogs,
-		Usage:        "retrieve logs produced by an ETL",
+		Usage:        "retrieve ETL logs",
 		ArgsUsage:    "ETL_ID [TARGET_ID]",
 		Action:       etlLogsHandler,
 		BashComplete: etlIDCompletions,
@@ -290,12 +290,11 @@ func etlSourceHandler(c *cli.Context) (err error) {
 		return err
 	}
 	if initMsg, ok := msg.(*etl.InitCodeMsg); ok {
-		fmt.Fprintf(c.App.Writer, "%s\n", string(initMsg.Code))
+		fmt.Fprintln(c.App.Writer, string(initMsg.Code))
 		return
 	}
 	if initMsg, ok := msg.(*etl.InitSpecMsg); ok {
-		fmt.Fprintf(c.App.Writer, "%s\n", string(initMsg.Spec))
-		return
+		fmt.Fprintln(c.App.Writer, string(initMsg.Spec))
 	}
 	return
 }
@@ -330,11 +329,18 @@ func etlLogsHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func etlStopHandler(c *cli.Context, shift int) (err error) {
-	var etls []string
-	if flagIsSet(c, allETLStopFlag) {
-		if c.NArg() > shift {
-			return fmt.Errorf("specify either --all flag or ETL IDs")
+func etlStopHandler(c *cli.Context) error {
+	return stopETLs(c, "")
+}
+
+func stopETLs(c *cli.Context, id string) (err error) {
+	var etlIDs []string
+	switch {
+	case id != "":
+		etlIDs = append(etlIDs, id)
+	case flagIsSet(c, allETLStopFlag):
+		if c.NArg() > 0 {
+			return incorrectUsageMsg(c, "'--%s' flag cannot be used together with specific ETL IDs", allETLStopFlag.Name)
 		}
 
 		res, err := api.ETLList(apiBP)
@@ -342,26 +348,25 @@ func etlStopHandler(c *cli.Context, shift int) (err error) {
 			return err
 		}
 		for _, etlInfo := range res {
-			etls = append(etls, etlInfo.ID)
+			etlIDs = append(etlIDs, etlInfo.ID)
 		}
-	} else {
-		if c.NArg() == shift {
-			return fmt.Errorf("either specify --all flag or provide at least one ETL ID")
+	default:
+		if c.NArg() == 0 {
+			return incorrectUsageMsg(c, "specify either '--%s' flag or specific ETL ID(s)", allETLStopFlag.Name)
 		}
-		etls = c.Args()[shift:]
+		etlIDs = c.Args()[0:]
 	}
-
-	for _, id := range etls {
+	for _, id := range etlIDs {
+		msg := fmt.Sprintf("ETL[%s]", id)
 		if err := api.ETLStop(apiBP, id); err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-				color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL %q not found", id)
+				actionWarn(c, msg+" not found, nothing to do")
 				continue
 			}
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "ETL %q stopped successfully\n", id)
+		actionDone(c, msg+" stopped")
 	}
-
 	return nil
 }
 
@@ -426,11 +431,11 @@ func etlBucketHandler(c *cli.Context) (err error) {
 
 	id := c.Args()[0]
 
-	fromBck, err := parseBckURI(c, c.Args()[1])
+	fromBck, err := parseBckURI(c, c.Args()[1], true /*require provider*/)
 	if err != nil {
 		return err
 	}
-	toBck, err := parseBckURI(c, c.Args()[2])
+	toBck, err := parseBckURI(c, c.Args()[2], true /*require provider*/)
 	if err != nil {
 		return err
 	}

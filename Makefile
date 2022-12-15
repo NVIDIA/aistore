@@ -122,8 +122,11 @@ else
 	@cd $(BUILD_DIR)/cli && $(CGO_DISABLE) go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) *.go
 endif
 	@echo "*** To enable autocompletions in your current shell, run:"
-	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/bash or"
-	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/zsh"
+ifeq ($(AISTORE_PATH),$(PWD))
+	@echo "*** 'source cmd/cli/autocomplete/bash' or 'source cmd/cli/autocomplete/zsh'"
+else
+	@echo "*** source $(AISTORE_PATH)/cmd/cli/autocomplete/[bash|zsh]"
+endif
 
 cli-autocompletions: ## Add CLI autocompletions
 	@echo "Adding CLI autocomplete..."

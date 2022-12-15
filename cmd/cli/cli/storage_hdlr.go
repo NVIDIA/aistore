@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -16,15 +16,6 @@ import (
 
 var (
 	storageCmdFlags = map[string][]cli.Flag{
-		subcmdStgSummary: append(
-			longRunFlags,
-			listObjCachedFlag,
-			allObjsOrBcksFlag,
-			sizeInBytesFlag,
-			verboseFlag,
-		),
-		subcmdStgValidate:  {},
-		subcmdStgMountpath: {},
 		subcmdStgCleanup: {
 			waitFlag,
 			waitTimeoutFlag,
@@ -65,7 +56,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 		id  string
 	)
 	if c.NArg() != 0 {
-		bck, err = parseBckURI(c, c.Args().First())
+		bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/)
 		if err != nil {
 			return
 		}

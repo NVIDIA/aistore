@@ -348,7 +348,7 @@ mloop:
 	for _, b := range buckets {
 		if multiple {
 			for _, argBck := range c.Args() {
-				parsedArgBck, err := parseBckURI(c, argBck)
+				parsedArgBck, err := parseBckURI(c, argBck, true /*require provider*/)
 				if err != nil {
 					return
 				}
@@ -446,42 +446,13 @@ func putPromoteObjectCompletions(c *cli.Context) {
 }
 
 //
-// Xaction
+// Job
 //
 
-func daemonXactionCompletions(c *cli.Context) {
-	if c.NArg() > 2 {
-		return
-	}
-	xactSet, xactKind := c.NArg() != 0, c.Args().First()
-	if c.NArg() == 0 {
-		suggestTargetNodes(c)
-	} else {
-		smap, err := api.GetClusterMap(apiBP)
-		if err != nil {
-			return
-		}
-		if node := smap.GetTarget(c.Args().First()); node != nil {
-			xactSet = false
-			xactKind = c.Args().Get(1)
-		}
-	}
-	if !xactSet {
-		xs := xact.ListDisplayNames(false /*onlyStartable*/)
-		for _, xname := range xs {
-			fmt.Println(xname)
-		}
-		return
-	}
-	if xact.IsSameScope(xactKind, xact.ScopeB, xact.ScopeGB) {
-		bucketCompletions(bcmplop{})(c)
-		return
-	}
-}
-
-// complete to `action NAME [ID]`
+// complete to: `NAME [running job or xaction ID] [TARGET]` - in that sequence
 func runningJobCompletions(c *cli.Context) {
-	if c.NArg() == 0 {
+	switch c.NArg() {
+	case 0: // 1. NAME
 		kindIDs, err := api.GetAllRunningXactions(apiBP, "")
 		if err != nil {
 			return
@@ -505,43 +476,40 @@ func runningJobCompletions(c *cli.Context) {
 			fmt.Println(subcmdDsort)
 		}
 		return
-	}
-
-	// route the (4) special ones
-	switch c.Args().First() {
-	case subcmdDownload:
-		suggestDownloadID(c, (*dload.Job).JobRunning, 1 /*shift*/)
+	case 1: // ID
+		name := c.Args().Get(0)
+		if name == commandRebalance {
+			return
+		}
+		switch name {
+		case subcmdDownload:
+			suggestDownloadID(c, (*dload.Job).JobRunning, 1 /*shift*/)
+			return
+		case subcmdDsort:
+			suggestDsortID(c, (*dsort.JobInfo).IsRunning, 1 /*shift*/)
+			return
+		case commandETL:
+			suggestEtlID(c, 1 /*shift*/)
+			return
+		}
+		// complete xactID
+		xactIDs, err := api.GetAllRunningXactions(apiBP, name)
+		if err != nil {
+			return
+		}
+		for _, ki := range xactIDs {
+			i := strings.IndexByte(ki, xact.LeftID[0])
+			fmt.Println(ki[i+1 : len(ki)-1]) // extract UUID from "name[UUID]"
+		}
 		return
-	case subcmdDsort:
-		suggestDsortID(c, (*dsort.JobInfo).IsRunning, 1 /*shift*/)
-		return
-	case commandETL:
-		suggestEtlID(c, 1 /*shift*/)
-		return
-	case commandRebalance:
-		// global rebalance is global
-		return
-	}
-
-	// all other xactions
-	xname := c.Args().First()
-	xactIDs, err := api.GetAllRunningXactions(apiBP, xname)
-	if err != nil {
-		return
-	}
-	for _, ki := range xactIDs {
-		i := strings.IndexByte(ki, xact.LeftID[0])
-		fmt.Println(ki[i+1 : len(ki)-1]) // extract UUID from "xname[UUID]"
+	case 2: // TARGET
+		suggestTargetNodes(c)
 	}
 }
 
 //
 // Download & dSort
 //
-
-func downloadIDAllCompletions(c *cli.Context) {
-	suggestDownloadID(c, func(*dload.Job) bool { return true }, 0)
-}
 
 func downloadIDFinishedCompletions(c *cli.Context) { suggestDownloadID(c, (*dload.Job).JobFinished, 0) }
 
@@ -558,10 +526,6 @@ func suggestDownloadID(c *cli.Context, filter func(*dload.Job) bool, shift int) 
 			fmt.Println(job.ID)
 		}
 	}
-}
-
-func dsortIDAllCompletions(c *cli.Context) {
-	suggestDsortID(c, func(*dsort.JobInfo) bool { return true }, 0)
 }
 
 func dsortIDFinishedCompletions(c *cli.Context) { suggestDsortID(c, (*dsort.JobInfo).IsFinished, 0) }

@@ -271,13 +271,14 @@ func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err 
 	return
 }
 
-func parseBckURI(c *cli.Context, uri string, requireProviderInURI ...bool) (cmn.Bck, error) {
+//nolint:unparam // !requireProviderInURI (with default ais://) is a currently never used (feature)
+func parseBckURI(c *cli.Context, uri string, requireProviderInURI bool) (cmn.Bck, error) {
 	if isWebURL(uri) {
 		bck := parseURLtoBck(uri)
 		return bck, nil
 	}
 	opts := cmn.ParseURIOpts{}
-	if cfg != nil && (len(requireProviderInURI) == 0 || !requireProviderInURI[0]) {
+	if cfg != nil && !requireProviderInURI {
 		opts.DefaultProvider = cfg.DefaultProvider
 	}
 	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
@@ -597,7 +598,7 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	bcks := make([]cmn.Bck, 0, len(uris))
 
 	for _, bckURI := range uris {
-		bck, err := parseBckURI(c, bckURI)
+		bck, err := parseBckURI(c, bckURI, true /*require provider*/)
 		if err != nil {
 			return nil, err
 		}
@@ -1228,7 +1229,7 @@ func preparseBckObjURI(uri string) string {
 }
 
 func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }
-func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg) }
+func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Warning: ")+msg) }
 
 func actionCptn(c *cli.Context, prefix, msg string) {
 	if prefix == "" {
