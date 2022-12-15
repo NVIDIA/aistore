@@ -113,12 +113,16 @@ func (t *target) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid 
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}
-	xctn := xreg.GetXact(uuid)
+	xctn, err := xreg.GetXact(uuid)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
 	if xctn != nil {
 		t.writeJSON(w, r, xctn.Snap(), what)
 		return
 	}
-	err := cmn.NewErrXactNotFoundError("[" + uuid + "]")
+	err = cmn.NewErrXactNotFoundError("[" + uuid + "]")
 	t.writeErrSilent(w, r, err, http.StatusNotFound)
 }
 

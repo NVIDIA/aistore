@@ -133,10 +133,13 @@ func RegWithHK() {
 	hk.Reg("x-prune-active"+hk.NameSuffix, dreg.hkPruneActive, 0 /*time.Duration*/)
 }
 
-func GetXact(uuid string) (xctn cluster.Xact) { return dreg.getXact(uuid) }
+func GetXact(uuid string) (cluster.Xact, error) { return dreg.getXact(uuid) }
 
-func (r *registry) getXact(uuid string) (xctn cluster.Xact) {
-	debug.Assert(cos.IsValidUUID(uuid) || xact.IsValidRebID(uuid), uuid)
+func (r *registry) getXact(uuid string) (xctn cluster.Xact, err error) {
+	if !xact.IsValidUUID(uuid) {
+		err = fmt.Errorf("invalid UUID %q", uuid)
+		return
+	}
 	e := &r.entries
 	e.mtx.RLock()
 outer:
@@ -205,23 +208,24 @@ func AbortKind(err error, kind string) {
 
 func AbortAllMountpathsXactions() { dreg.abort(abortArgs{mountpaths: true}) }
 
-func DoAbort(flt XactFilter, err error) (aborted bool) {
+func DoAbort(flt XactFilter, err error) (bool /*aborted*/, error) {
 	if flt.ID != "" {
-		xctn := dreg.getXact(flt.ID)
-		if xctn != nil {
-			debug.Assertf(flt.Kind == "" || xctn.Kind() == flt.Kind,
-				"UUID must uniquely identify kind: %s vs %+v", xctn, flt)
-			aborted = xctn.Abort(err)
+		xctn, err := dreg.getXact(flt.ID)
+		if xctn == nil || err != nil {
+			return false, err
 		}
-		return
+		debug.Assertf(flt.Kind == "" || xctn.Kind() == flt.Kind,
+			"UUID must uniquely identify kind: %s vs %+v", xctn, flt)
+		return xctn.Abort(err), nil
 	}
+
 	if flt.Kind != "" {
 		debug.Assert(xact.IsValidKind(flt.Kind), flt.Kind)
 		entry := dreg.getRunning(flt)
 		if entry == nil {
-			return
+			return false, nil
 		}
-		return entry.Get().Abort(err)
+		return entry.Get().Abort(err), nil
 	}
 	if flt.Bck == nil {
 		// No bucket and no kind - request for all available xactions.
@@ -230,8 +234,7 @@ func DoAbort(flt XactFilter, err error) (aborted bool) {
 		// Bucket present and no kind - request for all available bucket's xactions.
 		AbortAllBuckets(err, flt.Bck)
 	}
-	aborted = true
-	return
+	return true, nil
 }
 
 func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) {
@@ -240,7 +243,10 @@ func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 		onlyRunning = *flt.OnlyRunning
 	}
 	if flt.ID != "" {
-		xctn := dreg.getXact(flt.ID)
+		xctn, err := dreg.getXact(flt.ID)
+		if err != nil {
+			return nil, err
+		}
 		if xctn != nil {
 			if onlyRunning && xctn.Finished() {
 				return nil, cmn.NewErrXactNotFoundError("[only-running vs " + xctn.String() + "]")

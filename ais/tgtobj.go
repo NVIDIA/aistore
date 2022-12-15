@@ -142,7 +142,12 @@ func (poi *putObjInfo) do(r *http.Request, dpq *dpq) (int, error) {
 	}
 	if dpq.uuid != "" {
 		// resolve cluster-wide xact "behind" this PUT (promote via a single target won't show up)
-		if xctn := xreg.GetXact(dpq.uuid); xctn != nil {
+		xctn, err := xreg.GetXact(dpq.uuid)
+		if err != nil {
+			glog.Error(err)
+			return 0, err
+		}
+		if xctn != nil {
 			poi.xctn = xctn
 		}
 	}

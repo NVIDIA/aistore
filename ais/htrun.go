@@ -940,6 +940,9 @@ func isBrowser(userAgent string) bool {
 func (h *htrun) handleWriteError(r *http.Request, tag string, v any, err error) {
 	const maxl = 32
 	var s string
+	if daemon.stopping.Load() {
+		return
+	}
 	if v != nil {
 		s = fmt.Sprintf("[%+v", v)
 		if len(s) > maxl {

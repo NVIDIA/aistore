@@ -280,7 +280,11 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 		return
 	}
 
-	xctn := xreg.GetXact(msg.UUID)
+	xctn, err := xreg.GetXact(msg.UUID)
+	if err != nil {
+		t.writeErr(w, r, err, http.StatusInternalServerError)
+		return
+	}
 
 	// never started
 	if xctn == nil {
