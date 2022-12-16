@@ -232,7 +232,7 @@ func suggestNode(c *cli.Context, ty int) {
 		completionErr(c, err)
 		return
 	}
-	if sid := argDaemonID(argLast(c)); smap.GetNode(sid) != nil {
+	if _, _, err = getNodeIDName(c, argLast(c)); err == nil {
 		return // node already selected
 	}
 	if ty != allTargets {

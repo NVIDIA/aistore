@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -155,12 +155,6 @@ var (
 		ArgsUsage: "[TARGET_ID]",
 		Flags:     showCmdsFlags[commandStorage],
 		Action:    showStorageHandler,
-		BashComplete: func(c *cli.Context) {
-			if c.NArg() == 0 {
-				fmt.Println(subcmdShowDisk, subcmdMountpath, subcmdSummary)
-			}
-			suggestTargetNodes(c)
-		},
 		Subcommands: []cli.Command{
 			showCmdDisk,
 			showCmdMpath,
@@ -294,37 +288,49 @@ var (
 )
 
 func showDisksHandler(c *cli.Context) (err error) {
-	daemonID := argDaemonID(c.Args().First())
-	if _, err = fillNodeStatusMap(c); err != nil {
-		return
+	var sid string
+	if c.NArg() > 0 {
+		sid, _, err = getNodeIDName(c, c.Args().First())
+		if err != nil {
+			return
+		}
 	}
-	setLongRunParams(c)
-	return daemonDiskStats(c, daemonID)
+	return daemonDiskStats(c, sid)
 }
 
 // args: `NAME [running job or xaction ID] [TARGET]` (see `runningJobCompletions`)
 func showJobsHandler(c *cli.Context) error {
 	var (
 		name     = c.Args().Get(0)
-		id       = c.Args().Get(1)
+		xid      = c.Args().Get(1)
 		daemonID = c.Args().Get(2)
 	)
-	bck, err := parseBckURI(c, id, true /*require provider*/)
+	// reparse and reassign
+	bck, err := parseBckURI(c, xid, true /*require provider*/)
 	if err == nil {
-		id = "" // arg 1 was in fact bucket
 		if _, err = headBucket(bck, true /* don't add */); err != nil {
 			return err
 		}
+		xid = "" // arg #1 is a bucket
 	} else if bck, err = parseBckURI(c, daemonID, true); err == nil {
-		daemonID = ""
 		if _, err = headBucket(bck, true /* don't add */); err != nil {
 			return err
+		}
+		daemonID = "" // arg #2 ditto
+	}
+	if daemonID == "" {
+		if xid != "" && strings.HasPrefix(xid, cluster.TnamePrefix) {
+			daemonID, xid = xid, "" //  arg #1 is a node
 		}
 	}
-	if daemonID == "" && id != "" {
-		if strings.HasPrefix(id, cluster.TnamePrefix) {
-			daemonID, id = argDaemonID(id), ""
+
+	// sname to sid
+	if daemonID != "" {
+		sid, _, err := getNodeIDName(c, daemonID)
+		if err != nil {
+			return err
 		}
+		daemonID = sid
 	}
 
 	setLongRunParams(c, 72)
@@ -332,9 +338,9 @@ func showJobsHandler(c *cli.Context) error {
 	// special
 	switch name {
 	case subcmdDownload:
-		return showDownloadsHandler(c, id)
+		return showDownloadsHandler(c, xid)
 	case subcmdDsort:
-		return showDsortHandler(c, id)
+		return showDsortHandler(c, xid)
 	case commandETL:
 		return etlListHandler(c)
 	}
@@ -380,9 +386,9 @@ func showJobsHandler(c *cli.Context) error {
 		caption     string
 		xactKind, _ = xact.GetKindName(name)
 		xactArgs    = api.XactReqArgs{
-			ID:          id,
+			ID:          xid,
 			Kind:        xactKind,
-			DaemonID:    argDaemonID(daemonID),
+			DaemonID:    daemonID,
 			Bck:         bck,
 			OnlyRunning: onlyActive,
 		}
@@ -433,8 +439,10 @@ func showClusterHandler(c *cli.Context) error {
 	}
 	setLongRunParams(c)
 
-	if daemonID := argDaemonID(c.Args().Get(1)); daemonID != "" {
-		return cluDaeStatus(c, smap, cluConfig, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+	if arg := c.Args().Get(1); arg != "" {
+		if sid, _, err := getNodeIDName(c, arg); err == nil {
+			return cluDaeStatus(c, smap, cluConfig, sid, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+		}
 	}
 
 	what := c.Args().Get(0)
@@ -442,8 +450,7 @@ func showClusterHandler(c *cli.Context) error {
 }
 
 func showStorageHandler(c *cli.Context) (err error) {
-	setLongRunParams(c)
-	return showDisksHandler(c)
+	return daemonDiskStats(c, "")
 }
 
 func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption string) error {
@@ -556,17 +563,27 @@ func showBckPropsHandler(c *cli.Context) (err error) {
 	return showBucketProps(c)
 }
 
-func showSmapHandler(c *cli.Context) error {
-	smap, err := fillNodeStatusMap(c)
+func showSmapHandler(c *cli.Context) (err error) {
+	var (
+		sid, sname string
+		smap       *cluster.Smap
+	)
+	if arg := c.Args().First(); arg != "" {
+		sid, sname, err = getNodeIDName(c, arg)
+		if err != nil {
+			return
+		}
+	}
+	smap, err = fillNodeStatusMap(c)
 	if err != nil {
-		return err
+		return
 	}
+
 	setLongRunParams(c)
-	daemonID := argDaemonID(c.Args().First())
-	if daemonID != "" {
-		actionCptn(c, "Node ["+daemonID+"]", " cluster map:")
+	if sid != "" {
+		actionCptn(c, "Cluster map from: ", sname)
 	}
-	return smapFromNode(c, smap, daemonID, flagIsSet(c, jsonFlag))
+	return smapFromNode(c, smap, sid, flagIsSet(c, jsonFlag))
 }
 
 func showBMDHandler(c *cli.Context) (err error) {
@@ -620,19 +637,24 @@ func showClusterConfig(c *cli.Context, section string) error {
 
 func showNodeConfig(c *cli.Context) error {
 	var (
+		smap           *cluster.Smap
 		node           *cluster.Snode
 		section, scope string
-		daemonID       = argDaemonID(c.Args().First())
 		useJSON        = flagIsSet(c, jsonFlag)
 	)
-	smap, err := getClusterMap(c)
-	if err != nil {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+
+	sid, sname, err := getNodeIDName(c, c.Args().First())
+	if err == nil {
 		return err
 	}
-	if node = smap.GetNode(daemonID); node == nil {
-		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
-	}
-	sname := node.StringEx()
+	smap, err = getClusterMap(c)
+	debug.AssertNoErr(err)
+	node = smap.GetNode(sid)
+	debug.Assert(node != nil)
+
 	config, err := api.GetDaemonConfig(apiBP, node)
 	if err != nil {
 		return err
@@ -725,22 +747,20 @@ func showNodeConfig(c *cli.Context) error {
 	return tmpls.Print(data, c.App.Writer, tmpls.DaemonConfigTmpl, nil, useJSON)
 }
 
-func showDaemonLogHandler(c *cli.Context) (err error) {
+func showDaemonLogHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-
-	firstIteration := setLongRunParams(c, 0)
-
-	smap, err := getClusterMap(c)
+	sid, sname, err := getNodeIDName(c, c.Args().First())
 	if err != nil {
 		return err
 	}
-	daemonID := argDaemonID(c.Args().First())
-	node := smap.GetNode(daemonID)
-	if node == nil {
-		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
-	}
+	smap, err := getClusterMap(c)
+	debug.AssertNoErr(err)
+	node := smap.GetNode(sid)
+	debug.Assert(node != nil)
+
+	firstIteration := setLongRunParams(c, 0)
 
 	sev := strings.ToLower(parseStrFlag(c, logSevFlag))
 	if sev != "" {
@@ -762,11 +782,11 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 		}
 		if config.Log.FlushTime.D() != flushRate {
 			nvs[nodeLogFlushName] = flushRate.String()
-			if err := api.SetDaemonConfig(apiBP, daemonID, nvs, true /*transient*/); err != nil {
+			if err := api.SetDaemonConfig(apiBP, sid, nvs, true /*transient*/); err != nil {
 				return err
 			}
 			warn := fmt.Sprintf("run 'ais config node %s inherited %s %s' to change it back",
-				node.StringEx(), nodeLogFlushName, config.Log.FlushTime)
+				sname, nodeLogFlushName, config.Log.FlushTime)
 			actionWarn(c, warn)
 			time.Sleep(2 * time.Second)
 			fmt.Fprintln(c.App.Writer)
@@ -832,33 +852,45 @@ func showRemoteAISHandler(c *cli.Context) error {
 
 func showMpathHandler(c *cli.Context) error {
 	var (
-		daemonID = argDaemonID(c.Args().First())
-		nodes    []*cluster.Snode
+		nodes      []*cluster.Snode
+		sid, sname string
 	)
+	if c.NArg() > 0 {
+		var err error
+		sid, sname, err = getNodeIDName(c, c.Args().First())
+		if err != nil {
+			return err
+		}
+	}
 	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}
+
 	setLongRunParams(c)
-	if daemonID != "" {
-		tgt := smap.GetTarget(daemonID)
-		if tgt == nil {
-			return fmt.Errorf("target ID %q invalid - no such target", daemonID)
+
+	if sid != "" {
+		node := smap.GetNode(sid)
+		if node.IsProxy() {
+			return fmt.Errorf("node %s is a proxy (expecting target)", sname)
 		}
-		nodes = []*cluster.Snode{tgt}
+		nodes = []*cluster.Snode{node}
 	} else {
 		nodes = make(cluster.Nodes, 0, len(smap.Tmap))
 		for _, tgt := range smap.Tmap {
 			nodes = append(nodes, tgt)
 		}
 	}
-	wg := &sync.WaitGroup{}
-	mpCh := make(chan *targetMpath, len(nodes))
-	erCh := make(chan error, len(nodes))
+
+	var (
+		l    = len(nodes)
+		wg   = cos.NewLimitedWaitGroup(sys.NumCPU(), l)
+		mpCh = make(chan *targetMpath, l)
+		erCh = make(chan error, l)
+	)
 	for _, node := range nodes {
 		wg.Add(1)
 		go func(node *cluster.Snode) {
-			defer wg.Done()
 			mpl, err := api.GetMountpaths(apiBP, node)
 			if err != nil {
 				erCh <- err
@@ -868,6 +900,7 @@ func showMpathHandler(c *cli.Context) error {
 					Mpl:      mpl,
 				}
 			}
+			wg.Done()
 		}(node)
 	}
 	wg.Wait()
@@ -876,6 +909,7 @@ func showMpathHandler(c *cli.Context) error {
 	for err := range erCh {
 		return err
 	}
+
 	mpls := make([]*targetMpath, 0, len(nodes))
 	for mp := range mpCh {
 		mpls = append(mpls, mp)
@@ -902,17 +936,21 @@ func appendStatToProps(props nvpairList, name string, value int64, prefix, filte
 	return append(props, nvpair{Name: name, Value: fmtStatValue(name, value, human)})
 }
 
-func showClusterStatsHandler(c *cli.Context) error {
-	smap, err := getClusterMap(c)
-	if err != nil {
-		return err
-	}
+func showClusterStatsHandler(c *cli.Context) (err error) {
 	var (
-		node     *cluster.Snode
-		daemonID = argDaemonID(c.Args().First())
+		sid  string
+		node *cluster.Snode
+		smap *cluster.Smap
 	)
-	if daemonID != "" {
-		node = smap.GetNode(daemonID)
+	if c.NArg() > 0 {
+		sid, _, err = getNodeIDName(c, c.Args().First())
+		if err != nil {
+			return err
+		}
+		smap, err = getClusterMap(c)
+		debug.AssertNoErr(err)
+		node = smap.GetNode(sid)
+		debug.Assert(node != nil)
 	}
 
 	var (

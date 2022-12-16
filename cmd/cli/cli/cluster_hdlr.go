@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -284,24 +285,23 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	var (
-		action   = c.Command.Name
-		daemonID = argDaemonID(c.Args().First())
-		node     = smap.GetNode(daemonID)
-	)
-	if node == nil {
-		return fmt.Errorf("node %q does not exist", daemonID)
+	sid, sname, err := getNodeIDName(c, c.Args().First())
+	if err != nil {
+		return err
 	}
-	name := node.StringEx()
+	node := smap.GetNode(sid)
+	debug.Assert(node != nil)
+
+	action := c.Command.Name
 	if smap.IsPrimary(node) {
-		return fmt.Errorf("%s is primary, cannot %s", name, action)
+		return fmt.Errorf("%s is primary (cannot %s the primary node)", sname, action)
 	}
 	var (
 		xactID        string
 		skipRebalance = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
 		noShutdown    = flagIsSet(c, noShutdownFlag)
 		rmUserData    = flagIsSet(c, rmUserDataFlag)
-		actValue      = &apc.ActValRmNode{DaemonID: daemonID, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
+		actValue      = &apc.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
 	)
 	if skipRebalance && node.IsTarget() {
 		fmt.Fprintf(c.App.Writer,
@@ -311,7 +311,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	}
 	if action == subcmdNodeDecommission {
 		if !flagIsSet(c, yesFlag) {
-			warn := fmt.Sprintf("about to permanently decommission node %s. The operation cannot be undone!", name)
+			warn := fmt.Sprintf("about to permanently decommission node %s. The operation cannot be undone!", sname)
 			if ok := confirm(c, "Proceed?", warn); !ok {
 				return nil
 			}
@@ -345,42 +345,57 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	}
 	switch action {
 	case subcmdStopMaint:
-		fmt.Fprintf(c.App.Writer, "%s is now active (maintenance done)\n", name)
+		fmt.Fprintf(c.App.Writer, "%s is now active (maintenance done)\n", sname)
 	case subcmdNodeDecommission:
 		if skipRebalance || node.IsProxy() {
-			fmt.Fprintf(c.App.Writer, "%s has been decommissioned (permanently removed from the cluster)\n", name)
+			fmt.Fprintf(c.App.Writer, "%s has been decommissioned (permanently removed from the cluster)\n", sname)
 		} else {
 			fmt.Fprintf(c.App.Writer,
-				"%s is being decommissioned, please wait for cluster rebalancing to finish...\n", name)
+				"%s is being decommissioned, please wait for cluster rebalancing to finish...\n", sname)
 		}
 	case subcmdShutdown:
 		if skipRebalance || node.IsProxy() {
-			fmt.Fprintf(c.App.Writer, "%s has been shutdown\n", name)
+			fmt.Fprintf(c.App.Writer, "%s has been shutdown\n", sname)
 		} else {
 			fmt.Fprintf(c.App.Writer,
-				"%s is shutting down, please wait for cluster rebalancing to finish...\n", name)
+				"%s is shutting down, please wait for cluster rebalancing to finish...\n", sname)
 		}
 	case subcmdStartMaint:
-		fmt.Fprintf(c.App.Writer, "%s is now in maintenance\n", name)
+		fmt.Fprintf(c.App.Writer, "%s is now in maintenance\n", sname)
 	}
 	return nil
 }
 
 func setPrimaryHandler(c *cli.Context) error {
-	daemonID := argDaemonID(c.Args().First())
-	if daemonID == "" {
+	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	smap, err := fillNodeStatusMap(c)
+	sid, sname, err := getNodeIDName(c, c.Args().First())
 	if err != nil {
 		return err
 	}
-	if _, ok := smap.Pmap[daemonID]; !ok {
-		return incorrectUsageMsg(c, "%s: is not a proxy", daemonID)
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return err
 	}
-	err = api.SetPrimaryProxy(apiBP, daemonID, false /*force*/)
+	node := smap.GetNode(sid)
+	debug.Assert(node != nil)
+	if !node.IsProxy() {
+		return incorrectUsageMsg(c, "%s is not a proxy", sname)
+	}
+
+	switch {
+	case node.IsAnySet(cluster.NodeFlagMaint):
+		return fmt.Errorf("%s is currently in maintenance", sname)
+	case node.IsAnySet(cluster.NodeFlagDecomm):
+		return fmt.Errorf("%s is currently being decommissioned", sname)
+	case node.IsAnySet(cluster.SnodeNonElectable):
+		return fmt.Errorf("%s is non-electable", sname)
+	}
+
+	err = api.SetPrimaryProxy(apiBP, sid, false /*force*/)
 	if err == nil {
-		fmt.Fprintf(c.App.Writer, "%s is now a new primary\n", daemonID)
+		actionDone(c, sname+" is now a new primary")
 	}
 	return err
 }
@@ -409,16 +424,21 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 
 func showClusterRebalanceHandler(c *cli.Context) error {
 	var (
-		id       = c.Args().Get(0)
+		xid      = c.Args().Get(0)
 		daemonID = c.Args().Get(1)
 	)
-	if daemonID == "" && id != "" {
-		if strings.HasPrefix(id, cluster.TnamePrefix) {
-			daemonID, id = argDaemonID(id), ""
+	if daemonID == "" && xid != "" {
+		// either/or
+		if strings.HasPrefix(xid, cluster.TnamePrefix) {
+			sid, _, err := getNodeIDName(c, xid)
+			if err != nil {
+				return err
+			}
+			daemonID, xid = sid, ""
 		}
 	}
 	xactArgs := api.XactReqArgs{
-		ID:          id,
+		ID:          xid,
 		Kind:        apc.ActRebalance,
 		DaemonID:    daemonID,
 		OnlyRunning: !flagIsSet(c, allXactionsFlag),

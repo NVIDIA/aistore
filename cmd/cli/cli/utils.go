@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
@@ -87,10 +86,6 @@ type (
 		Old     string
 	}
 )
-
-func argDaemonID(arg string) string {
-	return cluster.N2ID(arg)
-}
 
 func argLast(c *cli.Context) (last string) {
 	if l := c.NArg(); l > 0 {

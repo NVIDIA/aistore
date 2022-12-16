@@ -263,15 +263,19 @@ func setNodeConfigHandler(c *cli.Context) error {
 	var (
 		config   cmn.Config
 		nvs      cos.StrKVs
-		daemonID     = argDaemonID(c.Args().First())
 		args         = c.Args()
 		v        any = &config.ClusterConfig
 		propList     = make([]string, 0, 48)
 	)
+	sid, sname, err := getNodeIDName(c, args.First())
+	if err != nil {
+		return err
+	}
+
 	if cos.StringInSlice(cfgScopeLocal, args) {
 		v = &config.LocalConfig
 	}
-	err := cmn.IterFields(v, func(tag string, _ cmn.IterField) (err error, b bool) {
+	err = cmn.IterFields(v, func(tag string, _ cmn.IterField) (err error, b bool) {
 		propList = append(propList, tag)
 		return
 	}, cmn.IterOpts{Allowed: apc.Cluster})
@@ -299,7 +303,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 		}
 		return err
 	}
-	if daemonID != "" && c.Args().Get(1) == cfgScopeLocal {
+	if args.Get(1) == cfgScopeLocal {
 		return errors.New(localNodeCfgErr)
 	}
 	for k := range nvs {
@@ -311,7 +315,8 @@ func setNodeConfigHandler(c *cli.Context) error {
 	// assorted named fields that'll require (cluster | node) restart
 	// for the change to take an effect
 	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
-		warn := fmt.Sprintf("node %q restart required for the change '%s=%s' to take an effect.", daemonID, name, nvs[name])
+		warn := fmt.Sprintf("for the change '%s=%s' to take an effect node %q must be restarted.",
+			name, nvs[name], sname)
 		actionWarn(c, warn)
 	}
 
@@ -323,14 +328,14 @@ func setNodeConfigHandler(c *cli.Context) error {
 		// have api.SetClusterConfigUsingMsg but not "api.SetDaemonConfigUsingMsg"
 		return fmt.Errorf("cannot update node configuration using JSON-formatted %q - not implemented yet", jsonval)
 	}
-	if err := api.SetDaemonConfig(apiBP, daemonID, nvs, flagIsSet(c, transientFlag)); err != nil {
+	if err := api.SetDaemonConfig(apiBP, sid, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
 
 	s, err := jsoniter.MarshalIndent(nvs, "", "    ")
 	debug.AssertNoErr(err)
 	fmt.Fprintf(c.App.Writer, "%s\n", string(s))
-	fmt.Fprintf(c.App.Writer, "\nnode %q config updated\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "\nnode %s config updated\n", sname)
 	return nil
 }
 
@@ -353,12 +358,15 @@ func resetConfigHandler(c *cli.Context) (err error) {
 	return
 }
 
-func resetNodeConfigHandler(c *cli.Context) (err error) {
-	var (
-		sname    = c.Args().First()
-		daemonID = argDaemonID(sname)
-	)
-	if err := api.ResetDaemonConfig(apiBP, daemonID); err != nil {
+func resetNodeConfigHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	sid, sname, err := getNodeIDName(c, c.Args().First())
+	if err != nil {
+		return err
+	}
+	if err := api.ResetDaemonConfig(apiBP, sid); err != nil {
 		return err
 	}
 	actionDone(c, sname+": inherited config successfully reset to the current cluster-wide defaults")

@@ -419,7 +419,7 @@ As far as existing Amazon-native CLI tools, `s3cmd` would be the preferred and r
   - [1. AIS Endpoint](/docs/s3cmd.md#1-ais-endpoint)
   - [2. How to have `s3cmd` calling AIS endpoint](/docs/s3cmd.md#2-how-to-have-s3cmd-calling-ais-endpoint)
   - [3. Alternatively](/docs/s3cmd.md#3-alternatively)
-  - [4. Notice and possibly update AIS configuration](/docs/s3cmd.md#4-notice-and-possibly-update-ais-configuration)
+  - [4. Note and, possibly, update AIS configuration](/docs/s3cmd.md#4-note-and-possibly-update-ais-configuration)
   - [5. Create bucket and PUT/GET objects using `s3cmd`](/docs/s3cmd.md#5-create-bucket-and-putget-objects-using-s3cmd)
   - [6. Multipart upload using `s3cmd`](/docs/s3cmd.md#6-multipart-upload-using-s3cmd)
 

@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api"
@@ -46,6 +47,35 @@ func getClusterMap(c *cli.Context) (*cluster.Smap, error) {
 		apiBP.URL = smap.Primary.PubNet.URL
 	}
 	return curSmap, nil
+}
+
+func getNodeIDName(c *cli.Context, arg string) (sid, sname string, err error) {
+	if arg == "" {
+		err = missingArgumentsError(c, c.Command.ArgsUsage)
+		return
+	}
+	smap, errV := getClusterMap(c)
+	if errV != nil {
+		err = errV
+		return
+	}
+	if strings.HasPrefix(arg, cluster.TnamePrefix) || strings.HasPrefix(arg, cluster.PnamePrefix) {
+		sname = arg
+		sid = cluster.N2ID(arg)
+	} else {
+		sid = arg
+	}
+	node := smap.GetNode(sid)
+	if node == nil {
+		if sname == "" {
+			err = fmt.Errorf("node ID=%s does not exist (see 'ais show cluster')", arg)
+		} else {
+			err = fmt.Errorf("node %s does not exist (see 'ais show cluster')", arg)
+		}
+		return
+	}
+	sname = node.StringEx()
+	return
 }
 
 // Gets Smap from a given node (`daemonID`) and displays it

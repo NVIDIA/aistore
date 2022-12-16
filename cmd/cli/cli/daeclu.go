@@ -114,6 +114,9 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 		useJSON    = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
 	)
+	if _, err := fillNodeStatusMap(c); err != nil {
+		return err
+	}
 	if _, ok := curPrxStatus[sid]; ok {
 		return fmt.Errorf("node %q is a proxy (hint: \"%s %s %s\" works only for targets)",
 			sid, cliName, commandShow, subcmdShowDisk)
@@ -121,6 +124,8 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 	if _, ok := curTgtStatus[sid]; sid != "" && !ok {
 		return fmt.Errorf("target ID=%q does not exist", sid)
 	}
+
+	setLongRunParams(c)
 
 	targets := stats.DaemonStatusMap{sid: {}}
 	if sid == "" {

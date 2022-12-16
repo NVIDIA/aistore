@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -201,20 +202,21 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 func removeNodeFromSmap(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, c.Command.ArgsUsage)
-	} else if c.NArg() > 1 {
+	}
+	if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
-	daemonID := argDaemonID(c.Args().First())
-	smap, err := getClusterMap(c)
+
+	sid, sname, err := getNodeIDName(c, c.Args().First())
 	if err != nil {
 		return err
 	}
-	node := smap.GetNode(daemonID)
-	if node == nil {
-		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
-	}
+	smap, err := getClusterMap(c)
+	debug.AssertNoErr(err)
+	node := smap.GetNode(sid)
+	debug.Assert(node != nil)
 	if smap.IsPrimary(node) {
-		return fmt.Errorf("node %s is primary: cannot remove", daemonID)
+		return fmt.Errorf("%s is primary (cannot remove the primary node)", sname)
 	}
-	return api.RemoveNodeFromSmap(apiBP, daemonID)
+	return api.RemoveNodeFromSmap(apiBP, sid)
 }
