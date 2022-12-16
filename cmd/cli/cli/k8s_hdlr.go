@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/urfave/cli"
 )
 
@@ -77,7 +76,7 @@ func k8sShowEntireCluster(c *cli.Context) (err error) {
 }
 
 func k8sShowSingleDaemon(c *cli.Context) (err error) {
-	smap, err := api.GetClusterMap(apiBP)
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}

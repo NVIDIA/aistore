@@ -526,16 +526,16 @@ func resetPropsHandler(c *cli.Context) error {
 	return nil
 }
 
-func lruBucketHandler(c *cli.Context) (err error) {
-	var p *cmn.BucketProps
+func lruBucketHandler(c *cli.Context) error {
 	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
 	if err != nil {
 		return err
 	}
+	var p *cmn.BucketProps
 	if p, err = headBucket(bck, true /* don't add */); err != nil {
 		return err
 	}
-	defProps, err := defaultBckProps(bck)
+	defProps, err := defaultBckProps(c, bck)
 	if err != nil {
 		return err
 	}

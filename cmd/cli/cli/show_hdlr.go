@@ -295,7 +295,7 @@ var (
 
 func showDisksHandler(c *cli.Context) (err error) {
 	daemonID := argDaemonID(c.Args().First())
-	if _, err = fillMap(); err != nil {
+	if _, err = fillNodeStatusMap(c); err != nil {
 		return
 	}
 	setLongRunParams(c)
@@ -423,7 +423,7 @@ func showDsortHandler(c *cli.Context, id string) error {
 }
 
 func showClusterHandler(c *cli.Context) error {
-	primarySmap, err := fillMap()
+	smap, err := fillNodeStatusMap(c)
 	if err != nil {
 		return err
 	}
@@ -434,11 +434,11 @@ func showClusterHandler(c *cli.Context) error {
 	setLongRunParams(c)
 
 	if daemonID := argDaemonID(c.Args().Get(1)); daemonID != "" {
-		return clusterDaemonStatus(c, primarySmap, cluConfig, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+		return cluDaeStatus(c, smap, cluConfig, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 	}
 
 	what := c.Args().Get(0)
-	return clusterDaemonStatus(c, primarySmap, cluConfig, what, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+	return cluDaeStatus(c, smap, cluConfig, what, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 }
 
 func showStorageHandler(c *cli.Context) (err error) {
@@ -556,16 +556,17 @@ func showBckPropsHandler(c *cli.Context) (err error) {
 	return showBucketProps(c)
 }
 
-func showSmapHandler(c *cli.Context) (err error) {
-	var (
-		primarySmap *cluster.Smap
-		daemonID    = argDaemonID(c.Args().First())
-	)
-	if primarySmap, err = fillMap(); err != nil {
-		return
+func showSmapHandler(c *cli.Context) error {
+	smap, err := fillNodeStatusMap(c)
+	if err != nil {
+		return err
 	}
 	setLongRunParams(c)
-	return clusterSmap(c, primarySmap, daemonID, flagIsSet(c, jsonFlag))
+	daemonID := argDaemonID(c.Args().First())
+	if daemonID != "" {
+		actionCptn(c, "Node ["+daemonID+"]", " cluster map:")
+	}
+	return smapFromNode(c, smap, daemonID, flagIsSet(c, jsonFlag))
 }
 
 func showBMDHandler(c *cli.Context) (err error) {
@@ -624,7 +625,7 @@ func showNodeConfig(c *cli.Context) error {
 		daemonID       = argDaemonID(c.Args().First())
 		useJSON        = flagIsSet(c, jsonFlag)
 	)
-	smap, err := api.GetClusterMap(apiBP)
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}
@@ -731,7 +732,7 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 
 	firstIteration := setLongRunParams(c, 0)
 
-	smap, err := api.GetClusterMap(apiBP)
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}
@@ -820,7 +821,7 @@ func showRemoteAISHandler(c *cli.Context) error {
 		for _, ra := range all.A {
 			fmt.Fprintln(c.App.Writer)
 			actionCptn(c, ra.Alias+"["+ra.UUID+"]", " cluster map:")
-			err := clusterSmap(c, ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))
+			err := smapFromNode(c, ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))
 			if err != nil {
 				actionWarn(c, err.Error())
 			}
@@ -834,7 +835,7 @@ func showMpathHandler(c *cli.Context) error {
 		daemonID = argDaemonID(c.Args().First())
 		nodes    []*cluster.Snode
 	)
-	smap, err := api.GetClusterMap(apiBP)
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}
@@ -902,7 +903,7 @@ func appendStatToProps(props nvpairList, name string, value int64, prefix, filte
 }
 
 func showClusterStatsHandler(c *cli.Context) error {
-	smap, err := api.GetClusterMap(apiBP)
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}

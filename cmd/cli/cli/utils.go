@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -35,7 +34,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools/docker"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -67,7 +65,6 @@ var (
 	authnHTTPClient   *http.Client
 	apiBP             api.BaseParams
 	authParams        api.BaseParams
-	mu                sync.Mutex
 )
 
 type (
@@ -174,56 +171,9 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 	return closestName, minDist
 }
 
-// Get cluster map and use it to retrieve node status for each clustered node
-func fillMap() (*cluster.Smap, error) {
-	wg := &sync.WaitGroup{}
-	smap, err := api.GetClusterMap(apiBP)
-	if err != nil {
-		return nil, err
-	}
-	if smap.Primary.PubNet.URL != apiBP.URL {
-		// TODO: cluster map (Smap) is replicated & synchronized across all nodes, and so
-		//       this step can be made optional/configurable with default='not doing it'
-		smapPrimary, err := api.GetNodeClusterMap(apiBP, smap.Primary.ID())
-		if err != nil {
-			return nil, err
-		}
-		smap = smapPrimary
-	}
-	proxyCount := smap.CountProxies()
-	targetCount := smap.CountTargets()
-
-	wg.Add(proxyCount + targetCount)
-	retrieveStatus(smap.Pmap, pmapStatus, wg)
-	retrieveStatus(smap.Tmap, tmapStatus, wg)
-	wg.Wait()
-	return smap, nil
-}
-
-func retrieveStatus(nodeMap cluster.NodeMap, daeMap stats.DaemonStatusMap, wg *sync.WaitGroup) {
-	fill := func(node *cluster.Snode) {
-		obj, _ := api.GetDaemonStatus(apiBP, node)
-		if node.Flags.IsSet(cluster.NodeFlagMaint) {
-			obj.Status = "maintenance"
-		} else if node.Flags.IsSet(cluster.NodeFlagDecomm) {
-			obj.Status = "decommission"
-		}
-		mu.Lock()
-		daeMap[node.ID()] = obj
-		mu.Unlock()
-	}
-
-	for _, si := range nodeMap {
-		go func(si *cluster.Snode) {
-			fill(si)
-			wg.Done()
-		}(si)
-	}
-}
-
-// Get config from random target.
-func getRandTargetConfig() (*cmn.Config, error) {
-	smap, err := api.GetClusterMap(apiBP)
+// Get config from a random target.
+func getRandTargetConfig(c *cli.Context) (*cmn.Config, error) {
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return nil, err
 	}
@@ -1004,8 +954,8 @@ done:
 
 // First, request cluster's config from the primary node that contains
 // default Cksum type. Second, generate default list of properties.
-func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
-	smap, err := api.GetClusterMap(apiBP)
+func defaultBckProps(c *cli.Context, bck cmn.Bck) (*cmn.BucketProps, error) {
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return nil, err
 	}

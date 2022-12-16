@@ -407,7 +407,7 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 	}
 	var smap *cluster.Smap
 	if len(cluSpec.URLs) == 0 {
-		smap, err = api.GetClusterMap(apiBP)
+		smap, err = getClusterMap(c)
 		cluSpec.URLs = append(cluSpec.URLs, clusterURL)
 	} else {
 		bp := api.BaseParams{
@@ -664,7 +664,8 @@ func parseClusterSpecs(c *cli.Context) (cluSpec authn.CluACL, err error) {
 	cluSpec.URLs = make([]string, 0, 1)
 	for idx := 0; idx < c.NArg(); idx++ {
 		arg := c.Args().Get(idx)
-		if strings.HasPrefix(arg, "http:") || strings.HasPrefix(arg, "https:") {
+		if strings.HasPrefix(arg, "http:") || strings.HasPrefix(arg, "https:") ||
+			strings.HasPrefix(arg, "HTTP:") || strings.HasPrefix(arg, "HTTPS:") {
 			cluSpec.URLs = append(cluSpec.URLs, arg)
 			continue
 		}

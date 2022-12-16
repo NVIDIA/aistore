@@ -293,7 +293,7 @@ func isResilverNode(c *cli.Context, xname string) (sid string, err error) {
 	if xname != apc.ActResilver || c.NArg() == 0 {
 		return "", nil
 	}
-	smap, err := api.GetClusterMap(apiBP)
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return "", err
 	}
@@ -377,7 +377,7 @@ func startDownloadHandler(c *cli.Context) error {
 	} else if source.backend.bck.IsEmpty() {
 		dlType = dload.TypeSingle
 	} else {
-		cfg, err := getRandTargetConfig()
+		cfg, err := getRandTargetConfig(c)
 		if err != nil {
 			return err
 		}

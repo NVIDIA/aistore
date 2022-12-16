@@ -62,6 +62,12 @@ var (
 	}
 )
 
+// prints completion (TAB-TAB) error when calling AIS APIs
+func completionErr(c *cli.Context, err error) {
+	fmt.Fprintln(c.App.ErrWriter)
+	fmt.Fprintln(c.App.ErrWriter, formatErr(err))
+}
+
 func lastValueIsAccess(c *cli.Context) bool {
 	return lastValueIs(c, propCmpls[apc.PropBucketAccessAttrs])
 }
@@ -220,10 +226,10 @@ func suggestTargetNodes(c *cli.Context) { suggestNode(c, allTargets) }
 func suggestProxyNodes(c *cli.Context)  { suggestNode(c, allProxies) }
 func suggestAllNodes(c *cli.Context)    { suggestNode(c, allNodes) }
 
-// TODO -- FIXME: optimize-out api.GetClusterMap
 func suggestNode(c *cli.Context, ty int) {
-	smap, err := api.GetClusterMap(apiBP)
+	smap, err := getClusterMap(c)
 	if err != nil {
+		completionErr(c, err)
 		return
 	}
 	if sid := argDaemonID(argLast(c)); smap.GetNode(sid) != nil {
@@ -330,11 +336,13 @@ func (opts *bcmplop) buckets(c *cli.Context) {
 	query := cmn.QueryBcks{Provider: opts.provider}
 	buckets, err := api.ListBuckets(apiBP, query, apc.FltPresent) // NOTE: `present` only
 	if err != nil {
+		completionErr(c, err)
 		return
 	}
 	if query.Provider == "" {
 		config, err := api.GetClusterConfig(apiBP)
 		if err != nil {
+			completionErr(c, err)
 			return
 		}
 		for provider := range config.Backend.Conf {
@@ -474,6 +482,7 @@ func runningJobCompletions(c *cli.Context) {
 	case 0: // 1. NAME
 		kindIDs, err := api.GetAllRunningXactions(apiBP, "")
 		if err != nil {
+			completionErr(c, err)
 			return
 		}
 		already := cos.StrSet{}
@@ -489,6 +498,7 @@ func runningJobCompletions(c *cli.Context) {
 		// NOTE: dsort is the only exception - not an xaction
 		list, err := api.ListDSort(apiBP, "", true /*onlyActive*/)
 		if err != nil {
+			completionErr(c, err)
 			return
 		}
 		if len(list) > 0 {
@@ -511,6 +521,7 @@ func runningJobCompletions(c *cli.Context) {
 		// complete xactID
 		xactIDs, err := api.GetAllRunningXactions(apiBP, name)
 		if err != nil {
+			completionErr(c, err)
 			return
 		}
 		if len(xactIDs) == 0 {
@@ -534,6 +545,7 @@ func rebalanceCompletions(c *cli.Context) {
 	case 0:
 		xactIDs, err := api.GetAllRunningXactions(apiBP, apc.ActRebalance)
 		if err != nil {
+			completionErr(c, err)
 			return
 		}
 		if len(xactIDs) == 0 {
@@ -563,7 +575,11 @@ func suggestDownloadID(c *cli.Context, filter func(*dload.Job) bool, shift int) 
 	if flagIsSet(c, allJobsFlag) {
 		return
 	}
-	list, _ := api.DownloadGetList(apiBP, "", false /*onlyActive*/)
+	list, err := api.DownloadGetList(apiBP, "", false /*onlyActive*/)
+	if err != nil {
+		completionErr(c, err)
+		return
+	}
 	for _, job := range list {
 		if filter(job) {
 			fmt.Println(job.ID)

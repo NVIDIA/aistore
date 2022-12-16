@@ -99,7 +99,7 @@ func Run(version, buildtime string, args []string) error {
 
 func (a *acli) runOnce(args []string) error {
 	err := a.app.Run(args)
-	return a.formatErr(err)
+	return formatErr(err)
 }
 
 func (a *acli) runForever(args []string) error {
@@ -156,15 +156,14 @@ func redErr(err error) error {
 }
 
 // Formats error message
-func (a *acli) formatErr(err error) error {
+func formatErr(err error) error {
 	if err == nil {
 		return nil
 	}
 	if _, unreachable := isUnreachableError(err); unreachable {
 		errmsg := fmt.Sprintf("AIStore cannot be reached at %s\n", clusterURL)
-		errmsg += fmt.Sprintf("Make sure that environment variable %s points to an AIS gateway "+
-			"(any AIS gateway in the cluster)\n"+
-			"For defaults, see CLI config at %s (or run `ais show config cli`)",
+		errmsg += fmt.Sprintf("Make sure that environment '%s' has the address of any AIS gateway (proxy).\n"+
+			"For defaults, see CLI config at %s or run `ais show config cli`.",
 			env.AIS.Endpoint, config.Path())
 		return redErr(errors.New(errmsg))
 	}
@@ -174,7 +173,7 @@ func (a *acli) formatErr(err error) error {
 	case *errUsage:
 		return err
 	case *errAdditionalInfo:
-		err.baseErr = a.formatErr(err.baseErr)
+		err.baseErr = formatErr(err.baseErr)
 		return err
 	default:
 		return redErr(err)

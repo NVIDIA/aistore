@@ -40,38 +40,6 @@ type (
 	}
 )
 
-var (
-	pmapStatus = make(stats.DaemonStatusMap, 8)
-	tmapStatus = make(stats.DaemonStatusMap, 8)
-)
-
-// Gets Smap from a given node (`daemonID`) and displays it
-func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, sid string, useJSON bool) error {
-	var (
-		smap = primarySmap
-		err  error
-	)
-	if sid != "" {
-		smap, err = api.GetNodeClusterMap(apiBP, sid)
-		if err != nil {
-			return err
-		}
-	}
-	extendedURLs := false
-	for _, m := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
-		for _, v := range m {
-			if v.PubNet != v.ControlNet || v.PubNet != v.DataNet {
-				extendedURLs = true
-			}
-		}
-	}
-	body := tmpls.SmapTemplateHelper{
-		Smap:         smap,
-		ExtendedURLs: extendedURLs,
-	}
-	return tmpls.Print(body, c.App.Writer, tmpls.SmapTmpl, nil, useJSON)
-}
-
 func getBMD(c *cli.Context) error {
 	useJSON := flagIsSet(c, jsonFlag)
 	bmd, err := api.GetBMD(apiBP)
@@ -113,18 +81,18 @@ func getBMD(c *cli.Context) error {
 }
 
 // Displays the status of the cluster or a node
-func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, sid string, useJSON, hideHeader bool) error {
+func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, sid string, useJSON, hideHeader bool) error {
 	body := tmpls.StatusTemplateHelper{
 		Smap:      smap,
 		CluConfig: cfg,
 		Status: tmpls.DaemonStatusTemplateHelper{
-			Pmap: pmapStatus,
-			Tmap: tmapStatus,
+			Pmap: curPrxStatus,
+			Tmap: curTgtStatus,
 		},
 	}
-	if res, proxyOK := pmapStatus[sid]; proxyOK {
+	if res, proxyOK := curPrxStatus[sid]; proxyOK {
 		return tmpls.Print(res, c.App.Writer, tmpls.NewProxyTable(res, smap).Template(hideHeader), nil, useJSON)
-	} else if res, targetOK := tmapStatus[sid]; targetOK {
+	} else if res, targetOK := curTgtStatus[sid]; targetOK {
 		return tmpls.Print(res, c.App.Writer, tmpls.NewTargetTable(res).Template(hideHeader), nil, useJSON)
 	} else if sid == apc.Proxy {
 		template := tmpls.NewProxiesTable(&body.Status, smap).Template(hideHeader)
@@ -146,17 +114,17 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 		useJSON    = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
 	)
-	if _, ok := pmapStatus[sid]; ok {
+	if _, ok := curPrxStatus[sid]; ok {
 		return fmt.Errorf("node %q is a proxy (hint: \"%s %s %s\" works only for targets)",
 			sid, cliName, commandShow, subcmdShowDisk)
 	}
-	if _, ok := tmapStatus[sid]; sid != "" && !ok {
+	if _, ok := curTgtStatus[sid]; sid != "" && !ok {
 		return fmt.Errorf("target ID=%q does not exist", sid)
 	}
 
 	targets := stats.DaemonStatusMap{sid: {}}
 	if sid == "" {
-		targets = tmapStatus
+		targets = curTgtStatus
 	}
 
 	diskStats, err := getDiskStats(targets)

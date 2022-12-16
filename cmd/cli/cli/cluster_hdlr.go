@@ -280,7 +280,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	smap, err := api.GetClusterMap(apiBP)
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}
@@ -371,11 +371,11 @@ func setPrimaryHandler(c *cli.Context) error {
 	if daemonID == "" {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	primarySmap, err := fillMap()
+	smap, err := fillNodeStatusMap(c)
 	if err != nil {
 		return err
 	}
-	if _, ok := primarySmap.Pmap[daemonID]; !ok {
+	if _, ok := smap.Pmap[daemonID]; !ok {
 		return incorrectUsageMsg(c, "%s: is not a proxy", daemonID)
 	}
 	err = api.SetPrimaryProxy(apiBP, daemonID, false /*force*/)
