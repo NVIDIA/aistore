@@ -156,6 +156,7 @@ test:short:python-etl:
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+      - $CI_MERGE_REQUEST_LABELS !~ /.*python.*/
 
 # Runs cluster with 1 proxy and 1 target (with 6 mountpaths).
 test:short:minimal:
