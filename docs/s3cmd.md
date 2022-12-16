@@ -194,7 +194,7 @@ $ s3cmd put README.md s3://mmm/saved-readme.md --no-ssl --host=10.10.0.1:51080/s
 
 Goes without saying that, as long as `.s3cfg` keeps pointing to `s3.amazonaws.com`, the `--host` and `--host-bucket` must be explicitly specified in every `s3cmd` command.
 
-### 4. Notice and possibly update AIS configuration
+### 4. Note and, possibly, update AIS configuration
 
 This next step actually depends on the AIStore configuration - the configuration of the cluster we intend to use with `s3cmd` client.
 
