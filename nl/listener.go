@@ -225,7 +225,7 @@ func (nlb *NotifListenerBase) String() string {
 		} else {
 			res = "-done"
 		}
-		tm = cos.FormatTimestamp(time.Unix(0, tfin))
+		tm = cos.FormatNanoTime(tfin, cos.FmtTimestamp)
 		return fmt.Sprintf("%s-%s%s", hdr, tm, res)
 	}
 	if finCount > 0 {

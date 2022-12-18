@@ -34,7 +34,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const dfltPeriodicFlushTime = 40 * time.Second // when config.Log.FlushTime == 0
+const (
+	dfltPeriodicFlushTime = 40 * time.Second       // when `config.Log.FlushTime` == time.Duration(0)
+	dfltPeriodicTimeStamp = time.Hour              // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
+	dfltStatsLogInterval  = int64(time.Minute)     // when `config.Log.StatsTime` == time.Duration(0)
+	maxStatsLogInterval   = int64(2 * time.Minute) // when the resulting `statsTime` is greater than
+)
 
 // more periodic
 const (
@@ -66,11 +71,6 @@ func IsKindThroughput(name string) bool { return name == GetThroughput }
 const (
 	numGorHigh    = 100
 	numGorExtreme = 1000
-)
-
-const (
-	dfltStatsLogInterval = int64(time.Minute)
-	maxStatsLogInterval  = int64(2 * time.Minute)
 )
 
 // NOTE: all supported metrics
@@ -779,6 +779,7 @@ waitStartup:
 		checkNumGorHigh   int64
 		startTime         = mono.NanoTime()
 		lastGlogFlushTime = startTime
+		lastDateTimestamp = startTime
 	)
 	for {
 		select {
@@ -805,6 +806,10 @@ waitStartup:
 			if time.Duration(now-lastGlogFlushTime) > flushTime {
 				glog.Flush()
 				lastGlogFlushTime = mono.NanoTime()
+			}
+			if time.Duration(now-lastDateTimestamp) > dfltPeriodicTimeStamp {
+				glog.Infoln(cos.FormatTime(time.Now(), "" /* RFC822 */) + " =============")
+				lastDateTimestamp = now
 			}
 		case <-r.stopCh:
 			r.ticker.Stop()

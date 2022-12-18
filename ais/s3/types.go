@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"path"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -48,7 +47,7 @@ type (
 
 	// Response for object copy request
 	CopyObjectResult struct {
-		LastModified string `xml:"LastModified"`
+		LastModified string `xml:"LastModified"` // e.g. <LastModified>2009-10-12T17:50:30.000Z</LastModified>
 		ETag         string `xml:"ETag"`
 	}
 
@@ -152,7 +151,7 @@ func entryToS3(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) *ObjInfo {
 	// Some S3 clients do not tolerate empty or missing LastModified, so fill it
 	// with a zero time if the object was not accessed yet
 	if objInfo.LastModified == "" {
-		objInfo.LastModified = cos.FormatUnixNano(defaultLastModified, lsmsg.TimeFormat)
+		objInfo.LastModified = cos.FormatNanoTime(defaultLastModified, lsmsg.TimeFormat)
 	}
 	return objInfo
 }
@@ -164,11 +163,6 @@ func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.LsoResult, lsmsg *apc
 	for _, e := range bckList.Entries {
 		r.Add(e, lsmsg)
 	}
-}
-
-func FormatTime(t time.Time) string {
-	s := t.UTC().Format(time.RFC1123)
-	return strings.Replace(s, "UTC", "GMT", 1) // expects: "%a, %d %b %Y %H:%M:%S GMT"
 }
 
 func lomMD5(lom *cluster.LOM) string {

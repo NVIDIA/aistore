@@ -69,7 +69,7 @@ func getBMD(c *cli.Context) error {
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 					provider, ns, bucket, props.BackendBck, copies, ec,
-					cos.FormatUnixNano(props.Created, ""))
+					cos.FormatNanoTime(props.Created, ""))
 			}
 		}
 	}

@@ -195,12 +195,12 @@ func (xctn *Base) Name() (s string) {
 func (xctn *Base) String() string {
 	var (
 		name = xctn.Name()
-		s    = name + "-" + cos.FormatTimestamp(xctn.StartTime())
+		s    = name + "-" + cos.FormatTime(xctn.StartTime(), cos.FmtTimestamp)
 	)
 	if !xctn.Finished() { // ok to (rarely) miss _aborted_ state as this is purely informational
 		return s
 	}
-	etime := cos.FormatTimestamp(xctn.EndTime())
+	etime := cos.FormatTime(xctn.EndTime(), cos.FmtTimestamp)
 	if xctn.IsAborted() {
 		s = fmt.Sprintf("%s-[abrt: %v]", s, xctn.AbortErr())
 	}

@@ -817,7 +817,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 	case apc.GetPropsChecksum:
 		v = op.Cksum.String()
 	case apc.GetPropsAtime:
-		v = cos.FormatUnixNano(op.Atime, "")
+		v = cos.FormatNanoTime(op.Atime, "")
 	case apc.GetPropsVersion:
 		v = op.Ver
 	case apc.GetPropsCached:

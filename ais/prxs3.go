@@ -77,7 +77,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// only bucket name - list objects in the bucket
-			p.bckListS3(w, r, apiItems[0])
+			p.listObjectsS3(w, r, apiItems[0])
 			return
 		}
 		// object data otherwise
@@ -291,13 +291,17 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 }
 
 // GET /s3/<bucket-name>
-func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string) {
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck, err, errCode := cluster.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return
 	}
-	lsmsg := &apc.LsoMsg{UUID: cos.GenUUID(), TimeFormat: time.RFC3339}
+	// e.g. <LastModified>2009-10-12T17:50:30.000Z</LastModified>
+	// (compare w/ `t.headObjS3()`
+	lsmsg := &apc.LsoMsg{UUID: cos.GenUUID(), TimeFormat: cos.ISO8601}
+
 	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion)
 	s3.FillMsgFromS3Query(r.URL.Query(), lsmsg)
 

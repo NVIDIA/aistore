@@ -335,7 +335,6 @@ var (
 		"IsUnsetTime":       isUnsetTime,
 		"IsFalse":           func(v bool) bool { return !v },
 		"FormatTime":        fmtTime,
-		"FormatUnixNano":    func(t int64) string { return cos.FormatUnixNano(t, "") },
 		"FormatEC":          FmtEC,
 		"FormatDur":         fmtDuration,
 		"FormatObjStatus":   fmtObjStatus,

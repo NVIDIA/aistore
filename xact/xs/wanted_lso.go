@@ -54,7 +54,7 @@ func setWanted(e *cmn.LsoEntry, lom *cluster.LOM, tmformat string, wanted cos.Bi
 		case apc.GetPropsChecksum:
 			e.Checksum = lom.Checksum().Value()
 		case apc.GetPropsAtime:
-			e.Atime = cos.FormatUnixNano(lom.AtimeUnix(), tmformat)
+			e.Atime = cos.FormatNanoTime(lom.AtimeUnix(), tmformat)
 		case apc.GetPropsLocation:
 			e.Location = lom.Location()
 		case apc.GetPropsCopies:

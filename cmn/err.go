@@ -474,7 +474,7 @@ func NewErrAborted(what, ctx string, err error) *ErrAborted {
 }
 
 func (e *ErrAborted) Error() (s string) {
-	s = fmt.Sprintf("%s aborted at %s", e.what, cos.FormatTimestamp(e.timestamp))
+	s = fmt.Sprintf("%s aborted at %s", e.what, cos.FormatTime(e.timestamp, cos.FmtTimestamp))
 	if e.err != nil {
 		s = fmt.Sprintf("%s, err: %v", s, e.err)
 	}
