@@ -191,15 +191,8 @@ type (
 //   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
 //   - BucketPropsToUpdate (above)
 //   - ais.defaultBckProps()
-func (bck *Bck) DefaultProps(cs ...*Config) *BucketProps {
-	var c *Config
-	if len(cs) > 0 {
-		c = &Config{}
-		cos.CopyStruct(c, cs[0])
-	} else {
-		c = GCO.Clone()
-		c.Cksum.Type = cos.ChecksumXXHash
-	}
+func (bck *Bck) DefaultProps() *BucketProps {
+	c := GCO.Clone()
 	if bck.IsAIS() {
 		c.LRU.Enabled = false
 	}
