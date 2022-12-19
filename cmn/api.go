@@ -196,6 +196,9 @@ func (bck *Bck) DefaultProps() *BucketProps {
 	if bck.IsAIS() {
 		c.LRU.Enabled = false
 	}
+	if c.Cksum.Type == "" { // tests with empty cluster config
+		c.Cksum.Type = cos.ChecksumXXHash
+	}
 	wp := c.WritePolicy
 	if wp.MD.IsImmediate() {
 		wp.MD = apc.WriteImmediate
