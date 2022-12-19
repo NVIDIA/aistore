@@ -10,9 +10,6 @@ redirect_from:
 ## Table of contents
 
 - [Getting Started](#getting-started)
-- [AIS CLI Shell Autocomplete](#ais-cli-shell-autocomplete)
-  - [Installing](#installing)
-  - [Uninstalling](#uninstalling)
 - [CLI Reference](#cli-reference)
 - [CLI Config](#cli-config)
 - [First steps](#first-steps)
@@ -20,38 +17,51 @@ redirect_from:
 - [Backend Provider](#backend-provider)
 
 
-AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle. 
+AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle.
 In addition, CLI provides dataset management commands, commands to read and write data, and more.
 
-You should be able to start by running ais <TAB-TAB>, selecting one of the available (completion) options, and repeating until the command is ready to be entered.
+## Getting Started
+
+To build CLI from source, run the following two steps:
+
+```console
+$ make cli			# 1. build CLI binary and install it into your `$GOPATH/bin` directory
+$ make cli-autocompletions	# 2. install CLI autocompletions (Bash and/or Zsh)
+```
+
+Alternatively, install directly from GitHub:
+
+* [Install CLI from release binaries](https://github.com/NVIDIA/aistore/blob/master/deploy/scripts/install_from_binaries.sh)
+
+For example, the following command extracts CLI binary to the specified destination and, secondly, installs `bash` autocompletions:
+
+```console
+$ ./deploy/scripts/install_from_binaries.sh --dstdir /tmp/www --completions
+```
+
+For more usage options, run: `./deploy/scripts/install_from_binaries.sh --help`
+
+You can also install `bash` and/or `zsh` autocompletions separately at any (later) time:
+
+* [Install CLI autocompletions](https://github.com/NVIDIA/aistore/blob/master/cmd/cli/install_autocompletions.sh)
+
+To uninstall autocompletions, follow the `install_autocompletions.sh` generated prompts, or simply run `bash autocomplete/uninstall.sh`.
+
+**Please note**: using CLI with autocompletions enabled is strongly recommended.
+
+Once installed, you should be able to start by running ais `<TAB-TAB>`, selecting one of the available (completion) options, and repeating until the command is ready to be entered.
 
 **TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list of CLI resources with numerous examples and usage guides that we constantly keep updating.
 
 **TIP**: when starting with AIS, [`ais search`](/docs/cli/search.md) command may be especially handy. It will list all possible variations of a command you are maybe looking for - by exact match, synonym, or regex.
 
-{% include youtubePlayer.html id="VPIhQm2sMD8" %}
+See also:
 
-## Getting Started
-
-Run `make cli` in AIStore repo root directory to install the AIS CLI binary in your `$GOPATH/bin` directory.
-You can also install [shell autocompletions](#ais-cli-shell-autocomplete) for AIS CLI with `make cli-autocompletions`.
+* [cmd/cli/README.md](https://github.com/NVIDIA/aistore/blob/master/cmd/cli/README.md)
 
 > The rest of the README assumes that user's `PATH` environment variable contains `$GOPATH/bin` directory.
-> Run `export PATH=$PATH:$GOPATH/bin` if this is not the case for you.
-> You can read more about GOPATH environment variable [here](https://golang.org/doc/code.html#GOPATH).
-
-## AIS CLI Shell Autocomplete
-
-The CLI tool supports `bash` and `zsh` auto-complete functionality.
-
-### Installing
-
-When running `install.sh` you will be asked if you want to install autocompletions.
-To install them manually, run `bash autocomplete/install.sh`.
-
-### Uninstalling
-
-To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
+> Run `export PATH=$PATH:$GOPATH/bin` if this is not the case.
+> You can find more about $GOPATH environment [here](https://golang.org/doc/code.html#GOPATH).
 
 ## CLI Reference
 

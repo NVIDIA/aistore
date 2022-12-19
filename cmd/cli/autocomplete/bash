@@ -1,37 +1,51 @@
 #!/bin/bash
-# Modified bash autocomplete script from github.com/urfave/cli
+# ais cli bash autocomplete script
+# see also:
+# - https://devmanual.gentoo.org/tasks-reference/completion/index.html
+# - https://stackoverflow.com/questions/10528695/how-to-reset-comp-wordbreaks-without-affecting-other-completion-script
 
 PROG=ais
 
 _cli_bash_autocomplete() {
-  if [[ "${COMP_WORDS[0]}" != "source" ]]; then
-    local cur opts base
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    if [[ $COMP_CWORD -gt 0 && ${COMP_WORDS[COMP_CWORD]} == "put" ]]; then
-      COMPREPLY=( $(compgen -A filename) )
-    else
-      if [[ "$cur" == "-"* ]]; then
-        opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} ${cur} --generate-bash-completion )
-      else
-        opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} --generate-bash-completion )
-      fi
-      COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
-    fi
-
-    # append single space after a suggestion if it doesn't end with a /
-    local i=${#COMPREPLY[*]}
-    while [[ $((--i)) -ge 0 ]]; do
-        case "${COMPREPLY[$i]}" in
-            */ )
-                 ;;
-             * )
-                 COMPREPLY[$i]="${COMPREPLY[$i]} "
-                 ;;
-        esac
-    done
+  if [[ "${COMP_WORDS[0]}" == "source" ]]; then
     return 0
   fi
+
+  COMPREPLY=()
+
+  local opts cmpls cur prev
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  if [[ "$cur" == "put" ]]; then
+    COMPREPLY=( $(compgen -A filename) )
+    return 0
+  fi
+
+  if [[ "$cur" == "-"* ]]; then
+    opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} ${cur} --generate-bash-completion )
+  else
+    opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} --generate-bash-completion )
+  fi
+
+  COMP_WORDBREAKS=" " # note: HACK to complete bucket names
+  cmpls=( $(compgen -W "${opts}" -- ${cur}) )
+
+  # TODO: grouping and/or coloring
+  for word in ${cmpls[*]}; do
+      case $word in
+          # the word ends with filepath separator, e.g. s3://
+          */)
+               COMPREPLY+=( $word )
+               ;;
+          p\[*|t\[*)
+               COMPREPLY+=( "$word " )
+               ;;
+          *)
+               COMPREPLY+=( "$word " )
+               ;;
+      esac
+  done
 }
 
 complete -o bashdefault -o default -o nospace -F _cli_bash_autocomplete $PROG
