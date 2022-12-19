@@ -26,6 +26,9 @@ For additional background, see:
 ## Table of Contents
 
 - [Quick example using `aws` CLI](#quick-example-using-aws-cli)
+  - [GET(object)](#getobject)
+  - [PUT(object)](#putobject)
+  - [HEAD(object)](#headobject)
 - [Quick example using Internet Browser](#quick-example-using-internet-browser)
 - [`s3cmd` command line](#s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
@@ -57,12 +60,13 @@ $ aws --endpoint-url http://localhost:8080/s3 s3 mb s3://abc
 make_bucket: abc
 ```
 
+### PUT(object)
+
 ```console
 # PUT using AIS CLI:
 $ ais put README.md ais://abc
 
-# The same via `aws`:
-PUT "README.md" to ais://abc
+# The same via `aws` CLI:
 $ aws --endpoint-url http://localhost:8080/s3 s3api put-object --bucket abc --key LICENSE --body LICENSE
 $ ais ls ais://abc
 NAME             SIZE
@@ -70,9 +74,10 @@ LICENSE          1.05KiB
 README.md        10.44KiB
 ```
 
-and GET as well:
+### GET(object)
 
 ```console
+# GET using `aws` CLI:
 $ aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket abc --key README.md /tmp/readme
 {
     "ContentType": "text/plain; charset=utf-8",
@@ -80,6 +85,19 @@ $ aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket abc --ke
     "ContentLength": 10689
 }
 $ diff -uN README.md /tmp/readme
+```
+
+### HEAD(object)
+
+```console
+# Get object metadata using `aws` CLI:
+$ aws s3api --endpoint-url http://localhost:8080/s3 head-object --bucket abc --key LICENSE
+{
+    "Metadata": {},
+    "ContentLength": 1075,
+    "ETag": "f70a21a0c5fa26a93820b0bef5be7619",
+    "LastModified": "Mon, 19 Dec 2022 22:23:05 GMT"
+}
 ```
 
 ## Quick example using Internet Browser
