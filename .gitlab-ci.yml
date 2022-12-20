@@ -22,7 +22,12 @@ variables:
   CLOUD_BCKS:
     value: "aws://ais-blossom gs://ais-ci-kube"
     description: "Set of buckets used when running cloud tests."
-
+  S3_COMPAT_RUN_ALL:
+    value: "False"
+    description: "Whether to run all s3 compatibility tests or only verified passing ones"
+  S3_COMPAT_STRICT:
+    value: "True"
+    description: "Whether to fail pipeline stage immediately on s3 compatibility test failure"
 
 # Templates
 
@@ -166,6 +171,20 @@ test:short:minimal:
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt $FS_CNT --deployment all
     - NUM_PROXY=1 NUM_TARGET=1 make test-short
+
+test:short:s3-compat:
+  <<: *test_short_def
+  tags:
+    - ais
+  script:
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - ais config cluster features Provide-S3-API-via-Root
+    - ais config cluster checksum.type=md5
+    - cd python/tests/s3compat
+    - ./compatibility_test.sh
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS !~ /.*s3-compat.*/
 
 test:short:authn:
   <<: *test_short_optional_def
