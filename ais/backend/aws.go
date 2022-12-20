@@ -34,12 +34,9 @@ import (
 )
 
 const (
-	awsChecksumType = "x-amz-meta-ais-cksum-type"
-	awsChecksumVal  = "x-amz-meta-ais-cksum-val"
-
 	// environment variable to globally override the default 'https://s3.amazonaws.com' endpoint
 	// NOTE: the same can be done on a per-bucket basis, via bucket prop `Extra.AWS.Endpoint`
-	//       (and of course, bucket override will take precedence)
+	// (bucket override will always take precedence)
 	awsEnvS3Endpoint = "S3_ENDPOINT"
 )
 
@@ -369,8 +366,8 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 
 	// custom metadata
 	lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)
-	if cksumType, ok := obj.Metadata[awsChecksumType]; ok {
-		if cksumValue, ok := obj.Metadata[awsChecksumVal]; ok {
+	if cksumType, ok := obj.Metadata[cos.S3MetadataChecksumType]; ok {
+		if cksumValue, ok := obj.Metadata[cos.S3MetadataChecksumVal]; ok {
 			lom.SetCksum(cos.NewCksum(*cksumType, *cksumValue))
 		}
 	}
@@ -417,8 +414,8 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 		glog.Warning(err)
 	}
 
-	md[awsChecksumType] = aws.String(cksumType)
-	md[awsChecksumVal] = aws.String(cksumValue)
+	md[cos.S3MetadataChecksumType] = aws.String(cksumType)
+	md[cos.S3MetadataChecksumVal] = aws.String(cksumValue)
 
 	uploader := s3manager.NewUploaderWithClient(svc)
 	uploadOutput, err = uploader.Upload(&s3manager.UploadInput{

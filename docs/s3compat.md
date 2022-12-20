@@ -37,6 +37,7 @@ For additional background, see:
 - [More Usage Examples](#more-usage-examples)
   - [Create bucket](#create-bucket)
   - [Remove bucket](#remove-bucket)
+  - [Upload large object](#upload-large-object)
 - [TensorFlow Demo](#tensorflow-demo)
 - [S3 Compatibility](#s3-compatibility)
   - [Supported S3](#supported-s3)
@@ -332,6 +333,74 @@ $ s3cmd --host http://localhost:51080/s3 s3 ls s3://
 $ s3cmd --host http://localhost:51080/s3 s3 mb s3://bck1
 remove_bucket: aws1
 $ s3cmd --host http://localhost:51080/s3 s3 ls s3://
+```
+
+### Upload large object
+
+In this section, we use all 3 (three) clients:
+
+1. `s3cmd` client pre-configured to communicate with (and via) AIS
+2. `aws` CLI that sends requests directly to AWS S3 standard endpoint (with no AIS in-between)
+3. and, finally, native AIS CLI
+
+```shell
+# 1. Upload via `s3cmd` => `aistore`
+
+$ s3cmd put $(which aisnode) s3://ais-aa --multipart-chunk-size-mb=8
+upload: '/root/gocode/bin/aisnode' -> 's3://ais-aa/aisnode'  [part 1 of 10, 8MB] [1 of 1]
+ 8388608 of 8388608   100% in    0s   233.84 MB/s  done
+...
+ 8388608 of 8388608   100% in    0s   234.19 MB/s  done
+upload: '/root/gocode/bin/aisnode' -> 's3://ais-aa/aisnode'  [part 10 of 10, 5MB] [1 of 1]
+ 5975140 of 5975140   100% in    0s   233.39 MB/s  done
+```
+
+```shell
+# 2. View object metadata via native CLI
+$ ais show object s3://ais-aa/aisnode --all
+PROPERTY         VALUE
+atime            30 Aug 54 17:47 LMT
+cached           yes
+checksum         md5[a38030ea13e1b59c...]
+copies           1 [/tmp/ais/mp3/11]
+custom           map[ETag:"e3be082db698af7c15b0502f6a88265d-16" source:aws version:3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2]
+ec               -
+location         t[MKpt8091]:mp[/tmp/ais/mp3/11, nvme0n1]
+name             s3://ais-aa/aisnode
+size             77.70MiB
+version          3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2
+```
+
+```shell
+# 3. View object metadata via `aws` CLI => directly to AWS (w/ no aistore in-between):
+$ aws s3api head-object --bucket ais-aa --key aisnode
+{
+    "LastModified": "Tue, 20 Dec 2022 17:43:16 GMT",
+    "ContentLength": 81472612,
+    "Metadata": {
+        "x-amz-meta-ais-cksum-type": "md5",
+        "x-amz-meta-ais-cksum-val": "a38030ea13e1b59c529e888426001eed"
+    },
+    "ETag": "\"e3be082db698af7c15b0502f6a88265d-16\"",
+    "AcceptRanges": "bytes",
+    "ContentType": "binary/octet-stream",
+    "VersionId": "3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2"
+}
+```
+
+```shell
+# 4. Finally, view object metadata via `s3cmd` => `aistore`
+$ s3cmd info s3://ais-aa/aisnode
+s3://ais-aa/aisnode (object):
+   File size: 81472612
+   Last mod:  Fri, 30 Aug 1754 22:43:41 GMT
+   MIME type: none
+   Storage:   STANDARD
+   MD5 sum:   a38030ea13e1b59c529e888426001eed
+   SSE:       none
+   Policy:    none
+   CORS:      none
+   ACL:       none
 ```
 
 ## TensorFlow Demo
