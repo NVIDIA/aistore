@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"text/template"
@@ -576,6 +577,10 @@ func setPropsHandler(c *cli.Context) (err error) {
 	}
 	newProps, err := parseBckPropsFromContext(c)
 	if err != nil {
+		if strings.Contains(err.Error(), "missing") || strings.Contains(err.Error(), "invalid property") {
+			actionWarn(c, err.Error()+"\n")
+			_ = showBucketProps(c) //nolint:errcheck // returning orig. error
+		}
 		return fmt.Errorf("%v%s", err, examplesBckSetProps)
 	}
 	newProps.Force = flagIsSet(c, forceFlag)
@@ -592,7 +597,11 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, upd
 		return nil
 	}
 	if _, err = api.SetBucketProps(apiBP, bck, updateProps); err != nil {
-		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET -v\"", cliName, commandShow, subcmdBucket)
+		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
+			return herr
+		}
+		helpMsg := fmt.Sprintf("To show bucket properties, run '%s %s %s %s'",
+			cliName, commandShow, subcmdBucket, bck.DisplayName())
 		return newAdditionalInfoError(err, helpMsg)
 	}
 	showDiff(c, currProps, allNewProps)

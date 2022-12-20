@@ -76,11 +76,11 @@ Create bucket `bucket_name` with custom properties specified.
 
 ```console
 $ # Key-value format
-$ ais bucket create ais://@Bghort1l/bucket_name --bucket-props="mirror.enabled=true mirror.copies=2"
+$ ais bucket create ais://@Bghort1l/bucket_name --props="mirror.enabled=true mirror.copies=2"
 "ais://@Bghort1l/bucket_name" bucket created
 $
 $ # JSON format
-$ ais bucket create ais://@Bghort1l/bucket_name --bucket-props='{"versioning": {"enabled": true, "validate_warm_get": true}}'
+$ ais bucket create ais://@Bghort1l/bucket_name --props='{"versioning": {"enabled": true, "validate_warm_get": true}}'
 "ais://@Bghort1l/bucket_name" bucket created
 ```
 
@@ -90,7 +90,7 @@ Create bucket `bucket_name` in HDFS backend with bucket pointing to `/yt8m` dire
 More info about HDFS buckets can be found [here](/docs/providers.md#hdfs-provider).
 
 ```console
-$ ais bucket create hdfs://bucket_name --bucket-props="extra.hdfs.ref_directory=/yt8m"
+$ ais bucket create hdfs://bucket_name --props="extra.hdfs.ref_directory=/yt8m"
 "hdfs://bucket_name" bucket created
 ```
 

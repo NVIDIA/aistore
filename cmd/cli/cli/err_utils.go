@@ -11,7 +11,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -50,15 +49,11 @@ func (e *errUsage) Error() string {
 ///////////////////////
 
 func newAdditionalInfoError(err error, info string) error {
-	debug.Assert(err != nil)
-	return &errAdditionalInfo{
-		baseErr:        err,
-		additionalInfo: info,
-	}
+	return &errAdditionalInfo{baseErr: err, additionalInfo: info}
 }
 
 func (e *errAdditionalInfo) Error() string {
-	return fmt.Sprintf("%s. %s", e.baseErr.Error(), cos.StrToSentence(e.additionalInfo))
+	return fmt.Sprintf("%s.\n%s\n", e.baseErr.Error(), cos.StrToSentence(e.additionalInfo))
 }
 
 /////////////////

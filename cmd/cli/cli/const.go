@@ -332,9 +332,14 @@ var (
 		Name:  "ignore-error",
 		Usage: "ignore \"soft\" failures, such as \"bucket already exists\", etc.",
 	}
-	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "bucket properties"}
-	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
-	rawFlag         = cli.BoolFlag{Name: "raw", Usage: "display exact values instead of human-readable ones"}
+
+	bucketPropsFlag = cli.StringFlag{
+		Name:  "props",
+		Usage: "bucket properties, e.g. --props=\"mirror.enabled=true mirror.copies=4 checksum.type=md5\"",
+	}
+
+	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
+	rawFlag   = cli.BoolFlag{Name: "raw", Usage: "display exact values instead of human-readable ones"}
 
 	// Bucket
 	startAfterFlag = cli.StringFlag{

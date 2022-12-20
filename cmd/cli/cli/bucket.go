@@ -546,6 +546,7 @@ func showBucketProps(c *cli.Context) (err error) {
 	}
 
 	section := c.Args().Get(1)
+
 	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
 		return
 	}

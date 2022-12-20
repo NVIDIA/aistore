@@ -94,10 +94,10 @@ Bucket creation operation allows to override the **inherited defaults**, which i
 Example specifying (non-default) bucket properties at creation time:
 
 ```console
-$ ais bucket create ais://abc --bucket-props="lru.enabled=false mirror.enabled=true mirror.copies=4"
+$ ais bucket create ais://abc --props="lru.enabled=false mirror.enabled=true mirror.copies=4"
 
 # or, same using JSON:
-$ ais bucket create ais://abc --bucket-props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
+$ ais bucket create ais://abc --props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
 ```
 
 ### Inherited Bucket Properties and LRU

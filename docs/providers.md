@@ -191,7 +191,7 @@ Example of HDFS provider configuration:
 
 After the HDFS is set up, and the binary is built with HDFS provider, we can see everything in action.
 ```console
-$ ais bucket create hdfs://yt8m --bucket-props="extra.hdfs.ref_directory=/part1/video"
+$ ais bucket create hdfs://yt8m --props="extra.hdfs.ref_directory=/part1/video"
 "hdfs://yt8m" bucket created
 $ ais bucket ls hdfs://
 HDFS Buckets (1)
@@ -205,7 +205,7 @@ $ ais object get hdfs://yt8m/1.mp4 video.mp4
 GET "1.mp4" from bucket "hdfs://yt8m" as "video.mp4" [76.31KiB]
 ```
 
-The first thing to notice is `--bucket-props="extra.hdfs.ref_directory=/part1/video"`.
+The first thing to notice is `--props="extra.hdfs.ref_directory=/part1/video"`.
 Here we specify the **required** path the `hdfs://yt8m` bucket will refer to (the directory must exist on bucket creation).
 It means that when accessing object `hdfs://yt8m/1.mp4` the path will be resolved to `/part1/video/1.mp4` (`/part1/video` + `1.mp4`).
 

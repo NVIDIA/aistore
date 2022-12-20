@@ -4,9 +4,9 @@ ais bucket create ais://$BUCKET_1 // FAIL "bucket "ais://$BUCKET_1" already exis
 ais bucket rm ais://$BUCKET_1
 ais bucket rm ais://$BUCKET_1  // FAIL "bucket "ais://$BUCKET_1" does not exist"
 ais bucket rm --ignore-error ais://$BUCKET_1
-ais bucket create ais://$BUCKET_1 --bucket-props="mirror.enabled=true mirror.copies=2" | awk '{print $1 " " $2}'
+ais bucket create ais://$BUCKET_1 --props="mirror.enabled=true mirror.copies=2" | awk '{print $1 " " $2}'
 ais bucket rm ais://$BUCKET_1
-ais bucket create ais://$BUCKET_1 --bucket-props='{"mirror":{"enabled":true, "copies":2}}' | awk '{print $1 " " $2}'
+ais bucket create ais://$BUCKET_1 --props='{"mirror":{"enabled":true, "copies":2}}' | awk '{print $1 " " $2}'
 
 
 ais bucket create ais://$BUCKET_2/ | awk '{print $1 " " $2}' # should ignore slash

@@ -173,7 +173,7 @@ Say, an S3-based client performs a GET or a PUT operation and calculates `md5` o
 To enable MD5 checksum at bucket creation time:
 
 ```console
-$ ais bucket create ais://bck --bucket-props="checksum.type=md5"
+$ ais bucket create ais://bck --props="checksum.type=md5"
 "ais://bck2" bucket created
 
 $ ais show bucket ais://bck | grep checksum
