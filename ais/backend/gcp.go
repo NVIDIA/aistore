@@ -139,6 +139,9 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 		errCode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
+	//
+	// NOTE: return a few assorted fields, specifically to fill-in vendor-specific `cmn.ExtraProps`
+	//
 	bckProps = make(cos.StrKVs)
 	bckProps[apc.HdrBackendProvider] = apc.GCP
 	// GCP always generates a versionid for an object even if versioning is disabled.

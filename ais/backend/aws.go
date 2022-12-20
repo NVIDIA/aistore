@@ -112,6 +112,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs, er
 	region = *svc.Config.Region
 	debug.Assert(region != "")
 
+	// NOTE: return a few assorted fields, specifically to fill-in vendor-specific `cmn.ExtraProps`
 	bckProps = make(cos.StrKVs, 4)
 	bckProps[apc.HdrBackendProvider] = apc.AWS
 	bckProps[apc.HdrS3Region] = region

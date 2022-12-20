@@ -315,7 +315,16 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	// when explicitly asked _not_ to
 	args.exists = true
 	if args.dontAddRemote {
-		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
+		if bck.IsRemoteAIS() {
+			bck.Props, err = remoteBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
+		} else {
+			// NOTE -- TODO (dilemma):
+			// The bucket has no local representation. The best would be to return its metadata _as is_
+			// but there's currently no control structure other than (AIS-only) `BucketProps`.
+			// Therefore: return cluster defaults + assorted `props.Extra` fields.
+			// See also: ais/backend for `HeadBucket`
+			bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
+		}
 		return
 	}
 

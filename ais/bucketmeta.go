@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -469,6 +470,23 @@ type bckPropsArgs struct {
 	hdr http.Header  // Header with remote bucket properties.
 }
 
+// Convert HEAD(bucket) response to cmn.BucketProps (compare with `defaultBckProps`)
+func remoteBckProps(args bckPropsArgs) (props *cmn.BucketProps, err error) {
+	props = &cmn.BucketProps{}
+	err = cmn.IterFields(props, func(tag string, field cmn.IterField) (error, bool) {
+		headerName := textproto.CanonicalMIMEHeaderKey(tag)
+		// skip the missing ones
+		if _, ok := args.hdr[headerName]; !ok {
+			return nil, false
+		}
+		// single-value
+		return field.SetValue(args.hdr.Get(headerName), true /*force*/), false
+	}, cmn.IterOpts{OnlyRead: false})
+	return
+}
+
+// Used to initialize "local" bucket, in particular when there's a remote one
+// (compare with `remoteBckProps` above)
 // See also:
 //   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
 //   - cmn.BucketPropsToUpdate
