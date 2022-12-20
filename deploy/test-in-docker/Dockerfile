@@ -41,4 +41,4 @@ ENV CLD_PROVIDER ${cld_provider}
 
 COPY . $GOPATH/src/github.com/NVIDIA/aistore/
 
-ENTRYPOINT [ "sh", "-c", "$GOPATH/src/github.com/NVIDIA/aistore/deploy/test/docker/entrypoint.sh" ]
+ENTRYPOINT [ "sh", "-c", "$GOPATH/src/github.com/NVIDIA/aistore/deploy/test-in-docker/entrypoint.sh" ]

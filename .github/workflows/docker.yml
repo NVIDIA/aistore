@@ -98,7 +98,7 @@ jobs:
       if: ${{ inputs.build_gitlab_ci_image }}
       run: |
 
-        pushd $GITHUB_WORKSPACE/deploy/test/ci
+        pushd $GITHUB_WORKSPACE/deploy/ci
         CI_IMAGE="${{ env.CI_IMAGE }}" HDFS_CI_IMAGE=${{ env.HDFS_CI_IMAGE }} IMAGE_TAG="${{ inputs.image_tag }}" make -e all
         popd
 

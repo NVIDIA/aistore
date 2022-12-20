@@ -1,12 +1,16 @@
-To support development and testing we include here a script to run
-all tests inside a docker container. This way you are can rebuild your local
-sources, change tests, and play with local development without worrying
-that the changes you've made impact other tests or other deployments.
+To support development and testing, we include here a script to run
+all tests inside a docker container.
+
+> Dockerfile included as well.
+
+This way you can rebuild your local sources, change tests, and play with
+your local development without worrying that the changes you have made
+impact any other tests, sources, or deployments.
 
 To start testing, run:
 
 ```console
-$ ./docker/test.sh --name=your_container_name
+$ ./test.sh --name=your_container_name
 ```
 
 This command will build and start Docker container and will output logs to
@@ -23,7 +27,7 @@ easily distinguish and switch between different Dockers.
 You can also provide credentials to `AWS` or `GCP` and pass it to script:
 
 ```console
-$ ./docker/test.sh --name=your_container_name --aws=~/.aws
+$ ./test.sh --name=your_container_name --aws=~/.aws
 ```
 
 This way testing will use given cloud in the backend (uniquely named cloud
@@ -33,6 +37,6 @@ Because of Docker isolation you can safely run multiple instances of testing
 containers (remember to uniquely name the containers).
 
 ```console
-$ ./docker/test.sh --name=your_container_name_local & # run local
-$ ./docker/test.sh --name=your_container_name_cloud --aws=~/.aws & # run cloud (aws)
+$ ./test.sh --name=your_container_name_local & # run local
+$ ./test.sh --name=your_container_name_cloud --aws=~/.aws & # run cloud (aws)
 ```
