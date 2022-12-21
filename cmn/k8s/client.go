@@ -86,8 +86,7 @@ func (c *defaultClient) Create(v any) (err error) {
 	return
 }
 
-func (c *defaultClient) ExecCmd(podName string, command []string,
-	stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+func (c *defaultClient) ExecCmd(podName string, command []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	req := c.client.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Namespace(c.namespace).
@@ -107,11 +106,10 @@ func (c *defaultClient) ExecCmd(podName string, command []string,
 	if err != nil {
 		return err
 	}
-	return exec.Stream(remotecommand.StreamOptions{
-		Stdin:  stdin,
-		Stdout: stdout,
-		Stderr: stderr,
-	})
+
+	options := remotecommand.StreamOptions{Stdin: stdin, Stdout: stdout, Stderr: stderr}
+	ctx := context.Background() // TODO -- FIXME: use context.WithTimeout to cancel()
+	return exec.StreamWithContext(ctx, options)
 }
 
 func (c *defaultClient) Delete(entityType, entityName string) (err error) {
@@ -200,7 +198,8 @@ func (*defaultClient) Health(podName string) (cpuCores float64, freeMem int64, e
 		return 0, 0, err
 	}
 
-	ms, err := mc.MetricsV1beta1().PodMetricses(metav1.NamespaceDefault).Get(context.Background(), podName, metav1.GetOptions{})
+	msgetter := mc.MetricsV1beta1().PodMetricses(metav1.NamespaceDefault)
+	ms, err := msgetter.Get(context.Background(), podName, metav1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.Status().Reason == metav1.StatusReasonNotFound {
 			err = cmn.NewErrNotFound("metrics for pod %q", podName)

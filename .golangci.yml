@@ -23,8 +23,6 @@ linters:
     - nolintlint
     - prealloc
     - reassign
-    - rowserrcheck
-    - sqlclosecheck
     - staticcheck
     - typecheck
     - unconvert
@@ -37,6 +35,10 @@ linters:
     # linters that could be only occasionally useful:
     # - errchkjson
     # - nilnil
+    #
+    # linters disabled because of generics:
+    # - rowserrcheck
+    # - sqlclosecheck
     #
     # linters that used to produce false positives:
     # - goconst
@@ -197,7 +199,7 @@ issues:
   max-per-linter: 0
 
 run:
-  go: '1.17'  # since we are not using generics but want to run linters that otherwise get disabled
+  go: '1.19'
   tests: true # enable linting test files
 
   build-tags:
