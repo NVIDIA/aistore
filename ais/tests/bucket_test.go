@@ -1116,7 +1116,7 @@ func TestListObjects(t *testing.T) {
 
 			tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-			p := bck.DefaultProps()
+			p := bck.DefaultProps(initialClusterConfig)
 
 			totalObjects := 0
 			for iter := 1; iter <= iterations; iter++ {

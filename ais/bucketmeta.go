@@ -492,8 +492,10 @@ func remoteBckProps(args bckPropsArgs) (props *cmn.BucketProps, err error) {
 //   - cmn.BucketPropsToUpdate
 //   - cmn.Bck.DefaultProps
 func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
-	props = args.bck.Bucket().DefaultProps()
+	config := cmn.GCO.Get()
+	props = args.bck.Bucket().DefaultProps(&config.ClusterConfig)
 	props.SetProvider(args.bck.Provider)
+
 	switch {
 	case args.bck.IsAIS():
 		debug.Assert(args.hdr == nil)

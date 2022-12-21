@@ -578,7 +578,7 @@ func showBucketProps(c *cli.Context) (err error) {
 		return tmpls.Print(p, c.App.Writer, "", nil, true)
 	}
 
-	defProps, err := defaultBckProps(c, bck)
+	defProps, err := defaultBckProps(bck)
 	if err != nil {
 		return err
 	}

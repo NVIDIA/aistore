@@ -133,6 +133,7 @@ func DisableMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dont
 }
 
 // GetDaemonConfig returns the configuration of a specific daemon in a cluster.
+// (compare with `api.GetClusterConfig`)
 func GetDaemonConfig(bp BaseParams, node *cluster.Snode) (config *cmn.Config, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()

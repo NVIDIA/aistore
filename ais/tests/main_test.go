@@ -23,8 +23,9 @@ import (
 )
 
 var (
-	proxyURL   string
-	baseParams api.BaseParams
+	proxyURL             string
+	baseParams           api.BaseParams
+	initialClusterConfig *cmn.ClusterConfig
 )
 
 func setBucket() (bck cmn.Bck, err error) {
@@ -42,13 +43,12 @@ func setBucket() (bck cmn.Bck, err error) {
 	return bck, nil
 }
 
-func waitForCluster() error {
+func waitForCluster() (primaryURL string, err error) {
 	const (
 		retryCount = 30
 		sleep      = time.Second
 	)
 	var (
-		err                        error
 		proxyCnt, targetCnt, retry int
 	)
 	pc := os.Getenv(env.AIS.NumProxy)
@@ -56,36 +56,41 @@ func waitForCluster() error {
 	if pc != "" || tc != "" {
 		proxyCnt, err = strconv.Atoi(pc)
 		if err != nil {
-			return fmt.Errorf("error EnvVars: %s. err: %v", env.AIS.NumProxy, err)
+			err = fmt.Errorf("error EnvVars: %s. err: %v", env.AIS.NumProxy, err)
+			return
 		}
 		targetCnt, err = strconv.Atoi(tc)
 		if err != nil {
-			return fmt.Errorf("error EnvVars: %s. err: %v", env.AIS.NumTarget, err)
+			err = fmt.Errorf("error EnvVars: %s. err: %v", env.AIS.NumTarget, err)
+			return
 		}
 	}
 	_, err = tools.WaitForClusterState(tools.GetPrimaryURL(), "startup", -1, proxyCnt, targetCnt)
 	if err != nil {
-		return fmt.Errorf("error waiting for cluster startup, err: %v", err)
+		err = fmt.Errorf("error waiting for cluster startup, err: %v", err)
+		return
 	}
 	tlog.Logf("Pinging primary for readiness ")
 	for {
 		if retry%5 == 4 {
 			fmt.Fprintf(os.Stdout, "%ds --- ", retry+1)
 		}
-		err = api.Health(tools.BaseAPIParams(tools.GetPrimaryURL()), true /*primary is ready to rebalance*/)
+		primaryURL = tools.GetPrimaryURL()
+		err = api.Health(tools.BaseAPIParams(primaryURL), true /*primary is ready to rebalance*/)
 		if err == nil {
 			fmt.Fprintln(os.Stdout, "")
 			break
 		}
 		if retry >= retryCount {
 			fmt.Fprintln(os.Stdout, "")
-			return fmt.Errorf("timed out waiting for cluster startup: %v", err)
+			err = fmt.Errorf("timed out waiting for cluster startup: %v", err)
+			return
 		}
 		retry++
 		time.Sleep(sleep)
 	}
 	tlog.Logln("Cluster is ready")
-	return nil
+	return
 }
 
 func initTestEnv() {
@@ -98,13 +103,14 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	var (
-		err    error
-		exists bool
+		primaryURL string
+		err        error
+		exists     bool
 	)
 
 	initTestEnv()
 	if cliBck, err = setBucket(); err == nil {
-		err = waitForCluster()
+		primaryURL, err = waitForCluster()
 	}
 
 	if err != nil {
@@ -121,6 +127,11 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			goto fail
 		}
+	}
+
+	initialClusterConfig, err = api.GetClusterConfig(tools.BaseAPIParams(primaryURL))
+	if err != nil {
+		goto fail
 	}
 
 	rand.Seed(time.Now().UnixNano())

@@ -191,13 +191,14 @@ type (
 //   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
 //   - BucketPropsToUpdate (above)
 //   - ais.defaultBckProps()
-func (bck *Bck) DefaultProps() *BucketProps {
-	c := GCO.Clone()
+func (bck *Bck) DefaultProps(c *ClusterConfig) *BucketProps {
+	lru := c.LRU
 	if bck.IsAIS() {
-		c.LRU.Enabled = false
+		lru.Enabled = false
 	}
-	if c.Cksum.Type == "" { // tests with empty cluster config
-		c.Cksum.Type = cos.ChecksumXXHash
+	cksum := c.Cksum
+	if cksum.Type == "" { // tests with empty cluster config
+		cksum.Type = cos.ChecksumXXHash
 	}
 	wp := c.WritePolicy
 	if wp.MD.IsImmediate() {
@@ -207,8 +208,8 @@ func (bck *Bck) DefaultProps() *BucketProps {
 		wp.Data = apc.WriteImmediate
 	}
 	return &BucketProps{
-		Cksum:       c.Cksum,
-		LRU:         c.LRU,
+		Cksum:       cksum,
+		LRU:         lru,
 		Mirror:      c.Mirror,
 		Versioning:  c.Versioning,
 		Access:      apc.AccessAll,

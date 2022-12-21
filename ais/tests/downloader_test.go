@@ -891,7 +891,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		p = bck.DefaultProps()
+		p = bck.DefaultProps(initialClusterConfig)
 
 		objName = trand.String(10)
 		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
@@ -937,7 +937,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		p = bck.DefaultProps()
+		p = bck.DefaultProps(initialClusterConfig)
 
 		objName = trand.String(10)
 		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/master/LICENSE"

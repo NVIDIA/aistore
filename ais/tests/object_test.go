@@ -959,7 +959,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 			),
 			cluster.CloneBck(&m.bck),
 		))
-		cksumConf = m.bck.DefaultProps().Cksum
+		cksumConf = m.bck.DefaultProps(initialClusterConfig).Cksum
 	)
 
 	m.initWithCleanup()

@@ -949,12 +949,8 @@ done:
 
 // First, request cluster's config from the primary node that contains
 // default Cksum type. Second, generate default list of properties.
-func defaultBckProps(c *cli.Context, bck cmn.Bck) (*cmn.BucketProps, error) {
-	smap, err := getClusterMap(c)
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := api.GetDaemonConfig(apiBP, smap.Primary)
+func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
+	cfg, err := api.GetClusterConfig(apiBP)
 	if err != nil {
 		return nil, err
 	}
