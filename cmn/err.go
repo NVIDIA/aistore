@@ -709,6 +709,10 @@ func IsNotExist(err error) bool {
 	return IsErrNotFound(err)
 }
 
+func IsFileAlreadyClosed(err error) bool {
+	return errors.Is(err, iofs.ErrClosed)
+}
+
 func IsErrBucketLevel(err error) bool { return IsErrBucketNought(err) }
 func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
 

@@ -131,7 +131,7 @@ func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []stri
 		resp.FinishedCnt, len(objects),
 	)
 
-	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0)
+	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
 		t, reflect.DeepEqual(objs, objects),
@@ -481,6 +481,7 @@ func TestDownloadRemote(t *testing.T) {
 			},
 		},
 	}
+	defer tools.CleanupRemoteBucket(t, proxyURL, cliBck, prefix)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: test.srcBck})
@@ -492,7 +493,6 @@ func TestDownloadRemote(t *testing.T) {
 			}
 
 			tools.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
-			defer tools.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
 
 			tlog.Logln("putting objects into remote bucket...")
 
@@ -539,7 +539,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("wait for remote download...")
 			waitForDownload(t, id, time.Minute)
 
-			objs, err := tools.ListObjectNames(proxyURL, test.dstBck, prefix, 0)
+			objs, err := tools.ListObjectNames(proxyURL, test.dstBck, prefix, 0, true /*cached*/)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
 
@@ -869,7 +869,7 @@ func TestDownloadMountpath(t *testing.T) {
 	abortDownload(t, id1)
 
 	tlog.Logf("Listing %s\n", bck)
-	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0)
+	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
 
@@ -878,7 +878,7 @@ func TestDownloadMountpath(t *testing.T) {
 	tlog.Logf("Started download job %s, waiting for it to finish\n", id2)
 
 	waitForDownload(t, id2, 2*time.Minute)
-	objs, err = tools.ListObjectNames(proxyURL, bck, "", 0)
+	objs, err = tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs))
 }

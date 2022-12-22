@@ -116,12 +116,14 @@ func PutObject(t *testing.T, bck cmn.Bck, objName string, reader readers.Reader)
 }
 
 // ListObjectNames returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint) ([]string, error) {
+func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint, cached bool) ([]string, error) {
 	var (
 		baseParams = BaseAPIParams(proxyURL)
-		msg        = &apc.LsoMsg{Flags: apc.LsObjCached, Prefix: prefix}
+		msg        = &apc.LsoMsg{Prefix: prefix}
 	)
-
+	if cached {
+		msg.Flags = apc.LsObjCached
+	}
 	data, err := api.ListObjects(baseParams, bck, msg, objectCountLimit)
 	if err != nil {
 		return nil, err
@@ -209,7 +211,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 		return
 	}
 
-	toDelete, err := ListObjectNames(proxyURL, bck, prefix, 0)
+	toDelete, err := ListObjectNames(proxyURL, bck, prefix, 0, false /*cached*/)
 	tassert.CheckFatal(t, err)
 	defer EvictRemoteBucket(t, proxyURL, bck)
 
