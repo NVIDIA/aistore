@@ -24,8 +24,8 @@ var _ = Describe("Mirror", func() {
 		testDir = "/tmp/mirror-test_q/"
 
 		testBucketName = "TEST_LOCAL_MIRROR_BUCKET"
-		mpath          = testDir + "mirrortest_mpath/2"
-		mpath2         = testDir + "mirrortest_mpath/1"
+		mpath          = testDir + "mirrortest_mpath/111"
+		mpath2         = testDir + "mirrortest_mpath/222"
 
 		testObjectName = "mirrortestobj.ext"
 		testObjectSize = 1234
@@ -71,10 +71,18 @@ var _ = Describe("Mirror", func() {
 		_ = os.RemoveAll(testDir)
 	})
 
+	// NOTE:
+	// the test creates copies; there's a built-in assumption that `mi` will be
+	// the HRW mountpath,
+	// while `mi2` will not (and, therefore, can be used to place the copy).
+	// Ultimately, this depends on the specific HRW hash; adding
+	// Expect(lom.IsHRW()).To(BeTrue()) to catch that sooner.
+
 	Describe("copyTo", func() {
 		It("should copy correctly object and set xattrs", func() {
 			createTestFile(bucketPath, testObjectName, testObjectSize)
 			lom := newBasicLom(defaultObjFQN)
+			Expect(lom.IsHRW()).To(BeTrue())
 			lom.SetSize(testObjectSize)
 			lom.SetAtimeUnix(time.Now().UnixNano())
 			Expect(lom.Persist()).NotTo(HaveOccurred())
@@ -100,6 +108,7 @@ var _ = Describe("Mirror", func() {
 
 			// Check reloaded default LOM
 			newLOM := newBasicLom(defaultObjFQN)
+			Expect(newLOM.IsHRW()).To(BeTrue())
 			Expect(newLOM.Load(false, true)).ShouldNot(HaveOccurred())
 			Expect(newLOM.IsCopy()).To(BeFalse())
 			Expect(newLOM.HasCopies()).To(BeTrue())
