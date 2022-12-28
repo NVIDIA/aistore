@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
@@ -25,6 +25,7 @@ from aistore.sdk.const import (
 )
 
 from aistore.sdk.errors import InvalidBckProvider
+from aistore.sdk.object_group import ObjectGroup
 from aistore.sdk.object import Object
 from aistore.sdk.types import (
     ActionMsg,
@@ -32,6 +33,7 @@ from aistore.sdk.types import (
     BucketEntry,
     BucketList,
     BucketLister,
+    ObjectRange,
     Namespace,
 )
 
@@ -105,15 +107,8 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        if self.provider is not ProviderAIS:
-            raise InvalidBckProvider(self.provider)
-        action = ActionMsg(action=ACT_CREATE_BCK).dict()
-        self.client.request(
-            HTTP_METHOD_POST,
-            path=f"buckets/{ self.name }",
-            json=action,
-            params=self.qparam,
-        )
+        self._verify_ais_bucket()
+        self.make_request(HTTP_METHOD_POST, ACT_CREATE_BCK)
 
     def delete(self):
         """
@@ -137,15 +132,8 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        if self.provider is not ProviderAIS:
-            raise InvalidBckProvider(self.provider)
-        action = ActionMsg(action=ACT_DESTROY_BCK).dict()
-        self.client.request(
-            HTTP_METHOD_DELETE,
-            path=f"buckets/{ self.name }",
-            json=action,
-            params=self.qparam,
-        )
+        self._verify_ais_bucket()
+        self.make_request(HTTP_METHOD_DELETE, ACT_DESTROY_BCK)
 
     def rename(self, to_bck: str) -> str:
         """
@@ -167,14 +155,10 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        if self.provider is not ProviderAIS:
-            raise InvalidBckProvider(self.provider)
+        self._verify_ais_bucket()
         params = self.qparam.copy()
         params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
-        action = ActionMsg(action=ACT_MOVE_BCK).dict()
-        resp = self.client.request(
-            HTTP_METHOD_POST, path=f"buckets/{ self.name }", json=action, params=params
-        )
+        resp = self.make_request(HTTP_METHOD_POST, ACT_MOVE_BCK, params=params)
         self.bck.name = to_bck
         return resp.text
 
@@ -198,17 +182,10 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        if self.provider is ProviderAIS:
-            raise InvalidBckProvider(self.provider)
+        self.verify_cloud_bucket()
         params = self.qparam.copy()
         params[QParamKeepBckMD] = keep_md
-        action = ActionMsg(action=ACT_EVICT_REMOTE_BCK).dict()
-        self.client.request(
-            HTTP_METHOD_DELETE,
-            path=f"buckets/{ self.name }",
-            json=action,
-            params=params,
-        )
+        self.make_request(HTTP_METHOD_DELETE, ACT_EVICT_REMOTE_BCK, params=params)
 
     def head(self) -> Header:
         """
@@ -230,7 +207,7 @@ class Bucket:
         """
         return self.client.request(
             HTTP_METHOD_HEAD,
-            path=f"buckets/{ self.name }",
+            path=f"buckets/{self.name}",
             params=self.qparam,
         ).headers
 
@@ -265,16 +242,11 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-
         value = {"prefix": prefix, "dry_run": dry_run, "force": force}
-        action = ActionMsg(action=ACT_COPY_BCK, value=value).dict()
         params = self.qparam.copy()
         params[QParamBucketTo] = f"{ to_provider }/@#/{ to_bck_name }/"
-        return self.client.request(
-            HTTP_METHOD_POST,
-            path=f"buckets/{ self.name }",
-            json=action,
-            params=params,
+        return self.make_request(
+            HTTP_METHOD_POST, ACT_COPY_BCK, value=value, params=params
         ).text
 
     def list_objects(
@@ -446,19 +418,11 @@ class Bucket:
         if ext:
             value["ext"] = ext
 
-        action = ActionMsg(action=ACT_ETL_BCK, value=value).dict()
-
         params = self.qparam.copy()
         params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
-
-        resp = self.client.request(
-            HTTP_METHOD_POST,
-            path=f"buckets/{ self.name }",
-            json=action,
-            params=params,
-        )
-
-        return resp.text
+        return self.make_request(
+            HTTP_METHOD_POST, ACT_ETL_BCK, value=value, params=params
+        ).text
 
     def object(self, obj_name: str):
         """
@@ -472,3 +436,48 @@ class Bucket:
             The object created.
         """
         return Object(bck=self, obj_name=obj_name)
+
+    def objects(self, obj_names: list = None, obj_range: ObjectRange = None):
+        """
+        Factory constructor for multiple objects bound to bucket.
+
+        Args:
+            obj_names (list): Names of objects to include in the collection
+            obj_range (ObjectRange): Range of objects to include in the collection
+
+        Returns:
+            The ObjectGroup created
+        """
+        return ObjectGroup(bck=self, obj_names=obj_names, obj_range=obj_range)
+
+    def make_request(
+        self, method: str, action: str, value: dict = None, params: dict = None
+    ) -> requests.Response:
+        """
+        Use the bucket's client to make a request to the bucket endpoint on the AIS server
+
+        Args:
+            method (str): HTTP method to use, e.g. POST/GET/DELETE
+            action (str): Action string used to create an ActionMsg to pass to the server
+            value (dict): Additional value parameter to pass in the ActionMsg
+            params (dict, optional): Optional parameters to pass in the request
+
+        Returns:
+            Response from the server
+
+        """
+        json_val = ActionMsg(action=action, value=value).dict()
+        return self.client.request(
+            method,
+            path=f"buckets/{self.name}",
+            json=json_val,
+            params=params if params else self.qparam,
+        )
+
+    def _verify_ais_bucket(self):
+        if self.provider is not ProviderAIS:
+            raise InvalidBckProvider(self.provider)
+
+    def verify_cloud_bucket(self):
+        if self.provider is ProviderAIS:
+            raise InvalidBckProvider(self.provider)

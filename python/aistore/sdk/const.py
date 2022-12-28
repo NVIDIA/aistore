@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-22, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
 # pylint: disable=unused-variable
@@ -38,6 +38,9 @@ ACT_EVICT_REMOTE_BCK = "evict-remote-bck"
 ACT_LIST = "list"
 ACT_MOVE_BCK = "move-bck"
 ACT_ETL_BCK = "etl-bck"
+ACT_DELETE_MULTIPLE_OBJ = "delete-listrange"
+ACT_EVICT_MULTIPLE_OBJ = "evict-listrange"
+ACT_PREFETCH_MULTIPLE_OBJ = "prefetch-listrange"
 
 # Defaults
 DEFAULT_CHUNK_SIZE = 32768

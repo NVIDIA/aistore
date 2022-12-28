@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
@@ -122,6 +122,14 @@ class ObjStream(BaseModel):
                 yield chunk
         finally:
             self.stream.close()
+
+
+class ObjectRange(BaseModel):
+    prefix: str
+    min_index: int
+    max_index: int
+    step: int = 1
+    suffix: str = ""
 
 
 class HttpError(BaseModel):

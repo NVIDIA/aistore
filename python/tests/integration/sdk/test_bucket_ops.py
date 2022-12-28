@@ -1,25 +1,35 @@
 #
-# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
 #
-
-# Default provider is AIS, so all Cloud-related tests are skipped.
-
-
 import unittest
-from aistore.sdk.errors import ErrBckNotFound
+
+from aistore.sdk.const import ProviderAIS
+from aistore.sdk.errors import ErrBckNotFound, InvalidBckProvider
 
 from aistore.sdk import Client
 import requests
+
+from aistore.sdk.xaction import Xaction
 from tests.utils import create_and_put_object, random_string
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
 
+# If remote bucket is not set, skip all cloud-related tests
+REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(ProviderAIS + ":")
 
-class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
+
+class TestBucketOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.bck_name = random_string()
 
         self.client = Client(CLUSTER_ENDPOINT)
         self.buckets = []
+        self.provider = None
+        self.cloud_bck = None
+        self.obj_prefix = "test_bucket_ops-"
+        if REMOTE_SET:
+            self.cloud_objects = []
+            self.provider, self.cloud_bck = REMOTE_BUCKET.split("://")
+            self._cleanup_objects()
 
     def tearDown(self) -> None:
         # Try to destroy all temporary buckets if there are left.
@@ -28,6 +38,21 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
                 self.client.bucket(bck_name).delete()
             except ErrBckNotFound:
                 pass
+        # If we are using a remote bucket for this specific test, delete the objects instead of the full bucket
+        if self.cloud_bck:
+            bucket = self.client.bucket(self.cloud_bck, provider=self.provider)
+            for obj_name in self.cloud_objects:
+                bucket.objects(obj_range=obj_name).delete()
+
+    def _cleanup_objects(self):
+        cloud_bck = self.client.bucket(self.cloud_bck, self.provider)
+        # Clean up any other objects created with the test prefix, potentially from aborted tests
+        object_names = [
+            x.name for x in cloud_bck.list_objects(self.obj_prefix).get_entries()
+        ]
+        if len(object_names) > 0:
+            xact_id = cloud_bck.objects(obj_names=object_names).delete()
+            Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
 
     def test_bucket(self):
         res = self.client.cluster().list_buckets()
@@ -39,7 +64,9 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def create_bucket(self, bck_name):
         self.buckets.append(bck_name)
-        self.client.bucket(bck_name).create()
+        bucket = self.client.bucket(bck_name)
+        bucket.create()
+        return bucket
 
     def test_head_bucket(self):
         self.create_bucket(self.bck_name)
@@ -82,39 +109,6 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         count_new = len(res)
         self.assertEqual(count, count_new)
 
-    @unittest.skipIf(
-        REMOTE_BUCKET == "" or REMOTE_BUCKET.startswith("ais:"),
-        "Remote bucket is not set",
-    )
-    def test_evict_bucket(self):
-        obj_name = "evict_obj"
-        parts = REMOTE_BUCKET.split("://")  # must be in the format '<provider>://<bck>'
-        self.assertTrue(len(parts) > 1)
-        provider, self.bck_name = parts[0], parts[1]
-        create_and_put_object(
-            self.client, bck_name=self.bck_name, provider=provider, obj_name=obj_name
-        )
-
-        objects = self.client.bucket(self.bck_name, provider=provider).list_objects(
-            props="name,cached", prefix=obj_name
-        )
-        self.assertTrue(len(objects) > 0)
-        for obj in objects:
-            if obj.name == obj_name:
-                self.assertTrue(obj.is_ok())
-                self.assertTrue(obj.is_cached())
-
-        self.client.bucket(self.bck_name, provider=provider).evict()
-        objects = self.client.bucket(self.bck_name, provider=provider).list_objects(
-            props="name,cached", prefix=obj_name
-        )
-        self.assertTrue(len(objects) > 0)
-        for obj in objects:
-            if obj.name == obj_name:
-                self.assertTrue(obj.is_ok())
-                self.assertFalse(obj.is_cached())
-        self.client.bucket(self.bck_name, provider=provider).object(obj_name).delete()
-
     def test_copy_bucket(self):
         from_bck = self.bck_name + "from"
         to_bck = self.bck_name + "to"
@@ -124,6 +118,58 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         xact_id = self.client.bucket(from_bck).copy(to_bck)
         self.assertNotEqual(xact_id, "")
         self.client.xaction().wait_for_xaction_finished(xact_id=xact_id)
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    def test_evict_bucket(self):
+        obj_name = "test_evict_bucket-"
+        create_and_put_object(
+            self.client,
+            bck_name=self.cloud_bck,
+            provider=self.provider,
+            obj_name=obj_name,
+        )
+        bucket = self.client.bucket(self.cloud_bck, provider=self.provider)
+        objects = bucket.list_objects(
+            props="name,cached", prefix=obj_name
+        ).get_entries()
+        self.verify_objects_cache_status(objects, True)
+
+        bucket.evict()
+
+        objects = bucket.list_objects(
+            props="name,cached", prefix=obj_name
+        ).get_entries()
+        self.verify_objects_cache_status(objects, False)
+
+    def test_evict_bucket_local(self):
+        bucket = self.create_bucket(self.bck_name)
+        with self.assertRaises(InvalidBckProvider):
+            bucket.evict()
+
+    def verify_objects_cache_status(self, objects, expected_status):
+        self.assertTrue(len(objects) > 0)
+        for obj in objects:
+            self.assertTrue(obj.is_ok())
+            if expected_status:
+                self.assertTrue(obj.is_cached())
+            else:
+                self.assertFalse(obj.is_cached())
+
+    def create_object_list(self, prefix, provider, bck_name, suffix="", length=10):
+        obj_names = [prefix + str(i) + suffix for i in range(length)]
+        for obj_name in obj_names:
+            if self.cloud_bck and bck_name == self.cloud_bck:
+                self.cloud_objects.append(obj_name)
+            create_and_put_object(
+                self.client,
+                bck_name=bck_name,
+                provider=provider,
+                obj_name=obj_name,
+            )
+        return obj_names
 
 
 if __name__ == "__main__":
