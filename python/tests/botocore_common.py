@@ -11,6 +11,12 @@ import boto3
 from moto import mock_s3
 from botocore.exceptions import ClientError
 
+from tests import (
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_SESSION_TOKEN,
+    AWS_DEFAULT_REGION,
+)
 from tests.utils import random_string
 from tests.unit.botocore_patch import mock_s3_redirect
 
@@ -68,7 +74,12 @@ class BotocoreBaseTest(unittest.TestCase):
         else:
             logging.debug("Using aistore for S3 services")
             self.s3 = boto3.client(
-                "s3", region_name="us-east-1", endpoint_url=self.endpoint_url
+                "s3",
+                region_name=AWS_DEFAULT_REGION,
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                aws_session_token=AWS_SESSION_TOKEN,
             )
 
         self.s3.create_bucket(Bucket=self.control_bucket)

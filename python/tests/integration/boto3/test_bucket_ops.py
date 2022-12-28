@@ -4,6 +4,7 @@ import boto3
 
 # pylint: disable=unused-import,unused-variable
 from aistore.botocore_patch import botocore
+from tests import AWS_ACCESS_KEY_ID, AWS_SESSION_TOKEN, AWS_SECRET_ACCESS_KEY
 
 from tests.integration import CLUSTER_ENDPOINT
 from tests.integration.boto3 import NUM_BUCKETS, NUM_OBJECTS, OBJECT_LENGTH, AWS_REGION
@@ -13,7 +14,12 @@ from tests.utils import random_string
 class BotoTest(TestCase):
     def setUp(self) -> None:
         self.client = boto3.client(
-            "s3", region_name=AWS_REGION, endpoint_url=CLUSTER_ENDPOINT + "/s3"
+            "s3",
+            region_name=AWS_REGION,
+            endpoint_url=CLUSTER_ENDPOINT + "/s3",
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            aws_session_token=AWS_SESSION_TOKEN,
         )
         self.clean_up()
 

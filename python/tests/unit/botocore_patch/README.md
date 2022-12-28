@@ -30,7 +30,7 @@ To run these tests, you need to start a new forked process each time, scoped per
 To do this inline we use the pytest-xdist plugin like so:
 
 ```
-pytest -v -n $(MP_TESTCOUNT) --dist loadfile tests/unit
+pytest -v -n $(MP_TESTCOUNT) --dist loadfile tests/unit/botocore_patch
 ```
 
 ...which is one of the reasons why this test set is kept separate from those for the aistore SDK proper.

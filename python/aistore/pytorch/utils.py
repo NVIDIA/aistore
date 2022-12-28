@@ -6,7 +6,7 @@ Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
 from typing import List, Mapping, Tuple
 from urllib.parse import urlparse, urlunparse
-from aistore import Client
+from aistore.sdk import Client
 
 
 def parse_url(url: str) -> Tuple[str, str, str]:
