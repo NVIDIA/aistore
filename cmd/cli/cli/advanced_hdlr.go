@@ -45,14 +45,7 @@ var (
 				Flags:     advancedCmdsFlags[commandGenShards],
 				Action:    genShardsHandler,
 			},
-			{
-				Name:         apc.ActResilver,
-				Usage:        "start resilvering objects across all drives on one or all targets",
-				ArgsUsage:    optionalTargetIDArgument,
-				Flags:        startCmdsFlags[subcmdXaction],
-				Action:       startXactionHandler,
-				BashComplete: suggestTargetNodes,
-			},
+			jobStartResilver,
 			{
 				Name:         subcmdPreload,
 				Usage:        "preload object metadata into in-memory cache",

@@ -41,9 +41,11 @@ type (
 	}
 )
 
-// Table is a static Kind=>[Xaction Descriptor] map that contains
-// static properties of a given xaction type (aka `kind`), such as:
-// `Startable`, `Owned`, etc.
+// Table is a static, public, and global Kind=>[Xaction Descriptor] map that contains
+// xaction kinds and static properties, such as `Startable`, `Owned`, etc.
+// In particular, "startability" is narrowly defined as ability to start xaction
+// via `api.StartXaction`
+// (whereby copying bucket, for instance, requires a separate `api.CopyBucket`, etc.)
 var Table = map[string]Descriptor{
 	// bucket-less xactions that will typically have a 'cluster' scope (with resilver being a notable exception)
 	apc.ActElection:  {DisplayName: "elect-primary", Scope: ScopeG, Startable: false},
@@ -71,64 +73,13 @@ var Table = map[string]Descriptor{
 	apc.ActECGet:     {Scope: ScopeB, Startable: false},
 	apc.ActECPut:     {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true},
 	apc.ActECRespond: {Scope: ScopeB, Startable: false},
-	apc.ActMakeNCopies: {
-		DisplayName: "mirror",
-		Scope:       ScopeB,
-		Access:      apc.AccessRW,
-		Startable:   true,
-		Metasync:    true,
-		Owned:       false,
-		RefreshCap:  true,
-		Mountpath:   true,
-	},
-	apc.ActPutCopies:   {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true},
+	apc.ActPutCopies: {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true},
+
+	// multi-object
 	apc.ActArchive:     {Scope: ScopeB, Startable: false, RefreshCap: true},
 	apc.ActCopyObjects: {DisplayName: "copy-objects", Scope: ScopeB, Startable: false, RefreshCap: true},
 	apc.ActETLObjects:  {DisplayName: "etl-objects", Scope: ScopeB, Startable: false, RefreshCap: true},
-	apc.ActMoveBck: {
-		DisplayName: "rename-bucket",
-		Scope:       ScopeB,
-		Access:      apc.AceMoveBucket,
-		Startable:   false,
-		Metasync:    true,
-		Owned:       false,
-		Mountpath:   true,
-		Rebalance:   true,
-		MassiveBck:  true,
-	},
-	apc.ActCopyBck: {
-		DisplayName: "copy-bucket",
-		Scope:       ScopeB,
-		Access:      apc.AccessRW,
-		Startable:   false,
-		Metasync:    true,
-		Owned:       false,
-		RefreshCap:  true,
-		Mountpath:   true,
-		MassiveBck:  true,
-	},
-	apc.ActETLBck: {
-		DisplayName: "etl-bucket",
-		Scope:       ScopeB,
-		Access:      apc.AccessRW,
-		Startable:   false,
-		Metasync:    true,
-		Owned:       false,
-		RefreshCap:  true,
-		Mountpath:   true,
-		MassiveBck:  true,
-	},
-	apc.ActECEncode: {
-		DisplayName: "ec-bucket",
-		Scope:       ScopeB,
-		Access:      apc.AccessRW,
-		Startable:   true,
-		Metasync:    true,
-		Owned:       false,
-		RefreshCap:  true,
-		Mountpath:   true,
-		MassiveBck:  true,
-	},
+	apc.ActPromote:     {DisplayName: "promote-files", Scope: ScopeB, Access: apc.AcePromote, Startable: false, RefreshCap: true},
 	apc.ActEvictObjects: {
 		DisplayName: "evict-objects",
 		Scope:       ScopeB,
@@ -145,9 +96,71 @@ var Table = map[string]Descriptor{
 		RefreshCap:  true,
 		Mountpath:   true,
 	},
-	apc.ActPrefetchObjects: {DisplayName: "prefetch-objects", Scope: ScopeB, Access: apc.AccessRW, RefreshCap: true, Startable: true},
-	apc.ActPromote:         {DisplayName: "promote-files", Scope: ScopeB, Access: apc.AcePromote, Startable: false, RefreshCap: true},
-	apc.ActList:            {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Owned: true},
+	apc.ActPrefetchObjects: {
+		DisplayName: "prefetch-objects",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW,
+		Startable:   true,
+		RefreshCap:  true,
+	},
+
+	// entire bucket (storage svcs)
+	apc.ActECEncode: {
+		DisplayName: "ec-bucket",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW,
+		Startable:   true,
+		Metasync:    true,
+		Owned:       false,
+		RefreshCap:  true,
+		Mountpath:   true,
+		MassiveBck:  true,
+	},
+	apc.ActMakeNCopies: {
+		DisplayName: "mirror",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW,
+		Startable:   true,
+		Metasync:    true,
+		Owned:       false,
+		RefreshCap:  true,
+		Mountpath:   true,
+	},
+	apc.ActMoveBck: {
+		DisplayName: "rename-bucket",
+		Scope:       ScopeB,
+		Access:      apc.AceMoveBucket,
+		Startable:   false, // executing this one cannot be done via `api.StartXaction`
+		Metasync:    true,
+		Owned:       false,
+		Mountpath:   true,
+		Rebalance:   true,
+		MassiveBck:  true,
+	},
+	apc.ActCopyBck: {
+		DisplayName: "copy-bucket",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW,
+		Startable:   false, // ditto
+		Metasync:    true,
+		Owned:       false,
+		RefreshCap:  true,
+		Mountpath:   true,
+		MassiveBck:  true,
+	},
+	apc.ActETLBck: {
+		DisplayName: "etl-bucket",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW,
+		Startable:   false, // ditto
+		Metasync:    true,
+		Owned:       false,
+		RefreshCap:  true,
+		Mountpath:   true,
+		MassiveBck:  true,
+	},
+
+	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Owned: true},
 
 	// cache management, internal usage
 	apc.ActLoadLomCache:   {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true, Mountpath: true},

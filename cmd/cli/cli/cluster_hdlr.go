@@ -401,7 +401,7 @@ func setPrimaryHandler(c *cli.Context) error {
 }
 
 func startClusterRebalanceHandler(c *cli.Context) (err error) {
-	return startXactionKindHandler(c, apc.ActRebalance)
+	return startXactionKind(c, apc.ActRebalance)
 }
 
 func stopClusterRebalanceHandler(c *cli.Context) error {

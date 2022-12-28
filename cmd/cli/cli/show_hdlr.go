@@ -254,7 +254,7 @@ var (
 	showCmdJob = cli.Command{
 		Name:         commandJob,
 		Usage:        "show running and finished jobs (use <TAB-TAB> to select, help to see options)",
-		ArgsUsage:    "NAME [JOB_ID] [NODE_ID] [BUCKET]",
+		ArgsUsage:    "NAME|JOB_ID [JOB_ID] [NODE_ID] [BUCKET]",
 		Flags:        showCmdsFlags[commandJob],
 		Action:       showJobsHandler,
 		BashComplete: runningJobCompletions,
@@ -298,14 +298,21 @@ func showDisksHandler(c *cli.Context) (err error) {
 	return daemonDiskStats(c, sid)
 }
 
-// args: `NAME [running job or xaction ID] [TARGET]` (see `runningJobCompletions`)
+// args: `NAME|JOB_ID [JOB_ID] [TARGET] [BUCKET]` (see `runningJobCompletions`)
 func showJobsHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
 	var (
 		name     = c.Args().Get(0)
 		xid      = c.Args().Get(1)
 		daemonID = c.Args().Get(2)
 	)
 	// reparse and reassign
+	if xactKind, _ := xact.GetKindName(name); xactKind == "" {
+		xid = name
+		name = ""
+	}
 	bck, err := parseBckURI(c, xid, true /*require provider*/)
 	if err == nil {
 		if _, err = headBucket(bck, true /* don't add */); err != nil {

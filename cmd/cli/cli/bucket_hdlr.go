@@ -136,6 +136,22 @@ var (
 		Action:       evictHandler,
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
 	}
+	bucketCmdCopy = cli.Command{
+		Name:         commandCopy,
+		Usage:        "copy bucket",
+		ArgsUsage:    "SRC_BUCKET DST_BUCKET",
+		Flags:        bucketCmdsFlags[commandCopy],
+		Action:       copyBucketHandler,
+		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
+	}
+	bucketCmdRename = cli.Command{
+		Name:         commandRename,
+		Usage:        "rename/move ais bucket",
+		ArgsUsage:    "BUCKET NEW_BUCKET",
+		Flags:        bucketCmdsFlags[commandRename],
+		Action:       mvBucketHandler,
+		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
+	}
 
 	bucketCmd = cli.Command{
 		Name:  commandBucket,
@@ -153,22 +169,8 @@ var (
 				Flags:     bucketCmdsFlags[commandCreate],
 				Action:    createBucketHandler,
 			},
-			{
-				Name:         commandCopy,
-				Usage:        "copy bucket",
-				ArgsUsage:    "SRC_BUCKET DST_BUCKET",
-				Flags:        bucketCmdsFlags[commandCopy],
-				Action:       copyBucketHandler,
-				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
-			},
-			{
-				Name:         commandRename,
-				Usage:        "rename/move ais bucket",
-				ArgsUsage:    "BUCKET NEW_BUCKET",
-				Flags:        bucketCmdsFlags[commandRename],
-				Action:       mvBucketHandler,
-				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
-			},
+			bucketCmdCopy,
+			bucketCmdRename,
 			{
 				Name:      commandRemove,
 				Usage:     "remove ais buckets",

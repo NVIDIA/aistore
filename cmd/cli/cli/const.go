@@ -56,6 +56,7 @@ const (
 	commandCopy      = "cp"
 	commandCreate    = "create"
 	commandECEncode  = "ec-encode"
+	commandMirror    = "mirror"
 	commandEvict     = "evict"
 	commandPrefetch  = "prefetch"
 	commandGet       = "get"
@@ -69,9 +70,10 @@ const (
 	commandStart     = apc.ActXactStart
 	commandStop      = apc.ActXactStop
 
-	commandLog       = "log"
-	commandRebalance = "rebalance"
-	commandMirror    = "mirror"
+	commandLog = "log"
+
+	commandRebalance = apc.ActRebalance
+	commandResilver  = apc.ActResilver
 
 	subcmdDsort      = dsort.DSortName
 	subcmdSmap       = apc.GetWhatSmap

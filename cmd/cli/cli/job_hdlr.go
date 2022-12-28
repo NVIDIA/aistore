@@ -75,6 +75,16 @@ var (
 		},
 	}
 
+	jobStartResilver = cli.Command{
+		Name: commandResilver,
+		Usage: "resilver user data on a given target or all targets " +
+			"(fix data redundancy with respect to bucket configuration, " +
+			"remove migrated objects and old/obsolete workfiles)",
+		ArgsUsage:    optionalTargetIDArgument,
+		Flags:        startCmdsFlags[subcmdXaction],
+		Action:       startResilverHandler,
+		BashComplete: suggestTargetNodes,
+	}
 	jobStartSub = cli.Command{
 		Name:  commandStart,
 		Usage: "run batch job",
@@ -131,6 +141,7 @@ var (
 				Flags:  clusterCmdsFlags[commandStart],
 				Action: startClusterRebalanceHandler,
 			},
+			jobStartResilver,
 			// NOTE: append all `startableXactions`
 		},
 	}
@@ -224,15 +235,25 @@ outer:
 			Flags:  startCmdsFlags[subcmdXaction],
 			Action: startXactionHandler,
 		}
-		if xact.IsSameScope(xname, xact.ScopeB) {
+		if xact.IsSameScope(xname, xact.ScopeB) { // with a single arg: bucket
 			cmd.ArgsUsage = bucketArgument
 			cmd.BashComplete = bucketCompletions(bcmplop{})
-		} else if xact.IsSameScope(xname, xact.ScopeGB) {
+		} else if xact.IsSameScope(xname, xact.ScopeGB) { // with a single optional arg: bucket
 			cmd.ArgsUsage = optionalBucketArgument
 			cmd.BashComplete = bucketCompletions(bcmplop{})
 		}
 		cmds = append(cmds, cmd)
 	}
+
+	// and in addition:
+	cmd := bucketCmdCopy
+	cmd.Name, _ = xact.GetKindName(apc.ActCopyBck)
+	cmds = append(cmds, cmd)
+
+	cmd = bucketCmdRename
+	cmd.Name, _ = xact.GetKindName(apc.ActMoveBck)
+	cmds = append(cmds, cmd)
+
 	return cmds
 }
 
@@ -240,27 +261,35 @@ outer:
 // job start
 //
 
+// via `startableXactions()`
 func startXactionHandler(c *cli.Context) (err error) {
 	xname := c.Command.Name
-	return startXactionKindHandler(c, xname)
+	return startXactionKind(c, xname)
 }
 
-func startXactionKindHandler(c *cli.Context, xname string) (err error) {
-	var (
-		bck cmn.Bck
-		sid string
-	)
-	if xact.IsSameScope(xname, xact.ScopeB, xact.ScopeGB) {
+func startXactionKind(c *cli.Context, xname string) (err error) {
+	var bck cmn.Bck
+	if c.NArg() == 0 && xact.IsSameScope(xname, xact.ScopeB) {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	if c.NArg() > 0 && xact.IsSameScope(xname, xact.ScopeB, xact.ScopeGB) {
 		bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/)
 		if err != nil {
 			return err
 		}
 	}
-	if sid, err = isResilverNode(c, xname); err != nil {
-		return err
-	}
+	return startXaction(c, xname, bck, "" /*sid*/)
+}
 
-	return startXaction(c, xname, bck, sid)
+func startResilverHandler(c *cli.Context) (err error) {
+	var sid string
+	if c.NArg() > 0 {
+		sid, _, err = getNodeIDName(c, c.Args().First())
+		if err != nil {
+			return
+		}
+	}
+	return startXaction(c, apc.ActResilver, cmn.Bck{}, sid)
 }
 
 func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
@@ -287,21 +316,6 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 		toShowMsg(c, "", "To investigate", false))
 	actionWarn(c, warn)
 	return nil
-}
-
-func isResilverNode(c *cli.Context, xname string) (sid string, err error) {
-	if xname != apc.ActResilver || c.NArg() == 0 {
-		return "", nil
-	}
-	smap, err := getClusterMap(c)
-	if err != nil {
-		return "", err
-	}
-	sid = c.Args().First()
-	if node := smap.GetTarget(sid); node == nil {
-		return "", fmt.Errorf("node %s is not a target. Run 'ais show cluster target' to see a list of all targets", sid)
-	}
-	return
 }
 
 func startDownloadHandler(c *cli.Context) error {
