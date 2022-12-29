@@ -146,7 +146,30 @@ car_1.txt shard-car-%d
 ...
 ```
 
-And content of the **input** shards looks more or less like this:
+or if `order_file` (URL: `http://website.web/static/order_file.json`, notice `.json` extension) and has content:
+
+```json
+{
+  "shard-cats-%d": [
+    "cat_0.txt",
+    "cat_1.txt",
+    ...
+  ],
+  "shard-dogs-%d": [
+    "dog_0.txt",
+    "dog_1.txt",
+    ...
+  ],
+  "shard-car-%d": [
+    "car_0.txt",
+    "car_1.txt",
+    ...
+  ],
+  ...
+}
+```
+
+and content of the **input** shards looks more or less like this:
 
 ```
 shard-0.tar:

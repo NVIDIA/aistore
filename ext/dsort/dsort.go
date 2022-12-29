@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -678,6 +679,11 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		return nil, errors.New("invalid max size of shard was specified when using external key map")
 	}
 
+	parsedURL, err := url.Parse(m.rs.OrderFileURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse `order_file` url, err: %v", err)
+	}
+
 	req, err := http.NewRequest(http.MethodGet, m.rs.OrderFileURL, http.NoBody)
 	if err != nil {
 		return nil, err
@@ -703,32 +709,45 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	//  need to save file to the disk and operate on the file directly rather
 	//  than keeping everything in memory.
 
-	lineReader := bufio.NewReader(resp.Body)
-
-	for idx := 0; ; idx++ {
-		l, _, err := lineReader.ReadLine()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
+	switch filepath.Ext(parsedURL.Path) {
+	case ".json":
+		var ekm map[string][]string
+		if err := jsoniter.NewDecoder(resp.Body).Decode(&ekm); err != nil {
 			return nil, err
 		}
 
-		line := strings.TrimSpace(string(l))
-		if line == "" {
-			continue
-		}
-
-		parts := strings.Split(line, m.rs.OrderFileSep)
-		if len(parts) != 2 {
-			msg := fmt.Sprintf("malformed line (%d) in external key map: %s", idx, line)
-			if err := m.react(m.rs.EKMMalformedLine, msg); err != nil {
-				return nil, err
+		for shardNameFmt, recordKeys := range ekm {
+			for _, recordKey := range recordKeys {
+				externalKeyMap[recordKey] = shardNameFmt
 			}
 		}
+	default:
+		lineReader := bufio.NewReader(resp.Body)
+		for idx := 0; ; idx++ {
+			l, _, err := lineReader.ReadLine()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
 
-		recordKey, shardNameFmt := parts[0], parts[1]
-		externalKeyMap[recordKey] = shardNameFmt
+			line := strings.TrimSpace(string(l))
+			if line == "" {
+				continue
+			}
+
+			parts := strings.Split(line, m.rs.OrderFileSep)
+			if len(parts) != 2 {
+				msg := fmt.Sprintf("malformed line (%d) in external key map: %s", idx, line)
+				if err := m.react(m.rs.EKMMalformedLine, msg); err != nil {
+					return nil, err
+				}
+			}
+
+			recordKey, shardNameFmt := parts[0], parts[1]
+			externalKeyMap[recordKey] = shardNameFmt
+		}
 	}
 
 	for _, r := range m.recManager.Records.All() {

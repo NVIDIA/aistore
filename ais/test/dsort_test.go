@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -1864,6 +1865,108 @@ func TestDistributedSortOrderFile(t *testing.T) {
 				ObjName:    orderFileName,
 				Reader:     readers.NewBytesReader(buffer.Bytes()),
 			}
+			_, err = api.PutObject(args)
+			tassert.CheckFatal(t, err)
+
+			tlog.Logln("starting distributed sort...")
+			rs := df.gen()
+			managerUUID, err := api.StartDSort(baseParams, rs)
+			tassert.CheckFatal(t, err)
+
+			_, err = tools.WaitForDSortToFinish(m.proxyURL, managerUUID)
+			tassert.CheckFatal(t, err)
+			tlog.Logln("finished distributed sort")
+
+			allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
+			tassert.CheckFatal(t, err)
+			if len(allMetrics) != m.originalTargetCount {
+				t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+			}
+
+			tlog.Logln("checking if all records are in specified shards...")
+			shardRecords = df.getRecordNames(df.outputBck)
+			for _, shard := range shardRecords {
+				for _, recordName := range shard.recordNames {
+					match := false
+					// Some shard with specified format contains the record
+					for i := 0; i < 30; i++ {
+						match = match || fmt.Sprintf(ekm[recordName], i) == shard.name
+					}
+					if !match {
+						t.Errorf("record %q was not part of any shard with format %q but was in shard %q", recordName, ekm[recordName], shard.name)
+					}
+				}
+			}
+		},
+	)
+}
+
+func TestDistributedSortOrderJSONFile(t *testing.T) {
+	runDSortTest(
+		t, dsortTestSpec{p: true, types: dsorterTypes},
+		func(dsorterType string, t *testing.T) {
+			var (
+				err error
+				m   = &ioContext{
+					t: t,
+				}
+				df = &dsortFramework{
+					m:           m,
+					dsorterType: dsorterType,
+					outputBck: cmn.Bck{
+						Name:     trand.String(15),
+						Provider: apc.AIS,
+					},
+					tarballCnt:       100,
+					fileInTarballCnt: 10,
+				}
+
+				orderFileName = "order_file_name.json"
+				ekm           = make(map[string]string, 10)
+				shardFmts     = []string{
+					"shard-%d-suf",
+					"input-%d-pref",
+					"smth-%d",
+				}
+				proxyURL   = tools.RandomProxyURL()
+				baseParams = tools.BaseAPIParams(proxyURL)
+			)
+
+			m.initWithCleanupAndSaveState()
+			m.expectTargets(3)
+
+			// Set URL for order file (points to the object in cluster).
+			df.orderFileURL = fmt.Sprintf(
+				"%s/%s/%s/%s/%s?%s=%s",
+				proxyURL, apc.Version, apc.Objects, m.bck.Name, orderFileName,
+				apc.QparamProvider, apc.AIS,
+			)
+
+			df.init()
+
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+
+			// Create local output bucket
+			tools.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
+
+			df.createInputShards()
+
+			// Generate content for the orderFile
+			tlog.Logln("generating and putting order file into cluster...")
+			var (
+				content      = make(map[string][]string, 10)
+				shardRecords = df.getRecordNames(m.bck)
+			)
+			for _, shard := range shardRecords {
+				for idx, recordName := range shard.recordNames {
+					shardFmt := shardFmts[idx%len(shardFmts)]
+					content[shardFmt] = append(content[shardFmt], recordName)
+					ekm[recordName] = shardFmts[idx%len(shardFmts)]
+				}
+			}
+			jsonBytes, err := jsoniter.Marshal(content)
+			tassert.CheckFatal(t, err)
+			args := api.PutArgs{BaseParams: baseParams, Bck: m.bck, ObjName: orderFileName, Reader: readers.NewBytesReader(jsonBytes)}
 			_, err = api.PutObject(args)
 			tassert.CheckFatal(t, err)
 
