@@ -1344,10 +1344,10 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
 		return
 	}
-	// not (explicitly) specified props default to the default ones
-	if lsmsg.Props == "" {
-		lsmsg.AddProps(apc.GetPropsDefault...)
-	} else if lsmsg.WantOnlyName() {
+	if lsmsg.Props == "" { // default to the minimal (name,size) subset when _not_ explicitly specified
+		lsmsg.AddProps(apc.GetPropsMinimal...)
+		lsmsg.SetFlag(apc.LsNameSize)
+	} else if lsmsg.WantOnlyName() { // fast option
 		lsmsg.SetFlag(apc.LsNameOnly)
 	}
 
@@ -1388,7 +1388,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 			p.writeErr(w, r, err, http.StatusNotImplemented)
 			return
 		}
-		lst, err = p.lsObjsR(bck, lsmsg, wantOnlyRemote)
+		lst, err = p.lsObjsR(bck, lsmsg, smap, wantOnlyRemote)
 		// TODO: `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
 		// cached objects. This isn't easy as we basically need to start a new
@@ -2018,16 +2018,14 @@ func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.Ls
 	pageSize := lsmsg.PageSize
 
 	// TODO: Before checking cache and buffer we should check if there is another
-	//  request already in-flight that requests the same page as we do - if yes
-	//  then we should just patiently wait for the cache to get populated.
+	// request in-flight that asks for the same page - if true wait for the cache
+	// to get populated.
 
 	if lsmsg.IsFlagSet(apc.UseListObjsCache) {
 		entries, hasEnough = p.qm.c.get(cacheID, token, pageSize)
 		if hasEnough {
 			goto end
 		}
-		// Request for all the props if (cache should always have all entries).
-		lsmsg.AddProps(apc.GetPropsAll...)
 	}
 	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
 	if hasEnough {
@@ -2096,9 +2094,8 @@ end:
 	return allEntries, nil
 }
 
-func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, wantOnlyRemote bool) (allEntries *cmn.LsoResult, err error) {
+func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, wantOnlyRemote bool) (allEntries *cmn.LsoResult, err error) {
 	var (
-		smap       = p.owner.smap.get()
 		config     = cmn.GCO.Get()
 		reqTimeout = config.Client.ListObjTimeout.D()
 		aisMsg     = p.newAmsgActVal(apc.ActList, &lsmsg)

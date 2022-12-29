@@ -879,37 +879,50 @@ func TestListObjectsProps(t *testing.T) {
 		}
 
 		for _, useCache := range []bool{false, true} {
-			tlog.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
+			tlog.Logf("[cache=%t] trying empty (minimal) subset of props...\n", useCache)
 			checkProps(useCache, []string{}, func(entry *cmn.LsoEntry) {
+				tassert.Errorf(t, entry.Name != "", "name is not set")
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-				tassert.Errorf(t, entry.Atime != "", "atime is not set")
-
-				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
-				tassert.Errorf(t, entry.Copies == 0, "copies is set")
-			})
-
-			tlog.Logf("[cache=%t] trying default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefault, func(entry *cmn.LsoEntry) {
-				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-				tassert.Errorf(t, entry.Atime != "", "atime is not set")
-
-				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
-				tassert.Errorf(t, entry.Copies == 0, "copies is set")
-			})
-
-			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.LsoEntry) {
-				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-				if bck.IsAIS() || bck.Provider == apc.GCP {
-					tassert.Errorf(t, entry.Version != "", "version is not set: "+m.bck.DisplayName()+"/"+entry.Name)
-				}
-				tassert.Errorf(t, entry.Copies > 0, "copies is not set")
 
 				tassert.Errorf(t, entry.Atime == "", "atime is set")
 				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
+				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			})
+
+			tlog.Logf("[cache=%t] trying ais-default subset of props...\n", useCache)
+			checkProps(useCache, apc.GetPropsDefaultAIS, func(entry *cmn.LsoEntry) {
+				tassert.Errorf(t, entry.Size != 0, "size is not set")
+				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+				tassert.Errorf(t, entry.Atime != "", "atime is not set")
+
+				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
+				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+			})
+
+			tlog.Logf("[cache=%t] trying cloud-default subset of props...\n", useCache)
+			checkProps(useCache, apc.GetPropsDefaultCloud, func(entry *cmn.LsoEntry) {
+				tassert.Errorf(t, entry.Size != 0, "size is not set")
+				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+				tassert.Errorf(t, entry.Version != "", "version is not set")
+
+				tassert.Errorf(t, entry.Atime == "", "atime is set")
+				tassert.Errorf(t, entry.Custom == "", "custom is set")
+			})
+
+			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
+			checkProps(useCache,
+				[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.LsoEntry) {
+					tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+					if bck.IsAIS() || bck.Provider == apc.GCP {
+						tassert.Errorf(t, entry.Version != "",
+							"version is not set: "+m.bck.DisplayName()+"/"+entry.Name)
+					}
+					tassert.Errorf(t, entry.Copies > 0, "copies is not set")
+
+					tassert.Errorf(t, entry.Atime == "", "atime is set")
+					tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
+				})
 
 			tlog.Logf("[cache=%t] trying small subset of props...\n", useCache)
 			checkProps(useCache, []string{apc.GetPropsSize}, func(entry *cmn.LsoEntry) {

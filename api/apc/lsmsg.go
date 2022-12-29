@@ -25,6 +25,7 @@ const (
 	LsDeleted  // include obj-s marked for deletion (TODO)
 	LsArchDir  // expand archives as directories
 	LsNameOnly // return only object names and statuses (for faster listing)
+	LsNameSize // same as above plus size
 
 	// The following two flags have to do with listing objects in those remote
 	// buckets that we don't yet have in the cluster's BMD. As far as AIS is concerned,
@@ -116,9 +117,10 @@ const (
 
 // NOTE: update when changing any of the above :NOTE
 var (
-	GetPropsMinimal = []string{GetPropsName, GetPropsSize}
-	GetPropsDefault = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
-	GetPropsAll     = append(GetPropsDefault,
+	GetPropsMinimal      = []string{GetPropsName, GetPropsSize, GetPropsChecksum}
+	GetPropsDefaultAIS   = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
+	GetPropsDefaultCloud = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsVersion}
+	GetPropsAll          = append(GetPropsDefaultAIS,
 		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation)
 )
 
@@ -143,20 +145,26 @@ func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
 	if lsmsg.IsFlagSet(LsWantOnlyRemoteProps) {
 		return true
 	}
-	// anything outside the subset (name, size, checksum, version)
-	for _, name := range GetPropsAll {
-		if !lsmsg.WantProp(name) {
-			continue
-		}
-		if name != GetPropsName && name != GetPropsSize && name != GetPropsChecksum && name != GetPropsVersion {
-			return false
+	// set by user or proxy
+	if lsmsg.IsFlagSet(LsNameOnly) || lsmsg.IsFlagSet(LsNameSize) {
+		return true
+	}
+	// return false if there's anything outside GetPropsDefaultCloud subset
+	for _, wn := range GetPropsAll {
+		if lsmsg.WantProp(wn) {
+			for _, n := range GetPropsDefaultCloud {
+				if wn != n {
+					return false
+				}
+			}
 		}
 	}
 	return true
 }
 
+// NOTE: internal usage
 func (lsmsg *LsoMsg) WantOnlyName() bool {
-	if lsmsg.IsFlagSet(LsNameOnly) {
+	if lsmsg.IsFlagSet(LsNameOnly) || lsmsg.Props == GetPropsName {
 		return true
 	}
 	return strings.IndexByte(lsmsg.Props, lsmsgPropsSepa[0]) < 0 && strings.Contains(lsmsg.Props, GetPropsName)

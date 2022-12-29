@@ -198,7 +198,6 @@ const nodeLogFlushName = "log.flush_time"
 const (
 	// Common
 	noArguments                 = " "
-	keyValuePairsArgument       = "KEY=VALUE [KEY=VALUE...]"
 	aliasURLPairArgument        = "ALIAS=URL (or UUID=URL)"
 	aliasArgument               = "ALIAS (or UUID)"
 	daemonMountpathPairArgument = "NODE_ID=MOUNTPATH [NODE_ID=MOUNTPATH...]"
@@ -208,11 +207,16 @@ const (
 	optionalJobIDArgument         = "[JOB_ID]"
 	optionalJobIDDaemonIDArgument = "[JOB_ID [NODE_ID]]"
 
+	// key/value
+	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"
+	jsonKeyValueArgument  = "JSON-formatted-KEY-VALUE"
+	jsonSpecArgument      = "JSON_SPECIFICATION"
+
 	// Buckets
 	bucketArgument         = "BUCKET"
 	optionalBucketArgument = "[BUCKET]"
 	bucketsArgument        = "BUCKET [BUCKET...]"
-	bucketPropsArgument    = bucketArgument + " " + jsonSpecArgument + "|" + keyValuePairsArgument
+	bucketPropsArgument    = bucketArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument
 	bucketAndPropsArgument = "BUCKET [PROP_PREFIX]"
 
 	// Objects
@@ -221,6 +225,10 @@ const (
 	concatObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET/OBJECT_NAME"
 	objectArgument           = "BUCKET/OBJECT_NAME"
 	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
+
+	setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
+		"   " +
+		"mykey1=value1 mykey2=value2 OR '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
 
 	// Daemons
 	daemonIDArgument         = "NODE_ID"
@@ -234,7 +242,6 @@ const (
 	detachRemoteAISArgument   = aliasArgument
 	joinNodeArgument          = "IP:PORT"
 	startDownloadArgument     = "SOURCE DESTINATION"
-	jsonSpecArgument          = "JSON_SPECIFICATION"
 	showStatsArgument         = "[NODE_ID] [STATS_FILTER]"
 
 	// List command

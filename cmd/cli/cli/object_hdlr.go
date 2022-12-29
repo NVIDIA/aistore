@@ -100,7 +100,7 @@ var (
 	objectCmdSetCustom = cli.Command{
 		Name:      commandSetCustom,
 		Usage:     "set object's custom properties",
-		ArgsUsage: objectArgument + " " + jsonSpecArgument + "|" + keyValuePairsArgument,
+		ArgsUsage: setCustomArgument,
 		Flags:     objectCmdsFlags[commandSetCustom],
 		Action:    setCustomPropsHandler,
 	}
