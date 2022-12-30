@@ -939,10 +939,11 @@ func isBrowser(userAgent string) bool {
 
 func (h *htrun) handleWriteError(r *http.Request, tag string, v any, err error) {
 	const maxl = 32
-	var s string
 	if daemon.stopping.Load() {
 		return
 	}
+
+	var s string
 	if v != nil {
 		s = fmt.Sprintf("[%+v", v)
 		if len(s) > maxl {
@@ -1101,17 +1102,11 @@ func _sev2logname(sev string) (log string, err error) {
 ////////////////////////////////////////////
 
 func (h *htrun) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
-	if daemon.stopping.Load() {
-		return
-	}
 	cmn.WriteErr(w, r, err, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
 func (h *htrun) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	if daemon.stopping.Load() {
-		return
-	}
 	cmn.WriteErrMsg(w, r, msg, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }

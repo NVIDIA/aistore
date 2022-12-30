@@ -208,7 +208,7 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	fmt.Fprint(c.App.Writer, "AIS cluster shut down.\n")
+	actionDone(c, "Cluster is successfully shutdown\n")
 	return
 }
 
@@ -223,7 +223,7 @@ func clusterDecommissionHandler(c *cli.Context) error {
 	if err := api.DecommissionCluster(apiBP, rmUserData); err != nil {
 		return err
 	}
-	fmt.Fprint(c.App.Writer, "AIS cluster decommissioned.\n")
+	actionDone(c, "Cluster successfully decommissioned\n")
 	return nil
 }
 

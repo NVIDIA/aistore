@@ -152,7 +152,7 @@ var (
 	jobStopSub = cli.Command{
 		Name:         commandStop,
 		Usage:        "stop/abort a batch job or multiple jobs (use <TAB-TAB> to select)",
-		ArgsUsage:    "NAME [JOB_ID] [TARGET]",
+		ArgsUsage:    "NAME [JOB_ID] [BUCKET]",
 		Action:       stopJobHandler,
 		BashComplete: runningJobCompletions,
 	}
@@ -164,7 +164,7 @@ var (
 	jobWaitSub = cli.Command{
 		Name:         commandWait,
 		Usage:        "wait for a specific batch job to complete (use <TAB-TAB> to select)",
-		ArgsUsage:    "NAME JOB_ID",
+		ArgsUsage:    "NAME " + jobIDArgument,
 		Flags:        waitCmdsFlags,
 		Action:       waitJobHandler,
 		BashComplete: runningJobCompletions,
@@ -176,26 +176,30 @@ var (
 	removeCmdsFlags = map[string][]cli.Flag{
 		subcmdDownload: {
 			allJobsFlag,
+			regexFlag,
 		},
-		subcmdDsort: {},
+		subcmdDsort: {
+			allJobsFlag,
+			regexFlag,
+		},
 	}
 
 	jobRemoveSub = cli.Command{
 		Name:  commandRemove,
-		Usage: "remove finished jobs",
+		Usage: "cleanup finished jobs",
 		Subcommands: []cli.Command{
 			{
 				Name:         subcmdDownload,
 				Usage:        "remove finished download job(s)",
-				ArgsUsage:    jobIDArgument,
+				ArgsUsage:    optionalJobIDArgument,
 				Flags:        removeCmdsFlags[subcmdDownload],
 				Action:       removeDownloadHandler,
 				BashComplete: downloadIDFinishedCompletions,
 			},
 			{
 				Name:         subcmdDsort,
-				Usage:        "remove finished " + dsort.DSortName + " job",
-				ArgsUsage:    jobIDArgument,
+				Usage:        "remove finished " + dsort.DSortName + " job(s)",
+				ArgsUsage:    optionalJobIDArgument,
 				Flags:        removeCmdsFlags[subcmdDsort],
 				Action:       removeDsortHandler,
 				BashComplete: dsortIDFinishedCompletions,
@@ -735,12 +739,12 @@ func stopJobHandler(c *cli.Context) error {
 	switch name {
 	case subcmdDownload:
 		if id == "" {
-			return missingArgumentsError(c, "JOB_ID")
+			return missingArgumentsError(c, jobIDArgument)
 		}
 		return stopDownloadHandler(c, id)
 	case subcmdDsort:
 		if id == "" {
-			return missingArgumentsError(c, "JOB_ID")
+			return missingArgumentsError(c, jobIDArgument)
 		}
 		return stopDsortHandler(c, id)
 	case commandETL:
@@ -749,12 +753,15 @@ func stopJobHandler(c *cli.Context) error {
 		return stopClusterRebalanceHandler(c)
 	}
 
-	// all the rest
-	xactID := c.Args().Get(1)
+	// 2. common `stop`
 	xactKind, xname := xact.GetKindName(name)
+	if xactKind == "" {
+		return incorrectUsageMsg(c, "unrecognized or misplaced option '%s'", name)
+	}
+	xactID := c.Args().Get(1)
 	msg := formatXactMsg(xactID, xname, bck)
 
-	// 2. query
+	// 3. query
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind}
 	snap, err := getXactSnap(xactArgs)
 	if err != nil {
@@ -765,7 +772,7 @@ func stopJobHandler(c *cli.Context) error {
 		return nil
 	}
 
-	// 3. reformat
+	// 4. reformat
 	if xactID == "" {
 		xactID = snap.ID
 		debug.Assert(xactKind == snap.Kind)
@@ -775,7 +782,7 @@ func stopJobHandler(c *cli.Context) error {
 		msg = formatXactMsg(xactID, xname, snap.Bck)
 	}
 
-	// 4. abort?
+	// abort?
 	var s string
 	if snap.IsAborted() {
 		s = " (aborted)"
@@ -850,24 +857,29 @@ func waitJobHandler(c *cli.Context) error {
 	switch name {
 	case subcmdDownload:
 		if id == "" {
-			return missingArgumentsError(c, "JOB_ID")
+			return missingArgumentsError(c, jobIDArgument)
 		}
 		return waitDownloadHandler(c, id /* job ID */)
 	case subcmdDsort:
 		if id == "" {
-			return missingArgumentsError(c, "JOB_ID")
+			return missingArgumentsError(c, jobIDArgument)
 		}
 		return waitDsortHandler(c, id /* job ID */)
 	}
 
+	// common `wait`
+	xactKind, xname := xact.GetKindName(name)
+	if xactKind == "" {
+		return incorrectUsageMsg(c, "unrecognized or misplaced option '%s'", name)
+	}
+
 	// all the rest
 	var (
-		xactID          = id
-		xactKind, xname = xact.GetKindName(name)
-		msg             = formatXactMsg(xactID, xname, bck)
-		xactArgs        = api.XactReqArgs{ID: xactID, Kind: xactKind}
-		refreshRate     = calcRefreshRate(c)
-		total           time.Duration
+		xactID      = id
+		msg         = formatXactMsg(xactID, xname, bck)
+		xactArgs    = api.XactReqArgs{ID: xactID, Kind: xactKind}
+		refreshRate = calcRefreshRate(c)
+		total       time.Duration
 	)
 	for {
 		status, err := api.GetOneXactionStatus(apiBP, xactArgs)
@@ -993,61 +1005,99 @@ func waitDsortHandler(c *cli.Context, id string) error {
 // job remove
 //
 
-func removeDownloadHandler(c *cli.Context) (err error) {
-	id := c.Args().First()
-	if flagIsSet(c, allJobsFlag) {
-		return removeDownloadRegex(c)
+func removeDownloadHandler(c *cli.Context) error {
+	regex := parseStrFlag(c, regexFlag)
+	if flagIsSet(c, allJobsFlag) || regex != "" {
+		return removeDownloadRegex(c, regex)
 	}
+
+	// by job ID
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
+		err := fmt.Errorf("specify either %s or '--%s' option (with or without regular expression)",
+			jobIDArgument, allJobsFlag.Name)
+		return cannotExecuteError(c, err)
 	}
-	if err = api.RemoveDownload(apiBP, id); err != nil {
-		return
+	id := c.Args().First()
+	if err := api.RemoveDownload(apiBP, id); err != nil {
+		return err
 	}
-	fmt.Fprintf(c.App.Writer, "removed download job %q\n", id)
-	return
+	actionDone(c, fmt.Sprintf("removed finished download job %q", id))
+	return nil
 }
 
-func removeDownloadRegex(c *cli.Context) (err error) {
-	var (
-		dlList dload.JobInfos
-		regex  = ".*"
-		cnt    int
-		failed bool
-	)
-	dlList, err = api.DownloadGetList(apiBP, regex, false /*onlyActive*/)
+func removeDownloadRegex(c *cli.Context, regex string) error {
+	dlList, err := api.DownloadGetList(apiBP, regex, false /*onlyActive*/)
 	if err != nil {
 		return err
 	}
+
+	var cnt int
 	for _, dl := range dlList {
 		if !dl.JobFinished() {
 			continue
 		}
-		if err = api.RemoveDownload(apiBP, dl.ID); err == nil {
-			fmt.Fprintf(c.App.Writer, "removed download job %q\n", dl.ID)
+		err = api.RemoveDownload(apiBP, dl.ID)
+		if err == nil {
+			actionDone(c, fmt.Sprintf("removed download job %q", dl.ID))
 			cnt++
 		} else {
-			fmt.Fprintf(c.App.Writer, "failed to remove download job %q, err: %v\n", dl.ID, err)
-			failed = true
+			actionWarn(c, fmt.Sprintf("failed to remove download job %q: %v", dl.ID, err))
 		}
 	}
-	if cnt == 0 && !failed {
-		fmt.Fprintf(c.App.Writer, "no finished download jobs, nothing to do\n")
+	if err != nil {
+		return err
 	}
-	return
+	if cnt == 0 {
+		actionDone(c, "no finished download jobs, nothing to do")
+	}
+	return nil
 }
 
-func removeDsortHandler(c *cli.Context) (err error) {
-	id := c.Args().First()
+func removeDsortHandler(c *cli.Context) error {
+	regex := parseStrFlag(c, regexFlag)
+	if flagIsSet(c, allJobsFlag) || regex != "" {
+		return removeDsortRegex(c, regex)
+	}
 
+	// by job ID
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
+		err := fmt.Errorf("specify either %s or '--%s' option (with or without regular expression)",
+			jobIDArgument, allJobsFlag.Name)
+		return cannotExecuteError(c, err)
+	}
+	id := c.Args().First()
+	if err := api.RemoveDSort(apiBP, id); err != nil {
+		return err
 	}
 
-	if err = api.RemoveDSort(apiBP, id); err != nil {
-		return
+	actionDone(c, fmt.Sprintf("removed finished dsort job %q", id))
+	return nil
+}
+
+func removeDsortRegex(c *cli.Context, regex string) error {
+	dsortLst, err := api.ListDSort(apiBP, regex, false /*onlyActive*/)
+	if err != nil {
+		return err
 	}
 
-	fmt.Fprintf(c.App.Writer, "removed %s job %q\n", dsort.DSortName, id)
-	return
+	var cnt int
+	for _, dsort := range dsortLst {
+		if dsort.IsRunning() {
+			continue
+		}
+		err = api.RemoveDSort(apiBP, dsort.ID)
+		if err == nil {
+			actionDone(c, fmt.Sprintf("removed dsort job %q", dsort.ID))
+			cnt++
+		} else {
+			actionWarn(c, fmt.Sprintf("failed to remove dsort job %q: %v", dsort.ID, err))
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if cnt == 0 {
+		actionDone(c, "no finished dsort jobs, nothing to do")
+	}
+	return nil
 }
