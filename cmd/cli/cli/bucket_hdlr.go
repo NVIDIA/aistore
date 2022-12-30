@@ -71,7 +71,7 @@ var (
 			templateFlag,
 			prefixFlag,
 			pageSizeFlag,
-			objPropsLsFlag,
+			objPropsFlag,
 			objLimitFlag,
 			showUnmatchedFlag,
 			allObjsOrBcksFlag,

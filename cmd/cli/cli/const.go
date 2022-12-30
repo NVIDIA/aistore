@@ -8,7 +8,6 @@
 package cli
 
 import (
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -191,6 +190,8 @@ const (
 	sizeUnits = `(IEC or SI units, e.g.: "b", "B", "KB", "KiB", "MiB", "mb", "g", "GB")`
 )
 
+const argsUsageIndent = "   "
+
 const nodeLogFlushName = "log.flush_time"
 
 // Argument placeholders in help messages
@@ -227,7 +228,7 @@ const (
 	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
 
 	setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
-		"   " +
+		argsUsageIndent +
 		"mykey1=value1 mykey2=value2 OR '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
 
 	// Daemons
@@ -303,15 +304,10 @@ var (
 
 	objPropsFlag = cli.StringFlag{
 		Name: "props",
-		Usage: "comma-separated list of object properties including name, size, version, copies, EC data and parity info, " +
-			"custom metadata, location, and more; to include all properties, type '--props all'",
-		Value: strings.Join(apc.GetPropsDefault, ","),
+		Usage: "comma-separated list of object properties including name, size, version, copies, and more; e.g.: " +
+			"'--props all', '--props name,size,cached', '--props ec,copies,custom,location'",
 	}
-	objPropsLsFlag = cli.StringFlag{
-		Name:  objPropsFlag.Name,
-		Usage: objPropsFlag.Usage,
-		Value: strings.Join(apc.GetPropsMinimal, ","),
-	}
+
 	prefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix to match"}
 
 	//
@@ -386,10 +382,8 @@ var (
 	compactPropFlag  = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
 
 	nameOnlyFlag = cli.BoolFlag{
-		Name: "name-only",
-		Usage: "fast request to retrieve only the names of objects in the bucket; " +
-			"if defined, all comma-separated fields in the '--props' flag will be ignored with only two exceptions: " +
-			"'name' and 'status'",
+		Name:  "name-only",
+		Usage: "fast request to retrieve only the names of objects (if defined, '--props' value will be ignored)",
 	}
 
 	// Log severity (cmn.LogInfo, ....) enum

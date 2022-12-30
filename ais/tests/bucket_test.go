@@ -883,7 +883,6 @@ func TestListObjectsProps(t *testing.T) {
 			checkProps(useCache, []string{}, func(entry *cmn.LsoEntry) {
 				tassert.Errorf(t, entry.Name != "", "name is not set")
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 
 				tassert.Errorf(t, entry.Atime == "", "atime is set")
 				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
@@ -905,9 +904,10 @@ func TestListObjectsProps(t *testing.T) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, entry.Version != "", "version is not set")
+				tassert.Errorf(t, !m.bck.IsCloud() || entry.Custom != "", "custom is not set")
 
 				tassert.Errorf(t, entry.Atime == "", "atime is set")
-				tassert.Errorf(t, entry.Custom == "", "custom is set")
+				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			})
 
 			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)

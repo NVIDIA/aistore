@@ -12,7 +12,7 @@ import (
 
 const (
 	LocationPropSepa = ":"
-	lsmsgPropsSepa   = ","
+	LsPropsSepa      = ","
 )
 
 // LsoMsg flags
@@ -117,9 +117,9 @@ const (
 
 // NOTE: update when changing any of the above :NOTE
 var (
-	GetPropsMinimal      = []string{GetPropsName, GetPropsSize, GetPropsChecksum}
+	GetPropsMinimal      = []string{GetPropsName, GetPropsSize}
 	GetPropsDefaultAIS   = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
-	GetPropsDefaultCloud = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsVersion}
+	GetPropsDefaultCloud = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsVersion, GetPropsCustom}
 	GetPropsAll          = append(GetPropsDefaultAIS,
 		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation)
 )
@@ -136,9 +136,9 @@ type LsoMsg struct {
 	PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 }
 
-/////////////////
+////////////
 // LsoMsg //
-/////////////////
+////////////
 
 func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
 	// set by user
@@ -167,7 +167,7 @@ func (lsmsg *LsoMsg) WantOnlyName() bool {
 	if lsmsg.IsFlagSet(LsNameOnly) || lsmsg.Props == GetPropsName {
 		return true
 	}
-	return strings.IndexByte(lsmsg.Props, lsmsgPropsSepa[0]) < 0 && strings.Contains(lsmsg.Props, GetPropsName)
+	return strings.IndexByte(lsmsg.Props, LsPropsSepa[0]) < 0 && strings.Contains(lsmsg.Props, GetPropsName)
 }
 
 // WantProp returns true if msg request requires to return propName property.
@@ -181,14 +181,14 @@ func (lsmsg *LsoMsg) AddProps(propNames ...string) {
 			continue
 		}
 		if lsmsg.Props != "" {
-			lsmsg.Props += lsmsgPropsSepa
+			lsmsg.Props += LsPropsSepa
 		}
 		lsmsg.Props += propName
 	}
 }
 
 func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
-	props := strings.Split(lsmsg.Props, lsmsgPropsSepa)
+	props := strings.Split(lsmsg.Props, LsPropsSepa)
 	s = make(cos.StrSet, len(props))
 	for _, p := range props {
 		s.Set(p)

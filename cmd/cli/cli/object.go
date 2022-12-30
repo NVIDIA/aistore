@@ -780,11 +780,14 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	} else if flagIsSet(c, objPropsFlag) {
 		propsFlag = strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	}
+
+	// NOTE: three different defaults; compare w/ `listObjects()`
 	if len(propsFlag) == 0 {
-		selectedProps = apc.GetPropsDefault
-		// to better represent remote obj that may not have any local presence
-		if flagIsSet(c, objNotCachedFlag) && !cos.StringInSlice(apc.GetPropsCustom, selectedProps) {
-			selectedProps = append(selectedProps, apc.GetPropsCustom)
+		selectedProps = apc.GetPropsMinimal
+		if bck.IsAIS() {
+			selectedProps = apc.GetPropsDefaultAIS
+		} else if bck.IsCloud() {
+			selectedProps = apc.GetPropsDefaultCloud
 		}
 	} else if cos.StringInSlice("all", propsFlag) {
 		selectedProps = apc.GetPropsAll

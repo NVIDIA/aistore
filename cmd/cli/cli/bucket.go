@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
 )
@@ -391,13 +392,27 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if flagIsSet(c, allObjsOrBcksFlag) {
 		msg.SetFlag(apc.LsAll)
 	}
-	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
+
+	var (
+		props    []string
+		propsStr = parseStrFlag(c, objPropsFlag)
+	)
+	if propsStr != "" {
+		debug.Assert(apc.LsPropsSepa == ",", "',' is documented in 'objPropsFlag' usage and elsewhere")
+		props = strings.Split(propsStr, apc.LsPropsSepa)
+	}
+
+	// NOTE: compare w/ `showObjProps()`
 	if flagIsSet(c, nameOnlyFlag) {
+		if len(props) > 2 {
+			warn := fmt.Sprintf("flag '--%s' is incompatible with the value of '--%s'",
+				nameOnlyFlag.Name, objPropsFlag.Name)
+			actionWarn(c, warn)
+		}
 		msg.SetFlag(apc.LsNameOnly)
 		msg.Props = apc.GetPropsName
-		if cos.StringInSlice(allPropsFlag.GetName(), props) || cos.StringInSlice(apc.GetPropsStatus, props) {
-			msg.AddProps(apc.GetPropsStatus)
-		}
+	} else if len(props) == 0 {
+		msg.AddProps(apc.GetPropsMinimal...)
 	} else {
 		if cos.StringInSlice(allPropsFlag.GetName(), props) {
 			msg.AddProps(apc.GetPropsAll...)

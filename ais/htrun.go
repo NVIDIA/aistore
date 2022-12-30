@@ -1101,11 +1101,17 @@ func _sev2logname(sev string) (log string, err error) {
 ////////////////////////////////////////////
 
 func (h *htrun) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
+	if daemon.stopping.Load() {
+		return
+	}
 	cmn.WriteErr(w, r, err, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
 func (h *htrun) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+	if daemon.stopping.Load() {
+		return
+	}
 	cmn.WriteErrMsg(w, r, msg, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
