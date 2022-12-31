@@ -69,17 +69,10 @@ var (
 			allJobsFlag,
 			jsonFlag,
 		),
-		subcmdXaction: append(
-			longRunFlags,
-			jsonFlag,
-			allXactionsFlag,
-			noHeaderFlag,
-			verboseFlag,
-		),
 		commandJob: append(
 			longRunFlags,
 			jsonFlag,
-			allXactionsFlag, // NOTE: allXactionsFlag.Name == allJobsFlag.Name
+			allJobsFlag,
 			regexFlag,
 			noHeaderFlag,
 			verboseFlag,
@@ -105,7 +98,7 @@ var (
 		},
 		subcmdRebalance: append(
 			longRunFlags,
-			allXactionsFlag,
+			allJobsFlag,
 			noHeaderFlag,
 		),
 		subcmdBucket: {

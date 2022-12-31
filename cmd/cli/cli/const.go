@@ -219,6 +219,9 @@ const (
 	bucketsArgument        = "BUCKET [BUCKET...]"
 	bucketPropsArgument    = bucketArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument
 	bucketAndPropsArgument = "BUCKET [PROP_PREFIX]"
+	bucketSrcArgument      = "SRC_BUCKET"
+	bucketDstArgument      = "DST_BUCKET"
+	bucketNewArgument      = "NEW_BUCKET"
 
 	// Objects
 	getObjectArgument        = "BUCKET/OBJECT_NAME [OUT_FILE|-]"
@@ -285,10 +288,10 @@ const (
 
 var (
 	// scope 'all'
-	allXactionsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all xactions, including finished and aborted"}
-	allPropsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "all object properties"}
-	allJobsFlag     = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
-	allETLStopFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all ETL jobs"}
+	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "all object properties"}
+	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
+	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
+	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
 
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,

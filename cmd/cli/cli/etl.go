@@ -43,7 +43,7 @@ var (
 			waitTimeoutFlag,
 		},
 		subcmdStop: {
-			allETLStopFlag,
+			allRunningJobsFlag,
 		},
 		subcmdBucket: {
 			etlExtFlag,
@@ -113,7 +113,7 @@ var (
 	bckCmdETL = cli.Command{
 		Name:         subcmdBucket,
 		Usage:        "perform bucket-to-bucket transform (\"offline transformation\")",
-		ArgsUsage:    "ETL_ID SRC_BUCKET DST_BUCKET",
+		ArgsUsage:    "ETL_ID " + bucketSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
 		Flags:        etlSubFlags[subcmdBucket],
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
@@ -338,11 +338,11 @@ func stopETLs(c *cli.Context, id string) (err error) {
 	switch {
 	case id != "":
 		etlIDs = append(etlIDs, id)
-	case flagIsSet(c, allETLStopFlag):
+	case flagIsSet(c, allRunningJobsFlag):
 		if c.NArg() > 0 {
-			return incorrectUsageMsg(c, "'--%s' flag cannot be used together with specific ETL IDs", allETLStopFlag.Name)
+			return incorrectUsageMsg(c, "flag '--%s' cannot be used together with ETL_ID (%q)",
+				allRunningJobsFlag.Name, id)
 		}
-
 		res, err := api.ETLList(apiBP)
 		if err != nil {
 			return err
@@ -352,7 +352,7 @@ func stopETLs(c *cli.Context, id string) (err error) {
 		}
 	default:
 		if c.NArg() == 0 {
-			return incorrectUsageMsg(c, "specify either '--%s' flag or specific ETL ID(s)", allETLStopFlag.Name)
+			return missingArgumentsError(c, c.Command.ArgsUsage)
 		}
 		etlIDs = c.Args()[0:]
 	}
@@ -420,28 +420,17 @@ func etlObjectHandler(c *cli.Context) (err error) {
 	return handleETLHTTPError(api.ETLObject(apiBP, id, bck, objName, w), id)
 }
 
-func etlBucketHandler(c *cli.Context) (err error) {
+func etlBucketHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
-	} else if c.NArg() == 1 {
-		return missingArgumentsError(c, "BUCKET_FROM")
-	} else if c.NArg() == 2 {
-		return missingArgumentsError(c, "BUCKET_TO")
 	}
-
-	id := c.Args()[0]
-
-	fromBck, err := parseBckURI(c, c.Args()[1], true /*require provider*/)
+	id := c.Args().Get(0)
+	fromBck, toBck, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/)
 	if err != nil {
 		return err
 	}
-	toBck, err := parseBckURI(c, c.Args()[2], true /*require provider*/)
-	if err != nil {
-		return err
-	}
-
 	if fromBck.Equal(&toBck) {
-		return fmt.Errorf("cannot ETL bucket %q onto itself", fromBck)
+		return fmt.Errorf("cannot transform bucket %q onto itself", fromBck)
 	}
 
 	msg := &apc.TCBMsg{

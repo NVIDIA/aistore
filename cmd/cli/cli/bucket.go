@@ -674,25 +674,27 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	return
 }
 
-// This function returns buckets based on arguments provided to the command.
-// In case something is missing it also generates a meaningful error message.
-func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
-	if c.NArg() == 0 {
-		return bckFrom, bckTo, missingArgumentsError(c, "bucket name", "new bucket name")
+// Return `bckFrom` and `bckTo` - the [shift] and the [shift+1] arguments, respectively
+func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int) (bckFrom, bckTo cmn.Bck, err error) {
+	if c.NArg() == shift {
+		err = missingArgumentsError(c, bckFromArg, bckToArg)
+		return
 	}
-	if c.NArg() == 1 {
-		return bckFrom, bckTo, missingArgumentsError(c, "new bucket name")
+	if c.NArg() == shift+1 {
+		err = missingArgumentsError(c, bckToArg)
+		return
 	}
 
-	bcks := make([]cmn.Bck, 0, 2)
-	for i := 0; i < 2; i++ {
-		bck, err := parseBckURI(c, c.Args().Get(i), true /*require provider*/)
-		if err != nil {
-			return bckFrom, bckTo, err
-		}
-		bcks = append(bcks, bck)
+	bckFrom, err = parseBckURI(c, c.Args().Get(shift), true /*require provider*/)
+	if err != nil {
+		err = incorrectUsageMsg(c, "invalid %s argument '%s': %v", bckFromArg, c.Args().Get(shift), err)
+		return
 	}
-	return bcks[0], bcks[1], nil
+	bckTo, err = parseBckURI(c, c.Args().Get(shift+1), true)
+	if err != nil {
+		err = incorrectUsageMsg(c, "invalid %s argument '%q': %v", bckToArg, c.Args().Get(shift+1), err)
+	}
+	return
 }
 
 func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectListFilter, props string, addCachedCol bool) error {

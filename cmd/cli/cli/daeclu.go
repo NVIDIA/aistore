@@ -244,7 +244,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		}
 		prevID := ""
 		for _, sts := range allSnaps {
-			if flagIsSet(c, allXactionsFlag) {
+			if flagIsSet(c, allJobsFlag) {
 				if prevID != "" && sts.snap.ID != prevID {
 					fmt.Fprintln(tw, strings.Repeat("\t ", 9 /*colCount*/))
 				}
@@ -261,7 +261,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		}
 		tw.Flush()
 
-		if !flagIsSet(c, allXactionsFlag) {
+		if !flagIsSet(c, allJobsFlag) {
 			if latestFinished && latestAborted {
 				fmt.Fprintln(c.App.Writer, "\nRebalance aborted.")
 				break

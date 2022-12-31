@@ -22,7 +22,7 @@ import (
 
 const (
 	errFmtSameBucket = "cannot %s bucket %q onto itself"
-	errFmtExclusive  = "flags %q and %q are mutually exclusive"
+	errFmtExclusive  = "flags '--%s' and '--%s' are mutually exclusive"
 )
 
 var examplesBckSetProps = `
@@ -139,7 +139,7 @@ var (
 	bucketCmdCopy = cli.Command{
 		Name:         commandCopy,
 		Usage:        "copy bucket",
-		ArgsUsage:    "SRC_BUCKET DST_BUCKET",
+		ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument,
 		Flags:        bucketCmdsFlags[commandCopy],
 		Action:       copyBucketHandler,
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
@@ -147,7 +147,7 @@ var (
 	bucketCmdRename = cli.Command{
 		Name:         commandRename,
 		Usage:        "rename/move ais bucket",
-		ArgsUsage:    "BUCKET NEW_BUCKET",
+		ArgsUsage:    bucketArgument + " " + bucketNewArgument,
 		Flags:        bucketCmdsFlags[commandRename],
 		Action:       mvBucketHandler,
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
@@ -414,7 +414,7 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 
 func copyBucketHandler(c *cli.Context) (err error) {
 	dryRun := flagIsSet(c, cpBckDryRunFlag)
-	bckFrom, bckTo, err := parseBcks(c)
+	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
 	if err != nil {
 		return err
 	}
@@ -457,7 +457,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 }
 
 func mvBucketHandler(c *cli.Context) error {
-	bckFrom, bckTo, err := parseBcks(c)
+	bckFrom, bckTo, err := parseBcks(c, bucketArgument, bucketNewArgument, 0 /*shift*/)
 	if err != nil {
 		return err
 	}

@@ -111,7 +111,16 @@ func incorrectUsageMsg(c *cli.Context, fmtString string, args ...any) *errUsage 
 }
 
 func missingArgumentsError(c *cli.Context, missingArgs ...string) *errUsage {
-	msg := fmt.Sprintf("missing arguments %q", strings.Join(missingArgs, ", "))
+	var msg string
+	if len(missingArgs) == 1 && !strings.Contains(missingArgs[0], " ") {
+		arg := missingArgs[0]
+		if arg[0] == '[' {
+			arg = arg[1 : len(arg)-1]
+		}
+		msg = fmt.Sprintf("missing %q argument", arg)
+	} else {
+		msg = fmt.Sprintf("missing arguments %q", strings.Join(missingArgs, ", "))
+	}
 	return _errUsage(c, msg)
 }
 
@@ -120,7 +129,7 @@ func missingKeyValueError(c *cli.Context) *errUsage {
 }
 
 func objectNameArgumentNotSupported(c *cli.Context, objectName string) *errUsage {
-	msg := fmt.Sprintf("object name %q argument not supported", objectName)
+	msg := fmt.Sprintf("object name argument (%q) not supported", objectName)
 	return _errUsage(c, msg)
 }
 

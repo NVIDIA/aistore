@@ -58,7 +58,7 @@ var (
 		commandStart: {},
 		commandStop:  {},
 		commandShow: {
-			allXactionsFlag,
+			allJobsFlag,
 			noHeaderFlag,
 		},
 	}
@@ -441,7 +441,7 @@ func showClusterRebalanceHandler(c *cli.Context) error {
 		ID:          xid,
 		Kind:        apc.ActRebalance,
 		DaemonID:    daemonID,
-		OnlyRunning: !flagIsSet(c, allXactionsFlag),
+		OnlyRunning: !flagIsSet(c, allJobsFlag),
 	}
 	return xactList(c, xactArgs, "")
 }
