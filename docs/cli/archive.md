@@ -19,15 +19,27 @@ See also:
 > [Archive multiple objects](/docs/cli/object.md#archive-multiple-objects)
 
 ## Table of Contents
-- [Create archive](#create-archive)
+- [Archive multiple objects](#archive-multiple-objects)
 - [List archive content](#list-archive-content)
 - [Append file to archive](#append-file-to-archive)
 
-## Create archive
+## Archive multiple objects
 
-`ais archive create BUCKET/OBJECT`
+`ais archive create BUCKET/OBJECT [command options]`
 
-Create an archive from existing objects.
+Archive a list or range of existing objects. Name the resulting (`.tar`, `.tar.gz`, `.zip`, `.msgpack`) archive `BUCKET/OBJECT`.
+
+The operation accepts either an explicitly defined *list* or template-defined *range* of object names (to archive).
+
+As such, `archive create` is one of the supported [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges).
+
+Also note that `ais put` command with its `--archive` option provides an alternative way to archive multiple objects:
+
+* [`ais object put BUCKET/OBJECT --archive`](/docs/cli/object.md##archive-multiple-objects)
+
+For the most recently updated list of supported archival formats, please see:
+
+* [this source](https://github.com/NVIDIA/aistore/blob/master/cmn/cos/archive.go).
 
 ### Options
 
@@ -48,7 +60,7 @@ The command must include either `--list` or `--template` option. Options `--list
 
 Create an archive from a list of files of the same bucket:
 
-```
+```console
 $ ais archive create ais://bck/arch.tar --list obj1,obj2
 Creating archive "ais://bck/arch.tar"
 ```
@@ -57,15 +69,15 @@ The archive `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bc
 
 Create an archive using template:
 
-```
-$ais archive create ais://bck/arch.tar --source-bck ais://bck2 --template "obj-{0..9}"
+```console
+$ ais archive create ais://bck/arch.tar --source-bck ais://bck2 --template "obj-{0..9}"
 Creating archive "ais://arch.tar"
 ```
 The archive `ais://bck/arch.tar` contains 10 objects from bucket `ais://bck2`: `ais://bck2/obj-0`, `ais://bck2/obj-1` ... `ais://bck2/obj-9`.
 
 Create an archive consisting of 3 objects and then append 2 more:
 
-```
+```console
 $ ais archive create ais://bck/arch1.tar --template "obj{1..3}"
 Creating archive "ais://bck/arch1.tar" ...
 $ ais archive ls ais://bck/arch1.tar
@@ -102,7 +114,7 @@ The files are always are sorted in alphabetical order.
 
 ### Examples
 
-```
+```console
 $ ais archive ls ais://bck/arch.tar
 NAME                SIZE
 arch.tar            4.5KiB
@@ -112,9 +124,7 @@ arch.tar            4.5KiB
 
 ## Append file to archive
 
-Add a local file to an existing archive.
-
-### Examples
+Add a file to an existing archive.
 
 ### Options
 
@@ -122,16 +132,23 @@ Add a local file to an existing archive.
 | --- | --- | --- | --- |
 | `--archpath` | `string` | Path inside the archive for the new file | `""`
 
-```
+**NOTE:** the option `--archpath` cannot be omitted (MUST be specified).
+
+### Example 1
+
+```console
+# contents _before_:
 $ ais archive ls ais://bck/arch.tar
 NAME                SIZE
 arch.tar            4.5KiB
     arch.tar/obj1   1.0KiB
     arch.tar/obj2   1.0KiB
 
+# Do append:
 $ ais archive /tmp/obj1.bin ais://bck/arch.tar --archpath bin/obj1
 APPEND "/tmp/obj1.bin" to object "ais://bck/arch.tar[/bin/obj1]"
 
+# contents _after_:
 $ ais archive ls ais://bck/arch.tar
 NAME                    SIZE
 arch.tar                6KiB
@@ -140,3 +157,30 @@ arch.tar                6KiB
     arch.tar/obj2       1.0KiB
 ```
 
+### Example 2
+
+```console
+# contents _before_:
+
+$ ais archive ls ais://nnn/shard-2.tar
+NAME                                             SIZE
+shard-2.tar                                      5.50KiB
+    shard-2.tar/0379f37cbb0415e7eaea-3.test      1.00KiB
+    shard-2.tar/504c563d14852368575b-5.test      1.00KiB
+    shard-2.tar/c7bcb7014568b5e7d13b-4.test      1.00KiB
+
+# Do append
+# Note that --archpath can specify fully qualified name of the destination
+
+$ ais archive append LICENSE ais://nnn/shard-2.tar --archpath shard-2.tar/license.test
+APPEND "/go/src/github.com/NVIDIA/aistore/LICENSE" to "ais://nnn/shard-2.tar[/shard-2.tar/license.test]"
+
+# contents _after_:
+$ ais archive ls ais://nnn/shard-2.tar
+NAME                                             SIZE
+shard-2.tar                                      7.50KiB
+    shard-2.tar/0379f37cbb0415e7eaea-3.test      1.00KiB
+    shard-2.tar/504c563d14852368575b-5.test      1.00KiB
+    shard-2.tar/c7bcb7014568b5e7d13b-4.test      1.00KiB
+    shard-2.tar/license.test                     1.05KiB
+```

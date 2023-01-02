@@ -32,7 +32,7 @@ var (
 				Name:      subcmdK8sCluster,
 				Usage:     "show AIS cluster",
 				Flags:     k8sCmdsFlags[subcmdK8sCluster],
-				ArgsUsage: optionalDaemonIDArgument,
+				ArgsUsage: optionalNodeIDArgument,
 				Action:    k8sShowClusterHandler,
 				BashComplete: func(c *cli.Context) {
 					if c.NArg() != 0 {

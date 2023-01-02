@@ -846,6 +846,10 @@ This is an archive-**creating** operation that takes in multiple objects from a 
 * supported archival formats include `.tar`, `.tar.gz` (or, same, `.tgz`), and `.zip`; more extensions may be added in the future.
 * archiving is carried out asynchronously, in parallel by all AIS targets.
 
+Note that (alternatively) multi-object archives can be created using `ais create archive`:
+
+* [`ais archive create BUCKET/OBJECT`](/docs/cli/archive.md##archive-multiple-objects)
+
 ```console
 # TAR objects `obj1`, `obj2` , `obj3` in a given (destination) bucket called `destbck`.
 # NOTE: when specifying `--list` or `--template`, make sure to use double or single quotation marks.

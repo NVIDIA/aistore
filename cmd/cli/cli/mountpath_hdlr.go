@@ -39,7 +39,7 @@ var (
 			{
 				Name:         subcmdMpathAttach,
 				Usage:        "attach mountpath (i.e., formatted disk or RAID) to a target node",
-				ArgsUsage:    daemonMountpathPairArgument,
+				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathAttach],
 				Action:       mpathAttachHandler,
 				BashComplete: suggestTargetNodes,
@@ -47,7 +47,7 @@ var (
 			{
 				Name:         subcmdMpathEnable,
 				Usage:        "(re)enable target's mountpath",
-				ArgsUsage:    daemonMountpathPairArgument,
+				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathEnable],
 				Action:       mpathEnableHandler,
 				BashComplete: suggestTargetNodes,
@@ -55,7 +55,7 @@ var (
 			{
 				Name:         subcmdMpathDetach,
 				Usage:        "detach mountpath (i.e., formatted disk or RAID) from a target node",
-				ArgsUsage:    daemonMountpathPairArgument,
+				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathDetach],
 				Action:       mpathDetachHandler,
 				BashComplete: suggestTargetNodes,
@@ -63,7 +63,7 @@ var (
 			{
 				Name:         subcmdMpathDisable,
 				Usage:        "disable mountpath (deactivate but keep in a target's volume)",
-				ArgsUsage:    daemonMountpathPairArgument,
+				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathDisable],
 				Action:       mpathDisableHandler,
 				BashComplete: suggestTargetNodes,

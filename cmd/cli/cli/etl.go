@@ -65,7 +65,7 @@ var (
 			{
 				Name:      commandSource,
 				Usage:     "show ETL code/spec",
-				ArgsUsage: "ETL_ID",
+				ArgsUsage: etlIDArgument,
 				Action:    etlSourceHandler,
 			},
 		},
@@ -73,7 +73,7 @@ var (
 	stopCmdETL = cli.Command{
 		Name:         subcmdStop,
 		Usage:        "stop ETL",
-		ArgsUsage:    "[ETL_ID...]",
+		ArgsUsage:    etlIDListArgument,
 		Action:       etlStopHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        etlSubFlags[subcmdStop],
@@ -81,7 +81,7 @@ var (
 	startCmdETL = cli.Command{
 		Name:         subcmdStart,
 		Usage:        "start ETL",
-		ArgsUsage:    "ETL_ID",
+		ArgsUsage:    etlIDArgument,
 		Action:       etlStartHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        etlSubFlags[subcmdStart],
@@ -106,14 +106,14 @@ var (
 	objCmdETL = cli.Command{
 		Name:         subcmdObject,
 		Usage:        "transform object",
-		ArgsUsage:    "ETL_ID BUCKET/OBJECT_NAME OUTPUT",
+		ArgsUsage:    etlIDArgument + " " + objectArgument + " OUTPUT",
 		Action:       etlObjectHandler,
 		BashComplete: etlIDCompletions,
 	}
 	bckCmdETL = cli.Command{
 		Name:         subcmdBucket,
 		Usage:        "perform bucket-to-bucket transform (\"offline transformation\")",
-		ArgsUsage:    "ETL_ID " + bucketSrcArgument + " " + bucketDstArgument,
+		ArgsUsage:    etlIDArgument + " " + bucketSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
 		Flags:        etlSubFlags[subcmdBucket],
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
@@ -121,7 +121,7 @@ var (
 	logsCmdETL = cli.Command{
 		Name:         subcmdLogs,
 		Usage:        "retrieve ETL logs",
-		ArgsUsage:    "ETL_ID [TARGET_ID]",
+		ArgsUsage:    etlIDArgument + " " + optionalTargetIDArgument,
 		Action:       etlLogsHandler,
 		BashComplete: etlIDCompletions,
 	}
@@ -340,8 +340,8 @@ func stopETLs(c *cli.Context, id string) (err error) {
 		etlIDs = append(etlIDs, id)
 	case flagIsSet(c, allRunningJobsFlag):
 		if c.NArg() > 0 {
-			return incorrectUsageMsg(c, "flag '--%s' cannot be used together with ETL_ID (%q)",
-				allRunningJobsFlag.Name, id)
+			return incorrectUsageMsg(c, "flag '--%s' cannot be used together with %s (%q)",
+				allRunningJobsFlag.Name, etlIDArgument, id)
 		}
 		res, err := api.ETLList(apiBP)
 		if err != nil {

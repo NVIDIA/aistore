@@ -28,15 +28,15 @@ var (
 		commandList:      {"list", "dir"},
 		commandSet:       {"update", "assign", "modify"},
 		commandShow:      {"view", "display", "list"},
-		commandRemove:    {"remove", "delete", "del", "evict", "destroy"},
+		commandRemove:    {"remove", "delete", "del", "evict", "destroy", "cleanup"},
 		commandRename:    {"move", "rename"},
-		commandCopy:      {"copy", "replicate"},
+		commandCopy:      {"copy", "replicate", "backup"},
 		commandGet:       {"fetch", "read"},
-		commandPrefetch:  {"load", "preload", "warmup", "cache"},
-		commandMirror:    {"protect", "replicate"},
+		commandPrefetch:  {"load", "preload", "warmup", "cache", "get"},
+		commandMirror:    {"protect", "replicate"}, // TODO -- FIXME: copy vs suggestions
 		commandECEncode:  {"protect", "encode", "replicate", "erasure-code"},
 		commandStart:     {"do", "run", "execute"},
-		commandStop:      {"abort", "termnate"},
+		commandStop:      {"abort", "terminate"},
 		commandPut:       {"update", "write", "promote", "modify"},
 		commandCreate:    {"add", "new"},
 		commandObject:    {"file"},
@@ -45,8 +45,9 @@ var (
 		commandJob:       {"batch", "async"},
 		commandArch:      {"serialize", "format", "reformat", "tar", "zip", "gzip"},
 		//
-		subcmdAuthAdd:  {"register", "create"},
-		subcmdDownload: {"load"},
+		subcmdAuthAdd:    {"register", "create"},
+		subcmdStgCleanup: {"remove", "delete", "evict"},
+		subcmdDownload:   {"load", "populate"}, // TODO -- FIXME: copy vs suggestions
 	}
 
 	// app state

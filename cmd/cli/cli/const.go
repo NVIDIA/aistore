@@ -190,23 +190,22 @@ const (
 	sizeUnits = `(IEC or SI units, e.g.: "b", "B", "KB", "KiB", "MiB", "mb", "g", "GB")`
 )
 
-const argsUsageIndent = "   "
-
 const nodeLogFlushName = "log.flush_time"
 
-// Argument placeholders in help messages
-// Name format: *Argument
+// `ArgsUsage`: argument placeholders in help messages
 const (
-	// Common
-	noArguments                 = " "
-	aliasURLPairArgument        = "ALIAS=URL (or UUID=URL)"
-	aliasArgument               = "ALIAS (or UUID)"
-	daemonMountpathPairArgument = "NODE_ID=MOUNTPATH [NODE_ID=MOUNTPATH...]"
+	argsUsageIndent = "   "
 
 	// Job IDs (download, dsort)
 	jobIDArgument                 = "JOB_ID"
 	optionalJobIDArgument         = "[JOB_ID]"
 	optionalJobIDDaemonIDArgument = "[JOB_ID [NODE_ID]]"
+
+	showJobArgument = "NAME|JOB_ID [JOB_ID] [NODE_ID] [BUCKET]"
+
+	// ETL
+	etlIDArgument     = "ETL_ID"
+	etlIDListArgument = "ETL_ID [ETL_ID ...]"
 
 	// key/value
 	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"
@@ -229,24 +228,35 @@ const (
 	concatObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET/OBJECT_NAME"
 	objectArgument           = "BUCKET/OBJECT_NAME"
 	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
+	renameObjectArgument     = "BUCKET/OBJECT_NAME NEW_OBJECT_NAME"
+	appendToArchArgument     = "FILE BUCKET/OBJECT_NAME"
 
 	setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
 		argsUsageIndent +
 		"mykey1=value1 mykey2=value2 OR '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
 
-	// Daemons
-	daemonIDArgument         = "NODE_ID"
-	optionalDaemonIDArgument = "[NODE_ID]"
-	optionalTargetIDArgument = "[TARGET_ID]"
-	showConfigArgument       = "cli | cluster [CONFIG SECTION OR PREFIX] |\n" +
+	// nodes
+	nodeIDArgument            = "NODE_ID"
+	optionalNodeIDArgument    = "[NODE_ID]"
+	optionalTargetIDArgument  = "[TARGET_ID]"
+	joinNodeArgument          = "IP:PORT"
+	nodeMountpathPairArgument = "NODE_ID=MOUNTPATH [NODE_ID=MOUNTPATH...]"
+
+	// cluster
+	showClusterArgument = "[ NODE_ID | NODE_TYPE | smap | bmd | config | stats ]"
+
+	// config
+	showConfigArgument = "cli | cluster [CONFIG SECTION OR PREFIX] |\n" +
 		"      NODE_ID [ cluster | local | all [CONFIG SECTION OR PREFIX ] ]"
 	showClusterConfigArgument = "[CONFIG_SECTION]"
-	nodeConfigArgument        = daemonIDArgument + " " + keyValuePairsArgument
-	attachRemoteAISArgument   = aliasURLPairArgument
-	detachRemoteAISArgument   = aliasArgument
-	joinNodeArgument          = "IP:PORT"
-	startDownloadArgument     = "SOURCE DESTINATION"
-	showStatsArgument         = "[NODE_ID] [STATS_FILTER]"
+	nodeConfigArgument        = nodeIDArgument + " " + keyValuePairsArgument
+
+	// remais
+	attachRemoteAISArgument = aliasURLPairArgument
+	detachRemoteAISArgument = aliasArgument
+
+	startDownloadArgument = "SOURCE DESTINATION"
+	showStatsArgument     = "[NODE_ID] [STATS_FILTER]"
 
 	// List command
 	listAnyCommandArgument = "[PROVIDER://][BUCKET_NAME]"
@@ -267,8 +277,10 @@ const (
 	deleteAuthTokenArgument   = "TOKEN | TOKEN_FILE"
 
 	// Alias
-	aliasCmdArgument    = "COMMAND"
-	aliasSetCmdArgument = "ALIAS COMMAND"
+	aliasURLPairArgument = "ALIAS=URL (or UUID=URL)"
+	aliasArgument        = "ALIAS (or UUID)"
+	aliasCmdArgument     = "COMMAND"
+	aliasSetCmdArgument  = "ALIAS COMMAND"
 
 	// Search
 	searchArgument = "KEYWORD [KEYWORD...]"
@@ -441,7 +453,7 @@ var (
 
 	// multi-object
 	listFlag     = cli.StringFlag{Name: "list", Usage: "comma-separated list of object names, e.g.: 'o1,o2,o3'"}
-	templateFlag = cli.StringFlag{Name: "template", Usage: "template for matching object names, e.g.: 'shard-{900..999}.tar'"}
+	templateFlag = cli.StringFlag{Name: "template", Usage: "template to select (matching) objects, e.g.: 'shard-{900..999}.tar'"}
 
 	// Object
 	offsetFlag = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
@@ -518,10 +530,20 @@ var (
 		Usage: "comma-separated list of AIS cluster IDs (type ',' for an empty cluster ID)",
 	}
 
-	// begin archive
-	listArchFlag             = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
-	createArchFlag           = cli.BoolFlag{Name: "archive", Usage: "archive a list or a range of objects"}
-	archpathFlag             = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}
+	// archive
+	listArchFlag   = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
+	createArchFlag = cli.BoolFlag{Name: "archive", Usage: "archive a list or a range of objects"}
+
+	archpathOptionalFlag = cli.StringFlag{
+		Name:  "archpath",
+		Usage: "filename in archive",
+	}
+	archpathRequiredFlag = cli.StringFlag{
+		Name:     archpathOptionalFlag.Name,
+		Usage:    archpathOptionalFlag.Usage,
+		Required: true,
+	}
+
 	includeSrcBucketNameFlag = cli.BoolFlag{
 		Name:  "include-src-bck",
 		Usage: "prefix names of archived objects with the source bucket name",
@@ -552,7 +574,10 @@ var (
 		Name:  "dry-run",
 		Usage: "show total size of new objects without really creating them",
 	}
-	cpBckPrefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix added to every new object's name"}
+	cpBckPrefixFlag = cli.StringFlag{
+		Name:  "prefix",
+		Usage: "string to prepend every copied object's name, e.g.: '--prefix=abc/'",
+	}
 
 	// ETL
 	etlExtFlag = cli.StringFlag{Name: "ext", Usage: "mapping from old to new extensions of transformed objects' names"}

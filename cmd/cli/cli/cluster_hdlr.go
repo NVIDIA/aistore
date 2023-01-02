@@ -113,7 +113,7 @@ var (
 			{
 				Name:         subcmdPrimary,
 				Usage:        "select a new primary proxy/gateway",
-				ArgsUsage:    daemonIDArgument,
+				ArgsUsage:    nodeIDArgument,
 				Flags:        clusterCmdsFlags[subcmdPrimary],
 				Action:       setPrimaryHandler,
 				BashComplete: suggestProxyNodes,
@@ -144,7 +144,7 @@ var (
 					{
 						Name:         subcmdStartMaint,
 						Usage:        "put node under \"maintenance\", temporarily suspend its operation",
-						ArgsUsage:    daemonIDArgument,
+						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[subcmdStartMaint],
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestAllNodes,
@@ -152,14 +152,14 @@ var (
 					{
 						Name:         subcmdStopMaint,
 						Usage:        "activate node by taking it back from \"maintenance\"",
-						ArgsUsage:    daemonIDArgument,
+						ArgsUsage:    nodeIDArgument,
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestAllNodes,
 					},
 					{
 						Name:         subcmdNodeDecommission,
 						Usage:        "safely and permanently remove node from the cluster",
-						ArgsUsage:    daemonIDArgument,
+						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[subcmdNodeDecommission+".node"],
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestAllNodes,
@@ -167,7 +167,7 @@ var (
 					{
 						Name:         subcmdShutdown,
 						Usage:        "shutdown a node",
-						ArgsUsage:    daemonIDArgument,
+						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[subcmdShutdown+".node"],
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestAllNodes,

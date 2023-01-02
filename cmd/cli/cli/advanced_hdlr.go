@@ -56,7 +56,7 @@ var (
 			{
 				Name:         subcmdRmSmap,
 				Usage:        "immediately remove node from cluster map (advanced usage - potential data loss)",
-				ArgsUsage:    daemonIDArgument,
+				ArgsUsage:    nodeIDArgument,
 				Action:       removeNodeFromSmap,
 				BashComplete: suggestAllNodes,
 			},

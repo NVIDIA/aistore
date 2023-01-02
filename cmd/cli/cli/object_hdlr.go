@@ -28,7 +28,7 @@ var (
 		commandGet: {
 			offsetFlag,
 			lengthFlag,
-			archpathFlag,
+			archpathOptionalFlag,
 			cksumFlag,
 			checkObjCachedFlag,
 		},
@@ -51,7 +51,7 @@ var (
 			allowAppendToExistingFlag,
 			continueOnErrorFlag,
 			createArchFlag,
-			archpathFlag,
+			archpathOptionalFlag,
 			skipVerCksumFlag,
 		),
 		commandSetCustom: {
@@ -72,7 +72,7 @@ var (
 		commandCat: {
 			offsetFlag,
 			lengthFlag,
-			archpathFlag,
+			archpathOptionalFlag,
 			cksumFlag,
 			forceFlag,
 		},
@@ -118,7 +118,7 @@ var (
 			{
 				Name:         commandRename,
 				Usage:        "move/rename object",
-				ArgsUsage:    "BUCKET/OBJECT_NAME NEW_OBJECT_NAME",
+				ArgsUsage:    renameObjectArgument,
 				Flags:        objectCmdsFlags[commandRename],
 				Action:       mvObjectHandler,
 				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
@@ -307,50 +307,27 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func putRegularObjHandler(c *cli.Context) (err error) {
-	var (
-		bck      cmn.Bck
-		p        *cmn.BucketProps
-		objName  string
-		fileName = c.Args().Get(0)
-		uri      = c.Args().Get(1)
-		dryRun   = flagIsSet(c, dryRunFlag)
-	)
-
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, "file to put", "object name in the form bucket/[object]")
+func putRegularObjHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "file to put", "destination object name in the form "+optionalObjectsArgument)
 	}
+	fileName := c.Args().Get(0)
 	if c.NArg() < 2 {
-		return missingArgumentsError(c, "object name in the form bucket/[object]")
+		return missingArgumentsError(c, "destination object name in the form "+optionalObjectsArgument)
 	}
+	uri := c.Args().Get(1)
 	if c.NArg() > 2 {
 		return incorrectUsageMsg(c, "too many arguments _or_ unrecognized option '%+v'", c.Args()[2:])
 	}
-	if bck, objName, err = parseBckObjectURI(c, uri, true /*optional objName*/); err != nil {
-		return
-	}
-	if p, err = headBucket(bck, false /* don't add */); err != nil {
+
+	bck, objName, err := parseBckObjectURI(c, uri, true /*optional objName*/)
+	if err != nil {
 		return err
 	}
-	if dryRun {
-		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-		path, err := getPathFromFileName(fileName)
-		if err != nil {
-			return err
-		}
-		if objName == "" {
-			objName = filepath.Base(path)
-		}
-		archPath := parseStrFlag(c, archpathFlag)
-		if archPath != "" {
-			fmt.Fprintf(c.App.Writer, "Add file %q to archive %s/%s as %s/%s\n", path, bck.DisplayName(),
-				objName, objName, archPath)
-		} else {
-			fmt.Fprintf(c.App.Writer, "Put file %q to %s/%s\n", path, bck.DisplayName(), objName)
-		}
-		return nil
+	if flagIsSet(c, dryRunFlag) {
+		return putDryRun(c, bck, objName, fileName)
 	}
-	return putObject(c, bck, objName, fileName, p.Cksum.Type)
+	return putObject(c, bck, objName, fileName)
 }
 
 func putHandler(c *cli.Context) (err error) {

@@ -145,7 +145,7 @@ var (
 	showCmdStorage = cli.Command{
 		Name:      commandStorage,
 		Usage:     "show storage usage and utilization, disks and mountpaths",
-		ArgsUsage: "[TARGET_ID]",
+		ArgsUsage: optionalTargetIDArgument,
 		Flags:     showCmdsFlags[commandStorage],
 		Action:    showStorageHandler,
 		Subcommands: []cli.Command{
@@ -165,7 +165,7 @@ var (
 	showCmdCluster = cli.Command{
 		Name:         subcmdCluster,
 		Usage:        "show cluster details",
-		ArgsUsage:    "[ NODE_ID | NODE_TYPE | smap | bmd | config | stats ]",
+		ArgsUsage:    showClusterArgument,
 		Flags:        showCmdsFlags[subcmdCluster],
 		Action:       showClusterHandler,
 		BashComplete: showClusterCompletions,
@@ -173,7 +173,7 @@ var (
 			{
 				Name:         subcmdSmap,
 				Usage:        "show Smap (cluster map)",
-				ArgsUsage:    optionalDaemonIDArgument,
+				ArgsUsage:    optionalNodeIDArgument,
 				Flags:        showCmdsFlags[subcmdSmap],
 				Action:       showSmapHandler,
 				BashComplete: suggestAllNodes,
@@ -181,7 +181,7 @@ var (
 			{
 				Name:         subcmdBMD,
 				Usage:        "show BMD (bucket metadata)",
-				ArgsUsage:    optionalDaemonIDArgument,
+				ArgsUsage:    optionalNodeIDArgument,
 				Flags:        showCmdsFlags[subcmdBMD],
 				Action:       showBMDHandler,
 				BashComplete: suggestAllNodes,
@@ -204,11 +204,10 @@ var (
 		},
 	}
 	showCmdRebalance = cli.Command{
-		Name:      subcmdRebalance,
-		Usage:     "show rebalance details",
-		ArgsUsage: noArguments,
-		Flags:     showCmdsFlags[subcmdRebalance],
-		Action:    showRebalanceHandler,
+		Name:   subcmdRebalance,
+		Usage:  "show rebalance details",
+		Flags:  showCmdsFlags[subcmdRebalance],
+		Action: showRebalanceHandler,
 	}
 	showCmdBucket = cli.Command{
 		Name:         subcmdBucket,
@@ -238,7 +237,7 @@ var (
 	showCmdLog = cli.Command{
 		Name:         subcmdLog,
 		Usage:        "show log",
-		ArgsUsage:    daemonIDArgument,
+		ArgsUsage:    nodeIDArgument,
 		Flags:        showCmdsFlags[subcmdLog],
 		Action:       showDaemonLogHandler,
 		BashComplete: suggestAllNodes,
@@ -247,7 +246,7 @@ var (
 	showCmdJob = cli.Command{
 		Name:         commandJob,
 		Usage:        "show running and finished jobs (use <TAB-TAB> to select, help to see options)",
-		ArgsUsage:    "NAME|JOB_ID [JOB_ID] [NODE_ID] [BUCKET]",
+		ArgsUsage:    showJobArgument,
 		Flags:        showCmdsFlags[commandJob],
 		Action:       showJobsHandler,
 		BashComplete: runningJobCompletions,
@@ -303,6 +302,7 @@ func showJobsHandler(c *cli.Context) error {
 	)
 	// reparse and reassign
 	if xactKind, _ := xact.GetKindName(name); xactKind == "" {
+		daemonID = xid
 		xid = name
 		name = ""
 	}
@@ -503,40 +503,38 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption string) error {
 		return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
 	}
 
-	var printedVerbose bool
-	if flagIsSet(c, verboseFlag) {
-		for _, di := range dts {
-			if len(dts[0].XactSnaps) == 0 {
-				continue
-			}
-			props := flattenXactStats(di.XactSnaps[0])
-			_, name := xact.GetKindName(di.XactSnaps[0].Kind)
-			debug.Assert(name != "", di.XactSnaps[0].Kind)
-			actionCptn(c, cluster.Tname(di.DaemonID), " "+name)
-			if err := tmpls.Print(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON); err != nil {
-				return err
-			}
-			printedVerbose = true
-		}
-		if printedVerbose {
-			return nil
-		}
-	}
-
 	hideHeader := flagIsSet(c, noHeaderFlag)
 	switch xactArgs.Kind {
 	case apc.ActECGet:
 		// TODO: hideHeader
-		return tmpls.Print(dts, c.App.Writer, tmpls.XactionECGetBodyTmpl, nil, useJSON)
+		err = tmpls.Print(dts, c.App.Writer, tmpls.XactionECGetBodyTmpl, nil, useJSON)
 	case apc.ActECPut:
 		// TODO: ditto
-		return tmpls.Print(dts, c.App.Writer, tmpls.XactionECPutBodyTmpl, nil, useJSON)
+		err = tmpls.Print(dts, c.App.Writer, tmpls.XactionECPutBodyTmpl, nil, useJSON)
 	default:
 		if hideHeader {
 			return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyNoHeaderTmpl, nil, useJSON)
 		}
-		return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
+		err = tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
 	}
+	if err != nil || !flagIsSet(c, verboseFlag) {
+		return err
+	}
+
+	// show in/out stats when verbose
+	for _, di := range dts {
+		if len(dts[0].XactSnaps) == 0 {
+			continue
+		}
+		props := flattenXactStats(di.XactSnaps[0])
+		_, name := xact.GetKindName(di.XactSnaps[0].Kind)
+		debug.Assert(name != "", di.XactSnaps[0].Kind)
+		actionCptn(c, cluster.Tname(di.DaemonID)+": ", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
+		if err := tmpls.Print(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func showObjectHandler(c *cli.Context) (err error) {

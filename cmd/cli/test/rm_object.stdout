@@ -1,2 +1,3 @@
-PUT "object.txt" to ais://$BUCKET
+^PUT.*=> ais://$BUCKET/object.txt$
+
 deleted "object.txt" from ais://$BUCKET

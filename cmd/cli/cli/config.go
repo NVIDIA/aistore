@@ -93,7 +93,7 @@ var (
 			{
 				Name:         subcmdReset,
 				Usage:        "reset (cluster | node | CLI) configuration to system defaults",
-				ArgsUsage:    optionalDaemonIDArgument,
+				ArgsUsage:    optionalNodeIDArgument,
 				Action:       resetConfigHandler,
 				BashComplete: showConfigCompletions, // `cli  cluster  p[...]   t[...]`
 			},

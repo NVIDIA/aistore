@@ -72,7 +72,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		}
 	}
 
-	archPath = parseStrFlag(c, archpathFlag)
+	archPath = parseStrFlag(c, archpathOptionalFlag)
 	if outFile == "" {
 		if archPath != "" {
 			outFile = filepath.Base(archPath)
@@ -224,9 +224,7 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
 	return nil
 }
 
-// PUT methods.
-
-func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err error) {
+func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) error {
 	var (
 		reader   cos.ReadOpenCloser
 		progress *mpb.Progress
@@ -274,7 +272,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
 
-	archPath := parseStrFlag(c, archpathFlag)
+	archPath := parseStrFlag(c, archpathOptionalFlag)
 	if archPath != "" {
 		fi, err := fh.Stat()
 		if err != nil {
@@ -301,7 +299,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 	return err
 }
 
-func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) (err error) {
+func putSingleChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) error {
 	var (
 		handle string
 		cksum  = cos.NewCksumHash(cksumType)
@@ -371,7 +369,6 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 	if cksumType != cos.ChecksumNone {
 		cksum.Finalize()
 	}
-
 	return api.FlushObject(api.FlushArgs{
 		BaseParams: apiBP,
 		Bck:        bck,
@@ -439,15 +436,13 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 	return uploadFiles(c, params)
 }
 
-// base + fileName = path
-// if fileName is already absolute path, base is empty
-func getPathFromFileName(fileName string) (path string, err error) {
+// replace common abbreviations (such as `~/`) and return an absolute path
+func absPath(fileName string) (path string, err error) {
 	path = cos.ExpandPath(fileName)
 	if path, err = filepath.Abs(path); err != nil {
 		return "", err
 	}
-
-	return path, err
+	return
 }
 
 // Returns longest common prefix ending with '/' (exclusive) for objects in the template
@@ -459,69 +454,82 @@ func rangeTrimPrefix(pt cos.ParsedTemplate) string {
 	return pt.Prefix[:sepaIndex+1]
 }
 
-func putObject(c *cli.Context, bck cmn.Bck, objName, fileName, cksumType string) (err error) {
-	printDryRunHeader(c)
+func putDryRun(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
+	actionCptn(c, dryRunHeader, " "+dryRunExplanation)
+	path, err := absPath(fileName)
+	if err != nil {
+		return err
+	}
+	if objName == "" {
+		objName = filepath.Base(path)
+	}
+	archPath := parseStrFlag(c, archpathOptionalFlag)
+	if archPath == "" {
+		actionDone(c, fmt.Sprintf("PUT %q => %s/%s\n", fileName, bck.DisplayName(), objName))
+	} else {
+		actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bck.DisplayName(), objName, archPath))
+	}
+	return nil
+}
 
+func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
+	// 1. STDIN
 	if fileName == "-" {
 		if objName == "" {
-			return fmt.Errorf("object name is required when reading from stdin")
+			return fmt.Errorf("destination object name is required when reading from STDIN")
 		}
-
-		if flagIsSet(c, dryRunFlag) {
-			fmt.Fprintf(c.App.Writer, "PUT (stdin) => \"%s/%s\"\n", bck.DisplayName(), objName)
-			return nil
-		}
-
-		if err := putSingleObjectChunked(c, bck, objName, os.Stdin, cksumType); err != nil {
+		p, err := headBucket(bck, false /* don't add */)
+		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "PUT %q to %s\n", objName, bck.DisplayName())
-
+		cksumType := p.Cksum.Type
+		if err := putSingleChunked(c, bck, objName, os.Stdin, cksumType); err != nil {
+			return err
+		}
+		actionDone(c, fmt.Sprintf("PUT (stdin) => %s/%s\n", bck.DisplayName(), objName))
 		return nil
 	}
 
-	path, err := getPathFromFileName(fileName)
+	// readable file, list, or range (must have abs path either way)
+	path, err := absPath(fileName)
 	if err != nil {
 		return err
 	}
 
-	var pt cos.ParsedTemplate
-	if pt, err = cos.ParseBashTemplate(path); err == nil {
+	// 2. template-specified range
+	if pt, err := cos.ParseBashTemplate(path); err == nil {
 		return putRangeObjects(c, pt, bck, rangeTrimPrefix(pt), objName)
 	}
-	// if parse failed continue to other options
 
-	// Upload single file
 	if fh, err := os.Stat(path); err == nil && !fh.IsDir() {
+		//
+		// 3. single-file PUT or APPEND-to-arch operation
+		//
 		if objName == "" {
-			// objName was not provided, only bucket name, use just file name as object name
+			// [CONVENTION]: if objName is not provided
+			// we use the filename as the destination object name
 			objName = filepath.Base(path)
 		}
 
-		archPath := parseStrFlag(c, archpathFlag)
-		if archPath != "" {
-			archPath = "/" + archPath
-		}
-		if flagIsSet(c, dryRunFlag) {
-			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s/%s\"\n", path, bck.DisplayName(), objName, archPath)
-			return nil
-		}
-		if err := putSingleObject(c, bck, objName, path); err != nil {
+		// single-file PUT or - if archpath defined - APPEND to an existing archive
+		if err := filePutOrAppend2Arch(c, bck, objName, path); err != nil {
 			return err
 		}
+
+		archPath := parseStrFlag(c, archpathOptionalFlag)
 		if archPath == "" {
-			fmt.Fprintf(c.App.Writer, "PUT %q to %s\n", objName, bck.DisplayName())
+			actionDone(c, fmt.Sprintf("PUT %q => %s/%s\n", fileName, bck.DisplayName(), objName))
 		} else {
-			fmt.Fprintf(c.App.Writer, "APPEND %q to object \"%s/%s[%s]\"\n", path, bck.DisplayName(), objName, archPath)
+			actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bck.DisplayName(), objName, archPath))
 		}
 		return nil
 	}
 
+	// 4. PUT multi-object list
 	files, err := generateFileList(path, "", objName, flagIsSet(c, recursiveFlag))
 	if err != nil {
-		return
+		return err
 	}
-
 	return putMultipleObjects(c, files, bck)
 }
 
