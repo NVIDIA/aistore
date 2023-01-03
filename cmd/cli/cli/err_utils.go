@@ -65,12 +65,79 @@ func commandNotFoundError(c *cli.Context, cmd string) *errUsage {
 	if !isAlphaLc(msg) {
 		msg = "unknown or misplaced \"" + cmd + "\""
 	}
+	var (
+		// via `similarWords` map
+		similar = findCmdByKey(cmd).ToSlice()
+
+		// alternatively, using https://en.wikipedia.org/wiki/Damerau–Levenshtein_distance
+		closestCommand, distance = findClosestCommand(cmd, c.App.VisibleCommands())
+
+		// finally, the case of trailing `show` (`ais object ... show` == `ais show object`)
+		trailingShow = argLast(c) == commandShow
+	)
 	return &errUsage{
 		context:       c,
 		message:       msg,
 		helpData:      c.App,
 		helpTemplate:  tmpls.ShortUsageTmpl,
-		bottomMessage: didYouMeanMessage(c, cmd),
+		bottomMessage: didYouMeanMessage(c, cmd, similar, closestCommand, distance, trailingShow),
+	}
+}
+
+func didYouMeanMessage(c *cli.Context, cmd string, similar []string, closestCommand string, distance int, trailingShow bool) string {
+	const prefix = "Did you mean: '"
+	sb := &strings.Builder{}
+
+	switch {
+	case trailingShow:
+		sb.WriteString(prefix)
+		sb.WriteString(c.App.Name) // NOTE: the entire command-line (vs cliName)
+		sb.WriteString(" " + commandShow)
+		sb.WriteString(" " + c.Args()[0])
+		for _, f := range c.FlagNames() {
+			sb.WriteString(" --" + f)
+		}
+		sb.WriteString("'?")
+		sbWriteSearch(sb, cmd, true)
+	case len(similar) == 1:
+		sb.WriteString(prefix)
+		msg := fmt.Sprintf("%v", similar)
+		sb.WriteString(msg)
+		sbWriteTail(c, sb)
+		sb.WriteString("'?")
+		sbWriteSearch(sb, cmd, true)
+	case distance < cos.Max(incorrectCmdDistance, len(cmd)/2):
+		sb.WriteString(prefix)
+		sb.WriteString(c.App.Name) // ditto
+		sb.WriteString(" " + closestCommand)
+		sbWriteTail(c, sb)
+		sb.WriteString("'?")
+		sbWriteSearch(sb, cmd, true)
+	default:
+		sbWriteSearch(sb, cmd, false)
+	}
+
+	return sb.String()
+}
+
+func sbWriteTail(c *cli.Context, sb *strings.Builder) {
+	if c.NArg() > 1 {
+		for _, a := range c.Args()[1:] { // skip the wrong one
+			sb.WriteString(" " + a)
+		}
+	}
+	for _, f := range c.FlagNames() {
+		sb.WriteString(" --" + f)
+	}
+}
+
+func sbWriteSearch(sb *strings.Builder, cmd string, found bool) {
+	searchCmd := cliName + " " + commandSearch + " " + cmd
+	if found {
+		sb.WriteString("\n")
+		sb.WriteString("If not, try search: '" + searchCmd + "'")
+	} else {
+		sb.WriteString("Try search: '" + searchCmd + "'")
 	}
 }
 

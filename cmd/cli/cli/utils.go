@@ -107,50 +107,6 @@ func helpMessage(template string, data any) string {
 	return buf.String()
 }
 
-func didYouMeanMessage(c *cli.Context, cmd string) string {
-	if alike := findCmdByKey(cmd); len(alike) > 0 {
-		msg := fmt.Sprintf("%v", alike) //nolint:gocritic // alt formatting
-		sb := &strings.Builder{}
-		sb.WriteString(msg)
-		sbWriteTail(c, sb)
-		return fmt.Sprintf("Did you mean: %q?", sb.String())
-	}
-
-	closestCommand, distance := findClosestCommand(cmd, c.App.VisibleCommands())
-	if distance >= cos.Max(incorrectCmdDistance, len(cmd)/2) {
-		// 2nd attempt: check misplaced `show`
-		// (that can be typed-in ex post facto as in: `ais object ... show` == `ais show object`)
-		// (feature)
-		if tail := c.Args().Tail(); len(tail) > 0 && tail[0] == commandShow {
-			sb := &strings.Builder{}
-			sb.WriteString(c.App.Name)
-			sb.WriteString(" " + commandShow)
-			sb.WriteString(" " + c.Args()[0])
-			for _, f := range c.FlagNames() {
-				sb.WriteString(" --" + f)
-			}
-			return fmt.Sprintf("Did you mean: %q?", sb.String())
-		}
-		return ""
-	}
-	sb := &strings.Builder{}
-	sb.WriteString(c.App.Name)
-	sb.WriteString(" " + closestCommand)
-	sbWriteTail(c, sb)
-	return fmt.Sprintf("Did you mean: %q?", sb.String())
-}
-
-func sbWriteTail(c *cli.Context, sb *strings.Builder) {
-	if c.NArg() > 1 {
-		for _, a := range c.Args()[1:] { // skip the wrong one
-			sb.WriteString(" " + a)
-		}
-	}
-	for _, f := range c.FlagNames() {
-		sb.WriteString(" --" + f)
-	}
-}
-
 func findClosestCommand(cmd string, candidates []cli.Command) (result string, distance int) {
 	var (
 		minDist     = math.MaxInt64

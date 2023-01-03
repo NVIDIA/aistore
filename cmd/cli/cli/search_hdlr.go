@@ -24,30 +24,29 @@ var (
 	searchCommands []cli.Command
 
 	similarWords = map[string][]string{
-		commandMountpath: {"mount", "unmount", "umount"},
-		commandList:      {"list", "dir"},
+		commandMountpath: {"mount", "unmount", "umount", "disk"},
+		commandList:      {"list", "dir", "contents"},
 		commandSet:       {"update", "assign", "modify"},
 		commandShow:      {"view", "display", "list"},
 		commandRemove:    {"remove", "delete", "del", "evict", "destroy", "cleanup"},
-		commandRename:    {"move", "rename"},
+		commandRename:    {"move", "rename", "ren"},
 		commandCopy:      {"copy", "replicate", "backup"},
-		commandGet:       {"fetch", "read"},
+		commandGet:       {"fetch", "read", "download"},
 		commandPrefetch:  {"load", "preload", "warmup", "cache", "get"},
-		commandMirror:    {"protect", "replicate"}, // TODO -- FIXME: copy vs suggestions
+		commandMirror:    {"protect", "replicate", "copy"},
 		commandECEncode:  {"protect", "encode", "replicate", "erasure-code"},
 		commandStart:     {"do", "run", "execute"},
 		commandStop:      {"abort", "terminate"},
-		commandPut:       {"update", "write", "promote", "modify"},
+		commandPut:       {"update", "write", "promote", "modify", "upload"},
 		commandCreate:    {"add", "new"},
 		commandObject:    {"file"},
 		commandStorage:   {"disk", "mountpath", "capacity", "used", "available"},
-		commandBucket:    {"dir", "directory"},
+		commandBucket:    {"dir", "directory", "container"},
 		commandJob:       {"batch", "async"},
-		commandArch:      {"serialize", "format", "reformat", "tar", "zip", "gzip"},
-		//
+		commandArch:      {"serialize", "format", "reformat", "compress", "tar", "zip", "gzip"},
 		subcmdAuthAdd:    {"register", "create"},
 		subcmdStgCleanup: {"remove", "delete", "evict"},
-		subcmdDownload:   {"load", "populate"}, // TODO -- FIXME: copy vs suggestions
+		subcmdDownload:   {"load", "populate", "copy", "cp"},
 	}
 
 	// app state
