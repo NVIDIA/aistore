@@ -23,12 +23,14 @@ import (
 
 // TODO: some of these constants must be configurable or derived from the config
 const (
-	delOldIval      = 10 * time.Minute // cleanup entries.entries
-	pruneActiveIval = 2 * time.Minute  // prune entries.active
-	oldAgeIval      = 1 * time.Hour    // the interval to keep for history
+	hkDelOldIval      = 10 * time.Minute // hk cleanup old entries
+	hkPruneActiveIval = 2 * time.Minute  // hk prune active entries
 
-	initialCap      = 256 // initial capacity of registry entries
-	delOldThreshold = 300 // the number of entries to trigger (housekeeping) cleanup
+	oldAgeLso = 2 * time.Minute // when list-objects is considered 'old'
+	oldAgeX   = time.Hour       // when all the rest is
+
+	initialCap       = 256 // initial capacity
+	keepOldThreshold = 256 // keep so many
 
 	waitPrevAborted = 2 * time.Second
 	waitLimitedCoex = 5 * time.Second
@@ -129,8 +131,8 @@ func newRegistry() (r *registry) {
 
 // register w/housekeeper periodic registry cleanups
 func RegWithHK() {
-	hk.Reg("x-old"+hk.NameSuffix, dreg.hkDelOld, 0 /*time.Duration*/)
-	hk.Reg("x-prune-active"+hk.NameSuffix, dreg.hkPruneActive, 0 /*time.Duration*/)
+	hk.Reg("x-old"+hk.NameSuffix, dreg.hkDelOld, 0)
+	hk.Reg("x-prune-active"+hk.NameSuffix, dreg.hkPruneActive, 0)
 }
 
 func GetXact(uuid string) (cluster.Xact, error) { return dreg.getXact(uuid) }
@@ -356,7 +358,7 @@ func (r *registry) incFinished() { r.finDelta.Inc() }
 
 func (r *registry) hkPruneActive() time.Duration {
 	if r.finDelta.Swap(0) == 0 {
-		return pruneActiveIval
+		return hkPruneActiveIval
 	}
 	e := &r.entries
 	e.mtx.Lock()
@@ -372,43 +374,63 @@ func (r *registry) hkPruneActive() time.Duration {
 		e.active = e.active[:l]
 	}
 	e.mtx.Unlock()
-	return pruneActiveIval
+	return hkPruneActiveIval
 }
 
 func (r *registry) hkDelOld() time.Duration {
 	var (
-		toRemove []string
-		now      time.Time
-		cnt      int
+		toRemove  []string
+		numNonLso int
+		now       = time.Now()
 	)
+
 	r.entries.mtx.RLock()
 	l := len(r.entries.all)
-	for i := 0; i < l; i++ { // older (start-time wise) -> newer
+	// first, cleanup list-objects: walk older to newer while counting non-lso
+	for i := 0; i < l; i++ {
 		xctn := r.entries.all[i].Get()
-		if !xctn.Finished() {
+		if xctn.Kind() != apc.ActList {
+			numNonLso++
 			continue
 		}
-		if cnt == 0 {
-			now = time.Now()
+		if xctn.Finished() {
+			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= oldAgeLso {
+				toRemove = append(toRemove, xctn.ID())
+			}
 		}
-		if xctn.EndTime().Add(oldAgeIval).Before(now) {
-			toRemove = append(toRemove, xctn.ID())
-			cnt++
-			if l-cnt < delOldThreshold {
-				break
+	}
+	// all the rest: older to newer, while keeping at least `keepOldThreshold`
+	if numNonLso > keepOldThreshold {
+		var cnt int
+		for i := 0; i < l; i++ {
+			xctn := r.entries.all[i].Get()
+			if xctn.Kind() == apc.ActList {
+				continue
+			}
+			if xctn.Finished() {
+				if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= oldAgeX {
+					toRemove = append(toRemove, xctn.ID())
+					cnt++
+					if numNonLso-cnt <= keepOldThreshold {
+						break
+					}
+				}
 			}
 		}
 	}
 	r.entries.mtx.RUnlock()
-	if cnt == 0 {
-		return delOldIval
+
+	if len(toRemove) == 0 {
+		return hkDelOldIval
 	}
+
+	// cleanup
 	r.entries.mtx.Lock()
 	for _, id := range toRemove {
 		r.entries.del(id)
 	}
 	r.entries.mtx.Unlock()
-	return delOldIval
+	return hkDelOldIval
 }
 
 func (r *registry) renewByID(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
