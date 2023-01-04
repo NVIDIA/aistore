@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains implementation of the top-level `show` command.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -18,8 +18,10 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
@@ -290,41 +292,45 @@ func showDisksHandler(c *cli.Context) (err error) {
 	return daemonDiskStats(c, sid)
 }
 
-// args: `NAME|JOB_ID [JOB_ID] [TARGET] [BUCKET]` (see `runningJobCompletions`)
+// args [NAME] [JOB_ID] [NODE_ID] [BUCKET] may:
+// - be omitted, in part or in total, and may
+// - come in arbitrary order
 func showJobsHandler(c *cli.Context) error {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
 	var (
+		bck      cmn.Bck
+		err      error
 		name     = c.Args().Get(0)
 		xid      = c.Args().Get(1)
 		daemonID = c.Args().Get(2)
 	)
-	// reparse and reassign
-	if xactKind, _ := xact.GetKindName(name); xactKind == "" {
-		daemonID = xid
-		xid = name
-		name = ""
-	}
-	bck, err := parseBckURI(c, xid, true /*require provider*/)
-	if err == nil {
-		if _, err = headBucket(bck, true /* don't add */); err != nil {
-			return err
-		}
-		xid = "" // arg #1 is a bucket
-	} else if bck, err = parseBckURI(c, daemonID, true); err == nil {
-		if _, err = headBucket(bck, true /* don't add */); err != nil {
-			return err
-		}
-		daemonID = "" // arg #2 ditto
-	}
-	if daemonID == "" {
-		if xid != "" && strings.HasPrefix(xid, cluster.TnamePrefix) {
-			daemonID, xid = xid, "" //  arg #1 is a node
+	// validate and reassign
+	if name != "" {
+		if xactKind, _ := xact.GetKindName(name); xactKind == "" {
+			daemonID = xid
+			xid = name
+			name = ""
 		}
 	}
-
-	// sname to sid
+	if xid != "" || daemonID != "" {
+		bck, err = parseBckURI(c, xid, true /*require provider*/)
+		if err == nil {
+			if _, err = headBucket(bck, true /* don't add */); err != nil {
+				return err
+			}
+			xid = "" // arg #1 is a bucket
+		} else if bck, err = parseBckURI(c, daemonID, true); err == nil {
+			if _, err = headBucket(bck, true /* don't add */); err != nil {
+				return err
+			}
+			daemonID = "" // arg #2 ditto
+		}
+	}
+	if xid != "" && daemonID == "" {
+		if sid, _, err := getNodeIDName(c, xid); err == nil {
+			daemonID, xid = sid, ""
+		}
+	}
+	// sname => sid
 	if daemonID != "" {
 		sid, _, err := getNodeIDName(c, daemonID)
 		if err != nil {
@@ -333,98 +339,103 @@ func showJobsHandler(c *cli.Context) error {
 		daemonID = sid
 	}
 
+	// show -----------------------
+
 	setLongRunParams(c, 72)
 
-	// special
-	switch name {
-	case subcmdDownload:
-		return showDownloadsHandler(c, xid)
-	case subcmdDsort:
-		return showDsortHandler(c, xid)
-	case commandETL:
-		return etlListHandler(c)
+	if name != "" {
+		return showJobs(c, name, xid, daemonID, bck, false /*caption*/)
 	}
 
-	// `--all` or all the rest
-
-	var (
-		regex      = parseStrFlag(c, regexFlag)
-		useJSON    = flagIsSet(c, jsonFlag)
-		onlyActive = !flagIsSet(c, allJobsFlag)
-		printed    bool
-	)
-	if name == "" {
-		downloads, err := api.DownloadGetList(apiBP, regex, onlyActive)
-		if err != nil {
-			actionWarn(c, err.Error())
-		} else if len(downloads) > 0 {
-			actionCptn(c, "", "download jobs:")
-			err = tmpls.Print(downloads, c.App.Writer, tmpls.DownloadListTmpl, nil, useJSON)
-			if err != nil {
+	// show all grouped by name (kind)
+	if xid == "" {
+		names := xact.ListDisplayNames(false /*only-startable*/)
+		names = append(names, dsort.DSortName)
+		sort.Strings(names)
+		for _, name = range names {
+			if err := showJobs(c, name, "" /*xid*/, daemonID, bck, true); err != nil {
 				actionWarn(c, err.Error())
 			}
-			printed = true
 		}
-
-		dsorts, err := api.ListDSort(apiBP, regex, onlyActive)
-		if err != nil {
-			return err
-		} else if len(dsorts) > 0 {
-			if printed {
-				fmt.Fprintln(c.App.Writer)
-			}
-			actionCptn(c, "", "dsort jobs:")
-			err = dsortJobsList(c, dsorts, useJSON)
-			if err != nil {
-				actionWarn(c, err.Error())
-			}
-			printed = true
-		}
+		return nil
 	}
 
-	var (
-		caption     string
-		xactKind, _ = xact.GetKindName(name)
-		xactArgs    = api.XactReqArgs{
-			ID:          xid,
-			Kind:        xactKind,
-			DaemonID:    daemonID,
-			Bck:         bck,
-			OnlyRunning: onlyActive,
-		}
-	)
-	if printed {
-		if onlyActive {
-			caption = "running jobs"
-		} else {
-			caption = "all jobs (including finished)"
-		}
+	// by xid with extra calls to disambiguate download/dsort job ID vs xaction UUID
+	if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
+		return showJobs(c, subcmdDownload, xid, daemonID, bck, true)
 	}
-	return xactList(c, xactArgs, caption)
+	if _, err := api.MetricsDSort(apiBP, xid); err == nil {
+		return showJobs(c, subcmdDsort, xid, daemonID, bck, true)
+	}
+	return showJobs(c, "" /*name*/, xid, daemonID, bck, true)
 }
 
-func showDownloadsHandler(c *cli.Context, id string) error {
-	if id == "" { // list all download jobs
-		return downloadJobsList(c, parseStrFlag(c, regexFlag))
+func jobCptn(c *cli.Context, name string, onlyActive bool) {
+	if onlyActive {
+		actionCptn(c, name, " jobs:")
+	} else {
+		actionCptn(c, name, " jobs (including finished):")
 	}
-	// display status of a download job with given id
+}
+
+func jobByTargetCptn(c *cli.Context, name string, onlyActive bool) {
+	if onlyActive {
+		actionCptn(c, name, " jobs by target:")
+	} else {
+		actionCptn(c, name, " jobs by target (including finished):")
+	}
+}
+
+func showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption bool) error {
+	switch name {
+	case subcmdDownload:
+		return showDownloads(c, xid, caption)
+	case subcmdDsort:
+		return showDsorts(c, xid, caption)
+	case commandETL:
+		return showAllETLs(c, caption)
+	default:
+		var (
+			all         = flagIsSet(c, allJobsFlag)
+			onlyActive  = !all
+			xactKind, _ = xact.GetKindName(name)
+			xactArgs    = api.XactReqArgs{
+				ID:          xid,
+				Kind:        xactKind,
+				DaemonID:    daemonID,
+				Bck:         bck,
+				OnlyRunning: onlyActive,
+			}
+		)
+		return xactList(c, xactArgs, caption)
+	}
+}
+
+func showDownloads(c *cli.Context, id string, caption bool) error {
+	if id == "" { // list all download jobs
+		return downloadJobsList(c, parseStrFlag(c, regexFlag), caption)
+	}
+	// display status of a download job identified by its JOB_ID
 	return downloadJobStatus(c, id)
 }
 
-func showDsortHandler(c *cli.Context, id string) error {
+func showDsorts(c *cli.Context, id string, caption bool) error {
 	var (
 		useJSON    = flagIsSet(c, jsonFlag)
 		onlyActive = !flagIsSet(c, allJobsFlag)
 	)
-	if id == "" { // list all (active) dsort jobs
+	if id == "" {
 		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag), onlyActive)
-		if err != nil {
+		if err != nil || len(list) == 0 {
 			return err
+		}
+		if caption {
+			jobCptn(c, subcmdDsort, onlyActive)
 		}
 		return dsortJobsList(c, list, useJSON)
 	}
 
-	// status of the ID-ed dsort
+	// ID-ed dsort
 	return dsortJobStatus(c, id)
 }
 
@@ -453,7 +464,7 @@ func showStorageHandler(c *cli.Context) (err error) {
 	return daemonDiskStats(c, "")
 }
 
-func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption string) error {
+func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 	// override the caller's choice if explicitly identified
 	if xactArgs.ID != "" {
 		debug.Assert(xact.IsValidUUID(xactArgs.ID), xactArgs.ID)
@@ -468,28 +479,52 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption string) error {
 	for _, snaps := range xs {
 		numSnaps += len(snaps)
 	}
-	if caption != "" && numSnaps > 0 {
-		actionCptn(c, "", caption)
+	if numSnaps == 0 {
+		return nil
 	}
 
-	dts := make([]daemonTemplateXactSnaps, len(xs))
-	i := 0
+	var (
+		xactKind = xactArgs.Kind
+		i        int
+		dts      = make([]daemonTemplateXactSnaps, len(xs))
+	)
 	for tid, snaps := range xs {
-		sort.Slice(snaps, func(i, j int) bool {
-			di, dj := snaps[i], snaps[j]
-			if di.Kind == dj.Kind {
-				// ascending by running
-				if di.Running() && dj.Running() {
-					return di.StartTime.After(dj.StartTime) // descending by start time (if both running)
-				} else if di.Running() && !dj.Running() {
-					return true
-				} else if !di.Running() && dj.Running() {
-					return false
+		if xactArgs.DaemonID != "" && xactArgs.DaemonID != tid {
+			continue
+		}
+		if len(snaps) == 0 {
+			continue
+		}
+		if xactKind == "" {
+			xactKind = snaps[0].Kind
+		} else {
+			debug.Assertf(xactKind == snaps[0].Kind, "%s vs %s", xactKind, snaps[0].Kind)
+		}
+		if len(snaps) > 1 {
+			sort.Slice(snaps, func(i, j int) bool {
+				di, dj := snaps[i], snaps[j]
+				if di.Kind == dj.Kind {
+					// ascending by running
+					if di.Running() && dj.Running() {
+						return di.ID < dj.ID
+					}
+					if di.Running() && !dj.Running() {
+						return true
+					}
+					if !di.Running() && dj.Running() {
+						return false
+					}
+					if di.IsAborted() && !dj.IsAborted() {
+						return true
+					}
+					if !di.IsAborted() && dj.IsAborted() {
+						return false
+					}
+					return di.ID < dj.ID
 				}
-				return di.EndTime.After(dj.EndTime) // descending by end time
-			}
-			return di.Kind < dj.Kind // ascending by kind
-		})
+				return di.Kind < dj.Kind // ascending by kind
+			})
+		}
 
 		dts[i] = daemonTemplateXactSnaps{DaemonID: tid, XactSnaps: snaps}
 		i++
@@ -498,19 +533,30 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption string) error {
 		return dts[i].DaemonID < dts[j].DaemonID // ascending by node id/name
 	})
 
-	useJSON := flagIsSet(c, jsonFlag)
-	if useJSON {
-		return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
+	_, xname := xact.GetKindName(xactKind)
+	if caption {
+		if xactArgs.DaemonID == "" {
+			jobByTargetCptn(c, xname, xactArgs.OnlyRunning)
+		} else {
+			jobCptn(c, xname, xactArgs.OnlyRunning)
+		}
 	}
 
-	hideHeader := flagIsSet(c, noHeaderFlag)
+	var (
+		useJSON    = flagIsSet(c, jsonFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
+	)
 	switch xactArgs.Kind {
 	case apc.ActECGet:
-		// TODO: hideHeader
-		err = tmpls.Print(dts, c.App.Writer, tmpls.XactionECGetBodyTmpl, nil, useJSON)
+		if hideHeader {
+			return tmpls.Print(dts, c.App.Writer, tmpls.XactionECGetBodyNoHeaderTmpl, nil, useJSON)
+		}
+		return tmpls.Print(dts, c.App.Writer, tmpls.XactionECGetBodyTmpl, nil, useJSON)
 	case apc.ActECPut:
-		// TODO: ditto
-		err = tmpls.Print(dts, c.App.Writer, tmpls.XactionECPutBodyTmpl, nil, useJSON)
+		if hideHeader {
+			return tmpls.Print(dts, c.App.Writer, tmpls.XactionECPutBodyNoHeaderTmpl, nil, useJSON)
+		}
+		return tmpls.Print(dts, c.App.Writer, tmpls.XactionECPutBodyTmpl, nil, useJSON)
 	default:
 		if hideHeader {
 			return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyNoHeaderTmpl, nil, useJSON)

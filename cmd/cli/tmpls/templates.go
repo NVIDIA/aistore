@@ -141,11 +141,11 @@ const (
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
-	XactionECGetStatsHeader = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
-	XactionECGetBodyTmpl    = XactionECGetStatsHeader +
-		"{{range $daemon := . }}" + XactionECGetBody + "{{end}}"
-	XactionECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECGetStatsBody + "{{end}}"
-	XactionECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
+	XactionECGetStatsHeader      = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
+	XactionECGetBodyTmpl         = XactionECGetStatsHeader + XactionECGetBodyNoHeaderTmpl
+	XactionECGetBodyNoHeaderTmpl = "{{range $daemon := . }}" + XactionECGetBody + "{{end}}"
+	XactionECGetBody             = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECGetStatsBody + "{{end}}"
+	XactionECGetStatsBody        = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
@@ -160,11 +160,11 @@ const (
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
-	XactionECPutStatsHeader = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
-	XactionECPutBodyTmpl    = XactionECPutStatsHeader +
-		"{{range $daemon := . }}" + XactionECPutBody + "{{end}}"
-	XactionECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECPutStatsBody + "{{end}}"
-	XactionECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
+	XactionECPutStatsHeader      = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
+	XactionECPutBodyTmpl         = XactionECPutStatsHeader + XactionECPutBodyNoHeaderTmpl
+	XactionECPutBodyNoHeaderTmpl = "{{range $daemon := . }}" + XactionECPutBody + "{{end}}"
+	XactionECPutBody             = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECPutStatsBody + "{{end}}"
+	XactionECPutStatsBody        = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +

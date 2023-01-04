@@ -2,5 +2,3 @@
 "ais://$BUCKET_2" created
 ^Copying bucket ais://$BUCKET_1 => ais://$BUCKET_2. To monitor.*$
 ^copy-bucket.*finished$
-NODE	 ID	 KIND	 BUCKET	 OBJECTS	 BYTES	 START	 END	 STATE
-NODE	 ID	 KIND	 BUCKET	 OBJECTS	 BYTES	 START	 END	 STATE

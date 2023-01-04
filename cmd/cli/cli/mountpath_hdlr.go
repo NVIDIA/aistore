@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file provides commands that show and update bucket properties and configuration.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 

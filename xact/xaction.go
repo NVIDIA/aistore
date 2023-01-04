@@ -64,7 +64,7 @@ func GoRunW(xctn cluster.Xact) {
 }
 
 //////////////
-// Base - partially implements Xact interface
+// Base - partially implements `cluster.Xact` interface
 //////////////
 
 func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {

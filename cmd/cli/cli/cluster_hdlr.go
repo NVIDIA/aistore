@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -443,5 +443,5 @@ func showClusterRebalanceHandler(c *cli.Context) error {
 		DaemonID:    daemonID,
 		OnlyRunning: !flagIsSet(c, allJobsFlag),
 	}
-	return xactList(c, xactArgs, "")
+	return xactList(c, xactArgs, false)
 }

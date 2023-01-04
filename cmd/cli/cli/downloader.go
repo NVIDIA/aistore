@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles download jobs in the cluster.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -312,12 +312,15 @@ func (b *downloaderPB) totalFilesCnt() int {
 	return b.totalFiles
 }
 
-func downloadJobsList(c *cli.Context, regex string) error {
-	list, err := api.DownloadGetList(apiBP, regex, !flagIsSet(c, allJobsFlag))
-	if err != nil {
+func downloadJobsList(c *cli.Context, regex string, caption bool) error {
+	onlyActive := !flagIsSet(c, allJobsFlag)
+	list, err := api.DownloadGetList(apiBP, regex, onlyActive)
+	if err != nil || len(list) == 0 {
 		return err
 	}
-
+	if caption {
+		jobCptn(c, subcmdDownload, onlyActive)
+	}
 	sort.Slice(list, func(i int, j int) bool {
 		if !list[i].JobFinished() && (list[j].JobFinished() || list[j].Aborted) {
 			return true

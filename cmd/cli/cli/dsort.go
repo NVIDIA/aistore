@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with objects in the cluster
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -334,9 +334,9 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 		aborted = aborted || targetMetrics.Aborted.Load()
 		finished = finished && targetMetrics.Creation.Finished
 	}
-	// Here we use encoding/json inplace of jsoniter because of indentation issues,
+	// NOTE: because of the still-open issue we use here Go-standard json, not jsoniter
 	// https://github.com/json-iterator/go/issues/331
-	b, err := jsonStd.MarshalIndent(resp, "", "  ")
+	b, err := jsonStd.MarshalIndent(resp, "", "    ")
 	if err != nil {
 		return false, false, err
 	}

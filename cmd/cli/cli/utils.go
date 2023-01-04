@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains util functions and types.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -95,6 +95,8 @@ func argLast(c *cli.Context) (last string) {
 }
 
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
+
+func jsonMarshalIndent(v any) ([]byte, error) { return jsoniter.MarshalIndent(v, "", "    ") }
 
 func helpMessage(template string, data any) string {
 	var buf bytes.Buffer
@@ -856,7 +858,7 @@ func _printSection(c *cli.Context, in any, section string) (done bool) {
 		nst       = regexp.MustCompile(`\s+"\S+": {`)
 		nonstruct = regexp.MustCompile(`\s+"` + section + `\S*": ".+"[,\n\r]{1}`)
 	)
-	out, err := jsoniter.MarshalIndent(in, "", "    ")
+	out, err := jsonMarshalIndent(in)
 	if err != nil {
 		return
 	}

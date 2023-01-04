@@ -13,7 +13,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -176,23 +175,20 @@ CreateShards:
 	return nil
 }
 
-func loadLomCacheHandler(c *cli.Context) (err error) {
-	var bck cmn.Bck
-
+func loadLomCacheHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	} else if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
-
-	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
+	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
+	if err != nil {
 		return err
 	}
-
 	return startXaction(c, apc.ActLoadLomCache, bck, "")
 }
 
-func removeNodeFromSmap(c *cli.Context) (err error) {
+func removeNodeFromSmap(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, c.Command.ArgsUsage)
 	}

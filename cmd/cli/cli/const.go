@@ -3,7 +3,7 @@
 // This file contains common constants and global variables
 // (including all command-line options aka flags).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -201,7 +201,7 @@ const (
 	optionalJobIDArgument         = "[JOB_ID]"
 	optionalJobIDDaemonIDArgument = "[JOB_ID [NODE_ID]]"
 
-	showJobArgument = "NAME|JOB_ID [JOB_ID] [NODE_ID] [BUCKET]"
+	showJobArgument = "[NAME] [JOB_ID] [NODE_ID] [BUCKET]"
 
 	// ETL
 	etlIDArgument     = "ETL_ID"

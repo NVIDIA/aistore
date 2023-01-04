@@ -332,7 +332,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 		return err
 	}
 
-	s, err := jsoniter.MarshalIndent(nvs, "", "    ")
+	s, err := jsonMarshalIndent(nvs)
 	debug.AssertNoErr(err)
 	fmt.Fprintf(c.App.Writer, "%s\n", string(s))
 	fmt.Fprintf(c.App.Writer, "\nnode %s config updated\n", sname)
@@ -383,7 +383,7 @@ func showCLIConfigHandler(c *cli.Context) (err error) {
 		return err
 	}
 	if flagIsSet(c, jsonFlag) {
-		out, err := jsoniter.MarshalIndent(cfg, "", "    ")
+		out, err := jsonMarshalIndent(cfg)
 		if err != nil {
 			return err
 		}

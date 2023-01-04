@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that control running jobs in the cluster.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -272,10 +272,18 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func etlListHandler(c *cli.Context) (err error) {
+func etlListHandler(c *cli.Context) error {
+	return showAllETLs(c, false)
+}
+
+func showAllETLs(c *cli.Context, caption bool) error {
 	list, err := api.ETLList(apiBP)
-	if err != nil {
+	if err != nil || len(list) == 0 {
 		return err
+	}
+	if caption {
+		onlyActive := !flagIsSet(c, allJobsFlag)
+		jobCptn(c, commandETL, onlyActive)
 	}
 	return tmpls.Print(list, c.App.Writer, tmpls.TransformListTmpl, nil, false)
 }
