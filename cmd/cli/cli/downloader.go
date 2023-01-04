@@ -7,7 +7,6 @@ package cli
 
 import (
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"time"
@@ -319,7 +318,7 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) error {
 		return err
 	}
 	if caption {
-		jobCptn(c, subcmdDownload, onlyActive)
+		jobCptn(c, subcmdDownload, onlyActive, "", false)
 	}
 	sort.Slice(list, func(i int, j int) bool {
 		if !list[i].JobFinished() && (list[j].JobFinished() || list[j].Aborted) {
@@ -363,34 +362,44 @@ func downloadJobStatus(c *cli.Context, id string) error {
 	}
 
 	// without progress bar
-	printDownloadStatus(c.App.Writer, resp, flagIsSet(c, verboseFlag))
+	printDownloadStatus(c, resp, flagIsSet(c, verboseFlag))
 	return nil
 }
 
-func printDownloadStatus(w io.Writer, d *dload.StatusResp, verbose bool) {
+func printDownloadStatus(c *cli.Context, d *dload.StatusResp, verbose bool) {
+	w := c.App.Writer
 	if d.Aborted {
-		fmt.Fprintln(w, "Download aborted")
+		fmt.Fprintf(w, "Download %s\n", d.String())
 		return
 	}
 
 	if d.JobFinished() {
+		var skipped, errs string
 		if d.SkippedCnt > 0 {
-			fmt.Fprintf(w, "Done: %d file%s downloaded (skipped: %d), %d error%s\n",
-				d.FinishedCnt, cos.NounEnding(d.FinishedCnt), d.SkippedCnt, d.ErrorCnt, cos.NounEnding(d.ErrorCnt))
-		} else {
-			fmt.Fprintf(w, "Done: %d file%s downloaded, %d error%s\n",
-				d.FinishedCnt, cos.NounEnding(d.FinishedCnt), d.ErrorCnt, cos.NounEnding(d.ErrorCnt))
+			skipped = fmt.Sprintf(", skipped: %d", d.SkippedCnt)
 		}
+		if d.ErrorCnt > 0 {
+			errs = fmt.Sprintf(", error%s: %d", cos.Plural(d.ErrorCnt), d.ErrorCnt)
+		}
+		fmt.Fprintf(w, "Done: %d file%s downloaded%s%s\n", d.FinishedCnt, cos.Plural(d.FinishedCnt), skipped, errs)
 
-		if verbose && len(d.Errs) > 0 {
+		if len(d.Errs) == 0 {
+			debug.Assert(d.ErrorCnt == 0)
+			return
+		}
+		if verbose {
 			fmt.Fprintln(w, "Errors:")
 			for _, e := range d.Errs {
 				fmt.Fprintf(w, "\t%s: %s\n", e.Name, e.Err)
 			}
+		} else {
+			const hint = "Use '--%s' option to list all errors.\n"
+			fmt.Fprintf(w, hint, verboseFlag.Name)
 		}
 		return
 	}
 
+	// running
 	var (
 		doneCnt  = d.DoneCnt()
 		totalCnt = d.TotalCnt()
@@ -399,9 +408,9 @@ func printDownloadStatus(w io.Writer, d *dload.StatusResp, verbose bool) {
 		verbose = true
 	}
 	if totalCnt == 0 {
-		fmt.Fprintf(w, "Download progress: 0/?\n")
+		fmt.Fprintf(w, "Download %s progress: 0/?\n", d.ID)
 	} else {
-		progressMsg := fmt.Sprintf("Download progress: %d/%d", doneCnt, totalCnt)
+		progressMsg := fmt.Sprintf("%s progress: downloaded %d file%s (out of %d) ", d.ID, doneCnt, cos.Plural(doneCnt), totalCnt)
 		if totalCnt >= minTotalCnt {
 			pctDone := 100 * float64(doneCnt) / float64(totalCnt)
 			progressMsg = fmt.Sprintf("%s (%0.2f%%)", progressMsg, pctDone)
@@ -413,8 +422,6 @@ func printDownloadStatus(w io.Writer, d *dload.StatusResp, verbose bool) {
 			sort.Slice(d.CurrentTasks, func(i, j int) bool {
 				return d.CurrentTasks[i].Name < d.CurrentTasks[j].Name
 			})
-
-			fmt.Fprintln(w, "Progress of files that are currently being downloaded:")
 			for _, task := range d.CurrentTasks {
 				fmt.Fprintf(w, "\t%s: ", task.Name)
 				if task.Total == 0 {
@@ -433,6 +440,7 @@ func printDownloadStatus(w io.Writer, d *dload.StatusResp, verbose bool) {
 			}
 		}
 	} else if d.ErrorCnt > 0 {
-		fmt.Fprintf(w, "Errors (%d) occurred during the download. To see detailed info run `ais show job download %s -v`\n", d.ErrorCnt, d.ID)
+		fmt.Fprintf(w, "Encountered %d error%s during download %s\n", d.ErrorCnt, cos.Plural(d.ErrorCnt), d.ID)
+		fmt.Fprintf(w, "For details, run 'ais show job %s -v'\n", d.ID)
 	}
 }

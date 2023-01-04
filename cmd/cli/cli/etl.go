@@ -283,7 +283,7 @@ func showAllETLs(c *cli.Context, caption bool) error {
 	}
 	if caption {
 		onlyActive := !flagIsSet(c, allJobsFlag)
-		jobCptn(c, commandETL, onlyActive)
+		jobCptn(c, commandETL, onlyActive, "", false)
 	}
 	return tmpls.Print(list, c.App.Writer, tmpls.TransformListTmpl, nil, false)
 }

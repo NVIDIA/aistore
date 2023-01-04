@@ -208,9 +208,12 @@ func (j *Job) String() string {
 	}
 	sb.WriteString(": ")
 
-	if finished {
+	switch {
+	case j.Aborted:
+		sb.WriteString("aborted")
+	case finished:
 		sb.WriteString("finished")
-	} else {
+	default:
 		sb.WriteString(fmt.Sprintf("%d file%s still being downloaded", pending, cos.Plural(pending)))
 	}
 	return sb.String()

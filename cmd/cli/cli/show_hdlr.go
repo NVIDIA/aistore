@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -360,29 +361,34 @@ func showJobsHandler(c *cli.Context) error {
 		return nil
 	}
 
-	// by xid with extra calls to disambiguate download/dsort job ID vs xaction UUID
-	if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
-		return showJobs(c, subcmdDownload, xid, daemonID, bck, true)
+	// by xid with additional logic to disambiguate download/dsort job ID vs xaction UUID
+	if strings.HasPrefix(xid, dload.PrefixJobID) {
+		if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
+			return showJobs(c, subcmdDownload, xid, daemonID, bck, true)
+		}
 	}
-	if _, err := api.MetricsDSort(apiBP, xid); err == nil {
-		return showJobs(c, subcmdDsort, xid, daemonID, bck, true)
+	if strings.HasPrefix(xid, dsort.PrefixJobID) {
+		if _, err := api.MetricsDSort(apiBP, xid); err == nil {
+			return showJobs(c, subcmdDsort, xid, daemonID, bck, true)
+		}
 	}
 	return showJobs(c, "" /*name*/, xid, daemonID, bck, true)
 }
 
-func jobCptn(c *cli.Context, name string, onlyActive bool) {
-	if onlyActive {
-		actionCptn(c, name, " jobs:")
-	} else {
-		actionCptn(c, name, " jobs (including finished):")
+func jobCptn(c *cli.Context, name string, onlyActive bool, xid string, byTarget bool) {
+	if xid != "" {
+		actionCptn(c, name, fmt.Sprintf(" job %s:", xid))
+		return
 	}
-}
 
-func jobByTargetCptn(c *cli.Context, name string, onlyActive bool) {
+	var s string
+	if byTarget {
+		s = " by target"
+	}
 	if onlyActive {
-		actionCptn(c, name, " jobs by target:")
+		actionCptn(c, name, " jobs"+s+":")
 	} else {
-		actionCptn(c, name, " jobs by target (including finished):")
+		actionCptn(c, name, " jobs"+s+" (including finished):")
 	}
 }
 
@@ -430,7 +436,7 @@ func showDsorts(c *cli.Context, id string, caption bool) error {
 			return err
 		}
 		if caption {
-			jobCptn(c, subcmdDsort, onlyActive)
+			jobCptn(c, subcmdDsort, onlyActive, id, false)
 		}
 		return dsortJobsList(c, list, useJSON)
 	}
@@ -535,11 +541,7 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 
 	_, xname := xact.GetKindName(xactKind)
 	if caption {
-		if xactArgs.DaemonID == "" {
-			jobByTargetCptn(c, xname, xactArgs.OnlyRunning)
-		} else {
-			jobCptn(c, xname, xactArgs.OnlyRunning)
-		}
+		jobCptn(c, xname, xactArgs.OnlyRunning, xactArgs.ID, xactArgs.DaemonID != "")
 	}
 
 	var (

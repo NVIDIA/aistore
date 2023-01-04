@@ -48,13 +48,6 @@ func CapitalizeString(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-func NounEnding(count int) string {
-	if count == 1 {
-		return ""
-	}
-	return "s"
-}
-
 // Either returns either lhs or rhs depending on which one is non-empty
 func Either(lhs, rhs string) string {
 	if lhs != "" {

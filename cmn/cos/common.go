@@ -327,7 +327,7 @@ func FreeMemToOS(d ...time.Duration) {
 
 // (common use)
 func Plural(num int) (s string) {
-	if num > 1 {
+	if num != 1 {
 		s = "s"
 	}
 	return

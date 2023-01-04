@@ -345,7 +345,7 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 	return
 }
 
-func printCondensedStats(w io.Writer, id string) error {
+func printCondensedStats(w io.Writer, id string, errhint bool) error {
 	var (
 		elapsedTime       time.Duration
 		extractionTime    time.Duration
@@ -383,11 +383,16 @@ func printCondensedStats(w io.Writer, id string) error {
 	}
 
 	if aborted {
-		fmt.Fprintf(w, "DSort job was aborted. Check detailed metrics for errors.\n")
+		fmt.Fprintf(w, "DSort job %s aborted.", id)
+		if errhint {
+			fmt.Fprintf(w, " For details, run 'ais show job %s -v'\n", id)
+		} else {
+			fmt.Fprintln(w)
+		}
 		return nil
 	}
 	if finished {
-		fmt.Fprintf(w, "DSort job has successfully finished in %v:\n  "+
+		fmt.Fprintf(w, "DSort job successfully finished in %v:\n  "+
 			"Longest extraction:\t%v\n  Longest sorting:\t%v\n  Longest creation:\t%v\n",
 			elapsedTime, extractionTime, sortingTime, creationTime,
 		)
@@ -458,11 +463,9 @@ func dsortJobStatus(c *cli.Context, id string) error {
 			}
 
 			fmt.Fprintf(c.App.Writer, "\n")
+			return printCondensedStats(c.App.Writer, id, false)
 		}
-		if !useJSON {
-			return printCondensedStats(c.App.Writer, id)
-		}
-		return nil
+		return printCondensedStats(c.App.Writer, id, true)
 	}
 
 	// Show metrics once in a while.
@@ -496,5 +499,5 @@ func dsortJobStatus(c *cli.Context, id string) error {
 	}
 
 	fmt.Fprintln(c.App.Writer)
-	return printCondensedStats(c.App.Writer, id)
+	return printCondensedStats(c.App.Writer, id, false)
 }
