@@ -128,6 +128,7 @@ class ObjectRange(BaseModel):
     prefix: str
     min_index: int
     max_index: int
+    pad_width: int = 0
     step: int = 1
     suffix: str = ""
 

@@ -19,7 +19,7 @@ class ObjectGroup:
     Args:
         bck (Bucket): Bucket the objects belong to
         obj_names (list[str], optional): List of object names to include in this collection
-        obj_range (ObjectRange): Range defining which object names in the bucket should be included
+        obj_range (ObjectRange, optional): Range defining which object names in the bucket should be included
     """
 
     def __init__(self, bck, obj_names: list = None, obj_range: ObjectRange = None):
@@ -100,5 +100,5 @@ class ObjectGroup:
         if self.obj_names:
             return {"objnames": self.obj_names}
         if self.obj_range:
-            return {"template": self.obj_range.string_template()}
+            return {"template": str(self.obj_range)}
         return None

@@ -30,7 +30,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_list = ObjectGroup(self.mock_bck, obj_names=self.obj_names)
         self.object_group_range = ObjectGroup(self.mock_bck, obj_range=self.obj_range)
         self.expected_list_value = {"objnames": self.obj_names}
-        self.expected_range_value = {"template": self.obj_range.string_template()}
+        self.expected_range_value = {"template": str(self.obj_range)}
 
     def test_object_group_both_types(self):
         with self.assertRaises(ValueError):

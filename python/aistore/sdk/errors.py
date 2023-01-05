@@ -32,3 +32,9 @@ class ErrBckNotFound(AISError):
 class Timeout(Exception):
     def __init__(self, action):
         super().__init__(f"{action} timed out")
+
+
+# pylint: disable=unused-variable
+class InvalidObjectRangeIndex(Exception):
+    def __init__(self, message):
+        super().__init__(f"Invalid argument provided for object range index: {message}")
