@@ -248,7 +248,7 @@ var (
 
 	showCmdJob = cli.Command{
 		Name:         commandJob,
-		Usage:        "show running and finished jobs (use <TAB-TAB> to select, help to see options)",
+		Usage:        "show running and finished jobs (use <TAB-TAB> to select, --all for all, help for options)",
 		ArgsUsage:    showJobArgument,
 		Flags:        showCmdsFlags[commandJob],
 		Action:       showJobsHandler,
@@ -315,15 +315,9 @@ func showJobsHandler(c *cli.Context) error {
 	if xid != "" || daemonID != "" {
 		bck, err = parseBckURI(c, xid, true /*require provider*/)
 		if err == nil {
-			if _, err = headBucket(bck, true /* don't add */); err != nil {
-				return err
-			}
 			xid = "" // arg #1 is a bucket
 		} else if bck, err = parseBckURI(c, daemonID, true); err == nil {
-			if _, err = headBucket(bck, true /* don't add */); err != nil {
-				return err
-			}
-			daemonID = "" // arg #2 ditto
+			daemonID = "" // ditto arg #2
 		}
 	}
 	if xid != "" && daemonID == "" {

@@ -184,7 +184,8 @@ func parseBckURI(c *cli.Context, uri string, requireProviderInURI bool) (cmn.Bck
 		return cmn.Bck{}, incorrectUsageMsg(c, "%q: missing bucket name", uri)
 	default:
 		if err = bck.Validate(); err != nil {
-			return cmn.Bck{}, cannotExecuteError(c, err)
+			msg := "E.g. " + bucketArgument + ": ais://mmm, s3://nnn or aws://nnn, gs://ppp or gcp://ppp, etc."
+			return cmn.Bck{}, cannotExecuteError(c, err, msg)
 		}
 	}
 	return bck, nil
@@ -223,14 +224,15 @@ func parseBckObjectURI(c *cli.Context, uri string, optObjName ...bool) (bck cmn.
 		if len(uri) > 1 && uri[:2] == "--" { // FIXME: needed smth like c.LooksLikeFlag
 			return bck, objName, incorrectUsageMsg(c, "misplaced flag %q", uri)
 		}
-		return bck, objName, cannotExecuteError(c, err)
+		msg := "Expecting " + objectArgument + ", e.g.: ais://mmm/obj1, s3://nnn/obj2, gs://ppp/obj3, etc."
+		return bck, objName, cannotExecuteError(c, err, msg)
 	}
 
 validate:
 	if bck.Name == "" {
 		return bck, objName, incorrectUsageMsg(c, "%q: missing bucket name", uri)
 	} else if err := bck.Validate(); err != nil {
-		return bck, objName, cannotExecuteError(c, err)
+		return bck, objName, cannotExecuteError(c, err, "")
 	} else if objName == "" && (len(optObjName) == 0 || !optObjName[0]) {
 		return bck, objName, incorrectUsageMsg(c, "%q: missing object name", uri)
 	}

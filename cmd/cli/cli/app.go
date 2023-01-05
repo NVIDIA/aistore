@@ -205,7 +205,7 @@ func (a *acli) init(version string) {
 	app.HideHelp = true
 	app.Flags = []cli.Flag{cli.HelpFlag, noColorFlag}
 	app.CommandNotFound = commandNotFoundHandler
-	app.OnUsageError = incorrectUsageHandler
+	app.OnUsageError = onUsageErrorHandler
 	app.Metadata = map[string]any{metadata: a.longRun}
 	app.Writer = a.outWriter
 	app.ErrWriter = a.errWriter
@@ -269,7 +269,7 @@ func setupCommandHelp(commands []cli.Command) {
 		if !hasHelpFlag(command.Flags, helpName) {
 			command.Flags = append(command.Flags, cli.HelpFlag)
 		}
-		command.OnUsageError = incorrectUsageHandler
+		command.OnUsageError = onUsageErrorHandler
 
 		// recursively
 		setupCommandHelp(command.Subcommands)
@@ -288,7 +288,10 @@ func hasHelpFlag(commandFlags []cli.Flag, helpName string) bool {
 	return false
 }
 
-// Print error and terminate
+//
+// cli.App error callbacks
+//
+
 func commandNotFoundHandler(c *cli.Context, cmd string) {
 	if cmd == "version" {
 		fmt.Fprintf(c.App.Writer, "version %s (build %s)\n", c.App.Version, buildTime)
@@ -297,6 +300,13 @@ func commandNotFoundHandler(c *cli.Context, cmd string) {
 	err := commandNotFoundError(c, cmd)
 	fmt.Fprint(c.App.ErrWriter, err.Error())
 	os.Exit(1)
+}
+
+func onUsageErrorHandler(c *cli.Context, err error, _ bool) error {
+	if c == nil {
+		return err
+	}
+	return cannotExecuteError(c, err, "")
 }
 
 /////////////

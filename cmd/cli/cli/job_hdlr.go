@@ -47,10 +47,10 @@ var (
 
 // job start
 var (
-	startCmdsFlags = map[string][]cli.Flag{
-		subcmdXaction: {
-			waitFlag,
-		},
+	startCommonFlags = []cli.Flag{
+		waitFlag,
+	}
+	startSpecialFlags = map[string][]cli.Flag{
 		subcmdDownload: {
 			timeoutFlag,
 			descJobFlag,
@@ -81,7 +81,7 @@ var (
 			"(fix data redundancy with respect to bucket configuration, " +
 			"remove migrated objects and old/obsolete workfiles)",
 		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        startCmdsFlags[subcmdXaction],
+		Flags:        startCommonFlags,
 		Action:       startResilverHandler,
 		BashComplete: suggestTargetNodes,
 	}
@@ -93,7 +93,7 @@ var (
 				Name:         commandPrefetch,
 				Usage:        "prefetch objects from remote buckets",
 				ArgsUsage:    bucketArgument,
-				Flags:        startCmdsFlags[commandPrefetch],
+				Flags:        startSpecialFlags[commandPrefetch],
 				Action:       startPrefetchHandler,
 				BashComplete: bucketCompletions(bcmplop{multiple: true}),
 			},
@@ -101,20 +101,20 @@ var (
 				Name:      subcmdDownload,
 				Usage:     "download files and objects from remote sources",
 				ArgsUsage: startDownloadArgument,
-				Flags:     startCmdsFlags[subcmdDownload],
+				Flags:     startSpecialFlags[subcmdDownload],
 				Action:    startDownloadHandler,
 			},
 			{
 				Name:      subcmdDsort,
 				Usage:     "start " + dsort.DSortName + " job",
 				ArgsUsage: jsonSpecArgument,
-				Flags:     startCmdsFlags[subcmdDsort],
+				Flags:     startSpecialFlags[subcmdDsort],
 				Action:    startDsortHandler,
 			},
 			{
 				Name:         subcmdLRU,
 				Usage:        "run LRU eviction",
-				Flags:        startCmdsFlags[subcmdLRU],
+				Flags:        startSpecialFlags[subcmdLRU],
 				Action:       startLRUHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
@@ -237,7 +237,7 @@ outer:
 		cmd := cli.Command{
 			Name:   xname,
 			Usage:  fmt.Sprintf("start %s", xname),
-			Flags:  startCmdsFlags[subcmdXaction],
+			Flags:  startCommonFlags,
 			Action: startXactionHandler,
 		}
 		if xact.IsSameScope(xname, xact.ScopeB) { // with a single arg: bucket
@@ -788,13 +788,14 @@ func stopJobHandler(c *cli.Context) error {
 	}
 	xactID := id
 
-	// stop all xactions of a given kind (TODO: bck)
 	if xactID == "" {
 		if !flagIsSet(c, allRunningJobsFlag) {
-			err := fmt.Errorf("expecting either %s argument or '--%s' option (with or without regular expression)",
+			msg := fmt.Sprintf("Expecting either %s argument or '--%s' option (with or without regular expression)",
 				jobIDArgument, allRunningJobsFlag.Name)
-			return cannotExecuteError(c, err)
+			return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
 		}
+
+		// stop all xactions of a given kind (TODO: bck)
 		return stopXactionKind(c, xactKind, xname, bck)
 	}
 
@@ -1125,9 +1126,9 @@ func removeDownloadHandler(c *cli.Context) error {
 
 	// by job ID
 	if c.NArg() < 1 {
-		err := fmt.Errorf("expecting either %s argument or '--%s' option (with or without regular expression)",
+		msg := fmt.Sprintf("Expecting either %s argument or '--%s' option (with or without regular expression)",
 			jobIDArgument, allFinishedJobsFlag.Name)
-		return cannotExecuteError(c, err)
+		return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
 	}
 	id := c.Args().First()
 	if err := api.RemoveDownload(apiBP, id); err != nil {
@@ -1173,9 +1174,9 @@ func removeDsortHandler(c *cli.Context) error {
 
 	// by job ID
 	if c.NArg() < 1 {
-		err := fmt.Errorf("expecting either %s argument or '--%s' option (with or without regular expression)",
+		msg := fmt.Sprintf("Expecting either %s argument or '--%s' option (with or without regular expression)",
 			jobIDArgument, allFinishedJobsFlag.Name)
-		return cannotExecuteError(c, err)
+		return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
 	}
 	id := c.Args().First()
 	if err := api.RemoveDSort(apiBP, id); err != nil {

@@ -54,13 +54,8 @@ const (
 	commandConcat    = "concat"
 	commandCopy      = "cp"
 	commandCreate    = "create"
-	commandECEncode  = "ec-encode"
-	commandMirror    = "mirror"
-	commandEvict     = "evict"
-	commandPrefetch  = "prefetch"
 	commandGet       = "get"
 	commandList      = "ls"
-	commandPromote   = "promote"
 	commandSetCustom = "set-custom"
 	commandPut       = "put"
 	commandRemove    = "rm"
@@ -71,21 +66,32 @@ const (
 
 	commandLog = "log"
 
+	subcmdSmap   = apc.GetWhatSmap
+	subcmdBMD    = apc.GetWhatBMD
+	subcmdMpath  = apc.GetWhatDiskStats
+	subcmdConfig = apc.GetWhatConfig
+	subcmdLog    = apc.GetWhatLog
+	subcmdBucket = "bucket"
+	subcmdObject = "object"
+	subcmdProps  = "props"
+
+	// NOTE implicit assumption: AIS xaction kind _eq_ the command name (e.g. "download")
 	commandRebalance = apc.ActRebalance
 	commandResilver  = apc.ActResilver
 
-	subcmdDsort      = dsort.DSortName
-	subcmdSmap       = apc.GetWhatSmap
-	subcmdBMD        = apc.GetWhatBMD
-	subcmdMpath      = apc.GetWhatDiskStats
-	subcmdConfig     = apc.GetWhatConfig
-	subcmdLog        = apc.GetWhatLog
+	commandPromote   = apc.ActPromote
+	commandECEncode  = apc.ActECEncode
+	commandMirror    = "mirror"   // display name for apc.ActMakeNCopies
+	commandEvict     = "evict"    // apc.ActEvictRemoteBck or apc.ActEvictObjects
+	commandPrefetch  = "prefetch" // apc.ActPrefetchObjects
+	subcmdDownload   = apc.ActDownload
 	subcmdRebalance  = apc.ActRebalance
-	subcmdBucket     = "bucket"
-	subcmdObject     = "object"
-	subcmdProps      = "props"
-	subcmdDownload   = "download"
-	subcmdXaction    = "xaction"
+	subcmdLRU        = apc.ActLRU
+	subcmdStgCleanup = "cleanup" // display name for apc.ActStoreCleanup
+	subcmdSummary    = "summary" // ditto apc.ActSummaryBck
+
+	subcmdDsort = dsort.DSortName
+
 	subcmdMountpath  = "mountpath"
 	subcmdCluster    = commandCluster
 	subcmdNode       = "node"
@@ -94,7 +100,6 @@ const (
 	subcmdLogs       = "logs"
 	subcmdStop       = "stop"
 	subcmdStart      = "start"
-	subcmdLRU        = apc.ActLRU
 	subcmdMembership = "add-remove-nodes"
 	subcmdShutdown   = "shutdown"
 	subcmdAttach     = "attach"
@@ -123,10 +128,6 @@ const (
 	subcmdShowClusterStats = "stats"
 	subcmdShowDisk         = subcmdMpath
 	subcmdStgValidate      = "validate"
-	subcmdStgCleanup       = "cleanup"
-
-	// Bucket and Storage subcommands
-	subcmdSummary = "summary"
 
 	// Bucket properties subcommands
 	subcmdSetProps   = "set"

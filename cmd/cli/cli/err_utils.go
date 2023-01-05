@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
@@ -16,10 +17,10 @@ import (
 
 type (
 	errUsage struct {
+		helpData      any
 		context       *cli.Context
 		message       string
 		bottomMessage string
-		helpData      any
 		helpTemplate  string
 	}
 	errAdditionalInfo struct {
@@ -34,14 +35,26 @@ type (
 
 func (e *errUsage) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
+
+	// remove "alias for" (simplify)
+	reg := regexp.MustCompile(`\s+\(alias for ".+"\)`)
+	if loc := reg.FindStringIndex(msg); loc != nil {
+		msg = msg[:loc[0]] + msg[loc[1]:]
+	}
+
+	// format
 	if e.bottomMessage != "" {
-		msg += fmt.Sprintf("\n%s\n", e.bottomMessage)
+		if msg[len(msg)-1] == '\n' || msg[len(msg)-1] == '\r' {
+			msg += e.bottomMessage + "\n"
+		} else {
+			msg += "\n" + e.bottomMessage + "\n"
+		}
 	}
 	if e.context.Command.Name != "" {
 		return fmt.Sprintf("Incorrect '%s %s' usage: %s.\n\n%s",
 			e.context.App.Name, e.context.Command.Name, e.message, msg)
 	}
-	return fmt.Sprintf("Incorrect usage: %s.\n\n%s", e.message, msg)
+	return fmt.Sprintf("Incorrect usage: %s.\n%s", e.message, msg)
 }
 
 ///////////////////////
@@ -151,19 +164,13 @@ func isAlphaLc(s string) bool {
 	return true
 }
 
-func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
-	if c == nil {
-		return err
-	}
-	return cannotExecuteError(c, err)
-}
-
-func cannotExecuteError(c *cli.Context, err error) *errUsage {
+func cannotExecuteError(c *cli.Context, err error, bottomMessage string) *errUsage {
 	return &errUsage{
-		context:      c,
-		message:      err.Error(),
-		helpData:     c.Command,
-		helpTemplate: tmpls.ShortUsageTmpl,
+		context:       c,
+		message:       err.Error(),
+		helpData:      c.Command,
+		helpTemplate:  tmpls.ShortUsageTmpl,
+		bottomMessage: bottomMessage,
 	}
 }
 
