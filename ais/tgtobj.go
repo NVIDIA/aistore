@@ -1108,19 +1108,19 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cos.CksumHash) s
 // COPY OBJECT //
 /////////////////
 
+func (coi *copyObjInfo) objsAdd(size int64, err error) {
+	if err == nil && coi.Xact != nil {
+		coi.Xact.ObjsAdd(1, size)
+	}
+}
+
 func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	debug.Assert(coi.DP == nil)
+
 	// remote to remote: no need to create local copies - use copyReader
 	if lom.Bck().IsRemote() || coi.BckTo.IsRemote() {
 		coi.DP = &cluster.LDP{}
 		return coi.copyReader(lom, objNameTo)
-	}
-	if coi.dryRun {
-		defer func() {
-			if err == nil && coi.Xact != nil {
-				coi.Xact.ObjsAdd(1, size)
-			}
-		}()
 	}
 
 	// remote
@@ -1183,11 +1183,6 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 	if dst2 != nil {
 		cluster.FreeLOM(dst2)
 	}
-	// xaction stats: inc locally processed (and see data mover for in and out objs)
-	if coi.Xact != nil {
-		debug.Assert(coi.DM == nil || coi.Xact == coi.DM.GetXact())
-		coi.Xact.ObjsAdd(1, lom.SizeBytes())
-	}
 	return
 }
 
@@ -1211,16 +1206,8 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		reader cos.ReadOpenCloser
 		tsi    *cluster.Snode
 	)
-	debug.Assert(coi.DP != nil)
 	if tsi, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
-	}
-	if coi.dryRun {
-		defer func() {
-			if err == nil && coi.Xact != nil {
-				coi.Xact.ObjsAdd(1, size)
-			}
-		}()
 	}
 	if tsi.ID() != coi.t.si.ID() {
 		// remote
@@ -1265,10 +1252,6 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	}
 	// xaction stats: inc locally processed (and see data mover for in and out objs)
 	size = lom.SizeBytes()
-	if coi.Xact != nil {
-		debug.Assert(coi.DM == nil || coi.Xact == coi.DM.GetXact())
-		coi.Xact.ObjsAdd(1, size)
-	}
 	return
 }
 

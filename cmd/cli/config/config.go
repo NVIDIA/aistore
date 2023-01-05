@@ -34,6 +34,7 @@ var (
 		"put":    "object put",
 		"ls":     "bucket ls",
 		"create": "bucket create",
+		"cp":     "bucket cp",
 		"start":  "job start",
 		"stop":   "job stop",
 		"wait":   "job wait",

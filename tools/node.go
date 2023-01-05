@@ -181,9 +181,17 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 		iter    int
 	)
 	if expPrx == 0 && expTgt == 0 {
-		tlog.Logf("Waiting for %q (Smap > v%d)\n", reason, origVer)
+		if origVer > 0 {
+			tlog.Logf("Waiting for %q (Smap > v%d)\n", reason, origVer)
+		} else {
+			tlog.Logf("Waiting for %q\n", reason)
+		}
 	} else {
-		tlog.Logf("Waiting for %q (p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVer)
+		if origVer > 0 {
+			tlog.Logf("Waiting for %q (p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVer)
+		} else {
+			tlog.Logf("Waiting for %q (p%d, t%d)\n", reason, expPrx, expTgt)
+		}
 	}
 	started := time.Now()
 	deadline := started.Add(maxWait)

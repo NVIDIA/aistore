@@ -258,12 +258,11 @@ func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes
 }
 
 func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) error {
-	if hdr.ObjAttrs.Size < 0 {
-		// see transport.UsePDU(); TODO: dm.data.recv() to return num-received-bytes
-		debug.Assert(dm.sizePDU > 0)
-	} else {
+	if hdr.Bck.Name != "" && hdr.ObjName != "" && hdr.ObjAttrs.Size >= 0 {
 		dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
 	}
+	// in re (hdr.ObjAttrs.Size < 0) see transport.UsePDU()
+
 	dm.stage.laterx.Store(true)
 	return dm.data.recv(hdr, object, err)
 }

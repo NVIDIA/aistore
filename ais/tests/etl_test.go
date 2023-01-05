@@ -241,18 +241,25 @@ func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedByte
 	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
 	tassert.CheckFatal(t, err)
 
-	locObjs, outObjs, inObjs := snaps.ObjCounts(xactID)
+	objs, outObjs, inObjs := snaps.ObjCounts(xactID)
 
-	tassert.Errorf(t, locObjs+outObjs == int64(expectedObjCnt), "expected %d objects, got (locObjs=%d, outObjs=%d, inObjs=%d)",
-		expectedObjCnt, locObjs, outObjs, inObjs)
+	tassert.Errorf(t, objs == int64(expectedObjCnt), "expected %d objects, got %d (where sent %d, received %d)",
+		expectedObjCnt, objs, outObjs, inObjs)
+	if outObjs != inObjs {
+		tlog.Logf("Warning: (sent objects) %d != %d (received objects)\n", outObjs, inObjs)
+	} else {
+		tlog.Logf("Num sent/received objects: %d\n", outObjs)
+	}
 
 	if expectedBytesCnt == 0 {
 		return // don't know the size
 	}
-	locBytes, outBytes, inBytes := snaps.ByteCounts(xactID)
-	// TODO -- FIXME: expected 5120, got (locBytes=2048, outBytes=0, inBytes=0)
-	tlog.Logf("Stats (bytes): expected %d, got (locBytes=%d, outBytes=%d, inBytes=%d)\n", expectedBytesCnt,
-		locBytes, outBytes, inBytes)
+	bytes, outBytes, inBytes := snaps.ByteCounts(xactID)
+
+	// TODO -- FIXME: validate transformed bytes as well, make sure `expectedBytesCnt` is correct
+
+	tlog.Logf("Byte counts: expected %d, got (original %d, sent %d, received %d)\n", expectedBytesCnt,
+		bytes, outBytes, inBytes)
 }
 
 func TestETLObject(t *testing.T) {

@@ -65,7 +65,7 @@ func waitForCluster() (primaryURL string, err error) {
 			return
 		}
 	}
-	_, err = tools.WaitForClusterState(tools.GetPrimaryURL(), "startup", -1, proxyCnt, targetCnt)
+	_, err = tools.WaitForClusterState(tools.GetPrimaryURL(), "cluster startup", -1, proxyCnt, targetCnt)
 	if err != nil {
 		err = fmt.Errorf("error waiting for cluster startup, err: %v", err)
 		return

@@ -2479,11 +2479,16 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
 	tassert.CheckFatal(t, err)
 	objs, outObjs, inObjs := snaps.ObjCounts(xactID)
-	tassert.Errorf(t, objs+outObjs == int64(m.num), "expected %d objects in total, got (objs=%d, outObjs=%d, inObjs=%d)",
+	tassert.Errorf(t, objs == int64(m.num), "expected %d objects copied, got (objs=%d, outObjs=%d, inObjs=%d)",
 		m.num, objs, outObjs, inObjs)
+	if outObjs != inObjs {
+		tlog.Logf("Warning: (sent objects) %d != %d (received objects)\n", outObjs, inObjs)
+	} else {
+		tlog.Logf("Num sent/received objects: %d\n", outObjs)
+	}
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
 	locBytes, outBytes, inBytes := snaps.ByteCounts(xactID)
-	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes in total, got (locBytes=%d, outBytes=%d, inBytes=%d)",
+	tassert.Errorf(t, locBytes == expectedBytesCnt, "expected %d bytes copied, got (bytes=%d, outBytes=%d, inBytes=%d)",
 		expectedBytesCnt, locBytes, outBytes, inBytes)
 }
 
