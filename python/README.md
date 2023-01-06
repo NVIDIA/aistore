@@ -85,6 +85,36 @@ client.bucket("my-ais-bucket").object("my-new-object").put("path-to-object")
 
 > If you are using AIS buckets, you can simply omit the provider argument (defaults to ProviderAIS) when instantiating a bucket object (`client.bucket("my-ais-bucket").create()` is equivalent to `client.bucket("my-ais-bucket", provider="ais").create()`).
 
+**Working with multiple objects**
+
+AIS provides support to create groups of objects on which multi-object operations can be performed. This group can be defined by a list of object names or by an [ObjectRange](https://github.com/NVIDIA/aistore/blob/master/python/aistore/object_range.py). 
+
+```python
+# Create Object Group by list of names
+my_objects = client.bucket("my-ais-bucket").objects(obj_names=["my-obj-1", "my-obj-2", "my-obj-3"])
+```
+
+```python
+# Create Object Group by ObjectRange
+my_object_range = ObjectRange(prefix="my-obj", min_index="1", max_index="3")
+my_objects = client.bucket("my-ais-bucket").objects(obj_range=my_object_range)
+```
+
+```python
+# Delete Multiple Objects
+my_objects.delete()
+```
+
+```python
+# Evict Multiple Objects
+my_objects.evict()
+```
+
+```python
+# Prefetch Multiple Objects
+my_objects.prefetch()
+```
+
 **External Cloud Storage Buckets**
 
 AIS supports a number of different [backend providers](https://aiatscale.org/docs/providers) or, simply, backends.
@@ -241,6 +271,7 @@ For more in-depth examples, please see [AIStore Python SDK Examples Directory](h
 |[cluster.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/cluster.py)|Contains `Cluster` class that represents a cluster bound to a client and contains all cluster-related operations, including checking the cluster's health and retrieving vital cluster information.|
 |[bucket.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/bucket.py)|Contains `Bucket` class that represents a bucket in an AIS cluster and contains all bucket-related operations, including (but not limited to) creating, deleting, evicting, renaming, copying.|
 |[object.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/object.py)|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) retreiving, adding and deleting objects.|
+|[object_group.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/object_group.py)|Contains class `ObjectGroup`, representing a collection of objects belonging to a bucket in an AIS cluster. Includes all multi-object operations such as deleting, evicting, and prefetching objects.|
 |[xaction.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/xaction.py)|Contains class `Xaction` and all xaction-related operations.|
 |[etl.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/etl.py)|Contains class `Etl` and all ETL-related operations.|
 
