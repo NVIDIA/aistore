@@ -6,7 +6,6 @@ import unittest
 from aistore.sdk import Client
 from aistore.sdk.const import ProviderAIS
 from aistore.sdk.errors import InvalidBckProvider
-from aistore.sdk.object_group import ObjectGroup
 from aistore.sdk.object_range import ObjectRange
 from aistore.sdk.xaction import Xaction
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
@@ -55,10 +54,6 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
             self.bucket.objects(obj_names=self.cloud_objects).delete()
         else:
             self.bucket.delete()
-
-    def test_object_group_both_types(self):
-        with self.assertRaises(ValueError):
-            ObjectGroup(self.bucket, obj_names=self.obj_names, obj_range=self.obj_range)
 
     def test_delete_list(self):
         objects_to_delete = self.obj_names[1:]
