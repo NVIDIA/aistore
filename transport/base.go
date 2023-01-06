@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -160,13 +161,15 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 
 func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 	s.time.inSend.Store(true) // StreamCollector to postpone cleanups
+
 	if s.IsTerminated() {
 		// slow path
 		reason, errT := s.TermInfo()
-		err = fmt.Errorf("%s terminated(%q, %v), dropping %s", s, reason, errT, streamable)
+		err = cmn.NewErrStreamTerminated(s.String(), errT, reason, "dropping "+streamable.String())
 		glog.Error(err)
 		return
 	}
+
 	if s.sessST.CAS(inactive, active) {
 		s.postCh <- struct{}{}
 		if verbose {

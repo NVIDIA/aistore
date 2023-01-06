@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -175,6 +175,13 @@ type (
 	ErrUsePrevXaction struct { // equivalent to xreg.WprUse
 		xaction string
 	}
+
+	ErrStreamTerminated struct {
+		err    error
+		stream string
+		reason string
+		detail string
+	}
 )
 
 var (
@@ -212,6 +219,23 @@ func (e *ErrFailedTo) Error() string {
 }
 
 func (e *ErrFailedTo) Unwrap() (err error) { return e.err }
+
+// ErrStreamTerminated
+
+func NewErrStreamTerminated(stream string, err error, reason, detail string) *ErrStreamTerminated {
+	return &ErrStreamTerminated{stream: stream, err: err, reason: reason, detail: detail}
+}
+
+func (e *ErrStreamTerminated) Error() string {
+	return fmt.Sprintf("%s terminated(%q, %v): %s", e.stream, e.reason, e.err, e.detail)
+}
+
+func (e *ErrStreamTerminated) Unwrap() (err error) { return e.err }
+
+func IsErrStreamTerminated(err error) bool {
+	_, ok := err.(*ErrStreamTerminated)
+	return ok
+}
 
 // ErrUnsupp & ErrNotImpl
 

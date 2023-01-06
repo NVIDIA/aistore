@@ -583,7 +583,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 		}
 
 		// 9. retransmit if needed
-		cnt = reb.retransmit(rargs)
+		cnt = reb.retransmit(rargs, xreb)
 		if cnt == 0 || reb.xctn().IsAborted() {
 			break
 		}
@@ -593,13 +593,8 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 	return
 }
 
-func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
-	aborted := func() (yes bool) {
-		yes = reb.xctn().IsAborted()
-		yes = yes || (rargs.smap.Version != reb.t.Sowner().Get().Version)
-		return
-	}
-	if aborted() {
+func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
+	if reb._aborted(rargs) {
 		return
 	}
 	var (
@@ -632,24 +627,35 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 				continue
 			}
 			// retransmit
-			if roc, err := getReader(lom); err != nil {
-				lom.Unlock(false)
-				glog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi.StringEx(), err)
-			} else {
-				rj.doSend(lom, tsi, roc)
-				glog.Warningf("%s: retransmitting %s => %s", loghdr, lom, tsi.StringEx())
-				cnt++
+			roc, err := _getReader(lom)
+			if err == nil {
+				err = rj.doSend(lom, tsi, roc)
 			}
-			if aborted() {
+			if err == nil {
+				glog.Warningf("%s: retransmit %s => %s", loghdr, lom, tsi.StringEx())
+				cnt++
+			} else {
+				glog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi.StringEx(), err)
+				if cmn.IsErrStreamTerminated(err) {
+					xreb.Abort(err)
+				}
+			}
+			if reb._aborted(rargs) {
 				lomAck.mu.Unlock()
 				return 0
 			}
 		}
 		lomAck.mu.Unlock()
-		if aborted() {
+		if reb._aborted(rargs) {
 			return 0
 		}
 	}
+	return
+}
+
+func (reb *Reb) _aborted(rargs *rebArgs) (yes bool) {
+	yes = reb.xctn().IsAborted()
+	yes = yes || (rargs.smap.Version != reb.t.Sowner().Get().Version)
 	return
 }
 
@@ -720,12 +726,10 @@ func (rj *rebJogger) walkBck(bck *cluster.Bck) bool {
 func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	rj.m.inQueue.Dec()
 	if err != nil {
-		lom, ok := arg.(*cluster.LOM)
-		debug.Assert(ok)
-		rj.m.delLomAck(lom, 0)
 		if bool(glog.FastV(4, glog.SmoduleReb)) || !cos.IsRetriableConnErr(err) {
-			si := rj.m.t.Snode()
-			glog.Errorf("%s: failed to send o[%s]: %v", si, hdr.FullName(), err)
+			lom, ok := arg.(*cluster.LOM)
+			debug.Assert(ok)
+			glog.Errorf("%s: failed to send %s: %v", rj.m.t.Snode(), lom, err)
 		}
 		return
 	}
@@ -740,8 +744,7 @@ func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) (err error) {
 	if de.IsDir() {
 		return nil
 	}
-	// NOTE: free on error or via (send => ... => delLomAck)
-	lom := cluster.AllocLOM("")
+	lom := cluster.AllocLOM(fqn)
 	err = rj._lwalk(lom, fqn)
 	if err != nil {
 		cluster.FreeLOM(lom)
@@ -773,41 +776,47 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) error {
 
 	// skip objects that were already sent via GFN (due to probabilistic filtering
 	// false-positives, albeit rare, are still possible)
-	uname := []byte(lom.Uname())
+	uname := cos.UnsafeB(lom.Uname())
 	if rj.m.filterGFN.Lookup(uname) {
-		rj.m.filterGFN.Delete(uname) // it will not be used anymore
+		rj.m.filterGFN.Delete(uname)
 		return cmn.ErrSkip
 	}
-	// prepare to send
-	roc, err := getReader(lom)
+	// prepare to send: rlock, load, new roc
+	roc, err := _getReader(lom)
 	if err != nil {
-		lom.Unlock(false)
 		return err
 	}
-	// transmit
+	// transmit (unlock via transport completion => roc.Close)
 	rj.m.addLomAck(lom)
-	rj.doSend(lom, tsi, roc)
+	if err := rj.doSend(lom, tsi, roc); err != nil {
+		rj.m.delLomAck(lom, 0, false /*free LOM*/)
+		return err
+	}
 	return nil
 }
 
-func getReader(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
+// takes rlock and keeps it _iff_ successful
+func _getReader(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 	lom.Lock(false)
 	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		lom.Unlock(false)
 		return
 	}
 	if lom.IsCopy() {
+		lom.Unlock(false)
 		err = cmn.ErrSkip
 		return
 	}
 	if lom.Checksum() == nil {
 		if _, err = lom.ComputeSetCksum(); err != nil {
+			lom.Unlock(false)
 			return
 		}
 	}
 	return lom.NewDeferROC()
 }
 
-func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOpenCloser) {
+func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOpenCloser) error {
 	var (
 		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.SID()}
 		o      = transport.AllocSend()
@@ -819,5 +828,5 @@ func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOp
 	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
 	o.Callback, o.CmplArg = rj.objSentCallback, lom
 	rj.m.inQueue.Inc()
-	rj.m.dm.Send(o, roc, tsi)
+	return rj.m.dm.Send(o, roc, tsi)
 }
