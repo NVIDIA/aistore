@@ -194,11 +194,11 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 	}
 
 	if len(bcks) == 0 && apc.IsFltPresent(fltPresence) && !qbck.IsAIS() {
-		const hint = "Use '--%s' option to list _all_ buckets.\n"
+		const hint = "Use %s option to list _all_ buckets.\n"
 		if qbck.IsEmpty() {
-			fmt.Fprintf(c.App.Writer, "No buckets in the cluster. "+hint, allObjsOrBcksFlag.Name)
+			fmt.Fprintf(c.App.Writer, "No buckets in the cluster. "+hint, qflprn(allObjsOrBcksFlag))
 		} else {
-			fmt.Fprintf(c.App.Writer, "No %q matching buckets in the cluster. "+hint, qbck, allObjsOrBcksFlag.Name)
+			fmt.Fprintf(c.App.Writer, "No %q matching buckets in the cluster. "+hint, qbck, qflprn(allObjsOrBcksFlag))
 		}
 		return
 	}
@@ -405,8 +405,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	// NOTE: compare w/ `showObjProps()`
 	if flagIsSet(c, nameOnlyFlag) {
 		if len(props) > 2 {
-			warn := fmt.Sprintf("flag '--%s' is incompatible with the value of '--%s'",
-				nameOnlyFlag.Name, objPropsFlag.Name)
+			warn := fmt.Sprintf("flag %s is incompatible with the value of %s", qflprn(nameOnlyFlag), qflprn(objPropsFlag))
 			actionWarn(c, warn)
 		}
 		msg.SetFlag(apc.LsNameOnly)

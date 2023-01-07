@@ -319,12 +319,12 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		actValue.NoShutdown = noShutdown
 		actValue.RmUserData = rmUserData
 	} else {
-		const fmterr = "option '--%s' is valid only for decommissioning\n"
+		const fmterr = "option %s is valid only for decommissioning\n"
 		if noShutdown {
-			return fmt.Errorf(fmterr, noShutdownFlag.Name)
+			return fmt.Errorf(fmterr, qflprn(noShutdownFlag))
 		}
 		if rmUserData {
-			return fmt.Errorf(fmterr, rmUserDataFlag.Name)
+			return fmt.Errorf(fmterr, qflprn(rmUserDataFlag))
 		}
 	}
 	switch action {
@@ -422,7 +422,7 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 	return nil
 }
 
-func showClusterRebalanceHandler(c *cli.Context) error {
+func showClusterRebalanceHandler(c *cli.Context) (err error) {
 	var (
 		xid      = c.Args().Get(0)
 		daemonID = c.Args().Get(1)
@@ -443,5 +443,6 @@ func showClusterRebalanceHandler(c *cli.Context) error {
 		DaemonID:    daemonID,
 		OnlyRunning: !flagIsSet(c, allJobsFlag),
 	}
-	return xactList(c, xactArgs, false)
+	_, err = xactList(c, xactArgs, false)
+	return
 }

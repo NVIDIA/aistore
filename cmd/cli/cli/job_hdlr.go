@@ -563,8 +563,8 @@ func bgDownload(c *cli.Context, id string) (err error) {
 	} else if resp.FinishedTime.UnixNano() != 0 {
 		actionDownloaded(c, resp.FinishedCnt)
 	} else {
-		msg := fmt.Sprintf("To monitor the progress, run '%s %s %s %s %s --%s` ",
-			cliName, commandShow, commandJob, subcmdDownload, id, progressBarFlag.Name)
+		msg := fmt.Sprintf("To monitor the progress, run '%s %s %s %s %s'",
+			cliName, commandShow, commandJob, id, flprn(progressBarFlag))
 		actionDone(c, msg)
 	}
 	return err
@@ -663,8 +663,8 @@ func startLRUHandler(c *cli.Context) (err error) {
 	}
 
 	if flagIsSet(c, forceFlag) {
-		warn := fmt.Sprintf("LRU with '--%s' option will evict buckets _ignoring_ their respective `lru.enabled` properties.",
-			forceFlag.Name)
+		warn := fmt.Sprintf("LRU eviction with %s option will evict buckets _ignoring_ their respective `lru.enabled` properties.",
+			qflprn(forceFlag))
 		if ok := confirm(c, "Would you like to continue?", warn); !ok {
 			return
 		}
@@ -738,20 +738,20 @@ func stopJobHandler(c *cli.Context) error {
 	}
 
 	if id != "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
-		warn := fmt.Sprintf("in presence of %s argument ('%s') flags '--%s' and '--%s' will be ignored",
-			jobIDArgument, id, allRunningJobsFlag.Name, regexFlag.Name)
+		warn := fmt.Sprintf("in presence of %s argument ('%s') flags %s and %s will be ignored",
+			jobIDArgument, id, qflprn(allRunningJobsFlag), qflprn(regexFlag))
 		actionWarn(c, warn)
 	} else if id == "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
 		switch name {
 		case subcmdDownload, subcmdDsort:
 			// regex supported
 		case commandRebalance:
-			warn := fmt.Sprintf("global rebalance is global (ignoring '--%s' and '--%s' flags)",
-				allRunningJobsFlag.Name, regexFlag.Name)
+			warn := fmt.Sprintf("global rebalance is global (ignoring %s and %s flags)",
+				qflprn(allRunningJobsFlag), qflprn(regexFlag))
 			actionWarn(c, warn)
 		default:
 			if regex != "" {
-				warn := fmt.Sprintf("ignoring flag '--%s' - not implemented yet", regexFlag.Name)
+				warn := fmt.Sprintf("ignoring flag %s - not implemented yet", qflprn(regexFlag))
 				actionWarn(c, warn)
 			}
 		}
@@ -790,8 +790,8 @@ func stopJobHandler(c *cli.Context) error {
 
 	if xactID == "" {
 		if !flagIsSet(c, allRunningJobsFlag) {
-			msg := fmt.Sprintf("Expecting either %s argument or '--%s' option (with or without regular expression)",
-				jobIDArgument, allRunningJobsFlag.Name)
+			msg := fmt.Sprintf("Expecting either %s argument or %s option (with or without regular expression)",
+				jobIDArgument, qflprn(allRunningJobsFlag))
 			return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
 		}
 
@@ -1126,8 +1126,8 @@ func removeDownloadHandler(c *cli.Context) error {
 
 	// by job ID
 	if c.NArg() < 1 {
-		msg := fmt.Sprintf("Expecting either %s argument or '--%s' option (with or without regular expression)",
-			jobIDArgument, allFinishedJobsFlag.Name)
+		msg := fmt.Sprintf("Expecting either %s argument or %s option (with or without regular expression)",
+			jobIDArgument, qflprn(allFinishedJobsFlag))
 		return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
 	}
 	id := c.Args().First()
@@ -1174,8 +1174,8 @@ func removeDsortHandler(c *cli.Context) error {
 
 	// by job ID
 	if c.NArg() < 1 {
-		msg := fmt.Sprintf("Expecting either %s argument or '--%s' option (with or without regular expression)",
-			jobIDArgument, allFinishedJobsFlag.Name)
+		msg := fmt.Sprintf("Expecting either %s argument or %s option (with or without regular expression)",
+			jobIDArgument, qflprn(allFinishedJobsFlag))
 		return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
 	}
 	id := c.Args().First()

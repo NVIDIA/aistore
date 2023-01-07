@@ -44,11 +44,9 @@ func (e *errUsage) Error() string {
 
 	// format
 	if e.bottomMessage != "" {
-		if msg[len(msg)-1] == '\n' || msg[len(msg)-1] == '\r' {
-			msg += e.bottomMessage + "\n"
-		} else {
-			msg += "\n" + e.bottomMessage + "\n"
-		}
+		msg = strings.TrimSuffix(msg, "\n")
+		msg = strings.TrimSuffix(msg, "\n")
+		msg += "\n\n" + e.bottomMessage + "\n"
 	}
 	if e.context.Command.Name != "" {
 		return fmt.Sprintf("Incorrect '%s %s' usage: %s.\n\n%s",
@@ -107,9 +105,7 @@ func didYouMeanMessage(c *cli.Context, cmd string, similar []string, closestComm
 		sb.WriteString(c.App.Name) // NOTE: the entire command-line (vs cliName)
 		sb.WriteString(" " + commandShow)
 		sb.WriteString(" " + c.Args()[0])
-		for _, f := range c.FlagNames() {
-			sb.WriteString(" --" + f)
-		}
+		sbWriteFlags(c, sb)
 		sb.WriteString("'?")
 		sbWriteSearch(sb, cmd, true)
 	case len(similar) == 1:
@@ -117,6 +113,7 @@ func didYouMeanMessage(c *cli.Context, cmd string, similar []string, closestComm
 		msg := fmt.Sprintf("%v", similar)
 		sb.WriteString(msg)
 		sbWriteTail(c, sb)
+		sbWriteFlags(c, sb)
 		sb.WriteString("'?")
 		sbWriteSearch(sb, cmd, true)
 	case distance < cos.Max(incorrectCmdDistance, len(cmd)/2):
@@ -124,6 +121,7 @@ func didYouMeanMessage(c *cli.Context, cmd string, similar []string, closestComm
 		sb.WriteString(c.App.Name) // ditto
 		sb.WriteString(" " + closestCommand)
 		sbWriteTail(c, sb)
+		sbWriteFlags(c, sb)
 		sb.WriteString("'?")
 		sbWriteSearch(sb, cmd, true)
 	default:
@@ -139,8 +137,14 @@ func sbWriteTail(c *cli.Context, sb *strings.Builder) {
 			sb.WriteString(" " + a)
 		}
 	}
-	for _, f := range c.FlagNames() {
-		sb.WriteString(" --" + f)
+}
+
+func sbWriteFlags(c *cli.Context, sb *strings.Builder) {
+	for _, f := range c.Command.Flags {
+		n := flprn(f)
+		if !strings.Contains(n, "help") {
+			sb.WriteString(" " + n)
+		}
 	}
 }
 

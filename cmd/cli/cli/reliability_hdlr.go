@@ -80,8 +80,8 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	dataSlices := c.Int(firstName(dataSlicesFlag.Name))
-	paritySlices := c.Int(firstName(paritySlicesFlag.Name))
+	dataSlices := c.Int(fl1n(dataSlicesFlag.Name))
+	paritySlices := c.Int(fl1n(paritySlicesFlag.Name))
 	if p.EC.Enabled {
 		// EC-encode is called automatically when EC is enabled. Changing
 		// data or parity numbers on the fly is unsupported yet.

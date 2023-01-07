@@ -335,7 +335,7 @@ var (
 	}
 	countFlag = cli.IntFlag{
 		Name:  "count",
-		Usage: "used together with '--" + firstName(refreshFlag.Name) + "' to limit the number of generated reports",
+		Usage: "used together with " + qflprn(refreshFlag) + " to limit the number of generated reports",
 	}
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 
@@ -405,9 +405,8 @@ var (
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag   = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}
 	logFlushFlag = DurationFlag{
-		Name: "log-flush",
-		Usage: "can be used in combination with '--" + refreshFlag.Name +
-			"' to override configured '" + nodeLogFlushName + "'",
+		Name:  "log-flush",
+		Usage: "can be used in combination with " + qflprn(refreshFlag) + " to override configured '" + nodeLogFlushName + "'",
 		Value: 10 * time.Second,
 	}
 

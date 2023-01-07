@@ -22,7 +22,7 @@ import (
 
 const (
 	errFmtSameBucket = "cannot %s bucket %q onto itself"
-	errFmtExclusive  = "flags '--%s' and '--%s' are mutually exclusive"
+	errFmtExclusive  = "flags %s and %s are mutually exclusive"
 )
 
 var examplesBckSetProps = `
@@ -364,7 +364,7 @@ func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
 func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs string, etlID ...string) (err error) {
 	operation := "Copying objects"
 	if listObjs != "" && tmplObjs != "" {
-		return incorrectUsageMsg(c, errFmtExclusive, listFlag.Name, templateFlag.Name)
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
 	var lrMsg cmn.SelectObjsMsg
 	if listObjs != "" {
@@ -442,7 +442,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 
 	// Copy matching objects
 	if listObjs != "" && tmplObjs != "" {
-		return incorrectUsageMsg(c, errFmtExclusive, listFlag.Name, templateFlag.Name)
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
 	if dryRun {
 		var msg string
@@ -493,8 +493,8 @@ func evictHandler(c *cli.Context) (err error) {
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			if objName != "" {
 				return incorrectUsageMsg(c,
-					"object name (%q) cannot be used together with --list and/or --template flags",
-					objName)
+					"object name (%q) cannot be used together with %s and/or %s flags",
+					objName, qflprn(listFlag), qflprn(templateFlag))
 			}
 			// List or range operation on a given bucket.
 			return listOrRangeOp(c, bck)

@@ -297,13 +297,28 @@ func showDisksHandler(c *cli.Context) (err error) {
 // - be omitted, in part or in total, and may
 // - come in arbitrary order
 func showJobsHandler(c *cli.Context) error {
-	var (
-		bck      cmn.Bck
-		err      error
-		name     = c.Args().Get(0)
-		xid      = c.Args().Get(1)
-		daemonID = c.Args().Get(2)
-	)
+	name, xid, daemonID, bck, err := showJobsParse(c)
+	if err != nil {
+		return err
+	}
+
+	setLongRunParams(c, 72)
+
+	var l int
+	l, err = showJobsDo(c, name, xid, daemonID, bck)
+	if err == nil && l == 0 {
+		n := qflprn(allJobsFlag)
+		fmt.Fprintf(c.App.Writer, "No running jobs. Use %s to show all, %s <TAB-TAB> to select, help for details.\n", n, n)
+	}
+	return err
+}
+
+func showJobsParse(c *cli.Context) (name, xid, daemonID string, bck cmn.Bck, err error) {
+	// prelim. assignments
+	name = c.Args().Get(0)
+	xid = c.Args().Get(1)
+	daemonID = c.Args().Get(2)
+
 	// validate and reassign
 	if name != "" {
 		if xactKind, _ := xact.GetKindName(name); xactKind == "" {
@@ -313,60 +328,59 @@ func showJobsHandler(c *cli.Context) error {
 		}
 	}
 	if xid != "" || daemonID != "" {
-		bck, err = parseBckURI(c, xid, true /*require provider*/)
-		if err == nil {
+		var errV error
+		bck, errV = parseBckURI(c, xid, true /*require provider*/)
+		if errV == nil {
 			xid = "" // arg #1 is a bucket
-		} else if bck, err = parseBckURI(c, daemonID, true); err == nil {
+		} else if bck, errV = parseBckURI(c, daemonID, true); errV == nil {
 			daemonID = "" // ditto arg #2
 		}
 	}
 	if xid != "" && daemonID == "" {
-		if sid, _, err := getNodeIDName(c, xid); err == nil {
+		if sid, _, errV := getNodeIDName(c, xid); errV == nil {
 			daemonID, xid = sid, ""
 		}
 	}
 	// sname => sid
 	if daemonID != "" {
-		sid, _, err := getNodeIDName(c, daemonID)
-		if err != nil {
-			return err
-		}
-		daemonID = sid
+		daemonID, _, err = getNodeIDName(c, daemonID)
 	}
+	return
+}
 
-	// show -----------------------
-
-	setLongRunParams(c, 72)
-
+func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, error) {
 	if name != "" {
-		return showJobs(c, name, xid, daemonID, bck, false /*caption*/)
+		return _showJobs(c, name, xid, daemonID, bck, false /*caption*/)
 	}
 
 	// show all grouped by name (kind)
 	if xid == "" {
+		var ll int
 		names := xact.ListDisplayNames(false /*only-startable*/)
 		names = append(names, dsort.DSortName)
 		sort.Strings(names)
 		for _, name = range names {
-			if err := showJobs(c, name, "" /*xid*/, daemonID, bck, true); err != nil {
+			l, err := _showJobs(c, name, "" /*xid*/, daemonID, bck, true)
+			if err != nil {
 				actionWarn(c, err.Error())
 			}
+			ll += l
 		}
-		return nil
+		return ll, nil
 	}
 
 	// by xid with additional logic to disambiguate download/dsort job ID vs xaction UUID
 	if strings.HasPrefix(xid, dload.PrefixJobID) {
 		if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
-			return showJobs(c, subcmdDownload, xid, daemonID, bck, true)
+			return _showJobs(c, subcmdDownload, xid, daemonID, bck, true)
 		}
 	}
 	if strings.HasPrefix(xid, dsort.PrefixJobID) {
 		if _, err := api.MetricsDSort(apiBP, xid); err == nil {
-			return showJobs(c, subcmdDsort, xid, daemonID, bck, true)
+			return _showJobs(c, subcmdDsort, xid, daemonID, bck, true)
 		}
 	}
-	return showJobs(c, "" /*name*/, xid, daemonID, bck, true)
+	return _showJobs(c, "" /*name*/, xid, daemonID, bck, true)
 }
 
 func jobCptn(c *cli.Context, name string, onlyActive bool, xid string, byTarget bool) {
@@ -386,7 +400,7 @@ func jobCptn(c *cli.Context, name string, onlyActive bool, xid string, byTarget 
 	}
 }
 
-func showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption bool) error {
+func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption bool) (int, error) {
 	switch name {
 	case subcmdDownload:
 		return showDownloads(c, xid, caption)
@@ -411,32 +425,33 @@ func showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption b
 	}
 }
 
-func showDownloads(c *cli.Context, id string, caption bool) error {
+func showDownloads(c *cli.Context, id string, caption bool) (int, error) {
 	if id == "" { // list all download jobs
 		return downloadJobsList(c, parseStrFlag(c, regexFlag), caption)
 	}
 	// display status of a download job identified by its JOB_ID
-	return downloadJobStatus(c, id)
+	return 1, downloadJobStatus(c, id)
 }
 
-func showDsorts(c *cli.Context, id string, caption bool) error {
+func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 	var (
 		usejs      = flagIsSet(c, jsonFlag)
 		onlyActive = !flagIsSet(c, allJobsFlag)
 	)
 	if id == "" {
 		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag), onlyActive)
-		if err != nil || len(list) == 0 {
-			return err
+		l := len(list)
+		if err != nil || l == 0 {
+			return l, err
 		}
 		if caption {
 			jobCptn(c, subcmdDsort, onlyActive, id, false)
 		}
-		return dsortJobsList(c, list, usejs)
+		return l, dsortJobsList(c, list, usejs)
 	}
 
 	// ID-ed dsort
-	return dsortJobStatus(c, id)
+	return 1, dsortJobStatus(c, id)
 }
 
 func showClusterHandler(c *cli.Context) error {
@@ -464,7 +479,7 @@ func showStorageHandler(c *cli.Context) (err error) {
 	return daemonDiskStats(c, "")
 }
 
-func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
+func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, error) {
 	// override the caller's choice if explicitly identified
 	if xactArgs.ID != "" {
 		debug.Assert(xact.IsValidUUID(xactArgs.ID), xactArgs.ID)
@@ -473,14 +488,14 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 
 	xs, err := queryXactions(xactArgs)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	var numSnaps int
 	for _, snaps := range xs {
 		numSnaps += len(snaps)
 	}
 	if numSnaps == 0 {
-		return nil
+		return 0, nil
 	}
 
 	var (
@@ -543,6 +558,7 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 		jobCptn(c, xname, xactArgs.OnlyRunning, xactArgs.ID, xactArgs.DaemonID != "")
 	}
 
+	l := len(dts)
 	var (
 		usejs      = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
@@ -550,14 +566,14 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 	switch xactKind {
 	case apc.ActECGet:
 		if hideHeader {
-			return tmpls.Print(dts, c.App.Writer, tmpls.XactECGetNoHdrTmpl, nil, usejs)
+			return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECGetNoHdrTmpl, nil, usejs)
 		}
-		return tmpls.Print(dts, c.App.Writer, tmpls.XactECGetTmpl, nil, usejs)
+		return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECGetTmpl, nil, usejs)
 	case apc.ActECPut:
 		if hideHeader {
-			return tmpls.Print(dts, c.App.Writer, tmpls.XactECPutNoHdrTmpl, nil, usejs)
+			return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECPutNoHdrTmpl, nil, usejs)
 		}
-		return tmpls.Print(dts, c.App.Writer, tmpls.XactECPutTmpl, nil, usejs)
+		return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECPutTmpl, nil, usejs)
 	default:
 		switch {
 		case fromToBck && hideHeader:
@@ -571,7 +587,7 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 		}
 	}
 	if err != nil || !flagIsSet(c, verboseFlag) {
-		return err
+		return l, err
 	}
 
 	// show in/out stats when verbose
@@ -584,10 +600,10 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 		debug.Assert(name != "", di.XactSnaps[0].Kind)
 		actionCptn(c, cluster.Tname(di.DaemonID)+": ", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
 		if err := tmpls.Print(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, usejs); err != nil {
-			return err
+			return l, err
 		}
 	}
-	return nil
+	return l, nil
 }
 
 func showObjectHandler(c *cli.Context) (err error) {
@@ -680,8 +696,7 @@ func showClusterConfig(c *cli.Context, section string) error {
 	flat := flattenConfig(cluConfig, section)
 	err = tmpls.Print(flat, c.App.Writer, tmpls.ConfigTmpl, nil, false)
 	if err == nil && section == "" {
-		actionDone(c, fmt.Sprintf("(Hint: use '[SECTION] --%s' to show config section(s), see '--help' for details)",
-			firstName(jsonFlag.Name)))
+		actionDone(c, fmt.Sprintf("(Hint: use '[SECTION] %s' to show config section(s), see '--help' for details)", flprn(jsonFlag)))
 	}
 	return err
 }
@@ -736,8 +751,7 @@ func showNodeConfig(c *cli.Context) error {
 	}
 
 	if usejs {
-		warn := "option '--" + strings.Split(jsonFlag.Name, ",")[0] +
-			"' won't show node <=> cluster configuration differences, if any."
+		warn := "option " + qflprn(jsonFlag) + " won't show node <=> cluster configuration differences, if any."
 		switch scope {
 		case cfgScopeLocal:
 			if section == "" {

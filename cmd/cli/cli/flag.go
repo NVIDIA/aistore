@@ -80,13 +80,22 @@ func (f DurationFlag) Apply(set *flag.FlagSet) { _ = f.ApplyWithError(set) }
 // flag parsers & misc. helpers
 //
 
-// If the flag has multiple names take the first one
-func firstName(flagName string) string {
+// flag's printable name
+func flprn(f cli.Flag) string { return "--" + fl1n(f.GetName()) }
+
+// in single quotes
+func qflprn(f cli.Flag) string { return "'" + flprn(f) + "'" }
+
+// return the first name
+func fl1n(flagName string) string {
+	if strings.IndexByte(flagName, ',') < 0 {
+		return flagName
+	}
 	return strings.Split(flagName, ",")[0]
 }
 
 func flagIsSet(c *cli.Context, flag cli.Flag) (v bool) {
-	name := firstName(flag.GetName()) // take the first of multiple names
+	name := fl1n(flag.GetName()) // take the first of multiple names
 	switch flag.(type) {
 	case cli.BoolFlag:
 		v = c.Bool(name)
@@ -100,7 +109,7 @@ func flagIsSet(c *cli.Context, flag cli.Flag) (v bool) {
 
 // Returns the value of a string flag (either parent or local scope)
 func parseStrFlag(c *cli.Context, flag cli.Flag) string {
-	flagName := firstName(flag.GetName())
+	flagName := fl1n(flag.GetName())
 	if c.GlobalIsSet(flagName) {
 		return c.GlobalString(flagName)
 	}
@@ -109,7 +118,7 @@ func parseStrFlag(c *cli.Context, flag cli.Flag) string {
 
 // Returns the value of an int flag (either parent or local scope)
 func parseIntFlag(c *cli.Context, flag cli.IntFlag) int {
-	flagName := firstName(flag.GetName())
+	flagName := fl1n(flag.GetName())
 	if c.GlobalIsSet(flagName) {
 		return c.GlobalInt(flagName)
 	}
@@ -118,7 +127,7 @@ func parseIntFlag(c *cli.Context, flag cli.IntFlag) int {
 
 // Returns the value of an duration flag (either parent or local scope)
 func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
-	flagName := firstName(flag.GetName())
+	flagName := fl1n(flag.GetName())
 	if c.GlobalIsSet(flagName) {
 		return c.GlobalDuration(flagName)
 	}

@@ -337,8 +337,9 @@ func setLongRunParams(c *cli.Context, footer ...int) bool {
 	if flagIsSet(c, countFlag) {
 		params.count = parseIntFlag(c, countFlag)
 		if params.count <= 0 {
-			warn := fmt.Sprintf("option '--%s=%d' is invalid (must be >= 1). Proceeding with '--%s=%d' (default).",
-				countFlag.Name, params.count, countFlag.Name, countDefault)
+			n := flprn(countFlag)
+			warn := fmt.Sprintf("option '%s=%d' is invalid (must be >= 1). Proceeding with '%s=%d' (default).",
+				n, params.count, n, countDefault)
 			actionWarn(c, warn)
 			params.count = countDefault
 		}

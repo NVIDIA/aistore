@@ -311,14 +311,18 @@ func (b *downloaderPB) totalFilesCnt() int {
 	return b.totalFiles
 }
 
-func downloadJobsList(c *cli.Context, regex string, caption bool) error {
+func downloadJobsList(c *cli.Context, regex string, caption bool) (int, error) {
 	onlyActive := !flagIsSet(c, allJobsFlag)
 	list, err := api.DownloadGetList(apiBP, regex, onlyActive)
 	if err != nil || len(list) == 0 {
-		return err
+		return 0, err
 	}
 	if caption {
 		jobCptn(c, subcmdDownload, onlyActive, "", false)
+	}
+	l := len(list)
+	if l == 0 {
+		return 0, nil
 	}
 	sort.Slice(list, func(i int, j int) bool {
 		if !list[i].JobFinished() && (list[j].JobFinished() || list[j].Aborted) {
@@ -338,7 +342,7 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) error {
 		return true
 	})
 
-	return tmpls.Print(list, c.App.Writer, tmpls.DownloadListTmpl, nil, flagIsSet(c, jsonFlag))
+	return l, tmpls.Print(list, c.App.Writer, tmpls.DownloadListTmpl, nil, flagIsSet(c, jsonFlag))
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {
@@ -393,8 +397,8 @@ func printDownloadStatus(c *cli.Context, d *dload.StatusResp, verbose bool) {
 				fmt.Fprintf(w, "\t%s: %s\n", e.Name, e.Err)
 			}
 		} else {
-			const hint = "Use '--%s' option to list all errors.\n"
-			fmt.Fprintf(w, hint, verboseFlag.Name)
+			const hint = "Use %s option to list all errors.\n"
+			fmt.Fprintf(w, hint, qflprn(verboseFlag))
 		}
 		return
 	}

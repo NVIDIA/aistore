@@ -2,3 +2,5 @@
 "ais://$BUCKET_2" created
 ^Copying bucket ais://$BUCKET_1 => ais://$BUCKET_2. To monitor.*$
 ^copy-bucket.*finished$
+^No running.*$
+^No running.*$

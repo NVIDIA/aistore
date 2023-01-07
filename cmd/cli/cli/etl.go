@@ -272,20 +272,22 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func etlListHandler(c *cli.Context) error {
-	return showAllETLs(c, false)
+func etlListHandler(c *cli.Context) (err error) {
+	_, err = showAllETLs(c, false)
+	return
 }
 
-func showAllETLs(c *cli.Context, caption bool) error {
+func showAllETLs(c *cli.Context, caption bool) (int, error) {
 	list, err := api.ETLList(apiBP)
-	if err != nil || len(list) == 0 {
-		return err
+	l := len(list)
+	if err != nil || l == 0 {
+		return l, err
 	}
 	if caption {
 		onlyActive := !flagIsSet(c, allJobsFlag)
 		jobCptn(c, commandETL, onlyActive, "", false)
 	}
-	return tmpls.Print(list, c.App.Writer, tmpls.TransformListTmpl, nil, false)
+	return l, tmpls.Print(list, c.App.Writer, tmpls.TransformListTmpl, nil, false)
 }
 
 func etlSourceHandler(c *cli.Context) (err error) {
