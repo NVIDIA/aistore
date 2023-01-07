@@ -79,7 +79,7 @@ func getNodeIDName(c *cli.Context, arg string) (sid, sname string, err error) {
 }
 
 // Gets Smap from a given node (`daemonID`) and displays it
-func smapFromNode(c *cli.Context, primarySmap *cluster.Smap, sid string, useJSON bool) error {
+func smapFromNode(c *cli.Context, primarySmap *cluster.Smap, sid string, usejs bool) error {
 	var (
 		smap         = primarySmap
 		err          error
@@ -102,7 +102,7 @@ func smapFromNode(c *cli.Context, primarySmap *cluster.Smap, sid string, useJSON
 		Smap:         smap,
 		ExtendedURLs: extendedURLs,
 	}
-	return tmpls.Print(body, c.App.Writer, tmpls.SmapTmpl, nil, useJSON)
+	return tmpls.Print(body, c.App.Writer, tmpls.SmapTmpl, nil, usejs)
 }
 
 // Get cluster map and use it to retrieve node status for each clustered node

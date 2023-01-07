@@ -41,13 +41,13 @@ type (
 )
 
 func getBMD(c *cli.Context) error {
-	useJSON := flagIsSet(c, jsonFlag)
+	usejs := flagIsSet(c, jsonFlag)
 	bmd, err := api.GetBMD(apiBP)
 	if err != nil {
 		return err
 	}
-	if useJSON {
-		return tmpls.Print(bmd, c.App.Writer, "", nil, useJSON)
+	if usejs {
+		return tmpls.Print(bmd, c.App.Writer, "", nil, usejs)
 	}
 
 	tw := &tabwriter.Writer{}
@@ -81,7 +81,7 @@ func getBMD(c *cli.Context) error {
 }
 
 // Displays the status of the cluster or a node
-func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, sid string, useJSON, hideHeader bool) error {
+func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, sid string, usejs, hideHeader bool) error {
 	body := tmpls.StatusTemplateHelper{
 		Smap:      smap,
 		CluConfig: cfg,
@@ -91,27 +91,27 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, si
 		},
 	}
 	if res, proxyOK := curPrxStatus[sid]; proxyOK {
-		return tmpls.Print(res, c.App.Writer, tmpls.NewProxyTable(res, smap).Template(hideHeader), nil, useJSON)
+		return tmpls.Print(res, c.App.Writer, tmpls.NewProxyTable(res, smap).Template(hideHeader), nil, usejs)
 	} else if res, targetOK := curTgtStatus[sid]; targetOK {
-		return tmpls.Print(res, c.App.Writer, tmpls.NewTargetTable(res).Template(hideHeader), nil, useJSON)
+		return tmpls.Print(res, c.App.Writer, tmpls.NewTargetTable(res).Template(hideHeader), nil, usejs)
 	} else if sid == apc.Proxy {
 		template := tmpls.NewProxiesTable(&body.Status, smap).Template(hideHeader)
-		return tmpls.Print(body, c.App.Writer, template, nil, useJSON)
+		return tmpls.Print(body, c.App.Writer, template, nil, usejs)
 	} else if sid == apc.Target {
 		return tmpls.Print(body, c.App.Writer,
-			tmpls.NewTargetsTable(&body.Status).Template(hideHeader), nil, useJSON)
+			tmpls.NewTargetsTable(&body.Status).Template(hideHeader), nil, usejs)
 	} else if sid == "" {
 		template := tmpls.NewProxiesTable(&body.Status, smap).Template(false) + "\n" +
 			tmpls.NewTargetsTable(&body.Status).Template(false) + "\n" +
 			tmpls.ClusterSummary
-		return tmpls.Print(body, c.App.Writer, template, nil, useJSON)
+		return tmpls.Print(body, c.App.Writer, template, nil, usejs)
 	}
 	return fmt.Errorf("%s is not a valid NODE_ID nor NODE_TYPE", sid)
 }
 
 func daemonDiskStats(c *cli.Context, sid string) error {
 	var (
-		useJSON    = flagIsSet(c, jsonFlag)
+		usejs      = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
 	)
 	if _, err := fillNodeStatusMap(c); err != nil {
@@ -138,9 +138,9 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 	}
 
 	if hideHeader {
-		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatBodyTmpl, nil, useJSON)
+		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatTmpl, nil, usejs)
 	} else {
-		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatsFullTmpl, nil, useJSON)
+		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatsFullTmpl, nil, usejs)
 	}
 	if err != nil {
 		return err

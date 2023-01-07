@@ -134,6 +134,14 @@ func (r *XactTCB) String() string {
 	return fmt.Sprintf("%s <= %s", r.Base.String(), r.args.BckFrom)
 }
 
+func (r *XactTCB) Snap() cluster.XactSnap {
+	snap := &xact.Snap{}
+	r.Base.ToSnap(snap)
+	from, to := r.FromTo()
+	snap.SrcBck, snap.DstBck = from.Clone(), to.Clone()
+	return snap
+}
+
 func (r *XactTCB) Name() string {
 	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.args.BckFrom)
 }
@@ -168,7 +176,9 @@ func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 	return
 }
 
-func (r *XactTCB) FromTo() (*cluster.Bck, *cluster.Bck) { return r.args.BckFrom, r.args.BckTo }
+func (r *XactTCB) FromTo() (*cluster.Bck, *cluster.Bck) {
+	return r.args.BckFrom, r.args.BckTo
+}
 
 func (r *XactTCB) WaitRunning() { r.wg.Wait() }
 

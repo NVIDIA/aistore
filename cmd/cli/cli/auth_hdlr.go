@@ -704,11 +704,11 @@ func showAuthConfigHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	useJSON := flagIsSet(c, jsonFlag)
-	if useJSON {
-		return tmpls.Print(conf, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
+	usejs := flagIsSet(c, jsonFlag)
+	if usejs {
+		return tmpls.Print(conf, c.App.Writer, tmpls.PropsSimpleTmpl, nil, usejs)
 	}
-	return tmpls.Print(list, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
+	return tmpls.Print(list, c.App.Writer, tmpls.PropsSimpleTmpl, nil, usejs)
 }
 
 func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {

@@ -421,7 +421,7 @@ func showDownloads(c *cli.Context, id string, caption bool) error {
 
 func showDsorts(c *cli.Context, id string, caption bool) error {
 	var (
-		useJSON    = flagIsSet(c, jsonFlag)
+		usejs      = flagIsSet(c, jsonFlag)
 		onlyActive = !flagIsSet(c, allJobsFlag)
 	)
 	if id == "" {
@@ -432,7 +432,7 @@ func showDsorts(c *cli.Context, id string, caption bool) error {
 		if caption {
 			jobCptn(c, subcmdDsort, onlyActive, id, false)
 		}
-		return dsortJobsList(c, list, useJSON)
+		return dsortJobsList(c, list, usejs)
 	}
 
 	// ID-ed dsort
@@ -484,9 +484,10 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 	}
 
 	var (
-		xactKind = xactArgs.Kind
-		i        int
-		dts      = make([]daemonTemplateXactSnaps, len(xs))
+		xactKind  = xactArgs.Kind
+		dts       = make([]daemonTemplateXactSnaps, len(xs))
+		i         int
+		fromToBck bool
 	)
 	for tid, snaps := range xs {
 		if xactArgs.DaemonID != "" && xactArgs.DaemonID != tid {
@@ -499,6 +500,10 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 			xactKind = snaps[0].Kind
 		} else {
 			debug.Assertf(xactKind == snaps[0].Kind, "%s vs %s", xactKind, snaps[0].Kind)
+		}
+		if !snaps[0].SrcBck.IsEmpty() {
+			debug.Assert(!snaps[0].DstBck.IsEmpty())
+			fromToBck = true
 		}
 		if len(snaps) > 1 {
 			sort.Slice(snaps, func(i, j int) bool {
@@ -539,25 +544,31 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 	}
 
 	var (
-		useJSON    = flagIsSet(c, jsonFlag)
+		usejs      = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
 	)
-	switch xactArgs.Kind {
+	switch xactKind {
 	case apc.ActECGet:
 		if hideHeader {
-			return tmpls.Print(dts, c.App.Writer, tmpls.XactionECGetBodyNoHeaderTmpl, nil, useJSON)
+			return tmpls.Print(dts, c.App.Writer, tmpls.XactECGetNoHdrTmpl, nil, usejs)
 		}
-		return tmpls.Print(dts, c.App.Writer, tmpls.XactionECGetBodyTmpl, nil, useJSON)
+		return tmpls.Print(dts, c.App.Writer, tmpls.XactECGetTmpl, nil, usejs)
 	case apc.ActECPut:
 		if hideHeader {
-			return tmpls.Print(dts, c.App.Writer, tmpls.XactionECPutBodyNoHeaderTmpl, nil, useJSON)
+			return tmpls.Print(dts, c.App.Writer, tmpls.XactECPutNoHdrTmpl, nil, usejs)
 		}
-		return tmpls.Print(dts, c.App.Writer, tmpls.XactionECPutBodyTmpl, nil, useJSON)
+		return tmpls.Print(dts, c.App.Writer, tmpls.XactECPutTmpl, nil, usejs)
 	default:
-		if hideHeader {
-			return tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyNoHeaderTmpl, nil, useJSON)
+		switch {
+		case fromToBck && hideHeader:
+			err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoHdrFromToTmpl, nil, usejs)
+		case !fromToBck && hideHeader:
+			err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoHdrTmpl, nil, usejs)
+		case fromToBck:
+			err = tmpls.Print(dts, c.App.Writer, tmpls.XactFromToTmpl, nil, usejs)
+		default:
+			err = tmpls.Print(dts, c.App.Writer, tmpls.XactTmpl, nil, usejs)
 		}
-		err = tmpls.Print(dts, c.App.Writer, tmpls.XactionsBodyTmpl, nil, useJSON)
 	}
 	if err != nil || !flagIsSet(c, verboseFlag) {
 		return err
@@ -572,7 +583,7 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) error {
 		_, name := xact.GetKindName(di.XactSnaps[0].Kind)
 		debug.Assert(name != "", di.XactSnaps[0].Kind)
 		actionCptn(c, cluster.Tname(di.DaemonID)+": ", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
-		if err := tmpls.Print(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON); err != nil {
+		if err := tmpls.Print(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, usejs); err != nil {
 			return err
 		}
 	}
@@ -649,22 +660,22 @@ func showConfigHandler(c *cli.Context) (err error) {
 
 func showClusterConfig(c *cli.Context, section string) error {
 	var (
-		useJSON        = flagIsSet(c, jsonFlag)
+		usejs          = flagIsSet(c, jsonFlag)
 		cluConfig, err = api.GetClusterConfig(apiBP)
 	)
 	if err != nil {
 		return err
 	}
 
-	if useJSON && section != "" {
+	if usejs && section != "" {
 		if printSectionJSON(c, cluConfig, section) {
 			return nil
 		}
-		useJSON = false
+		usejs = false
 	}
 
-	if useJSON {
-		return tmpls.Print(cluConfig, c.App.Writer, "", nil, useJSON)
+	if usejs {
+		return tmpls.Print(cluConfig, c.App.Writer, "", nil, usejs)
 	}
 	flat := flattenConfig(cluConfig, section)
 	err = tmpls.Print(flat, c.App.Writer, tmpls.ConfigTmpl, nil, false)
@@ -680,7 +691,7 @@ func showNodeConfig(c *cli.Context) error {
 		smap           *cluster.Smap
 		node           *cluster.Snode
 		section, scope string
-		useJSON        = flagIsSet(c, jsonFlag)
+		usejs          = flagIsSet(c, jsonFlag)
 	)
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
@@ -724,7 +735,7 @@ func showNodeConfig(c *cli.Context) error {
 		}
 	}
 
-	if useJSON {
+	if usejs {
 		warn := "option '--" + strings.Split(jsonFlag.Name, ",")[0] +
 			"' won't show node <=> cluster configuration differences, if any."
 		switch scope {
@@ -760,7 +771,7 @@ func showNodeConfig(c *cli.Context) error {
 		}
 	}
 
-	useJSON = false
+	usejs = false
 
 	// fill-in `data`
 	switch scope {
@@ -784,7 +795,7 @@ func showNodeConfig(c *cli.Context) error {
 		fmt.Fprintf(c.App.Writer, "PROPERTY\t VALUE\n\n")
 		return nil
 	}
-	return tmpls.Print(data, c.App.Writer, tmpls.DaemonConfigTmpl, nil, useJSON)
+	return tmpls.Print(data, c.App.Writer, tmpls.DaemonConfigTmpl, nil, usejs)
 }
 
 func showDaemonLogHandler(c *cli.Context) error {
@@ -957,8 +968,8 @@ func showMpathHandler(c *cli.Context) error {
 	sort.Slice(mpls, func(i, j int) bool {
 		return mpls[i].DaemonID < mpls[j].DaemonID // ascending by node id
 	})
-	useJSON := flagIsSet(c, jsonFlag)
-	return tmpls.Print(mpls, c.App.Writer, tmpls.TargetMpathListTmpl, nil, useJSON)
+	usejs := flagIsSet(c, jsonFlag)
+	return tmpls.Print(mpls, c.App.Writer, tmpls.TargetMpathListTmpl, nil, usejs)
 }
 
 func fmtStatValue(name string, value int64, human bool) string {
@@ -1067,9 +1078,9 @@ func showClusterTotalStats(c *cli.Context, averageOver time.Duration) (err error
 
 	clusterBps(st, averageOver)
 
-	useJSON := flagIsSet(c, jsonFlag)
-	if useJSON {
-		return tmpls.Print(st, c.App.Writer, tmpls.TargetMpathListTmpl, nil, useJSON)
+	usejs := flagIsSet(c, jsonFlag)
+	if usejs {
+		return tmpls.Print(st, c.App.Writer, tmpls.TargetMpathListTmpl, nil, usejs)
 	}
 
 	human := !flagIsSet(c, rawFlag)

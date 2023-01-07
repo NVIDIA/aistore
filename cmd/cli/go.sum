@@ -2,8 +2,8 @@ cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMT
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 code.cloudfoundry.org/bytefmt v0.0.0-20190710193110-1eb035ffe2b6/go.mod h1:wN/zk7mhREp/oviagqUXY3EwuHhWyOvAdsn5Y4CzOrc=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/NVIDIA/aistore v1.3.16-0.20230105230047-865d4a5fa412 h1:2S5snIgfEBOpc/ScS1UDzyFQysM1d2yzTtN3NhgrBO4=
-github.com/NVIDIA/aistore v1.3.16-0.20230105230047-865d4a5fa412/go.mod h1:hsrDVgG3j5+gEVhn9SQibAZSHje07qd+P9G/zCwWxyU=
+github.com/NVIDIA/aistore v1.3.16-0.20230107001819-4cb7b0f36234 h1:tHKy/nfDh8fzJdcFk1jKauVYLo6QDQ4FiuhSAAewWQY=
+github.com/NVIDIA/aistore v1.3.16-0.20230107001819-4cb7b0f36234/go.mod h1:hsrDVgG3j5+gEVhn9SQibAZSHje07qd+P9G/zCwWxyU=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=
 github.com/OneOfOne/xxhash v1.2.8/go.mod h1:eZbhyaAYD41SGSSsnmcpxVoRiQ/MPUTjUdIIOT9Um7Q=

@@ -410,7 +410,7 @@ func printCondensedStats(w io.Writer, id string, errhint bool) error {
 	return nil
 }
 
-func dsortJobsList(c *cli.Context, list []*dsort.JobInfo, useJSON bool) error {
+func dsortJobsList(c *cli.Context, list []*dsort.JobInfo, usejs bool) error {
 	sort.Slice(list, func(i int, j int) bool {
 		if list[i].IsRunning() && !list[j].IsRunning() {
 			return true
@@ -428,7 +428,7 @@ func dsortJobsList(c *cli.Context, list []*dsort.JobInfo, useJSON bool) error {
 		return list[i].StartedTime.Before(list[j].StartedTime)
 	})
 
-	return tmpls.Print(list, c.App.Writer, tmpls.DSortListTmpl, nil, useJSON)
+	return tmpls.Print(list, c.App.Writer, tmpls.DSortListTmpl, nil, usejs)
 }
 
 func dsortJobStatus(c *cli.Context, id string) error {
@@ -436,7 +436,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 		verbose = flagIsSet(c, verboseFlag)
 		refresh = flagIsSet(c, refreshFlag)
 		logging = flagIsSet(c, logFlag)
-		useJSON = flagIsSet(c, jsonFlag)
+		usejs   = flagIsSet(c, jsonFlag)
 	)
 
 	// Show progress bar.
@@ -453,7 +453,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 
 	// Show metrics just once.
 	if !refresh && !logging {
-		if useJSON || verbose {
+		if usejs || verbose {
 			var daemonIds []string
 			if c.NArg() == 2 {
 				daemonIds = append(daemonIds, c.Args().Get(1))

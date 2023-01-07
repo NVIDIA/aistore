@@ -25,6 +25,8 @@ type (
 		StartTime time.Time `json:"start-time"`
 		EndTime   time.Time `json:"end-time"`
 		Bck       cmn.Bck   `json:"bck"`
+		SrcBck    cmn.Bck   `json:"src-bck"`
+		DstBck    cmn.Bck   `json:"dst-bck"`
 		ID        string    `json:"id"`
 		Kind      string    `json:"kind"`
 		Stats     Stats     `json:"stats"` // common stats counters (below)

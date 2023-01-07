@@ -312,10 +312,11 @@ func (xctn *Base) Snap() cluster.XactSnap {
 	return snap
 }
 
+// NOTE: snap.SrcBck etc. must be done via real-xaction.Snap() override
 func (xctn *Base) ToSnap(snap *Snap) {
 	snap.ID = xctn.ID()
 	snap.Kind = xctn.Kind()
-	snap.Bck = *(xctn.bck.Bucket())
+	snap.Bck = xctn.bck.Clone()
 	snap.StartTime = xctn.StartTime()
 	snap.EndTime = xctn.EndTime()
 	snap.AbortedX = xctn.IsAborted()
