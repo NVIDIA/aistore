@@ -125,33 +125,50 @@ const (
 		"{{end}}\t {{FormatTime $value.StartedTime}}\t {{FormatTime $value.FinishTime}} \t {{$value.Description}}\n"
 	DSortListTmpl = DSortListHdr + "{{ range $value := . }}" + DSortListBody + "{{end}}"
 
+	//
 	// Xactions
-	XactTmpl = XactStatsHdr + XactNoHdrTmpl
+	//
+	XactBucketTmpl      = xactBucketHdr + XactNoHdrBucketTmpl
+	XactNoHdrBucketTmpl = "{{range $daemon := . }}" + xactBucketBodyAll + "{{end}}"
 
-	XactNoHdrTmpl = "{{range $daemon := . }}" + XactBody + "{{end}}"
-	XactStatsHdr  = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	XactBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactStatsBody + "{{end}}"
-	XactStatsBody = "{{ $daemon.DaemonID }}\t " +
+	xactBucketHdr     = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
+	xactBucketBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactBucketBodyOne + "{{end}}"
+	XactBucketBodyOne = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{$xctn.Kind}}\t " +
-		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
+		"{{FormatBckName $xctn.Bck}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatTime $xctn.StartTime}}\t " +
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
-	// [copy/paste] same as above except for: src-bck, dst-bck
-	XactFromToTmpl = XactFromToStatsHdr + XactNoHdrFromToTmpl
+	// same as above except for: src-bck, dst-bck columns
+	XactFromToTmpl      = xactFromToHdr + XactNoHdrFromToTmpl
+	XactNoHdrFromToTmpl = "{{range $daemon := . }}" + xactFromToBodyAll + "{{end}}"
 
-	XactNoHdrFromToTmpl = "{{range $daemon := . }}" + XactFromToBody + "{{end}}"
-	XactFromToStatsHdr  = "NODE\t ID\t KIND\t SRC BUCKET\t DST BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	XactFromToBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactFromToStatsBody + "{{end}}"
-	XactFromToStatsBody = "{{ $daemon.DaemonID }}\t " +
+	xactFromToHdr     = "NODE\t ID\t KIND\t SRC BUCKET\t DST BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
+	xactFromToBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactFromToBodyOne + "{{end}}"
+	xactFromToBodyOne = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{$xctn.Kind}}\t " +
 		"{{FormatBckName $xctn.SrcBck}}\t " +
 		"{{FormatBckName $xctn.DstBck}}\t " +
+		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
+		"{{FormatTime $xctn.StartTime}}\t " +
+		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{FormatXactState $xctn}}\n"
+
+	// same as above for: no bucket column
+	XactNoBucketTmpl      = xactNoBucketHdr + XactNoHdrNoBucketTmpl
+	XactNoHdrNoBucketTmpl = "{{range $daemon := . }}" + xactNoBucketBodyAll + "{{end}}"
+
+	xactNoBucketHdr     = "NODE\t ID\t KIND\t OBJECTS\t BYTES\t START\t END\t STATE\n"
+	xactNoBucketBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactNoBucketBodyOne + "{{end}}"
+	xactNoBucketBodyOne = "{{ $daemon.DaemonID }}\t " +
+		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
+		"{{$xctn.Kind}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatTime $xctn.StartTime}}\t " +

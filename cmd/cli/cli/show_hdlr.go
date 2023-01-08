@@ -499,10 +499,10 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, erro
 	}
 
 	var (
-		xactKind  = xactArgs.Kind
-		dts       = make([]daemonTemplateXactSnaps, len(xs))
-		i         int
-		fromToBck bool
+		xactKind           = xactArgs.Kind
+		dts                = make([]daemonTemplateXactSnaps, len(xs))
+		i                  int
+		fromToBck, haveBck bool
 	)
 	for tid, snaps := range xs {
 		if xactArgs.DaemonID != "" && xactArgs.DaemonID != tid {
@@ -519,6 +519,8 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, erro
 		if !snaps[0].SrcBck.IsEmpty() {
 			debug.Assert(!snaps[0].DstBck.IsEmpty())
 			fromToBck = true
+		} else if !snaps[0].Bck.IsEmpty() {
+			haveBck = true
 		}
 		if len(snaps) > 1 {
 			sort.Slice(snaps, func(i, j int) bool {
@@ -578,12 +580,18 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, erro
 		switch {
 		case fromToBck && hideHeader:
 			err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoHdrFromToTmpl, nil, usejs)
-		case !fromToBck && hideHeader:
-			err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoHdrTmpl, nil, usejs)
 		case fromToBck:
 			err = tmpls.Print(dts, c.App.Writer, tmpls.XactFromToTmpl, nil, usejs)
+		case haveBck && hideHeader:
+			err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoHdrBucketTmpl, nil, usejs)
+		case haveBck:
+			err = tmpls.Print(dts, c.App.Writer, tmpls.XactBucketTmpl, nil, usejs)
 		default:
-			err = tmpls.Print(dts, c.App.Writer, tmpls.XactTmpl, nil, usejs)
+			if hideHeader {
+				err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoHdrNoBucketTmpl, nil, usejs)
+			} else {
+				err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoBucketTmpl, nil, usejs)
+			}
 		}
 	}
 	if err != nil || !flagIsSet(c, verboseFlag) {
