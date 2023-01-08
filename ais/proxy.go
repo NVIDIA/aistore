@@ -1344,15 +1344,18 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
 		return
 	}
-	if lsmsg.Props == "" { // default to the minimal (name,size) subset when _not_ explicitly specified
+
+	// default props & flags => user-provided message
+	switch {
+	case lsmsg.Props == "" && lsmsg.IsFlagSet(apc.LsObjCached):
+		lsmsg.AddProps(apc.GetPropsDefaultAIS...)
+	case lsmsg.Props == "":
 		lsmsg.AddProps(apc.GetPropsMinimal...)
 		lsmsg.SetFlag(apc.LsNameSize)
-	} else if lsmsg.WantOnlyName() { // fast option
+	case lsmsg.WantOnlyName():
 		lsmsg.SetFlag(apc.LsNameOnly)
 	}
-
-	// HTTP "buckets" do not support remote listing. LsArchDir, on the other hand,
-	// needs locality to list archived content.
+	// ht:// backend doesn't have `ListObjects`; can only locally list archived content
 	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
 		lsmsg.SetFlag(apc.LsObjCached)
 	}
