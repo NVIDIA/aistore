@@ -87,7 +87,11 @@ client.bucket("my-ais-bucket").object("my-new-object").put("path-to-object")
 
 **Working with multiple objects**
 
-AIS provides support to create groups of objects on which multi-object operations can be performed. This group can be defined by a list of object names or by an [ObjectRange](https://github.com/NVIDIA/aistore/blob/master/python/aistore/object_range.py). 
+AIS supports multi-object operations on groups of objects. An `ObjectGroup` can be created with one of:
+* a list of object names
+* an [ObjectRange](https://github.com/NVIDIA/aistore/blob/master/python/aistore/object_range.py)
+* a string template.
+
 
 ```python
 # Create Object Group by list of names
@@ -98,6 +102,15 @@ my_objects = client.bucket("my-ais-bucket").objects(obj_names=["my-obj-1", "my-o
 # Create Object Group by ObjectRange
 my_object_range = ObjectRange(prefix="my-obj", min_index="1", max_index="3")
 my_objects = client.bucket("my-ais-bucket").objects(obj_range=my_object_range)
+```
+
+String templates can be passed directly to AIS following the [syntax described here](https://github.com/NVIDIA/aistore/blob/master/docs/batch.md#operations-on-multiple-selected-objects)
+```python
+# Create Object Group by Template String
+my_object_template = "my-obj-{1..3}"
+my_objects = client.bucket("my-ais-bucket").objects(obj_template=my_object_template)
+# More advanced template example with multiple ranges and defined steps
+complex_range = "my-obj-{0..10..2}-details-{1..9..2}-.file-extension"
 ```
 
 ```python

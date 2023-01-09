@@ -20,6 +20,7 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client = Client(CLUSTER_ENDPOINT)
         self.obj_prefix = "test_object_group_prefix-"
         self.obj_suffix = "-suffix"
+        self.obj_template = self.obj_prefix + "{1..8..2}" + self.obj_suffix
 
         if REMOTE_SET:
             self.cloud_objects = []
@@ -37,7 +38,7 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
             self.obj_prefix, 1, 8, step=2, suffix=self.obj_suffix
         )
         self.obj_names = self.create_object_list(
-            self.obj_prefix, self.provider, self.bck_name, self.obj_suffix
+            self.obj_prefix, self.provider, self.bck_name, 10, self.obj_suffix
         )
 
     def _cleanup_objects(self):
@@ -56,27 +57,33 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
             self.bucket.delete()
 
     def test_delete_list(self):
-        objects_to_delete = self.obj_names[1:]
-        xact_id = self.bucket.objects(objects_to_delete).delete()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
-        existing_objects = self.bucket.list_objects(
-            prefix=self.obj_prefix
-        ).get_entries()
-        self.assertEqual(1, len(existing_objects))
-        self.assertEqual(self.obj_names[0], existing_objects[0].name)
+        object_group = self.bucket.objects(obj_names=self.obj_names[1:])
+        self.delete_test_helper(object_group, [self.obj_names[0]])
 
     def test_delete_range(self):
-        xact_id = self.bucket.objects(obj_range=self.obj_range).delete()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
-        existing_objects = self.bucket.list_objects(
-            prefix=self.obj_prefix
-        ).get_entries()
-        self.assertEqual(6, len(existing_objects))
-
+        object_group = self.bucket.objects(obj_range=self.obj_range)
         expected_object_names = [
             self.obj_prefix + str(x) + self.obj_suffix for x in range(0, 9, 2)
         ]
         expected_object_names.append(self.obj_prefix + "9" + self.obj_suffix)
+        self.delete_test_helper(object_group, expected_object_names)
+
+    def test_delete_template(self):
+        object_group = self.bucket.objects(obj_template=self.obj_template)
+        expected_object_names = [
+            self.obj_prefix + str(x) + self.obj_suffix for x in range(0, 9, 2)
+        ]
+        expected_object_names.append(self.obj_prefix + "9" + self.obj_suffix)
+        self.delete_test_helper(object_group, expected_object_names)
+
+    def delete_test_helper(self, object_group, expected_object_names):
+        xact_id = object_group.delete()
+        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+        existing_objects = self.bucket.list_objects(
+            prefix=self.obj_prefix
+        ).get_entries()
+        self.assertEqual(len(expected_object_names), len(existing_objects))
+
         existing_object_names = [x.name for x in existing_objects]
         self.assertEqual(expected_object_names, existing_object_names)
 
@@ -85,22 +92,33 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
         "Remote bucket is not set",
     )
     def test_evict_list(self):
-        objects_to_evict = self.obj_names[1:]
-        xact_id = self.bucket.objects(obj_names=objects_to_evict).evict()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
-        cached = [0]
-        self.verify_cached_objects(10, cached)
+        object_group = self.bucket.objects(obj_names=self.obj_names[1:])
+        self.evict_test_helper(object_group, [0], 10)
 
     @unittest.skipIf(
         not REMOTE_SET,
         "Remote bucket is not set",
     )
     def test_evict_range(self):
-        xact_id = self.bucket.objects(obj_range=self.obj_range).evict()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+        object_group = self.bucket.objects(obj_range=self.obj_range)
         cached = list(range(0, 11, 2))
         cached.append(9)
-        self.verify_cached_objects(10, cached)
+        self.evict_test_helper(object_group, cached, 10)
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    def test_evict_template(self):
+        object_group = self.bucket.objects(obj_template=self.obj_template)
+        cached = list(range(0, 11, 2))
+        cached.append(9)
+        self.evict_test_helper(object_group, cached, 10)
+
+    def evict_test_helper(self, object_group, expected_cached, expected_total):
+        xact_id = object_group.evict()
+        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+        self.verify_cached_objects(expected_total, expected_cached)
 
     def test_evict_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=ProviderAIS)
@@ -114,25 +132,33 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
         "Remote bucket is not set",
     )
     def test_prefetch_list(self):
-        self.evict_all_objects()
-        # Fetch back a specific list and verify cache status
-        objects_to_fetch = self.obj_names[1:]
-        xact_id = self.bucket.objects(obj_names=objects_to_fetch).prefetch()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
-        cached = range(1, 10)
-        self.verify_cached_objects(10, cached)
+        obj_group = self.bucket.objects(obj_names=self.obj_names[1:])
+        self.prefetch_test_helper(obj_group, range(1, 10), 10)
 
     @unittest.skipIf(
         not REMOTE_SET,
         "Remote bucket is not set",
     )
     def test_prefetch_range(self):
-        self.evict_all_objects()
-        # Fetch back a specific range and verify cache status
-        xact_id = self.bucket.objects(obj_range=self.obj_range).prefetch()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+        obj_group = self.bucket.objects(obj_range=self.obj_range)
         cached = list(range(1, 8, 2))
-        self.verify_cached_objects(10, cached)
+        self.prefetch_test_helper(obj_group, cached, 10)
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    def test_prefetch_template(self):
+        obj_group = self.bucket.objects(obj_template=self.obj_template)
+        cached = list(range(1, 8, 2))
+        self.prefetch_test_helper(obj_group, cached, 10)
+
+    def prefetch_test_helper(self, object_group, expected_cached, expected_total):
+        self.evict_all_objects()
+        # Fetch back a specific object group and verify cache status
+        xact_id = object_group.prefetch()
+        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+        self.verify_cached_objects(expected_total, expected_cached)
 
     def test_prefetch_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=ProviderAIS)
@@ -171,7 +197,7 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
             else:
                 self.assertFalse(obj.is_cached())
 
-    def create_object_list(self, prefix, provider, bck_name, suffix="", length=10):
+    def create_object_list(self, prefix, provider, bck_name, length, suffix=""):
         obj_names = [prefix + str(i) + suffix for i in range(length)]
         for obj_name in obj_names:
             if REMOTE_SET:

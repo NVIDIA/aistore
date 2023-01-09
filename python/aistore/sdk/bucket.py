@@ -426,7 +426,7 @@ class Bucket:
 
     def object(self, obj_name: str):
         """
-        Factory constructor for object bound to bucket.
+        Factory constructor for object belongin to this bucket.
         Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
 
         Args:
@@ -437,18 +437,29 @@ class Bucket:
         """
         return Object(bck=self, obj_name=obj_name)
 
-    def objects(self, obj_names: list = None, obj_range: ObjectRange = None):
+    def objects(
+        self,
+        obj_names: list = None,
+        obj_range: ObjectRange = None,
+        obj_template: str = None,
+    ):
         """
-        Factory constructor for multiple objects bound to bucket.
+        Factory constructor for multiple objects belonging to this bucket.
 
         Args:
-            obj_names (list): Names of objects to include in the collection
-            obj_range (ObjectRange): Range of objects to include in the collection
+            obj_names (list): Names of objects to include in the group
+            obj_range (ObjectRange): Range of objects to include in the group
+            obj_template (str): String template defining objects to include in the group
 
         Returns:
             The ObjectGroup created
         """
-        return ObjectGroup(bck=self, obj_names=obj_names, obj_range=obj_range)
+        return ObjectGroup(
+            bck=self,
+            obj_names=obj_names,
+            obj_range=obj_range,
+            obj_template=obj_template,
+        )
 
     def make_request(
         self, method: str, action: str, value: dict = None, params: dict = None

@@ -20,16 +20,27 @@ class ObjectGroup:
         bck (Bucket): Bucket the objects belong to
         obj_names (list[str], optional): List of object names to include in this collection
         obj_range (ObjectRange, optional): Range defining which object names in the bucket should be included
+        obj_template (str, optional): String argument to pass as template value directly to api
     """
 
-    def __init__(self, bck, obj_names: list = None, obj_range: ObjectRange = None):
+    def __init__(
+        self,
+        bck,
+        obj_names: list = None,
+        obj_range: ObjectRange = None,
+        obj_template: str = None,
+    ):
         self.bck = bck
-        if obj_names and obj_range:
+        num_args = sum(
+            1 if x is not None else 0 for x in [obj_names, obj_range, obj_template]
+        )
+        if num_args != 1:
             raise ValueError(
-                "ObjectGroup only accepts either a list of objects or an ObjectRange"
+                "ObjectGroup accepts one and only one of: obj_names, obj_range, or obj_template"
             )
         self.obj_names = obj_names
         self.obj_range = obj_range
+        self.obj_template = obj_template
 
     def delete(self):
         """
@@ -101,4 +112,6 @@ class ObjectGroup:
             return {"objnames": self.obj_names}
         if self.obj_range:
             return {"template": str(self.obj_range)}
+        if self.obj_template:
+            return {"template": self.obj_template}
         return None
