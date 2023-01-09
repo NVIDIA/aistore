@@ -140,9 +140,9 @@ test:short:
 test:short:python:
   <<: *test_short_def
   variables:
-    BUCKET: "ais://test"
+    BUCKET: "aws://ais-cicd"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
     - cd python
     - make python_sdk_tests
     - make python_botocore_tests
