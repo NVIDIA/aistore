@@ -426,7 +426,7 @@ class Bucket:
 
     def object(self, obj_name: str):
         """
-        Factory constructor for object belongin to this bucket.
+        Factory constructor for object belonging to this bucket.
         Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
 
         Args:

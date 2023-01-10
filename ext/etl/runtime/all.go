@@ -14,6 +14,7 @@ import (
 const (
 	Py38  = "python3.8v2"
 	Py310 = "python3.10v2"
+	Py311 = "python3.11v2"
 )
 
 type (
@@ -26,6 +27,7 @@ type (
 	runbase struct{}
 	py38    struct{ runbase }
 	py310   struct{ runbase }
+	py311   struct{ runbase }
 )
 
 var (
@@ -41,8 +43,8 @@ func Get(runtime string) (r runtime, ok bool) {
 }
 
 func init() {
-	all = make(map[string]runtime, 2)
-	for _, r := range []runtime{py38{}, py310{}} {
+	all = make(map[string]runtime, 3)
+	for _, r := range []runtime{py38{}, py310{}, py311{}} {
 		if _, ok := all[r.Name()]; ok {
 			debug.Assert(false, "duplicate type "+r.Name())
 		} else {
@@ -54,8 +56,12 @@ func init() {
 func (runbase) CodeEnvName() string { return "AISTORE_CODE" }
 func (runbase) DepsEnvName() string { return "AISTORE_DEPS" }
 
+// container images: "aistorage/runtime_python:<TAG>"
 func (py38) Name() string    { return Py38 }
-func (py38) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.8v2") } // container images "aistore/runtime_python:<TAG>"
+func (py38) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.8v2") }
 
 func (py310) Name() string    { return Py310 }
-func (py310) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.10v2") } // ditto
+func (py310) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.10v2") }
+
+func (py311) Name() string    { return Py311 }
+func (py311) PodSpec() string { return strings.ReplaceAll(pyPodSpec, "<TAG>", "3.11v2") }

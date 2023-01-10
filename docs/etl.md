@@ -52,11 +52,13 @@ The rest of this text is organized as follows:
 - [Inline ETL example](#inline-etl-example)
 - [Offline ETL example](#offline-etl-example)
 - [Kubernetes Deployment](#kubernetes-deployment)
-- [Defining and initializing ETL](#defining-and-initializing-etl)
-  - [*init code* request](#init-code-request)
-    - [`transform` function](#transform-function)
-    - [Runtimes](#runtimes)
-  - [*init spec* request](#init-spec-request)
+- [Extract, Transform and Load using user-defined functions](#extract-transform-and-load-using-user-defined-functions)
+- [Extract, Transform and Load using custom containers](#extract-transform-and-load-using-custom-containers)
+- [*init code* request](#init-code-request)
+  - [`hpush://` communication](#hpush-communication)
+  - [`io://` communication](#io-communication)
+  - [Runtimes](#runtimes)
+- [*init spec* request](#init-spec-request)
     - [Requirements](#requirements)
     - [Specification YAML](#specification-yaml)
     - [Required or additional fields](#required-or-additional-fields)
@@ -197,6 +199,7 @@ Currently, the following runtimes are supported:
 | --- | --- |
 | `python3.8v2` | `python:3.8` is used to run the code. |
 | `python3.10v2` | `python:3.10` is used to run the code. |
+| `python3.11v2` | `python:3.11` is used to run the code. |
 
 More *runtimes* will be added in the future, with plans to support the most popular ETL toolchains.
 Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your ETL container and deploy it via [*init spec* request](#init-spec-request).

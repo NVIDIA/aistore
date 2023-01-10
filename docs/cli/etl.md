@@ -83,7 +83,7 @@ def transform(input_bytes):
     md5.update(input_bytes)
     return md5.hexdigest().encode()
 
-$ ais etl init code --from-file=code.py --runtime=python3 --name=transformer-md5
+$ ais etl init code --from-file=code.py --runtime=python3.11v2 --name=transformer-md5
 transformer-md5
 ```
 
@@ -101,7 +101,7 @@ def transform(input_bytes, context):
 def after(context):
     return context["before"].hexdigest().encode()
 
-$ ais etl init code --name=etl-md5 --from-file=code.py --runtime=python3.8v2 --chunk-size=32768 --before=before --after=after
+$ ais etl init code --name=etl-md5 --from-file=code.py --runtime=python3.11v2 --chunk-size=32768 --before=before --after=after
 ```
 
 ## List ETLs

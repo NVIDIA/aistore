@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #
+import sys
 
 import base64
 from typing import Callable, List
@@ -13,6 +14,18 @@ from aistore.sdk.const import (
     HTTP_METHOD_PUT,
 )
 from aistore.sdk.types import ETL, ETLDetails
+
+
+def get_default_runtime():
+    """
+    Determines etl runtime to use if not specified
+    Returns:
+        String of runtime
+    """
+    version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    if version in ["3.10", "3.11"]:
+        return f"python{version}v2"
+    return "python3.8v2"
 
 
 # pylint: disable=unused-variable
@@ -71,7 +84,7 @@ class Etl:
         transform: Callable,
         etl_id: str,
         dependencies: List[str] = None,
-        runtime: str = "python3.8v2",
+        runtime: str = get_default_runtime(),
         communication_type: str = "hpush",
         timeout: str = "5m",
         chunk_size: int = None,
@@ -81,10 +94,13 @@ class Etl:
 
         Args:
             transform (Callable): Transform function of the ETL
-            etl_id (str): Id of new ETL
-            runtime (str): [optional, default="python3.8v2"] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2] (see etl/runtime/all.go)
+            etl_id (str): ID of new ETL
+            dependencies (list[str]): Python dependencies to install
+            runtime (str): [optional, default= V2 implementation of the current python version if supported, else
+                python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
+                (see ext/etl/runtime/all.go)
             communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev, hpush, io)
-            timeout (str): [optional, default="5m"] Timeout of the ETL (eg. 5m for 5 minutes)
+            timeout (str): [optional, default="5m"] Timeout of the ETL (e.g. 5m for 5 minutes)
             chunk_size (int): Chunk size in bytes if transform function in streaming data. (whole object is read by default)
         Returns:
             etl_id (str): ETL ID

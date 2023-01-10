@@ -15,7 +15,7 @@ AIStore Python API is a growing set of client-side objects and methods to access
   * [Client](#api.Client)
     * [bucket](#api.Client.bucket)
     * [cluster](#api.Client.cluster)
-    * [xaction](#api.Client.xaction)
+    * [job](#api.Client.job)
     * [etl](#api.Client.etl)
     * [list\_objects\_iter](#api.Client.list_objects_iter)
     * [get\_object](#api.Client.get_object)
@@ -60,6 +60,7 @@ AIStore Python API is a growing set of client-side objects and methods to access
     * [evict](#object_group.ObjectGroup.evict)
     * [prefetch](#object_group.ObjectGroup.prefetch)
 * [etl](#etl)
+  * [get\_default\_runtime](#etl.get_default_runtime)
   * [Etl](#etl.Etl)
     * [client](#etl.Etl.client)
     * [init\_spec](#etl.Etl.init_spec)
@@ -126,16 +127,16 @@ Does not make any HTTP request, only instantiates a cluster object owned by the 
 
   The cluster object created.
 
-<a id="api.Client.xaction"></a>
+<a id="api.Client.job"></a>
 
-### xaction
+### job
 
 ```python
-def xaction()
+def job()
 ```
 
-Factory constructor for xaction object, which contains xaction-related functions.
-Does not make any HTTP request, only instantiates an xaction object bound to the client.
+Factory constructor for job object, which contains job-related functions.
+Does not make any HTTP request, only instantiates a job object bound to the client.
 
 **Arguments**:
 
@@ -144,7 +145,7 @@ Does not make any HTTP request, only instantiates an xaction object bound to the
 
 **Returns**:
 
-  The xaction object created.
+  The job object created.
 
 <a id="api.Client.etl"></a>
 
@@ -156,7 +157,7 @@ def etl()
 
 Factory constructor for ETL object.
 Contains APIs related to AIStore ETL operations.
-Does not make any HTTP request, only instantiates an xaction object bound to the client.
+Does not make any HTTP request, only instantiates an ETL object bound to the client.
 
 **Arguments**:
 
@@ -165,7 +166,7 @@ Does not make any HTTP request, only instantiates an xaction object bound to the
 
 **Returns**:
 
-  The xaction object created.
+  The ETL object created.
 
 <a id="api.Client.list_objects_iter"></a>
 
@@ -487,7 +488,7 @@ def rename(to_bck: str) -> str
 ```
 
 Renames bucket in AIStore cluster.
-Only works on AIS buckets. Returns xaction id that can be used later to check the status of the asynchronous operation.
+Only works on AIS buckets. Returns job ID that can be used later to check the status of the asynchronous operation.
 
 **Arguments**:
 
@@ -496,7 +497,7 @@ Only works on AIS buckets. Returns xaction id that can be used later to check th
 
 **Returns**:
 
-  xaction id (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the status of the operation
   
 
 **Raises**:
@@ -581,7 +582,7 @@ def copy(to_bck_name: str,
          to_provider: str = ProviderAIS) -> str
 ```
 
-Returns xaction id that can be used later to check the status of the asynchronous operation.
+Returns job ID that can be used later to check the status of the asynchronous operation.
 
 **Arguments**:
 
@@ -596,7 +597,7 @@ Returns xaction id that can be used later to check the status of the asynchronou
 
 **Returns**:
 
-  Xaction id (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the status of the operation
   
 
 **Raises**:
@@ -620,7 +621,7 @@ def list_objects(prefix: str = "",
                  continuation_token: str = "") -> BucketList
 ```
 
-Returns a structure that contains a page of objects, xaction UUID, and continuation token (to read the next page, if available).
+Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if available).
 
 **Arguments**:
 
@@ -630,7 +631,7 @@ Returns a structure that contains a page of objects, xaction UUID, and continuat
   The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
 - `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
   Defaults to "0" - return maximum number objects.
-- `uuid` _str, optional_ - Job UUID, required to get the next page of objects
+- `uuid` _str, optional_ - Job ID, required to get the next page of objects
 - `continuation_token` _str, optional_ - Marks the object to start reading the next page
   
 
@@ -748,7 +749,7 @@ Transforms all objects in a bucket and puts them to destination bucket.
 
 **Returns**:
 
-  Xaction id (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the status of the operation
 
 <a id="bucket.Bucket.object"></a>
 
@@ -758,7 +759,7 @@ Transforms all objects in a bucket and puts them to destination bucket.
 def object(obj_name: str)
 ```
 
-Factory constructor for object bound to bucket.
+Factory constructor for object belonging to this bucket.
 Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
 
 **Arguments**:
@@ -775,15 +776,18 @@ Does not make any HTTP request, only instantiates an object in a bucket owned by
 ### objects
 
 ```python
-def objects(obj_names: list = None, obj_range: ObjectRange = None)
+def objects(obj_names: list = None,
+            obj_range: ObjectRange = None,
+            obj_template: str = None)
 ```
 
-Factory constructor for multiple objects bound to bucket.
+Factory constructor for multiple objects belonging to this bucket.
 
 **Arguments**:
 
-- `obj_names` _list_ - Names of objects to include in the collection
-- `obj_range` _ObjectRange_ - Range of objects to include in the collection
+- `obj_names` _list_ - Names of objects to include in the group
+- `obj_range` _ObjectRange_ - Range of objects to include in the group
+- `obj_template` _str_ - String template defining objects to include in the group
   
 
 **Returns**:
@@ -982,6 +986,7 @@ A class representing multiple objects within the same bucket. Only one of obj_na
 - `bck` _Bucket_ - Bucket the objects belong to
 - `obj_names` _list[str], optional_ - List of object names to include in this collection
 - `obj_range` _ObjectRange, optional_ - Range defining which object names in the bucket should be included
+- `obj_template` _str, optional_ - String argument to pass as template value directly to api
 
 <a id="object_group.ObjectGroup.delete"></a>
 
@@ -1005,7 +1010,7 @@ Deletes a list or range of objects in a bucket
 
 **Returns**:
 
-  Xaction id (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the status of the operation
 
 <a id="object_group.ObjectGroup.evict"></a>
 
@@ -1030,7 +1035,7 @@ NOTE: only Cloud buckets can be evicted.
 
 **Returns**:
 
-  Xaction id (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the status of the operation
 
 <a id="object_group.ObjectGroup.prefetch"></a>
 
@@ -1055,7 +1060,21 @@ NOTE: only Cloud buckets can be prefetched.
 
 **Returns**:
 
-  Xaction id (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the status of the operation
+
+<a id="etl.get_default_runtime"></a>
+
+### get\_default\_runtime
+
+```python
+def get_default_runtime()
+```
+
+Determines etl runtime to use if not specified
+
+**Returns**:
+
+  String of runtime
 
 <a id="etl.Etl"></a>
 
@@ -1116,7 +1135,7 @@ For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transf
 def init_code(transform: Callable,
               etl_id: str,
               dependencies: List[str] = None,
-              runtime: str = "python3.8v2",
+              runtime: str = get_default_runtime(),
               communication_type: str = "hpush",
               timeout: str = "5m",
               chunk_size: int = None)
@@ -1127,10 +1146,13 @@ Initializes ETL based on the provided source code. Returns ETL_ID.
 **Arguments**:
 
 - `transform` _Callable_ - Transform function of the ETL
-- `etl_id` _str_ - Id of new ETL
-- `runtime` _str_ - [optional, default="python3.8v2"] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2] (see etl/runtime/all.go)
+- `etl_id` _str_ - ID of new ETL
+- `dependencies` _list[str]_ - Python dependencies to install
+- `runtime` _str_ - [optional, default= V2 implementation of the current python version if supported, else
+  python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
+  (see ext/etl/runtime/all.go)
 - `communication_type` _str_ - [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev, hpush, io)
-- `timeout` _str_ - [optional, default="5m"] Timeout of the ETL (eg. 5m for 5 minutes)
+- `timeout` _str_ - [optional, default="5m"] Timeout of the ETL (e.g. 5m for 5 minutes)
 - `chunk_size` _int_ - Chunk size in bytes if transform function in streaming data. (whole object is read by default)
 
 **Returns**:

@@ -2,9 +2,11 @@ import base64
 import unittest
 from typing import List
 from unittest.mock import Mock
+from unittest.mock import patch
 
 import cloudpickle
 
+import aistore
 from aistore.sdk.const import (
     HTTP_METHOD_PUT,
     CODE_TEMPLATE,
@@ -12,7 +14,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_POST,
     HTTP_METHOD_DELETE,
 )
-from aistore.sdk.etl import Etl
+from aistore.sdk.etl import Etl, get_default_runtime
 from aistore.sdk.types import ETL, ETLDetails
 
 
@@ -61,11 +63,25 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             HTTP_METHOD_PUT, path="etl", json=expected_action
         )
 
+    def test_init_code_default_runtime(self):
+        version_to_runtime = {
+            (3, 7): "python3.8v2",
+            (3, 1234): "python3.8v2",
+            (3, 8): "python3.8v2",
+            (3, 10): "python3.10v2",
+            (3, 11): "python3.11v2",
+        }
+        for version, runtime in version_to_runtime.items():
+            with patch.object(aistore.sdk.etl.sys, "version_info") as version_info:
+                version_info.major = version[0]
+                version_info.minor = version[1]
+                self.assertEqual(runtime, get_default_runtime())
+
     def test_init_code_default_params(self):
         communication_type = "hpush"
 
         expected_action = {
-            "runtime": "python3.8v2",
+            "runtime": get_default_runtime(),
             "communication": f"{communication_type}://",
             "timeout": "5m",
             "funcs": {"transform": "transform"},

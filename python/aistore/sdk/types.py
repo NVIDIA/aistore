@@ -215,7 +215,7 @@ class ETLDetails(BaseModel):
     code: Optional[bytes]
     spec: Optional[str]
     dependencies: Optional[str]
-    runtime: str = "python3.8v2"  # see etl/runtime/all.go
+    runtime: Optional[str]  # see ext/etl/runtime/all.go
     chunk_size: int = 0
 
     @validator("code")
