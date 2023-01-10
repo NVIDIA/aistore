@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -249,7 +248,7 @@ var (
 	showCmdJob = cli.Command{
 		Name:         commandJob,
 		Usage:        "show running and finished jobs (use <TAB-TAB> to select, --all for all, help for options)",
-		ArgsUsage:    showJobArgument,
+		ArgsUsage:    jobShowStopWaitArgument,
 		Flags:        showCmdsFlags[commandJob],
 		Action:       showJobsHandler,
 		BashComplete: runningJobCompletions,
@@ -297,7 +296,7 @@ func showDisksHandler(c *cli.Context) (err error) {
 // - be omitted, in part or in total, and may
 // - come in arbitrary order
 func showJobsHandler(c *cli.Context) error {
-	name, xid, daemonID, bck, err := showJobsParse(c)
+	name, xid, daemonID, bck, err := jobArgs(c, 0, false /*ignore daemonID*/)
 	if err != nil {
 		return err
 	}
@@ -311,41 +310,6 @@ func showJobsHandler(c *cli.Context) error {
 		fmt.Fprintf(c.App.Writer, "No running jobs. Use %s to show all, %s <TAB-TAB> to select, help for details.\n", n, n)
 	}
 	return err
-}
-
-func showJobsParse(c *cli.Context) (name, xid, daemonID string, bck cmn.Bck, err error) {
-	// prelim. assignments
-	name = c.Args().Get(0)
-	xid = c.Args().Get(1)
-	daemonID = c.Args().Get(2)
-
-	// validate and reassign
-	if name != "" {
-		if xactKind, _ := xact.GetKindName(name); xactKind == "" {
-			daemonID = xid
-			xid = name
-			name = ""
-		}
-	}
-	if xid != "" || daemonID != "" {
-		var errV error
-		bck, errV = parseBckURI(c, xid, true /*require provider*/)
-		if errV == nil {
-			xid = "" // arg #1 is a bucket
-		} else if bck, errV = parseBckURI(c, daemonID, true); errV == nil {
-			daemonID = "" // ditto arg #2
-		}
-	}
-	if xid != "" && daemonID == "" {
-		if sid, _, errV := getNodeIDName(c, xid); errV == nil {
-			daemonID, xid = sid, ""
-		}
-	}
-	// sname => sid
-	if daemonID != "" {
-		daemonID, _, err = getNodeIDName(c, daemonID)
-	}
-	return
 }
 
 func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, error) {
@@ -369,16 +333,12 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 		return ll, nil
 	}
 
-	// by xid with additional logic to disambiguate download/dsort job ID vs xaction UUID
-	if strings.HasPrefix(xid, dload.PrefixJobID) {
-		if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
-			return _showJobs(c, subcmdDownload, xid, daemonID, bck, true)
-		}
-	}
-	if strings.HasPrefix(xid, dsort.PrefixJobID) {
-		if _, err := api.MetricsDSort(apiBP, xid); err == nil {
-			return _showJobs(c, subcmdDsort, xid, daemonID, bck, true)
-		}
+	name = jobID2Name(xid)
+	switch name {
+	case subcmdDownload:
+		return _showJobs(c, subcmdDownload, xid, daemonID, bck, true)
+	case subcmdDsort:
+		return _showJobs(c, subcmdDsort, xid, daemonID, bck, true)
 	}
 	return _showJobs(c, "" /*name*/, xid, daemonID, bck, true)
 }

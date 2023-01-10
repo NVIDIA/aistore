@@ -187,8 +187,8 @@ const (
 )
 
 const (
-	timeUnits = `"ns", "us" (or "µs"), "ms", "s" (default), "m", "h"`
-	sizeUnits = `(IEC or SI units, e.g.: "b", "B", "KB", "KiB", "MiB", "mb", "g", "GB")`
+	timeUnits = `ns, us (or µs), ms, s (default), m, h`
+	sizeUnits = `(IEC or SI units, e.g.: b, B, KB, KiB, MiB, mb, g, GB)`
 )
 
 const nodeLogFlushName = "log.flush_time"
@@ -202,7 +202,7 @@ const (
 	optionalJobIDArgument         = "[JOB_ID]"
 	optionalJobIDDaemonIDArgument = "[JOB_ID [NODE_ID]]"
 
-	showJobArgument = "[NAME] [JOB_ID] [NODE_ID] [BUCKET]"
+	jobShowStopWaitArgument = "[NAME] [JOB_ID] [NODE_ID] [BUCKET]"
 
 	// ETL
 	etlIDArgument     = "ETL_ID"

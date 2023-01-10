@@ -323,6 +323,10 @@ Remove the finished dSort job with given `JOB_ID` from the job list.
 
 `ais job wait dsort JOB_ID`
 
+or, same:
+
+`ais wait JOB_ID`
+
 Wait for the dSort job with given `JOB_ID` to finish.
 
 ### Options

@@ -155,8 +155,8 @@ var (
 	}
 	jobStopSub = cli.Command{
 		Name:         commandStop,
-		Usage:        "stop/abort a single batch job or multiple jobs (use <TAB-TAB> to select)",
-		ArgsUsage:    "NAME [JOB_ID] [BUCKET]",
+		Usage:        "terminate a single batch job or multiple jobs (use <TAB-TAB> to select, help for options)",
+		ArgsUsage:    jobShowStopWaitArgument,
 		Flags:        stopCmdsFlags,
 		Action:       stopJobHandler,
 		BashComplete: runningJobCompletions,
@@ -171,8 +171,8 @@ var (
 	}
 	jobWaitSub = cli.Command{
 		Name:         commandWait,
-		Usage:        "wait for a specific batch job to complete (use <TAB-TAB> to select)",
-		ArgsUsage:    "NAME " + jobIDArgument,
+		Usage:        "wait for a specific batch job to complete (use <TAB-TAB> to select, help for options)",
+		ArgsUsage:    jobShowStopWaitArgument,
 		Flags:        waitCmdsFlags,
 		Action:       waitJobHandler,
 		BashComplete: runningJobCompletions,
@@ -724,24 +724,28 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 //
 
 func stopJobHandler(c *cli.Context) error {
-	var (
-		name  = c.Args().Get(0)
-		id    = c.Args().Get(1)
-		regex = parseStrFlag(c, regexFlag)
-	)
-	if name == "" {
+	var shift int
+	if c.Args().Get(0) == commandJob {
+		shift = 1
+	}
+	name, xid, daemonID, bck, err := jobArgs(c, shift, true /*ignore daemonID*/)
+	if err != nil {
+		return err
+	}
+	if name == "" && xid == "" {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	bck, err := parseBckURI(c, id, true /*require provider*/)
-	if err == nil {
-		id = "" // arg 1 was in fact bucket
+	if daemonID != "" {
+		actionWarn(c, fmt.Sprintf("node ID %q will be ignored (waiting for a single target not supported)\n", daemonID))
 	}
 
-	if id != "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
+	regex := parseStrFlag(c, regexFlag)
+
+	if xid != "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
 		warn := fmt.Sprintf("in presence of %s argument ('%s') flags %s and %s will be ignored",
-			jobIDArgument, id, qflprn(allRunningJobsFlag), qflprn(regexFlag))
+			jobIDArgument, xid, qflprn(allRunningJobsFlag), qflprn(regexFlag))
 		actionWarn(c, warn)
-	} else if id == "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
+	} else if xid == "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
 		switch name {
 		case subcmdDownload, subcmdDsort:
 			// regex supported
@@ -757,39 +761,54 @@ func stopJobHandler(c *cli.Context) error {
 		}
 	}
 
+	if name == "" && xid != "" {
+		name = jobID2Name(xid)
+	}
+
 	// specialized stop
 	switch name {
 	case subcmdDownload:
-		if id == "" {
+		if xid == "" {
 			if flagIsSet(c, allRunningJobsFlag) || regex != "" {
 				return stopDownloadRegex(c, regex)
 			}
 			return missingArgumentsError(c, jobIDArgument)
 		}
-		return stopDownloadHandler(c, id)
+		return stopDownloadHandler(c, xid)
 	case subcmdDsort:
-		if id == "" {
+		if xid == "" {
 			if flagIsSet(c, allRunningJobsFlag) || regex != "" {
 				return stopDsortRegex(c, regex)
 			}
 			return missingArgumentsError(c, jobIDArgument)
 		}
-		return stopDsortHandler(c, id)
+		return stopDsortHandler(c, xid)
 	case commandETL:
-		return stopETLs(c, id)
+		return stopETLs(c, xid)
 	case commandRebalance:
 		return stopClusterRebalanceHandler(c)
 	}
 
 	// common stop
-	xactKind, xname := xact.GetKindName(name)
-	if xactKind == "" {
-		return incorrectUsageMsg(c, "unrecognized or misplaced option '%s'", name)
+	var (
+		xactID          = xid
+		xname, xactKind string
+	)
+	if name != "" {
+		xactKind, xname = xact.GetKindName(name)
+		if xactKind == "" {
+			return incorrectUsageMsg(c, "unrecognized or misplaced option '%s'", name)
+		}
 	}
-	xactID := id
 
 	if xactID == "" {
-		if !flagIsSet(c, allRunningJobsFlag) {
+		// NOTE: differentiate global (cluster-wide) xactions from non-global
+		// (the latter require --all to confirm stopping potentially many...)
+		var isGlobal bool
+		if _, dtor, err := xact.GetDescriptor(xactKind); err == nil {
+			isGlobal = dtor.Scope == xact.ScopeG || dtor.Scope == xact.ScopeGB
+		}
+		if !isGlobal && !flagIsSet(c, allRunningJobsFlag) {
 			msg := fmt.Sprintf("Expecting either %s argument or %s option (with or without regular expression)",
 				jobIDArgument, qflprn(allRunningJobsFlag))
 			return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
@@ -879,7 +898,7 @@ func formatXactMsg(xactID, xactKind string, bck cmn.Bck) string {
 	case xactKind != "":
 		return xactKind
 	default:
-		return fmt.Sprintf("xaction[%s%s]", xactID, sb)
+		return fmt.Sprintf("job[%s%s]", xactID, sb)
 	}
 }
 
@@ -951,48 +970,60 @@ func stopDsortHandler(c *cli.Context, id string) (err error) {
 // `job wait`
 //
 
-const wasFast = 60 * time.Second // TODO -- FIXME: reduce and flex
+const wasFast = 5 * time.Second // start printing "."(s)
 
 func waitJobHandler(c *cli.Context) error {
-	var (
-		name = c.Args().Get(0)
-		id   = c.Args().Get(1)
-	)
-	if name == "" {
+	var shift int
+	if c.Args().Get(0) == commandJob {
+		shift = 1
+	}
+
+	name, xid, daemonID, bck, err := jobArgs(c, shift, true /*ignore daemonID*/)
+	if err != nil {
+		return err
+	}
+	if name == "" && xid == "" {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	bck, err := parseBckURI(c, id, true /*require provider*/)
-	if err == nil {
-		id = "" // arg 1 was in fact bucket
+	if daemonID != "" {
+		actionWarn(c, fmt.Sprintf("node ID %q will be ignored (waiting for a single target not supported)\n", daemonID))
 	}
 
-	// special
+	if name == "" && xid != "" {
+		name = jobID2Name(xid)
+	}
+
+	// special wait
 	switch name {
 	case subcmdDownload:
-		if id == "" {
+		if xid == "" {
 			return missingArgumentsError(c, jobIDArgument)
 		}
-		return waitDownloadHandler(c, id /* job ID */)
+		return waitDownloadHandler(c, xid /*job ID*/)
 	case subcmdDsort:
-		if id == "" {
+		if xid == "" {
 			return missingArgumentsError(c, jobIDArgument)
 		}
-		return waitDsortHandler(c, id /* job ID */)
+		return waitDsortHandler(c, xid /*job ID*/)
 	}
 
-	// common `wait`
-	xactKind, xname := xact.GetKindName(name)
-	if xactKind == "" {
-		return incorrectUsageMsg(c, "unrecognized or misplaced option '%s'", name)
-	}
-
-	// all the rest
+	// common wait
 	var (
-		xactID      = id
+		xactID          = xid
+		xname, xactKind string
+	)
+	if name != "" {
+		xactKind, xname = xact.GetKindName(name)
+		if xactKind == "" {
+			return incorrectUsageMsg(c, "unrecognized or misplaced option '%s'", name)
+		}
+	}
+	var (
 		msg         = formatXactMsg(xactID, xname, bck)
 		xactArgs    = api.XactReqArgs{ID: xactID, Kind: xactKind}
 		refreshRate = calcRefreshRate(c)
 		total       time.Duration
+		prompted    bool
 	)
 	for {
 		status, err := api.GetOneXactionStatus(apiBP, xactArgs)
@@ -1014,15 +1045,16 @@ func waitJobHandler(c *cli.Context) error {
 		if status.Finished() {
 			break
 		}
+		if !prompted {
+			fmt.Fprintf(c.App.Writer, "Waiting for %s ", msg)
+			prompted = true
+		}
 		time.Sleep(refreshRate)
 		if total += refreshRate; total > wasFast {
 			fmt.Fprint(c.App.Writer, ".")
 		}
 	}
-	if total > wasFast {
-		fmt.Fprintln(c.App.Writer)
-	}
-	actionDone(c, msg+" finished")
+	actionDone(c, "\n"+msg+" done.")
 	return nil
 }
 
@@ -1056,15 +1088,9 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 		if resp.JobFinished() {
 			break
 		}
-		if total += refreshRate; total > wasFast {
-			fmt.Fprint(c.App.Writer, ".")
-		}
 		time.Sleep(refreshRate)
 	}
-	if total > wasFast {
-		fmt.Fprintln(c.App.Writer)
-	}
-	actionDone(c, qn+" finished")
+	actionDone(c, "\n"+qn+" finished")
 	return nil
 }
 
@@ -1103,9 +1129,6 @@ func waitDsortHandler(c *cli.Context, id string) error {
 			break
 		}
 		time.Sleep(refreshRate)
-		if total += refreshRate; total > wasFast {
-			fmt.Fprint(c.App.Writer, ".")
-		}
 	}
 	if total > wasFast {
 		fmt.Fprintln(c.App.Writer)
@@ -1213,4 +1236,65 @@ func removeDsortRegex(c *cli.Context, regex string) error {
 		actionDone(c, "No finished dsort jobs, nothing to do")
 	}
 	return nil
+}
+
+//
+// utility functions
+//
+
+// facilitate flexibility and common-sense argument omissions, do away with rigid name -> id -> ... ordering
+func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonID string, bck cmn.Bck, err error) {
+	// prelim. assignments
+	name = c.Args().Get(shift)
+	xid = c.Args().Get(shift + 1)
+	daemonID = c.Args().Get(shift + 2)
+
+	// validate and reassign
+	if name != "" && name != dsort.DSortName {
+		if xactKind, _ := xact.GetKindName(name); xactKind == "" {
+			daemonID = xid
+			xid = name
+			name = ""
+		}
+	}
+	if xid != "" {
+		var errV error
+		if bck, errV = parseBckURI(c, xid, true /*require provider*/); errV == nil {
+			xid = "" // arg #1 is a bucket
+		}
+	}
+	if daemonID != "" && bck.IsEmpty() {
+		var errV error
+		if bck, errV = parseBckURI(c, daemonID, true); errV == nil {
+			daemonID = "" // ditto arg #2
+		}
+	}
+	if xid != "" && daemonID == "" {
+		if sid, _, errV := getNodeIDName(c, xid); errV == nil {
+			daemonID, xid = sid, ""
+			return
+		}
+	}
+	if ignoreDaemonID {
+		return
+	}
+	// sname => sid
+	if daemonID != "" {
+		daemonID, _, err = getNodeIDName(c, daemonID)
+	}
+	return
+}
+
+// disambiguate download/dsort job ID vs xaction UUID
+func jobID2Name(xid string) string {
+	if strings.HasPrefix(xid, dload.PrefixJobID) {
+		if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
+			return subcmdDownload
+		}
+	} else if strings.HasPrefix(xid, dsort.PrefixJobID) {
+		if _, err := api.MetricsDSort(apiBP, xid); err == nil {
+			return subcmdDsort
+		}
+	}
+	return ""
 }

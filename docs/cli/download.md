@@ -22,6 +22,10 @@ AIS Downloader is intended for downloading massive numbers of files (objects) an
 
 `ais job start download SOURCE DESTINATION`
 
+or, same:
+
+`ais start download SOURCE DESTINATION`
+
 Download the object(s) from `SOURCE` location and saves it as specified in `DESTINATION` location.
 `SOURCE` location can be a link to single or range download:
 * `gs://lpr-vision/imagenet/imagenet_train-000000.tgz`
@@ -65,13 +69,16 @@ Download object `ubuntu-18.04.1-desktop-amd64.iso` from the specified HTTP locat
 ```bash
 $ ais bucket create ubuntu
 ubuntu bucket created
+
 $ ais job start download http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/ubuntu-18.04.1.iso
 cudIYMAqg
 Run `ais show job download cudIYMAqg` to monitor the progress of downloading.
-$ ais show job download cudIYMAqg --progress
+
+$ ais show job cudIYMAqg --progress
 Files downloaded:              0/1 [---------------------------------------------------------]  0 %
 ubuntu-18.04.1.iso 431.7MiB/1.8GiB [============>--------------------------------------------] 23 %
 All files successfully downloaded.
+
 $ ais bucket ls ais://ubuntu
 Name			Size	Version
 ubuntu-18.04.1.iso	1.82GiB	1
@@ -221,6 +228,8 @@ $ ais bucket ls --no-headers --cached ais://lpr-vision-copy | wc -l
 $ diff <(ais bucket ls gcp://lpr-vision) <(ais bucket ls --cached ais://lpr-vision-copy) | wc -l
 0
 ```
+
+> Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais job start download` can be expressed as `ais start download`, while `ais job wait download Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
 
 #### Download GCP bucket objects with prefix
 
