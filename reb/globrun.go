@@ -660,7 +660,7 @@ func (reb *Reb) _aborted(rargs *rebArgs) (yes bool) {
 }
 
 func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
-	var stats xact.Stats
+	var stats cluster.Stats
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs.id, rargs.smap))
 	}

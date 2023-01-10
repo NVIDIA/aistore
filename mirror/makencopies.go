@@ -73,14 +73,6 @@ func (p *mncFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // xactMNC //
 /////////////
 
-func (r *xactMNC) String() string {
-	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.String(), r.tag, r.copies)
-}
-
-func (r *xactMNC) Name() string {
-	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.Name(), r.tag, r.copies)
-}
-
 func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
 	r = &xactMNC{tag: p.args.Tag, copies: p.args.Copies}
 	debug.Assert(r.tag != "" && r.copies > 0)
@@ -134,4 +126,20 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 		}
 	}
 	return nil
+}
+
+func (r *xactMNC) String() string {
+	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.String(), r.tag, r.copies)
+}
+
+func (r *xactMNC) Name() string {
+	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.Name(), r.tag, r.copies)
+}
+
+func (r *xactMNC) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
 }

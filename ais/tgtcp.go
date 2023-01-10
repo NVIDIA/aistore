@@ -249,12 +249,10 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case apc.GetWhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
 	case apc.GetWhatDaemonStatus:
-		var rebSnap *stats.RebalanceSnap
+		var rebSnap *cluster.Snap
 		if entry := xreg.GetLatest(xreg.XactFilter{Kind: apc.ActRebalance}); entry != nil {
-			var ok bool
 			if xctn := entry.Get(); xctn != nil {
-				rebSnap, ok = xctn.Snap().(*stats.RebalanceSnap)
-				debug.Assert(ok)
+				rebSnap = xctn.Snap()
 			}
 		}
 		msg := &stats.DaemonStatus{

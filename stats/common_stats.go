@@ -29,7 +29,6 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
-	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -131,17 +130,12 @@ type (
 		cmu       sync.RWMutex // ctracker vs Prometheus Collect()
 	}
 
-	RebalanceSnap struct {
-		xact.Snap
-		RebID int64 `json:"glob.id,string"`
-	}
-
 	// REST API
 	DaemonStatus struct {
 		Snode          *cluster.Snode `json:"snode"`
 		Stats          *CoreStats     `json:"daemon_stats"`
 		Capacity       fs.MPCap       `json:"capacity"`
-		RebSnap        *RebalanceSnap `json:"rebalance_snap,omitempty"`
+		RebSnap        *cluster.Snap  `json:"rebalance_snap,omitempty"`
 		Status         string         `json:"status"`
 		DeploymentType string         `json:"deployment"`
 		Version        string         `json:"ais_version"`  // major.minor.build

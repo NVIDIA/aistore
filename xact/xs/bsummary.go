@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -251,4 +251,12 @@ func (r *bsummXact) Result() (any, error) {
 		return nil, errors.New("no result to load")
 	}
 	return ts.Result, ts.Err
+}
+
+func (r *bsummXact) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
 }

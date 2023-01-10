@@ -182,4 +182,10 @@ func (r *XactPut) stop() (err error) {
 	return err
 }
 
-func (r *XactPut) Stats() cluster.XactSnap { return r.DemandBase.ExtSnap() }
+func (r *XactPut) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
+}

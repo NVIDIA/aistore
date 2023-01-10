@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -239,7 +239,7 @@ func DoAbort(flt XactFilter, err error) (bool /*aborted*/, error) {
 	return true, nil
 }
 
-func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) {
+func GetSnap(flt XactFilter) ([]*cluster.Snap, error) {
 	var onlyRunning bool
 	if flt.OnlyRunning != nil {
 		onlyRunning = *flt.OnlyRunning
@@ -256,7 +256,7 @@ func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 			if flt.Kind != "" && xctn.Kind() != flt.Kind {
 				return nil, cmn.NewErrXactNotFoundError("[kind=" + flt.Kind + " vs " + xctn.String() + "]")
 			}
-			return []cluster.XactSnap{xctn.Snap()}, nil
+			return []*cluster.Snap{xctn.Snap()}, nil
 		}
 		if onlyRunning || flt.Kind != apc.ActRebalance {
 			return nil, cmn.NewErrXactNotFoundError("ID=" + flt.ID)
@@ -278,7 +278,7 @@ func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 		}
 
 		if onlyRunning {
-			matching := make([]cluster.XactSnap, 0, 10)
+			matching := make([]*cluster.Snap, 0, 10)
 			if flt.Kind == "" {
 				dreg.entries.mtx.RLock()
 				for kind := range xact.Table {
@@ -337,7 +337,7 @@ func (r *registry) abort(args abortArgs) {
 	})
 }
 
-func (r *registry) matchingXactsStats(match func(xctn cluster.Xact) bool) []cluster.XactSnap {
+func (r *registry) matchingXactsStats(match func(xctn cluster.Xact) bool) []*cluster.Snap {
 	matchingEntries := make([]Renewable, 0, 20)
 	r.entries.forEach(func(entry Renewable) bool {
 		if !match(entry.Get()) {
@@ -347,7 +347,7 @@ func (r *registry) matchingXactsStats(match func(xctn cluster.Xact) bool) []clus
 		return true
 	})
 	// TODO: we cannot do this inside `forEach` because - nested locks
-	sts := make([]cluster.XactSnap, 0, len(matchingEntries))
+	sts := make([]*cluster.Snap, 0, len(matchingEntries))
 	for _, entry := range matchingEntries {
 		sts = append(sts, entry.Get().Snap())
 	}

@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -82,13 +82,13 @@ type (
 	}
 	XactArch struct {
 		streamingX
-		bckFrom *cluster.Bck
 		workCh  chan *cmn.ArchiveMsg
+		config  *cmn.Config
+		toBck   *cluster.Bck
 		pending struct {
-			sync.RWMutex
 			m map[string]*archwi
+			sync.RWMutex
 		}
-		config *cmn.Config
 	}
 )
 
@@ -115,10 +115,10 @@ func (*archFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 
 func (p *archFactory) Start() error {
 	workCh := make(chan *cmn.ArchiveMsg, maxNumInParallel)
-	r := &XactArch{streamingX: streamingX{p: &p.streamingF}, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
+	r := &XactArch{streamingX: streamingX{p: &p.streamingF}, workCh: workCh, config: cmn.GCO.Get()}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xctn = r
-	r.DemandBase.Init(p.UUID(), apc.ActArchive, p.Bck, 0 /*use default*/)
+	r.DemandBase.Init(p.UUID(), apc.ActArchive, p.Bck /*from*/, 0 /*use default*/)
 
 	bmd := p.Args.T.Bowner().Get()
 	trname := fmt.Sprintf("arch-%s-%s-%d", p.Bck.Provider, p.Bck.Name, bmd.Version) // NOTE: (bmd.Version)
@@ -192,6 +192,15 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 			return
 		}
 	}
+
+	// most of the time there'll be a single dst bucket for the lifetime
+	// TODO: extend `cluster.Xact` for one-source-to-many-destination buckets
+	if r.toBck == nil {
+		if from := r.Bck().Bucket(); !from.Equal(&wi.msg.ToBck) {
+			r.toBck = cluster.CloneBck(&wi.msg.ToBck)
+		}
+	}
+
 	r.pending.Lock()
 	r.pending.m[msg.TxnUUID] = wi
 	r.wiCnt.Inc()
@@ -364,6 +373,40 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	cluster.FreeLOM(wi.lom)
 
 	r.ObjsAdd(1, size-wi.appendPos)
+	return
+}
+
+func (r *XactArch) Name() (s string) {
+	s = r.streamingX.Name()
+	if src, dst := r.FromTo(); src != nil {
+		s += " => " + dst.String()
+	}
+	return
+}
+
+func (r *XactArch) String() (s string) {
+	s = r.streamingX.String()
+	if src, dst := r.FromTo(); src != nil {
+		s += " => " + dst.String()
+	}
+	return
+}
+
+func (r *XactArch) FromTo() (src, dst *cluster.Bck) {
+	if r.toBck != nil {
+		src, dst = r.Bck(), r.toBck
+	}
+	return
+}
+
+func (r *XactArch) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	if f, t := r.FromTo(); f != nil {
+		snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
+	}
 	return
 }
 

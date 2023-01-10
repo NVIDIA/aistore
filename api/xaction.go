@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -33,7 +34,7 @@ const (
 )
 
 type (
-	XactMultiSnap map[string][]*xact.SnapExt // by target ID (tid)
+	XactMultiSnap map[string][]*cluster.Snap // by target ID (tid)
 
 	// either xaction ID or Kind must be specified
 	XactReqArgs struct {
@@ -373,7 +374,7 @@ func (xs XactMultiSnap) GetUUIDs() []string {
 	return uuids.ToSlice()
 }
 
-func (xs XactMultiSnap) RunningTarget(xactID string) (string /*tid*/, *xact.SnapExt, error) {
+func (xs XactMultiSnap) RunningTarget(xactID string) (string /*tid*/, *cluster.Snap, error) {
 	if err := xs.checkEmptyID(xactID); err != nil {
 		return "", nil, err
 	}
@@ -421,7 +422,7 @@ func (xs XactMultiSnap) isOneIdle(xactID string) (found, idle bool) {
 		for _, xsnap := range snaps {
 			if xactID == xsnap.ID {
 				found = true
-				if xsnap.Started() && !xsnap.IsAborted() && !xsnap.Idle() {
+				if xsnap.Started() && !xsnap.IsAborted() && !xsnap.IsIdle() {
 					return true, false
 				}
 			}

@@ -33,7 +33,7 @@ type (
 		xactReqBase
 		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
 	}
-	// Runtime EC statistics for PUT xaction
+	// extended x-ec-put statistics
 	ExtECPutStats struct {
 		AvgEncodeTime  cos.Duration `json:"ec.encode.ns"`
 		AvgDeleteTime  cos.Duration `json:"ec.delete.ns"`
@@ -233,10 +233,10 @@ func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
 	}
 }
 
-func (r *XactPut) Snap() cluster.XactSnap {
-	baseSnap := r.DemandBase.ExtSnap()
+func (r *XactPut) Snap() (snap *cluster.Snap) {
+	snap = r.baseSnap()
 	st := r.stats.stats()
-	baseSnap.Ext = &ExtECPutStats{
+	snap.Ext = &ExtECPutStats{
 		AvgEncodeTime:  cos.Duration(st.EncodeTime),
 		EncodeSize:     st.EncodeSize,
 		EncodeCount:    st.PutReq,
@@ -249,7 +249,7 @@ func (r *XactPut) Snap() cluster.XactSnap {
 		IsIdle:         r.Pending() == 0,
 	}
 
-	baseSnap.Stats.Objs = st.PutReq + st.DelReq // TODO: support in and out
-	baseSnap.Stats.Bytes = st.EncodeSize
-	return baseSnap
+	snap.Stats.Objs = st.PutReq + st.DelReq // TODO: support in and out
+	snap.Stats.Bytes = st.EncodeSize
+	return
 }

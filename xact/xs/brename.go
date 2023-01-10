@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -49,6 +49,10 @@ var (
 	_ xreg.Renewable = (*bmvFactory)(nil)
 )
 
+////////////////
+// bmvFactory //
+////////////////
+
 func (*bmvFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	p := &bmvFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, cargs: args.Custom.(*xreg.BckRenameArgs)}
 	return p
@@ -84,6 +88,10 @@ func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	return
 }
 
+///////////////
+// bckRename //
+///////////////
+
 func newBckRename(uuid, kind, rebID string, bck, bckFrom, bckTo *cluster.Bck) (x *bckRename) {
 	// NOTE: `bck` = `bckTo` = (the new name) while `bckFrom` is the existing bucket to be renamed
 	debug.Assert(bck.Equal(bckTo, false, true), bck.String()+" vs "+bckTo.String())
@@ -93,16 +101,6 @@ func newBckRename(uuid, kind, rebID string, bck, bckFrom, bckTo *cluster.Bck) (x
 	x.InitBase(uuid, kind, bck)
 	return
 }
-
-func (r *bckRename) String() string {
-	return fmt.Sprintf("%s <= %s", r.Base.String(), r.bckFrom)
-}
-
-func (r *bckRename) Name() string {
-	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.bckFrom)
-}
-
-func (r *bckRename) FromTo() (*cluster.Bck, *cluster.Bck) { return r.bckFrom, r.bckTo }
 
 // NOTE: assuming that rebalance takes longer than resilvering
 func (r *bckRename) Run(wg *sync.WaitGroup) {
@@ -135,4 +133,24 @@ loop:
 	}
 	r.t.BMDVersionFixup(nil, r.bckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
 	r.Finish(err)
+}
+
+func (r *bckRename) String() string {
+	return fmt.Sprintf("%s <= %s", r.Base.String(), r.bckFrom)
+}
+
+func (r *bckRename) Name() string {
+	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.bckFrom)
+}
+
+func (r *bckRename) FromTo() (*cluster.Bck, *cluster.Bck) { return r.bckFrom, r.bckTo }
+
+func (r *bckRename) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	f, t := r.FromTo()
+	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
+	return
 }

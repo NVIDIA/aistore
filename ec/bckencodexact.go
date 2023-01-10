@@ -168,3 +168,11 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 	}
 	return nil
 }
+
+func (r *XactBckEncode) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
+}

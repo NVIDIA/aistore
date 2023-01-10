@@ -186,6 +186,14 @@ func RunLRU(ini *IniLRU) {
 
 func (*XactLRU) Run(*sync.WaitGroup) { debug.Assert(false) }
 
+func (r *XactLRU) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
+}
+
 //////////////////////
 // mountpath jogger //
 //////////////////////

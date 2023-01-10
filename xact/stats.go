@@ -1,46 +1,16 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
 import (
 	"fmt"
-	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
 type (
-	Stats struct {
-		Objs     int64 `json:"loc-objs,string"`  // locally processed
-		Bytes    int64 `json:"loc-bytes,string"` //
-		OutObjs  int64 `json:"out-objs,string"`  // transmit
-		OutBytes int64 `json:"out-bytes,string"` //
-		InObjs   int64 `json:"in-objs,string"`   // receive
-		InBytes  int64 `json:"in-bytes,string"`
-	}
-	Snap struct {
-		StartTime time.Time `json:"start-time"`
-		EndTime   time.Time `json:"end-time"`
-		Bck       cmn.Bck   `json:"bck"`
-		SrcBck    cmn.Bck   `json:"src-bck"`
-		DstBck    cmn.Bck   `json:"dst-bck"`
-		ID        string    `json:"id"`
-		Kind      string    `json:"kind"`
-		Stats     Stats     `json:"stats"` // common stats counters (below)
-		AbortedX  bool      `json:"aborted"`
-	}
-	SnapExt struct {
-		Ext any `json:"ext"`
-		Snap
-	}
-
-	BaseDemandStatsExt struct {
-		IsIdle bool `json:"is_idle"`
-	}
-
 	// NOTE: see closely related `api.XactReqArgs` and comments
 	// TODO: apc package, here and elsewhere
 	QueryMsg struct {
@@ -57,35 +27,6 @@ type (
 		Force bool `json:"force"`
 	}
 )
-
-// interface guard
-var _ cluster.XactSnap = (*Snap)(nil)
-
-//////////
-// Snap //
-//////////
-
-func (b *Snap) IsAborted() bool { return b.AbortedX }
-func (b *Snap) Started() bool   { return !b.StartTime.IsZero() }
-func (b *Snap) Running() bool   { return b.Started() && !b.IsAborted() && b.EndTime.IsZero() }
-func (b *Snap) Finished() bool  { return b.Started() && !b.EndTime.IsZero() }
-
-// Idle is:
-// - stat.IsIdle for on-demand xactions
-// - !stat.Running() for all the rest
-// MorphMarshal cannot be used to read any stats as BaseDemandStatsExt because
-// upcasting is unsupported (uknown fields are forbidden).
-func (b *SnapExt) Idle() bool {
-	if b.Ext == nil {
-		return !b.Running()
-	}
-	if vals, ok := b.Ext.(map[string]any); ok {
-		if idle, ok := vals["is_idle"].(bool); ok {
-			return idle
-		}
-	}
-	return !b.Running()
-}
 
 //////////////
 // QueryMsg //

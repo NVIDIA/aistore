@@ -273,7 +273,13 @@ func (xld *Xact) checkJob(req *request) (*dljob, error) {
 	return dljob, nil
 }
 
-func (xld *Xact) Snap() cluster.XactSnap { return xld.DemandBase.ExtSnap() }
+func (xld *Xact) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	xld.ToSnap(snap)
+
+	snap.IdleX = xld.IsIdle()
+	return
+}
 
 /////////////
 // request //

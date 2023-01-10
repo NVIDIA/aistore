@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -91,15 +90,18 @@ func (xreb *Rebalance) RebID() int64 {
 	return id
 }
 
-func (xreb *Rebalance) Snap() cluster.XactSnap {
-	rebSnap := &stats.RebalanceSnap{}
-	xreb.ToSnap(&rebSnap.Snap)
-	rebSnap.RebID = xreb.RebID()
-	// NOTE: the number of rebalanced objects _is_ the number of transmitted objects
-	//       (definition)
-	rebSnap.Stats.Objs = rebSnap.Stats.OutObjs
-	rebSnap.Stats.Bytes = rebSnap.Stats.OutBytes
-	return rebSnap
+func (xreb *Rebalance) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	xreb.ToSnap(snap)
+	snap.RebID = xreb.RebID()
+
+	snap.IdleX = xreb.IsIdle()
+
+	// the number of rebalanced objects _is_ the number of transmitted objects (definition)
+	// (TODO: revisit)
+	snap.Stats.Objs = snap.Stats.OutObjs
+	snap.Stats.Bytes = snap.Stats.OutBytes
+	return
 }
 
 //////////////
@@ -134,8 +136,10 @@ func (xres *Resilver) String() string {
 	return xres.Base.String()
 }
 
-// TODO: check "resilver-marked" and unify with rebalance
-func (xres *Resilver) Snap() cluster.XactSnap {
-	baseStats := xres.Base.Snap().(*xact.Snap)
-	return baseStats
+func (xres *Resilver) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	xres.ToSnap(snap)
+
+	snap.IdleX = xres.IsIdle()
+	return
 }

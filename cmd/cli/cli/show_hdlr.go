@@ -32,7 +32,7 @@ import (
 type (
 	daemonTemplateXactSnaps struct {
 		DaemonID  string
-		XactSnaps []*xact.SnapExt
+		XactSnaps []*cluster.Snap
 	}
 
 	targetMpath struct {

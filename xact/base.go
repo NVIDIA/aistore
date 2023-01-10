@@ -1,6 +1,6 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
@@ -78,17 +78,22 @@ func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {
 	xctn.setStartTime(time.Now())
 }
 
-func (xctn *Base) ID() string                      { return xctn.id }
-func (xctn *Base) Kind() string                    { return xctn.kind }
-func (xctn *Base) Bck() *cluster.Bck               { return &xctn.bck }
-func (*Base) FromTo() (*cluster.Bck, *cluster.Bck) { return nil, nil }
-func (xctn *Base) Finished() bool                  { return xctn.eutime.Load() != 0 }
+func (xctn *Base) ID() string   { return xctn.id }
+func (xctn *Base) Kind() string { return xctn.kind }
+
+func (xctn *Base) Bck() *cluster.Bck { return &xctn.bck }
+
+func (xctn *Base) Finished() bool { return xctn.eutime.Load() != 0 }
 
 func (xctn *Base) Running() (yes bool) {
 	yes = xctn.sutime.Load() != 0 && !xctn.Finished() && !xctn.IsAborted()
 	debug.Assert(!yes || xctn.ID() != "", xctn.String())
 	return
 }
+
+func (xctn *Base) IsIdle() bool { return !xctn.Running() }
+
+func (*Base) FromTo() (*cluster.Bck, *cluster.Bck) { return nil, nil }
 
 //
 // aborting
@@ -306,31 +311,23 @@ func (xctn *Base) InObjsAdd(cnt int, size int64) {
 	xctn.stats.inbytes.Add(size)
 }
 
-func (xctn *Base) Snap() cluster.XactSnap {
-	snap := &Snap{}
-	xctn.ToSnap(snap)
-	return snap
-}
-
-// NOTE: snap.SrcBck etc. must be done via real-xaction.Snap() override
-func (xctn *Base) ToSnap(snap *Snap) {
+// provided for external use to fill-in xaction-specific `SnapExt` part
+func (xctn *Base) ToSnap(snap *cluster.Snap) {
 	snap.ID = xctn.ID()
 	snap.Kind = xctn.Kind()
-	snap.Bck = xctn.bck.Clone()
 	snap.StartTime = xctn.StartTime()
 	snap.EndTime = xctn.EndTime()
 	snap.AbortedX = xctn.IsAborted()
 
+	if b := xctn.Bck(); b != nil {
+		snap.Bck = b.Clone()
+	}
+
+	// counters
 	xctn.ToStats(&snap.Stats)
 }
 
-func (xctn *Base) GetStats() (stats *Stats) {
-	stats = &Stats{}
-	xctn.ToStats(stats)
-	return
-}
-
-func (xctn *Base) ToStats(stats *Stats) {
+func (xctn *Base) ToStats(stats *cluster.Stats) {
 	stats.Objs = xctn.Objs()         // locally processed
 	stats.Bytes = xctn.Bytes()       //
 	stats.OutObjs = xctn.OutObjs()   // transmit

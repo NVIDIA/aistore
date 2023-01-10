@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -670,7 +669,7 @@ func fmtACL(acl apc.AccessAttrs) string {
 	return acl.Describe()
 }
 
-func extECGetStats(base *xact.SnapExt) *ec.ExtECGetStats {
+func extECGetStats(base *cluster.Snap) *ec.ExtECGetStats {
 	ecGet := &ec.ExtECGetStats{}
 	if err := cos.MorphMarshal(base.Ext, ecGet); err != nil {
 		return &ec.ExtECGetStats{}
@@ -678,7 +677,7 @@ func extECGetStats(base *xact.SnapExt) *ec.ExtECGetStats {
 	return ecGet
 }
 
-func extECPutStats(base *xact.SnapExt) *ec.ExtECPutStats {
+func extECPutStats(base *cluster.Snap) *ec.ExtECPutStats {
 	ecPut := &ec.ExtECPutStats{}
 	if err := cos.MorphMarshal(base.Ext, ecPut); err != nil {
 		return &ec.ExtECPutStats{}
@@ -697,7 +696,7 @@ func fmtNameArch(val string, flags uint16) string {
 	return "    " + val
 }
 
-func fmtRebStatus(rebSnap *stats.RebalanceSnap) string {
+func fmtRebStatus(rebSnap *cluster.Snap) string {
 	if rebSnap == nil {
 		return unknownVal
 	}
@@ -713,14 +712,14 @@ func fmtRebStatus(rebSnap *stats.RebalanceSnap) string {
 	return unknownVal
 }
 
-func fmtXactStatus(xctn *xact.SnapExt) string {
+func fmtXactStatus(xctn *cluster.Snap) string {
 	if xctn.AbortedX {
 		return xactStateAborted
 	}
 	if !xctn.EndTime.IsZero() {
 		return xactStateFinished
 	}
-	if xctn.Idle() {
+	if xctn.IsIdle() {
 		return xactStateIdle
 	}
 	return xactStateRunning

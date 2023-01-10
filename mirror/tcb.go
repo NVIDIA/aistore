@@ -1,6 +1,6 @@
 // Package mirror provides local mirroring and replica management
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package mirror
 
@@ -128,24 +128,6 @@ func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactTCB //
 /////////////
 
-func (r *XactTCB) Args() *xreg.TCBArgs { return &r.args }
-
-func (r *XactTCB) String() string {
-	return fmt.Sprintf("%s <= %s", r.Base.String(), r.args.BckFrom)
-}
-
-func (r *XactTCB) Snap() cluster.XactSnap {
-	snap := &xact.Snap{}
-	r.Base.ToSnap(snap)
-	from, to := r.FromTo()
-	snap.SrcBck, snap.DstBck = from.Clone(), to.Clone()
-	return snap
-}
-
-func (r *XactTCB) Name() string {
-	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.args.BckFrom)
-}
-
 // limited pre-run abort
 func (r *XactTCB) TxnAbort() {
 	err := cmn.NewErrAborted(r.Name(), "txn-abort", nil)
@@ -174,10 +156,6 @@ func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 	mpopts.Bck.Copy(e.args.BckFrom.Bucket())
 	r.BckJog.Init(e.UUID(), e.kind, e.args.BckTo, mpopts)
 	return
-}
-
-func (r *XactTCB) FromTo() (*cluster.Bck, *cluster.Bck) {
-	return r.args.BckFrom, r.args.BckTo
 }
 
 func (r *XactTCB) WaitRunning() { r.wg.Wait() }
@@ -289,4 +267,28 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 		glog.Error(erp)
 	}
 	return erp // NOTE: non-nil signals transport to terminate
+}
+
+func (r *XactTCB) Args() *xreg.TCBArgs { return &r.args }
+
+func (r *XactTCB) String() string {
+	return fmt.Sprintf("%s <= %s", r.Base.String(), r.args.BckFrom)
+}
+
+func (r *XactTCB) Name() string {
+	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.args.BckFrom)
+}
+
+func (r *XactTCB) FromTo() (*cluster.Bck, *cluster.Bck) {
+	return r.args.BckFrom, r.args.BckTo
+}
+
+func (r *XactTCB) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	f, t := r.FromTo()
+	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
+	return
 }

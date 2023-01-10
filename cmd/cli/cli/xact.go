@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xact"
@@ -60,7 +61,7 @@ func waitForXactionCompletion(apiBP api.BaseParams, args api.XactReqArgs) (err e
 	return nil
 }
 
-func flattenXactStats(snap *xact.SnapExt) nvpairList {
+func flattenXactStats(snap *cluster.Snap) nvpairList {
 	props := make(nvpairList, 0, 16)
 	if snap == nil {
 		return props
@@ -123,7 +124,7 @@ func flattenXactStats(snap *xact.SnapExt) nvpairList {
 	return props
 }
 
-func getXactSnap(xactArgs api.XactReqArgs) (*xact.SnapExt, error) {
+func getXactSnap(xactArgs api.XactReqArgs) (*cluster.Snap, error) {
 	xs, err := api.QueryXactionSnaps(apiBP, xactArgs)
 	if err != nil {
 		return nil, err

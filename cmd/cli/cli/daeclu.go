@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
 )
@@ -36,7 +35,7 @@ type (
 
 	targetRebSnap struct {
 		tid  string
-		snap *xact.SnapExt
+		snap *cluster.Snap
 	}
 )
 
@@ -291,8 +290,8 @@ func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %t\n",
 		st.snap.ID, st.tid,
-		st.snap.Snap.Stats.InObjs, cos.B2S(st.snap.Snap.Stats.InBytes, 2),
-		st.snap.Snap.Stats.OutObjs, cos.B2S(st.snap.Snap.Stats.OutBytes, 2),
+		st.snap.Stats.InObjs, cos.B2S(st.snap.Stats.InBytes, 2),
+		st.snap.Stats.OutObjs, cos.B2S(st.snap.Stats.OutBytes, 2),
 		startTime, endTime, st.snap.IsAborted(),
 	)
 }

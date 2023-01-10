@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 

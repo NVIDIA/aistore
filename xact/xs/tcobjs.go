@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -216,6 +216,26 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		glog.Error(err)
 	}
 	return err
+}
+
+func (r *XactTCObjs) Name() string {
+	return fmt.Sprintf("%s => %s", r.streamingX.Name(), r.args.BckTo)
+}
+
+func (r *XactTCObjs) String() string {
+	return fmt.Sprintf("%s => %s", r.streamingX.String(), r.args.BckTo)
+}
+
+func (r *XactTCObjs) FromTo() (*cluster.Bck, *cluster.Bck) { return r.args.BckFrom, r.args.BckTo }
+
+func (r *XactTCObjs) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	f, t := r.FromTo()
+	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
+	return
 }
 
 ///////////
