@@ -138,13 +138,13 @@ class Bucket:
     def rename(self, to_bck: str) -> str:
         """
         Renames bucket in AIStore cluster.
-        Only works on AIS buckets. Returns xaction id that can be used later to check the status of the asynchronous operation.
+        Only works on AIS buckets. Returns job ID that can be used later to check the status of the asynchronous operation.
 
         Args:
             to_bck (str): New bucket name for bucket to be renamed as
 
         Returns:
-            xaction id (as str) that can be used to check the status of the operation
+            Job ID (as str) that can be used to check the status of the operation
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -220,7 +220,7 @@ class Bucket:
         to_provider: str = ProviderAIS,
     ) -> str:
         """
-        Returns xaction id that can be used later to check the status of the asynchronous operation.
+        Returns job ID that can be used later to check the status of the asynchronous operation.
 
         Args:
             to_bck_name (str): Name of the destination bucket
@@ -232,7 +232,7 @@ class Bucket:
             to_provider (str, optional): Name of destination bucket provider
 
         Returns:
-            Xaction id (as str) that can be used to check the status of the operation
+            Job ID (as str) that can be used to check the status of the operation
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -258,7 +258,7 @@ class Bucket:
         continuation_token: str = "",
     ) -> BucketList:
         """
-        Returns a structure that contains a page of objects, xaction UUID, and continuation token (to read the next page, if available).
+        Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if available).
 
         Args:
             prefix (str, optional): Return only objects that start with the prefix
@@ -267,7 +267,7 @@ class Bucket:
                 The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
                 Defaults to "0" - return maximum number objects.
-            uuid (str, optional): Job UUID, required to get the next page of objects
+            uuid (str, optional): Job ID, required to get the next page of objects
             continuation_token (str, optional): Marks the object to start reading the next page
 
         Returns:
@@ -406,7 +406,7 @@ class Bucket:
             force (bool, optional): override existing destination bucket
 
         Returns:
-            Xaction id (as str) that can be used to check the status of the operation
+            Job ID (as str) that can be used to check the status of the operation
         """
         value = {
             "id": etl_id,

@@ -18,7 +18,7 @@ from aistore.sdk.const import (
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.types import BucketLister, ObjStream, Namespace
 from aistore.sdk.utils import handle_errors
-from aistore.sdk.xaction import Xaction
+from aistore.sdk.job import Job
 from aistore.sdk.etl import Etl
 
 T = TypeVar("T")
@@ -93,30 +93,30 @@ class Client:
         """
         return Cluster(client=self)
 
-    def xaction(self):
+    def job(self):
         """
-        Factory constructor for xaction object, which contains xaction-related functions.
-        Does not make any HTTP request, only instantiates an xaction object bound to the client.
+        Factory constructor for job object, which contains job-related functions.
+        Does not make any HTTP request, only instantiates a job object bound to the client.
 
         Args:
             None
 
         Returns:
-            The xaction object created.
+            The job object created.
         """
-        return Xaction(client=self)
+        return Job(client=self)
 
     def etl(self):
         """
         Factory constructor for ETL object.
         Contains APIs related to AIStore ETL operations.
-        Does not make any HTTP request, only instantiates an xaction object bound to the client.
+        Does not make any HTTP request, only instantiates an ETL object bound to the client.
 
         Args:
             None
 
         Returns:
-            The xaction object created.
+            The ETL object created.
         """
         return Etl(client=self)
 

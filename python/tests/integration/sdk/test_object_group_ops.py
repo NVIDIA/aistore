@@ -7,7 +7,7 @@ from aistore.sdk import Client
 from aistore.sdk.const import ProviderAIS
 from aistore.sdk.errors import InvalidBckProvider
 from aistore.sdk.object_range import ObjectRange
-from aistore.sdk.xaction import Xaction
+from aistore.sdk.job import Job
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
 from tests.utils import random_string, create_and_put_object
 
@@ -47,8 +47,8 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
             x.name for x in self.bucket.list_objects(self.obj_prefix).get_entries()
         ]
         if len(object_names) > 0:
-            xact_id = self.bucket.objects(obj_names=object_names).delete()
-            Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+            job_id = self.bucket.objects(obj_names=object_names).delete()
+            Job(self.client).wait_for_job(job_id=job_id, timeout=30)
 
     def tearDown(self) -> None:
         if REMOTE_SET:
@@ -77,8 +77,8 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.delete_test_helper(object_group, expected_object_names)
 
     def delete_test_helper(self, object_group, expected_object_names):
-        xact_id = object_group.delete()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+        job_id = object_group.delete()
+        Job(self.client).wait_for_job(job_id=job_id, timeout=30)
         existing_objects = self.bucket.list_objects(
             prefix=self.obj_prefix
         ).get_entries()
@@ -116,8 +116,8 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.evict_test_helper(object_group, cached, 10)
 
     def evict_test_helper(self, object_group, expected_cached, expected_total):
-        xact_id = object_group.evict()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+        job_id = object_group.evict()
+        Job(self.client).wait_for_job(job_id=job_id, timeout=30)
         self.verify_cached_objects(expected_total, expected_cached)
 
     def test_evict_objects_local(self):
@@ -156,8 +156,8 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
     def prefetch_test_helper(self, object_group, expected_cached, expected_total):
         self.evict_all_objects()
         # Fetch back a specific object group and verify cache status
-        xact_id = object_group.prefetch()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+        job_id = object_group.prefetch()
+        Job(self.client).wait_for_job(job_id=job_id, timeout=30)
         self.verify_cached_objects(expected_total, expected_cached)
 
     def test_prefetch_objects_local(self):
@@ -168,8 +168,8 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
             local_bucket.objects(obj_range=self.obj_range).prefetch()
 
     def evict_all_objects(self):
-        xact_id = self.bucket.objects(obj_names=self.obj_names).evict()
-        Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+        job_id = self.bucket.objects(obj_names=self.obj_names).evict()
+        Job(self.client).wait_for_job(job_id=job_id, timeout=30)
         self.verify_cached_objects(10, [])
 
     def verify_cached_objects(self, expected_object_count, cached_range):

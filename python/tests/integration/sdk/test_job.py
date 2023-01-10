@@ -25,10 +25,10 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         except ErrBckNotFound:
             pass
 
-    def test_xaction_start(self):
+    def test_job_start(self):
         self.client.bucket(self.bck_name).create()
-        xact_id = self.client.xaction().xact_start(xact_kind="lru")
-        self.client.xaction().wait_for_xaction_finished(xact_id=xact_id)
+        job_id = self.client.job().start(job_kind="lru")
+        self.client.job().wait_for_job(job_id=job_id)
 
 
 if __name__ == "__main__":

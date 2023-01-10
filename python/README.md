@@ -280,12 +280,12 @@ For more in-depth examples, please see [AIStore Python SDK Examples Directory](h
 
 |Module|Summary|
 |--|--|
-|[api.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/api.py)|Contains `Client` class, which has methods for making HTTP requests to an AIStore server. Includes factory constructors for `Bucket`, `Cluster`, and `Xaction` classes.|
+|[api.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/api.py)|Contains `Client` class, which has methods for making HTTP requests to an AIStore server. Includes factory constructors for `Bucket`, `Cluster`, and `Job` classes.|
 |[cluster.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/cluster.py)|Contains `Cluster` class that represents a cluster bound to a client and contains all cluster-related operations, including checking the cluster's health and retrieving vital cluster information.|
 |[bucket.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/bucket.py)|Contains `Bucket` class that represents a bucket in an AIS cluster and contains all bucket-related operations, including (but not limited to) creating, deleting, evicting, renaming, copying.|
 |[object.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/object.py)|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) retreiving, adding and deleting objects.|
 |[object_group.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/object_group.py)|Contains class `ObjectGroup`, representing a collection of objects belonging to a bucket in an AIS cluster. Includes all multi-object operations such as deleting, evicting, and prefetching objects.|
-|[xaction.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/xaction.py)|Contains class `Xaction` and all xaction-related operations.|
+|[job.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/job.py)|Contains class `Job` and all job-related operations.|
 |[etl.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/etl.py)|Contains class `Etl` and all ETL-related operations.|
 
 For more information on API usage, refer to the [API reference documentation](https://aiatscale.org/docs/python_api.md).

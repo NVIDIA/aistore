@@ -113,10 +113,10 @@ class TestETLOps(unittest.TestCase):
         temp_bck1 = random_string()
 
         # Transform Bucket with MD5 Template
-        xaction_id = self.client.bucket(self.bck_name).transform(
+        job_id = self.client.bucket(self.bck_name).transform(
             etl_id=self.etl_id_spec, to_bck=temp_bck1
         )
-        self.client.xaction().wait_for_xaction_finished(xaction_id)
+        self.client.job().wait_for_job(job_id)
 
         # Verify object counts of the original and transformed bucket are the same
         self.assertEqual(
@@ -136,12 +136,12 @@ class TestETLOps(unittest.TestCase):
         temp_bck2 = random_string()
 
         # Transform bucket with ECHO template
-        xaction_id = self.client.bucket(self.bck_name).transform(
+        job_id = self.client.bucket(self.bck_name).transform(
             etl_id=self.etl_id_spec_comp,
             to_bck=temp_bck2,
             ext={"jpg": "txt"},
         )
-        self.client.xaction().wait_for_xaction_finished(xaction_id)
+        self.client.job().wait_for_job(job_id)
 
         # Verify extension rename
         for obj_iter in self.client.bucket(temp_bck2).list_objects().get_entries():
@@ -214,17 +214,17 @@ class TestETLOps(unittest.TestCase):
         )
 
         start_time = time.time()
-        xaction_id = self.client.bucket(self.bck_name).transform(
+        job_id = self.client.bucket(self.bck_name).transform(
             etl_id=self.etl_id_code, to_bck="transformed-etl-hpush"
         )
-        self.client.xaction().wait_for_xaction_finished(xaction_id)
+        self.client.job().wait_for_job(job_id)
         print("Transform bucket using HPUSH took ", time.time() - start_time)
 
         start_time = time.time()
-        xaction_id = self.client.bucket(self.bck_name).transform(
+        job_id = self.client.bucket(self.bck_name).transform(
             etl_id=self.etl_id_code_io, to_bck="transformed-etl-io"
         )
-        self.client.xaction().wait_for_xaction_finished(xaction_id)
+        self.client.job().wait_for_job(job_id)
         print("Transform bucket using IO took ", time.time() - start_time)
 
         for key, value in content.items():

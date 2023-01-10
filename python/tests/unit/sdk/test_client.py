@@ -5,7 +5,7 @@ from aistore.sdk import Client
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.etl import Etl
 from aistore.sdk.types import Namespace
-from aistore.sdk.xaction import Xaction
+from aistore.sdk.job import Job
 
 
 class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
@@ -81,10 +81,10 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(self.client, res.client)
         self.assertIsInstance(res, Cluster)
 
-    def test_xaction(self):
-        res = self.client.xaction()
+    def test_job(self):
+        res = self.client.job()
         self.assertEqual(self.client, res.client)
-        self.assertIsInstance(res, Xaction)
+        self.assertIsInstance(res, Job)
 
     def test_etl(self):
         res = self.client.etl()

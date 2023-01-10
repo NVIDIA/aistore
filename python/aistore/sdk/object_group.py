@@ -55,7 +55,7 @@ class ObjectGroup:
             requests.ReadTimeout: Timed out receiving response from AIStore
 
         Returns:
-            Xaction id (as str) that can be used to check the status of the operation
+            Job ID (as str) that can be used to check the status of the operation
 
         """
 
@@ -77,7 +77,7 @@ class ObjectGroup:
             requests.ReadTimeout: Timed out receiving response from AIStore
 
         Returns:
-            Xaction id (as str) that can be used to check the status of the operation
+            Job ID (as str) that can be used to check the status of the operation
 
         """
         self.bck.verify_cloud_bucket()
@@ -99,7 +99,7 @@ class ObjectGroup:
             requests.ReadTimeout: Timed out receiving response from AIStore
 
         Returns:
-            Xaction id (as str) that can be used to check the status of the operation
+            Job ID (as str) that can be used to check the status of the operation
 
         """
         self.bck.verify_cloud_bucket()

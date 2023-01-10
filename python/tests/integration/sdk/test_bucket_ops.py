@@ -9,7 +9,7 @@ from aistore.sdk.errors import ErrBckNotFound, InvalidBckProvider
 from aistore.sdk import Client
 import requests
 
-from aistore.sdk.xaction import Xaction
+from aistore.sdk.job import Job
 from tests.utils import create_and_put_object, random_string
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
 
@@ -51,8 +51,8 @@ class TestBucketOps(unittest.TestCase):  # pylint: disable=unused-variable
             x.name for x in cloud_bck.list_objects(self.obj_prefix).get_entries()
         ]
         if len(object_names) > 0:
-            xact_id = cloud_bck.objects(obj_names=object_names).delete()
-            Xaction(self.client).wait_for_xaction_finished(xact_id=xact_id, timeout=30)
+            job_id = cloud_bck.objects(obj_names=object_names).delete()
+            Job(self.client).wait_for_job(job_id=job_id, timeout=30)
 
     def test_bucket(self):
         res = self.client.cluster().list_buckets()
@@ -86,11 +86,11 @@ class TestBucketOps(unittest.TestCase):  # pylint: disable=unused-variable
 
         bck_obj = self.client.bucket(from_bck_n)
         self.assertEqual(bck_obj.name, from_bck_n)
-        xact_id = bck_obj.rename(to_bck=to_bck_n)
-        self.assertNotEqual(xact_id, "")
+        job_id = bck_obj.rename(to_bck=to_bck_n)
+        self.assertNotEqual(job_id, "")
 
         # wait for rename to finish
-        self.client.xaction().wait_for_xaction_finished(xact_id=xact_id)
+        self.client.job().wait_for_job(job_id=job_id)
 
         # check if objects name has changed
         self.client.bucket(to_bck_n).head()
@@ -115,9 +115,9 @@ class TestBucketOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.create_bucket(from_bck)
         self.create_bucket(to_bck)
 
-        xact_id = self.client.bucket(from_bck).copy(to_bck)
-        self.assertNotEqual(xact_id, "")
-        self.client.xaction().wait_for_xaction_finished(xact_id=xact_id)
+        job_id = self.client.bucket(from_bck).copy(to_bck)
+        self.assertNotEqual(job_id, "")
+        self.client.job().wait_for_job(job_id=job_id)
 
     @unittest.skipIf(
         not REMOTE_SET,

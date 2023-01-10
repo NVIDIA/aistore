@@ -24,7 +24,7 @@ client.etl().init_code(
 )
 
 
-xaction_id = client.bucket("from-bck").transform(
+job_id = client.bucket("from-bck").transform(
     etl_id="etl-stream3", to_bck="to-bck", ext={"jpg": "txt"}
 )
-client.xaction().wait_for_xaction_finished(xaction_id)
+client.job().wait_for_job(job_id)

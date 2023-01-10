@@ -162,9 +162,9 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
             action=ACT_COPY_BCK, value=expected_act_value
         ).dict()
 
-        xaction_id = self.ais_bck.copy(to_bck_name, to_provider=to_provider, **kwargs)
+        job_id = self.ais_bck.copy(to_bck_name, to_provider=to_provider, **kwargs)
 
-        self.assertEqual(expected_response, xaction_id)
+        self.assertEqual(expected_response, job_id)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
             path=f"buckets/{bck_name}",
@@ -375,7 +375,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         to_bck = "new-bucket"
         self.ais_bck_params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
         expected_action = ActionMsg(action=ACT_ETL_BCK, value=expected_act_value).dict()
-        expected_response = "xaction-id"
+        expected_response = "job-id"
         mock_response = Mock()
         mock_response.text = expected_response
         self.mock_client.request.return_value = mock_response

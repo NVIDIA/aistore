@@ -88,7 +88,7 @@ class BucketList(BaseModel):
         return entries
 
 
-class XactStatus(BaseModel):
+class JobStatus(BaseModel):
     uuid: str = ""
     err: str = ""
     end_time: int = 0
