@@ -207,7 +207,7 @@ def transform(input_bytes):
 			)
 			switch test.ty {
 			case apc.ETLInitSpec:
-				uuid = tetl.Init(t, baseParams, test.initDesc, etl.Hpull)
+				uuid = tetl.InitSpec(t, baseParams, test.initDesc, etl.Hpull)
 			case apc.ETLInitCode:
 				test.buildDesc.IDX = test.name
 				test.buildDesc.Timeout = cos.Duration(10 * time.Minute)
@@ -265,7 +265,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 
 	m.puts()
 
-	etlID := tetl.Init(t, baseParams, name, comm)
+	etlID := tetl.InitSpec(t, baseParams, name, comm)
 	tlog.Logf("ETL init successful (%q)\n", etlID)
 	t.Cleanup(func() {
 		tetl.StopAndDeleteETL(t, baseParams, etlID)

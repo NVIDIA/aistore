@@ -66,7 +66,7 @@ var (
 				Name:      commandSource,
 				Usage:     "show ETL code/spec",
 				ArgsUsage: etlIDArgument,
-				Action:    etlSourceHandler,
+				Action:    etlShowInitMsgHandler,
 			},
 		},
 	}
@@ -273,11 +273,20 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 }
 
 func etlListHandler(c *cli.Context) (err error) {
-	_, err = showAllETLs(c, false)
+	_, err = etlList(c, false)
 	return
 }
 
-func showAllETLs(c *cli.Context, caption bool) (int, error) {
+func showETLs(c *cli.Context, id string, caption bool) (int, error) {
+	if id == "" {
+		return etlList(c, caption)
+	}
+
+	// ID-ed etl
+	return 1, etlPrintInitMsg(c, id)
+}
+
+func etlList(c *cli.Context, caption bool) (int, error) {
 	list, err := api.ETLList(apiBP)
 	l := len(list)
 	if err != nil || l == 0 {
@@ -290,23 +299,29 @@ func showAllETLs(c *cli.Context, caption bool) (int, error) {
 	return l, tmpls.Print(list, c.App.Writer, tmpls.TransformListTmpl, nil, false)
 }
 
-func etlSourceHandler(c *cli.Context) (err error) {
+func etlShowInitMsgHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	id := c.Args().Get(0)
+	return etlPrintInitMsg(c, id)
+}
+
+func etlPrintInitMsg(c *cli.Context, id string) error {
 	msg, err := api.ETLGetInitMsg(apiBP, id)
 	if err != nil {
 		return err
 	}
 	if initMsg, ok := msg.(*etl.InitCodeMsg); ok {
 		fmt.Fprintln(c.App.Writer, string(initMsg.Code))
-		return
+		return nil
 	}
 	if initMsg, ok := msg.(*etl.InitSpecMsg); ok {
 		fmt.Fprintln(c.App.Writer, string(initMsg.Spec))
+		return nil
 	}
-	return
+
+	return fmt.Errorf("invalid response [%+v]", msg)
 }
 
 func etlLogsHandler(c *cli.Context) (err error) {
@@ -513,7 +528,8 @@ func handleETLHTTPError(err error, etlID string) error {
 	if herr, ok := err.(*cmn.ErrHTTP); ok {
 		// TODO: How to find out if it's transformation not found, and not object not found?
 		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlID) {
-			return fmt.Errorf("ETL %q not found; try starting new ETL with:\nais %s %s <spec>", etlID, commandETL, subcmdInit)
+			return fmt.Errorf("ETL %q not found; try starting new ETL with:\nais %s %s <spec>",
+				etlID, commandETL, subcmdInit)
 		}
 	}
 	return err

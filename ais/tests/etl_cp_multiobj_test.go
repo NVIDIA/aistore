@@ -58,7 +58,7 @@ func TestETLMultiObj(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	uuid := tetl.Init(t, baseParams, transformer, etlCommType)
+	uuid := tetl.InitSpec(t, baseParams, transformer, etlCommType)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	for _, ty := range []string{"range", "list"} {

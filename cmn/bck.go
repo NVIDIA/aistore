@@ -170,7 +170,7 @@ func (n Ns) validate() error {
 	if n.IsGlobal() {
 		return nil
 	}
-	if cos.IsAlphaPlus(n.UUID, false /*with period*/) && cos.IsAlphaPlus(n.Name, false) {
+	if cos.IsAlphaNice(n.UUID) && cos.IsAlphaPlus(n.Name) {
 		return nil
 	}
 	return fmt.Errorf(
@@ -276,7 +276,7 @@ func (b *Bck) ValidateName() (err error) {
 	if b.Name == "." {
 		return fmt.Errorf(fmtErrBckName, b.Name)
 	}
-	if !cos.IsAlphaPlus(b.Name, true /*with period*/) {
+	if !cos.IsAlphaPlus(b.Name) {
 		err = fmt.Errorf(fmtErrBckName, b.Name)
 	}
 	return

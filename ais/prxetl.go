@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -56,11 +56,12 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// /v1/etl/<uuid>/logs[/<target-id>] or /v1/etl/<uuid>/health
 	switch apiItems[1] {
 	case apc.ETLLogs:
+		// /v1/etl/<uuid>/logs[/<target-id>]
 		p.logsETL(w, r, apiItems[0], apiItems[2:]...)
 	case apc.ETLHealth:
+		// /v1/etl/<uuid>/health
 		p.healthETL(w, r)
 	default:
 		p.writeErrURL(w, r)

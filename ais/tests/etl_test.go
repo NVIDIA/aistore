@@ -174,8 +174,9 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	// Always uses Echo transformation, as correctness of other transformations is checked in different tests.
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: onlyLong})
+
+	// TODO: PUT and then transform many objects
 
 	objName := fmt.Sprintf("%s-%s-object", uuid, trand.String(5))
 	tlog.Logln("PUT object")
@@ -203,7 +204,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 	}()
 
 	bf := bytes.NewBuffer(nil)
-	tlog.Logf("Read %q\n", uuid)
+	tlog.Logf("Use etl[%s] to read transformed object\n", uuid)
 	err = api.ETLObject(baseParams, uuid, bck, objName, bf)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, bf.Len() == cos.KiB, "Expected %d bytes, got %d", cos.KiB, bf.Len())
@@ -283,7 +284,7 @@ func TestETLObject(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
 
-			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
+			uuid := tetl.InitSpec(t, baseParams, test.transformer, test.comm)
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 			testETLObject(t, uuid, test.inPath, test.outPath, test.transform, test.filesEqual)
@@ -295,7 +296,6 @@ func TestETLObjectCloud(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Bck: cliBck, RequiredDeployment: tools.ClusterTypeK8s, RemoteBck: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
-	// TODO: When a test is stable, make part of test cases onlyLong: true.
 	tcs := map[string][]*testCloudObjConfig{
 		etl.Hpull: {
 			{cached: true, onlyLong: false},
@@ -313,7 +313,8 @@ func TestETLObjectCloud(t *testing.T) {
 
 	for comm, configs := range tcs {
 		t.Run(comm, func(t *testing.T) {
-			uuid := tetl.Init(t, baseParams, tetl.Echo, comm)
+			// TODO: currently, Echo transformation only - add other transforms
+			uuid := tetl.InitSpec(t, baseParams, tetl.Echo, comm)
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 			for _, conf := range configs {
@@ -345,7 +346,7 @@ func TestETLInline(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
 
-			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
+			uuid := tetl.InitSpec(t, baseParams, test.transformer, test.comm)
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 			tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
@@ -386,7 +387,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
-	uuid := tetl.Init(t, baseParams, transformer, comm)
+	uuid := tetl.InitSpec(t, baseParams, transformer, comm)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
@@ -454,7 +455,7 @@ func TestETLBucket(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: test.onlyLong})
 
-			uuid := tetl.Init(t, baseParams, test.transformer, test.comm)
+			uuid := tetl.InitSpec(t, baseParams, test.transformer, test.comm)
 			testETLBucket(t, uuid, bck, objCnt, m.fileSize, time.Minute)
 		})
 	}
@@ -600,7 +601,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tlog.Logf("PUT %d objects", m.num)
 	m.puts()
 
-	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
+	uuid := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	tlog.Logf("Start offline ETL %q\n", uuid)
@@ -628,7 +629,7 @@ func TestETLStopAndRestartETL(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
+	uuid := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	// 1. Check ETL is in running state
@@ -661,10 +662,10 @@ func TestETLMultipleTransformersAtATime(t *testing.T) {
 		t.Skip("Requires a single-node single-target deployment")
 	}
 
-	uuid1 := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
+	uuid1 := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid1) })
 
-	uuid2 := tetl.Init(t, baseParams, tetl.MD5, etl.Hrev)
+	uuid2 := tetl.InitSpec(t, baseParams, tetl.MD5, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid2) })
 }
 
@@ -678,7 +679,7 @@ func TestETLHealth(t *testing.T) {
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	tlog.Logln("Starting ETL")
-	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hpull)
+	uuid := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hpull)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	var (
@@ -724,7 +725,7 @@ func TestETLList(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 
-	uuid := tetl.Init(t, baseParams, tetl.Echo, etl.Hrev)
+	uuid := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
 
 	list, err := api.ETLList(baseParams)

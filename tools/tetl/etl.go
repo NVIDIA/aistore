@@ -73,10 +73,10 @@ func GetTransformYaml(name string) ([]byte, error) {
 	}
 
 	var resp *http.Response
-	// Retry in case github in unavailable to fulfill the request for a moment.
+	// with retry in case github in unavailable for a moment
 	err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call: func() (code int, err error) {
-			resp, err = client.Get(links[name]) //nolint:bodyclose // closed after returning from NetworkCallWithRetry().
+			resp, err = client.Get(links[name]) //nolint:bodyclose // see defer close below
 			return
 		},
 		Action:   "get transform yaml for ETL " + name,
@@ -227,8 +227,8 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cos.S
 	}()
 }
 
-func Init(t *testing.T, baseParams api.BaseParams, name, comm string) string {
-	tlog.Logln("Reading template")
+func InitSpec(t *testing.T, baseParams api.BaseParams, name, comm string) string {
+	tlog.Logf("InitSpec: %s template, %s communicator\n", name, comm)
 
 	msg := &etl.InitSpecMsg{}
 	msg.IDX = name
@@ -237,7 +237,6 @@ func Init(t *testing.T, baseParams api.BaseParams, name, comm string) string {
 	tassert.CheckFatal(t, err)
 	msg.Spec = spec
 
-	tlog.Logln("Init ETL")
 	uuid, err := api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
@@ -261,7 +260,8 @@ func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) stri
 
 	initCode := etlMsg.(*etl.InitCodeMsg)
 	tassert.Errorf(t, initCode.ID() == uuid, "expected uuid %s != %s", uuid, initCode.ID())
-	tassert.Errorf(t, msg.CommType() == "" || initCode.CommType() == msg.CommType(), "expected communicator type %s != %s", msg.CommType(), initCode.CommType())
+	tassert.Errorf(t, msg.CommType() == "" || initCode.CommType() == msg.CommType(),
+		"expected communicator type %s != %s", msg.CommType(), initCode.CommType())
 	tassert.Errorf(t, msg.Runtime == initCode.Runtime, "expected runtime %s != %s", msg.Runtime, initCode.Runtime)
 	tassert.Errorf(t, bytes.Equal(msg.Code, initCode.Code), "ETL codes differ")
 	tassert.Errorf(t, bytes.Equal(msg.Deps, initCode.Deps), "ETL dependencies differ")

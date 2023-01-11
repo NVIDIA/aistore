@@ -367,7 +367,7 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 	case subcmdDsort:
 		return showDsorts(c, xid, caption)
 	case commandETL:
-		return showAllETLs(c, caption)
+		return showETLs(c, xid, caption)
 	default:
 		var (
 			all         = flagIsSet(c, allJobsFlag)
