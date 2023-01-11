@@ -50,7 +50,7 @@ environment variable must be set; otherwise these tests will be skipped.
 
 All tests should support running on all operating systems, given access to a working AIS cluster. 
 
-Because of the way our botocore patch works, simply running pytest on the entired test directory will fail those tests. See the [botocore test README](python/tests/unit/botocore_patch/README.md) for more info
+Because of the way our botocore patch works, simply running pytest on the entire test directory will fail those tests. See the [botocore test README](python/tests/unit/botocore_patch/README.md) for more info
 
 Below are the recommended commands for running the test suites. Run these commands from the aistore/python directory. 
 
@@ -113,33 +113,10 @@ There is our own suite of tests, located in tests/integration/boto3. It can be r
 
 #### Minio s3 tests
 
-We also include a modified version of the s3 tests from the minio python sdk, 
-found [here](https://github.com/minio/minio-py).
+`s3compat` contains a modified version of the s3 tests from the Minio Python SDK, see the [README](s3compat/README.md) for details.
 
+### References
 
-These tests are NOT verified as working on Windows, and may not work properly due to the Minio client. 
+* [Botocore Test README](unit/botocore_patch/README.md)
+* [S3 Compatibility Test README](s3compat/README.md)
 
-This includes some tests that are verified as working and some that expect s3 behavior AIS does not currently support. 
-
-##### Cluster config
-
-First, the AIS cluster to test against must be configured to run as an s3 client and run with AWS-style MD5 checksums.
-This can be set with AIS cli. 
-
-    ais config cluster features Provide-S3-API-via-Root
-    ais config cluster checksum.type=md5
-
-
-##### Environment variables
-
-The default is to run all tests. 
-To run only tests we expect to succeed, set the environment variable `S3_COMPAT_RUN_ALL=False` 
-
-To exit tests on the first failure, set the environment variable `S3_COMPAT_STRICT=True`
-
-
-#### Running compatibility tests 
-Run on UNIX systems:
-
-    cd tests/s3compat
-    ./compatibility_test.sh
