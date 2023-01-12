@@ -18,7 +18,7 @@ REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(ProviderAIS + 
 class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.client = Client(CLUSTER_ENDPOINT)
-        self.obj_prefix = "test_object_group_prefix-"
+        self.obj_prefix = f"test_object_group_prefix-{random_string(10)}-"
         self.obj_suffix = "-suffix"
         self.obj_template = self.obj_prefix + "{1..8..2}" + self.obj_suffix
 
@@ -32,7 +32,6 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
             self.bucket = self.client.bucket(self.bck_name)
             self.bucket.create()
 
-        self._cleanup_objects()
         # Range selecting objects 1,3,5,7
         self.obj_range = ObjectRange(
             self.obj_prefix, 1, 8, step=2, suffix=self.obj_suffix
@@ -40,15 +39,6 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.obj_names = self.create_object_list(
             self.obj_prefix, self.provider, self.bck_name, 10, self.obj_suffix
         )
-
-    def _cleanup_objects(self):
-        # Clean up any other objects created with the test prefix, potentially from aborted tests
-        object_names = [
-            x.name for x in self.bucket.list_objects(self.obj_prefix).get_entries()
-        ]
-        if len(object_names) > 0:
-            job_id = self.bucket.objects(obj_names=object_names).delete()
-            Job(self.client).wait_for_job(job_id=job_id, timeout=30)
 
     def tearDown(self) -> None:
         if REMOTE_SET:
