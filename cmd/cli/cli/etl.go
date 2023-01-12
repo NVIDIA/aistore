@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
@@ -320,8 +321,9 @@ func etlPrintInitMsg(c *cli.Context, id string) error {
 		fmt.Fprintln(c.App.Writer, string(initMsg.Spec))
 		return nil
 	}
-
-	return fmt.Errorf("invalid response [%+v]", msg)
+	err = fmt.Errorf("invalid response [%+v, %T]", msg, msg)
+	debug.AssertNoErr(err)
+	return err
 }
 
 func etlLogsHandler(c *cli.Context) (err error) {

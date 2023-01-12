@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -66,10 +66,10 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 		cfg = cmn.GCO.Get()
 
 		etlMD = newEtlMD()
-		for _, initType := range []string{apc.ETLInitCode, apc.ETLInitSpec} {
+		for _, initType := range []string{etl.Code, etl.Spec} {
 			for i := 0; i < 5; i++ {
 				var msg etl.InitMsg
-				if initType == apc.ETLInitCode {
+				if initType == etl.Code {
 					msg = &etl.InitCodeMsg{
 						InitMsgBase: etl.InitMsgBase{
 							IDX:       fmt.Sprintf("init-code-%d", i),

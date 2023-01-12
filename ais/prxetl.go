@@ -133,7 +133,7 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 	etlMD := p.owner.etl.get()
 	etlMsg := etlMD.get(etlID)
 	if etlMsg == nil {
-		p.writeErr(w, r, cmn.NewErrNotFound("%s: etl UUID %s", p.si, etlID))
+		p.writeErr(w, r, cmn.NewErrNotFound("%s: etl[%s]", p.si, etlID))
 		return
 	}
 	if apiItems[1] == apc.ETLStop {
@@ -177,7 +177,7 @@ func (p *proxy) handleETLDelete(w http.ResponseWriter, r *http.Request) {
 func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 	debug.AssertNoErr(cos.ValidateEtlID(ctx.etlID))
 	if exists := clone.delete(ctx.etlID); !exists {
-		err = cmn.NewErrNotFound("%s: etl UUID %s", p.si, ctx.etlID)
+		err = cmn.NewErrNotFound("%s: etl[%s]", p.si, ctx.etlID)
 	}
 	return
 }
@@ -248,7 +248,7 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlID string) {
 	etlMD := p.owner.etl.get()
 	initMsg := etlMD.get(etlID)
 	if initMsg == nil {
-		p.writeErr(w, r, cmn.NewErrNotFound("%s: etl UUID %s", p.si, etlID))
+		p.writeErr(w, r, cmn.NewErrNotFound("%s: etl[%s]", p.si, etlID))
 		return
 	}
 	p.writeJSON(w, r, initMsg, "info-etl")

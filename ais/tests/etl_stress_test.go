@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -165,12 +165,12 @@ def transform(input_bytes):
 			initDesc  string
 			buildDesc etl.InitCodeMsg
 		}{
-			{name: "spec-echo-python", ty: apc.ETLInitSpec, initDesc: tetl.Echo},
-			{name: "spec-echo-golang", ty: apc.ETLInitSpec, initDesc: tetl.EchoGolang},
+			{name: "spec-echo-python", ty: etl.Spec, initDesc: tetl.Echo},
+			{name: "spec-echo-golang", ty: etl.Spec, initDesc: tetl.EchoGolang},
 
 			{
 				name: "code-echo-py38",
-				ty:   apc.ETLInitCode,
+				ty:   etl.Code,
 				buildDesc: etl.InitCodeMsg{
 					Code:      []byte(echoPythonTransform),
 					Runtime:   runtime.Py38,
@@ -179,7 +179,7 @@ def transform(input_bytes):
 			},
 			{
 				name: "code-echo-py310",
-				ty:   apc.ETLInitCode,
+				ty:   etl.Code,
 				buildDesc: etl.InitCodeMsg{
 					Code:      []byte(echoPythonTransform),
 					Runtime:   runtime.Py310,
@@ -206,9 +206,9 @@ def transform(input_bytes):
 				requestTimeout = 30 * time.Second
 			)
 			switch test.ty {
-			case apc.ETLInitSpec:
+			case etl.Spec:
 				uuid = tetl.InitSpec(t, baseParams, test.initDesc, etl.Hpull)
-			case apc.ETLInitCode:
+			case etl.Code:
 				test.buildDesc.IDX = test.name
 				test.buildDesc.Timeout = cos.Duration(10 * time.Minute)
 				test.buildDesc.Funcs.Transform = "transform"

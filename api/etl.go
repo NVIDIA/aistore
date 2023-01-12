@@ -5,7 +5,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/etl"
-	jsoniter "github.com/json-iterator/go"
 )
 
 func ETLInit(bp BaseParams, msg etl.InitMsg) (id string, err error) {
@@ -61,25 +59,7 @@ func ETLGetInitMsg(params BaseParams, id string) (etl.InitMsg, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response, err: %w", err)
 	}
-
-	// TODO -- FIXME: double-take, unmarshaling-wise
-
-	var msgInf map[string]json.RawMessage
-	if err := jsoniter.Unmarshal(b, &msgInf); err != nil {
-		return nil, err
-	}
-	if _, ok := msgInf["code"]; ok { // NOTE json tag hardcoded
-		initMsg := &etl.InitCodeMsg{}
-		err := jsoniter.Unmarshal(b, initMsg)
-		return initMsg, err
-	}
-	if _, ok := msgInf["spec"]; !ok { // NOTE: ditto
-		return nil, fmt.Errorf("invalid response body: %+v", msgInf)
-	}
-
-	initMsg := &etl.InitSpecMsg{}
-	err = jsoniter.Unmarshal(b, initMsg)
-	return initMsg, err
+	return etl.UnmarshalInitMsg(b)
 }
 
 func ETLLogs(bp BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg, err error) {

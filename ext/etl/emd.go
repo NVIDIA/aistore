@@ -8,21 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 )
 
 type (
-	InitMsg interface {
-		ID() string
-		CommType() string
-		InitType() string
-		Validate() error
-	}
-
 	ETLs map[string]InitMsg
 
 	// ETL metadata
@@ -91,7 +84,7 @@ func (e *MD) MarshalJSON() ([]byte, error) {
 		Ext:     e.Ext,
 	}
 	for k, v := range e.ETLs {
-		jsonMD.ETLs[k] = jsonETL{v.InitType(), cos.MustMarshal(v)}
+		jsonMD.ETLs[k] = jsonETL{v.Type(), cos.MustMarshal(v)}
 	}
 	return jsoniter.Marshal(jsonMD)
 }
@@ -104,10 +97,15 @@ func (e *MD) UnmarshalJSON(data []byte) (err error) {
 	e.Version, e.Ext = jsonMD.Version, jsonMD.Ext
 	e.ETLs = make(ETLs, len(jsonMD.ETLs))
 	for k, v := range jsonMD.ETLs {
-		if v.Type == apc.ETLInitCode {
+		switch v.Type {
+		case Code:
 			e.ETLs[k] = &InitCodeMsg{}
-		} else if v.Type == apc.ETLInitSpec {
+		case Spec:
 			e.ETLs[k] = &InitSpecMsg{}
+		default:
+			err = fmt.Errorf("invalid InitMsg type %q", v.Type)
+			debug.AssertNoErr(err)
+			return
 		}
 		if err = jsoniter.Unmarshal(v.Msg, e.ETLs[k]); err != nil {
 			break

@@ -98,13 +98,14 @@ func isAlpha(c byte) bool {
 func IsAlphaNice(s string) bool {
 	l := len(s)
 	for i, c := range s {
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
 			continue
 		}
-		if c == '-' || c == '_' {
-			if i == 0 || i == l-1 {
-				return false
-			}
+		if c != '-' && c != '_' {
+			return false
+		}
+		if i == 0 || i == l-1 {
+			return false
 		}
 	}
 	return true

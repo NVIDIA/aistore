@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
@@ -19,7 +18,20 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
+const (
+	Spec = "spec"
+	Code = "code"
+)
+
 type (
+	InitMsg interface {
+		ID() string
+		Type() string
+		CommType() string
+		Validate() error
+	}
+
+	// and implementations
 	InitMsgBase struct {
 		IDX       string       `json:"id"`
 		CommTypeX string       `json:"communication"`
@@ -27,12 +39,12 @@ type (
 	}
 	InitSpecMsg struct {
 		InitMsgBase
-		Spec []byte `json:"spec"`
+		Spec []byte `json:"spec"` // NOTE: eq. `Spec`
 	}
 
 	InitCodeMsg struct {
 		InitMsgBase
-		Code    []byte `json:"code"`
+		Code    []byte `json:"code"` // NOTE: eq. `Code`
 		Deps    []byte `json:"dependencies"`
 		Runtime string `json:"runtime"`
 		// ========================================================================================
@@ -50,7 +62,9 @@ type (
 		// bitwise flags: (streaming | debug | strict | ...)
 		Flags int64 `json:"flags"`
 	}
+)
 
+type (
 	InfoList []Info
 	Info     struct {
 		ID string `json:"id"`
@@ -116,22 +130,26 @@ var (
 func (m InitMsgBase) CommType() string { return m.CommTypeX }
 func (m InitMsgBase) ID() string       { return m.IDX }
 
+func (*InitCodeMsg) Type() string { return Code }
+func (*InitSpecMsg) Type() string { return Spec }
+
+// TODO: double-take, unmarshaling-wise. To avoid, include (`Spec`, `Code`) in API calls
 func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 	var msgInf map[string]json.RawMessage
 	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
 		return
 	}
-	if _, ok := msgInf["code"]; ok {
+	if _, ok := msgInf[Code]; ok {
 		msg = &InitCodeMsg{}
 		err = jsoniter.Unmarshal(b, msg)
 		return
 	}
-	if _, ok := msgInf["spec"]; ok {
+	if _, ok := msgInf[Spec]; ok {
 		msg = &InitSpecMsg{}
 		err = jsoniter.Unmarshal(b, msg)
 		return
 	}
-	err = fmt.Errorf("invalid response body: %s", b)
+	err = fmt.Errorf("invalid etl.InitMsg: %+v", msgInf)
 	return
 }
 
@@ -163,9 +181,6 @@ func (m *InitCodeMsg) Validate() error {
 	}
 	return nil
 }
-
-func (*InitCodeMsg) InitType() string { return apc.ETLInitCode }
-func (*InitSpecMsg) InitType() string { return apc.ETLInitSpec }
 
 func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
