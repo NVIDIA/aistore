@@ -1,6 +1,6 @@
 // Package k8s provides utilities for communicating with Kubernetes cluster.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package k8s
 
@@ -85,6 +85,30 @@ func Detect() error {
 	return nil
 }
 
-func CleanName(name string) string {
-	return strings.ReplaceAll(strings.ToLower(name), "_", "-")
+// POD name (K8s doesn't allow `_` and uppercase)
+func CleanName(name string) string { return strings.ReplaceAll(strings.ToLower(name), "_", "-") }
+
+const (
+	shortNameETL = 6
+	longNameETL  = 32
+)
+
+func ValidateEtlName(name string) error {
+	const prefix = "ETL name %q "
+	l := len(name)
+	if l < shortNameETL {
+		return fmt.Errorf(prefix+"is too short", name)
+	}
+	if l > longNameETL {
+		return fmt.Errorf(prefix+"is too long", name)
+	}
+	for _, c := range name {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			continue
+		}
+		if c != '-' {
+			return fmt.Errorf(prefix+"is invalid: can only contain [a-z0-9-]", name)
+		}
+	}
+	return nil
 }

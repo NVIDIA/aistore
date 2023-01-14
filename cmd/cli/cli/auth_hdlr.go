@@ -589,7 +589,7 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		role    = args.Get(0)
 	)
 	if bucket != "" && cluster == "" {
-		return nil, fmt.Errorf("flag %q requires flag %q to be set", bucketRoleFlag.Name, clusterRoleFlag.Name)
+		return nil, fmt.Errorf("flag %s requires %s to be specified", qflprn(bucketRoleFlag), qflprn(clusterRoleFlag))
 	}
 
 	if cluster != "" {

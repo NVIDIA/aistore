@@ -125,7 +125,7 @@ func prettyLatency(min, avg, max int64) string {
 }
 
 func prettyTimestamp() string {
-	return time.Now().Format("15:04:05")
+	return time.Now().Format(cos.StampSec)
 }
 
 func preWriteStats(to io.Writer, jsonFormat bool) {

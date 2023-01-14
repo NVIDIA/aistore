@@ -146,7 +146,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 							_, err = jsp.Load(testpath, loaded, opts)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(loaded.Version).To(BeEquivalentTo(clone.Version))
-							_, present := loaded.Get(msg.ID())
+							_, present := loaded.Get(msg.Name())
 							Expect(present).To(BeTrue())
 						}
 					}

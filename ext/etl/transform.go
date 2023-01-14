@@ -93,7 +93,7 @@ type (
 	Aborter struct {
 		t           cluster.Target
 		currentSmap *cluster.Smap
-		uuid        string
+		name        string
 		mtx         sync.Mutex
 	}
 
@@ -105,16 +105,16 @@ type (
 // interface guard
 var _ cluster.Slistener = (*Aborter)(nil)
 
-func newAborter(t cluster.Target, uuid string) *Aborter {
+func newAborter(t cluster.Target, name string) *Aborter {
 	return &Aborter{
-		uuid:        uuid,
+		name:        name,
 		t:           t,
 		currentSmap: t.Sowner().Get(),
 	}
 }
 
 func (e *Aborter) String() string {
-	return fmt.Sprintf("etl-aborter-%s", e.uuid)
+	return fmt.Sprintf("etl-aborter-%s", e.name)
 }
 
 func (e *Aborter) ListenSmapChanged() {
@@ -130,14 +130,14 @@ func (e *Aborter) ListenSmapChanged() {
 		}
 
 		if !newSmap.CompareTargets(e.currentSmap) {
-			err := cmn.NewErrETL(&cmn.ETLErrorContext{
-				TID:  e.t.SID(),
-				UUID: e.uuid,
+			err := cmn.NewErrETL(&cmn.ETLErrCtx{
+				TID:     e.t.SID(),
+				ETLName: e.name,
 			}, "targets have changed, aborting...")
 			glog.Warning(err)
 			// Stop will unregister `e` from smap listeners.
-			if err := Stop(e.t, e.uuid, err); err != nil {
-				glog.Error(err.Error())
+			if err := Stop(e.t, e.name, err); err != nil {
+				glog.Error(err)
 			}
 		}
 
@@ -145,22 +145,23 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-func InitSpec(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (err error) {
-	errCtx, podName, svcName, err := tryStart(t, msg, opts)
+// (common for both `InitCode` and `InitSpec` flows)
+func InitSpec(t cluster.Target, msg *InitSpecMsg, xactID string, opts StartOpts) error {
+	errCtx, podName, svcName, err := start(t, msg, xactID, opts)
 	if err != nil {
-		glog.Warning(cmn.NewErrETL(errCtx, "Performing cleanup after unsuccessful Start"))
-		if err := cleanupEntities(errCtx, podName, svcName); err != nil {
-			glog.Error(err)
+		glog.Warning(cmn.NewErrETL(errCtx, "%s: cleanup after unsuccessful Start", t))
+		if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {
+			glog.Error(errV)
 		}
 	}
-
 	return err
 }
 
-// Given user message `InitCodeMsg`, make the corresponding assorted substitutions
-// in the etl/runtime/podspec.yaml spec and run the container.
+// Given user message `InitCodeMsg`:
+// - make the corresponding assorted substitutions in the etl/runtime/podspec.yaml spec, and
+// - execute `InitSpec` with the modified podspec
 // See also: etl/runtime/podspec.yaml
-func InitCode(t cluster.Target, msg *InitCodeMsg) error {
+func InitCode(t cluster.Target, msg *InitCodeMsg, xactID string) error {
 	var (
 		ftp      = fromToPairs(msg)
 		replacer = strings.NewReplacer(ftp...)
@@ -171,8 +172,10 @@ func InitCode(t cluster.Target, msg *InitCodeMsg) error {
 	podSpec := replacer.Replace(r.PodSpec())
 
 	// Start ETL
+	// (the point where InitCode flow converges w/ InitSpec)
 	return InitSpec(t,
 		&InitSpecMsg{msg.InitMsgBase, []byte(podSpec)},
+		xactID,
 		StartOpts{Env: map[string]string{
 			r.CodeEnvName(): string(msg.Code),
 			r.DepsEnvName(): string(msg.Deps),
@@ -186,7 +189,7 @@ func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	var (
 		chunk string
 		flags string
-		name  = k8s.CleanName(msg.IDX) // cleanup the `msg.ID` as K8s doesn't allow `_` and uppercase
+		name  = msg.IDX
 	)
 	ftp = make([]string, 0, 16)
 	ftp = append(ftp, "<NAME>", name)
@@ -220,7 +223,7 @@ func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 
 // cleanupEntities removes provided entities. It tries its best to remove all
 // entities so it doesn't stop when encountering an error.
-func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err error) {
+func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error) {
 	if svcName != "" {
 		if deleteErr := deleteEntity(errCtx, k8s.Svc, svcName); deleteErr != nil {
 			err = deleteErr
@@ -236,15 +239,16 @@ func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err 
 	return
 }
 
+// (does the heavy-lifting)
 // Returns:
-// * errCtx - gathered information about ETL context
+// * errCtx - ETL error context
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
-// * err - any error occurred which should be passed further.
-func tryStart(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
+// * err - any error occurred that should be passed on.
+func start(t cluster.Target, msg *InitSpecMsg, xactID string, opts StartOpts) (errCtx *cmn.ETLErrCtx, podName, svcName string, err error) {
 	debug.Assert(k8s.NodeName != "") // checked above
 
-	errCtx = &cmn.ETLErrorContext{TID: t.SID(), UUID: msg.IDX}
+	errCtx = &cmn.ETLErrCtx{TID: t.SID(), ETLName: msg.IDX}
 	boot := &etlBootstrapper{errCtx: errCtx, t: t, env: opts.Env}
 	boot.msg = *msg
 
@@ -255,7 +259,7 @@ func tryStart(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (errCtx *cmn.E
 
 	boot.createServiceSpec()
 
-	// 1. Cleanup previously started entities (if any).
+	// 1. Cleanup previously started entities, if any.
 	errCleanup := cleanupEntities(errCtx, boot.pod.Name, boot.svc.Name)
 	debug.AssertNoErr(errCleanup)
 
@@ -276,14 +280,14 @@ func tryStart(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (errCtx *cmn.E
 		return
 	}
 
-	boot.setupXaction()
+	boot.setupXaction(xactID)
 
+	// finally, add Communicator to the runtime registry
 	c := makeCommunicator(commArgs{
 		listener:     newAborter(t, msg.IDX),
 		bootstrapper: boot,
 	})
-	// NOTE: Communicator is put to registry only if the whole tryStart was successful.
-	if err = reg.put(msg.IDX, c); err != nil {
+	if err = reg.add(msg.IDX, c); err != nil {
 		return
 	}
 	t.Sowner().Listeners().Reg(c)
@@ -293,9 +297,9 @@ func tryStart(t cluster.Target, msg *InitSpecMsg, opts StartOpts) (errCtx *cmn.E
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
 // It unregisters ETL smap listener.
 func Stop(t cluster.Target, id string, errCause error) error {
-	errCtx := &cmn.ETLErrorContext{
-		TID:  t.SID(),
-		UUID: id,
+	errCtx := &cmn.ETLErrCtx{
+		TID:     t.SID(),
+		ETLName: id,
 	}
 
 	// Abort all running offline ETLs.
@@ -312,7 +316,7 @@ func Stop(t cluster.Target, id string, errCause error) error {
 		return err
 	}
 
-	if c := reg.removeByUUID(id); c != nil {
+	if c := reg.del(id); c != nil {
 		t.Sowner().Listeners().Unreg(c)
 	}
 
@@ -327,16 +331,16 @@ func StopAll(t cluster.Target) {
 		return
 	}
 	for _, e := range List() {
-		if err := Stop(t, e.ID, nil); err != nil {
+		if err := Stop(t, e.Name, nil); err != nil {
 			glog.Error(err)
 		}
 	}
 }
 
-func GetCommunicator(transformID string, lsnode *cluster.Snode) (Communicator, error) {
-	c, exists := reg.getByUUID(transformID)
+func GetCommunicator(etlName string, lsnode *cluster.Snode) (Communicator, error) {
+	c, exists := reg.get(etlName)
 	if !exists {
-		return nil, cmn.NewErrNotFound("%s: ETL %q", lsnode, transformID)
+		return nil, cmn.NewErrNotFound("%s: etl[%s]", lsnode, etlName)
 	}
 	return c, nil
 }
@@ -362,12 +366,12 @@ func PodLogs(t cluster.Target, transformID string) (logs PodLogsMsg, err error) 
 	}, nil
 }
 
-func PodHealth(t cluster.Target, etlID string) (stats *PodHealthMsg, err error) {
+func PodHealth(t cluster.Target, etlName string) (stats *PodHealthMsg, err error) {
 	var (
 		c      Communicator
 		client k8s.Client
 	)
-	if c, err = GetCommunicator(etlID, t.Snode()); err != nil {
+	if c, err = GetCommunicator(etlName, t.Snode()); err != nil {
 		return
 	}
 	if client, err = k8s.GetClient(); err != nil {
@@ -419,7 +423,7 @@ func checkPodReady(client k8s.Client, podName string) (ready bool, err error) {
 	return false, nil
 }
 
-func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) error {
+func deleteEntity(errCtx *cmn.ETLErrCtx, entityType, entityName string) error {
 	client, err := k8s.GetClient()
 	if err != nil {
 		return cmn.NewErrETL(errCtx, err.Error())

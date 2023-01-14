@@ -26,7 +26,7 @@ const appLabel = "app"
 type etlBootstrapper struct {
 	// construction
 	t      cluster.Target
-	errCtx *cmn.ETLErrorContext
+	errCtx *cmn.ETLErrCtx
 	msg    InitSpecMsg
 	env    map[string]string
 
@@ -49,16 +49,16 @@ func (b *etlBootstrapper) createPodSpec() (err error) {
 }
 
 func (b *etlBootstrapper) _prepSpec() (err error) {
-	// Override the name (add target's daemon ID and node ID to its name).
+	// Override pod name: append target ID
+	// (K8s doesn't allow `_` and uppercase)
 	b.pod.SetName(k8s.CleanName(b.msg.IDX + "-" + b.t.SID()))
 	b.errCtx.PodName = b.pod.GetName()
 	b.pod.APIVersion = "v1"
 
-	// The following combination of Affinity and Anti-Affinity allows one to
-	// achieve the following:
-	//  1. The ETL container is always scheduled on the target invoking it.
-	//  2. Not more than one ETL container with the same target, is scheduled on
-	//     the same node, at a given point of time.
+	// The following combination of Affinity and Anti-Affinity provides for:
+	// 1. The ETL container is always scheduled on the target invoking it.
+	// 2. No more than a single ETL container with the same target is scheduled on
+	//    the same node at any given point in time.
 	if err = b._setAffinity(); err != nil {
 		return
 	}
@@ -195,8 +195,8 @@ func (b *etlBootstrapper) waitPodReady() error {
 	return err
 }
 
-func (b *etlBootstrapper) setupXaction() {
-	rns := xreg.RenewETL(b.t, b.msg)
+func (b *etlBootstrapper) setupXaction(xactID string) {
+	rns := xreg.RenewETL(b.t, b.msg, xactID)
 	debug.AssertNoErr(rns.Err)
 	debug.Assert(!rns.IsRunning())
 	b.xctn = rns.Entry.Get()

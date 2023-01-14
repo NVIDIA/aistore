@@ -1,6 +1,6 @@
 // Package tetl provides helpers for ETL.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tetl
 
@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -121,10 +122,10 @@ func GetTransformYaml(name string) ([]byte, error) {
 	return []byte(specStr), nil
 }
 
-func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlID string) {
+func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlName string) {
 	if t.Failed() {
 		tlog.Logln("Fetching logs from ETL containers")
-		if logMsgs, err := api.ETLLogs(baseParams, etlID); err == nil {
+		if logMsgs, err := api.ETLLogs(baseParams, etlName); err == nil {
 			for _, msg := range logMsgs {
 				tlog.Logf("%s\n", msg.String(10*cos.KiB))
 			}
@@ -132,14 +133,14 @@ func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlID string) {
 			tlog.Logf("Error retrieving logs; err %v\n", err)
 		}
 	}
-	tlog.Logf("Stopping ETL %q\n", etlID)
+	tlog.Logf("Stopping ETL %q\n", etlName)
 
-	if err := api.ETLStop(baseParams, etlID); err != nil {
-		tlog.Logf("Stopping ETL %q failed; err %v\n", etlID, err)
+	if err := api.ETLStop(baseParams, etlName); err != nil {
+		tlog.Logf("Stopping ETL %q failed; err %v\n", etlName, err)
 	} else {
-		tlog.Logf("ETL %q stopped\n", etlID)
+		tlog.Logf("ETL %q stopped\n", etlName)
 	}
-	err := api.ETLDelete(baseParams, etlID)
+	err := api.ETLDelete(baseParams, etlName)
 	tassert.CheckFatal(t, err)
 }
 
@@ -237,36 +238,38 @@ func InitSpec(t *testing.T, baseParams api.BaseParams, name, comm string) string
 	tassert.CheckFatal(t, err)
 	msg.Spec = spec
 
-	uuid, err := api.ETLInit(baseParams, msg)
+	retName, err := api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, retName == name, "expected name %s != %s", name, retName)
 
-	etlMsg, err := api.ETLGetInitMsg(baseParams, uuid)
+	etlMsg, err := api.ETLGetInitMsg(baseParams, retName)
 	tassert.CheckFatal(t, err)
 
 	initSpec := etlMsg.(*etl.InitSpecMsg)
-	tassert.Errorf(t, initSpec.ID() == uuid, "expected uuid %s != %s", uuid, initSpec.ID())
+	tassert.Errorf(t, initSpec.Name() == name, "expected name %s != %s", name, initSpec.Name())
 	tassert.Errorf(t, initSpec.CommType() == comm, "expected communicator type %s != %s", comm, initSpec.CommType())
 	tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ")
 
-	return uuid
+	return name
 }
 
 func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) string {
-	uuid, err := api.ETLInit(baseParams, &msg)
+	retName, err := api.ETLInit(baseParams, &msg)
 	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, retName == msg.Name(), "expected name %s != %s", msg.Name(), retName)
 
-	etlMsg, err := api.ETLGetInitMsg(baseParams, uuid)
+	etlMsg, err := api.ETLGetInitMsg(baseParams, msg.Name())
 	tassert.CheckFatal(t, err)
 
 	initCode := etlMsg.(*etl.InitCodeMsg)
-	tassert.Errorf(t, initCode.ID() == uuid, "expected uuid %s != %s", uuid, initCode.ID())
+	tassert.Errorf(t, initCode.Name() == retName, "expected name %s != %s", retName, initCode.Name())
 	tassert.Errorf(t, msg.CommType() == "" || initCode.CommType() == msg.CommType(),
 		"expected communicator type %s != %s", msg.CommType(), initCode.CommType())
 	tassert.Errorf(t, msg.Runtime == initCode.Runtime, "expected runtime %s != %s", msg.Runtime, initCode.Runtime)
 	tassert.Errorf(t, bytes.Equal(msg.Code, initCode.Code), "ETL codes differ")
 	tassert.Errorf(t, bytes.Equal(msg.Deps, initCode.Deps), "ETL dependencies differ")
 
-	return uuid
+	return retName
 }
 
 func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg) string {
@@ -278,24 +281,23 @@ func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, 
 	return xactID
 }
 
-func ETLShouldBeRunning(t *testing.T, params api.BaseParams, etlID string) {
+func ETLShouldBeRunning(t *testing.T, params api.BaseParams, etlName string) {
 	etls, err := api.ETLList(params)
 	tassert.CheckFatal(t, err)
 	for _, etl := range etls {
-		if etlID == etl.ID {
+		if etlName == etl.Name {
 			return
 		}
 	}
-	t.Fatalf("etl with ID (%s) is not running, (etls: %v)", etlID, etls)
+	t.Fatalf("etl[%s] is not running (%v)", etlName, etls)
 }
 
-func ETLShouldNotBeRunning(t *testing.T, params api.BaseParams, etlID string) {
+func ETLShouldNotBeRunning(t *testing.T, params api.BaseParams, etlName string) {
 	etls, err := api.ETLList(params)
 	tassert.CheckFatal(t, err)
 	for _, etl := range etls {
-		if etlID == etl.ID {
-			t.Fatalf("expected ETL with ID (%s) to be stopped, (etls: %v)", etlID, etls)
-			return
+		if etlName == etl.Name {
+			t.Fatalf("expected etl[%s] to be stopped (%v)", etlName, etls)
 		}
 	}
 }
@@ -307,7 +309,7 @@ func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {
 }
 
 func SpecToInitMsg(spec []byte /*yaml*/) (msg *etl.InitSpecMsg, err error) {
-	errCtx := &cmn.ETLErrorContext{}
+	errCtx := &cmn.ETLErrCtx{}
 	msg = &etl.InitSpecMsg{Spec: spec}
 	pod, err := etl.ParsePodSpec(errCtx, msg.Spec)
 	if err != nil {
@@ -316,8 +318,7 @@ func SpecToInitMsg(spec []byte /*yaml*/) (msg *etl.InitSpecMsg, err error) {
 	errCtx.ETLName = pod.GetName()
 	msg.IDX = pod.GetName()
 
-	if err := cos.ValidateEtlID(msg.IDX); err != nil {
-		err = fmt.Errorf("invalid pod name: %v", err)
+	if err := k8s.ValidateEtlName(msg.IDX); err != nil {
 		return msg, err
 	}
 	// Check annotations.
@@ -337,7 +338,7 @@ func podTransformCommType(pod *corev1.Pod) string {
 	return pod.Annotations[commTypeAnnotation]
 }
 
-func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cos.Duration, error) {
+func podTransformTimeout(errCtx *cmn.ETLErrCtx, pod *corev1.Pod) (cos.Duration, error) {
 	if pod.Annotations == nil || pod.Annotations[waitTimeoutAnnotation] == "" {
 		return 0, nil
 	}

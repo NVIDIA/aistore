@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -14,8 +14,8 @@ import (
 
 type (
 	registry struct {
-		mtx    sync.RWMutex
-		byUUID map[string]Communicator
+		m   map[string]Communicator
+		mtx sync.RWMutex
 	}
 )
 
@@ -25,34 +25,34 @@ var (
 )
 
 func init() {
-	reg = &registry{byUUID: make(map[string]Communicator)}
+	reg = &registry{m: make(map[string]Communicator)}
 	reqSecret = cos.RandStringStrong(10)
 }
 
-func (r *registry) put(uuid string, c Communicator) error {
-	debug.Assert(uuid != "")
+func (r *registry) add(name string, c Communicator) (err error) {
 	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	if _, ok := r.byUUID[uuid]; ok {
-		return fmt.Errorf("ETL %q already exists", uuid)
+	if _, ok := r.m[name]; ok {
+		err = fmt.Errorf("etl[%s] already exists", name)
+	} else {
+		r.m[name] = c
 	}
-	r.byUUID[uuid] = c
-	return nil
+	r.mtx.Unlock()
+	return
 }
 
-func (r *registry) getByUUID(uuid string) (c Communicator, exists bool) {
+func (r *registry) get(name string) (c Communicator, exists bool) {
 	r.mtx.RLock()
-	c, exists = r.byUUID[uuid]
+	c, exists = r.m[name]
 	r.mtx.RUnlock()
 	return
 }
 
-func (r *registry) removeByUUID(uuid string) (c Communicator) {
+func (r *registry) del(name string) (c Communicator) {
 	var ok bool
-	debug.Assert(uuid != "")
+	debug.Assert(name != "")
 	r.mtx.Lock()
-	if c, ok = r.byUUID[uuid]; ok {
-		delete(r.byUUID, uuid)
+	if c, ok = r.m[name]; ok {
+		delete(r.m, name)
 	}
 	r.mtx.Unlock()
 	return c
@@ -60,11 +60,10 @@ func (r *registry) removeByUUID(uuid string) (c Communicator) {
 
 func (r *registry) list() []Info {
 	r.mtx.RLock()
-	etls := make([]Info, 0, len(r.byUUID))
-	for uuid, comm := range r.byUUID {
+	etls := make([]Info, 0, len(r.m))
+	for name, comm := range r.m {
 		etls = append(etls, Info{
-			ID: uuid,
-
+			Name:     name,
 			ObjCount: comm.ObjCount(),
 			InBytes:  comm.InBytes(),
 			OutBytes: comm.OutBytes(),

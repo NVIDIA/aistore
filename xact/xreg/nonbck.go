@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -50,8 +50,8 @@ func RenewDownloader(t cluster.Target, statsT stats.Tracker, xactID string) Rene
 	return dreg.renew(e, nil)
 }
 
-func RenewETL(t cluster.Target, msg any) RenewRes {
-	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{T: t, Custom: msg}, nil)
+func RenewETL(t cluster.Target, msg any, xactID string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{T: t, UUID: xactID, Custom: msg}, nil)
 	return dreg.renew(e, nil)
 }
 

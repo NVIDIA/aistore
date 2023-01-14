@@ -37,11 +37,8 @@ func (*etlFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 }
 
 func (p *etlFactory) Start() error {
-	uuid := p.Args.UUID
-	if uuid == "" {
-		uuid = cos.GenUUID()
-	}
-	p.xctn = newETL(uuid, p.Kind())
+	debug.Assert(cos.IsValidUUID(p.Args.UUID), p.Args.UUID)
+	p.xctn = newETL(p.Args.UUID, p.Kind())
 	return nil
 }
 

@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -15,7 +15,8 @@ import (
 
 // in addition to standard layouts at /usr/local/go/src/time/format.go
 const (
-	FmtTimestamp = "15:04:05.000000" // internal (same as glog)
+	StampMicro = "15:04:05.000000" // time.StampMicro without a date, same as glog
+	StampSec   = "15:04:05"        // time.Stamp without a date
 
 	// S3 ListObjectsV2
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
@@ -44,6 +45,8 @@ func FormatTime(t time.Time, format string) string {
 		return t.Format(format)
 	}
 }
+
+func FormatNowStamp() string { return FormatTime(time.Now(), StampMicro) }
 
 func S2Duration(s string) (time.Duration, error) {
 	d, err := strconv.ParseInt(s, 0, 64)

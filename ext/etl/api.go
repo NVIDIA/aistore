@@ -25,15 +25,16 @@ const (
 
 type (
 	InitMsg interface {
-		ID() string
-		Type() string
+		Name() string
+		Type() string // Code or Spec
 		CommType() string
 		Validate() error
+		String() string
 	}
 
 	// and implementations
 	InitMsgBase struct {
-		IDX       string       `json:"id"`
+		IDX       string       `json:"name"`
 		CommTypeX string       `json:"communication"`
 		Timeout   cos.Duration `json:"timeout"`
 	}
@@ -67,11 +68,10 @@ type (
 type (
 	InfoList []Info
 	Info     struct {
-		ID string `json:"id"`
-
-		ObjCount int64 `json:"obj_count"`
-		InBytes  int64 `json:"in_bytes"`
-		OutBytes int64 `json:"out_bytes"`
+		Name     string `json:"name"`
+		ObjCount int64  `json:"obj_count"`
+		InBytes  int64  `json:"in_bytes"`
+		OutBytes int64  `json:"out_bytes"`
 	}
 
 	PodsLogsMsg []PodLogsMsg
@@ -88,7 +88,7 @@ type (
 	}
 
 	OfflineMsg struct {
-		ID     string `json:"id"`      // ETL ID
+		Name   string `json:"name"`    // ETL Name
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT
 
@@ -128,10 +128,18 @@ var (
 )
 
 func (m InitMsgBase) CommType() string { return m.CommTypeX }
-func (m InitMsgBase) ID() string       { return m.IDX }
+func (m InitMsgBase) Name() string     { return m.IDX }
 
 func (*InitCodeMsg) Type() string { return Code }
 func (*InitSpecMsg) Type() string { return Spec }
+
+func (m *InitCodeMsg) String() string {
+	return fmt.Sprintf("init-%s[%s-%s-%s]", Code, m.IDX, m.CommTypeX, m.Runtime)
+}
+
+func (m *InitSpecMsg) String() string {
+	return fmt.Sprintf("init-%s[%s-%s]", Spec, m.IDX, m.CommTypeX)
+}
 
 // TODO: double-take, unmarshaling-wise. To avoid, include (`Spec`, `Code`) in API calls
 func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
@@ -154,8 +162,8 @@ func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 }
 
 func (m *InitCodeMsg) Validate() error {
-	if err := cos.ValidateEtlID(m.IDX); err != nil {
-		return fmt.Errorf("invalid etl ID: %v (%q, comm-type %q)", err, m.Runtime, m.CommTypeX)
+	if err := k8s.ValidateEtlName(m.IDX); err != nil {
+		return fmt.Errorf("%v (%q, comm-type %q)", err, m.Runtime, m.CommTypeX)
 	}
 	if len(m.Code) == 0 {
 		return fmt.Errorf("source code is empty (%q)", m.Runtime)
@@ -182,7 +190,7 @@ func (m *InitCodeMsg) Validate() error {
 	return nil
 }
 
-func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error) {
+func ParsePodSpec(errCtx *cmn.ETLErrCtx, spec []byte) (*corev1.Pod, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
 	if err != nil {
 		return nil, cmn.NewErrETL(errCtx, "failed to parse pod spec: %v\n%q", err, string(spec))
@@ -197,15 +205,13 @@ func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error)
 }
 
 func (m *InitSpecMsg) Validate() (err error) {
-	errCtx := &cmn.ETLErrorContext{}
+	if err := k8s.ValidateEtlName(m.IDX); err != nil {
+		return err
+	}
+	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
 	pod, err := ParsePodSpec(errCtx, m.Spec)
 	if err != nil {
 		return err
-	}
-	errCtx.ETLName = m.ID()
-
-	if err := cos.ValidateEtlID(m.IDX); err != nil {
-		return fmt.Errorf("invalid pod name: %v", err)
 	}
 
 	if err := validateCommType(m.CommType()); err != nil {
@@ -278,5 +284,5 @@ func (p *PodLogsMsg) String(maxLen ...int) string {
 var _ sort.Interface = (*InfoList)(nil)
 
 func (il InfoList) Len() int           { return len(il) }
-func (il InfoList) Less(i, j int) bool { return il[i].ID < il[j].ID }
+func (il InfoList) Less(i, j int) bool { return il[i].Name < il[j].Name }
 func (il InfoList) Swap(i, j int)      { il[i], il[j] = il[j], il[i] }

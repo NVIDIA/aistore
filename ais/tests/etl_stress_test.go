@@ -265,12 +265,12 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 
 	m.puts()
 
-	etlID := tetl.InitSpec(t, baseParams, name, comm)
-	tlog.Logf("ETL init successful (%q)\n", etlID)
+	etlName := tetl.InitSpec(t, baseParams, name, comm)
+	tlog.Logf("ETL init successful (%q)\n", etlName)
 	t.Cleanup(func() {
-		tetl.StopAndDeleteETL(t, baseParams, etlID)
+		tetl.StopAndDeleteETL(t, baseParams, etlName)
 	})
 
-	tlog.Logf("Start offline ETL %q => %q\n", etlID, bckTo.String())
-	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &apc.TCBMsg{ID: etlID, CopyBckMsg: apc.CopyBckMsg{Force: true}})
+	tlog.Logf("Start offline ETL %q => %q\n", etlName, bckTo.String())
+	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &apc.TCBMsg{ID: etlName, CopyBckMsg: apc.CopyBckMsg{Force: true}})
 }

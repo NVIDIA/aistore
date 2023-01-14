@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -41,7 +40,7 @@ type response struct {
 // POST /v1/sort
 func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *ParsedRequestSpec) {
 	var err error
-	parsedRS.TargetOrderSalt = []byte(time.Now().Format("15:04:05.000000"))
+	parsedRS.TargetOrderSalt = []byte(cos.FormatNowStamp())
 
 	// TODO: handle case when bucket was removed during dSort job - this should
 	// stop whole operation. Maybe some listeners as we have on smap change?

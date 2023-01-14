@@ -604,9 +604,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			return lom
 		}
 	}
-	// isETLRequest (TODO: !4455 comment)
-	if dpq.uuid != "" {
-		t.doETL(w, r, dpq.uuid, bck, lom.ObjName)
+	if dpq.etlName != "" {
+		t.doETL(w, r, dpq.etlName, bck, lom.ObjName)
 		return lom
 	}
 	filename := dpq.archpath // apc.QparamArchpath

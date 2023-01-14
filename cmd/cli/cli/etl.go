@@ -159,15 +159,15 @@ func suggestEtlID(c *cli.Context, shift int) {
 	}
 }
 
-func etlExists(uuid string) (err error) {
+func etlExists(id string) (err error) {
 	// TODO: Replace with a generic API for checking duplicate UUID
 	list, err := api.ETLList(apiBP)
 	if err != nil {
 		return
 	}
 	for _, l := range list {
-		if l.ID == uuid {
-			return fmt.Errorf("ETL %q already exists", uuid)
+		if l.ID == id {
+			return fmt.Errorf("ETL %q already exists", id)
 		}
 	}
 	return
@@ -176,7 +176,7 @@ func etlExists(uuid string) (err error) {
 func etlInitSpecHandler(c *cli.Context) (err error) {
 	fromFile := parseStrFlag(c, fromFileFlag)
 	if fromFile == "" {
-		return fmt.Errorf("%s flag cannot be empty", fromFileFlag.Name)
+		return fmt.Errorf("flag %s must be specified", qflprn(fromFileFlag))
 	}
 	spec, err := os.ReadFile(fromFile)
 	if err != nil {
@@ -210,7 +210,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 
 	fromFile := parseStrFlag(c, fromFileFlag)
 	if fromFile == "" {
-		return fmt.Errorf("%s flag cannot be empty", fromFileFlag.Name)
+		return fmt.Errorf("%s flag cannot be empty", qflprn(fromFileFlag))
 	}
 
 	msg.IDX = parseStrFlag(c, etlUUID)

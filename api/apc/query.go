@@ -10,8 +10,10 @@ const (
 	QparamWhat = "what" // "smap" | "bmd" | "config" | "stats" | "xaction" ... (enum below)
 
 	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
-	QparamUUID  = "uuid"  // xaction
-	QparamJobID = "jobid" // job
+
+	QparamUUID    = "uuid"     // xaction
+	QparamJobID   = "jobid"    // job
+	QparamETLName = "etl_name" // etl
 
 	QparamRegex      = "regex"       // dsort: list regex
 	QparamOnlyActive = "only_active" // dsort: list only active

@@ -134,11 +134,10 @@ type (
 	}
 	ErrETL struct {
 		Reason string
-		ETLErrorContext
+		ETLErrCtx
 	}
-	ETLErrorContext struct {
+	ETLErrCtx struct {
 		TID     string
-		UUID    string
 		ETLName string
 		PodName string
 		SvcName string
@@ -498,7 +497,7 @@ func NewErrAborted(what, ctx string, err error) *ErrAborted {
 }
 
 func (e *ErrAborted) Error() (s string) {
-	s = fmt.Sprintf("%s aborted at %s", e.what, cos.FormatTime(e.timestamp, cos.FmtTimestamp))
+	s = fmt.Sprintf("%s aborted at %s", e.what, cos.FormatTime(e.timestamp, cos.StampMicro))
 	if e.err != nil {
 		s = fmt.Sprintf("%s, err: %v", s, e.err)
 	}
@@ -555,7 +554,7 @@ func (e *ErrMissingBackend) Error() string {
 
 // ErrETL
 
-func NewErrETL(ctx *ETLErrorContext, format string, a ...any) *ErrETL {
+func NewErrETL(ctx *ETLErrCtx, format string, a ...any) *ErrETL {
 	e := &ErrETL{
 		Reason: fmt.Sprintf(format, a...),
 	}
@@ -567,9 +566,6 @@ func (e *ErrETL) Error() string {
 	if e.TID != "" {
 		s = append(s, fmt.Sprintf("t[%s]", e.TID))
 	}
-	if e.UUID != "" {
-		s = append(s, fmt.Sprintf("uuid=%q", e.UUID))
-	}
 	if e.ETLName != "" {
 		s = append(s, fmt.Sprintf("etl=%q", e.ETLName))
 	}
@@ -580,13 +576,6 @@ func (e *ErrETL) Error() string {
 		s = append(s, fmt.Sprintf("service=%q", e.SvcName))
 	}
 	return fmt.Sprintf("[%s] %s", strings.Join(s, ","), e.Reason)
-}
-
-func (e *ErrETL) withUUID(uuid string) *ErrETL {
-	if uuid != "" {
-		e.UUID = uuid
-	}
-	return e
 }
 
 func (e *ErrETL) withTarget(tid string) *ErrETL {
@@ -617,13 +606,12 @@ func (e *ErrETL) WithPodName(name string) *ErrETL {
 	return e
 }
 
-func (e *ErrETL) WithContext(ctx *ETLErrorContext) *ErrETL {
+func (e *ErrETL) WithContext(ctx *ETLErrCtx) *ErrETL {
 	if ctx == nil {
 		return e
 	}
 	return e.
 		withTarget(ctx.TID).
-		withUUID(ctx.UUID).
 		WithPodName(ctx.PodName).
 		withETLName(ctx.ETLName).
 		withSvcName(ctx.SvcName)

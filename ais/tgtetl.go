@@ -39,12 +39,9 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /v1/etl
-//
-// handleETLPut is responsible validation and adding new ETL spec/code
-// to etl metadata.
+// start ETL spec/code
 func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
-	_, err := t.apiItems(w, r, 0, false, apc.URLPathETL.L)
-	if err != nil {
+	if _, err := t.apiItems(w, r, 0, false, apc.URLPathETL.L); err != nil {
 		return
 	}
 
@@ -60,14 +57,15 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
+	xactID := r.URL.Query().Get(apc.QparamUUID)
 
 	switch msg := initMsg.(type) {
 	case *etl.InitSpecMsg:
-		err = etl.InitSpec(t, msg, etl.StartOpts{})
+		err = etl.InitSpec(t, msg, xactID, etl.StartOpts{})
 	case *etl.InitCodeMsg:
-		err = etl.InitCode(t, msg)
+		err = etl.InitCode(t, msg, xactID)
 	default:
-		debug.Assert(false)
+		debug.Assert(false, initMsg.String())
 	}
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -126,8 +124,8 @@ func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
 	t.writeErrURL(w, r)
 }
 
-func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlID string) {
-	if err := etl.Stop(t, etlID, cmn.ErrXactUserAbort); err != nil {
+func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string) {
+	if err := etl.Stop(t, etlName, cmn.ErrXactUserAbort); err != nil {
 		statusCode := http.StatusBadRequest
 		if cmn.IsErrNotFound(err) {
 			statusCode = http.StatusNotFound
@@ -137,12 +135,12 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlID string) {
 	}
 }
 
-func (t *target) doETL(w http.ResponseWriter, r *http.Request, uuid string, bck *cluster.Bck, objName string) {
+func (t *target) doETL(w http.ResponseWriter, r *http.Request, etlName string, bck *cluster.Bck, objName string) {
 	var (
 		comm etl.Communicator
 		err  error
 	)
-	comm, err = etl.GetCommunicator(uuid, t.si)
+	comm, err = etl.GetCommunicator(etlName, t.si)
 	if err != nil {
 		if cmn.IsErrNotFound(err) {
 			smap := t.owner.smap.Get()
@@ -156,16 +154,16 @@ func (t *target) doETL(w http.ResponseWriter, r *http.Request, uuid string, bck 
 		return
 	}
 	if err := comm.OnlineTransform(w, r, bck, objName); err != nil {
-		t.writeErr(w, r, cmn.NewErrETL(&cmn.ETLErrorContext{
-			UUID:    uuid,
+		t.writeErr(w, r, cmn.NewErrETL(&cmn.ETLErrCtx{
+			ETLName: etlName,
 			PodName: comm.PodName(),
 			SvcName: comm.SvcName(),
 		}, err.Error()))
 	}
 }
 
-func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlID string) {
-	logs, err := etl.PodLogs(t, etlID)
+func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string) {
+	logs, err := etl.PodLogs(t, etlName)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -173,8 +171,8 @@ func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlID string) {
 	t.writeJSON(w, r, logs, "logs-etl")
 }
 
-func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlID string) {
-	healthMsg, err := etl.PodHealth(t, etlID)
+func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName string) {
+	healthMsg, err := etl.PodHealth(t, etlName)
 	if err != nil {
 		if cmn.IsErrNotFound(err) {
 			t.writeErrSilent(w, r, err, http.StatusNotFound)

@@ -853,13 +853,13 @@ func (t *target) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	t.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
 }
 
-func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD) {
+func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD, action string) {
 	for key := range oldEtlMD.ETLs {
 		if _, ok := newEtlMD.ETLs[key]; ok {
 			continue
 		}
-		// TODO: stop only when running; specify cause
-		etl.Stop(t, key, nil)
+		// TODO: stop only when running
+		etl.Stop(t, key, errors.New("ETL MD change resulting from action: "+action))
 	}
 }
 

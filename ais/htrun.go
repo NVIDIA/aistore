@@ -1516,7 +1516,7 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
 }
 
 func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
-	caller string, cb func(newELT *etlMD, oldETL *etlMD)) (err error) {
+	caller string, cb func(newELT *etlMD, oldETL *etlMD, action string)) (err error) {
 	if newEtlMD == nil {
 		return
 	}
@@ -1537,7 +1537,7 @@ func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
 	debug.AssertNoErr(err)
 
 	if cb != nil {
-		cb(newEtlMD, etlMD)
+		cb(newEtlMD, etlMD, msg.Action)
 	}
 	return
 }

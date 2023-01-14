@@ -51,7 +51,7 @@ var (
 ////////
 
 func (e *MD) Init(l int)         { e.ETLs = make(ETLs, l) }
-func (e *MD) Add(spec InitMsg)   { e.ETLs[spec.ID()] = spec }
+func (e *MD) Add(msg InitMsg)    { e.ETLs[msg.Name()] = msg }
 func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
 
 func (e *MD) Get(id string) (msg InitMsg, present bool) {

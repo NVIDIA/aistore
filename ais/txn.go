@@ -441,7 +441,7 @@ func (txn *txnBckBase) String() string {
 		return fmt.Sprintf("txn-%s%s", txn.xctn, res)
 	}
 	if !txn.phase.commit.IsZero() {
-		tm = "-" + cos.FormatTime(txn.phase.commit, cos.FmtTimestamp)
+		tm = "-" + cos.FormatTime(txn.phase.commit, cos.StampMicro)
 	}
 	return fmt.Sprintf("txn-%s[%s]-%s%s%s]", txn.action, txn.uid, txn.bck.Bucket().String(), tm, res)
 }

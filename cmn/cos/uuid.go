@@ -52,23 +52,15 @@ func IsValidUUID(uuid string) bool {
 	return len(uuid) >= lenShortID && IsAlphaNice(uuid)
 }
 
-//
-// ETL ID
-//
-
-func ValidateEtlID(id string) error {
-	return _validateID(id, 6)
-}
-
-func _validateID(id string, minlen int) (err error) {
+func ValidateNiceID(id string, minlen int, tag string) (err error) {
 	if len(id) < minlen {
-		return fmt.Errorf("ID %q is invalid: too short", id)
+		return fmt.Errorf("%s %q is too short", tag, id)
 	}
 	if len(id) >= lenTooLongID {
-		return fmt.Errorf("ID %q is invalid: too long", id)
+		return fmt.Errorf("%s %q is too long", tag, id)
 	}
 	if !IsAlphaNice(id) {
-		err = fmt.Errorf("ID %q is invalid: must start with a letter and can only contain [A-Za-z0-9-_]", id)
+		err = fmt.Errorf("%s %q is invalid: must start with a letter and can only contain [A-Za-z0-9-_]", tag, id)
 	}
 	return
 }
@@ -78,7 +70,7 @@ func _validateID(id string, minlen int) (err error) {
 //
 
 func GenDaemonID() string              { return RandStringStrong(lenDaemonID) }
-func ValidateDaemonID(id string) error { return _validateID(id, lenDaemonID) }
+func ValidateDaemonID(id string) error { return ValidateNiceID(id, lenDaemonID, "node ID") }
 
 // (when config.TestingEnv)
 func GenTestingDaemonID(suffix string) string {
