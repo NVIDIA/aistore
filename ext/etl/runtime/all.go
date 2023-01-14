@@ -42,6 +42,14 @@ func Get(runtime string) (r runtime, ok bool) {
 	return
 }
 
+func GetNames() (names []string) {
+	names = make([]string, 0, len(all))
+	for n := range all {
+		names = append(names, n)
+	}
+	return
+}
+
 func init() {
 	all = make(map[string]runtime, 3)
 	for _, r := range []runtime{py38{}, py310{}, py311{}} {

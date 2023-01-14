@@ -164,7 +164,7 @@ func (m *InitCodeMsg) Validate() error {
 		return fmt.Errorf("runtime is not specified (comm-type %q)", m.CommTypeX)
 	}
 	if _, ok := runtime.Get(m.Runtime); !ok {
-		return fmt.Errorf("unsupported runtime %q (comm-type %q)", m.Runtime, m.CommTypeX)
+		return fmt.Errorf("unsupported runtime %q (supported: %v)", m.Runtime, runtime.GetNames())
 	}
 	if m.CommTypeX == "" {
 		cos.Warningf("empty comm-type, defaulting to %q (%q)", Hpush, m.Runtime)
