@@ -189,7 +189,7 @@ func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	var (
 		chunk string
 		flags string
-		name  = msg.IDX
+		name  = k8s.CleanName(msg.IDX) // cleanup the `msg.ID` as K8s doesn't allow `_` and uppercase
 	)
 	ftp = make([]string, 0, 16)
 	ftp = append(ftp, "<NAME>", name)

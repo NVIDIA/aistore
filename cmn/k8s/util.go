@@ -103,12 +103,10 @@ func ValidateEtlName(name string) error {
 		return fmt.Errorf(prefix+"is too long", name)
 	}
 	for _, c := range name {
-		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {
 			continue
 		}
-		if c != '-' {
-			return fmt.Errorf(prefix+"is invalid: can only contain [a-z0-9-]", name)
-		}
+		return fmt.Errorf(prefix+"is invalid: can only contain [a-z0-9-_]", name)
 	}
 	return nil
 }

@@ -34,7 +34,7 @@ type (
 
 	// and implementations
 	InitMsgBase struct {
-		IDX       string       `json:"name"`
+		IDX       string       `json:"id"`
 		CommTypeX string       `json:"communication"`
 		Timeout   cos.Duration `json:"timeout"`
 	}
@@ -68,7 +68,7 @@ type (
 type (
 	InfoList []Info
 	Info     struct {
-		Name     string `json:"name"`
+		Name     string `json:"id"`
 		ObjCount int64  `json:"obj_count"`
 		InBytes  int64  `json:"in_bytes"`
 		OutBytes int64  `json:"out_bytes"`
@@ -88,7 +88,7 @@ type (
 	}
 
 	OfflineMsg struct {
-		Name   string `json:"name"`    // ETL Name
+		Name   string `json:"id"`      // ETL Name
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT
 

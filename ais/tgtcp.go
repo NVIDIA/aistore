@@ -859,7 +859,8 @@ func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD, action string) {
 			continue
 		}
 		// TODO: stop only when running
-		etl.Stop(t, key, errors.New("ETL MD change resulting from action: "+action))
+		glog.Infoln("ETL MD change resulting from action: " + action)
+		etl.Stop(t, key, nil)
 	}
 }
 
