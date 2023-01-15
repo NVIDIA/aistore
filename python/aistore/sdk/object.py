@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
@@ -71,7 +71,7 @@ class Object:
         self,
         archpath: str = "",
         chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl_id: str = None,
+        etl_name: str = None,
     ) -> ObjStream:
         """
         Reads an object
@@ -79,7 +79,7 @@ class Object:
         Args:
             archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
             chunk_size (int, optional): chunk_size to use while reading from stream
-            etl_id(str, optional): Transforms an object based on ETL with etl_id
+            etl_name(str, optional): Transforms an object based on ETL with etl_name
 
         Returns:
             The stream of bytes to read an object or a file inside an archive.
@@ -92,8 +92,8 @@ class Object:
         """
         params = self.bck.qparam
         params[QParamArchpath] = archpath
-        if etl_id:
-            params["uuid"] = etl_id
+        if etl_name:
+            params["etl_name"] = etl_name
         resp = self.bck.client.request(
             HTTP_METHOD_GET,
             path=f"objects/{ self.bck.name }/{ self.obj_name }",

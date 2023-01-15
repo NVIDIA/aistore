@@ -2,7 +2,7 @@
 ETL to transform images using torchvision.
 Communication Type: io://
 
-Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 from aistore import Client
 from torchvision import transforms
@@ -29,13 +29,13 @@ deps = ["Pillow", "torchvision"]
 # initialize ETL
 client.etl().init_code(
     transform=apply_image_transforms,
-    etl_id="etl_torchvision_io",
+    etl_name="etl_torchvision_io",
     dependencies=deps,
     communication_type="io",
 )
 
 # Transform bucket with given ETL id
 job_id = client.bucket("from-bck").transform(
-    etl_id="torchvision_io1", to_bck="to-bck", ext={"jpg": "npy"}
+    etl_name="torchvision_io1", to_bck="to-bck", ext={"jpg": "npy"}
 )
 client.job().wait_for_job(job_id)

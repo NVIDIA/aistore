@@ -366,30 +366,26 @@ func PodLogs(t cluster.Target, transformID string) (logs PodLogsMsg, err error) 
 	}, nil
 }
 
-func PodHealth(t cluster.Target, etlName string) (stats *PodHealthMsg, err error) {
-	var (
-		c      Communicator
-		client k8s.Client
-	)
-	if c, err = GetCommunicator(etlName, t.Snode()); err != nil {
-		return
-	}
-	if client, err = k8s.GetClient(); err != nil {
-		return
-	}
-
-	cpuUsed, memUsed, err := client.Health(c.PodName())
+func PodHealth(t cluster.Target, etlName string) (*PodHealthMsg, error) {
+	c, err := GetCommunicator(etlName, t.Snode())
 	if err != nil {
-		if metricsErr := client.CheckMetricsAvailability(); metricsErr != nil {
-			err = fmt.Errorf("%v; failed to fetch metrics from Kubernetes: %v", metricsErr, err)
-		}
 		return nil, err
 	}
-	return &PodHealthMsg{
-		TargetID: t.SID(),
-		CPU:      cpuUsed,
-		Mem:      memUsed,
-	}, nil
+	client, err := k8s.GetClient()
+	if err != nil {
+		return nil, err
+	}
+	cpuUsed, memUsed, err := client.Health(c.PodName())
+	if err == nil {
+		return &PodHealthMsg{TargetID: t.SID(), CPU: cpuUsed, Mem: memUsed}, nil
+	}
+	if cmn.IsErrNotFound(err) {
+		return nil, err
+	}
+	if metricsErr := client.CheckMetricsAvailability(); metricsErr != nil {
+		err = fmt.Errorf("%v; failed to fetch metrics from Kubernetes: %v", metricsErr, err)
+	}
+	return nil, err
 }
 
 // Pod conditions include enumerated lifecycle states, such as `PodScheduled`,

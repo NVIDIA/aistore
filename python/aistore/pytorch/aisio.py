@@ -1,6 +1,6 @@
 """
 AIS IO Datapipe
-Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 
 from typing import Iterator, Tuple

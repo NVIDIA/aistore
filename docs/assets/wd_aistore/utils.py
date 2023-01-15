@@ -33,11 +33,11 @@ def display_loader_images(data_loader, objects=2):
 
 # Utility for displaying images from shard
 # pylint: disable=unused-variable
-def display_shard_images(client, bucket, tar_name, objects=2, etl_id=""):
+def display_shard_images(client, bucket, tar_name, objects=2, etl_name=""):
     to_tensor = transforms.Compose([transforms.ToTensor()])
     test_object = (
         wds.WebDataset(
-            client.object_url(bucket, tar_name, transform_id=etl_id),
+            client.object_url(bucket, tar_name, transform_id=etl_name),
             handler=wds.handlers.warn_and_continue,
         )
         .decode("rgb")

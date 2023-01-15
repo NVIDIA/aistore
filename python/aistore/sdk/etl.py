@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 import sys
 
@@ -48,7 +48,7 @@ class Etl:
     def init_spec(
         self,
         template: str,
-        etl_id: str,
+        etl_name: str,
         communication_type: str = "hpush",
         timeout: str = "5m",
     ):
@@ -59,11 +59,11 @@ class Etl:
 
         Args:
             docker_image (str): docker image name looks like: <hub-user>/<repo-name>:<tag>
-            etl_id (str): id of new ETL
+            etl_name (str): id of new ETL
             communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush)
             timeout (str): timeout of the ETL (eg. 5m for 5 minutes)
         Returns:
-            etl_id (str): ETL ID
+            etl_name (str): ETL ID
         """
 
         # spec
@@ -71,7 +71,7 @@ class Etl:
 
         action = {
             "spec": spec_encoded,
-            "id": etl_id,
+            "id": etl_name,
             "communication": f"{communication_type}://",
             "timeout": timeout,
         }
@@ -82,7 +82,7 @@ class Etl:
     def init_code(
         self,
         transform: Callable,
-        etl_id: str,
+        etl_name: str,
         dependencies: List[str] = None,
         runtime: str = get_default_runtime(),
         communication_type: str = "hpush",
@@ -94,7 +94,7 @@ class Etl:
 
         Args:
             transform (Callable): Transform function of the ETL
-            etl_id (str): ID of new ETL
+            etl_name (str): ID of new ETL
             dependencies (list[str]): Python dependencies to install
             runtime (str): [optional, default= V2 implementation of the current python version if supported, else
                 python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
@@ -103,7 +103,7 @@ class Etl:
             timeout (str): [optional, default="5m"] Timeout of the ETL (e.g. 5m for 5 minutes)
             chunk_size (int): Chunk size in bytes if transform function in streaming data. (whole object is read by default)
         Returns:
-            etl_id (str): ETL ID
+            etl_name (str): ETL ID
         """
         if communication_type not in ["io", "hpush", "hrev", "hpull"]:
             raise ValueError("communication_type should be in: hpull, hrev, hpush, io")
@@ -113,7 +113,7 @@ class Etl:
         }
 
         action = {
-            "id": etl_id,
+            "id": etl_name,
             "runtime": runtime,
             "communication": f"{communication_type}://",
             "timeout": timeout,
@@ -160,53 +160,53 @@ class Etl:
         )
         return resp
 
-    def view(self, etl_id: str) -> ETLDetails:
+    def view(self, etl_name: str) -> ETLDetails:
         """
         View ETLs Init spec/code
 
         Args:
-            etl_id (str): id of ETL
+            etl_name (str): id of ETL
         Returns:
             ETLDetails: details of the ETL
         """
         resp = self.client.request_deserialize(
-            HTTP_METHOD_GET, path=f"etl/{ etl_id }", res_model=ETLDetails
+            HTTP_METHOD_GET, path=f"etl/{ etl_name }", res_model=ETLDetails
         )
         return resp
 
-    def start(self, etl_id: str):
+    def start(self, etl_name: str):
         """
         Resumes a stopped ETL with given ETL_ID.
 
         Note: Deleted ETLs cannot be started.
 
         Args:
-            etl_id (str): id of ETL
+            etl_name (str): id of ETL
         Returns:
             Nothing
         """
-        self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_id }/start")
+        self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_name }/start")
 
-    def stop(self, etl_id: str):
+    def stop(self, etl_name: str):
         """
         Stops ETL with given ETL_ID. Stops (but does not delete) all the pods created by Kubernetes for this ETL and terminates any transforms.
 
         Args:
-            etl_id (str): id of ETL
+            etl_name (str): id of ETL
         Returns:
             Nothing
         """
-        self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_id }/stop")
+        self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_name }/stop")
 
-    def delete(self, etl_id: str):
+    def delete(self, etl_name: str):
         """
         Delete ETL with given ETL_ID. Deletes pods created by Kubernetes for this ETL and specifications for this ETL in Kubernetes.
 
         Note: Running ETLs cannot be deleted.
 
         Args:
-            etl_id (str): id of ETL
+            etl_name (str): id of ETL
         Returns:
             Nothing
         """
-        self.client.request(HTTP_METHOD_DELETE, path=f"etl/{ etl_id }")
+        self.client.request(HTTP_METHOD_DELETE, path=f"etl/{ etl_name }")

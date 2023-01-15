@@ -1,7 +1,7 @@
 """
 Utils for AIS PyTorch Plugin
 
-Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 
 from typing import List, Mapping, Tuple

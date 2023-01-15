@@ -2,7 +2,7 @@
 ETL to calculate md5 of an object.
 Communication Type: hpush://
 
-Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 import hashlib
 from aistore import Client
@@ -16,9 +16,9 @@ def transform(input_bytes):
     return md5.hexdigest().encode()
 
 
-client.etl().init_code(transform=transform, etl_id="etl-md5")
+client.etl().init_code(transform=transform, etl_name="etl-md5")
 
 job_id = client.bucket("from-bck").transform(
-    etl_id="etl-md5", to_bck="to-bck", ext={"jpg": "txt"}
+    etl_name="etl-md5", to_bck="to-bck", ext={"jpg": "txt"}
 )
 client.job().wait_for_job(job_id)

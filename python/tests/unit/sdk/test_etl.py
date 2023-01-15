@@ -22,7 +22,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.mock_client = Mock()
         self.etl = Etl(self.mock_client)
-        self.etl_id = "etl id"
+        self.etl_name = "etl id"
 
     def test_properties(self):
         self.assertEqual(self.mock_client, self.etl.client)
@@ -50,13 +50,13 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         expected_action["spec"] = base64.b64encode(template.encode("utf-8")).decode(
             "utf-8"
         )
-        expected_action["id"] = self.etl_id
+        expected_action["id"] = self.etl_name
         expected_response_text = "response text"
         mock_response = Mock()
         mock_response.text = expected_response_text
         self.mock_client.request.return_value = mock_response
 
-        response = self.etl.init_spec(template, self.etl_id, **kwargs)
+        response = self.etl.init_spec(template, self.etl_name, **kwargs)
 
         self.assertEqual(expected_response_text, response)
         self.mock_client.request.assert_called_with(
@@ -133,14 +133,14 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         return base64.b64encode(template).decode("utf-8")
 
     def init_code_exec_assert(self, expected_action, **kwargs):
-        expected_action["id"] = self.etl_id
+        expected_action["id"] = self.etl_name
 
         expected_response_text = "response text"
         mock_response = Mock()
         mock_response.text = expected_response_text
         self.mock_client.request.return_value = mock_response
 
-        response = self.etl.init_code(self.transform_fn, self.etl_id, **kwargs)
+        response = self.etl.init_code(self.transform_fn, self.etl_name, **kwargs)
 
         self.assertEqual(expected_response_text, response)
         self.mock_client.request.assert_called_with(
@@ -159,26 +159,26 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     def test_view(self):
         mock_response = Mock()
         self.mock_client.request_deserialize.return_value = mock_response
-        response = self.etl.view(self.etl_id)
+        response = self.etl.view(self.etl_name)
         self.assertEqual(mock_response, response)
         self.mock_client.request_deserialize.assert_called_with(
-            HTTP_METHOD_GET, path=f"etl/{ self.etl_id }", res_model=ETLDetails
+            HTTP_METHOD_GET, path=f"etl/{ self.etl_name }", res_model=ETLDetails
         )
 
     def test_start(self):
-        self.etl.start(self.etl_id)
+        self.etl.start(self.etl_name)
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_POST, path=f"etl/{ self.etl_id }/start"
+            HTTP_METHOD_POST, path=f"etl/{ self.etl_name }/start"
         )
 
     def test_stop(self):
-        self.etl.stop(self.etl_id)
+        self.etl.stop(self.etl_name)
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_POST, path=f"etl/{ self.etl_id }/stop"
+            HTTP_METHOD_POST, path=f"etl/{ self.etl_name }/stop"
         )
 
     def test_delete(self):
-        self.etl.delete(self.etl_id)
+        self.etl.delete(self.etl_name)
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_DELETE, path=f"etl/{ self.etl_id }"
+            HTTP_METHOD_DELETE, path=f"etl/{ self.etl_name }"
         )

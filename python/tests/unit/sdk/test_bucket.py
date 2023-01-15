@@ -348,13 +348,13 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_client.request_deserialize.assert_has_calls([call_1, call_2])
 
     def test_transform(self):
-        etl_id = "etl-id"
+        etl_name = "etl-id"
         prefix = "prefix-"
         ext = {"jpg": "txt"}
         force = True
         dry_run = True
         action_value = {
-            "id": etl_id,
+            "id": etl_name,
             "prefix": prefix,
             "force": force,
             "dry_run": dry_run,
@@ -362,16 +362,16 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         }
 
         self._transform_exec_assert(
-            etl_id, action_value, prefix=prefix, ext=ext, force=force, dry_run=dry_run
+            etl_name, action_value, prefix=prefix, ext=ext, force=force, dry_run=dry_run
         )
 
     def test_transform_default_params(self):
-        etl_id = "etl-id"
-        action_value = {"id": etl_id, "prefix": "", "force": False, "dry_run": False}
+        etl_name = "etl-id"
+        action_value = {"id": etl_name, "prefix": "", "force": False, "dry_run": False}
 
-        self._transform_exec_assert(etl_id, action_value)
+        self._transform_exec_assert(etl_name, action_value)
 
-    def _transform_exec_assert(self, etl_id, expected_act_value, **kwargs):
+    def _transform_exec_assert(self, etl_name, expected_act_value, **kwargs):
         to_bck = "new-bucket"
         self.ais_bck_params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
         expected_action = ActionMsg(action=ACT_ETL_BCK, value=expected_act_value).dict()
@@ -380,7 +380,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         mock_response.text = expected_response
         self.mock_client.request.return_value = mock_response
 
-        result_id = self.ais_bck.transform(etl_id, to_bck, **kwargs)
+        result_id = self.ais_bck.transform(etl_name, to_bck, **kwargs)
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,

@@ -2,7 +2,7 @@
 ETL to transform images using torchvision.
 Communication Type: hpush://
 
-Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 from aistore import Client
 from torchvision import transforms
@@ -31,14 +31,14 @@ def apply_image_transforms(reader, writer):
 # initialize ETL
 client.etl().init_code(
     transform=apply_image_transforms,
-    etl_id="etl-torchvision",
+    etl_name="etl-torchvision",
     dependencies=["Pillow", "torchvision"],
     timeout="10m",
 )
 
 # Transform bucket with given ETL id
 job_id = client.bucket("from-bck").transform(
-    etl_id="etl-img-to-npy", to_bck="to-bck", ext={"jpg": "npy"}
+    etl_name="etl-img-to-npy", to_bck="to-bck", ext={"jpg": "npy"}
 )
 client.job().wait_for_job(job_id)
 

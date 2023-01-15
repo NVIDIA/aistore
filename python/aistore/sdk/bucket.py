@@ -387,7 +387,7 @@ class Bucket:
 
     def transform(
         self,
-        etl_id: str,
+        etl_name: str,
         to_bck: str,
         prefix: str = "",
         ext: Dict[str, str] = None,
@@ -398,7 +398,7 @@ class Bucket:
         Transforms all objects in a bucket and puts them to destination bucket.
 
         Args:
-            etl_id (str): id of etl to be used for transformations
+            etl_name (str): id of etl to be used for transformations
             to_bck (str): destination bucket for transformations
             prefix (str, optional): prefix to be added to resulting transformed objects
             ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced (i.e. {"jpg": "txt"})
@@ -409,7 +409,7 @@ class Bucket:
             Job ID (as str) that can be used to check the status of the operation
         """
         value = {
-            "id": etl_id,
+            "id": etl_name,
             "prefix": prefix,
             "force": force,
             "dry_run": dry_run,

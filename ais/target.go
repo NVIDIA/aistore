@@ -605,9 +605,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 	}
 
-	// TODO -- FIXME: update Python callers to use QparamETLName
-	if etlName := cos.Either(dpq.etlName, dpq.uuid); etlName != "" {
-		t.doETL(w, r, etlName, bck, lom.ObjName)
+	if dpq.etlName != "" {
+		t.doETL(w, r, dpq.etlName, bck, lom.ObjName)
 		return lom
 	}
 

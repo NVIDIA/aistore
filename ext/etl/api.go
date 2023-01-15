@@ -86,18 +86,6 @@ type (
 		CPU      float64 `json:"cpu"`
 		Mem      int64   `json:"mem"`
 	}
-
-	OfflineMsg struct {
-		Name   string `json:"id"`      // ETL Name
-		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
-		DryRun bool   `json:"dry_run"` // Don't perform any PUT
-
-		// New objects names will have this extension. Warning: if in a source
-		// bucket exist two objects with the same base name, but different
-		// extension, specifying this field might cause object overriding.
-		// This is because of resulting name conflict.
-		Ext string `json:"ext"`
-	}
 )
 
 const (

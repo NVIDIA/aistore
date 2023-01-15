@@ -46,15 +46,15 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_get(self):
         archpath_param = "archpath"
-        etl_id = "etl"
+        etl_name = "etl"
         expected_request_params = self.bck.qparam
         expected_request_params[QParamArchpath] = archpath_param
-        expected_request_params["uuid"] = etl_id
+        expected_request_params["etl_name"] = etl_name
         self.get_exec_assert(
             expected_request_params,
             archpath=archpath_param,
             chunk_size=DEFAULT_CHUNK_SIZE + 1,
-            etl_id=etl_id,
+            etl_name=etl_name,
         )
 
     def get_exec_assert(self, expected_request_params, **kwargs):

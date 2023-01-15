@@ -129,7 +129,7 @@ func etlPostAction(bp BaseParams, id, action string) (err error) {
 func ETLObject(bp BaseParams, etlName string, bck cmn.Bck, objName string, w io.Writer) (err error) {
 	_, err = GetObject(bp, bck, objName, GetObjectInput{
 		Writer: w,
-		Query:  url.Values{apc.QparamUUID: []string{etlName}}, // TODO -- FIXME: use apc.QparamETLName
+		Query:  url.Values{apc.QparamETLName: []string{etlName}},
 	})
 	return
 }

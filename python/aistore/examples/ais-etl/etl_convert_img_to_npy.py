@@ -2,7 +2,7 @@
 ETL to convert images to numpy arrays.
 Communication Type: hpush://
 
-Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 from aistore import Client
 import numpy as np
@@ -22,11 +22,13 @@ def transform(input_bytes):
 deps = ["opencv-python-headless==4.5.3.56"]
 
 # initialize ETL
-client.etl().init_code(transform=transform, etl_id="etl-img-to-npy", dependencies=deps)
+client.etl().init_code(
+    transform=transform, etl_name="etl-img-to-npy", dependencies=deps
+)
 
 # Transform bucket with given ETL id
 job_id = client.bucket("from-bck").transform(
-    etl_id="etl-img-to-npy", to_bck="to-bck", ext={"jpg": "npy"}
+    etl_name="etl-img-to-npy", to_bck="to-bck", ext={"jpg": "npy"}
 )
 client.job().wait_for_job(job_id)
 
