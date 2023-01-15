@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
@@ -155,7 +156,7 @@ func suggestEtlID(c *cli.Context, shift int) {
 		return
 	}
 	for _, l := range list {
-		fmt.Print(l.ID)
+		fmt.Print(l.Name)
 	}
 }
 
@@ -166,7 +167,7 @@ func etlExists(id string) (err error) {
 		return
 	}
 	for _, l := range list {
-		if l.ID == id {
+		if l.Name == id {
 			return fmt.Errorf("ETL %q already exists", id)
 		}
 	}
@@ -193,7 +194,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 	}
 
 	// msg.ID is `metadata.name` from podSpec
-	if err = etlExists(msg.ID()); err != nil {
+	if err = etlExists(msg.Name()); err != nil {
 		return
 	}
 
@@ -214,11 +215,11 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	}
 
 	msg.IDX = parseStrFlag(c, etlUUID)
-	if msg.ID() != "" {
-		if err = cos.ValidateEtlID(msg.ID()); err != nil {
+	if msg.Name() != "" {
+		if err = k8s.ValidateEtlName(msg.Name()); err != nil {
 			return
 		}
-		if err = etlExists(msg.ID()); err != nil {
+		if err = etlExists(msg.Name()); err != nil {
 			return
 		}
 	}
@@ -375,7 +376,7 @@ func stopETLs(c *cli.Context, id string) (err error) {
 			return err
 		}
 		for _, etlInfo := range res {
-			etlIDs = append(etlIDs, etlInfo.ID)
+			etlIDs = append(etlIDs, etlInfo.Name)
 		}
 	default:
 		if c.NArg() == 0 {
