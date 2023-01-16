@@ -93,7 +93,7 @@ class Object:
         params = self.bck.qparam
         params[QParamArchpath] = archpath
         if etl_name:
-            params["etl_name"] = etl_name
+            params["uuid"] = etl_name  # TODO -- FIXME: use QparamETLName
         resp = self.bck.client.request(
             HTTP_METHOD_GET,
             path=f"objects/{ self.bck.name }/{ self.obj_name }",
