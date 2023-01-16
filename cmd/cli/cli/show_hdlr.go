@@ -333,12 +333,15 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 		return ll, nil
 	}
 
-	name = jobID2Name(xid)
+	var otherID string
+	name, otherID = xid2Name(xid)
 	switch name {
 	case subcmdDownload:
 		return _showJobs(c, subcmdDownload, xid, daemonID, bck, true)
 	case subcmdDsort:
 		return _showJobs(c, subcmdDsort, xid, daemonID, bck, true)
+	case commandETL:
+		return _showJobs(c, commandETL, otherID /*etl name*/, daemonID, bck, true)
 	}
 	return _showJobs(c, "" /*name*/, xid, daemonID, bck, true)
 }

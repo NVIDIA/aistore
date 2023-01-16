@@ -205,8 +205,8 @@ const (
 	jobShowStopWaitArgument = "[NAME] [JOB_ID] [NODE_ID] [BUCKET]"
 
 	// ETL
-	etlIDArgument     = "ETL_ID"
-	etlIDListArgument = "ETL_ID [ETL_ID ...]"
+	etlNameArgument     = "ETL_NAME"
+	etlNameListArgument = "ETL_NAME [ETL_NAME ...]"
 
 	// key/value
 	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"

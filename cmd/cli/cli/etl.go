@@ -67,7 +67,7 @@ var (
 			{
 				Name:      commandSource,
 				Usage:     "show ETL code/spec",
-				ArgsUsage: etlIDArgument,
+				ArgsUsage: etlNameArgument,
 				Action:    etlShowInitMsgHandler,
 			},
 		},
@@ -75,7 +75,7 @@ var (
 	stopCmdETL = cli.Command{
 		Name:         subcmdStop,
 		Usage:        "stop ETL",
-		ArgsUsage:    etlIDListArgument,
+		ArgsUsage:    etlNameListArgument,
 		Action:       etlStopHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        etlSubFlags[subcmdStop],
@@ -83,7 +83,7 @@ var (
 	startCmdETL = cli.Command{
 		Name:         subcmdStart,
 		Usage:        "start ETL",
-		ArgsUsage:    etlIDArgument,
+		ArgsUsage:    etlNameArgument,
 		Action:       etlStartHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        etlSubFlags[subcmdStart],
@@ -108,14 +108,14 @@ var (
 	objCmdETL = cli.Command{
 		Name:         subcmdObject,
 		Usage:        "transform object",
-		ArgsUsage:    etlIDArgument + " " + objectArgument + " OUTPUT",
+		ArgsUsage:    etlNameArgument + " " + objectArgument + " OUTPUT",
 		Action:       etlObjectHandler,
 		BashComplete: etlIDCompletions,
 	}
 	bckCmdETL = cli.Command{
 		Name:         subcmdBucket,
 		Usage:        "perform bucket-to-bucket transform (\"offline transformation\")",
-		ArgsUsage:    etlIDArgument + " " + bucketSrcArgument + " " + bucketDstArgument,
+		ArgsUsage:    etlNameArgument + " " + bucketSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
 		Flags:        etlSubFlags[subcmdBucket],
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
@@ -123,7 +123,7 @@ var (
 	logsCmdETL = cli.Command{
 		Name:         subcmdLogs,
 		Usage:        "retrieve ETL logs",
-		ArgsUsage:    etlIDArgument + " " + optionalTargetIDArgument,
+		ArgsUsage:    etlNameArgument + " " + optionalTargetIDArgument,
 		Action:       etlLogsHandler,
 		BashComplete: etlIDCompletions,
 	}
@@ -160,18 +160,28 @@ func suggestEtlID(c *cli.Context, shift int) {
 	}
 }
 
-func etlExists(id string) (err error) {
-	// TODO: Replace with a generic API for checking duplicate UUID
-	list, err := api.ETLList(apiBP)
-	if err != nil {
-		return
-	}
-	for _, l := range list {
-		if l.Name == id {
-			return fmt.Errorf("ETL %q already exists", id)
-		}
+func etlAlreadyExists(etlName string) (err error) {
+	if l := findETL(etlName, ""); l != nil {
+		return fmt.Errorf("ETL[%s] already exists", etlName)
 	}
 	return
+}
+
+// either by name or xaction ID
+func findETL(etlName, xid string) *etl.Info {
+	list, err := api.ETLList(apiBP)
+	if err != nil {
+		return nil
+	}
+	for _, l := range list {
+		if etlName != "" && l.Name == etlName {
+			return &l
+		}
+		if xid != "" && l.XactID == xid {
+			return &l
+		}
+	}
+	return nil
 }
 
 func etlInitSpecHandler(c *cli.Context) (err error) {
@@ -194,7 +204,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 	}
 
 	// msg.ID is `metadata.name` from podSpec
-	if err = etlExists(msg.Name()); err != nil {
+	if err = etlAlreadyExists(msg.Name()); err != nil {
 		return
 	}
 
@@ -219,7 +229,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 		if err = k8s.ValidateEtlName(msg.Name()); err != nil {
 			return
 		}
-		if err = etlExists(msg.Name()); err != nil {
+		if err = etlAlreadyExists(msg.Name()); err != nil {
 			return
 		}
 	}
@@ -279,13 +289,12 @@ func etlListHandler(c *cli.Context) (err error) {
 	return
 }
 
-func showETLs(c *cli.Context, id string, caption bool) (int, error) {
-	if id == "" {
+func showETLs(c *cli.Context, etlName string, caption bool) (int, error) {
+	if etlName == "" {
 		return etlList(c, caption)
 	}
 
-	// ID-ed etl
-	return 1, etlPrintInitMsg(c, id)
+	return 1, etlPrintInitMsg(c, etlName) // TODO: extend to show Status and runtime stats
 }
 
 func etlList(c *cli.Context, caption bool) (int, error) {
@@ -298,6 +307,12 @@ func etlList(c *cli.Context, caption bool) (int, error) {
 		onlyActive := !flagIsSet(c, allJobsFlag)
 		jobCptn(c, commandETL, onlyActive, "", false)
 	}
+
+	hideHeader := flagIsSet(c, noHeaderFlag)
+	if hideHeader {
+		return l, tmpls.Print(list, c.App.Writer, tmpls.TransformListNoHdrTmpl, nil, false)
+	}
+
 	return l, tmpls.Print(list, c.App.Writer, tmpls.TransformListTmpl, nil, false)
 }
 
@@ -362,29 +377,29 @@ func etlStopHandler(c *cli.Context) error {
 }
 
 func stopETLs(c *cli.Context, id string) (err error) {
-	var etlIDs []string
+	var etlNames []string
 	switch {
 	case id != "":
-		etlIDs = append(etlIDs, id)
+		etlNames = append(etlNames, id)
 	case flagIsSet(c, allRunningJobsFlag):
 		if c.NArg() > 0 {
 			return incorrectUsageMsg(c, "flag '--%s' cannot be used together with %s (%q)",
-				allRunningJobsFlag.Name, etlIDArgument, id)
+				allRunningJobsFlag.Name, etlNameArgument, id)
 		}
 		res, err := api.ETLList(apiBP)
 		if err != nil {
 			return err
 		}
 		for _, etlInfo := range res {
-			etlIDs = append(etlIDs, etlInfo.Name)
+			etlNames = append(etlNames, etlInfo.Name)
 		}
 	default:
 		if c.NArg() == 0 {
 			return missingArgumentsError(c, c.Command.ArgsUsage)
 		}
-		etlIDs = c.Args()[0:]
+		etlNames = c.Args()[0:]
 	}
-	for _, id := range etlIDs {
+	for _, id := range etlNames {
 		msg := fmt.Sprintf("ETL[%s]", id)
 		if err := api.ETLStop(apiBP, id); err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
@@ -405,11 +420,11 @@ func etlStartHandler(c *cli.Context) (err error) {
 	etlID := c.Args()[0]
 	if err := api.ETLStart(apiBP, etlID); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-			color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL %q not found", etlID)
+			color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL[%s] not found", etlID)
 		}
 		return err
 	}
-	fmt.Fprintf(c.App.Writer, "ETL %q started successfully\n", etlID)
+	fmt.Fprintf(c.App.Writer, "ETL[%s] started successfully\n", etlID)
 	return nil
 }
 
@@ -531,7 +546,7 @@ func handleETLHTTPError(err error, etlID string) error {
 	if herr, ok := err.(*cmn.ErrHTTP); ok {
 		// TODO: How to find out if it's transformation not found, and not object not found?
 		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlID) {
-			return fmt.Errorf("ETL %q not found; try starting new ETL with:\nais %s %s <spec>",
+			return fmt.Errorf("ETL[%s] not found; try starting new ETL with:\nais %s %s <spec>",
 				etlID, commandETL, subcmdInit)
 		}
 	}

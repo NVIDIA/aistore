@@ -428,6 +428,11 @@ func dsortJobsList(c *cli.Context, list []*dsort.JobInfo, usejs bool) error {
 		return list[i].StartedTime.Before(list[j].StartedTime)
 	})
 
+	hideHeader := flagIsSet(c, noHeaderFlag)
+	if hideHeader {
+		return tmpls.Print(list, c.App.Writer, tmpls.DSortListNoHdrTmpl, nil, usejs)
+	}
+
 	return tmpls.Print(list, c.App.Writer, tmpls.DSortListTmpl, nil, usejs)
 }
 

@@ -1,11 +1,12 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -18,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -34,8 +36,13 @@ type (
 		cluster.Slistener
 
 		Name() string
+		Xact() cluster.Xact
 		PodName() string
 		SvcName() string
+
+		CommType() string
+
+		String() string
 
 		// OnlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
@@ -59,10 +66,11 @@ type (
 
 	baseComm struct {
 		cluster.Slistener
-		t       cluster.Target
-		xctn    cluster.Xact
-		name    string
-		podName string
+		t        cluster.Target
+		xctn     cluster.Xact
+		name     string
+		podName  string
+		commType string
 	}
 
 	pushComm struct {
@@ -112,16 +120,18 @@ func makeCommunicator(args commArgs) Communicator {
 
 	switch args.bootstrapper.msg.CommTypeX {
 	case Hpush:
+		baseComm.commType = Hpush
 		return &pushComm{
 			baseComm: baseComm,
 			mem:      args.bootstrapper.t.PageMM(),
 			uri:      args.bootstrapper.uri,
 		}
 	case Hpull:
+		baseComm.commType = Hpull
 		return &redirectComm{baseComm: baseComm, uri: args.bootstrapper.uri}
 	case Hrev:
 		transformerURL, err := url.Parse(args.bootstrapper.uri)
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				// Replacing the `req.URL` host with ETL container host
@@ -134,8 +144,10 @@ func makeCommunicator(args commArgs) Communicator {
 				}
 			},
 		}
+		baseComm.commType = Hrev
 		return &revProxyComm{baseComm: baseComm, rp: rp, uri: args.bootstrapper.uri}
 	case HpushStdin:
+		baseComm.commType = HpushStdin
 		return &pushComm{
 			baseComm: baseComm,
 			mem:      args.bootstrapper.t.PageMM(),
@@ -148,16 +160,62 @@ func makeCommunicator(args commArgs) Communicator {
 	return nil
 }
 
-func (c baseComm) Name() string    { return c.name }
-func (c baseComm) PodName() string { return c.podName }
-func (c baseComm) SvcName() string { return c.podName /*pod name is same as service name*/ }
+func (c *baseComm) Name() string     { return c.name }
+func (c *baseComm) PodName() string  { return c.podName }
+func (c *baseComm) SvcName() string  { return c.podName /*pod name is same as service name*/ }
+func (c *baseComm) CommType() string { return c.commType }
 
-func (c baseComm) ObjCount() int64 { return c.xctn.Objs() }
-func (c baseComm) InBytes() int64  { return c.xctn.InBytes() }
-func (c baseComm) OutBytes() int64 { return c.xctn.OutBytes() }
+func (c *baseComm) String() string {
+	return fmt.Sprintf("%s[%s]-%s", c.name, c.xctn.ID(), c.commType)
+}
 
-func (c *baseComm) Stop() {
-	c.xctn.Finish(nil)
+func (c *baseComm) Xact() cluster.Xact { return c.xctn }
+func (c *baseComm) ObjCount() int64    { return c.xctn.Objs() }
+func (c *baseComm) InBytes() int64     { return c.xctn.InBytes() }
+func (c *baseComm) OutBytes() int64    { return c.xctn.OutBytes() }
+
+func (c *baseComm) Stop() { c.xctn.Finish(nil) }
+
+func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration, tag string) (r cos.ReadCloseSizer, err error) {
+	if err := c.xctn.AbortErr(); err != nil {
+		return nil, cmn.NewErrAborted(c.String(), "get"+"-"+tag, err)
+	}
+
+	var (
+		req    *http.Request
+		resp   *http.Response
+		cancel func()
+	)
+	if timeout != 0 {
+		var ctx context.Context
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	} else {
+		req, err = http.NewRequest(http.MethodGet, url, http.NoBody)
+	}
+	if err != nil {
+		goto finish
+	}
+	resp, err = c.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
+finish:
+	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
+		return nil, err
+	}
+
+	return cos.NewReaderWithArgs(cos.ReaderArgs{
+		R:      resp.Body,
+		Size:   resp.ContentLength,
+		ReadCb: func(i int, err error) { c.xctn.OutObjsAdd(1, int64(i)) },
+		DeferCb: func() {
+			if cancel != nil {
+				cancel()
+			}
+			c.xctn.InObjsAdd(1, size)
+		},
+	}), nil
 }
 
 //////////////
@@ -185,7 +243,7 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, timeout time.Dur
 
 func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	if err := pc.xctn.AbortErr(); err != nil {
-		return nil, cmn.NewErrAborted(pc.xctn.Name(), "try-push-comm", err)
+		return nil, cmn.NewErrAborted(pc.String(), "do", err)
 	}
 
 	lom.Lock(false)
@@ -276,7 +334,7 @@ func (pc *pushComm) OfflineTransform(bck *cluster.Bck, objName string, timeout t
 
 func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	if err := rc.xctn.AbortErr(); err != nil {
-		return cmn.NewErrAborted(rc.xctn.Name(), "try-redirect-comm", err)
+		return cmn.NewErrAborted(rc.String(), "online", err)
 	}
 
 	size, err := determineSize(bck, objName)
@@ -298,7 +356,7 @@ func (rc *redirectComm) OfflineTransform(bck *cluster.Bck, objName string, timeo
 	}
 
 	etlURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
-	return rc.getWithTimeout(etlURL, size, timeout)
+	return rc.getWithTimeout(etlURL, size, timeout, "offline" /*tag*/)
 }
 
 //////////////////
@@ -327,7 +385,7 @@ func (pc *revProxyComm) OfflineTransform(bck *cluster.Bck, objName string, timeo
 	}
 
 	etlURL := cos.JoinPath(pc.uri, transformerPath(bck, objName))
-	return pc.getWithTimeout(etlURL, size, timeout)
+	return pc.getWithTimeout(etlURL, size, timeout, "offline" /*tag*/)
 }
 
 //////////////
@@ -340,9 +398,9 @@ func (cw *cbWriter) Write(b []byte) (n int, err error) {
 	return
 }
 
-///////////
-// utils //
-///////////
+//
+// utils
+//
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
 // not removing apc.QparamUUID, for instance, would cause infinite loop.
@@ -361,48 +419,6 @@ func pruneQuery(rawQuery string) string {
 // TODO: Consider encoding bucket and object name without the necessity to escape.
 func transformerPath(bck *cluster.Bck, objName string) string {
 	return "/" + url.PathEscape(bck.MakeUname(objName))
-}
-
-func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
-	if err := c.xctn.AbortErr(); err != nil {
-		return nil, cmn.NewErrAborted(c.xctn.Name(), "transform-get", err)
-	}
-
-	var (
-		req    *http.Request
-		resp   *http.Response
-		cancel func()
-	)
-	if timeout != 0 {
-		var ctx context.Context
-		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
-	} else {
-		req, err = http.NewRequest(http.MethodGet, url, http.NoBody)
-	}
-	if err != nil {
-		goto finish
-	}
-	resp, err = c.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
-finish:
-	if err != nil {
-		if cancel != nil {
-			cancel()
-		}
-		return nil, err
-	}
-
-	return cos.NewReaderWithArgs(cos.ReaderArgs{
-		R:      resp.Body,
-		Size:   resp.ContentLength,
-		ReadCb: func(i int, err error) { c.xctn.OutObjsAdd(1, int64(i)) },
-		DeferCb: func() {
-			if cancel != nil {
-				cancel()
-			}
-			c.xctn.InObjsAdd(1, size)
-		},
-	}), nil
 }
 
 func determineSize(bck *cluster.Bck, objName string) (int64, error) {

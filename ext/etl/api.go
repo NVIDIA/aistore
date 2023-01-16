@@ -18,6 +18,8 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
+const PrefixXactID = "etl-"
+
 const (
 	Spec = "spec"
 	Code = "code"
@@ -69,6 +71,7 @@ type (
 	InfoList []Info
 	Info     struct {
 		Name     string `json:"id"`
+		XactID   string `json:"xaction_id"`
 		ObjCount int64  `json:"obj_count"`
 		InBytes  int64  `json:"in_bytes"`
 		OutBytes int64  `json:"out_bytes"`

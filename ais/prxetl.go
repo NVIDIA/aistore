@@ -185,15 +185,16 @@ func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 // broadcast start-ETL request to all targets
 func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) error {
 	var (
-		err  error
-		args = allocBcArgs()
+		err    error
+		args   = allocBcArgs()
+		xactID = etl.PrefixXactID + cos.GenUUID()
 	)
 	{
 		args.req = cmn.HreqArgs{
 			Method: http.MethodPut,
 			Path:   apc.URLPathETL.S,
 			Body:   cos.MustMarshal(msg),
-			Query:  url.Values{apc.QparamUUID: []string{cos.GenUUID()}}, // xactID
+			Query:  url.Values{apc.QparamUUID: []string{xactID}},
 		}
 		args.timeout = apc.LongTimeout
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -761,8 +762,9 @@ func stopJobHandler(c *cli.Context) error {
 		}
 	}
 
+	var otherID string
 	if name == "" && xid != "" {
-		name = jobID2Name(xid)
+		name, otherID = xid2Name(xid)
 	}
 
 	// specialized stop
@@ -784,7 +786,7 @@ func stopJobHandler(c *cli.Context) error {
 		}
 		return stopDsortHandler(c, xid)
 	case commandETL:
-		return stopETLs(c, xid)
+		return stopETLs(c, otherID /*etl name*/)
 	case commandRebalance:
 		return stopClusterRebalanceHandler(c)
 	}
@@ -990,7 +992,7 @@ func waitJobHandler(c *cli.Context) error {
 	}
 
 	if name == "" && xid != "" {
-		name = jobID2Name(xid)
+		name, _ = xid2Name(xid) // TODO: add waitETL
 	}
 
 	// special wait
@@ -1286,15 +1288,22 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 }
 
 // disambiguate download/dsort job ID vs xaction UUID
-func jobID2Name(xid string) string {
-	if strings.HasPrefix(xid, dload.PrefixJobID) {
+func xid2Name(xid string) (name, otherID string) {
+	switch {
+	case strings.HasPrefix(xid, dload.PrefixJobID):
 		if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
-			return subcmdDownload
+			name = subcmdDownload
 		}
-	} else if strings.HasPrefix(xid, dsort.PrefixJobID) {
+	case strings.HasPrefix(xid, dsort.PrefixJobID):
 		if _, err := api.MetricsDSort(apiBP, xid); err == nil {
-			return subcmdDsort
+			name = subcmdDsort
+		}
+	// NOTE: not to confuse ETL xaction ID with its name (`etl-name`)
+	case strings.HasPrefix(xid, etl.PrefixXactID):
+		if l := findETL("", xid); l != nil {
+			name = commandETL
+			otherID = l.Name
 		}
 	}
-	return ""
+	return
 }

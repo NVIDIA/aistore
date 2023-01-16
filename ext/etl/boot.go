@@ -200,6 +200,7 @@ func (b *etlBootstrapper) setupXaction(xactID string) {
 	debug.AssertNoErr(rns.Err)
 	debug.Assert(!rns.IsRunning())
 	b.xctn = rns.Entry.Get()
+	debug.Assertf(b.xctn.ID() == xactID, "%s vs %s", b.xctn.ID(), xactID)
 }
 
 func (b *etlBootstrapper) _updPodCommand() {

@@ -64,6 +64,7 @@ func (r *registry) list() []Info {
 	for name, comm := range r.m {
 		etls = append(etls, Info{
 			Name:     name,
+			XactID:   comm.Xact().ID(),
 			ObjCount: comm.ObjCount(),
 			InBytes:  comm.InBytes(),
 			OutBytes: comm.OutBytes(),

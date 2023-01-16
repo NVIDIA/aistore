@@ -342,6 +342,11 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) (int, error) {
 		return true
 	})
 
+	hideHeader := flagIsSet(c, noHeaderFlag)
+	if hideHeader {
+		return l, tmpls.Print(list, c.App.Writer, tmpls.DownloadListNoHdrTmpl, nil, flagIsSet(c, jsonFlag))
+	}
+
 	return l, tmpls.Print(list, c.App.Writer, tmpls.DownloadListTmpl, nil, flagIsSet(c, jsonFlag))
 }
 

@@ -108,24 +108,36 @@ const (
 		"{{$p.Name}}\t {{$p.Value}}\n" +
 		"{{end}}"
 
-	DownloadListHdr  = "JOB ID\t XACTION\t STATUS\t ERRORS\t DESCRIPTION\n"
-	DownloadListBody = "{{$value.ID}}\t " +
+	//
+	// special
+	//
+
+	downloadListHdr  = "JOB ID\t XACTION\t STATUS\t ERRORS\t DESCRIPTION\n"
+	downloadListBody = "{{$value.ID}}\t " +
 		"{{$value.XactID}}\t " +
 		"{{if $value.Aborted}}Aborted" +
 		"{{else}}{{if $value.JobFinished}}Finished{{else}}{{$value.PendingCnt}} pending{{end}}" +
 		"{{end}}\t {{$value.ErrorCnt}}\t {{$value.Description}}\n"
-	DownloadListTmpl = DownloadListHdr + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
+	DownloadListNoHdrTmpl = "{{ range $key, $value := . }}" + downloadListBody + "{{end}}"
+	DownloadListTmpl      = downloadListHdr + DownloadListNoHdrTmpl
 
-	DSortListHdr  = "JOB ID\t STATUS\t START\t FINISH\t DESCRIPTION\n"
-	DSortListBody = "{{$value.ID}}\t " +
+	dsortListHdr  = "JOB ID\t STATUS\t START\t FINISH\t DESCRIPTION\n"
+	dsortListBody = "{{$value.ID}}\t " +
 		"{{if $value.Aborted}}Aborted" +
 		"{{else if $value.Archived}}Finished" +
 		"{{else}}Running" +
 		"{{end}}\t {{FormatTime $value.StartedTime}}\t {{FormatTime $value.FinishTime}} \t {{$value.Description}}\n"
-	DSortListTmpl = DSortListHdr + "{{ range $value := . }}" + DSortListBody + "{{end}}"
+	DSortListNoHdrTmpl = "{{ range $value := . }}" + dsortListBody + "{{end}}"
+	DSortListTmpl      = dsortListHdr + DSortListNoHdrTmpl
+
+	transformListHdr  = "ETL NAME\t XACTION\t OBJECTS\n"
+	transformListBody = "{{$value.Name}}\t {{$value.XactID}}\t " +
+		"{{if (eq $value.ObjCount 0) }}-{{else}}{{$value.ObjCount}}{{end}}\n"
+	TransformListNoHdrTmpl = "{{ range $value := . }}" + transformListBody + "{{end}}"
+	TransformListTmpl      = transformListHdr + TransformListNoHdrTmpl
 
 	//
-	// Xactions
+	// other Xactions
 	//
 	XactBucketTmpl      = xactBucketHdr + XactNoHdrBucketTmpl
 	XactNoHdrBucketTmpl = "{{range $daemon := . }}" + xactBucketBodyAll + "{{end}}"
@@ -315,12 +327,6 @@ const (
 
 	// Command `search`
 	SearchTmpl = "{{ JoinListNL . }}\n"
-
-	// Command `transform`
-	TransformListTmpl = "ID\n" +
-		"{{range $transform := .}}" +
-		"{{$transform.ID}}\n" +
-		"{{end}}"
 
 	// Command `show mountpath`
 	TargetMpathListTmpl = "{{range $p := . }}" +
