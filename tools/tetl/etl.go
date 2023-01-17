@@ -133,12 +133,12 @@ func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlName string) {
 			tlog.Logf("Error retrieving logs; err %v\n", err)
 		}
 	}
-	tlog.Logf("Stopping ETL %q\n", etlName)
+	tlog.Logf("Stopping ETL[%s]\n", etlName)
 
 	if err := api.ETLStop(baseParams, etlName); err != nil {
-		tlog.Logf("Stopping ETL %q failed; err %v\n", etlName, err)
+		tlog.Logf("Stopping ETL[%s] failed; err %v\n", etlName, err)
 	} else {
-		tlog.Logf("ETL %q stopped\n", etlName)
+		tlog.Logf("ETL[%s] stopped\n", etlName)
 	}
 	err := api.ETLDelete(baseParams, etlName)
 	tassert.CheckFatal(t, err)
@@ -214,12 +214,12 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cos.S
 					continue
 				}
 				locObjs, outObjs, inObjs := xs.ObjCounts(xactID)
-				tlog.Logf("ETL %q progress: (objs=%d, outObjs=%d, inObjs=%d) out of %d objects\n",
+				tlog.Logf("ETL[%s] progress: (objs=%d, outObjs=%d, inObjs=%d) out of %d objects\n",
 					xactID, locObjs, outObjs, inObjs, totalObj)
 				locBytes, outBytes, inBytes := xs.ByteCounts(xactID)
 				bps := float64(locBytes+outBytes) / time.Since(xactStart).Seconds()
 				bpsStr := fmt.Sprintf("%s/s", cos.B2S(int64(bps), 2))
-				tlog.Logf("ETL %q progress: (bytes=%d, outBytes=%d, inBytes=%d), %sBps\n",
+				tlog.Logf("ETL[%s] progress: (bytes=%d, outBytes=%d, inBytes=%d), %sBps\n",
 					xactID, locBytes, outBytes, inBytes, bpsStr)
 			case <-stopCh.Listen():
 				return

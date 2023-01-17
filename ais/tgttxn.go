@@ -483,13 +483,12 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) err
 	return nil
 }
 
-func (t *target) etlDP(msg *apc.TCBMsg) (dp cluster.DP, err error) {
-	if err = k8s.Detect(); err != nil {
-		return
+func (t *target) etlDP(msg *apc.TCBMsg) (cluster.DP, error) {
+	if err := k8s.Detect(); err != nil {
+		return nil, err
 	}
-	if msg.ID == "" {
-		err = apc.ErrETLMissingUUID
-		return
+	if err := msg.Validate(true); err != nil {
+		return nil, err
 	}
 	return etl.NewOfflineDataProvider(msg, t.si)
 }

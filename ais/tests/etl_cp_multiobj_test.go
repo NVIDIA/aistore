@@ -68,7 +68,7 @@ func TestETLMultiObj(t *testing.T) {
 	}
 }
 
-func testETLMultiObj(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRange, opType string) {
+func testETLMultiObj(t *testing.T, etlName string, fromBck, toBck cmn.Bck, fileRange, opType string) {
 	pt, err := cos.ParseBashTemplate(fileRange)
 	tassert.CheckFatal(t, err)
 
@@ -81,8 +81,10 @@ func testETLMultiObj(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRang
 		requestTimeout = 30 * time.Second
 		tcoMsg         = cmn.TCObjsMsg{
 			TCBMsg: apc.TCBMsg{
-				ID:             uuid,
-				RequestTimeout: cos.Duration(requestTimeout),
+				Transform: apc.Transform{
+					Name:    etlName,
+					Timeout: cos.Duration(requestTimeout),
+				},
 			},
 			ToBck: toBck,
 		}
@@ -93,7 +95,7 @@ func testETLMultiObj(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRang
 		tcoMsg.SelectObjsMsg.Template = fileRange
 	}
 
-	tlog.Logf("Start offline ETL %q\n", uuid)
+	tlog.Logf("Start offline ETL[%s]\n", etlName)
 	xactID, err := api.ETLMultiObj(baseParams, fromBck, tcoMsg)
 	tassert.CheckFatal(t, err)
 

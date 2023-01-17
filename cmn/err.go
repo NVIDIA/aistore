@@ -189,6 +189,7 @@ var (
 	ErrQuiesceTimeout   = errors.New("timed out waiting for quiescence")
 	ErrNotEnoughTargets = errors.New("not enough target nodes")
 	ErrNoMountpaths     = errors.New("no mountpaths")
+
 	// aborts
 	ErrXactRenewAbort   = errors.New("renewal abort")
 	ErrXactUserAbort    = errors.New("user abort")              // via apc.ActXactStop

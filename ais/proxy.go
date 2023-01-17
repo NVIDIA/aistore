@@ -1133,7 +1133,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 				return
 			}
-			if err := tcbMsg.Validate(); err != nil {
+			if err := tcbMsg.Validate(true); err != nil {
 				p.writeErr(w, r, err)
 				return
 			}

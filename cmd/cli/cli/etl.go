@@ -417,14 +417,14 @@ func etlStartHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	etlID := c.Args()[0]
-	if err := api.ETLStart(apiBP, etlID); err != nil {
+	etlName := c.Args()[0]
+	if err := api.ETLStart(apiBP, etlName); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-			color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL[%s] not found", etlID)
+			color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL[%s] not found", etlName)
 		}
 		return err
 	}
-	fmt.Fprintf(c.App.Writer, "ETL[%s] started successfully\n", etlID)
+	fmt.Fprintf(c.App.Writer, "ETL[%s] started successfully\n", etlName)
 	return nil
 }
 
@@ -477,7 +477,7 @@ func etlBucketHandler(c *cli.Context) error {
 	}
 
 	msg := &apc.TCBMsg{
-		ID: id,
+		Transform: apc.Transform{Name: id},
 		CopyBckMsg: apc.CopyBckMsg{
 			Prefix: parseStrFlag(c, cpBckPrefixFlag),
 			DryRun: flagIsSet(c, cpBckDryRunFlag),
@@ -542,12 +542,12 @@ func etlBucketHandler(c *cli.Context) error {
 	return nil
 }
 
-func handleETLHTTPError(err error, etlID string) error {
+func handleETLHTTPError(err error, etlName string) error {
 	if herr, ok := err.(*cmn.ErrHTTP); ok {
 		// TODO: How to find out if it's transformation not found, and not object not found?
-		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlID) {
+		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlName) {
 			return fmt.Errorf("ETL[%s] not found; try starting new ETL with:\nais %s %s <spec>",
-				etlID, commandETL, subcmdInit)
+				etlName, commandETL, subcmdInit)
 		}
 	}
 	return err

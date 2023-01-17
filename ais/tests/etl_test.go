@@ -211,7 +211,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 }
 
 // Responsible for cleaning ETL xaction, ETL containers, destination bucket.
-func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
+func testETLBucket(t *testing.T, etlName string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -219,14 +219,17 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 		bckTo          = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.AIS}
 		requestTimeout = 30 * time.Second
 	)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
-	tlog.Logf("Start offline etl[%s]\n", uuid)
-	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &apc.TCBMsg{
-		ID:             uuid,
-		RequestTimeout: cos.Duration(requestTimeout),
-		CopyBckMsg:     apc.CopyBckMsg{Force: true},
-	})
+	tlog.Logf("Start offline etl[%s]\n", etlName)
+	msg := &apc.TCBMsg{
+		Transform: apc.Transform{
+			Name:    etlName,
+			Timeout: cos.Duration(requestTimeout),
+		},
+		CopyBckMsg: apc.CopyBckMsg{Force: true},
+	}
+	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, msg)
 
 	err := tetl.WaitForFinished(baseParams, xactID, timeout)
 	tassert.CheckFatal(t, err)
@@ -605,8 +608,13 @@ func TestETLBucketDryRun(t *testing.T) {
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	tlog.Logf("Start offline etl[%s]\n", etlName)
-	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo,
-		&apc.TCBMsg{ID: etlName, CopyBckMsg: apc.CopyBckMsg{DryRun: true, Force: true}})
+	msg := &apc.TCBMsg{
+		Transform: apc.Transform{
+			Name: etlName,
+		},
+		CopyBckMsg: apc.CopyBckMsg{DryRun: true, Force: true},
+	}
+	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, msg)
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Timeout: time.Minute}

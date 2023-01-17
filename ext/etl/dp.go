@@ -24,12 +24,12 @@ type OfflineDataProvider struct {
 var _ cluster.DP = (*OfflineDataProvider)(nil)
 
 func NewOfflineDataProvider(msg *apc.TCBMsg, lsnode *cluster.Snode) (*OfflineDataProvider, error) {
-	comm, err := GetCommunicator(msg.ID, lsnode)
+	comm, err := GetCommunicator(msg.Transform.Name, lsnode)
 	if err != nil {
 		return nil, err
 	}
 	pr := &OfflineDataProvider{tcbMsg: msg, comm: comm}
-	pr.requestTimeout = time.Duration(msg.RequestTimeout)
+	pr.requestTimeout = time.Duration(msg.Transform.Timeout)
 	return pr, nil
 }
 
@@ -47,7 +47,7 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).
 	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      call,
-		Action:    "read [" + dp.tcbMsg.ID + "]-transformed " + lom.FullName(),
+		Action:    "read [" + dp.tcbMsg.Transform.Name + "]-transformed " + lom.FullName(),
 		SoftErr:   5,
 		HardErr:   2,
 		Sleep:     50 * time.Millisecond,

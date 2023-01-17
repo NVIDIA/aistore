@@ -199,34 +199,36 @@ def transform(input_bytes):
 		t.Run(test.name, func(t *testing.T) {
 			tetl.CheckNoRunningETLContainers(t, baseParams)
 			var (
-				uuid string
-				err  error
-
+				etlName        string
+				err            error
 				etlDoneCh      = cos.NewStopCh()
 				requestTimeout = 30 * time.Second
 			)
 			switch test.ty {
 			case etl.Spec:
-				uuid = tetl.InitSpec(t, baseParams, test.initDesc, etl.Hpull)
+				etlName = tetl.InitSpec(t, baseParams, test.initDesc, etl.Hpull)
 			case etl.Code:
 				test.buildDesc.IDX = test.name
 				test.buildDesc.Timeout = cos.Duration(10 * time.Minute)
 				test.buildDesc.Funcs.Transform = "transform"
-				uuid = tetl.InitCode(t, baseParams, test.buildDesc)
+				etlName = tetl.InitCode(t, baseParams, test.buildDesc)
 			default:
 				panic(test.ty)
 			}
 			t.Cleanup(func() {
-				tetl.StopAndDeleteETL(t, baseParams, uuid)
+				tetl.StopAndDeleteETL(t, baseParams, etlName)
 				tetl.WaitForContainersStopped(t, baseParams)
 			})
 
-			tlog.Logf("Start offline ETL %q\n", uuid)
-			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &apc.TCBMsg{
-				ID:             uuid,
-				RequestTimeout: cos.Duration(requestTimeout),
-				CopyBckMsg:     apc.CopyBckMsg{Force: true},
-			})
+			tlog.Logf("Start offline ETL[%s]\n", etlName)
+			msg := &apc.TCBMsg{
+				Transform: apc.Transform{
+					Name:    etlName,
+					Timeout: cos.Duration(requestTimeout),
+				},
+				CopyBckMsg: apc.CopyBckMsg{Force: true},
+			}
+			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, msg)
 			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
 
 			tlog.Logln("Waiting for ETL to finish")
@@ -271,6 +273,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 		tetl.StopAndDeleteETL(t, baseParams, etlName)
 	})
 
-	tlog.Logf("Start offline ETL %q => %q\n", etlName, bckTo.String())
-	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &apc.TCBMsg{ID: etlName, CopyBckMsg: apc.CopyBckMsg{Force: true}})
+	tlog.Logf("Start offline ETL[%s] => %q\n", etlName, bckTo.String())
+	msg := &apc.TCBMsg{Transform: apc.Transform{Name: etlName}, CopyBckMsg: apc.CopyBckMsg{Force: true}}
+	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, msg)
 }

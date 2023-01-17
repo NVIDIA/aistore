@@ -361,7 +361,7 @@ func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
 	return copyBucket(c, bckFrom, bckTo, msg)
 }
 
-func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs string, etlID ...string) (err error) {
+func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs string, etlName ...string) (err error) {
 	operation := "Copying objects"
 	if listObjs != "" && tmplObjs != "" {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
@@ -381,12 +381,13 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 	}
 	msg.DryRun = flagIsSet(c, cpBckDryRunFlag)
 	if flagIsSet(c, etlBucketRequestTimeout) {
-		msg.RequestTimeout = cos.Duration(etlBucketRequestTimeout.Value)
+		msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
 	}
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
+
 	var xactID string
-	if len(etlID) != 0 {
-		msg.ID = etlID[0]
+	if len(etlName) != 0 {
+		msg.Name = etlName[0]
 		operation = "Transforming objects"
 		xactID, err = api.ETLMultiObj(apiBP, fromBck, msg)
 	} else {
