@@ -181,7 +181,7 @@ def transform(input_bytes):
     return md5.hexdigest().encode()
 
 # Initializing ETL  with transform()
-client.etl().init_code(transform=transform, etl_id="etl-code")
+client.etl().init_code(transform=transform, etl_name="etl-code")
 ```
 
 We initialize another ETL w/ [spec](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#init-spec-request):
@@ -190,7 +190,7 @@ We initialize another ETL w/ [spec](https://github.com/NVIDIA/aistore/blob/maste
 from aistore.sdk.etl_templates import MD5
 
 template = MD5.format(communication_type="hpush")
-client.etl().init_spec(template=template, etl_id="etl-spec")
+client.etl().init_spec(template=template, etl_name="etl-spec")
 ```
 
 > Refer to more ETL templates [here](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/etl_templates.py).
@@ -206,38 +206,38 @@ We can get an object with the ETL transformations applied:
 
 ```python
 # Get object w/ ETL code transformation
-obj1 = client.bucket("bucket-demo").object("object-demo").get(etl_id="etl-code").read_all()
+obj1 = client.bucket("bucket-demo").object("object-demo").get(etl_name="etl-code").read_all()
 
 # Get object w/ ETL spec transformation
-obj2 = client.bucket("bucket-demo").object("object-demo").get(etl_id="etl-spec").read_all()
+obj2 = client.bucket("bucket-demo").object("object-demo").get(etl_name="etl-spec").read_all()
 ```
 
 Alternatively, we can transform an entire bucket's contents as follows:
 
 ```python
 # Transform bucket w/ ETL code transformation
-client.bucket("bucket-demo").transform(etl_id="etl-code", to_bck="bucket-transformed")
+client.bucket("bucket-demo").transform(etl_name="etl-code", to_bck="bucket-transformed")
 
 # Transform bucket w/ ETL spec transformation
-client.bucket("bucket-demo").transform(etl_id="etl-spec", to_bck="bucket-transformed")
+client.bucket("bucket-demo").transform(etl_name="etl-spec", to_bck="bucket-transformed")
 ```
 
 Transform also allows for *on-the-fly* rename operations for objects:
 
 ```python
 # Add a prefix to the resulting transformed files:
-client.bucket("bucket-demo").transform(etl_id="etl-code", to_bck="bucket-transformed", prefix="transformed-")
+client.bucket("bucket-demo").transform(etl_name="etl-code", to_bck="bucket-transformed", prefix="transformed-")
 
 # Replace existing filename extensions
-client.bucket("bucket-demo").transform(etl_id="etl-spec", to_bck="bucket-transformed", ext={"jpg":"txt"})
+client.bucket("bucket-demo").transform(etl_name="etl-spec", to_bck="bucket-transformed", ext={"jpg":"txt"})
 ```
 
 We can stop the ETLs if desired with method `stop()`:
 
 ```python
 # Stop ETL
-client.etl().stop(etl_id="etl-code")
-client.etl().stop(etl_id="etl-spec")
+client.etl().stop(etl_name="etl-code")
+client.etl().stop(etl_name="etl-spec")
 
 # Verify ETLs are not actively running
 client.etl().list()
@@ -247,8 +247,8 @@ If an ETL is stopped, any Kubernetes pods created for the ETL are *stopped*, but
 
 ```python
 # Stop ETLs
-client.etl().start(etl_id="etl-code")
-client.etl().start(etl_id="etl-spec")
+client.etl().start(etl_name="etl-code")
+client.etl().start(etl_name="etl-spec")
 
 # Verify ETLs are not actively running
 client.etl().list()
@@ -258,12 +258,12 @@ Once completely finished with the ETLs, we cleanup (for storage) by stopping the
 
 ```python
 # Stop ETLs
-client.etl().stop(etl_id="etl-code")
-client.etl().stop(etl_id="etl-spec")
+client.etl().stop(etl_name="etl-code")
+client.etl().stop(etl_name="etl-spec")
 
 # Delete ETLs
-client.etl().delete(etl_id="etl-code")
-client.etl().delete(etl_id="etl-spec")
+client.etl().delete(etl_name="etl-code")
+client.etl().delete(etl_name="etl-spec")
 
 ```
 

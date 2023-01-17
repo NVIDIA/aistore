@@ -53,17 +53,17 @@ class Etl:
         timeout: str = "5m",
     ):
         """
-        Initializes ETL based on POD spec template. Returns ETL_ID.
+        Initializes ETL based on POD spec template. Returns etl_name.
         Existing templates can be found at `sdk.etl_templates`
         For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
 
         Args:
             docker_image (str): docker image name looks like: <hub-user>/<repo-name>:<tag>
-            etl_name (str): id of new ETL
+            etl_name (str): name of new ETL
             communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush)
             timeout (str): timeout of the ETL (eg. 5m for 5 minutes)
         Returns:
-            etl_name (str): ETL ID
+            etl_name (str): ETL name
         """
 
         # spec
@@ -90,11 +90,11 @@ class Etl:
         chunk_size: int = None,
     ):
         """
-        Initializes ETL based on the provided source code. Returns ETL_ID.
+        Initializes ETL based on the provided source code. Returns etl_name.
 
         Args:
             transform (Callable): Transform function of the ETL
-            etl_name (str): ID of new ETL
+            etl_name (str): Name of new ETL
             dependencies (list[str]): Python dependencies to install
             runtime (str): [optional, default= V2 implementation of the current python version if supported, else
                 python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
@@ -103,7 +103,7 @@ class Etl:
             timeout (str): [optional, default="5m"] Timeout of the ETL (e.g. 5m for 5 minutes)
             chunk_size (int): Chunk size in bytes if transform function in streaming data. (whole object is read by default)
         Returns:
-            etl_name (str): ETL ID
+            etl_name (str): ETL name
         """
         if communication_type not in ["io", "hpush", "hrev", "hpull"]:
             raise ValueError("communication_type should be in: hpull, hrev, hpush, io")
@@ -165,7 +165,7 @@ class Etl:
         View ETLs Init spec/code
 
         Args:
-            etl_name (str): id of ETL
+            etl_name (str): name of ETL
         Returns:
             ETLDetails: details of the ETL
         """
@@ -176,12 +176,12 @@ class Etl:
 
     def start(self, etl_name: str):
         """
-        Resumes a stopped ETL with given ETL_ID.
+        Resumes a stopped ETL with given ETL name.
 
         Note: Deleted ETLs cannot be started.
 
         Args:
-            etl_name (str): id of ETL
+            etl_name (str): name of ETL
         Returns:
             Nothing
         """
@@ -189,10 +189,10 @@ class Etl:
 
     def stop(self, etl_name: str):
         """
-        Stops ETL with given ETL_ID. Stops (but does not delete) all the pods created by Kubernetes for this ETL and terminates any transforms.
+        Stops ETL with given ETL name. Stops (but does not delete) all the pods created by Kubernetes for this ETL and terminates any transforms.
 
         Args:
-            etl_name (str): id of ETL
+            etl_name (str): name of ETL
         Returns:
             Nothing
         """
@@ -200,12 +200,12 @@ class Etl:
 
     def delete(self, etl_name: str):
         """
-        Delete ETL with given ETL_ID. Deletes pods created by Kubernetes for this ETL and specifications for this ETL in Kubernetes.
+        Delete ETL with given ETL name. Deletes pods created by Kubernetes for this ETL and specifications for this ETL in Kubernetes.
 
         Note: Running ETLs cannot be deleted.
 
         Args:
-            etl_name (str): id of ETL
+            etl_name (str): name of ETL
         Returns:
             Nothing
         """

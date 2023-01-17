@@ -348,7 +348,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_client.request_deserialize.assert_has_calls([call_1, call_2])
 
     def test_transform(self):
-        etl_name = "etl-id"
+        etl_name = "etl-name"
         prefix = "prefix-"
         ext = {"jpg": "txt"}
         force = True
@@ -366,7 +366,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         )
 
     def test_transform_default_params(self):
-        etl_name = "etl-id"
+        etl_name = "etl-name"
         action_value = {"id": etl_name, "prefix": "", "force": False, "dry_run": False}
 
         self._transform_exec_assert(etl_name, action_value)

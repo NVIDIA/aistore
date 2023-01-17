@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -317,12 +318,12 @@ func TestETLObjectCloud(t *testing.T) {
 	for comm, configs := range tcs {
 		t.Run(comm, func(t *testing.T) {
 			// TODO: currently, Echo transformation only - add other transforms
-			uuid := tetl.InitSpec(t, baseParams, tetl.Echo, comm)
-			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
+			etlName := tetl.InitSpec(t, baseParams, tetl.Echo, comm)
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 			for _, conf := range configs {
 				t.Run(fmt.Sprintf("cached=%t", conf.cached), func(t *testing.T) {
-					testETLObjectCloud(t, cliBck, uuid, conf.onlyLong, conf.cached)
+					testETLObjectCloud(t, cliBck, etlName, conf.onlyLong, conf.cached)
 				})
 			}
 		})
@@ -349,8 +350,8 @@ func TestETLInline(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
 
-			uuid := tetl.InitSpec(t, baseParams, test.transformer, test.comm)
-			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
+			etlName := tetl.InitSpec(t, baseParams, test.transformer, test.comm)
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 			tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
@@ -368,7 +369,7 @@ func TestETLInline(t *testing.T) {
 			outObject := bytes.NewBuffer(nil)
 			_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 				Writer: outObject,
-				Query:  map[string][]string{apc.QparamUUID: {uuid}},
+				Query:  url.Values{apc.QparamETLName: {etlName}},
 			})
 			tassert.CheckFatal(t, err)
 
@@ -390,8 +391,8 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
-	uuid := tetl.InitSpec(t, baseParams, transformer, comm)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
+	etlName := tetl.InitSpec(t, baseParams, transformer, comm)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
@@ -413,7 +414,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	defer outObject.Free()
 	_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 		Writer: outObject,
-		Query:  map[string][]string{apc.QparamUUID: {uuid}},
+		Query:  url.Values{apc.QparamETLName: {etlName}},
 	})
 	tassert.CheckFatal(t, err)
 

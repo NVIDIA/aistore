@@ -146,8 +146,8 @@ func (e *Aborter) ListenSmapChanged() {
 }
 
 // (common for both `InitCode` and `InitSpec` flows)
-func InitSpec(t cluster.Target, msg *InitSpecMsg, xactID string, opts StartOpts) error {
-	errCtx, podName, svcName, err := start(t, msg, xactID, opts)
+func InitSpec(t cluster.Target, msg *InitSpecMsg, etlName string, opts StartOpts) error {
+	errCtx, podName, svcName, err := start(t, msg, etlName, opts)
 	if err != nil {
 		glog.Warning(cmn.NewErrETL(errCtx, "%s: cleanup after unsuccessful Start", t))
 		if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {

@@ -112,30 +112,30 @@ Lists all available ETLs.
 
 ## View ETL Logs
 
-`ais etl logs ETL_ID [TARGET_ID]`
+`ais etl logs ETL_NAME [TARGET_ID]`
 
 Output logs produced by given ETL.
 It is possible to pass an additional parameter to specify a particular `TARGET_ID` from which the logs must be retrieved.
 
 ## Stop ETL
 
-`ais etl stop ETL_ID` or, same, `ais job stop etl`
+`ais etl stop ETL_NAME` or, same, `ais job stop etl`
 
 Stop ETL with the specified id.
 
 
 ## Start ETL
 
-`ais etl start ETL_ID` or, same, `ais job start etl`
+`ais etl start ETL_NAME` or, same, `ais job start etl`
 
 Start ETL with the specified id.
 
 
 ## Transform object on-the-fly with given ETL
 
-`ais etl object ETL_ID BUCKET/OBJECT_NAME OUTPUT`
+`ais etl object ETL_NAME BUCKET/OBJECT_NAME OUTPUT`
 
-Get object with ETL defined by `ETL_ID`.
+Get object with ETL defined by `ETL_NAME`.
 
 ### Examples
 
@@ -160,7 +160,7 @@ $ cat output.txt
 
 ## Transform a bucket offline with the given ETL
 
-`ais etl bucket ETL_ID SRC_BUCKET DST_BUCKET`
+`ais etl bucket ETL_NAME SRC_BUCKET DST_BUCKET`
 
 Transform all or selected objects and put them into another bucket.
 

@@ -34,7 +34,7 @@ client.etl().init_code(
     communication_type="io",
 )
 
-# Transform bucket with given ETL id
+# Transform bucket with given ETL name
 job_id = client.bucket("from-bck").transform(
     etl_name="torchvision_io1", to_bck="to-bck", ext={"jpg": "npy"}
 )

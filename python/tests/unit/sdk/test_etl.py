@@ -22,7 +22,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.mock_client = Mock()
         self.etl = Etl(self.mock_client)
-        self.etl_name = "etl id"
+        self.etl_name = "etl-name"
 
     def test_properties(self):
         self.assertEqual(self.mock_client, self.etl.client)

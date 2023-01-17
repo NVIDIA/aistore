@@ -9,6 +9,7 @@ from aistore.sdk.const import (
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_GET,
     QParamArchpath,
+    QParamETLName,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
 )
@@ -49,7 +50,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         etl_name = "etl"
         expected_request_params = self.bck.qparam
         expected_request_params[QParamArchpath] = archpath_param
-        expected_request_params["uuid"] = etl_name  # TODO -- FIXME: use QparamETLName
+        expected_request_params[QParamETLName] = etl_name
         self.get_exec_assert(
             expected_request_params,
             archpath=archpath_param,

@@ -26,7 +26,7 @@ client.etl().init_code(
     transform=transform, etl_name="etl-img-to-npy", dependencies=deps
 )
 
-# Transform bucket with given ETL id
+# Transform bucket with given ETL name
 job_id = client.bucket("from-bck").transform(
     etl_name="etl-img-to-npy", to_bck="to-bck", ext={"jpg": "npy"}
 )

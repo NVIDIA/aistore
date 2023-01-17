@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +25,7 @@ import (
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 )
 
-func startTar2TfTransformer(t *testing.T) (uuid string) {
+func startTar2TfTransformer(t *testing.T) (etlName string) {
 	spec, err := tetl.GetTransformYaml(tetl.Tar2TF)
 	tassert.CheckError(t, err)
 
@@ -36,7 +37,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 	tassert.CheckError(t, msg.Validate())
 
 	// Starting transformer
-	uuid, err = api.ETLInit(baseParams, msg)
+	etlName, err = api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
 	return
 }
@@ -75,15 +76,22 @@ func TestETLTar2TFS3(t *testing.T) {
 	tassert.CheckFatal(t, api.PutObject(putArgs))
 	defer api.DeleteObject(baseParams, bck, tarObjName)
 
-	uuid := startTar2TfTransformer(t)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
+	etlName := startTar2TfTransformer(t)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 	// GET TFRecord from TAR
 	outFileBuffer := bytes.NewBuffer(nil)
 
 	// This is to mimic external S3 clients like Tensorflow
 	bck.Provider = ""
 
-	_, err = api.GetObjectS3(baseParams, bck, tarObjName+"%3fuuid="+uuid, api.GetObjectInput{Writer: outFileBuffer})
+	_, err = api.GetObjectS3(
+		baseParams,
+		bck,
+		tarObjName,
+		api.GetObjectInput{
+			Writer: outFileBuffer,
+			Query:  url.Values{apc.QparamETLName: {etlName}},
+		})
 	tassert.CheckFatal(t, err)
 
 	// Comparing actual vs expected
@@ -144,15 +152,22 @@ func TestETLTar2TFRanges(t *testing.T) {
 	}
 	tassert.CheckFatal(t, api.PutObject(putArgs))
 
-	uuid := startTar2TfTransformer(t)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
+	etlName := startTar2TfTransformer(t)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	// This is to mimic external S3 clients like Tensorflow
 	bck.Provider = ""
 
 	// GET TFRecord from TAR
 	wholeTFRecord := bytes.NewBuffer(nil)
-	_, err = api.GetObjectS3(baseParams, bck, tarObjName+"%3fuuid="+uuid, api.GetObjectInput{Writer: wholeTFRecord})
+	_, err = api.GetObjectS3(
+		baseParams,
+		bck,
+		tarObjName,
+		api.GetObjectInput{
+			Writer: wholeTFRecord,
+			Query:  url.Values{apc.QparamETLName: {etlName}},
+		})
 	tassert.CheckFatal(t, err)
 
 	for _, tc := range tcs {
@@ -161,7 +176,15 @@ func TestETLTar2TFRanges(t *testing.T) {
 		// Request only a subset of bytes
 		header := http.Header{}
 		header.Set(cos.HdrRange, fmt.Sprintf("bytes=%d-%d", tc.start, tc.end))
-		_, err = api.GetObjectS3(baseParams, bck, tarObjName+"%3fuuid="+uuid, api.GetObjectInput{Writer: rangeBytesBuff, Header: header})
+		_, err = api.GetObjectS3(
+			baseParams,
+			bck,
+			tarObjName,
+			api.GetObjectInput{
+				Writer: rangeBytesBuff,
+				Header: header,
+				Query:  url.Values{apc.QparamETLName: {etlName}},
+			})
 		tassert.CheckFatal(t, err)
 
 		tassert.Errorf(t, bytes.Equal(rangeBytesBuff.Bytes(), wholeTFRecord.Bytes()[tc.start:tc.end+1]), "[start: %d, end: %d] bytes different", tc.start, tc.end)

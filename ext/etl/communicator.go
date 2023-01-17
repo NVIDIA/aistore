@@ -403,14 +403,14 @@ func (cw *cbWriter) Write(b []byte) (n int, err error) {
 //
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
-// not removing apc.QparamUUID, for instance, would cause infinite loop.
+// not removing apc.QparamETLName, for instance, would cause infinite loop.
 func pruneQuery(rawQuery string) string {
 	vals, err := url.ParseQuery(rawQuery)
 	if err != nil {
 		glog.Errorf("failed to parse raw query %q, err: %v", rawQuery, err)
 		return ""
 	}
-	for _, filtered := range []string{apc.QparamUUID, apc.QparamProxyID, apc.QparamUnixTime} {
+	for _, filtered := range []string{apc.QparamETLName, apc.QparamProxyID, apc.QparamUnixTime} {
 		vals.Del(filtered)
 	}
 	return vals.Encode()

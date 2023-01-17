@@ -727,7 +727,7 @@ Returns a list of all objects in bucket
 ### transform
 
 ```python
-def transform(etl_id: str,
+def transform(etl_name: str,
               to_bck: str,
               prefix: str = "",
               ext: Dict[str, str] = None,
@@ -739,7 +739,7 @@ Transforms all objects in a bucket and puts them to destination bucket.
 
 **Arguments**:
 
-- `etl_id` _str_ - id of etl to be used for transformations
+- `etl_name` _str_ - name of etl to be used for transformations
 - `to_bck` _str_ - destination bucket for transformations
 - `prefix` _str, optional_ - prefix to be added to resulting transformed objects
 - `ext` _Dict[str, str], optional_ - dict of new extension followed by extension to be replaced (i.e. {"jpg": "txt"})
@@ -890,7 +890,7 @@ Requests object properties.
 ```python
 def get(archpath: str = "",
         chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl_id: str = None) -> ObjStream
+        etl_name: str = None) -> ObjStream
 ```
 
 Reads an object
@@ -899,7 +899,7 @@ Reads an object
 
 - `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file from the archive
 - `chunk_size` _int, optional_ - chunk_size to use while reading from stream
-  etl_id(str, optional): Transforms an object based on ETL with etl_id
+  etl_name(str, optional): Transforms an object based on ETL with etl_name
   
 
 **Returns**:
@@ -1107,25 +1107,25 @@ The client bound to this ETL object.
 
 ```python
 def init_spec(template: str,
-              etl_id: str,
+              etl_name: str,
               communication_type: str = "hpush",
               timeout: str = "5m")
 ```
 
-Initializes ETL based on POD spec template. Returns ETL_ID.
+Initializes ETL based on POD spec template. Returns etl_name.
 Existing templates can be found at `sdk.etl_templates`
 For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
 
 **Arguments**:
 
 - `docker_image` _str_ - docker image name looks like: <hub-user>/<repo-name>:<tag>
-- `etl_id` _str_ - id of new ETL
+- `etl_name` _str_ - name of new ETL
 - `communication_type` _str_ - Communication type of the ETL (options: hpull, hrev, hpush)
 - `timeout` _str_ - timeout of the ETL (eg. 5m for 5 minutes)
 
 **Returns**:
 
-- `etl_id` _str_ - ETL ID
+- `etl_name` _str_ - ETL name
 
 <a id="etl.Etl.init_code"></a>
 
@@ -1133,7 +1133,7 @@ For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transf
 
 ```python
 def init_code(transform: Callable,
-              etl_id: str,
+              etl_name: str,
               dependencies: List[str] = None,
               runtime: str = get_default_runtime(),
               communication_type: str = "hpush",
@@ -1141,12 +1141,12 @@ def init_code(transform: Callable,
               chunk_size: int = None)
 ```
 
-Initializes ETL based on the provided source code. Returns ETL_ID.
+Initializes ETL based on the provided source code. Returns etl_name.
 
 **Arguments**:
 
 - `transform` _Callable_ - Transform function of the ETL
-- `etl_id` _str_ - ID of new ETL
+- `etl_name` _str_ - Name of new ETL
 - `dependencies` _list[str]_ - Python dependencies to install
 - `runtime` _str_ - [optional, default= V2 implementation of the current python version if supported, else
   python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
@@ -1157,7 +1157,7 @@ Initializes ETL based on the provided source code. Returns ETL_ID.
 
 **Returns**:
 
-- `etl_id` _str_ - ETL ID
+- `etl_name` _str_ - ETL name
 
 <a id="etl.Etl.list"></a>
 
@@ -1184,14 +1184,14 @@ Note: Does not list ETLs that have been stopped or deleted.
 ### view
 
 ```python
-def view(etl_id: str) -> ETLDetails
+def view(etl_name: str) -> ETLDetails
 ```
 
 View ETLs Init spec/code
 
 **Arguments**:
 
-- `etl_id` _str_ - id of ETL
+- `etl_name` _str_ - name of ETL
 
 **Returns**:
 
@@ -1202,16 +1202,16 @@ View ETLs Init spec/code
 ### start
 
 ```python
-def start(etl_id: str)
+def start(etl_name: str)
 ```
 
-Resumes a stopped ETL with given ETL_ID.
+Resumes a stopped ETL with given ETL name.
 
 Note: Deleted ETLs cannot be started.
 
 **Arguments**:
 
-- `etl_id` _str_ - id of ETL
+- `etl_name` _str_ - name of ETL
 
 **Returns**:
 
@@ -1222,14 +1222,14 @@ Note: Deleted ETLs cannot be started.
 ### stop
 
 ```python
-def stop(etl_id: str)
+def stop(etl_name: str)
 ```
 
-Stops ETL with given ETL_ID. Stops (but does not delete) all the pods created by Kubernetes for this ETL and terminates any transforms.
+Stops ETL with given ETL name. Stops (but does not delete) all the pods created by Kubernetes for this ETL and terminates any transforms.
 
 **Arguments**:
 
-- `etl_id` _str_ - id of ETL
+- `etl_name` _str_ - name of ETL
 
 **Returns**:
 
@@ -1240,16 +1240,16 @@ Stops ETL with given ETL_ID. Stops (but does not delete) all the pods created by
 ### delete
 
 ```python
-def delete(etl_id: str)
+def delete(etl_name: str)
 ```
 
-Delete ETL with given ETL_ID. Deletes pods created by Kubernetes for this ETL and specifications for this ETL in Kubernetes.
+Delete ETL with given ETL name. Deletes pods created by Kubernetes for this ETL and specifications for this ETL in Kubernetes.
 
 Note: Running ETLs cannot be deleted.
 
 **Arguments**:
 
-- `etl_id` _str_ - id of ETL
+- `etl_name` _str_ - name of ETL
 
 **Returns**:
 

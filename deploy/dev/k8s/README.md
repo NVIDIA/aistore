@@ -1,12 +1,18 @@
 ## Table of Contents
 
+- [Table of Contents](#table-of-contents)
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
-- [Makefile](#Makefile)
+- [Makefile](#makefile)
 - [Files](#files)
 - [Trying AIStore on minikube](#trying-aistore-on-minikube)
+  - [Deploy](#deploy)
+  - [Stopping and cleanup](#stopping-and-cleanup)
 - [Developing AIStore on minikube](#developing-aistore-on-minikube)
+  - [Deploy](#deploy-1)
+  - [Stopping and cleanup](#stopping-and-cleanup-1)
 - [Troubleshooting minikube](#troubleshooting-minikube)
+- [Demo](#demo)
 
 ## Introduction
 
@@ -247,7 +253,7 @@ NAME:
    ais etl object - transform object with given ETL
 
 USAGE:
-   ais etl object [command options] ETL_ID BUCKET/OBJECT_NAME OUTPUT
+   ais etl object [command options] ETL_NAME BUCKET/OBJECT_NAME OUTPUT
 
 OPTIONS:
    --help, -h  show help

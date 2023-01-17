@@ -13,6 +13,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     HTTP_METHOD_PUT,
     QParamArchpath,
+    QParamETLName,
 )
 
 from aistore.sdk.types import ObjStream
@@ -93,7 +94,7 @@ class Object:
         params = self.bck.qparam
         params[QParamArchpath] = archpath
         if etl_name:
-            params["uuid"] = etl_name  # TODO -- FIXME: use QparamETLName
+            params[QParamETLName] = etl_name
         resp = self.bck.client.request(
             HTTP_METHOD_GET,
             path=f"objects/{ self.bck.name }/{ self.obj_name }",
