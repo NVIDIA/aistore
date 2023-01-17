@@ -86,7 +86,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             "timeout": "5m",
             "funcs": {"transform": "transform"},
             "code": self.encode_fn(self.transform_fn, communication_type),
-            "dependencies": base64.b64encode(b"cloudpickle==2.0.0").decode("utf-8"),
+            "dependencies": base64.b64encode(b"cloudpickle==2.2.0").decode("utf-8"),
         }
         self.init_code_exec_assert(expected_action)
 
@@ -98,7 +98,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         chunk_size = "123"
 
         expected_dependencies = user_dependencies.copy()
-        expected_dependencies.append("cloudpickle==2.0.0")
+        expected_dependencies.append("cloudpickle==2.2.0")
         expected_dep_str = base64.b64encode(
             "\n".join(expected_dependencies).encode("utf-8")
         ).decode("utf-8")

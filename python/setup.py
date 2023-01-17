@@ -81,7 +81,7 @@ setup(
     python_requires=">=3.6",
     packages=find_packages(exclude=("tests", "tests.*", "examples", "examples.*")),
     # packaging used to check latest version in torchdata
-    install_requires=["requests", "packaging", "pydantic==1.9.0", "cloudpickle==2.0.0"],
+    install_requires=["requests", "packaging", "pydantic==1.9.0", "cloudpickle==2.2.0"],
     extras_require={
         "pytorch": ["torch", "torchdata"],
         "botocore": ["wrapt"],

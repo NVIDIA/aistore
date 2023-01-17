@@ -133,7 +133,7 @@ class Etl:
         # dependencies
         if dependencies is None:
             dependencies = []
-        dependencies.append("cloudpickle==2.0.0")
+        dependencies.append("cloudpickle==2.2.0")
         deps = "\n".join(dependencies).encode("utf-8")
         action["dependencies"] = base64.b64encode(deps).decode("utf-8")
 
