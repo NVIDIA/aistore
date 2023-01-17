@@ -5,6 +5,7 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -541,19 +542,43 @@ func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs,
 	return
 }
 
-func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
+func (m *AISBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
 	var (
 		remAis    *remAis
 		r         io.ReadCloser
 		remoteBck = lom.Bck().Clone()
+		oa        *cmn.ObjAttrs
 	)
 	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
 		return
 	}
 	unsetUUID(&remoteBck)
-	if r, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName); err != nil {
+	if r, oa, err = api.GetObjectReaderWithOA(remAis.bp, remoteBck, lom.ObjName); err != nil {
 		return extractErrCode(err, remAis.uuid)
 	}
+
+	lom.SetVersion(oa.Version(true))
+
+	if warmVersion := ctx.Value(cos.CtxWarmVersion); warmVersion != nil {
+		if lom.ObjAttrs().Ver == "" {
+			errCode = http.StatusBadRequest
+			err = cmn.NewErrUnsupp("get version of", remoteBck.String())
+			return
+		}
+		if warmVersion != lom.ObjAttrs().Ver {
+			errCode = http.StatusNotFound
+			err = cmn.NewErrNotFound("%s: version %q", lom.ObjName, warmVersion)
+			return
+		}
+	}
+	if warmChkSum := ctx.Value(cos.CtxWarmChkSum); warmChkSum != nil {
+		if warmChkSum != oa.Checksum().Value() {
+			errCode = http.StatusNotFound
+			err = cmn.NewErrNotFound("%s with checksum %q", lom.ObjName, warmChkSum)
+			return
+		}
+	}
+
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfileColdget

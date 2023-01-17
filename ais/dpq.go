@@ -27,6 +27,8 @@ type dpq struct {
 	owt                 string // object write transaction { OwtPut, ... }
 	fltPresence         string // QparamFltPresence
 	dontAddRemote       string // QparamDontAddRemote
+	warmVersion         string // QparamWarmVersion
+	warmChkSum          string // QparamWarmChkSum
 }
 
 var (
@@ -105,6 +107,10 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 			dpq.fltPresence = value
 		case apc.QparamDontAddRemote:
 			dpq.dontAddRemote = value
+		case apc.QparamWarmVersion:
+			dpq.warmVersion = value
+		case apc.QparamWarmChkSum:
+			dpq.warmChkSum = value
 
 		case s3.QparamMptUploadID, s3.QparamMptUploads, s3.QparamMptPartNo:
 			// TODO: ignore for now

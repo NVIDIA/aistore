@@ -275,6 +275,44 @@ func GetObject(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectIn
 
 // GetObjectReader returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
+func GetObjectReaderWithOA(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser, oa *cmn.ObjAttrs, err error) {
+	var (
+		q   url.Values
+		hdr http.Header
+	)
+	if len(options) != 0 {
+		var w io.Writer
+		w, q, hdr = getObjectOptParams(options[0])
+		cos.Assert(w == nil)
+	}
+	q = bck.AddToQuery(q)
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = q
+		reqParams.Header = hdr
+	}
+	r, hdr, err = reqParams.doReaderAndHeader()
+
+	oa = &cmn.ObjAttrs{}
+
+	if ty := hdr.Get(apc.HdrObjCksumType); ty != "" {
+		val := hdr.Get(apc.HdrObjCksumVal)
+		oa.SetCksum(ty, val)
+	}
+
+	if v := hdr.Get(apc.HdrObjVersion); v != "" {
+		oa.Ver = v
+	}
+
+	FreeRp(reqParams)
+	return
+}
+
+// GetObjectReader returns reader of the requested object. It does not read body
+// bytes, nor validates a checksum. Caller is responsible for closing the reader.
 func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser, err error) {
 	var (
 		q   url.Values

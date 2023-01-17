@@ -509,7 +509,7 @@ do:
 			}
 			goto fin
 		}
-	} else if goi.lom.Bck().IsRemote() && goi.lom.VersionConf().ValidateWarmGet { // check remote version
+	} else if goi.lom.Bck().IsRemote() && (goi.lom.VersionConf().ValidateWarmGet || goi.ctx.Value(cos.CtxWarmVersion) != nil || goi.ctx.Value(cos.CtxWarmChkSum) != nil) { // check remote version
 		var equal bool
 		goi.lom.Unlock(false)
 		if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {

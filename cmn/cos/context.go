@@ -20,4 +20,6 @@ const (
 	CtxReadWrapper contextID = "readWrapper" // context key for ReadWrapperFunc
 	CtxSetSize     contextID = "setSize"     // context key for SetSizeFunc
 	CtxOriginalURL contextID = "origURL"     // context key for OriginalURL for HTTP cloud
+	CtxWarmVersion contextID = "warmVersion" // context key for WarmVersion
+	CtxWarmChkSum  contextID = "warmChkSum"  // context key for WarmChkSum
 )

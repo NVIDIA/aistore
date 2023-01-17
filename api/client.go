@@ -189,6 +189,20 @@ func (reqParams *ReqParams) doReader() (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
+// same as above except that it returns response body (as io.ReadCloser) for subsequent reading and headers
+func (reqParams *ReqParams) doReaderAndHeader() (io.ReadCloser, http.Header, error) {
+	resp, err := reqParams.do()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := reqParams.checkResp(resp); err != nil {
+		resp.Body.Close()
+		return nil, nil, err
+	}
+
+	return resp.Body, resp.Header, nil
+}
+
 // makes HTTP request, retries on connection-refused and reset errors, and returns the response
 func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 	var reqBody io.Reader

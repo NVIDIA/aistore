@@ -664,6 +664,14 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		originalURL := dpq.origURL // query.Get(apc.QparamOrigURL)
 		goi.ctx = context.WithValue(goi.ctx, cos.CtxOriginalURL, originalURL)
 	}
+	if dpq.warmVersion != "" {
+		warmVersion := dpq.warmVersion // query.Get(apc.QparamWarmVersion)
+		goi.ctx = context.WithValue(goi.ctx, cos.CtxWarmVersion, warmVersion)
+	}
+	if dpq.warmChkSum != "" {
+		warmChkSum := dpq.warmChkSum // query.Get(apc.QparamWarmChkSum)
+		goi.ctx = context.WithValue(goi.ctx, cos.CtxWarmChkSum, warmChkSum)
+	}
 	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
 		t.writeErr(w, r, err, errCode)
 	}
@@ -1111,6 +1119,16 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.B
 // remote object and local cache.
 // NOTE: Should be called only if the local copy exists.
 func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bool, errCode int, err error) {
+	warmVersion := ctx.Value(cos.CtxWarmVersion)
+	warmChkSum := ctx.Value(cos.CtxWarmChkSum)
+	if warmVersion != nil && warmVersion == lom.ObjAttrs().Ver {
+		equal = true
+		return
+	}
+	if warmChkSum != nil && warmChkSum == lom.ObjAttrs().Cksum.Value() {
+		equal = true
+		return
+	}
 	var objAttrs *cmn.ObjAttrs
 	objAttrs, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
@@ -1122,6 +1140,26 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 		return
 	}
 	equal = lom.Equal(objAttrs)
+
+	if warmVersion != nil {
+		if !equal && warmVersion == objAttrs.Ver {
+			return
+		} else if objAttrs.Ver == "" {
+			errCode = http.StatusBadRequest
+			err = cmn.NewErrUnsupp("get version of", lom.Bck().String())
+			return
+		}
+		errCode = http.StatusNotFound
+		err = cmn.NewErrNotFound("%s: version %q", lom.ObjName, warmVersion)
+	}
+	if warmChkSum != nil {
+		if !equal && warmChkSum == objAttrs.Cksum.Value() {
+			return
+		}
+		errCode = http.StatusNotFound
+		err = cmn.NewErrNotFound("%s with checksum %q", lom.ObjName, warmChkSum)
+	}
+
 	return
 }
 

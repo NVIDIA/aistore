@@ -64,6 +64,12 @@ const (
 	// force the operation; allows to overcome certain restrictions (e.g., shutdown primary and the entire cluster)
 	// or errors (e.g., attach invalid mountpath)
 	QparamForce = "frc"
+
+	//Set version in query param to invalidate warm cache if not match working with remote ais cluster
+	QparamWarmVersion = "warm_version"
+
+	//Set checksum in query param to invalidate warm cache if not match working with remote ais cluster
+	QparamWarmChkSum = "warm_chksum"
 )
 
 // QparamFltPresence enum.
