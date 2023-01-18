@@ -939,6 +939,10 @@ func isBrowser(userAgent string) bool {
 
 func (h *htrun) handleWriteError(r *http.Request, tag string, v any, err error) {
 	const maxl = 32
+	if daemon.stopping.Load() {
+		return
+	}
+
 	var s string
 	if v != nil {
 		s = fmt.Sprintf("[%+v", v)
@@ -1012,27 +1016,7 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 	case apc.GetWhatSnode:
 		body = h.si
 	case apc.GetWhatLog:
-		log, err := _sev2logname(r)
-		if err != nil {
-			h.writeErr(w, r, err)
-			return
-		}
-		file, err := os.Open(log)
-		if err != nil {
-			errCode := http.StatusInternalServerError
-			if os.IsNotExist(err) {
-				errCode = http.StatusNotFound
-			}
-			h.writeErr(w, r, err, errCode)
-			return
-		}
-		buf, slab := h.gmm.Alloc()
-		if written, err := io.CopyBuffer(w, file, buf); err != nil {
-			// at this point, http err must be already on its way
-			glog.Errorf("failed to read %s: %v (written=%d)", log, err, written)
-		}
-		cos.Close(file)
-		slab.Free(buf)
+		h.sendlog(w, r, query)
 		return
 	case apc.GetWhatStats:
 		body = h.statsT.GetWhatStats()
@@ -1043,9 +1027,58 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 	h.writeJSON(w, r, body, "httpdaeget-"+what)
 }
 
-func _sev2logname(r *http.Request) (log string, err error) {
+func (h *htrun) sendlog(w http.ResponseWriter, r *http.Request, query url.Values) {
+	sev := query.Get(apc.QparamLogSev)
+	log, err := _sev2logname(sev)
+	if err != nil {
+		h.writeErr(w, r, err)
+		return
+	}
+	fh, err := os.Open(log)
+	if err != nil {
+		errCode := http.StatusInternalServerError
+		if os.IsNotExist(err) {
+			errCode = http.StatusNotFound
+		}
+		h.writeErr(w, r, err, errCode)
+		return
+	}
+	soff := query.Get(apc.QparamLogOff)
+	if soff != "" {
+		var (
+			off   int64
+			err   error
+			finfo os.FileInfo
+		)
+		off, err = strconv.ParseInt(soff, 10, 64)
+		if err == nil {
+			finfo, err = os.Stat(log)
+			if err == nil {
+				if siz := finfo.Size(); off > siz {
+					err = fmt.Errorf("log likely rotated (offset %d, size %d)", off, siz)
+				}
+			}
+		}
+		if err == nil {
+			_, err = fh.Seek(off, io.SeekStart)
+		}
+		if err != nil {
+			cos.Close(fh)
+			h.writeErr(w, r, err)
+			return
+		}
+	}
+	buf, slab := h.gmm.Alloc()
+	if written, err := io.CopyBuffer(w, fh, buf); err != nil {
+		// at this point, http err must be already on its way
+		glog.Errorf("failed to read %s: %v (written=%d)", log, err, written)
+	}
+	cos.Close(fh)
+	slab.Free(buf)
+}
+
+func _sev2logname(sev string) (log string, err error) {
 	dir := cmn.GCO.Get().LogDir
-	sev := r.URL.Query().Get(apc.QparamSev)
 	if sev == "" {
 		log = filepath.Join(dir, glog.InfoLogName()) // symlink
 		return
@@ -1093,8 +1126,7 @@ func (h *htrun) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode 
 	h.writeErrSilent(w, r, err, errCode)
 }
 
-func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int,
-	format string, a ...any) {
+func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int, format string, a ...any) {
 	err := fmt.Errorf(format, a...)
 	h.writeErrMsg(w, r, err.Error(), errCode)
 }
@@ -1484,7 +1516,7 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
 }
 
 func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
-	caller string, cb func(newELT *etlMD, oldETL *etlMD)) (err error) {
+	caller string, cb func(newELT *etlMD, oldETL *etlMD, action string)) (err error) {
 	if newEtlMD == nil {
 		return
 	}
@@ -1505,7 +1537,7 @@ func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
 	debug.AssertNoErr(err)
 
 	if cb != nil {
-		cb(newEtlMD, etlMD)
+		cb(newEtlMD, etlMD, msg.Action)
 	}
 	return
 }
@@ -1526,9 +1558,9 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, msg *aisMsg, payload msPayload
 	if err = h.owner.config.persist(newConfig, payload); err != nil {
 		return
 	}
-	err = cmn.GCO.Update(&newConfig.ClusterConfig)
-	debug.AssertNoErr(err)
-
+	if err = cmn.GCO.Update(&newConfig.ClusterConfig); err != nil {
+		return
+	}
 	// update assorted read-mostly knobs
 	cmn.Features = newConfig.Features
 	cmn.Timeout.Set(&newConfig.ClusterConfig)

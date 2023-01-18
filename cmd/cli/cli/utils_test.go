@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -347,7 +347,7 @@ func TestParseBckURI(t *testing.T) {
 		{uri: "https://web.url/dataset", bck: cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
 	}
 	for _, test := range positiveTests {
-		bck, err := parseBckURI(&cli.Context{}, test.uri)
+		bck, err := parseBckURI(&cli.Context{}, test.uri, true /*require provider*/)
 		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
 		tassert.Errorf(t, test.bck.Equal(&bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
 	}
@@ -370,7 +370,7 @@ func TestParseBckURI(t *testing.T) {
 		{uri: "ftp://unsupported"},
 	}
 	for _, test := range negativeTests {
-		bck, err := parseBckURI(&cli.Context{}, test.uri)
+		bck, err := parseBckURI(&cli.Context{}, test.uri, true /*require provider*/)
 		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q)", test.uri, bck)
 	}
 }

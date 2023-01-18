@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file provides advanced commands that are useful for testing or development but not everyday use.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -13,9 +13,8 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -38,33 +37,27 @@ var (
 		Usage: "special commands intended for development and advanced usage",
 		Subcommands: []cli.Command{
 			{
-				Name:      commandGenShards,
-				Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", dsort.DSortName),
+				Name: commandGenShards,
+				Usage: "generate and write random shards " +
+					"(e.g.: \"ais://dsort-testing/shard-{001..999}.tar\" - generate 999 shards)",
 				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
 				Flags:     advancedCmdsFlags[commandGenShards],
 				Action:    genShardsHandler,
 			},
-			{
-				Name:         apc.ActResilver,
-				Usage:        "start resilvering objects across all drives on one or all targets",
-				ArgsUsage:    optionalTargetIDArgument,
-				Flags:        startCmdsFlags[subcmdStartXaction],
-				Action:       startXactionHandler,
-				BashComplete: daemonCompletions(completeTargets),
-			},
+			jobStartResilver,
 			{
 				Name:         subcmdPreload,
 				Usage:        "preload object metadata into in-memory cache",
 				ArgsUsage:    bucketArgument,
 				Action:       loadLomCacheHandler,
-				BashComplete: bucketCompletions(),
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			{
 				Name:         subcmdRmSmap,
 				Usage:        "immediately remove node from cluster map (advanced usage - potential data loss)",
-				ArgsUsage:    daemonIDArgument,
+				ArgsUsage:    nodeIDArgument,
 				Action:       removeNodeFromSmap,
-				BashComplete: daemonCompletions(completeAllDaemons),
+				BashComplete: suggestAllNodes,
 			},
 		},
 	}
@@ -182,39 +175,37 @@ CreateShards:
 	return nil
 }
 
-func loadLomCacheHandler(c *cli.Context) (err error) {
-	var bck cmn.Bck
-
+func loadLomCacheHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket name")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	} else if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
+		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
-
-	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
-		return err
-	}
-
-	return startXaction(c, apc.ActLoadLomCache, bck, "")
-}
-
-func removeNodeFromSmap(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing daemon ID")
-	} else if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
-	}
-	daemonID := argDaemonID(c)
-	smap, err := api.GetClusterMap(apiBP)
+	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
 	if err != nil {
 		return err
 	}
-	node := smap.GetNode(daemonID)
-	if node == nil {
-		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
+	return startXaction(c, apc.ActLoadLomCache, bck, "")
+}
+
+func removeNodeFromSmap(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, c.Command.ArgsUsage)
 	}
+	if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "", c.Args()[1:])
+	}
+
+	sid, sname, err := getNodeIDName(c, c.Args().First())
+	if err != nil {
+		return err
+	}
+	smap, err := getClusterMap(c)
+	debug.AssertNoErr(err)
+	node := smap.GetNode(sid)
+	debug.Assert(node != nil)
 	if smap.IsPrimary(node) {
-		return fmt.Errorf("node %s is primary: cannot remove", daemonID)
+		return fmt.Errorf("%s is primary (cannot remove the primary node)", sname)
 	}
-	return api.RemoveNodeFromSmap(apiBP, daemonID)
+	return api.RemoveNodeFromSmap(apiBP, sid)
 }

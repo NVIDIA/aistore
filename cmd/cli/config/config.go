@@ -34,6 +34,10 @@ var (
 		"put":    "object put",
 		"ls":     "bucket ls",
 		"create": "bucket create",
+		"cp":     "bucket cp",
+		"start":  "job start",
+		"stop":   "job stop",
+		"wait":   "job wait",
 	}
 )
 
@@ -114,7 +118,8 @@ func Load() (*Config, error) {
 	cfg := &Config{}
 	if err := jsp.LoadAppConfig(ConfigDir, fname.CliConfig, &cfg); err != nil {
 		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to load config: %v", err)
+			return nil, fmt.Errorf("failed to load CLI config %q: %v",
+				filepath.Join(ConfigDir, fname.CliConfig), err)
 		}
 
 		// Use default config in case of error.
@@ -127,6 +132,10 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+func Reset() error {
+	return Save(&defaultConfig)
 }
 
 func Save(cfg *Config) error {

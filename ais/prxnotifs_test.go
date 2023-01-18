@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -88,7 +88,7 @@ var _ = Describe("Notifications xaction test", func() {
 			return n
 		}
 
-		baseXact = func(xactID string, counts ...int64) *xact.SnapExt {
+		baseXact = func(xactID string, counts ...int64) *cluster.Snap {
 			var (
 				objCount  int64
 				byteCount int64
@@ -99,22 +99,21 @@ var _ = Describe("Notifications xaction test", func() {
 			if len(counts) > 1 {
 				byteCount = counts[1]
 			}
-			return &xact.SnapExt{Snap: xact.Snap{
+			return &cluster.Snap{
 				ID: xactID,
-				Stats: xact.Stats{
+				Stats: cluster.Stats{
 					Bytes: byteCount,
 					Objs:  objCount,
-				},
-			}}
+				}}
 		}
 
-		finishedXact = func(xactID string, counts ...int64) (snap *xact.SnapExt) {
+		finishedXact = func(xactID string, counts ...int64) (snap *cluster.Snap) {
 			snap = baseXact(xactID, counts...)
 			snap.EndTime = time.Now()
 			return
 		}
 
-		abortedXact = func(xactID string, counts ...int64) (snap *xact.SnapExt) {
+		abortedXact = func(xactID string, counts ...int64) (snap *cluster.Snap) {
 			snap = finishedXact(xactID, counts...)
 			snap.AbortedX = true
 			return
@@ -209,7 +208,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err := n.handleProgress(nl, targets[target1ID], cos.MustMarshal(statsFirst), nil)
 			Expect(err).To(BeNil())
 			val, _ := nl.NodeStats().Load(target1ID)
-			snap, ok := val.(*xact.SnapExt)
+			snap, ok := val.(*cluster.Snap)
 			Expect(ok).To(BeTrue())
 			Expect(snap.Stats.Objs).To(BeEquivalentTo(initObjCount))
 			Expect(snap.Stats.Bytes).To(BeEquivalentTo(initByteCount))
@@ -218,7 +217,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err = n.handleFinished(nl, targets[target1ID], cos.MustMarshal(statsProgress), nil)
 			Expect(err).To(BeNil())
 			val, _ = nl.NodeStats().Load(target1ID)
-			snap, ok = val.(*xact.SnapExt)
+			snap, ok = val.(*cluster.Snap)
 			Expect(ok).To(BeTrue())
 			Expect(snap.Stats.Objs).To(BeEquivalentTo(updatedObjCount))
 			Expect(snap.Stats.Bytes).To(BeEquivalentTo(updatedByteCount))

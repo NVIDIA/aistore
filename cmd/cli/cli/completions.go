@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles bash completions for the CLI.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -18,8 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/downloader"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dload"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -27,14 +27,6 @@ import (
 //////////////////////
 // Cluster / Daemon //
 //////////////////////
-
-type daemonKindCompletion int
-
-const (
-	completeTargets daemonKindCompletion = iota
-	completeProxies
-	completeAllDaemons
-)
 
 var (
 	supportedBool = []string{"true", "false"}
@@ -69,6 +61,12 @@ var (
 		"replication.on_put":                  supportedBool,
 	}
 )
+
+// prints completion (TAB-TAB) error when calling AIS APIs
+func completionErr(c *cli.Context, err error) {
+	fmt.Fprintln(c.App.ErrWriter)
+	fmt.Fprintln(c.App.ErrWriter, formatErr(err))
+}
 
 func lastValueIsAccess(c *cli.Context) bool {
 	return lastValueIs(c, propCmpls[apc.PropBucketAccessAttrs])
@@ -137,23 +135,11 @@ func propValueCompletion(c *cli.Context) bool {
 	return true
 }
 
-func daemonCompletions(what daemonKindCompletion) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		if c.Command.Name != subcmdDsort && c.NArg() >= 1 {
-			// Daemon already given as argument
-			if c.NArg() >= 1 {
-				return
-			}
-		}
-		suggestDaemon(what)
-	}
-}
-
 func showConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
 		fmt.Println(subcmdCluster)
 		fmt.Println(subcmdCLI)
-		suggestDaemon(completeAllDaemons)
+		suggestAllNodes(c)
 		return
 	}
 	if c.Args().First() == subcmdCLI {
@@ -165,7 +151,7 @@ func showConfigCompletions(c *cli.Context) {
 		}
 		return
 	}
-	if c.NArg() == 1 { // daemon id only
+	if c.NArg() == 1 { // node id only
 		fmt.Println(cfgScopeInherited)
 		fmt.Println(cfgScopeLocal)
 		return
@@ -185,7 +171,7 @@ func configSectionCompletions(_ *cli.Context, cfgScope string) {
 	}
 	err = cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 		section := strings.Split(uniqueTag, ".")[0]
-		props.Add(section)
+		props.Set(section)
 		return nil, false
 	})
 	debug.AssertNoErr(err)
@@ -196,10 +182,10 @@ func configSectionCompletions(_ *cli.Context, cfgScope string) {
 
 func setNodeConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		suggestDaemon(completeAllDaemons)
+		suggestNode(c, allNodes)
 		return
 	}
-	if c.NArg() == 1 { // daemon id only
+	if c.NArg() == 1 { // node id only
 		fmt.Println(cfgScopeInherited)
 		fmt.Println(cfgScopeLocal)
 		return
@@ -209,14 +195,14 @@ func setNodeConfigCompletions(c *cli.Context) {
 		v      any = &config.ClusterConfig
 		props      = cos.NewStrSet()
 	)
-	if c.NArg() == 2 { // daemon id and scope
+	if c.NArg() == 2 { // node id and scope
 		if argLast(c) == cfgScopeLocal {
 			v = &config.LocalConfig
 		} else if argLast(c) == cfgScopeInherited {
 			fmt.Println(subcmdReset)
 		}
 		err := cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
-			props.Add(uniqueTag)
+			props.Set(uniqueTag)
 			return nil, false
 		})
 		debug.AssertNoErr(err)
@@ -230,19 +216,49 @@ func setNodeConfigCompletions(c *cli.Context) {
 	suggestUpdatableConfig(c)
 }
 
-func suggestDaemon(what daemonKindCompletion) {
-	smap, err := api.GetClusterMap(cliAPIParams(clusterURL))
+const (
+	allTargets = iota
+	allProxies
+	allNodes
+)
+
+func suggestTargetNodes(c *cli.Context) { suggestNode(c, allTargets) }
+func suggestProxyNodes(c *cli.Context)  { suggestNode(c, allProxies) }
+func suggestAllNodes(c *cli.Context)    { suggestNode(c, allNodes) }
+
+func suggestNode(c *cli.Context, ty int) {
+	smap, err := getClusterMap(c)
 	if err != nil {
+		completionErr(c, err)
 		return
 	}
-	if what != completeTargets {
-		for dae := range smap.Pmap {
-			fmt.Println(cluster.Pname(dae))
+	if _, _, err = getNodeIDName(c, argLast(c)); err == nil {
+		return // node already selected
+	}
+	if ty != allTargets {
+		for sid := range smap.Pmap {
+			fmt.Println(cluster.Pname(sid))
 		}
 	}
-	if what != completeProxies {
-		for dae := range smap.Tmap {
-			fmt.Println(cluster.Tname(dae))
+	if ty != allProxies {
+		for sid := range smap.Tmap {
+			fmt.Println(cluster.Tname(sid))
+		}
+	}
+}
+
+func showClusterCompletions(c *cli.Context) {
+	switch c.NArg() {
+	case 0:
+		fmt.Println(apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
+	case 1:
+		switch c.Args().Get(0) {
+		case apc.Proxy:
+			suggestProxyNodes(c)
+		case apc.Target:
+			suggestTargetNodes(c)
+		default:
+			suggestAllNodes(c)
 		}
 	}
 }
@@ -285,159 +301,101 @@ func suggestUpdatableConfig(c *cli.Context) {
 	}
 }
 
-////////////
-// Bucket //
-////////////
+//
+// Bucket
+//
 
-type bckCompletionsOpts struct {
+type bcmplop struct {
 	additionalCompletions []cli.BashCompleteFunc
-	withProviders         bool
-	multiple              bool
-	separator             bool
 	provider              string
 
 	// Index in args array where first bucket name is.
 	// For command "ais bucket ls bck1 bck2" value should be set to 0
 	// For command "ais object put file bck1" value should be set to 1
 	firstBucketIdx int
+	multiple       bool
+	separator      bool
+}
+
+func (opts *bcmplop) buckets(c *cli.Context) {
+	var (
+		additionalCompletions []cli.BashCompleteFunc
+		buckets               []cmn.Bck
+	)
+	additionalCompletions = opts.additionalCompletions
+	if c.NArg() > opts.firstBucketIdx && !opts.multiple {
+		if propValueCompletion(c) {
+			return
+		}
+		for _, f := range additionalCompletions {
+			f(c)
+		}
+		return
+	}
+
+	query := cmn.QueryBcks{Provider: opts.provider}
+	buckets, err := api.ListBuckets(apiBP, query, apc.FltPresent) // NOTE: `present` only
+	if err != nil {
+		completionErr(c, err)
+		return
+	}
+	if query.Provider == "" {
+		config, err := api.GetClusterConfig(apiBP)
+		if err != nil {
+			completionErr(c, err)
+			return
+		}
+		for provider := range config.Backend.Conf {
+			if provider == apc.AIS {
+				qbck := cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
+				fmt.Println(qbck)
+			} else {
+				fmt.Printf("%s://\n", apc.ToScheme(provider))
+			}
+		}
+	}
+	printNotUsedBuckets(c, buckets, opts.separator, opts.multiple)
 }
 
 // The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
-// Buckets will also be listed after the first argument was given if true is passed to the 'multiple' param
-// Buckets will contain a path separator '/' if true is passed to the 'separator' param
-func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		var (
-			multiple, separator, withProviders bool
-			argsProvider                       string
-			firstBucketIdx                     int
-			additionalCompletions              []cli.BashCompleteFunc
-
-			bucketsToPrint []cmn.Bck
-			providers      []string
-		)
-
-		if len(args) > 0 {
-			multiple, separator, withProviders = args[0].multiple, args[0].separator, args[0].withProviders
-			argsProvider = args[0].provider
-			additionalCompletions = args[0].additionalCompletions
-			firstBucketIdx = args[0].firstBucketIdx
-		}
-
-		if c.NArg() > firstBucketIdx && !multiple {
-			if propValueCompletion(c) {
-				return
-			}
-			for _, f := range additionalCompletions {
-				f(c)
-			}
-			return
-		}
-
-		query := cmn.QueryBcks{
-			Provider: argsProvider,
-		}
-
-		if query.Provider == "" {
-			config, err := api.GetClusterConfig(apiBP)
-			if err != nil {
-				return
-			}
-			providers = []string{apc.AIS, apc.HTTP}
-			for provider := range config.Backend.Conf {
-				providers = append(providers, provider)
-			}
-		} else {
-			providers = []string{query.Provider}
-		}
-
-		for _, provider := range providers {
-			query.Provider = provider
-			buckets, err := api.ListBuckets(apiBP, query, apc.FltPresent)
-			if err != nil {
-				return
-			}
-
-			bucketsToPrint = append(bucketsToPrint, buckets...)
-		}
-
-		sep := ""
-		if separator {
-			sep = "/"
-		}
-
-		printNotUsedBuckets := func(buckets []cmn.Bck) {
-			for _, bckToPrint := range buckets {
-				alreadyListed := false
-				if multiple {
-					for _, argBck := range c.Args() {
-						parsedArgBck, err := parseBckURI(c, argBck)
-						if err != nil {
-							return
-						}
-						if parsedArgBck.Equal(&bckToPrint) {
-							alreadyListed = true
-							break
-						}
-					}
-				}
-
-				if !alreadyListed {
-					var bckStr string
-					if bckToPrint.Ns.IsGlobal() {
-						bckStr = fmt.Sprintf("%s\\://%s", bckToPrint.Provider, bckToPrint.Name)
-					} else {
-						bckStr = fmt.Sprintf("%s\\://%s/%s", bckToPrint.Provider, bckToPrint.Ns, bckToPrint.Name)
-					}
-					fmt.Printf("%s%s\n", bckStr, sep)
-				}
-			}
-		}
-
-		if withProviders {
-			for _, p := range providers {
-				fmt.Printf("%s\\://\n", p)
-			}
-		}
-
-		printNotUsedBuckets(bucketsToPrint)
-	}
+// Multiple buckets will also be listed if 'multiple'
+// Printed names will end with '/' if 'separator'
+func bucketCompletions(opts bcmplop) cli.BashCompleteFunc {
+	return opts.buckets
 }
 
-// The function lists bucket names for commands that require old and new bucket name
-func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, separator bool,
-	provider ...string) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		if c.NArg() >= 2 {
-			for _, f := range additionalCompletions {
-				f(c)
+func printNotUsedBuckets(c *cli.Context, buckets []cmn.Bck, separator, multiple bool) {
+	var sep string
+	if separator {
+		sep = "/"
+	}
+mloop:
+	for _, b := range buckets {
+		if multiple {
+			for _, argBck := range c.Args() {
+				parsedArgBck, err := parseBckURI(c, argBck, true /*require provider*/)
+				if err != nil {
+					return
+				}
+				if parsedArgBck.Equal(&b) {
+					continue mloop // already listed
+				}
 			}
-			return
 		}
-
-		if c.NArg() == 1 {
-			return
-		}
-
-		p := ""
-		if len(provider) > 0 {
-			p = provider[0]
-		}
-		bucketCompletions(bckCompletionsOpts{separator: separator, provider: p})(c)
+		fmt.Printf("%s%s\n", b.DisplayName(), sep)
 	}
 }
 
 func manyBucketsCompletions(additionalCompletions []cli.BashCompleteFunc, firstBckIdx, bucketsCnt int) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		if c.NArg() < firstBckIdx || c.NArg() >= firstBckIdx+bucketsCnt {
-			// If before a bucket completion, suggest different.
+			// suggest different if before bucket completion
 			for _, f := range additionalCompletions {
 				f(c)
 			}
 		}
-
 		if c.NArg() >= firstBckIdx && c.NArg() < firstBckIdx+bucketsCnt {
-			bucketCompletions(bckCompletionsOpts{firstBucketIdx: firstBckIdx, multiple: true})(c)
+			bucketCompletions(bcmplop{firstBucketIdx: firstBckIdx, multiple: true})(c)
 			return
 		}
 	}
@@ -472,7 +430,8 @@ func bpropsFilterExtra(c *cli.Context, tag string) bool {
 
 func bucketAndPropsCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		bucketCompletions()
+		f := bucketCompletions(bcmplop{})
+		f(c)
 		return
 	} else if c.NArg() == 1 {
 		var props []string
@@ -492,9 +451,9 @@ func bucketAndPropsCompletions(c *cli.Context) {
 	}
 }
 
-////////////
-// Object //
-////////////
+//
+// Object
+//
 
 func putPromoteObjectCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
@@ -502,93 +461,132 @@ func putPromoteObjectCompletions(c *cli.Context) {
 		return
 	}
 	if c.NArg() == 1 {
-		bucketCompletions(bckCompletionsOpts{separator: true, firstBucketIdx: 1 /* bucket arg after file arg*/})(c)
+		f := bucketCompletions(bcmplop{
+			separator:      true,
+			firstBucketIdx: 1 /* bucket arg after file arg*/},
+		)
+		f(c)
 		return
 	}
 }
 
-/////////////
-// Xaction //
-/////////////
+//
+// Job
+//
 
-func daemonXactionCompletions(ctx *cli.Context) {
-	if ctx.NArg() > 2 {
-		return
-	}
-	xactSet := ctx.NArg() != 0
-	xactName := ctx.Args().First()
-	if ctx.NArg() == 0 {
-		daemonCompletions(completeTargets)(ctx)
-	} else {
-		smap, err := api.GetClusterMap(cliAPIParams(clusterURL))
+// complete to:
+// - NAME [running job or xaction ID] [TARGET], or
+// - NAME [TARGET]
+func runningJobCompletions(c *cli.Context) {
+	switch c.NArg() {
+	case 0: // 1. NAME
+		if flagIsSet(c, allJobsFlag) {
+			names := xact.ListDisplayNames(false /*only-startable*/)
+			names = append(names, dsort.DSortName)
+			sort.Strings(names)
+			fmt.Println(strings.Join(names, " "))
+			return
+		}
+		kindIDs, err := api.GetAllRunningXactions(apiBP, "")
 		if err != nil {
+			completionErr(c, err)
 			return
 		}
-		if node := smap.GetTarget(ctx.Args().First()); node != nil {
-			xactSet = false
-			xactName = ctx.Args().Get(1)
-		}
-	}
-	if !xactSet {
-		for kind := range xact.Table {
-			fmt.Println(kind)
-		}
-		return
-	}
-	if xact.IsBckScope(xactName) {
-		bucketCompletions()(ctx)
-		return
-	}
-}
-
-func xactionCompletions(cmd string) func(ctx *cli.Context) {
-	return func(c *cli.Context) {
-		if c.NArg() == 0 {
-			for kind, dtor := range xact.Table {
-				if (cmd != apc.ActXactStart) || (cmd == apc.ActXactStart && dtor.Startable) {
-					fmt.Println(kind)
-				}
+		already := cos.StrSet{}
+		for _, ki := range kindIDs {
+			i := strings.IndexByte(ki, xact.LeftID[0])
+			kind := ki[0:i]
+			if !already.Contains(kind) {
+				xname, _ := xact.GetKindName(kind)
+				fmt.Println(xname)
+				already.Set(kind)
 			}
+		}
+		// NOTE: dsort is the only exception - not an xaction
+		list, err := api.ListDSort(apiBP, "", true /*onlyActive*/)
+		if err != nil {
+			completionErr(c, err)
 			return
 		}
-		xactName := c.Args().First()
-		if xact.IsBckScope(xactName) {
-			bucketCompletions()(c)
+		if len(list) > 0 {
+			fmt.Println(subcmdDsort)
+		}
+		return
+	case 1: // ID
+		name := c.Args().Get(0)
+		switch name {
+		case subcmdDownload:
+			suggestDownloadID(c, (*dload.Job).JobRunning, 1 /*shift*/)
+			return
+		case subcmdDsort:
+			suggestDsortID(c, (*dsort.JobInfo).IsRunning, 1 /*shift*/)
+			return
+		case commandETL:
+			suggestEtlID(c, 1 /*shift*/)
 			return
 		}
+		// complete xactID
+		xactIDs, err := api.GetAllRunningXactions(apiBP, name)
+		if err != nil {
+			completionErr(c, err)
+			return
+		}
+		if len(xactIDs) == 0 {
+			suggestTargetNodes(c)
+			return
+		}
+		for _, ki := range xactIDs {
+			i := strings.IndexByte(ki, xact.LeftID[0])
+			fmt.Println(ki[i+1 : len(ki)-1]) // extract UUID from "name[UUID]"
+		}
+		return
+	case 2: // TARGET
+		suggestTargetNodes(c)
 	}
 }
 
-func xactionDesc(onlyStartable bool) string {
-	xactKinds := listXactions(onlyStartable)
-	return fmt.Sprintf("%s can be one of: %q", xactionArgument, strings.Join(xactKinds, ", "))
+// - [running rebalance ID] [TARGET], or
+// - [TARGET]
+func rebalanceCompletions(c *cli.Context) {
+	switch c.NArg() {
+	case 0:
+		xactIDs, err := api.GetAllRunningXactions(apiBP, apc.ActRebalance)
+		if err != nil {
+			completionErr(c, err)
+			return
+		}
+		if len(xactIDs) == 0 {
+			suggestTargetNodes(c)
+			return
+		}
+		for _, ki := range xactIDs {
+			i := strings.IndexByte(ki, xact.LeftID[0])
+			fmt.Println(ki[i+1 : len(ki)-1]) // extract UUID from "name[UUID]"
+		}
+		return
+	case 1:
+		suggestTargetNodes(c)
+	}
 }
 
-//////////////////////
-// Download / dSort //
-//////////////////////
+//
+// Download & dSort
+//
 
-func downloadIDAllCompletions(c *cli.Context) {
-	suggestDownloadID(c, func(*downloader.DlJobInfo) bool { return true })
-}
+func downloadIDFinishedCompletions(c *cli.Context) { suggestDownloadID(c, (*dload.Job).JobFinished, 0) }
 
-func downloadIDRunningCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*downloader.DlJobInfo).JobRunning)
-}
-
-func downloadIDFinishedCompletions(c *cli.Context) {
-	suggestDownloadID(c, (*downloader.DlJobInfo).JobFinished)
-}
-
-func suggestDownloadID(c *cli.Context, filter func(*downloader.DlJobInfo) bool) {
-	if c.NArg() > 0 {
+func suggestDownloadID(c *cli.Context, filter func(*dload.Job) bool, shift int) {
+	if c.NArg() > shift {
 		return
 	}
 	if flagIsSet(c, allJobsFlag) {
 		return
 	}
-
-	list, _ := api.DownloadGetList(apiBP, "")
+	list, err := api.DownloadGetList(apiBP, "", false /*onlyActive*/)
+	if err != nil {
+		completionErr(c, err)
+		return
+	}
 	for _, job := range list {
 		if filter(job) {
 			fmt.Println(job.ID)
@@ -596,25 +594,13 @@ func suggestDownloadID(c *cli.Context, filter func(*downloader.DlJobInfo) bool) 
 	}
 }
 
-func dsortIDAllCompletions(c *cli.Context) {
-	suggestDsortID(c, func(*dsort.JobInfo) bool { return true })
-}
+func dsortIDFinishedCompletions(c *cli.Context) { suggestDsortID(c, (*dsort.JobInfo).IsFinished, 0) }
 
-func dsortIDRunningCompletions(c *cli.Context) {
-	suggestDsortID(c, (*dsort.JobInfo).IsRunning)
-}
-
-func dsortIDFinishedCompletions(c *cli.Context) {
-	suggestDsortID(c, (*dsort.JobInfo).IsFinished)
-}
-
-func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
-	if c.NArg() > 0 {
+func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool, shift int) {
+	if c.NArg() > shift {
 		return
 	}
-
-	list, _ := api.ListDSort(apiBP, "")
-
+	list, _ := api.ListDSort(apiBP, "", false /*onlyActive*/)
 	for _, job := range list {
 		if filter(job) {
 			fmt.Println(job.ID)

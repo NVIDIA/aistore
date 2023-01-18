@@ -77,6 +77,7 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, items []stri
 }
 
 // Copy object (maybe from another bucket)
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
 func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3Obj, 0)
@@ -141,7 +142,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		cksumValue = cksum.Value()
 	}
 	result := s3.CopyObjectResult{
-		LastModified: s3.FormatTime(lom.Atime()),
+		LastModified: cos.FormatNanoTime(lom.AtimeUnix(), cos.ISO8601),
 		ETag:         cksumValue,
 	}
 	sgl := t.gmm.NewSGL(0)
@@ -298,10 +299,10 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	if v, ok := custom[cos.HdrContentType]; ok {
 		hdr.Set(cos.HdrContentType, v)
 	}
-	if op.Atime != 0 {
-		atime := time.Unix(0, op.Atime)
-		hdr.Set(cos.S3LastModified, atime.Format(time.RFC3339))
-	}
+	// e.g. https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_Examples
+	// (compare w/ `p.listObjectsS3()`
+	lastModified := cos.FormatNanoTime(op.Atime, cos.RFC1123GMT)
+	hdr.Set(cos.S3LastModified, lastModified)
 
 	// TODO: lom.Checksum() via apc.HeaderPrefix+apc.HdrObjCksumType/Val via
 	// s3 obj Metadata map[string]*string

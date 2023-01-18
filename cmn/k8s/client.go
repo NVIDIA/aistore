@@ -20,11 +20,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	tcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/remotecommand"
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
@@ -41,7 +39,6 @@ type (
 		Logs(podName string) ([]byte, error)
 		Health(podName string) (cpuCores float64, freeMem int64, err error)
 		CheckMetricsAvailability() error
-		ExecCmd(podName string, command []string, stdin io.Reader, stdout, stderr io.Writer) error
 	}
 
 	// defaultClient implements Client interface.
@@ -84,34 +81,6 @@ func (c *defaultClient) Create(v any) (err error) {
 		debug.FailTypeCast(v)
 	}
 	return
-}
-
-func (c *defaultClient) ExecCmd(podName string, command []string,
-	stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
-	req := c.client.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Namespace(c.namespace).
-		Name(podName).
-		SubResource("exec")
-	req.VersionedParams(
-		&corev1.PodExecOptions{
-			Command: []string{"bash", "-c", strings.Join(command, " ")},
-			Stdin:   stdin != nil,
-			Stdout:  true,
-			Stderr:  stderr != nil,
-			TTY:     false,
-		},
-		scheme.ParameterCodec,
-	)
-	exec, err := remotecommand.NewSPDYExecutor(c.config, "POST", req.URL())
-	if err != nil {
-		return err
-	}
-	return exec.Stream(remotecommand.StreamOptions{
-		Stdin:  stdin,
-		Stdout: stdout,
-		Stderr: stderr,
-	})
 }
 
 func (c *defaultClient) Delete(entityType, entityName string) (err error) {
@@ -200,7 +169,8 @@ func (*defaultClient) Health(podName string) (cpuCores float64, freeMem int64, e
 		return 0, 0, err
 	}
 
-	ms, err := mc.MetricsV1beta1().PodMetricses(metav1.NamespaceDefault).Get(context.Background(), podName, metav1.GetOptions{})
+	msgetter := mc.MetricsV1beta1().PodMetricses(metav1.NamespaceDefault)
+	ms, err := msgetter.Get(context.Background(), podName, metav1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.Status().Reason == metav1.StatusReasonNotFound {
 			err = cmn.NewErrNotFound("metrics for pod %q", podName)

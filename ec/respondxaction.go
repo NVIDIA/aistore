@@ -244,4 +244,5 @@ func (r *XactRespond) stop(err error) {
 	r.Finish(err)
 }
 
-func (r *XactRespond) Snap() cluster.XactSnap { return r.DemandBase.ExtSnap() }
+// (compare w/ XactGet/Put)
+func (r *XactRespond) Snap() *cluster.Snap { return r.baseSnap() }

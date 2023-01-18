@@ -45,6 +45,18 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &xactMsg) != nil {
 			return
 		}
+		debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
+
+		if what == apc.GetWhatAllRunningXacts {
+			out := xreg.GetAllRunning(xactMsg.Kind)
+			t.writeJSON(w, r, out, what)
+			return
+		}
+		if what != apc.GetWhatQueryXactStats {
+			t.writeErrf(w, r, fmtUnknownQue, what)
+			return
+		}
+
 		if xactMsg.Bck.Name != "" {
 			bck = cluster.CloneBck(&xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd); err != nil {
@@ -75,11 +87,13 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		switch msg.Action {
 		case apc.ActXactStart:
+			debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
 			if err := t.cmdXactStart(&xactMsg, bck); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		case apc.ActXactStop:
+			debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
 			err := cmn.ErrXactUserAbort
 			if msg.Name == cmn.ErrXactICNotifAbort.Error() {
 				err = cmn.ErrXactICNotifAbort
@@ -99,21 +113,20 @@ func (t *target) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid 
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}
-	xctn := xreg.GetXact(uuid)
+	xctn, err := xreg.GetXact(uuid)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
 	if xctn != nil {
 		t.writeJSON(w, r, xctn.Snap(), what)
 		return
 	}
-	err := cmn.NewErrXactNotFoundError("[" + uuid + "]")
+	err = cmn.NewErrXactNotFoundError("[" + uuid + "]")
 	t.writeErrSilent(w, r, err, http.StatusNotFound)
 }
 
 func (t *target) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.XactFilter) {
-	debug.Assert(what == apc.GetWhatQueryXactStats)
-	if what != apc.GetWhatQueryXactStats {
-		t.writeErrf(w, r, fmtUnknownQue, what)
-		return
-	}
 	stats, err := xreg.GetSnap(xactQuery)
 	if err == nil {
 		t.writeJSON(w, r, stats, what)
@@ -134,7 +147,7 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 		return fmt.Errorf(cmn.FmtErrUnknown, t, "xaction kind", xactMsg.Kind)
 	}
 
-	if dtor := xact.Table[xactMsg.Kind]; dtor.Scope == xact.ScopeBck && bck == nil {
+	if dtor := xact.Table[xactMsg.Kind]; dtor.Scope == xact.ScopeB && bck == nil {
 		return fmt.Errorf(erfmn, xactMsg.Kind)
 	}
 

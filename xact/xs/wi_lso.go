@@ -32,6 +32,8 @@ type (
 	}
 )
 
+func noopCb(*cluster.LOM) {}
+
 func isOK(status uint16) bool { return status == apc.LocOK }
 
 // TODO: `msg.StartAfter`
@@ -97,9 +99,7 @@ func (wi *walkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsoEntry) {
 		return
 	}
 	setWanted(e, lom, wi.msg.TimeFormat, wi.wanted)
-	if wi.lomVisitedCb != nil {
-		wi.lomVisitedCb(lom)
-	}
+	wi.lomVisitedCb(lom)
 	return
 }
 

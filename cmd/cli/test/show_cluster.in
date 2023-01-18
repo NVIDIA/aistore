@@ -1,4 +1,4 @@
 ais show cluster // IGNORE
 ais show cluster --json // IGNORE
 ais show cluster $RANDOM_TARGET // IGNORE
-ais show cluster FOO // FAIL "FOO is not a valid DAEMON_ID nor DAEMON_TYPE"
+ais show cluster FOO // FAIL "FOO is not a valid NODE_ID nor NODE_TYPE"

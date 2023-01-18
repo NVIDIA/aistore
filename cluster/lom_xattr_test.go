@@ -78,7 +78,7 @@ var _ = Describe("LOM Xattributes", func() {
 			testObjectName = "xattr-foldr/test-obj.ext"
 
 			// Bucket needs to have checksum enabled
-			localFQN  = mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN  = mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName+".qqq")
 			cachedFQN = mix.MakePathFQN(&cachedBck, fs.ObjectType, testObjectName)
 
 			fqns []string
@@ -86,18 +86,27 @@ var _ = Describe("LOM Xattributes", func() {
 
 		BeforeEach(func() {
 			fqns = []string{
-				copyMpathInfo.MakePathFQN(&localBck, fs.ObjectType, "copy/fqn"),
+				copyMpathInfo.MakePathFQN(&localBck, fs.ObjectType, "copy/111/fqn"),
 				copyMpathInfo.MakePathFQN(&localBck, fs.ObjectType, "other/copy/fqn"),
 			}
 
+			// NOTE:
+			// the test creates copies; there's a built-in assumption that `mi` will be
+			// the HRW mountpath,
+			// while `mi2` will not (and, therefore, can be used to place the copy).
+			// Ultimately, this depends on the specific HRW hash; adding
+			// Expect(lom.IsHRW()).To(Be...)) to catch that sooner.
+
 			for _, fqn := range fqns {
-				_ = filePut(fqn, testFileSize)
+				lom := filePut(fqn, testFileSize)
+				Expect(lom.IsHRW()).To(BeFalse())
 			}
 		})
 
 		Describe("Persist", func() {
 			It("should save correct meta to disk", func() {
 				lom := filePut(localFQN, testFileSize)
+				Expect(lom.IsHRW()).To(BeTrue())
 				lom.Lock(true)
 				defer lom.Unlock(true)
 				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
@@ -132,6 +141,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 			It("should _not_ save meta to disk", func() {
 				lom := filePut(cachedFQN, testFileSize)
+				Expect(lom.IsHRW()).To(BeTrue())
 				lom.Lock(true)
 				defer lom.Unlock(true)
 				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))

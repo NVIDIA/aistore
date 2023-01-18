@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 func prependTime(msg string) string {
-	return fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000000"), msg)
+	return fmt.Sprintf("[%s] %s", cos.FormatNowStamp(), msg)
 }
 
 func Logln(msg string) {

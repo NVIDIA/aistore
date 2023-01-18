@@ -1,11 +1,10 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,8 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/etl"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/NVIDIA/aistore/ext/etl"
 )
 
 func ETLInit(bp BaseParams, msg etl.InitMsg) (id string, err error) {
@@ -28,7 +26,7 @@ func ETLInit(bp BaseParams, msg etl.InitMsg) (id string, err error) {
 	}
 	err = reqParams.DoReqResp(&id)
 	FreeRp(reqParams)
-	return id, err
+	return
 }
 
 func ETLList(bp BaseParams) (list []etl.Info, err error) {
@@ -40,7 +38,28 @@ func ETLList(bp BaseParams) (list []etl.Info, err error) {
 	}
 	err = reqParams.DoReqResp(&list)
 	FreeRp(reqParams)
-	return list, err
+	return
+}
+
+func ETLGetInitMsg(params BaseParams, id string) (etl.InitMsg, error) {
+	params.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = params
+		reqParams.Path = apc.URLPathETL.Join(id)
+	}
+	r, err := reqParams.doReader()
+	FreeRp(reqParams)
+	if err != nil {
+		return nil, err
+	}
+	defer cos.Close(r)
+
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response, err: %w", err)
+	}
+	return etl.UnmarshalInitMsg(b)
 }
 
 func ETLLogs(bp BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg, err error) {
@@ -58,7 +77,7 @@ func ETLLogs(bp BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg
 	}
 	err = reqParams.DoReqResp(&logs)
 	FreeRp(reqParams)
-	return logs, err
+	return
 }
 
 func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err error) {
@@ -71,60 +90,18 @@ func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err err
 	}
 	err = reqParams.DoReqResp(&healths)
 	FreeRp(reqParams)
-	return healths, err
+	return
 }
 
 func ETLDelete(bp BaseParams, id string) (err error) {
 	bp.Method = http.MethodDelete
-	path := apc.URLPathETL.Join(id)
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = path
+		reqParams.Path = apc.URLPathETL.Join(id)
 	}
 	err = reqParams.DoRequest()
 	FreeRp(reqParams)
-	return
-}
-
-func ETLGetInitMsg(params BaseParams, id string) (initMsg etl.InitMsg, err error) {
-	params.Method = http.MethodGet
-	path := apc.URLPathETL.Join(id)
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = params
-		reqParams.Path = path
-	}
-	r, err := reqParams.doReader()
-	FreeRp(reqParams)
-	if err != nil {
-		return nil, err
-	}
-	defer cos.Close(r)
-
-	b, err := io.ReadAll(r)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response, err: %w", err)
-	}
-
-	// TODO -- FIXME: optmize out
-	var msgInf map[string]json.RawMessage
-	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
-		return
-	}
-
-	if _, ok := msgInf["code"]; ok {
-		initMsg = &etl.InitCodeMsg{}
-		err = jsoniter.Unmarshal(b, initMsg)
-		return
-	}
-
-	if _, ok := msgInf["spec"]; !ok {
-		err = fmt.Errorf("invalid response body: %+v", msgInf)
-		return
-	}
-	initMsg = &etl.InitSpecMsg{}
-	err = jsoniter.Unmarshal(b, initMsg)
 	return
 }
 
@@ -145,14 +122,14 @@ func etlPostAction(bp BaseParams, id, action string) (err error) {
 	}
 	err = reqParams.DoRequest()
 	FreeRp(reqParams)
-	return err
+	return
 }
 
 // TODO: add ETL-specific query param and change the examples/docs (!4455)
-func ETLObject(bp BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {
+func ETLObject(bp BaseParams, etlName string, bck cmn.Bck, objName string, w io.Writer) (err error) {
 	_, err = GetObject(bp, bck, objName, GetObjectInput{
 		Writer: w,
-		Query:  url.Values{apc.QparamUUID: []string{id}},
+		Query:  url.Values{apc.QparamUUID: []string{etlName}}, // TODO -- FIXME: use apc.QparamETLName
 	})
 	return
 }

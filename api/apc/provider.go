@@ -38,6 +38,14 @@ var Providers = cos.NewStrSet(AIS, GCP, AWS, Azure, HDFS, HTTP)
 
 func IsProvider(p string) bool { return Providers.Contains(p) }
 
+func IsCloudProvider(p string) bool {
+	return p == AWS || p == GCP || p == Azure
+}
+
+func IsRemoteProvider(p string) bool {
+	return IsCloudProvider(p) || p == HDFS || p == HTTP
+}
+
 func ToScheme(p string) string {
 	debug.Assert(IsProvider(p))
 	switch p {

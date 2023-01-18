@@ -94,10 +94,10 @@ Bucket creation operation allows to override the **inherited defaults**, which i
 Example specifying (non-default) bucket properties at creation time:
 
 ```console
-$ ais bucket create ais://abc --bucket-props="lru.enabled=false mirror.enabled=true mirror.copies=4"
+$ ais bucket create ais://abc --props="lru.enabled=false mirror.enabled=true mirror.copies=4"
 
 # or, same using JSON:
-$ ais bucket create ais://abc --bucket-props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
+$ ais bucket create ais://abc --props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
 ```
 
 ### Inherited Bucket Properties and LRU
@@ -324,12 +324,14 @@ $ ais bucket create ais://images
 $ ais job start download "gs://pub-images/images-train-{000000..000001}.tar" ais://images/
 Z8WkHxwIrr
 Run `ais show job download Z8WkHxwIrr` to monitor the progress of downloading.
-$ ais job wait download Z8WkHxwIrr
+$ ais job wait download Z8WkHxwIrr # or, same: ais wait Z8WkHxwIrr
 $ ais bucket ls ais://images
 NAME                         SIZE
 images-train-000000.tar      964.77MiB
 images-train-000001.tar      964.74MiB
 ```
+
+> Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais job start download` can be expressed as `ais start download`, while `ais job wait copy-bucket Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
 
 ### Remote AIS cluster
 

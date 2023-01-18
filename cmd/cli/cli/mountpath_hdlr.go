@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file provides commands that show and update bucket properties and configuration.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -39,34 +39,34 @@ var (
 			{
 				Name:         subcmdMpathAttach,
 				Usage:        "attach mountpath (i.e., formatted disk or RAID) to a target node",
-				ArgsUsage:    daemonMountpathPairArgument,
+				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathAttach],
 				Action:       mpathAttachHandler,
-				BashComplete: daemonCompletions(completeTargets),
+				BashComplete: suggestTargetNodes,
 			},
 			{
 				Name:         subcmdMpathEnable,
 				Usage:        "(re)enable target's mountpath",
-				ArgsUsage:    daemonMountpathPairArgument,
+				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathEnable],
 				Action:       mpathEnableHandler,
-				BashComplete: daemonCompletions(completeTargets),
+				BashComplete: suggestTargetNodes,
 			},
 			{
 				Name:         subcmdMpathDetach,
 				Usage:        "detach mountpath (i.e., formatted disk or RAID) from a target node",
-				ArgsUsage:    daemonMountpathPairArgument,
+				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathDetach],
 				Action:       mpathDetachHandler,
-				BashComplete: daemonCompletions(completeTargets),
+				BashComplete: suggestTargetNodes,
 			},
 			{
 				Name:         subcmdMpathDisable,
 				Usage:        "disable mountpath (deactivate but keep in a target's volume)",
-				ArgsUsage:    daemonMountpathPairArgument,
+				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[subcmdMpathDisable],
 				Action:       mpathDisableHandler,
-				BashComplete: daemonCompletions(completeTargets),
+				BashComplete: suggestTargetNodes,
 			},
 		},
 	}
@@ -79,9 +79,9 @@ func mpathDisableHandler(c *cli.Context) (err error) { return mpathAction(c, apc
 
 func mpathAction(c *cli.Context, action string) error {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, daemonMountpathPairArgument)
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	smap, errMap := fillMap()
+	smap, errMap := fillNodeStatusMap(c)
 	if errMap != nil {
 		return errMap
 	}

@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -32,20 +32,13 @@ var (
 	_ xreg.Renewable = (*etlFactory)(nil)
 )
 
-////////////////
-// etlFactory //
-////////////////
-
 func (*etlFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 	return &etlFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
 func (p *etlFactory) Start() error {
-	uuid := p.Args.UUID
-	if uuid == "" {
-		uuid = cos.GenUUID()
-	}
-	p.xctn = newETL(uuid, p.Kind())
+	debug.Assert(cos.IsValidUUID(p.Args.UUID), p.Args.UUID)
+	p.xctn = newETL(p.Args.UUID, p.Kind())
 	return nil
 }
 
@@ -53,13 +46,10 @@ func (*etlFactory) Kind() string        { return apc.ActETLInline }
 func (p *etlFactory) Get() cluster.Xact { return p.xctn }
 
 func (*etlFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
-	// TODO: check xprev and reinforce
 	return xreg.WprKeepAndStartNew, nil
 }
 
-/////////////////
-// ETL xaction //
-/////////////////
+// (tests only)
 
 func newETL(id, kind string) (xctn *xactETL) {
 	xctn = &xactETL{}
@@ -68,3 +58,11 @@ func newETL(id, kind string) (xctn *xactETL) {
 }
 
 func (*xactETL) Run(*sync.WaitGroup) { debug.Assert(false) }
+
+func (r *xactETL) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
+}

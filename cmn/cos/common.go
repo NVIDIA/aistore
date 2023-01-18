@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -31,14 +30,10 @@ const (
 	TiB = 1024 * GiB
 )
 
-// assorted common constants
+const MLCG32 = 1103515245 // xxhash seed
+
+// permissions
 const (
-	SizeofI64 = int(unsafe.Sizeof(uint64(0)))
-	SizeofI32 = int(unsafe.Sizeof(uint32(0)))
-	SizeofI16 = int(unsafe.Sizeof(uint16(0)))
-
-	MLCG32 = 1103515245 // xxhash seed
-
 	PermRWR       os.FileMode = 0o640 // POSIX perms
 	PermRWXRX     os.FileMode = 0o750
 	configDirMode             = PermRWXRX | os.ModeDir
@@ -229,6 +224,10 @@ func (ss StrSet) ToSlice() []string {
 	return keys
 }
 
+func (ss StrSet) Set(key string) {
+	ss[key] = struct{}{}
+}
+
 func (ss StrSet) Add(keys ...string) {
 	for _, key := range keys {
 		ss[key] = struct{}{}
@@ -248,7 +247,7 @@ func (ss StrSet) Intersection(other StrSet) StrSet {
 	result := make(StrSet)
 	for key := range ss {
 		if other.Contains(key) {
-			result.Add(key)
+			result.Set(key)
 		}
 	}
 	return result
@@ -323,12 +322,8 @@ func FreeMemToOS(d ...time.Duration) {
 
 // (common use)
 func Plural(num int) (s string) {
-	if num > 1 {
+	if num != 1 {
 		s = "s"
 	}
 	return
 }
-
-// UnsafeS casts bytes to an immutable string.
-// ***** CAUTION! the resulting string must never change *****
-func UnsafeS(b []byte) string { return *(*string)(unsafe.Pointer(&b)) }

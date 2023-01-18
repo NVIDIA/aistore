@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -16,15 +16,6 @@ import (
 
 var (
 	storageCmdFlags = map[string][]cli.Flag{
-		subcmdStgSummary: append(
-			longRunFlags,
-			listObjCachedFlag,
-			allObjsOrBcksFlag,
-			sizeInBytesFlag,
-			verboseFlag,
-		),
-		subcmdStgValidate:  {},
-		subcmdStgMountpath: {},
 		subcmdStgCleanup: {
 			waitFlag,
 			waitTimeoutFlag,
@@ -43,7 +34,7 @@ var (
 				ArgsUsage:    listAnyCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgValidate],
 				Action:       showMisplacedAndMore,
-				BashComplete: bucketCompletions(),
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			mpathCmd,
 			showCmdDisk,
@@ -53,7 +44,7 @@ var (
 				ArgsUsage:    listAnyCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgCleanup],
 				Action:       cleanupStorageHandler,
-				BashComplete: bucketCompletions(),
+				BashComplete: bucketCompletions(bcmplop{}),
 			},
 		},
 	}
@@ -65,7 +56,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 		id  string
 	)
 	if c.NArg() != 0 {
-		bck, err = parseBckURI(c, c.Args().First())
+		bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/)
 		if err != nil {
 			return
 		}
@@ -80,7 +71,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 
 	if !flagIsSet(c, waitFlag) {
 		if id != "" {
-			fmt.Fprintf(c.App.Writer, "Started storage cleanup %q, %s\n", id, xactProgressMsg(id))
+			fmt.Fprintf(c.App.Writer, "Started storage cleanup %q. %s\n", id, toMonitorMsg(c, id))
 		} else {
 			fmt.Fprintf(c.App.Writer, "Started storage cleanup\n")
 		}

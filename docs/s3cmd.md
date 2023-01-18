@@ -70,7 +70,7 @@ delete: 's3://my-s3-bucket/README.md'
   - [1. AIS Endpoint](#1-ais-endpoint)
   - [2. How to have `s3cmd` calling AIS endpoint](#2-how-to-have-s3cmd-calling-ais-endpoint)
   - [3. Alternatively](#3-alternatively)
-  - [4. Notice and possibly update AIS configuration](#4-notice-and-possibly-update-ais-configuration)
+  - [4. Note and, possibly, update AIS configuration](#4-note-and-possibly-update-ais-configuration)
   - [5. Create bucket and PUT/GET objects using `s3cmd`](#5-create-bucket-and-putget-objects-using-s3cmd)
   - [6. Multipart upload using `s3cmd`](#6-multipart-upload-using-s3cmd)
 - [S3 URI and Further References](#s3-uri-and-further-references)
@@ -194,7 +194,7 @@ $ s3cmd put README.md s3://mmm/saved-readme.md --no-ssl --host=10.10.0.1:51080/s
 
 Goes without saying that, as long as `.s3cfg` keeps pointing to `s3.amazonaws.com`, the `--host` and `--host-bucket` must be explicitly specified in every `s3cmd` command.
 
-### 4. Notice and possibly update AIS configuration
+### 4. Note and, possibly, update AIS configuration
 
 This next step actually depends on the AIStore configuration - the configuration of the cluster we intend to use with `s3cmd` client.
 

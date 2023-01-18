@@ -40,9 +40,9 @@ Technically, the service supports running user-provided ETL containers **and** c
   - [Compute the MD5 of the object](/docs/tutorials/etl/compute_md5.md)
 * For a quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)
 * For initializing ETLs with AIStore Python SDK, see:
-  - [Python SDK ETL Usage Docs](https://github.com/NVIDIA/aistore/tree/master/sdk/python#etls)
-  - [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/sdk/python/examples/ais-etl)
-  - [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/sdk/sdk-etl-tutorial.ipynb)
+  - [Python SDK ETL Usage Docs](https://github.com/NVIDIA/aistore/tree/master/python/aistore#etls)
+  - [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/python/aistore/examples/ais-etl)
+  - [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/sdk/sdk-etl-tutorial.ipynb)
 
 
 The rest of this text is organized as follows:
@@ -52,11 +52,13 @@ The rest of this text is organized as follows:
 - [Inline ETL example](#inline-etl-example)
 - [Offline ETL example](#offline-etl-example)
 - [Kubernetes Deployment](#kubernetes-deployment)
-- [Defining and initializing ETL](#defining-and-initializing-etl)
-  - [*init code* request](#init-code-request)
-    - [`transform` function](#transform-function)
-    - [Runtimes](#runtimes)
-  - [*init spec* request](#init-spec-request)
+- [Extract, Transform and Load using user-defined functions](#extract-transform-and-load-using-user-defined-functions)
+- [Extract, Transform and Load using custom containers](#extract-transform-and-load-using-custom-containers)
+- [*init code* request](#init-code-request)
+  - [`hpush://` communication](#hpush-communication)
+  - [`io://` communication](#io-communication)
+  - [Runtimes](#runtimes)
+- [*init spec* request](#init-spec-request)
     - [Requirements](#requirements)
     - [Specification YAML](#specification-yaml)
     - [Required or additional fields](#required-or-additional-fields)
@@ -142,13 +144,13 @@ In effect, a user can skip the entire step of writing their Dockerfile and build
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-For a detailed step-by-step tutorial on *init code* requests, please see [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/sdk/sdk-etl-tutorial.ipynb) and [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/sdk/python/examples/ais-etl).
+For a detailed step-by-step tutorial on *init code* requests, please see [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/sdk/sdk-etl-tutorial.ipynb) and [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/python/aistore/examples/ais-etl).
 
 The `init_code` request currently supports two communication types:
 
 ### `hpush://` communication
 
-In `hpush` communication type, the user has to define a function that takes bytes as a parameter, processes it and returns bytes. e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_md5_hpush.py)
+In `hpush` communication type, the user has to define a function that takes bytes as a parameter, processes it and returns bytes. e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/ais-etl/etl_md5_hpush.py)
 
 ```python
 def transform(input_bytes: bytes) -> bytes
@@ -166,7 +168,7 @@ def after(context: Dict[str, object]) -> bytes
 
 You can also stream objects in `transform()` by setting the `CHUNK_SIZE` parameter (`CHUNK_SIZE` > 0).
 
-e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_md5_hpush.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_torchvision_hpush.py).
+e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/ais-etl/etl_md5_hpush.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/ais-etl/etl_torchvision_hpush.py).
 
 > **Note:**
 >- `before(context)` and `after(context)` functions are optional and not always needed.
@@ -184,7 +186,7 @@ def transform() -> None:
     sys.stdout.buffer.write(output_bytes)
 ```
 
-e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_md5_io.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/sdk/python/examples/ais-etl/etl_torchvision_io.py)
+e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/ais-etl/etl_md5_io.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/ais-etl/etl_torchvision_io.py)
 
 ### Runtimes
 
@@ -197,6 +199,7 @@ Currently, the following runtimes are supported:
 | --- | --- |
 | `python3.8v2` | `python:3.8` is used to run the code. |
 | `python3.10v2` | `python:3.10` is used to run the code. |
+| `python3.11v2` | `python:3.11` is used to run the code. |
 
 More *runtimes* will be added in the future, with plans to support the most popular ETL toolchains.
 Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your ETL container and deploy it via [*init spec* request](#init-spec-request).

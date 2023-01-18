@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -79,14 +79,17 @@ func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
 // bsummXact //
 ///////////////
 
-func (r *bsummXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) }
-
 func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	var (
 		err error
 		si  *cluster.Snode
 	)
 	rwg.Done()
+	if r.Bck() == nil || r.Bck().IsEmpty() {
+		glog.Infof("%s - all buckets", r.Name())
+	} else {
+		glog.Infof("%s - bucket(s) %s", r.Name(), r.Bck().Bucket())
+	}
 	if r.totalDisksSize, err = fs.GetTotalDisksSize(); err != nil {
 		r.updRes(err)
 		return
@@ -158,7 +161,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 
 	// 2. walk local pages
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
-	npg := newNpgCtx(r.t, bck, lsmsg, r.objsAdd)
+	npg := newNpgCtx(r.t, bck, lsmsg, r.LomAdd)
 	for {
 		npg.page.Entries = allocLsoEntries()
 		if err := npg.nextPageA(); err != nil {
@@ -189,7 +192,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	// 3. npg remote
 	lsmsg = &apc.LsoMsg{Props: apc.GetPropsSize}
 	for {
-		npg := newNpgCtx(r.t, bck, lsmsg, nil /*lomVisitedCb*/)
+		npg := newNpgCtx(r.t, bck, lsmsg, noopCb)
 		nentries := allocLsoEntries()
 		lst, err := npg.nextPageR(nentries)
 		if err != nil {
@@ -248,4 +251,12 @@ func (r *bsummXact) Result() (any, error) {
 		return nil, errors.New("no result to load")
 	}
 	return ts.Result, ts.Err
+}
+
+func (r *bsummXact) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
 }

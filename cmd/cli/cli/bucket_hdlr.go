@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"text/template"
@@ -21,8 +22,16 @@ import (
 
 const (
 	errFmtSameBucket = "cannot %s bucket %q onto itself"
-	errFmtExclusive  = "flags %q and %q are mutually exclusive"
+	errFmtExclusive  = "flags %s and %s are mutually exclusive"
 )
+
+var examplesBckSetProps = `
+Usage examples:
+- ais bucket props set [BUCKET] checksum.type=xxhash
+- ais bucket props set ais://nnn checksum.type=md5 checksum.validate_warm_get=true
+- ais bucket props [BUCKET] checksum
+  (see docs/cli for details)
+`
 
 var (
 	// flags
@@ -62,7 +71,7 @@ var (
 			templateFlag,
 			prefixFlag,
 			pageSizeFlag,
-			objPropsLsFlag,
+			objPropsFlag,
 			objLimitFlag,
 			showUnmatchedFlag,
 			allObjsOrBcksFlag,
@@ -99,7 +108,7 @@ var (
 		Action:       listAnyHandler,
 		ArgsUsage:    listAnyCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
-		BashComplete: bucketCompletions(bckCompletionsOpts{withProviders: true}),
+		BashComplete: bucketCompletions(bcmplop{}),
 	}
 
 	bucketCmdSummary = cli.Command{
@@ -108,29 +117,45 @@ var (
 		ArgsUsage:    optionalBucketArgument,
 		Flags:        bucketCmdsFlags[subcmdSummary],
 		Action:       summaryBucketHandler,
-		BashComplete: bucketCompletions(),
+		BashComplete: bucketCompletions(bcmplop{}),
 	}
 
 	bucketCmdLRU = cli.Command{
 		Name:         subcmdLRU,
-		Usage:        "show LRU settings for a bucket; enable or disable LRU eviction",
+		Usage:        "show bucket's LRU configuration; enable or disable LRU eviction",
 		ArgsUsage:    optionalBucketArgument,
 		Flags:        bucketCmdsFlags[subcmdLRU],
 		Action:       lruBucketHandler,
-		BashComplete: bucketCompletions(),
+		BashComplete: bucketCompletions(bcmplop{}),
 	}
 	bucketObjCmdEvict = cli.Command{
 		Name:         commandEvict,
-		Usage:        "evict objects from buckets and entire buckets",
+		Usage:        "evict all or selected objects from a bucket",
 		ArgsUsage:    optionalObjectsArgument,
 		Flags:        bucketCmdsFlags[commandEvict],
 		Action:       evictHandler,
-		BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
+		BashComplete: bucketCompletions(bcmplop{multiple: true}),
+	}
+	bucketCmdCopy = cli.Command{
+		Name:         commandCopy,
+		Usage:        "copy bucket",
+		ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument,
+		Flags:        bucketCmdsFlags[commandCopy],
+		Action:       copyBucketHandler,
+		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
+	}
+	bucketCmdRename = cli.Command{
+		Name:         commandRename,
+		Usage:        "rename/move ais bucket",
+		ArgsUsage:    bucketArgument + " " + bucketNewArgument,
+		Flags:        bucketCmdsFlags[commandRename],
+		Action:       mvBucketHandler,
+		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
 	}
 
 	bucketCmd = cli.Command{
 		Name:  commandBucket,
-		Usage: "create/destroy buckets, list bucket's content, show existing buckets and their properties",
+		Usage: "create/destroy buckets, list bucket contents, show existing buckets and their properties",
 		Subcommands: []cli.Command{
 			bucketsObjectsCmdList,
 			bucketCmdSummary,
@@ -144,33 +169,15 @@ var (
 				Flags:     bucketCmdsFlags[commandCreate],
 				Action:    createBucketHandler,
 			},
-			{
-				Name:         commandCopy,
-				Usage:        "copy bucket",
-				ArgsUsage:    "SRC_BUCKET DST_BUCKET",
-				Flags:        bucketCmdsFlags[commandCopy],
-				Action:       copyBucketHandler,
-				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
-			},
-			{
-				Name:      commandRename,
-				Usage:     "rename/move ais bucket",
-				ArgsUsage: "BUCKET NEW_BUCKET",
-				Flags:     bucketCmdsFlags[commandRename],
-				Action:    mvBucketHandler,
-				BashComplete: oldAndNewBucketCompletions(
-					[]cli.BashCompleteFunc{},
-					false, /* separator */
-					apc.AIS,
-				),
-			},
+			bucketCmdCopy,
+			bucketCmdRename,
 			{
 				Name:      commandRemove,
 				Usage:     "remove ais buckets",
 				ArgsUsage: bucketsArgument,
 				Flags:     bucketCmdsFlags[commandRemove],
 				Action:    removeBucketHandler,
-				BashComplete: bucketCompletions(bckCompletionsOpts{
+				BashComplete: bucketCompletions(bcmplop{
 					multiple: true, provider: apc.AIS,
 				}),
 			},
@@ -186,7 +193,7 @@ var (
 						Flags:     bucketCmdsFlags[subcmdSetProps],
 						Action:    setPropsHandler,
 						BashComplete: bucketCompletions(
-							bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
+							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 						),
 					},
 					{
@@ -196,7 +203,7 @@ var (
 						Flags:     bucketCmdsFlags[subcmdResetProps],
 						Action:    resetPropsHandler,
 						BashComplete: bucketCompletions(
-							bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
+							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 						),
 					},
 					makeAlias(showCmdBucket, "", true, commandShow),
@@ -302,15 +309,13 @@ func summaryBucketHandler(c *cli.Context) (err error) {
 	return showBucketSummary(c)
 }
 
+// (compare with listBckTableWithSummary)
 func showBucketSummary(c *cli.Context) error {
 	queryBcks, err := parseQueryBckURI(c, c.Args().First())
 	if err != nil {
 		return err
 	}
-	if err := updateLongRunParams(c); err != nil {
-		return err
-	}
-
+	setLongRunParams(c)
 	summaries, err := getSummaries(queryBcks, flagIsSet(c, listObjCachedFlag), flagIsSet(c, allObjsOrBcksFlag))
 	if err != nil {
 		return err
@@ -323,7 +328,7 @@ func showBucketSummary(c *cli.Context) error {
 	return tmpls.Print(summaries, c.App.Writer, tmpls.BucketsSummariesTmpl, altMap, false)
 }
 
-// NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets`)
+// NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
 func getSummaries(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.AllBsummResults, err error) {
 	fDetails := func() (err error) {
 		msg := &cmn.BsummCtrlMsg{ObjCached: cachedObjs, BckPresent: !allBuckets, Fast: false}
@@ -356,10 +361,10 @@ func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
 	return copyBucket(c, bckFrom, bckTo, msg)
 }
 
-func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs string, etlID ...string) (err error) {
+func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs string, etlName ...string) (err error) {
 	operation := "Copying objects"
 	if listObjs != "" && tmplObjs != "" {
-		return incorrectUsageMsg(c, errFmtExclusive, listFlag.Name, templateFlag.Name)
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
 	var lrMsg cmn.SelectObjsMsg
 	if listObjs != "" {
@@ -376,13 +381,14 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 	}
 	msg.DryRun = flagIsSet(c, cpBckDryRunFlag)
 	if flagIsSet(c, etlBucketRequestTimeout) {
-		msg.RequestTimeout = cos.Duration(etlBucketRequestTimeout.Value)
+		msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
 	}
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
+
 	var xactID string
-	if len(etlID) != 0 {
-		msg.ID = etlID[0]
-		operation = "ETL objects"
+	if len(etlName) != 0 {
+		msg.Name = etlName[0]
+		operation = "Transforming objects"
 		xactID, err = api.ETLMultiObj(apiBP, fromBck, msg)
 	} else {
 		xactID, err = api.CopyMultiObj(apiBP, fromBck, msg)
@@ -391,10 +397,13 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 		return err
 	}
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck, toBck, apc.ActCopyBck, toBck)
+		baseMsg := fmt.Sprintf("%s %s => %s. ", operation, fromBck, toBck)
+		actionDone(c, baseMsg+toMonitorMsg(c, xactID))
 		return nil
 	}
-	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck, toBck)
+
+	// wait
+	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, operation, fromBck, toBck)
 	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyObjects}
 	if err = api.WaitForXactionIdle(apiBP, wargs); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
@@ -406,7 +415,7 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 
 func copyBucketHandler(c *cli.Context) (err error) {
 	dryRun := flagIsSet(c, cpBckDryRunFlag)
-	bckFrom, bckTo, err := parseBcks(c)
+	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
 	if err != nil {
 		return err
 	}
@@ -434,7 +443,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 
 	// Copy matching objects
 	if listObjs != "" && tmplObjs != "" {
-		return incorrectUsageMsg(c, errFmtExclusive, listFlag.Name, templateFlag.Name)
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
 	if dryRun {
 		var msg string
@@ -449,7 +458,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 }
 
 func mvBucketHandler(c *cli.Context) error {
-	bckFrom, bckTo, err := parseBcks(c)
+	bckFrom, bckTo, err := parseBcks(c, bucketArgument, bucketNewArgument, 0 /*shift*/)
 	if err != nil {
 		return err
 	}
@@ -472,7 +481,7 @@ func evictHandler(c *cli.Context) (err error) {
 	printDryRunHeader(c)
 
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket name")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	// Bucket argument provided by the user.
@@ -485,11 +494,11 @@ func evictHandler(c *cli.Context) (err error) {
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			if objName != "" {
 				return incorrectUsageMsg(c,
-					"object name (%q) cannot be used together with --list and/or --template flags",
-					objName)
+					"object name (%q) cannot be used together with %s and/or %s flags",
+					objName, qflprn(listFlag), qflprn(templateFlag))
 			}
 			// List or range operation on a given bucket.
-			return listOrRangeOp(c, commandEvict, bck)
+			return listOrRangeOp(c, bck)
 		}
 		if objName == "" {
 			// Evict entire bucket.
@@ -510,7 +519,7 @@ func evictHandler(c *cli.Context) (err error) {
 }
 
 func resetPropsHandler(c *cli.Context) error {
-	bck, err := parseBckURI(c, c.Args().First())
+	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
 	if err != nil {
 		return err
 	}
@@ -521,12 +530,12 @@ func resetPropsHandler(c *cli.Context) error {
 	return nil
 }
 
-func lruBucketHandler(c *cli.Context) (err error) {
-	var p *cmn.BucketProps
-	bck, err := parseBckURI(c, c.Args().First())
+func lruBucketHandler(c *cli.Context) error {
+	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
 	if err != nil {
 		return err
 	}
+	var p *cmn.BucketProps
 	if p, err = headBucket(bck, true /* don't add */); err != nil {
 		return err
 	}
@@ -562,7 +571,7 @@ func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (er
 
 func setPropsHandler(c *cli.Context) (err error) {
 	var currProps *cmn.BucketProps
-	bck, err := parseBckURI(c, c.Args().First())
+	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
 	if err != nil {
 		return err
 	}
@@ -571,7 +580,11 @@ func setPropsHandler(c *cli.Context) (err error) {
 	}
 	newProps, err := parseBckPropsFromContext(c)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "missing") || strings.Contains(err.Error(), "invalid property") {
+			actionWarn(c, err.Error()+"\n")
+			_ = showBucketProps(c) //nolint:errcheck // returning orig. error
+		}
+		return fmt.Errorf("%v%s", err, examplesBckSetProps)
 	}
 	newProps.Force = flagIsSet(c, forceFlag)
 
@@ -587,7 +600,11 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, upd
 		return nil
 	}
 	if _, err = api.SetBucketProps(apiBP, bck, updateProps); err != nil {
-		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET -v\"", cliName, commandShow, subcmdShowBucket)
+		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
+			return herr
+		}
+		helpMsg := fmt.Sprintf("To show bucket properties, run '%s %s %s %s'",
+			cliName, commandShow, subcmdBucket, bck.DisplayName())
 		return newAdditionalInfoError(err, helpMsg)
 	}
 	showDiff(c, currProps, allNewProps)

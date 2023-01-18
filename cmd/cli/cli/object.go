@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles object operations.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -57,7 +57,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	)
 
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
+		return missingArgumentsError(c, "bucket/object", "output file")
 	}
 
 	uri := c.Args().Get(0)
@@ -72,7 +72,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		}
 	}
 
-	archPath = parseStrFlag(c, archpathFlag)
+	archPath = parseStrFlag(c, archpathOptionalFlag)
 	if outFile == "" {
 		if archPath != "" {
 			outFile = filepath.Base(archPath)
@@ -186,7 +186,8 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 		s2 = fmt.Sprintf(", xaction ID %q", xactID)
 	}
 	// alternatively, print(fmtXactStatusCheck, apc.ActPromote, ...)
-	fmt.Fprintf(c.App.Writer, "%spromoted %q => %s%s\n", s1, fqn, bck.DisplayName(), s2)
+	msg := fmt.Sprintf("%spromoted %q => %s%s\n", s1, fqn, bck.DisplayName(), s2)
+	actionDone(c, msg)
 	return nil
 }
 
@@ -217,15 +218,13 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
 	if err = api.SetObjectCustomProps(apiBP, bck, objName, props, setNewCustom); err != nil {
 		return
 	}
-	msg := fmt.Sprintf("Custom props successfully updated (use `ais show object %s/%s --props=all` to show the updates).",
+	msg := fmt.Sprintf("Custom props successfully updated (to show updates, run 'ais show object %s/%s --props=all').",
 		bck, objName)
 	actionDone(c, msg)
 	return nil
 }
 
-// PUT methods.
-
-func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err error) {
+func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) error {
 	var (
 		reader   cos.ReadOpenCloser
 		progress *mpb.Progress
@@ -273,7 +272,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
 
-	archPath := parseStrFlag(c, archpathFlag)
+	archPath := parseStrFlag(c, archpathOptionalFlag)
 	if archPath != "" {
 		fi, err := fh.Stat()
 		if err != nil {
@@ -300,7 +299,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 	return err
 }
 
-func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) (err error) {
+func putSingleChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) error {
 	var (
 		handle string
 		cksum  = cos.NewCksumHash(cksumType)
@@ -370,7 +369,6 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 	if cksumType != cos.ChecksumNone {
 		cksum.Finalize()
 	}
-
 	return api.FlushObject(api.FlushArgs{
 		BaseParams: apiBP,
 		Bck:        bck,
@@ -438,15 +436,13 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 	return uploadFiles(c, params)
 }
 
-// base + fileName = path
-// if fileName is already absolute path, base is empty
-func getPathFromFileName(fileName string) (path string, err error) {
+// replace common abbreviations (such as `~/`) and return an absolute path
+func absPath(fileName string) (path string, err error) {
 	path = cos.ExpandPath(fileName)
 	if path, err = filepath.Abs(path); err != nil {
 		return "", err
 	}
-
-	return path, err
+	return
 }
 
 // Returns longest common prefix ending with '/' (exclusive) for objects in the template
@@ -458,69 +454,82 @@ func rangeTrimPrefix(pt cos.ParsedTemplate) string {
 	return pt.Prefix[:sepaIndex+1]
 }
 
-func putObject(c *cli.Context, bck cmn.Bck, objName, fileName, cksumType string) (err error) {
-	printDryRunHeader(c)
+func putDryRun(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
+	actionCptn(c, dryRunHeader, " "+dryRunExplanation)
+	path, err := absPath(fileName)
+	if err != nil {
+		return err
+	}
+	if objName == "" {
+		objName = filepath.Base(path)
+	}
+	archPath := parseStrFlag(c, archpathOptionalFlag)
+	if archPath == "" {
+		actionDone(c, fmt.Sprintf("PUT %q => %s/%s\n", fileName, bck.DisplayName(), objName))
+	} else {
+		actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bck.DisplayName(), objName, archPath))
+	}
+	return nil
+}
 
+func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
+	// 1. STDIN
 	if fileName == "-" {
 		if objName == "" {
-			return fmt.Errorf("object name is required when reading from stdin")
+			return fmt.Errorf("destination object name is required when reading from STDIN")
 		}
-
-		if flagIsSet(c, dryRunFlag) {
-			fmt.Fprintf(c.App.Writer, "PUT (stdin) => \"%s/%s\"\n", bck.DisplayName(), objName)
-			return nil
-		}
-
-		if err := putSingleObjectChunked(c, bck, objName, os.Stdin, cksumType); err != nil {
+		p, err := headBucket(bck, false /* don't add */)
+		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "PUT %q to %s\n", objName, bck.DisplayName())
-
+		cksumType := p.Cksum.Type
+		if err := putSingleChunked(c, bck, objName, os.Stdin, cksumType); err != nil {
+			return err
+		}
+		actionDone(c, fmt.Sprintf("PUT (stdin) => %s/%s\n", bck.DisplayName(), objName))
 		return nil
 	}
 
-	path, err := getPathFromFileName(fileName)
+	// readable file, list, or range (must have abs path either way)
+	path, err := absPath(fileName)
 	if err != nil {
 		return err
 	}
 
-	var pt cos.ParsedTemplate
-	if pt, err = cos.ParseBashTemplate(path); err == nil {
+	// 2. template-specified range
+	if pt, err := cos.ParseBashTemplate(path); err == nil {
 		return putRangeObjects(c, pt, bck, rangeTrimPrefix(pt), objName)
 	}
-	// if parse failed continue to other options
 
-	// Upload single file
 	if fh, err := os.Stat(path); err == nil && !fh.IsDir() {
+		//
+		// 3. single-file PUT or APPEND-to-arch operation
+		//
 		if objName == "" {
-			// objName was not provided, only bucket name, use just file name as object name
+			// [CONVENTION]: if objName is not provided
+			// we use the filename as the destination object name
 			objName = filepath.Base(path)
 		}
 
-		archPath := parseStrFlag(c, archpathFlag)
-		if archPath != "" {
-			archPath = "/" + archPath
-		}
-		if flagIsSet(c, dryRunFlag) {
-			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s/%s\"\n", path, bck.DisplayName(), objName, archPath)
-			return nil
-		}
-		if err := putSingleObject(c, bck, objName, path); err != nil {
+		// single-file PUT or - if archpath defined - APPEND to an existing archive
+		if err := filePutOrAppend2Arch(c, bck, objName, path); err != nil {
 			return err
 		}
+
+		archPath := parseStrFlag(c, archpathOptionalFlag)
 		if archPath == "" {
-			fmt.Fprintf(c.App.Writer, "PUT %q to %s\n", objName, bck.DisplayName())
+			actionDone(c, fmt.Sprintf("PUT %q => %s/%s\n", fileName, bck.DisplayName(), objName))
 		} else {
-			fmt.Fprintf(c.App.Writer, "APPEND %q to object \"%s/%s[%s]\"\n", path, bck.DisplayName(), objName, archPath)
+			actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bck.DisplayName(), objName, archPath))
 		}
 		return nil
 	}
 
+	// 4. PUT multi-object list
 	files, err := generateFileList(path, "", objName, flagIsSet(c, recursiveFlag))
 	if err != nil {
-		return
+		return err
 	}
-
 	return putMultipleObjects(c, files, bck)
 }
 
@@ -779,11 +788,14 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	} else if flagIsSet(c, objPropsFlag) {
 		propsFlag = strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	}
+
+	// NOTE: three different defaults; compare w/ `listObjects()`
 	if len(propsFlag) == 0 {
-		selectedProps = apc.GetPropsDefault
-		// to better represent remote obj that may not have any local presence
-		if flagIsSet(c, objNotCachedFlag) && !cos.StringInSlice(apc.GetPropsCustom, selectedProps) {
-			selectedProps = append(selectedProps, apc.GetPropsCustom)
+		selectedProps = apc.GetPropsMinimal
+		if bck.IsAIS() {
+			selectedProps = apc.GetPropsDefaultAIS
+		} else if bck.IsCloud() {
+			selectedProps = apc.GetPropsDefaultCloud
 		}
 	} else if cos.StringInSlice("all", propsFlag) {
 		selectedProps = apc.GetPropsAll
@@ -816,7 +828,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 	case apc.GetPropsChecksum:
 		v = op.Cksum.String()
 	case apc.GetPropsAtime:
-		v = cos.FormatUnixNano(op.Atime, "")
+		v = cos.FormatNanoTime(op.Atime, "")
 	case apc.GetPropsVersion:
 		v = op.Ver
 	case apc.GetPropsCached:
@@ -851,72 +863,72 @@ func handleObjHeadError(err error, bck cmn.Bck, object string, fltPresence int) 
 	var hint string
 	if cmn.IsStatusNotFound(err) {
 		if apc.IsFltPresent(fltPresence) {
-			hint = fmt.Sprintf(" (hint: try '--%s' option)", objNotCachedFlag.GetName())
+			hint = fmt.Sprintf(" (hint: try %s option)", qflprn(objNotCachedFlag))
 		}
 		return fmt.Errorf("%q not found in %s%s", object, bck.DisplayName(), hint)
 	}
 	return err
 }
 
-func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
+func listOrRangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
 		return incorrectUsageMsg(c, "flags %q and %q cannot be used together", listFlag.Name, templateFlag.Name)
 	}
 
 	if flagIsSet(c, listFlag) {
-		return listOp(c, command, bck)
+		return listOp(c, bck)
 	}
 	if flagIsSet(c, templateFlag) {
-		return rangeOp(c, command, bck)
+		return rangeOp(c, bck)
 	}
 	return
 }
 
 // List handler
-func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
+func listOp(c *cli.Context, bck cmn.Bck) (err error) {
 	var (
 		fileList = makeList(parseStrFlag(c, listFlag))
 		xactID   string
 	)
 
 	if flagIsSet(c, dryRunFlag) {
-		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.DisplayName()+"/%s\n", fileList)
+		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.DisplayName()+"/%s\n", fileList)
 		return nil
 	}
-
-	switch command {
+	var done string
+	switch c.Command.Name {
 	case commandRemove:
 		xactID, err = api.DeleteList(apiBP, bck, fileList)
-		command = "removed"
+		done = "removed"
 	case commandPrefetch:
-		if err = ensureHasProvider(bck, command); err != nil {
+		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
 		xactID, err = api.PrefetchList(apiBP, bck, fileList)
-		command += "ed"
+		done = "prefetched"
 	case commandEvict:
-		if err = ensureHasProvider(bck, command); err != nil {
+		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
 		xactID, err = api.EvictList(apiBP, bck, fileList)
-		command += "ed"
+		done = "evicted"
 	default:
-		err = fmt.Errorf(invalidCmdMsg, command)
+		debug.Assert(false, c.Command.Name)
 		return
 	}
 	if err != nil {
 		return
 	}
-	basemsg := fmt.Sprintf("%s %s from %s", fileList, command, bck)
+	basemsg := fmt.Sprintf("%s %s from %s", fileList, done, bck)
 	if xactID != "" {
-		basemsg += ", " + xactProgressMsg(xactID)
+		basemsg += ". " + toMonitorMsg(c, xactID)
 	}
 	fmt.Fprintln(c.App.Writer, basemsg)
 	return
 }
 
 // Range handler
-func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
+func rangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 	var (
 		rangeStr = parseStrFlag(c, templateFlag)
 		pt       cos.ParsedTemplate
@@ -930,40 +942,41 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 			return nil
 		}
 		objs := pt.ToSlice(dryRunExamplesCnt)
-		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(command)+" "+bck.DisplayName()+"/%s", objs)
+		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.DisplayName()+"/%s", objs)
 		if pt.Count() > dryRunExamplesCnt {
 			fmt.Fprintf(c.App.Writer, "(and %d more)", pt.Count()-dryRunExamplesCnt)
 		}
 		return
 	}
-
-	switch command {
+	var done string
+	switch c.Command.Name {
 	case commandRemove:
 		xactID, err = api.DeleteRange(apiBP, bck, rangeStr)
-		command = "removed"
+		done = "removed"
 	case commandPrefetch:
-		if err = ensureHasProvider(bck, command); err != nil {
+		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
 		xactID, err = api.PrefetchRange(apiBP, bck, rangeStr)
-		command += "ed"
+		done = "prefetched"
 	case commandEvict:
-		if err = ensureHasProvider(bck, command); err != nil {
+		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
 		xactID, err = api.EvictRange(apiBP, bck, rangeStr)
-		command += "ed"
+		done = "evicted"
 	default:
-		return fmt.Errorf(invalidCmdMsg, command)
+		debug.Assert(false, c.Command.Name)
+		return nil
 	}
 	if err != nil {
 		return
 	}
 
-	baseMsg := fmt.Sprintf("%s from %s objects in the range %q", command, bck, rangeStr)
+	baseMsg := fmt.Sprintf("%s from %s objects in the range %q", done, bck, rangeStr)
 
 	if xactID != "" {
-		baseMsg += ", " + xactProgressMsg(xactID)
+		baseMsg += ". " + toMonitorMsg(c, xactID)
 	}
 	fmt.Fprintln(c.App.Writer, baseMsg)
 	return

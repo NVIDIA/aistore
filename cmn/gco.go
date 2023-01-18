@@ -108,7 +108,7 @@ func (gco *globalConfigOwner) Update(cluConfig *ClusterConfig) (err error) {
 	config.ClusterConfig = *cluConfig
 	override := gco.GetOverrideConfig()
 	if override != nil {
-		err = config.UpdateClusterConfig(*override, apc.Daemon) // update and validate
+		err = config.UpdateClusterConfig(override, apc.Daemon) // update and validate
 	} else {
 		err = config.Validate()
 	}

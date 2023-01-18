@@ -26,6 +26,9 @@ For additional background, see:
 ## Table of Contents
 
 - [Quick example using `aws` CLI](#quick-example-using-aws-cli)
+  - [GET(object)](#getobject)
+  - [PUT(object)](#putobject)
+  - [HEAD(object)](#headobject)
 - [Quick example using Internet Browser](#quick-example-using-internet-browser)
 - [`s3cmd` command line](#s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
@@ -34,6 +37,7 @@ For additional background, see:
 - [More Usage Examples](#more-usage-examples)
   - [Create bucket](#create-bucket)
   - [Remove bucket](#remove-bucket)
+  - [Upload large object](#upload-large-object)
 - [TensorFlow Demo](#tensorflow-demo)
 - [S3 Compatibility](#s3-compatibility)
   - [Supported S3](#supported-s3)
@@ -57,12 +61,13 @@ $ aws --endpoint-url http://localhost:8080/s3 s3 mb s3://abc
 make_bucket: abc
 ```
 
+### PUT(object)
+
 ```console
 # PUT using AIS CLI:
 $ ais put README.md ais://abc
 
-# The same via `aws`:
-PUT "README.md" to ais://abc
+# The same via `aws` CLI:
 $ aws --endpoint-url http://localhost:8080/s3 s3api put-object --bucket abc --key LICENSE --body LICENSE
 $ ais ls ais://abc
 NAME             SIZE
@@ -70,9 +75,10 @@ LICENSE          1.05KiB
 README.md        10.44KiB
 ```
 
-and GET as well:
+### GET(object)
 
 ```console
+# GET using `aws` CLI:
 $ aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket abc --key README.md /tmp/readme
 {
     "ContentType": "text/plain; charset=utf-8",
@@ -80,6 +86,19 @@ $ aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket abc --ke
     "ContentLength": 10689
 }
 $ diff -uN README.md /tmp/readme
+```
+
+### HEAD(object)
+
+```console
+# Get object metadata using `aws` CLI:
+$ aws s3api --endpoint-url http://localhost:8080/s3 head-object --bucket abc --key LICENSE
+{
+    "Metadata": {},
+    "ContentLength": 1075,
+    "ETag": "f70a21a0c5fa26a93820b0bef5be7619",
+    "LastModified": "Mon, 19 Dec 2022 22:23:05 GMT"
+}
 ```
 
 ## Quick example using Internet Browser
@@ -155,7 +174,7 @@ Say, an S3-based client performs a GET or a PUT operation and calculates `md5` o
 To enable MD5 checksum at bucket creation time:
 
 ```console
-$ ais bucket create ais://bck --bucket-props="checksum.type=md5"
+$ ais bucket create ais://bck --props="checksum.type=md5"
 "ais://bck2" bucket created
 
 $ ais show bucket ais://bck | grep checksum
@@ -316,6 +335,74 @@ remove_bucket: aws1
 $ s3cmd --host http://localhost:51080/s3 s3 ls s3://
 ```
 
+### Upload large object
+
+In this section, we use all 3 (three) clients:
+
+1. `s3cmd` client pre-configured to communicate with (and via) AIS
+2. `aws` CLI that sends requests directly to AWS S3 standard endpoint (with no AIS in-between)
+3. and, finally, native AIS CLI
+
+```shell
+# 1. Upload via `s3cmd` => `aistore`
+
+$ s3cmd put $(which aisnode) s3://ais-aa --multipart-chunk-size-mb=8
+upload: '/root/gocode/bin/aisnode' -> 's3://ais-aa/aisnode'  [part 1 of 10, 8MB] [1 of 1]
+ 8388608 of 8388608   100% in    0s   233.84 MB/s  done
+...
+ 8388608 of 8388608   100% in    0s   234.19 MB/s  done
+upload: '/root/gocode/bin/aisnode' -> 's3://ais-aa/aisnode'  [part 10 of 10, 5MB] [1 of 1]
+ 5975140 of 5975140   100% in    0s   233.39 MB/s  done
+```
+
+```shell
+# 2. View object metadata via native CLI
+$ ais show object s3://ais-aa/aisnode --all
+PROPERTY         VALUE
+atime            30 Aug 54 17:47 LMT
+cached           yes
+checksum         md5[a38030ea13e1b59c...]
+copies           1 [/tmp/ais/mp3/11]
+custom           map[ETag:"e3be082db698af7c15b0502f6a88265d-16" source:aws version:3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2]
+ec               -
+location         t[MKpt8091]:mp[/tmp/ais/mp3/11, nvme0n1]
+name             s3://ais-aa/aisnode
+size             77.70MiB
+version          3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2
+```
+
+```shell
+# 3. View object metadata via `aws` CLI => directly to AWS (w/ no aistore in-between):
+$ aws s3api head-object --bucket ais-aa --key aisnode
+{
+    "LastModified": "Tue, 20 Dec 2022 17:43:16 GMT",
+    "ContentLength": 81472612,
+    "Metadata": {
+        "x-amz-meta-ais-cksum-type": "md5",
+        "x-amz-meta-ais-cksum-val": "a38030ea13e1b59c529e888426001eed"
+    },
+    "ETag": "\"e3be082db698af7c15b0502f6a88265d-16\"",
+    "AcceptRanges": "bytes",
+    "ContentType": "binary/octet-stream",
+    "VersionId": "3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2"
+}
+```
+
+```shell
+# 4. Finally, view object metadata via `s3cmd` => `aistore`
+$ s3cmd info s3://ais-aa/aisnode
+s3://ais-aa/aisnode (object):
+   File size: 81472612
+   Last mod:  Fri, 30 Aug 1754 22:43:41 GMT
+   MIME type: none
+   Storage:   STANDARD
+   MD5 sum:   a38030ea13e1b59c529e888426001eed
+   SSE:       none
+   Policy:    none
+   CORS:      none
+   ACL:       none
+```
+
 ## TensorFlow Demo
 
 Setup `S3_ENDPOINT` and `S3_USE_HTTPS` environment variables prior to running a TensorFlow job. `S3_ENDPOINT` must be primary proxy hostname:port and URL path `/s3` (e.g., `S3_ENDPOINT=10.0.0.20:51080/s3`). Secure HTTP is disabled by default, so `S3_USE_HTTPS` must be `0`.
@@ -387,9 +474,26 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 
 ## Boto3 Compatibility
 
-Arguably, extremely few HTTP client-side libraries do _not_ follow [HTTP redirects](https://www.rfc-editor.org/rfc/rfc7231#page-54), and Amazon's [Boto3](https://github.com/boto/boto3) just happens to be one of those (libraries).
+Arguably, extremely few HTTP client-side libraries do _not_ follow [HTTP redirects](https://www.rfc-editor.org/rfc/rfc7231#page-54), and Amazon's [botocore](https://github.com/boto/botocore), used by [Boto3](https://github.com/boto/boto3), just happens to be one of those (libraries).
 
-For more (and deeper) context, see maybe the following `aws-cli` ticket and discussion at:
+AIStore provides a shim that you can use to alter `botocore` and `boto3`'s behavior to work as expected with AIStore.
+
+To use `boto3` or `botocore` as client libraries for AIStore:
+
+ - Install the [aistore python api](/docs/s3cmd.md) with the `botocore` extra.
+
+```shell
+$ pip install aistore[botocore]
+```
+
+ - Import `aistore.botocore_patch.botocore` in your source code alongside `botocore` and / or `boto3`.
+
+```python
+import boto3
+from aistore.botocore_patch import botocore
+```
+
+For more context, see perhaps the following `aws-cli` ticket and discussion at:
 
 * [Support S3 HTTP redirects to non-Amazon URI's](https://github.com/aws/aws-cli/issues/6559)
 
@@ -402,7 +506,7 @@ As far as existing Amazon-native CLI tools, `s3cmd` would be the preferred and r
   - [1. AIS Endpoint](/docs/s3cmd.md#1-ais-endpoint)
   - [2. How to have `s3cmd` calling AIS endpoint](/docs/s3cmd.md#2-how-to-have-s3cmd-calling-ais-endpoint)
   - [3. Alternatively](/docs/s3cmd.md#3-alternatively)
-  - [4. Notice and possibly update AIS configuration](/docs/s3cmd.md#4-notice-and-possibly-update-ais-configuration)
+  - [4. Note and, possibly, update AIS configuration](/docs/s3cmd.md#4-note-and-possibly-update-ais-configuration)
   - [5. Create bucket and PUT/GET objects using `s3cmd`](/docs/s3cmd.md#5-create-bucket-and-putget-objects-using-s3cmd)
   - [6. Multipart upload using `s3cmd`](/docs/s3cmd.md#6-multipart-upload-using-s3cmd)
 

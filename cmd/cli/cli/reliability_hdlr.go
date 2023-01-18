@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles specific bucket actions.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -30,7 +30,7 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        storageSvcCmdsFlags[commandMirror],
 			Action:       setCopiesHandler,
-			BashComplete: bucketCompletions(),
+			BashComplete: bucketCompletions(bcmplop{}),
 		},
 		{
 			Name:         commandECEncode,
@@ -38,7 +38,7 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        storageSvcCmdsFlags[commandECEncode],
 			Action:       ecEncodeHandler,
-			BashComplete: bucketCompletions(),
+			BashComplete: bucketCompletions(bcmplop{}),
 		},
 	}
 )
@@ -48,7 +48,7 @@ func setCopiesHandler(c *cli.Context) (err error) {
 		bck cmn.Bck
 		p   *cmn.BucketProps
 	)
-	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
+	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
 		return
 	}
 	if p, err = headBucket(bck, false /* don't add */); err != nil {
@@ -73,15 +73,15 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 		bck cmn.Bck
 		p   *cmn.BucketProps
 	)
-	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
+	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
 		return
 	}
 	if p, err = headBucket(bck, false /* don't add */); err != nil {
 		return
 	}
 
-	dataSlices := c.Int(cleanFlag(dataSlicesFlag.Name))
-	paritySlices := c.Int(cleanFlag(paritySlicesFlag.Name))
+	dataSlices := c.Int(fl1n(dataSlicesFlag.Name))
+	paritySlices := c.Int(fl1n(paritySlicesFlag.Name))
 	if p.EC.Enabled {
 		// EC-encode is called automatically when EC is enabled. Changing
 		// data or parity numbers on the fly is unsupported yet.

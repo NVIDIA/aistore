@@ -34,7 +34,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
@@ -80,8 +80,9 @@ type (
 		}
 		remais struct {
 			cluster.Remotes
-			mu sync.RWMutex
-			in atomic.Bool
+			old []*cluster.RemAis // to facilitate a2u resultion (and, therefore, offline access)
+			mu  sync.RWMutex
+			in  atomic.Bool
 		}
 	}
 )
@@ -551,7 +552,9 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 		// mutually exclusive
 		debug.Assert(!(lsmsg.IsFlagSet(apc.LsDontHeadRemote) && lsmsg.IsFlagSet(apc.LsTryHeadRemote)))
-		// TODO: the capability to list remote buckets without adding them to BMD
+		//
+		// TODO -- FIXME: the capability to list remote buckets without adding them to BMD
+		//
 		debug.Assert(!lsmsg.IsFlagSet(apc.LsDontAddRemote), "not implemented yet")
 
 		if bckArgs.dontHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote); !bckArgs.dontHeadRemote {
@@ -1130,7 +1133,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 				return
 			}
-			if err := tcbMsg.Validate(); err != nil {
+			if err := tcbMsg.Validate(true); err != nil {
 				p.writeErr(w, r, err)
 				return
 			}
@@ -1341,13 +1344,18 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
 		return
 	}
-	// not (explicitly) specified props default to the default ones
-	if lsmsg.Props == "" {
-		lsmsg.AddProps(apc.GetPropsDefault...)
-	}
 
-	// HTTP "buckets" do not support remote listing. LsArchDir, on the other hand,
-	// needs locality to list archived content.
+	// default props & flags => user-provided message
+	switch {
+	case lsmsg.Props == "" && lsmsg.IsFlagSet(apc.LsObjCached):
+		lsmsg.AddProps(apc.GetPropsDefaultAIS...)
+	case lsmsg.Props == "":
+		lsmsg.AddProps(apc.GetPropsMinimal...)
+		lsmsg.SetFlag(apc.LsNameSize)
+	case lsmsg.WantOnlyName():
+		lsmsg.SetFlag(apc.LsNameOnly)
+	}
+	// ht:// backend doesn't have `ListObjects`; can only locally list archived content
 	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
 		lsmsg.SetFlag(apc.LsObjCached)
 	}
@@ -1383,7 +1391,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 			p.writeErr(w, r, err, http.StatusNotImplemented)
 			return
 		}
-		lst, err = p.lsObjsR(bck, lsmsg, wantOnlyRemote)
+		lst, err = p.lsObjsR(bck, lsmsg, smap, wantOnlyRemote)
 		// TODO: `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
 		// cached objects. This isn't easy as we basically need to start a new
@@ -1840,14 +1848,12 @@ func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID st
 
 func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck *cmn.Bck, query url.Values) (err error) {
 	var (
-		backend       = cmn.BackendConfAIS{}
-		aliasOrUUID   = bck.Ns.UUID
-		config        = cmn.GCO.Get()
-		sleep         = config.Timeout.CplaneOperation.D()
-		retries       = 2
-		v, configured = config.Backend.ProviderConf(apc.AIS)
+		backend     = cmn.BackendConfAIS{}
+		aliasOrUUID = bck.Ns.UUID
+		config      = cmn.GCO.Get()
+		v           = config.Backend.Get(apc.AIS)
 	)
-	if !configured {
+	if v == nil {
 		p.writeErrMsg(w, r, "no remote ais clusters attached")
 		return err
 	}
@@ -1855,31 +1861,25 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	cos.MustMorphMarshal(v, &backend)
 	urls, exists := backend[aliasOrUUID]
 	if !exists {
-	retry:
-		for retries > 0 {
-			p.remais.mu.RLock()
-			for _, remais := range p.remais.A {
-				if remais.Alias == aliasOrUUID || remais.UUID == aliasOrUUID {
-					urls = []string{remais.URL}
-					p.remais.mu.RUnlock()
-					exists = true
-					break retry
-				}
-			}
-			p.remais.mu.RUnlock()
-
-			if p.forwardCP(w, r, msg, bck.Name) {
-				return
-			}
-
-			glog.Errorf("%s: retrying remais ver=%d (%d attempts)", p, p.remais.Ver, retries-1)
-			time.Sleep(sleep)
-			retries--
-			v, _ = cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
-			cos.MustMorphMarshal(v, &backend)
-			if urls, exists = backend[aliasOrUUID]; exists {
+		var refreshed bool
+		if p.remais.Ver == 0 {
+			p._remais(&config.ClusterConfig, true)
+			refreshed = true
+		}
+	ml:
+		p.remais.mu.RLock()
+		for _, remais := range p.remais.A {
+			if remais.Alias == aliasOrUUID || remais.UUID == aliasOrUUID {
+				urls = []string{remais.URL}
+				exists = true
 				break
 			}
+		}
+		p.remais.mu.RUnlock()
+		if !exists && !refreshed {
+			p._remais(&config.ClusterConfig, true)
+			refreshed = true
+			goto ml
 		}
 	}
 	if !exists {
@@ -2021,16 +2021,14 @@ func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.Ls
 	pageSize := lsmsg.PageSize
 
 	// TODO: Before checking cache and buffer we should check if there is another
-	//  request already in-flight that requests the same page as we do - if yes
-	//  then we should just patiently wait for the cache to get populated.
+	// request in-flight that asks for the same page - if true wait for the cache
+	// to get populated.
 
 	if lsmsg.IsFlagSet(apc.UseListObjsCache) {
 		entries, hasEnough = p.qm.c.get(cacheID, token, pageSize)
 		if hasEnough {
 			goto end
 		}
-		// Request for all the props if (cache should always have all entries).
-		lsmsg.AddProps(apc.GetPropsAll...)
 	}
 	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
 	if hasEnough {
@@ -2099,9 +2097,8 @@ end:
 	return allEntries, nil
 }
 
-func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, wantOnlyRemote bool) (allEntries *cmn.LsoResult, err error) {
+func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, wantOnlyRemote bool) (allEntries *cmn.LsoResult, err error) {
 	var (
-		smap       = p.owner.smap.get()
 		config     = cmn.GCO.Get()
 		reqTimeout = config.Client.ListObjTimeout.D()
 		aisMsg     = p.newAmsgActVal(apc.ActList, &lsmsg)
@@ -2116,8 +2113,8 @@ func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, wantOnlyRemote bool
 	}
 
 	if wantOnlyRemote {
-		nl, exists := p.notifs.entry(lsmsg.UUID)
-		debug.Assert(exists)
+		nl := p.notifs.entry(lsmsg.UUID)
+		debug.Assert(nl != nil)
 		for _, si := range nl.Notifiers() {
 			cargs := allocCargs()
 			{
@@ -2851,25 +2848,30 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 		return // nothing to do
 	}
 
-	go p._remais(newConfig)
+	go p._remais(&newConfig.ClusterConfig, false)
 	return
 }
 
 // refresh local p.remais cache via intra-cluster call to a random target
-func (p *proxy) _remais(newConfig *globalConfig) {
+func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 	if !p.remais.in.CAS(false, true) {
 		return
 	}
 	var (
 		sleep      = newConfig.Timeout.CplaneOperation.D()
-		maxsleep   = newConfig.Timeout.MaxKeepalive.D()
 		retries    = 5
 		over, nver int64
 	)
-	if clutime := p.startup.cluster.Load(); clutime < int64(maxsleep) {
-		sleep = 4 * maxsleep
-	} else if clutime < int64(newConfig.Timeout.Startup) {
-		sleep = 2 * maxsleep
+	if blocking {
+		retries = 1
+	} else {
+		maxsleep := newConfig.Timeout.MaxKeepalive.D()
+		clutime := mono.Since(p.startup.cluster.Load())
+		if clutime < maxsleep {
+			sleep = 4 * maxsleep
+		} else if clutime < newConfig.Timeout.Startup.D() {
+			sleep = 2 * maxsleep
+		}
 	}
 	for ; retries > 0; retries-- {
 		time.Sleep(sleep)
@@ -2883,6 +2885,25 @@ func (p *proxy) _remais(newConfig *globalConfig) {
 			over = p.remais.Ver
 		}
 		if p.remais.Ver < all.Ver {
+			// keep old/detached clusters to support access to existing ("cached") buckets
+			// i.e., the ability to resolve remote alias to Ns.UUID (see p.a2u)
+			for _, a := range p.remais.Remotes.A {
+				var found bool
+				for _, b := range p.remais.old {
+					if b.UUID == a.UUID {
+						*b = *a
+						found = true
+						break
+					}
+					if b.Alias == a.Alias {
+						glog.Errorf("duplicated remais alias: (%q, %q) vs (%q, %q)", a.UUID, a.Alias, b.UUID, b.Alias)
+					}
+				}
+				if !found {
+					p.remais.old = append(p.remais.old, a)
+				}
+			}
+
 			p.remais.Remotes = *all
 			nver = p.remais.Ver
 			p.remais.mu.Unlock()
@@ -3007,7 +3028,7 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, s
 	}
 	if bck.IsCloud() {
 		config := cmn.GCO.Get()
-		if _, ok := config.Backend.Providers[bck.Provider]; !ok {
+		if config.Backend.Get(bck.Provider) == nil {
 			err = &cmn.ErrMissingBackend{Provider: bck.Provider}
 			statusCode = http.StatusNotFound
 			err = cmn.NewErrFailedTo(p, "lookup Cloud bucket", bck, err, statusCode)

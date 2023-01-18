@@ -78,13 +78,14 @@ const (
 
 type (
 	Trunner struct {
-		statsRunner
-		T       cluster.Target `json:"-"`
-		MPCap   fs.MPCap       `json:"capacity"`
-		lines   []string
-		disk    ios.AllDiskStats
-		mem     sys.MemStat
-		standby bool
+		t           cluster.NodeMemCap
+		MPCap       fs.MPCap `json:"capacity"`
+		disk        ios.AllDiskStats
+		xln         string
+		statsRunner // the base (compare w/ Prunner)
+		lines       []string
+		mem         sys.MemStat
+		standby     bool
 	}
 )
 
@@ -98,6 +99,8 @@ const (
 
 // interface guard
 var _ cos.Runner = (*Trunner)(nil)
+
+func NewTrunner(t cluster.NodeMemCap) *Trunner { return &Trunner{t: t} }
 
 func (r *Trunner) Run() error     { return r.runcommon(r) }
 func (r *Trunner) Standby(v bool) { r.standby = v }
@@ -131,14 +134,14 @@ func (r *Trunner) InitCapacity() error {
 		return err
 	}
 	if cs.Err != nil {
-		glog.Errorf("%s: %s", r.T, cs.String())
+		glog.Errorf("%s: %s", r.t, cs.String())
 	}
 	return nil
 }
 
 // register target-specific metrics in addition to those that must be
 // already added via regCommonMetrics()
-func (r *Trunner) reg(name, kind string) { r.Core.Tracker.register(r.T.Snode(), name, kind) }
+func (r *Trunner) reg(name, kind string) { r.Core.Tracker.register(r.t.Snode(), name, kind) }
 
 func nameRbps(disk string) string { return "disk." + disk + ".read.bps" }
 func nameRavg(disk string) string { return "disk." + disk + ".avg.rsize" }
@@ -219,7 +222,7 @@ func (r *Trunner) GetWhatStats() (ds *DaemonStats) {
 func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.lines = r.lines[:0]
 
-	// 1 collect disk stats and populate the tracker
+	// 1. collect disk stats and populate the tracker
 	fs.FillDiskStats(r.disk)
 	s := r.Core
 	for disk, stats := range r.disk {
@@ -254,7 +257,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	cs, updated, errfs := fs.CapPeriodic(now, config, r.MPCap)
 	if updated {
 		if cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
-			r.T.OOS(&cs)
+			r.t.OOS(&cs)
 		}
 		for mpath, fsCapacity := range r.MPCap {
 			ln := cos.MustMarshalToString(fsCapacity)
@@ -269,12 +272,26 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 5. memory pressure
 	_ = r.mem.Get()
-	mm := r.T.PageMM()
+	mm := r.t.PageMM()
 	if p := mm.Pressure(&r.mem); p >= memsys.PressureHigh {
 		r.lines = append(r.lines, mm.Str(&r.mem))
 	}
 
-	// 5. log
+	// 6. running xactions
+	if !idle {
+		kindIds := r.t.GetAllRunning("")
+		if len(kindIds) > 0 {
+			ln := "running: " + strings.Join(kindIds, " ")
+			if ln != r.xln {
+				r.lines = append(r.lines, ln)
+				r.xln = ln
+			}
+		} else {
+			r.xln = ""
+		}
+	}
+
+	// 7. and, finally
 	for _, ln := range r.lines {
 		glog.Infoln(ln)
 	}

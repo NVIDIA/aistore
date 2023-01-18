@@ -42,7 +42,7 @@ type (
 		bp   api.BaseParams
 	}
 	AISBackendProvider struct {
-		t             cluster.Target
+		t             cluster.TargetPut
 		remote        map[string]*remAis // by UUID
 		alias         cos.StrKVs         // alias => UUID
 		mu            sync.RWMutex
@@ -57,7 +57,7 @@ var (
 	preg, treg *regexp.Regexp
 )
 
-func NewAIS(t cluster.Target) *AISBackendProvider {
+func NewAIS(t cluster.TargetPut) *AISBackendProvider {
 	suff := regexp.QuoteMeta(cluster.SnameSuffix)
 	preg = regexp.MustCompile(regexp.QuoteMeta(cluster.PnamePrefix) + `\S*` + suff + ": ")
 	treg = regexp.MustCompile(regexp.QuoteMeta(cluster.TnamePrefix) + `\S*` + suff + ": ")
@@ -104,18 +104,16 @@ func extractErrCode(e error, uuid string) (int, error) {
 
 // apply new or updated (attach, detach) cmn.BackendConfAIS configuration
 func (m *AISBackendProvider) Apply(v any, action string, cfg *cmn.ClusterConfig) error {
-	clusterConf := cmn.BackendConfAIS{}
-	if err := cos.MorphMarshal(v, &clusterConf); err != nil {
+	conf := cmn.BackendConfAIS{}
+	if err := cos.MorphMarshal(v, &conf); err != nil {
 		return fmt.Errorf("invalid ais backend config (%+v, %T), err: %v", v, v, err)
 	}
 	m.mu.Lock()
-
-	err := m._apply(cfg, clusterConf, action)
+	err := m._apply(cfg, conf, action)
 	if err == nil {
 		m.appliedCfgVer = cfg.Version
 	}
 	m.mu.Unlock()
-
 	return err
 }
 

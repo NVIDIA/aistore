@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -14,11 +14,12 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
 const (
-	fmtRebalanceStarted = "Started rebalance %q, use 'ais show job xaction %s' to monitor progress\n"
+	fmtRebalanceStarted = "Started rebalance %q (to monitor, run 'ais show rebalance %s').\n"
 
 	roleProxyShort  = "p"
 	roleTargetShort = "t"
@@ -57,9 +58,22 @@ var (
 		commandStart: {},
 		commandStop:  {},
 		commandShow: {
-			allXactionsFlag,
+			allJobsFlag,
 			noHeaderFlag,
 		},
+	}
+
+	startRebalance = cli.Command{
+		Name:   commandStart,
+		Usage:  "rebalance ais cluster",
+		Flags:  clusterCmdsFlags[commandStart],
+		Action: startClusterRebalanceHandler,
+	}
+	stopRebalance = cli.Command{
+		Name:   commandStop,
+		Usage:  "stop rebalancing ais cluster",
+		Flags:  clusterCmdsFlags[commandStop],
+		Action: stopClusterRebalanceHandler,
 	}
 
 	clusterCmd = cli.Command{
@@ -85,23 +99,13 @@ var (
 			{
 				Name: subcmdRebalance,
 				Subcommands: []cli.Command{
-					{
-						Name:   commandStart,
-						Usage:  "rebalance ais cluster",
-						Flags:  clusterCmdsFlags[commandStart],
-						Action: startClusterRebalanceHandler,
-					},
-					{
-						Name:   commandStop,
-						Usage:  "stop rebalancing ais cluster",
-						Flags:  clusterCmdsFlags[commandStop],
-						Action: stopClusterRebalanceHandler,
-					},
+					startRebalance,
+					stopRebalance,
 					{
 						Name:         commandShow,
-						Usage:        "show ais cluster rebalance",
+						Usage:        "show global rebalance",
 						Flags:        clusterCmdsFlags[commandShow],
-						BashComplete: daemonCompletions(completeTargets),
+						BashComplete: rebalanceCompletions,
 						Action:       showClusterRebalanceHandler,
 					},
 				},
@@ -109,10 +113,10 @@ var (
 			{
 				Name:         subcmdPrimary,
 				Usage:        "select a new primary proxy/gateway",
-				ArgsUsage:    daemonIDArgument,
+				ArgsUsage:    nodeIDArgument,
 				Flags:        clusterCmdsFlags[subcmdPrimary],
 				Action:       setPrimaryHandler,
-				BashComplete: daemonCompletions(completeProxies),
+				BashComplete: suggestProxyNodes,
 			},
 			{
 				Name:   subcmdShutdown,
@@ -140,33 +144,33 @@ var (
 					{
 						Name:         subcmdStartMaint,
 						Usage:        "put node under \"maintenance\", temporarily suspend its operation",
-						ArgsUsage:    daemonIDArgument,
+						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[subcmdStartMaint],
 						Action:       nodeMaintShutDecommHandler,
-						BashComplete: daemonCompletions(completeAllDaemons),
+						BashComplete: suggestAllNodes,
 					},
 					{
 						Name:         subcmdStopMaint,
 						Usage:        "activate node by taking it back from \"maintenance\"",
-						ArgsUsage:    daemonIDArgument,
+						ArgsUsage:    nodeIDArgument,
 						Action:       nodeMaintShutDecommHandler,
-						BashComplete: daemonCompletions(completeAllDaemons),
+						BashComplete: suggestAllNodes,
 					},
 					{
 						Name:         subcmdNodeDecommission,
 						Usage:        "safely and permanently remove node from the cluster",
-						ArgsUsage:    daemonIDArgument,
+						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[subcmdNodeDecommission+".node"],
 						Action:       nodeMaintShutDecommHandler,
-						BashComplete: daemonCompletions(completeAllDaemons),
+						BashComplete: suggestAllNodes,
 					},
 					{
 						Name:         subcmdShutdown,
 						Usage:        "shutdown a node",
-						ArgsUsage:    daemonIDArgument,
+						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[subcmdShutdown+".node"],
 						Action:       nodeMaintShutDecommHandler,
-						BashComplete: daemonCompletions(completeAllDaemons),
+						BashComplete: suggestAllNodes,
 					},
 				},
 			},
@@ -188,7 +192,7 @@ func attachRemoteAISHandler(c *cli.Context) (err error) {
 
 func detachRemoteAISHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		err = missingArgumentsError(c, aliasArgument)
+		err = missingArgumentsError(c, c.Command.ArgsUsage)
 		return
 	}
 	alias := c.Args().Get(0)
@@ -204,7 +208,7 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	fmt.Fprint(c.App.Writer, "AIS cluster shut down.\n")
+	actionDone(c, "Cluster is successfully shutdown\n")
 	return
 }
 
@@ -219,7 +223,7 @@ func clusterDecommissionHandler(c *cli.Context) error {
 	if err := api.DecommissionCluster(apiBP, rmUserData); err != nil {
 		return err
 	}
-	fmt.Fprint(c.App.Writer, "AIS cluster decommissioned.\n")
+	actionDone(c, "Cluster successfully decommissioned\n")
 	return nil
 }
 
@@ -275,30 +279,29 @@ func joinNodeHandler(c *cli.Context) (err error) {
 
 func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "daemon ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	smap, err := api.GetClusterMap(apiBP)
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}
-	var (
-		action   = c.Command.Name
-		daemonID = argDaemonID(c)
-		node     = smap.GetNode(daemonID)
-	)
-	if node == nil {
-		return fmt.Errorf("node %q does not exist", daemonID)
+	sid, sname, err := getNodeIDName(c, c.Args().First())
+	if err != nil {
+		return err
 	}
-	name := node.StringEx()
+	node := smap.GetNode(sid)
+	debug.Assert(node != nil)
+
+	action := c.Command.Name
 	if smap.IsPrimary(node) {
-		return fmt.Errorf("%s is primary, cannot %s", name, action)
+		return fmt.Errorf("%s is primary (cannot %s the primary node)", sname, action)
 	}
 	var (
 		xactID        string
 		skipRebalance = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
 		noShutdown    = flagIsSet(c, noShutdownFlag)
 		rmUserData    = flagIsSet(c, rmUserDataFlag)
-		actValue      = &apc.ActValRmNode{DaemonID: daemonID, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
+		actValue      = &apc.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
 	)
 	if skipRebalance && node.IsTarget() {
 		fmt.Fprintf(c.App.Writer,
@@ -308,7 +311,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	}
 	if action == subcmdNodeDecommission {
 		if !flagIsSet(c, yesFlag) {
-			warn := fmt.Sprintf("about to permanently decommission node %s. The operation cannot be undone!", name)
+			warn := fmt.Sprintf("about to permanently decommission node %s. The operation cannot be undone!", sname)
 			if ok := confirm(c, "Proceed?", warn); !ok {
 				return nil
 			}
@@ -316,12 +319,12 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		actValue.NoShutdown = noShutdown
 		actValue.RmUserData = rmUserData
 	} else {
-		const fmterr = "option '--%s' is valid only for decommissioning\n"
+		const fmterr = "option %s is valid only for decommissioning\n"
 		if noShutdown {
-			return fmt.Errorf(fmterr, noShutdownFlag.Name)
+			return fmt.Errorf(fmterr, qflprn(noShutdownFlag))
 		}
 		if rmUserData {
-			return fmt.Errorf(fmterr, rmUserDataFlag.Name)
+			return fmt.Errorf(fmterr, qflprn(rmUserDataFlag))
 		}
 	}
 	switch action {
@@ -342,85 +345,104 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	}
 	switch action {
 	case subcmdStopMaint:
-		fmt.Fprintf(c.App.Writer, "%s is now active (maintenance done)\n", name)
+		fmt.Fprintf(c.App.Writer, "%s is now active (maintenance done)\n", sname)
 	case subcmdNodeDecommission:
 		if skipRebalance || node.IsProxy() {
-			fmt.Fprintf(c.App.Writer, "%s has been decommissioned (permanently removed from the cluster)\n", name)
+			fmt.Fprintf(c.App.Writer, "%s has been decommissioned (permanently removed from the cluster)\n", sname)
 		} else {
 			fmt.Fprintf(c.App.Writer,
-				"%s is being decommissioned, please wait for cluster rebalancing to finish...\n", name)
+				"%s is being decommissioned, please wait for cluster rebalancing to finish...\n", sname)
 		}
 	case subcmdShutdown:
 		if skipRebalance || node.IsProxy() {
-			fmt.Fprintf(c.App.Writer, "%s has been shutdown\n", name)
+			fmt.Fprintf(c.App.Writer, "%s has been shutdown\n", sname)
 		} else {
 			fmt.Fprintf(c.App.Writer,
-				"%s is shutting down, please wait for cluster rebalancing to finish...\n", name)
+				"%s is shutting down, please wait for cluster rebalancing to finish...\n", sname)
 		}
 	case subcmdStartMaint:
-		fmt.Fprintf(c.App.Writer, "%s is now in maintenance\n", name)
+		fmt.Fprintf(c.App.Writer, "%s is now in maintenance\n", sname)
 	}
 	return nil
 }
 
 func setPrimaryHandler(c *cli.Context) error {
-	daemonID := argDaemonID(c)
-	if daemonID == "" {
-		return missingArgumentsError(c, "proxy daemon ID")
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	primarySmap, err := fillMap()
+	sid, sname, err := getNodeIDName(c, c.Args().First())
 	if err != nil {
 		return err
 	}
-	if _, ok := primarySmap.Pmap[daemonID]; !ok {
-		return incorrectUsageMsg(c, "%s: is not a proxy", daemonID)
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return err
 	}
-	err = api.SetPrimaryProxy(apiBP, daemonID, false /*force*/)
+	node := smap.GetNode(sid)
+	debug.Assert(node != nil)
+	if !node.IsProxy() {
+		return incorrectUsageMsg(c, "%s is not a proxy", sname)
+	}
+
+	switch {
+	case node.IsAnySet(cluster.NodeFlagMaint):
+		return fmt.Errorf("%s is currently in maintenance", sname)
+	case node.IsAnySet(cluster.NodeFlagDecomm):
+		return fmt.Errorf("%s is currently being decommissioned", sname)
+	case node.IsAnySet(cluster.SnodeNonElectable):
+		return fmt.Errorf("%s is non-electable", sname)
+	}
+
+	err = api.SetPrimaryProxy(apiBP, sid, false /*force*/)
 	if err == nil {
-		fmt.Fprintf(c.App.Writer, "%s is now a new primary\n", daemonID)
+		actionDone(c, sname+" is now a new primary")
 	}
 	return err
 }
 
 func startClusterRebalanceHandler(c *cli.Context) (err error) {
-	return startXactionKindHandler(c, apc.ActRebalance)
+	return startXactionKind(c, apc.ActRebalance)
 }
 
-func stopClusterRebalanceHandler(c *cli.Context) (err error) {
+func stopClusterRebalanceHandler(c *cli.Context) error {
 	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance, OnlyRunning: true}
-	var xs api.NodesXactMultiSnap
-	xs, err = api.QueryXactionSnaps(apiBP, xactArgs)
+	snap, err := getXactSnap(xactArgs)
 	if err != nil {
-		return
+		return err
 	}
-	rebID := ""
-outer:
-	for _, snaps := range xs {
-		for _, snap := range snaps {
-			rebID = snap.ID
-			break outer
-		}
-	}
-
-	if rebID == "" {
+	if snap == nil {
 		return errors.New("rebalance is not running")
 	}
 
-	xactArgs = api.XactReqArgs{ID: rebID, Kind: apc.ActRebalance}
-	if err = api.AbortXaction(apiBP, xactArgs); err != nil {
-		return
+	xactArgs.ID, xactArgs.OnlyRunning = snap.ID, false
+	if err := api.AbortXaction(apiBP, xactArgs); err != nil {
+		return err
 	}
-	_, err = fmt.Fprintf(c.App.Writer, "Stopped %s %q\n", apc.ActRebalance, rebID)
-	return
+	fmt.Fprintf(c.App.Writer, "Stopped %s[%s]\n", apc.ActRebalance, snap.ID)
+	return nil
 }
 
 func showClusterRebalanceHandler(c *cli.Context) (err error) {
-	nodeID, xactID, xactKind, bck, errP := parseXactionFromArgs(c)
-	if errP != nil {
-		return errP
+	var (
+		xid      = c.Args().Get(0)
+		daemonID = c.Args().Get(1)
+	)
+	if daemonID == "" && xid != "" {
+		// either/or
+		if strings.HasPrefix(xid, cluster.TnamePrefix) {
+			sid, _, err := getNodeIDName(c, xid)
+			if err != nil {
+				return err
+			}
+			daemonID, xid = sid, ""
+		}
 	}
-	if xactID == "" && xactKind == "" {
-		xactKind = apc.ActRebalance
+	xactArgs := api.XactReqArgs{
+		ID:          xid,
+		Kind:        apc.ActRebalance,
+		DaemonID:    daemonID,
+		OnlyRunning: !flagIsSet(c, allJobsFlag),
 	}
-	return _showXactList(c, nodeID, xactID, xactKind, bck)
+	_, err = xactList(c, xactArgs, false)
+	return
 }

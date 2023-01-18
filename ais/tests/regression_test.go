@@ -174,7 +174,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 		if e.Location == "" {
 			t.Fatalf("[%#v]: location is empty", e)
 		}
-		tmp := strings.Split(e.Location, apc.PropsLocationSepa)
+		tmp := strings.Split(e.Location, apc.LocationPropSepa)
 		tid := cluster.N2ID(tmp[0])
 		targets[tid] = struct{}{}
 		tsi := smap.GetTarget(tid)
@@ -293,7 +293,7 @@ func TestRenameBucket(t *testing.T) {
 			tools.DestroyBucket(t, proxyURL, renamedBck) // cleanup post Ctrl-C etc.
 			defer tools.DestroyBucket(t, proxyURL, renamedBck)
 
-			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltPresent)
+			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: bck.Provider}, apc.FltPresent)
 			tassert.CheckFatal(t, err)
 
 			regData := regressionTestData{
@@ -418,7 +418,7 @@ func TestRenameObjects(t *testing.T) {
 		ProxyURL:  proxyURL,
 		Bck:       bck,
 		ObjCnt:    100,
-		CksumType: bck.DefaultProps().Cksum.Type,
+		CksumType: bck.DefaultProps(initialClusterConfig).Cksum.Type,
 	})
 	tassert.CheckFatal(t, err)
 
@@ -750,7 +750,7 @@ func TestPrefetchList(t *testing.T) {
 	xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
 	snaps, err := api.QueryXactionSnaps(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	locObjs, _, _ := snaps.ObjCounts()
+	locObjs, _, _ := snaps.ObjCounts(xactID)
 	if locObjs != int64(m.num) {
 		t.Errorf("did not prefetch all files: missing %d of %d", int64(m.num)-locObjs, m.num)
 	}
@@ -858,11 +858,11 @@ func TestPrefetchRange(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	// 4. Ensure that all the prefetches occurred
+	// 4. Ensure all done
 	xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
 	snaps, err := api.QueryXactionSnaps(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	locObjs, _, _ := snaps.ObjCounts()
+	locObjs, _, _ := snaps.ObjCounts(xactID)
 	if locObjs != int64(len(files)) {
 		t.Errorf("did not prefetch all files: missing %d of %d", int64(len(files))-locObjs, len(files))
 	}
@@ -970,7 +970,7 @@ func TestStressDeleteRange(t *testing.T) {
 			Name:     testBucketName,
 			Provider: apc.AIS,
 		}
-		cksumType = bck.DefaultProps().Cksum.Type
+		cksumType = bck.DefaultProps(initialClusterConfig).Cksum.Type
 	)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
@@ -1054,16 +1054,4 @@ func TestStressDeleteRange(t *testing.T) {
 	if len(lst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(lst.Entries))
 	}
-}
-
-func TestXactionNotFound(t *testing.T) {
-	var (
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
-
-		missingID = "incorrect"
-	)
-
-	_, err := api.GetXactionSnapsByID(baseParams, missingID)
-	tools.CheckErrIsNotFound(t, err)
 }

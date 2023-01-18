@@ -85,12 +85,6 @@ import (
 	"time"
 )
 
-// severity identifies the sort of log: info, warning etc. It also implements
-// the flag.Value interface. The -stderrthreshold flag is of type severity and
-// should be modified only through the flag.Value interface. The values match
-// the corresponding constants in C++.
-type severity int32 // sync/atomic int32
-
 // These constants identify the log levels in order of increasing severity.
 // A message written to a high-severity log file is also written to each
 // lower-severity log file.
@@ -104,12 +98,6 @@ const (
 const recycleBufMaxSize = 1024
 
 const severityChar = "IWEF"
-
-var severityName = []string{
-	infoLog:    "INFO",
-	warningLog: "WARNING",
-	errorLog:   "ERROR",
-}
 
 // NOTE: for module names mapped to these constants, see cmn/debug/debug_on.go
 const (
@@ -129,7 +117,178 @@ const (
 	_smoduleLast
 )
 
-var smodules [_smoduleLast]Level
+// severity identifies the sort of log: info, warning etc. It also implements
+// the flag.Value interface. The -stderrthreshold flag is of type severity and
+// should be modified only through the flag.Value interface. The values match
+// the corresponding constants in C++.
+type (
+	severity int32 // sync/atomic int32
+
+	// OutputStats tracks the number of output lines and bytes written.
+	OutputStats struct {
+		lines int64
+		bytes int64
+	}
+
+	// Level is exported because it appears in the arguments to V and is
+	// the type of the v flag, which can be set programmatically.
+	// It's a distinct type because we want to discriminate it from logType.
+	// Variables of type level are only changed under logging.mu.
+	// The -v flag is read only with atomic ops, so the state of the logging
+	// module is consistent.
+	// Level is treated as a sync/atomic int32.
+	// Level specifies a level of verbosity for V logs. *Level implements
+	// flag.Value; the -v flag is of type Level and should be modified
+	// only through the flag.Value interface.
+	Level int32
+
+	// moduleSpec represents the setting of the -vmodule flag.
+	// * vmodule=ec/jogger=4 - matches file ec/jogger.go
+	// * vmodule=jo.*er=4 - match all files which are in form of jo<some_text>er
+	// * vmodule=ais/.*=4 - match all files from ais package.
+	moduleSpec struct {
+		filter []modulePat
+	}
+
+	// modulePat contains a filter for the -vmodule flag.
+	// It holds a verbosity level and a file pattern to match.
+	modulePat struct {
+		pattern string
+		level   Level
+		literal bool // The pattern is a literal string
+	}
+
+	// traceLocation represents the setting of the -log_backtrace_at flag.
+	traceLocation struct {
+		file string
+		line int
+	}
+
+	// flushSyncWriter is the interface satisfied by logging destinations.
+	flushSyncWriter interface {
+		Flush() error
+		Sync() error
+		io.Writer
+	}
+)
+
+// loggingT collects all the global state of the logging setup.
+type loggingT struct {
+	// Boolean flags. Not handled atomically because the flag.Value interface
+	// does not let us avoid the =true, and that shorthand is necessary for
+	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
+	toStderr     bool // The -logtostderr flag.
+	alsoToStderr bool // The -alsologtostderr flag.
+	oos          bool // if filesystem used for logs is out of space
+
+	// Level flag. Handled atomically.
+	stderrThreshold severity // The -stderrthreshold flag.
+
+	// freeList is a list of byte buffers, maintained under freeListMu.
+	freeList *buffer
+	// freeListMu maintains the free list. It is separate from the main mutex
+	// so buffers can be grabbed and printed to without holding the main lock,
+	// for better parallelization.
+	freeListMu sync.Mutex
+
+	// mu protects the remaining elements of this structure and is
+	// used to synchronize logging.
+	mu sync.Mutex
+	// file holds writer for each of the log types.
+	file [numSeverity]flushSyncWriter
+	// pcs is used in V to avoid an allocation when computing the caller's PC.
+	pcs [1]uintptr
+	// vmap is a cache of the V Level for each V() call site, identified by PC.
+	// It is wiped whenever the vmodule flag changes state.
+	vmap map[uintptr]Level
+	// filterLength stores the length of the vmodule filter chain. If greater
+	// than zero, it means vmodule is enabled. It may be read safely
+	// using sync.LoadInt32, but is only modified under mu.
+	filterLength int32
+	// traceLocation is the state of the -log_backtrace_at flag.
+	traceLocation traceLocation
+	// These flags are modified only under lock, although verbosity may be fetched
+	// safely using atomic.LoadInt32.
+	vmodule   moduleSpec // The state of the -vmodule flag.
+	verbosity Level      // V logging level, the value of the -v flag/
+}
+
+type (
+	// buffer holds a byte Buffer for reuse. The zero value is ready for use.
+	buffer struct {
+		bytes.Buffer
+		tmp  [64]byte // temporary byte array for creating headers.
+		next *buffer
+	}
+
+	// syncBuffer joins a bufio.Writer to its underlying file, providing access to the
+	// file's Sync method and providing a wrapper for the Write method that provides log
+	// file rotation. There are conflicting methods, so the file cannot be embedded.
+	// l.mu is held for all its methods.
+	syncBuffer struct {
+		*bufio.Writer
+		logger *loggingT
+		file   *os.File
+		nbytes uint64 // The number of bytes written to this file
+		sev    severity
+	}
+
+	// logBridge provides the Write method that enables CopyStandardLogTo to connect
+	// Go's standard logs to the logs provided by this package.
+	logBridge severity
+
+	// Verbose is a boolean type that implements Infof (like Printf) etc.
+	// See the documentation of V for more information.
+	Verbose bool
+)
+
+var (
+	severityName = []string{
+		infoLog:    "INFO",
+		warningLog: "WARNING",
+		errorLog:   "ERROR",
+	}
+
+	smodules [_smoduleLast]Level
+
+	// assorted filenames (and their line numbers) that we don't want to clutter the logs
+	redactFnames = map[string]int{
+		"target_stats.go": 0,
+		"proxy_stats.go":  0,
+		"common_stats.go": 0,
+	}
+
+	// Stats tracks the number of lines of output and number of bytes
+	// per severity level. Values must be read with atomic.LoadInt64.
+	Stats struct {
+		Info, Warning, Error OutputStats
+	}
+
+	severityStats = [numSeverity]*OutputStats{
+		infoLog:    &Stats.Info,
+		warningLog: &Stats.Warning,
+		errorLog:   &Stats.Error,
+	}
+
+	errVmoduleSyntax = errors.New("syntax error: expect comma-separated list of filename=N")
+
+	errTraceSyntax = errors.New("syntax error: expect file.go:234")
+
+	logging loggingT
+
+	timeNow = time.Now // Stubbed out for testing.
+)
+
+var (
+	// logExitFunc provides a simple mechanism to override the default behavior
+	// of exiting on error. Used in testing and to guarantee we reach a required exit
+	// for fatal logs. Instead, exit could be a function rather than a method but that
+	// would make its use clumsier.
+	logExitFunc func(error)
+
+	// interface guard
+	_ flushSyncWriter = (*syncBuffer)(nil)
+)
 
 // get returns the value of the severity.
 func (s *severity) get() severity {
@@ -178,12 +337,6 @@ func severityByName(s string) (severity, bool) {
 	return 0, false
 }
 
-// OutputStats tracks the number of output lines and bytes written.
-type OutputStats struct {
-	lines int64
-	bytes int64
-}
-
 // Lines returns the number of lines written.
 func (s *OutputStats) Lines() int64 {
 	return atomic.LoadInt64(&s.lines)
@@ -193,32 +346,6 @@ func (s *OutputStats) Lines() int64 {
 func (s *OutputStats) Bytes() int64 {
 	return atomic.LoadInt64(&s.bytes)
 }
-
-// Stats tracks the number of lines of output and number of bytes
-// per severity level. Values must be read with atomic.LoadInt64.
-var Stats struct {
-	Info, Warning, Error OutputStats
-}
-
-var severityStats = [numSeverity]*OutputStats{
-	infoLog:    &Stats.Info,
-	warningLog: &Stats.Warning,
-	errorLog:   &Stats.Error,
-}
-
-// Level is exported because it appears in the arguments to V and is
-// the type of the v flag, which can be set programmatically.
-// It's a distinct type because we want to discriminate it from logType.
-// Variables of type level are only changed under logging.mu.
-// The -v flag is read only with atomic ops, so the state of the logging
-// module is consistent.
-
-// Level is treated as a sync/atomic int32.
-
-// Level specifies a level of verbosity for V logs. *Level implements
-// flag.Value; the -v flag is of type Level and should be modified
-// only through the flag.Value interface.
-type Level int32
 
 // get returns the value of the Level.
 func (l *Level) get() Level {
@@ -252,22 +379,6 @@ func (*Level) Set(value string) error {
 	return nil
 }
 
-// moduleSpec represents the setting of the -vmodule flag.
-// * vmodule=ec/jogger=4 - matches file ec/jogger.go
-// * vmodule=jo.*er=4 - match all files which are in form of jo<some_text>er
-// * vmodule=ais/.*=4 - match all files from ais package.
-type moduleSpec struct {
-	filter []modulePat
-}
-
-// modulePat contains a filter for the -vmodule flag.
-// It holds a verbosity level and a file pattern to match.
-type modulePat struct {
-	pattern string
-	level   Level
-	literal bool // The pattern is a literal string
-}
-
 // match reports whether the file matches the pattern.
 func (m *modulePat) match(file string) bool {
 	if m.literal {
@@ -295,8 +406,6 @@ func (m *moduleSpec) String() string {
 // Get is part of the (Go 1.2)  flag.Getter interface. It always returns nil for this flag type since the
 // struct is not exported.
 func (*moduleSpec) Get() any { return nil }
-
-var errVmoduleSyntax = errors.New("syntax error: expect comma-separated list of filename=N")
 
 // Syntax: -vmodule=recordio=2,file=1,gfs*=3
 func (*moduleSpec) Set(value string) error {
@@ -336,12 +445,6 @@ func isLiteral(pattern string) bool {
 	return !strings.ContainsAny(pattern, `\*+?[]()^$|`)
 }
 
-// traceLocation represents the setting of the -log_backtrace_at flag.
-type traceLocation struct {
-	file string
-	line int
-}
-
 // isSet reports whether the trace location has been specified.
 // logging.mu is held.
 func (t *traceLocation) isSet() bool {
@@ -371,8 +474,6 @@ func (t *traceLocation) String() string {
 // Get is part of the (Go 1.2) flag.Getter interface. It always returns nil for this flag type since the
 // struct is not exported
 func (*traceLocation) Get() any { return nil }
-
-var errTraceSyntax = errors.New("syntax error: expect file.go:234")
 
 // Syntax: -log_backtrace_at=gopherflakes.go:234
 // Note that unlike vmodule the file extension is included here.
@@ -404,67 +505,10 @@ func (t *traceLocation) Set(value string) error {
 	return nil
 }
 
-// flushSyncWriter is the interface satisfied by logging destinations.
-type flushSyncWriter interface {
-	Flush() error
-	Sync() error
-	io.Writer
-}
-
 // Flush flushes all pending log I/O.
 func Flush() {
 	logging.lockAndFlushAll()
 }
-
-// loggingT collects all the global state of the logging setup.
-type loggingT struct {
-	// Boolean flags. Not handled atomically because the flag.Value interface
-	// does not let us avoid the =true, and that shorthand is necessary for
-	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
-	toStderr     bool // The -logtostderr flag.
-	alsoToStderr bool // The -alsologtostderr flag.
-	oos          bool // if filesystem used for logs is out of space
-
-	// Level flag. Handled atomically.
-	stderrThreshold severity // The -stderrthreshold flag.
-
-	// freeList is a list of byte buffers, maintained under freeListMu.
-	freeList *buffer
-	// freeListMu maintains the free list. It is separate from the main mutex
-	// so buffers can be grabbed and printed to without holding the main lock,
-	// for better parallelization.
-	freeListMu sync.Mutex
-
-	// mu protects the remaining elements of this structure and is
-	// used to synchronize logging.
-	mu sync.Mutex
-	// file holds writer for each of the log types.
-	file [numSeverity]flushSyncWriter
-	// pcs is used in V to avoid an allocation when computing the caller's PC.
-	pcs [1]uintptr
-	// vmap is a cache of the V Level for each V() call site, identified by PC.
-	// It is wiped whenever the vmodule flag changes state.
-	vmap map[uintptr]Level
-	// filterLength stores the length of the vmodule filter chain. If greater
-	// than zero, it means vmodule is enabled. It may be read safely
-	// using sync.LoadInt32, but is only modified under mu.
-	filterLength int32
-	// traceLocation is the state of the -log_backtrace_at flag.
-	traceLocation traceLocation
-	// These flags are modified only under lock, although verbosity may be fetched
-	// safely using atomic.LoadInt32.
-	vmodule   moduleSpec // The state of the -vmodule flag.
-	verbosity Level      // V logging level, the value of the -v flag/
-}
-
-// buffer holds a byte Buffer for reuse. The zero value is ready for use.
-type buffer struct {
-	bytes.Buffer
-	tmp  [64]byte // temporary byte array for creating headers.
-	next *buffer
-}
-
-var logging loggingT
 
 // setVState sets a consistent state for V logging.
 // l.mu is held.
@@ -515,8 +559,6 @@ func (l *loggingT) putBuffer(b *buffer) {
 	l.freeListMu.Unlock()
 }
 
-var timeNow = time.Now // Stubbed out for testing.
-
 /*
 header formats a log header as defined by the C++ implementation.
 It returns a buffer containing the formatted header and the user's file and line number.
@@ -531,12 +573,6 @@ where the fields are defined as follows:
 	line             The line number
 	msg              The user-supplied message
 */
-
-// selected filenames (and their line numbers) that we don't want to clutter the logs
-var redactFnames = map[string]int{
-	"target_stats.go": 0,
-	"proxy_stats.go":  0,
-}
 
 func (l *loggingT) header(s severity, depth int) (*buffer, string, int) {
 	var redact bool
@@ -750,12 +786,6 @@ func stacks(all bool) []byte {
 	return trace
 }
 
-// logExitFunc provides a simple mechanism to override the default behavior
-// of exiting on error. Used in testing and to guarantee we reach a required exit
-// for fatal logs. Instead, exit could be a function rather than a method but that
-// would make its use clumsier.
-var logExitFunc func(error)
-
 // exit is called if there is trouble creating or writing log files.
 // l.mu is held.
 func (*loggingT) exit(err error) {
@@ -768,21 +798,6 @@ func (*loggingT) exit(err error) {
 	// we don't want glog to kill a ais process only is there is trouble creating
 	// or writing log files.
 }
-
-// syncBuffer joins a bufio.Writer to its underlying file, providing access to the
-// file's Sync method and providing a wrapper for the Write method that provides log
-// file rotation. There are conflicting methods, so the file cannot be embedded.
-// l.mu is held for all its methods.
-type syncBuffer struct {
-	*bufio.Writer
-	logger *loggingT
-	file   *os.File
-	nbytes uint64 // The number of bytes written to this file
-	sev    severity
-}
-
-// interface guard
-var _ flushSyncWriter = (*syncBuffer)(nil)
 
 func (sb *syncBuffer) Sync() error {
 	return sb.file.Sync()
@@ -896,10 +911,6 @@ func CopyStandardLogTo(name string) {
 	stdLog.SetOutput(logBridge(sev))
 }
 
-// logBridge provides the Write method that enables CopyStandardLogTo to connect
-// Go's standard logs to the logs provided by this package.
-type logBridge severity
-
 // Write parses the standard logging line and passes its components to the
 // logger for severity(lb).
 func (lb logBridge) Write(b []byte) (n int, err error) {
@@ -946,10 +957,6 @@ func (l *loggingT) setV(pc uintptr) Level {
 	l.vmap[pc] = 0
 	return 0
 }
-
-// Verbose is a boolean type that implements Infof (like Printf) etc.
-// See the documentation of V for more information.
-type Verbose bool
 
 // V reports whether verbosity at the call site is at least the requested level.
 // The returned value is a boolean of type Verbose, which implements Info, Infoln

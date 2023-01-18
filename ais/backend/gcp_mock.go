@@ -11,6 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 )
 
-func NewGCP(_ cluster.Target) (cluster.BackendProvider, error) {
+func NewGCP(_ cluster.TargetPut) (cluster.BackendProvider, error) {
 	return nil, newErrInitBackend(apc.GCP)
 }

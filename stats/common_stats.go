@@ -29,12 +29,16 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
-	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const dfltPeriodicFlushTime = 40 * time.Second // when config.Log.FlushTime == 0
+const (
+	dfltPeriodicFlushTime = 40 * time.Second       // when `config.Log.FlushTime` == time.Duration(0)
+	dfltPeriodicTimeStamp = time.Hour              // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
+	dfltStatsLogInterval  = int64(time.Minute)     // when `config.Log.StatsTime` == time.Duration(0)
+	maxStatsLogInterval   = int64(2 * time.Minute) // when the resulting `statsTime` is greater than
+)
 
 // more periodic
 const (
@@ -66,11 +70,6 @@ func IsKindThroughput(name string) bool { return name == GetThroughput }
 const (
 	numGorHigh    = 100
 	numGorExtreme = 1000
-)
-
-const (
-	dfltStatsLogInterval = int64(time.Minute)
-	maxStatsLogInterval  = int64(2 * time.Minute)
 )
 
 // NOTE: all supported metrics
@@ -126,14 +125,9 @@ type (
 		Tracker   statsTracker
 		promDesc  promDesc
 		statsdC   *statsd.Client
-		statsTime time.Duration
 		sgl       *memsys.SGL
+		statsTime time.Duration
 		cmu       sync.RWMutex // ctracker vs Prometheus Collect()
-	}
-
-	RebalanceSnap struct {
-		xact.Snap
-		RebID int64 `json:"glob.id,string"`
 	}
 
 	// REST API
@@ -141,7 +135,7 @@ type (
 		Snode          *cluster.Snode `json:"snode"`
 		Stats          *CoreStats     `json:"daemon_stats"`
 		Capacity       fs.MPCap       `json:"capacity"`
-		RebSnap        *RebalanceSnap `json:"rebalance_snap,omitempty"`
+		RebSnap        *cluster.Snap  `json:"rebalance_snap,omitempty"`
 		Status         string         `json:"status"`
 		DeploymentType string         `json:"deployment"`
 		Version        string         `json:"ais_version"`  // major.minor.build
@@ -202,14 +196,14 @@ type (
 	}
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
-		name        string
+		daemon      runnerHost
 		stopCh      chan struct{}
 		workCh      chan cos.NamedVal64
 		ticker      *time.Ticker
 		Core        *CoreStats  `json:"core"`
 		ctracker    copyTracker // to avoid making it at runtime
-		daemon      runnerHost
-		nextLogTime int64 // mono.NanoTime()
+		name        string      // this stats-runner's name
+		nextLogTime int64       // mono.NanoTime()
 		startedUp   atomic.Bool
 	}
 	// Stats are tracked via a map of stats names (key) to statsValue (values).
@@ -779,6 +773,7 @@ waitStartup:
 		checkNumGorHigh   int64
 		startTime         = mono.NanoTime()
 		lastGlogFlushTime = startTime
+		lastDateTimestamp = startTime
 	)
 	for {
 		select {
@@ -805,6 +800,10 @@ waitStartup:
 			if time.Duration(now-lastGlogFlushTime) > flushTime {
 				glog.Flush()
 				lastGlogFlushTime = mono.NanoTime()
+			}
+			if time.Duration(now-lastDateTimestamp) > dfltPeriodicTimeStamp {
+				glog.Infoln(cos.FormatTime(time.Now(), "" /* RFC822 */) + " =============")
+				lastDateTimestamp = now
 			}
 		case <-r.stopCh:
 			r.ticker.Stop()

@@ -56,13 +56,19 @@ $ BUCKET=<existing-cloud-bucket> make test-long
 To run Python-related tests:
 
 ```console
-$ cd aistore/sdk/python
+$ cd aistore/python
 
-# Run Python tests
+# Run all Python tests
 $ make python_tests
+
+# Run Python sdk tests
+$ make python_sdk_tests
 
 # Run Python ETL tests
 $ make python_etl_tests
+
+# Run Python botocore monkey patch tests
+$ make python_botocore_tests
 ```
 
 

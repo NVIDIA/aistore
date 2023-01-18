@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // interface guard
@@ -29,6 +30,8 @@ var _ cluster.Target = (*target)(nil)
 func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *target) PageMM() *memsys.MMSA        { return t.gmm }
 func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
+
+func (*target) GetAllRunning(xactKind string) []string { return xreg.GetAllRunning(xactKind) }
 
 func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.IsRemoteAIS() {
@@ -41,8 +44,14 @@ func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Props != nil {
 		provider = bck.RemoteBck().Provider
 	}
-	if ext, ok := t.backend[provider]; ok {
-		return ext
+	config := cmn.GCO.Get()
+	if _, ok := config.Backend.Providers[provider]; ok {
+		bp, k := t.backend[provider]
+		debug.Assert(k, provider)
+		if bp != nil {
+			return bp
+		}
+		// nil when configured & not-built
 	}
 	c, _ := backend.NewDummyBackend(t)
 	return c
@@ -90,12 +99,15 @@ func (t *target) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 	return
 }
 
-// CopyObject creates either a full replica of an object (the `lom` argument)
-//   - or -
+// CopyObject:
+// - either creates a full replica of the source object (the `lom` argument)
+// - or transforms the object
 //
-// transforms the object and places it at the destination, in accordance with the `params`.
+// In both cases, the result is placed at the `params`-defined destination
+// in accordance with the configured destination bucket policies.
 //
-// The destination _may_ have a different name and _may_ be located in a different bucket.
+// Destination object _may_ have a different name and _may_ be located in a different bucket.
+//
 // Scenarios include (but are not limited to):
 //   - if both src and dst LOMs are from local buckets the copying then takes place between AIS targets
 //     (of this same cluster);
@@ -117,9 +129,11 @@ func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, 
 		objNameTo = params.ObjNameTo
 	}
 	if params.DP != nil { // NOTE: w/ transformation
-		return coi.copyReader(lom, objNameTo)
+		size, err = coi.copyReader(lom, objNameTo)
+	} else {
+		size, err = coi.copyObject(lom, objNameTo)
 	}
-	size, err = coi.copyObject(lom, objNameTo)
+	coi.objsAdd(size, err)
 	freeCopyObjInfo(coi)
 	return
 }

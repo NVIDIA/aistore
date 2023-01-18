@@ -59,7 +59,7 @@ type (
 var (
 	lomLocker nameLocker
 	maxLmeta  atomic.Int64
-	T         Target
+	T         TargetLoc
 )
 
 // interface guard
@@ -69,7 +69,7 @@ var (
 	_ lifUnlocker        = (*LOM)(nil)
 )
 
-func Init(t Target) {
+func Init(t TargetLoc) {
 	initBckLocker()
 	if t == nil { // am proxy
 		return
@@ -159,10 +159,10 @@ func (lom *LOM) ObjectName() string           { return lom.ObjName }
 func (lom *LOM) Bck() *Bck                    { return &lom.bck }
 func (lom *LOM) Bucket() *cmn.Bck             { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
-func (lom *LOM) Location() string             { return T.String() + apc.PropsLocationSepa + lom.mpathInfo.String() }
+func (lom *LOM) Location() string             { return T.String() + apc.LocationPropSepa + lom.mpathInfo.String() }
 
 func ParseObjLoc(loc string) (tname, mpname string) {
-	i := strings.IndexByte(loc, apc.PropsLocationSepa[0])
+	i := strings.IndexByte(loc, apc.LocationPropSepa[0])
 	tname, mpname = loc[:i], loc[i+1:]
 	return
 }

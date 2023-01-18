@@ -1,6 +1,6 @@
 // Package apc: API messages and constants
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -56,7 +56,7 @@ const (
 	Finished = "finished"
 	Progress = "progress"
 
-	// dSort, downloader, query
+	// dSort, dloader, query
 	Metrics     = "metrics"
 	Records     = "records"
 	Shards      = "shards"
@@ -69,16 +69,14 @@ const (
 	WorkerOwner = "worker" // TODO: it should be removed once get-next-bytes endpoint is ready
 
 	// ETL
-	ETL         = "etl"
-	ETLInitSpec = "init_spec"
-	ETLInitCode = "init_code"
-	ETLInfo     = "info"
-	ETLList     = List
-	ETLLogs     = "logs"
-	ETLObject   = "_object"
-	ETLStop     = Stop
-	ETLStart    = Start
-	ETLHealth   = "health"
+	ETL       = "etl"
+	ETLInfo   = "info"
+	ETLList   = List
+	ETLLogs   = "logs"
+	ETLObject = "_object"
+	ETLStop   = Stop
+	ETLStart  = Start
+	ETLHealth = "health"
 )
 
 type URLPath struct {

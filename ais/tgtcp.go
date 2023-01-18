@@ -22,9 +22,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/dsort"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/nl"
@@ -249,12 +249,10 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case apc.GetWhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
 	case apc.GetWhatDaemonStatus:
-		var rebSnap *stats.RebalanceSnap
+		var rebSnap *cluster.Snap
 		if entry := xreg.GetLatest(xreg.XactFilter{Kind: apc.ActRebalance}); entry != nil {
-			var ok bool
 			if xctn := entry.Get(); xctn != nil {
-				rebSnap, ok = xctn.Snap().(*stats.RebalanceSnap)
-				debug.Assert(ok)
+				rebSnap = xctn.Snap()
 			}
 		}
 		msg := &stats.DaemonStatus{
@@ -278,7 +276,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case apc.GetWhatRemoteAIS:
 		var (
-			aisBackend = t.backend[apc.AIS].(*backend.AISBackendProvider)
+			aisBackend = t.aisBackend()
 			refresh    = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
 		)
 		if !refresh {
@@ -286,15 +284,15 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		anyConf, ok := cmn.GCO.Get().Backend.ProviderConf(apc.AIS)
-		if !ok {
+		anyConf := cmn.GCO.Get().Backend.Get(apc.AIS)
+		if anyConf == nil {
 			t.writeJSON(w, r, cluster.Remotes{}, httpdaeWhat)
 			return
 		}
-		aisBackendConf, ok := anyConf.(cmn.BackendConfAIS)
+		aisConf, ok := anyConf.(cmn.BackendConfAIS)
 		debug.Assert(ok)
 
-		t.writeJSON(w, r, aisBackend.GetInfo(aisBackendConf), httpdaeWhat)
+		t.writeJSON(w, r, aisBackend.GetInfo(aisConf), httpdaeWhat)
 	default:
 		t.htrun.httpdaeget(w, r, query)
 	}
@@ -855,12 +853,13 @@ func (t *target) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	t.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
 }
 
-func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD) {
+func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD, action string) {
 	for key := range oldEtlMD.ETLs {
 		if _, ok := newEtlMD.ETLs[key]; ok {
 			continue
 		}
-		// TODO: stop only when running; specify cause
+		// TODO: stop only when running
+		glog.Infoln("ETL MD change resulting from action: " + action)
 		etl.Stop(t, key, nil)
 	}
 }
@@ -879,30 +878,29 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 		return
 	}
 
-	// specific remais update
+	// special: remais update
 	if msg.Action == apc.ActAttachRemAis || msg.Action == apc.ActDetachRemAis {
 		return t.attachDetachRemAis(newConfig, msg)
 	}
 
 	if !newConfig.Backend.EqualRemAIS(&oldConfig.Backend) {
-		t.backend.init(t, false /*starting*/) // re-init from scratch
-		return
-	}
-	// NOTE: primary command-line flag `-override_backends` allows to update
-	// (via build tags - see AIS_BACKEND_PROVIDERS) remote backends at deployment time.
-	// See also: earlystart.go
-	if !newConfig.Backend.EqualClouds(&oldConfig.Backend) {
-		t.backend.initExt(t, false /*starting*/)
+		if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
+			err = t.attachDetachRemAis(newConfig, msg)
+		} else {
+			t.backend[apc.AIS] = backend.NewAIS(t)
+		}
 	}
 	return
 }
 
 // NOTE: apply the entire config: add new and update existing entries (remote clusters)
 func (t *target) attachDetachRemAis(newConfig *globalConfig, msg *aisMsg) (err error) {
-	aisConf, ok := newConfig.Backend.ProviderConf(apc.AIS)
-	debug.Assert(ok)
-
-	aisBackend := t.backend[apc.AIS].(*backend.AISBackendProvider)
+	var (
+		aisBackend *backend.AISBackendProvider
+		aisConf    = newConfig.Backend.Get(apc.AIS)
+	)
+	debug.Assert(aisConf != nil)
+	aisBackend = t.aisBackend()
 	return aisBackend.Apply(aisConf, msg.Action, &newConfig.ClusterConfig)
 }
 

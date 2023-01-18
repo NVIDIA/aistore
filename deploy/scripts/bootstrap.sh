@@ -145,7 +145,7 @@ test-docker)
 
   echo "Running test in Docker..." >&2
   branch=$(git branch | grep \* | cut -d ' ' -f2)
-  errs=$("${AISTORE_PATH}/deploy/test/docker/test.sh" --name=${branch} 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL: Bench\|^--- FAIL: Test"  )
+  errs=$("${AISTORE_PATH}/deploy/test-in-docker/test.sh" --name=${branch} 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL: Bench\|^--- FAIL: Test"  )
   perror $1 "${errs}"
   ;;
 

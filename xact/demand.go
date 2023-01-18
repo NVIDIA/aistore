@@ -1,6 +1,6 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
@@ -52,6 +52,9 @@ type (
 ////////////////
 // DemandBase //
 ////////////////
+
+// NOTE: override `Base.IsIdle`
+func (r *DemandBase) IsIdle() bool { return r.likelyIdle() }
 
 func (r *DemandBase) Init(uuid, kind string, bck *cluster.Bck, idle time.Duration) (xdb *DemandBase) {
 	r.hkName = kind + "/" + uuid
@@ -114,18 +117,6 @@ func (r *DemandBase) SubPending(n int) {
 func (r *DemandBase) Stop() {
 	hk.Unreg(r.hkName + hk.NameSuffix)
 	r.idle.ticks.Close()
-}
-
-func (r *DemandBase) Snap() cluster.XactSnap { return r.ExtSnap() }
-
-func (r *DemandBase) ExtSnap() *SnapExt {
-	snap := &SnapExt{}
-	r.ToSnap(&snap.Snap)
-	if r.Bck() != nil {
-		snap.Bck = *r.Bck().Bucket()
-	}
-	snap.Ext = &BaseDemandStatsExt{IsIdle: r.likelyIdle()}
-	return snap
 }
 
 func (r *DemandBase) Abort(err error) (ok bool) {

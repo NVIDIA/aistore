@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/sys"
@@ -50,9 +50,8 @@ type (
 			ntargets    int  // expected number of targets in a starting-up cluster
 			skipStartup bool // determines if primary should skip waiting for targets to join
 		}
-		transient        bool // true: keep command-line provided `-config-custom` settings in memory only
-		overrideBackends bool // if true primary will metasync backends from deployment-time plain-text config
-		target           struct {
+		transient bool // true: keep command-line provided `-config-custom` settings in memory only
+		target    struct {
 			// do not try to auto-join cluster upon startup - stand by and wait for admin request
 			standby bool
 			// allow: disk sharing by multiple mountpaths and mountpaths with no disks whatsoever
@@ -92,7 +91,6 @@ func init() {
 	flag.BoolVar(&daemon.cli.transient, "transient", false,
 		"false: store customized (via '-config_custom') configuration\ntrue: keep '-config_custom' settings in memory only (non-persistent)")
 	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
-	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "configure remote backends at deployment time (potentially, override previously stored configuration)")
 
 	// target-only
 	flag.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")
@@ -205,7 +203,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	// reg more xaction factories
 	space.Xreg()
-	downloader.Xreg()
+	dload.Xreg()
 
 	t := newTarget(co)
 	t.init(config)

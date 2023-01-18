@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file provides commands that remove various entities from the cluster.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -24,29 +24,29 @@ var (
 	searchCommands []cli.Command
 
 	similarWords = map[string][]string{
-		commandMountpath: {"mount", "unmount", "umount"},
-		commandList:      {"list", "dir"},
+		commandMountpath: {"mount", "unmount", "umount", "disk"},
+		commandList:      {"list", "dir", "contents"},
 		commandSet:       {"update", "assign", "modify"},
 		commandShow:      {"view", "display", "list"},
-		commandRemove:    {"remove", "delete", "del", "evict", "destroy"},
-		commandRename:    {"move", "rename"},
-		commandCopy:      {"copy", "replicate"},
-		commandGet:       {"fetch", "read"},
-		commandPrefetch:  {"load", "preload", "warmup", "cache"},
-		commandMirror:    {"protect", "replicate"},
+		commandRemove:    {"remove", "delete", "del", "evict", "destroy", "cleanup"},
+		commandRename:    {"move", "rename", "ren"},
+		commandCopy:      {"copy", "replicate", "backup"},
+		commandGet:       {"fetch", "read", "download"},
+		commandPrefetch:  {"load", "preload", "warmup", "cache", "get"},
+		commandMirror:    {"protect", "replicate", "copy"},
 		commandECEncode:  {"protect", "encode", "replicate", "erasure-code"},
 		commandStart:     {"do", "run", "execute"},
-		commandStop:      {"abort", "termnate"},
-		commandPut:       {"update", "write", "promote", "modify"},
+		commandStop:      {"abort", "terminate"},
+		commandPut:       {"update", "write", "promote", "modify", "upload"},
 		commandCreate:    {"add", "new"},
 		commandObject:    {"file"},
 		commandStorage:   {"disk", "mountpath", "capacity", "used", "available"},
-		commandBucket:    {"dir", "directory"},
-		commandJob:       {"xaction", "batch", "async"},
-		commandArch:      {"serialize", "format", "reformat", "tar", "zip", "gzip"},
-		//
-		subcmdAuthAdd:  {"register", "create"},
-		subcmdDownload: {"load"},
+		commandBucket:    {"dir", "directory", "container"},
+		commandJob:       {"batch", "async"},
+		commandArch:      {"serialize", "format", "reformat", "compress", "tar", "zip", "gzip"},
+		subcmdAuthAdd:    {"register", "create"},
+		subcmdStgCleanup: {"remove", "delete", "evict"},
+		subcmdDownload:   {"load", "populate", "copy", "cp"},
 	}
 
 	// app state
@@ -59,7 +59,7 @@ func initSearch(app *cli.App) {
 	searchCommands = []cli.Command{
 		{
 			Name:         commandSearch,
-			Usage:        "search ais commands",
+			Usage:        "search " + cliName + " commands",
 			ArgsUsage:    searchArgument,
 			Action:       searchCmdHdlr,
 			Flags:        searchCmdFlags,
@@ -95,6 +95,7 @@ func findCmdByKey(key string) (result cos.StrSet) {
 	return
 }
 
+// (compare w/ findCmdMultiKeyAlt)
 func findCmdMultiKey(keys []string) []string {
 	resultSet := findCmdByKey(keys[0])
 	for _, key := range keys[1:] {
@@ -103,6 +104,25 @@ func findCmdMultiKey(keys []string) []string {
 	}
 
 	result := resultSet.ToSlice()
+	sort.Strings(result)
+	return result
+}
+
+func findCmdMultiKeyAlt(keys ...string) []string {
+	var (
+		result    []string
+		resultSet = findCmdByKey(keys[0])
+	)
+outer:
+	for cmd := range resultSet {
+		for _, key := range keys[1:] {
+			if !strings.Contains(cmd, " "+key+" ") && !strings.HasSuffix(cmd, " "+key) {
+				continue outer
+			}
+		}
+		result = append(result, cmd)
+	}
+
 	sort.Strings(result)
 	return result
 }
@@ -127,6 +147,19 @@ func searchCmdHdlr(c *cli.Context) error {
 		pattern := parseStrFlag(c, regexFlag)
 		commands = findCmdMatching(pattern)
 	} else {
+		if c.NArg() > 1 {
+			for word, similar := range similarWords {
+				if !cos.StringInSlice(word, c.Args()) {
+					continue
+				}
+				for _, word2 := range similar {
+					if cos.StringInSlice(word2, c.Args()) {
+						warn := fmt.Sprintf("%q and %q are \"similar\"", word, word2)
+						actionWarn(c, warn+" (search results may include either/or combinations)")
+					}
+				}
+			}
+		}
 		commands = findCmdMultiKey(c.Args())
 	}
 

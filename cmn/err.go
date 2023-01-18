@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -134,11 +134,10 @@ type (
 	}
 	ErrETL struct {
 		Reason string
-		ETLErrorContext
+		ETLErrCtx
 	}
-	ETLErrorContext struct {
+	ETLErrCtx struct {
 		TID     string
-		UUID    string
 		ETLName string
 		PodName string
 		SvcName string
@@ -175,6 +174,13 @@ type (
 	ErrUsePrevXaction struct { // equivalent to xreg.WprUse
 		xaction string
 	}
+
+	ErrStreamTerminated struct {
+		err    error
+		stream string
+		reason string
+		detail string
+	}
 )
 
 var (
@@ -183,6 +189,7 @@ var (
 	ErrQuiesceTimeout   = errors.New("timed out waiting for quiescence")
 	ErrNotEnoughTargets = errors.New("not enough target nodes")
 	ErrNoMountpaths     = errors.New("no mountpaths")
+
 	// aborts
 	ErrXactRenewAbort   = errors.New("renewal abort")
 	ErrXactUserAbort    = errors.New("user abort")              // via apc.ActXactStop
@@ -212,6 +219,23 @@ func (e *ErrFailedTo) Error() string {
 }
 
 func (e *ErrFailedTo) Unwrap() (err error) { return e.err }
+
+// ErrStreamTerminated
+
+func NewErrStreamTerminated(stream string, err error, reason, detail string) *ErrStreamTerminated {
+	return &ErrStreamTerminated{stream: stream, err: err, reason: reason, detail: detail}
+}
+
+func (e *ErrStreamTerminated) Error() string {
+	return fmt.Sprintf("%s terminated(%q, %v): %s", e.stream, e.reason, e.err, e.detail)
+}
+
+func (e *ErrStreamTerminated) Unwrap() (err error) { return e.err }
+
+func IsErrStreamTerminated(err error) bool {
+	_, ok := err.(*ErrStreamTerminated)
+	return ok
+}
 
 // ErrUnsupp & ErrNotImpl
 
@@ -474,7 +498,7 @@ func NewErrAborted(what, ctx string, err error) *ErrAborted {
 }
 
 func (e *ErrAborted) Error() (s string) {
-	s = fmt.Sprintf("%s aborted at %s", e.what, cos.FormatTimestamp(e.timestamp))
+	s = fmt.Sprintf("%s aborted at %s", e.what, cos.FormatTime(e.timestamp, cos.StampMicro))
 	if e.err != nil {
 		s = fmt.Sprintf("%s, err: %v", s, e.err)
 	}
@@ -526,13 +550,12 @@ func (e *ErrMissingBackend) Error() string {
 	if e.Msg != "" {
 		return e.Msg
 	}
-	const redeploy = "(hint: consider redeploying with '-override_backends' command-line and the corresponding build tag)"
-	return fmt.Sprintf("%q backend is missing %s", e.Provider, redeploy)
+	return fmt.Sprintf("%q backend is missing in the cluster configuration", e.Provider)
 }
 
 // ErrETL
 
-func NewErrETL(ctx *ETLErrorContext, format string, a ...any) *ErrETL {
+func NewErrETL(ctx *ETLErrCtx, format string, a ...any) *ErrETL {
 	e := &ErrETL{
 		Reason: fmt.Sprintf(format, a...),
 	}
@@ -544,9 +567,6 @@ func (e *ErrETL) Error() string {
 	if e.TID != "" {
 		s = append(s, fmt.Sprintf("t[%s]", e.TID))
 	}
-	if e.UUID != "" {
-		s = append(s, fmt.Sprintf("uuid=%q", e.UUID))
-	}
 	if e.ETLName != "" {
 		s = append(s, fmt.Sprintf("etl=%q", e.ETLName))
 	}
@@ -557,13 +577,6 @@ func (e *ErrETL) Error() string {
 		s = append(s, fmt.Sprintf("service=%q", e.SvcName))
 	}
 	return fmt.Sprintf("[%s] %s", strings.Join(s, ","), e.Reason)
-}
-
-func (e *ErrETL) withUUID(uuid string) *ErrETL {
-	if uuid != "" {
-		e.UUID = uuid
-	}
-	return e
 }
 
 func (e *ErrETL) withTarget(tid string) *ErrETL {
@@ -594,13 +607,12 @@ func (e *ErrETL) WithPodName(name string) *ErrETL {
 	return e
 }
 
-func (e *ErrETL) WithContext(ctx *ETLErrorContext) *ErrETL {
+func (e *ErrETL) WithContext(ctx *ETLErrCtx) *ErrETL {
 	if ctx == nil {
 		return e
 	}
 	return e.
 		withTarget(ctx.TID).
-		withUUID(ctx.UUID).
 		WithPodName(ctx.PodName).
 		withETLName(ctx.ETLName).
 		withSvcName(ctx.SvcName)
@@ -708,6 +720,10 @@ func IsNotExist(err error) bool {
 		return true
 	}
 	return IsErrNotFound(err)
+}
+
+func IsFileAlreadyClosed(err error) bool {
+	return errors.Is(err, iofs.ErrClosed)
 }
 
 func IsErrBucketLevel(err error) bool { return IsErrBucketNought(err) }

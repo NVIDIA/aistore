@@ -1,10 +1,16 @@
 ^.*promoted.*"/tmp/prm/obj".*=>.*$
+
 /tmp/prm/obj
 ^.*promoted.*"/tmp/prm/discard".*=>.*$
+
 ^.*promoted.*"/tmp/prm/".*=>.*$
+
 ^.*promoted.*"/tmp/prm".*=>.*$
+
 ^.*promoted.*"/tmp/prm".*=>.*$
+
 ^.*promoted.*"/tmp/prm/".*=>.*$
+
 NAME             SIZE
 fifth/obj        7B
 fourth/obj       7B
@@ -13,6 +19,7 @@ sixth/obj        7B
 three/obj        7B
 two/discard      7B
 ^promoted.*/tmp/prm.*=>.*ais://$BUCKET.*$
+
 11.txt
 12.txt
 13.txt
@@ -20,6 +27,7 @@ two/discard      7B
 15.txt
 NAME     SIZE
 ^recursively promoted.*/tmp/prm.*=>.*ais://$BUCKET.*$
+
 subdir/11.txt
 subdir/12.txt
 subdir/13.txt

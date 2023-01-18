@@ -89,6 +89,14 @@ var (
 
 func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) }
 
+func (r *XactCln) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
+}
+
 ////////////////
 // clnFactory //
 ////////////////

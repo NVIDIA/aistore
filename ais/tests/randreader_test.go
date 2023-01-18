@@ -25,7 +25,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 		wg         = &sync.WaitGroup{}
 		dir        = t.Name()
-		cksumType  = bck.DefaultProps().Cksum.Type
+		cksumType  = bck.DefaultProps(initialClusterConfig).Cksum.Type
 	)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)

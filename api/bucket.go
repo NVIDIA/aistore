@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -100,7 +100,8 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketPr
 // - includes usage, capacity, other statistics
 // - is obtained via GetBucketInfo() API
 // - delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
-// The API utilizes HEAD method (compare with HeadBucket above)
+// NOTE:
+// - the API utilizes HEAD method (compare with HeadBucket above) and always executes the _fast_ version of the summary
 func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketProps, info *cmn.BsummResult, err error) {
 	var (
 		resp *wrappedResp
@@ -185,7 +186,7 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 	return len(bcks) > 0, err
 }
 
-// GetBucketSummary returns bucket summaries (i.e., capcity ulitization stats and
+// GetBucketSummary returns bucket summaries (capacity ulitization percentages, sizes, and
 // numbers of objects) for the specified bucket or buckets, as per `cmn.QueryBcks` query.
 // E.g., an empty bucket query corresponds to all buckets present in the cluster's metadata.
 func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (cmn.AllBsummResults, error) {
@@ -333,20 +334,22 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 // (where 0 (zero) means returning all objects in the bucket).
 //
 // This API supports numerous options and flags. In particular, `apc.LsoMsg`
-// supports "opening" objects formatted as one of the supported
+// structure supports "opening" objects formatted as one of the supported
 // archival types and include contents of archived directories in generated
 // result sets.
-// In addition, `apc.LsoMsg` provides options (flags) to optimize ListObjects
-// performance, to list anonymous public-access Cloud buckets, and more.
-// For detals, see: `api/apc/lsmsg.go` source.
 //
-// AIS fully supports listing buckets that may have millions of objects.
-// For large and very large buckets, it is strongly recommended to use ListObjectsPage
-// that will return the very first (listed) page and a so called "continuation token".
+// In addition, `lsmsg` (`apc.LsoMsg`) provides options (flags) to optimize
+// the request's latency, to list anonymous public-access Cloud buckets, and more.
+// Further details at `api/apc/lsmsg.go` source.
+//
+// AIS supports listing buckets that have millions of objects.
+// For large and very large buckets, it is strongly recommended to use the
+// `ListObjectsPage` API - effectively, an iterator returning _next_
+// listed page along with associated _continuation token_.
 //
 // See also:
-// - `ListObjectsPage` below.
-// - usage examples, see CLI docs under docs/cli.
+// - `ListObjectsPage`
+// - usage examples in CLI docs under docs/cli.
 func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj uint) (*cmn.LsoResult, error) {
 	return ListObjectsWithOpts(bp, bck, lsmsg, numObj, nil)
 }

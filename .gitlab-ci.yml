@@ -22,7 +22,12 @@ variables:
   CLOUD_BCKS:
     value: "aws://ais-blossom gs://ais-ci-kube"
     description: "Set of buckets used when running cloud tests."
-
+  S3_COMPAT_RUN_ALL:
+    value: "False"
+    description: "Whether to run all s3 compatibility tests or only verified passing ones"
+  S3_COMPAT_STRICT:
+    value: "True"
+    description: "Whether to fail pipeline stage immediately on s3 compatibility test failure"
 
 # Templates
 
@@ -57,7 +62,7 @@ variables:
   stage: test-short
   tags:
     - ais
-  timeout: 23m
+  timeout: 25m
   <<: *default_only_def
   except:
     variables:
@@ -69,7 +74,7 @@ variables:
   stage: test-short
   tags:
     - ais
-  timeout: 23m
+  timeout: 25m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
@@ -135,14 +140,28 @@ test:short:
 test:short:python:
   <<: *test_short_def
   variables:
-    BUCKET: "ais://test"
+    BUCKET: "aws://ais-cicd"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
-    - cd sdk/python
-    - make python_tests
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
+    - cd python
+    - make python_sdk_tests
+    - make python_botocore_tests
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+
+test:short:python-etl:
+  <<: *test_short_def
+  tags:
+    - ais-k8s
+  script:
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - cd python
+    - make python_etl_tests
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+      - $CI_MERGE_REQUEST_LABELS !~ /.*python.*/
 
 # Runs cluster with 1 proxy and 1 target (with 6 mountpaths).
 test:short:minimal:
@@ -152,6 +171,20 @@ test:short:minimal:
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt $FS_CNT --deployment all
     - NUM_PROXY=1 NUM_TARGET=1 make test-short
+
+test:short:s3-compat:
+  <<: *test_short_def
+  tags:
+    - ais
+  script:
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - ais config cluster features Provide-S3-API-via-Root
+    - ais config cluster checksum.type=md5
+    - cd python/tests/s3compat
+    - ./compatibility_test.sh
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS !~ /.*s3-compat.*/
 
 test:short:authn:
   <<: *test_short_optional_def
@@ -228,7 +261,7 @@ test:long:hdfs:
     NUM_PROXY: 6
     BUCKET: "hdfs://ais-ci"
   script:
-    - bash deploy/test/ci/setup_hdfs.sh
+    - bash deploy/ci/setup_hdfs.sh
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --hdfs
     - ais bucket create "${BUCKET}" --bucket-props="extra.hdfs.ref_directory=/"
     - make test-long
@@ -264,10 +297,6 @@ test:long:aisloader:
     - git clone https://github.com/prometheus-operator/kube-prometheus.git
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
 
-.test_k8s_optional_template: &test_k8s_optional_def
-  <<: *test_short_optional_def
-  tags:
-    - ais-k8s
 
 .test_k8s_long_template: &test_k8s_long_def
   extends: .test_k8s_short_template
@@ -290,13 +319,6 @@ test:short:k8s:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-short
     - status=$? make kill && exit $status
-
-test:short:python:etl:
-  <<: *test_k8s_optional_def
-  script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
-    - cd sdk/python
-    - make python_etl_tests
 
 test:long:k8s:
   stage: test-long

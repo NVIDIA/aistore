@@ -10,11 +10,11 @@ categories: aistore python sdk
 
 Python has grounded itself as a popular language of choice among data scientists and machine learning developers. Python's recent popularity in the field can be attributed to Python's general *ease-of-use*, especially with the popular machine learning framework [PyTorch](https://pytorch.org/), which is itself written in Python.
 
-[AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) is a project which includes a growing library of client-side APIs to easily access and utilize AIStore clusters, objects, and buckets, as well as a number of tools for AIStore usage/integration with PyTorch.
+[AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) is a project which includes a growing library of client-side APIs to easily access and utilize AIStore clusters, objects, and buckets, as well as a number of tools for AIStore usage/integration with PyTorch.
 
 The [AIStore Python API](https://aiatscale.org/docs/python-api) is essentially a Python port of AIStore's [Go APIs](https://github.com/NVIDIA/aistore/tree/master/api). In terms of functionality, the AIStore Python and Go APIs are quite similar, both of which essentially make simple [HTTP requests](https://aiatscale.org/docs/http-api#api-reference) to an AIStore endpoint. The HTTP requests allow the APIs to interact (reads and writes) with an AIStore instance's metadata. The API provides convenient and flexible ways (similar to those provided by the [CLI](https://aiatscale.org/docs/cli)) to move data (as objects) in and out of buckets on AIStore, manage AIStore clusters, and much more.
 
-This technical blog will demonstrate a few potential ways the Python API provided in the [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) could be used with a running AIStore instance to manage and utilize data.
+This technical blog will demonstrate a few potential ways the Python API provided in the [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) could be used with a running AIStore instance to manage and utilize data.
 
 ## Getting Started
 
@@ -216,7 +216,7 @@ For more information on dataloading from AIStore with PyTorch, please refer to t
 
 ## More Examples & Resources
 
-For more examples, please refer to additional documentation [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) and try out the [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/master/sdk/python/sdk-tutorial.ipynb).
+For more examples, please refer to additional documentation [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) and try out the [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk-tutorial.ipynb).
 
 For information on specific API usage, please refer to the [API reference](https://aiatscale.org/docs/python-api).
 
@@ -225,6 +225,6 @@ For information on specific API usage, please refer to the [API reference](https
 
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
 * [AIStore Go API](https://github.com/NVIDIA/aistore/tree/master/api)
-* [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python)
+* [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore)
 * [Documentation](https://aiatscale.org/docs)
 * [Official AIStore PIP Package](https://pypi.org/project/aistore/)

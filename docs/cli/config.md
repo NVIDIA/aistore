@@ -16,6 +16,30 @@ Generally, there are two main commands, each having multiple subcommands and sub
 
 > As always, the subcommands of the `ais config` and, respectively, `ais show config` will reveal themselves as completions (upon `<TAB-TAB>`).
 
+Here's a quick usage example:
+
+```console
+# show `ais config` subcommands:
+$ ais config <TAB-TAB>
+cli    cluster    node    reset    show
+
+# select `cluster` configuration and see usage and options
+$ ais config cluster --help
+
+# show the entire cluster configuration in JSON
+$ ais config cluster --json
+
+# show one selected section (e.g., checksum) from the cluster config
+$ ais config cluster checksum
+
+# update one value (e.g., checksum type)
+$ ais config cluster checksum=md5
+
+# using JSON-formatted values, update backend configuration;
+# for supported backend providers, see docs/providers.md
+$ ais config cluster backend.conf='{"gcp":{}, "aws":{}}'
+```
+
 Further, as far as configuration, AIS supports **inheritance** and **local override**.
 
 Here's how it works:

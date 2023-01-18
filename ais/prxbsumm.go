@@ -25,7 +25,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
 	}
-	debug.Assert(msg.UUID == "" || cos.IsValidUUID(msg.UUID))
+	debug.Assert(msg.UUID == "" || cos.IsValidUUID(msg.UUID), msg.UUID)
 	if qbck.IsBucket() {
 		bck := (*cluster.Bck)(qbck)
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
@@ -35,32 +35,52 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 			return
 		}
 	}
-	summaries, err := p.bsummDo(qbck, &msg)
+	orig, retried := msg.UUID, false
+retry:
+	summaries, tsi, numNotFound, err := p.bsummDo(qbck, &msg)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	if summaries == nil {
-		debug.Assert(cos.IsValidUUID(msg.UUID))
+	// result
+	if summaries != nil {
+		p.writeJSON(w, r, summaries, "bucket-summary")
+		return
+	}
+	// all accepted
+	if numNotFound == 0 {
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte(msg.UUID))
-	} else {
-		p.writeJSON(w, r, summaries, "bucket-summary")
+		return
 	}
+
+	// "not started"
+	if orig != "" && !retried {
+		runtime.Gosched()
+		glog.Errorf("%s: checking on the x-%s[%s] status - retrying once...", p, apc.ActSummaryBck, msg.UUID)
+		time.Sleep(cos.MaxDuration(cmn.Timeout.CplaneOperation(), time.Second))
+		retried = true
+		goto retry
+	}
+	var s string
+	if tsi != nil {
+		s = fmt.Sprintf(", targets: [%s ...]", tsi.StringEx())
+	}
+	err = fmt.Errorf("%s: %d instance%s of x-%s[%s] apparently failed to start%s",
+		p, numNotFound, cos.Plural(numNotFound), apc.ActSummaryBck, msg.UUID, s)
+	p.writeErr(w, r, err)
 }
 
-// 4 (four) steps
-func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (summaries cmn.AllBsummResults, err error) {
+// steps
+func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (cmn.AllBsummResults, *cluster.Snode, int, error) {
 	var (
 		q      = make(url.Values, 4)
 		config = cmn.GCO.Get()
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAmsgActVal(apc.ActSummaryBck, msg)
-		isNew  bool
 	)
 	// 1. init
 	if msg.UUID == "" {
-		isNew = true
 		msg.UUID = cos.GenUUID() // generate UUID
 		q.Set(apc.QparamTaskAction, apc.TaskStart)
 	} else {
@@ -81,12 +101,21 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (summaries c
 	results := p.bcastGroup(args)
 
 	// 3. check status
-	if isNew {
-		runtime.Gosched()
+	tsi, numDone, numAck, err := p.bsummCheckRes(msg.UUID, results)
+	if err != nil {
+		return nil, tsi, 0, err
 	}
-	allDone, err := p.bsummCheckRes(msg.UUID, results)
-	if err != nil || !allDone {
-		return nil, err
+	if numDone != len(results) {
+		numNotFound := len(results) - (numDone + numAck)
+		if numNotFound > 0 {
+			var s string
+			if tsi != nil {
+				s = fmt.Sprintf(", failed targets: [%s ...]", tsi.StringEx())
+			}
+			glog.Errorf("%s: not found %d instance%s of x-%s[%s]%s",
+				p, numNotFound, cos.Plural(numNotFound), apc.ActSummaryBck, msg.UUID, s)
+		}
+		return nil, tsi, numNotFound, nil
 	}
 
 	// 4. all targets ready - call to collect the results
@@ -98,13 +127,14 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (summaries c
 	freeBcArgs(args)
 
 	// 5. summarize
-	summaries = make(cmn.AllBsummResults, 0, 8)
+	summaries := make(cmn.AllBsummResults, 0, 8)
 	dsize := make(map[string]uint64, len(results))
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
+			tsi = res.si
 			freeBcastRes(results)
-			return nil, err
+			return nil, tsi, 0, err
 		}
 		tgtsumm, tid := res.v.(*cmn.AllBsummResults), res.si.ID()
 		for _, summ := range *tgtsumm {
@@ -114,18 +144,20 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (summaries c
 	}
 	summaries.Finalize(dsize, config.TestingEnv())
 	freeBcastRes(results)
-	return summaries, nil
+	return summaries, nil, 0, nil
 }
 
-func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (bool /*all done*/, error) {
-	var numDone, numAck int
+func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (tsi *cluster.Snode, numDone, numAck int, err error) {
 	defer freeBcastRes(results)
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
+			tsi = res.si
 			continue
 		}
 		if res.err != nil {
-			return false, res.err
+			err = res.err
+			tsi = res.si
+			return
 		}
 		switch {
 		case res.status == http.StatusOK:
@@ -133,16 +165,16 @@ func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (bool /*all don
 		case res.status == http.StatusAccepted:
 			numAck++
 		default:
-			err := fmt.Errorf("%s: unexpected x-summary[%s] from %s: status(%d), details(%q)", p, uuid,
+			err = fmt.Errorf("%s: unexpected x-%s[%s] from %s: status(%d), details(%q)", p, apc.ActSummaryBck, uuid,
 				res.si, res.status, res.details)
 			debug.AssertNoErr(err)
-			return false, err
+			return
 		}
 	}
-	return numDone == len(results), nil
+	return
 }
 
-// NOTE: always executes a /fast/ version of the bucket summary
+// NOTE: always executes the _fast_ version of the bucket summary
 func (p *proxy) bsummDoWait(bck *cluster.Bck, out *cmn.BsummResult, fltPresence int) error {
 	var (
 		max   = cmn.Timeout.MaxKeepalive()
@@ -150,22 +182,31 @@ func (p *proxy) bsummDoWait(bck *cluster.Bck, out *cmn.BsummResult, fltPresence 
 		qbck  = (*cmn.QueryBcks)(bck)
 		msg   = &cmn.BsummCtrlMsg{ObjCached: true, BckPresent: apc.IsFltPresent(fltPresence), Fast: true}
 	)
-	if _, err := p.bsummDo(qbck, msg); err != nil {
+	if _, _, _, err := p.bsummDo(qbck, msg); err != nil {
 		return err
 	}
 	debug.Assert(cos.IsValidUUID(msg.UUID))
 	for total := time.Duration(0); total < max; total += sleep {
 		time.Sleep(sleep)
-		summaries, err := p.bsummDo(qbck, msg)
+		summaries, tsi, numNotFound, err := p.bsummDo(qbck, msg)
 		if err != nil {
+			glog.Errorf("%s: x-%s[%s]: %s returned err: %v", p, apc.ActSummaryBck, msg.UUID, tsi, err)
 			return err
 		}
 		if summaries == nil {
+			if numNotFound > 0 {
+				var s string
+				if tsi != nil {
+					s = fmt.Sprintf(", failed targets: [%s ...]", tsi.StringEx())
+				}
+				glog.Errorf("%s: not found %d instance%s of x-%s[%s]%s",
+					p, numNotFound, cos.Plural(numNotFound), apc.ActSummaryBck, msg.UUID, s)
+			}
 			continue
 		}
 		*out = *summaries[0]
 		return nil
 	}
-	glog.Warningf("%s: timed-out waiting for %s x-summary[%s]", p, bck, msg.UUID)
+	glog.Warningf("%s: timed-out waiting for %s x-%s[%s]", p, bck, apc.ActSummaryBck, msg.UUID)
 	return nil
 }

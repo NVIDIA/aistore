@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
 )
@@ -27,11 +28,9 @@ const (
 	// max wait time for a function finishes before printing "Please wait"
 	longCommandTime = 10 * time.Second
 
-	fmtXactFailed    = "Failed to %s (%q => %q)\n"
-	fmtXactSucceeded = "Done.\n"
-
-	fmtXactStarted     = "%s (%q => %q) ...\n"
-	fmtXactStatusCheck = "%s (%q => %q) is in progress.\nTo check the status, run: ais show job xaction %s %s\n"
+	fmtXactFailed      = "Failed to %s (%q => %q)\n"
+	fmtXactSucceeded   = "Done.\n"
+	fmtXactWaitStarted = "%s %s => %s ...\n"
 )
 
 type (
@@ -100,44 +99,50 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 }
 
 // Rename ais bucket
-func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
-	var xactID string
-	if _, err = headBucket(fromBck, true /* don't add */); err != nil {
-		return
+func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
+	if _, err := headBucket(fromBck, true /* don't add */); err != nil {
+		return err
 	}
-	if xactID, err = api.RenameBucket(apiBP, fromBck, toBck); err != nil {
-		return
+	xactID, err := api.RenameBucket(apiBP, fromBck, toBck)
+	if err != nil {
+		return err
 	}
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Renaming bucket", fromBck, toBck, apc.ActMoveBck, toBck)
-		return
+		baseMsg := fmt.Sprintf("Renaming bucket %s => %s. ", fromBck, toBck)
+		actionDone(c, baseMsg+toMonitorMsg(c, xactID))
+		return nil
 	}
-	fmt.Fprintf(c.App.Writer, fmtXactStarted, "Renaming bucket", fromBck, toBck)
-	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
+
+	// wait
+	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Renaming bucket", fromBck, toBck)
+	if err := waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", fromBck, toBck)
-	} else {
-		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
+		return err
 	}
-	return
+	fmt.Fprint(c.App.Writer, fmtXactSucceeded)
+	return nil
 }
 
 // Copy ais bucket
-func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (err error) {
-	var xactID string
-	if xactID, err = api.CopyBucket(apiBP, fromBck, toBck, msg); err != nil {
-		return
+func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) error {
+	xactID, err := api.CopyBucket(apiBP, fromBck, toBck, msg)
+	if err != nil {
+		return err
 	}
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, "Copying bucket", fromBck, toBck, apc.ActCopyBck, toBck)
-		return
+		baseMsg := fmt.Sprintf("Copying bucket %s => %s. ", fromBck, toBck)
+		actionDone(c, baseMsg+toMonitorMsg(c, xactID))
+		return nil
 	}
-	fmt.Fprintf(c.App.Writer, fmtXactStarted, "Copying bucket", fromBck, toBck)
+
+	// wait
+	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying bucket", fromBck, toBck)
 	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "copy", fromBck, toBck)
-	} else {
-		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
+		return err
 	}
-	return
+	actionDone(c, fmtXactSucceeded)
+	return nil
 }
 
 // Evict remote bucket
@@ -146,7 +151,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 		fmt.Fprintf(c.App.Writer, "EVICT: %q\n", bck.DisplayName())
 		return
 	}
-	if err = ensureHasProvider(bck, c.Command.Name); err != nil {
+	if err = ensureHasProvider(bck); err != nil {
 		return
 	}
 	if err = api.EvictRemoteBucket(apiBP, bck, flagIsSet(c, keepMDFlag)); err != nil {
@@ -188,12 +193,12 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		}
 	}
 
-	if len(bcks) == 0 && apc.IsFltPresent(fltPresence) {
-		const hint = "Use '--%s' option to list _all_ buckets.\n"
+	if len(bcks) == 0 && apc.IsFltPresent(fltPresence) && !qbck.IsAIS() {
+		const hint = "Use %s option to list _all_ buckets.\n"
 		if qbck.IsEmpty() {
-			fmt.Fprintf(c.App.Writer, "No buckets in the cluster. "+hint, allObjsOrBcksFlag.Name)
+			fmt.Fprintf(c.App.Writer, "No buckets in the cluster. "+hint, qflprn(allObjsOrBcksFlag))
 		} else {
-			fmt.Fprintf(c.App.Writer, "No %q matching buckets in the cluster. "+hint, qbck, allObjsOrBcksFlag.Name)
+			fmt.Fprintf(c.App.Writer, "No %q matching buckets in the cluster. "+hint, qbck, qflprn(allObjsOrBcksFlag))
 		}
 		return
 	}
@@ -269,6 +274,14 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 			footer.nbp++
 		}
 		if bck.IsHTTP() {
+			if bmd == nil {
+				bmd, err = api.GetBMD(apiBP)
+				if err != nil {
+					fmt.Fprintln(c.App.ErrWriter, err)
+					return
+				}
+			}
+			props, _ = bmd.Get(cluster.CloneBck(&bck))
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
 		data = append(data, tmpls.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: &info})
@@ -294,6 +307,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
 }
 
+// (compare with showBucketSummary)
 func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
 	var (
 		footer     lsbFooter
@@ -336,7 +350,8 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	if hideFooter || footer.nbp <= 1 {
 		return
 	}
-	var s string
+
+	var s, foot string
 	if !apc.IsFltPresent(fltPresence) {
 		s = fmt.Sprintf(" (%d present)", footer.nbp)
 	}
@@ -344,9 +359,14 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	if qbck.IsRemoteAIS() {
 		p = qbck.DisplayProvider()
 	}
-	foot := fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
-		p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj,
-		cos.UnsignedB2S(footer.size, 2), footer.pct)
+	if footer.pobj+footer.robj != 0 {
+		foot = fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
+			p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj,
+			cos.UnsignedB2S(footer.size, 2), footer.pct)
+	} else {
+		foot = fmt.Sprintf("Total: [%s bucket%s: %d%s, apparent size %s, used capacity %d%%] ========",
+			p, cos.Plural(footer.nb), footer.nb, s, cos.UnsignedB2S(footer.size, 2), footer.pct)
+	}
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
 }
 
@@ -372,15 +392,28 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if flagIsSet(c, allObjsOrBcksFlag) {
 		msg.SetFlag(apc.LsAll)
 	}
-	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
+
+	var (
+		props    []string
+		propsStr = parseStrFlag(c, objPropsFlag)
+	)
+	if propsStr != "" {
+		debug.Assert(apc.LsPropsSepa == ",", "',' is documented in 'objPropsFlag' usage and elsewhere")
+		props = strings.Split(propsStr, apc.LsPropsSepa)
+	}
+
+	// NOTE: compare w/ `showObjProps()`
 	if flagIsSet(c, nameOnlyFlag) {
+		if len(props) > 2 {
+			warn := fmt.Sprintf("flag %s is incompatible with the value of %s", qflprn(nameOnlyFlag), qflprn(objPropsFlag))
+			actionWarn(c, warn)
+		}
 		msg.SetFlag(apc.LsNameOnly)
 		msg.Props = apc.GetPropsName
-		if cos.StringInSlice("all", props) || cos.StringInSlice(apc.GetPropsStatus, props) {
-			msg.AddProps(apc.GetPropsStatus)
-		}
+	} else if len(props) == 0 {
+		msg.AddProps(apc.GetPropsMinimal...)
 	} else {
-		if cos.StringInSlice("all", props) {
+		if cos.StringInSlice(allPropsFlag.GetName(), props) {
 			msg.AddProps(apc.GetPropsAll...)
 		} else {
 			msg.AddProps(apc.GetPropsName)
@@ -523,11 +556,12 @@ func showBucketProps(c *cli.Context) (err error) {
 	)
 
 	if c.NArg() > 2 {
-		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[2:])
+		return incorrectUsageMsg(c, "", c.Args()[2:])
 	}
 
 	section := c.Args().Get(1)
-	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
+
+	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
 		return
 	}
 	if p, err = headBucket(bck, true /* don't add */); err != nil {
@@ -620,11 +654,11 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	}
 	var baseMsg string
 	if copies > 1 {
-		baseMsg = fmt.Sprintf("Configured %s as %d-way mirror, ", bck.DisplayName(), copies)
+		baseMsg = fmt.Sprintf("Configured %s as %d-way mirror. ", bck.DisplayName(), copies)
 	} else {
-		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy), ", bck.DisplayName())
+		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy). ", bck.DisplayName())
 	}
-	actionDone(c, baseMsg+xactProgressMsg(xactID))
+	actionDone(c, baseMsg+toMonitorMsg(c, xactID))
 	return
 }
 
@@ -634,30 +668,32 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	if xactID, err = api.ECEncodeBucket(apiBP, bck, data, parity); err != nil {
 		return
 	}
-	msg := fmt.Sprintf("Erasure-coding bucket %s, ", bck.DisplayName())
-	actionDone(c, msg+xactProgressMsg(xactID))
+	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.DisplayName())
+	actionDone(c, msg+toMonitorMsg(c, xactID))
 	return
 }
 
-// This function returns buckets based on arguments provided to the command.
-// In case something is missing it also generates a meaningful error message.
-func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
-	if c.NArg() == 0 {
-		return bckFrom, bckTo, missingArgumentsError(c, "bucket name", "new bucket name")
+// Return `bckFrom` and `bckTo` - the [shift] and the [shift+1] arguments, respectively
+func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int) (bckFrom, bckTo cmn.Bck, err error) {
+	if c.NArg() == shift {
+		err = missingArgumentsError(c, bckFromArg, bckToArg)
+		return
 	}
-	if c.NArg() == 1 {
-		return bckFrom, bckTo, missingArgumentsError(c, "new bucket name")
+	if c.NArg() == shift+1 {
+		err = missingArgumentsError(c, bckToArg)
+		return
 	}
 
-	bcks := make([]cmn.Bck, 0, 2)
-	for i := 0; i < 2; i++ {
-		bck, err := parseBckURI(c, c.Args().Get(i))
-		if err != nil {
-			return bckFrom, bckTo, err
-		}
-		bcks = append(bcks, bck)
+	bckFrom, err = parseBckURI(c, c.Args().Get(shift), true /*require provider*/)
+	if err != nil {
+		err = incorrectUsageMsg(c, "invalid %s argument '%s': %v", bckFromArg, c.Args().Get(shift), err)
+		return
 	}
-	return bcks[0], bcks[1], nil
+	bckTo, err = parseBckURI(c, c.Args().Get(shift+1), true)
+	if err != nil {
+		err = incorrectUsageMsg(c, "invalid %s argument '%q': %v", bckToArg, c.Args().Get(shift+1), err)
+	}
+	return
 }
 
 func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectListFilter, props string, addCachedCol bool) error {

@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -41,7 +41,7 @@ func generateDownloadDesc() string {
 }
 
 func clearDownloadList(t *testing.T) {
-	listDownload, err := api.DownloadGetList(tools.BaseAPIParams(), downloadDescAllRegex)
+	listDownload, err := api.DownloadGetList(tools.BaseAPIParams(), downloadDescAllRegex, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 
 	if len(listDownload) == 0 {
@@ -59,7 +59,7 @@ func clearDownloadList(t *testing.T) {
 	// Wait for the jobs to complete.
 	for running := true; running; {
 		time.Sleep(time.Second)
-		listDownload, err := api.DownloadGetList(tools.BaseAPIParams(), downloadDescAllRegex)
+		listDownload, err := api.DownloadGetList(tools.BaseAPIParams(), downloadDescAllRegex, false /*onlyActive*/)
 		tassert.CheckFatal(t, err)
 
 		running = false
@@ -86,7 +86,7 @@ func checkDownloadList(t *testing.T, expNumEntries ...int) {
 		expNumEntriesVal = expNumEntries[0]
 	}
 
-	listDownload, err := api.DownloadGetList(tools.BaseAPIParams(), downloadDescAllRegex)
+	listDownload, err := api.DownloadGetList(tools.BaseAPIParams(), downloadDescAllRegex, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 	actEntries := len(listDownload)
 
@@ -123,7 +123,7 @@ func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []stri
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
-	resp, err := api.DownloadStatus(baseParams, id)
+	resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
 		t, resp.FinishedCnt == len(objects),
@@ -131,7 +131,7 @@ func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []stri
 		resp.FinishedCnt, len(objects),
 	)
 
-	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0)
+	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
 		t, reflect.DeepEqual(objs, objects),
@@ -143,7 +143,7 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSki
 	id, err := api.DownloadSingle(tools.BaseAPIParams(), generateDownloadDesc(), bck, objName, link)
 	tassert.CheckError(t, err)
 	waitForDownload(t, id, time.Minute)
-	status, err := api.DownloadStatus(tools.BaseAPIParams(), id)
+	status, err := api.DownloadStatus(tools.BaseAPIParams(), id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, status.ErrorCnt == 0, "expected no errors during download, got: %d (errs: %v)", status.ErrorCnt, status.Errs)
 	if shouldBeSkipped {
@@ -153,15 +153,15 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSki
 	}
 }
 
-func downloadObjectRemote(t *testing.T, body downloader.DlBackendBody, expectedFinished, expectedSkipped int) {
+func downloadObjectRemote(t *testing.T, body dload.BackendBody, expectedFinished, expectedSkipped int) {
 	baseParams := tools.BaseAPIParams()
 	body.Description = generateDownloadDesc()
-	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeBackend, body)
+	id, err := api.DownloadWithParam(baseParams, dload.TypeBackend, body)
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, 2*time.Minute)
 
-	resp, err := api.DownloadStatus(baseParams, id)
+	resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 
 	if resp.FinishedCnt > expectedFinished {
@@ -182,7 +182,7 @@ func abortDownload(t *testing.T, id string) {
 
 	waitForDownload(t, id, 30*time.Second)
 
-	status, err := api.DownloadStatus(baseParams, id)
+	status, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, status.Aborted, "download was not marked aborted")
 	tassert.Fatalf(t, status.JobFinished(), "download should be finished")
@@ -247,7 +247,7 @@ func TestDownloadSingle(t *testing.T) {
 		time.Sleep(time.Second)
 
 		// Check if the status is still available after some time.
-		if resp, err := api.DownloadStatus(baseParams, id); err != nil {
+		if resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/); err != nil {
 			t.Errorf("got error when getting status for link that is not being downloaded: %v", err)
 		} else if !resp.Aborted {
 			t.Errorf("canceled link not marked: %v", resp)
@@ -418,8 +418,8 @@ func TestDownloadTimeout(t *testing.T) {
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-	body := downloader.DlSingleBody{
-		DlSingleObj: downloader.DlSingleObj{
+	body := dload.SingleBody{
+		SingleObj: dload.SingleObj{
 			ObjName: objName,
 			Link:    link,
 		},
@@ -428,12 +428,12 @@ func TestDownloadTimeout(t *testing.T) {
 	body.Description = generateDownloadDesc()
 	body.Timeout = "1ms" // super small timeout to see if the request will be canceled
 
-	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeSingle, body)
+	id, err := api.DownloadWithParam(baseParams, dload.TypeSingle, body)
 	tassert.CheckFatal(t, err)
 
 	time.Sleep(time.Second)
 
-	status, err := api.DownloadStatus(baseParams, id)
+	status, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 
 	objErr := status.Errs[0]
@@ -481,6 +481,7 @@ func TestDownloadRemote(t *testing.T) {
 			},
 		},
 	}
+	defer tools.CleanupRemoteBucket(t, proxyURL, cliBck, prefix)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: test.srcBck})
@@ -492,7 +493,6 @@ func TestDownloadRemote(t *testing.T) {
 			}
 
 			tools.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
-			defer tools.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
 
 			tlog.Logln("putting objects into remote bucket...")
 
@@ -526,8 +526,8 @@ func TestDownloadRemote(t *testing.T) {
 			}
 
 			tlog.Logln("starting remote download...")
-			id, err := api.DownloadWithParam(baseParams, downloader.DlTypeBackend, downloader.DlBackendBody{
-				DlBase: downloader.DlBase{
+			id, err := api.DownloadWithParam(baseParams, dload.TypeBackend, dload.BackendBody{
+				Base: dload.Base{
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
 				},
@@ -539,7 +539,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("wait for remote download...")
 			waitForDownload(t, id, time.Minute)
 
-			objs, err := tools.ListObjectNames(proxyURL, test.dstBck, prefix, 0)
+			objs, err := tools.ListObjectNames(proxyURL, test.dstBck, prefix, 0, true /*cached*/)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
 
@@ -552,8 +552,8 @@ func TestDownloadRemote(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			tlog.Logln("starting remote download...")
-			id, err = api.DownloadWithParam(baseParams, downloader.DlTypeBackend, downloader.DlBackendBody{
-				DlBase: downloader.DlBase{
+			id, err = api.DownloadWithParam(baseParams, dload.TypeBackend, dload.BackendBody{
+				Base: dload.Base{
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
 				},
@@ -568,7 +568,7 @@ func TestDownloadRemote(t *testing.T) {
 			err = api.AbortDownload(baseParams, id)
 			tassert.CheckFatal(t, err)
 
-			resp, err := api.DownloadStatus(baseParams, id)
+			resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, resp.Aborted, "canceled remote download %v not marked", id)
 
@@ -611,7 +611,7 @@ func TestDownloadStatus(t *testing.T) {
 	err = tools.WaitForObjectToBeDowloaded(baseParams, bck, shortFileName, 5*time.Second)
 	tassert.CheckFatal(t, err)
 
-	resp, err := api.DownloadStatus(baseParams, id)
+	resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 
 	tassert.Errorf(t, resp.Total == 2, "expected %d objects, got %d", 2, resp.Total)
@@ -654,7 +654,7 @@ func TestDownloadStatusError(t *testing.T) {
 	// Wait to make sure both files were processed by downloader
 	waitForDownload(t, id, 15*time.Second)
 
-	resp, err := api.DownloadStatus(baseParams, id)
+	resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 
 	tassert.Errorf(t, resp.Total == len(files), "expected %d objects, got %d", len(files), resp.Total)
@@ -869,7 +869,7 @@ func TestDownloadMountpath(t *testing.T) {
 	abortDownload(t, id1)
 
 	tlog.Logf("Listing %s\n", bck)
-	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0)
+	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
 
@@ -878,7 +878,7 @@ func TestDownloadMountpath(t *testing.T) {
 	tlog.Logf("Started download job %s, waiting for it to finish\n", id2)
 
 	waitForDownload(t, id2, 2*time.Minute)
-	objs, err = tools.ListObjectNames(proxyURL, bck, "", 0)
+	objs, err = tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs))
 }
@@ -891,7 +891,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		p = bck.DefaultProps()
+		p = bck.DefaultProps(initialClusterConfig)
 
 		objName = trand.String(10)
 		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
@@ -937,7 +937,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		p = bck.DefaultProps()
+		p = bck.DefaultProps(initialClusterConfig)
 
 		objName = trand.String(10)
 		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/master/LICENSE"
@@ -979,8 +979,8 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		dlBody = downloader.DlBackendBody{
-			DlBase: downloader.DlBase{Bck: bck},
+		dlBody = dload.BackendBody{
+			Base: dload.Base{Bck: bck},
 		}
 		m = &ioContext{
 			t:                   t,
@@ -1039,8 +1039,8 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		dlBody = downloader.DlBackendBody{
-			DlBase: downloader.DlBase{Bck: bck},
+		dlBody = dload.BackendBody{
+			Base: dload.Base{Bck: bck},
 		}
 		m = &ioContext{
 			t:                   t,
@@ -1076,8 +1076,8 @@ func TestDownloadSync(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
-		dlBody = downloader.DlBackendBody{
-			DlBase: downloader.DlBase{Bck: bck},
+		dlBody = dload.BackendBody{
+			Base: dload.Base{Bck: bck},
 		}
 		m = &ioContext{
 			t:                   t,
@@ -1159,11 +1159,11 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
 
-	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeRange, downloader.DlRangeBody{
-		DlBase: downloader.DlBase{
+	id, err := api.DownloadWithParam(baseParams, dload.TypeRange, dload.RangeBody{
+		Base: dload.Base{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
-			Limits: downloader.DlLimits{
+			Limits: dload.Limits{
 				Connections:  limitConnection,
 				BytesPerHour: 200 * cos.MiB,
 			},
@@ -1178,7 +1178,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	tlog.Logln("waiting for checks...")
 	minConnectionLimitReached := false
 	for i := 0; i < 10; i++ {
-		resp, err := api.DownloadStatus(baseParams, id)
+		resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 		tassert.CheckFatal(t, err)
 
 		// Expect that we never exceed the limit of connections per target.
@@ -1222,11 +1222,11 @@ func TestDownloadJobConcurrency(t *testing.T) {
 
 	tlog.Logln("Starting first download...")
 
-	id1, err := api.DownloadWithParam(baseParams, downloader.DlTypeRange, downloader.DlRangeBody{
-		DlBase: downloader.DlBase{
+	id1, err := api.DownloadWithParam(baseParams, dload.TypeRange, dload.RangeBody{
+		Base: dload.Base{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
-			Limits: downloader.DlLimits{
+			Limits: dload.Limits{
 				Connections:  1,
 				BytesPerHour: 100 * cos.MiB,
 			},
@@ -1240,11 +1240,11 @@ func TestDownloadJobConcurrency(t *testing.T) {
 
 	tlog.Logln("Starting second download...")
 
-	id2, err := api.DownloadWithParam(baseParams, downloader.DlTypeRange, downloader.DlRangeBody{
-		DlBase: downloader.DlBase{
+	id2, err := api.DownloadWithParam(baseParams, dload.TypeRange, dload.RangeBody{
+		Base: dload.Base{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
-			Limits: downloader.DlLimits{
+			Limits: dload.Limits{
 				BytesPerHour: 100 * cos.MiB,
 			},
 		},
@@ -1258,10 +1258,10 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	tlog.Logln("Waiting for checks...")
 	var (
 		concurrentJobs bool
-		resp1, resp2   downloader.DlStatusResp
+		resp1, resp2   *dload.StatusResp
 	)
 	for i := 0; i < 10; i++ {
-		resp1, err = api.DownloadStatus(baseParams, id1)
+		resp1, err = api.DownloadStatus(baseParams, id1, false /*onlyActive*/)
 		tassert.CheckFatal(t, err)
 
 		// Expect that number of tasks never exceeds the defined limit.
@@ -1273,7 +1273,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		)
 
 		// Expect that at some point the second job will be run concurrently.
-		resp2, err = api.DownloadStatus(baseParams, id2)
+		resp2, err = api.DownloadStatus(baseParams, id2, false /*onlyActive*/)
 		tassert.CheckFatal(t, err)
 
 		if len(resp2.CurrentTasks) > 0 && len(resp1.CurrentTasks) > 0 {
@@ -1311,15 +1311,15 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeSingle, downloader.DlSingleBody{
-		DlBase: downloader.DlBase{
+	id, err := api.DownloadWithParam(baseParams, dload.TypeSingle, dload.SingleBody{
+		Base: dload.Base{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
-			Limits: downloader.DlLimits{
+			Limits: dload.Limits{
 				BytesPerHour: softLimit,
 			},
 		},
-		DlSingleObj: downloader.DlSingleObj{
+		SingleObj: dload.SingleObj{
 			ObjName: "object",
 			Link:    link,
 		},
@@ -1331,7 +1331,7 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 
 	time.Sleep(10 * time.Second) // wait for downloader to download `softLimit` bytes
 
-	resp, err := api.DownloadStatus(baseParams, id)
+	resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 
 	tassert.Fatalf(t, len(resp.CurrentTasks) == 1, "expected one running task")

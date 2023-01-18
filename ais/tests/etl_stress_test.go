@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -13,8 +13,8 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/etl"
-	"github.com/NVIDIA/aistore/etl/runtime"
+	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/ext/etl/runtime"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tetl"
@@ -165,12 +165,12 @@ def transform(input_bytes):
 			initDesc  string
 			buildDesc etl.InitCodeMsg
 		}{
-			{name: "spec-echo-python", ty: apc.ETLInitSpec, initDesc: tetl.Echo},
-			{name: "spec-echo-golang", ty: apc.ETLInitSpec, initDesc: tetl.EchoGolang},
+			{name: "spec-echo-python", ty: etl.Spec, initDesc: tetl.Echo},
+			{name: "spec-echo-golang", ty: etl.Spec, initDesc: tetl.EchoGolang},
 
 			{
 				name: "code-echo-py38",
-				ty:   apc.ETLInitCode,
+				ty:   etl.Code,
 				buildDesc: etl.InitCodeMsg{
 					Code:      []byte(echoPythonTransform),
 					Runtime:   runtime.Py38,
@@ -179,7 +179,7 @@ def transform(input_bytes):
 			},
 			{
 				name: "code-echo-py310",
-				ty:   apc.ETLInitCode,
+				ty:   etl.Code,
 				buildDesc: etl.InitCodeMsg{
 					Code:      []byte(echoPythonTransform),
 					Runtime:   runtime.Py310,
@@ -199,34 +199,36 @@ def transform(input_bytes):
 		t.Run(test.name, func(t *testing.T) {
 			tetl.CheckNoRunningETLContainers(t, baseParams)
 			var (
-				uuid string
-				err  error
-
+				etlName        string
+				err            error
 				etlDoneCh      = cos.NewStopCh()
 				requestTimeout = 30 * time.Second
 			)
 			switch test.ty {
-			case apc.ETLInitSpec:
-				uuid = tetl.Init(t, baseParams, test.initDesc, etl.Hpull)
-			case apc.ETLInitCode:
+			case etl.Spec:
+				etlName = tetl.InitSpec(t, baseParams, test.initDesc, etl.Hpull)
+			case etl.Code:
 				test.buildDesc.IDX = test.name
 				test.buildDesc.Timeout = cos.Duration(10 * time.Minute)
 				test.buildDesc.Funcs.Transform = "transform"
-				uuid = tetl.InitCode(t, baseParams, test.buildDesc)
+				etlName = tetl.InitCode(t, baseParams, test.buildDesc)
 			default:
 				panic(test.ty)
 			}
 			t.Cleanup(func() {
-				tetl.StopAndDeleteETL(t, baseParams, uuid)
+				tetl.StopAndDeleteETL(t, baseParams, etlName)
 				tetl.WaitForContainersStopped(t, baseParams)
 			})
 
-			tlog.Logf("Start offline ETL %q\n", uuid)
-			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &apc.TCBMsg{
-				ID:             uuid,
-				RequestTimeout: cos.Duration(requestTimeout),
-				CopyBckMsg:     apc.CopyBckMsg{Force: true},
-			})
+			tlog.Logf("Start offline ETL[%s]\n", etlName)
+			msg := &apc.TCBMsg{
+				Transform: apc.Transform{
+					Name:    etlName,
+					Timeout: cos.Duration(requestTimeout),
+				},
+				CopyBckMsg: apc.CopyBckMsg{Force: true},
+			}
+			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, msg)
 			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
 
 			tlog.Logln("Waiting for ETL to finish")
@@ -234,9 +236,11 @@ def transform(input_bytes):
 			etlDoneCh.Close()
 			tassert.CheckFatal(t, err)
 
-			snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
+			snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
 			tassert.CheckFatal(t, err)
-			tlog.Logf("ETL Bucket took %s\n", snaps.TotalRunningTime())
+			total, err := snaps.TotalRunningTime(xactID)
+			tassert.CheckFatal(t, err)
+			tlog.Logf("Transforming bucket %s took %s\n", bckFrom.DisplayName(), total)
 
 			objList, err := api.ListObjects(baseParams, bckTo, nil, 0)
 			tassert.CheckFatal(t, err)
@@ -263,12 +267,13 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 
 	m.puts()
 
-	etlID := tetl.Init(t, baseParams, name, comm)
-	tlog.Logf("ETL init successful (%q)\n", etlID)
+	etlName := tetl.InitSpec(t, baseParams, name, comm)
+	tlog.Logf("ETL init successful (%q)\n", etlName)
 	t.Cleanup(func() {
-		tetl.StopAndDeleteETL(t, baseParams, etlID)
+		tetl.StopAndDeleteETL(t, baseParams, etlName)
 	})
 
-	tlog.Logf("Start offline ETL %q => %q\n", etlID, bckTo.String())
-	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &apc.TCBMsg{ID: etlID, CopyBckMsg: apc.CopyBckMsg{Force: true}})
+	tlog.Logf("Start offline ETL[%s] => %q\n", etlName, bckTo.String())
+	msg := &apc.TCBMsg{Transform: apc.Transform{Name: etlName}, CopyBckMsg: apc.CopyBckMsg{Force: true}}
+	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, msg)
 }

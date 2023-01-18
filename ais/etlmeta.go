@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -49,9 +49,9 @@ type (
 		pre   func(ctx *etlMDModifier, clone *etlMD) (err error)
 		final func(ctx *etlMDModifier, clone *etlMD)
 
-		msg   etl.InitMsg
-		etlID string
-		wait  bool
+		msg     etl.InitMsg
+		etlName string
+		wait    bool
 	}
 
 	etlMDOwnerBase struct {
@@ -113,7 +113,7 @@ func (e *etlMD) add(spec etl.InitMsg) {
 
 func (e *etlMD) get(id string) etl.InitMsg { return e.ETLs[id] }
 
-func (e *etlMD) delete(id string) (exists bool) {
+func (e *etlMD) del(id string) (exists bool) {
 	_, exists = e.ETLs[id]
 	delete(e.ETLs, id)
 	return

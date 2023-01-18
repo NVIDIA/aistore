@@ -1,6 +1,0 @@
-pytest==7.1.1
-pydantic==1.9.0
-cloudpickle==2.0.0
-pylint==2.13.4
-typing_extensions==4.1.1
-requests==2.27.1

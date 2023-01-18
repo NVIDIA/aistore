@@ -1,6 +1,6 @@
 // Package apc: API messages and constants
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -11,8 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-var ErrETLMissingUUID = errors.New("ETL UUID can't be empty")
-
 // copy & (offline) transform bucket to bucket
 type (
 	CopyBckMsg struct {
@@ -20,16 +18,18 @@ type (
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT
 		Force  bool   `json:"force"`   // Force running in presence of a potential "limited coexistence" type conflict
 	}
+	Transform struct {
+		Name    string       `json:"id,omitempty"`
+		Timeout cos.Duration `json:"request_timeout,omitempty"`
+	}
 	TCBMsg struct {
-		// Resulting objects names will have this extension. Warning: if in a source bucket exist two objects with the
-		// same base name, but different extension, specifying this field might cause object overriding. This is because
-		// of resulting name conflict.
-		// TODO: this field might not be required when transformation on subset (template) of bucket is supported.
+		// NOTE: resulting object names will have this extension, if specified.
+		// NOTE: if source bucket has two (or more) objects with the same base name but different extension,
+		// specifying this field might cause unintended override.
+		// TODO: this field might not be required when range/list transformation is supported.
 		Ext cos.StrKVs `json:"ext"`
 
-		ID             string       `json:"id,omitempty"`              // optional, ETL only
-		RequestTimeout cos.Duration `json:"request_timeout,omitempty"` // optional, ETL only
-
+		Transform
 		CopyBckMsg
 	}
 )
@@ -38,11 +38,11 @@ type (
 // TCBMsg //
 ////////////
 
-func (msg *TCBMsg) Validate() error {
-	if msg.ID == "" {
-		return ErrETLMissingUUID
+func (msg *TCBMsg) Validate(isEtl bool) (err error) {
+	if isEtl && msg.Transform.Name == "" {
+		err = errors.New("ETL name can't be empty")
 	}
-	return nil
+	return
 }
 
 // Replace extension and add suffix if provided.

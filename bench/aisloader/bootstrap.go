@@ -64,7 +64,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
@@ -201,7 +201,7 @@ var (
 	flagVersion bool
 
 	etlInitSpec *etl.InitSpecMsg
-	etlID       string
+	etlName     string
 
 	useRandomObjName bool
 	objNameCnt       atomic.Uint64
@@ -780,7 +780,7 @@ func Start(version, buildtime string) (err error) {
 
 	if etlInitSpec != nil {
 		fmt.Println(prettyTimestamp() + " Waiting for an ETL to start...")
-		etlID, err = api.ETLInit(runParams.bp, etlInitSpec)
+		etlName, err = api.ETLInit(runParams.bp, etlInitSpec)
 		if err != nil {
 			return fmt.Errorf("failed to initialize ETL: %v", err)
 		}
@@ -788,7 +788,7 @@ func Start(version, buildtime string) (err error) {
 
 		defer func() {
 			fmt.Println(prettyTimestamp() + " Stopping the ETL...")
-			if err := api.ETLStop(runParams.bp, etlID); err != nil {
+			if err := api.ETLStop(runParams.bp, etlName); err != nil {
 				fmt.Printf("%s Failed to stop the ETL: %v\n", prettyTimestamp(), err)
 				return
 			}

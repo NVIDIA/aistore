@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
 func StartDSort(bp BaseParams, rs dsort.RequestSpec) (string, error) {
@@ -67,15 +67,20 @@ func RemoveDSort(bp BaseParams, managerUUID string) error {
 	return err
 }
 
-func ListDSort(bp BaseParams, regex string) (jobsInfos []*dsort.JobInfo, err error) {
+func ListDSort(bp BaseParams, regex string, onlyActive bool) (jobInfos []*dsort.JobInfo, err error) {
+	q := make(url.Values, 2)
+	q.Set(apc.QparamRegex, regex)
+	if onlyActive {
+		q.Set(apc.QparamOnlyActive, "true")
+	}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathdSort.S
-		reqParams.Query = url.Values{apc.QparamRegex: []string{regex}}
+		reqParams.Query = q
 	}
-	err = reqParams.DoReqResp(&jobsInfos)
+	err = reqParams.DoReqResp(&jobInfos)
 	FreeRp(reqParams)
-	return jobsInfos, err
+	return
 }

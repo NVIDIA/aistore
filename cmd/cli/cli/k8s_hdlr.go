@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/urfave/cli"
 )
 
@@ -33,13 +32,13 @@ var (
 				Name:      subcmdK8sCluster,
 				Usage:     "show AIS cluster",
 				Flags:     k8sCmdsFlags[subcmdK8sCluster],
-				ArgsUsage: optionalDaemonIDArgument,
+				ArgsUsage: optionalNodeIDArgument,
 				Action:    k8sShowClusterHandler,
 				BashComplete: func(c *cli.Context) {
 					if c.NArg() != 0 {
 						return
 					}
-					suggestDaemon(completeAllDaemons)
+					suggestAllNodes(c)
 				},
 			},
 		},
@@ -76,22 +75,22 @@ func k8sShowEntireCluster(c *cli.Context) (err error) {
 	return err
 }
 
-func k8sShowSingleDaemon(c *cli.Context) (err error) {
-	smap, err := api.GetClusterMap(apiBP)
+func k8sShowSingleDaemon(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	sid, _, err := getNodeIDName(c, c.Args().First())
 	if err != nil {
 		return err
 	}
-	daemonID := argDaemonID(c)
-	if node := smap.GetNode(daemonID); node == nil {
-		return fmt.Errorf("%s does not exist in the cluster (see 'ais show cluster')", daemonID)
-	}
+
 	cmdLine := make([]string, 0, len(cmdNodeInfo)+1)
 	cmdLine = append(cmdLine, cmdNodeInfo...)
-	cmdLine = append(cmdLine, "--selector=ais-daemon-id="+daemonID)
+	cmdLine = append(cmdLine, "--selector=ais-daemon-id="+sid)
 	output, err := exec.Command(subcmdK8s, cmdLine...).CombinedOutput()
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprint(c.App.Writer, string(output))
-	return err
+	fmt.Fprintln(c.App.Writer, string(output))
+	return nil
 }

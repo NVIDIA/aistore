@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 const maxVerConfirmations = 3 // NOTE: minimum number of max-ver confirmations required to make the decision
@@ -334,15 +333,9 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		}
 	}
 
-	// 6.5. mark RMD as starting up to prevent joining targets from triggering rebalance
+	// 7. mark RMD as starting up to prevent joining targets from triggering rebalance
 	ok := p.owner.rmd.startup.CAS(false, true)
 	debug.Assert(ok)
-
-	// 7. global config
-	cluConfig, err := p._config(smap.UUID)
-	if err != nil {
-		cos.ExitLogf("%v", err)
-	}
 
 	// 8. initialize etl
 	etlMD := p.owner.etl.get().clone()
@@ -352,7 +345,13 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		}
 	}
 
-	// 9. metasync (smap, config, etl & bmd) and startup as primary
+	// 9. cluster config: load existing _or_ initialize brand new v1
+	cluConfig, err := p._cluConfig(smap.UUID)
+	if err != nil {
+		cos.ExitLogf("%v", err)
+	}
+
+	// 10. metasync (smap, config, etl & bmd) and startup as primary
 	var (
 		aisMsg = p.newAmsgStr(metaction2, bmd)
 		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}}
@@ -366,59 +365,25 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		_ = p.metasyncer.sync(revsPair{etlMD, aisMsg})
 	}
 
-	// Clear regpool
+	// 11. Clear regpool
 	p.reg.mu.Lock()
 	p.reg.pool = p.reg.pool[:0]
 	p.reg.pool = nil
 	p.reg.mu.Unlock()
 
-	// 10. resume rebalance if needed
+	// 12. resume rebalance if needed
 	if config.Rebalance.Enabled {
 		p.resumeReb(smap, config)
 	}
 	p.owner.rmd.startup.Store(false)
 }
 
-// NOTE: `-override_backends` option (cli.overrideBackends)
-func (p *proxy) _config(uuid string) (config *globalConfig, err error) {
-	var (
-		c        cmn.ClusterConfig
-		confPath string
-	)
-	if p.owner.config.version() == 0 {
-		config, err = p.initClusterConfig(uuid)
-		return
+func (p *proxy) _cluConfig(uuid string) (config *globalConfig, err error) {
+	if p.owner.config.version() > 0 {
+		return p.owner.config.get()
 	}
-	config, err = p.owner.config.get()
-	if !daemon.cli.overrideBackends {
-		return
-	}
-	// load plain-text backends and compare
-	confPath = cmn.GCO.GetInitialGconfPath()
-	_, err = jsp.Load(confPath, &c, jsp.Plain())
-	if err != nil {
-		return
-	}
-	if c.Backend.EqualClouds(&config.Backend) {
-		return
-	}
-	// NOTE: primary command-line flag `-override_backends` allows to choose
-	//       Cloud providers (and HDFS) at deployment time
+	// Create version 1 and set primary URL.
 	config, err = p.owner.config.modify(&configModifier{
-		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
-			clone.Backend.Conf = c.Backend.Conf
-			updated = true
-			return
-		},
-	})
-	return
-}
-
-func (p *proxy) initClusterConfig(uuid string) (config *globalConfig, err error) {
-	debug.Assert(p.owner.smap.get().isPrimary(p.si))
-
-	// Create version 1 of the cluster config and set primary URL.
-	return p.owner.config.modify(&configModifier{
 		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
 			debug.Assert(clone.version() == 0)
 			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetPublic)
@@ -427,6 +392,7 @@ func (p *proxy) initClusterConfig(uuid string) (config *globalConfig, err error)
 			return
 		},
 	})
+	return
 }
 
 // resume rebalance if needed

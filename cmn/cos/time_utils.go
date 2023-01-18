@@ -1,30 +1,52 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// in addition to standard layouts at /usr/local/go/src/time/format.go
 const (
-	timestampFormat = "15:04:05.000000"
+	StampMicro = "15:04:05.000000" // time.StampMicro without a date, same as glog
+	StampSec   = "15:04:05"        // time.Stamp without a date
+
+	// S3 ListObjectsV2
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+	ISO8601 = "2006-01-02T15:04:05.000Z"
+
+	// S3 HeadObject
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_Examples
+	RFC1123GMT = "Mon, 17 Dec 2012 02:14:10 GMT"
 )
 
-func FormatUnixNano(unixnano int64, format string) string {
+// `unixnano` here is expected to be "nanoseconds since January 1, 1970 UTC"
+func FormatNanoTime(unixnano int64, format string) string {
 	t := time.Unix(0, unixnano)
+	return FormatTime(t, format)
+}
+
+func FormatTime(t time.Time, format string) string {
 	switch format {
 	case "", time.RFC822:
-		return t.Format(time.RFC822)
+		return t.Format(time.RFC822) // default
+	case RFC1123GMT:
+		s := t.UTC().Format(time.RFC1123)
+		debug.Assert(strings.HasSuffix(s, "UTC"), s)
+		return strings.TrimSuffix(s, "UTC") + "GMT"
 	default:
 		return t.Format(format)
 	}
 }
 
-func FormatTimestamp(tm time.Time) string { return tm.Format(timestampFormat) }
+func FormatNowStamp() string { return FormatTime(time.Now(), StampMicro) }
 
 func S2Duration(s string) (time.Duration, error) {
 	d, err := strconv.ParseInt(s, 0, 64)

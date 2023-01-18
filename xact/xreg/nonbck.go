@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -14,12 +14,8 @@ import (
 )
 
 func RegNonBckXact(entry Renewable) {
-	debug.Assert(xact.Table[entry.Kind()].Scope != xact.ScopeBck)
-
-	// It is expected that registrations happen at the init time. Therefore, it
-	// is safe to assume that no `RenewXYZ` will happen before all xactions
-	// are registered. Thus, no locking is needed.
-	dreg.nonbckXacts[entry.Kind()] = entry
+	debug.Assert(!xact.IsSameScope(entry.Kind(), xact.ScopeB))
+	dreg.nonbckXacts[entry.Kind()] = entry // no locking: all reg-s are done at init time
 }
 
 func RenewRebalance(id int64) RenewRes {
@@ -49,13 +45,13 @@ func RenewStoreCleanup(id string) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewDownloader(t cluster.Target, statsT stats.Tracker) RenewRes {
-	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, Custom: statsT}, nil)
+func RenewDownloader(t cluster.Target, statsT stats.Tracker, xactID string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, UUID: xactID, Custom: statsT}, nil)
 	return dreg.renew(e, nil)
 }
 
-func RenewETL(t cluster.Target, msg any) RenewRes {
-	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{T: t, Custom: msg}, nil)
+func RenewETL(t cluster.Target, msg any, xactID string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{T: t, UUID: xactID, Custom: msg}, nil)
 	return dreg.renew(e, nil)
 }
 

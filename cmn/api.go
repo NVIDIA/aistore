@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -191,17 +191,14 @@ type (
 //   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
 //   - BucketPropsToUpdate (above)
 //   - ais.defaultBckProps()
-func (bck *Bck) DefaultProps(cs ...*Config) *BucketProps {
-	var c *Config
-	if len(cs) > 0 {
-		c = &Config{}
-		cos.CopyStruct(c, cs[0])
-	} else {
-		c = GCO.Clone()
-		c.Cksum.Type = cos.ChecksumXXHash
-	}
+func (bck *Bck) DefaultProps(c *ClusterConfig) *BucketProps {
+	lru := c.LRU
 	if bck.IsAIS() {
-		c.LRU.Enabled = false
+		lru.Enabled = false
+	}
+	cksum := c.Cksum
+	if cksum.Type == "" { // tests with empty cluster config
+		cksum.Type = cos.ChecksumXXHash
 	}
 	wp := c.WritePolicy
 	if wp.MD.IsImmediate() {
@@ -211,8 +208,8 @@ func (bck *Bck) DefaultProps(cs ...*Config) *BucketProps {
 		wp.Data = apc.WriteImmediate
 	}
 	return &BucketProps{
-		Cksum:       c.Cksum,
-		LRU:         c.LRU,
+		Cksum:       cksum,
+		LRU:         lru,
 		Mirror:      c.Mirror,
 		Versioning:  c.Versioning,
 		Access:      apc.AccessAll,
@@ -281,7 +278,7 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 }
 
 func (bp *BucketProps) Apply(propsToUpdate *BucketPropsToUpdate) {
-	err := copyProps(*propsToUpdate, bp, apc.Daemon)
+	err := copyProps(propsToUpdate, bp, apc.Daemon)
 	debug.AssertNoErr(err)
 }
 

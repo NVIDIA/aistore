@@ -11,6 +11,7 @@ import (
 	"runtime"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -142,7 +143,11 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 		debug.Assert(rc >= 0)
 	}
 	if obj.Reader != nil {
-		cos.Close(obj.Reader) // NOTE: always closing
+		if err != nil && cmn.IsFileAlreadyClosed(err) {
+			glog.Errorf("%s %s: %v", s, obj, err)
+		} else {
+			cos.Close(obj.Reader) // otherwise, always closing
+		}
 	}
 	// SCQ completion callback
 	if rc == 0 {

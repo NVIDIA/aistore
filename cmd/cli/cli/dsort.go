@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with objects in the cluster
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -24,7 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -117,7 +117,7 @@ type dsortResult struct {
 
 func (d dsortResult) String() string {
 	if d.aborted {
-		return fmt.Sprintf("%s job was aborted", dsort.DSortName)
+		return dsort.DSortName + " job was aborted"
 	}
 
 	var sb strings.Builder
@@ -320,7 +320,7 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 		// Check if targets exist in the metric output.
 		for _, daemonID := range daemonIds {
 			if _, ok := resp[daemonID]; !ok {
-				return false, false, fmt.Errorf("invalid daemon id %q ", daemonID)
+				return false, false, fmt.Errorf("invalid node id %q ", daemonID)
 			}
 		}
 		// Filter metrics only for requested targets.
@@ -334,9 +334,9 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 		aborted = aborted || targetMetrics.Aborted.Load()
 		finished = finished && targetMetrics.Creation.Finished
 	}
-	// Here we use encoding/json inplace of jsoniter because of indentation issues,
+	// NOTE: because of the still-open issue we use here Go-standard json, not jsoniter
 	// https://github.com/json-iterator/go/issues/331
-	b, err := jsonStd.MarshalIndent(resp, "", "  ")
+	b, err := jsonStd.MarshalIndent(resp, "", "    ")
 	if err != nil {
 		return false, false, err
 	}
@@ -345,21 +345,19 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 	return
 }
 
-func printCondensedStats(w io.Writer, id string) error {
+func printCondensedStats(w io.Writer, id string, errhint bool) error {
+	var (
+		elapsedTime       time.Duration
+		extractionTime    time.Duration
+		sortingTime       time.Duration
+		creationTime      time.Duration
+		finished, aborted bool
+	)
 	resp, err := api.MetricsDSort(apiBP, id)
 	if err != nil {
 		return err
 	}
-
-	var (
-		aborted  bool
-		finished = true
-
-		elapsedTime    time.Duration
-		extractionTime time.Duration
-		sortingTime    time.Duration
-		creationTime   time.Duration
-	)
+	finished = true
 	for _, tm := range resp {
 		aborted = aborted || tm.Aborted.Load()
 		finished = finished && tm.Creation.Finished
@@ -385,36 +383,34 @@ func printCondensedStats(w io.Writer, id string) error {
 	}
 
 	if aborted {
-		_, _ = fmt.Fprintf(w, "DSort job was aborted. Check detailed metrics for encountered errors.\n")
+		fmt.Fprintf(w, "DSort job %s aborted.", id)
+		if errhint {
+			fmt.Fprintf(w, " For details, run 'ais show job %s -v'\n", id)
+		} else {
+			fmt.Fprintln(w)
+		}
 		return nil
 	}
-
 	if finished {
-		_, _ = fmt.Fprintf(
-			w,
-			"DSort job has successfully finished in %v:\n  Longest extraction:\t%v\n  Longest sorting:\t%v\n  Longest creation:\t%v\n",
+		fmt.Fprintf(w, "DSort job successfully finished in %v:\n  "+
+			"Longest extraction:\t%v\n  Longest sorting:\t%v\n  Longest creation:\t%v\n",
 			elapsedTime, extractionTime, sortingTime, creationTime,
 		)
 		return nil
 	}
 
-	_, _ = fmt.Fprintf(w, "DSort job currently running:\n  Extraction:\t%v", extractionTime)
+	fmt.Fprintf(w, "DSort job currently running:\n  Extraction:\t%v", extractionTime)
 	if sortingTime.Seconds() > 0 {
-		_, _ = fmt.Fprintf(w, "\n  Sorting:\t%v", sortingTime)
+		fmt.Fprintf(w, "\n  Sorting:\t%v", sortingTime)
 	}
 	if creationTime.Seconds() > 0 {
-		_, _ = fmt.Fprintf(w, "\n  Creation:\t%v", creationTime)
+		fmt.Fprintf(w, "\n  Creation:\t%v", creationTime)
 	}
-	_, _ = fmt.Fprint(w, "\n")
+	fmt.Fprint(w, "\n")
 	return nil
 }
 
-func dsortJobsList(c *cli.Context, regex string) error {
-	list, err := api.ListDSort(apiBP, regex)
-	if err != nil {
-		return err
-	}
-
+func dsortJobsList(c *cli.Context, list []*dsort.JobInfo, usejs bool) error {
 	sort.Slice(list, func(i int, j int) bool {
 		if list[i].IsRunning() && !list[j].IsRunning() {
 			return true
@@ -432,7 +428,12 @@ func dsortJobsList(c *cli.Context, regex string) error {
 		return list[i].StartedTime.Before(list[j].StartedTime)
 	})
 
-	return tmpls.Print(list, c.App.Writer, tmpls.DSortListTmpl, nil, false)
+	hideHeader := flagIsSet(c, noHeaderFlag)
+	if hideHeader {
+		return tmpls.Print(list, c.App.Writer, tmpls.DSortListNoHdrTmpl, nil, usejs)
+	}
+
+	return tmpls.Print(list, c.App.Writer, tmpls.DSortListTmpl, nil, usejs)
 }
 
 func dsortJobStatus(c *cli.Context, id string) error {
@@ -440,7 +441,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 		verbose = flagIsSet(c, verboseFlag)
 		refresh = flagIsSet(c, refreshFlag)
 		logging = flagIsSet(c, logFlag)
-		json    = flagIsSet(c, jsonFlag)
+		usejs   = flagIsSet(c, jsonFlag)
 	)
 
 	// Show progress bar.
@@ -457,7 +458,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 
 	// Show metrics just once.
 	if !refresh && !logging {
-		if json || verbose {
+		if usejs || verbose {
 			var daemonIds []string
 			if c.NArg() == 2 {
 				daemonIds = append(daemonIds, c.Args().Get(1))
@@ -467,11 +468,9 @@ func dsortJobStatus(c *cli.Context, id string) error {
 			}
 
 			fmt.Fprintf(c.App.Writer, "\n")
+			return printCondensedStats(c.App.Writer, id, false)
 		}
-		if !json {
-			return printCondensedStats(c.App.Writer, id)
-		}
-		return nil
+		return printCondensedStats(c.App.Writer, id, true)
 	}
 
 	// Show metrics once in a while.
@@ -504,6 +503,6 @@ func dsortJobStatus(c *cli.Context, id string) error {
 		time.Sleep(rate)
 	}
 
-	fmt.Fprintf(c.App.Writer, "\n")
-	return printCondensedStats(c.App.Writer, id)
+	fmt.Fprintln(c.App.Writer)
+	return printCondensedStats(c.App.Writer, id, false)
 }

@@ -222,13 +222,16 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 	return
 }
 
-func copyProps(src, dst any, asType string) (err error) {
+// update dst with the values from src
+func copyProps(src, dst any, asType string) error {
 	var (
 		srcVal = reflect.ValueOf(src)
 		dstVal = reflect.ValueOf(dst).Elem()
 	)
 	debug.Assertf(cos.StringInSlice(asType, []string{apc.Daemon, apc.Cluster}), "unexpected config level: %s", asType)
-
+	if srcVal.Kind() == reflect.Ptr {
+		srcVal = srcVal.Elem()
+	}
 	for i := 0; i < srcVal.NumField(); i++ {
 		copyTag, ok := srcVal.Type().Field(i).Tag.Lookup("copy")
 		if ok && copyTag == "skip" {
@@ -240,18 +243,21 @@ func copyProps(src, dst any, asType string) (err error) {
 			fieldName   = srcVal.Type().Field(i).Name
 			dstValField = dstVal.FieldByName(fieldName)
 		)
-
 		if srcValField.IsNil() {
 			continue
 		}
-
 		t, ok := dstVal.Type().FieldByName(fieldName)
 		debug.Assert(ok, fieldName)
-		// NOTE: the tag is used exclusively to enforce local vs global scope of the config var
-		allowed := t.Tag.Get("allow")
-		if allowed != "" && allowed != asType {
-			return fmt.Errorf("cannot set property %s with config level %q as %q",
-				fieldName, allowed, asType)
+
+		// "allow" tag is used exclusively to enforce local vs global scope
+		// of the config updates
+		allowedScope := t.Tag.Get("allow")
+		if allowedScope != "" && allowedScope != asType {
+			name := strings.ToLower(fieldName)
+			if allowedScope == apc.Cluster && asType == apc.Daemon {
+				return fmt.Errorf("%s configuration can only be globally updated", name)
+			}
+			return fmt.Errorf("cannot update %s configuration: expecting %q scope, got %q", name, allowedScope, asType)
 		}
 
 		if dstValField.Kind() != reflect.Struct && dstValField.Kind() != reflect.Invalid {
@@ -263,13 +269,12 @@ func copyProps(src, dst any, asType string) (err error) {
 			}
 		} else {
 			// Recurse into struct
-			err = copyProps(srcValField.Elem().Interface(), dstValField.Addr().Interface(), asType)
-			if err != nil {
-				return
+			if err := copyProps(srcValField.Elem().Interface(), dstValField.Addr().Interface(), asType); err != nil {
+				return err
 			}
 		}
 	}
-	return
+	return nil
 }
 
 func mergeProps(src, dst any) {

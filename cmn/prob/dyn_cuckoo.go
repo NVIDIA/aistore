@@ -1,6 +1,6 @@
 // Package prob implements fully features dynamic probabilistic filter.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package prob
 
@@ -44,15 +44,13 @@ func NewDefaultFilter() *Filter {
 
 func (f *Filter) Lookup(k []byte) bool {
 	f.mtx.RLock()
-	defer f.mtx.RUnlock()
-	if len(f.filters) == 0 {
-		return false
-	}
 	for idx := len(f.filters) - 1; idx >= 0; idx-- {
 		if f.filters[idx].Lookup(k) {
+			f.mtx.RUnlock()
 			return true
 		}
 	}
+	f.mtx.RUnlock()
 	return false
 }
 

@@ -116,7 +116,7 @@ Therefore, I can point my new bucket to `/yt8m` directory, and I should be able 
 Let's try it out.
 
 ```console
-$ ais bucket create hdfs://yt8m --bucket-props="extra.hdfs.ref_directory=/yt8m"
+$ ais bucket create hdfs://yt8m --props="extra.hdfs.ref_directory=/yt8m"
 "hdfs://yt8m" bucket created
 $ ais bucket ls hdfs://yt8m
 NAME	 SIZE

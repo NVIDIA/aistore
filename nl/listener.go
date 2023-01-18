@@ -55,7 +55,7 @@ type NotifListener interface {
 	ActiveCount() int
 	HasFinished(node *cluster.Snode) bool
 	MarkFinished(node *cluster.Snode)
-	NodesTardy(durs ...time.Duration) (nodes cluster.NodeMap, tardy bool)
+	NodesTardy(periodicNotifTime time.Duration) (nodes cluster.NodeMap, tardy bool)
 }
 
 type (
@@ -91,11 +91,13 @@ type (
 	}
 
 	NotifStatus struct {
-		UUID     string `json:"uuid"`     // UUID of the xaction
+		Kind     string `json:"kind"`     // xaction kind
+		UUID     string `json:"uuid"`     // xaction UUID
 		ErrMsg   string `json:"err"`      // error
 		FinTime  int64  `json:"end_time"` // time xaction ended
 		AbortedX bool   `json:"aborted"`  // true if aborted
 	}
+	NotifStatusVec []NotifStatus
 )
 
 ///////////////////////
@@ -181,19 +183,17 @@ func (nlb *NotifListenerBase) LastUpdated(si *cluster.Snode) int64 {
 	return nlb.lastUpdated[si.ID()]
 }
 
-func (nlb *NotifListenerBase) NodesTardy(durs ...time.Duration) (nodes cluster.NodeMap, tardy bool) {
-	dur := cmn.GCO.Get().Periodic.NotifTime.D()
-	if len(durs) > 0 {
-		dur = durs[0]
-	} else if nlb.ProgressInterval() != 0 {
-		dur = nlb.ProgressInterval()
+// under rlock
+func (nlb *NotifListenerBase) NodesTardy(periodicNotifTime time.Duration) (nodes cluster.NodeMap, tardy bool) {
+	if nlb.ProgressInterval() != 0 {
+		periodicNotifTime = nlb.ProgressInterval()
 	}
 	nodes = make(cluster.NodeMap, nlb.ActiveCount())
 	now := mono.NanoTime()
 	for _, si := range nlb.ActiveSrcs {
 		ts := nlb.LastUpdated(si)
 		diff := time.Duration(now - ts)
-		if _, ok := nlb.Stats.Load(si.ID()); ok && diff < dur {
+		if _, ok := nlb.Stats.Load(si.ID()); ok && diff < periodicNotifTime {
 			continue
 		}
 		nodes.Add(si)
@@ -203,7 +203,7 @@ func (nlb *NotifListenerBase) NodesTardy(durs ...time.Duration) (nodes cluster.N
 }
 
 func (nlb *NotifListenerBase) Status() *NotifStatus {
-	return &NotifStatus{UUID: nlb.UUID(), FinTime: nlb.FinTime.Load(), AbortedX: nlb.Aborted()}
+	return &NotifStatus{Kind: nlb.Kind(), UUID: nlb.UUID(), FinTime: nlb.FinTime.Load(), AbortedX: nlb.Aborted()}
 }
 
 func (nlb *NotifListenerBase) String() string {
@@ -225,7 +225,7 @@ func (nlb *NotifListenerBase) String() string {
 		} else {
 			res = "-done"
 		}
-		tm = cos.FormatTimestamp(time.Unix(0, tfin))
+		tm = cos.FormatNanoTime(tfin, cos.StampMicro)
 		return fmt.Sprintf("%s-%s%s", hdr, tm, res)
 	}
 	if finCount > 0 {
@@ -248,8 +248,30 @@ func (nlb *NotifListenerBase) SetHrwOwner(smap *cluster.Smap) {
 // NotifStatus //
 /////////////////
 
-func (xs *NotifStatus) Finished() bool { return xs.FinTime > 0 }
-func (xs *NotifStatus) Aborted() bool  { return xs.AbortedX }
+func (ns *NotifStatus) Finished() bool { return ns.FinTime > 0 }
+func (ns *NotifStatus) Aborted() bool  { return ns.AbortedX }
+
+func (ns *NotifStatus) String() (s string) {
+	s = ns.Kind + "[" + ns.UUID + "]"
+	switch {
+	case ns.Aborted():
+		s += "-abrt"
+	case ns.Finished():
+		if ns.ErrMsg != "" {
+			s += "-" + ns.ErrMsg
+		} else {
+			s += "-done"
+		}
+	}
+	return
+}
+
+func (nsv NotifStatusVec) String() (s string) {
+	for _, ns := range nsv {
+		s += ns.String() + ", "
+	}
+	return s[:cos.Max(0, len(s)-2)]
+}
 
 /////////////////
 //  NodeStats  //

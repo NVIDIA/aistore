@@ -24,11 +24,13 @@ import (
 )
 
 // Information Center (IC) is a group of proxies that take care of ownership of
-// jtx (Job, Task, eXtended action) entities. It manages the lifecycle of an entity (uuid),
-// and monitors its status (metadata). When an entity is created, it is registered with the
-// members of IC. The IC members monitor all the entities (by uuid) registered to them,
-// and act as information sources for those entities. Non-IC proxies redirect entity related
-// requests to one of the IC members.
+// (Job, Task, eXtended action) entities. IC manages their lifecycle and monitors
+// status. When a job, task or xaction is created, it gets registered with all IC
+// members. Henceforth, IC acts as information source as far as status (running,
+// aborted, finished), progress, and statistics.
+//
+// Non-IC AIS proxies, on the other hand, redirect all corresponding requests to
+// one (anyone) of the IC (proxy) members.
 
 const (
 	// Implies equal ownership by all IC members and applies to all async ops
@@ -141,36 +143,72 @@ outer:
 	return true
 }
 
-// TODO: add more functionality similar to reverseToOwner
 func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	smap := ic.p.owner.smap.get()
-	if !smap.IsIC(ic.p.si) {
-		var node *cluster.Snode
-		for _, psi := range smap.Pmap {
-			if smap.IsIC(psi) {
-				node = psi
-				break
-			}
-		}
-		redirectURL := ic.p.redirectURL(r, node, time.Now(), cmn.NetIntraControl)
-		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-		return true
+	if smap.IsIC(ic.p.si) {
+		return false
 	}
-	return false
+
+	var node *cluster.Snode
+	for _, psi := range smap.Pmap {
+		if smap.IsIC(psi) {
+			node = psi
+			break
+		}
+	}
+	redirectURL := ic.p.redirectURL(r, node, time.Now(), cmn.NetIntraControl)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	return true
 }
 
-func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
+func (ic *ic) handleAllXactStatus(w http.ResponseWriter, r *http.Request, query url.Values) {
+	msg := &xact.QueryMsg{}
+	if err := cmn.ReadJSON(w, r, msg); err != nil {
+		return
+	}
+	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: (*cluster.Bck)(&msg.Bck), OnlyRunning: msg.OnlyRunning}
+	if !msg.Bck.IsEmpty() {
+		flt.Bck = (*cluster.Bck)(&msg.Bck)
+	}
+	nls := ic.p.notifs.findAll(flt)
+
+	var vec nl.NotifStatusVec
+
+	if cos.IsParseBool(query.Get(apc.QparamForce)) {
+		// (force just-in-time)
+		// for each args-selected xaction:
+		// check if any of the targets delayed updating the corresponding status,
+		// and query those targets directly
+		var (
+			config   = cmn.GCO.Get()
+			interval = config.Periodic.NotifTime.D()
+		)
+		for _, nl := range nls {
+			ic.p.notifs.bcastGetStats(nl, interval)
+			status := nl.Status()
+			if err := nl.Err(); err != nil {
+				status.ErrMsg = err.Error()
+			}
+			vec = append(vec, *status)
+		}
+	} else {
+		for _, nl := range nls {
+			vec = append(vec, *nl.Status())
+		}
+	}
+	w.Write(cos.MustMarshal(vec))
+}
+
+func (ic *ic) handleOneXactStatus(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg      = &xact.QueryMsg{}
-		bck      *cluster.Bck
-		nl       nl.NotifListener
-		config   = cmn.GCO.Get()
-		interval = config.Periodic.NotifTime.D()
-		exists   bool
+		nl  nl.NotifListener
+		bck *cluster.Bck
+		msg = &xact.QueryMsg{}
 	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
+	msg.Kind, _ = xact.GetKindName(msg.Kind) // display name => kind
 	if msg.ID == "" && msg.Kind == "" {
 		ic.p.writeErrStatusf(w, r, http.StatusBadRequest, "invalid %s", msg)
 		return
@@ -191,13 +229,12 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: bck, OnlyRunning: msg.OnlyRunning}
 	withRetry(cmn.Timeout.CplaneOperation(), func() bool {
-		nl, exists = ic.p.notifs.find(flt)
-		return exists
+		nl = ic.p.notifs.find(flt)
+		return nl != nil
 	})
-	if !exists {
+	if nl == nil {
 		smap := ic.p.owner.smap.get()
 		ic.p.writeErrStatusSilentf(w, r, http.StatusNotFound, "%s, %s", smap.StrIC(ic.p.si), msg)
 		return
@@ -208,7 +245,12 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ic.p.notifs.syncStats(nl, interval)
+	// refresh NotifStatus
+	var (
+		config   = cmn.GCO.Get()
+		interval = config.Periodic.NotifTime.D()
+	)
+	ic.p.notifs.bcastGetStats(nl, interval)
 
 	status := nl.Status()
 	if err := nl.Err(); err != nil {

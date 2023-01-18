@@ -55,23 +55,28 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	)
 	// always allow as the flow involves intra-cluster redirect
 	// (ref 1377 for more context)
-	if what == apc.GetWhatXactStatus {
-		p.ic.writeStatus(w, r)
+	if what == apc.GetWhatOneXactStatus {
+		p.ic.handleOneXactStatus(w, r)
 		return
 	}
 
 	if err := p.checkAccess(w, r, nil, apc.AceShowCluster); err != nil {
 		return
 	}
+
 	switch what {
+	case apc.GetWhatAllXactStatus:
+		p.ic.handleAllXactStatus(w, r, query)
+	case apc.GetWhatQueryXactStats:
+		p.queryXaction(w, r, what, query)
+	case apc.GetWhatAllRunningXacts:
+		p.getAllRunningXacts(w, r, what, query)
 	case apc.GetWhatStats:
-		p.queryClusterStats(w, r, what)
+		p.queryClusterStats(w, r, what, query)
 	case apc.GetWhatSysInfo:
 		p.queryClusterSysinfo(w, r, what, query)
-	case apc.GetWhatQueryXactStats:
-		p.queryXaction(w, r, what)
 	case apc.GetWhatMountpaths:
-		p.queryClusterMountpaths(w, r, what)
+		p.queryClusterMountpaths(w, r, what, query)
 	case apc.GetWhatRemoteAIS:
 		all, err := p.getRemAises(true /*refresh*/)
 		if err != nil {
@@ -99,12 +104,8 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		w.Write(buf.Bytes())
 
 	case apc.GetWhatClusterConfig:
-		config, err := p.owner.config.get()
-		if err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		p.writeJSON(w, r, config, what)
+		config := cmn.GCO.Get()
+		p.writeJSON(w, r, &config.ClusterConfig, what)
 	case apc.GetWhatBMD, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatSmap:
 		p.htrun.httpdaeget(w, r, query)
 	default:
@@ -112,29 +113,20 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
-	var (
-		body  []byte
-		xflt  string
-		query = r.URL.Query()
-	)
-	switch what {
-	case apc.GetWhatQueryXactStats:
-		var xactMsg xact.QueryMsg
-		if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
-			return
-		}
-		xflt = xactMsg.String()
-		body = cos.MustMarshal(xactMsg)
-	default:
-		p.writeErrStatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
+// apc.GetWhatQueryXactStats (NOTE: may poll for quiescence)
+func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	var xactMsg xact.QueryMsg
+	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 		return
 	}
+	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // convert display name => kind
+	body := cos.MustMarshal(xactMsg)
+
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathXactions.S, Body: body, Query: query}
 	args.to = cluster.Targets
 	config := cmn.GCO.Get()
-	args.timeout = config.Client.Timeout.D() // NOTE: may poll for quiescence
+	args.timeout = config.Client.Timeout.D() // quiescence
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	targetResults, erred := p._queryResults(w, r, results)
@@ -142,10 +134,48 @@ func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string
 		return
 	}
 	if len(targetResults) == 0 {
-		p.writeErrMsg(w, r, "xaction \""+xflt+"\" not found", http.StatusNotFound)
+		p.writeErrStatusf(w, r, http.StatusNotFound, "xaction %q not found", xactMsg.String())
 		return
 	}
 	p.writeJSON(w, r, targetResults, what)
+}
+
+// apc.GetWhatAllRunningXacts
+func (p *proxy) getAllRunningXacts(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	var xactMsg xact.QueryMsg
+	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
+		return
+	}
+	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // convert display name => kind
+	body := cos.MustMarshal(xactMsg)
+
+	args := allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathXactions.S, Body: body, Query: query}
+	args.to = cluster.Targets
+	results := p.bcastGroup(args)
+	freeBcArgs(args)
+
+	uniqueKindIDs := cos.StrSet{}
+	for _, res := range results {
+		if res.err != nil {
+			p.writeErr(w, r, res.toErr())
+			freeBcastRes(results)
+			return
+		}
+		if len(res.bytes) == 0 {
+			continue
+		}
+		var (
+			kindIDs []string
+			err     = jsoniter.Unmarshal(res.bytes, &kindIDs)
+		)
+		debug.AssertNoErr(err)
+		for _, ki := range kindIDs {
+			uniqueKindIDs.Set(ki)
+		}
+	}
+	freeBcastRes(results)
+	p.writeJSON(w, r, uniqueKindIDs.ToSlice(), what)
 }
 
 func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
@@ -224,8 +254,8 @@ func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int, query
 	return sysInfoMap, nil
 }
 
-func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what string) {
-	targetStats, erred := p._queryTargets(w, r)
+func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	targetStats, erred := p._queryTargets(w, r, query)
 	if targetStats == nil || erred {
 		return
 	}
@@ -235,8 +265,8 @@ func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what s
 	_ = p.writeJSON(w, r, out, what)
 }
 
-func (p *proxy) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, what string) {
-	targetMountpaths, erred := p._queryTargets(w, r)
+func (p *proxy) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	targetMountpaths, erred := p._queryTargets(w, r, query)
 	if targetMountpaths == nil || erred {
 		return
 	}
@@ -247,7 +277,7 @@ func (p *proxy) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, w
 
 // helper methods for querying targets
 
-func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request) (cos.JSONRawMsgs, bool) {
+func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request, query url.Values) (cos.JSONRawMsgs, bool) {
 	var (
 		err  error
 		body []byte
@@ -260,7 +290,7 @@ func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request) (cos.JSONR
 		}
 	}
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathDae.S, Query: r.URL.Query(), Body: body}
+	args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathDae.S, Query: query, Body: body}
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
@@ -822,20 +852,20 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 		p.writeErr(w, r, err)
 		return
 	}
-	q := url.Values{}
-	q.Add(apc.ActTransient, "true")
-
 	msg.Value = toUpdate
-	body := cos.MustMarshal(msg)
-
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body, Query: q}
+	args.req = cmn.HreqArgs{
+		Method: http.MethodPut,
+		Path:   apc.URLPathDae.S,
+		Body:   cos.MustMarshal(msg),
+		Query:  url.Values{apc.ActTransient: []string{"true"}},
+	}
 	p.bcastReqGroup(w, r, args, cluster.AllNodes)
 	freeBcArgs(args)
 }
 
 func _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
-	if err = clone.Apply(*ctx.toUpdate, apc.Cluster); err != nil {
+	if err = clone.Apply(ctx.toUpdate, apc.Cluster); err != nil {
 		return
 	}
 	updated = true
@@ -855,6 +885,7 @@ func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *apc.Actio
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // display name => kind
 	// rebalance
 	if xactMsg.Kind == apc.ActRebalance {
 		p.rebalanceCluster(w, r)
@@ -897,6 +928,7 @@ func (p *proxy) xactStop(w http.ResponseWriter, r *http.Request, msg *apc.Action
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // display name => kind
 	body := cos.MustMarshal(apc.ActionMsg{Action: msg.Action, Value: xactMsg})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
@@ -1184,7 +1216,7 @@ func (p *proxy) attachDetachRemAis(w http.ResponseWriter, r *http.Request, actio
 	if err != nil {
 		p.writeErr(w, r, err)
 	} else if newConfig != nil {
-		go p._remais(newConfig)
+		go p._remais(&newConfig.ClusterConfig, false)
 	}
 }
 
@@ -1194,9 +1226,9 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 	var (
 		aisConf cmn.BackendConfAIS
 		action  = ctx.msg.Action
-		v, ok   = config.Backend.ProviderConf(apc.AIS)
+		v       = config.Backend.Get(apc.AIS)
 	)
-	if !ok || v == nil {
+	if v == nil {
 		if action == apc.ActDetachRemAis {
 			return false, fmt.Errorf("%s: remote cluster config is empty", p.si)
 		}
@@ -1213,6 +1245,9 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 				cmn.NewErrFailedTo(p, action, "remote cluster", errors.New("not found"), http.StatusNotFound)
 		}
 		delete(aisConf, alias)
+		if len(aisConf) == 0 {
+			aisConf = nil // unconfigure
+		}
 	} else {
 		debug.Assert(action == apc.ActAttachRemAis)
 		u := ctx.hdr.Get(apc.HdrRemAisURL)
@@ -1252,7 +1287,7 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 		glog.Infof("%s: %s %s", p, action, detail)
 		aisConf[alias] = []string{u}
 	}
-	config.Backend.ProviderConf(apc.AIS, aisConf)
+	config.Backend.Set(apc.AIS, aisConf)
 
 	return true, nil
 }

@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains util functions and types.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -28,16 +27,13 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools/docker"
-	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -46,7 +42,6 @@ import (
 )
 
 const (
-	infinity             = -1
 	keyAndValueSeparator = "="
 	fileStdIO            = "-"
 
@@ -69,7 +64,6 @@ var (
 	authnHTTPClient   *http.Client
 	apiBP             api.BaseParams
 	authParams        api.BaseParams
-	mu                sync.Mutex
 )
 
 type (
@@ -93,14 +87,16 @@ type (
 	}
 )
 
-func argDaemonID(c *cli.Context) string {
-	daemonID := c.Args().First()
-	return cluster.N2ID(daemonID)
+func argLast(c *cli.Context) (last string) {
+	if l := c.NArg(); l > 0 {
+		last = c.Args().Get(l - 1)
+	}
+	return
 }
 
-func argLast(c *cli.Context) string { return c.Args().Get(c.NArg() - 1) }
-
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
+
+func jsonMarshalIndent(v any) ([]byte, error) { return jsoniter.MarshalIndent(v, "", "    ") }
 
 func helpMessage(template string, data any) string {
 	var buf bytes.Buffer
@@ -111,50 +107,6 @@ func helpMessage(template string, data any) string {
 	_ = w.Flush()
 
 	return buf.String()
-}
-
-func didYouMeanMessage(c *cli.Context, cmd string) string {
-	if alike := findCmdByKey(cmd); len(alike) > 0 {
-		msg := fmt.Sprintf("%v", alike) //nolint:gocritic // alt formatting
-		sb := &strings.Builder{}
-		sb.WriteString(msg)
-		sbWriteTail(c, sb)
-		return fmt.Sprintf("Did you mean: %q?", sb.String())
-	}
-
-	closestCommand, distance := findClosestCommand(cmd, c.App.VisibleCommands())
-	if distance >= cos.Max(incorrectCmdDistance, len(cmd)/2) {
-		// 2nd attempt: check misplaced `show`
-		// (that can be typed-in ex post facto as in: `ais object ... show` == `ais show object`)
-		// (feature)
-		if tail := c.Args().Tail(); len(tail) > 0 && tail[0] == commandShow {
-			sb := &strings.Builder{}
-			sb.WriteString(c.App.Name)
-			sb.WriteString(" " + commandShow)
-			sb.WriteString(" " + c.Args()[0])
-			for _, f := range c.FlagNames() {
-				sb.WriteString(" --" + f)
-			}
-			return fmt.Sprintf("Did you mean: %q?", sb.String())
-		}
-		return ""
-	}
-	sb := &strings.Builder{}
-	sb.WriteString(c.App.Name)
-	sb.WriteString(" " + closestCommand)
-	sbWriteTail(c, sb)
-	return fmt.Sprintf("Did you mean: %q?", sb.String())
-}
-
-func sbWriteTail(c *cli.Context, sb *strings.Builder) {
-	if c.NArg() > 1 {
-		for _, a := range c.Args()[1:] { // skip the wrong one
-			sb.WriteString(" " + a)
-		}
-	}
-	for _, f := range c.FlagNames() {
-		sb.WriteString(" --" + f)
-	}
 }
 
 func findClosestCommand(cmd string, candidates []cli.Command) (result string, distance int) {
@@ -172,56 +124,9 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 	return closestName, minDist
 }
 
-// Get cluster map and use it to retrieve node status for each clustered node
-func fillMap() (*cluster.Smap, error) {
-	wg := &sync.WaitGroup{}
-	smap, err := api.GetClusterMap(apiBP)
-	if err != nil {
-		return nil, err
-	}
-	if smap.Primary.PubNet.URL != apiBP.URL {
-		// TODO: cluster map (Smap) is replicated & synchronized across all nodes, and so
-		//       this step can be made optional/configurable with default='not doing it'
-		smapPrimary, err := api.GetNodeClusterMap(apiBP, smap.Primary.ID())
-		if err != nil {
-			return nil, err
-		}
-		smap = smapPrimary
-	}
-	proxyCount := smap.CountProxies()
-	targetCount := smap.CountTargets()
-
-	wg.Add(proxyCount + targetCount)
-	retrieveStatus(smap.Pmap, pmapStatus, wg)
-	retrieveStatus(smap.Tmap, tmapStatus, wg)
-	wg.Wait()
-	return smap, nil
-}
-
-func retrieveStatus(nodeMap cluster.NodeMap, daeMap stats.DaemonStatusMap, wg *sync.WaitGroup) {
-	fill := func(node *cluster.Snode) {
-		obj, _ := api.GetDaemonStatus(apiBP, node)
-		if node.Flags.IsSet(cluster.NodeFlagMaint) {
-			obj.Status = "maintenance"
-		} else if node.Flags.IsSet(cluster.NodeFlagDecomm) {
-			obj.Status = "decommission"
-		}
-		mu.Lock()
-		daeMap[node.ID()] = obj
-		mu.Unlock()
-	}
-
-	for _, si := range nodeMap {
-		go func(si *cluster.Snode) {
-			fill(si)
-			wg.Done()
-		}(si)
-	}
-}
-
-// Get config from random target.
-func getRandTargetConfig() (*cmn.Config, error) {
-	smap, err := api.GetClusterMap(apiBP)
+// Get config from a random target.
+func getRandTargetConfig(c *cli.Context) (*cmn.Config, error) {
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return nil, err
 	}
@@ -258,26 +163,30 @@ func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err 
 	return
 }
 
-func parseBckURI(c *cli.Context, uri string, requireProviderInURI ...bool) (cmn.Bck, error) {
+//nolint:unparam // !requireProviderInURI (with default ais://) is a currently never used (feature)
+func parseBckURI(c *cli.Context, uri string, requireProviderInURI bool) (cmn.Bck, error) {
 	if isWebURL(uri) {
 		bck := parseURLtoBck(uri)
 		return bck, nil
 	}
+
 	opts := cmn.ParseURIOpts{}
-	if cfg != nil && (len(requireProviderInURI) == 0 || !requireProviderInURI[0]) {
+	if cfg != nil && !requireProviderInURI {
 		opts.DefaultProvider = cfg.DefaultProvider
 	}
 	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
-	if err != nil {
-		return bck, err
-	}
-	if objName != "" {
-		return bck, objectNameArgumentNotSupported(c, objName)
-	}
-	if bck.Name == "" {
-		return bck, incorrectUsageMsg(c, "%q: missing bucket name", uri)
-	} else if err := bck.Validate(); err != nil {
-		return bck, cannotExecuteError(c, err)
+	switch {
+	case err != nil:
+		return cmn.Bck{}, err
+	case objName != "":
+		return cmn.Bck{}, objectNameArgumentNotSupported(c, objName)
+	case bck.Name == "":
+		return cmn.Bck{}, incorrectUsageMsg(c, "%q: missing bucket name", uri)
+	default:
+		if err = bck.Validate(); err != nil {
+			msg := "E.g. " + bucketArgument + ": ais://mmm, s3://nnn or aws://nnn, gs://ppp or gcp://ppp, etc."
+			return cmn.Bck{}, cannotExecuteError(c, err, msg)
+		}
 	}
 	return bck, nil
 }
@@ -315,14 +224,15 @@ func parseBckObjectURI(c *cli.Context, uri string, optObjName ...bool) (bck cmn.
 		if len(uri) > 1 && uri[:2] == "--" { // FIXME: needed smth like c.LooksLikeFlag
 			return bck, objName, incorrectUsageMsg(c, "misplaced flag %q", uri)
 		}
-		return bck, objName, cannotExecuteError(c, err)
+		msg := "Expecting " + objectArgument + ", e.g.: ais://mmm/obj1, s3://nnn/obj2, gs://ppp/obj3, etc."
+		return bck, objName, cannotExecuteError(c, err, msg)
 	}
 
 validate:
 	if bck.Name == "" {
 		return bck, objName, incorrectUsageMsg(c, "%q: missing bucket name", uri)
 	} else if err := bck.Validate(); err != nil {
-		return bck, objName, cannotExecuteError(c, err)
+		return bck, objName, cannotExecuteError(c, err, "")
 	} else if objName == "" && (len(optObjName) == 0 || !optObjName[0]) {
 		return bck, objName, incorrectUsageMsg(c, "%q: missing object name", uri)
 	}
@@ -387,7 +297,7 @@ func makePairs(args []string) (nvs cos.StrKVs, err error) {
 func parseRemAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
 	var parts []string
 	if c.NArg() == 0 {
-		err = missingArgumentsError(c, aliasURLPairArgument)
+		err = missingArgumentsError(c, c.Command.ArgsUsage)
 		return
 	}
 	if c.NArg() > 1 {
@@ -405,66 +315,6 @@ ret:
 		err = cmn.ValidateRemAlias(alias)
 	}
 	return
-}
-
-// Parses [TARGET_ID] [XACTION_ID|XACTION_NAME] [BUCKET]
-func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck cmn.Bck, err error) {
-	var smap *cluster.Smap
-	smap, err = api.GetClusterMap(apiBP)
-	if err != nil {
-		return
-	}
-	shift := 0
-	xactKind = argDaemonID(c)
-	if node := smap.GetProxy(xactKind); node != nil {
-		return "", "", "", bck, fmt.Errorf("daemon %q is a proxy", xactKind)
-	}
-	if node := smap.GetTarget(xactKind); node != nil {
-		nodeID = xactKind
-		xactKind = c.Args().Get(1)
-		shift++
-	}
-
-	uri := c.Args().Get(1 + shift)
-	if !xact.IsValidKind(xactKind) {
-		xactID = xactKind
-		xactKind = ""
-		uri = c.Args().Get(1 + shift)
-	} else if strings.Contains(xactKind, apc.BckProviderSeparator) {
-		uri = xactKind
-		xactKind = ""
-	}
-	if uri != "" {
-		switch xact.Table[xactKind].Scope {
-		case xact.ScopeBck:
-			// Bucket is optional.
-			if uri := c.Args().Get(1); uri != "" {
-				if bck, err = parseBckURI(c, uri); err != nil {
-					return "", "", "", bck, err
-				}
-				if _, err = headBucket(bck, true /* don't add */); err != nil {
-					return "", "", "", bck, err
-				}
-			}
-		default:
-			if c.NArg() > 1 {
-				actionWarn(c, "\""+xactKind+"\" is a non bucket-scope xaction, ignoring bucket name.")
-			}
-		}
-	}
-	return
-}
-
-// Get list of xactions
-func listXactions(onlyStartable bool) []string {
-	xactKinds := make([]string, 0)
-	for kind, dtor := range xact.Table {
-		if !onlyStartable || (onlyStartable && dtor.Startable) {
-			xactKinds = append(xactKinds, kind)
-		}
-	}
-	sort.Strings(xactKinds)
-	return xactKinds
 }
 
 func isJSON(arg string) bool {
@@ -644,7 +494,7 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	bcks := make([]cmn.Bck, 0, len(uris))
 
 	for _, bckURI := range uris {
-		bck, err := parseBckURI(c, bckURI)
+		bck, err := parseBckURI(c, bckURI, true /*require provider*/)
 		if err != nil {
 			return nil, err
 		}
@@ -658,14 +508,6 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	}
 
 	return nil, missingArgumentsError(c, "bucket")
-}
-
-func cliAPIParams(proxyURL string) api.BaseParams {
-	return api.BaseParams{
-		Client: defaultHTTPClient,
-		URL:    proxyURL,
-		Token:  loggedUserToken,
-	}
 }
 
 // NOTE:
@@ -919,9 +761,9 @@ func isBucketEmpty(bck cmn.Bck) (bool, error) {
 	return len(objList.Entries) == 0, nil
 }
 
-func ensureHasProvider(bck cmn.Bck, cmd string) error {
+func ensureHasProvider(bck cmn.Bck) error {
 	if !apc.IsProvider(bck.Provider) {
-		return fmt.Errorf("missing backend provider in bucket %q for command %q", bck, cmd)
+		return fmt.Errorf("missing backend provider in %q", bck)
 	}
 	return nil
 }
@@ -995,8 +837,17 @@ func diffConfigs(actual, original nvpairList) []propDiff {
 }
 
 func printSectionJSON(c *cli.Context, in any, section string) (done bool) {
-	debug.Assert(section != "")
+	if i := strings.LastIndexByte(section, '.'); i > 0 {
+		section = section[:i]
+	}
 	if done = _printSection(c, in, section); !done {
+		// e.g. keepalivetracker.proxy.name
+		if i := strings.LastIndexByte(section, '.'); i > 0 {
+			section = section[:i]
+			done = _printSection(c, in, section)
+		}
+	}
+	if !done {
 		actionWarn(c, "config section (or section prefix) \""+section+"\" not found.")
 	}
 	return
@@ -1005,11 +856,11 @@ func printSectionJSON(c *cli.Context, in any, section string) (done bool) {
 func _printSection(c *cli.Context, in any, section string) (done bool) {
 	var (
 		beg       = regexp.MustCompile(`\s+"` + section + `\S*": {`)
-		end       = regexp.MustCompile(`}[,|$]`)
+		end       = regexp.MustCompile(`},\n`)
 		nst       = regexp.MustCompile(`\s+"\S+": {`)
 		nonstruct = regexp.MustCompile(`\s+"` + section + `\S*": ".+"[,\n\r]{1}`)
 	)
-	out, err := jsoniter.MarshalIndent(in, "", "    ")
+	out, err := jsonMarshalIndent(in)
 	if err != nil {
 		return
 	}
@@ -1049,6 +900,9 @@ func _printSection(c *cli.Context, in any, section string) (done bool) {
 		return
 	}
 done:
+	if l := len(res); res[l-1] == ',' {
+		res = res[:l-1]
+	}
 	fmt.Fprintln(c.App.Writer, string(res)+"\n")
 	return true
 }
@@ -1056,32 +910,12 @@ done:
 // First, request cluster's config from the primary node that contains
 // default Cksum type. Second, generate default list of properties.
 func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
-	smap, err := api.GetClusterMap(apiBP)
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := api.GetDaemonConfig(apiBP, smap.Primary)
+	cfg, err := api.GetClusterConfig(apiBP)
 	if err != nil {
 		return nil, err
 	}
 	props := bck.DefaultProps(cfg)
 	return props, nil
-}
-
-// Wait for an Xaction to complete, and print if it aborted
-func waitForXactionCompletion(apiBP api.BaseParams, args api.XactReqArgs) (err error) {
-	if args.Timeout == 0 {
-		args.Timeout = time.Minute // TODO: make it a flag and an argument with configurable default
-	}
-	status, err := api.WaitForXactionIC(apiBP, args)
-	if err != nil {
-		return err
-	}
-	if status.Aborted() {
-		return fmt.Errorf("xaction with UUID %q was aborted", status.UUID)
-	}
-
-	return nil
 }
 
 // see also flattenConfig
@@ -1210,48 +1044,6 @@ func parseSource(rawURL string) (source dlSource, err error) {
 }
 
 ///////////////////
-// longRunParams //
-///////////////////
-
-type longRunParams struct {
-	count       int
-	refreshRate time.Duration
-}
-
-func defaultLongRunParams() *longRunParams {
-	return &longRunParams{
-		count:       countDefault,
-		refreshRate: refreshRateDefault,
-	}
-}
-
-func (p *longRunParams) isInfiniteRun() bool {
-	return p.count == infinity
-}
-
-func updateLongRunParams(c *cli.Context) error {
-	params := c.App.Metadata[metadata].(*longRunParams)
-
-	if flagIsSet(c, refreshFlag) {
-		params.refreshRate = parseDurationFlag(c, refreshFlag)
-		// Run forever unless `count` is also specified
-		params.count = infinity
-	}
-
-	if flagIsSet(c, countFlag) {
-		params.count = parseIntFlag(c, countFlag)
-		if params.count <= 0 {
-			warn := fmt.Sprintf("%q set to %d, but expected value >= 1. Assuming %q = %d",
-				countFlag.Name, params.count, countFlag.Name, countDefault)
-			actionWarn(c, warn)
-			params.count = countDefault
-		}
-	}
-
-	return nil
-}
-
-///////////////////
 // progIndicator //
 ///////////////////
 
@@ -1271,129 +1063,6 @@ func (pi *progIndicator) printProgress(incr int64) {
 
 func newProgIndicator(objName string) *progIndicator {
 	return &progIndicator{objName, atomic.NewInt64(0)}
-}
-
-// get xaction progress message
-func xactProgressMsg(xactID string) string {
-	return fmt.Sprintf("use '%s %s %s %s %s' to monitor progress",
-		cliName, commandJob, commandShow, subcmdXaction, xactID)
-}
-
-///////////////
-// CLI flags //
-///////////////
-
-// If the flag has multiple values (separated by comma), take the first one
-func cleanFlag(flag string) string {
-	return strings.Split(flag, ",")[0]
-}
-
-func flagIsSet(c *cli.Context, flag cli.Flag) (v bool) {
-	name := cleanFlag(flag.GetName()) // take the first of multiple names
-	switch flag.(type) {
-	case cli.BoolFlag:
-		v = c.Bool(name)
-	case cli.BoolTFlag:
-		v = c.BoolT(name)
-	default:
-		v = c.GlobalIsSet(name) || c.IsSet(name)
-	}
-	return
-}
-
-// Returns the value of a string flag (either parent or local scope)
-func parseStrFlag(c *cli.Context, flag cli.Flag) string {
-	flagName := cleanFlag(flag.GetName())
-	if c.GlobalIsSet(flagName) {
-		return c.GlobalString(flagName)
-	}
-	return c.String(flagName)
-}
-
-// Returns the value of an int flag (either parent or local scope)
-func parseIntFlag(c *cli.Context, flag cli.IntFlag) int {
-	flagName := cleanFlag(flag.GetName())
-	if c.GlobalIsSet(flagName) {
-		return c.GlobalInt(flagName)
-	}
-	return c.Int(flagName)
-}
-
-// Returns the value of an duration flag (either parent or local scope)
-func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
-	flagName := cleanFlag(flag.GetName())
-	if c.GlobalIsSet(flagName) {
-		return c.GlobalDuration(flagName)
-	}
-	return c.Duration(flagName)
-}
-
-func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
-	flagValue := parseStrFlag(c, flag.(cli.StringFlag))
-	b, err := cos.S2B(flagValue)
-	if err != nil {
-		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)",
-			flag.GetName(), flagValue)
-	}
-	return b, nil
-}
-
-func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
-	cksums := []*cos.Cksum{}
-	for _, ckflag := range supportedCksumFlags {
-		if flagIsSet(c, ckflag) {
-			cksums = append(cksums, cos.NewCksum(ckflag.GetName(), parseStrFlag(c, ckflag)))
-		}
-	}
-	return cksums
-}
-
-func flattenXactStats(snap *xact.SnapExt) nvpairList {
-	props := make(nvpairList, 0)
-	if snap == nil {
-		return props
-	}
-	fmtTime := func(t time.Time) string {
-		if t.IsZero() {
-			return tmpls.NotSetVal
-		}
-		return t.Format("01-02 15:04:05")
-	}
-	props = append(props,
-		// Start xaction properties with a dot to make them first alphabetically
-		nvpair{Name: ".id", Value: snap.ID},
-		nvpair{Name: ".kind", Value: snap.Kind},
-		nvpair{Name: ".bck", Value: snap.Bck.String()},
-		nvpair{Name: ".start", Value: fmtTime(snap.StartTime)},
-		nvpair{Name: ".end", Value: fmtTime(snap.EndTime)},
-		nvpair{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
-
-		nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
-		nvpair{Name: "loc.obj.size", Value: formatStatHuman(".size", snap.Stats.Bytes)},
-		nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
-		nvpair{Name: "in.obj.size", Value: formatStatHuman(".size", snap.Stats.InBytes)},
-		nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
-		nvpair{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
-	)
-	if extStats, ok := snap.Ext.(map[string]any); ok {
-		for k, v := range extStats {
-			var value string
-			if strings.HasSuffix(k, ".size") {
-				val := v.(string)
-				if i, err := strconv.ParseInt(val, 10, 64); err == nil {
-					value = cos.B2S(i, 2)
-				}
-			}
-			if value == "" {
-				value = fmt.Sprintf("%v", v)
-			}
-			props = append(props, nvpair{Name: k, Value: value})
-		}
-	}
-	sort.Slice(props, func(i, j int) bool {
-		return props[i].Name < props[j].Name
-	})
-	return props
 }
 
 func configPropList(scopes ...string) []string {
@@ -1452,7 +1121,7 @@ func preparseBckObjURI(uri string) string {
 }
 
 func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }
-func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, fcyan("Warning: ")+msg) }
+func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Warning: ")+msg) }
 
 func actionCptn(c *cli.Context, prefix, msg string) {
 	if prefix == "" {

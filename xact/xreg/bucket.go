@@ -32,6 +32,7 @@ type (
 	}
 
 	BckRenameArgs struct {
+		T       cluster.TargetExt
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
 		RebID   string
@@ -51,12 +52,8 @@ type (
 func RegBckXact(entry Renewable) { dreg.regBckXact(entry) }
 
 func (r *registry) regBckXact(entry Renewable) {
-	debug.Assert(xact.Table[entry.Kind()].Scope == xact.ScopeBck)
-
-	// It is expected that registrations happen at the init time. Therefore, it
-	// is safe to assume that no `RenewXYZ` will happen before all xactions
-	// are registered. Thus, no locking is needed.
-	r.bckXacts[entry.Kind()] = entry
+	debug.Assert(xact.IsSameScope(entry.Kind(), xact.ScopeB, xact.ScopeGB))
+	r.bckXacts[entry.Kind()] = entry // no locking: all reg-s are done at init time
 }
 
 // RenewBucketXact is general function to renew bucket xaction without any
@@ -124,8 +121,9 @@ func RenewTCObjs(t cluster.Target, uuid, kind string, custom *TCObjsArgs) RenewR
 	return RenewBucketXact(kind, custom.BckFrom, Args{T: t, Custom: custom, UUID: uuid})
 }
 
-func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {
+func RenewBckRename(t cluster.TargetExt, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {
 	custom := &BckRenameArgs{
+		T:       t,
 		Phase:   phase,
 		RebID:   xact.RebID2S(rmdVersion),
 		BckFrom: bckFrom,

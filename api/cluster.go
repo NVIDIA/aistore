@@ -254,6 +254,7 @@ func ResetClusterConfig(bp BaseParams) error {
 }
 
 // GetClusterConfig returns cluster-wide configuration
+// (compare with `api.GetDaemonConfig`)
 func GetClusterConfig(bp BaseParams) (*cmn.ClusterConfig, error) {
 	cluConfig := &cmn.ClusterConfig{}
 	bp.Method = http.MethodGet

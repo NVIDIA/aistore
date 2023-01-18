@@ -2,8 +2,8 @@ source "https://rubygems.org"
 
 gem "minima"
 gem "wdm" if Gem.win_platform?
-gem 'jekyll-redirect-from'
-gem 'jekyll-relative-links'
+gem "jekyll-redirect-from"
+gem "jekyll-relative-links"
 
 gem "jekyll"
 gem "kramdown-parser-gfm"

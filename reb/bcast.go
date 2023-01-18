@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -28,7 +27,7 @@ type (
 		SmapVersion int64         `json:"smap_version,string"` // current Smap version (via smapOwner)
 		RebVersion  int64         `json:"reb_version,string"`  // Smap version of *this* rebalancing op
 		RebID       int64         `json:"reb_id,string"`       // rebalance ID
-		Stats       xact.Stats    `json:"stats"`               // transmitted/received totals
+		Stats       cluster.Stats `json:"stats"`               // transmitted/received totals
 		Stage       uint32        `json:"stage"`               // the current stage - see enum above
 		Aborted     bool          `json:"aborted"`             // aborted?
 		Running     bool          `json:"running"`             // running?

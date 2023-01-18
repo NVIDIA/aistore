@@ -16,13 +16,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
-// NOTE: This request is internal so we can have asserts there.
 // [METHOD] /v1/download
 func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -33,33 +32,25 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	if !t.ensureIntraControl(w, r, false /* from primary */) {
 		return
 	}
-	rns := xreg.RenewDownloader(t, t.statsT)
-	if rns.Err != nil {
-		t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
-		return
-	}
-	xctn := rns.Entry.Get()
-	downloaderXact := xctn.(*downloader.Downloader)
+
 	switch r.Method {
 	case http.MethodPost:
 		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
 		}
 		var (
-			uuid             = r.URL.Query().Get(apc.QparamUUID)
-			dlb              = downloader.DlBody{}
-			progressInterval = downloader.DownloadProgressInterval
+			query            = r.URL.Query()
+			xactID           = query.Get(apc.QparamUUID)
+			jobID            = query.Get(apc.QparamJobID)
+			dlb              = dload.Body{}
+			progressInterval = dload.DownloadProgressInterval
 		)
-		if uuid == "" {
-			debug.Assert(false)
-			t.writeErrMsg(w, r, "missing UUID in query")
-			return
-		}
+		debug.Assertf(cos.IsValidUUID(xactID) && cos.IsValidUUID(jobID), "%q, %q", xactID, jobID)
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
 			return
 		}
 
-		dlBodyBase := downloader.DlBase{}
+		dlBodyBase := dload.Base{}
 		if err := jsoniter.Unmarshal(dlb.RawMessage, &dlBodyBase); err != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "download message", cos.BHead(dlb.RawMessage), err)
 			t.writeErr(w, r, err)
@@ -80,16 +71,22 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		dlJob, err := downloader.ParseStartDownloadRequest(t, bck, uuid, dlb, downloaderXact)
+
+		xdl, err := t.renewdl(xactID)
+		if err != nil {
+			t.writeErr(w, r, err, http.StatusInternalServerError)
+			return
+		}
+		dljob, err := dload.ParseStartRequest(t, bck, jobID, dlb, xdl)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Downloading: %s", dlJob.ID())
+			glog.Infof("Downloading: %s", dljob.ID())
 		}
 
-		dlJob.AddNotif(&downloader.NotifDownload{
+		dljob.AddNotif(&dload.NotifDownload{
 			NotifBase: nl.NotifBase{
 				When:     cluster.UponProgress,
 				Interval: progressInterval,
@@ -97,42 +94,57 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 				F:        t.callerNotifyFin,
 				P:        t.callerNotifyProgress,
 			},
-		}, dlJob)
-		response, statusCode, respErr = downloaderXact.Download(dlJob)
+		}, dljob)
+		response, statusCode, respErr = xdl.Download(dljob)
+
 	case http.MethodGet:
 		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
 		}
-		payload := &downloader.DlAdminBody{}
-		if err := cmn.ReadJSON(w, r, payload); err != nil {
+		msg := &dload.AdminBody{}
+		if err := cmn.ReadJSON(w, r, msg); err != nil {
 			return
 		}
-		if err := payload.Validate(false /*requireID*/); err != nil {
+		if err := msg.Validate(false /*requireID*/); err != nil {
 			debug.Assert(false)
 			t.writeErr(w, r, err)
 			return
 		}
-		if payload.ID != "" {
-			response, statusCode, respErr = downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
+
+		if msg.ID != "" {
+			xactID := r.URL.Query().Get(apc.QparamUUID)
+			debug.Assert(cos.IsValidUUID(xactID))
+			xdl, err := t.renewdl(xactID)
+			if err != nil {
+				t.writeErr(w, r, err, http.StatusInternalServerError)
+				return
+			}
+			response, statusCode, respErr = xdl.JobStatus(msg.ID, msg.OnlyActive)
 		} else {
-			var (
-				regex *regexp.Regexp
-				err   error
-			)
-			if payload.Regex != "" {
-				if regex, err = regexp.CompilePOSIX(payload.Regex); err != nil {
+			var regex *regexp.Regexp
+			if msg.Regex != "" {
+				rgx, err := regexp.CompilePOSIX(msg.Regex)
+				if err != nil {
 					t.writeErr(w, r, err)
 					return
 				}
+				regex = rgx
 			}
-			response, statusCode, respErr = downloaderXact.ListJobs(regex)
+			response, statusCode, respErr = dload.ListJobs(regex, msg.OnlyActive)
 		}
+
 	case http.MethodDelete:
 		items, err := t.apiItems(w, r, 1, false, apc.URLPathDownload.L)
 		if err != nil {
 			return
 		}
-		payload := &downloader.DlAdminBody{}
+		actdelete := items[0]
+		if actdelete != apc.Abort && actdelete != apc.Remove {
+			t.writeErrAct(w, r, actdelete)
+			return
+		}
+
+		payload := &dload.AdminBody{}
 		if err = cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
@@ -142,14 +154,17 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		switch items[0] {
-		case apc.Abort:
-			response, statusCode, respErr = downloaderXact.AbortJob(payload.ID)
-		case apc.Remove:
-			response, statusCode, respErr = downloaderXact.RemoveJob(payload.ID)
-		default:
-			t.writeErrAct(w, r, items[0])
+		xactID := r.URL.Query().Get(apc.QparamUUID)
+		debug.Assertf(cos.IsValidUUID(xactID), "%q", xactID)
+		xdl, err := t.renewdl(xactID)
+		if err != nil {
+			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
+		}
+		if actdelete == apc.Abort {
+			response, statusCode, respErr = xdl.AbortJob(payload.ID)
+		} else { // apc.Remove
+			response, statusCode, respErr = xdl.RemoveJob(payload.ID)
 		}
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
@@ -160,11 +175,16 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, respErr, statusCode)
 		return
 	}
-
 	if response != nil {
-		b := cos.MustMarshal(response)
-		if _, err := w.Write(b); err != nil {
-			glog.Errorf("Failed to write to HTTP response, err: %v", err)
-		}
+		w.Write(cos.MustMarshal(response))
 	}
+}
+
+func (t *target) renewdl(xactID string) (*dload.Xact, error) {
+	rns := xreg.RenewDownloader(t, t.statsT, xactID)
+	if rns.Err != nil {
+		return nil, rns.Err
+	}
+	xctn := rns.Entry.Get()
+	return xctn.(*dload.Xact), nil
 }

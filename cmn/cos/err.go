@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"syscall"
 
@@ -61,15 +62,20 @@ func (ea *ErrValue) Err() (err error) {
 	return
 }
 
-////////////////////////
-// IS-syscall helpers //
-////////////////////////
+//
+// IS-syscall helpers
+//
 
 func UnwrapSyscallErr(err error) error {
 	if syscallErr, ok := err.(*os.SyscallError); ok {
 		return syscallErr.Unwrap()
 	}
 	return nil
+}
+
+func IsErrSyscallTimeout(err error) bool {
+	syscallErr, ok := err.(*os.SyscallError)
+	return ok && syscallErr.Timeout()
 }
 
 // likely out of socket descriptors
@@ -108,9 +114,9 @@ func (e *ErrSignal) ExitCode() int               { return 128 + int(e.signal) }
 func NewSignalError(s syscall.Signal) *ErrSignal { return &ErrSignal{signal: s} }
 func (e *ErrSignal) Error() string               { return fmt.Sprintf("Signal %d", e.signal) }
 
-//////////////////////////
-// Abnormal Termination //
-//////////////////////////
+//
+// Abnormal Termination
+//
 
 // Exitf writes formatted message to STDERR and exits with non-zero status code.
 func Exitf(f string, a ...any) {
@@ -126,4 +132,20 @@ func ExitLogf(f string, a ...any) {
 	glog.Flush()
 	fmt.Fprint(os.Stderr, msg)
 	os.Exit(1)
+}
+
+//
+// url.Error
+//
+
+func Err2ClientURLErr(err error) (uerr *url.Error) {
+	if e, ok := err.(*url.Error); ok {
+		uerr = e
+	}
+	return
+}
+
+func IsErrClientURLTimeout(err error) bool {
+	uerr := Err2ClientURLErr(err)
+	return uerr != nil && uerr.Timeout()
 }

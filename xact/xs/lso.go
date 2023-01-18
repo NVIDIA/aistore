@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -120,6 +120,10 @@ func (p *lsoFactory) Start() error {
 	p.xctn = r
 	return nil
 }
+
+/////////////
+// LsoXact //
+/////////////
 
 func (r *LsoXact) Run(*sync.WaitGroup) {
 	if verbose {
@@ -262,8 +266,8 @@ func (r *LsoXact) doPage() *LsoRsp {
 	return &LsoRsp{Lst: page, Status: http.StatusOK}
 }
 
-func (r *LsoXact) objsAdd(*cluster.LOM) { r.ObjsAdd(1, 0) }
-
+// `ais show job` will report the sum of non-replicated obj numbers and
+// sum of obj sizes - for all visited objects
 // Returns the index of the first object in the page that follows the continuation `token`
 func (r *LsoXact) findToken(token string) uint {
 	if r.listRemote() && r.token == token {
@@ -286,7 +290,7 @@ func (r *LsoXact) nextPageR() error {
 	debug.Assert(r.msg.SID != "")
 	var (
 		page *cmn.LsoResult
-		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.objsAdd)
+		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.LomAdd)
 		smap = r.p.dm.Smap()
 		tsi  = smap.GetTarget(r.msg.SID)
 		err  error
@@ -448,7 +452,7 @@ func (r *LsoXact) shiftLastPage(token string) {
 }
 
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
-	r.walk.wi = newWalkInfo(r.p.T, msg, r.objsAdd)
+	r.walk.wi = newWalkInfo(r.p.T, msg, r.LomAdd)
 	opts := &fs.WalkBckOpts{
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Sorted: true},
 	}
@@ -508,6 +512,14 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		}
 	}
 	return nil
+}
+
+func (r *LsoXact) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
 }
 
 //

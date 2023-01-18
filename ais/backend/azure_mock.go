@@ -11,6 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 )
 
-func NewAzure(_ cluster.Target) (cluster.BackendProvider, error) {
+func NewAzure(_ cluster.TargetPut) (cluster.BackendProvider, error) {
 	return nil, newErrInitBackend(apc.Azure)
 }

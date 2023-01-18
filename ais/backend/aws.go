@@ -34,18 +34,15 @@ import (
 )
 
 const (
-	awsChecksumType = "x-amz-meta-ais-cksum-type"
-	awsChecksumVal  = "x-amz-meta-ais-cksum-val"
-
 	// environment variable to globally override the default 'https://s3.amazonaws.com' endpoint
 	// NOTE: the same can be done on a per-bucket basis, via bucket prop `Extra.AWS.Endpoint`
-	//       (and of course, bucket override will take precedence)
+	// (bucket override will always take precedence)
 	awsEnvS3Endpoint = "S3_ENDPOINT"
 )
 
 type (
 	awsProvider struct {
-		t cluster.Target
+		t cluster.TargetPut
 	}
 	sessConf struct {
 		bck    *cmn.Bck
@@ -62,7 +59,7 @@ var (
 // interface guard
 var _ cluster.BackendProvider = (*awsProvider)(nil)
 
-func NewAWS(t cluster.Target) (cluster.BackendProvider, error) {
+func NewAWS(t cluster.TargetPut) (cluster.BackendProvider, error) {
 	clients = make(map[string]map[string]*s3.S3, 2)
 	s3Endpoint = os.Getenv(awsEnvS3Endpoint)
 	return &awsProvider{t: t}, nil
@@ -112,6 +109,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs, er
 	region = *svc.Config.Region
 	debug.Assert(region != "")
 
+	// NOTE: return a few assorted fields, specifically to fill-in vendor-specific `cmn.ExtraProps`
 	bckProps = make(cos.StrKVs, 4)
 	bckProps[apc.HdrBackendProvider] = apc.AWS
 	bckProps[apc.HdrS3Region] = region
@@ -368,8 +366,8 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 
 	// custom metadata
 	lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)
-	if cksumType, ok := obj.Metadata[awsChecksumType]; ok {
-		if cksumValue, ok := obj.Metadata[awsChecksumVal]; ok {
+	if cksumType, ok := obj.Metadata[cos.S3MetadataChecksumType]; ok {
+		if cksumValue, ok := obj.Metadata[cos.S3MetadataChecksumVal]; ok {
 			lom.SetCksum(cos.NewCksum(*cksumType, *cksumValue))
 		}
 	}
@@ -416,8 +414,8 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 		glog.Warning(err)
 	}
 
-	md[awsChecksumType] = aws.String(cksumType)
-	md[awsChecksumVal] = aws.String(cksumValue)
+	md[cos.S3MetadataChecksumType] = aws.String(cksumType)
+	md[cos.S3MetadataChecksumVal] = aws.String(cksumValue)
 
 	uploader := s3manager.NewUploaderWithClient(svc)
 	uploadOutput, err = uploader.Upload(&s3manager.UploadInput{

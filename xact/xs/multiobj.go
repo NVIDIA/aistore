@@ -1,7 +1,7 @@
-// Package xs contains most of the supported eXtended actions (xactions) with some
-// exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -139,7 +139,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 		lst     *cmn.LsoResult
 		msg     = &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsStatus}
 		bck     = r.xctn.Bck()
-		npg     = newNpgCtx(r.t, bck, msg, nil /*lomVisitedCb*/)
+		npg     = newNpgCtx(r.t, bck, msg, noopCb)
 		bremote = bck.IsRemote()
 	)
 	if err := bck.Init(r.t.Bowner()); err != nil {
@@ -288,6 +288,14 @@ func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) {
 	r.ObjsAdd(1, lom.SizeBytes(true)) // loaded and evicted
 }
 
+func (r *evictDelete) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
+}
+
 //////////////
 // prefetch //
 //////////////
@@ -371,4 +379,12 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 		glog.Infof("prefetch: %s", lom)
 	}
 	r.ObjsAdd(1, lom.SizeBytes())
+}
+
+func (r *prefetch) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
 }

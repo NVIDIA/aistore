@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -25,7 +25,7 @@ import "github.com/NVIDIA/aistore/cmn/jsp"
 
 const (
 	VersionAIStore = "3.12"
-	VersionCLI     = "0.97"
+	VersionCLI     = "0.98"
 	VersionLoader  = "1.6"
 	VersionAuthN   = "1.0"
 )

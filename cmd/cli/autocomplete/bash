@@ -1,38 +1,78 @@
 #!/bin/bash
-# Modified bash autocomplete script from github.com/urfave/cli
+# ais cli bash autocomplete script
+# see also:
+# - https://devmanual.gentoo.org/tasks-reference/completion/index.html
+# - https://stackoverflow.com/questions/10528695/how-to-reset-comp-wordbreaks-without-affecting-other-completion-script
+# - http://tiswww.case.edu/php/chet/bash/FAQ (Section E13).
 
-PROG=ais
-
-_cli_bash_autocomplete() {
-  if [[ "${COMP_WORDS[0]}" != "source" ]]; then
-    local cur opts base
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    if [[ $COMP_CWORD -gt 0 && ${COMP_WORDS[COMP_CWORD]} == "put" ]]; then
-      COMPREPLY=( $(compgen -A filename) )
-    else
-      if [[ "$cur" == "-"* ]]; then
-        opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} ${cur} --generate-bash-completion )
-      else
-        opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} --generate-bash-completion )
-      fi
-      COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
-    fi
-
-    # append single space after a suggestion if it doesn't end with a /
-    local i=${#COMPREPLY[*]}
-    while [[ $((--i)) -ge 0 ]]; do
-        case "${COMPREPLY[$i]}" in
-            */ )
-                 ;;
-             * )
-                 COMPREPLY[$i]="${COMPREPLY[$i]} "
-                 ;;
-        esac
-    done
-    return 0
-  fi
+# Return 0 if the bash version is greater than X.Y.
+# Only consider the first two version components.
+_ais_bash_version_ge() {
+  local IFS='.'
+  local want_version_arr=($1)
+  local bash_version_arr=($BASH_VERSION)
+  for ((i=0; i<2; i++)); do
+    [[ -z ${bash_version_arr[i]} ]] && bash_version_arr[i]=0
+    ((${want_version_arr[i]} < ${bash_version_arr[i]})) && return 0
+    ((${want_version_arr[i]} > ${bash_version_arr[i]})) && return 1
+  done
+  return 0
 }
 
-complete -o bashdefault -o default -o nospace -F _cli_bash_autocomplete $PROG
-unset PROG
+# AIS bash autocompletions.
+_ais_cli_bash_autocomplete() {
+  if [[ "${COMP_WORDS[0]}" == "source" ]]; then
+    return 0
+  fi
+
+  COMPREPLY=()
+
+  local opts cmpls cur
+  cur="${COMP_WORDS[COMP_CWORD]}"
+
+  if [[ "$cur" == "-"* ]]; then
+    opts=$( "${COMP_WORDS[@]:0:$COMP_CWORD}" "${cur}" --generate-bash-completion )
+  else
+    opts=$( "${COMP_WORDS[@]:0:$COMP_CWORD}" --generate-bash-completion )
+  fi
+
+  # Needed for bucket listings.
+  # There is a "correct" helper function for this in the bash_completions
+  # package, __ltrim_colon_completions, but it's own documentation
+  # recommends just doing the below.
+  COMP_WORDBREAKS=${COMP_WORDBREAKS//:}
+  cmpls=( $( compgen -W "${opts}" -- "${cur}" ) )
+
+  for word in "${cmpls[@]}"; do
+    case $word in
+      # the word ends with filepath separator, e.g. s3://
+      */)
+         COMPREPLY+=( $word )
+         ;;
+      p\[*|t\[*)
+         COMPREPLY+=( "$word " )
+         ;;
+      *)
+         COMPREPLY+=( "$word " )
+         ;;
+    esac
+  done
+}
+
+# Apply autocompletions.
+_ais_apply_cli_bash_autocomplete() {
+  local PROG=ais
+
+  # On bash >= 4.3 we can disable readline(3)'s default
+  # sorting behavior to preserve completion word ordering as
+  # provided by the ais binary.
+  #
+  # Beneath that, there's not much we can do; readline controls
+  # completion word ordering, and we can't modify it much here.
+  local compargs=" -o bashdefault -o default -o nospace "
+  ( _ais_bash_version_ge 4.3 ) && compargs="${compargs} -o nosort "
+
+  complete $compargs -F _ais_cli_bash_autocomplete $PROG
+}
+
+_ais_apply_cli_bash_autocomplete

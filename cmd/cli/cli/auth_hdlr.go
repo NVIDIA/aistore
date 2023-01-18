@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that create entities in the cluster.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -336,7 +336,7 @@ func addAuthUserHandler(c *cli.Context) (err error) {
 func deleteUserHandler(c *cli.Context) (err error) {
 	userName := c.Args().First()
 	if userName == "" {
-		return missingArgumentsError(c, "user name")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	return authn.DeleteUser(authParams, userName)
 }
@@ -344,7 +344,7 @@ func deleteUserHandler(c *cli.Context) (err error) {
 func deleteRoleHandler(c *cli.Context) (err error) {
 	role := c.Args().Get(0)
 	if role == "" {
-		return missingArgumentsError(c, "role")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	return authn.DeleteRole(authParams, role)
 }
@@ -407,7 +407,7 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 	}
 	var smap *cluster.Smap
 	if len(cluSpec.URLs) == 0 {
-		smap, err = api.GetClusterMap(apiBP)
+		smap, err = getClusterMap(c)
 		cluSpec.URLs = append(cluSpec.URLs, clusterURL)
 	} else {
 		bp := api.BaseParams{
@@ -435,7 +435,7 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 		return
 	}
 	if cluSpec.Alias == "" && cluSpec.ID == "" {
-		return missingArgumentsError(c, "cluster ID")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	list, err := authn.GetRegisteredClusters(authParams, cluSpec)
 	if err != nil {
@@ -463,7 +463,7 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 func deleteAuthClusterHandler(c *cli.Context) (err error) {
 	cid := c.Args().Get(0)
 	if cid == "" {
-		return missingArgumentsError(c, "cluster id")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	cluSpec := authn.CluACL{ID: cid}
 	return authn.UnregisterCluster(authParams, cluSpec)
@@ -589,7 +589,7 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		role    = args.Get(0)
 	)
 	if bucket != "" && cluster == "" {
-		return nil, fmt.Errorf("flag %q requires flag %q to be set", bucketRoleFlag.Name, clusterRoleFlag.Name)
+		return nil, fmt.Errorf("flag %s requires %s to be specified", qflprn(bucketRoleFlag), qflprn(clusterRoleFlag))
 	}
 
 	if cluster != "" {
@@ -628,7 +628,7 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		Desc: parseStrFlag(c, descRoleFlag),
 	}
 	if bucket != "" {
-		bck, err := parseBckURI(c, bucket)
+		bck, err := parseBckURI(c, bucket, true /*require provider*/)
 		if err != nil {
 			return nil, err
 		}
@@ -664,7 +664,8 @@ func parseClusterSpecs(c *cli.Context) (cluSpec authn.CluACL, err error) {
 	cluSpec.URLs = make([]string, 0, 1)
 	for idx := 0; idx < c.NArg(); idx++ {
 		arg := c.Args().Get(idx)
-		if strings.HasPrefix(arg, "http:") || strings.HasPrefix(arg, "https:") {
+		if strings.HasPrefix(arg, "http:") || strings.HasPrefix(arg, "https:") ||
+			strings.HasPrefix(arg, "HTTP:") || strings.HasPrefix(arg, "HTTPS:") {
 			cluSpec.URLs = append(cluSpec.URLs, arg)
 			continue
 		}
@@ -703,11 +704,11 @@ func showAuthConfigHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	useJSON := flagIsSet(c, jsonFlag)
-	if useJSON {
-		return tmpls.Print(conf, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
+	usejs := flagIsSet(c, jsonFlag)
+	if usejs {
+		return tmpls.Print(conf, c.App.Writer, tmpls.PropsSimpleTmpl, nil, usejs)
 	}
-	return tmpls.Print(list, c.App.Writer, tmpls.PropsSimpleTmpl, nil, useJSON)
+	return tmpls.Print(list, c.App.Writer, tmpls.PropsSimpleTmpl, nil, usejs)
 }
 
 func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {

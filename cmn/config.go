@@ -52,33 +52,41 @@ type (
 
 	// global configuration
 	ClusterConfig struct {
-		Ext         any             `json:"ext,omitempty"` // within meta-version extensions
-		Backend     BackendConf     `json:"backend" allow:"cluster"`
-		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
-		EC          ECConf          `json:"ec" allow:"cluster"`
-		Log         LogConf         `json:"log"`
-		Periodic    PeriodConf      `json:"periodic"`
-		Timeout     TimeoutConf     `json:"timeout"`
-		Client      ClientConf      `json:"client"`
-		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
-		Space       SpaceConf       `json:"space"`
-		LRU         LRUConf         `json:"lru"`
-		Disk        DiskConf        `json:"disk"`
-		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
-		Resilver    ResilverConf    `json:"resilver"`
-		Cksum       CksumConf       `json:"checksum"`
-		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
-		Net         NetConf         `json:"net"`
-		FSHC        FSHCConf        `json:"fshc"`
-		Auth        AuthConf        `json:"auth"`
-		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
-		Downloader  DownloaderConf  `json:"downloader"`
-		DSort       DSortConf       `json:"distributed_sort"`
-		Transport   TransportConf   `json:"transport"`
-		Memsys      MemsysConf      `json:"memsys"`
-		TCB         TCBConf         `json:"tcb"`                             // transform/copy bucket
-		WritePolicy WritePolicyConf `json:"write_policy"`                    // write {immediate, delayed, never}
-		Features    feat.Flags      `json:"features,string" allow:"cluster"` // (to flip assorted defaults) (NOTE: cmn. FeaturesPropName)
+		Ext        any            `json:"ext,omitempty"` // within meta-version extensions
+		Backend    BackendConf    `json:"backend" allow:"cluster"`
+		Mirror     MirrorConf     `json:"mirror" allow:"cluster"`
+		EC         ECConf         `json:"ec" allow:"cluster"`
+		Log        LogConf        `json:"log"`
+		Periodic   PeriodConf     `json:"periodic"`
+		Timeout    TimeoutConf    `json:"timeout"`
+		Client     ClientConf     `json:"client"`
+		Proxy      ProxyConf      `json:"proxy" allow:"cluster"`
+		Space      SpaceConf      `json:"space"`
+		LRU        LRUConf        `json:"lru"`
+		Disk       DiskConf       `json:"disk"`
+		Rebalance  RebalanceConf  `json:"rebalance" allow:"cluster"`
+		Resilver   ResilverConf   `json:"resilver"`
+		Cksum      CksumConf      `json:"checksum"`
+		Versioning VersionConf    `json:"versioning" allow:"cluster"`
+		Net        NetConf        `json:"net"`
+		FSHC       FSHCConf       `json:"fshc"`
+		Auth       AuthConf       `json:"auth"`
+		Keepalive  KeepaliveConf  `json:"keepalivetracker"`
+		Downloader DownloaderConf `json:"downloader"`
+		DSort      DSortConf      `json:"distributed_sort"`
+		Transport  TransportConf  `json:"transport"`
+		Memsys     MemsysConf     `json:"memsys"`
+
+		// Transform (offline) or Copy src Bucket => dst bucket
+		TCB TCBConf `json:"tcb"`
+
+		// metadata write policy: (immediate | delayed | never)
+		WritePolicy WritePolicyConf `json:"write_policy"`
+
+		// standalone enumerated features that can be configured
+		// to flip assorted global defaults (see cmn/feat/feat.go)
+		Features feat.Flags `json:"features,string" allow:"cluster"`
+
 		// read-only
 		LastUpdated string `json:"lastupdate_time"`       // timestamp
 		UUID        string `json:"uuid"`                  // UUID
@@ -667,7 +675,7 @@ func (c *Config) SetRole(role string) {
 	c.role = role
 }
 
-func (c *Config) UpdateClusterConfig(updateConf ConfigToUpdate, asType string) (err error) {
+func (c *Config) UpdateClusterConfig(updateConf *ConfigToUpdate, asType string) (err error) {
 	err = c.ClusterConfig.Apply(updateConf, asType)
 	if err != nil {
 		return
@@ -686,7 +694,7 @@ func (c *Config) TestingEnv() bool {
 // ClusterConfig //
 ///////////////////
 
-func (c *ClusterConfig) Apply(updateConf ConfigToUpdate, asType string) error {
+func (c *ClusterConfig) Apply(updateConf *ConfigToUpdate, asType string) error {
 	return copyProps(updateConf, c, asType)
 }
 
@@ -707,7 +715,7 @@ func (c *LocalConfig) TestingEnv() bool {
 
 func (c *LocalConfig) AddPath(mpath string) {
 	debug.Assert(!c.TestingEnv())
-	c.FSP.Paths.Add(mpath)
+	c.FSP.Paths.Set(mpath)
 }
 
 func (c *LocalConfig) DelPath(mpath string) {
@@ -812,7 +820,6 @@ func (c *BackendConf) Validate() (err error) {
 				if len(urls) == 0 {
 					return fmt.Errorf("no URL(s) to connect to remote AIS cluster %q", alias)
 				}
-				break
 			}
 			c.Conf[provider] = aisConf
 		case apc.HDFS:
@@ -870,12 +877,15 @@ func (c *BackendConf) setProvider(provider string) {
 	c.Providers[provider] = ns
 }
 
-func (c *BackendConf) ProviderConf(provider string, newConf ...any) (conf any, ok bool) {
-	if len(newConf) > 0 {
-		c.Conf[provider] = newConf[0]
+func (c *BackendConf) Get(provider string) (conf any) {
+	if c, ok := c.Conf[provider]; ok {
+		conf = c
 	}
-	conf, ok = c.Conf[provider]
 	return
+}
+
+func (c *BackendConf) Set(provider string, newConf any) {
+	c.Conf[provider] = newConf
 }
 
 func (c *BackendConf) EqualClouds(o *BackendConf) bool {
@@ -1409,7 +1419,7 @@ func (c *TestFSPConf) Validate(contextConfig *Config) (err error) {
 		if c.Instance > 0 {
 			mpath = filepath.Join(mpath, strconv.Itoa(c.Instance))
 		}
-		contextConfig.FSP.Paths.Add(mpath)
+		contextConfig.FSP.Paths.Set(mpath)
 	}
 	return nil
 }
@@ -1793,7 +1803,7 @@ func handleOverrideConfig(config *Config) error {
 		config.LocalConfig.FSP = *overrideConfig.FSP // override local config's fspaths
 		overrideConfig.FSP = nil
 	}
-	return config.UpdateClusterConfig(*overrideConfig, apc.Daemon)
+	return config.UpdateClusterConfig(overrideConfig, apc.Daemon)
 }
 
 func SaveOverrideConfig(configDir string, toUpdate *ConfigToUpdate) error {
@@ -1813,7 +1823,9 @@ func ValidateRemAlias(alias string) (err error) {
 	if alias == apc.QparamWhat {
 		return fmt.Errorf("cannot use %q as an alias", apc.QparamWhat)
 	}
-	if !cos.IsAlphaPlus(alias, false /*. allowed*/) {
+	if len(alias) < 2 {
+		err = fmt.Errorf("alias %q is too short: must have at least 2 letters", alias)
+	} else if !cos.IsAlphaPlus(alias) {
 		err = fmt.Errorf("alias %q is invalid: use only letters, numbers, dashes (-), and underscores (_)", alias)
 	}
 	return

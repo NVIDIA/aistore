@@ -19,15 +19,14 @@ import (
 const mock = "mock-backend"
 
 type mockBP struct {
-	t cluster.Target
+	t cluster.TargetPut
 }
 
 // interface guard
 var _ cluster.BackendProvider = (*mockBP)(nil)
 
-func NewDummyBackend(t cluster.Target) (cluster.BackendProvider, error) {
-	return &mockBP{t: t}, nil
-}
+func NewDummyBackend(t cluster.TargetPut) (cluster.BackendProvider, error) { return &mockBP{t: t}, nil }
+
 func (*mockBP) Provider() string  { return mock }
 func (*mockBP) MaxPageSize() uint { return math.MaxUint32 }
 

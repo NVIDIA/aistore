@@ -15,6 +15,8 @@ endif
 
 AISTORE_PATH = $(shell git rev-parse --show-toplevel)
 
+CLI_VERSION := $(shell ais version 2>/dev/null)
+
 # Do not print enter/leave directory when doing 'make -C DIR <target>'
 MAKEFLAGS += --no-print-directory
 
@@ -120,8 +122,11 @@ else
 	@cd $(BUILD_DIR)/cli && $(CGO_DISABLE) go build -o $(BUILD_DEST)/ais $(BUILD_FLAGS) $(LDFLAGS) *.go
 endif
 	@echo "*** To enable autocompletions in your current shell, run:"
-	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/bash or"
-	@echo "*** source $(GOPATH)/src/github.com/NVIDIA/aistore/cmd/cli/autocomplete/zsh"
+ifeq ($(AISTORE_PATH),$(PWD))
+	@echo "*** 'source cmd/cli/autocomplete/bash' or 'source cmd/cli/autocomplete/zsh'"
+else
+	@echo "*** source $(AISTORE_PATH)/cmd/cli/autocomplete/[bash|zsh]"
+endif
 
 cli-autocompletions: ## Add CLI autocompletions
 	@echo "Adding CLI autocomplete..."
@@ -172,9 +177,12 @@ restart: kill run
 #
 .PHONY: kill clean clean-client-bindings
 
-kill: ## Kill all locally deployed targets and proxies
-	@which ais >/dev/null || echo "Warning: missing CLI (ais) executable for proper graceful shutdown"
-	@ais job stop cluster 2>/dev/null || true
+kill: ## Kill all locally deployed clusters (all targets and all proxies)
+ifndef CLI_VERSION
+	@echo "Warning: missing CLI (ais) executable for proper graceful shutdown"
+else
+	@ais cluster shutdown 2>/dev/null || true
+endif
 	@"$(DEPLOY_DIR)/kill.sh"
 
 clean: ## Remove all AIS related files and binaries

@@ -11,6 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 )
 
-func NewAWS(_ cluster.Target) (cluster.BackendProvider, error) {
+func NewAWS(_ cluster.TargetPut) (cluster.BackendProvider, error) {
 	return nil, newErrInitBackend(apc.AWS)
 }

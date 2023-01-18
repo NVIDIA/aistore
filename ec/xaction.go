@@ -400,6 +400,14 @@ func _writerReceive(writer *slice, exists bool, objAttrs cmn.ObjAttrs, reader io
 
 func (r *xactECBase) ECStats() *Stats { return r.stats.stats() }
 
+func (r *xactECBase) baseSnap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	return
+}
+
 //////////////
 // BckXacts //
 //////////////

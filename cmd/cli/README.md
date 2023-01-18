@@ -1,21 +1,39 @@
-Main documentation can be found [here](/docs/cli.md).
+## AIS CLI
 
-## Info For Developers
+CLI provides easy-to-use intuitive interface to AIStore.
 
-AIS CLI utilizes [urfave/cli](https://github.com/urfave/cli/blob/master/docs/v1/manual.md) open-source framework.
+It is a separate package, module (as in: `go.mod`), and development.
 
-### Adding New Commands
+For implementation, we have used [urfave/cli](https://github.com/urfave/cli/blob/master/docs/v1/manual.md) open-source.
 
-Currently, the CLI has the format of `ais <resource> <command>`.
+To build CLI from source, run the following two steps:
 
-To add a new command to an existing resource:
+```console
+$ make cli			# 1. build CLI binary and install it into your `$GOPATH/bin` directory
+$ make cli-autocompletions	# 2. install CLI autocompletions (Bash and/or Zsh)
+```
 
-1. Create a subcommand entry for the command in the resource object
-2. Create an entry in the command's flag map for the new command
-3. Register flags in the subcommand object
-4. Register the handler function (named `XXXHandler`) in the subcommand object
+Alternatively, install directly from GitHub:
 
-To add a new resource:
+* [Install CLI from release binaries](https://github.com/NVIDIA/aistore/blob/master/deploy/scripts/install_from_binaries.sh)
 
-1. Create a new Go file (named `xxx_hdlr.go`) with the name of the new resource and follow the format of existing files
-2. Once the new resource and its commands are implemented, make sure to register the new resource with the CLI (see `setupCommands()` in `app.go`)
+For example, the following command extracts CLI binary to the specified destination and, secondly, installs Bash autocompletions:
+
+```console
+$ ./deploy/scripts/install_from_binaries.sh --dstdir /tmp/www --completions
+```
+
+For more usage options, run: `./deploy/scripts/install_from_binaries.sh --help`
+
+You can also install Bash and/or Zsh autocompletions separately at any (later) time:
+
+* [Install CLI autocompletions](https://github.com/NVIDIA/aistore/blob/master/cmd/cli/install_autocompletions.sh)
+
+Once installed, you should be able to start by running ais `<TAB-TAB>`, selecting one of the available (completion) options, and repeating until the command is ready to be entered.
+
+**Please note**: we strongly recommend using CLI _with_ autocompletions enabled.
+
+## Further references
+
+* [Main CLI readme](/docs/cli.md)
+* [CLI user documentation](/docs/cli)

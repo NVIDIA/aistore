@@ -1,7 +1,7 @@
 // Package xs contains most of the supported eXtended actions (xactions) with some
 // exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -54,7 +54,7 @@ func setWanted(e *cmn.LsoEntry, lom *cluster.LOM, tmformat string, wanted cos.Bi
 		case apc.GetPropsChecksum:
 			e.Checksum = lom.Checksum().Value()
 		case apc.GetPropsAtime:
-			e.Atime = cos.FormatUnixNano(lom.AtimeUnix(), tmformat)
+			e.Atime = cos.FormatNanoTime(lom.AtimeUnix(), tmformat)
 		case apc.GetPropsLocation:
 			e.Location = lom.Location()
 		case apc.GetPropsCopies:

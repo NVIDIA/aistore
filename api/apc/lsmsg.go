@@ -10,6 +10,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+const (
+	LocationPropSepa = ":"
+	LsPropsSepa      = ","
+)
+
 // LsoMsg flags
 const (
 	// Applies to objects from the buckets with remote backends (e.g., to optimize-out listing remotes)
@@ -20,6 +25,7 @@ const (
 	LsDeleted  // include obj-s marked for deletion (TODO)
 	LsArchDir  // expand archives as directories
 	LsNameOnly // return only object names and statuses (for faster listing)
+	LsNameSize // same as above plus size
 
 	// The following two flags have to do with listing objects in those remote
 	// buckets that we don't yet have in the cluster's BMD. As far as AIS is concerned,
@@ -109,19 +115,18 @@ const (
 	GetPropsLocation = "location" // advanced usage
 )
 
-const PropsLocationSepa = ":"
-
 // NOTE: update when changing any of the above :NOTE
 var (
-	GetPropsMinimal = []string{GetPropsName, GetPropsSize}
-	GetPropsDefault = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
-	GetPropsAll     = append(GetPropsDefault,
+	GetPropsMinimal      = []string{GetPropsName, GetPropsSize}
+	GetPropsDefaultAIS   = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
+	GetPropsDefaultCloud = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsVersion, GetPropsCustom}
+	GetPropsAll          = append(GetPropsDefaultAIS,
 		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation)
 )
 
 type LsoMsg struct {
 	UUID              string `json:"uuid"`               // ID to identify a single multi-page request
-	Props             string `json:"props"`              // object props to return, e.g. "checksum,size,custom" (Get* enum above)
+	Props             string `json:"props"`              // comma-delimited, e.g. "checksum,size,custom" (see GetProps* enum)
 	TimeFormat        string `json:"time_format"`        // RFC822 is the default
 	Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
 	StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
@@ -131,26 +136,38 @@ type LsoMsg struct {
 	PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 }
 
-/////////////////
+////////////
 // LsoMsg //
-/////////////////
+////////////
 
 func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
-	// case 1: set by the user
+	// set by user
 	if lsmsg.IsFlagSet(LsWantOnlyRemoteProps) {
 		return true
 	}
-	// case 2: anything outside the subset (name, size, checksum, and version)
-	// (e.g., atime) requires loading local metadata
-	for _, name := range GetPropsAll {
-		if !lsmsg.WantProp(name) {
-			continue
-		}
-		if name != GetPropsName && name != GetPropsSize && name != GetPropsChecksum && name != GetPropsVersion {
-			return false
+	// set by user or proxy
+	if lsmsg.IsFlagSet(LsNameOnly) || lsmsg.IsFlagSet(LsNameSize) {
+		return true
+	}
+	// return false if there's anything outside GetPropsDefaultCloud subset
+	for _, wn := range GetPropsAll {
+		if lsmsg.WantProp(wn) {
+			for _, n := range GetPropsDefaultCloud {
+				if wn != n {
+					return false
+				}
+			}
 		}
 	}
 	return true
+}
+
+// NOTE: internal usage
+func (lsmsg *LsoMsg) WantOnlyName() bool {
+	if lsmsg.IsFlagSet(LsNameOnly) || lsmsg.Props == GetPropsName {
+		return true
+	}
+	return strings.IndexByte(lsmsg.Props, LsPropsSepa[0]) < 0 && strings.Contains(lsmsg.Props, GetPropsName)
 }
 
 // WantProp returns true if msg request requires to return propName property.
@@ -164,17 +181,17 @@ func (lsmsg *LsoMsg) AddProps(propNames ...string) {
 			continue
 		}
 		if lsmsg.Props != "" {
-			lsmsg.Props += ","
+			lsmsg.Props += LsPropsSepa
 		}
 		lsmsg.Props += propName
 	}
 }
 
 func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
-	props := strings.Split(lsmsg.Props, ",")
+	props := strings.Split(lsmsg.Props, LsPropsSepa)
 	s = make(cos.StrSet, len(props))
 	for _, p := range props {
-		s.Add(p)
+		s.Set(p)
 	}
 	return s
 }

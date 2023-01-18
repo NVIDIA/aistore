@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
@@ -42,7 +43,7 @@ func (*target) putMptCopy(w http.ResponseWriter, r *http.Request, items []string
 // PUT a part of the multipart upload.
 // Body is empty, everything in the query params and the header.
 //
-// Obsevation: "Content-MD5" in the parts' headers looks be to be deprecated:
+// "Content-MD5" in the part headers seems be to be deprecated:
 // either not present (s3cmd) or cannot be trusted (aws s3api).
 //
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
@@ -171,7 +172,6 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 // 2. Merge all parts into a single file and calculate its ETag
 // 3. Return ETag to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
-// TODO: lom.Lock; ETag => customMD
 func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *cluster.Bck) {
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID == "" {
@@ -195,45 +195,46 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 
-	// do 1. through 7.
+	// steps 1-...
 	var (
 		obj         io.WriteCloser
 		objWorkfile string
-		objMD5      string
+		mwriter     io.Writer
+		concatMD5   string // => ETag
+		actualMD5   = cos.NewCksumHash(cos.ChecksumMD5)
 	)
 	// 1. sort
 	sort.Slice(partList.Parts, func(i, j int) bool {
 		return partList.Parts[i].PartNumber < partList.Parts[j].PartNumber
 	})
-	// 2. check existence and get specified
+	// 2. check
 	nparts, err := s3.CheckParts(uploadID, partList.Parts)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	// 3. cycle through parts and do appending
+	// 3. append all parts and, separately, their respective MD5s
 	buf, slab := t.gmm.Alloc()
 	defer slab.Free(buf)
+
+	prefix := fmt.Sprintf("%s.%s", uploadID, "complete") // <upload-id>.complete.<obj-name>
+	objWorkfile = fs.CSM.Gen(lom, fs.WorkfileType, prefix)
+	obj, err = os.Create(objWorkfile)
+	if err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
+	mwriter = io.MultiWriter(actualMD5.H, obj)
+
 	for _, partInfo := range nparts {
-		objMD5 += partInfo.MD5
-		// first part
-		if obj == nil {
-			objWorkfile = partInfo.FQN
-			obj, err = os.OpenFile(objWorkfile, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
-			if err != nil {
-				s3.WriteErr(w, r, err, 0)
-				return
-			}
-			continue
-		}
-		// 2nd etc. parts
+		concatMD5 += partInfo.MD5
 		nextPart, err := os.Open(partInfo.FQN)
 		if err != nil {
 			cos.Close(obj)
 			s3.WriteErr(w, r, err, 0)
 			return
 		}
-		if _, err := io.CopyBuffer(obj, nextPart, buf); err != nil {
+		if _, err := io.CopyBuffer(mwriter, nextPart, buf); err != nil {
 			cos.Close(obj)
 			cos.Close(nextPart)
 			s3.WriteErr(w, r, err, 0)
@@ -243,13 +244,17 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	}
 	cos.Close(obj)
 
-	// 4. md5, size, atime
-	eTagMD5 := cos.NewCksumHash(cos.ChecksumMD5)
-	_, err = eTagMD5.H.Write([]byte(objMD5)) // Should never fail?
+	// 4. resulting ETag and MD5
+	resMD5 := cos.NewCksumHash(cos.ChecksumMD5)
+	_, err = resMD5.H.Write([]byte(concatMD5))
 	debug.AssertNoErr(err)
-	eTagMD5.Finalize()
-	objETag := fmt.Sprintf("%s-%d", eTagMD5.Value(), len(partList.Parts))
+	resMD5.Finalize()
+	actualMD5.Finalize()
 
+	// (e.g. sample 9-part response: <ETag>"3858f62230ac3c915f300c664312c11f-9"</ETag>)
+	objETag := fmt.Sprintf("%s%s%d", resMD5.Value(), cmn.AwsMultipartDelim, len(partList.Parts))
+
+	// 5. finalize
 	size, err := s3.ObjSize(uploadID)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
@@ -257,9 +262,9 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	}
 	lom.SetSize(size)
 	lom.SetAtimeUnix(time.Now().UnixNano())
-
-	// 5. finalize (note: locks inside)
-	t.FinalizeObj(lom, objWorkfile, nil)
+	lom.SetCustomKey(cmn.ETag, objETag)
+	lom.SetCksum(actualMD5.Cksum.Clone())
+	t.FinalizeObj(lom, objWorkfile, nil) // locks inside
 
 	// 6. mpt state => xattr
 	exists := s3.FinishUpload(uploadID, lom.FQN, false /*aborted*/)

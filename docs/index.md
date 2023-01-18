@@ -7,13 +7,14 @@ redirect_from:
  - /README.md/
 ---
 
-AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered servers, producing performance charts that look as follows:
+**AIStore is a lightweight object storage system with the capability to linearly scale out with each added storage node and a special focus on petascale deep learning.**
 
-![I/O distribution](images/ais-disk-throughput-flat.png)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
-> The picture above *comprises* 120 HDDs.
+AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size.
 
-The ability to scale linearly with each added disk was, and remains, one of the main incentives behind AIStore. Much of the development is also driven by the ideas to [offload dataset transformations](https://aiatscale.org/blog/2021/10/21/ais-etl-1) to AIS clusters.
+AIS consistently shows balanced I/O distribution and **linear scalability** across arbitrary numbers of clustered nodes. The ability to scale linearly with each added disk was, and remains, one of the main incentives. Much of the development is also driven by the ideas to [offload dataset transformations](https://aiatscale.org/blog/2021/10/21/ais-etl-1).
 
 ## Features
 
@@ -21,22 +22,22 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 * **Highly available** control and data planes, end-to-end data protection, self-healing, n-way mirroring, erasure coding, and arbitrary number of extremely lightweight access points.
 * **REST API**. Comprehensive native HTTP-based API, as well as compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps.
 * **Unified namespace** across multiple [remote backends](/docs/providers.md) including Amazon S3, Google Cloud, and Microsoft Azure.
-* **Network of clusters**. Any AIS cluster can attach any other AIS cluster thus gaining immediate visibility and fast access to the respective hosted datasets.
+* **Network of clusters**. Any AIS cluster can attach any other AIS cluster, thus gaining immediate visibility and fast access to the respective hosted datasets.
 * **Turn-key cache**. Can be used as a standalone highly-available protected storage and/or LRU-based fast cache. Eviction watermarks, as well as numerous other management policies, are per-bucket configurable.
-* **ETL offload**. The capability to run I/O intensive custom data transformations *close to data*, offline (dataset to dataset) and inline (on-the-fly).
-* **File datasets**. AIS can be immediately populated from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch);
+* **ETL offload**. The capability to run I/O intensive custom data transformations *close to data* - offline (dataset to dataset) and inline (on-the-fly).
+* **File datasets**. AIS can be immediately populated from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch).
 * **Small files. Sharding.** To serialize small files, AIS supports TAR, TAR.GZ, ZIP, and [MessagePack](https://msgpack.org) formats, and provides the entire spectrum of operations to make the corresponding sharding transparent to the apps.
 * **Kubernetes**. Provides for easy Kubernetes deployment via a separate GitHub [repo](https://github.com/NVIDIA/ais-k8s) and [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator).
 * **Command line management**. Integrated powerful [CLI](/docs/cli.md) for easy management and monitoring.
 * **Access control**. For security and fine-grained access control, AIS includes OAuth 2.0 compliant [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance executes CLI requests over HTTPS and can serve multiple clusters.
-* **Distributed shuffle** extension for massively parallel resharding of very large datasets;
+* **Distributed shuffle** extension for massively parallel resharding of very large datasets.
 * **Batch jobs**. APIs and CLI to start, stop, and monitor documented [batch operations](/docs/batch.md), such as `prefetch`, `download`, copy or transform datasets, and many more.
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
 For developers and data scientists, there's also:
 * native [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
-* native [Python API](/docs/python_api.md), and [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) that also contains PyTorch integration and usage examples.
+* native [Python API](/docs/python_api.md), and [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) that also contains PyTorch integration and usage examples.
 
 For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 
@@ -63,13 +64,37 @@ Further, there's the capability referred to as [global namespace](/docs/provider
 
 > For performance tuning and preparing AIS nodes for bare-metal deployment, see [performance](/docs/performance.md).
 
-## Related Software
+## Installing from release binaries
 
-When it comes to PyTorch, [WebDataset](https://github.com/webdataset/webdataset) is the preferred AIStore client.
+Generally, AIStore (cluster) requires at least some sort of [deployment](/deploy#contents) procedure. There are standalone binaries, though, that can be [built](Makefile) from source or, alternatively, installed directly from GitHub:
 
-> WebDataset is a PyTorch Dataset (IterableDataset) implementation providing efficient access to datasets stored in POSIX tar archives.
+```console
+$ ./deploy/scripts/install_from_binaries.sh --help
+```
 
-Further references include technical blog titled [AIStore & ETL: Using WebDataset to train on a sharded dataset](https://aiatscale.org/blog/2021/10/29/ais-etl-3) where you can also find easy step-by-step instruction.
+The script installs [aisloader](/docs/aisloader.md) and [CLI](/docs/cli.md) from the most recent, or the previous, GitHub [release](https://github.com/NVIDIA/aistore/releases). For CLI, it'll also enable auto-completions (which is strongly recommended).
+
+## PyTorch integration
+
+AIS is one of the PyTorch [Iterable Datapipes](https://github.com/pytorch/data/tree/main/torchdata/datapipes/iter/load#iterable-datapipes).
+
+Specifically, [TorchData](https://github.com/pytorch/data) library provides:
+* [AISFileLister](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLister.html#aisfilelister)
+* [AISFileLoader](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLoader.html#aisfileloader)
+
+to list and, respectively, load data from AIStore.
+
+Further references and usage examples - in our technical blog at https://aiatscale.org/blog:
+* [PyTorch: Loading Data from AIStore](https://aiatscale.org/blog/2022/07/12/aisio-pytorch)
+* [Python SDK: Getting Started](https://aiatscale.org/blog/2022/07/20/python-sdk)
+
+Since AIS natively supports a number of [remote backends](/docs/providers.md), you can also use (PyTorch + AIS) to iterate over Amazon S3 and Google Cloud buckets, and more.
+
+## Reuse
+
+This repo includes [SGL and Slab allocator](/memsys) intended to optimize memory usage, [Streams and Stream Bundles](/transport) to multiplex messages over long-lived HTTP connections, and a few other sub-packages providing rather generic functionality.
+
+With a little effort, they all could be extracted and used outside.
 
 ## Guides and References
 
@@ -77,7 +102,7 @@ Further references include technical blog titled [AIStore & ETL: Using WebDatase
 - [Technical Blog](https://aiatscale.org/blog)
 - API and SDK
   - [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api)
-  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/sdk/python) (and [pip package](https://pypi.org/project/aistore/))
+  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) (and [pip package](https://pypi.org/project/aistore/))
   - [REST API](/docs/http_api.md)
     - [Easy URL](/docs/easy_url.md)
 - Amazon S3

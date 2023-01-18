@@ -10,8 +10,13 @@ const (
 	QparamWhat = "what" // "smap" | "bmd" | "config" | "stats" | "xaction" ... (enum below)
 
 	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
-	QparamUUID  = "uuid"  // xaction
-	QparamRegex = "regex" // dsort/downloader regex
+
+	QparamUUID    = "uuid"     // xaction
+	QparamJobID   = "jobid"    // job
+	QparamETLName = "etl_name" // etl
+
+	QparamRegex      = "regex"       // dsort: list regex
+	QparamOnlyActive = "only_active" // dsort: list only active
 
 	// remove existing custom keys and store new custom metadata
 	// NOTE: making an s/_/-/ naming exception because of the namesake CLI usage
@@ -48,7 +53,8 @@ const (
 	QparamOrigURL = "original_url"
 
 	// Log severity
-	QparamSev = "severity" // see { LogInfo, ...} enum
+	QparamLogSev = "severity" // see { LogInfo, ...} enum
+	QparamLogOff = "offset"
 
 	// Archive filename and format (mime type)
 	QparamArchpath = "archpath"
@@ -165,20 +171,23 @@ const (
 	GetWhatSmapVote      = "smapvote"
 	GetWhatSnode         = "snode"
 	GetWhatStats         = "stats"
-	GetWhatXactStatus    = "status" // IC status by uuid.
 	GetWhatSysInfo       = "sysinfo"
 	GetWhatTargetIPs     = "target_ips" // comma-separated list of all target IPs (compare w/ GetWhatSnode)
 	GetWhatLog           = "log"
+	// xactions
+	GetWhatOneXactStatus   = "status"      // IC status by uuid (returns a single matching xaction or none)
+	GetWhatAllXactStatus   = "status_all"  // ditto - all matching xactions
+	GetWhatXactStats       = "getxstats"   // stats: xaction by uuid
+	GetWhatQueryXactStats  = "qryxstats"   // stats: all matching xactions
+	GetWhatAllRunningXacts = "running_all" // e.g. e.g.: put-copies[D-ViE6HEL_j] list[H96Y7bhR2s] ...
 )
 
 // Internal "what" values.
 const (
-	GetWhatXactStats      = "getxstats" // stats: xaction by uuid
-	GetWhatQueryXactStats = "qryxstats" // stats: all matching xactions
-	GetWhatICBundle       = "ic_bundle"
+	GetWhatICBundle = "ic_bundle"
 )
 
-// QparamSev enum.
+// QparamLogSev enum.
 const (
 	LogInfo = "info"
 	LogWarn = "warning"

@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -31,7 +31,10 @@ func InitShortID(seed uint64) {
 	sid = shortid.MustNew(4 /*worker*/, uuidABC, seed)
 }
 
-// GenUUID generates unique and human-readable IDs.
+//
+// UUID
+//
+
 func GenUUID() (uuid string) {
 	var h, t string
 	uuid = sid.MustGenerate()
@@ -46,59 +49,18 @@ func GenUUID() (uuid string) {
 }
 
 func IsValidUUID(uuid string) bool {
-	return len(uuid) >= lenShortID && isAlpha(uuid[0])
+	return len(uuid) >= lenShortID && IsAlphaNice(uuid)
 }
 
-// alpha-numeric++ including letters, numbers, dashes (-), and underscores (_)
-// period (.) is allowed conditionally except for '..'
-func IsAlphaPlus(s string, withPeriod bool) bool {
-	for i, c := range s {
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {
-			continue
-		}
-		if c != '.' {
-			return false
-		}
-		if !withPeriod || (i < len(s)-1 && s[i+1] == '.') {
-			return false
-		}
-	}
-	return true
-}
-
-func isAlpha(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-}
-
-//
-// 3-letter tie breaker (fast)
-//
-
-func GenTie() string {
-	tie := rtie.Add(1)
-	b0 := uuidABC[tie&0x3f]
-	b1 := uuidABC[-tie&0x3f]
-	b2 := uuidABC[(tie>>2)&0x3f]
-	return string([]byte{b0, b1, b2})
-}
-
-//
-// ETL ID
-//
-
-func ValidateEtlID(id string) error {
-	return _validateID(id, 6)
-}
-
-func _validateID(id string, minlen int) (err error) {
+func ValidateNiceID(id string, minlen int, tag string) (err error) {
 	if len(id) < minlen {
-		return fmt.Errorf("ID %q is invalid: too short", id)
+		return fmt.Errorf("%s %q is too short", tag, id)
 	}
 	if len(id) >= lenTooLongID {
-		return fmt.Errorf("ID %q is invalid: too long", id)
+		return fmt.Errorf("%s %q is too long", tag, id)
 	}
-	if !isAlpha(id[0]) || !IsAlphaPlus(id, false /*with period*/) {
-		err = fmt.Errorf("ID %q is invalid: must start with a letter and can only contain [A-Za-z0-9-_]", id)
+	if !IsAlphaNice(id) {
+		err = fmt.Errorf("%s %q is invalid: must start with a letter and can only contain [A-Za-z0-9-_]", tag, id)
 	}
 	return
 }
@@ -107,13 +69,62 @@ func _validateID(id string, minlen int) (err error) {
 // Daemon ID
 //
 
-func GenDaemonID() string { return RandStringStrong(lenDaemonID) }
+func GenDaemonID() string              { return RandStringStrong(lenDaemonID) }
+func ValidateDaemonID(id string) error { return ValidateNiceID(id, lenDaemonID, "node ID") }
 
+// (when config.TestingEnv)
 func GenTestingDaemonID(suffix string) string {
 	l := Max(lenDaemonID-len(suffix), 3)
 	return RandStringStrong(l) + suffix
 }
 
-func ValidateDaemonID(id string) error {
-	return _validateID(id, lenDaemonID)
+//
+// utility functions
+//
+
+func isAlpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// letters and numbers w/ '-' and '_' permitted with limitations (below)
+func IsAlphaNice(s string) bool {
+	l := len(s)
+	for i, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+			continue
+		}
+		if c != '-' && c != '_' {
+			return false
+		}
+		if i == 0 || i == l-1 {
+			return false
+		}
+	}
+	return true
+}
+
+// alpha-numeric++ including letters, numbers, dashes (-), and underscores (_)
+// period (.) is allowed except for '..'
+func IsAlphaPlus(s string) bool {
+	for i, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {
+			continue
+		}
+		if c != '.' {
+			return false
+		}
+		if i < len(s)-1 && s[i+1] == '.' {
+			return false
+		}
+	}
+	return true
+}
+
+// 3-letter tie breaker (fast)
+func GenTie() string {
+	tie := rtie.Add(1)
+	b0 := uuidABC[tie&0x3f]
+	b1 := uuidABC[-tie&0x3f]
+	b2 := uuidABC[(tie>>2)&0x3f]
+	return string([]byte{b0, b1, b2})
 }

@@ -9,13 +9,13 @@ redirect_from:
 
 AIStore Python API is a growing set of client-side objects and methods to access and utilize AIS clusters.
 
-> For PyTorch integration and usage examples, please refer to [AIS Python SDK](https://pypi.org/project/aistore) available via Python Package Index (PyPI), or see [https://github.com/NVIDIA/aistore/tree/master/sdk/python](https://github.com/NVIDIA/aistore/tree/master/sdk/python).
+> For PyTorch integration and usage examples, please refer to [AIS Python SDK](https://pypi.org/project/aistore) available via Python Package Index (PyPI), or see [https://github.com/NVIDIA/aistore/tree/master/python/aistore](https://github.com/NVIDIA/aistore/tree/master/python/aistore).
 
 * [api](#api)
   * [Client](#api.Client)
     * [bucket](#api.Client.bucket)
     * [cluster](#api.Client.cluster)
-    * [xaction](#api.Client.xaction)
+    * [job](#api.Client.job)
     * [etl](#api.Client.etl)
     * [list\_objects\_iter](#api.Client.list_objects_iter)
     * [get\_object](#api.Client.get_object)
@@ -44,6 +44,8 @@ AIStore Python API is a growing set of client-side objects and methods to access
     * [list\_all\_objects](#bucket.Bucket.list_all_objects)
     * [transform](#bucket.Bucket.transform)
     * [object](#bucket.Bucket.object)
+    * [objects](#bucket.Bucket.objects)
+    * [make\_request](#bucket.Bucket.make_request)
 * [object](#object)
   * [Object](#object.Object)
     * [bck](#object.Object.bck)
@@ -52,7 +54,13 @@ AIStore Python API is a growing set of client-side objects and methods to access
     * [get](#object.Object.get)
     * [put](#object.Object.put)
     * [delete](#object.Object.delete)
+* [object\_group](#object_group)
+  * [ObjectGroup](#object_group.ObjectGroup)
+    * [delete](#object_group.ObjectGroup.delete)
+    * [evict](#object_group.ObjectGroup.evict)
+    * [prefetch](#object_group.ObjectGroup.prefetch)
 * [etl](#etl)
+  * [get\_default\_runtime](#etl.get_default_runtime)
   * [Etl](#etl.Etl)
     * [client](#etl.Etl.client)
     * [init\_spec](#etl.Etl.init_spec)
@@ -82,7 +90,7 @@ AIStore client for managing buckets, objects, ETL jobs
 ### bucket
 
 ```python
-def bucket(bck_name: str, provider: str = ProviderAIS, ns: str = "")
+def bucket(bck_name: str, provider: str = ProviderAIS, ns: Namespace = None)
 ```
 
 Factory constructor for bucket object.
@@ -92,6 +100,7 @@ Does not make any HTTP request, only instantiates a bucket object owned by the c
 
 - `bck_name` _str_ - Name of bucket (optional, defaults to "ais").
 - `provider` _str_ - Provider of bucket (one of "ais", "aws", "gcp", ...).
+- `ns` _Namespace_ - Namespace of bucket (optional, defaults to None).
   
 
 **Returns**:
@@ -118,16 +127,16 @@ Does not make any HTTP request, only instantiates a cluster object owned by the 
 
   The cluster object created.
 
-<a id="api.Client.xaction"></a>
+<a id="api.Client.job"></a>
 
-### xaction
+### job
 
 ```python
-def xaction()
+def job()
 ```
 
-Factory constructor for xaction object, which contains xaction-related functions.
-Does not make any HTTP request, only instantiates an xaction object bound to the client.
+Factory constructor for job object, which contains job-related functions.
+Does not make any HTTP request, only instantiates a job object bound to the client.
 
 **Arguments**:
 
@@ -136,7 +145,7 @@ Does not make any HTTP request, only instantiates an xaction object bound to the
 
 **Returns**:
 
-  The xaction object created.
+  The job object created.
 
 <a id="api.Client.etl"></a>
 
@@ -148,7 +157,7 @@ def etl()
 
 Factory constructor for ETL object.
 Contains APIs related to AIStore ETL operations.
-Does not make any HTTP request, only instantiates an xaction object bound to the client.
+Does not make any HTTP request, only instantiates an ETL object bound to the client.
 
 **Arguments**:
 
@@ -157,7 +166,7 @@ Does not make any HTTP request, only instantiates an xaction object bound to the
 
 **Returns**:
 
-  The xaction object created.
+  The ETL object created.
 
 <a id="api.Client.list_objects_iter"></a>
 
@@ -267,7 +276,7 @@ Returns state of AIS cluster, including the detailed information about its nodes
 
 **Returns**:
 
-- `aistore.msg.Smap` - Smap containing cluster information
+- `aistore.sdk.types.Smap` - Smap containing cluster information
   
 
 **Raises**:
@@ -338,7 +347,7 @@ A class representing a bucket that contains user data.
 
 - `bck_name` _str_ - name of bucket
 - `provider` _str, optional_ - provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
-- `ns` _str, optional_ - namespace of bucket, defaults to ""
+- `ns` _Namespace, optional_ - namespace of bucket, defaults to None
 
 <a id="bucket.Bucket.client"></a>
 
@@ -429,8 +438,8 @@ Can only create a bucket for AIS provider on localized cluster. Remote cloud buc
 
 **Raises**:
 
-- `aistore.client.errors.AISError` - All other types of errors with AIStore
-- `aistore.client.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `aistore.sdk.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -462,8 +471,8 @@ Note: AIS will _not_ call the remote backend provider to delete the correspondin
 
 **Raises**:
 
-- `aistore.client.errors.AISError` - All other types of errors with AIStore
-- `aistore.client.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `aistore.sdk.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -479,7 +488,7 @@ def rename(to_bck: str) -> str
 ```
 
 Renames bucket in AIStore cluster.
-Only works on AIS buckets. Returns xaction id that can be used later to check the status of the asynchronous operation.
+Only works on AIS buckets. Returns job ID that can be used later to check the status of the asynchronous operation.
 
 **Arguments**:
 
@@ -488,13 +497,13 @@ Only works on AIS buckets. Returns xaction id that can be used later to check th
 
 **Returns**:
 
-  xaction id (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the status of the operation
   
 
 **Raises**:
 
-- `aistore.client.errors.AISError` - All other types of errors with AIStore
-- `aistore.client.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `aistore.sdk.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -524,8 +533,8 @@ NOTE: only Cloud buckets can be evicted.
 
 **Raises**:
 
-- `aistore.client.errors.AISError` - All other types of errors with AIStore
-- `aistore.client.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `aistore.sdk.errors.InvalidBckProvider` - Invalid bucket provider for requested operation
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -554,7 +563,7 @@ Requests bucket properties.
 
 **Raises**:
 
-- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -573,7 +582,7 @@ def copy(to_bck_name: str,
          to_provider: str = ProviderAIS) -> str
 ```
 
-Returns xaction id that can be used later to check the status of the asynchronous operation.
+Returns job ID that can be used later to check the status of the asynchronous operation.
 
 **Arguments**:
 
@@ -588,12 +597,12 @@ Returns xaction id that can be used later to check the status of the asynchronou
 
 **Returns**:
 
-  Xaction id (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the status of the operation
   
 
 **Raises**:
 
-- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -612,7 +621,7 @@ def list_objects(prefix: str = "",
                  continuation_token: str = "") -> BucketList
 ```
 
-Returns a structure that contains a page of objects, xaction UUID, and continuation token (to read the next page, if available).
+Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if available).
 
 **Arguments**:
 
@@ -622,7 +631,7 @@ Returns a structure that contains a page of objects, xaction UUID, and continuat
   The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
 - `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
   Defaults to "0" - return maximum number objects.
-- `uuid` _str, optional_ - Job UUID, required to get the next page of objects
+- `uuid` _str, optional_ - Job ID, required to get the next page of objects
 - `continuation_token` _str, optional_ - Marks the object to start reading the next page
   
 
@@ -634,7 +643,7 @@ Returns a structure that contains a page of objects, xaction UUID, and continuat
 
 **Raises**:
 
-- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -670,7 +679,7 @@ Returns an iterator for all objects in bucket
 
 **Raises**:
 
-- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -706,7 +715,7 @@ Returns a list of all objects in bucket
 
 **Raises**:
 
-- `aistore.client.errors.AISError` - All other types of errors with AIStore
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -740,7 +749,7 @@ Transforms all objects in a bucket and puts them to destination bucket.
 
 **Returns**:
 
-  Xaction id (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the status of the operation
 
 <a id="bucket.Bucket.object"></a>
 
@@ -750,7 +759,7 @@ Transforms all objects in a bucket and puts them to destination bucket.
 def object(obj_name: str)
 ```
 
-Factory constructor for object bound to bucket.
+Factory constructor for object belonging to this bucket.
 Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
 
 **Arguments**:
@@ -761,6 +770,54 @@ Does not make any HTTP request, only instantiates an object in a bucket owned by
 **Returns**:
 
   The object created.
+
+<a id="bucket.Bucket.objects"></a>
+
+### objects
+
+```python
+def objects(obj_names: list = None,
+            obj_range: ObjectRange = None,
+            obj_template: str = None)
+```
+
+Factory constructor for multiple objects belonging to this bucket.
+
+**Arguments**:
+
+- `obj_names` _list_ - Names of objects to include in the group
+- `obj_range` _ObjectRange_ - Range of objects to include in the group
+- `obj_template` _str_ - String template defining objects to include in the group
+  
+
+**Returns**:
+
+  The ObjectGroup created
+
+<a id="bucket.Bucket.make_request"></a>
+
+### make\_request
+
+```python
+def make_request(method: str,
+                 action: str,
+                 value: dict = None,
+                 params: dict = None) -> requests.Response
+```
+
+Use the bucket's client to make a request to the bucket endpoint on the AIS server
+
+**Arguments**:
+
+- `method` _str_ - HTTP method to use, e.g. POST/GET/DELETE
+- `action` _str_ - Action string used to create an ActionMsg to pass to the server
+- `value` _dict_ - Additional value parameter to pass in the ActionMsg
+- `params` _dict, optional_ - Optional parameters to pass in the request
+  
+
+**Returns**:
+
+  Response from the server
 
 <a id="object.Object"></a>
 
@@ -914,6 +971,111 @@ Delete an object from a bucket.
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `requests.exeptions.HTTPError(404)` - The object does not exist
 
+<a id="object_group.ObjectGroup"></a>
+
+## Class: ObjectGroup
+
+```python
+class ObjectGroup()
+```
+
+A class representing multiple objects within the same bucket. Only one of obj_names or obj_range should be provided.
+
+**Arguments**:
+
+- `bck` _Bucket_ - Bucket the objects belong to
+- `obj_names` _list[str], optional_ - List of object names to include in this collection
+- `obj_range` _ObjectRange, optional_ - Range defining which object names in the bucket should be included
+- `obj_template` _str, optional_ - String argument to pass as template value directly to api
+
+<a id="object_group.ObjectGroup.delete"></a>
+
+### delete
+
+```python
+def delete()
+```
+
+Deletes a list or range of objects in a bucket
+
+**Raises**:
+
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+  
+
+**Returns**:
+
+  Job ID (as str) that can be used to check the status of the operation
+
+<a id="object_group.ObjectGroup.evict"></a>
+
+### evict
+
+```python
+def evict()
+```
+
+Evicts a list or range of objects in a bucket so that they are no longer cached in AIS
+NOTE: only Cloud buckets can be evicted.
+
+**Raises**:
+
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+  
+
+**Returns**:
+
+  Job ID (as str) that can be used to check the status of the operation
+
+<a id="object_group.ObjectGroup.prefetch"></a>
+
+### prefetch
+
+```python
+def prefetch()
+```
+
+Prefetches a list or range of objects in a bucket so that they are cached in AIS
+NOTE: only Cloud buckets can be prefetched.
+
+**Raises**:
+
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+  
+
+**Returns**:
+
+  Job ID (as str) that can be used to check the status of the operation
+
+<a id="etl.get_default_runtime"></a>
+
+### get\_default\_runtime
+
+```python
+def get_default_runtime()
+```
+
+Determines etl runtime to use if not specified
+
+**Returns**:
+
+  String of runtime
+
 <a id="etl.Etl"></a>
 
 ## Class: Etl
@@ -951,7 +1113,7 @@ def init_spec(template: str,
 ```
 
 Initializes ETL based on POD spec template. Returns ETL_ID.
-Existing templates can be found at `aistore.client.etl_templates`
+Existing templates can be found at `sdk.etl_templates`
 For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
 
 **Arguments**:
@@ -972,10 +1134,8 @@ For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transf
 ```python
 def init_code(transform: Callable,
               etl_id: str,
-              before: Callable = None,
-              after: Callable = None,
               dependencies: List[str] = None,
-              runtime: str = "python3.8v2",
+              runtime: str = get_default_runtime(),
               communication_type: str = "hpush",
               timeout: str = "5m",
               chunk_size: int = None)
@@ -986,13 +1146,13 @@ Initializes ETL based on the provided source code. Returns ETL_ID.
 **Arguments**:
 
 - `transform` _Callable_ - Transform function of the ETL
-- `etl_id` _str_ - Id of new ETL
-- `before` _Callable_ - Code function to be executed before transform function, will initialize and return objects used in transform function
-- `after` _Callable_ - Code function to be executed after transform function, will return results
-- `dependencies` _List[str]_ - [optional] List of the necessary dependencies with version (eg. aistore>1.0.0)
-- `runtime` _str_ - [optional, default="python3.8v2"] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2] (see etl/runtime/all.go)
+- `etl_id` _str_ - ID of new ETL
+- `dependencies` _list[str]_ - Python dependencies to install
+- `runtime` _str_ - [optional, default= V2 implementation of the current python version if supported, else
+  python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
+  (see ext/etl/runtime/all.go)
 - `communication_type` _str_ - [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev, hpush, io)
-- `timeout` _str_ - [optional, default="5m"] Timeout of the ETL (eg. 5m for 5 minutes)
+- `timeout` _str_ - [optional, default="5m"] Timeout of the ETL (e.g. 5m for 5 minutes)
 - `chunk_size` _int_ - Chunk size in bytes if transform function in streaming data. (whole object is read by default)
 
 **Returns**:

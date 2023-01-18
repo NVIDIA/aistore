@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles cluster and daemon operations.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
 )
@@ -36,50 +35,18 @@ type (
 
 	targetRebSnap struct {
 		tid  string
-		snap *xact.SnapExt
+		snap *cluster.Snap
 	}
 )
-
-var (
-	pmapStatus = make(stats.DaemonStatusMap, 8)
-	tmapStatus = make(stats.DaemonStatusMap, 8)
-)
-
-// Gets Smap from a given node (`daemonID`) and displays it
-func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, useJSON bool) error {
-	var (
-		smap = primarySmap
-		err  error
-	)
-	if daemonID != "" {
-		smap, err = api.GetNodeClusterMap(apiBP, daemonID)
-		if err != nil {
-			return err
-		}
-	}
-	extendedURLs := false
-	for _, m := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
-		for _, v := range m {
-			if v.PubNet != v.ControlNet || v.PubNet != v.DataNet {
-				extendedURLs = true
-			}
-		}
-	}
-	body := tmpls.SmapTemplateHelper{
-		Smap:         smap,
-		ExtendedURLs: extendedURLs,
-	}
-	return tmpls.Print(body, c.App.Writer, tmpls.SmapTmpl, nil, useJSON)
-}
 
 func getBMD(c *cli.Context) error {
-	useJSON := flagIsSet(c, jsonFlag)
+	usejs := flagIsSet(c, jsonFlag)
 	bmd, err := api.GetBMD(apiBP)
 	if err != nil {
 		return err
 	}
-	if useJSON {
-		return tmpls.Print(bmd, c.App.Writer, "", nil, useJSON)
+	if usejs {
+		return tmpls.Print(bmd, c.App.Writer, "", nil, usejs)
 	}
 
 	tw := &tabwriter.Writer{}
@@ -101,7 +68,7 @@ func getBMD(c *cli.Context) error {
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 					provider, ns, bucket, props.BackendBck, copies, ec,
-					cos.FormatUnixNano(props.Created, ""))
+					cos.FormatNanoTime(props.Created, ""))
 			}
 		}
 	}
@@ -112,52 +79,56 @@ func getBMD(c *cli.Context) error {
 	return nil
 }
 
-// Displays the status of the cluster or node
-func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, cluConfig *cmn.ClusterConfig, daemonID string, useJSON, hideHeader bool) error {
+// Displays the status of the cluster or a node
+func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, sid string, usejs, hideHeader bool) error {
 	body := tmpls.StatusTemplateHelper{
 		Smap:      smap,
-		CluConfig: cluConfig,
+		CluConfig: cfg,
 		Status: tmpls.DaemonStatusTemplateHelper{
-			Pmap: pmapStatus,
-			Tmap: tmapStatus,
+			Pmap: curPrxStatus,
+			Tmap: curTgtStatus,
 		},
 	}
-	if res, proxyOK := pmapStatus[daemonID]; proxyOK {
-		return tmpls.Print(res, c.App.Writer, tmpls.NewProxyTable(res, smap).Template(hideHeader), nil, useJSON)
-	} else if res, targetOK := tmapStatus[daemonID]; targetOK {
-		return tmpls.Print(res, c.App.Writer, tmpls.NewTargetTable(res).Template(hideHeader), nil, useJSON)
-	} else if daemonID == apc.Proxy {
+	if res, proxyOK := curPrxStatus[sid]; proxyOK {
+		return tmpls.Print(res, c.App.Writer, tmpls.NewProxyTable(res, smap).Template(hideHeader), nil, usejs)
+	} else if res, targetOK := curTgtStatus[sid]; targetOK {
+		return tmpls.Print(res, c.App.Writer, tmpls.NewTargetTable(res).Template(hideHeader), nil, usejs)
+	} else if sid == apc.Proxy {
 		template := tmpls.NewProxiesTable(&body.Status, smap).Template(hideHeader)
-		return tmpls.Print(body, c.App.Writer, template, nil, useJSON)
-	} else if daemonID == apc.Target {
+		return tmpls.Print(body, c.App.Writer, template, nil, usejs)
+	} else if sid == apc.Target {
 		return tmpls.Print(body, c.App.Writer,
-			tmpls.NewTargetsTable(&body.Status).Template(hideHeader), nil, useJSON)
-	} else if daemonID == "" {
+			tmpls.NewTargetsTable(&body.Status).Template(hideHeader), nil, usejs)
+	} else if sid == "" {
 		template := tmpls.NewProxiesTable(&body.Status, smap).Template(false) + "\n" +
 			tmpls.NewTargetsTable(&body.Status).Template(false) + "\n" +
 			tmpls.ClusterSummary
-		return tmpls.Print(body, c.App.Writer, template, nil, useJSON)
+		return tmpls.Print(body, c.App.Writer, template, nil, usejs)
 	}
-	return fmt.Errorf("%s is not a valid DAEMON_ID nor DAEMON_TYPE", daemonID)
+	return fmt.Errorf("%s is not a valid NODE_ID nor NODE_TYPE", sid)
 }
 
-// Displays the disk stats of a target
-func daemonDiskStats(c *cli.Context, daemonID string) error {
+func daemonDiskStats(c *cli.Context, sid string) error {
 	var (
-		useJSON    = flagIsSet(c, jsonFlag)
+		usejs      = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
 	)
-	if _, ok := pmapStatus[daemonID]; ok {
-		return fmt.Errorf("daemon ID=%q is a proxy, but \"%s %s %s\" works only for targets",
-			daemonID, cliName, commandShow, subcmdShowDisk)
+	if _, err := fillNodeStatusMap(c); err != nil {
+		return err
 	}
-	if _, ok := tmapStatus[daemonID]; daemonID != "" && !ok {
-		return fmt.Errorf("target ID=%q does not exist", daemonID)
+	if _, ok := curPrxStatus[sid]; ok {
+		return fmt.Errorf("node %q is a proxy (hint: \"%s %s %s\" works only for targets)",
+			sid, cliName, commandShow, subcmdShowDisk)
+	}
+	if _, ok := curTgtStatus[sid]; sid != "" && !ok {
+		return fmt.Errorf("target ID=%q does not exist", sid)
 	}
 
-	targets := stats.DaemonStatusMap{daemonID: {}}
-	if daemonID == "" {
-		targets = tmapStatus
+	setLongRunParams(c)
+
+	targets := stats.DaemonStatusMap{sid: {}}
+	if sid == "" {
+		targets = curTgtStatus
 	}
 
 	diskStats, err := getDiskStats(targets)
@@ -166,9 +137,9 @@ func daemonDiskStats(c *cli.Context, daemonID string) error {
 	}
 
 	if hideHeader {
-		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatBodyTmpl, nil, useJSON)
+		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatTmpl, nil, usejs)
 	} else {
-		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatsFullTmpl, nil, useJSON)
+		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatsFullTmpl, nil, usejs)
 	}
 	if err != nil {
 		return err
@@ -272,7 +243,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		}
 		prevID := ""
 		for _, sts := range allSnaps {
-			if flagIsSet(c, allXactionsFlag) {
+			if flagIsSet(c, allJobsFlag) {
 				if prevID != "" && sts.snap.ID != prevID {
 					fmt.Fprintln(tw, strings.Repeat("\t ", 9 /*colCount*/))
 				}
@@ -289,7 +260,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		}
 		tw.Flush()
 
-		if !flagIsSet(c, allXactionsFlag) {
+		if !flagIsSet(c, allJobsFlag) {
 			if latestFinished && latestAborted {
 				fmt.Fprintln(c.App.Writer, "\nRebalance aborted.")
 				break
@@ -319,8 +290,8 @@ func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %t\n",
 		st.snap.ID, st.tid,
-		st.snap.Snap.Stats.InObjs, cos.B2S(st.snap.Snap.Stats.InBytes, 2),
-		st.snap.Snap.Stats.OutObjs, cos.B2S(st.snap.Snap.Stats.OutBytes, 2),
+		st.snap.Stats.InObjs, cos.B2S(st.snap.Stats.InBytes, 2),
+		st.snap.Stats.OutObjs, cos.B2S(st.snap.Stats.OutBytes, 2),
 		startTime, endTime, st.snap.IsAborted(),
 	)
 }

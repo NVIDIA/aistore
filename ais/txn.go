@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/xact/xs"
@@ -46,7 +47,7 @@ type (
 		String() string
 	}
 	rndzvs struct { // rendezvous records
-		timestamp  time.Time
+		timestamp  int64
 		err        *txnError
 		callerName string
 	}
@@ -201,14 +202,13 @@ func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 	)
 	txns.Lock()
 	if rndzvs, ok = txns.rendezvous[msg.UUID]; !ok {
-		rndzvs.callerName, rndzvs.timestamp = caller, time.Now()
+		rndzvs.callerName, rndzvs.timestamp = caller, mono.NanoTime()
 		txns.rendezvous[msg.UUID] = rndzvs
 		txns.Unlock()
 		return nil
 	}
 	txns.Unlock()
-	return fmt.Errorf("rendezvous record %s:%s already exists",
-		msg.UUID, cos.FormatTimestamp(rndzvs.timestamp))
+	return fmt.Errorf("rendezvous record %s:%d already exists", msg.UUID, rndzvs.timestamp)
 }
 
 func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, args ...any) (errDone error) {
@@ -441,7 +441,7 @@ func (txn *txnBckBase) String() string {
 		return fmt.Sprintf("txn-%s%s", txn.xctn, res)
 	}
 	if !txn.phase.commit.IsZero() {
-		tm = "-" + cos.FormatTimestamp(txn.phase.commit)
+		tm = "-" + cos.FormatTime(txn.phase.commit, cos.StampMicro)
 	}
 	return fmt.Sprintf("txn-%s[%s]-%s%s%s]", txn.action, txn.uid, txn.bck.Bucket().String(), tm, res)
 }

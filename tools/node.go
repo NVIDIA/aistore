@@ -181,9 +181,17 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 		iter    int
 	)
 	if expPrx == 0 && expTgt == 0 {
-		tlog.Logf("Waiting for %q (Smap > v%d)\n", reason, origVer)
+		if origVer > 0 {
+			tlog.Logf("Waiting for %q (Smap > v%d)\n", reason, origVer)
+		} else {
+			tlog.Logf("Waiting for %q\n", reason)
+		}
 	} else {
-		tlog.Logf("Waiting for %q (p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVer)
+		if origVer > 0 {
+			tlog.Logf("Waiting for %q (p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVer)
+		} else {
+			tlog.Logf("Waiting for %q (p%d, t%d)\n", reason, expPrx, expTgt)
+		}
 	}
 	started := time.Now()
 	deadline := started.Add(maxWait)
@@ -274,17 +282,17 @@ func WaitForResilvering(t *testing.T, bp api.BaseParams, target *cluster.Snode) 
 	} else {
 		time.Sleep(4 * time.Second)
 	}
-	err := api.WaitForXactionNode(bp, args, _xactSnapFinished)
-	tassert.CheckFatal(t, err)
-}
-
-func _xactSnapFinished(snaps api.NodesXactMultiSnap) bool {
-	tid, xsnap := snaps.Running()
-	if tid != "" {
-		tlog.Logf("t[%s]: x-%s[%s] is running\n", tid, xsnap.Kind, xsnap.ID)
-		return false
+	allFinished := func(snaps api.XactMultiSnap) bool {
+		tid, xsnap, err := snaps.RunningTarget("")
+		tassert.CheckFatal(t, err)
+		if tid != "" {
+			tlog.Logf("t[%s]: x-%s[%s] is running\n", tid, xsnap.Kind, xsnap.ID)
+			return false
+		}
+		return true
 	}
-	return true
+	err := api.WaitForXactionNode(bp, args, allFinished)
+	tassert.CheckFatal(t, err)
 }
 
 func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[*cluster.Snode][]string {
@@ -766,7 +774,12 @@ func waitSmapSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.
 			}
 			if newSmap.Version > ver+1 {
 				// reset
-				ctx.Log("Updating Smap state cond v%d to v%d from %s\n", ver, newSmap.Version-1, sname)
+				if ver <= 0 {
+					ctx.Log("Received %s from %s\n", newSmap, sname)
+				} else {
+					ctx.Log("Received newer %s from %s, updated wait-for condition (%d => %d)\n",
+						newSmap, sname, ver, newSmap.Version)
+				}
 				ver = newSmap.Version - 1
 				ignore = orig.Clone()
 				ignore.Add(sid)

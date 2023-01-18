@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles CLI commands that pertain to AIS objects.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -28,7 +28,7 @@ var (
 		commandGet: {
 			offsetFlag,
 			lengthFlag,
-			archpathFlag,
+			archpathOptionalFlag,
 			cksumFlag,
 			checkObjCachedFlag,
 		},
@@ -51,7 +51,7 @@ var (
 			allowAppendToExistingFlag,
 			continueOnErrorFlag,
 			createArchFlag,
-			archpathFlag,
+			archpathOptionalFlag,
 			skipVerCksumFlag,
 		),
 		commandSetCustom: {
@@ -72,7 +72,7 @@ var (
 		commandCat: {
 			offsetFlag,
 			lengthFlag,
-			archpathFlag,
+			archpathOptionalFlag,
 			cksumFlag,
 			forceFlag,
 		},
@@ -85,7 +85,7 @@ var (
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,
-		BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
+		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
 
 	objectCmdPut = cli.Command{
@@ -100,7 +100,7 @@ var (
 	objectCmdSetCustom = cli.Command{
 		Name:      commandSetCustom,
 		Usage:     "set object's custom properties",
-		ArgsUsage: objectArgument + " " + jsonSpecArgument + "|" + keyValuePairsArgument,
+		ArgsUsage: setCustomArgument,
 		Flags:     objectCmdsFlags[commandSetCustom],
 		Action:    setCustomPropsHandler,
 	}
@@ -116,23 +116,20 @@ var (
 			bucketObjCmdEvict,
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
 			{
-				Name:      commandRename,
-				Usage:     "move/rename object",
-				ArgsUsage: "BUCKET/OBJECT_NAME NEW_OBJECT_NAME",
-				Flags:     objectCmdsFlags[commandRename],
-				Action:    mvObjectHandler,
-				BashComplete: oldAndNewBucketCompletions(
-					[]cli.BashCompleteFunc{}, true /* separator */, apc.AIS),
+				Name:         commandRename,
+				Usage:        "move/rename object",
+				ArgsUsage:    renameObjectArgument,
+				Flags:        objectCmdsFlags[commandRename],
+				Action:       mvObjectHandler,
+				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
 			},
 			{
-				Name:      commandRemove,
-				Usage:     "remove object(s) from the specified bucket",
-				ArgsUsage: optionalObjectsArgument,
-				Flags:     objectCmdsFlags[commandRemove],
-				Action:    removeObjectHandler,
-				BashComplete: bucketCompletions(bckCompletionsOpts{
-					multiple: true, separator: true,
-				}),
+				Name:         commandRemove,
+				Usage:        "remove object(s) from the specified bucket",
+				ArgsUsage:    optionalObjectsArgument,
+				Flags:        objectCmdsFlags[commandRemove],
+				Action:       removeObjectHandler,
+				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
 			},
 			{
 				Name:         commandPromote,
@@ -155,7 +152,7 @@ var (
 				ArgsUsage:    objectArgument,
 				Flags:        objectCmdsFlags[commandCat],
 				Action:       catHandler,
-				BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
+				BashComplete: bucketCompletions(bcmplop{separator: true}),
 			},
 		},
 	}
@@ -210,7 +207,7 @@ func mvObjectHandler(c *cli.Context) (err error) {
 
 func removeObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	if c.NArg() == 1 {
@@ -222,7 +219,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			// List or range operation on a given bucket.
-			return listOrRangeOp(c, commandRemove, bck)
+			return listOrRangeOp(c, bck)
 		}
 		if flagIsSet(c, rmRfFlag) {
 			if !flagIsSet(c, yesFlag) {
@@ -310,50 +307,27 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func putRegularObjHandler(c *cli.Context) (err error) {
-	var (
-		bck      cmn.Bck
-		p        *cmn.BucketProps
-		objName  string
-		fileName = c.Args().Get(0)
-		uri      = c.Args().Get(1)
-		dryRun   = flagIsSet(c, dryRunFlag)
-	)
-
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, "file to put", "object name in the form bucket/[object]")
+func putRegularObjHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "file to put", "destination object name in the form "+optionalObjectsArgument)
 	}
+	fileName := c.Args().Get(0)
 	if c.NArg() < 2 {
-		return missingArgumentsError(c, "object name in the form bucket/[object]")
+		return missingArgumentsError(c, "destination object name in the form "+optionalObjectsArgument)
 	}
+	uri := c.Args().Get(1)
 	if c.NArg() > 2 {
 		return incorrectUsageMsg(c, "too many arguments _or_ unrecognized option '%+v'", c.Args()[2:])
 	}
-	if bck, objName, err = parseBckObjectURI(c, uri, true /*optional objName*/); err != nil {
-		return
-	}
-	if p, err = headBucket(bck, false /* don't add */); err != nil {
+
+	bck, objName, err := parseBckObjectURI(c, uri, true /*optional objName*/)
+	if err != nil {
 		return err
 	}
-	if dryRun {
-		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-		path, err := getPathFromFileName(fileName)
-		if err != nil {
-			return err
-		}
-		if objName == "" {
-			objName = filepath.Base(path)
-		}
-		archPath := parseStrFlag(c, archpathFlag)
-		if archPath != "" {
-			fmt.Fprintf(c.App.Writer, "Add file %q to archive %s/%s as %s/%s\n", path, bck.DisplayName(),
-				objName, objName, archPath)
-		} else {
-			fmt.Fprintf(c.App.Writer, "Put file %q to %s/%s\n", path, bck.DisplayName(), objName)
-		}
-		return nil
+	if flagIsSet(c, dryRunFlag) {
+		return putDryRun(c, bck, objName, fileName)
 	}
-	return putObject(c, bck, objName, fileName, p.Cksum.Type)
+	return putObject(c, bck, objName, fileName)
 }
 
 func putHandler(c *cli.Context) (err error) {
@@ -420,7 +394,7 @@ func promoteHandler(c *cli.Context) (err error) {
 
 func setCustomPropsHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket")
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	uri := c.Args().First()
 	bck, objName, err := parseBckObjectURI(c, uri, true /* optional objName */)

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/xact"
@@ -80,6 +81,15 @@ func (p *proxy) a2u(aliasOrUUID string) string {
 	p.remais.mu.RLock()
 	for _, remais := range p.remais.A {
 		if aliasOrUUID == remais.Alias || aliasOrUUID == remais.UUID {
+			p.remais.mu.RUnlock()
+			return remais.UUID
+		}
+	}
+	l := len(p.remais.old)
+	for i := l - 1; i >= 0; i-- {
+		remais := p.remais.old[i]
+		if aliasOrUUID == remais.Alias || aliasOrUUID == remais.UUID {
+			p.remais.mu.RUnlock()
 			return remais.UUID
 		}
 	}
@@ -274,10 +284,9 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 		glog.Warningf("%s: %q doesn't exist, proceeding to create", args.p, args.bck)
 		goto creadd
 	}
+	action = apc.ActAddRemoteBck // only if requested via args
 
 	// lookup remote
-	debug.Assert(bck.IsRemote())
-	action = apc.ActAddRemoteBck
 	if remoteHdr, errCode, err = args.lookup(bck); err != nil {
 		bck = nil
 		return
@@ -306,7 +315,16 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	// when explicitly asked _not_ to
 	args.exists = true
 	if args.dontAddRemote {
-		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
+		if bck.IsRemoteAIS() {
+			bck.Props, err = remoteBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
+		} else {
+			// NOTE -- TODO (dilemma):
+			// The bucket has no local representation. The best would be to return its metadata _as is_
+			// but there's currently no control structure other than (AIS-only) `BucketProps`.
+			// Therefore: return cluster defaults + assorted `props.Extra` fields.
+			// See also: ais/backend for `HeadBucket`
+			bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
+		}
 		return
 	}
 
@@ -337,7 +355,10 @@ func (args *bckInitArgs) getOrigURL() (ourl string) {
 }
 
 func (args *bckInitArgs) lookup(bck *cluster.Bck) (hdr http.Header, code int, err error) {
-	q := url.Values{}
+	var (
+		q       = url.Values{}
+		retried bool
+	)
 	if bck.IsHTTP() {
 		origURL := args.getOrigURL()
 		q.Set(apc.QparamOrigURL, origURL)
@@ -345,7 +366,9 @@ func (args *bckInitArgs) lookup(bck *cluster.Bck) (hdr http.Header, code int, er
 	if args.tryHeadRemote {
 		q.Set(apc.QparamSilent, "true")
 	}
+retry:
 	hdr, code, err = args.p.headRemoteBck(bck.Bucket(), q)
+
 	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && args.tryHeadRemote {
 		if args.dontAddRemote {
 			return
@@ -357,6 +380,13 @@ func (args *bckInitArgs) lookup(bck *cluster.Bck) (hdr http.Header, code int, er
 		hdr.Set(apc.HdrBackendProvider, bck.Provider)
 		hdr.Set(apc.HdrBucketVerEnabled, "false")
 		err = nil
+		return
+	}
+	// NOTE: retrying once (via random target)
+	if err != nil && !retried && cos.IsErrClientURLTimeout(err) {
+		glog.Warningf("%s: HEAD(%s) timeout %q - retrying...", args.p, bck, errors.Unwrap(err))
+		retried = true
+		goto retry
 	}
 	return
 }

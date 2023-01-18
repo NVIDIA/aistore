@@ -222,9 +222,11 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) e
 	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof("%s: ACK from %s on %s", reb.t, string(hdr.Opaque), lom)
 	}
+
 	// No immediate file deletion: let LRU cleanup the "misplaced" object
 	// TODO: mark the object "Deleted"
-	reb.delLomAck(lom, ack.rebID)
+
+	reb.delLomAck(lom, ack.rebID, true /*free pending (orig) transmitted LOM*/)
 	return nil
 }
 

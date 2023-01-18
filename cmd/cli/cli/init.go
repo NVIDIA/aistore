@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -17,6 +17,18 @@ import (
 )
 
 var loggedUserToken string
+
+func Init() (err error) {
+	cfg, err = config.Load()
+	if err != nil {
+		return err
+	}
+	k8sDetected = detectK8s()
+	initClusterParams()
+	return nil
+}
+
+// private
 
 func initClusterParams() {
 	loggedUserToken = authn.LoadToken("")
@@ -57,16 +69,6 @@ func detectK8s() bool {
 	cmd := exec.Command("which", "kubectl")
 	err := cmd.Run()
 	return err == nil
-}
-
-func Init() (err error) {
-	cfg, err = config.Load()
-	if err != nil {
-		return err
-	}
-	k8sDetected = detectK8s()
-	initClusterParams()
-	return nil
 }
 
 func initSupportedCksumFlags() (flags []cli.Flag) {

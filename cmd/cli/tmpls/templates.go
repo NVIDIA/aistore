@@ -1,6 +1,6 @@
 // Package tmpls provides the set of templates used to format output for the CLI.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tmpls
 
@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -46,16 +45,16 @@ const (
 	xactStateAborted  = "Aborted"
 
 	// Smap
-	SmapHeader = "NODE\t TYPE\t PUBLIC URL" +
+	SmapHdr = "NODE\t TYPE\t PUBLIC URL" +
 		"{{ if (eq $.ExtendedURLs true) }}\t INTRA CONTROL URL\t INTRA DATA URL{{end}}" +
 		"\n"
 	SmapBody = "{{FormatDaemonID $value.ID $.Smap}}\t {{$value.DaeType}}\t {{$value.PubNet.URL}}" +
 		"{{ if (eq $.ExtendedURLs true) }}\t {{$value.ControlNet.URL}}\t {{$value.DataNet.URL}}{{end}}" +
 		"\n"
 
-	SmapTmpl = SmapHeader +
+	SmapTmpl = SmapHdr +
 		"{{ range $key, $value := .Smap.Pmap }}" + SmapBody + "{{end}}\n" +
-		SmapHeader +
+		SmapHdr +
 		"{{ range $key, $value := .Smap.Tmap }}" + SmapBody + "{{end}}\n" +
 		"Non-Electable:\n" +
 		"{{ range $key, $si := .Smap.Pmap }} " +
@@ -79,7 +78,7 @@ const (
 		"Build:\t{{ ( BuildTimes .Status) }}\n"
 
 	// Disk Stats
-	DiskStatsHeader = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
+	DiskStatsHdr = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
 
 	DiskStatsBody = "{{ $value.TargetID }}\t " +
 		"{{ $value.DiskName }}\t " +
@@ -88,8 +87,8 @@ const (
 		"{{ FormatBytesSig $stat.WBps 2 }}/s\t " +
 		"{{ $stat.Util }}%\n"
 
-	DiskStatBodyTmpl  = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
-	DiskStatsFullTmpl = DiskStatsHeader + DiskStatBodyTmpl
+	DiskStatTmpl      = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
+	DiskStatsFullTmpl = DiskStatsHdr + DiskStatTmpl
 
 	// Config
 	ConfigTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
@@ -109,42 +108,89 @@ const (
 		"{{$p.Name}}\t {{$p.Value}}\n" +
 		"{{end}}"
 
-	DownloadListHeader = "JOB ID\t STATUS\t ERRORS\t DESCRIPTION\n"
-	DownloadListBody   = "{{$value.ID}}\t " +
+	//
+	// special
+	//
+
+	downloadListHdr  = "JOB ID\t XACTION\t STATUS\t ERRORS\t DESCRIPTION\n"
+	downloadListBody = "{{$value.ID}}\t " +
+		"{{$value.XactID}}\t " +
 		"{{if $value.Aborted}}Aborted" +
 		"{{else}}{{if $value.JobFinished}}Finished{{else}}{{$value.PendingCnt}} pending{{end}}" +
 		"{{end}}\t {{$value.ErrorCnt}}\t {{$value.Description}}\n"
-	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
+	DownloadListNoHdrTmpl = "{{ range $key, $value := . }}" + downloadListBody + "{{end}}"
+	DownloadListTmpl      = downloadListHdr + DownloadListNoHdrTmpl
 
-	DSortListHeader = "JOB ID\t STATUS\t START\t FINISH\t DESCRIPTION\n"
-	DSortListBody   = "{{$value.ID}}\t " +
+	dsortListHdr  = "JOB ID\t STATUS\t START\t FINISH\t DESCRIPTION\n"
+	dsortListBody = "{{$value.ID}}\t " +
 		"{{if $value.Aborted}}Aborted" +
 		"{{else if $value.Archived}}Finished" +
 		"{{else}}Running" +
 		"{{end}}\t {{FormatTime $value.StartedTime}}\t {{FormatTime $value.FinishTime}} \t {{$value.Description}}\n"
-	DSortListTmpl = DSortListHeader + "{{ range $value := . }}" + DSortListBody + "{{end}}"
+	DSortListNoHdrTmpl = "{{ range $value := . }}" + dsortListBody + "{{end}}"
+	DSortListTmpl      = dsortListHdr + DSortListNoHdrTmpl
 
-	// Xactions templates
-	XactionsBodyTmpl = XactionStatsHeader + XactionsBodyNoHeaderTmpl
+	transformListHdr  = "ETL NAME\t XACTION\t OBJECTS\n"
+	transformListBody = "{{$value.Name}}\t {{$value.XactID}}\t " +
+		"{{if (eq $value.ObjCount 0) }}-{{else}}{{$value.ObjCount}}{{end}}\n"
+	TransformListNoHdrTmpl = "{{ range $value := . }}" + transformListBody + "{{end}}"
+	TransformListTmpl      = transformListHdr + TransformListNoHdrTmpl
 
-	XactionsBodyNoHeaderTmpl = "{{range $daemon := . }}" + XactionBody + "{{end}}"
-	XactionStatsHeader       = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	XactionBody              = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionStatsBody + "{{end}}"
-	XactionStatsBody         = "{{ $daemon.DaemonID }}\t " +
+	//
+	// other Xactions
+	//
+	XactBucketTmpl      = xactBucketHdr + XactNoHdrBucketTmpl
+	XactNoHdrBucketTmpl = "{{range $daemon := . }}" + xactBucketBodyAll + "{{end}}"
+
+	xactBucketHdr     = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
+	xactBucketBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactBucketBodyOne + "{{end}}"
+	XactBucketBodyOne = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{$xctn.Kind}}\t " +
-		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
+		"{{FormatBckName $xctn.Bck}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatTime $xctn.StartTime}}\t " +
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
-	XactionECGetStatsHeader = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
-	XactionECGetBodyTmpl    = XactionECGetStatsHeader +
-		"{{range $daemon := . }}" + XactionECGetBody + "{{end}}"
-	XactionECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECGetStatsBody + "{{end}}"
-	XactionECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
+	// same as above except for: src-bck, dst-bck columns
+	XactFromToTmpl      = xactFromToHdr + XactNoHdrFromToTmpl
+	XactNoHdrFromToTmpl = "{{range $daemon := . }}" + xactFromToBodyAll + "{{end}}"
+
+	xactFromToHdr     = "NODE\t ID\t KIND\t SRC BUCKET\t DST BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
+	xactFromToBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactFromToBodyOne + "{{end}}"
+	xactFromToBodyOne = "{{ $daemon.DaemonID }}\t " +
+		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
+		"{{$xctn.Kind}}\t " +
+		"{{FormatBckName $xctn.SrcBck}}\t " +
+		"{{FormatBckName $xctn.DstBck}}\t " +
+		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
+		"{{FormatTime $xctn.StartTime}}\t " +
+		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{FormatXactState $xctn}}\n"
+
+	// same as above for: no bucket column
+	XactNoBucketTmpl      = xactNoBucketHdr + XactNoHdrNoBucketTmpl
+	XactNoHdrNoBucketTmpl = "{{range $daemon := . }}" + xactNoBucketBodyAll + "{{end}}"
+
+	xactNoBucketHdr     = "NODE\t ID\t KIND\t OBJECTS\t BYTES\t START\t END\t STATE\n"
+	xactNoBucketBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactNoBucketBodyOne + "{{end}}"
+	xactNoBucketBodyOne = "{{ $daemon.DaemonID }}\t " +
+		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
+		"{{$xctn.Kind}}\t " +
+		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
+		"{{FormatTime $xctn.StartTime}}\t " +
+		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{FormatXactState $xctn}}\n"
+
+	XactECGetStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
+	XactECGetTmpl      = XactECGetStatsHdr + XactECGetNoHdrTmpl
+	XactECGetNoHdrTmpl = "{{range $daemon := . }}" + XactECGetBody + "{{end}}"
+	XactECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactECGetStatsBody + "{{end}}"
+	XactECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
@@ -159,11 +205,11 @@ const (
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
-	XactionECPutStatsHeader = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
-	XactionECPutBodyTmpl    = XactionECPutStatsHeader +
-		"{{range $daemon := . }}" + XactionECPutBody + "{{end}}"
-	XactionECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECPutStatsBody + "{{end}}"
-	XactionECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
+	XactECPutStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
+	XactECPutTmpl      = XactECPutStatsHdr + XactECPutNoHdrTmpl
+	XactECPutNoHdrTmpl = "{{range $daemon := . }}" + XactECPutBody + "{{end}}"
+	XactECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactECPutStatsBody + "{{end}}"
+	XactECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
@@ -179,20 +225,20 @@ const (
 		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
-	ListBucketsHeader = "NAME\t PRESENT\t OBJECTS (cached, remote)\t TOTAL SIZE (apparent, objects)\t USAGE(%)\n"
-	ListBucketsBody   = "{{range $k, $v := . }}" +
+	ListBucketsHdr  = "NAME\t PRESENT\t OBJECTS (cached, remote)\t TOTAL SIZE (apparent, objects)\t USAGE(%)\n"
+	ListBucketsBody = "{{range $k, $v := . }}" +
 		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsBckPresent}}\t " +
 		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{$v.Info.ObjCount.Present}} {{$v.Info.ObjCount.Remote}}{{end}}\t " +
 		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{FormatBytesUns $v.Info.TotalSize.OnDisk 2}} {{FormatBytesUns $v.Info.TotalSize.PresentObjs 2}}{{end}}\t " +
 		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{$v.Info.UsedPct}}%{{end}}\n" +
 		"{{end}}"
-	ListBucketsTmpl = ListBucketsHeader + ListBucketsBody
+	ListBucketsTmpl = ListBucketsHdr + ListBucketsBody
 
-	ListBucketsHeaderNoSummary = "NAME\t PRESENT\n"
-	ListBucketsBodyNoSummary   = "{{range $k, $v := . }}" +
+	ListBucketsHdrNoSummary  = "NAME\t PRESENT\n"
+	ListBucketsBodyNoSummary = "{{range $k, $v := . }}" +
 		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsBckPresent}}\n" +
 		"{{end}}"
-	ListBucketsTmplNoSummary = ListBucketsHeaderNoSummary + ListBucketsBodyNoSummary
+	ListBucketsTmplNoSummary = ListBucketsHdrNoSummary + ListBucketsBodyNoSummary
 
 	// Bucket summary templates
 	BucketsSummariesFastTmpl = "NAME\t APPARENT SIZE\t USAGE(%)\n" + bucketsSummariesFastBody
@@ -282,12 +328,6 @@ const (
 	// Command `search`
 	SearchTmpl = "{{ JoinListNL . }}\n"
 
-	// Command `transform`
-	TransformListTmpl = "ID\n" +
-		"{{range $transform := .}}" +
-		"{{$transform.ID}}\n" +
-		"{{end}}"
-
 	// Command `show mountpath`
 	TargetMpathListTmpl = "{{range $p := . }}" +
 		"{{ $p.DaemonID }}\n" +
@@ -334,7 +374,6 @@ var (
 		"IsUnsetTime":       isUnsetTime,
 		"IsFalse":           func(v bool) bool { return !v },
 		"FormatTime":        fmtTime,
-		"FormatUnixNano":    func(t int64) string { return cos.FormatUnixNano(t, "") },
 		"FormatEC":          FmtEC,
 		"FormatDur":         fmtDuration,
 		"FormatObjStatus":   fmtObjStatus,
@@ -524,9 +563,9 @@ func fmtDaemonID(id string, smap cluster.Smap) string {
 func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }
 
 // Main function to print formatted output
-// NOTE: if useJSON, outputTemplate is ignored
-func Print(object any, writer io.Writer, outputTemplate string, altMap template.FuncMap, useJSON bool) error {
-	if useJSON {
+// NOTE: if usejs, outputTemplate is ignored
+func Print(object any, writer io.Writer, outputTemplate string, altMap template.FuncMap, usejs bool) error {
+	if usejs {
 		if o, ok := object.(forMarshaler); ok {
 			object = o.forMarshal()
 		}
@@ -636,7 +675,7 @@ func fmtACL(acl apc.AccessAttrs) string {
 	return acl.Describe()
 }
 
-func extECGetStats(base *xact.SnapExt) *ec.ExtECGetStats {
+func extECGetStats(base *cluster.Snap) *ec.ExtECGetStats {
 	ecGet := &ec.ExtECGetStats{}
 	if err := cos.MorphMarshal(base.Ext, ecGet); err != nil {
 		return &ec.ExtECGetStats{}
@@ -644,7 +683,7 @@ func extECGetStats(base *xact.SnapExt) *ec.ExtECGetStats {
 	return ecGet
 }
 
-func extECPutStats(base *xact.SnapExt) *ec.ExtECPutStats {
+func extECPutStats(base *cluster.Snap) *ec.ExtECPutStats {
 	ecPut := &ec.ExtECPutStats{}
 	if err := cos.MorphMarshal(base.Ext, ecPut); err != nil {
 		return &ec.ExtECPutStats{}
@@ -663,7 +702,7 @@ func fmtNameArch(val string, flags uint16) string {
 	return "    " + val
 }
 
-func fmtRebStatus(rebSnap *stats.RebalanceSnap) string {
+func fmtRebStatus(rebSnap *cluster.Snap) string {
 	if rebSnap == nil {
 		return unknownVal
 	}
@@ -679,14 +718,14 @@ func fmtRebStatus(rebSnap *stats.RebalanceSnap) string {
 	return unknownVal
 }
 
-func fmtXactStatus(xctn *xact.SnapExt) string {
+func fmtXactStatus(xctn *cluster.Snap) string {
 	if xctn.AbortedX {
 		return xactStateAborted
 	}
 	if !xctn.EndTime.IsZero() {
 		return xactStateFinished
 	}
-	if xctn.Idle() {
+	if xctn.IsIdle() {
 		return xactStateIdle
 	}
 	return xactStateRunning

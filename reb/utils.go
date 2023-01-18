@@ -150,7 +150,7 @@ func (reb *Reb) addLomAck(lom *cluster.LOM) {
 	lomAck.mu.Unlock()
 }
 
-func (reb *Reb) delLomAck(lom *cluster.LOM, rebID int64) {
+func (reb *Reb) delLomAck(lom *cluster.LOM, rebID int64, freeLOM bool) {
 	if rebID != 0 && rebID != reb.rebID.Load() {
 		return
 	}
@@ -159,7 +159,9 @@ func (reb *Reb) delLomAck(lom *cluster.LOM, rebID int64) {
 	if rebID == 0 || rebID == reb.rebID.Load() {
 		if lomOrig, ok := lomAck.q[lom.Uname()]; ok {
 			delete(lomAck.q, lom.Uname())
-			cluster.FreeLOM(lomOrig) // NOTE: free the original (pending) LOM
+			if freeLOM {
+				cluster.FreeLOM(lomOrig)
+			}
 		}
 	}
 	lomAck.mu.Unlock()

@@ -86,7 +86,13 @@ func newConfigOwner(config *cmn.Config) (co *configOwner) {
 	return
 }
 
-// NOTE: loading every time - not keeping global replicated config in memory
+// NOTE:
+// iff user ever executed transient config updates this loaded
+// from disk version will differ from in-memory cmn.GCO.Get()
+// (with respect to those in-memory only updated values)
+// See also:
+// - api.SetClusterConfig
+// - apc.ActTransient
 func (co *configOwner) get() (clone *globalConfig, err error) {
 	clone = &globalConfig{}
 	if _, err = jsp.LoadMeta(co.globalFpath, clone); err == nil {
@@ -220,7 +226,7 @@ func setConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config, asType str
 			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.Log.Level, err)
 		}
 	}
-	err = config.UpdateClusterConfig(*toUpdate, asType)
+	err = config.UpdateClusterConfig(toUpdate, asType)
 	return
 }
 

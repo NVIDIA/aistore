@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
-* Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+* Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -36,7 +36,7 @@ type (
 		getJoggers map[string]*getJogger // mountpath joggers for GET
 	}
 
-	// Runtime EC statistics for restore xaction
+	// extended x-ec-get statistics
 	ExtECGetStats struct {
 		AvgTime     cos.Duration `json:"ec.decode.ns"`
 		ErrCount    int64        `json:"ec.decode.err.n,string"`
@@ -295,16 +295,16 @@ func (r *XactGet) removeMpath(mpath string) {
 	delete(r.getJoggers, mpath)
 }
 
-func (r *XactGet) Snap() cluster.XactSnap {
-	baseSnap := r.DemandBase.ExtSnap()
+func (r *XactGet) Snap() (snap *cluster.Snap) {
+	snap = r.baseSnap()
 	st := r.stats.stats()
-	baseSnap.Ext = &ExtECGetStats{
+	snap.Ext = &ExtECGetStats{
 		AvgTime:     cos.Duration(st.DecodeTime),
 		ErrCount:    st.DecodeErr,
 		AvgObjTime:  cos.Duration(st.ObjTime),
 		AvgQueueLen: st.QueueLen,
 		IsIdle:      r.Pending() == 0,
 	}
-	baseSnap.Stats.Objs = st.GetReq
-	return baseSnap
+	snap.Stats.Objs = st.GetReq
+	return
 }

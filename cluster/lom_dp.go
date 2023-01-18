@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -39,7 +39,7 @@ func (r *deferROC) Close() (err error) {
 	return
 }
 
-// is called under rlock
+// is called under rlock; unlocks on fail
 func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 	fh, err := cos.NewFileHandle(lom.FQN)
 	if err == nil {

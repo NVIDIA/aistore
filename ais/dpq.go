@@ -29,6 +29,7 @@ type dpq struct {
 	dontAddRemote       string // QparamDontAddRemote
 	warmVersion         string // QparamWarmVersion
 	warmChkSum          string // QparamWarmChkSum
+	etlName             string // QparamETLName
 }
 
 var (
@@ -111,6 +112,8 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 			dpq.warmVersion = value
 		case apc.QparamWarmChkSum:
 			dpq.warmChkSum = value
+		case apc.QparamETLName:
+			dpq.etlName = value
 
 		case s3.QparamMptUploadID, s3.QparamMptUploads, s3.QparamMptPartNo:
 			// TODO: ignore for now

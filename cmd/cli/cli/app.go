@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -29,16 +29,23 @@ const (
 	cliDescr = `If [Tab] completion doesn't work:
    * download ` + cmn.GitHubHome + `/tree/master/cmd/cli/autocomplete
    * and run 'install.sh'.
-   For more information, please refer to ` + cmn.GitHubHome + `/blob/master/cmd/cli/README.md`
+   To install CLI directly from GitHub, use ` + cmn.GitHubHome + `/blob/master/deploy/scripts/install_from_binaries.sh`
 )
 
-// AISCLI represents an instance of an AIS command line interface
-type AISCLI struct {
-	app           *cli.App
-	outWriter     io.Writer
-	errWriter     io.Writer
-	longRunParams *longRunParams
-}
+type (
+	acli struct {
+		app       *cli.App
+		outWriter io.Writer
+		errWriter io.Writer
+		longRun   *longRun
+	}
+	longRun struct {
+		count       int
+		footer      int
+		refreshRate time.Duration
+		offset      int64
+	}
+)
 
 var (
 	cfg         *config.Config
@@ -51,58 +58,72 @@ var (
 	fred, fcyan func(a ...any) string
 )
 
-// New returns a new, initialized AISCLI instance
-func New(version, buildtime string) *AISCLI {
-	aisCLI := AISCLI{
-		app:           cli.NewApp(),
-		outWriter:     os.Stdout,
-		errWriter:     os.Stderr,
-		longRunParams: defaultLongRunParams(),
-	}
-	buildTime = buildtime
-	aisCLI.init(version)
-	return &aisCLI
+// `ais help`
+var helpCommand = cli.Command{
+	Name:      "help",
+	Usage:     "show a list of commands; show help for a given command",
+	ArgsUsage: "[COMMAND]",
+	Action: func(c *cli.Context) error {
+		args := c.Args()
+		if args.Present() {
+			return cli.ShowCommandHelp(c, args.First())
+		}
+
+		cli.ShowAppHelp(c)
+		return nil
+	},
+	BashComplete: func(c *cli.Context) {
+		for _, cmd := range c.App.Commands {
+			fmt.Println(cmd.Name)
+		}
+	},
 }
 
-// Run runs the CLI
-func (aisCLI *AISCLI) Run(input []string) error {
-	if err := aisCLI.runOnce(input); err != nil {
+// main method
+func Run(version, buildtime string, args []string) error {
+	a := acli{app: cli.NewApp(), outWriter: os.Stdout, errWriter: os.Stderr, longRun: &longRun{}}
+	buildTime = buildtime
+	a.init(version)
+	// run
+	if err := a.runOnce(args); err != nil {
 		return err
 	}
-
-	if aisCLI.longRunParams.isInfiniteRun() {
-		return aisCLI.runForever(input)
+	if !a.longRun.isSet() {
+		return nil
 	}
-
-	return aisCLI.runNTimes(input)
+	if a.longRun.isForever() {
+		return a.runForever(args)
+	}
+	return a.runNTimes(args)
 }
 
-func (aisCLI *AISCLI) runOnce(input []string) error {
-	return aisCLI.handleCLIError(aisCLI.app.Run(input))
+func (a *acli) runOnce(args []string) error {
+	err := a.app.Run(args)
+	return formatErr(err)
 }
 
-func (aisCLI *AISCLI) runForever(input []string) error {
-	rate := aisCLI.longRunParams.refreshRate
-
+func (a *acli) runForever(args []string) error {
+	rate := a.longRun.refreshRate
 	for {
 		time.Sleep(rate)
-
-		_, _ = fmt.Fprintln(aisCLI.outWriter)
-		if err := aisCLI.runOnce(input); err != nil {
+		if a.longRun.footer > 0 {
+			fmt.Fprintln(a.outWriter, fcyan(strings.Repeat("-", a.longRun.footer)))
+		}
+		if err := a.runOnce(args); err != nil {
 			return err
 		}
 	}
 }
 
-func (aisCLI *AISCLI) runNTimes(input []string) error {
-	n := aisCLI.longRunParams.count - 1
-	rate := aisCLI.longRunParams.refreshRate
-
-	for ; n > 0; n-- {
+func (a *acli) runNTimes(args []string) error {
+	var (
+		countdown = a.longRun.count - 1
+		rate      = a.longRun.refreshRate
+	)
+	for ; countdown > 0; countdown-- {
 		time.Sleep(rate)
-
-		_, _ = fmt.Fprintln(aisCLI.outWriter)
-		if err := aisCLI.runOnce(input); err != nil {
+		fmt.Fprintln(a.outWriter, fcyan("--------"))
+		if err := a.runOnce(args); err != nil {
 			return err
 		}
 	}
@@ -134,27 +155,25 @@ func redErr(err error) error {
 	return errors.New(fred("Error: ") + msg)
 }
 
-// Formats the error message to a nice string
-func (aisCLI *AISCLI) handleCLIError(err error) error {
+// Formats error message
+func formatErr(err error) error {
 	if err == nil {
 		return nil
 	}
 	if _, unreachable := isUnreachableError(err); unreachable {
 		errmsg := fmt.Sprintf("AIStore cannot be reached at %s\n", clusterURL)
-		errmsg += fmt.Sprintf("Make sure that environment variable %s points to an AIS gateway "+
-			"(any AIS gateway in the cluster)\n"+
-			"For defaults, see CLI config at %s (or run `ais show config cli`)",
+		errmsg += fmt.Sprintf("Make sure that environment '%s' has the address of any AIS gateway (proxy).\n"+
+			"For defaults, see CLI config at %s or run `ais show config cli`.",
 			env.AIS.Endpoint, config.Path())
 		return redErr(errors.New(errmsg))
 	}
-
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
 		return redErr(err)
 	case *errUsage:
 		return err
 	case *errAdditionalInfo:
-		err.baseErr = aisCLI.handleCLIError(err.baseErr)
+		err.baseErr = formatErr(err.baseErr)
 		return err
 	default:
 		return redErr(err)
@@ -173,8 +192,8 @@ func onBeforeCommand(c *cli.Context) error {
 	return nil
 }
 
-func (aisCLI *AISCLI) init(version string) {
-	app := aisCLI.app
+func (a *acli) init(version string) {
+	app := a.app
 
 	fcyan = color.New(color.FgHiCyan).SprintFunc()
 	fred = color.New(color.FgHiRed).SprintFunc()
@@ -186,24 +205,25 @@ func (aisCLI *AISCLI) init(version string) {
 	app.HideHelp = true
 	app.Flags = []cli.Flag{cli.HelpFlag, noColorFlag}
 	app.CommandNotFound = commandNotFoundHandler
-	app.OnUsageError = incorrectUsageHandler
-	app.Metadata = map[string]any{metadata: aisCLI.longRunParams}
-	app.Writer = aisCLI.outWriter
-	app.ErrWriter = aisCLI.errWriter
+	app.OnUsageError = onUsageErrorHandler
+	app.Metadata = map[string]any{metadata: a.longRun}
+	app.Writer = a.outWriter
+	app.ErrWriter = a.errWriter
 	app.Before = onBeforeCommand // to disable colors if `no-colors' is set
 	app.Description = cliDescr
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version, V",
 		Usage: "print only the version",
 	}
-	initJobSubcmds()
-	aisCLI.setupCommands()
+
+	a.setupCommands()
 }
 
-func (aisCLI *AISCLI) setupCommands() {
-	app := aisCLI.app
+func (a *acli) setupCommands() {
+	app := a.app
 
 	// Note: order of commands below is the order shown in "ais help"
+	appendJobSub(&jobCmd)
 	app.Commands = []cli.Command{
 		bucketCmd,
 		objectCmd,
@@ -220,21 +240,20 @@ func (aisCLI *AISCLI) setupCommands() {
 		logCmd,
 		rebalanceCmd,
 		remClusterCmd,
-		aisCLI.getAliasCmd(),
+		a.getAliasCmd(),
 	}
 
 	if k8sDetected {
 		app.Commands = append(app.Commands, k8sCmd)
 	}
-	app.Commands = append(app.Commands, aisCLI.initAliases()...)
+	app.Commands = append(app.Commands, a.initAliases()...)
 	setupCommandHelp(app.Commands)
-	aisCLI.enableSearch()
+	a.enableSearch()
 }
 
-func (aisCLI *AISCLI) enableSearch() {
-	app := aisCLI.app
-	initSearch(app)
-	app.Commands = append(app.Commands, searchCommands...)
+func (a *acli) enableSearch() {
+	initSearch(a.app)
+	a.app.Commands = append(a.app.Commands, searchCommands...)
 }
 
 func setupCommandHelp(commands []cli.Command) {
@@ -250,7 +269,7 @@ func setupCommandHelp(commands []cli.Command) {
 		if !hasHelpFlag(command.Flags, helpName) {
 			command.Flags = append(command.Flags, cli.HelpFlag)
 		}
-		command.OnUsageError = incorrectUsageHandler
+		command.OnUsageError = onUsageErrorHandler
 
 		// recursively
 		setupCommandHelp(command.Subcommands)
@@ -269,28 +288,10 @@ func hasHelpFlag(commandFlags []cli.Flag, helpName string) bool {
 	return false
 }
 
-// This is a copy-paste from urfave/cli/help.go. It is done to remove the 'h' alias of the 'help' command
-var helpCommand = cli.Command{
-	Name:      "help",
-	Usage:     "show a list of commands; show help for a given command",
-	ArgsUsage: "[COMMAND]",
-	Action: func(c *cli.Context) error {
-		args := c.Args()
-		if args.Present() {
-			return cli.ShowCommandHelp(c, args.First())
-		}
+//
+// cli.App error callbacks
+//
 
-		cli.ShowAppHelp(c)
-		return nil
-	},
-	BashComplete: func(c *cli.Context) {
-		for _, cmd := range c.App.Commands {
-			fmt.Println(cmd.Name)
-		}
-	},
-}
-
-// Print error and terminate
 func commandNotFoundHandler(c *cli.Context, cmd string) {
 	if cmd == "version" {
 		fmt.Fprintf(c.App.Writer, "version %s (build %s)\n", c.App.Version, buildTime)
@@ -299,4 +300,59 @@ func commandNotFoundHandler(c *cli.Context, cmd string) {
 	err := commandNotFoundError(c, cmd)
 	fmt.Fprint(c.App.ErrWriter, err.Error())
 	os.Exit(1)
+}
+
+func onUsageErrorHandler(c *cli.Context, err error, _ bool) error {
+	if c == nil {
+		return err
+	}
+	return cannotExecuteError(c, err, "")
+}
+
+/////////////
+// longRun //
+/////////////
+
+func (p *longRun) isForever() bool {
+	return p.count == countUnlimited
+}
+
+func (p *longRun) isSet() bool {
+	return p.refreshRate != 0
+}
+
+func setLongRunParams(c *cli.Context, footer ...int) bool {
+	params := c.App.Metadata[metadata].(*longRun)
+	if params.isSet() {
+		return false
+	}
+	params.footer = 8
+	if len(footer) > 0 {
+		params.footer = footer[0]
+	}
+	if flagIsSet(c, refreshFlag) {
+		params.refreshRate = parseDurationFlag(c, refreshFlag)
+		params.count = countUnlimited // unless counted (below)
+	}
+	if flagIsSet(c, countFlag) {
+		params.count = parseIntFlag(c, countFlag)
+		if params.count <= 0 {
+			n := flprn(countFlag)
+			warn := fmt.Sprintf("option '%s=%d' is invalid (must be >= 1). Proceeding with '%s=%d' (default).",
+				n, params.count, n, countDefault)
+			actionWarn(c, warn)
+			params.count = countDefault
+		}
+	}
+	return true
+}
+
+func addLongRunOffset(c *cli.Context, off int64) {
+	params := c.App.Metadata[metadata].(*longRun)
+	params.offset += off
+}
+
+func getLongRunOffset(c *cli.Context) int64 {
+	params := c.App.Metadata[metadata].(*longRun)
+	return params.offset
 }

@@ -33,3 +33,9 @@ func NewXact(kind string) *XactMock {
 	xctn.InitBase(cos.GenUUID(), kind, nil)
 	return xctn
 }
+
+func (r *XactMock) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+	return
+}
