@@ -381,11 +381,22 @@ func (m *Smap) NewTmap(tids []string) (tmap NodeMap, err error) {
 	return
 }
 
+// (compare w/ GetNodeNotMaint)
 func (m *Smap) GetNode(id string) *Snode {
 	if node := m.GetTarget(id); node != nil {
 		return node
 	}
 	return m.GetProxy(id)
+}
+
+// present and _not_ in maintenance
+// (compare w/ PresentInMaint)
+func (m *Smap) GetNodeNotMaint(sid string) (si *Snode) {
+	si = m.GetNode(sid)
+	if si != nil && si.IsAnySet(NodeFlagsMaintDecomm) {
+		si = nil
+	}
+	return
 }
 
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
@@ -462,15 +473,6 @@ func (m *Smap) CompareTargets(other *Smap) (equal bool) {
 func (m *Smap) NonElectable(psi *Snode) (ok bool) {
 	node := m.GetProxy(psi.ID())
 	return node != nil && node.nonElectable()
-}
-
-// not nil when present and _not_ in maintenance (compare w/ PresentInMaint)
-func (m *Smap) GetNodeNotMaint(sid string) (si *Snode) {
-	si = m.GetNode(sid)
-	if si != nil && si.IsAnySet(NodeFlagsMaintDecomm) {
-		si = nil
-	}
-	return
 }
 
 // true when present and in maintenance (compare w/ GetNodeNotMaint)

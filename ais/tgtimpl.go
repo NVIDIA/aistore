@@ -202,22 +202,32 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 
 func (t *target) Promote(params cluster.PromoteParams) (errCode int, err error) {
 	lom := cluster.AllocLOM(params.ObjName)
-	defer cluster.FreeLOM(lom)
-	if eri := lom.InitBck(params.Bck.Bucket()); eri != nil {
-		return 0, eri
+	if err = lom.InitBck(params.Bck.Bucket()); err == nil {
+		errCode, err = t._promote(&params, lom)
 	}
-	smap := t.owner.smap.get()
-	tsi, local, erh := lom.HrwTarget(&smap.Smap)
+	cluster.FreeLOM(lom)
+	return
+}
+
+func (t *target) _promote(params *cluster.PromoteParams, lom *cluster.LOM) (errCode int, err error) {
+	tsi, local, erh := lom.HrwTarget(t.owner.smap.Get())
 	if erh != nil {
 		return 0, erh
 	}
+	var size int64
 	if local {
-		errCode, err = t.promoteLocal(&params, lom)
+		size, errCode, err = t._promLocal(params, lom)
 	} else {
-		err = t.promoteRemote(&params, lom, tsi)
+		size, err = t._promRemote(params, lom, tsi)
+		if err == nil && size >= 0 && params.Xact != nil {
+			params.Xact.OutObjsAdd(1, size)
+		}
 	}
 	if err != nil {
 		return
+	}
+	if size >= 0 && params.Xact != nil {
+		params.Xact.ObjsAdd(1, size) // (as initiator)
 	}
 	if params.DeleteSrc {
 		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
@@ -227,15 +237,16 @@ func (t *target) Promote(params cluster.PromoteParams) (errCode int, err error) 
 	return
 }
 
-func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (int, error) {
+func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fileSize int64, errCode int, err error) {
 	var (
 		cksum     *cos.CksumHash
-		fileSize  int64
 		workFQN   string
 		extraCopy = true
 	)
-	if err := lom.Load(true /*cache it*/, false /*locked*/); err == nil && !params.OverwriteDst {
-		return 0, nil
+	fileSize = -1
+
+	if err = lom.Load(true /*cache it*/, false /*locked*/); err == nil && !params.OverwriteDst {
+		return
 	}
 	if params.DeleteSrc {
 		// To use `params.SrcFQN` as `workFQN`, make sure both are
@@ -245,24 +256,25 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 		extraCopy = err != nil || !mi.FilesystemInfo.Equal(lom.MpathInfo().FilesystemInfo)
 	}
 	if extraCopy {
-		var err error
 		workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
 		buf, slab := t.gmm.Alloc()
 		fileSize, cksum, err = cos.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumType())
 		slab.Free(buf)
 		if err != nil {
-			return 0, err
+			return
 		}
 		lom.SetCksum(cksum.Clone())
 	} else {
 		// avoid extra copy: use the source as `workFQN`
-		fi, err := os.Stat(params.SrcFQN)
+		var fi os.FileInfo
+		fi, err = os.Stat(params.SrcFQN)
 		if err != nil {
 			if os.IsNotExist(err) {
 				err = nil
 			}
-			return 0, err
+			return
 		}
+
 		fileSize = fi.Size()
 		workFQN = params.SrcFQN
 		if params.Cksum != nil {
@@ -271,7 +283,7 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 			clone := lom.CloneMD(params.SrcFQN)
 			if cksum, err = clone.ComputeCksum(lom.CksumType()); err != nil {
 				cluster.FreeLOM(clone)
-				return 0, err
+				return
 			}
 			lom.SetCksum(cksum.Clone())
 			cluster.FreeLOM(clone)
@@ -279,8 +291,11 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 	}
 	if params.Cksum != nil && cksum != nil {
 		if !cksum.Equal(params.Cksum) {
-			detail := params.SrcFQN + " => " + lom.String()
-			return 0, cos.NewBadDataCksumError(cksum.Clone(), params.Cksum, detail)
+			err = cos.NewBadDataCksumError(
+				cksum.Clone(),
+				params.Cksum,
+				params.SrcFQN+" => "+lom.String() /*detail*/)
+			return
 		}
 	}
 	poi := allocPutObjInfo()
@@ -293,25 +308,21 @@ func (t *target) promoteLocal(params *cluster.PromoteParams, lom *cluster.LOM) (
 		poi.xctn = params.Xact
 	}
 	lom.SetSize(fileSize)
-	errCode, err := poi.finalize()
+	errCode, err = poi.finalize()
 	freePutObjInfo(poi)
-	if err != nil {
-		return errCode, err
-	}
-	if params.Xact != nil {
-		params.Xact.ObjsAdd(1, fileSize)
-	}
-	return 0, nil
+	return
 }
 
 // TODO: use DM streams
 // TODO: Xact.InObjsAdd on the receive side
-func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *cluster.Snode) error {
+func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *cluster.Snode) (int64, error) {
 	lom.FQN = params.SrcFQN
+
 	// when not overwriting check w/ remote target first (and separately)
 	if !params.OverwriteDst && t.HeadObjT2T(lom, tsi) {
-		return nil
+		return -1, nil
 	}
+
 	coi := allocCopyObjInfo()
 	{
 		coi.t = t
@@ -321,13 +332,7 @@ func (t *target) promoteRemote(params *cluster.PromoteParams, lom *cluster.LOM, 
 	}
 	size, err := coi.sendRemote(lom, lom.ObjName, tsi)
 	freeCopyObjInfo(coi)
-	if err != nil {
-		return err
-	}
-	if params.Xact != nil {
-		params.Xact.OutObjsAdd(1, size)
-	}
-	return nil
+	return size, err
 }
 
 //

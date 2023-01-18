@@ -734,7 +734,7 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 		return
 	}
 	xreb := rj.xreb
-	xreb.OutObjsAdd(1, hdr.ObjAttrs.Size)
+	xreb.OutObjsAdd(1, hdr.ObjAttrs.Size) // NOTE: double-counts retransmissions
 }
 
 func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) (err error) {

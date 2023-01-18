@@ -2227,6 +2227,10 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	smap := p.owner.smap.get()
 	si := smap.GetNode(nodeID)
+	if si != nil && si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+		// e.g. "good" scenario: node shutdown when we transition through states
+		glog.Warningf("%s: %s is in maintenance or decommissioned - proceeding anyway...", p.si, si.StringEx())
+	}
 
 	// access control
 	switch r.Method {
@@ -2620,12 +2624,11 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 	prepare, err := cos.ParseBool(query.Get(apc.QparamPrepare))
 	if err != nil {
-		p.writeErrf(w, r, "failed to parse %s URL parameter: %v", apc.QparamPrepare, err)
+		p.writeErrf(w, r, "failed to parse URL query %q: %v", apc.QparamPrepare, err)
 		return
 	}
 	if p.owner.smap.get().isPrimary(p.si) {
-		p.writeErr(w, r,
-			errors.New("expecting 'cluster' (RESTful) resource when designating primary proxy via API"))
+		p.writeErrf(w, r, "%s: am PRIMARY, expecting '/v1/cluster/...' when designating a new one", p)
 		return
 	}
 	if prepare {
@@ -2634,16 +2637,25 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := p.recvCluMeta(&cluMeta, "set-primary", cluMeta.SI.String()); err != nil {
-			p.writeErrf(w, r, "failed to receive clu-meta: %v", err)
+			p.writeErrf(w, r, "%s: failed to receive clu-meta: %v", p, err)
 			return
 		}
 	}
+
+	// self
 	if p.si.ID() == proxyID {
+		smap := p.owner.smap.get()
+		if smap.GetNodeNotMaint(proxyID) == nil {
+			p.writeErrf(w, r, "%s: in maintenance or decommissioned", p)
+			return
+		}
 		if !prepare {
 			p.becomeNewPrimary("")
 		}
 		return
 	}
+
+	// other
 	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil {

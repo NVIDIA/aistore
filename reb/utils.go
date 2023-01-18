@@ -160,6 +160,10 @@ func (reb *Reb) delLomAck(lom *cluster.LOM, rebID int64, freeLOM bool) {
 		if lomOrig, ok := lomAck.q[lom.Uname()]; ok {
 			delete(lomAck.q, lom.Uname())
 			if freeLOM {
+				// counting acknowledged migrations (as initiator)
+				xreb := reb.xctn()
+				xreb.ObjsAdd(1, lomOrig.SizeBytes())
+
 				cluster.FreeLOM(lomOrig)
 			}
 		}

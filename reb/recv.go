@@ -214,19 +214,17 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) e
 	}
 
 	lom := cluster.AllocLOM(hdr.ObjName)
-	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(&hdr.Bck); err != nil {
+		cluster.FreeLOM(lom)
 		glog.Error(err)
 		return nil
-	}
-	if glog.FastV(5, glog.SmoduleReb) {
-		glog.Infof("%s: ACK from %s on %s", reb.t, string(hdr.Opaque), lom)
 	}
 
 	// No immediate file deletion: let LRU cleanup the "misplaced" object
 	// TODO: mark the object "Deleted"
 
 	reb.delLomAck(lom, ack.rebID, true /*free pending (orig) transmitted LOM*/)
+	cluster.FreeLOM(lom)
 	return nil
 }
 

@@ -397,9 +397,9 @@ func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, 
 }
 
 // detectNodeChanges is called at startup. Given loaded Smap, it checks whether
-// this node ID is present. NOTE: we are _not_ enforcing node's (`h.si`)
-// immutability - in particular, the node's IPs that, in fact, may change upon
-// restart in certain environments.
+// this node ID is present.
+// NOTE: we are _not_ enforcing node's (`h.si`) immutability - in particular,
+// the node's IPs that, in fact, may change upon restart in certain environments.
 func (h *htrun) detectNodeChanges(smap *smapX) (err error) {
 	if smap.GetNode(h.si.ID()) == nil {
 		err = fmt.Errorf("%s: not present in the loaded %s", h.si, smap)

@@ -292,13 +292,14 @@ func (r *LsoXact) nextPageR() error {
 		page *cmn.LsoResult
 		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.LomAdd)
 		smap = r.p.dm.Smap()
-		tsi  = smap.GetTarget(r.msg.SID)
+		tsi  = smap.GetNodeNotMaint(r.msg.SID)
 		err  error
 	)
 	if tsi == nil {
-		err = fmt.Errorf("%s: lost or missing target ID=%q (%s)", r, r.msg.SID, smap)
+		err = fmt.Errorf("%s: lost, missing, or inactive t[%s], %s", r, r.msg.SID, smap)
 		goto ex
 	}
+	debug.Assert(tsi.IsTarget(), tsi.StringEx())
 
 	r.wiCnt.Inc()
 	if r.msg.SID == r.p.T.SID() {
@@ -346,7 +347,7 @@ ex:
 func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
 	var (
 		mm        = r.p.T.PageMM()
-		siz       = cos.MaxI64(r.lensgl, 32*cos.KiB)
+		siz       = cos.MaxI64(r.lensgl, memsys.DefaultBufSize)
 		buf, slab = mm.AllocSize(siz)
 		sgl       = mm.NewSGL(siz, slab.Size())
 		mw        = msgp.NewWriterBuf(sgl, buf)
@@ -354,28 +355,30 @@ func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
 	if err = page.EncodeMsg(mw); err == nil {
 		err = mw.Flush()
 	}
+	slab.Free(buf)
 	r.lensgl = sgl.Len()
 	if err != nil {
+		sgl.Free()
 		return
 	}
+
 	o := transport.AllocSend()
 	{
 		o.Hdr.Bck = r.p.Bck.Clone()
 		o.Hdr.ObjName = r.Name()
-		o.Hdr.Opaque = []byte(r.p.UUID())
+		o.Hdr.Opaque = cos.UnsafeB(r.p.UUID())
 		o.Hdr.ObjAttrs.Size = sgl.Len()
 	}
 	o.Callback, o.CmplArg = r.sentCb, sgl // cleanup
 	o.Reader = sgl
 	roc := memsys.NewReader(sgl)
 	r.p.dm.Bcast(o, roc)
-
-	slab.Free(buf)
 	return
 }
 
 func (r *LsoXact) sentCb(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	if err == nil {
+		// NOTE: counting broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
 	} else if bool(glog.FastV(4, glog.SmoduleXs)) || !cos.IsRetriableConnErr(err) {
 		glog.Errorf("%s: failed to send [%+v]: %v", r.p.T, hdr, err)
@@ -670,6 +673,8 @@ func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 	err = page.DecodeMsg(mr)
 	if err == nil {
 		r.remtCh <- &LsoRsp{Lst: page, Status: http.StatusOK}
+		// NOTE: counting received pages
+		r.InObjsAdd(1, hdr.ObjAttrs.Size)
 	} else {
 		glog.Errorf("%s: failed to recv [%s: %s] num=%d from %s (%s, %s): %v",
 			r.p.T, page.UUID, page.ContinuationToken, len(page.Entries),
