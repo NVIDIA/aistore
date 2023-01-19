@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -628,7 +628,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 		start           int
 		curShardSize    int64
 		shards          = make([]*extract.Shard, 0)
-		numLocalRecords = make(map[string]int, m.smap.CountActiveTargets())
+		numLocalRecords = make(map[string]int, m.smap.CountActiveTs())
 	)
 	pt.InitIter()
 
@@ -788,9 +788,9 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		shards []*extract.Shard
 		err    error
 
-		shardsToTarget = make(map[*cluster.Snode][]*extract.Shard, m.smap.CountActiveTargets())
-		sendOrder      = make(map[string]map[string]*extract.Shard, m.smap.CountActiveTargets())
-		errCh          = make(chan error, m.smap.CountActiveTargets())
+		shardsToTarget = make(map[*cluster.Snode][]*extract.Shard, m.smap.CountActiveTs())
+		sendOrder      = make(map[string]map[string]*extract.Shard, m.smap.CountActiveTs())
+		errCh          = make(chan error, m.smap.CountActiveTs())
 	)
 
 	for _, d := range m.smap.Tmap {

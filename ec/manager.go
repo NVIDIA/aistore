@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -57,7 +57,7 @@ func initManager(t cluster.Target) error {
 		netResp:   netResp,
 		t:         t,
 		smap:      smap,
-		targetCnt: *atomic.NewInt32(int32(smap.CountActiveTargets())),
+		targetCnt: *atomic.NewInt32(int32(smap.CountActiveTs())),
 		bmd:       t.Bowner().Get(),
 		xacts:     make(map[string]*BckXacts),
 	}
@@ -115,7 +115,7 @@ func (mgr *Manager) initECBundles() error {
 	mgr.respBundle.Store(unsafe.Pointer(bundle.NewStreams(sowner, mgr.t.Snode(), client, respSbArgs)))
 
 	mgr.smap = sowner.Get()
-	mgr.targetCnt.Store(int32(mgr.smap.CountActiveTargets()))
+	mgr.targetCnt.Store(int32(mgr.smap.CountActiveTs()))
 	sowner.Listeners().Reg(mgr)
 	return nil
 }
@@ -401,7 +401,7 @@ func (mgr *Manager) ListenSmapChanged() {
 	}
 
 	mgr.smap = mgr.t.Sowner().Get()
-	targetCnt := mgr.smap.CountActiveTargets()
+	targetCnt := mgr.smap.CountActiveTs()
 	mgr.targetCnt.Store(int32(targetCnt))
 
 	mgr.mu.Lock()

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -181,7 +181,7 @@ type (
 
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
 	aisMsg struct {
-		apc.ActionMsg
+		apc.ActMsg
 		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 		BMDVersion int64  `json:"bmdversion,string"`
 		RMDVersion int64  `json:"rmdversion,string"`
@@ -305,7 +305,7 @@ func isErrDowngrade(err error) bool {
 
 func (e *errNotEnoughTargets) Error() string {
 	return fmt.Sprintf("%s: not enough targets: %s, need %d, have %d",
-		e.si, e.smap, e.required, e.smap.CountActiveTargets())
+		e.si, e.smap, e.required, e.smap.CountActiveTs())
 }
 
 ///////////////////
@@ -839,7 +839,7 @@ func _reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck, smap *smapX) (targ
 		return
 	}
 	if smap != nil {
-		targetCnt = smap.CountActiveTargets()
+		targetCnt = smap.CountActiveTs()
 	}
 	if !bprops.EC.Enabled ||
 		(bprops.EC.DataSlices != nprops.EC.DataSlices || bprops.EC.ParitySlices != nprops.EC.ParitySlices) {

@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -57,7 +57,7 @@ func AttachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, force
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathAttach, Value: mountpath})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathAttach, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			apc.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
@@ -76,7 +76,7 @@ func EnableMountpath(bp BaseParams, node *cluster.Snode, mountpath string) error
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathEnable, Value: mountpath})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathEnable, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			apc.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
@@ -98,7 +98,7 @@ func DetachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dontR
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathDetach, Value: mountpath})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathDetach, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			cos.HdrContentType: []string{cos.ContentJSON},
@@ -120,7 +120,7 @@ func DisableMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dont
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMountpathDisable, Value: mountpath})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathDisable, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			cos.HdrContentType: []string{cos.ContentJSON},
@@ -251,7 +251,7 @@ func ResetDaemonConfig(bp BaseParams, nodeID string) error {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActResetConfig})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActResetConfig})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{nodeID},
 			cos.HdrContentType: []string{cos.ContentJSON},

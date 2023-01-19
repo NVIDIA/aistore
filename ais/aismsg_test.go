@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 
 package ais
@@ -30,7 +30,7 @@ func testAisMsgMarshal(t *testing.T, tc aismsgTestConf) {
 	t.Run(tc.Name(), func(t *testing.T) {
 		beforeMsg := &aisMsg{}
 		if tc.actionMsgPresent {
-			actionMsg := apc.ActionMsg{
+			actionMsg := apc.ActMsg{
 				Action: "test-action",
 				Name:   "test-name",
 				Value: &cmn.Bck{
@@ -42,7 +42,7 @@ func testAisMsgMarshal(t *testing.T, tc aismsgTestConf) {
 					},
 				},
 			}
-			beforeMsg.ActionMsg = actionMsg
+			beforeMsg.ActMsg = actionMsg
 		}
 		if tc.restPropsPresent {
 			beforeMsg.BMDVersion = 12

@@ -186,7 +186,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cm
 // See also: HeadObject() and apc.HdrObjCustomMD
 func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, object string, custom cos.StrKVs, setNew bool) error {
 	var (
-		actMsg = apc.ActionMsg{Value: custom}
+		actMsg = apc.ActMsg{Value: custom}
 		q      url.Values
 	)
 	if setNew {
@@ -227,7 +227,7 @@ func DeleteObject(bp BaseParams, bck cmn.Bck, object string) error {
 // EvictObject evicts an object specified by bucket/object.
 func EvictObject(bp BaseParams, bck cmn.Bck, object string) error {
 	bp.Method = http.MethodDelete
-	actMsg := apc.ActionMsg{Action: apc.ActEvictObjects, Name: cos.JoinWords(bck.Name, object)}
+	actMsg := apc.ActMsg{Action: apc.ActEvictObjects, Name: cos.JoinWords(bck.Name, object)}
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
@@ -492,7 +492,7 @@ func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, oldName)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActRenameObject, Name: newName})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActRenameObject, Name: newName})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
@@ -503,7 +503,7 @@ func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
 
 // promote files and directories to ais objects
 func Promote(args *PromoteArgs) (xactID string, err error) {
-	actMsg := apc.ActionMsg{Action: apc.ActPromote, Name: args.SrcFQN}
+	actMsg := apc.ActMsg{Action: apc.ActPromote, Name: args.SrcFQN}
 	actMsg.Value = &args.PromoteArgs
 	args.BaseParams.Method = http.MethodPost
 	reqParams := AllocRp()

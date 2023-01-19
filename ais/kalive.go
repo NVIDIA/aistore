@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -337,7 +337,7 @@ loop:
 	if cnt == 0 {
 		return fmt.Errorf("%s: nothing to do [%s, %s]", pkr.p.si, ctx.smap.StringEx(), metaction)
 	}
-	ctx.msg = &apc.ActionMsg{Value: metaction}
+	ctx.msg = &apc.ActMsg{Value: metaction}
 	return nil
 }
 

@@ -75,10 +75,10 @@ func TestMultiProxy(t *testing.T) {
 
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	if cnt := smap.CountActiveProxies(); cnt < 3 {
+	if cnt := smap.CountActivePs(); cnt < 3 {
 		t.Fatalf("Not enough proxies (%d) to run tests (must be at least 3)", cnt)
 	}
-	if smap.CountActiveTargets() < 1 {
+	if smap.CountActiveTs() < 1 {
 		t.Fatalf("No active targets to run tests (%s, num-t-active=0)", smap.StringEx())
 	}
 
@@ -102,13 +102,13 @@ func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
 	postKill func(smap *cluster.Smap, newPrimary, oldPrimary *cluster.Snode)) *cluster.Smap {
 	var (
 		smap          = tools.GetClusterMap(t, proxyURL)
-		proxyCount    = smap.CountActiveProxies()
+		proxyCount    = smap.CountActivePs()
 		oldPrimary    = smap.Primary
 		oldPrimaryURL = smap.Primary.URL(cmn.NetPublic)
 		oldPrimaryID  = smap.Primary.ID()
 	)
 
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), proxyCount)
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), proxyCount)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 	newPrimary := smap.GetProxy(newPrimaryID)
@@ -121,7 +121,7 @@ func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(newPrimaryURL, "designate new primary", smap.Version,
-		smap.CountActiveProxies()-1, smap.CountActiveTargets())
+		smap.CountActivePs()-1, smap.CountActiveTs())
 	tassert.CheckFatal(t, err)
 	tlog.Logf("New primary elected: %s\n", newPrimaryID)
 
@@ -163,7 +163,7 @@ func killRestoreDiffIP(t *testing.T, nodeType string) {
 	var (
 		proxyURL                      = tools.GetPrimaryURL()
 		smap                          = tools.GetClusterMap(t, proxyURL)
-		origProxyCnt, origTargetCount = smap.CountActiveProxies(), smap.CountActiveTargets()
+		origProxyCnt, origTargetCount = smap.CountActivePs(), smap.CountActiveTs()
 		portInc                       = 100
 		node                          *cluster.Snode
 		err                           error
@@ -235,7 +235,7 @@ func primaryAndTargetCrash(t *testing.T) {
 
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
@@ -250,8 +250,8 @@ func primaryAndTargetCrash(t *testing.T) {
 		targetURL       string
 		targetID        string
 		targetNode      *cluster.Snode
-		origTargetCount = smap.CountActiveTargets()
-		origProxyCount  = smap.CountActiveProxies()
+		origTargetCount = smap.CountActiveTs()
+		origProxyCount  = smap.CountActivePs()
 	)
 
 	targetNode, _ = smap.GetRandTarget()
@@ -287,12 +287,12 @@ func primaryAndTargetCrash(t *testing.T) {
 func proxyCrash(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
 	primaryURL := smap.Primary.URL(cmn.NetPublic)
 	tlog.Logf("Primary: %s\n", smap.Primary.StringEx())
 
-	origProxyCount := smap.CountActiveProxies()
+	origProxyCount := smap.CountActivePs()
 	secondNode, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
@@ -415,12 +415,12 @@ func primaryAndProxyCrash(t *testing.T) {
 	var (
 		proxyURL                    = tools.RandomProxyURL(t)
 		smap                        = tools.GetClusterMap(t, proxyURL)
-		origProxyCount              = smap.CountActiveProxies()
+		origProxyCount              = smap.CountActivePs()
 		oldPrimaryURL, oldPrimaryID = smap.Primary.URL(cmn.NetPublic), smap.Primary.ID()
 		secondNode                  *cluster.Snode
 		secondID                    string
 	)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
@@ -487,7 +487,7 @@ func targetRejoin(t *testing.T) {
 	)
 
 	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
 	node, _ = smap.GetRandTarget()
 	id = node.ID()
@@ -495,7 +495,7 @@ func targetRejoin(t *testing.T) {
 	cmd, err := tools.KillNode(node)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "synchronize on 'target crashed'",
-		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()-1)
+		smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Tmap[id]; ok {
@@ -506,7 +506,7 @@ func targetRejoin(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(proxyURL, "synchronize on 'target rejoined'",
-		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()+1)
+		smap.Version, smap.CountActivePs(), smap.CountActiveTs()+1)
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Tmap[id]; !ok {
@@ -520,7 +520,7 @@ func crashAndFastRestore(t *testing.T) {
 	var err error
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
 	// Make sure proxyURL is not primary URL.
 	_, proxyURL, err = chooseNextProxy(smap)
@@ -556,8 +556,8 @@ func joinWhileVoteInProgress(t *testing.T) {
 	var (
 		proxyURL     = tools.RandomProxyURL(t)
 		smap         = tools.GetClusterMap(t, proxyURL)
-		oldTargetCnt = smap.CountActiveTargets()
-		oldProxyCnt  = smap.CountActiveProxies()
+		oldTargetCnt = smap.CountActiveTs()
+		oldProxyCnt  = smap.CountActivePs()
 		stopch       = make(chan struct{})
 		errCh        = make(chan error, 10)
 		mocktgt      = &voteRetryMockTarget{
@@ -624,13 +624,13 @@ func majorityTargetMapVersionMismatch(t *testing.T) {
 // wait for the new leader to come online
 func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL string) {
 	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
 	smap.Version++
 	jsonMap, err := jsoniter.Marshal(smap)
 	tassert.CheckFatal(t, err)
 
-	n := getNum(smap.CountActiveTargets() + smap.CountActiveProxies() - 1)
+	n := getNum(smap.CountActiveTs() + smap.CountActivePs() - 1)
 	for _, v := range smap.Tmap {
 		if n == 0 {
 			break
@@ -656,11 +656,11 @@ func concurrentPutGetDel(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		proxyURL := tools.RandomProxyURL(t)
 		smap := tools.GetClusterMap(t, proxyURL)
-		tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
+		tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
 		var (
 			wg        = &sync.WaitGroup{}
-			errCh     = make(chan error, smap.CountActiveProxies())
+			errCh     = make(chan error, smap.CountActivePs())
 			cksumType = bck.Props.Cksum.Type
 		)
 
@@ -840,8 +840,8 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 
 	// Make sure primary is same config
 	smap := primarySetToOriginal(t)
-	origProxyCnt := smap.CountActiveProxies()
-	origTargetCnt := smap.CountActiveTargets()
+	origProxyCnt := smap.CountActivePs()
+	origTargetCnt := smap.CountActiveTs()
 
 	for _, si := range smap.Pmap {
 		if smap.IsPrimary(si) {
@@ -1076,7 +1076,7 @@ func primarySetToOriginal(t *testing.T) *cluster.Smap {
 // proxy since the `idDigest` will be initialized to 0. To avoid this, we
 // compute the checksum directly in this method.
 func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
-	if smap.CountActiveProxies() == 0 {
+	if smap.CountActivePs() == 0 {
 		err = errors.New("AIStore cluster map is empty: no proxies")
 		return
 	}
@@ -1107,7 +1107,7 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 	}
 	if pi == "" {
 		err = fmt.Errorf("cannot HRW-select proxy: current count=%d, skipped=%d",
-			smap.CountActiveProxies(), skipped)
+			smap.CountActivePs(), skipped)
 	}
 	return
 }
@@ -1115,7 +1115,7 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 func networkFailureTarget(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	proxyCount, targetCount := smap.CountActiveProxies(), smap.CountActiveTargets()
+	proxyCount, targetCount := smap.CountActivePs(), smap.CountActiveTs()
 
 	tassert.Fatalf(t, targetCount > 0, "At least 1 target required")
 	target, _ := smap.GetRandTarget()
@@ -1151,7 +1151,7 @@ func networkFailureTarget(t *testing.T) {
 func networkFailureProxy(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	proxyCount, targetCount := smap.CountActiveProxies(), smap.CountActiveTargets()
+	proxyCount, targetCount := smap.CountActivePs(), smap.CountActiveTs()
 	tassert.Fatalf(t, proxyCount > 1, "At least 2 proxy required (has: %d)", proxyCount)
 
 	oldPrimaryID := smap.Primary.ID()
@@ -1193,11 +1193,11 @@ func networkFailureProxy(t *testing.T) {
 func networkFailurePrimary(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	if smap.CountActiveProxies() < 2 {
+	if smap.CountActivePs() < 2 {
 		t.Fatal("At least 2 proxy required")
 	}
 
-	proxyCount, targetCount := smap.CountActiveProxies(), smap.CountActiveTargets()
+	proxyCount, targetCount := smap.CountActivePs(), smap.CountActiveTs()
 	oldPrimaryID, oldPrimaryURL := smap.Primary.ID(), smap.Primary.URL(cmn.NetPublic)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
@@ -1288,7 +1288,7 @@ func networkFailure(t *testing.T) {
 func primaryAndNextCrash(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	origProxyCount := smap.CountActiveProxies()
+	origProxyCount := smap.CountActivePs()
 
 	if origProxyCount < 4 {
 		t.Skip("The test requires at least 4 proxies, found only ", origProxyCount)
@@ -1348,7 +1348,7 @@ func TestIC(t *testing.T) {
 
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	if cnt := smap.CountActiveProxies(); cnt < 4 {
+	if cnt := smap.CountActivePs(); cnt < 4 {
 		t.Fatalf("Not enough proxies (%d) to run tests (must be at least 4)", cnt)
 	}
 
@@ -1363,7 +1363,7 @@ func TestIC(t *testing.T) {
 }
 
 func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (tools.RestoreCmd, *cluster.Smap) {
-	origProxyCount := smap.CountActiveProxies()
+	origProxyCount := smap.CountActivePs()
 	primary := smap.Primary
 	var killNode *cluster.Snode
 	for _, psi := range smap.Pmap {
@@ -1523,7 +1523,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 	var (
 		proxyURL       = tools.RandomProxyURL(t)
 		smap           = tools.GetClusterMap(t, proxyURL)
-		origProxyCount = smap.CountActiveProxies()
+		origProxyCount = smap.CountActivePs()
 
 		src = cmn.Bck{
 			Name:     testBucketName,
@@ -1563,7 +1563,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 
 		smap, err = tools.WaitForClusterState(proxyURL,
 			"restore node "+cmd.Node.ID(), smap.Version,
-			smap.CountActiveProxies()+1, smap.CountTargets())
+			smap.CountActivePs()+1, smap.CountTargets())
 		tassert.CheckFatal(t, err)
 
 		baseParams = tools.BaseAPIParams(cmd.Node.URL(cmn.NetPublic))

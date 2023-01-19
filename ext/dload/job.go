@@ -1,6 +1,6 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -138,7 +138,7 @@ func (j *baseDlJob) init(t cluster.Target, id string, bck *cluster.Bck, timeout,
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
-		limits.BytesPerHour /= t.Sowner().Get().CountActiveTargets()
+		limits.BytesPerHour /= t.Sowner().Get().CountActiveTs()
 	}
 	td, _ := time.ParseDuration(timeout)
 	{

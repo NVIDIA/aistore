@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -155,7 +155,7 @@ func (p *proxy) bckNamesFromBMD(w http.ResponseWriter) {
 
 // PUT /s3/<bucket-name> (i.e., create bucket)
 func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	msg := apc.ActionMsg{Action: apc.ActCreateBck}
+	msg := apc.ActMsg{Action: apc.ActCreateBck}
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
@@ -180,7 +180,7 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
-	msg := apc.ActionMsg{Action: apc.ActDestroyBck}
+	msg := apc.ActMsg{Action: apc.ActDestroyBck}
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
@@ -240,7 +240,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	}
 
 	var (
-		msg   = apc.ActionMsg{Action: apc.ActDeleteObjects}
+		msg   = apc.ActMsg{Action: apc.ActDeleteObjects}
 		lrMsg = &cmn.SelectObjsMsg{ObjNames: make([]string, 0, len(objList.Object))}
 	)
 	for _, obj := range objList.Object {
@@ -251,7 +251,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	// Marshal+Unmashal to new struct:
 	// hack to make `doListRange` treat `listMsg` as `map[string]interface`
 	var (
-		msg2  apc.ActionMsg
+		msg2  apc.ActMsg
 		bt    = cos.MustMarshal(&msg)
 		query = make(url.Values, 1)
 	)
@@ -462,7 +462,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 // GET /s3/<bucket-name>/<object-name> with `s3.QparamMptUploads`
 func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, q url.Values) {
 	smap := p.owner.smap.get()
-	if smap.CountActiveTargets() == 1 {
+	if smap.CountActiveTs() == 1 {
 		si, err := cluster.HrwTarget(bck.MakeUname(""), &smap.Smap)
 		if err != nil {
 			s3.WriteErr(w, r, err, 0)
@@ -595,7 +595,7 @@ func (p *proxy) unsupported(w http.ResponseWriter, r *http.Request, bucket strin
 
 // PUT /s3/<bucket-name>?versioning
 func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	msg := &apc.ActionMsg{Action: apc.ActSetBprops}
+	msg := &apc.ActMsg{Action: apc.ActSetBprops}
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}

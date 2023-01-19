@@ -115,7 +115,9 @@ func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Clien
 	}
 
 	// update streams when Smap changes
+	sb.smaplock.Lock()
 	sb.Resync()
+	sb.smaplock.Unlock()
 
 	// register this stream-bundle as Smap listener
 	if !sb.manualResync {
@@ -222,7 +224,10 @@ func (sb *Streams) ListenSmapChanged() {
 	if smap.Version <= sb.smap.Version {
 		return
 	}
+
+	sb.smaplock.Lock()
 	sb.Resync()
+	sb.smaplock.Unlock()
 }
 
 func (sb *Streams) GetStats() Stats {
@@ -309,17 +314,13 @@ func (sb *Streams) apply(action int) {
 	wg.Wait()
 }
 
-// "Resync" streams asynchronously (is a slowpath); calls stream.Stop()
+// Resync streams asynchronously
+// is a slowpath; is called under lock; NOTE: calls stream.Stop()
 func (sb *Streams) Resync() {
-	sb.smaplock.Lock()
-	defer sb.smaplock.Unlock()
 	smap := sb.sowner.Get()
 	if smap.Version <= sb.smap.Version {
-		var u unsafe.Pointer
-		if sb.streams.Load() != u {
-			return
-		}
-		glog.Errorf("%s[%s]: %s vs %s, unsafe=%v", sb.trname, sb.lid, smap, sb.smap, sb.streams.Load())
+		debug.Assertf(smap.Version == sb.smap.Version, "%s[%s]: %s vs %s", sb.trname, sb.lid, smap, sb.smap)
+		return
 	}
 
 	var oldNodeMap, newNodeMap []cluster.NodeMap
@@ -334,7 +335,7 @@ func (sb *Streams) Resync() {
 		oldNodeMap = []cluster.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
 		newNodeMap = []cluster.NodeMap{smap.Tmap, smap.Pmap}
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	added, removed := cluster.NodeMapDelta(oldNodeMap, newNodeMap)
 

@@ -23,13 +23,13 @@ import (
 // SetBucketProps sets the properties of a bucket.
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate, query ...url.Values) (string, error) {
-	b := cos.MustMarshal(apc.ActionMsg{Action: apc.ActSetBprops, Value: props})
+	b := cos.MustMarshal(apc.ActMsg{Action: apc.ActSetBprops, Value: props})
 	return patchBucketProps(bp, bck, b, query...)
 }
 
 // ResetBucketProps resets the properties of a bucket to the global configuration.
 func ResetBucketProps(bp BaseParams, bck cmn.Bck, query ...url.Values) (string, error) {
-	b := cos.MustMarshal(apc.ActionMsg{Action: apc.ActResetBprops})
+	b := cos.MustMarshal(apc.ActMsg{Action: apc.ActResetBprops})
 	return patchBucketProps(bp, bck, b, query...)
 }
 
@@ -166,7 +166,7 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 		// NOTE: bucket name
 		// - qbck.IsBucket() to differentiate between list-objects and list-buckets (operations)
 		// - list-buckets own correctness (see QueryBuckets below)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActList, Name: qbck.Name})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActList, Name: qbck.Name})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
@@ -230,7 +230,7 @@ func CreateBucket(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) er
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActCreateBck, Value: props})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActCreateBck, Value: props})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
@@ -246,7 +246,7 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActDestroyBck})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActDestroyBck})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
@@ -275,7 +275,7 @@ func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xac
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(fromBck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActCopyBck, Value: msg})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActCopyBck, Value: msg})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
@@ -296,7 +296,7 @@ func RenameBucket(bp BaseParams, fromBck, toBck cmn.Bck) (xactID string, err err
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(fromBck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMoveBck})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMoveBck})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
@@ -318,7 +318,7 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActEvictRemoteBck})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActEvictRemoteBck})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(q)
 	}
@@ -393,7 +393,7 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj u
 		if !listAll {
 			lsmsg.PageSize = toRead
 		}
-		actMsg := apc.ActionMsg{Action: apc.ActList, Value: lsmsg}
+		actMsg := apc.ActMsg{Action: apc.ActList, Value: lsmsg}
 		reqParams.Body = cos.MustMarshal(actMsg)
 		page := nextPage
 
@@ -463,7 +463,7 @@ func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg) (*cmn.LsoRes
 	if lsmsg == nil {
 		lsmsg = &apc.LsoMsg{}
 	}
-	actMsg := apc.ActionMsg{Action: apc.ActList, Value: lsmsg}
+	actMsg := apc.ActMsg{Action: apc.ActList, Value: lsmsg}
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
@@ -500,7 +500,7 @@ func ListObjectsInvalidateCache(bp BaseParams, bck cmn.Bck) error {
 		reqParams.Query = bck.AddToQuery(q)
 		reqParams.BaseParams = bp
 		reqParams.Path = path
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActInvalListCache})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActInvalListCache})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoRequest()
@@ -516,7 +516,7 @@ func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xactID string, err err
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActMakeNCopies, Value: copies})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMakeNCopies, Value: copies})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
@@ -537,7 +537,7 @@ func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int) (xactID string
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActECEncode, Value: ecConf})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActECEncode, Value: ecConf})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}

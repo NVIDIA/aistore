@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -27,7 +27,7 @@ type bckInitArgs struct {
 	p *proxy
 
 	bck *cluster.Bck
-	msg *apc.ActionMsg
+	msg *apc.ActMsg
 
 	// URL query: the conventional/slow and
 	// the fast alternative tailored exclusively for the datapath
@@ -330,7 +330,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 
 	// add/create
 creadd:
-	if err = args.p.createBucket(&apc.ActionMsg{Action: action}, bck, remoteHdr); err != nil {
+	if err = args.p.createBucket(&apc.ActMsg{Action: action}, bck, remoteHdr); err != nil {
 		errCode = crerrStatus(err)
 		return
 	}

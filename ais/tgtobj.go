@@ -692,7 +692,7 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 		ecEnabled            = goi.lom.Bprops().EC.Enabled
 		// TODO: if there're not enough EC targets to restore a sliced object,
 		//       we might still be able to restore it from its full replica
-		enoughECRestoreTargets = goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountActiveTargets()
+		enoughECRestoreTargets = goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountActiveTs()
 	)
 	if running {
 		doubleCheck = true

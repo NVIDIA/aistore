@@ -175,7 +175,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.ctx = ctx
 	m.smap = m.ctx.smapOwner.Get()
 
-	targetCount := m.smap.CountActiveTargets()
+	targetCount := m.smap.CountActiveTs()
 
 	m.rs = rs
 	m.Metrics = newMetrics(rs.Description, rs.ExtendedMetrics)
@@ -753,7 +753,7 @@ func (m *Manager) ListenSmapChanged() {
 		return
 	}
 
-	if newSmap.CountActiveTargets() != m.smap.CountActiveTargets() {
+	if newSmap.CountActiveTs() != m.smap.CountActiveTs() {
 		// Currently adding new target as well as removing one is not
 		// supported during the run.
 		//

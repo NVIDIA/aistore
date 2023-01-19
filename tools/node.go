@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -72,8 +72,8 @@ func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID 
 		proxyURL,
 		"join target",
 		smap.Version,
-		smap.CountActiveProxies(),
-		smap.CountActiveTargets()+1,
+		smap.CountActivePs(),
+		smap.CountActiveTs()+1,
 	)
 	tassert.CheckFatal(t, err)
 	return rebID, newSmap
@@ -208,7 +208,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			tlog.Logf("%v\n", err)
 			goto next
 		}
-		ok = expTgt.satisfied(smap.CountActiveTargets()) && expPrx.satisfied(smap.CountActiveProxies()) &&
+		ok = expTgt.satisfied(smap.CountActiveTs()) && expPrx.satisfied(smap.CountActivePs()) &&
 			smap.Version > origVer
 		if ok && time.Since(started) < time.Second {
 			time.Sleep(time.Second)
@@ -244,7 +244,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 					err, smap, syncedSmap, origVer, idsToIgnore)
 				return nil, err
 			}
-			if !expTgt.satisfied(smap.CountActiveTargets()) || !expPrx.satisfied(smap.CountActiveProxies()) {
+			if !expTgt.satisfied(smap.CountActiveTs()) || !expPrx.satisfied(smap.CountActivePs()) {
 				return nil, fmt.Errorf("%s updated and does not satisfy the state condition anymore", smap.StringEx())
 			}
 			return smap, nil
@@ -591,8 +591,8 @@ func EnsureOrigClusterState(t *testing.T) {
 		proxyURL       = RandomProxyURL()
 		smap           = GetClusterMap(t, proxyURL)
 		baseParam      = BaseAPIParams(proxyURL)
-		afterProxyCnt  = smap.CountActiveProxies()
-		afterTargetCnt = smap.CountActiveTargets()
+		afterProxyCnt  = smap.CountActivePs()
+		afterTargetCnt = smap.CountActiveTs()
 		tgtCnt         int
 		proxyCnt       int
 		updated        bool

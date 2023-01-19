@@ -1,6 +1,6 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
@@ -62,7 +62,7 @@ func (nxb *NotifXactListener) QueryArgs() cmn.HreqArgs {
 
 // (see also downloader.AbortArgs)
 func (nxb *NotifXactListener) AbortArgs() cmn.HreqArgs {
-	msg := apc.ActionMsg{
+	msg := apc.ActMsg{
 		Action: apc.ActXactStop,
 		Name:   cmn.ErrXactICNotifAbort.Error(),
 		Value:  QueryMsg{ID: nxb.UUID(), Kind: nxb.Kind()},

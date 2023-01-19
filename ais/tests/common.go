@@ -83,8 +83,8 @@ func (m *ioContext) initWithCleanupAndSaveState() {
 
 func (m *ioContext) saveCluState(proxyURL string) {
 	m.smap = tools.GetClusterMap(m.t, proxyURL)
-	m.originalTargetCount = m.smap.CountActiveTargets()
-	m.originalProxyCount = m.smap.CountActiveProxies()
+	m.originalTargetCount = m.smap.CountActiveTs()
+	m.originalProxyCount = m.smap.CountActivePs()
 	tlog.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
 }
 
@@ -101,8 +101,8 @@ func (m *ioContext) waitAndCheckCluState() {
 }
 
 func (m *ioContext) checkCluState(smap *cluster.Smap) {
-	proxyCount := smap.CountActiveProxies()
-	targetCount := smap.CountActiveTargets()
+	proxyCount := smap.CountActivePs()
+	targetCount := smap.CountActiveTs()
 	if targetCount != m.originalTargetCount ||
 		proxyCount != m.originalProxyCount {
 		m.t.Errorf(
@@ -653,8 +653,8 @@ func (m *ioContext) startMaintenanceNoRebalance() *cluster.Snode {
 		m.proxyURL,
 		"put target in maintenance",
 		m.smap.Version,
-		m.smap.CountActiveProxies(),
-		m.smap.CountActiveTargets()-1,
+		m.smap.CountActivePs(),
+		m.smap.CountActiveTs()-1,
 	)
 	tassert.CheckFatal(m.t, err)
 	return target

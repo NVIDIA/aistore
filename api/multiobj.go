@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -86,7 +86,7 @@ func doListRangeRequest(bp BaseParams, bck cmn.Bck, action string, msg any) (xac
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: action, Value: msg})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: action, Value: msg})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}

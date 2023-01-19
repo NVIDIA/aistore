@@ -186,7 +186,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Valu
 func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 	var (
 		smap        = ctx.smapOwner.Get()
-		allMetrics  = make(map[string]*Metrics, smap.CountActiveTargets())
+		allMetrics  = make(map[string]*Metrics, smap.CountActiveTs())
 		managerUUID = query.Get(apc.QparamUUID)
 		path        = apc.URLPathdSortMetrics.Join(managerUUID)
 		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
@@ -705,7 +705,7 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 
 func broadcastTargets(method, path string, urlParams url.Values, body []byte, smap *cluster.Smap, ignore ...*cluster.Snode) []response {
 	var (
-		responses = make([]response, smap.CountActiveTargets())
+		responses = make([]response, smap.CountActiveTs())
 		wg        = &sync.WaitGroup{}
 	)
 

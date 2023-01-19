@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -77,7 +77,7 @@ type (
 		smap *smapX // smap before pre-modifcation
 		rmd  *rebMD // latest rebMD post modification
 
-		msg      *apc.ActionMsg // action modifying smap (apc.Act*)
+		msg      *apc.ActMsg    // action modifying smap (apc.Act*)
 		nsi      *cluster.Snode // new node to be added
 		nid      string         // DaemonID of candidate primary to vote
 		sid      string         // DaemonID of node to modify
@@ -93,7 +93,7 @@ type (
 		final func(ctx *rmdModifier, clone *rebMD)
 
 		smap  *smapX
-		msg   *apc.ActionMsg
+		msg   *apc.ActMsg
 		rebCB func(nl nl.NotifListener)
 		wait  bool
 	}

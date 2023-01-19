@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -494,7 +494,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/buckets[/bucket-name]
 func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg     *apc.ActionMsg
+		msg     *apc.ActMsg
 		bckName string
 		qbck    *cmn.QueryBcks
 	)
@@ -508,7 +508,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	ctype := r.Header.Get(cos.HdrContentType)
 	if r.ContentLength == 0 && !strings.HasPrefix(ctype, cos.ContentJSON) {
 		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
-		msg = &apc.ActionMsg{Action: apc.ActList, Value: &apc.LsoMsg{}}
+		msg = &apc.ActMsg{Action: apc.ActList, Value: &apc.LsoMsg{}}
 	} else if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
@@ -968,7 +968,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 // PUT { action } /v1/buckets/bucket-name
 func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg           *apc.ActionMsg
+		msg           *apc.ActMsg
 		query         = r.URL.Query()
 		apiItems, err = p.apiItems(w, r, 1, true, apc.URLPathBuckets.L)
 	)
@@ -1027,7 +1027,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	var msg *apc.ActionMsg
+	var msg *apc.ActMsg
 	apiItems, err := p.apiItems(w, r, 1, true, apc.URLPathBuckets.L)
 	if err != nil {
 		return
@@ -1039,7 +1039,7 @@ func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	p.hpostBucket(w, r, msg, bucket)
 }
 
-func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bucket string) {
+func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, bucket string) {
 	var (
 		query    = r.URL.Query()
 		bck, err = newBckFromQ(bucket, query, nil)
@@ -1245,7 +1245,7 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 }
 
 // POST { apc.ActCreateBck } /v1/buckets/bucket-name
-func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActionMsg, bck *cluster.Bck) {
+func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActMsg, bck *cluster.Bck) {
 	var (
 		remoteHdr http.Header
 		bucket    = bck.Name
@@ -1337,10 +1337,10 @@ func crerrStatus(err error) (errCode int) {
 	return
 }
 
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActionMsg, lsmsg *apc.LsoMsg, beg int64) {
+func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, beg int64) {
 	const tag = "list-objects"
 	smap := p.owner.smap.get()
-	if smap.CountActiveTargets() < 1 {
+	if smap.CountActiveTs() < 1 {
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
 		return
 	}
@@ -1439,7 +1439,7 @@ func (p *proxy) lsoFlowControls(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX
 		tsi = smap.GetTarget(lsmsg.SID)
 		if tsi == nil {
 			err = &errNodeNotFound{"list-objects failure", lsmsg.SID, p.si, smap}
-			if smap.CountActiveTargets() == 1 {
+			if smap.CountActiveTs() == 1 {
 				// (walk an extra mile)
 				orig := err
 				tsi, err = cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap)
@@ -1633,7 +1633,7 @@ func toHdr(bck *cluster.Bck, hdr http.Header, info *cmn.BsummResult) {
 func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	var (
 		err           error
-		msg           *apc.ActionMsg
+		msg           *apc.ActMsg
 		propsToUpdate cmn.BucketPropsToUpdate
 		xactID        string
 		nprops        *cmn.BucketProps // complete instance of bucket props with propsToUpdate changes
@@ -1759,7 +1759,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 // ============================
 // forward control plane request to the current primary proxy
 // return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
-func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg,
+func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg,
 	s string, origBody ...[]byte) (forf bool) {
 	var (
 		body []byte
@@ -1846,7 +1846,7 @@ func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID st
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, bck *cmn.Bck, query url.Values) (err error) {
+func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, bck *cmn.Bck, query url.Values) (err error) {
 	var (
 		backend     = cmn.BackendConfAIS{}
 		aliasOrUUID = bck.Ns.UUID
@@ -1908,7 +1908,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 	return nil
 }
 
-func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActionMsg, dpq *dpq) {
+func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
 	var (
 		bmd     = p.owner.bmd.get()
 		present bool
@@ -2160,7 +2160,7 @@ func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, wantOn
 	return allEntries, nil
 }
 
-func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, msg *apc.ActionMsg) {
+func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, msg *apc.ActMsg) {
 	started := time.Now()
 	if objName == msg.Name {
 		p.writeErrMsg(w, r, "the new and the current name are the same")
@@ -2183,7 +2183,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, 
 	p.statsT.Add(stats.RenameCount, 1)
 }
 
-func (p *proxy) doListRange(method, bucket string, msg *apc.ActionMsg, query url.Values) (xactID string, err error) {
+func (p *proxy) doListRange(method, bucket string, msg *apc.ActMsg, query url.Values) (xactID string, err error) {
 	var (
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAmsg(msg, nil, cos.GenUUID())
@@ -2297,7 +2297,7 @@ func (p *proxy) handlePendingRenamedLB(renamedBucket string) {
 	ctx := &bmdModifier{
 		pre:   p.bmodPostMv,
 		final: p.bmodSync,
-		msg:   &apc.ActionMsg{Value: apc.ActMoveBck},
+		msg:   &apc.ActMsg{Value: apc.ActMoveBck},
 		bcks:  []*cluster.Bck{cluster.NewBck(renamedBucket, apc.AIS, cmn.NsGlobal)},
 	}
 	_, err := p.owner.bmd.modify(ctx)
@@ -2471,14 +2471,14 @@ func (p *proxy) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
-	var msg apc.ActionMsg
+	var msg apc.ActMsg
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
 	p.unreg(w, r, &msg)
 }
 
-func (p *proxy) unreg(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg) {
+func (p *proxy) unreg(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	// Stop keepaliving
 	p.keepalive.ctrl(kaSuspendMsg)
 
@@ -2947,7 +2947,7 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error
 
 	// Register `nl` for rebalance/resilver
 	smap := p.owner.smap.get()
-	if smap.IsIC(p.si) && smap.CountActiveTargets() > 0 {
+	if smap.IsIC(p.si) && smap.CountActiveTs() > 0 {
 		nl := xact.NewXactNL(xact.RebID2S(newRMD.Version), apc.ActRebalance, &smap.Smap, nil)
 		nl.SetOwner(equalIC)
 		err := p.notifs.add(nl)

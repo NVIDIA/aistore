@@ -1,6 +1,6 @@
-// Package apc: API constant
+// Package apc: API constant and control messages
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -12,8 +12,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// ActionMsg.Action
-// includes Xaction.Kind == ActionMsg.Action (when the action is asynchronous)
+// ActMsg.Action
+// includes Xaction.Kind == ActMsg.Action (when the action is asynchronous)
 const (
 	ActCreateBck      = "create-bck"  // NOTE: compare w/ ActAddRemoteBck below
 	ActDestroyBck     = "destroy-bck" // destroy bucket data and metadata
@@ -109,9 +109,9 @@ const (
 	ActAbort  = "abort"
 )
 
-// ActionMsg is a JSON-formatted control structures used in a majority of API calls
+// ActMsg is a JSON-formatted control structures used in a majority of API calls
 type (
-	ActionMsg struct {
+	ActMsg struct {
 		Value  any    `json:"value"`  // action-specific and optional
 		Action string `json:"action"` // ActShutdown, ActRebalance, and many more (see apc/const.go)
 		Name   string `json:"name"`   // action-specific name (e.g., bucket name)
@@ -166,11 +166,11 @@ type (
 	}
 )
 
-///////////////
-// ActionMsg //
-///////////////
+////////////
+// ActMsg //
+////////////
 
-func (msg *ActionMsg) String() string {
+func (msg *ActMsg) String() string {
 	s := "amsg[" + msg.Action
 	if msg.Name != "" {
 		s += ", name=" + msg.Name

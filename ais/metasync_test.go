@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -602,7 +602,7 @@ func TestMetasyncData(t *testing.T) {
 
 	emptyAisMsg, err := jsoniter.Marshal(aisMsg{})
 	if err != nil {
-		t.Fatal("Failed to marshal empty apc.ActionMsg, err =", err)
+		t.Fatal("Failed to marshal empty apc.ActMsg, err =", err)
 	}
 
 	var wg sync.WaitGroup

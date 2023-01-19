@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 
 package cmn
@@ -25,7 +25,7 @@ type actmsgTestConf struct {
 func testRawUnmarshal(t *testing.T, tc actmsgTestConf) {
 	t.Run(tc.action, func(t *testing.T) {
 		for _, val := range tc.vals {
-			msg := &apc.ActionMsg{}
+			msg := &apc.ActMsg{}
 			raw := fmt.Sprintf(val, tc.action)
 			err := jsoniter.Unmarshal([]byte(raw), &msg)
 			tassert.CheckError(t, err)

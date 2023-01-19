@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -219,7 +219,7 @@ func SetClusterConfig(bp BaseParams, nvs cos.StrKVs, transient bool) error {
 func SetClusterConfigUsingMsg(bp BaseParams, configToUpdate *cmn.ConfigToUpdate, transient bool) error {
 	var (
 		q   url.Values
-		msg = apc.ActionMsg{Action: apc.ActSetConfig, Value: configToUpdate}
+		msg = apc.ActMsg{Action: apc.ActSetConfig, Value: configToUpdate}
 	)
 	if transient {
 		q.Set(apc.ActTransient, "true")
@@ -245,7 +245,7 @@ func ResetClusterConfig(bp BaseParams) error {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClu.S
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActResetConfig})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActResetConfig})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoRequest()
@@ -324,7 +324,7 @@ func DetachRemoteAIS(bp BaseParams, alias string) error {
 //
 
 func StartMaintenance(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err error) {
-	msg := apc.ActionMsg{
+	msg := apc.ActMsg{
 		Action: apc.ActStartMaintenance,
 		Value:  actValue,
 	}
@@ -342,7 +342,7 @@ func StartMaintenance(bp BaseParams, actValue *apc.ActValRmNode) (xid string, er
 }
 
 func DecommissionNode(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err error) {
-	msg := apc.ActionMsg{
+	msg := apc.ActMsg{
 		Action: apc.ActDecommissionNode,
 		Value:  actValue,
 	}
@@ -360,7 +360,7 @@ func DecommissionNode(bp BaseParams, actValue *apc.ActValRmNode) (xid string, er
 }
 
 func StopMaintenance(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err error) {
-	msg := apc.ActionMsg{
+	msg := apc.ActMsg{
 		Action: apc.ActStopMaintenance,
 		Value:  actValue,
 	}
@@ -379,7 +379,7 @@ func StopMaintenance(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err
 
 // ShutdownCluster shuts down the whole cluster
 func ShutdownCluster(bp BaseParams) error {
-	msg := apc.ActionMsg{Action: apc.ActShutdown}
+	msg := apc.ActMsg{Action: apc.ActShutdown}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -395,7 +395,7 @@ func ShutdownCluster(bp BaseParams) error {
 
 // DecommissionCluster permanently decommissions entire cluster
 func DecommissionCluster(bp BaseParams, rmUserData bool) error {
-	msg := apc.ActionMsg{Action: apc.ActDecommission}
+	msg := apc.ActMsg{Action: apc.ActDecommission}
 	if rmUserData {
 		msg.Value = &apc.ActValRmNode{RmUserData: true}
 	}
@@ -417,7 +417,7 @@ func DecommissionCluster(bp BaseParams, rmUserData bool) error {
 
 // ShutdownNode shuts down a specific node
 func ShutdownNode(bp BaseParams, actValue *apc.ActValRmNode) (id string, err error) {
-	msg := apc.ActionMsg{
+	msg := apc.ActMsg{
 		Action: apc.ActShutdownNode,
 		Value:  actValue,
 	}

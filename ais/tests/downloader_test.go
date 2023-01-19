@@ -1182,7 +1182,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Expect that we never exceed the limit of connections per target.
-		targetCnt := smap.CountActiveTargets()
+		targetCnt := smap.CountActiveTs()
 		tassert.Errorf(
 			t, len(resp.CurrentTasks) <= limitConnection*targetCnt,
 			"number of tasks mismatch (expected as most: %d, got: %d)",
@@ -1265,7 +1265,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Expect that number of tasks never exceeds the defined limit.
-		targetCnt := smap.CountActiveTargets()
+		targetCnt := smap.CountActiveTs()
 		tassert.Errorf(
 			t, len(resp1.CurrentTasks) <= targetCnt,
 			"number of tasks mismatch (expected at most: %d, got: %d)",

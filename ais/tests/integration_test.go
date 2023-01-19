@@ -214,7 +214,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	_, err := api.StartMaintenance(tools.BaseAPIParams(m.proxyURL), args)
 	tassert.Errorf(t, err != nil, "error expected")
 
-	n := tools.GetClusterMap(t, m.proxyURL).CountActiveTargets()
+	n := tools.GetClusterMap(t, m.proxyURL).CountActiveTs()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("expected %d targets after putting target in maintenance, got %d targets",
 			m.originalTargetCount-1, n)
@@ -254,7 +254,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		m.originalTargetCount-1,
 	)
 
-	n := tools.GetClusterMap(t, m.proxyURL).CountActiveTargets()
+	n := tools.GetClusterMap(t, m.proxyURL).CountActiveTs()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("expected %d targets after putting target in maintenance, got %d targets",
 			m.originalTargetCount-1, n)
@@ -1792,7 +1792,7 @@ func TestICRebalance(t *testing.T) {
 	cmd, err := tools.KillNode(icNode)
 	tassert.CheckFatal(t, err)
 
-	proxyCnt := m.smap.CountActiveProxies()
+	proxyCnt := m.smap.CountActivePs()
 	smap, err := tools.WaitForClusterState(m.proxyURL, "designate new primary", m.smap.Version, proxyCnt-1, 0)
 	tassert.CheckError(t, err)
 
@@ -1864,7 +1864,7 @@ func TestICDecommission(t *testing.T) {
 	cmd, err := tools.KillNode(icNode)
 	tassert.CheckFatal(t, err)
 
-	proxyCnt := m.smap.CountActiveProxies()
+	proxyCnt := m.smap.CountActivePs()
 	smap, err := tools.WaitForClusterState(m.proxyURL, "designate new primary", m.smap.Version, proxyCnt-1, 0)
 	tassert.CheckError(t, err)
 

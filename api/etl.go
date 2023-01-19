@@ -145,7 +145,7 @@ func ETLBucket(bp BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg) (xactI
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(fromBck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActionMsg{Action: apc.ActETLBck, Value: bckMsg})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActETLBck, Value: bckMsg})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}

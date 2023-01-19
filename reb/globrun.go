@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -188,7 +188,7 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 		return
 	}
 	reb.regRecv()
-	haveStreams := smap.CountActiveTargets() > 1
+	haveStreams := smap.CountActiveTs() > 1
 	if !reb.initRenew(rargs, notif, logHdr, haveStreams) {
 		reb.unregRecv()
 		reb.semaCh.Release()

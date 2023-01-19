@@ -244,7 +244,7 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
 	var (
 		removeTarget, _ = smap.GetRandTarget()
-		origTgtCnt      = smap.CountActiveTargets()
+		origTgtCnt      = smap.CountActiveTs()
 		args            = &apc.ActValRmNode{DaemonID: removeTarget.ID(), SkipRebalance: true}
 	)
 	_, err := api.StartMaintenance(BaseAPIParams(proxyURL), args)
@@ -253,11 +253,11 @@ func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.Smap) (*cl
 		proxyURL,
 		"target is gone",
 		smap.Version,
-		smap.CountActiveProxies(),
+		smap.CountActivePs(),
 		origTgtCnt-1,
 	)
 	tassert.CheckFatal(t, err)
-	newTgtCnt := newSmap.CountActiveTargets()
+	newTgtCnt := newSmap.CountActiveTs()
 	tassert.Fatalf(t, newTgtCnt == origTgtCnt-1,
 		"new smap expected to have 1 target less: %d (v%d) vs %d (v%d)", newTgtCnt, origTgtCnt,
 		newSmap.Version, smap.Version)
@@ -502,7 +502,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 	)
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
-	if smap.CountActiveTargets() < 2 {
+	if smap.CountActiveTs() < 2 {
 		return
 	}
 

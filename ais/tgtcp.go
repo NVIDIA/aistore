@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -359,7 +359,7 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		t.handleMountpathReq(w, r)
 	case apc.CallbackRmSelf:
 		var (
-			msg  apc.ActionMsg
+			msg  apc.ActMsg
 			opts apc.ActValRmNode
 		)
 		if err := readJSON(w, r, &msg); err != nil {

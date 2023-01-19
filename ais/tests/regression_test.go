@@ -116,9 +116,9 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 		}
 	}
 
-	if smap.CountActiveTargets() != len(targets) { // The objects should have been distributed to all targets
+	if smap.CountActiveTs() != len(targets) { // The objects should have been distributed to all targets
 		t.Errorf("Expected %d different target URLs, actual: %d different target URLs",
-			smap.CountActiveTargets(), len(targets))
+			smap.CountActiveTs(), len(targets))
 	}
 
 	// Ensure no target URLs are returned when the property is not requested
@@ -354,7 +354,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 	if err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 			smap := tools.GetClusterMap(t, proxyURL)
-			if smap.CountActiveTargets() == 1 {
+			if smap.CountActiveTs() == 1 {
 				err = nil
 			}
 		}
@@ -488,7 +488,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	}
 
 	// Step 1: Unregister multiple targets
-	removed := make(map[string]*cluster.Snode, m.smap.CountActiveTargets()-1)
+	removed := make(map[string]*cluster.Snode, m.smap.CountActiveTs()-1)
 	defer func() {
 		var rebID string
 		for _, tgt := range removed {
@@ -511,7 +511,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	smap, err := tools.WaitForClusterState(proxyURL, "remove targets",
 		m.smap.Version, m.originalProxyCount, m.originalTargetCount-targetsToUnregister)
 	tassert.CheckFatal(t, err)
-	tlog.Logf("The cluster now has %d target(s)\n", smap.CountActiveTargets())
+	tlog.Logf("The cluster now has %d target(s)\n", smap.CountActiveTs())
 
 	// Step 2: PUT objects into a newly created bucket
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)

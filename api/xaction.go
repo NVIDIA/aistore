@@ -70,7 +70,7 @@ func StartXaction(bp BaseParams, args XactReqArgs) (id string, err error) {
 		xactMsg.Buckets = args.Buckets
 	}
 
-	msg := apc.ActionMsg{Action: apc.ActXactStart, Value: xactMsg}
+	msg := apc.ActMsg{Action: apc.ActXactStart, Value: xactMsg}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -87,7 +87,7 @@ func StartXaction(bp BaseParams, args XactReqArgs) (id string, err error) {
 
 // AbortXaction aborts a given xact.
 func AbortXaction(bp BaseParams, args XactReqArgs) error {
-	msg := apc.ActionMsg{
+	msg := apc.ActMsg{
 		Action: apc.ActXactStop,
 		Value:  xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
 	}
@@ -293,7 +293,7 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v *cmn.AllBsummResu
 	var (
 		uuid   string
 		sleep  = xactMinPollTime
-		actMsg = apc.ActionMsg{Action: apc.ActSummaryBck, Value: msg}
+		actMsg = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
 		body   = cos.MustMarshal(actMsg)
 	)
 	if reqParams.Query == nil {

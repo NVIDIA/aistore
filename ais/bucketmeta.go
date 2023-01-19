@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -78,7 +78,7 @@ type (
 		pre   func(*bmdModifier, *bucketMD) error
 		final func(*bmdModifier, *bucketMD)
 
-		msg   *apc.ActionMsg
+		msg   *apc.ActMsg
 		txnID string // transaction UUID
 		bcks  []*cluster.Bck
 

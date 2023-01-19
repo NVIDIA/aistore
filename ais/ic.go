@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -376,7 +376,7 @@ func (ic *ic) registerEqual(a regIC) {
 
 func (ic *ic) bcastListenIC(nl nl.NotifListener) {
 	var (
-		actMsg = apc.ActionMsg{Action: apc.ActListenToNotif, Value: newNLMsg(nl)}
+		actMsg = apc.ActMsg{Action: apc.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAmsg(&actMsg, nil)
 	)
 	ic.p.bcastAsyncIC(msg)

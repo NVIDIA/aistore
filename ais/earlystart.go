@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -433,12 +433,12 @@ until:
 		p.owner.smap.mu.Unlock()
 		goto until
 	}
-	if smap.CountActiveTargets() < 2 {
+	if smap.CountActiveTs() < 2 {
 		err := &errNotEnoughTargets{p.si, smap, 2}
 		cos.ExitLogf("%s: cannot resume global rebalance - %v", p.si, err)
 	}
 	var (
-		msg    = &apc.ActionMsg{Action: apc.ActRebalance, Value: metaction3}
+		msg    = &apc.ActMsg{Action: apc.ActRebalance, Value: metaction3}
 		aisMsg = p.newAmsg(msg, nil)
 		ctx    = &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },

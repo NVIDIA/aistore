@@ -214,7 +214,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	propsCleanupObjects(t, proxyURL, bck, objects)
 
 	smap := tools.GetClusterMap(t, proxyURL)
-	origActiveTargetCnt := smap.CountActiveTargets()
+	origActiveTargetCnt := smap.CountActiveTs()
 	if origActiveTargetCnt < 2 {
 		t.Skipf("Only %d targets found, need at least 2", origActiveTargetCnt)
 	}
@@ -228,8 +228,8 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		proxyURL,
 		"target removed",
 		smap.Version,
-		smap.CountActiveProxies(),
-		smap.CountActiveTargets()-1,
+		smap.CountActivePs(),
+		smap.CountActiveTs()-1,
 	)
 	tassert.CheckFatal(t, err)
 
@@ -243,8 +243,8 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		proxyURL,
 		"target joined",
 		smap.Version,
-		smap.CountActiveProxies(),
-		smap.CountActiveTargets()+1,
+		smap.CountActivePs(),
+		smap.CountActiveTs()+1,
 	)
 	tassert.CheckFatal(t, err)
 	tools.WaitForRebalanceByID(t, origActiveTargetCnt, baseParams, rebID, rebalanceTimeout)

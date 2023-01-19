@@ -494,8 +494,8 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 		proxyURL   = tools.RandomProxyURL()
 		baseParams = tools.BaseAPIParams()
 		smap       = tools.GetClusterMap(t, proxyURL)
-		proxyCnt   = smap.CountActiveProxies()
-		targetCnt  = smap.CountActiveTargets()
+		proxyCnt   = smap.CountActivePs()
+		targetCnt  = smap.CountActiveTs()
 	)
 
 	if targetCnt < 2 {
@@ -551,7 +551,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 		smap       = tools.GetClusterMap(t, proxyURL)
 		proxyCnt   = smap.CountProxies()
-		targetCnt  = smap.CountActiveTargets()
+		targetCnt  = smap.CountActiveTs()
 		tmpMpath   = "/tmp/testmp"
 	)
 	if targetCnt < 2 {
@@ -626,7 +626,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 		proxyURL   = smap.Primary.URL(cmn.NetPublic)
 		proxyCnt   = smap.CountProxies()
-		targetCnt  = smap.CountActiveTargets()
+		targetCnt  = smap.CountActiveTs()
 		enabled    bool
 	)
 	for _, tsi := range smap.Tmap {

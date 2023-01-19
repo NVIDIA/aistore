@@ -294,10 +294,10 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 func (r *LsoXact) nextPageR() error {
 	var (
 		page *cmn.LsoResult
-		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.LomAdd)
-		smap = r.p.dm.Smap()
-		tsi  = smap.GetNodeNotMaint(r.msg.SID)
 		err  error
+		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.LomAdd)
+		smap = r.p.T.Sowner().Get()
+		tsi  = smap.GetNodeNotMaint(r.msg.SID)
 	)
 	if tsi == nil {
 		err = fmt.Errorf("%s: lost, missing, or inactive t[%s], %s", r, r.msg.SID, smap)
@@ -310,7 +310,7 @@ func (r *LsoXact) nextPageR() error {
 		wantOnlyRemote := r.msg.WantOnlyRemoteProps()
 		nentries := allocLsoEntries()
 		page, err = npg.nextPageR(nentries)
-		if !wantOnlyRemote && r.p.dm.Smap().CountActiveTargets() > 1 {
+		if !wantOnlyRemote && smap.HasActiveTargetPeers() {
 			if err == nil {
 				err = r.bcast(page)
 			} else {

@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package apitests
 
@@ -15,7 +15,7 @@ import (
 
 func BenchmarkActionMsgMarshal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		msg := apc.ActionMsg{
+		msg := apc.ActMsg{
 			Name:   "test-name",
 			Action: apc.ActDeleteObjects,
 			Value:  &cmn.SelectObjsMsg{Template: "thisisatemplate"},
@@ -24,7 +24,7 @@ func BenchmarkActionMsgMarshal(b *testing.B) {
 		if err != nil {
 			b.Errorf("marshaling errored: %v", err)
 		}
-		msg2 := &apc.ActionMsg{}
+		msg2 := &apc.ActMsg{}
 		err = jsoniter.Unmarshal(data, &msg2)
 		if err != nil {
 			b.Errorf("unmarshaling errored: %v", err)

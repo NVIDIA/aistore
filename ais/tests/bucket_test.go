@@ -2920,7 +2920,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			})
 			tassert.CheckFatal(t, err)
 		} else if eced {
-			if m.smap.CountActiveTargets() < parityCnt+1 {
+			if m.smap.CountActiveTs() < parityCnt+1 {
 				t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 			}
 			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{

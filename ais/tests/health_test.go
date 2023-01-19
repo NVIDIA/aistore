@@ -24,9 +24,9 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	baseParams := tools.BaseAPIParams(proxyURL)
 	_, err = api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	targetCount := smapOrig.CountActiveTargets()
+	targetCount := smapOrig.CountActiveTs()
 	origTargetCnt := targetCount
-	proxyCount := smapOrig.CountActiveProxies()
+	proxyCount := smapOrig.CountActivePs()
 	if si.IsProxy() {
 		proxyCount--
 	} else {
@@ -38,8 +38,8 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 		val := &apc.ActValRmNode{DaemonID: si.ID()}
 		rebID, err := api.StopMaintenance(baseParams, val)
 		tassert.CheckFatal(t, err)
-		_, err = tools.WaitForClusterState(proxyURL, "join node", smapOrig.Version, smapOrig.CountActiveProxies(),
-			smapOrig.CountActiveTargets())
+		_, err = tools.WaitForClusterState(proxyURL, "join node", smapOrig.Version, smapOrig.CountActivePs(),
+			smapOrig.CountActiveTs())
 		tassert.CheckFatal(t, err)
 		if rebID != "" {
 			tools.WaitForRebalanceByID(t, origTargetCnt, baseParams, rebID)
@@ -64,13 +64,13 @@ func TestUnregisteredProxyHealth(t *testing.T) {
 		smap     = tools.GetClusterMap(t, proxyURL)
 	)
 
-	proxyCnt := smap.CountActiveProxies()
+	proxyCnt := smap.CountActivePs()
 	proxy, err := smap.GetRandProxy(true /*excludePrimary*/)
 	tassert.CheckError(t, err)
 	unregisteredNodeHealth(t, proxyURL, proxy)
 
 	smap = tools.GetClusterMap(t, proxyURL)
-	tassert.Fatalf(t, proxyCnt == smap.CountActiveProxies(), "expected number of proxies to be the same after the test")
+	tassert.Fatalf(t, proxyCnt == smap.CountActivePs(), "expected number of proxies to be the same after the test")
 }
 
 func TestTargetHealth(t *testing.T) {
@@ -90,11 +90,11 @@ func TestUnregisteredTargetHealth(t *testing.T) {
 		smap     = tools.GetClusterMap(t, proxyURL)
 	)
 
-	targetsCnt := smap.CountActiveTargets()
+	targetsCnt := smap.CountActiveTs()
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
 	unregisteredNodeHealth(t, proxyURL, target)
 
 	smap = tools.GetClusterMap(t, proxyURL)
-	tassert.Fatalf(t, targetsCnt == smap.CountActiveTargets(), "expected number of targets to be the same after the test")
+	tassert.Fatalf(t, targetsCnt == smap.CountActiveTs(), "expected number of targets to be the same after the test")
 }

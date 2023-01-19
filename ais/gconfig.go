@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -42,7 +42,7 @@ type (
 
 		oldConfig *cmn.Config
 		toUpdate  *cmn.ConfigToUpdate
-		msg       *apc.ActionMsg
+		msg       *apc.ActMsg
 		query     url.Values
 		hdr       http.Header
 		wait      bool

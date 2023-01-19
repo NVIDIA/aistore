@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -321,9 +321,29 @@ func (m *Smap) StringEx() string {
 func (m *Smap) CountTargets() int { return len(m.Tmap) }
 func (m *Smap) CountProxies() int { return len(m.Pmap) }
 func (m *Smap) Count() int        { return len(m.Pmap) + len(m.Tmap) }
-func (m *Smap) CountActiveTargets() (count int) {
+
+func (m *Smap) CountActiveTs() (count int) {
 	for _, t := range m.Tmap {
 		if !t.IsAnySet(NodeFlagsMaintDecomm) {
+			count++
+		}
+	}
+	return
+}
+
+func (m *Smap) HasActiveTargetPeers() bool {
+	for tid, t := range m.Tmap {
+		if tid == T.SID() || t.IsAnySet(NodeFlagsMaintDecomm) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func (m *Smap) CountActivePs() (count int) {
+	for _, p := range m.Pmap {
+		if !p.IsAnySet(NodeFlagsMaintDecomm) {
 			count++
 		}
 	}
@@ -333,15 +353,6 @@ func (m *Smap) CountActiveTargets() (count int) {
 func (m *Smap) CountNonElectable() (count int) {
 	for _, p := range m.Pmap {
 		if p.nonElectable() {
-			count++
-		}
-	}
-	return
-}
-
-func (m *Smap) CountActiveProxies() (count int) {
-	for _, t := range m.Pmap {
-		if !t.IsAnySet(NodeFlagsMaintDecomm) {
 			count++
 		}
 	}

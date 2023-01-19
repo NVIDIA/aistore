@@ -38,12 +38,12 @@ func TestMaintenanceOnOff(t *testing.T) {
 	_, err = api.StartMaintenance(baseParams, msg)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
-		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()-1)
+		smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)
 	tassert.CheckFatal(t, err)
 	_, err = tools.WaitForClusterState(proxyURL, "target is back",
-		smap.Version, smap.CountActiveProxies(), smap.CountTargets())
+		smap.Version, smap.CountActivePs(), smap.CountTargets())
 	tassert.CheckFatal(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)
 	tassert.Fatalf(t, err != nil, "Canceling maintenance must fail for 'normal' daemon")
@@ -93,14 +93,14 @@ func TestMaintenanceListObjects(t *testing.T) {
 		rebID, err = api.StopMaintenance(baseParams, actVal)
 		tassert.CheckFatal(t, err)
 		_, err = tools.WaitForClusterState(proxyURL, "target is back",
-			m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountTargets())
+			m.smap.Version, m.smap.CountActivePs(), m.smap.CountTargets())
 		args := api.XactReqArgs{ID: rebID, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 	}()
 
 	m.smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
-		m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountActiveTargets()-1)
+		m.smap.Version, m.smap.CountActivePs(), m.smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
 
 	// Wait for reb to complete
@@ -148,7 +148,7 @@ func TestMaintenanceMD(t *testing.T) {
 	_, err := api.DecommissionNode(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
-	_, err = tools.WaitForClusterState(proxyURL, "target decommission", smap.Version, smap.CountActiveProxies(),
+	_, err = tools.WaitForClusterState(proxyURL, "target decommission", smap.Version, smap.CountActivePs(),
 		smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 
@@ -159,7 +159,7 @@ func TestMaintenanceMD(t *testing.T) {
 	time.Sleep(time.Second)
 	err = tools.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
-	_, err = tools.WaitForClusterState(proxyURL, "target joined back", smap.Version, smap.CountActiveProxies(),
+	_, err = tools.WaitForClusterState(proxyURL, "target joined back", smap.Version, smap.CountActivePs(),
 		smap.CountTargets())
 	tassert.CheckFatal(t, err)
 
@@ -182,8 +182,8 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 
 		dcmTarget, _          = smap.GetRandTarget()
 		origTargetCount       = smap.CountTargets()
-		origActiveTargetCount = smap.CountActiveTargets()
-		origActiveProxyCount  = smap.CountActiveProxies()
+		origActiveTargetCount = smap.CountActiveTs()
+		origActiveProxyCount  = smap.CountActivePs()
 		bck                   = cmn.Bck{Name: t.Name(), Provider: apc.AIS}
 	)
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
@@ -287,7 +287,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 
 	m.initWithCleanupAndSaveState()
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	origProxyCnt, origTargetCount := m.smap.CountActiveProxies(), m.smap.CountActiveTargets()
+	origProxyCnt, origTargetCount := m.smap.CountActivePs(), m.smap.CountActiveTs()
 
 	m.puts()
 	tsi, _ := m.smap.GetRandTarget()
@@ -358,7 +358,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 
 	m.initWithCleanupAndSaveState()
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	origProxyCnt, origTargetCount := m.smap.CountActiveProxies(), m.smap.CountActiveTargets()
+	origProxyCnt, origTargetCount := m.smap.CountActivePs(), m.smap.CountActiveTs()
 
 	m.puts()
 	go m.getsUntilStop()
@@ -433,8 +433,8 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		err      error
 		pdc, tdc int
 
-		origProxyCnt    = smap.CountActiveProxies()
-		origTargetCount = smap.CountActiveTargets()
+		origProxyCnt    = smap.CountActivePs()
+		origTargetCount = smap.CountActiveTs()
 	)
 	if nodeType == apc.Proxy {
 		if origProxyCnt == 1 {
@@ -507,7 +507,7 @@ func TestShutdownListObjects(t *testing.T) {
 	)
 
 	m.initWithCleanupAndSaveState()
-	origTargetCount := m.smap.CountActiveTargets()
+	origTargetCount := m.smap.CountActiveTs()
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	m.puts()
 
@@ -555,7 +555,7 @@ func TestShutdownListObjects(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// 3. Check if we can list all the objects.
-	if m.smap.CountActiveTargets() == 0 {
+	if m.smap.CountActiveTs() == 0 {
 		tlog.Logln("Shutdown single target - nothing to do")
 		return
 	}

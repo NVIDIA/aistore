@@ -71,7 +71,7 @@ type ecOptions struct {
 //nolint:revive // modifies-value-receiver on purpose
 func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 	o.smap = tools.GetClusterMap(t, proxyURL)
-	if cnt := o.smap.CountActiveTargets(); cnt < o.minTargets {
+	if cnt := o.smap.CountActiveTs(); cnt < o.minTargets {
 		t.Skipf("not enough targets in the cluster: expected at least %d, got %d", o.minTargets, cnt)
 	}
 	if o.concurrency > 0 {
@@ -80,7 +80,7 @@ func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 	o.seed = time.Now().UnixNano()
 	o.rnd = rand.New(rand.NewSource(o.seed))
 	if o.dataCnt < 0 {
-		total := o.smap.CountActiveTargets() - 2
+		total := o.smap.CountActiveTs() - 2
 		o.parityCnt = total / 2
 		o.dataCnt = total - o.parityCnt
 	}
@@ -809,7 +809,7 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 						"ec.disk_only": "false",
 					})
 				}
-				if o.smap.CountActiveTargets() <= test.parity+test.data {
+				if o.smap.CountActiveTs() <= test.parity+test.data {
 					t.Skip(cmn.ErrNotEnoughTargets)
 				}
 				o.parityCnt = test.parity
@@ -891,7 +891,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 						"ec.disk_only": "false",
 					})
 				}
-				if o.smap.CountActiveTargets() <= test.parity+test.data {
+				if o.smap.CountActiveTs() <= test.parity+test.data {
 					t.Skip(cmn.ErrNotEnoughTargets)
 				}
 				o.parityCnt = test.parity
@@ -1249,7 +1249,7 @@ func TestECStress(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.data+test.parity {
+			if o.smap.CountActiveTs() <= test.data+test.parity {
 				t.Skip(cmn.ErrNotEnoughTargets)
 			}
 			o.parityCnt = test.parity
@@ -1360,7 +1360,7 @@ func TestECExtraStress(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.data+test.parity {
+			if o.smap.CountActiveTs() <= test.data+test.parity {
 				t.Skip(cmn.ErrNotEnoughTargets)
 			}
 			o.parityCnt = test.parity
@@ -1789,7 +1789,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		pattern:     "obj-rest-%04d",
 	}.init(t, proxyURL)
 
-	if o.smap.CountActiveTargets() > 10 {
+	if o.smap.CountActiveTs() > 10 {
 		// Reason: calculating main obj directory based on DeamonID
 		// see getOneObj, 'HACK' annotation
 		t.Skip("Test requires at most 10 targets")
@@ -2050,7 +2050,7 @@ func TestECRebalance(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.parity+test.data+1 {
+			if o.smap.CountActiveTs() <= test.parity+test.data+1 {
 				t.Skip(cmn.ErrNotEnoughTargets)
 			}
 			o.parityCnt = test.parity
@@ -2080,7 +2080,7 @@ func TestECMountpaths(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.parity+test.data {
+			if o.smap.CountActiveTs() <= test.parity+test.data {
 				t.Skipf("%s: %v", t.Name(), cmn.ErrNotEnoughTargets)
 			}
 			o.parityCnt = test.parity
@@ -2175,7 +2175,7 @@ func TestECBucketEncode(t *testing.T) {
 	m.initWithCleanupAndSaveState()
 	baseParams := tools.BaseAPIParams(proxyURL)
 
-	if m.smap.CountActiveTargets() < parityCnt+1 {
+	if m.smap.CountActiveTs() < parityCnt+1 {
 		t.Skipf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 	}
 
@@ -2247,7 +2247,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.parity+test.data+1 {
+			if o.smap.CountActiveTs() <= test.parity+test.data+1 {
 				t.Skip(cmn.ErrNotEnoughTargets)
 			}
 			o.parityCnt = test.parity
@@ -2375,7 +2375,7 @@ func TestECResilver(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.parity+test.data {
+			if o.smap.CountActiveTs() <= test.parity+test.data {
 				t.Skip(cmn.ErrNotEnoughTargets)
 			}
 			o.parityCnt = test.parity
@@ -2474,7 +2474,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 	initMountpaths(t, proxyURL)
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.parity+test.data+1 {
+			if o.smap.CountActiveTs() <= test.parity+test.data+1 {
 				t.Skip(cmn.ErrNotEnoughTargets)
 			}
 			o.parityCnt = test.parity
@@ -2507,7 +2507,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	_, err = tools.WaitForClusterState(proxyURL, "target removed",
-		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()-1)
+		smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
 	registered := false
 
@@ -2713,7 +2713,7 @@ func TestECGenerations(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.parity+test.data {
+			if o.smap.CountActiveTs() <= test.parity+test.data {
 				t.Skip(cmn.ErrNotEnoughTargets)
 			}
 			o.parityCnt = test.parity

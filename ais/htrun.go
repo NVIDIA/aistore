@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -429,7 +429,7 @@ func (h *htrun) tryLoadSmap() (_ *smapX, reliable bool) {
 	return smap, reliable
 }
 
-func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *apc.ActionMsg, query url.Values) {
+func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, query url.Values) {
 	var (
 		transient = cos.IsParseBool(query.Get(apc.ActTransient))
 		toUpdate  = &cmn.ConfigToUpdate{}
@@ -980,7 +980,7 @@ func _parseNCopies(value any) (copies int64, err error) {
 	return
 }
 
-func _checkAction(msg *apc.ActionMsg, expectedActions ...string) (err error) {
+func _checkAction(msg *apc.ActMsg, expectedActions ...string) (err error) {
 	found := false
 	for _, action := range expectedActions {
 		found = found || msg.Action == action
@@ -1259,7 +1259,7 @@ func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num
 	c.maxCii.fillSmap(smap)
 
 	h._bch(&c, smap, apc.Proxy)
-	if checkAll || (c.cnt < maxVerConfirmations && smap.CountActiveTargets() > 0) {
+	if checkAll || (c.cnt < maxVerConfirmations && smap.CountActiveTs() > 0) {
 		h._bch(&c, smap, apc.Target)
 	}
 	glog.Infof("%s: %s", h.si, c.maxCii.String())
@@ -1979,7 +1979,7 @@ func (h *htrun) readAisMsg(w http.ResponseWriter, r *http.Request) (msg *aisMsg,
 }
 
 func (msg *aisMsg) String() string {
-	s := msg.ActionMsg.String()
+	s := msg.ActMsg.String()
 	if msg.UUID == "" {
 		return s
 	}
@@ -1987,15 +1987,15 @@ func (msg *aisMsg) String() string {
 }
 
 func (h *htrun) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
-	return h.newAmsg(&apc.ActionMsg{Value: msgStr}, bmd)
+	return h.newAmsg(&apc.ActMsg{Value: msgStr}, bmd)
 }
 
 func (h *htrun) newAmsgActVal(act string, val any) *aisMsg {
-	return h.newAmsg(&apc.ActionMsg{Action: act, Value: val}, nil)
+	return h.newAmsg(&apc.ActMsg{Action: act, Value: val}, nil)
 }
 
-func (h *htrun) newAmsg(actionMsg *apc.ActionMsg, bmd *bucketMD, uuid ...string) *aisMsg {
-	msg := &aisMsg{ActionMsg: *actionMsg}
+func (h *htrun) newAmsg(actionMsg *apc.ActMsg, bmd *bucketMD, uuid ...string) *aisMsg {
+	msg := &aisMsg{ActMsg: *actionMsg}
 	if bmd != nil {
 		msg.BMDVersion = bmd.Version
 	} else {
@@ -2007,9 +2007,9 @@ func (h *htrun) newAmsg(actionMsg *apc.ActionMsg, bmd *bucketMD, uuid ...string)
 	return msg
 }
 
-// apc.ActionMsg c-tor and reader
-func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.ActionMsg, err error) {
-	msg = &apc.ActionMsg{}
+// apc.ActMsg c-tor and reader
+func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.ActMsg, err error) {
+	msg = &apc.ActMsg{}
 	err = cmn.ReadJSON(w, r, msg)
 	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
 		glog.InfoDepth(1, h.si.String()+": "+msg.String())
