@@ -27,15 +27,15 @@ const (
 type (
 	Streams struct {
 		sowner       cluster.Sowner
+		client       transport.Client
 		smap         *cluster.Smap // current Smap
 		smaplock     *sync.Mutex
-		lsnode       *cluster.Snode // local Snode
-		client       transport.Client
-		network      string
+		lsnode       *cluster.Snode // this node
+		streams      atomic.Pointer // points to the bundle (map below)
 		trname       string
-		streams      atomic.Pointer // points to bundle (below)
-		extra        transport.Extra
+		network      string
 		lid          string
+		extra        transport.Extra
 		rxNodeType   int // receiving nodes: [Targets, ..., AllNodes ] enum above
 		multiplier   int // optionally: multiple streams per destination (round-robin)
 		manualResync bool
@@ -52,9 +52,9 @@ type (
 	bundle map[string]*robin // stream "bundle" indexed by DaemonID
 
 	Args struct {
+		Extra        *transport.Extra // additional parameters
 		Net          string           // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
 		Trname       string           // transport endpoint name
-		Extra        *transport.Extra // additional parameters
 		Ntype        int              // cluster.Target (0) by default
 		Multiplier   int              // so-many TCP connections per Rx endpoint, with round-robin
 		ManualResync bool             // auto-resync by default

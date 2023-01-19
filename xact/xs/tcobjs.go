@@ -27,13 +27,13 @@ import (
 
 type (
 	tcoFactory struct {
-		streamingF
 		args *xreg.TCObjsArgs
+		streamingF
 	}
 	XactTCObjs struct {
 		pending struct {
-			sync.RWMutex
 			m map[string]*tcowi
+			sync.RWMutex
 		}
 		args   *xreg.TCObjsArgs
 		workCh chan *cmn.TCObjsMsg

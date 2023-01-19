@@ -26,8 +26,8 @@ type (
 		t            cluster.Target
 		smap         *cluster.Smap
 		lomVisitedCb lomVisitedCb
-		markerDir    string
 		msg          *apc.LsoMsg
+		markerDir    string
 		wanted       cos.BitFlags
 	}
 )

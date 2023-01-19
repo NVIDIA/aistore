@@ -40,11 +40,10 @@ import (
 // `on-demand` per list-objects request
 type (
 	lsoFactory struct {
-		streamingF
 		msg *apc.LsoMsg
+		streamingF
 	}
 	LsoXact struct {
-		streamingX
 		msg       *apc.LsoMsg
 		msgCh     chan *apc.LsoMsg // incoming requests
 		respCh    chan *LsoRsp     // responses - next pages
@@ -52,15 +51,16 @@ type (
 		stopCh    cos.StopCh       // to stop xaction
 		token     string           // continuation token -> last responded page
 		nextToken string           // next continuation token -> next pages
-		lastPage  cmn.LsoEntries   // last page contents
-		lensgl    int64            // sgl.Len()
+		lastPage  cmn.LsoEntries   // last page (contents)
 		walk      struct {
 			pageCh chan *cmn.LsoEntry // channel to accumulate listed object entries
 			stopCh *cos.StopCh        // to abort bucket walk
-			wi     *walkInfo          // walking context
-			wg     sync.WaitGroup     // to wait until the walk finishes
-			done   bool               // done walking
+			wi     *walkInfo          // walking context and state
+			wg     sync.WaitGroup     // wait until this walk finishes
+			done   bool               // done walking (indication)
 		}
+		streamingX
+		lensgl int64
 	}
 	LsoRsp struct {
 		Err    error
@@ -139,7 +139,12 @@ func (r *LsoXact) Run(*sync.WaitGroup) {
 			debug.Assert(r.msg.UUID == msg.UUID && r.msg.Prefix == msg.Prefix && r.msg.Flags == msg.Flags)
 			r.msg.ContinuationToken = msg.ContinuationToken
 			r.msg.PageSize = msg.PageSize
-			r.respCh <- r.doPage()
+			resp := r.doPage()
+			if resp.Err == nil {
+				// NOTE: x-list reports heterogeneous stats (and is an exception)
+				r.ObjsAdd(len(resp.Lst.Entries), 0)
+			}
+			r.respCh <- resp
 		case <-r.IdleTimer():
 			r.stop(nil)
 			return
@@ -287,7 +292,6 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 }
 
 func (r *LsoXact) nextPageR() error {
-	debug.Assert(r.msg.SID != "")
 	var (
 		page *cmn.LsoResult
 		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.LomAdd)
@@ -378,7 +382,7 @@ func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
 
 func (r *LsoXact) sentCb(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	if err == nil {
-		// NOTE: counting broadcast pages
+		// using generic out-counter to count broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
 	} else if bool(glog.FastV(4, glog.SmoduleXs)) || !cos.IsRetriableConnErr(err) {
 		glog.Errorf("%s: failed to send [%+v]: %v", r.p.T, hdr, err)
@@ -673,7 +677,7 @@ func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 	err = page.DecodeMsg(mr)
 	if err == nil {
 		r.remtCh <- &LsoRsp{Lst: page, Status: http.StatusOK}
-		// NOTE: counting received pages
+		// using generic in-counter to count received pages
 		r.InObjsAdd(1, hdr.ObjAttrs.Size)
 	} else {
 		glog.Errorf("%s: failed to recv [%s: %s] num=%d from %s (%s, %s): %v",

@@ -1352,7 +1352,8 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 	return
 }
 
-// transmit object to another target via data mover (compare with coi.put())
+// use data mover to transmit objects to other targets
+// (compare with coi.put())
 func (coi *copyObjInfo) dm(lom *cluster.LOM, sargs *sendArgs) error {
 	debug.Assert(sargs.dm.OWT() == sargs.owt)
 	debug.Assert(sargs.dm.GetXact() == coi.Xact || sargs.dm.GetXact().ID() == coi.Xact.ID())

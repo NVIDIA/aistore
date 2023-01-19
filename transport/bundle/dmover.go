@@ -1,7 +1,7 @@
 // Package bundle provides multi-streaming transport with the functionality
 // to dynamically (un)register receive endpoints, establish long-lived flows, and more.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package bundle
 
@@ -23,34 +23,34 @@ import (
 
 type (
 	DataMover struct {
-		t    cluster.Node
 		data struct {
-			trname  string
-			recv    transport.RecvObj
-			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
-			streams *Streams
 			client  transport.Client
+			recv    transport.RecvObj
+			streams *Streams
+			trname  string
+			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
 		}
 		ack struct {
-			trname  string
-			recv    transport.RecvObj
-			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraControl
-			streams *Streams
 			client  transport.Client
+			recv    transport.RecvObj
+			streams *Streams
+			trname  string
+			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraControl
 		}
-		stage struct {
+		t           cluster.Node
+		xctn        cluster.Xact
+		config      *cmn.Config
+		mem         *memsys.MMSA
+		compression string // enum { apc.CompressNever, ... }
+		multiplier  int
+		owt         cmn.OWT
+		stage       struct {
 			regred atomic.Bool
 			opened atomic.Bool
 			laterx atomic.Bool
 		}
-		config      *cmn.Config
-		mem         *memsys.MMSA
-		compression string // enum { apc.CompressNever, ... }
-		xctn        cluster.Xact
-		multiplier  int
-		owt         cmn.OWT
-		sizePDU     int32
-		maxHdrSize  int32
+		sizePDU    int32
+		maxHdrSize int32
 	}
 	// additional (and optional) params for new data mover
 	Extra struct {
@@ -261,7 +261,7 @@ func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err er
 	if hdr.Bck.Name != "" && hdr.ObjName != "" && hdr.ObjAttrs.Size >= 0 {
 		dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
 	}
-	// in re (hdr.ObjAttrs.Size < 0) see transport.UsePDU()
+	// NOTE: in re (hdr.ObjAttrs.Size < 0) see transport.UsePDU()
 
 	dm.stage.laterx.Store(true)
 	return dm.data.recv(hdr, object, err)
