@@ -8,12 +8,9 @@ package cli
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -193,105 +190,4 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]tmpls.DiskStatsTemplateHelpe
 	})
 
 	return allStats, nil
-}
-
-func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duration) error {
-	var (
-		tw                            = &tabwriter.Writer{}
-		latestAborted, latestFinished bool
-		hideHeader                    = flagIsSet(c, noHeaderFlag)
-	)
-	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
-
-	// run until rebalance is completed
-	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance}
-	for {
-		rebSnaps, err := api.QueryXactionSnaps(apiBP, xactArgs)
-		if err != nil {
-			switch err := err.(type) {
-			case *cmn.ErrHTTP:
-				if err.Status == http.StatusNotFound {
-					fmt.Fprintln(c.App.Writer, "Rebalance is not running or hasn't started yet.")
-					return nil
-				}
-				return err
-			default:
-				return err
-			}
-		}
-
-		allSnaps := make([]*targetRebSnap, 0, 100)
-		for daemonID, daemonStats := range rebSnaps {
-			for _, sts := range daemonStats {
-				allSnaps = append(allSnaps, &targetRebSnap{
-					tid:  daemonID,
-					snap: sts,
-				})
-			}
-		}
-		sort.Slice(allSnaps, func(i, j int) bool {
-			if allSnaps[i].snap.ID != allSnaps[j].snap.ID {
-				return allSnaps[i].snap.ID > allSnaps[j].snap.ID
-			}
-			return allSnaps[i].tid < allSnaps[j].tid
-		})
-
-		// NOTE: when changing header do not forget to change `colCount` couple
-		//  lines below and `displayRebStats` logic.
-		if !hideHeader {
-			fmt.Fprintln(tw, "REB ID\t NODE\t OBJECTS RECV\t SIZE RECV\t OBJECTS SENT\t SIZE SENT\t START TIME\t END TIME\t ABORTED")
-		}
-		prevID := ""
-		for _, sts := range allSnaps {
-			if flagIsSet(c, allJobsFlag) {
-				if prevID != "" && sts.snap.ID != prevID {
-					fmt.Fprintln(tw, strings.Repeat("\t ", 9 /*colCount*/))
-				}
-				displayRebStats(tw, sts)
-			} else {
-				if prevID != "" && sts.snap.ID != prevID {
-					break
-				}
-				latestAborted = latestAborted || sts.snap.AbortedX
-				latestFinished = latestFinished || !sts.snap.EndTime.IsZero()
-				displayRebStats(tw, sts)
-			}
-			prevID = sts.snap.ID
-		}
-		tw.Flush()
-
-		if !flagIsSet(c, allJobsFlag) {
-			if latestFinished && latestAborted {
-				fmt.Fprintln(c.App.Writer, "\nRebalance aborted.")
-				break
-			} else if latestFinished {
-				fmt.Fprintln(c.App.Writer, "\nRebalance completed.")
-				break
-			}
-		}
-
-		if !keepMonitoring {
-			break
-		}
-
-		time.Sleep(refreshRate)
-	}
-
-	return nil
-}
-
-func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
-	endTime := tmpls.NotSetVal
-	if !st.snap.EndTime.IsZero() {
-		endTime = st.snap.EndTime.Format("01-02 15:04:05")
-	}
-	startTime := st.snap.StartTime.Format("01-02 15:04:05")
-
-	fmt.Fprintf(tw,
-		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %t\n",
-		st.snap.ID, st.tid,
-		st.snap.Stats.InObjs, cos.B2S(st.snap.Stats.InBytes, 2),
-		st.snap.Stats.OutObjs, cos.B2S(st.snap.Stats.OutBytes, 2),
-		startTime, endTime, st.snap.IsAborted(),
-	)
 }

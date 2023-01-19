@@ -391,7 +391,7 @@ var (
 		"ExtECGetStats":     extECGetStats,
 		"ExtECPutStats":     extECPutStats,
 		"FormatNameArch":    fmtNameArch,
-		"FormatXactState":   fmtXactStatus,
+		"FormatXactState":   FmtXactStatus,
 		// for all stats.DaemonStatus structs in `h`: select specific field
 		// and make a slice, and then a string out of it
 		"OnlineStatus": func(h DaemonStatusTemplateHelper) string { return toString(h.onlineStatus()) },
@@ -718,14 +718,14 @@ func fmtRebStatus(rebSnap *cluster.Snap) string {
 	return unknownVal
 }
 
-func fmtXactStatus(xctn *cluster.Snap) string {
-	if xctn.AbortedX {
+func FmtXactStatus(snap *cluster.Snap) string {
+	if snap.AbortedX {
 		return xactStateAborted
 	}
-	if !xctn.EndTime.IsZero() {
+	if !snap.EndTime.IsZero() {
 		return xactStateFinished
 	}
-	if xctn.IsIdle() {
+	if snap.IsIdle() {
 		return xactStateIdle
 	}
 	return xactStateRunning

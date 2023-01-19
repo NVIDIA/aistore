@@ -238,7 +238,6 @@ func (a *acli) setupCommands() {
 		storageCmd,
 		archCmd,
 		logCmd,
-		rebalanceCmd,
 		remClusterCmd,
 		a.getAliasCmd(),
 	}

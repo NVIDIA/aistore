@@ -98,11 +98,6 @@ var (
 		subcmdBMD: {
 			jsonFlag,
 		},
-		subcmdRebalance: append(
-			longRunFlags,
-			allJobsFlag,
-			noHeaderFlag,
-		),
 		subcmdBucket: {
 			jsonFlag,
 			compactPropFlag,
@@ -205,12 +200,6 @@ var (
 			},
 		},
 	}
-	showCmdRebalance = cli.Command{
-		Name:   subcmdRebalance,
-		Usage:  "show rebalance details",
-		Flags:  showCmdsFlags[subcmdRebalance],
-		Action: showRebalanceHandler,
-	}
 	showCmdBucket = cli.Command{
 		Name:         subcmdBucket,
 		Usage:        "show bucket properties",
@@ -299,6 +288,10 @@ func showJobsHandler(c *cli.Context) error {
 	name, xid, daemonID, bck, err := jobArgs(c, 0, false /*ignore daemonID*/)
 	if err != nil {
 		return err
+	}
+
+	if name == subcmdRebalance {
+		return showRebalanceHandler(c)
 	}
 
 	setLongRunParams(c, 72)
@@ -591,10 +584,6 @@ func showObjectHandler(c *cli.Context) (err error) {
 		return err
 	}
 	return showObjProps(c, bck, object)
-}
-
-func showRebalanceHandler(c *cli.Context) (err error) {
-	return showRebalance(c, flagIsSet(c, refreshFlag), calcRefreshRate(c))
 }
 
 func showBckPropsHandler(c *cli.Context) (err error) {

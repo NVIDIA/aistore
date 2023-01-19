@@ -202,7 +202,8 @@ const (
 	optionalJobIDArgument         = "[JOB_ID]"
 	optionalJobIDDaemonIDArgument = "[JOB_ID [NODE_ID]]"
 
-	jobShowStopWaitArgument = "[NAME] [JOB_ID] [NODE_ID] [BUCKET]"
+	jobShowStopWaitArgument  = "[NAME] [JOB_ID] [NODE_ID] [BUCKET]"
+	jobShowRebalanceArgument = "[REB_ID] [NODE_ID]"
 
 	// ETL
 	etlNameArgument     = "ETL_NAME"
