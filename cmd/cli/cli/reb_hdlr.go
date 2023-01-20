@@ -172,20 +172,7 @@ func showRebalanceHandler(c *cli.Context) error {
 }
 
 func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
-	var (
-		endTime    = tmpls.NotSetVal
-		y1, m1, d1 = st.snap.StartTime.Date()
-		f          = cos.StampSec
-	)
-	if !st.snap.EndTime.IsZero() {
-		y2, m2, d2 := st.snap.EndTime.Date()
-		if y1 != y2 || m1 != m2 || d1 != d2 {
-			f = time.Stamp
-		}
-		endTime = cos.FormatTime(st.snap.EndTime, f)
-	}
-	startTime := cos.FormatTime(st.snap.StartTime, f)
-
+	startTime, endTime := tmpls.FmtStartEnd(st.snap.StartTime, st.snap.EndTime)
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %s\n",
 		st.snap.ID, st.tid,

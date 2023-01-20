@@ -143,7 +143,7 @@ var (
 					},
 					{
 						Name:         subcmdStartMaint,
-						Usage:        "put node under \"maintenance\", temporarily suspend its operation",
+						Usage:        "put node in maintenance mode, temporarily suspend its operation",
 						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[subcmdStartMaint],
 						Action:       nodeMaintShutDecommHandler,

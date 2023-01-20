@@ -18,12 +18,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
-	"k8s.io/apimachinery/pkg/util/duration"
 )
 
 const (
@@ -62,9 +60,9 @@ const (
 		"{{ if (eq $nonElect true) }} ProxyID: {{$key}}\n{{end}}{{end}}\n" +
 		"Primary Proxy: {{.Smap.Primary.ID}}\nProxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
 
-	//////////////////
-	// Cluster info //
-	//////////////////
+	//
+	// Cluster
+	//
 
 	ClusterSummary = "Summary:\n  Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} unelectable)\n  " +
 		"Targets:\t{{len .Smap.Tmap}}\n  " +
@@ -109,7 +107,7 @@ const (
 		"{{end}}"
 
 	//
-	// special
+	// special xactions & dsort
 	//
 
 	downloadListHdr  = "JOB ID\t XACTION\t STATUS\t ERRORS\t DESCRIPTION\n"
@@ -126,7 +124,10 @@ const (
 		"{{if $value.Aborted}}Aborted" +
 		"{{else if $value.Archived}}Finished" +
 		"{{else}}Running" +
-		"{{end}}\t {{FormatTime $value.StartedTime}}\t {{FormatTime $value.FinishTime}} \t {{$value.Description}}\n"
+		"{{end}}\t " +
+		"{{FormatStart $value.StartedTime $value.FinishTime}}\t " +
+		"{{FormatEnd $value.StartedTime $value.FinishTime}}\t " +
+		"{{$value.Description}}\n"
 	DSortListNoHdrTmpl = "{{ range $value := . }}" + dsortListBody + "{{end}}"
 	DSortListTmpl      = dsortListHdr + DSortListNoHdrTmpl
 
@@ -137,7 +138,7 @@ const (
 	TransformListTmpl      = transformListHdr + TransformListNoHdrTmpl
 
 	//
-	// other Xactions
+	// all other xactions
 	//
 	XactBucketTmpl      = xactBucketHdr + XactNoHdrBucketTmpl
 	XactNoHdrBucketTmpl = "{{range $daemon := . }}" + xactBucketBodyAll + "{{end}}"
@@ -150,8 +151,8 @@ const (
 		"{{FormatBckName $xctn.Bck}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
-		"{{FormatTime $xctn.StartTime}}\t " +
-		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
 	// same as above except for: src-bck, dst-bck columns
@@ -167,8 +168,8 @@ const (
 		"{{FormatBckName $xctn.DstBck}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
-		"{{FormatTime $xctn.StartTime}}\t " +
-		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
 	// same as above for: no bucket column
@@ -182,8 +183,8 @@ const (
 		"{{$xctn.Kind}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
-		"{{FormatTime $xctn.StartTime}}\t " +
-		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
 	XactECGetStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
@@ -201,8 +202,8 @@ const (
 		"{{if (eq $ext.AvgQueueLen 0.0) }}-{{else}}{{ FormatFloat $ext.AvgQueueLen}}{{end}}\t " +
 		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
 
-		"{{FormatTime $xctn.StartTime}}\t " +
-		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
 	XactECPutStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
@@ -221,8 +222,8 @@ const (
 		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
 		"{{if (eq $ext.AvgEncodeTime 0) }}-{{else}}{{FormatMilli $ext.AvgEncodeTime}}{{end}}\t " +
 
-		"{{FormatTime $xctn.StartTime}}\t " +
-		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
 	ListBucketsHdr  = "NAME\t PRESENT\t OBJECTS (cached, remote)\t TOTAL SIZE (apparent, objects)\t USAGE(%)\n"
@@ -352,6 +353,36 @@ const (
 		"{{end}}{{end}}"
 )
 
+type (
+	// Used to return specific fields/objects for marshaling (MarshalIdent).
+	forMarshaler interface {
+		forMarshal() any
+	}
+	DiskStatsTemplateHelper struct {
+		TargetID string
+		DiskName string
+		Stat     ios.DiskStats
+	}
+	SmapTemplateHelper struct {
+		Smap         *cluster.Smap
+		ExtendedURLs bool
+	}
+	DaemonStatusTemplateHelper struct {
+		Pmap stats.DaemonStatusMap `json:"pmap"`
+		Tmap stats.DaemonStatusMap `json:"tmap"`
+	}
+	StatusTemplateHelper struct {
+		Smap      *cluster.Smap              `json:"smap"`
+		CluConfig *cmn.ClusterConfig         `json:"config"`
+		Status    DaemonStatusTemplateHelper `json:"status"`
+	}
+	ListBucketsTemplateHelper struct {
+		Bck   cmn.Bck
+		Props *cmn.BucketProps
+		Info  *cmn.BsummResult
+	}
+)
+
 var (
 	// ObjectPropsMap matches ObjEntry field
 	ObjectPropsMap = map[string]string{
@@ -367,13 +398,18 @@ var (
 		apc.GetPropsCached:   "{{FormatObjIsCached $obj}}",
 	}
 
+	// for extensions and override, see also:
+	// - AltFuncMapSizeBytes
+	// - HelpTemplateFuncMap
+	// - `altMap template.FuncMap` below
 	funcMap = template.FuncMap{
 		"FormatBytesSig":    cos.B2S,
 		"FormatBytesUns":    cos.UnsignedB2S,
 		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", cos.B2S(u, 2)) },
 		"IsUnsetTime":       isUnsetTime,
 		"IsFalse":           func(v bool) bool { return !v },
-		"FormatTime":        fmtTime,
+		"FormatStart":       func(s, e time.Time) string { res, _ := FmtStartEnd(s, e); return res },
+		"FormatEnd":         func(s, e time.Time) string { _, res := FmtStartEnd(s, e); return res },
 		"FormatEC":          FmtEC,
 		"FormatDur":         fmtDuration,
 		"FormatObjStatus":   fmtObjStatus,
@@ -410,157 +446,6 @@ var (
 		"Mod":      func(a, mod int) int { return a % mod },
 	}
 )
-
-type (
-	// Used to return specific fields/objects for marshaling (MarshalIdent).
-	forMarshaler interface {
-		forMarshal() any
-	}
-	DiskStatsTemplateHelper struct {
-		TargetID string
-		DiskName string
-		Stat     ios.DiskStats
-	}
-	SmapTemplateHelper struct {
-		Smap         *cluster.Smap
-		ExtendedURLs bool
-	}
-	DaemonStatusTemplateHelper struct {
-		Pmap stats.DaemonStatusMap `json:"pmap"`
-		Tmap stats.DaemonStatusMap `json:"tmap"`
-	}
-	StatusTemplateHelper struct {
-		Smap      *cluster.Smap              `json:"smap"`
-		CluConfig *cmn.ClusterConfig         `json:"config"`
-		Status    DaemonStatusTemplateHelper `json:"status"`
-	}
-	ListBucketsTemplateHelper struct {
-		Bck   cmn.Bck
-		Props *cmn.BucketProps
-		Info  *cmn.BsummResult
-	}
-)
-
-// interface guard
-var _ forMarshaler = SmapTemplateHelper{}
-
-func (sth SmapTemplateHelper) forMarshal() any {
-	return sth.Smap
-}
-
-// Gets the associated value from CoreStats
-func extractStat(daemon *stats.CoreStats, statName string) int64 {
-	if daemon == nil {
-		return 0
-	}
-	return daemon.Tracker[statName].Value
-}
-
-func calcCapPercentage(daemon *stats.DaemonStatus) (total float64) {
-	for _, fs := range daemon.Capacity {
-		total += float64(fs.PctUsed)
-	}
-
-	if len(daemon.Capacity) == 0 {
-		return 0
-	}
-	return total / float64(len(daemon.Capacity))
-}
-
-func calcCap(daemon *stats.DaemonStatus) (total uint64) {
-	for _, fs := range daemon.Capacity {
-		total += fs.Avail
-	}
-	return total
-}
-
-func fmtObjStatus(obj *cmn.LsoEntry) string {
-	switch obj.Status() {
-	case apc.LocOK:
-		return "ok"
-	case apc.LocMisplacedNode:
-		return "misplaced(cluster)"
-	case apc.LocMisplacedMountpath:
-		return "misplaced(mountpath)"
-	case apc.LocIsCopy:
-		return "replica"
-	case apc.LocIsCopyMissingObj:
-		return "replica(object-is-missing)"
-	default:
-		debug.Assertf(false, "%#v", obj)
-		return "invalid"
-	}
-}
-
-func fmtObjIsCached(obj *cmn.LsoEntry) string {
-	return FmtBool(obj.CheckExists())
-}
-
-// FmtBool returns "yes" if true, else "no"
-func FmtBool(t bool) string {
-	if t {
-		return "yes"
-	}
-	return "no"
-}
-
-// see also: cli.isUnsetTime and cli.fmtBucketCreatedTime
-func isUnsetTime(t time.Time) bool {
-	return t.IsZero()
-}
-
-// see also: cli.isUnsetTime and cli.fmtBucketCreatedTime
-func fmtTime(t time.Time) string {
-	if t.IsZero() {
-		return NotSetVal
-	}
-	return t.Format("01-02 15:04:05")
-}
-
-func fmtObjCustom(custom string) string {
-	if custom != "" {
-		return custom
-	}
-	return NotSetVal
-}
-
-// FmtCopies formats an int to a string, where 0 becomes "-"
-func FmtCopies(copies int) string {
-	if copies == 0 {
-		return unknownVal
-	}
-	return fmt.Sprint(copies)
-}
-
-// FmtEC formats EC data (DataSlices, ParitySlices, IsECCopy) into a
-// readable string for CLI, e.g. "1:2[encoded]"
-func FmtEC(gen int64, data, parity int, isCopy bool) string {
-	if data == 0 {
-		return unknownVal
-	}
-	info := fmt.Sprintf("%d:%d (gen %d)", data, parity, gen)
-	if isCopy {
-		info += "[replicated]"
-	} else {
-		info += "[encoded]"
-	}
-	return info
-}
-
-func fmtDuration(ns int64) string { return duration.HumanDuration(time.Duration(ns)) }
-
-func fmtDaemonID(id string, smap cluster.Smap) string {
-	si := smap.GetNode(id)
-	if id == smap.Primary.ID() {
-		return id + primarySuffix
-	}
-	if smap.NonElectable(si) {
-		return id + nonElectableSuffix
-	}
-	return id
-}
-
-func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }
 
 // Main function to print formatted output
 // NOTE: if usejs, outputTemplate is ignored
@@ -601,23 +486,57 @@ func Print(object any, writer io.Writer, outputTemplate string, altMap template.
 	return w.Flush()
 }
 
-func fmtStringList(lst []string) string {
-	if len(lst) == 0 {
-		return unknownVal
-	}
-	return fmtStringListGeneric(lst, ",")
+func AltFuncMapSizeBytes() (m template.FuncMap) {
+	m = make(template.FuncMap, 2)
+	m["FormatBytesSig"] = func(b int64, _ int) string { return strconv.FormatInt(b, 10) }
+	m["FormatBytesUns"] = func(b uint64, _ int) string { return strconv.FormatInt(int64(b), 10) }
+	m["FormatMAM"] = func(u int64) string { return fmt.Sprintf("%-10d", u) }
+	return
 }
 
-func fmtStringListGeneric(lst []string, sep string) string {
-	var s strings.Builder
-	for idx, url := range lst {
-		if idx != 0 {
-			fmt.Fprint(&s, sep)
-		}
-		fmt.Fprint(&s, url)
-	}
-	return s.String()
+////////////////////////
+// SmapTemplateHelper //
+////////////////////////
+
+var _ forMarshaler = SmapTemplateHelper{}
+
+func (sth SmapTemplateHelper) forMarshal() any {
+	return sth.Smap
 }
+
+// Gets the associated value from CoreStats
+func extractStat(daemon *stats.CoreStats, statName string) int64 {
+	if daemon == nil {
+		return 0
+	}
+	return daemon.Tracker[statName].Value
+}
+
+//
+// stats.DaemonStatus
+//
+
+func calcCapPercentage(daemon *stats.DaemonStatus) (total float64) {
+	for _, fs := range daemon.Capacity {
+		total += float64(fs.PctUsed)
+	}
+
+	if len(daemon.Capacity) == 0 {
+		return 0
+	}
+	return total / float64(len(daemon.Capacity))
+}
+
+func calcCap(daemon *stats.DaemonStatus) (total uint64) {
+	for _, fs := range daemon.Capacity {
+		total += fs.Avail
+	}
+	return total
+}
+
+////////////////////////////////
+// DaemonStatusTemplateHelper //
+////////////////////////////////
 
 // for all stats.DaemonStatus structs: select specific field and append to the returned slice
 // (using the corresponding jtags here for no particular reason)
@@ -654,87 +573,4 @@ func (h *DaemonStatusTemplateHelper) toSlice(jtag string) []string {
 		}
 	}
 	return set.ToSlice()
-}
-
-// internal helper for the methods above
-func toString(lst []string) string {
-	switch len(lst) {
-	case 0:
-		return NotSetVal
-	case 1:
-		return lst[0]
-	default:
-		return "[" + strings.Join(lst, ", ") + "]"
-	}
-}
-
-func fmtACL(acl apc.AccessAttrs) string {
-	if acl == 0 {
-		return unknownVal
-	}
-	return acl.Describe()
-}
-
-func extECGetStats(base *cluster.Snap) *ec.ExtECGetStats {
-	ecGet := &ec.ExtECGetStats{}
-	if err := cos.MorphMarshal(base.Ext, ecGet); err != nil {
-		return &ec.ExtECGetStats{}
-	}
-	return ecGet
-}
-
-func extECPutStats(base *cluster.Snap) *ec.ExtECPutStats {
-	ecPut := &ec.ExtECPutStats{}
-	if err := cos.MorphMarshal(base.Ext, ecPut); err != nil {
-		return &ec.ExtECPutStats{}
-	}
-	return ecPut
-}
-
-func fmtMilli(val cos.Duration) string {
-	return cos.FormatMilli(time.Duration(val))
-}
-
-func fmtNameArch(val string, flags uint16) string {
-	if flags&apc.EntryInArch == 0 {
-		return val
-	}
-	return "    " + val
-}
-
-func fmtRebStatus(rebSnap *cluster.Snap) string {
-	if rebSnap == nil {
-		return unknownVal
-	}
-	if rebSnap.IsAborted() {
-		return fmt.Sprintf("aborted(%s)", rebSnap.ID)
-	}
-	if rebSnap.EndTime.IsZero() {
-		return fmt.Sprintf("running(%s)", rebSnap.ID)
-	}
-	if time.Since(rebSnap.EndTime) < rebalanceExpirationTime {
-		return fmt.Sprintf("finished(%s)", rebSnap.ID)
-	}
-	return unknownVal
-}
-
-func FmtXactStatus(snap *cluster.Snap) string {
-	if snap.AbortedX {
-		return xactStateAborted
-	}
-	if !snap.EndTime.IsZero() {
-		return xactStateFinished
-	}
-	if snap.IsIdle() {
-		return xactStateIdle
-	}
-	return xactStateRunning
-}
-
-func AltFuncMapSizeBytes() (m template.FuncMap) {
-	m = make(template.FuncMap, 2)
-	m["FormatBytesSig"] = func(b int64, _ int) string { return strconv.FormatInt(b, 10) }
-	m["FormatBytesUns"] = func(b uint64, _ int) string { return strconv.FormatInt(int64(b), 10) }
-	m["FormatMAM"] = func(u int64) string { return fmt.Sprintf("%-10d", u) }
-	return
 }
