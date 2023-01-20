@@ -106,12 +106,16 @@ func (a *acli) runForever(args []string) error {
 	rate := a.longRun.refreshRate
 	for {
 		time.Sleep(rate)
-		if a.longRun.footer > 0 {
-			fmt.Fprintln(a.outWriter, fcyan(strings.Repeat("-", a.longRun.footer)))
-		}
+		printLongRunFooter(a.outWriter, a.longRun.footer)
 		if err := a.runOnce(args); err != nil {
 			return err
 		}
+	}
+}
+
+func printLongRunFooter(w io.Writer, repeat int) {
+	if repeat > 0 {
+		fmt.Fprintln(w, fcyan(strings.Repeat("-", repeat)))
 	}
 }
 

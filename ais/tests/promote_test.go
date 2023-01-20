@@ -209,9 +209,8 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 	// vs xaction stats
 	if xactID != "" {
 		if test.singleTarget {
-			tassert.Errorf(t, locObjs+outObjs == int64(expNum),
-				"single-target promote: expected sum(loc+out)==%d, got (%d + %d)=%d",
-				expNum, locObjs, outObjs, locObjs+outObjs)
+			tassert.Errorf(t, locObjs == int64(expNum),
+				"single-target promote: expected promoted-objs-num==%d, got %d", expNum, locObjs)
 		} else if !test.notFshare {
 			tassert.Errorf(t, int(locObjs) == expNum && int(inObjs) == 0 && int(outObjs) == 0,
 				"file share: expected each target to handle the entire content locally, got (loc, out, in) = (%d, %d, %d)",
@@ -262,9 +261,8 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 	// all the rest already exists and is not expected to "show up" in the stats
 	if xactID != "" {
 		if test.singleTarget {
-			tassert.Errorf(t, locObjs+outObjs == int64(numDel),
-				"single-target promote: expected sum(loc+out)==%d, got (%d + %d)=%d",
-				expNum, locObjs, outObjs, locObjs+outObjs)
+			tassert.Errorf(t, locObjs == int64(numDel),
+				"single-target promote: expected to \"undelete\" %d objects, got %d", expNum, locObjs)
 		} else if !test.notFshare {
 			tassert.Errorf(t, int(locObjs) == numDel && int(inObjs) == 0 && int(outObjs) == 0,
 				"file share: expected each target to handle the entire content locally, got (loc, out, in) = (%d, %d, %d)",

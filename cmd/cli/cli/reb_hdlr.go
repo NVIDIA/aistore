@@ -160,6 +160,7 @@ func showRebalanceHandler(c *cli.Context) error {
 		if !keepMonitoring {
 			break
 		}
+		printLongRunFooter(c.App.Writer, 72)
 		time.Sleep(refreshRate)
 	}
 
