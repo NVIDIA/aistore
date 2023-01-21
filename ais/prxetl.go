@@ -52,7 +52,7 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// /v1/etl/<uuid>
+	// /v1/etl/<etl-name>
 	if len(apiItems) == 1 {
 		p.infoETL(w, r, apiItems[0])
 		return
@@ -60,10 +60,10 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 
 	switch apiItems[1] {
 	case apc.ETLLogs:
-		// /v1/etl/<uuid>/logs[/<target-id>]
+		// /v1/etl/<etl-name>/logs[/<target-id>]
 		p.logsETL(w, r, apiItems[0], apiItems[2:]...)
 	case apc.ETLHealth:
-		// /v1/etl/<uuid>/health
+		// /v1/etl/<etl-name>/health
 		p.healthETL(w, r)
 	default:
 		p.writeErrURL(w, r)
@@ -117,7 +117,7 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/etl/<uuid>/stop (or) /v1/etl/<uuid>/start
+// POST /v1/etl/<etl-name>/stop (or) /v1/etl/<etl-name>/start
 //
 // start/stop ETL pods
 func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +148,7 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DELETE /v1/etl/<uuid>
+// DELETE /v1/etl/<etl-name>
 func (p *proxy) handleETLDelete(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.apiItems(w, r, 1, true, apc.URLPathETL.L)
 	if err != nil {
@@ -248,7 +248,7 @@ func (p *proxy) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
 	}
 }
 
-// GET /v1/etl/<uuid>
+// GET /v1/etl/<etl-name>
 func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	if err := k8s.ValidateEtlName(etlName); err != nil {
 		p.writeErr(w, r, err)
@@ -303,7 +303,7 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, *etls, "list-etl")
 }
 
-// GET /v1/etl/<uuid>/logs[/<target_id>]
+// GET /v1/etl/<etl-name>/logs[/<target_id>]
 func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, apiItems ...string) {
 	var (
 		results sliceResults
@@ -352,7 +352,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 	p.writeJSON(w, r, logs, "logs-etl")
 }
 
-// GET /v1/etl/<uuid>/health
+// GET /v1/etl/<etl-name>/health
 func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	var (
 		results sliceResults
@@ -379,7 +379,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, healths, "health-etl")
 }
 
-// POST /v1/etl/<uuid>/stop
+// POST /v1/etl/<etl-name>/stop
 func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path}

@@ -307,36 +307,39 @@ func showJobsHandler(c *cli.Context) error {
 
 func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, error) {
 	if name != "" {
-		return _showJobs(c, name, xid, daemonID, bck, false /*caption*/)
+		return _showJobs(c, name, xid, daemonID, bck, xid == "" /*caption*/)
 	}
 
-	// show all grouped by name (kind)
-	if xid == "" {
-		var ll int
-		names := xact.ListDisplayNames(false /*only-startable*/)
-		names = append(names, dsort.DSortName)
-		sort.Strings(names)
-		for _, name = range names {
-			l, err := _showJobs(c, name, "" /*xid*/, daemonID, bck, true)
-			if err != nil {
-				actionWarn(c, err.Error())
-			}
-			ll += l
+	// special (best-effort)
+	if xid != "" {
+		var otherID string
+		name, otherID = xid2Name(xid)
+		switch name {
+		case subcmdDownload:
+			return _showJobs(c, subcmdDownload, xid, daemonID, bck, false)
+		case subcmdDsort:
+			return _showJobs(c, subcmdDsort, xid, daemonID, bck, false)
+		case commandETL:
+			return _showJobs(c, commandETL, otherID /*etl name*/, daemonID, bck, false)
 		}
-		return ll, nil
 	}
 
-	var otherID string
-	name, otherID = xid2Name(xid)
-	switch name {
-	case subcmdDownload:
-		return _showJobs(c, subcmdDownload, xid, daemonID, bck, true)
-	case subcmdDsort:
-		return _showJobs(c, subcmdDsort, xid, daemonID, bck, true)
-	case commandETL:
-		return _showJobs(c, commandETL, otherID /*etl name*/, daemonID, bck, true)
+	var (
+		ll  int
+		err error
+	)
+	names := xact.ListDisplayNames(false /*only-startable*/)
+	names = append(names, dsort.DSortName)
+	sort.Strings(names)
+	for _, name = range names {
+		l, errV := _showJobs(c, name, "" /*xid*/, daemonID, bck, true)
+		if errV != nil {
+			actionWarn(c, errV.Error())
+			err = errV
+		}
+		ll += l
 	}
-	return _showJobs(c, "" /*name*/, xid, daemonID, bck, true)
+	return ll, err
 }
 
 func jobCptn(c *cli.Context, name string, onlyActive bool, xid string, byTarget bool) {
@@ -455,22 +458,50 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, erro
 	}
 
 	var (
-		xactKind           = xactArgs.Kind
-		dts                = make([]daemonTemplateXactSnaps, len(xs))
-		i                  int
-		fromToBck, haveBck bool
+		ll           int
+		allXactKinds = extractXactKinds(xs)
 	)
-	for tid, snaps := range xs {
-		if xactArgs.DaemonID != "" && xactArgs.DaemonID != tid {
-			continue
+	for _, xactKind := range allXactKinds {
+		xactIDs := extractXactIDsForKind(xs, xactKind)
+		for _, xactID := range xactIDs {
+			xactArgs.Kind, xactArgs.ID = xactKind, xactID
+			l, err := xlistByKindID(c, xactArgs, caption, xs)
+			if err != nil {
+				actionWarn(c, err.Error())
+			}
+			ll += l
 		}
+	}
+	return ll, nil
+}
+
+func xlistByKindID(c *cli.Context, xactArgs api.XactReqArgs, caption bool, xs api.XactMultiSnap) (int, error) {
+	// first, extract snaps for: xactArgs.ID, Kind
+	filteredXs := make(api.XactMultiSnap, 8)
+	for tid, snaps := range xs {
+		for _, snap := range snaps {
+			if snap.ID != xactArgs.ID {
+				continue
+			}
+			debug.Assert(snap.Kind == xactArgs.Kind)
+			if _, ok := filteredXs[tid]; !ok {
+				filteredXs[tid] = make([]*cluster.Snap, 0, 8)
+			}
+			filteredXs[tid] = append(filteredXs[tid], snap)
+		}
+	}
+
+	// second, filteredXs => dts templates
+	var (
+		fromToBck, haveBck bool
+		dts                = make([]daemonTemplateXactSnaps, 0, len(filteredXs))
+	)
+	for tid, snaps := range filteredXs {
 		if len(snaps) == 0 {
 			continue
 		}
-		if xactKind == "" {
-			xactKind = snaps[0].Kind
-		} else {
-			debug.Assertf(xactKind == snaps[0].Kind, "%s vs %s", xactKind, snaps[0].Kind)
+		if xactArgs.DaemonID != "" && xactArgs.DaemonID != tid {
+			continue
 		}
 		if !snaps[0].SrcBck.IsEmpty() {
 			debug.Assert(!snaps[0].DstBck.IsEmpty())
@@ -478,40 +509,13 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, erro
 		} else if !snaps[0].Bck.IsEmpty() {
 			haveBck = true
 		}
-		if len(snaps) > 1 {
-			sort.Slice(snaps, func(i, j int) bool {
-				di, dj := snaps[i], snaps[j]
-				if di.Kind == dj.Kind {
-					// ascending by running
-					if di.Running() && dj.Running() {
-						return di.ID < dj.ID
-					}
-					if di.Running() && !dj.Running() {
-						return true
-					}
-					if !di.Running() && dj.Running() {
-						return false
-					}
-					if di.IsAborted() && !dj.IsAborted() {
-						return true
-					}
-					if !di.IsAborted() && dj.IsAborted() {
-						return false
-					}
-					return di.ID < dj.ID
-				}
-				return di.Kind < dj.Kind // ascending by kind
-			})
-		}
-
-		dts[i] = daemonTemplateXactSnaps{DaemonID: tid, XactSnaps: snaps}
-		i++
+		dts = append(dts, daemonTemplateXactSnaps{DaemonID: tid, XactSnaps: snaps})
 	}
 	sort.Slice(dts, func(i, j int) bool {
 		return dts[i].DaemonID < dts[j].DaemonID // ascending by node id/name
 	})
 
-	_, xname := xact.GetKindName(xactKind)
+	_, xname := xact.GetKindName(xactArgs.Kind)
 	if caption {
 		jobCptn(c, xname, xactArgs.OnlyRunning, xactArgs.ID, xactArgs.DaemonID != "")
 	}
@@ -520,8 +524,9 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, erro
 	var (
 		usejs      = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
+		err        error
 	)
-	switch xactKind {
+	switch xactArgs.Kind {
 	case apc.ActECGet:
 		if hideHeader {
 			return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECGetNoHdrTmpl, nil, usejs)

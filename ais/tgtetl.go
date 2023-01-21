@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -91,13 +91,13 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// /v1/etl/<uuid>
+	// /v1/etl/<etl-name>
 	if len(apiItems) == 1 {
 		t.writeErr(w, r, fmt.Errorf("GET(ETL[%s] info) not implemented yet", apiItems[0]), http.StatusNotImplemented)
 		return
 	}
 
-	// /v1/etl/<uuid>/logs or /v1/etl/<uuid>/health
+	// /v1/etl/<etl-name>/logs or /v1/etl/<etl-name>/health
 	switch apiItems[1] {
 	case apc.ETLLogs:
 		t.logsETL(w, r, apiItems[0])
@@ -108,7 +108,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/etl/<uuid>/stop (or) TODO: /v1/etl/<uuid>/start
+// POST /v1/etl/<etl-name>/stop (or) TODO: /v1/etl/<etl-name>/start
 //
 // handleETLPost handles start/stop ETL pods
 func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +208,7 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 
 // GET /v1/etl/_objects/<secret>/<uname>
 // NOTE: this is an internal URL, `_objects` in the path is chosen to avoid
-// conflicts with ETL UUID in URL paths of format `/v1/elts/<uuid>/...`
+// conflicts with ETL UUID in URL paths of format `/v1/elts/<etl-name>/...`
 //
 // getObjectETL handles GET requests from ETL containers (K8s Pods).
 // getObjectETL validates the secret that was injected into a Pod during its initialization.

@@ -177,3 +177,53 @@ func queryXactions(xactArgs api.XactReqArgs) (xs api.XactMultiSnap, err error) {
 	}
 	return
 }
+
+//
+// api.XactMultiSnap regrouping helpers
+//
+
+func extractXactKinds(xs api.XactMultiSnap) []string {
+	var out = make(cos.StrSet, 8)
+	for _, snaps := range xs {
+		for _, snap := range snaps {
+			out[snap.Kind] = struct{}{}
+		}
+	}
+	x := out.ToSlice()
+	sort.Strings(x)
+	return x
+}
+
+// sorted by start time
+func extractXactIDsForKind(xs api.XactMultiSnap, xactKind string) (xactIDs []string) {
+	// prep. temp timedIDs
+	timedIDs := make(map[string]time.Time, 8)
+	for _, snaps := range xs {
+		for _, snap := range snaps {
+			if snap.Kind != xactKind {
+				continue
+			}
+			if _, ok := timedIDs[snap.ID]; !ok {
+				timedIDs[snap.ID] = snap.StartTime
+				continue
+			}
+			// take the earliest
+			if timedIDs[snap.ID].After(snap.StartTime) {
+				timedIDs[snap.ID] = snap.StartTime
+			}
+		}
+	}
+	// fill and sort
+	xactIDs = make([]string, 0, len(timedIDs))
+	for xid := range timedIDs {
+		xactIDs = append(xactIDs, xid)
+	}
+	if len(xactIDs) <= 1 {
+		return
+	}
+	sort.Slice(xactIDs, func(i, j int) bool {
+		xi, xj := xactIDs[i], xactIDs[j]
+		return timedIDs[xi].Before(timedIDs[xj])
+	})
+	return
+}
