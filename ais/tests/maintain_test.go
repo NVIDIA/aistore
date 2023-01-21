@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -78,8 +78,8 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
-	for _, entry := range lst.Entries {
-		origEntries[entry.Name] = entry
+	for _, en := range lst.Entries {
+		origEntries[en.Name] = en
 	}
 
 	// 2. Put a random target under maintenance
@@ -113,14 +113,14 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
-	for _, entry := range lst.Entries {
-		origEntry, ok := origEntries[entry.Name]
-		tassert.Fatalf(t, ok, "object %s missing in original entries", entry.Name)
-		if entry.Checksum != origEntry.Checksum ||
-			entry.Version != origEntry.Version ||
-			entry.Flags != origEntry.Flags ||
-			entry.Copies != origEntry.Copies {
-			t.Errorf("some fields of object %q, don't match: %#v v/s %#v ", entry.Name, entry, origEntry)
+	for _, en := range lst.Entries {
+		origEntry, ok := origEntries[en.Name]
+		tassert.Fatalf(t, ok, "object %s missing in original entries", en.Name)
+		if en.Checksum != origEntry.Checksum ||
+			en.Version != origEntry.Version ||
+			en.Flags != origEntry.Flags ||
+			en.Copies != origEntry.Copies {
+			t.Errorf("some fields of object %q, don't match: %#v v/s %#v ", en.Name, en, origEntry)
 		}
 	}
 }
@@ -518,8 +518,8 @@ func TestShutdownListObjects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
-	for _, entry := range lst.Entries {
-		origEntries[entry.Name] = entry
+	for _, en := range lst.Entries {
+		origEntries[en.Name] = en
 	}
 
 	// 2. Shut down a random target.
@@ -564,13 +564,13 @@ func TestShutdownListObjects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
-	for _, entry := range lst.Entries {
-		origEntry, ok := origEntries[entry.Name]
-		tassert.Errorf(t, ok, "object %s missing in original entries", entry.Name)
-		if entry.Version != origEntry.Version ||
-			entry.Flags != origEntry.Flags ||
-			entry.Copies != origEntry.Copies {
-			t.Errorf("some fields of object %q, don't match: %#v v/s %#v ", entry.Name, entry, origEntry)
+	for _, en := range lst.Entries {
+		origEntry, ok := origEntries[en.Name]
+		tassert.Errorf(t, ok, "object %s missing in original entries", en.Name)
+		if en.Version != origEntry.Version ||
+			en.Flags != origEntry.Flags ||
+			en.Copies != origEntry.Copies {
+			t.Errorf("some fields of object %q, don't match: %#v v/s %#v ", en.Name, en, origEntry)
 		}
 	}
 }

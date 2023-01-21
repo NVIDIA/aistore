@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -388,13 +388,13 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 
 	tlog.Logf("Overwrite %s objects with newer versions\n", m.bck)
 	nsize := int64(m.fileSize) * 10
-	for _, entry := range objList.Entries {
+	for _, en := range objList.Entries {
 		reader, err := readers.NewRandReader(nsize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		err = api.PutObject(api.PutObjectArgs{
 			BaseParams: baseParams,
 			Bck:        m.bck,
-			Object:     entry.Name,
+			Object:     en.Name,
 			Reader:     reader,
 		})
 		tassert.CheckFatal(t, err)
@@ -411,8 +411,8 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	tassert.Fatalf(t, len(objList.Entries) == m.num, "expecting %d entries, have %d",
 		m.num, len(objList.Entries))
 
-	for _, entry := range objList.Entries {
-		n, s, c := entry.Name, entry.Size, entry.Copies
+	for _, en := range objList.Entries {
+		n, s, c := en.Name, en.Size, en.Copies
 		tassert.Fatalf(t, s == nsize, "%s: expecting size = %d, got %d", n, nsize, s)
 		tassert.Fatalf(t, c == 2, "%s: expecting copies = %d, got %d", n, 2, c)
 	}
@@ -619,7 +619,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	if !p.Versioning.Enabled {
-		t.Skip("test requires a remote bucket with enabled versioning")
+		t.Skipf("%s requires a remote bucket with enabled versioning", t.Name())
 	}
 
 	m.puts()
@@ -631,10 +631,10 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Checking %q object versions [total: %d]\n", m.bck, len(bckObjs.Entries))
-	for _, entry := range bckObjs.Entries {
-		tassert.Errorf(t, entry.Size != 0, "object %s does not have size", entry.Name)
+	for _, en := range bckObjs.Entries {
+		tassert.Errorf(t, en.Size != 0, "object %s does not have size", en.Name)
 		if !m.bck.IsHDFS() {
-			tassert.Errorf(t, entry.Version != "", "object %s does not have version", entry.Name)
+			tassert.Errorf(t, en.Version != "", "object %s does not have version", en.Name)
 		}
 	}
 }
@@ -736,7 +736,7 @@ func TestListObjectsGoBack(t *testing.T) {
 		for idx := range expectedEntries {
 			tassert.Errorf(
 				t, entries[idx].Name == expectedEntries[idx].Name,
-				"unexpected entry (got: %q, expected: %q)",
+				"unexpected en (got: %q, expected: %q)",
 				entries[idx], expectedEntries[idx],
 			)
 		}
@@ -849,6 +849,7 @@ func TestListObjectsProps(t *testing.T) {
 				fileSize:            128,
 				deleteRemoteBckObjs: true,
 			}
+			remoteVersioning bool
 		)
 
 		if !bck.IsAIS() {
@@ -859,8 +860,16 @@ func TestListObjectsProps(t *testing.T) {
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
+
+			s := "disabled"
+			p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
+			tassert.CheckFatal(t, err)
+			if remoteVersioning = p.Versioning.Enabled; remoteVersioning {
+				s = "enabled"
+			}
+			tlog.Logf("%s: versioning is %s\n", m.bck.DisplayName(), s)
 		}
-		checkProps := func(useCache bool, props []string, f func(entry *cmn.LsoEntry)) {
+		checkProps := func(useCache bool, props []string, f func(en *cmn.LsoEntry)) {
 			msg := &apc.LsoMsg{PageSize: 100}
 			if useCache {
 				msg.SetFlag(apc.UseListObjsCache)
@@ -872,77 +881,80 @@ func TestListObjectsProps(t *testing.T) {
 				t, len(objList.Entries) == m.num,
 				"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
 			)
-			for _, entry := range objList.Entries {
-				tassert.Errorf(t, entry.Name != "", "name is not set")
-				f(entry)
+			for _, en := range objList.Entries {
+				tassert.Errorf(t, en.Name != "", "name is not set")
+				f(en)
 			}
 		}
 
 		for _, useCache := range []bool{false, true} {
 			tlog.Logf("[cache=%t] trying empty (minimal) subset of props...\n", useCache)
-			checkProps(useCache, []string{}, func(entry *cmn.LsoEntry) {
-				tassert.Errorf(t, entry.Name != "", "name is not set")
-				tassert.Errorf(t, entry.Size != 0, "size is not set")
+			checkProps(useCache, []string{}, func(en *cmn.LsoEntry) {
+				tassert.Errorf(t, en.Name != "", "name is not set")
+				tassert.Errorf(t, en.Size != 0, "size is not set")
 
-				tassert.Errorf(t, entry.Atime == "", "atime is set")
-				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
-				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+				tassert.Errorf(t, en.Atime == "", "atime is set")
+				tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
+				tassert.Errorf(t, en.Copies == 0, "copies is set")
 			})
 
 			tlog.Logf("[cache=%t] trying ais-default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefaultAIS, func(entry *cmn.LsoEntry) {
-				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-				tassert.Errorf(t, entry.Atime != "", "atime is not set")
+			checkProps(useCache, apc.GetPropsDefaultAIS, func(en *cmn.LsoEntry) {
+				tassert.Errorf(t, en.Size != 0, "size is not set")
+				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
+				tassert.Errorf(t, en.Atime != "", "atime is not set")
 
-				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
-				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+				tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
+				tassert.Errorf(t, en.Copies == 0, "copies is set")
 			})
 
 			tlog.Logf("[cache=%t] trying cloud-default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefaultCloud, func(entry *cmn.LsoEntry) {
-				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-				tassert.Errorf(t, entry.Version != "", "version is not set")
-				tassert.Errorf(t, !m.bck.IsCloud() || entry.Custom != "", "custom is not set")
+			checkProps(useCache, apc.GetPropsDefaultCloud, func(en *cmn.LsoEntry) {
+				tassert.Errorf(t, en.Size != 0, "size is not set")
+				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
+				if bck.IsAIS() || remoteVersioning {
+					tassert.Errorf(t, en.Version != "", "version is not set")
+				}
+				tassert.Errorf(t, !m.bck.IsCloud() || en.Custom != "", "custom is not set")
 
-				tassert.Errorf(t, entry.Atime == "", "atime is set")
-				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+				tassert.Errorf(t, en.Atime == "", "atime is set")
+				tassert.Errorf(t, en.Copies == 0, "copies is set")
 			})
 
 			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
 			checkProps(useCache,
-				[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(entry *cmn.LsoEntry) {
-					tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-					if bck.IsAIS() || bck.Provider == apc.GCP {
-						tassert.Errorf(t, entry.Version != "",
-							"version is not set: "+m.bck.DisplayName()+"/"+entry.Name)
+				[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(en *cmn.LsoEntry) {
+					tassert.Errorf(t, en.Checksum != "", "checksum is not set")
+					if bck.IsAIS() || remoteVersioning {
+						tassert.Errorf(t, en.Version != "",
+							"version is not set: "+m.bck.DisplayName()+"/"+en.Name)
 					}
-					tassert.Errorf(t, entry.Copies > 0, "copies is not set")
+					tassert.Errorf(t, en.Copies > 0, "copies is not set")
 
-					tassert.Errorf(t, entry.Atime == "", "atime is set")
-					tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
+					tassert.Errorf(t, en.Atime == "", "atime is set")
+					tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
 				})
 
 			tlog.Logf("[cache=%t] trying small subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsSize}, func(entry *cmn.LsoEntry) {
-				tassert.Errorf(t, entry.Size != 0, "size is not set")
+			checkProps(useCache, []string{apc.GetPropsSize}, func(en *cmn.LsoEntry) {
+				tassert.Errorf(t, en.Size != 0, "size is not set")
 
-				tassert.Errorf(t, entry.Atime == "", "atime is set")
-				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
-				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+				tassert.Errorf(t, en.Atime == "", "atime is set")
+				tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
+				tassert.Errorf(t, en.Copies == 0, "copies is set")
 			})
 
 			tlog.Logf("[cache=%t] trying all props...\n", useCache)
-			checkProps(useCache, apc.GetPropsAll, func(entry *cmn.LsoEntry) {
-				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				if bck.IsAIS() || bck.Provider == apc.GCP {
-					tassert.Errorf(t, entry.Version != "", "version is not set: "+m.bck.DisplayName()+"/"+entry.Name)
+			checkProps(useCache, apc.GetPropsAll, func(en *cmn.LsoEntry) {
+				tassert.Errorf(t, en.Size != 0, "size is not set")
+				if bck.IsAIS() || remoteVersioning {
+					tassert.Errorf(t, en.Version != "",
+						"version is not set: "+m.bck.DisplayName()+"/"+en.Name)
 				}
-				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-				tassert.Errorf(t, entry.Atime != "", "atime is not set")
-				tassert.Errorf(t, entry.Location != "", "target location is not set [%#v]", entry)
-				tassert.Errorf(t, entry.Copies != 0, "copies is not set")
+				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
+				tassert.Errorf(t, en.Atime != "", "atime is not set")
+				tassert.Errorf(t, en.Location != "", "target location is not set [%#v]", en)
+				tassert.Errorf(t, en.Copies != 0, "copies is not set")
 			})
 		}
 	})
@@ -952,16 +964,24 @@ func TestListObjectsProps(t *testing.T) {
 func TestListObjectsRemoteCached(t *testing.T) {
 	var (
 		baseParams = tools.BaseAPIParams()
-
-		m = ioContext{
+		m          = ioContext{
 			t:        t,
 			bck:      cliBck,
 			num:      rand.Intn(100) + 10,
 			fileSize: 128,
 		}
-	)
 
+		remoteVersioning bool
+		s                = "disabled"
+	)
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+
+	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
+	tassert.CheckFatal(t, err)
+	if remoteVersioning = p.Versioning.Enabled; remoteVersioning {
+		s = "enabled"
+	}
+	tlog.Logf("%s: versioning is %s\n", m.bck.DisplayName(), s)
 
 	m.initWithCleanup()
 
@@ -970,6 +990,9 @@ func TestListObjectsRemoteCached(t *testing.T) {
 		m.remotePuts(evict)
 
 		msg := &apc.LsoMsg{PageSize: 10, Flags: apc.LsObjCached}
+		msg.AddProps(apc.GetPropsDefaultAIS...)
+		msg.AddProps(apc.GetPropsVersion)
+
 		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if evict {
@@ -982,15 +1005,16 @@ func TestListObjectsRemoteCached(t *testing.T) {
 				t, len(objList.Entries) == m.num,
 				"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
 			)
-			for _, entry := range objList.Entries {
-				tassert.Errorf(t, entry.Name != "", "name is not set")
-				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-				tassert.Errorf(t, entry.Atime != "", "atime is not set")
-				// NOTE: `entry.Version` value depends on remote bucket configuration.
-
-				tassert.Errorf(t, entry.Location == "", "target location is set %q", entry.Location)
-				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+			for _, en := range objList.Entries {
+				tassert.Errorf(t, en.Name != "", "name is not set")
+				tassert.Errorf(t, en.Size != 0, "size is not set")
+				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
+				tassert.Errorf(t, en.Atime != "", "atime is not set")
+				if remoteVersioning {
+					tassert.Errorf(t, en.Version != "", "version is not set")
+				}
+				tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
+				tassert.Errorf(t, en.Copies == 0, "copies is set")
 			}
 		}
 	}
@@ -1173,28 +1197,28 @@ func TestListObjects(t *testing.T) {
 				}
 
 				empty := &cmn.LsoEntry{}
-				for _, entry := range lst.Entries {
-					e, exists := objs.Load(entry.Name)
+				for _, en := range lst.Entries {
+					e, exists := objs.Load(en.Name)
 					if !exists {
-						t.Errorf("failed to locate %s/%s in bucket %s", bck.DisplayName(), entry.Name, bck)
+						t.Errorf("failed to locate %s/%s in bucket %s", bck.DisplayName(), en.Name, bck)
 						continue
 					}
 
 					obj := e.(objEntry)
-					if obj.size != entry.Size {
+					if obj.size != en.Size {
 						t.Errorf(
 							"sizes do not match for object %s, expected: %d, got: %d",
-							obj.name, obj.size, entry.Size,
+							obj.name, obj.size, en.Size,
 						)
 					}
 
-					if entry.Version == empty.Version {
-						t.Errorf("%s/%s version is empty (not set)", bck.DisplayName(), entry.Name)
-					} else if entry.Checksum == empty.Checksum ||
-						entry.Atime == empty.Atime ||
-						entry.Flags == empty.Flags ||
-						entry.Copies == empty.Copies {
-						t.Errorf("some fields of %s/%s are empty (not set): %#v", bck.DisplayName(), entry.Name, entry)
+					if en.Version == empty.Version {
+						t.Errorf("%s/%s version is empty (not set)", bck.DisplayName(), en.Name)
+					} else if en.Checksum == empty.Checksum ||
+						en.Atime == empty.Atime ||
+						en.Flags == empty.Flags ||
+						en.Copies == empty.Copies {
+						t.Errorf("some fields of %s/%s are empty (not set): %#v", bck.DisplayName(), en.Name, en)
 					}
 				}
 
@@ -1232,9 +1256,9 @@ func TestListObjects(t *testing.T) {
 						)
 					}
 
-					for _, entry := range lst.Entries {
-						if !strings.HasPrefix(entry.Name, prefix) {
-							t.Errorf("object %q does not have expected prefix: %q", entry.Name, prefix)
+					for _, en := range lst.Entries {
+						if !strings.HasPrefix(en.Name, prefix) {
+							t.Errorf("object %q does not have expected prefix: %q", en.Name, prefix)
 						}
 					}
 					return true
@@ -1277,8 +1301,8 @@ func TestListObjectsPrefix(t *testing.T) {
 				tlog.Logf("Cleaning up the remote bucket %s\n", bck)
 				lst, err := api.ListObjects(baseParams, bck, nil, 0)
 				tassert.CheckFatal(t, err)
-				for _, entry := range lst.Entries {
-					err := tools.Del(proxyURL, bck, entry.Name, nil, nil, false /*silent*/)
+				for _, en := range lst.Entries {
+					err := tools.Del(proxyURL, bck, en.Name, nil, nil, false /*silent*/)
 					tassert.CheckFatal(t, err)
 				}
 			} else {
@@ -2997,13 +3021,13 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		tlog.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
 		wg := cos.NewLimitedWaitGroup(40, 0)
 
-		for _, entry := range bckObjs.Entries {
+		for _, en := range bckObjs.Entries {
 			wg.Add(1)
 			go func(name string) {
 				defer wg.Done()
 				_, err = api.GetObjectWithValidation(baseParams, m.bck, name)
 				tassert.CheckError(t, err)
-			}(entry.Name)
+			}(en.Name)
 		}
 
 		wg.Wait()

@@ -1,6 +1,6 @@
 // Package s3_integration provides tests of compatibility with AWS S3
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 

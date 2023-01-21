@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -917,8 +917,8 @@ func TestDeleteRange(t *testing.T) {
 			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), objCnt-smallrangesize)
 		}
 		filemap := make(map[string]*cmn.LsoEntry)
-		for _, entry := range bktlst.Entries {
-			filemap[entry.Name] = entry
+		for _, en := range bktlst.Entries {
+			filemap[en.Name] = en
 		}
 		for i := 0; i < objCnt; i++ {
 			keyname := fmt.Sprintf("%s%04d", prefix, i)
@@ -1026,8 +1026,8 @@ func TestStressDeleteRange(t *testing.T) {
 	}
 
 	objNames := make(map[string]*cmn.LsoEntry)
-	for _, entry := range lst.Entries {
-		objNames[entry.Name] = entry
+	for _, en := range lst.Entries {
+		objNames[en.Name] = en
 	}
 	for i := 0; i < numFiles; i++ {
 		objName := fmt.Sprintf("%s%d", objNamePrefix, i)

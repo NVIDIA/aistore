@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -1188,8 +1188,8 @@ func TestAtimeRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	objNames := make(cos.StrKVs, 10)
-	for _, entry := range lst.Entries {
-		objNames[entry.Name] = entry.Atime
+	for _, en := range lst.Entries {
+		objNames[en.Name] = en.Atime
 	}
 
 	rebID := m.stopMaintenance(target)
@@ -1216,16 +1216,16 @@ func TestAtimeRebalance(t *testing.T) {
 	if itemCount != l {
 		t.Errorf("The number of objects mismatch: before %d, after %d", len(lst.Entries), itemCount)
 	}
-	for _, entry := range lstReb.Entries {
-		atime, ok := objNames[entry.Name]
+	for _, en := range lstReb.Entries {
+		atime, ok := objNames[en.Name]
 		if !ok {
-			t.Errorf("Object %q not found", entry.Name)
+			t.Errorf("Object %q not found", en.Name)
 			continue
 		}
-		if atime != entry.Atime {
-			t.Errorf("Atime mismatched for %s: before %q, after %q", entry.Name, atime, entry.Atime)
+		if atime != en.Atime {
+			t.Errorf("Atime mismatched for %s: before %q, after %q", en.Name, atime, en.Atime)
 		}
-		if entry.IsStatusOK() {
+		if en.IsStatusOK() {
 			itemCountOk++
 		}
 	}
@@ -1363,8 +1363,8 @@ func TestAtimePrefetch(t *testing.T) {
 	if len(lst.Entries) != numObjs {
 		t.Errorf("Number of objects mismatch: expected %d, found %d", numObjs, len(lst.Entries))
 	}
-	for _, entry := range lst.Entries {
-		atime, err := time.Parse(timeFormat, entry.Atime)
+	for _, en := range lst.Entries {
+		atime, err := time.Parse(timeFormat, en.Atime)
 		tassert.CheckFatal(t, err)
 		if atime.After(timeAfterPut) {
 			t.Errorf("Atime should not be updated after prefetch (got: atime after PUT: %s, atime after GET: %s).",

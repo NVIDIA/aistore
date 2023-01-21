@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -2147,14 +2147,14 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			len(oldObjList.Entries), len(newObjList.Entries))
 	}
 
-	for _, entry := range newObjList.Entries {
-		n, err := api.GetObject(baseParams, bck, entry.Name)
+	for _, en := range newObjList.Entries {
+		n, err := api.GetObject(baseParams, bck, en.Name)
 		if err != nil {
-			t.Errorf("Failed to read %s: %v", entry.Name, err)
+			t.Errorf("Failed to read %s: %v", en.Name, err)
 			continue // to avoid printing other error in this case
 		}
-		if n != entry.Size {
-			t.Errorf("%s size mismatch read %d, props %d", entry.Name, n, entry.Size)
+		if n != en.Size {
+			t.Errorf("%s size mismatch read %d, props %d", en.Name, n, en.Size)
 		}
 	}
 }
@@ -2683,8 +2683,8 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		}
 	}
 
-	for _, entry := range objList.Entries {
-		_, err := api.GetObject(baseParams, bck, entry.Name)
+	for _, en := range objList.Entries {
+		_, err := api.GetObject(baseParams, bck, en.Name)
 		tassert.CheckError(t, err)
 	}
 }

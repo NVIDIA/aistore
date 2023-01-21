@@ -302,8 +302,8 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
 			tassert.CheckFatal(t, err)
-			for _, entry := range objList.Entries {
-				tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
+			for _, en := range objList.Entries {
+				tlog.Logf("%s: %dB\n", en.Name, en.Size)
 			}
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
@@ -326,9 +326,9 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				objName string
 				mime    = "application/x-" + test.ext[1:]
 			)
-			for _, entry := range objList.Entries {
-				if !entry.IsInsideArch() {
-					objName = entry.Name
+			for _, en := range objList.Entries {
+				if !en.IsInsideArch() {
+					objName = en.Name
 					continue
 				}
 				if rand.Intn(3) > 0 {
@@ -337,13 +337,13 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 
 				getOptions := api.GetObjectInput{
 					Query: url.Values{
-						apc.QparamArchpath: []string{entry.Name},
+						apc.QparamArchpath: []string{en.Name},
 						apc.QparamArchmime: []string{mime},
 					},
 				}
 				n, err := api.GetObject(baseParams, toBck, objName, getOptions)
 				if err != nil {
-					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, apc.QparamArchpath, entry.Name, n, err)
+					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, apc.QparamArchpath, en.Name, n, err)
 				}
 			}
 		})

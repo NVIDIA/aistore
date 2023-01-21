@@ -41,12 +41,12 @@ func ETLList(bp BaseParams) (list []etl.Info, err error) {
 	return
 }
 
-func ETLGetInitMsg(params BaseParams, id string) (etl.InitMsg, error) {
+func ETLGetInitMsg(params BaseParams, etlName string) (etl.InitMsg, error) {
 	params.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = params
-		reqParams.Path = apc.URLPathETL.Join(id)
+		reqParams.Path = apc.URLPathETL.Join(etlName)
 	}
 	r, err := reqParams.doReader()
 	FreeRp(reqParams)
@@ -62,13 +62,13 @@ func ETLGetInitMsg(params BaseParams, id string) (etl.InitMsg, error) {
 	return etl.UnmarshalInitMsg(b)
 }
 
-func ETLLogs(bp BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg, err error) {
+func ETLLogs(bp BaseParams, etlName string, targetID ...string) (logs etl.PodsLogsMsg, err error) {
 	bp.Method = http.MethodGet
 	var path string
 	if len(targetID) > 0 && targetID[0] != "" {
-		path = apc.URLPathETL.Join(id, apc.ETLLogs, targetID[0])
+		path = apc.URLPathETL.Join(etlName, apc.ETLLogs, targetID[0])
 	} else {
-		path = apc.URLPathETL.Join(id, apc.ETLLogs)
+		path = apc.URLPathETL.Join(etlName, apc.ETLLogs)
 	}
 	reqParams := AllocRp()
 	{
@@ -80,9 +80,9 @@ func ETLLogs(bp BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg
 	return
 }
 
-func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err error) {
+func ETLHealth(params BaseParams, etlName string) (healths etl.PodsHealthMsg, err error) {
 	params.Method = http.MethodGet
-	path := apc.URLPathETL.Join(id, apc.ETLHealth)
+	path := apc.URLPathETL.Join(etlName, apc.ETLHealth)
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = params
@@ -93,32 +93,32 @@ func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err err
 	return
 }
 
-func ETLDelete(bp BaseParams, id string) (err error) {
+func ETLDelete(bp BaseParams, etlName string) (err error) {
 	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathETL.Join(id)
+		reqParams.Path = apc.URLPathETL.Join(etlName)
 	}
 	err = reqParams.DoRequest()
 	FreeRp(reqParams)
 	return
 }
 
-func ETLStop(bp BaseParams, id string) (err error) {
-	return etlPostAction(bp, id, apc.ETLStop)
+func ETLStop(bp BaseParams, etlName string) (err error) {
+	return etlPostAction(bp, etlName, apc.ETLStop)
 }
 
-func ETLStart(bp BaseParams, id string) (err error) {
-	return etlPostAction(bp, id, apc.ETLStart)
+func ETLStart(bp BaseParams, etlName string) (err error) {
+	return etlPostAction(bp, etlName, apc.ETLStart)
 }
 
-func etlPostAction(bp BaseParams, id, action string) (err error) {
+func etlPostAction(bp BaseParams, etlName, action string) (err error) {
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathETL.Join(id, action)
+		reqParams.Path = apc.URLPathETL.Join(etlName, action)
 	}
 	err = reqParams.DoRequest()
 	FreeRp(reqParams)

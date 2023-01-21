@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -209,8 +209,8 @@ func TestHttpProviderObjectGet(t *testing.T) {
 	tassert.Errorf(t, len(reslist.Entries) == 2, "should have exactly 2 entries in bucket")
 
 	matchCount := 0
-	for _, entry := range reslist.Entries {
-		if entry.Name == httpAnotherObjectName || entry.Name == httpObjectName {
+	for _, en := range reslist.Entries {
+		if en.Name == httpAnotherObjectName || en.Name == httpObjectName {
 			matchCount++
 		}
 	}
@@ -497,8 +497,8 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 			bckRemote.String(), 1, len(resLocal.Entries))
 	}
 
-	for _, entry := range resRemote.Entries {
-		if entry.Name == fileName {
+	for _, en := range resRemote.Entries {
+		if en.Name == fileName {
 			found = true
 			break
 		}
