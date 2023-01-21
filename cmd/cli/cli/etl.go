@@ -36,12 +36,12 @@ var (
 			funcTransformFlag,
 			chunkSizeFlag,
 			waitTimeoutFlag,
-			etlUUID,
+			etlNameFlag,
 		},
 		subcmdSpec: {
 			fromFileFlag,
 			commTypeFlag,
-			etlUUID,
+			etlNameFlag,
 			waitTimeoutFlag,
 		},
 		subcmdStop: {
@@ -144,10 +144,10 @@ var (
 )
 
 func etlIDCompletions(c *cli.Context) {
-	suggestEtlID(c, 0)
+	suggestEtlName(c, 0)
 }
 
-func suggestEtlID(c *cli.Context, shift int) {
+func suggestEtlName(c *cli.Context, shift int) {
 	if c.NArg() > shift {
 		return
 	}
@@ -195,7 +195,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 	}
 
 	msg := &etl.InitSpecMsg{}
-	msg.IDX = parseStrFlag(c, etlUUID)
+	msg.IDX = parseStrFlag(c, etlNameFlag)
 	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
 	msg.Spec = spec
 
@@ -224,7 +224,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("%s flag cannot be empty", qflprn(fromFileFlag))
 	}
 
-	msg.IDX = parseStrFlag(c, etlUUID)
+	msg.IDX = parseStrFlag(c, etlNameFlag)
 	if msg.Name() != "" {
 		if err = k8s.ValidateEtlName(msg.Name()); err != nil {
 			return
@@ -376,15 +376,16 @@ func etlStopHandler(c *cli.Context) error {
 	return stopETLs(c, "")
 }
 
-func stopETLs(c *cli.Context, id string) (err error) {
+func stopETLs(c *cli.Context, name string) (err error) {
 	var etlNames []string
 	switch {
-	case id != "":
-		etlNames = append(etlNames, id)
+	case name != "":
+		etlNames = append(etlNames, name)
 	case flagIsSet(c, allRunningJobsFlag):
 		if c.NArg() > 0 {
-			return incorrectUsageMsg(c, "flag '--%s' cannot be used together with %s (%q)",
-				allRunningJobsFlag.Name, etlNameArgument, id)
+			etlNames = c.Args()[0:]
+			return incorrectUsageMsg(c, "flag %s cannot be used together with %s %v",
+				qflprn(allRunningJobsFlag), etlNameArgument, etlNames)
 		}
 		res, err := api.ETLList(apiBP)
 		if err != nil {
@@ -399,9 +400,9 @@ func stopETLs(c *cli.Context, id string) (err error) {
 		}
 		etlNames = c.Args()[0:]
 	}
-	for _, id := range etlNames {
-		msg := fmt.Sprintf("ETL[%s]", id)
-		if err := api.ETLStop(apiBP, id); err != nil {
+	for _, name := range etlNames {
+		msg := fmt.Sprintf("ETL[%s]", name)
+		if err := api.ETLStop(apiBP, name); err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 				actionWarn(c, msg+" not found, nothing to do")
 				continue
@@ -428,7 +429,7 @@ func etlStartHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func etlObjectHandler(c *cli.Context) (err error) {
+func etlObjectHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	} else if c.NArg() == 1 {
@@ -438,14 +439,13 @@ func etlObjectHandler(c *cli.Context) (err error) {
 	}
 
 	var (
-		id         = c.Args()[0]
-		uri        = c.Args()[1]
-		outputDest = c.Args()[2]
+		etlName    = c.Args().Get(0)
+		uri        = c.Args().Get(1)
+		outputDest = c.Args().Get(2)
 	)
-
-	bck, objName, err := parseBckObjectURI(c, uri)
-	if err != nil {
-		return err
+	bck, objName, errV := parseBckObjectURI(c, uri)
+	if errV != nil {
+		return errV
 	}
 
 	var w io.Writer
@@ -460,14 +460,15 @@ func etlObjectHandler(c *cli.Context) (err error) {
 		defer f.Close()
 	}
 
-	return handleETLHTTPError(api.ETLObject(apiBP, id, bck, objName, w), id)
+	err := api.ETLObject(apiBP, etlName, bck, objName, w)
+	return handleETLHTTPError(err, etlName)
 }
 
 func etlBucketHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	id := c.Args().Get(0)
+	etlName := c.Args().Get(0)
 	fromBck, toBck, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/)
 	if err != nil {
 		return err
@@ -477,7 +478,7 @@ func etlBucketHandler(c *cli.Context) error {
 	}
 
 	msg := &apc.TCBMsg{
-		Transform: apc.Transform{Name: id},
+		Transform: apc.Transform{Name: etlName},
 		CopyBckMsg: apc.CopyBckMsg{
 			Prefix: parseStrFlag(c, cpBckPrefixFlag),
 			DryRun: flagIsSet(c, cpBckDryRunFlag),
@@ -508,12 +509,12 @@ func etlBucketHandler(c *cli.Context) error {
 	tmplObjs := parseStrFlag(c, templateFlag)
 	listObjs := parseStrFlag(c, listFlag)
 	if listObjs != "" || tmplObjs != "" {
-		return multiObjBckCopy(c, fromBck, toBck, listObjs, tmplObjs, id)
+		return multiObjBckCopy(c, fromBck, toBck, listObjs, tmplObjs, etlName)
 	}
 
 	xactID, err := api.ETLBucket(apiBP, fromBck, toBck, msg)
-	if err := handleETLHTTPError(err, id); err != nil {
-		return err
+	if errV := handleETLHTTPError(err, etlName); errV != nil {
+		return errV
 	}
 
 	if !flagIsSet(c, waitFlag) {
@@ -536,13 +537,16 @@ func etlBucketHandler(c *cli.Context) error {
 	fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
 
 	locObjs, outObjs, inObjs := snaps.ObjCounts(xactID)
-	fmt.Fprintf(c.App.Writer, "ETL object snaps: locally transformed=%d, sent=%d, received=%d", locObjs, outObjs, inObjs)
+	fmt.Fprintf(c.App.Writer, "ETL object stats: locally transformed=%d, sent=%d, received=%d", locObjs, outObjs, inObjs)
 	locBytes, outBytes, inBytes := snaps.ByteCounts(xactID)
-	fmt.Fprintf(c.App.Writer, "ETL byte snaps: locally transformed=%d, sent=%d, received=%d", locBytes, outBytes, inBytes)
+	fmt.Fprintf(c.App.Writer, "ETL byte stats: locally transformed=%d, sent=%d, received=%d", locBytes, outBytes, inBytes)
 	return nil
 }
 
 func handleETLHTTPError(err error, etlName string) error {
+	if err == nil {
+		return nil
+	}
 	if herr, ok := err.(*cmn.ErrHTTP); ok {
 		// TODO: How to find out if it's transformation not found, and not object not found?
 		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlName) {

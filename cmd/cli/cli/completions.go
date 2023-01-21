@@ -522,7 +522,7 @@ func runningJobCompletions(c *cli.Context) {
 			suggestDsortID(c, (*dsort.JobInfo).IsRunning, 1 /*shift*/)
 			return
 		case commandETL:
-			suggestEtlID(c, 1 /*shift*/)
+			suggestEtlName(c, 1 /*shift*/)
 			return
 		}
 		// complete xactID
