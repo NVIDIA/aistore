@@ -195,10 +195,11 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 	}
 
 	msg := &etl.InitSpecMsg{}
-	msg.IDX = parseStrFlag(c, etlNameFlag)
-	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
-	msg.Spec = spec
-
+	{
+		msg.IDX = parseStrFlag(c, etlNameFlag)
+		msg.CommTypeX = parseStrFlag(c, commTypeFlag)
+		msg.Spec = spec
+	}
 	if err = msg.Validate(); err != nil {
 		return err
 	}
@@ -208,11 +209,11 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	id, err := api.ETLInit(apiBP, msg)
+	xactID, err := api.ETLInit(apiBP, msg)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(c.App.Writer, "%s\n", id)
+	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xactID)
 	return nil
 }
 
@@ -221,7 +222,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 
 	fromFile := parseStrFlag(c, fromFileFlag)
 	if fromFile == "" {
-		return fmt.Errorf("%s flag cannot be empty", qflprn(fromFileFlag))
+		return fmt.Errorf("flag %s cannot be empty", qflprn(fromFileFlag))
 	}
 
 	msg.IDX = parseStrFlag(c, etlNameFlag)
@@ -235,13 +236,13 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	}
 
 	if msg.Code, err = os.ReadFile(fromFile); err != nil {
-		return fmt.Errorf("failed to read file: %q, err: %v", fromFile, err)
+		return fmt.Errorf("failed to read %q: %v", fromFile, err)
 	}
 
 	depsFile := parseStrFlag(c, depsFileFlag)
 	if depsFile != "" {
 		if msg.Deps, err = os.ReadFile(depsFile); err != nil {
-			return fmt.Errorf("failed to read file: %q, err: %v", depsFile, err)
+			return fmt.Errorf("failed to read %q: %v", depsFile, err)
 		}
 	}
 
@@ -276,11 +277,11 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	}
 
 	// start
-	id, err := api.ETLInit(apiBP, msg)
+	xactID, err := api.ETLInit(apiBP, msg)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(c.App.Writer, "%s\n", id)
+	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xactID)
 	return nil
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/ext/etl/runtime"
 	"github.com/NVIDIA/aistore/tools"
@@ -21,6 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
+
+const etlBucketTimeout = cos.Duration(3 * time.Minute)
 
 func TestETLConnectionError(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
@@ -57,16 +60,16 @@ def transform(input_bytes):
 	m.puts()
 
 	msg := etl.InitCodeMsg{
-		InitMsgBase: etl.InitMsgBase{IDX: "etl-build-conn-err", Timeout: cos.Duration(5 * time.Minute)},
+		InitMsgBase: etl.InitMsgBase{IDX: "etl-build-conn-err", Timeout: etlBucketTimeout},
 		Code:        []byte(timeoutFunc),
 		Runtime:     runtime.Py38,
 		ChunkSize:   0,
 	}
 	msg.Funcs.Transform = "transform"
 
-	uuid := tetl.InitCode(t, baseParams, msg)
+	_ = tetl.InitCode(t, baseParams, msg)
 
-	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
+	testETLBucket(t, msg.Name(), m.bck, m.num, 0 /*skip bytes check*/, time.Duration(etlBucketTimeout))
 }
 
 func TestETLBucketAbort(t *testing.T) {
@@ -160,18 +163,18 @@ def transform(input_bytes):
 		}
 
 		tests = []struct {
-			name      string
-			ty        string
-			initDesc  string
-			buildDesc etl.InitCodeMsg
+			name        string
+			ty          string
+			etlSpecName string
+			etlCodeMsg  etl.InitCodeMsg
 		}{
-			{name: "spec-echo-python", ty: etl.Spec, initDesc: tetl.Echo},
-			{name: "spec-echo-golang", ty: etl.Spec, initDesc: tetl.EchoGolang},
+			{name: "spec-echo-python", ty: etl.Spec, etlSpecName: tetl.Echo},
+			{name: "spec-echo-golang", ty: etl.Spec, etlSpecName: tetl.EchoGolang},
 
 			{
 				name: "code-echo-py38",
 				ty:   etl.Code,
-				buildDesc: etl.InitCodeMsg{
+				etlCodeMsg: etl.InitCodeMsg{
 					Code:      []byte(echoPythonTransform),
 					Runtime:   runtime.Py38,
 					ChunkSize: 0,
@@ -180,7 +183,7 @@ def transform(input_bytes):
 			{
 				name: "code-echo-py310",
 				ty:   etl.Code,
-				buildDesc: etl.InitCodeMsg{
+				etlCodeMsg: etl.InitCodeMsg{
 					Code:      []byte(echoPythonTransform),
 					Runtime:   runtime.Py310,
 					ChunkSize: 0,
@@ -199,21 +202,25 @@ def transform(input_bytes):
 		t.Run(test.name, func(t *testing.T) {
 			tetl.CheckNoRunningETLContainers(t, baseParams)
 			var (
-				etlName        string
 				err            error
+				etlName        string
 				etlDoneCh      = cos.NewStopCh()
 				requestTimeout = 30 * time.Second
 			)
 			switch test.ty {
 			case etl.Spec:
-				etlName = tetl.InitSpec(t, baseParams, test.initDesc, etl.Hpull)
+				etlName = test.etlSpecName
+				_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpull)
 			case etl.Code:
-				test.buildDesc.IDX = test.name
-				test.buildDesc.Timeout = cos.Duration(10 * time.Minute)
-				test.buildDesc.Funcs.Transform = "transform"
-				etlName = tetl.InitCode(t, baseParams, test.buildDesc)
+				etlName = test.name
+				{
+					test.etlCodeMsg.IDX = etlName
+					test.etlCodeMsg.Timeout = etlBucketTimeout
+					test.etlCodeMsg.Funcs.Transform = "transform"
+				}
+				_ = tetl.InitCode(t, baseParams, test.etlCodeMsg)
 			default:
-				panic(test.ty)
+				debug.Assert(false, test.ty)
 			}
 			t.Cleanup(func() {
 				tetl.StopAndDeleteETL(t, baseParams, etlName)
@@ -228,7 +235,7 @@ def transform(input_bytes):
 				},
 				CopyBckMsg: apc.CopyBckMsg{Force: true},
 			}
-			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, msg)
+			xactID := tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
 			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
 
 			tlog.Logln("Waiting for ETL to finish")
@@ -253,27 +260,26 @@ def transform(input_bytes):
 }
 
 // Responsible for cleaning all resources, except ETL xact.
-func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID string) {
+func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xactID string) {
 	var (
 		bckFrom = cmn.Bck{Name: "etl-in-" + trand.String(5), Provider: apc.AIS}
 		bckTo   = cmn.Bck{Name: "etl-out-" + trand.String(5), Provider: apc.AIS}
 	)
-
 	m.bck = bckFrom
 
-	tlog.Logf("Preparing source bucket %q\n", bckFrom.String())
+	tlog.Logf("Preparing source bucket %s\n", bckFrom.DisplayName())
 	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
 	m.initWithCleanupAndSaveState()
 
 	m.puts()
 
-	etlName := tetl.InitSpec(t, baseParams, name, comm)
-	tlog.Logf("ETL init successful (%q)\n", etlName)
+	_ = tetl.InitSpec(t, baseParams, etlName, comm)
 	t.Cleanup(func() {
 		tetl.StopAndDeleteETL(t, baseParams, etlName)
 	})
 
-	tlog.Logf("Start offline ETL[%s] => %q\n", etlName, bckTo.String())
+	tlog.Logf("Start offline ETL[%s] => %s\n", etlName, bckTo.DisplayName())
 	msg := &apc.TCBMsg{Transform: apc.Transform{Name: etlName}, CopyBckMsg: apc.CopyBckMsg{Force: true}}
-	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, msg)
+	xactID = tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
+	return
 }

@@ -63,13 +63,13 @@ var (
 
 func validateETLName(name string) error {
 	if _, ok := links[name]; !ok {
-		return fmt.Errorf("%s invalid name; expected one of %s, %s, %s", name, Echo, Tar2TF, MD5)
+		return fmt.Errorf("%s is invalid etlName, expected predefined (%s, %s, %s)", name, Echo, Tar2TF, MD5)
 	}
 	return nil
 }
 
-func GetTransformYaml(name string) ([]byte, error) {
-	if err := validateETLName(name); err != nil {
+func GetTransformYaml(etlName string) ([]byte, error) {
+	if err := validateETLName(etlName); err != nil {
 		return nil, err
 	}
 
@@ -77,10 +77,10 @@ func GetTransformYaml(name string) ([]byte, error) {
 	// with retry in case github in unavailable for a moment
 	err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call: func() (code int, err error) {
-			resp, err = client.Get(links[name]) //nolint:bodyclose // see defer close below
+			resp, err = client.Get(links[etlName]) //nolint:bodyclose // see defer close below
 			return
 		},
-		Action:   "get transform yaml for ETL " + name,
+		Action:   "get transform yaml for ETL[" + etlName + "]",
 		SoftErr:  3,
 		HardErr:  1,
 		IsClient: true,
@@ -108,7 +108,7 @@ func GetTransformYaml(name string) ([]byte, error) {
 		if strings.Contains(v, "DOCKER_REGISTRY_URL") {
 			return "aistore"
 		}
-		if name == Tar2tfFilters {
+		if etlName == Tar2tfFilters {
 			if strings.Contains(v, "OPTION_KEY") {
 				return "--spec"
 			}
@@ -145,7 +145,7 @@ func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlName string) {
 }
 
 func WaitForContainersStopped(t *testing.T, baseParams api.BaseParams) {
-	tlog.Logln("Waiting for ETL containers to be stopped...")
+	tlog.Logln("Waiting for ETL containers to stop...")
 	var (
 		etls         etl.InfoList
 		stopDeadline = time.Now().Add(20 * time.Second)
@@ -153,18 +153,22 @@ func WaitForContainersStopped(t *testing.T, baseParams api.BaseParams) {
 		err          error
 	)
 
-	for time.Now().Before(stopDeadline) {
+	for {
 		etls, err = api.ETLList(baseParams)
 		tassert.CheckFatal(t, err)
 		if len(etls) == 0 {
 			tlog.Logln("ETL containers stopped successfully")
 			return
 		}
+		if time.Now().After(stopDeadline) {
+			break
+		}
 		tlog.Logf("ETLs %+v still running, waiting %s... \n", etls, interval)
 		time.Sleep(interval)
 	}
 
-	tassert.Fatalf(t, len(etls) != 0, "expected all ETLs to be stopped, got %+v", etls)
+	err = fmt.Errorf("expected all ETLs to stop, got %+v still running", etls)
+	tassert.CheckFatal(t, err)
 }
 
 func WaitForAborted(baseParams api.BaseParams, xactID string, timeout time.Duration) error {
@@ -228,56 +232,66 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cos.S
 	}()
 }
 
-func InitSpec(t *testing.T, baseParams api.BaseParams, name, comm string) string {
-	tlog.Logf("InitSpec: %s template, %s communicator\n", name, comm)
+func InitSpec(t *testing.T, baseParams api.BaseParams, etlName, comm string) (xactID string) {
+	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, comm)
 
 	msg := &etl.InitSpecMsg{}
-	msg.IDX = name
+	msg.IDX = etlName
 	msg.CommTypeX = comm
-	spec, err := GetTransformYaml(name)
+	spec, err := GetTransformYaml(etlName)
 	tassert.CheckFatal(t, err)
 	msg.Spec = spec
+	tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName) // assert
 
-	retName, err := api.ETLInit(baseParams, msg)
+	xactID, err = api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, retName == name, "expected name %s != %s", name, retName)
+	tassert.Errorf(t, cos.IsValidUUID(xactID), "expected valid xaction ID, got %q", xactID)
 
-	etlMsg, err := api.ETLGetInitMsg(baseParams, retName)
+	tlog.Logf("ETL[%s]: running xaction %q\n", etlName, xactID)
+
+	// reread `InitMsg` and compare with the specified
+	etlMsg, err := api.ETLGetInitMsg(baseParams, etlName)
 	tassert.CheckFatal(t, err)
 
 	initSpec := etlMsg.(*etl.InitSpecMsg)
-	tassert.Errorf(t, initSpec.Name() == name, "expected name %s != %s", name, initSpec.Name())
+	tassert.Errorf(t, initSpec.Name() == etlName, "expected etlName %s != %s", etlName, initSpec.Name())
 	tassert.Errorf(t, initSpec.CommType() == comm, "expected communicator type %s != %s", comm, initSpec.CommType())
 	tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ")
 
-	return name
+	return
 }
 
-func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) string {
-	retName, err := api.ETLInit(baseParams, &msg)
+func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) (xactID string) {
+	id, err := api.ETLInit(baseParams, &msg)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, retName == msg.Name(), "expected name %s != %s", msg.Name(), retName)
+	tassert.Errorf(t, cos.IsValidUUID(id), "expected valid xaction ID, got %q", xactID)
+	xactID = id
 
+	// reread `InitMsg` and compare with the specified
 	etlMsg, err := api.ETLGetInitMsg(baseParams, msg.Name())
 	tassert.CheckFatal(t, err)
 
 	initCode := etlMsg.(*etl.InitCodeMsg)
-	tassert.Errorf(t, initCode.Name() == retName, "expected name %s != %s", retName, initCode.Name())
+	tassert.Errorf(t, initCode.Name() == msg.Name(), "expected etlName %q != %q", msg.Name(), initCode.Name())
 	tassert.Errorf(t, msg.CommType() == "" || initCode.CommType() == msg.CommType(),
 		"expected communicator type %s != %s", msg.CommType(), initCode.CommType())
 	tassert.Errorf(t, msg.Runtime == initCode.Runtime, "expected runtime %s != %s", msg.Runtime, initCode.Runtime)
 	tassert.Errorf(t, bytes.Equal(msg.Code, initCode.Code), "ETL codes differ")
 	tassert.Errorf(t, bytes.Equal(msg.Deps, initCode.Deps), "ETL dependencies differ")
 
-	return retName
+	return
 }
 
-func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg) string {
-	xactID, err := api.ETLBucket(baseParams, fromBck, toBck, bckMsg)
+func ETLBucketWithCleanup(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, msg *apc.TCBMsg) string {
+	xactID, err := api.ETLBucket(baseParams, fromBck, toBck, msg)
 	tassert.CheckFatal(t, err)
+
 	t.Cleanup(func() {
 		tools.DestroyBucket(t, baseParams.URL, toBck)
 	})
+
+	tlog.Logf("ETL[%s]: running %s => %s xaction %q\n",
+		msg.Transform.Name, fromBck.DisplayName(), toBck.DisplayName(), xactID)
 	return xactID
 }
 

@@ -20,6 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
+// TODO: support start/stop/list using `xactID`
+
 // [METHOD] /v1/etl
 func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStartedWithRetry() {
@@ -182,7 +184,7 @@ func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 	return
 }
 
-// broadcast start-ETL request to all targets
+// broadcast (start ETL) request to all targets
 func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) error {
 	var (
 		err    error
@@ -230,8 +232,8 @@ func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) e
 		}
 		p.owner.etl.modify(ctx)
 	}
-	// All init calls succeeded - return user-specified ETL name.
-	w.Write([]byte(msg.Name()))
+	// All init calls succeeded - return running xaction
+	w.Write(cos.UnsafeB(xactID))
 	return nil
 }
 

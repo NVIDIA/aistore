@@ -193,7 +193,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 	tassert.CheckFatal(t, err)
 
 	if !cached {
-		tlog.Logf("Evicting object %s\n", objName)
+		tlog.Logf("Evicting object %s/%s\n", bck.DisplayName(), objName)
 		err := api.EvictObject(baseParams, bck, objName)
 		tassert.CheckFatal(t, err)
 	}
@@ -205,13 +205,13 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 	}()
 
 	bf := bytes.NewBuffer(nil)
-	tlog.Logf("Use etl[%s] to read transformed object\n", etlName)
+	tlog.Logf("Use ETL[%s] to read transformed object\n", etlName)
 	err = api.ETLObject(baseParams, etlName, bck, objName, bf)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, bf.Len() == cos.KiB, "Expected %d bytes, got %d", cos.KiB, bf.Len())
 }
 
-// Responsible for cleaning ETL xaction, ETL containers, destination bucket.
+// also responsible for cleanup: ETL xaction, ETL containers, destination bucket.
 func testETLBucket(t *testing.T, etlName string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
@@ -222,7 +222,7 @@ func testETLBucket(t *testing.T, etlName string, bckFrom cmn.Bck, objCnt int, fi
 	)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
-	tlog.Logf("Start offline etl[%s]\n", etlName)
+	tlog.Logf("Start offline ETL[%s]\n", etlName)
 	msg := &apc.TCBMsg{
 		Transform: apc.Transform{
 			Name:    etlName,
@@ -230,7 +230,7 @@ func testETLBucket(t *testing.T, etlName string, bckFrom cmn.Bck, objCnt int, fi
 		},
 		CopyBckMsg: apc.CopyBckMsg{Force: true},
 	}
-	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, msg)
+	xactID := tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
 
 	err := tetl.WaitForFinished(baseParams, xactID, timeout)
 	tassert.CheckFatal(t, err)
@@ -288,10 +288,10 @@ func TestETLObject(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
 
-			uuid := tetl.InitSpec(t, baseParams, test.transformer, test.comm)
-			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
+			_ = tetl.InitSpec(t, baseParams, test.transformer, test.comm)
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.transformer) })
 
-			testETLObject(t, uuid, test.inPath, test.outPath, test.transform, test.filesEqual)
+			testETLObject(t, test.transformer, test.inPath, test.outPath, test.transform, test.filesEqual)
 		})
 	}
 }
@@ -318,12 +318,12 @@ func TestETLObjectCloud(t *testing.T) {
 	for comm, configs := range tcs {
 		t.Run(comm, func(t *testing.T) {
 			// TODO: currently, Echo transformation only - add other transforms
-			etlName := tetl.InitSpec(t, baseParams, tetl.Echo, comm)
-			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
+			_ = tetl.InitSpec(t, baseParams, tetl.Echo, comm)
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, tetl.Echo) })
 
 			for _, conf := range configs {
 				t.Run(fmt.Sprintf("cached=%t", conf.cached), func(t *testing.T) {
-					testETLObjectCloud(t, cliBck, etlName, conf.onlyLong, conf.cached)
+					testETLObjectCloud(t, cliBck, tetl.Echo, conf.onlyLong, conf.cached)
 				})
 			}
 		})
@@ -350,8 +350,8 @@ func TestETLInline(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
 
-			etlName := tetl.InitSpec(t, baseParams, test.transformer, test.comm)
-			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
+			_ = tetl.InitSpec(t, baseParams, test.transformer, test.comm)
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.transformer) })
 
 			tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
@@ -369,7 +369,7 @@ func TestETLInline(t *testing.T) {
 			outObject := bytes.NewBuffer(nil)
 			_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 				Writer: outObject,
-				Query:  url.Values{apc.QparamETLName: {etlName}},
+				Query:  url.Values{apc.QparamETLName: {test.transformer}},
 			})
 			tassert.CheckFatal(t, err)
 
@@ -391,8 +391,8 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
-	etlName := tetl.InitSpec(t, baseParams, transformer, comm)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
+	_ = tetl.InitSpec(t, baseParams, transformer, comm)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
@@ -412,9 +412,10 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tlog.Logln("GET transformed object")
 	outObject := memsys.PageMM().NewSGL(0)
 	defer outObject.Free()
+
 	_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 		Writer: outObject,
-		Query:  url.Values{apc.QparamETLName: {etlName}},
+		Query:  url.Values{apc.QparamETLName: {transformer}},
 	})
 	tassert.CheckFatal(t, err)
 
@@ -459,8 +460,8 @@ func TestETLBucket(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: test.onlyLong})
 
-			uuid := tetl.InitSpec(t, baseParams, test.transformer, test.comm)
-			testETLBucket(t, uuid, bck, objCnt, m.fileSize, time.Minute)
+			_ = tetl.InitSpec(t, baseParams, test.transformer, test.comm)
+			testETLBucket(t, test.transformer, bck, objCnt, m.fileSize, time.Minute)
 		})
 	}
 }
@@ -517,7 +518,7 @@ def transform(input_bytes: bytes) -> bytes:
 		}
 
 		tests = []struct {
-			name      string
+			etlName   string
 			code      string
 			deps      string
 			runtime   string
@@ -525,10 +526,10 @@ def transform(input_bytes: bytes) -> bytes:
 			chunkSize int64
 			onlyLong  bool
 		}{
-			{name: "simple-py38", code: md5, deps: "", runtime: runtime.Py38, onlyLong: false},
-			{name: "simple-py38-stream", code: echo, deps: "", runtime: runtime.Py38, onlyLong: false, chunkSize: 64},
-			{name: "with-deps-py38", code: numpy, deps: numpyDeps, runtime: runtime.Py38, onlyLong: false},
-			{name: "simple-py310-io", code: md5IO, deps: "", runtime: runtime.Py310, commType: etl.HpushStdin, onlyLong: false},
+			{etlName: "simple-py38", code: md5, deps: "", runtime: runtime.Py38, onlyLong: false},
+			{etlName: "simple-py38-stream", code: echo, deps: "", runtime: runtime.Py38, onlyLong: false, chunkSize: 64},
+			{etlName: "with-deps-py38", code: numpy, deps: numpyDeps, runtime: runtime.Py38, onlyLong: false},
+			{etlName: "simple-py310-io", code: md5IO, deps: "", runtime: runtime.Py310, commType: etl.HpushStdin, onlyLong: false},
 		}
 	)
 
@@ -541,14 +542,14 @@ def transform(input_bytes: bytes) -> bytes:
 
 	for _, testType := range []string{"etl_object", "etl_bucket"} {
 		for _, test := range tests {
-			t.Run(testType+"__"+test.name, func(t *testing.T) {
+			t.Run(testType+"__"+test.etlName, func(t *testing.T) {
 				tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: test.onlyLong})
 
 				msg := etl.InitCodeMsg{
 					InitMsgBase: etl.InitMsgBase{
-						IDX:       test.name,
+						IDX:       test.etlName,
 						CommTypeX: test.commType,
-						Timeout:   cos.Duration(5 * time.Minute),
+						Timeout:   etlBucketTimeout,
 					},
 					Code:      []byte(test.code),
 					Deps:      []byte(test.deps),
@@ -557,19 +558,19 @@ def transform(input_bytes: bytes) -> bytes:
 				}
 				msg.Funcs.Transform = "transform"
 
-				etlName := tetl.InitCode(t, baseParams, msg)
+				_ = tetl.InitCode(t, baseParams, msg)
 
 				switch testType {
 				case "etl_object":
-					t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
+					t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
 
-					testETLObject(t, etlName, "", "", func(r io.Reader) io.Reader {
+					testETLObject(t, test.etlName, "", "", func(r io.Reader) io.Reader {
 						return r // TODO: Write function to transform input to md5.
 					}, func(f1, f2 string) (bool, error) {
 						return true, nil // TODO: Write function to compare output from md5.
 					})
 				case "etl_bucket":
-					testETLBucket(t, etlName, m.bck, m.num, m.fileSize, time.Minute)
+					testETLBucket(t, test.etlName, m.bck, m.num, m.fileSize, time.Minute)
 				default:
 					panic(testType)
 				}
@@ -605,13 +606,12 @@ func TestETLBucketDryRun(t *testing.T) {
 	tlog.Logf("PUT %d objects", m.num)
 	m.puts()
 
-	etlName := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
+	_ = tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, tetl.Echo) })
 
-	tlog.Logf("Start offline etl[%s]\n", etlName)
 	msg := &apc.TCBMsg{
 		Transform: apc.Transform{
-			Name: etlName,
+			Name: tetl.Echo,
 		},
 		CopyBckMsg: apc.CopyBckMsg{DryRun: true, Force: true},
 	}
@@ -624,7 +624,7 @@ func TestETLBucketDryRun(t *testing.T) {
 
 	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bckTo), apc.FltPresent)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, exists == false, "expected destination bucket to not be created")
+	tassert.Errorf(t, exists == false, "[dry-run] expected destination bucket not to be created")
 
 	checkETLStats(t, xactID, m.num, uint64(m.num*int(m.fileSize)))
 }
@@ -636,22 +636,23 @@ func TestETLStopAndRestartETL(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
+		etlName    = tetl.Echo // TODO: currently, echo only - add more
 	)
 
-	etlName := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
+	_ = tetl.InitSpec(t, baseParams, etlName, etl.Hrev)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	// 1. Check ETL is in running state
 	tetl.ETLShouldBeRunning(t, baseParams, etlName)
 
 	// 2. Stop ETL and verify it stopped successfully
-	tlog.Logf("stopping etl[%s]", etlName)
+	tlog.Logf("stopping ETL[%s]\n", etlName)
 	err := api.ETLStop(baseParams, etlName)
 	tassert.CheckFatal(t, err)
 	tetl.ETLShouldNotBeRunning(t, baseParams, etlName)
 
 	// 3. Start ETL and verify it is in running state
-	tlog.Logf("restarting etl[%s]", etlName)
+	tlog.Logf("restarting ETL[%s]\n", etlName)
 	err = api.ETLStart(baseParams, etlName)
 	tassert.CheckFatal(t, err)
 	tetl.ETLShouldBeRunning(t, baseParams, etlName)
@@ -671,34 +672,34 @@ func TestETLMultipleTransformersAtATime(t *testing.T) {
 		t.Skip("Requires a single-node single-target deployment")
 	}
 
-	etlName1 := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName1) })
+	_ = tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, tetl.Echo) })
 
-	etlName2 := tetl.InitSpec(t, baseParams, tetl.MD5, etl.Hrev)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName2) })
+	_ = tetl.InitSpec(t, baseParams, tetl.MD5, etl.Hrev)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, tetl.MD5) })
 }
+
+const getMetricsTimeout = 90 * time.Second
 
 func TestETLHealth(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
+		etlName    = tetl.Echo // TODO: currently, only echo - add more
 	)
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
-	tlog.Logln("Starting ETL")
-	etlName := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hpull)
+	_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpull)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	var (
 		start    = time.Now()
-		deadline = start.Add(2 * time.Minute)
+		deadline = start.Add(getMetricsTimeout) // might take a while for metrics to become available
 		healths  etl.PodsHealthMsg
 		err      error
 	)
-
-	// It might take some time for metrics to be available.
 	for {
 		now := time.Now()
 		if now.After(deadline) {
@@ -717,12 +718,13 @@ func TestETLHealth(t *testing.T) {
 
 		herr, ok := err.(*cmn.ErrHTTP)
 		tassert.Errorf(t, ok && herr.Status == http.StatusNotFound, "Unexpected error %v, expected 404", err)
-		tlog.Logf("etl[%s] not found in metrics, retrying...\n", etlName)
+		tlog.Logf("ETL[%s] not found in metrics, retrying...\n", etlName)
 		time.Sleep(10 * time.Second)
 	}
 
 	for _, health := range healths {
-		tassert.Errorf(t, health.CPU > 0.0 || health.Mem > 0, "[%s] expected non empty health info, got %v", health.TargetID, health)
+		tassert.Errorf(t, health.CPU > 0.0 || health.Mem > 0, "[%s] expected non empty health info, got %v",
+			health.TargetID, health)
 	}
 }
 
@@ -730,14 +732,15 @@ func TestETLList(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
+		etlName    = tetl.Echo // TODO: currently, only echo - add more
 	)
 	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 
-	name := tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, name) })
+	_ = tetl.InitSpec(t, baseParams, etlName, etl.Hrev)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	list, err := api.ETLList(baseParams)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(list) == 1, "expected exactly one ETL to be listed, got %d", len(list))
-	tassert.Fatalf(t, list[0].Name == name, "expected etl[%s], got %q", name, list[0].Name)
+	tassert.Fatalf(t, len(list) == 1, "expected exactly one ETL to be listed, got %d (%+v)", len(list), list)
+	tassert.Fatalf(t, list[0].Name == etlName, "expected ETL[%s], got %q", etlName, list[0].Name)
 }

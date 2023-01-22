@@ -110,7 +110,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/etl/<etl-name>/stop (or) TODO: /v1/etl/<etl-name>/start
 //
-// handleETLPost handles start/stop ETL pods
+// Handles starting/stopping ETL pods
 func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.apiItems(w, r, 2, true, apc.URLPathETL.L)
 	if err != nil {
@@ -207,11 +207,11 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 }
 
 // GET /v1/etl/_objects/<secret>/<uname>
-// NOTE: this is an internal URL, `_objects` in the path is chosen to avoid
-// conflicts with ETL UUID in URL paths of format `/v1/elts/<etl-name>/...`
+// Handles GET requests from ETL containers (K8s Pods).
+// Validates the secret that was injected into a Pod during its initialization.
 //
-// getObjectETL handles GET requests from ETL containers (K8s Pods).
-// getObjectETL validates the secret that was injected into a Pod during its initialization.
+// NOTE: this is an internal URL with `_objects` in its path intended to avoid
+// conflicts with ETL name in `/v1/elts/<etl-name>/...`
 func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 	secret, bck, objName, err := etlParseObjectReq(w, r)
 	if err != nil {
@@ -236,8 +236,8 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/etl/objects/<secret>/<uname>
 //
-// headObjectETL handles HEAD requests from ETL containers (K8s Pods).
-// headObjectETL validates the secret that was injected into a Pod during its initialization.
+// Handles HEAD requests from ETL containers (K8s Pods).
+// Validates the secret that was injected into a Pod during its initialization.
 func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 	secret, bck, objName, err := etlParseObjectReq(w, r)
 	if err != nil {

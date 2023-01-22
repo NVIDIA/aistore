@@ -16,7 +16,12 @@ import (
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
-func ETLInit(bp BaseParams, msg etl.InitMsg) (etlName string, err error) {
+// Initiate custom ETL workload by executing one of the documented `etl.InitMsg`
+// message types.
+// The API call results in deploying multiple ETL containers (K8s pods):
+// one container per storage target.
+// Returns xaction ID if successful, an error otherwise.
+func ETLInit(bp BaseParams, msg etl.InitMsg) (xactID string, err error) {
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -24,7 +29,7 @@ func ETLInit(bp BaseParams, msg etl.InitMsg) (etlName string, err error) {
 		reqParams.Path = apc.URLPathETL.S
 		reqParams.Body = cos.MustMarshal(msg)
 	}
-	err = reqParams.DoReqResp(&etlName)
+	err = reqParams.DoReqResp(&xactID)
 	FreeRp(reqParams)
 	return
 }

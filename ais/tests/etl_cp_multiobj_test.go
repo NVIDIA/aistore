@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -58,12 +58,13 @@ func TestETLMultiObj(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	uuid := tetl.InitSpec(t, baseParams, transformer, etlCommType)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, uuid) })
+	_ = tetl.InitSpec(t, baseParams, transformer, etlCommType)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
 
 	for _, ty := range []string{"range", "list"} {
 		t.Run(ty, func(t *testing.T) {
-			testETLMultiObj(t, uuid, bck, toBck, "test/a-"+fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1), ty)
+			testETLMultiObj(t, transformer, bck, toBck,
+				"test/a-"+fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1), ty)
 		})
 	}
 }

@@ -1098,7 +1098,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 	if rebID != "" {
-		w.Write([]byte(rebID))
+		w.Write(cos.UnsafeB(rebID))
 	}
 }
 
@@ -1149,7 +1149,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		return
 	}
 	if rebID != "" {
-		w.Write([]byte(rebID))
+		w.Write(cos.UnsafeB(rebID))
 	}
 }
 

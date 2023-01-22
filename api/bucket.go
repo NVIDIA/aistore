@@ -264,6 +264,8 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 //     you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
 //     bucket, etc.
 //   - Copying multiple buckets to the same destination bucket is also permitted.
+//
+// Returns xaction ID if successful, an error otherwise.
 func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xactID string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
@@ -285,6 +287,7 @@ func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xac
 }
 
 // RenameBucket renames fromBck as toBck.
+// Returns xaction ID if successful, an error otherwise.
 func RenameBucket(bp BaseParams, fromBck, toBck cmn.Bck) (xactID string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
@@ -510,6 +513,7 @@ func ListObjectsInvalidateCache(bp BaseParams, bck cmn.Bck) error {
 
 // MakeNCopies starts an extended action (xaction) to bring a given bucket to a
 // certain redundancy level (num copies).
+// Returns xaction ID if successful, an error otherwise.
 func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xactID string, err error) {
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
@@ -525,6 +529,9 @@ func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xactID string, err err
 	return
 }
 
+// Erasure-code entire `bck` bucket at a given `data`:`parity` redundancy.
+// The operation requires at least (`data + `parity` + 1) storage targets in the cluster.
+// Returns xaction ID if successful, an error otherwise.
 func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int) (xactID string, err error) {
 	bp.Method = http.MethodPost
 	// Without `string` conversion it makes base64 from []byte in `Body`.

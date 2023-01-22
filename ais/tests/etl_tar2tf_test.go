@@ -22,23 +22,30 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tetl"
+	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 )
 
 func startTar2TfTransformer(t *testing.T) (etlName string) {
-	spec, err := tetl.GetTransformYaml(tetl.Tar2TF)
+	etlName = tetl.Tar2TF // TODO: add more
+
+	spec, err := tetl.GetTransformYaml(etlName)
 	tassert.CheckError(t, err)
 
 	msg := &etl.InitSpecMsg{}
-	msg.IDX = tetl.Tar2TF
-	msg.CommTypeX = etl.Hpull
-	msg.Spec = spec
-
+	{
+		msg.IDX = etlName
+		msg.CommTypeX = etl.Hpull
+		msg.Spec = spec
+	}
 	tassert.CheckError(t, msg.Validate())
+	tassert.Fatalf(t, msg.Name() == tetl.Tar2TF, "%q vs %q", msg.Name(), tetl.Tar2TF)
 
 	// Starting transformer
-	etlName, err = api.ETLInit(baseParams, msg)
+	xactID, err := api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
+
+	tlog.Logf("ETL[%s]: running xaction %q\n", etlName, xactID)
 	return
 }
 
@@ -187,6 +194,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 			})
 		tassert.CheckFatal(t, err)
 
-		tassert.Errorf(t, bytes.Equal(rangeBytesBuff.Bytes(), wholeTFRecord.Bytes()[tc.start:tc.end+1]), "[start: %d, end: %d] bytes different", tc.start, tc.end)
+		tassert.Errorf(t, bytes.Equal(rangeBytesBuff.Bytes(),
+			wholeTFRecord.Bytes()[tc.start:tc.end+1]), "[start: %d, end: %d] bytes different", tc.start, tc.end)
 	}
 }
