@@ -85,6 +85,19 @@ func ETLLogs(bp BaseParams, etlName string, targetID ...string) (logs etl.PodsLo
 	return
 }
 
+func ETLMetrics(params BaseParams, etlName string) (healths etl.PodsMetricsMsg, err error) {
+	params.Method = http.MethodGet
+	path := apc.URLPathETL.Join(etlName, apc.ETLMetrics)
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = params
+		reqParams.Path = path
+	}
+	err = reqParams.DoReqResp(&healths)
+	FreeRp(reqParams)
+	return
+}
+
 func ETLHealth(params BaseParams, etlName string) (healths etl.PodsHealthMsg, err error) {
 	params.Method = http.MethodGet
 	path := apc.URLPathETL.Join(etlName, apc.ETLHealth)

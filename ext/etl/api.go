@@ -85,6 +85,12 @@ type (
 
 	PodsHealthMsg []*PodHealthMsg
 	PodHealthMsg  struct {
+		TargetID     string `json:"target_id"`
+		HealthStatus string `json:"health_status"`
+	}
+
+	PodsMetricsMsg []*PodMetricsMsg
+	PodMetricsMsg  struct {
 		TargetID string  `json:"target_id"`
 		CPU      float64 `json:"cpu"`
 		Mem      int64   `json:"mem"`

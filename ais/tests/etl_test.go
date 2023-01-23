@@ -709,7 +709,7 @@ func TestETLHealth(t *testing.T) {
 		healths, err = api.ETLHealth(baseParams, etlName)
 		if err == nil {
 			if len(healths) > 0 {
-				tlog.Logf("Successfully received metrics after %s\n", now.Sub(start))
+				tlog.Logf("Successfully received health data after %s\n", now.Sub(start))
 				break
 			}
 			tlog.Logln("Unexpected empty health messages without error, retrying...")
@@ -722,9 +722,55 @@ func TestETLHealth(t *testing.T) {
 		time.Sleep(10 * time.Second)
 	}
 
-	for _, health := range healths {
-		tassert.Errorf(t, health.CPU > 0.0 || health.Mem > 0, "[%s] expected non empty health info, got %v",
-			health.TargetID, health)
+	for _, healthMsg := range healths {
+		tassert.Errorf(t, healthMsg.HealthStatus == "Running", "Expected pod health status to be 'Running', got [%s]", healthMsg.HealthStatus)
+	}
+}
+
+func TestETLMetrics(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		etlName    = tetl.Echo // TODO: currently, only echo - add more
+	)
+
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpull)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
+
+	var (
+		start    = time.Now()
+		deadline = start.Add(getMetricsTimeout) // might take a while for metrics to become available
+		metrics  etl.PodsMetricsMsg
+		err      error
+	)
+	for {
+		now := time.Now()
+		if now.After(deadline) {
+			t.Fatal("Timeout waiting for successful metrics response")
+		}
+
+		metrics, err = api.ETLMetrics(baseParams, etlName)
+		if err == nil {
+			if len(metrics) > 0 {
+				tlog.Logf("Successfully received metrics after %s\n", now.Sub(start))
+				break
+			}
+			tlog.Logln("Unexpected empty metrics messages without error, retrying...")
+			continue
+		}
+
+		herr, ok := err.(*cmn.ErrHTTP)
+		tassert.Errorf(t, ok && herr.Status == http.StatusNotFound, "Unexpected error %v, expected 404", err)
+		tlog.Logf("ETL[%s] not found in metrics, retrying...\n", etlName)
+		time.Sleep(10 * time.Second)
+	}
+
+	for _, metric := range metrics {
+		tassert.Errorf(t, metric.CPU > 0.0 || metric.Mem > 0, "[%s] expected non empty metrics info, got %v",
+			metric.TargetID, metric)
 	}
 }
 

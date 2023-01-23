@@ -97,12 +97,14 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// /v1/etl/<etl-name>/logs or /v1/etl/<etl-name>/health
+	// /v1/etl/<etl-name>/logs or /v1/etl/<etl-name>/health or /v1/etl/<etl-name>/metrics
 	switch apiItems[1] {
 	case apc.ETLLogs:
 		t.logsETL(w, r, apiItems[0])
 	case apc.ETLHealth:
 		t.healthETL(w, r, apiItems[0])
+	case apc.ETLMetrics:
+		t.metricsETL(w, r, apiItems[0])
 	default:
 		t.writeErrURL(w, r)
 	}
@@ -172,7 +174,7 @@ func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string)
 }
 
 func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName string) {
-	healthMsg, err := etl.PodHealth(t, etlName)
+	health, err := etl.PodHealth(t, etlName)
 	if err != nil {
 		if cmn.IsErrNotFound(err) {
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
@@ -181,7 +183,20 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName strin
 		}
 		return
 	}
-	t.writeJSON(w, r, healthMsg, "health-etl")
+	w.Write([]byte(health))
+}
+
+func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName string) {
+	metricMsg, err := etl.PodMetrics(t, etlName)
+	if err != nil {
+		if cmn.IsErrNotFound(err) {
+			t.writeErrSilent(w, r, err, http.StatusNotFound)
+		} else {
+			t.writeErr(w, r, err)
+		}
+		return
+	}
+	t.writeJSON(w, r, metricMsg, "metrics-etl")
 }
 
 func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *cluster.Bck, objName string, err error) {

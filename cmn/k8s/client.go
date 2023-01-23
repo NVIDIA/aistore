@@ -37,7 +37,8 @@ type (
 		Service(name string) (*corev1.Service, error)
 		Node(name string) (*corev1.Node, error)
 		Logs(podName string) ([]byte, error)
-		Health(podName string) (cpuCores float64, freeMem int64, err error)
+		Health(podName string) (string, error)
+		Metrics(podName string) (cpuCores float64, freeMem int64, err error)
 		CheckMetricsAvailability() error
 	}
 
@@ -158,7 +159,15 @@ func (c *defaultClient) CheckMetricsAvailability() error {
 	return err
 }
 
-func (*defaultClient) Health(podName string) (cpuCores float64, freeMem int64, err error) {
+func (c *defaultClient) Health(podName string) (string, error) {
+	response, err := c.pods().Get(context.Background(), podName, metav1.GetOptions{})
+	if err != nil {
+		return "Error", err
+	}
+	return string(response.Status.Phase), nil
+}
+
+func (*defaultClient) Metrics(podName string) (cpuCores float64, freeMem int64, err error) {
 	var (
 		totalCPU, totalMem int64
 		fracCPU            float64

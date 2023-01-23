@@ -67,6 +67,9 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 	case apc.ETLHealth:
 		// /v1/etl/<etl-name>/health
 		p.healthETL(w, r)
+	case apc.ETLMetrics:
+		// /v1/etl/<etl-name>/metrics
+		p.metricsETL(w, r)
 	default:
 		p.writeErrURL(w, r)
 	}
@@ -360,11 +363,8 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 		results sliceResults
 		args    *bcastArgs
 	)
-
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
-	args.timeout = apc.DefaultTimeout
-	args.cresv = cresEH{} // -> etl.PodHealthMsg
 	results = p.bcastGroup(args)
 	defer freeBcastRes(results)
 	freeBcArgs(args)
@@ -375,10 +375,39 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 			p.writeErr(w, r, res.toErr(), res.status)
 			return
 		}
-		healths = append(healths, res.v.(*etl.PodHealthMsg))
+		msg := etl.PodHealthMsg{
+			TargetID:     res.si.ID(),
+			HealthStatus: string(res.bytes),
+		}
+		healths = append(healths, &msg)
 	}
-	sort.SliceStable(healths, func(i, j int) bool { return healths[i].TargetID < healths[j].TargetID })
 	p.writeJSON(w, r, healths, "health-etl")
+}
+
+// GET /v1/etl/<etl-name>/metrics
+func (p *proxy) metricsETL(w http.ResponseWriter, r *http.Request) {
+	var (
+		results sliceResults
+		args    *bcastArgs
+	)
+	args = allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
+	args.timeout = apc.DefaultTimeout
+	args.cresv = cresEM{} // -> etl.PodsMetricsMsg
+	results = p.bcastGroup(args)
+	defer freeBcastRes(results)
+	freeBcArgs(args)
+
+	metrics := make(etl.PodsMetricsMsg, 0, len(results))
+	for _, res := range results {
+		if res.err != nil {
+			p.writeErr(w, r, res.toErr(), res.status)
+			return
+		}
+		metrics = append(metrics, res.v.(*etl.PodMetricsMsg))
+	}
+	sort.SliceStable(metrics, func(i, j int) bool { return metrics[i].TargetID < metrics[j].TargetID })
+	p.writeJSON(w, r, metrics, "metrics-etl")
 }
 
 // POST /v1/etl/<etl-name>/stop

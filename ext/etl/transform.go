@@ -366,7 +366,19 @@ func PodLogs(t cluster.Target, transformID string) (logs PodLogsMsg, err error) 
 	}, nil
 }
 
-func PodHealth(t cluster.Target, etlName string) (*PodHealthMsg, error) {
+func PodHealth(t cluster.Target, etlName string) (string, error) {
+	c, err := GetCommunicator(etlName, t.Snode())
+	if err != nil {
+		return "", err
+	}
+	client, err := k8s.GetClient()
+	if err != nil {
+		return "", err
+	}
+	return client.Health(c.PodName())
+}
+
+func PodMetrics(t cluster.Target, etlName string) (*PodMetricsMsg, error) {
 	c, err := GetCommunicator(etlName, t.Snode())
 	if err != nil {
 		return nil, err
@@ -375,9 +387,9 @@ func PodHealth(t cluster.Target, etlName string) (*PodHealthMsg, error) {
 	if err != nil {
 		return nil, err
 	}
-	cpuUsed, memUsed, err := client.Health(c.PodName())
+	cpuUsed, memUsed, err := client.Metrics(c.PodName())
 	if err == nil {
-		return &PodHealthMsg{TargetID: t.SID(), CPU: cpuUsed, Mem: memUsed}, nil
+		return &PodMetricsMsg{TargetID: t.SID(), CPU: cpuUsed, Mem: memUsed}, nil
 	}
 	if cmn.IsErrNotFound(err) {
 		return nil, err

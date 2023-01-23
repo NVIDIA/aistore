@@ -69,14 +69,15 @@ const (
 	WorkerOwner = "worker" // TODO: it should be removed once get-next-bytes endpoint is ready
 
 	// ETL
-	ETL       = "etl"
-	ETLInfo   = "info"
-	ETLList   = List
-	ETLLogs   = "logs"
-	ETLObject = "_object"
-	ETLStop   = Stop
-	ETLStart  = Start
-	ETLHealth = "health"
+	ETL        = "etl"
+	ETLInfo    = "info"
+	ETLList    = List
+	ETLLogs    = "logs"
+	ETLObject  = "_object"
+	ETLStop    = Stop
+	ETLStart   = Start
+	ETLHealth  = "health"
+	ETLMetrics = "metrics"
 )
 
 type URLPath struct {

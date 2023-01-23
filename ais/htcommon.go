@@ -422,7 +422,7 @@ type (
 	cresBA struct{} // -> cmn.BackendInfoAIS
 	cresEI struct{} // -> etl.InfoList
 	cresEL struct{} // -> etl.PodLogsMsg
-	cresEH struct{} // -> etl.PodHealthMsg
+	cresEM struct{} // -> etl.PodMetricsMsg
 	cresIC struct{} // -> icBundle
 	cresBM struct{} // -> bucketMD
 
@@ -438,7 +438,7 @@ var (
 	_ cresv = cresBA{}
 	_ cresv = cresEI{}
 	_ cresv = cresEL{}
-	_ cresv = cresEH{}
+	_ cresv = cresEM{}
 	_ cresv = cresIC{}
 	_ cresv = cresBM{}
 	_ cresv = cresBsumm{}
@@ -476,8 +476,8 @@ func (c cresEI) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jr
 func (cresEL) newV() any                              { return &etl.PodLogsMsg{} }
 func (c cresEL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresEH) newV() any                              { return &etl.PodHealthMsg{} }
-func (c cresEH) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
+func (cresEM) newV() any                              { return &etl.PodMetricsMsg{} }
+func (c cresEM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 func (cresIC) newV() any                              { return &icBundle{} }
 func (c cresIC) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
