@@ -274,7 +274,7 @@ func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName 
 	maxTime := time.Now().Add(timeout)
 	for {
 		if time.Now().After(maxTime) {
-			return fmt.Errorf("timed out when downloading %s/%s", bck, objName)
+			return fmt.Errorf("timed out (%v) waiting for %s/%s downloaded", timeout, bck, objName)
 		}
 		reslist, err := api.ListObjects(baseParams, bck, &apc.LsoMsg{}, 0)
 		if err != nil {

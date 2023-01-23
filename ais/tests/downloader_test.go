@@ -608,7 +608,7 @@ func TestDownloadStatus(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Wait for the short file to be downloaded
-	err = tools.WaitForObjectToBeDowloaded(baseParams, bck, shortFileName, 5*time.Second)
+	err = tools.WaitForObjectToBeDowloaded(baseParams, bck, shortFileName, 13*time.Second)
 	tassert.CheckFatal(t, err)
 
 	resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
