@@ -87,7 +87,7 @@ func CheckObjIsPresent(proxyURL string, bck cmn.Bck, objName string) bool {
 // Put sends a PUT request to the given URL
 func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, errCh chan error) {
 	baseParams := BaseAPIParams(proxyURL)
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     object,
@@ -291,7 +291,7 @@ func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName 
 
 func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck cmn.Bck, objectsNames ...string) {
 	for _, objName := range objectsNames {
-		_, err := api.GetObject(params, bck, objName)
+		_, err := api.GetObject(params, bck, objName, nil)
 		if err != nil {
 			t.Errorf("Unexpected GetObject(%s) error: %v.", objName, err)
 		}
@@ -343,7 +343,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 					// We could PUT while creating files, but that makes it
 					// begin all the puts immediately (because creating random files is fast
 					// compared to the list objects call that getRandomFiles does)
-					err = api.PutObject(api.PutObjectArgs{
+					err = api.PutObject(api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        args.Bck,
 						Object:     objName,
@@ -375,7 +375,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, object string, objContent cos.ReadOpenCloser) {
 	baseParams := BaseAPIParams()
 
-	err := api.PutObject(api.PutObjectArgs{
+	err := api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     object,

@@ -549,7 +549,7 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM, owt cmn.OWT) (errCo
 		return
 	}
 	unsetUUID(&remoteBck)
-	if r, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName); err != nil {
+	if r, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName, nil /*api.GetArgs*/); err != nil {
 		return extractErrCode(err, remAis.uuid)
 	}
 	params := cluster.AllocPutObjParams()
@@ -584,7 +584,7 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadClo
 	expCksum = oa.Cksum
 	lom.SetCksum(nil)
 	// reader
-	r, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName)
+	r, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName, nil /*api.GetArgs*/)
 	errCode, err = extractErrCode(err, remAis.uuid)
 	return
 }
@@ -600,7 +600,7 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 		return
 	}
 	unsetUUID(&remoteBck)
-	args := api.PutObjectArgs{
+	args := api.PutArgs{
 		BaseParams: remAis.bp,
 		Bck:        remoteBck,
 		Object:     lom.ObjName,

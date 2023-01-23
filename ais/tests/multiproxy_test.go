@@ -695,7 +695,7 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string
 		}
 		fname := trand.String(20)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
-		putArgs := api.PutObjectArgs{
+		putArgs := api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     keyname,
@@ -705,7 +705,7 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string
 		if err = api.PutObject(putArgs); err != nil {
 			return fmt.Errorf("error executing put: %v", err)
 		}
-		if _, err = api.GetObject(baseParams, bck, keyname); err != nil {
+		if _, err = api.GetObject(baseParams, bck, keyname, nil); err != nil {
 			return fmt.Errorf("error executing get: %v", err)
 		}
 		if err = tools.Del(proxyURL, bck, keyname, nil /* wg */, nil /* errCh */, true /* silent */); err != nil {
@@ -765,7 +765,7 @@ loop:
 
 		fname := trand.String(20)
 		objName := fmt.Sprintf("%s/%s", localBucketDir, fname)
-		putArgs := api.PutObjectArgs{
+		putArgs := api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     objName,
@@ -777,7 +777,7 @@ loop:
 			errCh <- err
 			continue
 		}
-		_, err = api.GetObject(baseParams, bck, objName)
+		_, err = api.GetObject(baseParams, bck, objName, nil)
 		if err != nil {
 			errCh <- err
 		}

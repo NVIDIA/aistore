@@ -52,7 +52,7 @@ func putFile(size int64, cksumType string) error {
 	if err != nil {
 		return err
 	}
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
 		Object:     "key",
@@ -69,7 +69,7 @@ func putRand(size int64, cksumType string) error {
 	if err != nil {
 		return err
 	}
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
 		Object:     "key",
@@ -85,7 +85,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 	if err != nil {
 		return err
 	}
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
 		Object:     "key",

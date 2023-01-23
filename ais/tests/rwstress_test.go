@@ -71,7 +71,7 @@ func opPut(objName, cksumType string, bck cmn.Bck) opRes {
 	if err != nil {
 		return opRes{http.MethodPut, err}
 	}
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objName,
@@ -82,7 +82,7 @@ func opPut(objName, cksumType string, bck cmn.Bck) opRes {
 }
 
 func opGet(objName, _ string, bck cmn.Bck) opRes {
-	_, err := api.GetObject(baseParams, bck, objName)
+	_, err := api.GetObject(baseParams, bck, objName, nil)
 	return opRes{http.MethodGet, err}
 }
 

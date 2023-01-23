@@ -132,7 +132,7 @@ func PutObjRR(baseParams api.BaseParams, bck cmn.Bck, objName string, objSize in
 	if err != nil {
 		return err
 	}
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objName,

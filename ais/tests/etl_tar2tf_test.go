@@ -73,7 +73,7 @@ func TestETLTar2TFS3(t *testing.T) {
 	// PUT TAR to the cluster
 	f, err := readers.NewFileReaderFromFile(tarPath, cos.ChecksumXXHash)
 	tassert.CheckFatal(t, err)
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     tarObjName,
@@ -95,7 +95,7 @@ func TestETLTar2TFS3(t *testing.T) {
 		baseParams,
 		bck,
 		tarObjName,
-		api.GetObjectInput{
+		api.GetArgs{
 			Writer: outFileBuffer,
 			Query:  url.Values{apc.QparamETLName: {etlName}},
 		})
@@ -150,7 +150,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 	// PUT TAR to the cluster
 	f, err := readers.NewFileReaderFromFile(tarPath, cos.ChecksumXXHash)
 	tassert.CheckFatal(t, err)
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     tarObjName,
@@ -171,7 +171,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 		baseParams,
 		bck,
 		tarObjName,
-		api.GetObjectInput{
+		api.GetArgs{
 			Writer: wholeTFRecord,
 			Query:  url.Values{apc.QparamETLName: {etlName}},
 		})
@@ -187,7 +187,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 			baseParams,
 			bck,
 			tarObjName,
-			api.GetObjectInput{
+			api.GetArgs{
 				Writer: rangeBytesBuff,
 				Header: header,
 				Query:  url.Values{apc.QparamETLName: {etlName}},

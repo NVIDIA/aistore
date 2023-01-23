@@ -338,7 +338,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 				wg.Done()
 			}()
 			tassert.CheckFatal(t, err)
-			putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
+			putArgs := api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
 			err = api.PutObject(putArgs)
 			tassert.CheckFatal(t, err)
 
@@ -399,7 +399,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 				return
 			}
 
-			_, err = api.GetObject(baseParams, bck, objPath)
+			_, err = api.GetObject(baseParams, bck, objPath, nil)
 			tassert.CheckFatal(t, err)
 
 			if doEC {
@@ -446,7 +446,7 @@ func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
 func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath string, size int) {
 	r, err := readers.NewRandReader(int64(size), cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	err = api.PutObject(api.PutObjectArgs{
+	err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objPath,
@@ -515,7 +515,7 @@ func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt 
 	getOneObj := func(objName string) {
 		defer wg.Done()
 		objPath := ecTestDir + objName
-		_, err := api.GetObject(baseParams, bck, objPath)
+		_, err := api.GetObject(baseParams, bck, objPath, nil)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -619,7 +619,7 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objN
 	tlog.Logf("Creating %s, size %8d\n", objPath, objSize)
 	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+	err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("waiting for %s\n", objPath)
@@ -647,7 +647,7 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objNam
 	tlog.LogfCond(!o.silent, "Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+	err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
 	tlog.LogfCond(!o.silent, "waiting for %s\n", objPath)
@@ -686,7 +686,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	tlog.LogfCond(!o.silent, "Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+	err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
 	tlog.LogfCond(!o.silent, "waiting for %s\n", objPath)
@@ -750,11 +750,11 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	}
 
 	tlog.LogfCond(!o.silent, "Restoring %s\n", objPath)
-	_, err = api.GetObject(baseParams, bck, objPath)
+	_, err = api.GetObject(baseParams, bck, objPath, nil)
 	if err != nil {
 		tlog.Logf("... retrying %s\n", objPath)
 		time.Sleep(time.Second)
-		_, err = api.GetObject(baseParams, bck, objPath)
+		_, err = api.GetObject(baseParams, bck, objPath, nil)
 	}
 	tassert.CheckFatal(t, err)
 
@@ -926,7 +926,7 @@ func putECFile(baseParams api.BaseParams, bck cmn.Bck, objName string) error {
 	if err != nil {
 		return err
 	}
-	return api.PutObject(api.PutObjectArgs{
+	return api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objPath,
@@ -1001,7 +1001,7 @@ func TestECChecksum(t *testing.T) {
 		}
 	}
 
-	_, err := api.GetObject(baseParams, bck, objPath1)
+	_, err := api.GetObject(baseParams, bck, objPath1, nil)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Removing main object %s\n", mainObjPath2)
@@ -1017,7 +1017,7 @@ func TestECChecksum(t *testing.T) {
 		}
 	}
 
-	_, err = api.GetObject(baseParams, bck, objPath2)
+	_, err = api.GetObject(baseParams, bck, objPath2, nil)
 	tassert.Fatalf(t, err != nil, "Object should not be restored when checksums are wrong")
 }
 
@@ -1411,7 +1411,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			}
 			r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 			tassert.Errorf(t, err == nil, "Failed to create reader: %v", err)
-			putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
+			putArgs := api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
 			err = api.PutObject(putArgs)
 			tassert.Errorf(t, err == nil, "PUT failed: %v", err)
 
@@ -1504,7 +1504,7 @@ func TestECXattrs(t *testing.T) {
 		tlog.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 		r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+		err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 
 		tlog.Logf("waiting for %s\n", objPath)
@@ -1531,11 +1531,11 @@ func TestECXattrs(t *testing.T) {
 		}
 
 		tlog.Logf("Restoring %s\n", objPath)
-		_, err = api.GetObject(baseParams, bck, objPath)
+		_, err = api.GetObject(baseParams, bck, objPath, nil)
 		if err != nil {
 			tlog.Logf("... retrying %s\n", objPath)
 			time.Sleep(time.Second)
-			_, err = api.GetObject(baseParams, bck, objPath)
+			_, err = api.GetObject(baseParams, bck, objPath, nil)
 		}
 		tassert.CheckFatal(t, err)
 
@@ -1726,7 +1726,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		tlog.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+		err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 		t.Logf("Object %s put in %v", objName, time.Since(start))
 		start = time.Now()
@@ -1888,7 +1888,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 			if !hasTarget(removedTargets, target) {
 				// there exists a target which was not killed and stores replica
 				objPath := ecTestDir + objName
-				_, err := api.GetObject(baseParams, bck, objPath)
+				_, err := api.GetObject(baseParams, bck, objPath, nil)
 				tassert.CheckFatal(t, err)
 				return
 			}
@@ -1974,7 +1974,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 		tlog.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+		err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 
 		foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, bck, objPath)
@@ -2148,7 +2148,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 
 	for _, en := range newObjList.Entries {
-		n, err := api.GetObject(baseParams, bck, en.Name)
+		n, err := api.GetObject(baseParams, bck, en.Name, nil)
 		if err != nil {
 			t.Errorf("Failed to read %s: %v", en.Name, err)
 			continue // to avoid printing other error in this case
@@ -2335,11 +2335,11 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 
 	tlog.Logln("Test object readability after rebalance")
 	for _, obj := range resECOld.Entries {
-		_, err := api.GetObject(baseParams, bckEC, obj.Name)
+		_, err := api.GetObject(baseParams, bckEC, obj.Name, nil)
 		tassert.CheckError(t, err)
 	}
 	for _, obj := range resRegOld.Entries {
-		_, err := api.GetObject(baseParams, bckReg, obj.Name)
+		_, err := api.GetObject(baseParams, bckReg, obj.Name, nil)
 		tassert.CheckError(t, err)
 	}
 }
@@ -2560,7 +2560,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 		defer wg.Done()
 		for {
 			for _, obj := range resECOld.Entries {
-				_, err := api.GetObject(baseParams, bckEC, obj.Name)
+				_, err := api.GetObject(baseParams, bckEC, obj.Name, nil)
 				tassert.CheckError(t, err)
 				select {
 				case <-stopCh.Listen():
@@ -2596,7 +2596,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	tlog.Logln("Reading objects")
 	for _, obj := range resECOld.Entries {
-		_, err := api.GetObject(baseParams, bckEC, obj.Name)
+		_, err := api.GetObject(baseParams, bckEC, obj.Name, nil)
 		tassert.CheckError(t, err)
 	}
 	tlog.Logln("Getting the number of objects after rebalance")
@@ -2610,7 +2610,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 
 	tlog.Logln("Test object readability after rebalance")
 	for _, obj := range resECOld.Entries {
-		_, err := api.GetObject(baseParams, bckEC, obj.Name)
+		_, err := api.GetObject(baseParams, bckEC, obj.Name, nil)
 		tassert.CheckError(t, err)
 	}
 
@@ -2684,7 +2684,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 
 	for _, en := range objList.Entries {
-		_, err := api.GetObject(baseParams, bck, en.Name)
+		_, err := api.GetObject(baseParams, bck, en.Name, nil)
 		tassert.CheckError(t, err)
 	}
 }

@@ -76,20 +76,6 @@ func HTTPStatus(err error) int {
 	return -1 // invalid
 }
 
-func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr http.Header) {
-	w = io.Discard
-	if options.Writer != nil {
-		w = options.Writer
-	}
-	if len(options.Query) != 0 {
-		q = options.Query
-	}
-	if len(options.Header) != 0 {
-		hdr = options.Header
-	}
-	return
-}
-
 func SetAuxHeaders(r *http.Request, bp *BaseParams) {
 	if bp.Token != "" {
 		r.Header.Set(apc.HdrAuthorization, apc.AuthenticationTypeBearer+" "+bp.Token)

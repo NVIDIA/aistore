@@ -184,7 +184,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 	reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 
-	err = api.PutObject(api.PutObjectArgs{
+	err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objName,
@@ -367,7 +367,7 @@ func TestETLInline(t *testing.T) {
 
 			tlog.Logln("GET transformed object")
 			outObject := bytes.NewBuffer(nil)
-			_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
+			_, err = api.GetObject(baseParams, bck, objName, &api.GetArgs{
 				Writer: outObject,
 				Query:  url.Values{apc.QparamETLName: {test.transformer}},
 			})
@@ -401,7 +401,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	reader, err := readers.NewRandReader(cos.MiB, cos.ChecksumMD5)
 	tassert.CheckFatal(t, err)
 
-	err = api.PutObject(api.PutObjectArgs{
+	err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objName,
@@ -413,7 +413,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	outObject := memsys.PageMM().NewSGL(0)
 	defer outObject.Free()
 
-	_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
+	_, err = api.GetObject(baseParams, bck, objName, &api.GetArgs{
 		Writer: outObject,
 		Query:  url.Values{apc.QparamETLName: {transformer}},
 	})

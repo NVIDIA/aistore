@@ -44,7 +44,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 	}
 	baseParams := tools.BaseAPIParams(proxyURL)
 	for fname := range oldVersions {
-		putArgs := api.PutObjectArgs{
+		putArgs := api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     fname,
@@ -91,10 +91,10 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[string]string) {
 	versChanged, bytesChanged := propsStats(t, proxyURL)
 	baseParams := tools.BaseAPIParams(proxyURL)
-	for object := range objList {
-		_, err := api.GetObject(baseParams, bck, object)
+	for objName := range objList {
+		_, err := api.GetObject(baseParams, bck, objName, nil)
 		if err != nil {
-			t.Errorf("Failed to read %s/%s: %v", bck, object, err)
+			t.Errorf("Failed to read %s/%s: %v", bck, objName, err)
 			continue
 		}
 	}

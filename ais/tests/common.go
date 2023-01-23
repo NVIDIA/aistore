@@ -346,7 +346,7 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 
 		wg.Add(1)
 		go func(obj *cmn.LsoEntry) {
-			_, err := api.GetObject(baseParams, m.bck, obj.Name)
+			_, err := api.GetObject(baseParams, m.bck, obj.Name, nil)
 			tassert.CheckError(m.t, err)
 			wg.Done()
 		}(obj)
@@ -445,9 +445,9 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, validate 
 		objName = m.objNames[idx%len(m.objNames)]
 	)
 	if validate {
-		_, err = api.GetObjectWithValidation(baseParams, m.bck, objName)
+		_, err = api.GetObjectWithValidation(baseParams, m.bck, objName, nil)
 	} else {
-		_, err = api.GetObject(baseParams, m.bck, objName)
+		_, err = api.GetObject(baseParams, m.bck, objName, nil)
 	}
 	if err != nil {
 		if m.getErrIsFatal {

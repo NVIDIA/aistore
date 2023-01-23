@@ -14,14 +14,14 @@ import (
 )
 
 // s3/<bucket-name>/<object-name>
-func GetObjectS3(bp BaseParams, bck cmn.Bck, objectName string, options ...GetObjectInput) (int64, error) {
+func GetObjectS3(bp BaseParams, bck cmn.Bck, objectName string, args ...GetArgs) (int64, error) {
 	var (
 		q   url.Values
 		hdr http.Header
 		w   = io.Discard
 	)
-	if len(options) != 0 {
-		w, q, hdr = getObjectOptParams(options[0])
+	if len(args) != 0 {
+		w, q, hdr = args[0].ret()
 	}
 	q = bck.AddToQuery(q)
 	bp.Method = http.MethodGet

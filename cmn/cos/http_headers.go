@@ -9,19 +9,25 @@ package cos
 // - AIS HTTP headers:      api package and api/apc/headers.go source
 
 const (
-	HdrRange                 = "Range" // Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
-	HdrRangeValPrefix        = "bytes="
+	// range to read:
+	HdrRange          = "Range" // Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
+	HdrRangeValPrefix = "bytes="
+	// range read response:
 	HdrContentRange          = "Content-Range"
 	HdrContentRangeValPrefix = "bytes " // Ref: https://tools.ietf.org/html/rfc7233#section-4.2
 	HdrAcceptRanges          = "Accept-Ranges"
-	HdrContentType           = "Content-Type"
-	HdrContentTypeOptions    = "X-Content-Type-Options"
-	HdrContentLength         = "Content-Length"
-	HdrUserAgent             = "User-Agent"
-	HdrAccept                = "Accept"
-	HdrLocation              = "Location"
-	HdrServer                = "Server"
-	HdrETag                  = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/ETag
+
+	// content length & type
+	HdrContentType        = "Content-Type"
+	HdrContentTypeOptions = "X-Content-Type-Options"
+	HdrContentLength      = "Content-Length"
+
+	// misc. gen
+	HdrUserAgent = "User-Agent"
+	HdrAccept    = "Accept"
+	HdrLocation  = "Location"
+	HdrServer    = "Server"
+	HdrETag      = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/ETag
 )
 
 // provider-specific headers (=> custom props, and more)

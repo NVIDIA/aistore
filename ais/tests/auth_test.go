@@ -54,7 +54,7 @@ func TestAuthObj(t *testing.T) {
 
 	r, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
 	objName := trand.String(10)
-	err = api.PutObject(api.PutObjectArgs{
+	err = api.PutObject(api.PutArgs{
 		BaseParams: unAuthBP,
 		Bck:        bck,
 		Reader:     r,
@@ -64,7 +64,7 @@ func TestAuthObj(t *testing.T) {
 	expectUnauthorized(t, err)
 
 	r, _ = readers.NewRandReader(fileSize, cos.ChecksumNone)
-	err = api.PutObject(api.PutObjectArgs{
+	err = api.PutObject(api.PutArgs{
 		BaseParams: authBP,
 		Bck:        bck,
 		Reader:     r,

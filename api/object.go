@@ -32,7 +32,7 @@ const (
 type (
 	NewRequestCB func(args *cmn.HreqArgs) (*http.Request, error)
 
-	GetObjectInput struct {
+	GetArgs struct {
 		// If not specified otherwise, the Writer field defaults to io.Discard
 		// (i.e., with no writer the object that we read will be discarded)
 		Writer io.Writer
@@ -45,7 +45,7 @@ type (
 		// * https://www.rfc-editor.org/rfc/rfc7233#section-2.1
 		Header http.Header
 	}
-	PutObjectArgs struct {
+	PutArgs struct {
 		Reader cos.ReadOpenCloser
 		Cksum  *cos.Cksum
 
@@ -64,7 +64,7 @@ type (
 	}
 	AppendToArchArgs struct {
 		ArchPath string
-		PutObjectArgs
+		PutArgs
 	}
 	PromoteArgs struct {
 		BaseParams BaseParams
@@ -88,13 +88,13 @@ type (
 	}
 )
 
-///////////////////
-// PutObjectArgs //
-///////////////////
+/////////////
+// PutArgs //
+/////////////
 
-func (args *PutObjectArgs) getBody() (io.ReadCloser, error) { return args.Reader.Open() }
+func (args *PutArgs) getBody() (io.ReadCloser, error) { return args.Reader.Open() }
 
-func (args *PutObjectArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
+func (args *PutArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	req, err := reqArgs.Req()
 	if err != nil {
 		return nil, newErrCreateHTTPRequest(err)
@@ -246,22 +246,31 @@ func EvictObject(bp BaseParams, bck cmn.Bck, object string) error {
 	return err
 }
 
+/////////////
+// GetArgs //
+/////////////
+
+func (args *GetArgs) ret() (w io.Writer, q url.Values, hdr http.Header) {
+	w = io.Discard
+	if args == nil {
+		return
+	}
+	if args.Writer != nil {
+		w = args.Writer
+	}
+	q, hdr = args.Query, args.Header
+	return
+}
+
 // GetObject returns the length of the object. Does not validate checksum of the
 // object in the response.
 //
 // Writes the response body to a writer if one is specified in the optional
-// `GetObjectInput.Writer`. Otherwise, it discards the response body read.
+// `GetObjectArgs.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObject(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
-	var (
-		w   = io.Discard
-		q   url.Values
-		hdr http.Header
-	)
-	if len(options) != 0 {
-		w, q, hdr = getObjectOptParams(options[0])
-	}
+func GetObject(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (n int64, err error) {
+	w, q, hdr := args.ret()
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -280,16 +289,8 @@ func GetObject(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectIn
 
 // GetObjectReader returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
-func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser, err error) {
-	var (
-		q   url.Values
-		hdr http.Header
-	)
-	if len(options) != 0 {
-		var w io.Writer
-		w, q, hdr = getObjectOptParams(options[0])
-		cos.Assert(w == nil)
-	}
+func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (r io.ReadCloser, err error) {
+	_, q, hdr := args.ret()
 	q = bck.AddToQuery(q)
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -314,17 +315,9 @@ func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, options ...GetOb
 //
 // Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
 // are different.
-func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
-	var (
-		w   = io.Discard
-		q   url.Values
-		hdr http.Header
-	)
-	if len(options) != 0 {
-		w, q, hdr = getObjectOptParams(options[0])
-	}
+func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (n int64, err error) {
+	w, q, hdr := args.ret()
 	bp.Method = http.MethodGet
-
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
@@ -349,19 +342,11 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, options 
 // It does not validate the checksum of the object in the response.
 //
 // Writes the response body to a writer if one is specified in the optional
-// `GetObjectInput.Writer`. Otherwise, it discards the response body read.
+// `GetObjectArgs.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObjectWithResp(bp BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (*http.Response,
-	int64, error) {
-	var (
-		q   url.Values
-		hdr http.Header
-		w   = io.Discard
-	)
-	if len(options) != 0 {
-		w, q, hdr = getObjectOptParams(options[0])
-	}
+func GetObjectWithResp(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (*http.Response, int64, error) {
+	w, q, hdr := args.ret()
 	q = bck.AddToQuery(q)
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -383,7 +368,7 @@ func GetObjectWithResp(bp BaseParams, bck cmn.Bck, object string, options ...Get
 // it in the specified bucket.
 //
 // Assumes that `args.Reader` is already opened and ready for usage.
-func PutObject(args PutObjectArgs) (err error) {
+func PutObject(args PutArgs) (err error) {
 	query := args.Bck.AddToQuery(nil)
 	if args.SkipVC {
 		query.Set(apc.QparamSkipVC, "true")
@@ -425,7 +410,7 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 		reqArgs.Query = q
 		reqArgs.BodyR = args.Reader
 	}
-	putArgs := &args.PutObjectArgs
+	putArgs := &args.PutArgs
 	_, err = DoWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) //nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)
 	return

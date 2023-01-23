@@ -134,7 +134,7 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 		tassert.CheckFatal(md.t, err)
 		for _, objName := range objList {
 			r, _ := readers.NewRandReader(md.fileSize, p.Cksum.Type)
-			err := api.PutObject(api.PutObjectArgs{
+			err := api.PutObject(api.PutArgs{
 				BaseParams: md.baseParams,
 				Bck:        md.bck,
 				Object:     path.Join(fshcDir, objName),
@@ -148,7 +148,7 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 	case http.MethodGet:
 		for _, objName := range objList {
 			// GetObject must fail - so no error checking
-			_, err := api.GetObject(md.baseParams, md.bck, objName)
+			_, err := api.GetObject(md.baseParams, md.bck, objName, nil)
 			if err == nil {
 				md.t.Errorf("Get %q must fail", objName)
 			}
@@ -296,7 +296,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 			switch op {
 			case "PUT":
 				r, _ := readers.NewRandReader(fileSize, p.Cksum.Type)
-				api.PutObject(api.PutObjectArgs{
+				api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					Object:     path.Join(fshcDir, fname),
@@ -304,7 +304,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 					Size:       fileSize,
 				})
 			case "GET":
-				api.GetObject(baseParams, bck, path.Join(fshcDir, fname))
+				api.GetObject(baseParams, bck, path.Join(fshcDir, fname), nil)
 				time.Sleep(time.Millisecond * 10)
 			default:
 				t.Errorf("Invalid operation: %s", op)
@@ -363,7 +363,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	tlog.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
 	for n := 1; n < 10; n++ {
 		objName := fmt.Sprintf("%s/o%d", fshcDir, n)
-		if _, err := api.GetObject(md.baseParams, md.bck, objName); err == nil {
+		if _, err := api.GetObject(md.baseParams, md.bck, objName, nil); err == nil {
 			t.Error("Should not be able to GET non-existing objects")
 		}
 	}

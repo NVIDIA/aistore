@@ -95,7 +95,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 		url := tsi.URL(cmn.NetPublic)
 		baseParams := tools.BaseAPIParams(url)
 
-		l, err := api.GetObject(baseParams, m.bck, e.Name)
+		l, err := api.GetObject(baseParams, m.bck, e.Name, nil)
 		tassert.CheckFatal(t, err)
 		if uint64(l) != m.fileSize {
 			t.Errorf("Expected filesize: %d, actual filesize: %d\n", m.fileSize, l)
@@ -106,7 +106,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
 			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.Value()})
-			_, err = api.GetObject(baseParams, m.bck, e.Name)
+			_, err = api.GetObject(baseParams, m.bck, e.Name, nil)
 
 			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features
 			// tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
@@ -181,7 +181,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 		url := tsi.URL(cmn.NetPublic)
 		baseParams := tools.BaseAPIParams(url)
 
-		objectSize, err := api.GetObject(baseParams, bck, e.Name)
+		objectSize, err := api.GetObject(baseParams, bck, e.Name, nil)
 		tassert.CheckFatal(t, err)
 		if uint64(objectSize) != m.fileSize {
 			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", m.fileSize, objectSize)
@@ -192,7 +192,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
 			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.Value()})
-			_, err = api.GetObject(baseParams, m.bck, e.Name)
+			_, err = api.GetObject(baseParams, m.bck, e.Name, nil)
 
 			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features
 			// tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
@@ -256,8 +256,8 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	err := os.WriteFile(fqn, []byte("this file has been corrupted"), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 
-	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName)
-	tassert.Errorf(t, err != nil, "error is nil, expected non-nil error on a a GET for an object with corrupted contents")
+	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName, nil)
+	tassert.Errorf(t, err != nil, "error is nil, expected error getting corrupted object")
 }
 
 func TestRegressionBuckets(t *testing.T) {
@@ -438,7 +438,7 @@ func TestRenameObjects(t *testing.T) {
 
 	// Check that renamed objects exist.
 	for _, newObjName := range newObjNames {
-		_, err := api.GetObject(baseParams, bck, newObjName)
+		_, err := api.GetObject(baseParams, bck, newObjName, nil)
 		tassert.CheckError(t, err)
 	}
 }
@@ -989,7 +989,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 			for j := 0; j < numFiles/numReaders; j++ {
 				objName := fmt.Sprintf("%s%d", objNamePrefix, i*numFiles/numReaders+j)
-				putArgs := api.PutObjectArgs{
+				putArgs := api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					Object:     objName,

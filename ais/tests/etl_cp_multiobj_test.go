@@ -48,7 +48,7 @@ func TestETLMultiObj(t *testing.T) {
 
 	for i := 0; i < objCnt; i++ {
 		r, _ := readers.NewRandReader(objSize, cksumType)
-		err := api.PutObject(api.PutObjectArgs{
+		err := api.PutObject(api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
 			Object:     fmt.Sprintf("test/a-%04d", i),

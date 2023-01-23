@@ -91,7 +91,7 @@ func TestObjectInvalidName(t *testing.T) {
 			case putOP:
 				reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 				tassert.CheckFatal(t, err)
-				err = api.PutObject(api.PutObjectArgs{
+				err = api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					Object:     test.objName,
@@ -99,7 +99,7 @@ func TestObjectInvalidName(t *testing.T) {
 				})
 				tassert.Errorf(t, err != nil, "expected error to occur (object name: %q)", test.objName)
 			case getOP:
-				_, err := api.GetObjectWithValidation(baseParams, bck, test.objName)
+				_, err := api.GetObjectWithValidation(baseParams, bck, test.objName, nil)
 				tassert.Errorf(t, err != nil, "expected error to occur (object name: %q)", test.objName)
 			default:
 				panic(test.op)
@@ -142,7 +142,7 @@ func TestRemoteBucketObject(t *testing.T) {
 
 			switch test.ty {
 			case putOP:
-				err = api.PutObject(api.PutObjectArgs{
+				err = api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					Object:     object,
@@ -150,7 +150,7 @@ func TestRemoteBucketObject(t *testing.T) {
 				})
 			case getOP:
 				if test.exists {
-					err = api.PutObject(api.PutObjectArgs{
+					err = api.PutObject(api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck,
 						Object:     object,
@@ -159,7 +159,7 @@ func TestRemoteBucketObject(t *testing.T) {
 					tassert.CheckFatal(t, err)
 				}
 
-				_, err = api.GetObjectWithValidation(baseParams, bck, object)
+				_, err = api.GetObjectWithValidation(baseParams, bck, object, nil)
 			default:
 				t.Fail()
 			}
@@ -183,25 +183,27 @@ func TestHttpProviderObjectGet(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 		hbo, _     = cmn.NewHTTPObjPath(httpObjectURL)
 		w          = bytes.NewBuffer(nil)
-		options    = api.GetObjectInput{Writer: w}
+		getArgs    = api.GetArgs{Writer: w}
 	)
 	_ = api.DestroyBucket(baseParams, hbo.Bck)
 	defer api.DestroyBucket(baseParams, hbo.Bck)
 
 	// get using the HTTP API
-	options.Query = make(url.Values, 1)
-	options.Query.Set(apc.QparamOrigURL, httpObjectURL)
-	_, err := api.GetObject(baseParams, hbo.Bck, httpObjectName, options)
+	getArgs.Query = make(url.Values, 1)
+	getArgs.Query.Set(apc.QparamOrigURL, httpObjectURL)
+	_, err := api.GetObject(baseParams, hbo.Bck, httpObjectName, &getArgs)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpObjectOutput, "bad content (expected:%s got:%s)", httpObjectOutput, w.String())
+	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpObjectOutput, "bad content (expected:%s got:%s)",
+		httpObjectOutput, w.String())
 
 	// get another object using /v1/objects/bucket-name/object-name endpoint
 	w.Reset()
-	options.Query = make(url.Values, 1)
-	options.Query.Set(apc.QparamOrigURL, httpAnotherObjectURL)
-	_, err = api.GetObject(baseParams, hbo.Bck, httpAnotherObjectName, options)
+	getArgs.Query = make(url.Values, 1)
+	getArgs.Query.Set(apc.QparamOrigURL, httpAnotherObjectURL)
+	_, err = api.GetObject(baseParams, hbo.Bck, httpAnotherObjectName, &getArgs)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpAnotherObjectOutput, "bad content (expected:%s got:%s)", httpAnotherObjectOutput, w.String())
+	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpAnotherObjectOutput, "bad content (expected:%s got:%s)",
+		httpAnotherObjectOutput, w.String())
 
 	// list object should contain both the objects
 	reslist, err := api.ListObjects(baseParams, hbo.Bck, &apc.LsoMsg{}, 0)
@@ -214,7 +216,8 @@ func TestHttpProviderObjectGet(t *testing.T) {
 			matchCount++
 		}
 	}
-	tassert.Errorf(t, matchCount == 2, "objects %s and %s should be present in the bucket %s", httpObjectName, httpAnotherObjectName, hbo.Bck)
+	tassert.Errorf(t, matchCount == 2, "objects %s and %s should be present in %s",
+		httpObjectName, httpAnotherObjectName, hbo.Bck)
 }
 
 func TestAppendObject(t *testing.T) {
@@ -274,8 +277,8 @@ func TestAppendObject(t *testing.T) {
 
 			// Read the object from the bucket.
 			writer := bytes.NewBuffer(nil)
-			getArgs := api.GetObjectInput{Writer: writer}
-			n, err := api.GetObjectWithValidation(baseParams, bck, objName, getArgs)
+			getArgs := api.GetArgs{Writer: writer}
+			n, err := api.GetObjectWithValidation(baseParams, bck, objName, &getArgs)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
 				t, writer.String() == content,
@@ -305,14 +308,14 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bckRemote})
 
-	putArgsLocal := api.PutObjectArgs{
+	putArgsLocal := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
 		Object:     fileName1,
 		Reader:     readers.NewBytesReader(dataLocal),
 	}
 
-	putArgsRemote := api.PutObjectArgs{
+	putArgsRemote := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckRemote,
 		Object:     fileName1,
@@ -326,7 +329,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
 
-	_, err = api.GetObject(baseParams, bckLocal, fileName1)
+	_, err = api.GetObject(baseParams, bckLocal, fileName1, nil)
 	if err == nil {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
@@ -467,7 +470,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 	// Put
 	tlog.Logf("Putting object (%s) into ais bucket %s...\n", fileName, bckLocal)
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
 		Object:     fileName,
@@ -480,7 +483,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckRemote)
-	putArgs = api.PutObjectArgs{
+	putArgs = api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckRemote,
 		Object:     fileName,
@@ -509,9 +512,9 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	}
 
 	// Get
-	lenLocal, err := api.GetObject(baseParams, bckLocal, fileName)
+	lenLocal, err := api.GetObject(baseParams, bckLocal, fileName, nil)
 	tassert.CheckFatal(t, err)
-	lenRemote, err := api.GetObject(baseParams, bckRemote, fileName)
+	lenRemote, err := api.GetObject(baseParams, bckRemote, fileName, nil)
 	tassert.CheckFatal(t, err)
 
 	if lenLocal == lenRemote {
@@ -523,7 +526,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	err = api.DeleteObject(baseParams, bckRemote, fileName)
 	tassert.CheckFatal(t, err)
 
-	lenLocal, err = api.GetObject(baseParams, bckLocal, fileName)
+	lenLocal, err = api.GetObject(baseParams, bckLocal, fileName, nil)
 	tassert.CheckFatal(t, err)
 
 	// Check that local object still exists
@@ -781,7 +784,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	})
 
 	objName := m.objNames[0]
-	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName)
+	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName, nil)
 	tassert.CheckError(t, err)
 
 	if !p.Cksum.ValidateWarmGet {
@@ -833,7 +836,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 
-	_, err = api.GetObject(baseParams, m.bck, objName)
+	_, err = api.GetObject(baseParams, m.bck, objName, nil)
 	tassert.Errorf(t, err == nil, "A GET on an object when checksum algo is none should pass. Error: %v", err)
 }
 
@@ -919,7 +922,7 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, objN
 		bck        = cliBck
 	)
 
-	_, err := api.GetObjectWithValidation(baseParams, bck, objName)
+	_, err := api.GetObjectWithValidation(baseParams, bck, objName, nil)
 	tassert.CheckError(t, err)
 
 	tools.CheckPathExists(t, fqn, false /*dir*/)
@@ -1017,20 +1020,20 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
-	_, err = api.GetObject(baseParams, m.bck, objName)
+	_, err = api.GetObject(baseParams, m.bck, objName, nil)
 	tassert.CheckError(t, err)
 }
 
 func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName string, t *testing.T) {
 	baseParams := tools.BaseAPIParams(proxyURL)
-	_, err := api.GetObjectWithValidation(baseParams, bck, objName)
+	_, err := api.GetObjectWithValidation(baseParams, bck, objName, nil)
 	if err == nil {
 		t.Error("Error is nil, expected internal server error on a GET for an object")
 	} else if !strings.Contains(err.Error(), "ErrBadCksum") {
 		t.Errorf("Expected bad checksum error on a GET for a corrupted object, got [%v]", err)
 	}
 	// Execute another GET to make sure that the object is deleted
-	_, err = api.GetObjectWithValidation(baseParams, bck, objName)
+	_, err = api.GetObjectWithValidation(baseParams, bck, objName, nil)
 	if err == nil {
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
 	} else if !strings.Contains(err.Error(), "ErrNotFound") {
@@ -1144,9 +1147,9 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 		hdr        = cmn.RangeHdr(offset, length)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		fqn        = findObjOnDisk(bck, objName)
-		options    = api.GetObjectInput{Writer: w, Header: hdr}
+		args       = api.GetArgs{Writer: w, Header: hdr}
 	)
-	n, err := api.GetObjectWithValidation(baseParams, bck, objName, options)
+	n, err := api.GetObjectWithValidation(baseParams, bck, objName, &args)
 	if err != nil {
 		if !checkEntireObjCksum {
 			t.Errorf("Failed to get object %s/%s! Error: %v", bck, objName, err)
@@ -1204,9 +1207,9 @@ func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName,
 	var (
 		baseParams = tools.BaseAPIParams(proxyURL)
 		hdr        = http.Header{cos.HdrRange: {rangeQuery}}
-		options    = api.GetObjectInput{Header: hdr}
+		args       = api.GetArgs{Header: hdr}
 	)
-	resp, n, err := api.GetObjectWithResp(baseParams, bck, objName, options) //nolint:bodyclose // it's closed inside
+	resp, n, err := api.GetObjectWithResp(baseParams, bck, objName, &args) //nolint:bodyclose // it's closed inside
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
 		t, resp.ContentLength == expectedLength, "expected content-length %d, got %d", expectedLength, resp.ContentLength)
@@ -1225,9 +1228,9 @@ func verifyInvalidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objNam
 	var (
 		baseParams = tools.BaseAPIParams(proxyURL)
 		hdr        = http.Header{cos.HdrRange: {rangeQuery}}
-		options    = api.GetObjectInput{Header: hdr}
+		args       = api.GetArgs{Header: hdr}
 	)
-	_, err := api.GetObjectWithValidation(baseParams, bck, objName, options)
+	_, err := api.GetObjectWithValidation(baseParams, bck, objName, &args)
 	tassert.Errorf(t, err != nil, "must fail for %q combination", rangeQuery)
 }
 
@@ -1357,7 +1360,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		badCksumVal  = "badchecksum"
 	)
 	tools.CreateBucketWithCleanup(t, proxyURL, bckLocal, nil)
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
 		Reader:     readers.NewBytesReader(objData),
@@ -1419,7 +1422,7 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 				for _, objName := range objList {
 					r, _ := readers.NewRandReader(objSize, cksumType)
-					err := api.PutObject(api.PutObjectArgs{
+					err := api.PutObject(api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck.Clone(),
 						Object:     objName,

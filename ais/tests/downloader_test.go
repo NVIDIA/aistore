@@ -502,7 +502,7 @@ func TestDownloadRemote(t *testing.T) {
 				tassert.CheckFatal(t, err)
 
 				objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)
-				err = api.PutObject(api.PutObjectArgs{
+				err = api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        test.srcBck,
 					Object:     objName,
@@ -911,7 +911,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 
 	// Update the file
 	r, _ := readers.NewRandReader(10, p.Cksum.Type)
-	err := api.PutObject(api.PutObjectArgs{
+	err := api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objName,
@@ -953,7 +953,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 
 	// Update the file
 	r, _ := readers.NewRandReader(newSize, p.Cksum.Type)
-	err := api.PutObject(api.PutObjectArgs{
+	err := api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     objName,

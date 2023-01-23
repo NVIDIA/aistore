@@ -321,7 +321,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	for i := 0; i < df.outputShardCnt; i++ {
 		shardName := fmt.Sprintf("%s%0*d%s", df.outputPrefix, zeros, i, df.extension)
 		var buffer bytes.Buffer
-		getOptions := api.GetObjectInput{
+		getArgs := api.GetArgs{
 			Writer: &buffer,
 		}
 
@@ -330,7 +330,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			bucket = df.outputBck
 		}
 
-		_, err := api.GetObject(baseParams, bucket, shardName, getOptions)
+		_, err := api.GetObject(baseParams, bucket, shardName, &getArgs)
 		if err != nil && df.extension == ".zip" && i > df.outputShardCnt/2 {
 			// We estimated too much output shards to be produced - zip compression
 			// was so good that we could fit more files inside the shard.
@@ -503,10 +503,10 @@ func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 
 	for _, obj := range list.Entries {
 		var buffer bytes.Buffer
-		getOptions := api.GetObjectInput{
+		getArgs := api.GetArgs{
 			Writer: &buffer,
 		}
-		_, err := api.GetObject(df.baseParams, bck, obj.Name, getOptions)
+		_, err := api.GetObject(df.baseParams, bck, obj.Name, &getArgs)
 		tassert.CheckFatal(df.m.t, err)
 
 		files, err := archive.GetFileInfosFromTarBuffer(buffer, false)
@@ -1858,7 +1858,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					ekm[recordName] = shardFmts[idx%len(shardFmts)]
 				}
 			}
-			args := api.PutObjectArgs{BaseParams: baseParams, Bck: m.bck, Object: orderFileName, Reader: readers.NewBytesReader(buffer.Bytes())}
+			args := api.PutArgs{BaseParams: baseParams, Bck: m.bck, Object: orderFileName, Reader: readers.NewBytesReader(buffer.Bytes())}
 			err = api.PutObject(args)
 			tassert.CheckFatal(t, err)
 

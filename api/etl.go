@@ -132,7 +132,7 @@ func etlPostAction(bp BaseParams, etlName, action string) (err error) {
 
 // TODO: add ETL-specific query param and change the examples/docs (!4455)
 func ETLObject(bp BaseParams, etlName string, bck cmn.Bck, objName string, w io.Writer) (err error) {
-	_, err = GetObject(bp, bck, objName, GetObjectInput{
+	_, err = GetObject(bp, bck, objName, &GetArgs{
 		Writer: w,
 		Query:  url.Values{apc.QparamETLName: []string{etlName}},
 	})

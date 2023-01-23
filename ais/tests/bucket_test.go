@@ -43,14 +43,14 @@ func TestHTTPProviderBucket(t *testing.T) {
 	err := api.CreateBucket(baseParams, bck, nil)
 	tassert.Fatalf(t, err != nil, "expected error")
 
-	_, err = api.GetObject(baseParams, bck, "nonexisting")
+	_, err = api.GetObject(baseParams, bck, "nonexisting", nil)
 	tassert.Fatalf(t, err != nil, "expected error")
 
 	_, err = api.ListObjects(baseParams, bck, nil, 0)
 	tassert.Fatalf(t, err != nil, "expected error")
 
 	reader, _ := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
-	err = api.PutObject(api.PutObjectArgs{
+	err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		Object:     "something",
@@ -391,7 +391,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	for _, en := range objList.Entries {
 		reader, err := readers.NewRandReader(nsize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		err = api.PutObject(api.PutObjectArgs{
+		err = api.PutObject(api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        m.bck,
 			Object:     en.Name,
@@ -1324,7 +1324,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				objNames = append(objNames, objName)
 
 				r, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
-				err := api.PutObject(api.PutObjectArgs{
+				err := api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					Object:     objName,
@@ -2809,7 +2809,7 @@ func TestBackendBucket(t *testing.T) {
 
 	// Try to cache object.
 	cachedObjName := remoteObjList.Entries[0].Name
-	_, err = api.GetObject(baseParams, aisBck, cachedObjName)
+	_, err = api.GetObject(baseParams, aisBck, cachedObjName, nil)
 	tassert.CheckFatal(t, err)
 
 	// Check if listing objects will result in listing backend bucket objects.
@@ -2847,7 +2847,7 @@ func TestBackendBucket(t *testing.T) {
 	tassert.Fatalf(t, p.BackendBck.IsEmpty(), "backend bucket isn't empty")
 
 	// Check if we can still get object and list objects.
-	_, err = api.GetObject(baseParams, aisBck, cachedObjName)
+	_, err = api.GetObject(baseParams, aisBck, cachedObjName, nil)
 	tassert.CheckFatal(t, err)
 
 	aisObjList, err = api.ListObjects(baseParams, aisBck, msg, 0)
@@ -2859,7 +2859,7 @@ func TestBackendBucket(t *testing.T) {
 	)
 
 	// Check that we cannot do cold gets anymore.
-	_, err = api.GetObject(baseParams, aisBck, remoteObjList.Entries[1].Name)
+	_, err = api.GetObject(baseParams, aisBck, remoteObjList.Entries[1].Name, nil)
 	tassert.Fatalf(t, err != nil, "expected error (object should not exist)")
 
 	// Check that we cannot do put anymore.
@@ -3025,7 +3025,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			wg.Add(1)
 			go func(name string) {
 				defer wg.Done()
-				_, err = api.GetObjectWithValidation(baseParams, m.bck, name)
+				_, err = api.GetObjectWithValidation(baseParams, m.bck, name, nil)
 				tassert.CheckError(t, err)
 			}(en.Name)
 		}
@@ -3056,13 +3056,13 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		}()
 		for j := 0; j < numCorrupted; j++ {
 			objName := <-objCh
-			_, err = api.GetObject(baseParams, m.bck, objName)
+			_, err = api.GetObject(baseParams, m.bck, objName, nil)
 			if mirrored || eced {
 				if err != nil && cksumType != cos.ChecksumNone {
 					if eced {
 						// retry EC
 						time.Sleep(2 * time.Second)
-						_, err = api.GetObject(baseParams, m.bck, objName)
+						_, err = api.GetObject(baseParams, m.bck, objName, nil)
 					}
 					if err != nil {
 						t.Errorf("%s/%s corruption detected but not resolved, mirror=%t, ec=%t\n",

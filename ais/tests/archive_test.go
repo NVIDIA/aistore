@@ -130,13 +130,13 @@ func TestGetFromArchive(t *testing.T) {
 					if test.mime {
 						mime = "application/x-" + test.ext[1:]
 					}
-					getOptions := api.GetObjectInput{
+					getArgs := api.GetArgs{
 						Query: url.Values{
 							apc.QparamArchpath: []string{randomName},
 							apc.QparamArchmime: []string{mime},
 						},
 					}
-					n, err := api.GetObject(baseParams, m.bck, objname, getOptions)
+					n, err := api.GetObject(baseParams, m.bck, objname, &getArgs)
 					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, apc.QparamArchpath, randomName, n)
 					tassert.CheckFatal(t, err)
 				}
@@ -335,13 +335,13 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 					continue
 				}
 
-				getOptions := api.GetObjectInput{
+				getArgs := api.GetArgs{
 					Query: url.Values{
 						apc.QparamArchpath: []string{en.Name},
 						apc.QparamArchmime: []string{mime},
 					},
 				}
-				n, err := api.GetObject(baseParams, toBck, objName, getOptions)
+				n, err := api.GetObject(baseParams, toBck, objName, &getArgs)
 				if err != nil {
 					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, apc.QparamArchpath, en.Name, n, err)
 				}
@@ -437,7 +437,7 @@ func TestAppendToArch(t *testing.T) {
 				} else {
 					for j := 0; j < numAdd; j++ {
 						reader, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
-						putArgs := api.PutObjectArgs{
+						putArgs := api.PutArgs{
 							BaseParams: baseParams,
 							Bck:        toBck,
 							Object:     archName,
@@ -445,8 +445,8 @@ func TestAppendToArch(t *testing.T) {
 							Size:       fileSize,
 						}
 						appendArchArgs := api.AppendToArchArgs{
-							PutObjectArgs: putArgs,
-							ArchPath:      fmt.Sprintf(archPath, j),
+							PutArgs:  putArgs,
+							ArchPath: fmt.Sprintf(archPath, j),
 						}
 						err = api.AppendToArch(appendArchArgs)
 						tassert.CheckError(t, err)
