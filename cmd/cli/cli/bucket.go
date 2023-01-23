@@ -109,7 +109,7 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	}
 	if !flagIsSet(c, waitFlag) {
 		baseMsg := fmt.Sprintf("Renaming bucket %s => %s. ", fromBck, toBck)
-		actionDone(c, baseMsg+toMonitorMsg(c, xactID))
+		actionDone(c, baseMsg+toMonitorMsg(c, xactID, ""))
 		return nil
 	}
 
@@ -131,7 +131,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) err
 	}
 	if !flagIsSet(c, waitFlag) {
 		baseMsg := fmt.Sprintf("Copying bucket %s => %s. ", fromBck, toBck)
-		actionDone(c, baseMsg+toMonitorMsg(c, xactID))
+		actionDone(c, baseMsg+toMonitorMsg(c, xactID, ""))
 		return nil
 	}
 
@@ -658,7 +658,7 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	} else {
 		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy). ", bck.DisplayName())
 	}
-	actionDone(c, baseMsg+toMonitorMsg(c, xactID))
+	actionDone(c, baseMsg+toMonitorMsg(c, xactID, ""))
 	return
 }
 
@@ -669,7 +669,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 		return
 	}
 	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.DisplayName())
-	actionDone(c, msg+toMonitorMsg(c, xactID))
+	actionDone(c, msg+toMonitorMsg(c, xactID, ""))
 	return
 }
 

@@ -976,7 +976,8 @@ func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int
 	FreeHterr(herr)
 }
 
-// 405 Method Not Allowed, see: https://tools.ietf.org/html/rfc2616#section-10.4.6
+// 405 Method Not Allowed, see:
+// * https://www.rfc-editor.org/rfc/rfc7231#section-6.5.5
 func WriteErr405(w http.ResponseWriter, r *http.Request, methods ...string) {
 	w.Header().Set("Allow", strings.Join(methods, ", "))
 	if r.Method == http.MethodOptions {

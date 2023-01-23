@@ -1209,15 +1209,9 @@ func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName,
 	resp, n, err := api.GetObjectWithResp(baseParams, bck, objName, options) //nolint:bodyclose // it's closed inside
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
-		t, resp.ContentLength == expectedLength,
-		"number of bytes received is different than expected (expected: %d, got: %d)",
-		expectedLength, resp.ContentLength,
-	)
+		t, resp.ContentLength == expectedLength, "expected content-length %d, got %d", expectedLength, resp.ContentLength)
 	tassert.Errorf(
-		t, n == expectedLength,
-		"number of bytes received is different than expected (expected: %d, got: %d)",
-		expectedLength, n,
-	)
+		t, n == expectedLength, "expected range length %d, got %d", expectedLength, n)
 	acceptRanges := resp.Header.Get(cos.HdrAcceptRanges)
 	tassert.Errorf(
 		t, acceptRanges == "bytes",

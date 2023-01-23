@@ -314,7 +314,7 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 	}
 	if id != "" {
 		debug.Assert(cos.IsValidUUID(id), id)
-		msg := fmt.Sprintf("Started %s[%s]. %s", xname, id, toMonitorMsg(c, id))
+		msg := fmt.Sprintf("Started %s[%s]. %s", xname, id, toMonitorMsg(c, id, ""))
 		actionDone(c, msg)
 		return nil
 	}
@@ -559,13 +559,12 @@ func bgDownload(c *cli.Context, id string) (err error) {
 
 	if resp.ErrorCnt != 0 {
 		msg := toShowMsg(c, id, "For details", true)
-		warn := fmt.Sprintf("%d of %d download jobs failed. %s", resp.ErrorCnt, resp.ScheduledCnt, msg)
+		warn := fmt.Sprintf("%d of %d download jobs failed. %sBarFlag)s", resp.ErrorCnt, resp.ScheduledCnt, msg)
 		actionWarn(c, warn)
 	} else if resp.FinishedTime.UnixNano() != 0 {
 		actionDownloaded(c, resp.FinishedCnt)
 	} else {
-		msg := fmt.Sprintf("To monitor the progress, run '%s %s %s %s %s'",
-			cliName, commandShow, commandJob, id, flprn(progressBarFlag))
+		msg := toMonitorMsg(c, id, flprn(progressBarFlag)+"'")
 		actionDone(c, msg)
 	}
 	return err
@@ -689,7 +688,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Started %s %s. %s\n", apc.ActLRU, id, toMonitorMsg(c, id))
+	fmt.Fprintf(c.App.Writer, "Started %s %s. %s\n", apc.ActLRU, id, toMonitorMsg(c, id, ""))
 	return
 }
 

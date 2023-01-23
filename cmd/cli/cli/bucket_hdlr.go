@@ -398,7 +398,7 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 	}
 	if !flagIsSet(c, waitFlag) {
 		baseMsg := fmt.Sprintf("%s %s => %s. ", operation, fromBck, toBck)
-		actionDone(c, baseMsg+toMonitorMsg(c, xactID))
+		actionDone(c, baseMsg+toMonitorMsg(c, xactID, ""))
 		return nil
 	}
 

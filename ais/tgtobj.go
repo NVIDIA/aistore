@@ -69,7 +69,7 @@ type (
 		lom *cluster.LOM
 
 		archive archiveQuery // archive query
-		ranges  byteRanges   // range read (see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35)
+		ranges  byteRanges   // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
 
 		atime    int64
 		nanotim  int64

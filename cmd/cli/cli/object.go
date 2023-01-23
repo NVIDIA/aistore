@@ -921,7 +921,7 @@ func listOp(c *cli.Context, bck cmn.Bck) (err error) {
 	}
 	basemsg := fmt.Sprintf("%s %s from %s", fileList, done, bck)
 	if xactID != "" {
-		basemsg += ". " + toMonitorMsg(c, xactID)
+		basemsg += ". " + toMonitorMsg(c, xactID, "")
 	}
 	fmt.Fprintln(c.App.Writer, basemsg)
 	return
@@ -976,7 +976,7 @@ func rangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 	baseMsg := fmt.Sprintf("%s from %s objects in the range %q", done, bck, rangeStr)
 
 	if xactID != "" {
-		baseMsg += ". " + toMonitorMsg(c, xactID)
+		baseMsg += ". " + toMonitorMsg(c, xactID, "")
 	}
 	fmt.Fprintln(c.App.Writer, baseMsg)
 	return

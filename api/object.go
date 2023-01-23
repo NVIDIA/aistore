@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -34,10 +34,15 @@ type (
 
 	GetObjectInput struct {
 		// If not specified otherwise, the Writer field defaults to io.Discard
+		// (i.e., with no writer the object that we read will be discarded)
 		Writer io.Writer
-		// Map of strings as keys and string slices as values used for url formulation
+
+		// Currently, `apc.QparamETLName` and `apc.QparamOrigURL`
+		// TBD future: custom key/value extension
 		Query url.Values
-		// Custom header values passed with GET request
+
+		// `cos.HdrRange` to facilitate range read, see:
+		// * https://www.rfc-editor.org/rfc/rfc7233#section-2.1
 		Header http.Header
 	}
 	PutObjectArgs struct {

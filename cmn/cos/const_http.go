@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -9,7 +9,7 @@ package cos
 // - AIS HTTP headers:      api package and api/apc/headers.go source
 
 const (
-	HdrRange                 = "Range" // Ref: https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35
+	HdrRange                 = "Range" // Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
 	HdrRangeValPrefix        = "bytes="
 	HdrContentRange          = "Content-Range"
 	HdrContentRangeValPrefix = "bytes " // Ref: https://tools.ietf.org/html/rfc7233#section-4.2

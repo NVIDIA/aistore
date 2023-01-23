@@ -55,22 +55,6 @@ var (
 			longRunFlags,
 			jsonFlag,
 		),
-		subcmdDownload: append(
-			longRunFlags,
-			regexFlag,
-			progressBarFlag,
-			allJobsFlag,
-			verboseFlag,
-			jsonFlag,
-		),
-		subcmdDsort: append(
-			longRunFlags,
-			regexFlag,
-			verboseFlag,
-			logFlag,
-			allJobsFlag,
-			jsonFlag,
-		),
 		commandJob: append(
 			longRunFlags,
 			jsonFlag,
@@ -78,6 +62,9 @@ var (
 			regexFlag,
 			noHeaderFlag,
 			verboseFlag,
+			// download and dsort only
+			progressBarFlag,
+			logFlag,
 		),
 		subcmdObject: {
 			objPropsFlag,

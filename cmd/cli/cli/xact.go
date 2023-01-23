@@ -20,8 +20,12 @@ import (
 	"github.com/urfave/cli"
 )
 
-func toMonitorMsg(c *cli.Context, xjid string) string {
-	return toShowMsg(c, xjid, "To monitor the progress", false)
+func toMonitorMsg(c *cli.Context, xjid, suffix string) (out string) {
+	out = toShowMsg(c, xjid, "To monitor the progress", false)
+	if suffix != "" && out != "" {
+		out = strings.TrimRight(out, "'") + " " + suffix
+	}
+	return
 }
 
 func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {

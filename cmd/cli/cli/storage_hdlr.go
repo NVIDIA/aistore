@@ -71,7 +71,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 
 	if !flagIsSet(c, waitFlag) {
 		if id != "" {
-			fmt.Fprintf(c.App.Writer, "Started storage cleanup %q. %s\n", id, toMonitorMsg(c, id))
+			fmt.Fprintf(c.App.Writer, "Started storage cleanup %q. %s\n", id, toMonitorMsg(c, id, ""))
 		} else {
 			fmt.Fprintf(c.App.Writer, "Started storage cleanup\n")
 		}
