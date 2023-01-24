@@ -106,6 +106,10 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
 			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.Value()})
+			t.Cleanup(func() {
+				tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
+			})
+
 			_, err = api.GetObject(baseParams, m.bck, e.Name, nil)
 
 			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features

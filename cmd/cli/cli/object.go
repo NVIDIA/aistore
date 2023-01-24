@@ -50,7 +50,8 @@ const (
 
 func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	var (
-		objArgs                api.GetObjectInput
+		getArgs                api.GetArgs
+		oah                    api.ObjAttrs
 		bck                    cmn.Bck
 		objName, archPath      string
 		objLen, offset, length int64
@@ -99,7 +100,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 
 	hdr := cmn.RangeHdr(offset, length)
 	if outFile == fileStdIO {
-		objArgs = api.GetObjectInput{Writer: os.Stdout, Header: hdr}
+		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
 		silent = true
 	} else {
 		var file *os.File
@@ -112,25 +113,25 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 				os.Remove(outFile)
 			}
 		}()
-		objArgs = api.GetObjectInput{Writer: file, Header: hdr}
+		getArgs = api.GetArgs{Writer: file, Header: hdr}
 	}
 
 	if bck.IsHTTP() {
-		objArgs.Query = make(url.Values, 2)
-		objArgs.Query.Set(apc.QparamOrigURL, uri)
+		getArgs.Query = make(url.Values, 2)
+		getArgs.Query.Set(apc.QparamOrigURL, uri)
 	}
 	// TODO: validate
 	if archPath != "" {
-		if objArgs.Query == nil {
-			objArgs.Query = make(url.Values, 1)
+		if getArgs.Query == nil {
+			getArgs.Query = make(url.Values, 1)
 		}
-		objArgs.Query.Set(apc.QparamArchpath, archPath)
+		getArgs.Query.Set(apc.QparamArchpath, archPath)
 	}
 
 	if flagIsSet(c, cksumFlag) {
-		objLen, err = api.GetObjectWithValidation(apiBP, bck, objName, objArgs)
+		oah, err = api.GetObjectWithValidation(apiBP, bck, objName, &getArgs)
 	} else {
-		objLen, err = api.GetObject(apiBP, bck, objName, objArgs)
+		oah, err = api.GetObject(apiBP, bck, objName, &getArgs)
 	}
 	if err != nil {
 		if cmn.IsStatusNotFound(err) && archPath == "" {
@@ -138,6 +139,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		}
 		return
 	}
+	objLen = oah.Size()
 
 	if flagIsSet(c, lengthFlag) && outFile != fileStdIO {
 		fmt.Fprintf(c.App.ErrWriter, "Read range len=%s(%dB) as %q\n", cos.B2S(objLen, 2), objLen, outFile)
@@ -148,7 +150,8 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 			fmt.Fprintf(c.App.Writer, "GET %q from archive \"%s/%s\" as %q [%s]\n",
 				archPath, bck, objName, outFile, cos.B2S(objLen, 2))
 		} else {
-			fmt.Fprintf(c.App.Writer, "GET %q from %s as %q [%s]\n", objName, bck.DisplayName(), outFile, cos.B2S(objLen, 2))
+			fmt.Fprintf(c.App.Writer, "GET %q from %s as %q [%s]\n",
+				objName, bck.DisplayName(), outFile, cos.B2S(objLen, 2))
 		}
 	}
 	return
@@ -263,10 +266,10 @@ func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) err
 		reader = cos.NewCallbackReadOpenCloser(fh, readCallback)
 	}
 
-	putArgs := api.PutObjectArgs{
+	putArgs := api.PutArgs{
 		BaseParams: apiBP,
 		Bck:        bck,
-		Object:     objName,
+		ObjName:    objName,
 		Reader:     reader,
 		Cksum:      cksum,
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
@@ -280,8 +283,8 @@ func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) err
 		}
 		putArgs.Size = uint64(fi.Size())
 		appendArchArgs := api.AppendToArchArgs{
-			PutObjectArgs: putArgs,
-			ArchPath:      archPath,
+			PutArgs:  putArgs,
+			ArchPath: archPath,
 		}
 		err = api.AppendToArch(appendArchArgs)
 		if flagIsSet(c, progressBarFlag) {
@@ -716,10 +719,10 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		}
 		countReader := cos.NewCallbackReadOpenCloser(reader, updateBar)
 
-		putArgs := api.PutObjectArgs{
+		putArgs := api.PutArgs{
 			BaseParams: apiBP,
 			Bck:        p.bck,
-			Object:     f.name,
+			ObjName:    f.name,
 			Reader:     countReader,
 			SkipVC:     flagIsSet(c, skipVerCksumFlag),
 		}

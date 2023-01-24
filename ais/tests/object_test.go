@@ -278,12 +278,14 @@ func TestAppendObject(t *testing.T) {
 			// Read the object from the bucket.
 			writer := bytes.NewBuffer(nil)
 			getArgs := api.GetArgs{Writer: writer}
-			n, err := api.GetObjectWithValidation(baseParams, bck, objName, &getArgs)
-			tassert.CheckFatal(t, err)
+			oah, err := api.GetObjectWithValidation(baseParams, bck, objName, &getArgs)
+			if !cksum.IsEmpty() {
+				tassert.CheckFatal(t, err)
+			}
 			tassert.Errorf(
 				t, writer.String() == content,
 				"invalid object content: [%d](%s), expected: [%d](%s)",
-				n, writer.String(), objSize, content,
+				oah.Size(), writer.String(), objSize, content,
 			)
 		})
 	}
@@ -1152,7 +1154,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 		fqn        = findObjOnDisk(bck, objName)
 		args       = api.GetArgs{Writer: w, Header: hdr}
 	)
-	n, err := api.GetObjectWithValidation(baseParams, bck, objName, &args)
+	oah, err := api.GetObjectWithValidation(baseParams, bck, objName, &args)
 	if err != nil {
 		if !checkEntireObjCksum {
 			t.Errorf("Failed to get object %s/%s! Error: %v", bck, objName, err)
@@ -1175,8 +1177,8 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 				t.Errorf("Unexpected error returned [%v].", err)
 			}
 		}
-	} else if n != expectedLength {
-		t.Errorf("number of bytes received is different than expected (expected: %d, got: %d)", expectedLength, n)
+	} else if oah.Size() != expectedLength {
+		t.Errorf("number of bytes received (%d) is different from expected (%d)", oah.Size(), expectedLength)
 	}
 
 	file, err := os.Open(fqn)

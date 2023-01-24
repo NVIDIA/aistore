@@ -178,6 +178,39 @@ func GetObject(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (oah Ob
 	return
 }
 
+// Same as above with checksum validation.
+//
+// Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
+// are different.
+func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (oah ObjAttrs, err error) {
+	w, q, hdr := args.ret()
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = bck.AddToQuery(q)
+		reqParams.Header = hdr
+	}
+
+	var (
+		resp  *http.Response
+		wresp *wrappedResp
+	)
+	resp, err = reqParams.do()
+	if err != nil {
+		return
+	}
+
+	wresp, err = reqParams.readValidateCksum(resp, w)
+	resp.Body.Close()
+	FreeRp(reqParams)
+	if err == nil {
+		oah.wrespHeader, oah.n = wresp.Header, wresp.n
+	}
+	return
+}
+
 // GetObjectReader returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
 func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (r io.ReadCloser, err error) {
@@ -194,39 +227,6 @@ func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (
 	r, err = reqParams.doReader()
 	FreeRp(reqParams)
 	return
-}
-
-// GetObjectWithValidation has same behavior as GetObject, but performs checksum
-// validation of the object by comparing the checksum in the response header
-// with the calculated checksum value derived from the returned object.
-//
-// Similar to GetObject, if a memory manager/slab allocator is not specified, a
-// temporary buffer is allocated when reading from the response body to compute
-// the object checksum.
-//
-// Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
-// are different.
-func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (n int64, err error) {
-	w, q, hdr := args.ret()
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
-		reqParams.Query = bck.AddToQuery(q)
-		reqParams.Header = hdr
-		reqParams.Validate = true
-	}
-	wresp, err := reqParams.doResp(w)
-	FreeRp(reqParams)
-	if err != nil {
-		return 0, err
-	}
-	hdrCksumValue := wresp.Header.Get(apc.HdrObjCksumVal)
-	if wresp.cksumValue != hdrCksumValue {
-		return 0, cmn.NewErrInvalidCksum(hdrCksumValue, wresp.cksumValue)
-	}
-	return wresp.n, nil
 }
 
 /////////////

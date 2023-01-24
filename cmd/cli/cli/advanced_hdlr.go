@@ -153,10 +153,10 @@ CreateShards:
 					return err
 				}
 
-				putArgs := api.PutObjectArgs{
+				putArgs := api.PutArgs{
 					BaseParams: apiBP,
 					Bck:        bck,
-					Object:     name,
+					ObjName:    name,
 					Reader:     sgl,
 					SkipVC:     true,
 				}

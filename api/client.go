@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -44,9 +45,6 @@ type (
 		Password string
 
 		Body []byte
-
-		// Determines if the response should be validated with the checksum
-		Validate bool
 	}
 	reqResp struct {
 		client *http.Client
@@ -221,6 +219,7 @@ func (reqParams *ReqParams) setRequestOptParams(req *http.Request) {
 	}
 }
 
+// (compare w/ readValidateCksum below)
 func (reqParams *ReqParams) readResp(resp *http.Response, v any) (*wrappedResp, error) {
 	defer cos.DrainReader(resp.Body)
 
@@ -235,24 +234,13 @@ func (reqParams *ReqParams) readResp(resp *http.Response, v any) (*wrappedResp, 
 		return wresp, nil
 	}
 	if w, ok := v.(io.Writer); ok {
-		if !reqParams.Validate {
-			n, err := io.Copy(w, resp.Body)
-			if err != nil {
-				return nil, err
-			}
-			wresp.n = n
-		} else {
-			hdrCksumType := resp.Header.Get(apc.HdrObjCksumType)
-			// TODO: use MMSA
-			n, cksum, err := cos.CopyAndChecksum(w, resp.Body, nil, hdrCksumType)
-			if err != nil {
-				return nil, err
-			}
-			wresp.n = n
-			if cksum != nil {
-				wresp.cksumValue = cksum.Value()
-			}
+		n, err := io.Copy(w, resp.Body)
+		if err != nil {
+			return nil, err
 		}
+		// NOTE: Content-Length == -1 (unknown) for transformed objects
+		debug.Assertf(n == resp.ContentLength || resp.ContentLength == -1, "%d vs %d", n, wresp.n)
+		wresp.n = n
 	} else {
 		var err error
 		switch t := v.(type) {
@@ -274,6 +262,39 @@ func (reqParams *ReqParams) readResp(resp *http.Response, v any) (*wrappedResp, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response: %w", err)
 		}
+	}
+	return wresp, nil
+}
+
+// affectively, end-to-end protection
+// (compare w/ readResp above)
+func (reqParams *ReqParams) readValidateCksum(resp *http.Response, w io.Writer) (*wrappedResp, error) {
+	if err := reqParams.checkResp(resp); err != nil {
+		cos.DrainReader(resp.Body)
+		return nil, err
+	}
+	var (
+		wresp     = &wrappedResp{Response: resp, n: resp.ContentLength}
+		cksumType = resp.Header.Get(apc.HdrObjCksumType)
+	)
+
+	// TODO: add optional api.Init(MMSA) to use it here
+	n, cksum, err := cos.CopyAndChecksum(w, resp.Body, nil, cksumType)
+	if err != nil {
+		return nil, err
+	}
+	if n != resp.ContentLength {
+		return nil, fmt.Errorf("read length (%d) != (%d) content-length", n, resp.ContentLength)
+	}
+	if cksum == nil {
+		return nil, fmt.Errorf("cannot validate nil checksum (type %q)", cksumType)
+	}
+
+	// and compare
+	wresp.cksumValue = cksum.Value()
+	hdrCksumValue := wresp.Header.Get(apc.HdrObjCksumVal)
+	if wresp.cksumValue != hdrCksumValue {
+		return nil, cmn.NewErrInvalidCksum(hdrCksumValue, wresp.cksumValue)
 	}
 	return wresp, nil
 }
