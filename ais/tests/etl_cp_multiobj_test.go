@@ -51,7 +51,7 @@ func TestETLMultiObj(t *testing.T) {
 		err := api.PutObject(api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
-			Object:     fmt.Sprintf("test/a-%04d", i),
+			ObjName:    fmt.Sprintf("test/a-%04d", i),
 			Reader:     r,
 			Size:       objSize,
 		})

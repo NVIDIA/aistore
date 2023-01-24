@@ -23,37 +23,62 @@ import (
 const (
 	httpMaxRetries = 5                      // maximum number of retries for an HTTP request
 	httpRetrySleep = 100 * time.Millisecond // a sleep between HTTP request retries
+
 	// Sleep between HTTP retries for error[rate of change requests exceeds limit] - must be > 1s:
 	// From https://cloud.google.com/storage/quotas#objects
-	//    "There is an update limit on each object of once per second..."
+	// * "There is an update limit on each object of once per second..."
 	httpRetryRateSleep = 1500 * time.Millisecond
 )
 
+// GET (object)
 type (
-	NewRequestCB func(args *cmn.HreqArgs) (*http.Request, error)
-
 	GetArgs struct {
-		// If not specified otherwise, the Writer field defaults to io.Discard
-		// (i.e., with no writer the object that we read will be discarded)
+		// If not specified (or same: if `nil`), Writer defaults to `io.Discard`
+		// (in other words, with no writer the object that is being read will be discarded)
 		Writer io.Writer
 
-		// Currently, `apc.QparamETLName` and `apc.QparamOrigURL`
-		// TBD future: custom key/value extension
+		// Currently, the Query field can optionally carry 2 (two) distinct values:
+		// 1. `apc.QparamETLName`: named ETL to transform the object (i.e., perform "inline transformation")
+		// 2. `apc.QparamOrigURL`: GET from a vanilla http(s) location (`ht://` bucket with the corresponding `OrigURLBck`)
 		Query url.Values
 
-		// `cos.HdrRange` to facilitate range read, see:
+		// The field is exclusively used to facilitate Range Read.
+		// E.g. usage:
+		// * Header.Set(cos.HdrRange, fmt.Sprintf("bytes=%d-%d", fromOffset, toOffset))
+		// For range formatting, see the spec:
 		// * https://www.rfc-editor.org/rfc/rfc7233#section-2.1
 		Header http.Header
 	}
+
+	// `ObjAttrs` represents object attributes and can be further used to retrieve
+	// the object's size, checksum, version, and other metadata.
+	//
+	// Note that while `GetObject()` and related GET APIs return `ObjAttrs`,
+	// `HeadObject()` API returns `cmn.ObjectProps` - a superset.
+	ObjAttrs struct {
+		wrespHeader http.Header
+		n           int64
+	}
+)
+
+// PUT, APPEND, PROMOTE (object)
+type (
+	NewRequestCB func(args *cmn.HreqArgs) (*http.Request, error)
+
 	PutArgs struct {
 		Reader cos.ReadOpenCloser
-		Cksum  *cos.Cksum
+
+		// optional; if provided:
+		// - if object exists: load the object's metadata, compare checksums - skip writing if equal
+		// - otherwise, compare the two checksums upon writing (aka, "end-to-end protection")
+		Cksum *cos.Cksum
 
 		BaseParams BaseParams
-		Bck        cmn.Bck
 
-		Object string
-		Size   uint64 // optional
+		Bck     cmn.Bck
+		ObjName string
+
+		Size uint64 // optional
 
 		// Skip loading existing object's metadata in order to
 		// compare its Checksum and update its existing Version (if exists);
@@ -87,6 +112,122 @@ type (
 		Handle     string
 	}
 )
+
+/////////////
+// GetArgs //
+/////////////
+
+func (args *GetArgs) ret() (w io.Writer, q url.Values, hdr http.Header) {
+	w = io.Discard
+	if args == nil {
+		return
+	}
+	if args.Writer != nil {
+		w = args.Writer
+	}
+	q, hdr = args.Query, args.Header
+	return
+}
+
+//////////////
+// ObjAttrs //
+//////////////
+
+// most often used (convenience) method
+func (oah *ObjAttrs) Size() int64 {
+	if oah.n == 0 { // unlikely
+		oah.n = oah.Attrs().Size
+	}
+	return oah.n
+}
+
+func (oah *ObjAttrs) Attrs() (out cmn.ObjAttrs) {
+	out.Cksum = out.FromHeader(oah.wrespHeader)
+	return
+}
+
+// e.g. usage: range read response
+func (oah *ObjAttrs) RespHeader() http.Header {
+	return oah.wrespHeader
+}
+
+// Writes the response body if GetArgs.Writer is specified;
+// otherwise, uses `io.Discard` to read all and discard
+//
+// `io.Copy` is used internally to copy response bytes from the request to the writer.
+//
+// Returns `ObjAttrs` that can be further used to get the size and other object metadata.
+func GetObject(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (oah ObjAttrs, err error) {
+	var (
+		wresp     *wrappedResp
+		w, q, hdr = args.ret()
+	)
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = bck.AddToQuery(q)
+		reqParams.Header = hdr
+	}
+	wresp, err = reqParams.doResp(w)
+	FreeRp(reqParams)
+	if err == nil {
+		oah.wrespHeader, oah.n = wresp.Header, wresp.n
+	}
+	return
+}
+
+// GetObjectReader returns reader of the requested object. It does not read body
+// bytes, nor validates a checksum. Caller is responsible for closing the reader.
+func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (r io.ReadCloser, err error) {
+	_, q, hdr := args.ret()
+	q = bck.AddToQuery(q)
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = q
+		reqParams.Header = hdr
+	}
+	r, err = reqParams.doReader()
+	FreeRp(reqParams)
+	return
+}
+
+// GetObjectWithValidation has same behavior as GetObject, but performs checksum
+// validation of the object by comparing the checksum in the response header
+// with the calculated checksum value derived from the returned object.
+//
+// Similar to GetObject, if a memory manager/slab allocator is not specified, a
+// temporary buffer is allocated when reading from the response body to compute
+// the object checksum.
+//
+// Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
+// are different.
+func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (n int64, err error) {
+	w, q, hdr := args.ret()
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Query = bck.AddToQuery(q)
+		reqParams.Header = hdr
+		reqParams.Validate = true
+	}
+	wresp, err := reqParams.doResp(w)
+	FreeRp(reqParams)
+	if err != nil {
+		return 0, err
+	}
+	hdrCksumValue := wresp.Header.Get(apc.HdrObjCksumVal)
+	if wresp.cksumValue != hdrCksumValue {
+		return 0, cmn.NewErrInvalidCksum(hdrCksumValue, wresp.cksumValue)
+	}
+	return wresp.n, nil
+}
 
 /////////////
 // PutArgs //
@@ -158,7 +299,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cm
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = q
 	}
-	resp, err := reqParams.doResp(nil)
+	wresp, err := reqParams.doResp(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -168,16 +309,16 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cm
 
 	// first, cnm.ObjAttrs (NOTE: compare with `headObject()` in target.go)
 	op := &cmn.ObjectProps{}
-	op.Cksum = op.ObjAttrs.FromHeader(resp.Header)
+	op.Cksum = op.ObjAttrs.FromHeader(wresp.Header)
 	// second, all the rest
 	err = cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
 		headerName := cmn.PropToHeader(tag)
 		// skip the missing ones
-		if _, ok := resp.Header[textproto.CanonicalMIMEHeaderKey(headerName)]; !ok {
+		if _, ok := wresp.Header[textproto.CanonicalMIMEHeaderKey(headerName)]; !ok {
 			return nil, false
 		}
 		// single-value
-		return field.SetValue(resp.Header.Get(headerName), true /*force*/), false
+		return field.SetValue(wresp.Header.Get(headerName), true /*force*/), false
 	}, cmn.IterOpts{OnlyRead: false})
 	if err != nil {
 		return nil, err
@@ -246,124 +387,6 @@ func EvictObject(bp BaseParams, bck cmn.Bck, object string) error {
 	return err
 }
 
-/////////////
-// GetArgs //
-/////////////
-
-func (args *GetArgs) ret() (w io.Writer, q url.Values, hdr http.Header) {
-	w = io.Discard
-	if args == nil {
-		return
-	}
-	if args.Writer != nil {
-		w = args.Writer
-	}
-	q, hdr = args.Query, args.Header
-	return
-}
-
-// GetObject returns the length of the object. Does not validate checksum of the
-// object in the response.
-//
-// Writes the response body to a writer if one is specified in the optional
-// `GetObjectArgs.Writer`. Otherwise, it discards the response body read.
-//
-// `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObject(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (n int64, err error) {
-	w, q, hdr := args.ret()
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
-		reqParams.Query = bck.AddToQuery(q)
-		reqParams.Header = hdr
-	}
-	resp, err := reqParams.doResp(w)
-	FreeRp(reqParams)
-	if err != nil {
-		return 0, err
-	}
-	return resp.n, nil
-}
-
-// GetObjectReader returns reader of the requested object. It does not read body
-// bytes, nor validates a checksum. Caller is responsible for closing the reader.
-func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (r io.ReadCloser, err error) {
-	_, q, hdr := args.ret()
-	q = bck.AddToQuery(q)
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
-		reqParams.Query = q
-		reqParams.Header = hdr
-	}
-	r, err = reqParams.doReader()
-	FreeRp(reqParams)
-	return
-}
-
-// GetObjectWithValidation has same behavior as GetObject, but performs checksum
-// validation of the object by comparing the checksum in the response header
-// with the calculated checksum value derived from the returned object.
-//
-// Similar to GetObject, if a memory manager/slab allocator is not specified, a
-// temporary buffer is allocated when reading from the response body to compute
-// the object checksum.
-//
-// Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
-// are different.
-func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (n int64, err error) {
-	w, q, hdr := args.ret()
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
-		reqParams.Query = bck.AddToQuery(q)
-		reqParams.Header = hdr
-		reqParams.Validate = true
-	}
-	resp, err := reqParams.doResp(w)
-	FreeRp(reqParams)
-	if err != nil {
-		return 0, err
-	}
-	hdrCksumValue := resp.Header.Get(apc.HdrObjCksumVal)
-	if resp.cksumValue != hdrCksumValue {
-		return 0, cmn.NewErrInvalidCksum(hdrCksumValue, resp.cksumValue)
-	}
-	return resp.n, nil
-}
-
-// GetObjectWithResp returns the response and the length of the object.
-// It does not validate the checksum of the object in the response.
-//
-// Writes the response body to a writer if one is specified in the optional
-// `GetObjectArgs.Writer`. Otherwise, it discards the response body read.
-//
-// `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObjectWithResp(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (*http.Response, int64, error) {
-	w, q, hdr := args.ret()
-	q = bck.AddToQuery(q)
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
-		reqParams.Query = q
-		reqParams.Header = hdr
-	}
-	resp, err := reqParams.doResp(w)
-	FreeRp(reqParams)
-	if err != nil {
-		return nil, 0, err
-	}
-	return resp.Response, resp.n, nil
-}
-
 // PutObject creates an object from the body of the reader (`args.Reader`) and puts
 // it in the specified bucket.
 //
@@ -377,7 +400,7 @@ func PutObject(args PutArgs) (err error) {
 	{
 		reqArgs.Method = http.MethodPut
 		reqArgs.Base = args.BaseParams.URL
-		reqArgs.Path = apc.URLPathObjects.Join(args.Bck.Name, args.Object)
+		reqArgs.Path = apc.URLPathObjects.Join(args.Bck.Name, args.ObjName)
 		reqArgs.Query = query
 		reqArgs.BodyR = args.Reader
 	}
@@ -394,7 +417,7 @@ func PutObject(args PutArgs) (err error) {
 //   - `api.CreateArchMultiObj`
 //   - `api.AppendObject`
 func AppendToArch(args AppendToArchArgs) (err error) {
-	m, err := cos.Mime("", args.Object)
+	m, err := cos.Mime("", args.ObjName)
 	if err != nil {
 		return err
 	}
@@ -406,7 +429,7 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 	{
 		reqArgs.Method = http.MethodPut
 		reqArgs.Base = args.BaseParams.URL
-		reqArgs.Path = apc.URLPathObjects.Join(args.Bck.Name, args.Object)
+		reqArgs.Path = apc.URLPathObjects.Join(args.Bck.Name, args.ObjName)
 		reqArgs.Query = q
 		reqArgs.BodyR = args.Reader
 	}
@@ -436,12 +459,12 @@ func AppendObject(args AppendArgs) (string /*handle*/, error) {
 		reqArgs.Query = q
 		reqArgs.BodyR = args.Reader
 	}
-	resp, err := DoWithRetry(args.BaseParams.Client, args._append, reqArgs) //nolint:bodyclose // it's closed inside
+	wresp, err := DoWithRetry(args.BaseParams.Client, args._append, reqArgs) //nolint:bodyclose // it's closed inside
 	cmn.FreeHra(reqArgs)
 	if err != nil {
 		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
-	return resp.Header.Get(apc.HdrAppendHandle), err
+	return wresp.Header.Get(apc.HdrAppendHandle), err
 }
 
 // FlushObject must be called after all the appends (via `api.AppendObject`).

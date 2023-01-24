@@ -94,7 +94,7 @@ func TestObjectInvalidName(t *testing.T) {
 				err = api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
-					Object:     test.objName,
+					ObjName:    test.objName,
 					Reader:     reader,
 				})
 				tassert.Errorf(t, err != nil, "expected error to occur (object name: %q)", test.objName)
@@ -145,7 +145,7 @@ func TestRemoteBucketObject(t *testing.T) {
 				err = api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
-					Object:     object,
+					ObjName:    object,
 					Reader:     reader,
 				})
 			case getOP:
@@ -153,7 +153,7 @@ func TestRemoteBucketObject(t *testing.T) {
 					err = api.PutObject(api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck,
-						Object:     object,
+						ObjName:    object,
 						Reader:     reader,
 					})
 					tassert.CheckFatal(t, err)
@@ -311,14 +311,14 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	putArgsLocal := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
-		Object:     fileName1,
+		ObjName:    fileName1,
 		Reader:     readers.NewBytesReader(dataLocal),
 	}
 
 	putArgsRemote := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckRemote,
-		Object:     fileName1,
+		ObjName:    fileName1,
 		Reader:     readers.NewBytesReader(dataRemote),
 	}
 
@@ -373,13 +373,13 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
 	err = api.PutObject(putArgsLocal)
 	tassert.CheckFatal(t, err)
-	putArgsLocal.Object = fileName2
+	putArgsLocal.ObjName = fileName2
 	err = api.PutObject(putArgsLocal)
 	tassert.CheckFatal(t, err)
 
 	err = api.PutObject(putArgsRemote)
 	tassert.CheckFatal(t, err)
-	putArgsRemote.Object = fileName2
+	putArgsRemote.ObjName = fileName2
 	err = api.PutObject(putArgsRemote)
 	tassert.CheckFatal(t, err)
 
@@ -473,7 +473,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
-		Object:     fileName,
+		ObjName:    fileName,
 		Reader:     readers.NewBytesReader(dataLocal),
 	}
 	err := api.PutObject(putArgs)
@@ -486,7 +486,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	putArgs = api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckRemote,
-		Object:     fileName,
+		ObjName:    fileName,
 		Reader:     readers.NewBytesReader(dataRemote),
 	}
 	err = api.PutObject(putArgs)
@@ -512,10 +512,12 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	}
 
 	// Get
-	lenLocal, err := api.GetObject(baseParams, bckLocal, fileName, nil)
+	oahLocal, err := api.GetObject(baseParams, bckLocal, fileName, nil)
 	tassert.CheckFatal(t, err)
-	lenRemote, err := api.GetObject(baseParams, bckRemote, fileName, nil)
+	lenLocal := oahLocal.Size()
+	oahRemote, err := api.GetObject(baseParams, bckRemote, fileName, nil)
 	tassert.CheckFatal(t, err)
+	lenRemote := oahRemote.Size()
 
 	if lenLocal == lenRemote {
 		t.Errorf("Local file and cloud file have same size, expected: local (%v) cloud (%v) got: local (%v) cloud (%v)",
@@ -526,8 +528,9 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	err = api.DeleteObject(baseParams, bckRemote, fileName)
 	tassert.CheckFatal(t, err)
 
-	lenLocal, err = api.GetObject(baseParams, bckLocal, fileName, nil)
+	oahLocal, err = api.GetObject(baseParams, bckLocal, fileName, nil)
 	tassert.CheckFatal(t, err)
+	lenLocal = oahLocal.Size()
 
 	// Check that local object still exists
 	if lenLocal != int64(len(dataLocal)) {
@@ -1209,18 +1212,21 @@ func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName,
 		hdr        = http.Header{cos.HdrRange: {rangeQuery}}
 		args       = api.GetArgs{Header: hdr}
 	)
-	resp, n, err := api.GetObjectWithResp(baseParams, bck, objName, &args) //nolint:bodyclose // it's closed inside
+	oah, err := api.GetObject(baseParams, bck, objName, &args)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(
-		t, resp.ContentLength == expectedLength, "expected content-length %d, got %d", expectedLength, resp.ContentLength)
-	tassert.Errorf(
-		t, n == expectedLength, "expected range length %d, got %d", expectedLength, n)
-	acceptRanges := resp.Header.Get(cos.HdrAcceptRanges)
-	tassert.Errorf(
-		t, acceptRanges == "bytes",
-		"%q header is not set correctly: %s", cos.HdrAcceptRanges, acceptRanges,
-	)
-	contentRange := resp.Header.Get(cos.HdrContentRange)
+
+	tlog.Logf("rangeQuery=%s, n=%d\n", rangeQuery, oah.Size()) // DEBUG
+
+	// check size
+	tassert.Errorf(t, oah.Size() == expectedLength, "expected range length %d, got %d",
+		expectedLength, oah.Size())
+
+	// check read range response headers
+	respHeader := oah.RespHeader()
+	acceptRanges := respHeader.Get(cos.HdrAcceptRanges)
+	tassert.Errorf(t, acceptRanges == "bytes", "%q header is not set correctly: %s",
+		cos.HdrAcceptRanges, acceptRanges)
+	contentRange := respHeader.Get(cos.HdrContentRange)
 	tassert.Errorf(t, contentRange != "", "%q header should be set", cos.HdrContentRange)
 }
 
@@ -1374,7 +1380,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		hasher.H.Write(objData)
 		cksumValue := hex.EncodeToString(hasher.H.Sum(nil))
 		putArgs.Cksum = cos.NewCksum(cksumType, badCksumVal)
-		putArgs.Object = fileName
+		putArgs.ObjName = fileName
 		err := api.PutObject(putArgs)
 		if err == nil {
 			t.Errorf("Bad checksum provided by the user, Expected an error")
@@ -1425,7 +1431,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					err := api.PutObject(api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck.Clone(),
-						Object:     objName,
+						ObjName:    objName,
 						Reader:     r,
 						Size:       objSize,
 					})

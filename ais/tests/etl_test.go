@@ -187,7 +187,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 	err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     objName,
+		ObjName:    objName,
 		Reader:     reader,
 	})
 	tassert.CheckFatal(t, err)
@@ -404,7 +404,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     objName,
+		ObjName:    objName,
 		Reader:     reader,
 	})
 	tassert.CheckFatal(t, err)

@@ -59,7 +59,7 @@ func TestAuthObj(t *testing.T) {
 		Bck:        bck,
 		Reader:     r,
 		Size:       fileSize,
-		Object:     objName,
+		ObjName:    objName,
 	})
 	expectUnauthorized(t, err)
 
@@ -69,7 +69,7 @@ func TestAuthObj(t *testing.T) {
 		Bck:        bck,
 		Reader:     r,
 		Size:       fileSize,
-		Object:     objName,
+		ObjName:    objName,
 	})
 	tassert.CheckFatal(t, err)
 	tlog.Logf("used token[%s...] to PUT %s/%s\n", authBP.Token[:16], bck.String(), objName)

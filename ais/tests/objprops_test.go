@@ -47,7 +47,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 		putArgs := api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
-			Object:     fname,
+			ObjName:    fname,
 			Cksum:      r.Cksum(),
 			Reader:     r,
 		}

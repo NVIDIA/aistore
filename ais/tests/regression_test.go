@@ -95,10 +95,10 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 		url := tsi.URL(cmn.NetPublic)
 		baseParams := tools.BaseAPIParams(url)
 
-		l, err := api.GetObject(baseParams, m.bck, e.Name, nil)
+		oah, err := api.GetObject(baseParams, m.bck, e.Name, nil)
 		tassert.CheckFatal(t, err)
-		if uint64(l) != m.fileSize {
-			t.Errorf("Expected filesize: %d, actual filesize: %d\n", m.fileSize, l)
+		if uint64(oah.Size()) != m.fileSize {
+			t.Errorf("Expected filesize: %d, actual filesize: %d\n", m.fileSize, oah.Size())
 		}
 
 		if i%j == 0 {
@@ -181,10 +181,10 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 		url := tsi.URL(cmn.NetPublic)
 		baseParams := tools.BaseAPIParams(url)
 
-		objectSize, err := api.GetObject(baseParams, bck, e.Name, nil)
+		oah, err := api.GetObject(baseParams, bck, e.Name, nil)
 		tassert.CheckFatal(t, err)
-		if uint64(objectSize) != m.fileSize {
-			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", m.fileSize, objectSize)
+		if uint64(oah.Size()) != m.fileSize {
+			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", m.fileSize, oah.Size())
 		}
 
 		if i%j == 0 {
@@ -992,7 +992,7 @@ func TestStressDeleteRange(t *testing.T) {
 				putArgs := api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
-					Object:     objName,
+					ObjName:    objName,
 					Cksum:      reader.Cksum(),
 					Reader:     reader,
 				}

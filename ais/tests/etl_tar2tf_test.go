@@ -76,7 +76,7 @@ func TestETLTar2TFS3(t *testing.T) {
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     tarObjName,
+		ObjName:    tarObjName,
 		Cksum:      f.Cksum(),
 		Reader:     f,
 	}
@@ -153,7 +153,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     tarObjName,
+		ObjName:    tarObjName,
 		Cksum:      f.Cksum(),
 		Reader:     f,
 	}

@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 
 package aisloader
@@ -178,7 +178,7 @@ func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader c
 		args = api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
-			Object:     object,
+			ObjName:    object,
 			Cksum:      cksum,
 			Reader:     reader,
 			SkipVC:     true,

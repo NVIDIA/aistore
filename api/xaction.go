@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -300,15 +300,15 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v *cmn.AllBsummResu
 		reqParams.Query = url.Values{}
 	}
 	reqParams.Body = body
-	resp, err := reqParams.doResp(&uuid)
+	wresp, err := reqParams.doResp(&uuid)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusAccepted {
-		if resp.StatusCode == http.StatusOK {
+	if wresp.StatusCode != http.StatusAccepted {
+		if wresp.StatusCode == http.StatusOK {
 			return errors.New("expected 202 response code on first call, got 200")
 		}
-		return fmt.Errorf("invalid response code: %d", resp.StatusCode)
+		return fmt.Errorf("invalid response code: %d", wresp.StatusCode)
 	}
 	if msg.UUID == "" {
 		msg.UUID = uuid
@@ -318,11 +318,11 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v *cmn.AllBsummResu
 	// Poll async task for http.StatusOK completion
 	for {
 		reqParams.Body = body
-		resp, err = reqParams.doResp(v)
+		wresp, err = reqParams.doResp(v)
 		if err != nil {
 			return err
 		}
-		if resp.StatusCode == http.StatusOK {
+		if wresp.StatusCode == http.StatusOK {
 			break
 		}
 		time.Sleep(sleep)

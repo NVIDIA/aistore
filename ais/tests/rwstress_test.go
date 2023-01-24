@@ -74,7 +74,7 @@ func opPut(objName, cksumType string, bck cmn.Bck) opRes {
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     objName,
+		ObjName:    objName,
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	}

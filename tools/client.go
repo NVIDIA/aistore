@@ -90,7 +90,7 @@ func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, err
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     object,
+		ObjName:    object,
 		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}
@@ -346,7 +346,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 					err = api.PutObject(api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        args.Bck,
-						Object:     objName,
+						ObjName:    objName,
 						Cksum:      reader.Cksum(),
 						Reader:     reader,
 						Size:       size,
@@ -378,7 +378,7 @@ func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, obj
 	err := api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     object,
+		ObjName:    object,
 		Reader:     objContent,
 	})
 	tassert.CheckFatal(t, err)

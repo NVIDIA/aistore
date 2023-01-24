@@ -136,8 +136,8 @@ func TestGetFromArchive(t *testing.T) {
 							apc.QparamArchmime: []string{mime},
 						},
 					}
-					n, err := api.GetObject(baseParams, m.bck, objname, &getArgs)
-					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, apc.QparamArchpath, randomName, n)
+					oah, err := api.GetObject(baseParams, m.bck, objname, &getArgs)
+					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, apc.QparamArchpath, randomName, oah.Size())
 					tassert.CheckFatal(t, err)
 				}
 			})
@@ -341,9 +341,9 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 						apc.QparamArchmime: []string{mime},
 					},
 				}
-				n, err := api.GetObject(baseParams, toBck, objName, &getArgs)
+				oah, err := api.GetObject(baseParams, toBck, objName, &getArgs)
 				if err != nil {
-					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, apc.QparamArchpath, en.Name, n, err)
+					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, apc.QparamArchpath, en.Name, oah.Size(), err)
 				}
 			}
 		})
@@ -440,7 +440,7 @@ func TestAppendToArch(t *testing.T) {
 						putArgs := api.PutArgs{
 							BaseParams: baseParams,
 							Bck:        toBck,
-							Object:     archName,
+							ObjName:    archName,
 							Reader:     reader,
 							Size:       fileSize,
 						}

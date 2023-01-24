@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -141,23 +141,23 @@ func (reqParams *ReqParams) cdc(resp *http.Response) (err error) {
 	return
 }
 
-// (see below)
-func (reqParams *ReqParams) DoReqResp(v any) error {
-	_, err := reqParams.doResp(v)
-	return err
+// (for caller's convenience)
+func (reqParams *ReqParams) DoReqResp(v any) (err error) {
+	_, err = reqParams.doResp(v)
+	return
 }
 
 // doResp makes http request via do(), decodes the `v` structure from the `resp.Body` (if provided),
 // and returns the entire wrapped response.
 //
 // The function returns an error if the response status code is >= 400.
-func (reqParams *ReqParams) doResp(v any) (wrap *wrappedResp, err error) {
+func (reqParams *ReqParams) doResp(v any) (wresp *wrappedResp, err error) {
 	var resp *http.Response
 	resp, err = reqParams.do()
 	if err != nil {
 		return nil, err
 	}
-	wrap, err = reqParams.readResp(resp, v)
+	wresp, err = reqParams.readResp(resp, v)
 	resp.Body.Close()
 	return
 }
@@ -227,7 +227,10 @@ func (reqParams *ReqParams) readResp(resp *http.Response, v any) (*wrappedResp, 
 	if err := reqParams.checkResp(resp); err != nil {
 		return nil, err
 	}
-	wresp := &wrappedResp{Response: resp}
+	wresp := &wrappedResp{
+		Response: resp,
+		n:        resp.ContentLength, // re-eval. below if Writer specified
+	}
 	if v == nil {
 		return wresp, nil
 	}
@@ -269,7 +272,7 @@ func (reqParams *ReqParams) readResp(resp *http.Response, v any) (*wrappedResp, 
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to read response, err: %w", err)
+			return nil, fmt.Errorf("failed to read response: %w", err)
 		}
 	}
 	return wresp, nil

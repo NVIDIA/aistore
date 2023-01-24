@@ -1858,7 +1858,12 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					ekm[recordName] = shardFmts[idx%len(shardFmts)]
 				}
 			}
-			args := api.PutArgs{BaseParams: baseParams, Bck: m.bck, Object: orderFileName, Reader: readers.NewBytesReader(buffer.Bytes())}
+			args := api.PutArgs{
+				BaseParams: baseParams,
+				Bck:        m.bck,
+				ObjName:    orderFileName,
+				Reader:     readers.NewBytesReader(buffer.Bytes()),
+			}
 			err = api.PutObject(args)
 			tassert.CheckFatal(t, err)
 

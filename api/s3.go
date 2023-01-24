@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -32,10 +32,10 @@ func GetObjectS3(bp BaseParams, bck cmn.Bck, objectName string, args ...GetArgs)
 		reqParams.Query = q
 		reqParams.Header = hdr
 	}
-	resp, err := reqParams.doResp(w)
+	wresp, err := reqParams.doResp(w)
 	FreeRp(reqParams)
 	if err != nil {
 		return 0, err
 	}
-	return resp.n, nil
+	return wresp.n, nil
 }

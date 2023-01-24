@@ -65,7 +65,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 			err := api.PutObject(api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        bckFrom,
-				Object:     objName,
+				ObjName:    objName,
 				Reader:     r,
 				Size:       objSize,
 			})

@@ -698,7 +698,7 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string
 		putArgs := api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
-			Object:     keyname,
+			ObjName:    keyname,
 			Cksum:      reader.Cksum(),
 			Reader:     reader,
 		}
@@ -768,7 +768,7 @@ loop:
 		putArgs := api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
-			Object:     objName,
+			ObjName:    objName,
 			Cksum:      reader.Cksum(),
 			Reader:     reader,
 		}

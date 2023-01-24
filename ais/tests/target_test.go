@@ -40,7 +40,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     objName,
+		ObjName:    objName,
 		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}

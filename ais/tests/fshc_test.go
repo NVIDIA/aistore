@@ -137,7 +137,7 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 			err := api.PutObject(api.PutArgs{
 				BaseParams: md.baseParams,
 				Bck:        md.bck,
-				Object:     path.Join(fshcDir, objName),
+				ObjName:    path.Join(fshcDir, objName),
 				Reader:     r,
 				Size:       uint64(md.fileSize),
 			})
@@ -299,7 +299,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 				api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
-					Object:     path.Join(fshcDir, fname),
+					ObjName:    path.Join(fshcDir, fname),
 					Reader:     r,
 					Size:       fileSize,
 				})

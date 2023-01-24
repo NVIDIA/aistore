@@ -505,7 +505,7 @@ func TestDownloadRemote(t *testing.T) {
 				err = api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        test.srcBck,
-					Object:     objName,
+					ObjName:    objName,
 					Reader:     reader,
 				})
 				tassert.CheckFatal(t, err)
@@ -914,7 +914,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 	err := api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     objName,
+		ObjName:    objName,
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	})
@@ -956,7 +956,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 	err := api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     objName,
+		ObjName:    objName,
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	})

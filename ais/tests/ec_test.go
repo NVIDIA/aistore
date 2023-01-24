@@ -338,7 +338,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 				wg.Done()
 			}()
 			tassert.CheckFatal(t, err)
-			putArgs := api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
+			putArgs := api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r}
 			err = api.PutObject(putArgs)
 			tassert.CheckFatal(t, err)
 
@@ -449,7 +449,7 @@ func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath
 	err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     objPath,
+		ObjName:    objPath,
 		Reader:     r,
 	})
 	tassert.CheckFatal(t, err)
@@ -619,7 +619,7 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objN
 	tlog.Logf("Creating %s, size %8d\n", objPath, objSize)
 	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+	err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("waiting for %s\n", objPath)
@@ -647,7 +647,7 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objNam
 	tlog.LogfCond(!o.silent, "Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+	err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
 	tlog.LogfCond(!o.silent, "waiting for %s\n", objPath)
@@ -686,7 +686,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	tlog.LogfCond(!o.silent, "Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+	err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
 	tlog.LogfCond(!o.silent, "waiting for %s\n", objPath)
@@ -929,7 +929,7 @@ func putECFile(baseParams api.BaseParams, bck cmn.Bck, objName string) error {
 	return api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     objPath,
+		ObjName:    objPath,
 		Reader:     r,
 	})
 }
@@ -1411,7 +1411,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			}
 			r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 			tassert.Errorf(t, err == nil, "Failed to create reader: %v", err)
-			putArgs := api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
+			putArgs := api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r}
 			err = api.PutObject(putArgs)
 			tassert.Errorf(t, err == nil, "PUT failed: %v", err)
 
@@ -1504,7 +1504,7 @@ func TestECXattrs(t *testing.T) {
 		tlog.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 		r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+		err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 
 		tlog.Logf("waiting for %s\n", objPath)
@@ -1726,7 +1726,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		tlog.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+		err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 		t.Logf("Object %s put in %v", objName, time.Since(start))
 		start = time.Now()
@@ -1974,7 +1974,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 		tlog.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
+		err = api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 
 		foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, bck, objPath)
@@ -2148,13 +2148,13 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 
 	for _, en := range newObjList.Entries {
-		n, err := api.GetObject(baseParams, bck, en.Name, nil)
+		oah, err := api.GetObject(baseParams, bck, en.Name, nil)
 		if err != nil {
 			t.Errorf("Failed to read %s: %v", en.Name, err)
 			continue // to avoid printing other error in this case
 		}
-		if n != en.Size {
-			t.Errorf("%s size mismatch read %d, props %d", en.Name, n, en.Size)
+		if oah.Size() != en.Size {
+			t.Errorf("%s size mismatch read %d, props %d", en.Name, oah.Size(), en.Size)
 		}
 	}
 }

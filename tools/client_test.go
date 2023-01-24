@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tools_test
 
@@ -55,7 +55,7 @@ func putFile(size int64, cksumType string) error {
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
-		Object:     "key",
+		ObjName:    "key",
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	}
@@ -72,7 +72,7 @@ func putRand(size int64, cksumType string) error {
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
-		Object:     "key",
+		ObjName:    "key",
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	}
@@ -88,7 +88,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
-		Object:     "key",
+		ObjName:    "key",
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	}

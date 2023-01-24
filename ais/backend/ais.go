@@ -603,7 +603,7 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 	args := api.PutArgs{
 		BaseParams: remAis.bp,
 		Bck:        remoteBck,
-		Object:     lom.ObjName,
+		ObjName:    lom.ObjName,
 		Cksum:      lom.Checksum(),
 		Reader:     r.(cos.ReadOpenCloser),
 		Size:       uint64(lom.SizeBytes(true)), // _special_ because it's still workfile.

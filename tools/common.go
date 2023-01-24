@@ -135,7 +135,7 @@ func PutObjRR(baseParams api.BaseParams, bck cmn.Bck, objName string, objSize in
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     objName,
+		ObjName:    objName,
 		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}

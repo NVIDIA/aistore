@@ -193,7 +193,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		err := api.PutObject(api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
-			Object:     objName,
+			ObjName:    objName,
 			Reader:     r,
 			Size:       uint64(fileSize),
 		})

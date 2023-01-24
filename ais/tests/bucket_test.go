@@ -53,7 +53,7 @@ func TestHTTPProviderBucket(t *testing.T) {
 	err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
-		Object:     "something",
+		ObjName:    "something",
 		Reader:     reader,
 	})
 	tassert.Fatalf(t, err != nil, "expected error")
@@ -394,7 +394,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 		err = api.PutObject(api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        m.bck,
-			Object:     en.Name,
+			ObjName:    en.Name,
 			Reader:     reader,
 		})
 		tassert.CheckFatal(t, err)
@@ -1327,7 +1327,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				err := api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
-					Object:     objName,
+					ObjName:    objName,
 					Reader:     r,
 					Size:       fileSize,
 				})
