@@ -6,6 +6,8 @@ fi
 
 kubectl apply -f kube_templates/minikube_perms.yaml
 
+minikube addons enable metrics-server
+
 # Commands below are run in subshell and the 0 file descriptor is closed
 # so they do not "eat" the input.
 

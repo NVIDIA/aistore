@@ -293,10 +293,6 @@ test:long:aisloader:
     TESTS_DIR: "ais/tests"
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
-    # Make sure that metrics collection is enabled.
-    - git clone https://github.com/prometheus-operator/kube-prometheus.git
-    - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
-
 
 .test_k8s_long_template: &test_k8s_long_def
   extends: .test_k8s_short_template
