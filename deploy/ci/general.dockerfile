@@ -6,7 +6,7 @@ ENV PATH="${GOPATH}/bin:${PATH}"
 RUN apt-get update -yq
 RUN apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse coreutils python3-pip python3-setuptools s3cmd 
 # Python source-build requirements
-RUN apt-get --no-install-recommends -y install wget libbz2-dev libncursesw5-dev unzip libreadline-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libffi-dev zlib1g-dev
+RUN apt-get --no-install-recommends -y install wget libbz2-dev libncursesw5-dev unzip libreadline-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libffi-dev zlib1g-dev docker.io
 
 # Install Python 3.11 from source
 RUN curl -o python3.11.tgz https://www.python.org/ftp/python/3.11.1/Python-3.11.1.tgz
