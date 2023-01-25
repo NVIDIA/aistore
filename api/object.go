@@ -170,7 +170,7 @@ func GetObject(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (oah Ob
 		reqParams.Query = bck.AddToQuery(q)
 		reqParams.Header = hdr
 	}
-	wresp, err = reqParams.doResp(w)
+	wresp, err = reqParams.doWriter(w)
 	FreeRp(reqParams)
 	if err == nil {
 		oah.wrespHeader, oah.n = wresp.Header, wresp.n
@@ -299,7 +299,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cm
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = q
 	}
-	wresp, err := reqParams.doResp(nil)
+	hdr, err := reqParams.doReqHdr()
 	if err != nil {
 		return nil, err
 	}
@@ -309,16 +309,16 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cm
 
 	// first, cnm.ObjAttrs (NOTE: compare with `headObject()` in target.go)
 	op := &cmn.ObjectProps{}
-	op.Cksum = op.ObjAttrs.FromHeader(wresp.Header)
+	op.Cksum = op.ObjAttrs.FromHeader(hdr)
 	// second, all the rest
 	err = cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
 		headerName := cmn.PropToHeader(tag)
 		// skip the missing ones
-		if _, ok := wresp.Header[textproto.CanonicalMIMEHeaderKey(headerName)]; !ok {
+		if _, ok := hdr[textproto.CanonicalMIMEHeaderKey(headerName)]; !ok {
 			return nil, false
 		}
 		// single-value
-		return field.SetValue(wresp.Header.Get(headerName), true /*force*/), false
+		return field.SetValue(hdr.Get(headerName), true /*force*/), false
 	}, cmn.IterOpts{OnlyRead: false})
 	if err != nil {
 		return nil, err
@@ -590,10 +590,11 @@ func DoWithRetry(client *http.Client, cb NewRequestCB, reqArgs *cmn.HreqArgs) (r
 	}
 exit:
 	if err != nil {
-		return nil, fmt.Errorf("failed to %s, err: %v", reqArgs.Method, err)
+		return nil, fmt.Errorf("failed to %s: %v", reqArgs.Method, err)
 	}
 	reqParams := AllocRp()
-	_, err = reqParams.readResp(resp, nil)
+	err = reqParams.checkResp(resp)
+	cos.DrainReader(resp.Body)
 	FreeRp(reqParams)
 	return
 }

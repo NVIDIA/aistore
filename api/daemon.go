@@ -189,7 +189,7 @@ func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) (int64, 
 		reqParams.Query = q
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	wrap, err := reqParams.doResp(w)
+	wrap, err := reqParams.doWriter(w)
 	FreeRp(reqParams)
 	if err == nil {
 		return wrap.n, nil

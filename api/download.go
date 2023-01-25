@@ -77,7 +77,7 @@ func DownloadBackend(bp BaseParams, descr string, bck cmn.Bck, prefix, suffix st
 	return DownloadWithParam(bp, dload.TypeBackend, dlBody)
 }
 
-func DownloadStatus(bp BaseParams, id string, onlyActive bool) (resp *dload.StatusResp, err error) {
+func DownloadStatus(bp BaseParams, id string, onlyActive bool) (dlStatus *dload.StatusResp, err error) {
 	dlBody := dload.AdminBody{ID: id, OnlyActive: onlyActive}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -87,8 +87,8 @@ func DownloadStatus(bp BaseParams, id string, onlyActive bool) (resp *dload.Stat
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	resp = &dload.StatusResp{}
-	err = reqParams.DoReqResp(resp)
+	dlStatus = &dload.StatusResp{}
+	err = reqParams.DoReqResp(dlStatus)
 	FreeRp(reqParams)
 	return
 }

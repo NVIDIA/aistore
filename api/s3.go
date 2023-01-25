@@ -32,7 +32,7 @@ func GetObjectS3(bp BaseParams, bck cmn.Bck, objectName string, args ...GetArgs)
 		reqParams.Query = q
 		reqParams.Header = hdr
 	}
-	wresp, err := reqParams.doResp(w)
+	wresp, err := reqParams.doWriter(w)
 	FreeRp(reqParams)
 	if err != nil {
 		return 0, err

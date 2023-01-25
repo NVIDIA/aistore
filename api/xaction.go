@@ -178,7 +178,7 @@ func GetAllXactionStatus(bp BaseParams, args XactReqArgs, force bool) (matching 
 	return
 }
 
-func getxst(v any, q url.Values, bp BaseParams, args XactReqArgs) (err error) {
+func getxst(out any, q url.Values, bp BaseParams, args XactReqArgs) (err error) {
 	bp.Method = http.MethodGet
 	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
@@ -192,7 +192,7 @@ func getxst(v any, q url.Values, bp BaseParams, args XactReqArgs) (err error) {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err = reqParams.DoReqResp(v)
+	err = reqParams.DoReqResp(out)
 	FreeRp(reqParams)
 	return
 }
@@ -289,7 +289,7 @@ func WaitForXactionIdle(bp BaseParams, args XactReqArgs) error {
 //  3. Breaks loop on error
 //  4. If the destination returns status code StatusOK, it means the response
 //     contains the real data and the function returns the response to the caller
-func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v *cmn.AllBsummResults) error {
+func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, bsumm *cmn.AllBsummResults) error {
 	var (
 		uuid   string
 		sleep  = xactMinPollTime
@@ -300,7 +300,7 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v *cmn.AllBsummResu
 		reqParams.Query = url.Values{}
 	}
 	reqParams.Body = body
-	wresp, err := reqParams.doResp(&uuid)
+	wresp, err := reqParams.doAny(&uuid)
 	if err != nil {
 		return err
 	}
@@ -318,7 +318,7 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, v *cmn.AllBsummResu
 	// Poll async task for http.StatusOK completion
 	for {
 		reqParams.Body = body
-		wresp, err = reqParams.doResp(v)
+		wresp, err = reqParams.doAny(bsumm)
 		if err != nil {
 			return err
 		}

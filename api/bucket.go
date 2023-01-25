@@ -68,7 +68,7 @@ func patchBucketProps(bp BaseParams, bck cmn.Bck, body []byte, query ...url.Valu
 // `dontAddRemote = true` prevents AIS from adding remote bucket to the cluster's metadata.
 func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketProps, err error) {
 	var (
-		resp *wrappedResp
+		hdr  http.Header
 		path = apc.URLPathBuckets.Join(bck.Name)
 		q    = make(url.Values, 4)
 	)
@@ -85,10 +85,9 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketPr
 		reqParams.Path = path
 		reqParams.Query = q
 	}
-	resp, err = reqParams.doResp(nil)
-	if err == nil {
+	if hdr, err = reqParams.doReqHdr(); err == nil {
 		p = &cmn.BucketProps{}
-		err = jsoniter.Unmarshal([]byte(resp.Header.Get(apc.HdrBucketProps)), p)
+		err = jsoniter.Unmarshal([]byte(hdr.Get(apc.HdrBucketProps)), p)
 		return
 	}
 	err = headerr2msg(bck, err)
@@ -104,9 +103,9 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketPr
 // - the API utilizes HEAD method (compare with HeadBucket above) and always executes the _fast_ version of the summary
 func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketProps, info *cmn.BsummResult, err error) {
 	var (
-		wresp *wrappedResp
-		path  = apc.URLPathBuckets.Join(bck.Name)
-		q     = make(url.Values, 4)
+		hdr  http.Header
+		path = apc.URLPathBuckets.Join(bck.Name)
+		q    = make(url.Values, 4)
 	)
 	q = bck.AddToQuery(q)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
@@ -118,13 +117,11 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketPr
 		reqParams.Path = path
 		reqParams.Query = q
 	}
-	wresp, err = reqParams.doResp(nil)
-	if err == nil {
+	if hdr, err = reqParams.doReqHdr(); err == nil {
 		p = &cmn.BucketProps{}
-		err = jsoniter.Unmarshal([]byte(wresp.Header.Get(apc.HdrBucketProps)), p)
-		if err == nil {
+		if err = jsoniter.Unmarshal([]byte(hdr.Get(apc.HdrBucketProps)), p); err == nil {
 			info = &cmn.BsummResult{}
-			err = jsoniter.Unmarshal([]byte(wresp.Header.Get(apc.HdrBucketSumm)), info)
+			err = jsoniter.Unmarshal([]byte(hdr.Get(apc.HdrBucketSumm)), info)
 		}
 		return
 	}

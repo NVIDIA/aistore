@@ -42,7 +42,10 @@ func Health(bp BaseParams, readyToRebalance ...bool) error {
 
 func HealthUptime(bp BaseParams, readyToRebalance ...bool) (string, string, error) {
 	reqParams := mkhealth(bp, readyToRebalance...)
-	hdr, err := reqParams.DoRequestHdr()
+	hdr, err := reqParams.doReqHdr()
+	if err != nil {
+		return "", "", err
+	}
 	clutime, nutime := hdr.Get(apc.HdrClusterUptime), hdr.Get(apc.HdrNodeUptime)
 	FreeRp(reqParams)
 	return clutime, nutime, err

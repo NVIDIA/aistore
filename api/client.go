@@ -46,12 +46,14 @@ type (
 
 		Body []byte
 	}
+)
+
+type (
 	reqResp struct {
 		client *http.Client
 		req    *http.Request
 		resp   *http.Response
 	}
-
 	wrappedResp struct {
 		*http.Response
 		cksumValue string // checksum value of the response
@@ -113,6 +115,10 @@ func FreeRp(reqParams *ReqParams) {
 	reqParamPool.Put(reqParams)
 }
 
+//
+// do request ------------------------------------------------------------------------------
+//
+
 // uses do() to make the request; if successful, checks, drains, and closes the response body
 func (reqParams *ReqParams) DoRequest() error {
 	resp, err := reqParams.do()
@@ -123,7 +129,7 @@ func (reqParams *ReqParams) DoRequest() error {
 }
 
 // same as above except that it also returns response header
-func (reqParams *ReqParams) DoRequestHdr() (http.Header, error) {
+func (reqParams *ReqParams) doReqHdr() (http.Header, error) {
 	resp, err := reqParams.do()
 	if err != nil {
 		return nil, err
@@ -135,27 +141,44 @@ func (reqParams *ReqParams) DoRequestHdr() (http.Header, error) {
 func (reqParams *ReqParams) cdc(resp *http.Response) (err error) {
 	err = reqParams.checkResp(resp)
 	cos.DrainReader(resp.Body)
-	resp.Body.Close()
+	resp.Body.Close() // ignore Close err, if any
 	return
 }
 
 // (for caller's convenience)
-func (reqParams *ReqParams) DoReqResp(v any) (err error) {
-	_, err = reqParams.doResp(v)
+func (reqParams *ReqParams) DoReqResp(out any) (err error) {
+	_, err = reqParams.doAny(out)
 	return
 }
 
-// doResp makes http request via do(), decodes the `v` structure from the `resp.Body` (if provided),
-// and returns the entire wrapped response.
+// Makes request via do(), decodes `resp.Body` into the `out` structure,
+// closes the former, and returns the entire wrapped response
+// (as well as `out`)
 //
-// The function returns an error if the response status code is >= 400.
-func (reqParams *ReqParams) doResp(v any) (wresp *wrappedResp, err error) {
+// Returns an error if the response status >= 400.
+func (reqParams *ReqParams) doAny(out any) (wresp *wrappedResp, err error) {
 	var resp *http.Response
 	resp, err = reqParams.do()
 	if err != nil {
-		return nil, err
+		return
 	}
-	wresp, err = reqParams.readResp(resp, v)
+	wresp, err = reqParams.readAny(resp, out)
+	cos.DrainReader(resp.Body)
+	resp.Body.Close()
+	return
+}
+
+// Makes request via do() and uses provided writer to write `resp.Body`
+// (which is also closes)
+//
+// Returns the entire wrapped response.
+func (reqParams *ReqParams) doWriter(w io.Writer) (wresp *wrappedResp, err error) {
+	var resp *http.Response
+	resp, err = reqParams.do()
+	if err != nil {
+		return
+	}
+	wresp, err = reqParams.rwResp(resp, w)
 	resp.Body.Close()
 	return
 }
@@ -219,50 +242,54 @@ func (reqParams *ReqParams) setRequestOptParams(req *http.Request) {
 	}
 }
 
-// (compare w/ readValidateCksum below)
-func (reqParams *ReqParams) readResp(resp *http.Response, v any) (*wrappedResp, error) {
+//
+// check, read, write, validate http.Response ----------------------------------------------
+//
+
+func (reqParams *ReqParams) readAny(resp *http.Response, v any) (wresp *wrappedResp, err error) {
+	debug.Assert(v != nil)
+	if err = reqParams.checkResp(resp); err != nil {
+		return nil, err
+	}
+	wresp = &wrappedResp{Response: resp, n: resp.ContentLength}
+
+	switch out := v.(type) {
+	case *string:
+		// when the response is a string (e.g., UUID)
+		var b []byte
+		b, err = io.ReadAll(resp.Body)
+		*out = string(b)
+	default:
+		if resp.StatusCode == http.StatusOK {
+			if resp.Header.Get(cos.HdrContentType) == cos.ContentMsgPack {
+				r := msgp.NewReaderSize(resp.Body, 10*cos.KiB)
+				err = v.(msgp.Decodable).DecodeMsg(r)
+			} else {
+				err = jsoniter.NewDecoder(resp.Body).Decode(v)
+			}
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+	return wresp, nil
+}
+
+func (reqParams *ReqParams) rwResp(resp *http.Response, w io.Writer) (*wrappedResp, error) {
 	defer cos.DrainReader(resp.Body)
 
 	if err := reqParams.checkResp(resp); err != nil {
 		return nil, err
 	}
-	wresp := &wrappedResp{
-		Response: resp,
-		n:        resp.ContentLength, // re-eval. below if Writer specified
+	wresp := &wrappedResp{Response: resp}
+	// TODO: pass a buffer or add an optional api.Init(MMSA) to allocate reusable one
+	n, err := io.Copy(w, resp.Body)
+	if err != nil {
+		return nil, err
 	}
-	if v == nil {
-		return wresp, nil
-	}
-	if w, ok := v.(io.Writer); ok {
-		n, err := io.Copy(w, resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		// NOTE: Content-Length == -1 (unknown) for transformed objects
-		debug.Assertf(n == resp.ContentLength || resp.ContentLength == -1, "%d vs %d", n, wresp.n)
-		wresp.n = n
-	} else {
-		var err error
-		switch t := v.(type) {
-		case *string:
-			// when the response is a string (e.g., UUID)
-			var b []byte
-			b, err = io.ReadAll(resp.Body)
-			*t = string(b)
-		default:
-			if resp.StatusCode == http.StatusOK {
-				if resp.Header.Get(cos.HdrContentType) == cos.ContentMsgPack {
-					r := msgp.NewReaderSize(resp.Body, 10*cos.KiB)
-					err = v.(msgp.Decodable).DecodeMsg(r)
-				} else {
-					err = jsoniter.NewDecoder(resp.Body).Decode(v)
-				}
-			}
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response: %w", err)
-		}
-	}
+	// NOTE: Content-Length == -1 (unknown) for transformed objects
+	debug.Assertf(n == resp.ContentLength || resp.ContentLength == -1, "%d vs %d", n, wresp.n)
+	wresp.n = n
 	return wresp, nil
 }
 
@@ -278,7 +305,7 @@ func (reqParams *ReqParams) readValidateCksum(resp *http.Response, w io.Writer) 
 		cksumType = resp.Header.Get(apc.HdrObjCksumType)
 	)
 
-	// TODO: add optional api.Init(MMSA) to use it here
+	// TODO: pass a buffer or add an optional api.Init(MMSA) to allocate reusable one
 	n, cksum, err := cos.CopyAndChecksum(w, resp.Body, nil, cksumType)
 	if err != nil {
 		return nil, err
