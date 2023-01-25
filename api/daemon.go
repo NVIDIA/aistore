@@ -45,7 +45,7 @@ func GetMountpaths(bp BaseParams, node *cluster.Snode) (mpl *apc.MountpathList, 
 			apc.HdrNodeURL: []string{node.URL(cmn.NetPublic)},
 		}
 	}
-	err = reqParams.DoReqResp(&mpl)
+	_, err = reqParams.DoReqAny(&mpl)
 	FreeRp(reqParams)
 	return mpl, err
 }
@@ -143,7 +143,7 @@ func GetDaemonConfig(bp BaseParams, node *cluster.Snode) (config *cmn.Config, er
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatConfig}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	err = reqParams.DoReqResp(&config)
+	_, err = reqParams.DoReqAny(&config)
 	FreeRp(reqParams)
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, 
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStats}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	err = reqParams.DoReqResp(&ds)
+	_, err = reqParams.DoReqAny(&ds)
 	FreeRp(reqParams)
 	return ds, err
 }
@@ -207,7 +207,7 @@ func GetDaemonStatus(bp BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonS
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatDaemonStatus}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	err = reqParams.DoReqResp(&daeInfo)
+	_, err = reqParams.DoReqAny(&daeInfo)
 	FreeRp(reqParams)
 	if err == nil {
 		daeInfo.Status = StatusOnline

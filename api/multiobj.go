@@ -90,7 +90,7 @@ func doListRangeRequest(bp BaseParams, bck cmn.Bck, action string, msg any) (xac
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err = reqParams.DoReqResp(&xactID)
+	_, err = reqParams.doReqStr(&xactID)
 	FreeRp(reqParams)
 	return
 }

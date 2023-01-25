@@ -87,8 +87,9 @@ func DownloadStatus(bp BaseParams, id string, onlyActive bool) (dlStatus *dload.
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
+
 	dlStatus = &dload.StatusResp{}
-	err = reqParams.DoReqResp(dlStatus)
+	_, err = reqParams.DoReqAny(dlStatus)
 	FreeRp(reqParams)
 	return
 }
@@ -103,7 +104,7 @@ func DownloadGetList(bp BaseParams, regex string, onlyActive bool) (dlList dload
 		reqParams.Body = cos.MustMarshal(dlBody)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err = reqParams.DoReqResp(&dlList)
+	_, err = reqParams.DoReqAny(&dlList)
 	FreeRp(reqParams)
 	sort.Sort(dlList)
 	return
@@ -139,8 +140,9 @@ func RemoveDownload(bp BaseParams, id string) error {
 	return err
 }
 
+// TODO: simplify `dload.DlPostResp` => string
 func (reqParams *ReqParams) doDlDownloadRequest() (string, error) {
 	var resp dload.DlPostResp
-	err := reqParams.DoReqResp(&resp)
+	_, err := reqParams.DoReqAny(&resp)
 	return resp.ID, err
 }

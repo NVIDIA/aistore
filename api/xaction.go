@@ -52,9 +52,9 @@ type (
 )
 
 // StartXaction starts a given xact.
-func StartXaction(bp BaseParams, args XactReqArgs) (id string, err error) {
+func StartXaction(bp BaseParams, args XactReqArgs) (string, error) {
 	if !xact.Table[args.Kind].Startable {
-		return id, fmt.Errorf("cannot start \"kind=%s\" xaction", args.Kind)
+		return "", fmt.Errorf("xaction %q is not startable", args.Kind)
 	}
 	xactMsg := xact.QueryMsg{Kind: args.Kind, Bck: args.Bck, DaemonID: args.DaemonID}
 
@@ -80,9 +80,11 @@ func StartXaction(bp BaseParams, args XactReqArgs) (id string, err error) {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
-	err = reqParams.DoReqResp(&id)
+
+	var xactID string
+	_, err := reqParams.doReqStr(&xactID)
 	FreeRp(reqParams)
-	return id, err
+	return xactID, err
 }
 
 // AbortXaction aborts a given xact.
@@ -122,7 +124,7 @@ func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err 
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatAllRunningXacts}}
 	}
-	err = reqParams.DoReqResp(&out)
+	_, err = reqParams.DoReqAny(&out)
 	FreeRp(reqParams)
 	return
 }
@@ -143,7 +145,7 @@ func QueryXactionSnaps(bp BaseParams, args XactReqArgs) (xs XactMultiSnap, err e
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatQueryXactStats}}
 	}
-	err = reqParams.DoReqResp(&xs)
+	_, err = reqParams.DoReqAny(&xs)
 	FreeRp(reqParams)
 	return
 }
@@ -192,7 +194,7 @@ func getxst(out any, q url.Values, bp BaseParams, args XactReqArgs) (err error) 
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err = reqParams.DoReqResp(out)
+	_, err = reqParams.DoReqAny(out)
 	FreeRp(reqParams)
 	return
 }
@@ -300,15 +302,15 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, bsumm *cmn.AllBsumm
 		reqParams.Query = url.Values{}
 	}
 	reqParams.Body = body
-	wresp, err := reqParams.doAny(&uuid)
+	status, err := reqParams.doReqStr(&uuid)
 	if err != nil {
 		return err
 	}
-	if wresp.StatusCode != http.StatusAccepted {
-		if wresp.StatusCode == http.StatusOK {
+	if status != http.StatusAccepted {
+		if status == http.StatusOK {
 			return errors.New("expected 202 response code on first call, got 200")
 		}
-		return fmt.Errorf("invalid response code: %d", wresp.StatusCode)
+		return fmt.Errorf("invalid response code: %d", status)
 	}
 	if msg.UUID == "" {
 		msg.UUID = uuid
@@ -318,11 +320,11 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, bsumm *cmn.AllBsumm
 	// Poll async task for http.StatusOK completion
 	for {
 		reqParams.Body = body
-		wresp, err = reqParams.doAny(bsumm)
+		status, err = reqParams.DoReqAny(bsumm)
 		if err != nil {
 			return err
 		}
-		if wresp.StatusCode == http.StatusOK {
+		if status == http.StatusOK {
 			break
 		}
 		time.Sleep(sleep)

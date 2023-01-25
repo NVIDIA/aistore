@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -624,8 +624,9 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]any) {
 		Path:       apc.URLPathDae.S,
 		Query:      url.Values{apc.QparamWhat: {apc.GetWhatStats}},
 	}
-	err := reqParams.DoReqResp(&stats)
+	status, err := reqParams.DoReqAny(&stats)
 	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, status == http.StatusOK, "expecting status ok, got %d", status)
 	return
 }
 

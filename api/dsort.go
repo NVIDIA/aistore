@@ -13,8 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
-func StartDSort(bp BaseParams, rs dsort.RequestSpec) (string, error) {
-	var id string
+func StartDSort(bp BaseParams, rs dsort.RequestSpec) (id string, err error) {
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -23,9 +22,9 @@ func StartDSort(bp BaseParams, rs dsort.RequestSpec) (string, error) {
 		reqParams.Body = cos.MustMarshal(rs)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err := reqParams.DoReqResp(&id)
+	_, err = reqParams.doReqStr(&id)
 	FreeRp(reqParams)
-	return id, err
+	return
 }
 
 func AbortDSort(bp BaseParams, managerUUID string) error {
@@ -49,7 +48,7 @@ func MetricsDSort(bp BaseParams, managerUUID string) (metrics map[string]*dsort.
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
 	}
-	err = reqParams.DoReqResp(&metrics)
+	_, err = reqParams.DoReqAny(&metrics)
 	FreeRp(reqParams)
 	return metrics, err
 }
@@ -80,7 +79,7 @@ func ListDSort(bp BaseParams, regex string, onlyActive bool) (jobInfos []*dsort.
 		reqParams.Path = apc.URLPathdSort.S
 		reqParams.Query = q
 	}
-	err = reqParams.DoReqResp(&jobInfos)
+	_, err = reqParams.DoReqAny(&jobInfos)
 	FreeRp(reqParams)
 	return
 }

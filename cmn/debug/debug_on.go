@@ -157,6 +157,12 @@ func AssertRWMutexRLocked(m *sync.RWMutex) {
 	Assert(rc > 0 || (0 > rc && rc > -maxReaders), "RWMutex not RLocked")
 }
 
+func AssertNotPstr(a any) {
+	if _, ok := a.(*string); ok {
+		_panic(fmt.Errorf("invalid usage: %v (%T)", a, a))
+	}
+}
+
 func FailTypeCast(a any) {
 	_panic(fmt.Errorf("unexpected type %v (%T)", a, a))
 }

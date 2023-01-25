@@ -29,7 +29,7 @@ func ETLInit(bp BaseParams, msg etl.InitMsg) (xactID string, err error) {
 		reqParams.Path = apc.URLPathETL.S
 		reqParams.Body = cos.MustMarshal(msg)
 	}
-	err = reqParams.DoReqResp(&xactID)
+	_, err = reqParams.doReqStr(&xactID)
 	FreeRp(reqParams)
 	return
 }
@@ -41,7 +41,7 @@ func ETLList(bp BaseParams) (list []etl.Info, err error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathETL.S
 	}
-	err = reqParams.DoReqResp(&list)
+	_, err = reqParams.DoReqAny(&list)
 	FreeRp(reqParams)
 	return
 }
@@ -80,7 +80,7 @@ func ETLLogs(bp BaseParams, etlName string, targetID ...string) (logs etl.PodsLo
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
-	err = reqParams.DoReqResp(&logs)
+	_, err = reqParams.DoReqAny(&logs)
 	FreeRp(reqParams)
 	return
 }
@@ -93,7 +93,7 @@ func ETLMetrics(params BaseParams, etlName string) (healths etl.PodsMetricsMsg, 
 		reqParams.BaseParams = params
 		reqParams.Path = path
 	}
-	err = reqParams.DoReqResp(&healths)
+	_, err = reqParams.DoReqAny(&healths)
 	FreeRp(reqParams)
 	return
 }
@@ -106,7 +106,7 @@ func ETLHealth(params BaseParams, etlName string) (healths etl.PodsHealthMsg, er
 		reqParams.BaseParams = params
 		reqParams.Path = path
 	}
-	err = reqParams.DoReqResp(&healths)
+	_, err = reqParams.DoReqAny(&healths)
 	FreeRp(reqParams)
 	return
 }
@@ -167,7 +167,7 @@ func ETLBucket(bp BaseParams, fromBck, toBck cmn.Bck, bckMsg *apc.TCBMsg) (xactI
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	err = reqParams.DoReqResp(&xactID)
+	_, err = reqParams.doReqStr(&xactID)
 	FreeRp(reqParams)
 	return
 }

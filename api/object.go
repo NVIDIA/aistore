@@ -527,7 +527,7 @@ func Promote(args *PromoteArgs) (xactID string, err error) {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
-	err = reqParams.DoReqResp(&xactID)
+	_, err = reqParams.doReqStr(&xactID)
 	FreeRp(reqParams)
 	return
 }

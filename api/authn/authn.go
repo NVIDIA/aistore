@@ -1,6 +1,6 @@
 // Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
@@ -72,11 +72,9 @@ func LoginUser(bp api.BaseParams, userID, pass, clusterID string, expire *time.D
 		reqParams.Body = cos.MustMarshal(rec)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
-	err = reqParams.DoReqResp(&token)
-	if err != nil {
+	if _, err = reqParams.DoReqAny(&token); err != nil {
 		return nil, err
 	}
-
 	if token.Token == "" {
 		return nil, errors.New("login failed: empty response from AuthN server")
 	}
@@ -128,15 +126,15 @@ func GetRegisteredClusters(bp api.BaseParams, spec CluACL) ([]*CluACL, error) {
 	if spec.ID != "" {
 		path = cos.JoinWords(path, spec.ID)
 	}
-	clusters := &RegisteredClusters{}
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
-	err := reqParams.DoReqResp(clusters)
 
+	clusters := &RegisteredClusters{}
+	_, err := reqParams.DoReqAny(clusters)
 	rec := make([]*CluACL, 0, len(clusters.M))
 	for _, clu := range clusters.M {
 		rec = append(rec, clu)
@@ -150,7 +148,6 @@ func GetRole(bp api.BaseParams, roleID string) (*Role, error) {
 	if roleID == "" {
 		return nil, errors.New("missing role ID")
 	}
-	rInfo := &Role{}
 	bp.Method = http.MethodGet
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
@@ -158,21 +155,24 @@ func GetRole(bp api.BaseParams, roleID string) (*Role, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = cos.JoinWords(apc.URLPathRoles.S, roleID)
 	}
-	err := reqParams.DoReqResp(&rInfo)
+
+	rInfo := &Role{}
+	_, err := reqParams.DoReqAny(&rInfo)
 	return rInfo, err
 }
 
 func GetAllRoles(bp api.BaseParams) ([]*Role, error) {
 	bp.Method = http.MethodGet
 	path := apc.URLPathRoles.S
-	roles := make([]*Role, 0)
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 	}
-	err := reqParams.DoReqResp(&roles)
+
+	roles := make([]*Role, 0)
+	_, err := reqParams.DoReqAny(&roles)
 
 	less := func(i, j int) bool { return roles[i].ID < roles[j].ID }
 	sort.Slice(roles, less)
@@ -181,14 +181,15 @@ func GetAllRoles(bp api.BaseParams) ([]*Role, error) {
 
 func GetAllUsers(bp api.BaseParams) ([]*User, error) {
 	bp.Method = http.MethodGet
-	users := make(map[string]*User, 4)
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathUsers.S
 	}
-	err := reqParams.DoReqResp(&users)
+
+	users := make(map[string]*User, 4)
+	_, err := reqParams.DoReqAny(&users)
 
 	list := make([]*User, 0, len(users))
 	for _, info := range users {
@@ -205,7 +206,6 @@ func GetUser(bp api.BaseParams, userID string) (*User, error) {
 	if userID == "" {
 		return nil, errors.New("missing user ID")
 	}
-	uInfo := &User{}
 	bp.Method = http.MethodGet
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
@@ -213,7 +213,9 @@ func GetUser(bp api.BaseParams, userID string) (*User, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = cos.JoinWords(apc.URLPathUsers.S, userID)
 	}
-	err := reqParams.DoReqResp(&uInfo)
+
+	uInfo := &User{}
+	_, err := reqParams.DoReqAny(&uInfo)
 	return uInfo, err
 }
 
@@ -271,7 +273,6 @@ func RevokeToken(bp api.BaseParams, token string) error {
 }
 
 func GetConfig(bp api.BaseParams) (*Config, error) {
-	conf := &Config{}
 	bp.Method = http.MethodGet
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
@@ -279,7 +280,9 @@ func GetConfig(bp api.BaseParams) (*Config, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathDae.S
 	}
-	err := reqParams.DoReqResp(&conf)
+
+	conf := &Config{}
+	_, err := reqParams.DoReqAny(&conf)
 	return conf, err
 }
 

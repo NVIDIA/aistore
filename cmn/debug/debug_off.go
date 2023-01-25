@@ -25,7 +25,8 @@ func AssertFunc(_ func() bool, _ ...any) {}
 func AssertNoErr(_ error)                {}
 func Assertf(_ bool, _ string, _ ...any) {}
 
-func FailTypeCast(any) {}
+func AssertNotPstr(any) {}
+func FailTypeCast(any)  {}
 
 func AssertMutexLocked(_ *sync.Mutex)      {}
 func AssertRWMutexLocked(_ *sync.RWMutex)  {}

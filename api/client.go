@@ -137,35 +137,33 @@ func (reqParams *ReqParams) doReqHdr() (http.Header, error) {
 	return resp.Header, reqParams.cdc(resp)
 }
 
-// check, drain and close
-func (reqParams *ReqParams) cdc(resp *http.Response) (err error) {
-	err = reqParams.checkResp(resp)
-	cos.DrainReader(resp.Body)
-	resp.Body.Close() // ignore Close err, if any
-	return
-}
-
-// (for caller's convenience)
-func (reqParams *ReqParams) DoReqResp(out any) (err error) {
-	_, err = reqParams.doAny(out)
-	return
-}
-
 // Makes request via do(), decodes `resp.Body` into the `out` structure,
 // closes the former, and returns the entire wrapped response
 // (as well as `out`)
 //
 // Returns an error if the response status >= 400.
-func (reqParams *ReqParams) doAny(out any) (wresp *wrappedResp, err error) {
-	var resp *http.Response
-	resp, err = reqParams.do()
+func (reqParams *ReqParams) DoReqAny(out any) (int, error) {
+	debug.AssertNotPstr(out)
+	resp, err := reqParams.do()
 	if err != nil {
-		return
+		return 0, err
 	}
-	wresp, err = reqParams.readAny(resp, out)
+	err = reqParams.readAny(resp, out)
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()
-	return
+	return resp.StatusCode, err
+}
+
+// same as above with `out` being a string
+func (reqParams *ReqParams) doReqStr(out *string) (int, error) {
+	resp, err := reqParams.do()
+	if err != nil {
+		return 0, err
+	}
+	err = reqParams.readStr(resp, out)
+	cos.DrainReader(resp.Body)
+	resp.Body.Close()
+	return resp.StatusCode, err
 }
 
 // Makes request via do() and uses provided writer to write `resp.Body`
@@ -228,6 +226,14 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 	return
 }
 
+// Check, Drain, Close
+func (reqParams *ReqParams) cdc(resp *http.Response) (err error) {
+	err = reqParams.checkResp(resp)
+	cos.DrainReader(resp.Body)
+	resp.Body.Close() // ignore Close err, if any
+	return
+}
+
 // setRequestOptParams given an existing HTTP Request and optional API parameters,
 // sets the optional fields of the request if provided.
 func (reqParams *ReqParams) setRequestOptParams(req *http.Request) {
@@ -246,33 +252,38 @@ func (reqParams *ReqParams) setRequestOptParams(req *http.Request) {
 // check, read, write, validate http.Response ----------------------------------------------
 //
 
-func (reqParams *ReqParams) readAny(resp *http.Response, v any) (wresp *wrappedResp, err error) {
-	debug.Assert(v != nil)
-	if err = reqParams.checkResp(resp); err != nil {
-		return nil, err
+func (reqParams *ReqParams) readAny(resp *http.Response, out any) error {
+	debug.Assert(out != nil)
+	if err := reqParams.checkResp(resp); err != nil {
+		return err
 	}
-	wresp = &wrappedResp{Response: resp, n: resp.ContentLength}
-
-	switch out := v.(type) {
-	case *string:
-		// when the response is a string (e.g., UUID)
-		var b []byte
-		b, err = io.ReadAll(resp.Body)
-		*out = string(b)
-	default:
-		if resp.StatusCode == http.StatusOK {
-			if resp.Header.Get(cos.HdrContentType) == cos.ContentMsgPack {
-				r := msgp.NewReaderSize(resp.Body, 10*cos.KiB)
-				err = v.(msgp.Decodable).DecodeMsg(r)
-			} else {
-				err = jsoniter.NewDecoder(resp.Body).Decode(v)
-			}
+	if resp.StatusCode == http.StatusOK {
+		if err := decodeResp(resp, out); err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
 		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+	return nil
+}
+
+func decodeResp(resp *http.Response, out any) error {
+	if resp.Header.Get(cos.HdrContentType) == cos.ContentMsgPack {
+		r := msgp.NewReaderSize(resp.Body, 10*cos.KiB)
+		return out.(msgp.Decodable).DecodeMsg(r)
 	}
-	return wresp, nil
+
+	return jsoniter.NewDecoder(resp.Body).Decode(out)
+}
+
+func (reqParams *ReqParams) readStr(resp *http.Response, out *string) error {
+	if err := reqParams.checkResp(resp); err != nil {
+		return err
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+	*out = string(b)
+	return nil
 }
 
 func (reqParams *ReqParams) rwResp(resp *http.Response, w io.Writer) (*wrappedResp, error) {
