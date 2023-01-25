@@ -347,7 +347,7 @@ func GetCommunicator(etlName string, lsnode *cluster.Snode) (Communicator, error
 
 func List() []Info { return reg.list() }
 
-func PodLogs(t cluster.Target, transformID string) (logs PodLogsMsg, err error) {
+func PodLogs(t cluster.Target, transformID string) (logs Logs, err error) {
 	c, err := GetCommunicator(transformID, t.Snode())
 	if err != nil {
 		return logs, err
@@ -360,7 +360,7 @@ func PodLogs(t cluster.Target, transformID string) (logs PodLogsMsg, err error) 
 	if err != nil {
 		return logs, err
 	}
-	return PodLogsMsg{
+	return Logs{
 		TargetID: t.SID(),
 		Logs:     b,
 	}, nil
@@ -378,7 +378,7 @@ func PodHealth(t cluster.Target, etlName string) (string, error) {
 	return client.Health(c.PodName())
 }
 
-func PodMetrics(t cluster.Target, etlName string) (*PodMetricsMsg, error) {
+func PodMetrics(t cluster.Target, etlName string) (*CPUMemUsed, error) {
 	c, err := GetCommunicator(etlName, t.Snode())
 	if err != nil {
 		return nil, err
@@ -389,7 +389,7 @@ func PodMetrics(t cluster.Target, etlName string) (*PodMetricsMsg, error) {
 	}
 	cpuUsed, memUsed, err := client.Metrics(c.PodName())
 	if err == nil {
-		return &PodMetricsMsg{TargetID: t.SID(), CPU: cpuUsed, Mem: memUsed}, nil
+		return &CPUMemUsed{TargetID: t.SID(), CPU: cpuUsed, Mem: memUsed}, nil
 	}
 	if cmn.IsErrNotFound(err) {
 		return nil, err

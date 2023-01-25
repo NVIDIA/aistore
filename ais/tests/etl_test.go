@@ -23,6 +23,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -697,7 +698,7 @@ func TestETLHealth(t *testing.T) {
 	var (
 		start    = time.Now()
 		deadline = start.Add(getMetricsTimeout) // might take a while for metrics to become available
-		healths  etl.PodsHealthMsg
+		healths  etl.HealthByTarget
 		err      error
 	)
 	for {
@@ -722,8 +723,9 @@ func TestETLHealth(t *testing.T) {
 		time.Sleep(10 * time.Second)
 	}
 
-	for _, healthMsg := range healths {
-		tassert.Errorf(t, healthMsg.HealthStatus == "Running", "Expected pod health status to be 'Running', got [%s]", healthMsg.HealthStatus)
+	for _, msg := range healths {
+		tassert.Errorf(t, msg.Status == etl.HealthStatusRunning, "Expected pod at %s to be %q, got %q",
+			cluster.Tname(msg.TargetID), etl.HealthStatusRunning, msg.Status)
 	}
 }
 
@@ -743,7 +745,7 @@ func TestETLMetrics(t *testing.T) {
 	var (
 		start    = time.Now()
 		deadline = start.Add(getMetricsTimeout) // might take a while for metrics to become available
-		metrics  etl.PodsMetricsMsg
+		metrics  etl.CPUMemByTarget
 		err      error
 	)
 	for {

@@ -25,6 +25,8 @@ const (
 	Code = "code"
 )
 
+const HealthStatusRunning = "Running" // TODO: add the full enum, if exists
+
 type (
 	InitMsg interface {
 		Name() string
@@ -77,20 +79,20 @@ type (
 		OutBytes int64  `json:"out_bytes"`
 	}
 
-	PodsLogsMsg []PodLogsMsg
-	PodLogsMsg  struct {
+	LogsByTarget []Logs
+	Logs         struct {
 		TargetID string `json:"target_id"`
 		Logs     []byte `json:"logs"`
 	}
 
-	PodsHealthMsg []*PodHealthMsg
-	PodHealthMsg  struct {
-		TargetID     string `json:"target_id"`
-		HealthStatus string `json:"health_status"`
+	HealthByTarget []*HealthStatus
+	HealthStatus   struct {
+		TargetID string `json:"target_id"`
+		Status   string `json:"health_status"` // enum { HealthStatusRunning, ... } above
 	}
 
-	PodsMetricsMsg []*PodMetricsMsg
-	PodMetricsMsg  struct {
+	CPUMemByTarget []*CPUMemUsed
+	CPUMemUsed     struct {
 		TargetID string  `json:"target_id"`
 		CPU      float64 `json:"cpu"`
 		Mem      int64   `json:"mem"`
@@ -250,28 +252,6 @@ func (m *InitSpecMsg) Validate() (err error) {
 		return cmn.NewErrETL(errCtx, "readinessProbe port must be the %q port", k8s.Default)
 	}
 	return nil
-}
-
-/////////////////
-// PodsLogsMsg //
-/////////////////
-
-func (p PodsLogsMsg) Len() int           { return len(p) }
-func (p PodsLogsMsg) Less(i, j int) bool { return p[i].TargetID < p[j].TargetID }
-func (p PodsLogsMsg) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-
-func (p *PodLogsMsg) String(maxLen ...int) string {
-	msg := string(p.Logs)
-	orgLen := len(msg)
-
-	if len(maxLen) > 0 && maxLen[0] > 0 && maxLen[0] < len(msg) {
-		msg = msg[:maxLen[0]]
-	}
-	str := fmt.Sprintf("Target ID: %s; Logs:\n%s", p.TargetID, msg)
-	if len(msg) < orgLen {
-		str += fmt.Sprintf("\nand %d bytes more...", orgLen-len(msg))
-	}
-	return str
 }
 
 //////////////

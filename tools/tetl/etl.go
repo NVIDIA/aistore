@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
@@ -125,12 +126,12 @@ func GetTransformYaml(etlName string) ([]byte, error) {
 func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlName string) {
 	if t.Failed() {
 		tlog.Logln("Fetching logs from ETL containers")
-		if logMsgs, err := api.ETLLogs(baseParams, etlName); err == nil {
-			for _, msg := range logMsgs {
-				tlog.Logf("%s\n", msg.String(10*cos.KiB))
+		if logsByTarget, err := api.ETLLogs(baseParams, etlName); err == nil {
+			for _, etlLogs := range logsByTarget {
+				tlog.Logln(headETLLogs(etlLogs, 10*cos.KiB))
 			}
 		} else {
-			tlog.Logf("Error retrieving logs; err %v\n", err)
+			tlog.Logf("Error retrieving ETL[%s] logs: %v\n", etlName, err)
 		}
 	}
 	tlog.Logf("Stopping ETL[%s]\n", etlName)
@@ -142,6 +143,18 @@ func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlName string) {
 	}
 	err := api.ETLDelete(baseParams, etlName)
 	tassert.CheckFatal(t, err)
+}
+
+func headETLLogs(etlLogs etl.Logs, maxLen int) string {
+	logs, l := etlLogs.Logs, len(etlLogs.Logs)
+	if maxLen < l {
+		logs = logs[:maxLen]
+	}
+	str := fmt.Sprintf("%s logs:\n%s", cluster.Tname(etlLogs.TargetID), string(logs))
+	if maxLen < l {
+		str += fmt.Sprintf("\nand %d bytes more...", l-maxLen)
+	}
+	return str
 }
 
 func WaitForContainersStopped(t *testing.T, baseParams api.BaseParams) {

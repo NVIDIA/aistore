@@ -421,8 +421,8 @@ type (
 	cresND struct{} // -> cluster.Snode
 	cresBA struct{} // -> cmn.BackendInfoAIS
 	cresEI struct{} // -> etl.InfoList
-	cresEL struct{} // -> etl.PodLogsMsg
-	cresEM struct{} // -> etl.PodMetricsMsg
+	cresEL struct{} // -> etl.Logs
+	cresEM struct{} // -> etl.CPUMemUsed
 	cresIC struct{} // -> icBundle
 	cresBM struct{} // -> bucketMD
 
@@ -473,10 +473,10 @@ func (c cresBA) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jr
 func (cresEI) newV() any                              { return &etl.InfoList{} }
 func (c cresEI) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresEL) newV() any                              { return &etl.PodLogsMsg{} }
+func (cresEL) newV() any                              { return &etl.Logs{} }
 func (c cresEL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresEM) newV() any                              { return &etl.PodMetricsMsg{} }
+func (cresEM) newV() any                              { return &etl.CPUMemUsed{} }
 func (c cresEM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 func (cresIC) newV() any                              { return &icBundle{} }

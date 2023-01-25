@@ -626,7 +626,7 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]any) {
 	}
 	status, err := reqParams.DoReqAny(&stats)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, status == http.StatusOK, "expecting status ok, got %d", status)
+	tassert.Fatalf(t, status == http.StatusOK, "expecting status 200, got %d", status)
 	return
 }
 

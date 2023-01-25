@@ -330,7 +330,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 			cargs.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.Join(etlName, apc.ETLLogs)}
 			cargs.si = si
 			cargs.timeout = apc.DefaultTimeout
-			cargs.cresv = cresEL{} // -> etl.PodLogsMsg
+			cargs.cresv = cresEL{} // -> etl.Logs
 		}
 		results[0] = p.call(cargs)
 		freeCargs(cargs)
@@ -339,21 +339,20 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 		args = allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 		args.timeout = apc.DefaultTimeout
-		args.cresv = cresEL{} // -> etl.PodLogsMsg
+		args.cresv = cresEL{} // -> etl.Logs
 		results = p.bcastGroup(args)
 		freeBcArgs(args)
 	}
-	logs := make(etl.PodsLogsMsg, 0, len(results))
+	logs := make(etl.LogsByTarget, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
 			p.writeErr(w, r, res.toErr())
 			freeBcastRes(results)
 			return
 		}
-		logs = append(logs, *res.v.(*etl.PodLogsMsg))
+		logs = append(logs, *res.v.(*etl.Logs))
 	}
 	freeBcastRes(results)
-	sort.Sort(logs)
 	p.writeJSON(w, r, logs, "logs-etl")
 }
 
@@ -369,15 +368,15 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	defer freeBcastRes(results)
 	freeBcArgs(args)
 
-	healths := make(etl.PodsHealthMsg, 0, len(results))
+	healths := make(etl.HealthByTarget, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
 			p.writeErr(w, r, res.toErr(), res.status)
 			return
 		}
-		msg := etl.PodHealthMsg{
-			TargetID:     res.si.ID(),
-			HealthStatus: string(res.bytes),
+		msg := etl.HealthStatus{
+			TargetID: res.si.ID(),
+			Status:   string(res.bytes),
 		}
 		healths = append(healths, &msg)
 	}
@@ -393,18 +392,18 @@ func (p *proxy) metricsETL(w http.ResponseWriter, r *http.Request) {
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 	args.timeout = apc.DefaultTimeout
-	args.cresv = cresEM{} // -> etl.PodsMetricsMsg
+	args.cresv = cresEM{} // -> etl.CPUMemByTarget
 	results = p.bcastGroup(args)
 	defer freeBcastRes(results)
 	freeBcArgs(args)
 
-	metrics := make(etl.PodsMetricsMsg, 0, len(results))
+	metrics := make(etl.CPUMemByTarget, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
 			p.writeErr(w, r, res.toErr(), res.status)
 			return
 		}
-		metrics = append(metrics, res.v.(*etl.PodMetricsMsg))
+		metrics = append(metrics, res.v.(*etl.CPUMemUsed))
 	}
 	sort.SliceStable(metrics, func(i, j int) bool { return metrics[i].TargetID < metrics[j].TargetID })
 	p.writeJSON(w, r, metrics, "metrics-etl")
