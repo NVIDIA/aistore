@@ -206,4 +206,4 @@ run:
     - hrw aws azure gcp hdfs # Build hrw and backend providers so that staticcheck doesn't complain about unused export functions.
 
   concurrency: 4
-  deadline: 5m
+  deadline: 6m

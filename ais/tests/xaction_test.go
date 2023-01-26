@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -48,16 +50,50 @@ func TestXactionAllStatus(t *testing.T) {
 			if len(vec) == 0 {
 				continue
 			}
-			tlog.Logln(vec.String())
+			if kind != apc.ActList {
+				tlog.Logln(vec.String())
+			}
 			for _, ns := range vec {
 				tassert.Errorf(t, ns.Kind == kind, "kind %q vs %q", ns.Kind, kind)
 			}
 			if !test.running {
 				continue
 			}
+
+			// check fin time for all running
+			var aborted nl.NotifStatusVec
 			for _, ns := range vec {
-				tassert.Errorf(t, ns.FinTime == 0, "%q expected to be running, got fintime=%v",
-					ns.String(), time.Unix(0, ns.FinTime))
+				if ns.AbortedX {
+					tlog.Logf("%q is aborted but hasn't finished yet\n", ns.String())
+					aborted = append(aborted, ns)
+				} else {
+					// doesn't appear to be aborted and is, therefore, expected to be running
+					tassert.Errorf(t, ns.FinTime == 0, "%q: non-sero fin time=%v",
+						ns.String(), time.Unix(0, ns.FinTime))
+				}
+			}
+			if len(aborted) == 0 {
+				continue
+			}
+
+			// re-check after a while
+			time.Sleep(2 * time.Second)
+
+			xactArgs = api.XactReqArgs{Kind: kind, OnlyRunning: false}
+			vec, err = api.GetAllXactionStatus(baseParams, xactArgs, test.force)
+			tassert.CheckFatal(t, err)
+			for _, a := range aborted {
+				found := false
+				for _, ns := range vec {
+					if a.UUID == ns.UUID {
+						found = true
+						tassert.Errorf(t, ns.FinTime != 0, "%q: was aborted, is expected to be finished",
+							ns.String())
+						break
+					}
+				}
+				tassert.Errorf(t, found,
+					"%q: was aborted, is missing in the all-xaction-status results", a.String())
 			}
 		}
 	}
