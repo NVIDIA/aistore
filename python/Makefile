@@ -54,10 +54,10 @@ python_tests: common_deps dev_deps botocore_deps python_sdk_tests python_etl_tes
 
 # Tests for aistore.sdk
 .PHONY: python_sdk_tests
-python_sdk_tests: common_deps dev_deps python_sdk_unit_tests python_sdk_integration_tests
+python_sdk_tests: common_deps python_sdk_unit_tests python_sdk_integration_tests
 
 .PHONY: python_sdk_integration_tests
-python_sdk_integration_tests: common_deps dev_deps
+python_sdk_integration_tests: common_deps
 	pytest -v tests/integration/sdk --ignore=tests/integration/sdk/test_etl_ops.py
 
 .PHONY: python_sdk_unit_tests
