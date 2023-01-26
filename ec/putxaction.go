@@ -134,7 +134,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 
 	jogger, ok := r.putJoggers[lom.MpathInfo().Path]
 	if !ok {
-		cos.AssertMsg(false, "invalid "+lom.MpathInfo().String())
+		debug.Assert(false, "invalid "+lom.MpathInfo().String())
 	}
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)
@@ -188,7 +188,7 @@ func (r *XactPut) mainLoop() {
 				r.setEcRequestsEnabled()
 				break
 			}
-			cos.Assert(msg.Action == ActClearRequests)
+			debug.Assert(msg.Action == ActClearRequests, msg.Action)
 
 			r.setEcRequestsDisabled()
 			r.stop()

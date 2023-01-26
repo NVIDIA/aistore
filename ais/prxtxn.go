@@ -308,7 +308,7 @@ func bmodMirror(ctx *bmdModifier, clone *bucketMD) error {
 		bck             = ctx.bcks[0]
 		bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
 	)
-	cos.Assert(present)
+	debug.Assert(present)
 	nprops := bprops.Clone()
 	nprops.Apply(ctx.propsToUpdate)
 	ctx.revertProps = &cmn.BucketPropsToUpdate{
@@ -515,7 +515,7 @@ func bmodMv(ctx *bmdModifier, clone *bucketMD) error {
 	bckFrom.Props = bprops.Clone()
 	bckTo.Props = bprops.Clone()
 	added := clone.add(bckTo, bckTo.Props)
-	cos.Assert(added)
+	debug.Assert(added)
 	bckFrom.Props.Renamed = apc.ActMoveBck // NOTE: state until `BMDVersionFixup` by renaming xaction
 	clone.set(bckFrom, bckFrom.Props)
 	return nil
@@ -623,7 +623,7 @@ func bmodTCB(ctx *bmdModifier, clone *bucketMD) error {
 		bckFrom, bckTo  = ctx.bcks[0], ctx.bcks[1]
 		bprops, present = clone.Get(bckFrom) // TODO: Bucket could be removed during begin.
 	)
-	cos.Assert(present)
+	debug.Assert(present)
 
 	// Skip destination bucket creation if it's dry run or it's already present.
 	if _, present = clone.Get(bckTo); present {
@@ -640,7 +640,7 @@ func bmodTCB(ctx *bmdModifier, clone *bucketMD) error {
 		bckTo.Props = defaultBckProps(bckPropsArgs{bck: bckTo})
 	}
 	added := clone.add(bckTo, bckTo.Props)
-	cos.Assert(added)
+	debug.Assert(added)
 	return nil
 }
 

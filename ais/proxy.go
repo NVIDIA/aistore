@@ -2068,7 +2068,7 @@ func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.Ls
 	}
 	freeBcastRes(results)
 	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
-	cos.Assert(hasEnough)
+	debug.Assert(hasEnough)
 
 endWithCache:
 	if lsmsg.IsFlagSet(apc.UseListObjsCache) {
@@ -2951,13 +2951,13 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error
 		nl := xact.NewXactNL(xact.RebID2S(newRMD.Version), apc.ActRebalance, &smap.Smap, nil)
 		nl.SetOwner(equalIC)
 		err := p.notifs.add(nl)
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 
 		if newRMD.Resilver != "" {
 			nl = xact.NewXactNL(newRMD.Resilver, apc.ActResilver, &smap.Smap, nil)
 			nl.SetOwner(equalIC)
 			err := p.notifs.add(nl)
-			cos.AssertNoErr(err)
+			debug.AssertNoErr(err)
 		}
 	}
 	return

@@ -481,7 +481,7 @@ func (n *notifs) ListenSmapChanged() {
 	}
 	n.fin.Lock()
 	for uuid, nl := range remnl {
-		cos.Assert(nl.UUID() == uuid)
+		debug.Assert(nl.UUID() == uuid)
 		n.fin.add(nl, true /*locked*/)
 	}
 	n.fin.Unlock()

@@ -772,11 +772,6 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	errCode, err := t.DeleteObject(lom, evict)
-	if errCode == http.StatusServiceUnavailable {
-		// (googleapi: "Error 503: We encountered an internal error. Please try again.")
-		time.Sleep(time.Second)
-		errCode, err = t.DeleteObject(lom, evict)
-	}
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			t.writeErrSilentf(w, r, http.StatusNotFound, "object %s/%s doesn't exist", lom.Bucket(), lom.ObjName)
@@ -1204,24 +1199,40 @@ func (t *target) putMirror(lom *cluster.LOM) {
 	xputlrep.Repl(lom)
 }
 
-func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
+func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (code int, err error) {
+	var isback bool
+	lom.Lock(true)
+	code, err, isback = t.delobj(lom, evict)
+	lom.Unlock(true)
+
+	// special corner-case retry, namely:
+	// - googleapi: "Error 503: We encountered an internal error. Please try again."
+	// - aws-error[InternalError: We encountered an internal error. Please try again.]
+	if err != nil && isback {
+		if code == http.StatusServiceUnavailable || strings.Contains(err.Error(), "try again") {
+			glog.Errorf("failed to delete %s: %v(%d) - retrying...", lom, err, code)
+			time.Sleep(time.Second)
+			code, err = t.Backend(lom.Bck()).DeleteObj(lom)
+		}
+	}
+	return
+}
+
+func (t *target) delobj(lom *cluster.LOM, evict bool) (int, error, bool) {
 	var (
 		aisErr, backendErr         error
 		aisErrCode, backendErrCode int
 		delFromAIS, delFromBackend bool
 	)
-	lom.Lock(true)
-	defer lom.Unlock(true)
-
 	delFromBackend = lom.Bck().IsRemote() && !evict
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsObjNotExist(err) {
-		return 0, err
+		return 0, err, false
 	} else {
 		aisErrCode = http.StatusNotFound
 		if !delFromBackend {
-			return http.StatusNotFound, err
+			return http.StatusNotFound, err, false
 		}
 	}
 
@@ -1237,9 +1248,11 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 		if aisErr != nil {
 			if !os.IsNotExist(aisErr) {
 				if backendErr != nil {
-					glog.Errorf("failed to delete %s from %s: %v", lom, lom.Bck(), backendErr)
+					// unlikely
+					glog.Errorf("double-failure to delete %s: ais err %v, backend err %v(%d)",
+						lom, aisErr, backendErr, backendErrCode)
 				}
-				return 0, aisErr
+				return 0, aisErr, false
 			}
 		} else if evict {
 			debug.Assert(lom.Bck().IsRemote())
@@ -1250,9 +1263,9 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 		}
 	}
 	if backendErr != nil {
-		return backendErrCode, backendErr
+		return backendErrCode, backendErr, true
 	}
-	return aisErrCode, aisErr
+	return aisErrCode, aisErr, false
 }
 
 // rename obj (TODO: consider unifying with Promote)

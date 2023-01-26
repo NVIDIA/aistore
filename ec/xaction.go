@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -190,7 +191,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 		reader, err = newReplicaResponse(&objAttrs, bck, objName)
 		ireq.exists = err == nil
 	}
-	cos.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
+	debug.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
 
 	rHdr := transport.ObjHdr{ObjName: objName, ObjAttrs: objAttrs, Opcode: act}
 	rHdr.Bck.Copy(bck.Bucket())

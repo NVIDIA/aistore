@@ -700,7 +700,7 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 			reader, _ = cos.NewFileHandle(sl.workFQN)
 		} else {
 			s, ok := sl.obj.(*memsys.SGL)
-			cos.Assert(ok)
+			debug.Assert(ok)
 			reader = memsys.NewReader(s)
 		}
 		dataSrc := &dataSource{

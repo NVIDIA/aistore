@@ -422,14 +422,19 @@ func (m *ioContext) del(opts ...int) {
 			defer wg.Done()
 			err := api.DeleteObject(baseParams, m.bck, obj.Name)
 			if err != nil {
-				if cmn.IsErrObjNought(err) {
+				switch {
+				case cmn.IsErrObjNought(err):
 					err = nil
-				} else if strings.Contains(err.Error(), "server closed idle connection") {
+				case strings.Contains(err.Error(), "server closed idle connection"):
 					// see (unexported) http.exportErrServerClosedIdle in the Go source
 					err = nil
-				} else if cos.IsErrConnectionNotAvail(err) {
+				case strings.Contains(err.Error(), "try again"):
+					// aws-error[InternalError: We encountered an internal error. Please try again.]
+					time.Sleep(time.Second)
+					err = api.DeleteObject(baseParams, m.bck, obj.Name)
+				case cos.IsErrConnectionNotAvail(err):
 					errCnt.Add(maxErrCount / 10)
-				} else {
+				default:
 					errCnt.Inc()
 				}
 			}

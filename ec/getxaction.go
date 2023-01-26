@@ -165,7 +165,7 @@ func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {
 
 	jogger, ok := r.getJoggers[lom.MpathInfo().Path]
 	if !ok {
-		cos.AssertMsg(false, "invalid "+lom.MpathInfo().String())
+		debug.Assert(false, "invalid "+lom.MpathInfo().String())
 	}
 	r.stats.updateQueue(len(jogger.workCh))
 	jogger.workCh <- req
@@ -289,7 +289,7 @@ func (r *XactGet) addMpath(mpath string) {
 func (r *XactGet) removeMpath(mpath string) {
 	getJog, ok := r.getJoggers[mpath]
 	if !ok {
-		cos.AssertMsg(false, "invalid mountpath: "+mpath)
+		debug.Assert(false, "invalid mountpath: "+mpath)
 	}
 	getJog.stop()
 	delete(r.getJoggers, mpath)
