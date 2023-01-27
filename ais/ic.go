@@ -161,7 +161,7 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func (ic *ic) handleAllXactStatus(w http.ResponseWriter, r *http.Request, query url.Values) {
+func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Values) {
 	msg := &xact.QueryMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -199,7 +199,7 @@ func (ic *ic) handleAllXactStatus(w http.ResponseWriter, r *http.Request, query 
 	w.Write(cos.MustMarshal(vec))
 }
 
-func (ic *ic) handleOneXactStatus(w http.ResponseWriter, r *http.Request) {
+func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	var (
 		nl  nl.NotifListener
 		bck *cluster.Bck

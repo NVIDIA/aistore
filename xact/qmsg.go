@@ -15,16 +15,11 @@ type (
 	// TODO: apc package, here and elsewhere
 	QueryMsg struct {
 		OnlyRunning *bool     `json:"show_active"`
-		Ext         any       `json:"ext"`
 		Bck         cmn.Bck   `json:"bck"`
 		ID          string    `json:"id"`
 		Kind        string    `json:"kind"`
 		DaemonID    string    `json:"node,omitempty"`
 		Buckets     []cmn.Bck `json:"buckets,omitempty"`
-	}
-
-	QueryMsgLRU struct {
-		Force bool `json:"force"`
 	}
 )
 

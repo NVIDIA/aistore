@@ -1,10 +1,9 @@
 import unittest
 from unittest.mock import Mock, patch, call
 
-from aistore.sdk.bucket import Bucket
-from aistore.sdk.const import QParamWhat, HTTP_METHOD_GET, HTTP_METHOD_PUT
+from aistore.sdk.const import QParamWhat, QParamForce, HTTP_METHOD_GET, HTTP_METHOD_PUT
 from aistore.sdk.errors import Timeout
-from aistore.sdk.types import JobStatus
+from aistore.sdk.types import JobStatus, JobArgs, Bck
 from aistore.sdk.utils import probing_frequency
 from aistore.sdk.job import Job
 
@@ -19,12 +18,7 @@ class TestJob(unittest.TestCase):
         self.assertEqual(self.mock_client, self.job.client)
 
     def test_job_status_default_params(self):
-        expected_request_val = {
-            "id": "",
-            "kind": "",
-            "show_active": False,
-            "node": "",
-        }
+        expected_request_val = JobArgs().get_json()
         self.job_status_exec_assert(expected_request_val)
 
     def test_job_status(self):
@@ -33,12 +27,9 @@ class TestJob(unittest.TestCase):
         daemon_id = "daemon id"
         only_running = True
 
-        expected_request_val = {
-            "id": job_id,
-            "kind": job_kind,
-            "show_active": only_running,
-            "node": daemon_id,
-        }
+        expected_request_val = JobArgs(
+            id=job_id, kind=job_kind, only_running=only_running, daemon_id=daemon_id
+        ).get_json()
         self.job_status_exec_assert(
             expected_request_val,
             job_id=job_id,
@@ -137,15 +128,13 @@ class TestJob(unittest.TestCase):
     def test_job_start(self):
         job_kind = "job kind"
         daemon_id = "daemon id"
-        buckets = [Bucket(bck_name="name", client=Mock())]
-        expected_act_value = {
-            "kind": job_kind,
-            "node": daemon_id,
-            "buckets": buckets,
-            "ext": {"force": True},
-        }
+        buckets = [Bck(name="test bucket")]
+        expected_json = JobArgs(
+            kind=job_kind, daemon_id=daemon_id, buckets=buckets
+        ).get_json()
         self.job_start_exec_assert(
-            expected_act_value,
+            expected_json,
+            {QParamForce: "true"},
             job_kind=job_kind,
             daemon_id=daemon_id,
             force=True,
@@ -153,11 +142,11 @@ class TestJob(unittest.TestCase):
         )
 
     def test_job_start_default_params(self):
-        expected_act_value = {"kind": "", "node": "", "buckets": None}
-        self.job_start_exec_assert(expected_act_value)
+        expected_act_value = JobArgs().get_json()
+        self.job_start_exec_assert(expected_act_value, {})
 
-    def job_start_exec_assert(self, expected_act_value, **kwargs):
-        expected_action = {"action": "start", "value": expected_act_value}
+    def job_start_exec_assert(self, expected_json, expected_params, **kwargs):
+        expected_action = {"action": "start", "value": expected_json}
         response_txt = "response"
         response = Mock()
         response.text = response_txt
@@ -165,5 +154,8 @@ class TestJob(unittest.TestCase):
         res = self.job.start(**kwargs)
         self.assertEqual(response_txt, res)
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_PUT, path="cluster", json=expected_action
+            HTTP_METHOD_PUT,
+            path="cluster",
+            json=expected_action,
+            params=expected_params,
         )

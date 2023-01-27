@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -56,7 +57,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	// always allow as the flow involves intra-cluster redirect
 	// (ref 1377 for more context)
 	if what == apc.GetWhatOneXactStatus {
-		p.ic.handleOneXactStatus(w, r)
+		p.ic.xstatusOne(w, r)
 		return
 	}
 
@@ -66,11 +67,11 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 	switch what {
 	case apc.GetWhatAllXactStatus:
-		p.ic.handleAllXactStatus(w, r, query)
+		p.ic.xstatusAll(w, r, query)
 	case apc.GetWhatQueryXactStats:
-		p.queryXaction(w, r, what, query)
+		p.xquery(w, r, what, query)
 	case apc.GetWhatAllRunningXacts:
-		p.getAllRunningXacts(w, r, what, query)
+		p.xgetRunning(w, r, what, query)
 	case apc.GetWhatStats:
 		p.queryClusterStats(w, r, what, query)
 	case apc.GetWhatSysInfo:
@@ -114,7 +115,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 // apc.GetWhatQueryXactStats (NOTE: may poll for quiescence)
-func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
 	var xactMsg xact.QueryMsg
 	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 		return
@@ -134,14 +135,19 @@ func (p *proxy) queryXaction(w http.ResponseWriter, r *http.Request, what string
 		return
 	}
 	if len(targetResults) == 0 {
-		p.writeErrStatusf(w, r, http.StatusNotFound, "xaction %q not found", xactMsg.String())
-		return
+		smap := p.owner.smap.get()
+		if smap.CountActiveTs() > 0 {
+			p.writeErrStatusf(w, r, http.StatusNotFound, "%q not found", xactMsg.String())
+			return
+		}
+		err := cmn.NewErrNoNodes(apc.Target)
+		glog.Warningf("%s: %v, %s", p, err, smap)
 	}
 	p.writeJSON(w, r, targetResults, what)
 }
 
 // apc.GetWhatAllRunningXacts
-func (p *proxy) getAllRunningXacts(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+func (p *proxy) xgetRunning(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
 	var xactMsg xact.QueryMsg
 	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 		return
@@ -787,9 +793,9 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		freeBcArgs(args)
 		p.unreg(w, r, msg)
 	case apc.ActXactStart:
-		p.xactStart(w, r, msg)
+		p.xstart(w, r, msg)
 	case apc.ActXactStop:
-		p.xactStop(w, r, msg)
+		p.xstop(w, r, msg)
 	case apc.ActSendOwnershipTbl:
 		p.sendOwnTbl(w, r, msg)
 	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode:
@@ -879,29 +885,31 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 	}
 }
 
-func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	xactMsg := xact.QueryMsg{}
-	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
+func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
+	var (
+		xactArgs = api.XactReqArgs{}
+	)
+	if err := cos.MorphMarshal(msg.Value, &xactArgs); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
-	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // display name => kind
+	xactArgs.Kind, _ = xact.GetKindName(xactArgs.Kind) // display name => kind
 	// rebalance
-	if xactMsg.Kind == apc.ActRebalance {
+	if xactArgs.Kind == apc.ActRebalance {
 		p.rebalanceCluster(w, r)
 		return
 	}
 
-	xactMsg.ID = cos.GenUUID() // common for all targets
+	xactArgs.ID = cos.GenUUID() // common for all targets
 
 	// cluster-wide resilver
-	if xactMsg.Kind == apc.ActResilver && xactMsg.DaemonID != "" {
-		p.resilverOne(w, r, msg, xactMsg)
+	if xactArgs.Kind == apc.ActResilver && xactArgs.DaemonID != "" {
+		p.resilverOne(w, r, msg, xactArgs)
 		return
 	}
 
 	// all the rest `startable` (see xaction/api.go)
-	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xactMsg})
+	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xactArgs})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
 	args.to = cluster.Targets
@@ -917,19 +925,21 @@ func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 	}
 	freeBcastRes(results)
 	smap := p.owner.smap.get()
-	nl := xact.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
+	nl := xact.NewXactNL(xactArgs.ID, xactArgs.Kind, &smap.Smap, nil)
 	p.ic.registerEqual(regIC{smap: smap, nl: nl})
-	w.Write([]byte(xactMsg.ID))
+	w.Write([]byte(xactArgs.ID))
 }
 
-func (p *proxy) xactStop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	xactMsg := xact.QueryMsg{}
-	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
+func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
+	var (
+		xactArgs = api.XactReqArgs{}
+	)
+	if err := cos.MorphMarshal(msg.Value, &xactArgs); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
-	xactMsg.Kind, _ = xact.GetKindName(xactMsg.Kind) // display name => kind
-	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xactMsg})
+	xactArgs.Kind, _ = xact.GetKindName(xactArgs.Kind) // display name => kind
+	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xactArgs})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
 	args.to = cluster.Targets
@@ -971,15 +981,15 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(xact.RebID2S(rmdClone.version())))
 }
 
-func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, xactMsg xact.QueryMsg) {
+func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, xactArgs api.XactReqArgs) {
 	smap := p.owner.smap.get()
-	si := smap.GetTarget(xactMsg.DaemonID)
+	si := smap.GetTarget(xactArgs.DaemonID)
 	if si == nil {
 		p.writeErrf(w, r, "cannot resilver %v: node must exist and be a target", si)
 		return
 	}
 
-	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xactMsg})
+	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xactArgs})
 	cargs := allocCargs()
 	{
 		cargs.si = si
@@ -990,9 +1000,9 @@ func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.Act
 	if res.err != nil {
 		p.writeErr(w, r, res.toErr())
 	} else {
-		nl := xact.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
+		nl := xact.NewXactNL(xactArgs.ID, xactArgs.Kind, &smap.Smap, nil)
 		p.ic.registerEqual(regIC{smap: smap, nl: nl})
-		w.Write([]byte(xactMsg.ID))
+		w.Write([]byte(xactArgs.ID))
 	}
 	freeCR(res)
 }

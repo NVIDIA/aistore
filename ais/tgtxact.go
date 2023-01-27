@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -25,90 +26,100 @@ import (
 
 // verb /v1/xactions
 func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		xactMsg xact.QueryMsg
-		bck     *cluster.Bck
-	)
 	if _, err := t.apiItems(w, r, 0, true, apc.URLPathXactions.L); err != nil {
 		return
 	}
 	switch r.Method {
 	case http.MethodGet:
-		var (
-			query = r.URL.Query()
-			what  = query.Get(apc.QparamWhat)
-		)
-		if uuid := query.Get(apc.QparamUUID); uuid != "" {
-			t.getXactByID(w, r, what, uuid)
-			return
-		}
-		if cmn.ReadJSON(w, r, &xactMsg) != nil {
-			return
-		}
-		debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
-
-		if what == apc.GetWhatAllRunningXacts {
-			out := xreg.GetAllRunning(xactMsg.Kind)
-			t.writeJSON(w, r, out, what)
-			return
-		}
-		if what != apc.GetWhatQueryXactStats {
-			t.writeErrf(w, r, fmtUnknownQue, what)
-			return
-		}
-
-		if xactMsg.Bck.Name != "" {
-			bck = cluster.CloneBck(&xactMsg.Bck)
-			if err := bck.Init(t.owner.bmd); err != nil {
-				t.writeErrSilent(w, r, err, http.StatusNotFound)
-				return
-			}
-		}
-		xactQuery := xreg.XactFilter{
-			ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRunning: xactMsg.OnlyRunning,
-		}
-		t.queryMatchingXact(w, r, what, xactQuery)
+		t.httpxget(w, r)
 	case http.MethodPut:
-		msg, err := t.readActionMsg(w, r)
-		if err != nil {
-			return
-		}
-		if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
-			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-			return
-		}
-		if !xactMsg.Bck.IsEmpty() {
-			bck = cluster.CloneBck(&xactMsg.Bck)
-			if err := bck.Init(t.owner.bmd); err != nil && msg.Action != apc.ActXactStop {
-				// apc.ActXactStop: proceed anyway
-				t.writeErr(w, r, err)
-				return
-			}
-		}
-		switch msg.Action {
-		case apc.ActXactStart:
-			debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
-			if err := t.cmdXactStart(&xactMsg, bck); err != nil {
-				t.writeErr(w, r, err)
-				return
-			}
-		case apc.ActXactStop:
-			debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
-			err := cmn.ErrXactUserAbort
-			if msg.Name == cmn.ErrXactICNotifAbort.Error() {
-				err = cmn.ErrXactICNotifAbort
-			}
-			flt := xreg.XactFilter{ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck}
-			xreg.DoAbort(flt, err)
-		default:
-			t.writeErrAct(w, r, msg.Action)
-		}
+		t.httpxput(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
 	}
 }
 
-func (t *target) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid string) {
+func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
+	var (
+		xactMsg xact.QueryMsg
+		bck     *cluster.Bck
+		query   = r.URL.Query()
+		what    = query.Get(apc.QparamWhat)
+	)
+	if uuid := query.Get(apc.QparamUUID); uuid != "" {
+		t.xget(w, r, what, uuid)
+		return
+	}
+	if cmn.ReadJSON(w, r, &xactMsg) != nil {
+		return
+	}
+	debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
+
+	if what == apc.GetWhatAllRunningXacts {
+		out := xreg.GetAllRunning(xactMsg.Kind)
+		t.writeJSON(w, r, out, what)
+		return
+	}
+	if what != apc.GetWhatQueryXactStats {
+		t.writeErrf(w, r, fmtUnknownQue, what)
+		return
+	}
+
+	if xactMsg.Bck.Name != "" {
+		bck = cluster.CloneBck(&xactMsg.Bck)
+		if err := bck.Init(t.owner.bmd); err != nil {
+			t.writeErrSilent(w, r, err, http.StatusNotFound)
+			return
+		}
+	}
+	xactQuery := xreg.XactFilter{
+		ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRunning: xactMsg.OnlyRunning,
+	}
+	t.xquery(w, r, what, xactQuery)
+}
+
+func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
+	var (
+		xactArgs api.XactReqArgs
+		bck      *cluster.Bck
+	)
+	msg, err := t.readActionMsg(w, r)
+	if err != nil {
+		return
+	}
+	if err := cos.MorphMarshal(msg.Value, &xactArgs); err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+		return
+	}
+	if !xactArgs.Bck.IsEmpty() {
+		bck = cluster.CloneBck(&xactArgs.Bck)
+		if err := bck.Init(t.owner.bmd); err != nil && msg.Action != apc.ActXactStop {
+			// proceed anyway to stop
+			t.writeErr(w, r, err)
+			return
+		}
+	}
+	switch msg.Action {
+	case apc.ActXactStart:
+		debug.Assert(xact.IsValidKind(xactArgs.Kind), xactArgs.String())
+		if err := t.xstart(r, &xactArgs, bck); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+	case apc.ActXactStop:
+		debug.Assert(xact.IsValidKind(xactArgs.Kind) || xact.IsValidUUID(xactArgs.ID), xactArgs.String())
+		err := cmn.ErrXactUserAbort
+		if msg.Name == cmn.ErrXactICNotifAbort.Error() {
+			err = cmn.ErrXactICNotifAbort
+		}
+		flt := xreg.XactFilter{ID: xactArgs.ID, Kind: xactArgs.Kind, Bck: bck}
+		xreg.DoAbort(flt, err)
+	default:
+		t.writeErrAct(w, r, msg.Action)
+	}
+}
+
+func (t *target) xget(w http.ResponseWriter, r *http.Request, what, uuid string) {
 	if what != apc.GetWhatXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
@@ -126,7 +137,7 @@ func (t *target) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid 
 	t.writeErrSilent(w, r, err, http.StatusNotFound)
 }
 
-func (t *target) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.XactFilter) {
+func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.XactFilter) {
 	stats, err := xreg.GetSnap(xactQuery)
 	if err == nil {
 		t.writeJSON(w, r, stats, what)
@@ -139,40 +150,36 @@ func (t *target) queryMatchingXact(w http.ResponseWriter, r *http.Request, what 
 	}
 }
 
-func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
+func (t *target) xstart(r *http.Request, args *api.XactReqArgs, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 
-	if !xact.IsValidKind(xactMsg.Kind) {
-		return fmt.Errorf(cmn.FmtErrUnknown, t, "xaction kind", xactMsg.Kind)
+	if !xact.IsValidKind(args.Kind) {
+		return fmt.Errorf(cmn.FmtErrUnknown, t, "xaction kind", args.Kind)
 	}
-
-	if dtor := xact.Table[xactMsg.Kind]; dtor.Scope == xact.ScopeB && bck == nil {
-		return fmt.Errorf(erfmn, xactMsg.Kind)
+	if dtor := xact.Table[args.Kind]; dtor.Scope == xact.ScopeB && bck == nil {
+		return fmt.Errorf(erfmn, args.Kind)
 	}
-
-	switch xactMsg.Kind {
-	// 1. globals
+	switch args.Kind {
+	// 1. global x-s
 	case apc.ActLRU:
 		if bck != nil {
-			glog.Errorf(erfmb, xactMsg.Kind, bck)
+			glog.Errorf(erfmb, args.Kind, bck)
 		}
-		ext := &xact.QueryMsgLRU{}
-		if err := cos.MorphMarshal(xactMsg.Ext, ext); err != nil {
-			return err
-		}
+		q := r.URL.Query()
+		force := cos.IsParseBool(q.Get(apc.QparamForce)) // NOTE: the only 'force' use case so far
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
-		go t.runLRU(xactMsg.ID, wg, ext.Force, xactMsg.Buckets...)
+		go t.runLRU(args.ID, wg, force, args.Buckets...)
 		wg.Wait()
 	case apc.ActStoreCleanup:
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
-		go t.runStoreCleanup(xactMsg.ID, wg, xactMsg.Buckets...)
+		go t.runStoreCleanup(args.ID, wg, args.Buckets...)
 		wg.Wait()
 	case apc.ActResilver:
 		if bck != nil {
-			glog.Errorf(erfmb, xactMsg.Kind, bck)
+			glog.Errorf(erfmb, args.Kind, bck)
 		}
 		notif := &xact.NotifXact{
 			NotifBase: nl.NotifBase{
@@ -183,12 +190,14 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 		}
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
-		go t.runResilver(res.Args{UUID: xactMsg.ID, Notif: notif}, wg)
+		go t.runResilver(res.Args{UUID: args.ID, Notif: notif}, wg)
 		wg.Wait()
 	// 2. with bucket
 	case apc.ActPrefetchObjects:
-		args := &cmn.SelectObjsMsg{}
-		rns := xreg.RenewPrefetch(xactMsg.ID, t, bck, args)
+		var (
+			smsg = &cmn.SelectObjsMsg{}
+		)
+		rns := xreg.RenewPrefetch(args.ID, t, bck, smsg)
 		if rns.Err != nil {
 			glog.Errorf("%s: %s %v", t, bck, rns.Err)
 			debug.AssertNoErr(rns.Err)
@@ -205,18 +214,18 @@ func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 		})
 		go xctn.Run(nil)
 	case apc.ActLoadLomCache:
-		rns := xreg.RenewBckLoadLomCache(t, xactMsg.ID, bck)
+		rns := xreg.RenewBckLoadLomCache(t, args.ID, bck)
 		return rns.Err
 	// 3. cannot start
 	case apc.ActPutCopies:
-		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", xactMsg)
+		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", args)
 	case apc.ActDownload, apc.ActEvictObjects, apc.ActDeleteObjects, apc.ActMakeNCopies, apc.ActECEncode:
-		return fmt.Errorf("initiating %q must be done via a separate documented API", xactMsg)
+		return fmt.Errorf("initiating %q must be done via a separate documented API", args)
 	// 4. unknown
 	case "":
-		return fmt.Errorf("%q: unspecified (empty) xaction kind", xactMsg)
+		return fmt.Errorf("%q: unspecified (empty) xaction kind", args)
 	default:
-		return cmn.NewErrUnsupp("start xaction", xactMsg.Kind)
+		return cmn.NewErrUnsupp("start xaction", args.Kind)
 	}
 	return nil
 }

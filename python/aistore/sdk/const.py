@@ -16,6 +16,7 @@ QParamKeepBckMD = "keep_md"
 QParamBucketTo = "bck_to"
 QparamPrimaryReadyReb = "prr"
 QParamETLName = "etl_name"
+QParamForce = "frc"
 
 # Bucket providers
 ProviderAIS = "ais"

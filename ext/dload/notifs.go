@@ -1,6 +1,6 @@
 // Package cmn provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -60,20 +60,6 @@ func (nd *NotifDownloadListerner) QueryArgs() cmn.HreqArgs {
 		}
 	)
 	args.Path = apc.URLPathDownload.S
-	args.Body = cos.MustMarshal(dlBody)
-	return args
-}
-
-func (nd *NotifDownloadListerner) AbortArgs() cmn.HreqArgs {
-	var (
-		xactID = "nabrt-" + cos.GenUUID()
-		q      = url.Values{apc.QparamUUID: []string{xactID}} // ditto
-		args   = cmn.HreqArgs{Method: http.MethodDelete, Query: q}
-		dlBody = AdminBody{
-			ID: nd.UUID(),
-		}
-	)
-	args.Path = apc.URLPathDownloadAbort.S
 	args.Body = cos.MustMarshal(dlBody)
 	return args
 }

@@ -6,9 +6,9 @@ from __future__ import annotations  # pylint: disable=unused-variable
 from typing import List
 import time
 
-from aistore.sdk.const import HTTP_METHOD_GET, HTTP_METHOD_PUT, QParamWhat
+from aistore.sdk.const import HTTP_METHOD_GET, HTTP_METHOD_PUT, QParamWhat, QParamForce
 from aistore.sdk.errors import Timeout
-from aistore.sdk.types import Bck, JobStatus
+from aistore.sdk.types import Bck, JobStatus, JobArgs
 from aistore.sdk.utils import probing_frequency
 
 
@@ -56,20 +56,14 @@ class Job:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        value = {
-            "id": job_id,
-            "kind": job_kind,
-            "show_active": only_running,
-            "node": daemon_id,
-        }
-        params = {QParamWhat: "status"}
-
         return self.client.request_deserialize(
             HTTP_METHOD_GET,
             path="cluster",
             res_model=JobStatus,
-            json=value,
-            params=params,
+            json=JobArgs(
+                id=job_id, kind=job_kind, only_running=only_running, daemon_id=daemon_id
+            ).get_json(),
+            params={QParamWhat: "status"},
         )
 
     def wait_for_job(
@@ -135,14 +129,11 @@ class Job:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        value = {"kind": job_kind, "node": daemon_id, "buckets": buckets}
-        if force:
-            value["ext"] = {"force": True}
+        value = JobArgs(kind=job_kind, daemon_id=daemon_id, buckets=buckets).get_json()
+        params = {QParamForce: "true"} if force else {}
         action = {"action": "start", "value": value}
 
         resp = self.client.request(
-            HTTP_METHOD_PUT,
-            path="cluster",
-            json=action,
+            HTTP_METHOD_PUT, path="cluster", json=action, params=params
         )
         return resp.text

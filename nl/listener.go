@@ -37,7 +37,6 @@ type NotifListener interface {
 	SetStats(daeID string, stats any)
 	NodeStats() *NodeStats
 	QueryArgs() cmn.HreqArgs
-	AbortArgs() cmn.HreqArgs
 	EndTime() int64
 	SetAddedTime()
 	AddedTime() int64

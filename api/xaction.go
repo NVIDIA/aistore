@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -51,26 +50,16 @@ type (
 	}
 )
 
-// StartXaction starts a given xact.
-func StartXaction(bp BaseParams, args XactReqArgs) (string, error) {
+// Start xaction
+func StartXaction(bp BaseParams, args XactReqArgs) (xactID string, err error) {
 	if !xact.Table[args.Kind].Startable {
 		return "", fmt.Errorf("xaction %q is not startable", args.Kind)
 	}
-	xactMsg := xact.QueryMsg{Kind: args.Kind, Bck: args.Bck, DaemonID: args.DaemonID}
-
-	// TODO -- FIXME: remove
-	if strings.Contains(args.Kind, "lru") {
-		ext := &xact.QueryMsgLRU{}
-		if args.Buckets != nil {
-			xactMsg.Buckets = args.Buckets
-			ext.Force = args.Force
-		}
-		xactMsg.Ext = ext
-	} else if strings.Contains(args.Kind, "cleanup") && args.Buckets != nil {
-		xactMsg.Buckets = args.Buckets
+	q := args.Bck.AddToQuery(nil)
+	if args.Force {
+		q.Set(apc.QparamForce, "true")
 	}
-
-	msg := apc.ActMsg{Action: apc.ActXactStart, Value: xactMsg}
+	msg := apc.ActMsg{Action: apc.ActXactStart, Value: args}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -78,21 +67,16 @@ func StartXaction(bp BaseParams, args XactReqArgs) (string, error) {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = args.Bck.AddToQuery(nil)
+		reqParams.Query = q
 	}
-
-	var xactID string
-	_, err := reqParams.doReqStr(&xactID)
+	_, err = reqParams.doReqStr(&xactID)
 	FreeRp(reqParams)
-	return xactID, err
+	return
 }
 
-// AbortXaction aborts a given xact.
-func AbortXaction(bp BaseParams, args XactReqArgs) error {
-	msg := apc.ActMsg{
-		Action: apc.ActXactStop,
-		Value:  xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
-	}
+// Abort ("stop") xactions
+func AbortXaction(bp BaseParams, args XactReqArgs) (err error) {
+	msg := apc.ActMsg{Action: apc.ActXactStop, Value: args}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -102,9 +86,9 @@ func AbortXaction(bp BaseParams, args XactReqArgs) error {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
-	err := reqParams.DoRequest()
+	err = reqParams.DoRequest()
 	FreeRp(reqParams)
-	return err
+	return
 }
 
 //
@@ -499,4 +483,26 @@ func (xs XactMultiSnap) TotalRunningTime(xactID string) (time.Duration, error) {
 		end = time.Now()
 	}
 	return end.Sub(start), nil
+}
+
+/////////////////
+// XactReqArgs //
+/////////////////
+
+func (args *XactReqArgs) String() (s string) {
+	if args.ID == "" {
+		s = fmt.Sprintf("x-%s", args.Kind)
+	} else {
+		s = fmt.Sprintf("x-%s[%s]", args.Kind, args.ID)
+	}
+	if !args.Bck.IsEmpty() {
+		s += "-" + args.Bck.String()
+	}
+	if args.Timeout > 0 {
+		s += "-" + args.Timeout.String()
+	}
+	if args.DaemonID != "" {
+		s += "-node[" + args.DaemonID + "]"
+	}
+	return
 }

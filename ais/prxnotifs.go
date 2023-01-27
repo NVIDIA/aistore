@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -323,7 +324,7 @@ func (n *notifs) done(nl nl.NotifListener) {
 			// NOTE: we accept finished notifications even after
 			// `nl` is aborted. Handle locks carefully.
 			args := allocBcArgs()
-			args.req = nl.AbortArgs()
+			args.req = abortReq(nl)
 			args.network = cmn.NetIntraControl
 			args.timeout = cmn.Timeout.MaxKeepalive()
 			args.nodes = []cluster.NodeMap{nl.Notifiers()}
@@ -334,6 +335,23 @@ func (n *notifs) done(nl nl.NotifListener) {
 		}
 	}
 	nl.Callback(nl, time.Now().UnixNano())
+}
+
+func abortReq(nl nl.NotifListener) cmn.HreqArgs {
+	if nl.Kind() == apc.ActDownload {
+		// downloader implements abort via http.MethodDelete
+		// and different messaging
+		return dload.AbortReq(nl.UUID() /*job ID*/)
+	}
+	msg := apc.ActMsg{
+		Action: apc.ActXactStop,
+		Name:   cmn.ErrXactICNotifAbort.Error(),
+		Value:  api.XactReqArgs{ID: nl.UUID() /*xactID*/, Kind: nl.Kind()},
+	}
+	args := cmn.HreqArgs{Method: http.MethodPut}
+	args.Body = cos.MustMarshal(msg)
+	args.Path = apc.URLPathXactions.S
+	return args
 }
 
 //

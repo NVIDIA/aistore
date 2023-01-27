@@ -88,6 +88,23 @@ class BucketList(BaseModel):
         return entries
 
 
+class JobArgs(BaseModel):
+    id: str = ""
+    kind: str = ""
+    daemon_id: str = ""
+    buckets: List[Bck] = None
+    only_running: bool = False
+
+    def get_json(self):
+        return {
+            "ID": self.id,
+            "Kind": self.kind,
+            "DaemonID": self.daemon_id,
+            "Buckets": self.buckets,
+            "OnlyRunning": self.only_running,
+        }
+
+
 class JobStatus(BaseModel):
     uuid: str = ""
     err: str = ""
