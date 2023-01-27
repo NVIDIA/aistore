@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/xact"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -199,7 +200,7 @@ func waitForXactDone(baseParams api.BaseParams, xid string, timeout time.Duratio
 	}
 
 	tlog.Logf("Waiting for ETL xaction to be %s...\n", action)
-	args := api.XactArgs{ID: xid, Kind: apc.ActETLBck, Timeout: timeout /* total timeout */}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: timeout /* total timeout */}
 	status, err := api.WaitForXactionIC(baseParams, args)
 	if err == nil {
 		if waitForAbort && !status.Aborted() {
@@ -225,7 +226,7 @@ func ReportXactionStatus(baseParams api.BaseParams, xid string, stopCh *cos.Stop
 			select {
 			case <-etlTicker.C:
 				// Check number of objects transformed.
-				xs, err := api.QueryXactionSnaps(baseParams, api.XactArgs{ID: xid})
+				xs, err := api.QueryXactionSnaps(baseParams, xact.ArgsMsg{ID: xid})
 				if err != nil {
 					tlog.Logf("Failed to get x-etl[%s] stats: %v\n", xid, err)
 					continue

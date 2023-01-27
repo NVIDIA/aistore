@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 func propsStats(t *testing.T, proxyURL string) (objChanged, bytesChanged int64) {
@@ -129,7 +130,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 	}
-	args := api.XactArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 

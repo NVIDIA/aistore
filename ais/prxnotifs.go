@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -24,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
-	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -63,7 +61,7 @@ type (
 		Finished []*notifListenMsg `json:"finished"`
 	}
 
-	nlFilter xreg.XactFilter
+	nlFilter xact.Flt
 
 	// receiver to start listening
 	notifListenMsg struct {
@@ -346,7 +344,7 @@ func abortReq(nl nl.NotifListener) cmn.HreqArgs {
 	msg := apc.ActMsg{
 		Action: apc.ActXactStop,
 		Name:   cmn.ErrXactICNotifAbort.Error(),
-		Value:  api.XactArgs{ID: nl.UUID() /*xid*/, Kind: nl.Kind()},
+		Value:  xact.ArgsMsg{ID: nl.UUID() /*xid*/, Kind: nl.Kind()},
 	}
 	args := cmn.HreqArgs{Method: http.MethodPut}
 	args.Body = cos.MustMarshal(msg)

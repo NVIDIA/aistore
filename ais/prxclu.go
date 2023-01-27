@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -116,7 +115,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 // apc.GetWhatQueryXactStats (NOTE: may poll for quiescence)
 func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
-	var xactMsg api.QueryMsg
+	var xactMsg xact.QueryMsg
 	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 		return
 	}
@@ -148,7 +147,7 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 
 // apc.GetWhatAllRunningXacts
 func (p *proxy) xgetRunning(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
-	var xactMsg api.QueryMsg
+	var xactMsg xact.QueryMsg
 	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 		return
 	}
@@ -887,7 +886,7 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 
 func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	var (
-		xargs = api.XactArgs{}
+		xargs = xact.ArgsMsg{}
 	)
 	if err := cos.MorphMarshal(msg.Value, &xargs); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
@@ -932,7 +931,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	var (
-		xargs = api.XactArgs{}
+		xargs = xact.ArgsMsg{}
 	)
 	if err := cos.MorphMarshal(msg.Value, &xargs); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
@@ -981,7 +980,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(xact.RebID2S(rmdClone.version())))
 }
 
-func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, xargs api.XactArgs) {
+func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, xargs xact.ArgsMsg) {
 	smap := p.owner.smap.get()
 	si := smap.GetTarget(xargs.DaemonID)
 	if si == nil {

@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -541,7 +542,7 @@ func (m *ioContext) stopGets() {
 func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies int, greaterOk bool) {
 	m.t.Helper()
 	time.Sleep(time.Second)
-	xargs := api.XactArgs{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, xargs)
 	tassert.CheckFatal(m.t, err)
 
@@ -642,7 +643,7 @@ func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
 	}
 	tlog.Logln("Warning: wait for unfinished rebalance(?)")
 	time.Sleep(5 * time.Second)
-	args := api.XactArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 	time.Sleep(5 * time.Second)
 	return true

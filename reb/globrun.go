@@ -330,7 +330,7 @@ func (reb *Reb) acquire(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunning
 }
 
 func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Duration, errcnt int) (err error) {
-	entry := xreg.GetRunning(xreg.XactFilter{Kind: apc.ActRebalance})
+	entry := xreg.GetRunning(xact.Flt{Kind: apc.ActRebalance})
 	if entry == nil {
 		var (
 			rebID   = reb.RebID()

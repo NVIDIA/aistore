@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
 
@@ -404,7 +405,7 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 
 	// wait
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, operation, fromBck, toBck)
-	wargs := api.XactArgs{ID: xid, Kind: apc.ActCopyObjects}
+	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects}
 	if err = api.WaitForXactionIdle(apiBP, wargs); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
 	} else {

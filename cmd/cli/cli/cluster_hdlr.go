@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
 
@@ -405,7 +406,7 @@ func startClusterRebalanceHandler(c *cli.Context) (err error) {
 }
 
 func stopClusterRebalanceHandler(c *cli.Context) error {
-	xargs := api.XactArgs{Kind: apc.ActRebalance, OnlyRunning: true}
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true}
 	snap, err := getXactSnap(xargs)
 	if err != nil {
 		return err
@@ -437,7 +438,7 @@ func showClusterRebalanceHandler(c *cli.Context) (err error) {
 			daemonID, xid = sid, ""
 		}
 	}
-	xargs := api.XactArgs{
+	xargs := xact.ArgsMsg{
 		ID:          xid,
 		Kind:        apc.ActRebalance,
 		DaemonID:    daemonID,

@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // TODO -- FIXME: randomize range, check prefix for `xs.iteratePrefix`
@@ -80,7 +81,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	wargs := api.XactArgs{ID: xid, Kind: apc.ActCopyObjects}
+	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects}
 	api.WaitForXactionIdle(baseParams, wargs)
 
 	tlog.Logln("prefix: test/")
@@ -188,7 +189,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			if erv.Load() != nil {
 				tassert.CheckFatal(t, erv.Load().(error))
 			}
-			wargs := api.XactArgs{Kind: apc.ActCopyObjects, Bck: m.bck}
+			wargs := xact.ArgsMsg{Kind: apc.ActCopyObjects, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
 			msg := &apc.LsoMsg{Prefix: m.prefix}

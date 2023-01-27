@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -41,7 +40,7 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 
 func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	var (
-		xactMsg api.QueryMsg
+		xactMsg xact.QueryMsg
 		bck     *cluster.Bck
 		query   = r.URL.Query()
 		what    = query.Get(apc.QparamWhat)
@@ -72,7 +71,7 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	xactQuery := xreg.XactFilter{
+	xactQuery := xact.Flt{
 		ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRunning: xactMsg.OnlyRunning,
 	}
 	t.xquery(w, r, what, xactQuery)
@@ -80,7 +79,7 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 
 func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 	var (
-		xargs api.XactArgs
+		xargs xact.ArgsMsg
 		bck   *cluster.Bck
 	)
 	msg, err := t.readActionMsg(w, r)
@@ -112,7 +111,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 		if msg.Name == cmn.ErrXactICNotifAbort.Error() {
 			err = cmn.ErrXactICNotifAbort
 		}
-		flt := xreg.XactFilter{ID: xargs.ID, Kind: xargs.Kind, Bck: bck}
+		flt := xact.Flt{ID: xargs.ID, Kind: xargs.Kind, Bck: bck}
 		xreg.DoAbort(flt, err)
 	default:
 		t.writeErrAct(w, r, msg.Action)
@@ -137,7 +136,7 @@ func (t *target) xget(w http.ResponseWriter, r *http.Request, what, uuid string)
 	t.writeErrSilent(w, r, err, http.StatusNotFound)
 }
 
-func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.XactFilter) {
+func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xactQuery xact.Flt) {
 	stats, err := xreg.GetSnap(xactQuery)
 	if err == nil {
 		t.writeJSON(w, r, stats, what)
@@ -150,7 +149,7 @@ func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xac
 	}
 }
 
-func (t *target) xstart(r *http.Request, args *api.XactArgs, bck *cluster.Bck) error {
+func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 

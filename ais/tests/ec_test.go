@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 const (
@@ -506,7 +507,7 @@ func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOption
 		}(idx)
 	}
 	wg.Wait()
-	reqArgs := api.XactArgs{Kind: apc.ActECPut, Bck: bck}
+	reqArgs := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
 	api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), reqArgs)
 }
 
@@ -821,12 +822,12 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 
 				defer func() {
 					tlog.Logln("Wait for PUTs to finish...")
-					args := api.XactArgs{Kind: apc.ActECPut}
+					args := xact.ArgsMsg{Kind: apc.ActECPut}
 					err := api.WaitForXactionIdle(baseParams, args)
 					tassert.CheckError(t, err)
 
 					clearAllECObjects(t, bck, true, o)
-					reqArgs := api.XactArgs{Kind: apc.ActECPut, Bck: bck}
+					reqArgs := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
 					err = api.WaitForXactionIdle(baseParams, reqArgs)
 					tassert.CheckError(t, err)
 				}()
@@ -1202,7 +1203,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
-	reqArgs := api.XactArgs{Kind: apc.ActECEncode, Bck: bck}
+	reqArgs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: bck}
 	_, err = api.WaitForXactionIC(baseParams, reqArgs)
 	tassert.CheckError(t, err)
 
@@ -1649,7 +1650,7 @@ func TestECDestroyBucket(t *testing.T) {
 
 	wg.Wait()
 	tlog.Logf("EC put files resulted in error in %d out of %d files\n", errCnt.Load(), o.objCount)
-	args := api.XactArgs{Kind: apc.ActECPut}
+	args := xact.ArgsMsg{Kind: apc.ActECPut}
 	api.WaitForXactionIC(baseParams, args)
 
 	// create bucket with the same name and check if puts are successful
@@ -2026,7 +2027,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 	}
 
 	// Wait for ec to finish
-	flt := api.XactArgs{Kind: apc.ActECPut, Bck: bck}
+	flt := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
 	_ = api.WaitForXactionIdle(baseParams, flt)
 }
 
@@ -2204,7 +2205,7 @@ func TestECBucketEncode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EC encode must start automatically for bucket %s\n", m.bck)
-	xargs := api.XactArgs{Kind: apc.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, xargs)
 	tassert.CheckFatal(t, err)
 
@@ -2571,7 +2572,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 			}
 		}
 	}()
-	xargs := api.XactArgs{Kind: apc.ActRebalance, Timeout: startTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: startTimeout}
 	err = api.WaitForXactionNode(baseParams, xargs, xactSnapRunning)
 	tassert.CheckError(t, err)
 

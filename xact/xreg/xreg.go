@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xact"
@@ -63,13 +62,6 @@ type (
 	RenewBase struct {
 		Args
 		Bck *cluster.Bck
-	}
-
-	XactFilter struct {
-		Bck         *cluster.Bck
-		OnlyRunning *bool
-		ID          string
-		Kind        string
 	}
 
 	// Represents result of renewing given xact.
@@ -174,9 +166,9 @@ func (e *entries) getAllRunning(kind string) (out []string) {
 	return sort.StringSlice(out)
 }
 
-func GetRunning(flt XactFilter) Renewable { return dreg.getRunning(flt) }
+func GetRunning(flt xact.Flt) Renewable { return dreg.getRunning(flt) }
 
-func (r *registry) getRunning(flt XactFilter) (entry Renewable) {
+func (r *registry) getRunning(flt xact.Flt) (entry Renewable) {
 	e := &r.entries
 	e.mtx.RLock()
 	entry = e.findRunning(flt)
@@ -185,7 +177,7 @@ func (r *registry) getRunning(flt XactFilter) (entry Renewable) {
 }
 
 // NOTE: relies on the find() to walk in the newer --> older order
-func GetLatest(flt XactFilter) Renewable {
+func GetLatest(flt xact.Flt) Renewable {
 	entry := dreg.entries.find(flt)
 	return entry
 }
@@ -210,7 +202,7 @@ func AbortKind(err error, kind string) {
 
 func AbortAllMountpathsXactions() { dreg.abort(abortArgs{mountpaths: true}) }
 
-func DoAbort(flt XactFilter, err error) (bool /*aborted*/, error) {
+func DoAbort(flt xact.Flt, err error) (bool /*aborted*/, error) {
 	if flt.ID != "" {
 		xctn, err := dreg.getXact(flt.ID)
 		if xctn == nil || err != nil {
@@ -239,7 +231,7 @@ func DoAbort(flt XactFilter, err error) (bool /*aborted*/, error) {
 	return true, nil
 }
 
-func GetSnap(flt XactFilter) ([]*cluster.Snap, error) {
+func GetSnap(flt xact.Flt) ([]*cluster.Snap, error) {
 	var onlyRunning bool
 	if flt.OnlyRunning != nil {
 		onlyRunning = *flt.OnlyRunning
@@ -282,23 +274,23 @@ func GetSnap(flt XactFilter) ([]*cluster.Snap, error) {
 			if flt.Kind == "" {
 				dreg.entries.mtx.RLock()
 				for kind := range xact.Table {
-					entry := dreg.entries.findRunning(XactFilter{Kind: kind, Bck: flt.Bck})
+					entry := dreg.entries.findRunning(xact.Flt{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Snap())
 					}
 				}
 				dreg.entries.mtx.RUnlock()
 			} else {
-				entry := dreg.getRunning(XactFilter{Kind: flt.Kind, Bck: flt.Bck})
+				entry := dreg.getRunning(xact.Flt{Kind: flt.Kind, Bck: flt.Bck})
 				if entry != nil {
 					matching = append(matching, entry.Get().Snap())
 				}
 			}
 			return matching, nil
 		}
-		return dreg.matchingXactsStats(flt.matches), nil
+		return dreg.matchingXactsStats(flt.Matches), nil
 	}
-	return dreg.matchingXactsStats(flt.matches), nil
+	return dreg.matchingXactsStats(flt.Matches), nil
 }
 
 func (r *registry) abort(args abortArgs) {
@@ -434,20 +426,20 @@ func (r *registry) hkDelOld() time.Duration {
 }
 
 func (r *registry) renewByID(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
-	flt := XactFilter{ID: entry.UUID(), Kind: entry.Kind(), Bck: bck}
+	flt := xact.Flt{ID: entry.UUID(), Kind: entry.Kind(), Bck: bck}
 	rns = r._renewFlt(entry, flt)
 	rns.beingRenewed()
 	return
 }
 
 func (r *registry) renew(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
-	flt := XactFilter{Kind: entry.Kind(), Bck: bck}
+	flt := xact.Flt{Kind: entry.Kind(), Bck: bck}
 	rns = r._renewFlt(entry, flt)
 	rns.beingRenewed()
 	return
 }
 
-func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {
+func (r *registry) _renewFlt(entry Renewable, flt xact.Flt) (rns RenewRes) {
 	bck := flt.Bck
 	// first, try to reuse under rlock
 	r.renewMtx.RLock()
@@ -503,7 +495,7 @@ func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) 
 	return
 }
 
-func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck) (rns RenewRes) {
+func (r *registry) renewLocked(entry Renewable, flt xact.Flt, bck *cluster.Bck) (rns RenewRes) {
 	var (
 		xprev cluster.Xact
 		wpr   WPR
@@ -536,18 +528,18 @@ func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck
 //////////////////////
 
 // NOTE: the caller must take rlock
-func (e *entries) findRunning(flt XactFilter) Renewable {
+func (e *entries) findRunning(flt xact.Flt) Renewable {
 	onl := true
 	flt.OnlyRunning = &onl
 	for _, entry := range e.active {
-		if flt.matches(entry.Get()) {
+		if flt.Matches(entry.Get()) {
 			return entry
 		}
 	}
 	return nil
 }
 
-// internal use, special case: XactFilter{Kind: kind}; NOTE: the caller must take rlock
+// internal use, special case: xact.Flt{Kind: kind}; NOTE: the caller must take rlock
 func (e *entries) findRunningKind(kind string) Renewable {
 	for _, entry := range e.active {
 		xctn := entry.Get()
@@ -558,14 +550,14 @@ func (e *entries) findRunningKind(kind string) Renewable {
 	return nil
 }
 
-func (e *entries) find(flt XactFilter) (entry Renewable) {
+func (e *entries) find(flt xact.Flt) (entry Renewable) {
 	e.mtx.RLock()
 	entry = e.findUnlocked(flt)
 	e.mtx.RUnlock()
 	return
 }
 
-func (e *entries) findUnlocked(flt XactFilter) Renewable {
+func (e *entries) findUnlocked(flt xact.Flt) Renewable {
 	if flt.OnlyRunning != nil && *flt.OnlyRunning {
 		return e.findRunning(flt)
 	}
@@ -573,7 +565,7 @@ func (e *entries) findUnlocked(flt XactFilter) Renewable {
 	// the one we are looking for is at the end
 	for idx := len(e.all) - 1; idx >= 0; idx-- {
 		entry := e.all[idx]
-		if flt.matches(entry.Get()) {
+		if flt.Matches(entry.Get()) {
 			return entry
 		}
 	}
@@ -764,56 +756,4 @@ func (rns *RenewRes) beingRenewed() {
 		xdmnd.IncPending()
 		xdmnd.DecPending()
 	}
-}
-
-////////////////
-// XactFilter //
-////////////////
-
-func (flt *XactFilter) String() string {
-	s := fmt.Sprintf("ID=%q, kind=%q", flt.ID, flt.Kind)
-	if flt.Bck != nil {
-		s = fmt.Sprintf("%s, %s", s, flt.Bck)
-	}
-	if flt.OnlyRunning != nil {
-		s = fmt.Sprintf("%s, only-running=%t", s, *flt.OnlyRunning)
-	}
-	return s
-}
-
-func (flt XactFilter) matches(xctn cluster.Xact) (yes bool) {
-	debug.Assert(xact.IsValidKind(xctn.Kind()), xctn.String())
-	// running?
-	if flt.OnlyRunning != nil {
-		if *flt.OnlyRunning != xctn.Running() {
-			return false
-		}
-	}
-	// same ID?
-	if flt.ID != "" {
-		debug.Assert(cos.IsValidUUID(flt.ID) || xact.IsValidRebID(flt.ID), flt.ID)
-		if yes = xctn.ID() == flt.ID; yes {
-			debug.Assert(xctn.Kind() == flt.Kind, xctn.String()+" vs same ID "+flt.String())
-		}
-		return
-	}
-	// kind?
-	if flt.Kind != "" {
-		debug.Assert(xact.IsValidKind(flt.Kind), flt.Kind)
-		if xctn.Kind() != flt.Kind {
-			return false
-		}
-	}
-	// bucket?
-	if xact.Table[xctn.Kind()].Scope != xact.ScopeB {
-		return true // non single-bucket x
-	}
-	if flt.Bck == nil {
-		return true // the filter's not filtering out
-	}
-
-	if xctn.Bck() == nil {
-		return false // ambiguity (cannot really compare)
-	}
-	return xctn.Bck().Equal(flt.Bck, true, true)
 }

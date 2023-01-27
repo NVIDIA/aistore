@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // TODO: stress notFshare
@@ -274,7 +275,7 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 // wait for an xaction (if there's one) and then query all targets for stats
 func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *cluster.Snode, m *ioContext) (locObjs, outObjs, inObjs int64) {
 	time.Sleep(4 * time.Second)
-	xargs := api.XactArgs{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
 	xname := fmt.Sprintf("%q", apc.ActPromote)
 	if xid != "" {
 		xargs.ID = xid

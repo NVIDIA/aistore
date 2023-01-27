@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // NOTE: TestDownload* can fail if link, content, version changes - should be super rare!
@@ -516,7 +517,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("evicting remote bucket...")
 			xid, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			args := api.XactArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+			args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, args)
 			tassert.CheckFatal(t, err)
 
@@ -547,7 +548,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("evicting remote bucket...")
 			xid, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			args = api.XactArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+			args = xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, args)
 			tassert.CheckFatal(t, err)
 

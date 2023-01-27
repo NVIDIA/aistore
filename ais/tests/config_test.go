@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // Note: Run these tests on both K8s and local.
@@ -156,7 +157,7 @@ func TestConfigSetGlobal(t *testing.T) {
 	checkConfig(t, smap, check)
 
 	// wait for ec
-	flt := api.XactArgs{Kind: apc.ActECEncode}
+	flt := xact.ArgsMsg{Kind: apc.ActECEncode}
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
@@ -179,7 +180,7 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 		"expected 'ec.enabled' to be %v, got: %v", config.EC.Enabled, daemonConfig.EC.Enabled)
 
 	// wait for ec
-	flt := api.XactArgs{Kind: apc.ActECEncode}
+	flt := xact.ArgsMsg{Kind: apc.ActECEncode}
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
@@ -277,7 +278,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		"expected 'ec.Enabled' to be %v, got: %v", newECEnabled, daemonConfig.EC.Enabled)
 
 	// wait for ec
-	flt := api.XactArgs{Kind: apc.ActECEncode}
+	flt := xact.ArgsMsg{Kind: apc.ActECEncode}
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 

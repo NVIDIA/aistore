@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -523,14 +524,14 @@ func etlBucketHandler(c *cli.Context) error {
 		return nil
 	}
 
-	if _, err := api.WaitForXactionIC(apiBP, api.XactArgs{ID: xid}); err != nil {
+	if _, err := api.WaitForXactionIC(apiBP, xact.ArgsMsg{ID: xid}); err != nil {
 		return err
 	}
 	if !flagIsSet(c, cpBckDryRunFlag) {
 		return nil
 	}
 
-	snaps, err := api.QueryXactionSnaps(apiBP, api.XactArgs{ID: xid})
+	snaps, err := api.QueryXactionSnaps(apiBP, xact.ArgsMsg{ID: xid})
 	if err != nil {
 		return err
 	}

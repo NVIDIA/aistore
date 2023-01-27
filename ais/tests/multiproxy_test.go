@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -1497,7 +1498,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	newICNode := smap.GetProxy(newICMemID)
 
 	baseParams = tools.BaseAPIParams(newICNode.URL(cmn.NetPublic))
-	xargs := api.XactArgs{ID: xid, Kind: apc.ActCopyBck}
+	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck}
 	_, err = api.GetOneXactionStatus(baseParams, xargs)
 	tassert.CheckError(t, err)
 
@@ -1551,7 +1552,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 
 	// Start any xaction and get ID.
 	xid, err := api.CopyBucket(baseParams, src, dstBck, nil)
-	xargs := api.XactArgs{ID: xid, Kind: apc.ActCopyBck}
+	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck}
 
 	tassert.CheckFatal(t, err)
 	defer tools.DestroyBucket(t, proxyURL, dstBck)
@@ -1697,7 +1698,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 				tools.DestroyBucket(t, proxyURL, dstBck)
 				wg.Done()
 			}()
-			xargs := api.XactArgs{ID: xid, Timeout: rebalanceTimeout}
+			xargs := xact.ArgsMsg{ID: xid, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, xargs)
 			tassert.CheckError(t, err)
 		}(i)

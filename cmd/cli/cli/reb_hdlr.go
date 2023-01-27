@@ -44,7 +44,7 @@ func showRebalanceHandler(c *cli.Context) error {
 		keepMonitoring = flagIsSet(c, refreshFlag)
 		refreshRate    = calcRefreshRate(c)
 		hideHeader     = flagIsSet(c, noHeaderFlag)
-		xargs          = api.XactArgs{Kind: apc.ActRebalance}
+		xargs          = xact.ArgsMsg{Kind: apc.ActRebalance}
 
 		latestAborted, latestFinished bool
 	)

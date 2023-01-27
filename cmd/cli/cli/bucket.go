@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
 )
@@ -115,7 +116,7 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 
 	// wait
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Renaming bucket", fromBck, toBck)
-	if err := waitForXactionCompletion(apiBP, api.XactArgs{ID: xid}); err != nil {
+	if err := waitForXactionCompletion(apiBP, xact.ArgsMsg{ID: xid}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", fromBck, toBck)
 		return err
 	}
@@ -137,7 +138,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) err
 
 	// wait
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying bucket", fromBck, toBck)
-	if err = waitForXactionCompletion(apiBP, api.XactArgs{ID: xid}); err != nil {
+	if err = waitForXactionCompletion(apiBP, xact.ArgsMsg{ID: xid}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "copy", fromBck, toBck)
 		return err
 	}

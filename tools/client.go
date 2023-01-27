@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -222,7 +223,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 	baseParams := BaseAPIParams(proxyURL)
 	xid, err := api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
-	args := api.XactArgs{ID: xid, Kind: apc.ActDeleteObjects, Timeout: time.Minute}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 }
@@ -482,7 +483,7 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}
 
-	args := api.XactArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: evictPrefetchTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: evictPrefetchTimeout}
 	if _, err := api.WaitForXactionIC(baseParams, args); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}
@@ -514,7 +515,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		xargs := api.XactArgs{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
+		xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
 		if _, err := api.WaitForXactionIC(baseParams, xargs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
@@ -525,7 +526,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 
 	go func() {
 		defer wg.Done()
-		xargs := api.XactArgs{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
+		xargs := xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
 		if _, err := api.WaitForXactionIC(baseParams, xargs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
@@ -547,7 +548,7 @@ func WaitForResilver(t *testing.T, baseParams api.BaseParams, timeouts ...time.D
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	xargs := api.XactArgs{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
 	for i := 0; i < 10; i++ {
 		_, err := api.WaitForXactionIC(baseParams, xargs)
 		if err == nil {
@@ -573,7 +574,7 @@ func WaitForRebalanceByID(t *testing.T, origTargetCnt int, baseParams api.BasePa
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	xargs := api.XactArgs{ID: rebID, Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
+	xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
 	_, err := api.WaitForXactionIC(baseParams, xargs)
 	tassert.CheckFatal(t, err)
 }
@@ -583,7 +584,7 @@ func _waitReToStart(baseParams api.BaseParams) {
 		kinds   = []string{apc.ActRebalance, apc.ActResilver}
 		timeout = cos.MaxDuration(10*xactPollSleep, 10*time.Second)
 		retries = int(timeout / xactPollSleep)
-		args    = api.XactArgs{Timeout: xactPollSleep, OnlyRunning: true}
+		args    = xact.ArgsMsg{Timeout: xactPollSleep, OnlyRunning: true}
 	)
 	for i := 0; i < retries; i++ {
 		for _, kind := range kinds {

@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 //
@@ -288,7 +289,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				}
 			}
 
-			flt := api.XactArgs{Kind: apc.ActArchive, Bck: m.bck}
+			flt := xact.ArgsMsg{Kind: apc.ActArchive, Bck: m.bck}
 			if test.abrt {
 				time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
 				tlog.Logln("Aborting...")
@@ -411,7 +412,7 @@ func TestAppendToArch(t *testing.T) {
 				}(archName, list)
 			}
 
-			wargs := api.XactArgs{Kind: apc.ActArchive, Bck: m.bck}
+			wargs := xact.ArgsMsg{Kind: apc.ActArchive, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
 			lsmsg := &apc.LsoMsg{Prefix: "test_lst"}
@@ -454,7 +455,7 @@ func TestAppendToArch(t *testing.T) {
 				}
 			}
 			if test.multi {
-				wargs := api.XactArgs{Kind: apc.ActArchive, Bck: m.bck}
+				wargs := xact.ArgsMsg{Kind: apc.ActArchive, Bck: m.bck}
 				api.WaitForXactionIdle(baseParams, wargs)
 			}
 

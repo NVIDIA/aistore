@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 const (
@@ -85,7 +86,7 @@ func BenchmarkECEncode(b *testing.B) {
 				_, err := api.SetBucketProps(baseParams, bck, bckProps)
 				tassert.CheckFatal(b, err)
 
-				reqArgs := api.XactArgs{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
+				reqArgs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
 				_, err = api.WaitForXactionIC(baseParams, reqArgs)
 				tassert.CheckFatal(b, err)
 			})
@@ -136,7 +137,7 @@ func BenchmarkECRebalance(b *testing.B) {
 				_, err := api.SetBucketProps(baseParams, bck, bckProps)
 				tassert.CheckFatal(b, err)
 
-				reqArgs := api.XactArgs{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
+				reqArgs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
 				_, err = api.WaitForXactionIC(baseParams, reqArgs)
 				tassert.CheckFatal(b, err)
 

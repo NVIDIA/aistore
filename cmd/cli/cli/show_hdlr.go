@@ -359,7 +359,7 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 			all         = flagIsSet(c, allJobsFlag)
 			onlyActive  = !all
 			xactKind, _ = xact.GetKindName(name)
-			xargs       = api.XactArgs{
+			xargs       = xact.ArgsMsg{
 				ID:          xid,
 				Kind:        xactKind,
 				DaemonID:    daemonID,
@@ -425,7 +425,7 @@ func showStorageHandler(c *cli.Context) (err error) {
 	return daemonDiskStats(c, "")
 }
 
-func xactList(c *cli.Context, xargs api.XactArgs, caption bool) (int, error) {
+func xactList(c *cli.Context, xargs xact.ArgsMsg, caption bool) (int, error) {
 	// override the caller's choice if explicitly identified
 	if xargs.ID != "" {
 		debug.Assert(xact.IsValidUUID(xargs.ID), xargs.ID)
@@ -462,7 +462,7 @@ func xactList(c *cli.Context, xargs api.XactArgs, caption bool) (int, error) {
 	return ll, nil
 }
 
-func xlistByKindID(c *cli.Context, xargs api.XactArgs, caption bool, xs api.XactMultiSnap) (int, error) {
+func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs api.XactMultiSnap) (int, error) {
 	// first, extract snaps for: xargs.ID, Kind
 	filteredXs := make(api.XactMultiSnap, 8)
 	for tid, snaps := range xs {

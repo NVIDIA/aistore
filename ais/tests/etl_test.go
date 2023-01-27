@@ -35,6 +35,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 )
 
@@ -244,7 +245,7 @@ func testETLBucket(t *testing.T, etlName string, bckFrom cmn.Bck, objCnt int, fi
 
 // NOTE: BytesCount references number of bytes *before* the transformation.
 func checkETLStats(t *testing.T, xid string, expectedObjCnt int, expectedBytesCnt uint64) {
-	snaps, err := api.QueryXactionSnaps(baseParams, api.XactArgs{ID: xid})
+	snaps, err := api.QueryXactionSnaps(baseParams, xact.ArgsMsg{ID: xid})
 	tassert.CheckFatal(t, err)
 
 	objs, outObjs, inObjs := snaps.ObjCounts(xid)
@@ -619,7 +620,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	xid, err := api.ETLBucket(baseParams, bckFrom, bckTo, msg)
 	tassert.CheckFatal(t, err)
 
-	args := api.XactArgs{ID: xid, Timeout: time.Minute}
+	args := xact.ArgsMsg{ID: xid, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 

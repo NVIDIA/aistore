@@ -51,7 +51,7 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 }
 
 // Wait for xaction to run for completion, warn if aborted
-func waitForXactionCompletion(apiBP api.BaseParams, args api.XactArgs) (err error) {
+func waitForXactionCompletion(apiBP api.BaseParams, args xact.ArgsMsg) (err error) {
 	if args.Timeout == 0 {
 		args.Timeout = time.Minute // TODO: make it a flag and an argument with configurable default
 	}
@@ -128,7 +128,7 @@ func flattenXactStats(snap *cluster.Snap) nvpairList {
 	return props
 }
 
-func getXactSnap(xargs api.XactArgs) (*cluster.Snap, error) {
+func getXactSnap(xargs xact.ArgsMsg) (*cluster.Snap, error) {
 	xs, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func getXactSnap(xargs api.XactArgs) (*cluster.Snap, error) {
 	return nil, nil
 }
 
-func queryXactions(xargs api.XactArgs) (xs api.XactMultiSnap, err error) {
+func queryXactions(xargs xact.ArgsMsg) (xs api.XactMultiSnap, err error) {
 	xs, err = api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return

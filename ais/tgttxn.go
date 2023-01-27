@@ -249,7 +249,7 @@ func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 			return "", fmt.Errorf("%s %s: %v", t, txn, rns.Err)
 		}
 		xctn := rns.Entry.Get()
-		flt := xreg.XactFilter{Kind: apc.ActPutCopies, Bck: c.bck}
+		flt := xact.Flt{Kind: apc.ActPutCopies, Bck: c.bck}
 		xreg.DoAbort(flt, errors.New("make-n-copies"))
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
@@ -331,14 +331,14 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 				return "", fmt.Errorf("%s %s: %v", t, txn, rns.Err)
 			}
 			xctn := rns.Entry.Get()
-			flt := xreg.XactFilter{Kind: apc.ActPutCopies, Bck: c.bck}
+			flt := xact.Flt{Kind: apc.ActPutCopies, Bck: c.bck}
 			xreg.DoAbort(flt, errors.New("re-mirror"))
 			c.addNotif(xctn) // notify upon completion
 			xact.GoRunW(xctn)
 			xid = xctn.ID()
 		}
 		if _, reec := _reEC(bprops, nprops, c.bck, nil /*smap*/); reec {
-			flt := xreg.XactFilter{Kind: apc.ActECEncode, Bck: c.bck}
+			flt := xact.Flt{Kind: apc.ActECEncode, Bck: c.bck}
 			xreg.DoAbort(flt, errors.New("re-ec"))
 			rns := xreg.RenewECEncode(t, c.bck, c.uuid, apc.ActCommit)
 			if rns.Err != nil {

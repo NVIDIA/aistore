@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
 
@@ -64,7 +65,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 			return
 		}
 	}
-	xargs := api.XactArgs{Kind: apc.ActStoreCleanup, Bck: bck}
+	xargs := xact.ArgsMsg{Kind: apc.ActStoreCleanup, Bck: bck}
 	if id, err = api.StartXaction(apiBP, xargs); err != nil {
 		return
 	}
@@ -79,7 +80,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 	}
 
 	fmt.Fprintf(c.App.Writer, "Started storage cleanup %s...\n", id)
-	wargs := api.XactArgs{ID: id, Kind: apc.ActStoreCleanup}
+	wargs := xact.ArgsMsg{ID: id, Kind: apc.ActStoreCleanup}
 	if flagIsSet(c, waitTimeoutFlag) {
 		wargs.Timeout = parseDurationFlag(c, waitTimeoutFlag)
 	}

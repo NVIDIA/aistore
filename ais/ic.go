@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -163,7 +162,7 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Values) {
-	msg := &api.QueryMsg{}
+	msg := &xact.QueryMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
@@ -204,7 +203,7 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	var (
 		nl  nl.NotifListener
 		bck *cluster.Bck
-		msg = &api.QueryMsg{}
+		msg = &xact.QueryMsg{}
 	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
