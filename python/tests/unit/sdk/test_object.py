@@ -3,7 +3,6 @@ from unittest.mock import Mock, patch, mock_open
 
 from requests import Response
 
-from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     DEFAULT_CHUNK_SIZE,
@@ -17,48 +16,47 @@ from aistore.sdk.object import Object
 from aistore.sdk.types import ObjStream
 
 
-class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
+class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.mock_client = Mock()
         self.bck_name = "bucket name"
-
-        self.bck = Bucket(self.mock_client, self.bck_name)
-
         self.obj_name = "object name"
-        self.object = Object(self.bck, self.obj_name)
+        self.mock_bucket = Mock()
+        self.mock_bucket.client = self.mock_client
+        self.mock_bucket.name = self.bck_name
+        self.mock_bucket.qparam = {}
+        self.expected_params = {}
+        self.object = Object(self.mock_bucket, self.obj_name)
 
     def test_properties(self):
-        self.assertEqual(self.bck, self.object.bck)
-        self.assertEqual(self.obj_name, self.object.obj_name)
+        self.assertEqual(self.mock_bucket, self.object.bucket)
+        self.assertEqual(self.obj_name, self.object.name)
 
     def test_head(self):
         self.object.head()
 
-        self.bck.client.request.assert_called_with(
+        self.mock_client.request.assert_called_with(
             HTTP_METHOD_HEAD,
-            path=f"objects/{ self.bck.name }/{ self.obj_name }",
-            params=self.bck.qparam,
+            path=f"objects/{self.bck_name}/{self.obj_name}",
+            params=self.expected_params,
         )
 
     def test_get_default_params(self):
-        expected_request_params = self.bck.qparam
-        expected_request_params[QParamArchpath] = ""
-        self.get_exec_assert(expected_request_params)
+        self.expected_params[QParamArchpath] = ""
+        self.get_exec_assert()
 
     def test_get(self):
         archpath_param = "archpath"
         etl_name = "etl"
-        expected_request_params = self.bck.qparam
-        expected_request_params[QParamArchpath] = archpath_param
-        expected_request_params[QParamETLName] = etl_name
+        self.expected_params[QParamArchpath] = archpath_param
+        self.expected_params[QParamETLName] = etl_name
         self.get_exec_assert(
-            expected_request_params,
             archpath=archpath_param,
             chunk_size=DEFAULT_CHUNK_SIZE + 1,
             etl_name=etl_name,
         )
 
-    def get_exec_assert(self, expected_request_params, **kwargs):
+    def get_exec_assert(self, **kwargs):
         content_length = 123
         ais_check_val = "xyz"
         ais_check_type = "md5"
@@ -83,8 +81,8 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(expected_obj, res)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_GET,
-            path=f"objects/{ self.bck_name }/{ self.obj_name }",
-            params=expected_request_params,
+            path=f"objects/{self.bck_name}/{self.obj_name}",
+            params=self.expected_params,
             stream=True,
         )
 
@@ -94,20 +92,20 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         )
 
     def test_put_default_args(self):
-        self.put_exec_assert(None)
+        self.put_exec_assert(expected_data=None)
 
     def test_put_path(self):
         path = "path/to/data"
         data = b"any-data-bytes"
         with patch("builtins.open", mock_open(read_data=data)):
-            self.put_exec_assert(data, path=path)
+            self.put_exec_assert(expected_data=data, path=path)
 
     def test_put_content(self):
         data = b"user-supplied-bytes"
-        self.put_exec_assert(data, content=data)
+        self.put_exec_assert(expected_data=data, content=data)
 
     def put_exec_assert(self, expected_data, **kwargs):
-        request_path = f"/objects/{ self.bck_name }/{ self.obj_name }"
+        request_path = f"/objects/{self.bck_name}/{self.obj_name}"
         expected_headers = "headers"
         mock_headers = Mock()
         mock_headers.headers = expected_headers
@@ -117,7 +115,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,
             path=request_path,
-            params=self.bck.qparam,
+            params=self.expected_params,
             data=expected_data,
         )
 
@@ -125,5 +123,5 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.object.delete()
         path = f"objects/{self.bck_name}/{self.obj_name}"
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_DELETE, path=path, params=self.bck.qparam
+            HTTP_METHOD_DELETE, path=path, params=self.expected_params
         )

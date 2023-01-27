@@ -7,7 +7,6 @@ from aistore.sdk import Client
 from aistore.sdk.const import ProviderAIS
 from aistore.sdk.errors import InvalidBckProvider
 from aistore.sdk.object_range import ObjectRange
-from aistore.sdk.job import Job
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
 from tests.utils import random_string, create_and_put_object
 
@@ -68,7 +67,7 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def delete_test_helper(self, object_group, expected_object_names):
         job_id = object_group.delete()
-        Job(self.client).wait_for_job(job_id=job_id, timeout=30)
+        self.client.job().wait_for_job(job_id=job_id, timeout=30)
         existing_objects = self.bucket.list_objects(
             prefix=self.obj_prefix
         ).get_entries()
@@ -107,7 +106,7 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def evict_test_helper(self, object_group, expected_cached, expected_total):
         job_id = object_group.evict()
-        Job(self.client).wait_for_job(job_id=job_id, timeout=30)
+        self.client.job().wait_for_job(job_id=job_id, timeout=30)
         self.verify_cached_objects(expected_total, expected_cached)
 
     def test_evict_objects_local(self):
@@ -147,7 +146,7 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.evict_all_objects()
         # Fetch back a specific object group and verify cache status
         job_id = object_group.prefetch()
-        Job(self.client).wait_for_job(job_id=job_id, timeout=30)
+        self.client.job().wait_for_job(job_id=job_id, timeout=30)
         self.verify_cached_objects(expected_total, expected_cached)
 
     def test_prefetch_objects_local(self):
@@ -159,7 +158,7 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def evict_all_objects(self):
         job_id = self.bucket.objects(obj_names=self.obj_names).evict()
-        Job(self.client).wait_for_job(job_id=job_id, timeout=30)
+        self.client.job().wait_for_job(job_id=job_id, timeout=30)
         self.verify_cached_objects(10, [])
 
     def verify_cached_objects(self, expected_object_count, cached_range):

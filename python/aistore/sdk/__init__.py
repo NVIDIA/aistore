@@ -1,1 +1,1 @@
-from aistore.sdk.api import Client
+from aistore.sdk.client import Client

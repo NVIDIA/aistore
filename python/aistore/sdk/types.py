@@ -9,7 +9,9 @@ from typing import Any, Mapping, List, Iterator, Optional
 
 from pydantic import BaseModel, Field, StrictInt, StrictStr, validator
 import requests
+
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE, ProviderAIS
+
 
 # pylint: disable=too-few-public-methods,unused-variable
 
@@ -19,16 +21,20 @@ class Namespace(BaseModel):
     name: str = ""
 
 
-class Bck(BaseModel):
-    name: str
-    provider: str = ProviderAIS
-    ns: Namespace = None
-
-
 class ActionMsg(BaseModel):
     action: str
     name: str = ""
     value: Any = None
+
+
+class HttpError(BaseModel):
+    status: int
+    message: str = ""
+    method: str = ""
+    url_path: str = ""
+    remote_addr: str = ""
+    caller: str = ""
+    node: str = ""
 
 
 class NetInfo(BaseModel):
@@ -88,11 +94,17 @@ class BucketList(BaseModel):
         return entries
 
 
+class BucketModel(BaseModel):
+    name: str
+    provider: str = ProviderAIS
+    ns: Namespace = None
+
+
 class JobArgs(BaseModel):
     id: str = ""
     kind: str = ""
     daemon_id: str = ""
-    buckets: List[Bck] = None
+    buckets: List[BucketModel] = None
     only_running: bool = False
 
     def get_json(self):
@@ -148,74 +160,6 @@ class ObjectRange(BaseModel):
     pad_width: int = 0
     step: int = 1
     suffix: str = ""
-
-
-class HttpError(BaseModel):
-    status: int
-    message: str = ""
-    method: str = ""
-    url_path: str = ""
-    remote_addr: str = ""
-    caller: str = ""
-    node: str = ""
-
-
-class BucketLister:
-    _fetched: Optional[List[BucketEntry]] = []
-    _token: str = ""
-    _uuid: str = ""
-    _prefix: str = ""
-    _props: str = ""
-    _provider: str = ProviderAIS
-    _bck_name: str = ""
-    _client: "Client"
-
-    def __init__(
-        self,
-        client: "Client",
-        bck_name: str = "",
-        provider: str = ProviderAIS,
-        prefix: str = "",
-        props: str = "",
-        page_size: int = 0,
-    ):
-        self._client = client
-        self._prefix = prefix
-        self._props = props
-        self._bck_name = bck_name
-        self._provider = provider
-        self._page_size = page_size
-
-    def __iter__(self):
-        return self
-
-    def __next__(self) -> Iterator[BucketEntry]:
-        # Iterator is exhausted.
-        if len(self._fetched) == 0 and self._token == "" and self._uuid != "":
-            raise StopIteration
-        # Read the next page of objects.
-        if len(self._fetched) == 0:
-            value = {
-                "prefix": self._prefix,
-                "uuid": self._uuid,
-                "props": self._props,
-                "continuation_token": self._token,
-                "pagesize": self._page_size,
-            }
-            resp = self._client.bucket(self._bck_name, self._provider).list_objects(
-                prefix=self._prefix,
-                props=self._props,
-                uuid=self._uuid,
-                continuation_token=self._token,
-                page_size=self._page_size,
-            )
-            self._fetched = resp.get_entries()
-            self._uuid = resp.uuid
-            self._token = resp.continuation_token
-            # Empty page and token mean no more objects left.
-            if len(self._fetched) == 0 and self._token == "":
-                raise StopIteration
-        return self._fetched.pop(0)
 
 
 class ETL(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable

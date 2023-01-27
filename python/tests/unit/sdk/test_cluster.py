@@ -2,7 +2,7 @@ import unittest
 from typing import List
 from unittest.mock import Mock, create_autospec
 
-from aistore.sdk import Client
+from aistore.sdk.bucket import Bucket
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
@@ -11,12 +11,13 @@ from aistore.sdk.const import (
     ACT_LIST,
     ProviderAIS,
 )
-from aistore.sdk.types import Smap, ActionMsg, Bck
+from aistore.sdk.request_client import RequestClient
+from aistore.sdk.types import Smap, ActionMsg, BucketModel
 
 
 class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        self.mock_client = Mock(Client)
+        self.mock_client = Mock(RequestClient)
         self.cluster = Cluster(self.mock_client)
 
     def test_get_info(self):
@@ -38,7 +39,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
         self.list_buckets_exec_assert(expected_params)
 
     def list_buckets_exec_assert(self, expected_params, **kwargs):
-        expected_result = [Bck(name="bucket")]
+        expected_result = [Mock(Bucket)]
         self.mock_client.request_deserialize.return_value = expected_result
 
         res = self.cluster.list_buckets(**kwargs)
@@ -47,7 +48,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
             path="buckets",
-            res_model=List[Bck],
+            res_model=List[BucketModel],
             json=ActionMsg(action=ACT_LIST).dict(),
             params=expected_params,
         )

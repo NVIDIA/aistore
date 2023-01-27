@@ -14,7 +14,9 @@ from aistore.sdk.const import (
     QParamProvider,
 )
 
-from aistore.sdk.types import ActionMsg, Bck, Smap
+from aistore.sdk.types import BucketModel
+from aistore.sdk.request_client import RequestClient
+from aistore.sdk.types import ActionMsg, Smap
 
 
 # pylint: disable=unused-variable
@@ -26,7 +28,7 @@ class Cluster:
         None
     """
 
-    def __init__(self, client):
+    def __init__(self, client: RequestClient):
         self._client = client
 
     @property
@@ -66,7 +68,7 @@ class Cluster:
             Defaults to "ais". Empty provider returns buckets of all providers.
 
         Returns:
-            List[Bck]: A list of buckets
+            List[BucketModel]: A list of buckets
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
@@ -80,17 +82,14 @@ class Cluster:
         return self.client.request_deserialize(
             HTTP_METHOD_GET,
             path="buckets",
-            res_model=List[Bck],
+            res_model=List[BucketModel],
             json=action,
             params=params,
         )
 
     def is_aistore_running(self) -> bool:
         """
-        Returns True if cluster is ready, or false if cluster is still setting up.
-
-        Args:
-            None
+        Checks if cluster is ready or still setting up.
 
         Returns:
             bool: True if cluster is ready, or false if cluster is still setting up

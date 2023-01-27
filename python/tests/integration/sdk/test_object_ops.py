@@ -51,8 +51,6 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         num_objs = 10
 
         for i in range(num_objs):
-            s = "test string" * random.randrange(1, 10)
-            content = s.encode("utf-8")
             obj_name = f"obj{ i }"
             content = create_and_put_object(
                 client=self.client, bck_name=self.bck_name, obj_name=obj_name

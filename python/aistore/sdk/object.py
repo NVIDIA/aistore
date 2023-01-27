@@ -2,7 +2,6 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
-from __future__ import annotations  # pylint: disable=unused-variable
 from typing import NewType
 import requests
 
@@ -28,29 +27,31 @@ class Object:
     A class representing an object of a bucket bound to a client.
 
     Args:
+        bucket (Bucket): Bucket to which this object belongs
         obj_name (str): name of object
+
     """
 
-    def __init__(self, bck, obj_name: str):
-        self._bck = bck
-        self._obj_name = obj_name
+    def __init__(self, bucket: "Bucket", name: str):
+        self._bucket = bucket
+        self._client = bucket.client
+        self._bck_name = bucket.name
+        self._qparams = bucket.qparam
+        self._name = name
 
     @property
-    def bck(self):
-        """The custom type [Bck] bound to this object."""
-        return self._bck
+    def bucket(self):
+        """Bucket to which this object belongs"""
+        return self._bucket
 
     @property
-    def obj_name(self):
-        """The name of this object."""
-        return self._obj_name
+    def name(self):
+        """Name of this object"""
+        return self._name
 
     def head(self) -> Header:
         """
         Requests object properties.
-
-        Args:
-            None
 
         Returns:
             Response header with the object properties.
@@ -60,12 +61,12 @@ class Object:
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
-            requests.exeptions.HTTPError(404): The object does not exist
+            requests.exceptions.HTTPError(404): The object does not exist
         """
-        return self.bck.client.request(
+        return self._client.request(
             HTTP_METHOD_HEAD,
-            path=f"objects/{ self.bck.name }/{ self.obj_name }",
-            params=self.bck.qparam,
+            path=f"objects/{ self._bck_name}/{ self.name }",
+            params=self._qparams,
         ).headers
 
     def get(
@@ -91,13 +92,13 @@ class Object:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        params = self.bck.qparam
+        params = self._qparams.copy()
         params[QParamArchpath] = archpath
         if etl_name:
             params[QParamETLName] = etl_name
-        resp = self.bck.client.request(
+        resp = self._client.request(
             HTTP_METHOD_GET,
-            path=f"objects/{ self.bck.name }/{ self.obj_name }",
+            path=f"objects/{ self._bck_name }/{ self.name }",
             params=params,
             stream=True,
         )
@@ -133,25 +134,22 @@ class Object:
         if path and content:
             raise ValueError("path and content are mutually exclusive")
 
-        url = f"/objects/{ self.bck.name }/{ self.obj_name }"
+        url = f"/objects/{ self._bck_name }/{ self.name }"
         if path:
             with open(path, "rb") as reader:
                 data = reader.read()
         else:
             data = content
-        return self.bck.client.request(
+        return self._client.request(
             HTTP_METHOD_PUT,
             path=url,
-            params=self.bck.qparam,
+            params=self._qparams,
             data=data,
         ).headers
 
     def delete(self):
         """
         Delete an object from a bucket.
-
-        Args:
-            None
 
         Returns:
             None
@@ -161,10 +159,10 @@ class Object:
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
-            requests.exeptions.HTTPError(404): The object does not exist
+            requests.exceptions.HTTPError(404): The object does not exist
         """
-        self.bck.client.request(
+        self._client.request(
             HTTP_METHOD_DELETE,
-            path=f"objects/{ self.bck.name }/{ self.obj_name }",
-            params=self.bck.qparam,
+            path=f"objects/{ self._bck_name }/{ self.name }",
+            params=self._qparams,
         )

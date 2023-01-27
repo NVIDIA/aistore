@@ -2,8 +2,8 @@ import unittest
 from unittest import mock
 from unittest.mock import Mock
 
-from aistore.sdk import Client
 from aistore.sdk.bucket import Bucket, Header
+from aistore.sdk.object_iterator import ObjectIterator
 
 from aistore.sdk.const import (
     ACT_CREATE_BCK,
@@ -21,14 +21,14 @@ from aistore.sdk.const import (
     ACT_LIST,
     HTTP_METHOD_GET,
     ACT_ETL_BCK,
+    QParamProvider,
 )
 from aistore.sdk.errors import InvalidBckProvider
+from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     ActionMsg,
     BucketList,
-    BucketLister,
     BucketEntry,
-    Bck,
     Namespace,
 )
 
@@ -39,7 +39,7 @@ namespace = "namespace"
 # pylint: disable=too-many-public-methods
 class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        self.mock_client = Mock(Client)
+        self.mock_client = Mock(RequestClient)
         self.amz_bck = Bucket(self.mock_client, bck_name, provider=ProviderAmazon)
         self.amz_bck_params = self.amz_bck.qparam.copy()
         self.ais_bck = Bucket(
@@ -48,18 +48,23 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.ais_bck_params = self.ais_bck.qparam.copy()
 
     def test_default_props(self):
-        self.ais_bck = Bucket(self.mock_client, bck_name)
-        self.assertEqual(ProviderAIS, self.ais_bck.provider)
-        self.assertIsNone(self.ais_bck.namespace)
+        bucket = Bucket(self.mock_client, bck_name)
+        self.assertEqual({QParamProvider: ProviderAIS}, bucket.qparam)
+        self.assertEqual(ProviderAIS, bucket.provider)
+        self.assertIsNone(bucket.namespace)
 
     def test_properties(self):
         self.assertEqual(self.mock_client, self.ais_bck.client)
         expected_ns = Namespace(uuid="", name=namespace)
-        expected_bck = Bck(name=bck_name, provider=ProviderAIS, ns=expected_ns)
-        self.assertEqual(expected_bck, self.ais_bck.bck)
-        self.assertEqual(ProviderAIS, self.ais_bck.provider)
-        self.assertEqual(bck_name, self.ais_bck.name)
-        self.assertEqual(expected_ns, self.ais_bck.namespace)
+        client = RequestClient("test client name")
+        bck = Bucket(
+            client=client, name=bck_name, provider=ProviderAmazon, ns=expected_ns
+        )
+        self.assertEqual(client, bck.client)
+        self.assertEqual(ProviderAmazon, bck.provider)
+        self.assertEqual({QParamProvider: ProviderAmazon}, bck.qparam)
+        self.assertEqual(bck_name, bck.name)
+        self.assertEqual(expected_ns, bck.namespace)
 
     def test_create_invalid_provider(self):
         self.assertRaises(InvalidBckProvider, self.amz_bck.create)
@@ -112,7 +117,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_evict_success(self):
         for keep_md in [True, False]:
-            self.amz_bck_params[QParamKeepBckMD] = keep_md
+            self.amz_bck_params[QParamKeepBckMD] = str(keep_md)
             self.amz_bck.evict(keep_md=keep_md)
             self.mock_client.request.assert_called_with(
                 HTTP_METHOD_DELETE,
@@ -220,34 +225,8 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(result, return_val)
 
     def test_list_objects_iter(self):
-        prefix = "prefix-"
-        props = "name"
-        page_size = 123
-        expected_res = BucketLister(
-            self.mock_client,
-            bck_name=bck_name,
-            provider=ProviderAIS,
-            prefix=prefix,
-            props=props,
-            page_size=page_size,
-        )
-        self.assertEqual(
-            expected_res.__dict__,
-            self.ais_bck.list_objects_iter(prefix, props, page_size).__dict__,
-        )
-
-    def test_list_objects_iter_default_params(self):
-        expected_res = BucketLister(
-            self.mock_client,
-            bck_name=bck_name,
-            provider=ProviderAIS,
-            prefix="",
-            props="",
-            page_size=0,
-        )
-        self.assertEqual(
-            expected_res.__dict__,
-            self.ais_bck.list_objects_iter().__dict__,
+        self.assertIsInstance(
+            self.ais_bck.list_objects_iter("prefix-", "obj props", 123), ObjectIterator
         )
 
     def test_list_all_objects(self):
@@ -392,7 +371,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_object(self):
         new_obj = self.ais_bck.object(obj_name="name")
-        self.assertEqual(self.ais_bck, new_obj.bck)
+        self.assertEqual(self.ais_bck, new_obj.bucket)
 
 
 if __name__ == "__main__":

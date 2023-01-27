@@ -6,6 +6,7 @@ from __future__ import annotations  # pylint: disable=unused-variable
 from typing import Dict, List, NewType
 import requests
 
+from aistore.sdk.object_iterator import ObjectIterator
 from aistore.sdk.const import (
     ACT_COPY_BCK,
     ACT_CREATE_BCK,
@@ -25,14 +26,13 @@ from aistore.sdk.const import (
 )
 
 from aistore.sdk.errors import InvalidBckProvider
+from aistore.sdk.request_client import RequestClient
 from aistore.sdk.object_group import ObjectGroup
 from aistore.sdk.object import Object
 from aistore.sdk.types import (
     ActionMsg,
-    Bck,
     BucketEntry,
     BucketList,
-    BucketLister,
     ObjectRange,
     Namespace,
 )
@@ -46,27 +46,29 @@ class Bucket:
     A class representing a bucket that contains user data.
 
     Args:
-        bck_name (str): name of bucket
+        client (RequestClient): Client for interfacing with AIS cluster
+        name (str): name of bucket
         provider (str, optional): provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
         ns (Namespace, optional): namespace of bucket, defaults to None
     """
 
     def __init__(
-        self, client, bck_name: str, provider: str = ProviderAIS, ns: Namespace = None
+        self,
+        client: RequestClient,
+        name: str,
+        provider: str = ProviderAIS,
+        ns: Namespace = None,
     ):
         self._client = client
-        self._bck = Bck(name=bck_name, provider=provider, ns=ns)
+        self._name = name
+        self._provider = provider
+        self._namespace = ns
         self._qparam = {QParamProvider: provider}
 
     @property
     def client(self):
         """The client bound to this bucket."""
         return self._client
-
-    @property
-    def bck(self):
-        """The custom type [Bck] corresponding to this bucket."""
-        return self._bck
 
     @property
     def qparam(self):
@@ -76,17 +78,17 @@ class Bucket:
     @property
     def provider(self):
         """The provider for this bucket."""
-        return self.bck.provider
+        return self._provider
 
     @property
     def name(self):
         """The name of this bucket."""
-        return self.bck.name
+        return self._name
 
     @property
     def namespace(self):
         """The namespace for this bucket."""
-        return self.bck.ns
+        return self._namespace
 
     def create(self):
         """
@@ -159,7 +161,7 @@ class Bucket:
         params = self.qparam.copy()
         params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
         resp = self.make_request(HTTP_METHOD_POST, ACT_MOVE_BCK, params=params)
-        self.bck.name = to_bck
+        self._name = to_bck
         return resp.text
 
     def evict(self, keep_md: bool = False):
@@ -184,15 +186,12 @@ class Bucket:
         """
         self.verify_cloud_bucket()
         params = self.qparam.copy()
-        params[QParamKeepBckMD] = keep_md
+        params[QParamKeepBckMD] = str(keep_md)
         self.make_request(HTTP_METHOD_DELETE, ACT_EVICT_REMOTE_BCK, params=params)
 
     def head(self) -> Header:
         """
         Requests bucket properties.
-
-        Args:
-            None
 
         Returns:
             Response header with the bucket properties
@@ -266,7 +265,7 @@ class Bucket:
             page_size (int, optional): Return at most "page_size" objects.
                 The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
-                Defaults to "0" - return maximum number objects.
+                Defaults to "0" - return maximum number of objects.
             uuid (str, optional): Job ID, required to get the next page of objects
             continuation_token (str, optional): Marks the object to start reading the next page
 
@@ -304,7 +303,7 @@ class Bucket:
         prefix: str = "",
         props: str = "",
         page_size: int = 0,
-    ) -> BucketLister:
+    ) -> ObjectIterator:
         """
         Returns an iterator for all objects in bucket
 
@@ -317,7 +316,7 @@ class Bucket:
                 Defaults to "0" - return maximum number objects
 
         Returns:
-            BucketLister: object iterator
+            ObjectIterator: object iterator
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -327,14 +326,13 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        return BucketLister(
-            self.client,
-            bck_name=self.name,
-            provider=self.provider,
-            prefix=prefix,
-            props=props,
-            page_size=page_size,
-        )
+
+        def fetch_objects(uuid, token):
+            return self.list_objects(
+                prefix, props, page_size, uuid=uuid, continuation_token=token
+            )
+
+        return ObjectIterator(fetch_objects)
 
     def list_all_objects(
         self,
@@ -435,7 +433,10 @@ class Bucket:
         Returns:
             The object created.
         """
-        return Object(bck=self, obj_name=obj_name)
+        return Object(
+            bucket=self,
+            name=obj_name,
+        )
 
     def objects(
         self,

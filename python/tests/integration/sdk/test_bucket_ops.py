@@ -9,7 +9,6 @@ from aistore.sdk.errors import ErrBckNotFound, InvalidBckProvider
 from aistore.sdk import Client
 import requests
 
-from aistore.sdk.job import Job
 from tests.utils import create_and_put_object, random_string
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
 
@@ -52,7 +51,7 @@ class TestBucketOps(unittest.TestCase):  # pylint: disable=unused-variable
         ]
         if len(object_names) > 0:
             job_id = cloud_bck.objects(obj_names=object_names).delete()
-            Job(self.client).wait_for_job(job_id=job_id, timeout=30)
+            self.client.job().wait_for_job(job_id=job_id, timeout=30)
 
     def test_bucket(self):
         res = self.client.cluster().list_buckets()

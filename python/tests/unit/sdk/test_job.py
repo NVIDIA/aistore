@@ -3,7 +3,8 @@ from unittest.mock import Mock, patch, call
 
 from aistore.sdk.const import QParamWhat, QParamForce, HTTP_METHOD_GET, HTTP_METHOD_PUT
 from aistore.sdk.errors import Timeout
-from aistore.sdk.types import JobStatus, JobArgs, Bck
+from aistore.sdk.request_client import RequestClient
+from aistore.sdk.types import JobStatus, JobArgs, BucketModel
 from aistore.sdk.utils import probing_frequency
 from aistore.sdk.job import Job
 
@@ -128,7 +129,7 @@ class TestJob(unittest.TestCase):
     def test_job_start(self):
         job_kind = "job kind"
         daemon_id = "daemon id"
-        buckets = [Bck(name="test bucket")]
+        buckets = [BucketModel(client=Mock(RequestClient), name="name")]
         expected_json = JobArgs(
             kind=job_kind, daemon_id=daemon_id, buckets=buckets
         ).get_json()

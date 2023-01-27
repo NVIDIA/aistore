@@ -6,9 +6,11 @@ from __future__ import annotations  # pylint: disable=unused-variable
 from typing import List
 import time
 
+from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import HTTP_METHOD_GET, HTTP_METHOD_PUT, QParamWhat, QParamForce
 from aistore.sdk.errors import Timeout
-from aistore.sdk.types import Bck, JobStatus, JobArgs
+from aistore.sdk.request_client import RequestClient
+from aistore.sdk.types import JobStatus, JobArgs
 from aistore.sdk.utils import probing_frequency
 
 
@@ -18,10 +20,10 @@ class Job:
     A class containing job-related functions.
 
     Args:
-        None
+        client (RequestClient): Client for interfacing with AIS cluster
     """
 
-    def __init__(self, client):
+    def __init__(self, client: RequestClient):
         self._client = client
 
     @property
@@ -109,7 +111,7 @@ class Job:
         job_kind: str = "",
         daemon_id: str = "",
         force: bool = False,
-        buckets: List[Bck] = None,
+        buckets: List[Bucket] = None,
     ) -> str:
         """
         Start a job and return its ID.
@@ -118,7 +120,7 @@ class Job:
             job_kind (str, optional): Kind of the job (for supported kinds, see api/apc/const.go). Empty - all kinds.
             daemon_id (str, optional): Return jobs only running on the daemon_id.
             force (bool, optional): Override existing restrictions for a bucket (e.g., run LRU eviction even if the bucket has LRU disabled).
-            buckets (List[Bck], optional): List of one or more buckets; applicable only for jobs that have bucket scope (for details and full enumeration, see xact/table.go).
+            buckets (List[Bucket], optional): List of one or more buckets; applicable only for jobs that have bucket scope (for details and full enumeration, see xact/table.go).
 
         Returns:
             The running job ID.
