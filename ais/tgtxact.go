@@ -80,19 +80,19 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 
 func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 	var (
-		xactArgs api.XactReqArgs
-		bck      *cluster.Bck
+		xargs api.XactArgs
+		bck   *cluster.Bck
 	)
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
 		return
 	}
-	if err := cos.MorphMarshal(msg.Value, &xactArgs); err != nil {
+	if err := cos.MorphMarshal(msg.Value, &xargs); err != nil {
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 		return
 	}
-	if !xactArgs.Bck.IsEmpty() {
-		bck = cluster.CloneBck(&xactArgs.Bck)
+	if !xargs.Bck.IsEmpty() {
+		bck = cluster.CloneBck(&xargs.Bck)
 		if err := bck.Init(t.owner.bmd); err != nil && msg.Action != apc.ActXactStop {
 			// proceed anyway to stop
 			t.writeErr(w, r, err)
@@ -101,18 +101,18 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case apc.ActXactStart:
-		debug.Assert(xact.IsValidKind(xactArgs.Kind), xactArgs.String())
-		if err := t.xstart(r, &xactArgs, bck); err != nil {
+		debug.Assert(xact.IsValidKind(xargs.Kind), xargs.String())
+		if err := t.xstart(r, &xargs, bck); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
 	case apc.ActXactStop:
-		debug.Assert(xact.IsValidKind(xactArgs.Kind) || xact.IsValidUUID(xactArgs.ID), xactArgs.String())
+		debug.Assert(xact.IsValidKind(xargs.Kind) || xact.IsValidUUID(xargs.ID), xargs.String())
 		err := cmn.ErrXactUserAbort
 		if msg.Name == cmn.ErrXactICNotifAbort.Error() {
 			err = cmn.ErrXactICNotifAbort
 		}
-		flt := xreg.XactFilter{ID: xactArgs.ID, Kind: xactArgs.Kind, Bck: bck}
+		flt := xreg.XactFilter{ID: xargs.ID, Kind: xargs.Kind, Bck: bck}
 		xreg.DoAbort(flt, err)
 	default:
 		t.writeErrAct(w, r, msg.Action)
@@ -150,7 +150,7 @@ func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xac
 	}
 }
 
-func (t *target) xstart(r *http.Request, args *api.XactReqArgs, bck *cluster.Bck) error {
+func (t *target) xstart(r *http.Request, args *api.XactArgs, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 

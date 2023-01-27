@@ -100,7 +100,7 @@ func testETLMultiObj(t *testing.T, etlName string, fromBck, toBck cmn.Bck, fileR
 	xid, err := api.ETLMultiObj(baseParams, fromBck, tcoMsg)
 	tassert.CheckFatal(t, err)
 
-	wargs := api.XactReqArgs{ID: xid, Kind: apc.ActETLObjects}
+	wargs := api.XactArgs{ID: xid, Kind: apc.ActETLObjects}
 	err = api.WaitForXactionIdle(baseParams, wargs)
 	tassert.CheckFatal(t, err)
 

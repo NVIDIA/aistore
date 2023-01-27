@@ -405,8 +405,8 @@ func startClusterRebalanceHandler(c *cli.Context) (err error) {
 }
 
 func stopClusterRebalanceHandler(c *cli.Context) error {
-	xactArgs := api.XactReqArgs{Kind: apc.ActRebalance, OnlyRunning: true}
-	snap, err := getXactSnap(xactArgs)
+	xargs := api.XactArgs{Kind: apc.ActRebalance, OnlyRunning: true}
+	snap, err := getXactSnap(xargs)
 	if err != nil {
 		return err
 	}
@@ -414,8 +414,8 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 		return errors.New("rebalance is not running")
 	}
 
-	xactArgs.ID, xactArgs.OnlyRunning = snap.ID, false
-	if err := api.AbortXaction(apiBP, xactArgs); err != nil {
+	xargs.ID, xargs.OnlyRunning = snap.ID, false
+	if err := api.AbortXaction(apiBP, xargs); err != nil {
 		return err
 	}
 	fmt.Fprintf(c.App.Writer, "Stopped %s[%s]\n", apc.ActRebalance, snap.ID)
@@ -437,12 +437,12 @@ func showClusterRebalanceHandler(c *cli.Context) (err error) {
 			daemonID, xid = sid, ""
 		}
 	}
-	xactArgs := api.XactReqArgs{
+	xargs := api.XactArgs{
 		ID:          xid,
 		Kind:        apc.ActRebalance,
 		DaemonID:    daemonID,
 		OnlyRunning: !flagIsSet(c, allJobsFlag),
 	}
-	_, err = xactList(c, xactArgs, false)
+	_, err = xactList(c, xargs, false)
 	return
 }

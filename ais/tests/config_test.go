@@ -156,7 +156,7 @@ func TestConfigSetGlobal(t *testing.T) {
 	checkConfig(t, smap, check)
 
 	// wait for ec
-	flt := api.XactReqArgs{Kind: apc.ActECEncode}
+	flt := api.XactArgs{Kind: apc.ActECEncode}
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
@@ -179,7 +179,7 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 		"expected 'ec.enabled' to be %v, got: %v", config.EC.Enabled, daemonConfig.EC.Enabled)
 
 	// wait for ec
-	flt := api.XactReqArgs{Kind: apc.ActECEncode}
+	flt := api.XactArgs{Kind: apc.ActECEncode}
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
@@ -277,7 +277,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		"expected 'ec.Enabled' to be %v, got: %v", newECEnabled, daemonConfig.EC.Enabled)
 
 	// wait for ec
-	flt := api.XactReqArgs{Kind: apc.ActECEncode}
+	flt := api.XactArgs{Kind: apc.ActECEncode}
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 

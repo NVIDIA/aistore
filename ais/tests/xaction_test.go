@@ -24,7 +24,7 @@ func TestXactionNotFound(t *testing.T) {
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
-	_, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: "dummy-" + cos.GenUUID()})
+	_, err := api.QueryXactionSnaps(baseParams, api.XactArgs{ID: "dummy-" + cos.GenUUID()})
 	tools.CheckErrIsNotFound(t, err)
 }
 
@@ -40,12 +40,12 @@ func TestXactionAllStatus(t *testing.T) {
 	}
 	for _, test := range tests {
 		for kind := range xact.Table {
-			xactArgs := api.XactReqArgs{Kind: kind, OnlyRunning: test.running}
+			xargs := api.XactArgs{Kind: kind, OnlyRunning: test.running}
 			if mono.NanoTime()&0x1 == 0x1 {
 				_, xname := xact.GetKindName(kind)
-				xactArgs.Kind = xname
+				xargs.Kind = xname
 			}
-			vec, err := api.GetAllXactionStatus(baseParams, xactArgs, test.force)
+			vec, err := api.GetAllXactionStatus(baseParams, xargs, test.force)
 			tassert.CheckFatal(t, err)
 			if len(vec) == 0 {
 				continue
@@ -79,8 +79,8 @@ func TestXactionAllStatus(t *testing.T) {
 			// re-check after a while
 			time.Sleep(2 * time.Second)
 
-			xactArgs = api.XactReqArgs{Kind: kind, OnlyRunning: false}
-			vec, err = api.GetAllXactionStatus(baseParams, xactArgs, test.force)
+			xargs = api.XactArgs{Kind: kind, OnlyRunning: false}
+			vec, err = api.GetAllXactionStatus(baseParams, xargs, test.force)
 			tassert.CheckFatal(t, err)
 			for _, a := range aborted {
 				found := false

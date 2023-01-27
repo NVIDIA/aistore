@@ -80,7 +80,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	wargs := api.XactReqArgs{ID: xid, Kind: apc.ActCopyObjects}
+	wargs := api.XactArgs{ID: xid, Kind: apc.ActCopyObjects}
 	api.WaitForXactionIdle(baseParams, wargs)
 
 	tlog.Logln("prefix: test/")
@@ -188,7 +188,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			if erv.Load() != nil {
 				tassert.CheckFatal(t, erv.Load().(error))
 			}
-			wargs := api.XactReqArgs{Kind: apc.ActCopyObjects, Bck: m.bck}
+			wargs := api.XactArgs{Kind: apc.ActCopyObjects, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
 			msg := &apc.LsoMsg{Prefix: m.prefix}

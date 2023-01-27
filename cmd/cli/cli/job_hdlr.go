@@ -307,8 +307,8 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 		return fmt.Errorf("%q requires bucket to run", xname)
 	}
 
-	xactArgs := api.XactReqArgs{Kind: xname, Bck: bck, DaemonID: sid}
-	id, err := api.StartXaction(apiBP, xactArgs)
+	xargs := api.XactArgs{Kind: xname, Bck: bck, DaemonID: sid}
+	id, err := api.StartXaction(apiBP, xargs)
 	if err != nil {
 		return err
 	}
@@ -681,10 +681,10 @@ func startLRUHandler(c *cli.Context) (err error) {
 	}
 
 	var (
-		id       string
-		xactArgs = api.XactReqArgs{Kind: apc.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
+		id    string
+		xargs = api.XactArgs{Kind: apc.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
 	)
-	if id, err = api.StartXaction(apiBP, xactArgs); err != nil {
+	if id, err = api.StartXaction(apiBP, xargs); err != nil {
 		return
 	}
 
@@ -821,8 +821,8 @@ func stopJobHandler(c *cli.Context) error {
 
 	// query
 	msg := formatXactMsg(xactID, xname, bck)
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind}
-	snap, err := getXactSnap(xactArgs)
+	xargs := api.XactArgs{ID: xactID, Kind: xactKind}
+	snap, err := getXactSnap(xargs)
 	if err != nil {
 		return fmt.Errorf("cannot stop %s: %v", msg, err)
 	}
@@ -852,7 +852,7 @@ func stopJobHandler(c *cli.Context) error {
 	}
 
 	// abort
-	args := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: snap.Bck}
+	args := api.XactArgs{ID: xactID, Kind: xactKind, Bck: snap.Bck}
 	if err := api.AbortXaction(apiBP, args); err != nil {
 		return err
 	}
@@ -874,7 +874,7 @@ func stopXactionKind(c *cli.Context, xactKind, xname string, bck cmn.Bck) error 
 		var (
 			i      = strings.IndexByte(ki, xact.LeftID[0])
 			xactID = ki[i+1 : len(ki)-1] // extract UUID from "name[UUID]"
-			args   = api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
+			args   = api.XactArgs{ID: xactID, Kind: xactKind, Bck: bck}
 			msg    = formatXactMsg(xactID, xname, bck)
 		)
 		if err := api.AbortXaction(apiBP, args); err != nil {
@@ -1021,13 +1021,13 @@ func waitJobHandler(c *cli.Context) error {
 	}
 	var (
 		msg         = formatXactMsg(xactID, xname, bck)
-		xactArgs    = api.XactReqArgs{ID: xactID, Kind: xactKind}
+		xargs       = api.XactArgs{ID: xactID, Kind: xactKind}
 		refreshRate = calcRefreshRate(c)
 		total       time.Duration
 		prompted    bool
 	)
 	for {
-		status, err := api.GetOneXactionStatus(apiBP, xactArgs)
+		status, err := api.GetOneXactionStatus(apiBP, xargs)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 				actionWarn(c, msg+" not found")

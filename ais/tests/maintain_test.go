@@ -94,7 +94,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		_, err = tools.WaitForClusterState(proxyURL, "target is back",
 			m.smap.Version, m.smap.CountActivePs(), m.smap.CountTargets())
-		args := api.XactReqArgs{ID: rebID, Timeout: rebalanceTimeout}
+		args := api.XactArgs{ID: rebID, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 	}()
@@ -104,7 +104,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Wait for reb to complete
-	args := api.XactReqArgs{ID: rebID, Timeout: rebalanceTimeout}
+	args := api.XactArgs{ID: rebID, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -139,7 +139,7 @@ func TestMaintenanceMD(t *testing.T) {
 	)
 
 	t.Cleanup(func() {
-		args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+		args := api.XactArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 		api.WaitForXactionIC(baseParams, args)
 	})
 
@@ -235,7 +235,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	}
 	if dcm != nil {
 		tlog.Logf("Canceling maintenance for %s\n", dcm.ID())
-		args := api.XactReqArgs{Kind: apc.ActRebalance}
+		args := api.XactArgs{Kind: apc.ActRebalance}
 		err = api.AbortXaction(baseParams, args)
 		tassert.CheckError(t, err)
 		val := &apc.ActValRmNode{DaemonID: dcm.ID()}
@@ -243,7 +243,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tassert.CheckError(t, err)
 		tools.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
 	} else {
-		args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+		args := api.XactArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckError(t, err)
 	}

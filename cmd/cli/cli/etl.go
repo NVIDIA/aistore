@@ -523,14 +523,14 @@ func etlBucketHandler(c *cli.Context) error {
 		return nil
 	}
 
-	if _, err := api.WaitForXactionIC(apiBP, api.XactReqArgs{ID: xid}); err != nil {
+	if _, err := api.WaitForXactionIC(apiBP, api.XactArgs{ID: xid}); err != nil {
 		return err
 	}
 	if !flagIsSet(c, cpBckDryRunFlag) {
 		return nil
 	}
 
-	snaps, err := api.QueryXactionSnaps(apiBP, api.XactReqArgs{ID: xid})
+	snaps, err := api.QueryXactionSnaps(apiBP, api.XactArgs{ID: xid})
 	if err != nil {
 		return err
 	}

@@ -275,7 +275,7 @@ func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, 
 }
 
 func WaitForResilvering(t *testing.T, bp api.BaseParams, target *cluster.Snode) {
-	args := api.XactReqArgs{Kind: apc.ActResilver, Timeout: resilverTimeout}
+	args := api.XactArgs{Kind: apc.ActResilver, Timeout: resilverTimeout}
 	if target != nil {
 		args.DaemonID = target.ID()
 		time.Sleep(2 * time.Second)

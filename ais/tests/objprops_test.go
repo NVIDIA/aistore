@@ -129,7 +129,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 	}
-	args := api.XactReqArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args := api.XactArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 

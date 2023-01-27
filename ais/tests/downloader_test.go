@@ -516,7 +516,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("evicting remote bucket...")
 			xid, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			args := api.XactReqArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+			args := api.XactArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, args)
 			tassert.CheckFatal(t, err)
 
@@ -547,7 +547,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("evicting remote bucket...")
 			xid, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			args = api.XactReqArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+			args = api.XactArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, args)
 			tassert.CheckFatal(t, err)
 

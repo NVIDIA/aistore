@@ -85,7 +85,7 @@ func BenchmarkECEncode(b *testing.B) {
 				_, err := api.SetBucketProps(baseParams, bck, bckProps)
 				tassert.CheckFatal(b, err)
 
-				reqArgs := api.XactReqArgs{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
+				reqArgs := api.XactArgs{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
 				_, err = api.WaitForXactionIC(baseParams, reqArgs)
 				tassert.CheckFatal(b, err)
 			})
@@ -136,7 +136,7 @@ func BenchmarkECRebalance(b *testing.B) {
 				_, err := api.SetBucketProps(baseParams, bck, bckProps)
 				tassert.CheckFatal(b, err)
 
-				reqArgs := api.XactReqArgs{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
+				reqArgs := api.XactArgs{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
 				_, err = api.WaitForXactionIC(baseParams, reqArgs)
 				tassert.CheckFatal(b, err)
 

@@ -359,7 +359,7 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 			all         = flagIsSet(c, allJobsFlag)
 			onlyActive  = !all
 			xactKind, _ = xact.GetKindName(name)
-			xactArgs    = api.XactReqArgs{
+			xargs       = api.XactArgs{
 				ID:          xid,
 				Kind:        xactKind,
 				DaemonID:    daemonID,
@@ -367,7 +367,7 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 				OnlyRunning: onlyActive,
 			}
 		)
-		return xactList(c, xactArgs, caption)
+		return xactList(c, xargs, caption)
 	}
 }
 
@@ -425,14 +425,14 @@ func showStorageHandler(c *cli.Context) (err error) {
 	return daemonDiskStats(c, "")
 }
 
-func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, error) {
+func xactList(c *cli.Context, xargs api.XactArgs, caption bool) (int, error) {
 	// override the caller's choice if explicitly identified
-	if xactArgs.ID != "" {
-		debug.Assert(xact.IsValidUUID(xactArgs.ID), xactArgs.ID)
-		xactArgs.OnlyRunning = false
+	if xargs.ID != "" {
+		debug.Assert(xact.IsValidUUID(xargs.ID), xargs.ID)
+		xargs.OnlyRunning = false
 	}
 
-	xs, err := queryXactions(xactArgs)
+	xs, err := queryXactions(xargs)
 	if err != nil {
 		return 0, err
 	}
@@ -451,8 +451,8 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, erro
 	for _, xactKind := range allXactKinds {
 		xactIDs := extractXactIDsForKind(xs, xactKind)
 		for _, xid := range xactIDs {
-			xactArgs.Kind, xactArgs.ID = xactKind, xid
-			l, err := xlistByKindID(c, xactArgs, caption, xs)
+			xargs.Kind, xargs.ID = xactKind, xid
+			l, err := xlistByKindID(c, xargs, caption, xs)
 			if err != nil {
 				actionWarn(c, err.Error())
 			}
@@ -462,15 +462,15 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, erro
 	return ll, nil
 }
 
-func xlistByKindID(c *cli.Context, xactArgs api.XactReqArgs, caption bool, xs api.XactMultiSnap) (int, error) {
-	// first, extract snaps for: xactArgs.ID, Kind
+func xlistByKindID(c *cli.Context, xargs api.XactArgs, caption bool, xs api.XactMultiSnap) (int, error) {
+	// first, extract snaps for: xargs.ID, Kind
 	filteredXs := make(api.XactMultiSnap, 8)
 	for tid, snaps := range xs {
 		for _, snap := range snaps {
-			if snap.ID != xactArgs.ID {
+			if snap.ID != xargs.ID {
 				continue
 			}
-			debug.Assert(snap.Kind == xactArgs.Kind)
+			debug.Assert(snap.Kind == xargs.Kind)
 			if _, ok := filteredXs[tid]; !ok {
 				filteredXs[tid] = make([]*cluster.Snap, 0, 8)
 			}
@@ -487,7 +487,7 @@ func xlistByKindID(c *cli.Context, xactArgs api.XactReqArgs, caption bool, xs ap
 		if len(snaps) == 0 {
 			continue
 		}
-		if xactArgs.DaemonID != "" && xactArgs.DaemonID != tid {
+		if xargs.DaemonID != "" && xargs.DaemonID != tid {
 			continue
 		}
 		if !snaps[0].SrcBck.IsEmpty() {
@@ -502,9 +502,9 @@ func xlistByKindID(c *cli.Context, xactArgs api.XactReqArgs, caption bool, xs ap
 		return dts[i].DaemonID < dts[j].DaemonID // ascending by node id/name
 	})
 
-	_, xname := xact.GetKindName(xactArgs.Kind)
+	_, xname := xact.GetKindName(xargs.Kind)
 	if caption {
-		jobCptn(c, xname, xactArgs.OnlyRunning, xactArgs.ID, xactArgs.DaemonID != "")
+		jobCptn(c, xname, xargs.OnlyRunning, xargs.ID, xargs.DaemonID != "")
 	}
 
 	l := len(dts)
@@ -513,7 +513,7 @@ func xlistByKindID(c *cli.Context, xactArgs api.XactReqArgs, caption bool, xs ap
 		hideHeader = flagIsSet(c, noHeaderFlag)
 		err        error
 	)
-	switch xactArgs.Kind {
+	switch xargs.Kind {
 	case apc.ActECGet:
 		if hideHeader {
 			return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECGetNoHdrTmpl, nil, usejs)

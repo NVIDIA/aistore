@@ -44,7 +44,7 @@ func showRebalanceHandler(c *cli.Context) error {
 		keepMonitoring = flagIsSet(c, refreshFlag)
 		refreshRate    = calcRefreshRate(c)
 		hideHeader     = flagIsSet(c, noHeaderFlag)
-		xactArgs       = api.XactReqArgs{Kind: apc.ActRebalance}
+		xargs          = api.XactArgs{Kind: apc.ActRebalance}
 
 		latestAborted, latestFinished bool
 	)
@@ -54,28 +54,28 @@ func showRebalanceHandler(c *cli.Context) error {
 	if c.NArg() > 0 {
 		arg := c.Args().Get(0)
 		if xact.IsValidRebID(arg) {
-			xactArgs.ID = arg
+			xargs.ID = arg
 		} else if sid, _, err := getNodeIDName(c, arg); err == nil {
-			xactArgs.DaemonID = sid
+			xargs.DaemonID = sid
 		}
 		if c.NArg() > 1 {
 			arg = c.Args().Get(1)
 			if xact.IsValidRebID(arg) {
-				xactArgs.ID = arg
+				xargs.ID = arg
 			} else if sid, _, err := getNodeIDName(c, arg); err == nil {
-				xactArgs.DaemonID = sid
+				xargs.DaemonID = sid
 			}
 		}
 	}
 	// show running unless --all
 	if !flagIsSet(c, allJobsFlag) {
-		xactArgs.OnlyRunning = true
+		xargs.OnlyRunning = true
 	}
 
 	// run until rebalance is completed
 	var printed bool
 	for {
-		rebSnaps, err := api.QueryXactionSnaps(apiBP, xactArgs)
+		rebSnaps, err := api.QueryXactionSnaps(apiBP, xargs)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok {
 				if herr.Status == http.StatusNotFound {
@@ -93,7 +93,7 @@ func showRebalanceHandler(c *cli.Context) error {
 			allSnaps          = make([]*targetRebSnap, 0, 32)
 		)
 		for daemonID, daemonStats := range rebSnaps {
-			if xactArgs.DaemonID != "" && xactArgs.DaemonID != daemonID {
+			if xargs.DaemonID != "" && xargs.DaemonID != daemonID {
 				continue
 			}
 			for _, sts := range daemonStats {

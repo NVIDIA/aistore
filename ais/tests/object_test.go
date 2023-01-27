@@ -344,28 +344,28 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("PrefetchList %d\n", len(files))
 	prefetchListID, err := api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args := api.XactReqArgs{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args := api.XactArgs{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("PrefetchRange\n")
 	prefetchRangeID, err := api.PrefetchRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: prefetchRangeID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = api.XactArgs{ID: prefetchRangeID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EvictList\n")
 	evictListID, err := api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args = api.XactArgs{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EvictRange\n")
 	evictRangeID, err := api.EvictRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: evictRangeID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args = api.XactArgs{ID: evictRangeID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -395,13 +395,13 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	// Prefetch/Evict should work
 	prefetchListID, err = api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = api.XactArgs{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	evictListID, err = api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args = api.XactArgs{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -409,7 +409,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
 	deleteID, err := api.DeleteList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args = api.XactArgs{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -417,7 +417,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
 	deleteID, err = api.DeleteList(baseParams, bckLocal, files)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args = api.XactArgs{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -899,7 +899,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	tassert.Fatalf(t, bProps.Mirror.Enabled, "test property hasn't changed")
 
 	// Wait for async mirroring to finish
-	flt := api.XactReqArgs{Kind: apc.ActMakeNCopies, Bck: m.bck}
+	flt := api.XactArgs{Kind: apc.ActMakeNCopies, Bck: m.bck}
 	api.WaitForXactionIdle(baseParams, flt)
 	time.Sleep(time.Second)
 
@@ -1508,7 +1508,7 @@ func TestOperationsWithRanges(t *testing.T) {
 						continue
 					}
 
-					args := api.XactReqArgs{ID: xid, Kind: kind, Timeout: waitTimeout}
+					args := api.XactArgs{ID: xid, Kind: kind, Timeout: waitTimeout}
 					_, err = api.WaitForXactionIC(baseParams, args)
 					tassert.CheckFatal(t, err)
 

@@ -541,8 +541,8 @@ func (m *ioContext) stopGets() {
 func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies int, greaterOk bool) {
 	m.t.Helper()
 	time.Sleep(time.Second)
-	xactArgs := api.XactReqArgs{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
-	_, err := api.WaitForXactionIC(baseParams, xactArgs)
+	xargs := api.XactArgs{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
+	_, err := api.WaitForXactionIC(baseParams, xargs)
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
@@ -642,7 +642,7 @@ func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
 	}
 	tlog.Logln("Warning: wait for unfinished rebalance(?)")
 	time.Sleep(5 * time.Second)
-	args := api.XactReqArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args := api.XactArgs{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 	time.Sleep(5 * time.Second)
 	return true

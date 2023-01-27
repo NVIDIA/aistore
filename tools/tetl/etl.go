@@ -199,7 +199,7 @@ func waitForXactDone(baseParams api.BaseParams, xid string, timeout time.Duratio
 	}
 
 	tlog.Logf("Waiting for ETL xaction to be %s...\n", action)
-	args := api.XactReqArgs{ID: xid, Kind: apc.ActETLBck, Timeout: timeout /* total timeout */}
+	args := api.XactArgs{ID: xid, Kind: apc.ActETLBck, Timeout: timeout /* total timeout */}
 	status, err := api.WaitForXactionIC(baseParams, args)
 	if err == nil {
 		if waitForAbort && !status.Aborted() {
@@ -225,7 +225,7 @@ func ReportXactionStatus(baseParams api.BaseParams, xid string, stopCh *cos.Stop
 			select {
 			case <-etlTicker.C:
 				// Check number of objects transformed.
-				xs, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xid})
+				xs, err := api.QueryXactionSnaps(baseParams, api.XactArgs{ID: xid})
 				if err != nil {
 					tlog.Logf("Failed to get x-etl[%s] stats: %v\n", xid, err)
 					continue

@@ -51,7 +51,7 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 }
 
 // Wait for xaction to run for completion, warn if aborted
-func waitForXactionCompletion(apiBP api.BaseParams, args api.XactReqArgs) (err error) {
+func waitForXactionCompletion(apiBP api.BaseParams, args api.XactArgs) (err error) {
 	if args.Timeout == 0 {
 		args.Timeout = time.Minute // TODO: make it a flag and an argument with configurable default
 	}
@@ -128,8 +128,8 @@ func flattenXactStats(snap *cluster.Snap) nvpairList {
 	return props
 }
 
-func getXactSnap(xactArgs api.XactReqArgs) (*cluster.Snap, error) {
-	xs, err := api.QueryXactionSnaps(apiBP, xactArgs)
+func getXactSnap(xargs api.XactArgs) (*cluster.Snap, error) {
+	xs, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return nil, err
 	}
@@ -141,12 +141,12 @@ func getXactSnap(xactArgs api.XactReqArgs) (*cluster.Snap, error) {
 	return nil, nil
 }
 
-func queryXactions(xactArgs api.XactReqArgs) (xs api.XactMultiSnap, err error) {
-	xs, err = api.QueryXactionSnaps(apiBP, xactArgs)
+func queryXactions(xargs api.XactArgs) (xs api.XactMultiSnap, err error) {
+	xs, err = api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return
 	}
-	if xactArgs.OnlyRunning {
+	if xargs.OnlyRunning {
 		for tid, snaps := range xs {
 			if len(snaps) == 0 {
 				continue
@@ -161,10 +161,10 @@ func queryXactions(xactArgs api.XactReqArgs) (xs api.XactMultiSnap, err error) {
 		}
 	}
 
-	if xactArgs.DaemonID != "" {
+	if xargs.DaemonID != "" {
 		var found bool
 		for tid := range xs {
-			if tid == xactArgs.DaemonID {
+			if tid == xargs.DaemonID {
 				found = true
 				break
 			}
@@ -174,7 +174,7 @@ func queryXactions(xactArgs api.XactReqArgs) (xs api.XactMultiSnap, err error) {
 		}
 		// remove all other targets
 		for tid := range xs {
-			if tid != xactArgs.DaemonID {
+			if tid != xargs.DaemonID {
 				delete(xs, tid)
 			}
 		}

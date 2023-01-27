@@ -288,7 +288,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				}
 			}
 
-			flt := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
+			flt := api.XactArgs{Kind: apc.ActArchive, Bck: m.bck}
 			if test.abrt {
 				time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
 				tlog.Logln("Aborting...")
@@ -411,7 +411,7 @@ func TestAppendToArch(t *testing.T) {
 				}(archName, list)
 			}
 
-			wargs := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
+			wargs := api.XactArgs{Kind: apc.ActArchive, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
 			lsmsg := &apc.LsoMsg{Prefix: "test_lst"}
@@ -454,7 +454,7 @@ func TestAppendToArch(t *testing.T) {
 				}
 			}
 			if test.multi {
-				wargs := api.XactReqArgs{Kind: apc.ActArchive, Bck: m.bck}
+				wargs := api.XactArgs{Kind: apc.ActArchive, Bck: m.bck}
 				api.WaitForXactionIdle(baseParams, wargs)
 			}
 
