@@ -220,9 +220,9 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 	}
 
 	baseParams := BaseAPIParams(proxyURL)
-	xactID, err := api.DeleteList(baseParams, bck, toDelete)
+	xid, err := api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActDeleteObjects, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActDeleteObjects, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 }
@@ -477,12 +477,12 @@ func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
 
 func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) {
 	baseParams := BaseAPIParams(proxyURL)
-	xactID, err := api.EvictList(baseParams, bck, objList)
+	xid, err := api.EvictList(baseParams, bck, objList)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}
 
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActEvictObjects, Timeout: evictPrefetchTimeout}
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActEvictObjects, Timeout: evictPrefetchTimeout}
 	if _, err := api.WaitForXactionIC(baseParams, args); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}

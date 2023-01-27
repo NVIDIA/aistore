@@ -33,7 +33,7 @@ func ResetBucketProps(bp BaseParams, bck cmn.Bck, query ...url.Values) (string, 
 	return patchBucketProps(bp, bck, b, query...)
 }
 
-func patchBucketProps(bp BaseParams, bck cmn.Bck, body []byte, query ...url.Values) (xactID string, err error) {
+func patchBucketProps(bp BaseParams, bck cmn.Bck, body []byte, query ...url.Values) (xid string, err error) {
 	var q url.Values
 	if len(query) > 0 {
 		q = query[0]
@@ -49,7 +49,7 @@ func patchBucketProps(bp BaseParams, bck cmn.Bck, body []byte, query ...url.Valu
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	_, err = reqParams.doReqStr(&xactID)
+	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
 	return
 }
@@ -263,7 +263,7 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 //   - Copying multiple buckets to the same destination bucket is also permitted.
 //
 // Returns xaction ID if successful, an error otherwise.
-func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xactID string, err error) {
+func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xid string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
 	}
@@ -278,14 +278,14 @@ func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xac
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	_, err = reqParams.doReqStr(&xactID)
+	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
 	return
 }
 
 // RenameBucket renames fromBck as toBck.
 // Returns xaction ID if successful, an error otherwise.
-func RenameBucket(bp BaseParams, fromBck, toBck cmn.Bck) (xactID string, err error) {
+func RenameBucket(bp BaseParams, fromBck, toBck cmn.Bck) (xid string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
 	}
@@ -300,7 +300,7 @@ func RenameBucket(bp BaseParams, fromBck, toBck cmn.Bck) (xactID string, err err
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	_, err = reqParams.doReqStr(&xactID)
+	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
 	return
 }
@@ -511,7 +511,7 @@ func ListObjectsInvalidateCache(bp BaseParams, bck cmn.Bck) error {
 // MakeNCopies starts an extended action (xaction) to bring a given bucket to a
 // certain redundancy level (num copies).
 // Returns xaction ID if successful, an error otherwise.
-func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xactID string, err error) {
+func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xid string, err error) {
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -521,7 +521,7 @@ func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xactID string, err err
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
-	_, err = reqParams.doReqStr(&xactID)
+	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
 	return
 }
@@ -529,7 +529,7 @@ func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xactID string, err err
 // Erasure-code entire `bck` bucket at a given `data`:`parity` redundancy.
 // The operation requires at least (`data + `parity` + 1) storage targets in the cluster.
 // Returns xaction ID if successful, an error otherwise.
-func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int) (xactID string, err error) {
+func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int) (xid string, err error) {
 	bp.Method = http.MethodPost
 	// Without `string` conversion it makes base64 from []byte in `Body`.
 	ecConf := string(cos.MustMarshal(&cmn.ECConfToUpdate{
@@ -545,7 +545,7 @@ func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int) (xactID string
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(nil)
 	}
-	_, err = reqParams.doReqStr(&xactID)
+	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
 	return
 }

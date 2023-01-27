@@ -37,7 +37,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		bckFrom    cmn.Bck
 		bckTo      = cmn.Bck{Name: "cp-range-to", Provider: apc.AIS}
 		baseParams = tools.BaseAPIParams(proxyURL)
-		xactID     string
+		xid        string
 		err        error
 		exists     bool
 	)
@@ -76,11 +76,11 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
 		tlog.Logf("[%s] %s => %s\n", template, bckFrom.DisplayName(), bckTo.DisplayName())
 		msg := cmn.TCObjsMsg{SelectObjsMsg: cmn.SelectObjsMsg{Template: template}, ToBck: bckTo}
-		xactID, err = api.CopyMultiObj(baseParams, bckFrom, msg)
+		xid, err = api.CopyMultiObj(baseParams, bckFrom, msg)
 		tassert.CheckFatal(t, err)
 	}
 
-	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyObjects}
+	wargs := api.XactReqArgs{ID: xid, Kind: apc.ActCopyObjects}
 	api.WaitForXactionIdle(baseParams, wargs)
 
 	tlog.Logln("prefix: test/")

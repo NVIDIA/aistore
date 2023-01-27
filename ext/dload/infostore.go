@@ -72,7 +72,7 @@ func (is *infoStore) getList(req *request) (jobs []*dljob) {
 func (is *infoStore) setJob(job jobif) (njob *dljob) {
 	njob = &dljob{
 		id:          job.ID(),
-		xactID:      job.XactID(),
+		xid:         job.XactID(),
 		total:       job.Len(),
 		description: job.Description(),
 		startedTime: time.Now(),

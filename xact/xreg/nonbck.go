@@ -45,13 +45,13 @@ func RenewStoreCleanup(id string) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewDownloader(t cluster.Target, statsT stats.Tracker, xactID string) RenewRes {
-	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, UUID: xactID, Custom: statsT}, nil)
+func RenewDownloader(t cluster.Target, statsT stats.Tracker, xid string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, UUID: xid, Custom: statsT}, nil)
 	return dreg.renew(e, nil)
 }
 
-func RenewETL(t cluster.Target, msg any, xactID string) RenewRes {
-	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{T: t, UUID: xactID, Custom: msg}, nil)
+func RenewETL(t cluster.Target, msg any, xid string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{T: t, UUID: xid, Custom: msg}, nil)
 	return dreg.renew(e, nil)
 }
 

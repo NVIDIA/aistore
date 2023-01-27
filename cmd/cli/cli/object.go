@@ -177,7 +177,7 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 			DeleteSrc:      flagIsSet(c, deleteSrcFlag),
 		},
 	}
-	xactID, err := api.Promote(promoteArgs)
+	xid, err := api.Promote(promoteArgs)
 	if err != nil {
 		return err
 	}
@@ -185,8 +185,8 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 	if recurs {
 		s1 = "recursively "
 	}
-	if xactID != "" {
-		s2 = fmt.Sprintf(", xaction ID %q", xactID)
+	if xid != "" {
+		s2 = fmt.Sprintf(", xaction ID %q", xid)
 	}
 	// alternatively, print(fmtXactStatusCheck, apc.ActPromote, ...)
 	msg := fmt.Sprintf("%spromoted %q => %s%s\n", s1, fqn, bck.DisplayName(), s2)
@@ -891,7 +891,7 @@ func listOrRangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 func listOp(c *cli.Context, bck cmn.Bck) (err error) {
 	var (
 		fileList = makeList(parseStrFlag(c, listFlag))
-		xactID   string
+		xid      string
 	)
 
 	if flagIsSet(c, dryRunFlag) {
@@ -901,19 +901,19 @@ func listOp(c *cli.Context, bck cmn.Bck) (err error) {
 	var done string
 	switch c.Command.Name {
 	case commandRemove:
-		xactID, err = api.DeleteList(apiBP, bck, fileList)
+		xid, err = api.DeleteList(apiBP, bck, fileList)
 		done = "removed"
 	case commandPrefetch:
 		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
-		xactID, err = api.PrefetchList(apiBP, bck, fileList)
+		xid, err = api.PrefetchList(apiBP, bck, fileList)
 		done = "prefetched"
 	case commandEvict:
 		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
-		xactID, err = api.EvictList(apiBP, bck, fileList)
+		xid, err = api.EvictList(apiBP, bck, fileList)
 		done = "evicted"
 	default:
 		debug.Assert(false, c.Command.Name)
@@ -923,8 +923,8 @@ func listOp(c *cli.Context, bck cmn.Bck) (err error) {
 		return
 	}
 	basemsg := fmt.Sprintf("%s %s from %s", fileList, done, bck)
-	if xactID != "" {
-		basemsg += ". " + toMonitorMsg(c, xactID, "")
+	if xid != "" {
+		basemsg += ". " + toMonitorMsg(c, xid, "")
 	}
 	fmt.Fprintln(c.App.Writer, basemsg)
 	return
@@ -935,7 +935,7 @@ func rangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 	var (
 		rangeStr = parseStrFlag(c, templateFlag)
 		pt       cos.ParsedTemplate
-		xactID   string
+		xid      string
 	)
 
 	if flagIsSet(c, dryRunFlag) {
@@ -954,19 +954,19 @@ func rangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 	var done string
 	switch c.Command.Name {
 	case commandRemove:
-		xactID, err = api.DeleteRange(apiBP, bck, rangeStr)
+		xid, err = api.DeleteRange(apiBP, bck, rangeStr)
 		done = "removed"
 	case commandPrefetch:
 		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
-		xactID, err = api.PrefetchRange(apiBP, bck, rangeStr)
+		xid, err = api.PrefetchRange(apiBP, bck, rangeStr)
 		done = "prefetched"
 	case commandEvict:
 		if err = ensureHasProvider(bck); err != nil {
 			return
 		}
-		xactID, err = api.EvictRange(apiBP, bck, rangeStr)
+		xid, err = api.EvictRange(apiBP, bck, rangeStr)
 		done = "evicted"
 	default:
 		debug.Assert(false, c.Command.Name)
@@ -978,8 +978,8 @@ func rangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 
 	baseMsg := fmt.Sprintf("%s from %s objects in the range %q", done, bck, rangeStr)
 
-	if xactID != "" {
-		baseMsg += ". " + toMonitorMsg(c, xactID, "")
+	if xid != "" {
+		baseMsg += ". " + toMonitorMsg(c, xid, "")
 	}
 	fmt.Fprintln(c.App.Writer, baseMsg)
 	return

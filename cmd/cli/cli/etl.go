@@ -209,11 +209,11 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	xactID, err := api.ETLInit(apiBP, msg)
+	xid, err := api.ETLInit(apiBP, msg)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xactID)
+	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
 	return nil
 }
 
@@ -277,11 +277,11 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	}
 
 	// start
-	xactID, err := api.ETLInit(apiBP, msg)
+	xid, err := api.ETLInit(apiBP, msg)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xactID)
+	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
 	return nil
 }
 
@@ -513,33 +513,33 @@ func etlBucketHandler(c *cli.Context) error {
 		return multiObjBckCopy(c, fromBck, toBck, listObjs, tmplObjs, etlName)
 	}
 
-	xactID, err := api.ETLBucket(apiBP, fromBck, toBck, msg)
+	xid, err := api.ETLBucket(apiBP, fromBck, toBck, msg)
 	if errV := handleETLHTTPError(err, etlName); errV != nil {
 		return errV
 	}
 
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintln(c.App.Writer, xactID)
+		fmt.Fprintln(c.App.Writer, xid)
 		return nil
 	}
 
-	if _, err := api.WaitForXactionIC(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
+	if _, err := api.WaitForXactionIC(apiBP, api.XactReqArgs{ID: xid}); err != nil {
 		return err
 	}
 	if !flagIsSet(c, cpBckDryRunFlag) {
 		return nil
 	}
 
-	snaps, err := api.QueryXactionSnaps(apiBP, api.XactReqArgs{ID: xactID})
+	snaps, err := api.QueryXactionSnaps(apiBP, api.XactReqArgs{ID: xid})
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
 
-	locObjs, outObjs, inObjs := snaps.ObjCounts(xactID)
+	locObjs, outObjs, inObjs := snaps.ObjCounts(xid)
 	fmt.Fprintf(c.App.Writer, "ETL object stats: locally transformed=%d, sent=%d, received=%d", locObjs, outObjs, inObjs)
-	locBytes, outBytes, inBytes := snaps.ByteCounts(xactID)
+	locBytes, outBytes, inBytes := snaps.ByteCounts(xid)
 	fmt.Fprintf(c.App.Writer, "ETL byte stats: locally transformed=%d, sent=%d, received=%d", locBytes, outBytes, inBytes)
 	return nil
 }

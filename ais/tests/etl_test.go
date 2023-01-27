@@ -231,23 +231,23 @@ func testETLBucket(t *testing.T, etlName string, bckFrom cmn.Bck, objCnt int, fi
 		},
 		CopyBckMsg: apc.CopyBckMsg{Force: true},
 	}
-	xactID := tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
+	xid := tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
 
-	err := tetl.WaitForFinished(baseParams, xactID, timeout)
+	err := tetl.WaitForFinished(baseParams, xid, timeout)
 	tassert.CheckFatal(t, err)
 
 	list, err := api.ListObjects(baseParams, bckTo, nil, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
-	checkETLStats(t, xactID, objCnt, fileSize*uint64(objCnt))
+	checkETLStats(t, xid, objCnt, fileSize*uint64(objCnt))
 }
 
 // NOTE: BytesCount references number of bytes *before* the transformation.
-func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedBytesCnt uint64) {
-	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
+func checkETLStats(t *testing.T, xid string, expectedObjCnt int, expectedBytesCnt uint64) {
+	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xid})
 	tassert.CheckFatal(t, err)
 
-	objs, outObjs, inObjs := snaps.ObjCounts(xactID)
+	objs, outObjs, inObjs := snaps.ObjCounts(xid)
 
 	tassert.Errorf(t, objs == int64(expectedObjCnt), "expected %d objects, got %d (where sent %d, received %d)",
 		expectedObjCnt, objs, outObjs, inObjs)
@@ -260,7 +260,7 @@ func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedByte
 	if expectedBytesCnt == 0 {
 		return // don't know the size
 	}
-	bytes, outBytes, inBytes := snaps.ByteCounts(xactID)
+	bytes, outBytes, inBytes := snaps.ByteCounts(xid)
 
 	// TODO -- FIXME: validate transformed bytes as well, make sure `expectedBytesCnt` is correct
 
@@ -616,10 +616,10 @@ func TestETLBucketDryRun(t *testing.T) {
 		},
 		CopyBckMsg: apc.CopyBckMsg{DryRun: true, Force: true},
 	}
-	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, msg)
+	xid, err := api.ETLBucket(baseParams, bckFrom, bckTo, msg)
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: xactID, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xid, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -627,7 +627,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, exists == false, "[dry-run] expected destination bucket not to be created")
 
-	checkETLStats(t, xactID, m.num, uint64(m.num*int(m.fileSize)))
+	checkETLStats(t, xid, m.num, uint64(m.num*int(m.fileSize)))
 }
 
 func TestETLStopAndRestartETL(t *testing.T) {

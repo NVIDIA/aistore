@@ -116,7 +116,7 @@ type (
 
 	dljob struct {
 		id            string
-		xactID        string
+		xid           string
 		description   string
 		startedTime   time.Time
 		finishedTime  atomic.Time
@@ -416,7 +416,7 @@ func (j *backendDlJob) getNextObjs() error {
 func (j *dljob) clone() Job {
 	return Job{
 		ID:            j.id,
-		XactID:        j.xactID,
+		XactID:        j.xid,
 		Description:   j.description,
 		FinishedCnt:   int(j.finishedCnt.Load()),
 		ScheduledCnt:  int(j.scheduledCnt.Load()),

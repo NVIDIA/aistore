@@ -450,8 +450,8 @@ func xactList(c *cli.Context, xactArgs api.XactReqArgs, caption bool) (int, erro
 	)
 	for _, xactKind := range allXactKinds {
 		xactIDs := extractXactIDsForKind(xs, xactKind)
-		for _, xactID := range xactIDs {
-			xactArgs.Kind, xactArgs.ID = xactKind, xactID
+		for _, xid := range xactIDs {
+			xactArgs.Kind, xactArgs.ID = xactKind, xid
 			l, err := xlistByKindID(c, xactArgs, caption, xs)
 			if err != nil {
 				actionWarn(c, err.Error())

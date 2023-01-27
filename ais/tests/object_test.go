@@ -1490,17 +1490,17 @@ func TestOperationsWithRanges(t *testing.T) {
 					tlog.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
 
 					var (
-						err    error
-						xactID string
-						kind   string
-						msg    = &apc.LsoMsg{Prefix: "test/"}
+						err  error
+						xid  string
+						kind string
+						msg  = &apc.LsoMsg{Prefix: "test/"}
 					)
 					if evict {
-						xactID, err = api.EvictRange(baseParams, b, test.rangeStr)
+						xid, err = api.EvictRange(baseParams, b, test.rangeStr)
 						msg.Flags = apc.LsObjCached
 						kind = apc.ActEvictObjects
 					} else {
-						xactID, err = api.DeleteRange(baseParams, b, test.rangeStr)
+						xid, err = api.DeleteRange(baseParams, b, test.rangeStr)
 						kind = apc.ActDeleteObjects
 					}
 					if err != nil {
@@ -1508,7 +1508,7 @@ func TestOperationsWithRanges(t *testing.T) {
 						continue
 					}
 
-					args := api.XactReqArgs{ID: xactID, Kind: kind, Timeout: waitTimeout}
+					args := api.XactReqArgs{ID: xid, Kind: kind, Timeout: waitTimeout}
 					_, err = api.WaitForXactionIC(baseParams, args)
 					tassert.CheckFatal(t, err)
 

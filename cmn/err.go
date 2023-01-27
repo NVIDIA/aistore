@@ -34,7 +34,8 @@ var thisNodeName string
 const (
 	stackTracePrefix = "stack: ["
 
-	fmtErrBckName = "bucket name %q is invalid: may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
+	fmtErrBckName   = "bucket name %q is invalid: " + cos.OnlyPlus
+	fmtErrNamespace = "bucket namespace (uuid: %q, name: %q) " + cos.OnlyNice
 
 	FmtErrIntegrity      = "[%s%d, for troubleshooting see %s/blob/master/docs/troubleshooting.md]"
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"

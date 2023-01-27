@@ -41,7 +41,7 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 
 func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	var (
-		xactMsg xact.QueryMsg
+		xactMsg api.QueryMsg
 		bck     *cluster.Bck
 		query   = r.URL.Query()
 		what    = query.Get(apc.QparamWhat)

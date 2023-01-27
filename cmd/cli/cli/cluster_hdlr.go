@@ -297,7 +297,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		return fmt.Errorf("%s is primary (cannot %s the primary node)", sname, action)
 	}
 	var (
-		xactID        string
+		xid           string
 		skipRebalance = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
 		noShutdown    = flagIsSet(c, noShutdownFlag)
 		rmUserData    = flagIsSet(c, rmUserDataFlag)
@@ -329,19 +329,19 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	}
 	switch action {
 	case subcmdStartMaint:
-		xactID, err = api.StartMaintenance(apiBP, actValue)
+		xid, err = api.StartMaintenance(apiBP, actValue)
 	case subcmdStopMaint:
-		xactID, err = api.StopMaintenance(apiBP, actValue)
+		xid, err = api.StopMaintenance(apiBP, actValue)
 	case subcmdNodeDecommission:
-		xactID, err = api.DecommissionNode(apiBP, actValue)
+		xid, err = api.DecommissionNode(apiBP, actValue)
 	case subcmdShutdown:
-		xactID, err = api.ShutdownNode(apiBP, actValue)
+		xid, err = api.ShutdownNode(apiBP, actValue)
 	}
 	if err != nil {
 		return err
 	}
-	if xactID != "" {
-		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xactID, xactID)
+	if xid != "" {
+		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xid, xid)
 	}
 	switch action {
 	case subcmdStopMaint:

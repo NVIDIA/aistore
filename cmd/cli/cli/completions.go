@@ -525,7 +525,7 @@ func runningJobCompletions(c *cli.Context) {
 			suggestEtlName(c, 1 /*shift*/)
 			return
 		}
-		// complete xactID
+		// complete xid
 		xactIDs, err := api.GetAllRunningXactions(apiBP, name)
 		if err != nil {
 			completionErr(c, err)

@@ -42,10 +42,10 @@ func startTar2TfTransformer(t *testing.T) (etlName string) {
 	tassert.Fatalf(t, msg.Name() == tetl.Tar2TF, "%q vs %q", msg.Name(), tetl.Tar2TF)
 
 	// Starting transformer
-	xactID, err := api.ETLInit(baseParams, msg)
+	xid, err := api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("ETL[%s]: running xaction %q\n", etlName, xactID)
+	tlog.Logf("ETL[%s]: running xaction %q\n", etlName, xid)
 	return
 }
 

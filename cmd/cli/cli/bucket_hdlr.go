@@ -385,26 +385,26 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 	}
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 
-	var xactID string
+	var xid string
 	if len(etlName) != 0 {
 		msg.Name = etlName[0]
 		operation = "Transforming objects"
-		xactID, err = api.ETLMultiObj(apiBP, fromBck, msg)
+		xid, err = api.ETLMultiObj(apiBP, fromBck, msg)
 	} else {
-		xactID, err = api.CopyMultiObj(apiBP, fromBck, msg)
+		xid, err = api.CopyMultiObj(apiBP, fromBck, msg)
 	}
 	if err != nil {
 		return err
 	}
 	if !flagIsSet(c, waitFlag) {
 		baseMsg := fmt.Sprintf("%s %s => %s. ", operation, fromBck, toBck)
-		actionDone(c, baseMsg+toMonitorMsg(c, xactID, ""))
+		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
 	// wait
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, operation, fromBck, toBck)
-	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyObjects}
+	wargs := api.XactReqArgs{ID: xid, Kind: apc.ActCopyObjects}
 	if err = api.WaitForXactionIdle(apiBP, wargs); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
 	} else {

@@ -22,6 +22,11 @@ const (
 	lenTooLongID = 32 // suspiciously long
 )
 
+const (
+	OnlyNice = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
+	OnlyPlus = OnlyNice + ", and dots (.)"
+)
+
 var (
 	sid  *shortid.Shortid
 	rtie atomic.Int32
@@ -87,6 +92,7 @@ func isAlpha(c byte) bool {
 }
 
 // letters and numbers w/ '-' and '_' permitted with limitations (below)
+// (see OnlyNice above)
 func IsAlphaNice(s string) bool {
 	l := len(s)
 	for i, c := range s {
@@ -105,6 +111,7 @@ func IsAlphaNice(s string) bool {
 
 // alpha-numeric++ including letters, numbers, dashes (-), and underscores (_)
 // period (.) is allowed except for '..'
+// (see OnlyPlus above)
 func IsAlphaPlus(s string) bool {
 	for i, c := range s {
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {

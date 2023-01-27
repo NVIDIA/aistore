@@ -83,14 +83,14 @@ func TestETLBucketAbort(t *testing.T) {
 		fixedSize: true,
 	}
 
-	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActETLBck}
+	xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActETLBck}
 	time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 
-	tlog.Logf("Aborting ETL xaction %q\n", xactID)
+	tlog.Logf("Aborting ETL xaction %q\n", xid)
 	err := api.AbortXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
-	err = tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
+	err = tetl.WaitForAborted(baseParams, xid, 5*time.Minute)
 	tassert.CheckFatal(t, err)
 	etls, err := api.ETLList(baseParams)
 	tassert.CheckFatal(t, err)
@@ -115,7 +115,7 @@ func TestETLTargetDown(t *testing.T) {
 		t.Skipf("skipping %s long test (kill-node vs maintenance vs ETL)", t.Name())
 	}
 	m.initWithCleanupAndSaveState()
-	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
+	xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
 	tlog.Logln("Waiting for ETL to process a few objects...")
 	time.Sleep(5 * time.Second)
@@ -136,7 +136,7 @@ func TestETLTargetDown(t *testing.T) {
 		tetl.CheckNoRunningETLContainers(t, baseParams)
 	})
 
-	err = tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
+	err = tetl.WaitForAborted(baseParams, xid, 5*time.Minute)
 	tassert.CheckFatal(t, err)
 	tetl.WaitForContainersStopped(t, baseParams)
 }
@@ -235,17 +235,17 @@ def transform(input_bytes):
 				},
 				CopyBckMsg: apc.CopyBckMsg{Force: true},
 			}
-			xactID := tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
-			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
+			xid := tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
+			tetl.ReportXactionStatus(baseParams, xid, etlDoneCh, 2*time.Minute, m.num)
 
 			tlog.Logln("Waiting for ETL to finish")
-			err = tetl.WaitForFinished(baseParams, xactID, 15*time.Minute)
+			err = tetl.WaitForFinished(baseParams, xid, 15*time.Minute)
 			etlDoneCh.Close()
 			tassert.CheckFatal(t, err)
 
-			snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
+			snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xid})
 			tassert.CheckFatal(t, err)
-			total, err := snaps.TotalRunningTime(xactID)
+			total, err := snaps.TotalRunningTime(xid)
 			tassert.CheckFatal(t, err)
 			tlog.Logf("Transforming bucket %s took %s\n", bckFrom.DisplayName(), total)
 
@@ -260,7 +260,7 @@ def transform(input_bytes):
 }
 
 // Responsible for cleaning all resources, except ETL xact.
-func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xactID string) {
+func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xid string) {
 	var (
 		bckFrom = cmn.Bck{Name: "etl-in-" + trand.String(5), Provider: apc.AIS}
 		bckTo   = cmn.Bck{Name: "etl-out-" + trand.String(5), Provider: apc.AIS}
@@ -280,6 +280,6 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xactI
 
 	tlog.Logf("Start offline ETL[%s] => %s\n", etlName, bckTo.DisplayName())
 	msg := &apc.TCBMsg{Transform: apc.Transform{Name: etlName}, CopyBckMsg: apc.CopyBckMsg{Force: true}}
-	xactID = tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
+	xid = tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
 	return
 }

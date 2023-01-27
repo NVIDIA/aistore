@@ -40,12 +40,12 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		var (
 			query            = r.URL.Query()
-			xactID           = query.Get(apc.QparamUUID)
+			xid              = query.Get(apc.QparamUUID)
 			jobID            = query.Get(apc.QparamJobID)
 			dlb              = dload.Body{}
 			progressInterval = dload.DownloadProgressInterval
 		)
-		debug.Assertf(cos.IsValidUUID(xactID) && cos.IsValidUUID(jobID), "%q, %q", xactID, jobID)
+		debug.Assertf(cos.IsValidUUID(xid) && cos.IsValidUUID(jobID), "%q, %q", xid, jobID)
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
 			return
 		}
@@ -72,7 +72,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		xdl, err := t.renewdl(xactID)
+		xdl, err := t.renewdl(xid)
 		if err != nil {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
@@ -112,9 +112,9 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg.ID != "" {
-			xactID := r.URL.Query().Get(apc.QparamUUID)
-			debug.Assert(cos.IsValidUUID(xactID))
-			xdl, err := t.renewdl(xactID)
+			xid := r.URL.Query().Get(apc.QparamUUID)
+			debug.Assert(cos.IsValidUUID(xid))
+			xdl, err := t.renewdl(xid)
 			if err != nil {
 				t.writeErr(w, r, err, http.StatusInternalServerError)
 				return
@@ -154,9 +154,9 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		xactID := r.URL.Query().Get(apc.QparamUUID)
-		debug.Assertf(cos.IsValidUUID(xactID), "%q", xactID)
-		xdl, err := t.renewdl(xactID)
+		xid := r.URL.Query().Get(apc.QparamUUID)
+		debug.Assertf(cos.IsValidUUID(xid), "%q", xid)
+		xdl, err := t.renewdl(xid)
 		if err != nil {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
@@ -180,8 +180,8 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *target) renewdl(xactID string) (*dload.Xact, error) {
-	rns := xreg.RenewDownloader(t, t.statsT, xactID)
+func (t *target) renewdl(xid string) (*dload.Xact, error) {
+	rns := xreg.RenewDownloader(t, t.statsT, xid)
 	if rns.Err != nil {
 		return nil, rns.Err
 	}

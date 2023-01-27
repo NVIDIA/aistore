@@ -48,10 +48,20 @@ type (
 		Force       bool          // force
 		OnlyRunning bool          // look only for running xactions
 	}
+
+	// TODO -- FIXME: deprecated
+	QueryMsg struct {
+		OnlyRunning *bool     `json:"show_active"`
+		Bck         cmn.Bck   `json:"bck"`
+		ID          string    `json:"id"`
+		Kind        string    `json:"kind"`
+		DaemonID    string    `json:"node,omitempty"`
+		Buckets     []cmn.Bck `json:"buckets,omitempty"`
+	}
 )
 
 // Start xaction
-func StartXaction(bp BaseParams, args XactReqArgs) (xactID string, err error) {
+func StartXaction(bp BaseParams, args XactReqArgs) (xid string, err error) {
 	if !xact.Table[args.Kind].Startable {
 		return "", fmt.Errorf("xaction %q is not startable", args.Kind)
 	}
@@ -69,7 +79,7 @@ func StartXaction(bp BaseParams, args XactReqArgs) (xactID string, err error) {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	_, err = reqParams.doReqStr(&xactID)
+	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
 	return
 }
@@ -98,7 +108,7 @@ func AbortXaction(bp BaseParams, args XactReqArgs) (err error) {
 // returns unique ':'-separated kind/ID pairs (strings)
 // e.g.: put-copies[D-ViE6HEL_j] list[H96Y7bhR2s] copy-bck[matRQMRes] put-copies[pOibtHExY]
 func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err error) {
-	msg := xact.QueryMsg{Kind: kindOrName}
+	msg := QueryMsg{Kind: kindOrName}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -116,7 +126,7 @@ func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err 
 // QueryXactionSnaps gets all xaction snaps based on the specified selection.
 // NOTE: args.Kind can be either xaction kind or name - here and elsewhere
 func QueryXactionSnaps(bp BaseParams, args XactReqArgs) (xs XactMultiSnap, err error) {
-	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
+	msg := QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
 	}
@@ -166,7 +176,7 @@ func GetAllXactionStatus(bp BaseParams, args XactReqArgs, force bool) (matching 
 
 func getxst(out any, q url.Values, bp BaseParams, args XactReqArgs) (err error) {
 	bp.Method = http.MethodGet
-	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
+	msg := QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
 	}
@@ -325,10 +335,10 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, bsumm *cmn.AllBsumm
 
 // NOTE: when xaction UUID is not specified: require the same kind _and_
 // a single running uuid (otherwise, IsAborted() et al. can only produce ambiguous results)
-func (xs XactMultiSnap) checkEmptyID(xactID string) error {
+func (xs XactMultiSnap) checkEmptyID(xid string) error {
 	var kind, uuid string
-	if xactID != "" {
-		debug.Assert(xact.IsValidUUID(xactID), xactID)
+	if xid != "" {
+		debug.Assert(xact.IsValidUUID(xid), xid)
 		return nil
 	}
 	for _, snaps := range xs {
@@ -360,13 +370,13 @@ func (xs XactMultiSnap) GetUUIDs() []string {
 	return uuids.ToSlice()
 }
 
-func (xs XactMultiSnap) RunningTarget(xactID string) (string /*tid*/, *cluster.Snap, error) {
-	if err := xs.checkEmptyID(xactID); err != nil {
+func (xs XactMultiSnap) RunningTarget(xid string) (string /*tid*/, *cluster.Snap, error) {
+	if err := xs.checkEmptyID(xid); err != nil {
 		return "", nil, err
 	}
 	for tid, snaps := range xs {
 		for _, xsnap := range snaps {
-			if (xactID == xsnap.ID || xactID == "") && xsnap.Running() {
+			if (xid == xsnap.ID || xid == "") && xsnap.Running() {
 				return tid, xsnap, nil
 			}
 		}
@@ -374,13 +384,13 @@ func (xs XactMultiSnap) RunningTarget(xactID string) (string /*tid*/, *cluster.S
 	return "", nil, nil
 }
 
-func (xs XactMultiSnap) IsAborted(xactID string) (bool, error) {
-	if err := xs.checkEmptyID(xactID); err != nil {
+func (xs XactMultiSnap) IsAborted(xid string) (bool, error) {
+	if err := xs.checkEmptyID(xid); err != nil {
 		return false, err
 	}
 	for _, snaps := range xs {
 		for _, xsnap := range snaps {
-			if (xactID == xsnap.ID || xactID == "") && xsnap.IsAborted() {
+			if (xid == xsnap.ID || xid == "") && xsnap.IsAborted() {
 				return true, nil
 			}
 		}
@@ -388,25 +398,25 @@ func (xs XactMultiSnap) IsAborted(xactID string) (bool, error) {
 	return false, nil
 }
 
-func (xs XactMultiSnap) isAllIdle(xactID string) (found, idle bool) {
-	if xactID != "" {
-		debug.Assert(xact.IsValidUUID(xactID), xactID)
-		return xs.isOneIdle(xactID)
+func (xs XactMultiSnap) isAllIdle(xid string) (found, idle bool) {
+	if xid != "" {
+		debug.Assert(xact.IsValidUUID(xid), xid)
+		return xs.isOneIdle(xid)
 	}
 	uuids := xs.GetUUIDs()
 	idle = true
-	for _, xactID = range uuids {
-		f, i := xs.isOneIdle(xactID)
+	for _, xid = range uuids {
+		f, i := xs.isOneIdle(xid)
 		found = found || f
 		idle = idle && i
 	}
 	return
 }
 
-func (xs XactMultiSnap) isOneIdle(xactID string) (found, idle bool) {
+func (xs XactMultiSnap) isOneIdle(xid string) (found, idle bool) {
 	for _, snaps := range xs {
 		for _, xsnap := range snaps {
-			if xactID == xsnap.ID {
+			if xid == xsnap.ID {
 				found = true
 				if xsnap.Started() && !xsnap.IsAborted() && !xsnap.IsIdle() {
 					return true, false
@@ -418,15 +428,15 @@ func (xs XactMultiSnap) isOneIdle(xactID string) (found, idle bool) {
 	return
 }
 
-func (xs XactMultiSnap) ObjCounts(xactID string) (locObjs, outObjs, inObjs int64) {
-	if xactID == "" {
+func (xs XactMultiSnap) ObjCounts(xid string) (locObjs, outObjs, inObjs int64) {
+	if xid == "" {
 		uuids := xs.GetUUIDs()
 		debug.Assert(len(uuids) == 1, uuids)
-		xactID = uuids[0]
+		xid = uuids[0]
 	}
 	for _, snaps := range xs {
 		for _, xsnap := range snaps {
-			if xactID == xsnap.ID {
+			if xid == xsnap.ID {
 				locObjs += xsnap.Stats.Objs
 				outObjs += xsnap.Stats.OutObjs
 				inObjs += xsnap.Stats.InObjs
@@ -436,15 +446,15 @@ func (xs XactMultiSnap) ObjCounts(xactID string) (locObjs, outObjs, inObjs int64
 	return
 }
 
-func (xs XactMultiSnap) ByteCounts(xactID string) (locBytes, outBytes, inBytes int64) {
-	if xactID == "" {
+func (xs XactMultiSnap) ByteCounts(xid string) (locBytes, outBytes, inBytes int64) {
+	if xid == "" {
 		uuids := xs.GetUUIDs()
 		debug.Assert(len(uuids) == 1, uuids)
-		xactID = uuids[0]
+		xid = uuids[0]
 	}
 	for _, snaps := range xs {
 		for _, xsnap := range snaps {
-			if xactID == xsnap.ID {
+			if xid == xsnap.ID {
 				locBytes += xsnap.Stats.Bytes
 				outBytes += xsnap.Stats.OutBytes
 				inBytes += xsnap.Stats.InBytes
@@ -454,15 +464,15 @@ func (xs XactMultiSnap) ByteCounts(xactID string) (locBytes, outBytes, inBytes i
 	return
 }
 
-func (xs XactMultiSnap) TotalRunningTime(xactID string) (time.Duration, error) {
-	debug.Assert(xact.IsValidUUID(xactID), xactID)
+func (xs XactMultiSnap) TotalRunningTime(xid string) (time.Duration, error) {
+	debug.Assert(xact.IsValidUUID(xid), xid)
 	var (
 		start, end     time.Time
 		found, running bool
 	)
 	for _, snaps := range xs {
 		for _, xsnap := range snaps {
-			if xactID == xsnap.ID {
+			if xid == xsnap.ID {
 				found = true
 				running = running || xsnap.Running()
 				if !xsnap.StartTime.IsZero() {
@@ -477,7 +487,7 @@ func (xs XactMultiSnap) TotalRunningTime(xactID string) (time.Duration, error) {
 		}
 	}
 	if !found {
-		return 0, errors.New("xaction [" + xactID + "] not found")
+		return 0, errors.New("xaction [" + xid + "] not found")
 	}
 	if running {
 		end = time.Now()
@@ -505,4 +515,20 @@ func (args *XactReqArgs) String() (s string) {
 		s += "-node[" + args.DaemonID + "]"
 	}
 	return
+}
+
+//////////////
+// QueryMsg //
+//////////////
+
+func (msg *QueryMsg) String() (s string) {
+	if msg.ID == "" {
+		s = fmt.Sprintf("x-%s", msg.Kind)
+	} else {
+		s = fmt.Sprintf("x-%s[%s]", msg.Kind, msg.ID)
+	}
+	if msg.Bck.IsEmpty() {
+		return
+	}
+	return fmt.Sprintf("%s, bucket %s", s, msg.Bck)
 }

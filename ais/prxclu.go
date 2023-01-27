@@ -116,7 +116,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 // apc.GetWhatQueryXactStats (NOTE: may poll for quiescence)
 func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
-	var xactMsg xact.QueryMsg
+	var xactMsg api.QueryMsg
 	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 		return
 	}
@@ -148,7 +148,7 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 
 // apc.GetWhatAllRunningXacts
 func (p *proxy) xgetRunning(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
-	var xactMsg xact.QueryMsg
+	var xactMsg api.QueryMsg
 	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 		return
 	}
@@ -560,7 +560,7 @@ func (p *proxy) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp strin
 	return
 }
 
-func (p *proxy) updateAndDistribute(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags) (xactID string,
+func (p *proxy) updateAndDistribute(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags) (xid string,
 	err error) {
 	ctx := &smapModifier{
 		pre:   p._updPre,
@@ -576,7 +576,7 @@ func (p *proxy) updateAndDistribute(nsi *cluster.Snode, msg *apc.ActMsg, flags c
 		return
 	}
 	if ctx.rmd != nil {
-		xactID = xact.RebID2S(ctx.rmd.Version)
+		xid = xact.RebID2S(ctx.rmd.Version)
 	}
 	return
 }

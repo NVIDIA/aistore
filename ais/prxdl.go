@@ -105,8 +105,8 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 		progressInterval = ival
 	}
 
-	xactID := cos.GenUUID()
-	if errCode, err := p.dlstart(r, xactID, jobID, body); err != nil {
+	xid := cos.GenUUID()
+	if errCode, err := p.dlstart(r, xid, jobID, body); err != nil {
 		p.writeErrStatusf(w, r, errCode, "Error starting download: %v", err)
 		return
 	}
@@ -132,8 +132,8 @@ func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, e
 		config      = cmn.GCO.Get()
 		body        = cos.MustMarshal(msg)
 		args        = allocBcArgs()
-		xactID      = cos.GenUUID()
-		q           = url.Values{apc.QparamUUID: []string{xactID}}
+		xid         = cos.GenUUID()
+		q           = url.Values{apc.QparamUUID: []string{xid}}
 		notFoundCnt int
 	)
 	args.req = cmn.HreqArgs{Method: method, Path: path, Body: body, Query: q}
@@ -239,9 +239,9 @@ func (p *proxy) dlstatus(nl nl.NotifListener) ([]byte, int, error) {
 	return respJSON, http.StatusOK, nil
 }
 
-func (p *proxy) dlstart(r *http.Request, xactID, jobID string, body []byte) (errCode int, err error) {
+func (p *proxy) dlstart(r *http.Request, xid, jobID string, body []byte) (errCode int, err error) {
 	query := make(url.Values, 2)
-	query.Set(apc.QparamUUID, xactID)
+	query.Set(apc.QparamUUID, xid)
 	query.Set(apc.QparamJobID, jobID)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body, Query: query}

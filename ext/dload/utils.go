@@ -265,8 +265,8 @@ func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
 // called via ais/prxnotifs generic mechanism
 func AbortReq(jobID string) cmn.HreqArgs {
 	var (
-		xactID = "nabrt-" + cos.GenUUID()
-		q      = url.Values{apc.QparamUUID: []string{xactID}} // ditto
+		xid    = "nabrt-" + cos.GenUUID()
+		q      = url.Values{apc.QparamUUID: []string{xid}} // ditto
 		args   = cmn.HreqArgs{Method: http.MethodDelete, Query: q}
 		dlBody = AdminBody{
 			ID: jobID,

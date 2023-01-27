@@ -57,13 +57,13 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-	xactID := r.URL.Query().Get(apc.QparamUUID)
+	xid := r.URL.Query().Get(apc.QparamUUID)
 
 	switch msg := initMsg.(type) {
 	case *etl.InitSpecMsg:
-		err = etl.InitSpec(t, msg, xactID, etl.StartOpts{})
+		err = etl.InitSpec(t, msg, xid, etl.StartOpts{})
 	case *etl.InitCodeMsg:
-		err = etl.InitCode(t, msg, xactID)
+		err = etl.InitCode(t, msg, xid)
 	default:
 		debug.Assert(false, initMsg.String())
 	}

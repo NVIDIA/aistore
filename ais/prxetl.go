@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
-// TODO: support start/stop/list using `xactID`
+// TODO: support start/stop/list using `xid`
 
 // [METHOD] /v1/etl
 func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
@@ -190,16 +190,16 @@ func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 // broadcast (start ETL) request to all targets
 func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) error {
 	var (
-		err    error
-		args   = allocBcArgs()
-		xactID = etl.PrefixXactID + cos.GenUUID()
+		err  error
+		args = allocBcArgs()
+		xid  = etl.PrefixXactID + cos.GenUUID()
 	)
 	{
 		args.req = cmn.HreqArgs{
 			Method: http.MethodPut,
 			Path:   apc.URLPathETL.S,
 			Body:   cos.MustMarshal(msg),
-			Query:  url.Values{apc.QparamUUID: []string{xactID}},
+			Query:  url.Values{apc.QparamUUID: []string{xid}},
 		}
 		args.timeout = apc.LongTimeout
 	}
@@ -236,7 +236,7 @@ func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) e
 		p.owner.etl.modify(ctx)
 	}
 	// All init calls succeeded - return running xaction
-	w.Write(cos.UnsafeB(xactID))
+	w.Write(cos.UnsafeB(xid))
 	return nil
 }
 

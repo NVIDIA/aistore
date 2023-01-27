@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -173,10 +173,7 @@ func (n Ns) validate() error {
 	if cos.IsAlphaNice(n.UUID) && cos.IsAlphaPlus(n.Name) {
 		return nil
 	}
-	return fmt.Errorf(
-		"namespace (uuid: %q, name: %q) may only contain letters, numbers, dashes (-), underscores (_)",
-		n.UUID, n.Name,
-	)
+	return fmt.Errorf(fmtErrNamespace, n.UUID, n.Name)
 }
 
 func (n Ns) contains(other Ns) bool {

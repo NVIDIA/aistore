@@ -1481,7 +1481,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	tools.CreateBucketWithCleanup(t, proxyURL, src, nil)
 
 	// Start any xaction and get ID.
-	xactID, err := api.CopyBucket(baseParams, src, dstBck, nil)
+	xid, err := api.CopyBucket(baseParams, src, dstBck, nil)
 	tassert.CheckFatal(t, err)
 	defer tools.DestroyBucket(t, proxyURL, dstBck)
 
@@ -1497,7 +1497,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	newICNode := smap.GetProxy(newICMemID)
 
 	baseParams = tools.BaseAPIParams(newICNode.URL(cmn.NetPublic))
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck}
+	xactArgs := api.XactReqArgs{ID: xid, Kind: apc.ActCopyBck}
 	_, err = api.GetOneXactionStatus(baseParams, xactArgs)
 	tassert.CheckError(t, err)
 
@@ -1550,8 +1550,8 @@ func icSinglePrimaryRevamp(t *testing.T) {
 	tools.CreateBucketWithCleanup(t, proxyURL, src, nil)
 
 	// Start any xaction and get ID.
-	xactID, err := api.CopyBucket(baseParams, src, dstBck, nil)
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck}
+	xid, err := api.CopyBucket(baseParams, src, dstBck, nil)
+	xactArgs := api.XactReqArgs{ID: xid, Kind: apc.ActCopyBck}
 
 	tassert.CheckFatal(t, err)
 	defer tools.DestroyBucket(t, proxyURL, dstBck)
@@ -1691,13 +1691,13 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 				Name:     fmt.Sprintf("%s_dst_par_%d", testBucketName, idx),
 				Provider: apc.AIS,
 			}
-			xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, nil)
+			xid, err := api.CopyBucket(baseParams, srcBck, dstBck, nil)
 			tassert.CheckError(t, err)
 			defer func() {
 				tools.DestroyBucket(t, proxyURL, dstBck)
 				wg.Done()
 			}()
-			xargs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
+			xargs := api.XactReqArgs{ID: xid, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, xargs)
 			tassert.CheckError(t, err)
 		}(i)

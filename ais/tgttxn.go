@@ -50,11 +50,11 @@ type txnServerCtx struct {
 	}
 }
 
-// TODO: return xaction ID (xactID) where applicable
+// TODO: return xaction ID (xid) where applicable
 
 // verb /v1/txn
 func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
-	var bucket, phase, xactID string
+	var bucket, phase, xid string
 	if r.Method != http.MethodPost {
 		cmn.WriteErr405(w, r, http.MethodPost)
 		return
@@ -92,11 +92,11 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.ActCreateBck, apc.ActAddRemoteBck:
 		err = t.createBucket(c)
 	case apc.ActMakeNCopies:
-		xactID, err = t.makeNCopies(c)
+		xid, err = t.makeNCopies(c)
 	case apc.ActSetBprops, apc.ActResetBprops:
-		xactID, err = t.setBucketProps(c)
+		xid, err = t.setBucketProps(c)
 	case apc.ActMoveBck:
-		xactID, err = t.renameBucket(c)
+		xid, err = t.renameBucket(c)
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
 			dp    cluster.DP
@@ -113,7 +113,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		xactID, err = t.tcb(c, tcmsg, dp)
+		xid, err = t.tcb(c, tcmsg, dp)
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
 			dp     cluster.DP
@@ -130,24 +130,24 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		xactID, err = t.tcobjs(c, tcoMsg, dp)
+		xid, err = t.tcobjs(c, tcoMsg, dp)
 	case apc.ActECEncode:
-		xactID, err = t.ecEncode(c)
+		xid, err = t.ecEncode(c)
 	case apc.ActArchive:
-		xactID, err = t.createArchMultiObj(c)
+		xid, err = t.createArchMultiObj(c)
 	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode:
 		err = t.startMaintenance(c)
 	case apc.ActDestroyBck, apc.ActEvictRemoteBck:
 		err = t.destroyBucket(c)
 	case apc.ActPromote:
 		hdr := w.Header()
-		xactID, err = t.promote(c, hdr)
+		xid, err = t.promote(c, hdr)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
 	if err == nil {
-		if xactID != "" {
-			w.Header().Set(apc.HdrXactionID, xactID)
+		if xid != "" {
+			w.Header().Set(apc.HdrXactionID, xid)
 		}
 		return
 	}
@@ -313,7 +313,7 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
-		var xactID string
+		var xid string
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return "", err
@@ -335,7 +335,7 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 			xreg.DoAbort(flt, errors.New("re-mirror"))
 			c.addNotif(xctn) // notify upon completion
 			xact.GoRunW(xctn)
-			xactID = xctn.ID()
+			xid = xctn.ID()
 		}
 		if _, reec := _reEC(bprops, nprops, c.bck, nil /*smap*/); reec {
 			flt := xreg.XactFilter{Kind: apc.ActECEncode, Bck: c.bck}
@@ -348,13 +348,13 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 			c.addNotif(xctn) // ditto
 			xact.GoRunW(xctn)
 
-			if xactID == "" {
-				xactID = xctn.ID()
+			if xid == "" {
+				xid = xctn.ID()
 			} else {
-				xactID = "" // not supporting multiple..
+				xid = "" // not supporting multiple..
 			}
 		}
-		return xactID, nil
+		return xid, nil
 	default:
 		debug.Assert(false)
 	}
@@ -560,11 +560,11 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()
-		xactID := xctn.ID()
-		debug.Assert(xactID == txnTcb.xtcb.ID())
+		xid := xctn.ID()
+		debug.Assert(xid == txnTcb.xtcb.ID())
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
-		return xactID, nil
+		return xid, nil
 	default:
 		debug.Assert(false)
 	}
@@ -607,9 +607,9 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlp
 }
 
 func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (string, error) {
-	var xactID string
+	var xid string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return xactID, err
+		return xid, err
 	}
 	switch c.phase {
 	case apc.ActBegin:
@@ -619,37 +619,37 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 		)
 		// validate
 		if err := bckTo.Validate(); err != nil {
-			return xactID, err
+			return xid, err
 		}
 		if err := bckFrom.Validate(); err != nil {
-			return xactID, err
+			return xid, err
 		}
 		if cs := fs.GetCapStatus(); cs.Err != nil {
-			return xactID, cs.Err
+			return xid, cs.Err
 		}
 		if err := xreg.LimitedCoexistence(t.si, bckFrom, c.msg.Action); err != nil {
-			return xactID, err
+			return xid, err
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {
-			return xactID, cmn.NewErrBckNotFound(bckFrom.Bucket())
+			return xid, cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
 		// begin
 		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
 		rns := xreg.RenewTCObjs(t, c.uuid, c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
 			glog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)
-			return xactID, rns.Err
+			return xid, rns.Err
 		}
 		xctn := rns.Entry.Get()
-		xactID = xctn.ID()
-		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
+		xid = xctn.ID()
+		debug.Assert((!rns.IsRunning() && xid == c.uuid) || (rns.IsRunning() && xid == rns.UUID))
 
 		xtco := xctn.(*xs.XactTCObjs)
 		msg.TxnUUID = c.uuid
 		txn := newTxnTCObjs(c, bckFrom, xtco, msg)
 		if err := t.transactions.begin(txn); err != nil {
-			return xactID, err
+			return xid, err
 		}
 		xtco.Begin(msg)
 	case apc.ActAbort:
@@ -658,23 +658,23 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 			txnTco := txn.(*txnTCObjs)
 			// if _this_ transaction initiated _that_ on-demand
 			if xtco := txnTco.xtco; xtco != nil && xtco.ID() == c.uuid {
-				xactID = xtco.ID()
+				xid = xtco.ID()
 				xtco.Abort(nil)
 			}
 		}
 	case apc.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return xactID, err
+			return xid, err
 		}
 		txnTco := txn.(*txnTCObjs)
 		txnTco.xtco.Do(txnTco.msg)
-		xactID = txnTco.xtco.ID()
+		xid = txnTco.xtco.ID()
 		t.transactions.find(c.uuid, apc.ActCommit)
 	default:
 		debug.Assert(false)
 	}
-	return xactID, nil
+	return xid, nil
 }
 
 //////////////
@@ -740,9 +740,9 @@ func (t *target) validateECEncode(bck *cluster.Bck, msg *aisMsg) error {
 ////////////////////////
 
 func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
-	var xactID string
+	var xid string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return xactID, err
+		return xid, err
 	}
 	switch c.phase {
 	case apc.ActBegin:
@@ -751,46 +751,46 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 			bckFrom = c.bck
 		)
 		if err := bckTo.Validate(); err != nil {
-			return xactID, err
+			return xid, err
 		}
 		if !bckFrom.Equal(bckTo, false, false) {
 			if err := bckFrom.Validate(); err != nil {
-				return xactID, err
+				return xid, err
 			}
 		}
 		archMsg := &cmn.ArchiveMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, archMsg); err != nil {
-			return xactID, fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
+			return xid, fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}
 		mime, err := cos.Mime(archMsg.Mime, archMsg.ArchName)
 		if err != nil {
-			return xactID, err
+			return xid, err
 		}
 		archMsg.Mime = mime // set it for xarch
 
 		if cs := fs.GetCapStatus(); cs.Err != nil {
-			return xactID, cs.Err
+			return xid, cs.Err
 		}
 
 		rns := xreg.RenewPutArchive(c.uuid, t, bckFrom)
 		if rns.Err != nil {
 			glog.Errorf("%s: %q %+v %v", t, c.uuid, archMsg, rns.Err)
-			return xactID, rns.Err
+			return xid, rns.Err
 		}
 		xctn := rns.Entry.Get()
-		xactID = xctn.ID()
-		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
+		xid = xctn.ID()
+		debug.Assert((!rns.IsRunning() && xid == c.uuid) || (rns.IsRunning() && xid == rns.UUID))
 
 		xarch := xctn.(*xs.XactArch)
 		// finalize the message and begin local transaction
 		archMsg.TxnUUID = c.uuid
 		archMsg.FromBckName = bckFrom.Name
 		if err := xarch.Begin(archMsg); err != nil {
-			return xactID, err
+			return xid, err
 		}
 		txn := newTxnArchMultiObj(c, bckFrom, xarch, archMsg)
 		if err := t.transactions.begin(txn); err != nil {
-			return xactID, err
+			return xid, err
 		}
 	case apc.ActAbort:
 		txn, err := t.transactions.find(c.uuid, apc.ActAbort)
@@ -798,21 +798,21 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 			txnArch := txn.(*txnArchMultiObj)
 			// if _this_ transaction initiated _that_ on-demand
 			if xarch := txnArch.xarch; xarch != nil && xarch.ID() == c.uuid {
-				xactID = xarch.ID()
+				xid = xarch.ID()
 				xarch.Abort(nil)
 			}
 		}
 	case apc.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return xactID, err
+			return xid, err
 		}
 		txnArch := txn.(*txnArchMultiObj)
 		txnArch.xarch.Do(txnArch.msg)
-		xactID = txnArch.xarch.ID()
+		xid = txnArch.xarch.ID()
 		t.transactions.find(c.uuid, apc.ActCommit)
 	}
-	return xactID, nil
+	return xid, nil
 }
 
 //////////////////////

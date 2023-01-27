@@ -346,7 +346,7 @@ func abortReq(nl nl.NotifListener) cmn.HreqArgs {
 	msg := apc.ActMsg{
 		Action: apc.ActXactStop,
 		Name:   cmn.ErrXactICNotifAbort.Error(),
-		Value:  api.XactReqArgs{ID: nl.UUID() /*xactID*/, Kind: nl.Kind()},
+		Value:  api.XactReqArgs{ID: nl.UUID() /*xid*/, Kind: nl.Kind()},
 	}
 	args := cmn.HreqArgs{Method: http.MethodPut}
 	args.Body = cos.MustMarshal(msg)

@@ -103,19 +103,19 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	if _, err := headBucket(fromBck, true /* don't add */); err != nil {
 		return err
 	}
-	xactID, err := api.RenameBucket(apiBP, fromBck, toBck)
+	xid, err := api.RenameBucket(apiBP, fromBck, toBck)
 	if err != nil {
 		return err
 	}
 	if !flagIsSet(c, waitFlag) {
 		baseMsg := fmt.Sprintf("Renaming bucket %s => %s. ", fromBck, toBck)
-		actionDone(c, baseMsg+toMonitorMsg(c, xactID, ""))
+		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
 	// wait
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Renaming bucket", fromBck, toBck)
-	if err := waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
+	if err := waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xid}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", fromBck, toBck)
 		return err
 	}
@@ -125,19 +125,19 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 
 // Copy ais bucket
 func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) error {
-	xactID, err := api.CopyBucket(apiBP, fromBck, toBck, msg)
+	xid, err := api.CopyBucket(apiBP, fromBck, toBck, msg)
 	if err != nil {
 		return err
 	}
 	if !flagIsSet(c, waitFlag) {
 		baseMsg := fmt.Sprintf("Copying bucket %s => %s. ", fromBck, toBck)
-		actionDone(c, baseMsg+toMonitorMsg(c, xactID, ""))
+		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
 	// wait
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying bucket", fromBck, toBck)
-	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xactID}); err != nil {
+	if err = waitForXactionCompletion(apiBP, api.XactReqArgs{ID: xid}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "copy", fromBck, toBck)
 		return err
 	}
@@ -648,8 +648,8 @@ func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section stri
 
 // Configure bucket as n-way mirror
 func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
-	var xactID string
-	if xactID, err = api.MakeNCopies(apiBP, bck, copies); err != nil {
+	var xid string
+	if xid, err = api.MakeNCopies(apiBP, bck, copies); err != nil {
 		return
 	}
 	var baseMsg string
@@ -658,18 +658,18 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	} else {
 		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy). ", bck.DisplayName())
 	}
-	actionDone(c, baseMsg+toMonitorMsg(c, xactID, ""))
+	actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 	return
 }
 
 // erasure code the entire bucket
 func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
-	var xactID string
-	if xactID, err = api.ECEncodeBucket(apiBP, bck, data, parity); err != nil {
+	var xid string
+	if xid, err = api.ECEncodeBucket(apiBP, bck, data, parity); err != nil {
 		return
 	}
 	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.DisplayName())
-	actionDone(c, msg+toMonitorMsg(c, xactID, ""))
+	actionDone(c, msg+toMonitorMsg(c, xid, ""))
 	return
 }
 

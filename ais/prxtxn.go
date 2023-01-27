@@ -39,7 +39,7 @@ type txnClientCtx struct {
 	}
 }
 
-// TODO: IC(c.uuid) vs _committed_ xactID (currently asserted)
+// TODO: IC(c.uuid) vs _committed_ xid (currently asserted)
 // TODO: cleanup upon failures
 
 //////////////////
@@ -62,7 +62,7 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (err error) {
 // NOTE: global ID can be further reinforced by _not_ ignoring empty returns, i.e.,
 // requiring that each responding target returns a valid ID and all IDs are equal.
 // Likely, an additional condition that a caller must be able to ask for.
-func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xactID string, err error) {
+func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xid string, err error) {
 	globalID := true // cluster-wide xaction ID
 	results := c.bcast(apc.ActCommit, timeout)
 	for _, res := range results {
@@ -72,10 +72,10 @@ func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xactID 
 			break
 		}
 		if globalID {
-			if xactID == "" {
-				xactID = res.header.Get(apc.HdrXactionID)
-			} else if xactID != res.header.Get(apc.HdrXactionID) {
-				xactID, globalID = "", false
+			if xid == "" {
+				xid = res.header.Get(apc.HdrXactionID)
+			} else if xid != res.header.Get(apc.HdrXactionID) {
+				xid, globalID = "", false
 			}
 		}
 	}
@@ -243,7 +243,7 @@ func bmodRm(ctx *bmdModifier, clone *bucketMD) error {
 }
 
 // make-n-copies: { confirm existence -- begin -- update locally -- metasync -- commit }
-func (p *proxy) makeNCopies(msg *apc.ActMsg, bck *cluster.Bck) (xactID string, err error) {
+func (p *proxy) makeNCopies(msg *apc.ActMsg, bck *cluster.Bck) (xid string, err error) {
 	copies, err := _parseNCopies(msg.Value)
 	if err != nil {
 		return
@@ -295,8 +295,8 @@ func (p *proxy) makeNCopies(msg *apc.ActMsg, bck *cluster.Bck) (xactID string, e
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	xactID, err = c.commit(bck, c.cmtTout(waitmsync))
-	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
+	xid, err = c.commit(bck, c.cmtTout(waitmsync))
+	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	if err != nil {
 		p.undoUpdateCopies(msg, bck, ctx.revertProps)
 	}
@@ -322,7 +322,7 @@ func bmodMirror(ctx *bmdModifier, clone *bucketMD) error {
 }
 
 // set-bucket-props: { confirm existence -- begin -- apply props -- metasync -- commit }
-func (p *proxy) setBucketProps(msg *apc.ActMsg, bck *cluster.Bck, nprops *cmn.BucketProps) (string /*xactID*/, error) {
+func (p *proxy) setBucketProps(msg *apc.ActMsg, bck *cluster.Bck, nprops *cmn.BucketProps) (string /*xid*/, error) {
 	// 1. confirm existence
 	bprops, present := p.owner.bmd.get().Get(bck)
 	if !present {
@@ -382,7 +382,7 @@ func (p *proxy) setBucketProps(msg *apc.ActMsg, bck *cluster.Bck, nprops *cmn.Bu
 	c.msg.BMDVersion = bmd.version()
 
 	// 4. if remirror|re-EC|TBD-storage-svc
-	// NOTE: setting up IC listening prior to committing (and confirming xactID) here and elsewhere
+	// NOTE: setting up IC listening prior to committing (and confirming xid) here and elsewhere
 	if ctx.needReMirror || ctx.needReEC {
 		action := apc.ActMakeNCopies
 		if ctx.needReEC {
@@ -416,7 +416,7 @@ func (p *proxy) bmodSetProps(ctx *bmdModifier, clone *bucketMD) (err error) {
 }
 
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
-func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xactID string, err error) {
+func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid string, err error) {
 	if err = p.canRunRebalance(); err != nil {
 		err = cmn.NewErrFailedTo(p, "rename", bckFrom, err)
 		return
@@ -481,8 +481,8 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xact
 
 	// 5. commit
 	c.req.Body = cos.MustMarshal(c.msg)
-	xactID, err = c.commit(bckFrom, c.cmtTout(waitmsync))
-	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
+	xid, err = c.commit(bckFrom, c.cmtTout(waitmsync))
+	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	if err != nil {
 		glog.Errorf("%s: failed to commit %q, err: %v", p, msg.Action, err)
 		return
@@ -523,7 +523,7 @@ func bmodMv(ctx *bmdModifier, clone *bucketMD) error {
 
 // transform (or simply copy) bucket to another bucket
 // { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
-func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (xactID string, err error) {
+func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (xid string, err error) {
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, existsFrom := bmd.Get(bckFrom); !existsFrom {
@@ -582,8 +582,8 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	xactID, err = c.commit(bckFrom, c.cmtTout(waitmsync))
-	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
+	xid, err = c.commit(bckFrom, c.cmtTout(waitmsync))
+	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	if err != nil {
 		// cleanup
 		_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
@@ -592,7 +592,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 }
 
 // transform or copy a list or a range of objects
-func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xactID string, err error) {
+func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid string, err error) {
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
@@ -610,10 +610,10 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xactID str
 	}
 
 	// 3. commit
-	xactID, err = c.commit(bckFrom, c.cmtTout(waitmsync))
-	if xactID != "" {
+	xid, err = c.commit(bckFrom, c.cmtTout(waitmsync))
+	if xid != "" {
 		// happens to grab cluster-wide ID
-		glog.Infof("%s: x-%s[%s]", p, msg.Action, xactID)
+		glog.Infof("%s: x-%s[%s]", p, msg.Action, xid)
 	}
 	return
 }
@@ -660,7 +660,7 @@ func parseECConf(value any) (*cmn.ECConfToUpdate, error) {
 }
 
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }
-func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActMsg) (xactID string, err error) {
+func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActMsg) (xid string, err error) {
 	nlp := bck.GetNameLockPair()
 	ecConf, err := parseECConf(msg.Value)
 	if err != nil {
@@ -722,8 +722,8 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActMsg) (xactID string, err 
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
-	xactID, err = c.commit(bck, c.cmtTout(waitmsync))
-	debug.Assertf(xactID == "" || xactID == c.uuid, "committed %q vs generated %q", xactID, c.uuid)
+	xid, err = c.commit(bck, c.cmtTout(waitmsync))
+	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	return
 }
 
@@ -743,7 +743,7 @@ func bmodUpdateProps(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
-func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xactID string, err error) {
+func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid string, err error) {
 	// begin
 	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
@@ -751,10 +751,10 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg)
 		return
 	}
 	// commit
-	xactID, err = c.commit(bckFrom, c.cmtTout(false /*waitmsync*/))
-	if xactID != "" {
+	xid, err = c.commit(bckFrom, c.cmtTout(false /*waitmsync*/))
+	if xid != "" {
 		// happens to grab cluster-wide ID
-		glog.Infof("%s: x-%s[%s]", p, msg.Action, xactID)
+		glog.Infof("%s: x-%s[%s]", p, msg.Action, xid)
 	}
 	return
 }
@@ -912,7 +912,7 @@ func (p *proxy) destroyBucketData(msg *apc.ActMsg, bck *cluster.Bck) error {
 // promote synchronously if the number of files (to promote) is less or equal
 const promoteNumSync = 16
 
-func (p *proxy) promote(bck *cluster.Bck, msg *apc.ActMsg, tsi *cluster.Snode) (xactID string, err error) {
+func (p *proxy) promote(bck *cluster.Bck, msg *apc.ActMsg, tsi *cluster.Snode) (xid string, err error) {
 	var (
 		totalN           int64
 		waitmsync        bool
@@ -951,8 +951,8 @@ func (p *proxy) promote(bck *cluster.Bck, msg *apc.ActMsg, tsi *cluster.Snode) (
 	}
 
 	// commit
-	xactID, err = c.commit(bck, c.cmtTout(waitmsync))
-	debug.Assertf(noXact || xactID == c.uuid, "noXact=%t, committed %q vs generated %q", noXact, xactID, c.uuid)
+	xid, err = c.commit(bck, c.cmtTout(waitmsync))
+	debug.Assertf(noXact || xid == c.uuid, "noXact=%t, committed %q vs generated %q", noXact, xid, c.uuid)
 	return
 }
 

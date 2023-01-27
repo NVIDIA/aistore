@@ -52,8 +52,8 @@ func (*NotifDownloadListerner) UnmarshalStats(rawMsg []byte) (stats any, finishe
 
 func (nd *NotifDownloadListerner) QueryArgs() cmn.HreqArgs {
 	var (
-		xactID = "nqui-" + cos.GenUUID()
-		q      = url.Values{apc.QparamUUID: []string{xactID}} // compare w/ p.dladm
+		xid    = "nqui-" + cos.GenUUID()
+		q      = url.Values{apc.QparamUUID: []string{xid}} // compare w/ p.dladm
 		args   = cmn.HreqArgs{Method: http.MethodGet, Query: q}
 		dlBody = AdminBody{
 			ID: nd.UUID(), // jobID

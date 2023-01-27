@@ -1342,17 +1342,17 @@ func TestAtimePrefetch(t *testing.T) {
 	for obj := range nameCh {
 		objs = append(objs, obj)
 	}
-	xactID, err := api.EvictList(baseParams, bck, objs)
+	xid, err := api.EvictList(baseParams, bck, objs)
 	tassert.CheckFatal(t, err)
-	args := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xid, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	timeAfterPut := time.Now()
 
-	xactID, err = api.PrefetchList(baseParams, bck, objs)
+	xid, err = api.PrefetchList(baseParams, bck, objs)
 	tassert.CheckFatal(t, err)
-	args = api.XactReqArgs{ID: xactID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 

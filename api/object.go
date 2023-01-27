@@ -515,7 +515,7 @@ func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
 }
 
 // promote files and directories to ais objects
-func Promote(args *PromoteArgs) (xactID string, err error) {
+func Promote(args *PromoteArgs) (xid string, err error) {
 	actMsg := apc.ActMsg{Action: apc.ActPromote, Name: args.SrcFQN}
 	actMsg.Value = &args.PromoteArgs
 	args.BaseParams.Method = http.MethodPost
@@ -527,7 +527,7 @@ func Promote(args *PromoteArgs) (xactID string, err error) {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = args.Bck.AddToQuery(nil)
 	}
-	_, err = reqParams.doReqStr(&xactID)
+	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
 	return
 }

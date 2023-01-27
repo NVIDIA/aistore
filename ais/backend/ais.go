@@ -32,6 +32,8 @@ import (
 
 const ua = "aisnode/backend"
 
+const uuidConfiguredOffline = "defunct"
+
 type (
 	remAis struct {
 		smap *cluster.Smap
@@ -220,11 +222,11 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res cluste
 		out.Smap = remAis.smap
 		res.A = append(res.A, out)
 	}
-	// defunct
+	// defunct (cluster config not updated yet locally?)
 	for alias, clusterURLs := range clusterConf {
 		if _, ok := m.alias[alias]; !ok {
 			if _, ok = m.remote[alias]; !ok {
-				out := &cluster.RemAis{Alias: alias, UUID: "<defunct>"}
+				out := &cluster.RemAis{Alias: alias, UUID: uuidConfiguredOffline}
 				out.URL = fmt.Sprintf("%v", clusterURLs)
 				res.A = append(res.A, out)
 			}

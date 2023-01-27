@@ -1741,7 +1741,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 	{
 		baseParams := tools.BaseAPIParams()
-		xactID, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
+		xid, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 			Mirror: &cmn.MirrorConfToUpdate{
 				Enabled: api.Bool(true),
 			},
@@ -1754,7 +1754,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 		// Even though the bucket is empty, it can take a short while until the
 		// xaction is propagated and finished.
-		reqArgs := api.XactReqArgs{ID: xactID, Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: xactTimeout}
+		reqArgs := api.XactReqArgs{ID: xid, Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: xactTimeout}
 		_, err = api.WaitForXactionIC(baseParams, reqArgs)
 		tassert.CheckFatal(t, err)
 	}
@@ -1786,10 +1786,10 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies int) {
 	tlog.Logf("Set copies = %d\n", ncopies)
 
-	xactID, err := api.MakeNCopies(baseParams, bck, ncopies)
+	xid, err := api.MakeNCopies(baseParams, bck, ncopies)
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMakeNCopies}
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActMakeNCopies}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1969,15 +1969,15 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	// Rename it
 	tlog.Logf("rename %s => %s\n", srcBck, dstBck)
 	m.bck = dstBck
-	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck)
+	xid, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
 		// can retry
-		xactID, err = api.RenameBucket(baseParams, srcBck, dstBck)
+		xid, err = api.RenameBucket(baseParams, srcBck, dstBck)
 	}
 
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2075,7 +2075,7 @@ func TestRenameBucketTwice(t *testing.T) {
 
 	// Rename to first destination
 	tlog.Logf("rename %s => %s\n", srcBck, dstBck1)
-	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck1)
+	xid, err := api.RenameBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination again - already in progress
@@ -2093,7 +2093,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	}
 
 	// Wait for rename to complete
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2171,14 +2171,14 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	srcProps, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
-	xactID, err := api.RenameBucket(baseParams, bck, dstBck)
+	xid, err := api.RenameBucket(baseParams, bck, dstBck)
 	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
 		// can retry
-		xactID, err = api.RenameBucket(baseParams, bck, dstBck)
+		xid, err = api.RenameBucket(baseParams, bck, dstBck)
 	}
 
 	tassert.CheckFatal(t, err)
-	xargs := api.XactReqArgs{ID: xactID}
+	xargs := api.XactReqArgs{ID: xid}
 	_, err = api.WaitForXactionIC(baseParams, xargs)
 	tassert.CheckFatal(t, err)
 
@@ -2492,17 +2492,17 @@ func TestCopyBucketSimple(t *testing.T) {
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
 	tassert.CheckFatal(t, err)
 	defer tools.DestroyBucket(t, proxyURL, dstBck)
 
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
+	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xid})
 	tassert.CheckFatal(t, err)
-	objs, outObjs, inObjs := snaps.ObjCounts(xactID)
+	objs, outObjs, inObjs := snaps.ObjCounts(xid)
 	tassert.Errorf(t, objs == int64(m.num), "expected %d objects copied, got (objs=%d, outObjs=%d, inObjs=%d)",
 		m.num, objs, outObjs, inObjs)
 	if outObjs != inObjs {
@@ -2511,7 +2511,7 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		tlog.Logf("Num sent/received objects: %d\n", outObjs)
 	}
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
-	locBytes, outBytes, inBytes := snaps.ByteCounts(xactID)
+	locBytes, outBytes, inBytes := snaps.ByteCounts(xid)
 	tassert.Errorf(t, locBytes == expectedBytesCnt, "expected %d bytes copied, got (bytes=%d, outBytes=%d, inBytes=%d)",
 		expectedBytesCnt, locBytes, outBytes, inBytes)
 }
@@ -2523,12 +2523,12 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		dstBck    = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 	)
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prefix: cpyPrefix})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prefix: cpyPrefix})
 	tassert.CheckFatal(t, err)
 	defer tools.DestroyBucket(t, proxyURL, dstBck)
 
-	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xactID)
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: time.Minute}
+	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xid)
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2543,22 +2543,22 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	dstBck := cmn.Bck{Name: testBucketName + cos.GenTie(), Provider: apc.AIS}
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
 	tassert.CheckError(t, err)
 	defer tools.DestroyBucket(t, m.proxyURL, dstBck)
 
 	time.Sleep(time.Second)
 
-	tlog.Logf("Aborting x-%s[%s]\n", apc.ActCopyBck, xactID)
-	err = api.AbortXaction(baseParams, api.XactReqArgs{ID: xactID})
+	tlog.Logf("Aborting x-%s[%s]\n", apc.ActCopyBck, xid)
+	err = api.AbortXaction(baseParams, api.XactReqArgs{ID: xid})
 	tassert.CheckError(t, err)
 
 	time.Sleep(time.Second)
-	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
+	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xid})
 	tassert.CheckError(t, err)
-	aborted, err := snaps.IsAborted(xactID)
+	aborted, err := snaps.IsAborted(xid)
 	tassert.CheckError(t, err)
-	tassert.Errorf(t, aborted, "failed to abort copy-bucket (%s)", xactID)
+	tassert.Errorf(t, aborted, "failed to abort copy-bucket (%s)", xid)
 
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
 	tassert.CheckError(t, err)
@@ -2569,23 +2569,23 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie() + trand.String(5), Provider: apc.AIS}
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{DryRun: true})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{DryRun: true})
 	tassert.CheckFatal(t, err)
 	defer tools.DestroyBucket(t, proxyURL, dstBck)
 
-	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xactID)
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActCopyBck, Timeout: time.Minute}
+	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xid)
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xactID})
+	snaps, err := api.QueryXactionSnaps(baseParams, api.XactReqArgs{ID: xid})
 	tassert.CheckFatal(t, err)
 
-	locObjs, outObjs, inObjs := snaps.ObjCounts(xactID)
+	locObjs, outObjs, inObjs := snaps.ObjCounts(xid)
 	tassert.Errorf(t, locObjs+outObjs == int64(m.num), "expected %d objects, got (locObjs=%d, outObjs=%d, inObjs=%d)",
 		m.num, locObjs, outObjs, inObjs)
 
-	locBytes, outBytes, inBytes := snaps.ByteCounts(xactID)
+	locBytes, outBytes, inBytes := snaps.ByteCounts(xid)
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
 	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes, got (locBytes=%d, outBytes=%d, inBytes=%d)",
 		expectedBytesCnt, locBytes, outBytes, inBytes)
@@ -2619,13 +2619,13 @@ func TestRenameAndCopyBucket(t *testing.T) {
 
 	// Rename as dst1
 	tlog.Logf("Rename %s => %s\n", src, dst1)
-	xactID, err := api.RenameBucket(baseParams, src, dst1)
+	xid, err := api.RenameBucket(baseParams, src, dst1)
 	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
 		// retry just once
-		xactID, err = api.RenameBucket(baseParams, src, dst1)
+		xid, err = api.RenameBucket(baseParams, src, dst1)
 	}
 	tassert.CheckFatal(t, err)
-	tlog.Logf("x-%s[%s] in progress...\n", apc.ActMoveBck, xactID)
+	tlog.Logf("x-%s[%s] in progress...\n", apc.ActMoveBck, xid)
 
 	// Try to copy src to dst1 - and note that rename src => dst1 in progress
 	tlog.Logf("Copy %s => %s (note: expecting to fail)\n", src, dst1)
@@ -2643,9 +2643,9 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "expected copy %s => %s to fail (as %s is the renaming destination)", dst1, dst2, dst1)
 
 	// Wait for rename to finish
-	tlog.Logf("Waiting for x-%s[%s] to finish\n", apc.ActMoveBck, xactID)
+	tlog.Logf("Waiting for x-%s[%s] to finish\n", apc.ActMoveBck, xid)
 	time.Sleep(2 * time.Second)
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2708,7 +2708,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 
 	// Rename to first destination
 	tlog.Logf("copy %s => %s\n", srcBck, dstBck1)
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck1, nil)
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck1, nil)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination - copy in progress, both for srcBck and dstBck1
@@ -2733,7 +2733,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	}
 
 	// Wait for copy to complete
-	args := api.XactReqArgs{ID: xactID, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 

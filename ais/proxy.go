@@ -807,16 +807,16 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case apc.ActDeleteObjects, apc.ActEvictObjects:
-		var xactID string
+		var xid string
 		if msg.Action == apc.ActEvictObjects && bck.IsAIS() {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
-		if xactID, err = p.doListRange(r.Method, bck.Name, msg, apireq.query); err != nil {
+		if xid, err = p.doListRange(r.Method, bck.Name, msg, apireq.query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xactID))
+		w.Write([]byte(xid))
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
@@ -1014,9 +1014,9 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.writeErr(w, r, err)
 			return
 		}
-		xactID, err := p.createArchMultiObj(bckFrom, bckTo, msg)
+		xid, err := p.createArchMultiObj(bckFrom, bckTo, msg)
 		if err == nil {
-			w.Write([]byte(xactID))
+			w.Write([]byte(xid))
 		} else {
 			p.writeErr(w, r, err)
 		}
@@ -1114,15 +1114,15 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			return
 		}
 		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bckTo)
-		var xactID string
-		if xactID, err = p.renameBucket(bckFrom, bckTo, msg); err != nil {
+		var xid string
+		if xid, err = p.renameBucket(bckFrom, bckTo, msg); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xactID))
+		w.Write([]byte(xid))
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
-			xactID  string
+			xid     string
 			bckTo   *cluster.Bck
 			tcbMsg  = &apc.TCBMsg{}
 			errCode int
@@ -1170,14 +1170,14 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			return
 		}
 		glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
-		if xactID, err = p.tcb(bck, bckTo, msg, tcbMsg.DryRun); err != nil {
+		if xid, err = p.tcb(bck, bckTo, msg, tcbMsg.DryRun); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xactID))
+		w.Write([]byte(xid))
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
-			xactID string
+			xid    string
 			tcoMsg = &cmn.TCObjsMsg{}
 			bckTo  *cluster.Bck
 		)
@@ -1198,11 +1198,11 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			return
 		}
 		glog.Infof("multi-obj %s %s => %s", msg.Action, bck, bckTo)
-		if xactID, err = p.tcobjs(bck, bckTo, msg); err != nil {
+		if xid, err = p.tcobjs(bck, bckTo, msg); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xactID))
+		w.Write([]byte(xid))
 	case apc.ActAddRemoteBck:
 		if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 			return
@@ -1217,28 +1217,28 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			p.writeErrf(w, r, fmtNotRemote, bucket)
 			return
 		}
-		var xactID string
-		if xactID, err = p.doListRange(r.Method, bucket, msg, query); err != nil {
+		var xid string
+		if xid, err = p.doListRange(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xactID))
+		w.Write([]byte(xid))
 	case apc.ActInvalListCache:
 		p.qm.c.invalidate(bck.Bucket())
 	case apc.ActMakeNCopies:
-		var xactID string
-		if xactID, err = p.makeNCopies(msg, bck); err != nil {
+		var xid string
+		if xid, err = p.makeNCopies(msg, bck); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xactID))
+		w.Write([]byte(xid))
 	case apc.ActECEncode:
-		var xactID string
-		if xactID, err = p.ecEncode(bck, msg); err != nil {
+		var xid string
+		if xid, err = p.ecEncode(bck, msg); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xactID))
+		w.Write([]byte(xid))
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
@@ -1520,12 +1520,12 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		xactID, err := p.promote(bck, msg, tsi)
+		xid, err := p.promote(bck, msg, tsi)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xactID))
+		w.Write([]byte(xid))
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
@@ -1635,7 +1635,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		err           error
 		msg           *apc.ActMsg
 		propsToUpdate cmn.BucketPropsToUpdate
-		xactID        string
+		xid           string
 		nprops        *cmn.BucketProps // complete instance of bucket props with propsToUpdate changes
 	)
 	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false /*dpq*/)
@@ -1687,11 +1687,11 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if xactID, err = p.setBucketProps(msg, bck, nprops); err != nil {
+	if xid, err = p.setBucketProps(msg, bck, nprops); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	w.Write([]byte(xactID))
+	w.Write([]byte(xid))
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -2183,7 +2183,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, 
 	p.statsT.Add(stats.RenameCount, 1)
 }
 
-func (p *proxy) doListRange(method, bucket string, msg *apc.ActMsg, query url.Values) (xactID string, err error) {
+func (p *proxy) doListRange(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {
 	var (
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAmsg(msg, nil, cos.GenUUID())
@@ -2207,7 +2207,7 @@ func (p *proxy) doListRange(method, bucket string, msg *apc.ActMsg, query url.Va
 		break
 	}
 	freeBcastRes(results)
-	xactID = aisMsg.UUID
+	xid = aisMsg.UUID
 	return
 }
 

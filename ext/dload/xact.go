@@ -200,10 +200,10 @@ func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 // Xact //
 //////////
 
-func newXact(t cluster.Target, statsT stats.Tracker, xactID string) (xld *Xact) {
+func newXact(t cluster.Target, statsT stats.Tracker, xid string) (xld *Xact) {
 	xld = &Xact{t: t, statsT: statsT}
 	xld.dispatcher = newDispatcher(xld)
-	xld.DemandBase.Init(xactID, apc.Download, nil /*bck*/, 0 /*use default*/)
+	xld.DemandBase.Init(xid, apc.Download, nil /*bck*/, 0 /*use default*/)
 	return
 }
 

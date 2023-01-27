@@ -97,10 +97,10 @@ func testETLMultiObj(t *testing.T, etlName string, fromBck, toBck cmn.Bck, fileR
 	}
 
 	tlog.Logf("Start offline ETL[%s]\n", etlName)
-	xactID, err := api.ETLMultiObj(baseParams, fromBck, tcoMsg)
+	xid, err := api.ETLMultiObj(baseParams, fromBck, tcoMsg)
 	tassert.CheckFatal(t, err)
 
-	wargs := api.XactReqArgs{ID: xactID, Kind: apc.ActETLObjects}
+	wargs := api.XactReqArgs{ID: xid, Kind: apc.ActETLObjects}
 	err = api.WaitForXactionIdle(baseParams, wargs)
 	tassert.CheckFatal(t, err)
 

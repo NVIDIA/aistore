@@ -161,7 +161,7 @@ func InitSpec(t cluster.Target, msg *InitSpecMsg, etlName string, opts StartOpts
 // - make the corresponding assorted substitutions in the etl/runtime/podspec.yaml spec, and
 // - execute `InitSpec` with the modified podspec
 // See also: etl/runtime/podspec.yaml
-func InitCode(t cluster.Target, msg *InitCodeMsg, xactID string) error {
+func InitCode(t cluster.Target, msg *InitCodeMsg, xid string) error {
 	var (
 		ftp      = fromToPairs(msg)
 		replacer = strings.NewReplacer(ftp...)
@@ -175,7 +175,7 @@ func InitCode(t cluster.Target, msg *InitCodeMsg, xactID string) error {
 	// (the point where InitCode flow converges w/ InitSpec)
 	return InitSpec(t,
 		&InitSpecMsg{msg.InitMsgBase, []byte(podSpec)},
-		xactID,
+		xid,
 		StartOpts{Env: map[string]string{
 			r.CodeEnvName(): string(msg.Code),
 			r.DepsEnvName(): string(msg.Deps),
@@ -245,7 +245,7 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred that should be passed on.
-func start(t cluster.Target, msg *InitSpecMsg, xactID string, opts StartOpts) (errCtx *cmn.ETLErrCtx, podName, svcName string, err error) {
+func start(t cluster.Target, msg *InitSpecMsg, xid string, opts StartOpts) (errCtx *cmn.ETLErrCtx, podName, svcName string, err error) {
 	debug.Assert(k8s.NodeName != "") // checked above
 
 	errCtx = &cmn.ETLErrCtx{TID: t.SID(), ETLName: msg.IDX}
@@ -280,7 +280,7 @@ func start(t cluster.Target, msg *InitSpecMsg, xactID string, opts StartOpts) (e
 		return
 	}
 
-	boot.setupXaction(xactID)
+	boot.setupXaction(xid)
 
 	// finally, add Communicator to the runtime registry
 	c := makeCommunicator(commArgs{

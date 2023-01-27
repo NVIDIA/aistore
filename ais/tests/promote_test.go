@@ -165,11 +165,11 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 	}
 
 	// (I) do
-	xactID, err := api.Promote(&args)
+	xid, err := api.Promote(&args)
 	tassert.CheckFatal(t, err)
 
 	// wait for the operation to finish and collect stats
-	locObjs, outObjs, inObjs := test.wait(t, xactID, tempdir, target, &m)
+	locObjs, outObjs, inObjs := test.wait(t, xid, tempdir, target, &m)
 
 	// list
 	tlog.Logln("Listing and counting...")
@@ -207,7 +207,7 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 		}
 	}
 	// vs xaction stats
-	if xactID != "" {
+	if xid != "" {
 		if test.singleTarget {
 			tassert.Errorf(t, locObjs == int64(expNum),
 				"single-target promote: expected promoted-objs-num==%d, got %d", expNum, locObjs)
@@ -243,10 +243,10 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 	}
 
 	// do
-	xactID, err = api.Promote(&args)
+	xid, err = api.Promote(&args)
 	tassert.CheckFatal(t, err)
 
-	locObjs, outObjs, inObjs = test.wait(t, xactID, tempdir, target, &m)
+	locObjs, outObjs, inObjs = test.wait(t, xid, tempdir, target, &m)
 
 	// list
 	tlog.Logln("Listing and counting the 2nd time...")
@@ -259,7 +259,7 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 	// xaction stats versus `numDel` - but note:
 	// other than the selected few objects that were deleted prior to promoting the 2nd time,
 	// all the rest already exists and is not expected to "show up" in the stats
-	if xactID != "" {
+	if xid != "" {
 		if test.singleTarget {
 			tassert.Errorf(t, locObjs == int64(numDel),
 				"single-target promote: expected to \"undelete\" %d objects, got %d", expNum, locObjs)
@@ -272,25 +272,25 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 }
 
 // wait for an xaction (if there's one) and then query all targets for stats
-func (test *prmTests) wait(t *testing.T, xactID, tempdir string, target *cluster.Snode, m *ioContext) (locObjs, outObjs, inObjs int64) {
+func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *cluster.Snode, m *ioContext) (locObjs, outObjs, inObjs int64) {
 	time.Sleep(4 * time.Second)
 	xargs := api.XactReqArgs{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
 	xname := fmt.Sprintf("%q", apc.ActPromote)
-	if xactID != "" {
-		xargs.ID = xactID
-		xname = fmt.Sprintf("x-%s[%s]", apc.ActPromote, xactID)
-		tassert.Errorf(t, cos.IsValidUUID(xactID), "expecting valid x-UUID %q", xactID)
+	if xid != "" {
+		xargs.ID = xid
+		xname = fmt.Sprintf("x-%s[%s]", apc.ActPromote, xid)
+		tassert.Errorf(t, cos.IsValidUUID(xid), "expecting valid x-UUID %q", xid)
 	}
 
 	// wait "cases" 1. through 3.
-	if xactID != "" && !test.singleTarget { // 1. cluster-wide xaction
+	if xid != "" && !test.singleTarget { // 1. cluster-wide xaction
 		tlog.Logf("Waiting for global %s(%s=>%s)\n", xname, tempdir, m.bck)
 		notifStatus, err := api.WaitForXactionIC(baseParams, xargs)
 		tassert.CheckFatal(t, err)
 		if notifStatus != nil && (notifStatus.AbortedX || notifStatus.ErrMsg != "") {
 			tlog.Logf("Warning: notif-status: %+v\n", notifStatus)
 		}
-	} else if xactID != "" && test.singleTarget { // 2. single-target xaction
+	} else if xid != "" && test.singleTarget { // 2. single-target xaction
 		xargs.DaemonID = target.ID()
 		tlog.Logf("Waiting for %s(%s=>%s) at %s\n", xname, tempdir, m.bck, target.StringEx())
 		err := api.WaitForXactionNode(baseParams, xargs, xactSnapNotRunning)
@@ -302,15 +302,15 @@ func (test *prmTests) wait(t *testing.T, xactID, tempdir string, target *cluster
 	// collect stats
 	xs, err := api.QueryXactionSnaps(baseParams, xargs)
 	tassert.CheckFatal(t, err)
-	if xactID != "" {
-		locObjs, outObjs, inObjs = xs.ObjCounts(xactID)
-		tlog.Logf("%s[%s]: (loc, out, in) = (%d, %d, %d)\n", xname, xactID, locObjs, outObjs, inObjs)
+	if xid != "" {
+		locObjs, outObjs, inObjs = xs.ObjCounts(xid)
+		tlog.Logf("%s[%s]: (loc, out, in) = (%d, %d, %d)\n", xname, xid, locObjs, outObjs, inObjs)
 		return
 	}
 	uuids := xs.GetUUIDs()
-	for _, xactID := range uuids {
-		locObjs, outObjs, inObjs = xs.ObjCounts(xactID)
-		tlog.Logf("%s[%s]: (loc, out, in) = (%d, %d, %d)\n", xname, xactID, locObjs, outObjs, inObjs)
+	for _, xid := range uuids {
+		locObjs, outObjs, inObjs = xs.ObjCounts(xid)
+		tlog.Logf("%s[%s]: (loc, out, in) = (%d, %d, %d)\n", xname, xid, locObjs, outObjs, inObjs)
 	}
 	return 0, 0, 0
 }

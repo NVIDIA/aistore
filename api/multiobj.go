@@ -23,11 +23,11 @@ func CreateArchMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.ArchiveMsg) (str
 	return doListRangeRequest(bp, fromBck, apc.ActArchive, msg)
 }
 
-func CopyMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
+func CopyMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xid string, err error) {
 	return doListRangeRequest(bp, fromBck, apc.ActCopyObjects, msg)
 }
 
-func ETLMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
+func ETLMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xid string, err error) {
 	return doListRangeRequest(bp, fromBck, apc.ActETLObjects, msg)
 }
 
@@ -69,7 +69,7 @@ func EvictRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 
 // Handles multi-object (delete, prefetch, evict) operations
 // as well as (archive, copy and ETL) transactions
-func doListRangeRequest(bp BaseParams, bck cmn.Bck, action string, msg any) (xactID string, err error) {
+func doListRangeRequest(bp BaseParams, bck cmn.Bck, action string, msg any) (xid string, err error) {
 	q := bck.AddToQuery(nil)
 	switch action {
 	case apc.ActDeleteObjects, apc.ActEvictObjects:
@@ -90,7 +90,7 @@ func doListRangeRequest(bp BaseParams, bck cmn.Bck, action string, msg any) (xac
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	_, err = reqParams.doReqStr(&xactID)
+	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
 	return
 }

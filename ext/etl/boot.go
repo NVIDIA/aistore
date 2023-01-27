@@ -195,12 +195,12 @@ func (b *etlBootstrapper) waitPodReady() error {
 	return err
 }
 
-func (b *etlBootstrapper) setupXaction(xactID string) {
-	rns := xreg.RenewETL(b.t, b.msg, xactID)
+func (b *etlBootstrapper) setupXaction(xid string) {
+	rns := xreg.RenewETL(b.t, b.msg, xid)
 	debug.AssertNoErr(rns.Err)
 	debug.Assert(!rns.IsRunning())
 	b.xctn = rns.Entry.Get()
-	debug.Assertf(b.xctn.ID() == xactID, "%s vs %s", b.xctn.ID(), xactID)
+	debug.Assertf(b.xctn.ID() == xid, "%s vs %s", b.xctn.ID(), xid)
 }
 
 func (b *etlBootstrapper) _updPodCommand() {

@@ -41,7 +41,7 @@ var _ = Describe("Notifications xaction test", func() {
 	)
 
 	cos.InitShortID(0)
-	xactID := cos.GenUUID()
+	xid := cos.GenUUID()
 
 	// helper functions
 	var (
@@ -88,7 +88,7 @@ var _ = Describe("Notifications xaction test", func() {
 			return n
 		}
 
-		baseXact = func(xactID string, counts ...int64) *cluster.Snap {
+		baseXact = func(xid string, counts ...int64) *cluster.Snap {
 			var (
 				objCount  int64
 				byteCount int64
@@ -100,28 +100,28 @@ var _ = Describe("Notifications xaction test", func() {
 				byteCount = counts[1]
 			}
 			return &cluster.Snap{
-				ID: xactID,
+				ID: xid,
 				Stats: cluster.Stats{
 					Bytes: byteCount,
 					Objs:  objCount,
 				}}
 		}
 
-		finishedXact = func(xactID string, counts ...int64) (snap *cluster.Snap) {
-			snap = baseXact(xactID, counts...)
+		finishedXact = func(xid string, counts ...int64) (snap *cluster.Snap) {
+			snap = baseXact(xid, counts...)
 			snap.EndTime = time.Now()
 			return
 		}
 
-		abortedXact = func(xactID string, counts ...int64) (snap *cluster.Snap) {
-			snap = finishedXact(xactID, counts...)
+		abortedXact = func(xid string, counts ...int64) (snap *cluster.Snap) {
+			snap = finishedXact(xid, counts...)
 			snap.AbortedX = true
 			return
 		}
 
-		notifRequest = func(daeID, xactID, notifKind string, stats any) *http.Request {
+		notifRequest = func(daeID, xid, notifKind string, stats any) *http.Request {
 			nm := cluster.NotifMsg{
-				UUID: xactID,
+				UUID: xid,
 				Data: cos.MustMarshal(stats),
 			}
 			body := bytes.NewBuffer(cos.MustMarshal(nm))
@@ -151,13 +151,13 @@ var _ = Describe("Notifications xaction test", func() {
 
 	BeforeEach(func() {
 		n = testNotifs()
-		nl = xact.NewXactNL(xactID, apc.ActECEncode, &smap.Smap, targets)
+		nl = xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, targets)
 	})
 
 	Describe("handleMsg", func() {
 		It("should add node to finished set on receiving finished stats", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(0))
-			snap := finishedXact(xactID)
+			snap := finishedXact(xid)
 			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), nil)
 			Expect(err).To(BeNil())
 			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
@@ -166,7 +166,7 @@ var _ = Describe("Notifications xaction test", func() {
 
 		It("should set error when source sends an error message", func() {
 			Expect(nl.Err()).To(BeNil())
-			snap := finishedXact(xactID)
+			snap := finishedXact(xid)
 			srcErr := errors.New("some error")
 			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), srcErr)
 			Expect(err).To(BeNil())
@@ -177,7 +177,7 @@ var _ = Describe("Notifications xaction test", func() {
 		It("should finish when all the Notifiers finished", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(0))
 			n.add(nl)
-			snap := finishedXact(xactID)
+			snap := finishedXact(xid)
 			n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), nil)
 			err := n.handleFinished(nl, targets[target2ID], cos.MustMarshal(snap), nil)
 			Expect(err).To(BeNil())
@@ -186,7 +186,7 @@ var _ = Describe("Notifications xaction test", func() {
 		})
 
 		It("should be done if xaction Aborted", func() {
-			snap := abortedXact(xactID)
+			snap := abortedXact(xid)
 			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), nil)
 			Expect(err).To(BeNil())
 			Expect(nl.Aborted()).To(BeTrue())
@@ -201,8 +201,8 @@ var _ = Describe("Notifications xaction test", func() {
 				updatedByteCount int64 = 120
 			)
 
-			statsFirst := baseXact(xactID, initObjCount, initByteCount)
-			statsProgress := baseXact(xactID, updatedObjCount, updatedByteCount)
+			statsFirst := baseXact(xid, initObjCount, initByteCount)
+			statsProgress := baseXact(xid, updatedObjCount, updatedByteCount)
 
 			// Handle fist set of stats
 			err := n.handleProgress(nl, targets[target1ID], cos.MustMarshal(statsFirst), nil)
@@ -227,7 +227,7 @@ var _ = Describe("Notifications xaction test", func() {
 	Describe("ListenSmapChanged", func() {
 		It("should mark xaction Aborted when node not in smap", func() {
 			notifiers := getNodeMap(target1ID, target2ID)
-			nl = xact.NewXactNL(xactID, apc.ActECEncode, &smap.Smap, notifiers)
+			nl = xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, notifiers)
 			n = testNotifs()
 			n.add(nl)
 
@@ -245,21 +245,21 @@ var _ = Describe("Notifications xaction test", func() {
 
 	Describe("handler", func() {
 		It("should mark xaction finished when done", func() {
-			stats := finishedXact(xactID)
+			stats := finishedXact(xid)
 			n.add(nl)
 
-			request := notifRequest(target1ID, xactID, apc.Finished, stats)
+			request := notifRequest(target1ID, xid, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// Second target sends progress
-			request = notifRequest(target2ID, xactID, apc.Progress, stats)
+			request = notifRequest(target2ID, xid, apc.Progress, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should not be marked finished on progress notification
 			Expect(nl.Finished()).To(BeFalse())
 
 			// Second target finished
-			request = notifRequest(target2ID, xactID, apc.Finished, stats)
+			request = notifRequest(target2ID, xid, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished
@@ -267,12 +267,12 @@ var _ = Describe("Notifications xaction test", func() {
 		})
 
 		It("should accept finished notifications after a target aborts", func() {
-			stats := finishedXact(xactID)
-			abortStats := abortedXact(xactID)
+			stats := finishedXact(xid)
+			abortStats := abortedXact(xid)
 			n.add(nl)
 
 			// First target aborts an xaction
-			request := notifRequest(target1ID, xactID, apc.Finished, abortStats)
+			request := notifRequest(target1ID, xid, apc.Finished, abortStats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished when an xaction aborts
@@ -280,7 +280,7 @@ var _ = Describe("Notifications xaction test", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(1))
 
 			// Second target sends finished stats
-			request = notifRequest(target2ID, xactID, apc.Finished, stats)
+			request = notifRequest(target2ID, xid, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
 			Expect(nl.Finished()).To(BeTrue())
 			Expect(nl.FinCount()).To(BeEquivalentTo(2))
