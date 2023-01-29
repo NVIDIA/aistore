@@ -77,15 +77,16 @@ type (
 		smap *smapX // smap before pre-modifcation
 		rmd  *rebMD // latest rebMD post modification
 
-		msg      *apc.ActMsg    // action modifying smap (apc.Act*)
-		nsi      *cluster.Snode // new node to be added
-		nid      string         // DaemonID of candidate primary to vote
-		sid      string         // DaemonID of node to modify
-		flags    cos.BitFlags   // enum cmn.Snode* to set or clear
-		status   int            // http.Status* of operation
-		exists   bool           // node (nsi) added already exists in `smap`
-		skipReb  bool           // skip rebalance when target added/removed
-		_mustReb bool           // must run rebalance (modifier's internal)
+		msg         *apc.ActMsg    // action modifying smap (apc.Act*)
+		nsi         *cluster.Snode // new node to be added
+		nid         string         // DaemonID of candidate primary to vote
+		sid         string         // DaemonID of node to modify
+		flags       cos.BitFlags   // enum cmn.Snode* to set or clear
+		status      int            // http.Status* of operation
+		exists      bool           // node (nsi) that's being added already exists in Smap
+		interrupted bool           // target reports interrupted rebalance or cold restart (powercycle)
+		skipReb     bool           // skip rebalance when target added/removed
+		_mustReb    bool           // must run rebalance (modifier's internal)
 	}
 
 	rmdModifier struct {

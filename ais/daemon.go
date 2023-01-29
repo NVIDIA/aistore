@@ -215,14 +215,12 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 func newProxy(co *configOwner) *proxy {
 	p := &proxy{}
-	p.name = apc.Proxy
 	p.owner.config = co
 	return p
 }
 
 func newTarget(co *configOwner) *target {
 	t := &target{backend: make(backends, 8)}
-	t.name = apc.Target
 	t.owner.bmd = newBMDOwnerTgt()
 	t.owner.etl = newEtlMDOwnerTgt()
 	t.owner.config = co

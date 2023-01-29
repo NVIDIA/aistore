@@ -286,8 +286,8 @@ func showJobsHandler(c *cli.Context) error {
 	var l int
 	l, err = showJobsDo(c, name, xid, daemonID, bck)
 	if err == nil && l == 0 {
-		n := qflprn(allJobsFlag)
-		fmt.Fprintf(c.App.Writer, "No running jobs. Use %s to show all, %s <TAB-TAB> to select, help for details.\n", n, n)
+		n, h := qflprn(allJobsFlag), qflprn(cli.HelpFlag)
+		fmt.Fprintf(c.App.Writer, "No running jobs. Use %s to show all, %s <TAB-TAB> to select, %s for details.\n", n, n, h)
 	}
 	return err
 }

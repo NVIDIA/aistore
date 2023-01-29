@@ -189,11 +189,16 @@ func (d *Snode) Equals(o *Snode) (eq bool) {
 		if !eq {
 			return
 		}
-		eq2 := d.DaeType == o.DaeType && d.PubNet.Equals(o.PubNet) &&
-			d.ControlNet.Equals(o.ControlNet) && d.DataNet.Equals(o.DataNet)
-		debug.Assertf(eq2, "%s(pub: %s, control: %s, data: %s) != %s(pub: %s, control: %s, data: %s)",
-			d.StringEx(), d.PubNet.URL, d.ControlNet.URL, d.DataNet.URL,
-			o.StringEx(), o.PubNet.URL, o.ControlNet.URL, o.DataNet.URL)
+		// if eq then must be equal
+		name := d.StringEx()
+		debug.Assertf(d.DaeType == o.DaeType, "%s: node type %q vs %q", name, d.DaeType, o.DaeType)
+		debug.Assertf(d.PubNet.Port == o.PubNet.Port, "%s: pub port %s vs %s", name, d.PubNet.Port, o.PubNet.Port)
+		debug.Assertf(d.PubNet.Hostname == o.PubNet.Hostname, "%s: pub host %s vs %s",
+			name, d.PubNet.Hostname, o.PubNet.Hostname)
+		debug.Assertf(d.ControlNet.Port == o.ControlNet.Port, "%s: ctrl port %s vs %s",
+			name, d.ControlNet.Port, o.ControlNet.Port)
+		debug.Assertf(d.ControlNet.Hostname == o.ControlNet.Hostname, "%s: ctrl host %s vs %s",
+			name, d.ControlNet.Hostname, o.ControlNet.Hostname)
 	})
 	return
 }
@@ -252,9 +257,9 @@ func (d *Snode) IsAnySet(flags cos.BitFlags) bool { return d.Flags.IsAnySet(flag
 func (d *Snode) nonElectable() bool               { return d.Flags.IsSet(SnodeNonElectable) }
 func (d *Snode) isIC() bool                       { return d.Flags.IsSet(SnodeIC) }
 
-//////////////////////
-//	  NetInfo       //
-//////////////////////
+/////////////
+// NetInfo //
+/////////////
 
 func NewNetInfo(proto, hostname, port string) *NetInfo {
 	tcpEndpoint := fmt.Sprintf("%s:%s", hostname, port)
@@ -275,10 +280,6 @@ func (ni *NetInfo) TCPEndpoint() string {
 
 func (ni *NetInfo) String() string {
 	return ni.TCPEndpoint()
-}
-
-func (ni *NetInfo) Equals(other NetInfo) bool {
-	return ni.Hostname == other.Hostname && ni.Port == other.Port && ni.URL == other.URL
 }
 
 //===============================================================

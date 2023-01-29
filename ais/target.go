@@ -74,6 +74,8 @@ type (
 // interface guard
 var _ cos.Runner = (*target)(nil)
 
+func (*target) Name() string { return apc.Target } // as cos.Runner
+
 //
 // target
 //
@@ -478,9 +480,11 @@ func (t *target) Stop(err error) {
 func (t *target) checkRestarted() (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
 		t.statsT.Add(stats.RestartCount, 1)
-	} else {
-		fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)
+
+		// TODO -- FIXME quick and dirty to trigger rebalance
+		fs.PersistMarker(fname.RebalanceMarker)
 	}
+	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)
 	return
 }
 

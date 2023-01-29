@@ -421,7 +421,7 @@ until:
 	}
 	debug.AssertNoErr(smap.validate())
 	//
-	// NOTE: under Smap lock to serialize vs node joins (see `httpclupost`)
+	// NOTE: under Smap lock to serialize the following vs node joins (see `httpclupost`)
 	//
 	p.owner.smap.mu.Lock()
 	if !p.owner.rmd.rebalance.CAS(true, false) {

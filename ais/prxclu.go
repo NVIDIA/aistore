@@ -351,15 +351,19 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		nsi = regReq.SI
-		// node ID is obtained from the node itself: `aisnode` either loads existing or generates a new
-		// unique ID at startup (for details, see `initDaemonID`).
+		// must be reachable and must respond
 		si, err := p.getDaemonInfo(nsi)
 		if err != nil {
 			p.writeErrf(w, r, "%s: failed to obtain node info from %s: %v", p.si, nsi.StringEx(), err)
 			return
 		}
-		nsi = regReq.SI
-		nsi.DaeID = si.ID()
+		// NOTE: ID _and_ 3-networks configuration is obtained from the node itself;
+		// as far as ID, `aisnode` either:
+		// (a) loads existing one,
+		// (b) gets it from command line or env (see `envDaemonID`), or
+		// (c) generates a new one (see `genDaemonID`)
+		// - in that exact sequence.
+		*nsi = *si
 	case apc.SelfJoin: // auto-join at node startup
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
@@ -449,32 +453,38 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p.owner.smap.mu.Lock()
-	update, err := p.handleJoinKalive(nsi, regReq.Smap, apiOp, nsi.Flags)
-	if !nsi.IsProxy() && p.NodeStarted() {
-		if p.owner.rmd.rebalance.CAS(false, regReq.RebInterrupted) && regReq.RebInterrupted {
-			glog.Errorf("%s: target %s reports interrupted rebalance", p, nsi.StringEx())
-		}
-	}
+	upd, err := p.handleJoinKalive(nsi, regReq.Smap, apiOp, nsi.Flags)
 	p.owner.smap.mu.Unlock()
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	if !update {
+	if !upd {
+		if apiOp == apc.AdminJoin {
+			// TODO: respond !updated (NOP)
+			p.writeJSON(w, r, apc.JoinNodeResult{DaemonID: nsi.ID()}, "")
+		}
 		return
 	}
 
+	var rebInterrupted bool
+	if !nsi.IsProxy() && p.NodeStarted() {
+		if p.owner.rmd.rebalance.CAS(false, regReq.RebInterrupted) && regReq.RebInterrupted {
+			rebInterrupted = true
+			glog.Errorf("%s: %s reports interrupted rebalance", p, nsi.StringEx())
+		}
+	}
 	msg := &apc.ActMsg{Action: action, Name: nsi.ID()}
 	glog.Infof("%s: %s(%q) %s (%s)...", p, apiOp, action, nsi.StringEx(), regReq.Smap)
 
 	if apiOp == apc.AdminJoin {
 		// return both node ID and rebalance ID
-		rebID, err := p.updateAndDistribute(nsi, msg, nsi.Flags)
+		rebID, err := p.mcastJoined(nsi, msg, nsi.Flags, rebInterrupted)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		p.writeJSON(w, r, apc.JoinNodeResult{DaemonID: nsi.Name(), RebalanceID: rebID}, "")
+		p.writeJSON(w, r, apc.JoinNodeResult{DaemonID: nsi.ID(), RebalanceID: rebID}, "")
 		return
 	}
 
@@ -488,11 +498,11 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()))
 	}
 
-	go p.updateAndDistribute(nsi, msg, nsi.Flags)
+	go p.mcastJoined(nsi, msg, nsi.Flags, rebInterrupted)
 }
 
-// when joining manually, update the node with cluster meta that does not include Smap (the later
-// gets metasync-ed upon success of this primary <=> joining node "handshake")
+// when joining manually: update the node with cluster meta that does not include Smap
+// (the later gets finalized and metasync-ed upon success)
 func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error) {
 	cm, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 	if err != nil {
@@ -523,21 +533,31 @@ func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error
 }
 
 // NOTE: executes under Smap lock
+// TODO: extract Infof and Warningf
 func (p *proxy) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags) (upd bool, err error) {
 	smap := p.owner.smap.get()
-	keepalive := apiOp == apc.Keepalive
 	if !smap.isPrimary(p.si) {
 		err = newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
 		return
 	}
-	if nsi.IsProxy() {
-		osi := smap.GetProxy(nsi.ID())
-		if !p.addOrUpdateNode(nsi, osi, keepalive) {
-			return
+
+	keepalive := apiOp == apc.Keepalive
+	osi := smap.GetNode(nsi.ID())
+	if osi == nil {
+		if keepalive {
+			glog.Warningf("%s keepalive %s: adding back to the %s", p, nsi.StringEx(), smap)
 		}
 	} else {
-		osi := smap.GetTarget(nsi.ID())
-		if keepalive && !p.addOrUpdateNode(nsi, osi, keepalive) {
+		if osi.Type() != nsi.Type() {
+			err = fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)", osi.StringEx(), nsi.StringEx(), smap, keepalive)
+			return
+		}
+		if keepalive {
+			upd = p.kalive(nsi, osi)
+		} else {
+			upd = p.rereg(nsi, osi)
+		}
+		if !upd {
 			return
 		}
 	}
@@ -559,15 +579,46 @@ func (p *proxy) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp strin
 	return
 }
 
-func (p *proxy) updateAndDistribute(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags) (xid string,
-	err error) {
+func (p *proxy) kalive(nsi, osi *cluster.Snode) bool {
+	if !osi.Equals(nsi) {
+		duplicate, err := p.detectDaemonDuplicate(osi, nsi)
+		if err != nil {
+			glog.Errorf("%s: %s(%s) failed to obtain node info: %v", p, nsi.StringEx(), nsi.PubNet.URL, err)
+			return false
+		}
+		if duplicate {
+			glog.Errorf("%s: %s(%s) is trying to keepalive with duplicate ID", p, nsi.StringEx(), nsi.PubNet.URL)
+			return false
+		}
+		glog.Warningf("%s: renewing registration %s (info changed!)", p, nsi.StringEx())
+		return true // NOTE: update cluster map
+	}
+
+	p.keepalive.heardFrom(nsi.ID(), false /*reset*/)
+	return false
+}
+
+func (p *proxy) rereg(nsi, osi *cluster.Snode) bool {
+	if !p.NodeStarted() {
+		return true
+	}
+	if osi.Equals(nsi) {
+		glog.Infof("%s: %s is already *in*", p, nsi.StringEx())
+		return false
+	}
+	glog.Warningf("%s: renewing %s %+v => %+v", p, nsi.StringEx(), osi, nsi)
+	return true
+}
+
+func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags, rebInterrupted bool) (xid string, err error) {
 	ctx := &smapModifier{
-		pre:   p._updPre,
-		post:  p._updPost,
-		final: p._updFinal,
-		nsi:   nsi,
-		msg:   msg,
-		flags: flags,
+		pre:         p._updPre,
+		post:        p._updPost,
+		final:       p._updFinal,
+		nsi:         nsi,
+		msg:         msg,
+		flags:       flags,
+		interrupted: rebInterrupted,
 	}
 	err = p.owner.smap.modify(ctx)
 	if err != nil {
@@ -605,9 +656,10 @@ func (p *proxy) _updPost(ctx *smapModifier, clone *smapX) {
 	if err := p.canRunRebalance(); err != nil {
 		return
 	}
-	// `ctx.exists` - trigger rebalance when target with the same ID already exists
+	// `ctx.exists` - make a note of the fact that target with the same ID already exists
+	// `ctx.interrupted` - trigger global rebalance when target reports interrupted rebalance or power-cycle
 	// (see mustRunRebalance() for all other conditions)
-	if ctx.exists || mustRunRebalance(ctx, clone) {
+	if mustRunRebalance(ctx, clone) {
 		rmdCtx := &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) {
 				clone.TargetIDs = []string{ctx.nsi.ID()}
@@ -659,41 +711,6 @@ func (p *proxy) _updFinal(ctx *smapModifier, clone *smapX) {
 	}
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
-}
-
-func (p *proxy) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) bool {
-	if keepalive {
-		if osi == nil {
-			glog.Warningf("register/keepalive %s: adding back to the cluster map", nsi.StringEx())
-			return true
-		}
-		if !osi.Equals(nsi) {
-			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
-				glog.Errorf("%s: %s(%s) failed to obtain daemon info, err: %v",
-					p.si, nsi.StringEx(), nsi.PubNet.URL, err)
-				return false
-			} else if duplicate {
-				glog.Errorf("%s: %s(%s) is trying to register/keepalive with duplicate ID",
-					p.si, nsi.StringEx(), nsi.PubNet.URL)
-				return false
-			}
-			glog.Warningf("%s: renewing registration %s (info changed!)", p, nsi.StringEx())
-			return true
-		}
-		p.keepalive.heardFrom(nsi.ID(), false /*reset*/)
-		return false
-	}
-	if osi != nil {
-		if !p.NodeStarted() {
-			return true
-		}
-		if osi.Equals(nsi) {
-			glog.Infof("%s: %s is already registered", p, nsi.StringEx())
-			return false
-		}
-		glog.Warningf("%s: renewing %s registration %+v => %+v", p, nsi.StringEx(), osi, nsi)
-	}
-	return true
 }
 
 func (p *proxy) _newRebRMD(ctx *smapModifier, clone *smapX) {
@@ -1673,6 +1690,10 @@ func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		return false
 	}
+	if ctx.interrupted {
+		ctx._mustReb = true
+		goto ret
+	}
 	for _, si := range cur.Tmap {
 		if si.IsProxy() || si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
 			continue
@@ -1693,7 +1714,7 @@ func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
 	}
 ret:
 	if ctx._mustReb {
-		ctx._mustReb = prev.CountActiveTs() != 0 && cur.CountActiveTs() != 0
+		ctx._mustReb = prev.CountActiveTs() > 0 && cur.CountActiveTs() > 1
 	}
 	return ctx._mustReb
 }

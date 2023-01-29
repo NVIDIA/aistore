@@ -93,6 +93,7 @@ var (
 	_ electable  = (*proxy)(nil)
 )
 
+func (*proxy) Name() string     { return apc.Proxy } // as cos.Runner
 func (p *proxy) String() string { return p.si.String() }
 
 func (p *proxy) initClusterCIDR() {

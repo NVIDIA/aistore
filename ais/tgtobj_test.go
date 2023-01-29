@@ -65,7 +65,6 @@ func TestMain(m *testing.M) {
 	config := cmn.GCO.Get()
 	co := newConfigOwner(config)
 	t = newTarget(co)
-	t.name = apc.Target
 	t.initNetworks()
 	tid, _ := initTID(config)
 	t.si.Init(tid, apc.Target)

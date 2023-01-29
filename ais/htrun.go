@@ -43,7 +43,6 @@ import (
 const ciePrefix = "cluster integrity error cie#"
 
 type htrun struct {
-	name      string
 	si        *cluster.Snode
 	logger    *log.Logger
 	keepalive keepaliver
@@ -78,7 +77,6 @@ type htrun struct {
 // htrun //
 ///////////
 
-func (h *htrun) Name() string             { return h.name }
 func (h *htrun) DataClient() *http.Client { return h.client.data }
 
 func (h *htrun) Snode() *cluster.Snode { return h.si }
