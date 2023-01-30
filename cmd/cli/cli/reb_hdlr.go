@@ -38,6 +38,7 @@ var (
 	}
 )
 
+// (implemented over Go text/tabwriter directly w/ no templates)
 func showRebalanceHandler(c *cli.Context) error {
 	var (
 		tw             = &tabwriter.Writer{}

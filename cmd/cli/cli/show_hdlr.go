@@ -8,6 +8,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -102,10 +103,11 @@ var (
 			logSevFlag,
 			logFlushFlag,
 		),
-		subcmdShowClusterStats: {
+		subcmdShowStats: {
 			jsonFlag,
 			rawFlag,
 			refreshFlag,
+			regexFlag,
 		},
 	}
 
@@ -146,13 +148,21 @@ var (
 		Action:       showObjectHandler,
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
+	showCmdStats = cli.Command{ // TODO -- FIXME: provide via `ais show stats` as well, and include jobs somehow ============
+		Name:         subcmdShowStats,
+		Usage:        "show cluster and node statistics",
+		ArgsUsage:    showStatsArgument,
+		Flags:        showCmdsFlags[subcmdShowStats],
+		Action:       showStatsHandler,
+		BashComplete: suggestAllNodes,
+	}
 	showCmdCluster = cli.Command{
 		Name:         subcmdCluster,
-		Usage:        "show cluster details",
+		Usage:        "show cluster nodes and utilization",
 		ArgsUsage:    showClusterArgument,
 		Flags:        showCmdsFlags[subcmdCluster],
 		Action:       showClusterHandler,
-		BashComplete: showClusterCompletions,
+		BashComplete: showClusterCompletions, // NOTE: level 0 hardcoded
 		Subcommands: []cli.Command{
 			{
 				Name:         subcmdSmap,
@@ -172,19 +182,12 @@ var (
 			},
 			{
 				Name:      subcmdConfig,
-				Usage:     "show cluster configuration",
+				Usage:     "show cluster and node configuration",
 				ArgsUsage: showClusterConfigArgument,
 				Flags:     showCmdsFlags[subcmdConfig],
 				Action:    showClusterConfigHandler,
 			},
-			{
-				Name:         subcmdShowClusterStats,
-				Usage:        "show cluster statistics",
-				ArgsUsage:    showStatsArgument,
-				Flags:        showCmdsFlags[subcmdShowClusterStats],
-				Action:       showClusterStatsHandler,
-				BashComplete: suggestAllNodes,
-			},
+			showCmdStats,
 		},
 	}
 	showCmdBucket = cli.Command{
@@ -217,7 +220,7 @@ var (
 		Usage:        "show log",
 		ArgsUsage:    nodeIDArgument,
 		Flags:        showCmdsFlags[subcmdLog],
-		Action:       showDaemonLogHandler,
+		Action:       showNodeLogHandler,
 		BashComplete: suggestAllNodes,
 	}
 
@@ -413,12 +416,17 @@ func showClusterHandler(c *cli.Context) error {
 
 	if arg := c.Args().Get(1); arg != "" {
 		if sid, _, err := getNodeIDName(c, arg); err == nil {
-			return cluDaeStatus(c, smap, cluConfig, sid, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+			return cluDaeStatus(c, smap, cluConfig, sid)
 		}
 	}
 
 	what := c.Args().Get(0)
-	return cluDaeStatus(c, smap, cluConfig, what, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+	if c.NArg() > 0 {
+		if sid, _, err := getNodeIDName(c, what); err == nil {
+			what = sid
+		}
+	}
+	return cluDaeStatus(c, smap, cluConfig, what)
 }
 
 func showStorageHandler(c *cli.Context) (err error) {
@@ -764,7 +772,7 @@ func showNodeConfig(c *cli.Context) error {
 	return tmpls.Print(data, c.App.Writer, tmpls.DaemonConfigTmpl, nil, usejs)
 }
 
-func showDaemonLogHandler(c *cli.Context) error {
+func showNodeLogHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
@@ -945,15 +953,15 @@ func fmtStatValue(name string, value int64, human bool) string {
 	return fmt.Sprintf("%v", value)
 }
 
-func appendStatToProps(props nvpairList, name string, value int64, prefix, filter string, human bool) nvpairList {
+func appendStatToProps(props nvpairList, name string, value int64, prefix string, regex *regexp.Regexp, human bool) nvpairList {
 	name = prefix + name
-	if filter != "" && !strings.Contains(name, filter) {
+	if regex != nil && !regex.MatchString(name) {
 		return props
 	}
 	return append(props, nvpair{Name: name, Value: fmtStatValue(name, value, human)})
 }
 
-func showClusterStatsHandler(c *cli.Context) (err error) {
+func showStatsHandler(c *cli.Context) (err error) {
 	var (
 		sid  string
 		node *cluster.Snode
@@ -967,20 +975,26 @@ func showClusterStatsHandler(c *cli.Context) (err error) {
 		smap, err = getClusterMap(c)
 		debug.AssertNoErr(err)
 		node = smap.GetNode(sid)
-		debug.Assert(node != nil)
 	}
-
 	var (
+		regexStr    = parseStrFlag(c, regexFlag)
+		regex       *regexp.Regexp
 		refresh     = flagIsSet(c, refreshFlag)
 		sleep       = calcRefreshRate(c)
 		averageOver = cos.MinDuration(cos.MaxDuration(sleep/2, 2*time.Second), 10*time.Second)
 	)
+	if regexStr != "" {
+		regex, err = regexp.Compile(regexStr)
+		if err != nil {
+			return
+		}
+	}
 	sleep = cos.MaxDuration(10*time.Millisecond, sleep-averageOver)
 	for {
 		if node != nil {
-			err = showDaemonStats(c, node, averageOver)
+			err = showNodeStats(c, node, averageOver, regex)
 		} else {
-			err = showClusterTotalStats(c, averageOver)
+			err = showAggregatedStats(c, averageOver, regex)
 		}
 		if err != nil || !refresh {
 			return err
@@ -990,53 +1004,63 @@ func showClusterStatsHandler(c *cli.Context) (err error) {
 	}
 }
 
-func showDaemonStats(c *cli.Context, node *cluster.Snode, averageOver time.Duration) error {
+func showNodeStats(c *cli.Context, node *cluster.Snode, averageOver time.Duration, regex *regexp.Regexp) error {
 	stats, err := api.GetDaemonStats(apiBP, node)
 	if err != nil {
 		return err
 	}
 
+	// throughput (Bps)
 	daemonBps(node, stats, averageOver)
 
+	// TODO: extract regex-matching, if defined
 	if flagIsSet(c, jsonFlag) {
 		return tmpls.Print(stats, c.App.Writer, tmpls.ConfigTmpl, nil, true)
 	}
 
-	human := !flagIsSet(c, rawFlag)
-	filter := c.Args().Get(1)
-	props := make(nvpairList, 0, len(stats.Tracker))
+	var (
+		human = !flagIsSet(c, rawFlag)
+		props = make(nvpairList, 0, len(stats.Tracker))
+	)
 	for k, v := range stats.Tracker {
-		props = appendStatToProps(props, k, v.Value, "", filter, human)
+		props = appendStatToProps(props, k, v.Value, "", regex, human)
 	}
 	sort.Slice(props, func(i, j int) bool {
 		return props[i].Name < props[j].Name
 	})
-	if node.IsTarget() {
-		mID := 0
-		// Make mountpaths always sorted.
-		mpathSorted := make([]string, 0, len(stats.MPCap))
-		for mpath := range stats.MPCap {
-			mpathSorted = append(mpathSorted, mpath)
+
+	if node.IsProxy() {
+		return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	}
+
+	// target
+	var (
+		idx         int
+		mpathSorted = make([]string, 0, len(stats.MPCap)) // sort
+	)
+	for mpath := range stats.MPCap {
+		mpathSorted = append(mpathSorted, mpath)
+	}
+	sort.Strings(mpathSorted)
+	for _, mpath := range mpathSorted {
+		var (
+			mstat  = stats.MPCap[mpath]
+			prefix = fmt.Sprintf("mountpath.%d.", idx)
+		)
+		idx++
+		if regex != nil && !regex.MatchString(prefix) {
+			continue
 		}
-		sort.Strings(mpathSorted)
-		for _, mpath := range mpathSorted {
-			mstat := stats.MPCap[mpath]
-			prefix := fmt.Sprintf("mountpath.%d.", mID)
-			if filter != "" && !strings.HasPrefix(prefix, filter) {
-				continue
-			}
-			props = append(props,
-				nvpair{Name: prefix + "path", Value: mpath},
-				nvpair{Name: prefix + "used", Value: fmtStatValue(".size", int64(mstat.Used), human)},
-				nvpair{Name: prefix + "avail", Value: fmtStatValue(".size", int64(mstat.Avail), human)},
-				nvpair{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
-			mID++
-		}
+		props = append(props,
+			nvpair{Name: prefix + "path", Value: mpath},
+			nvpair{Name: prefix + "used", Value: fmtStatValue(".size", int64(mstat.Used), human)},
+			nvpair{Name: prefix + "avail", Value: fmtStatValue(".size", int64(mstat.Avail), human)},
+			nvpair{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
 	}
 	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
 }
 
-func showClusterTotalStats(c *cli.Context, averageOver time.Duration) (err error) {
+func showAggregatedStats(c *cli.Context, averageOver time.Duration, regex *regexp.Regexp) error {
 	st, err := api.GetClusterStats(apiBP)
 	if err != nil {
 		return err
@@ -1050,10 +1074,9 @@ func showClusterTotalStats(c *cli.Context, averageOver time.Duration) (err error
 	}
 
 	human := !flagIsSet(c, rawFlag)
-	filter := c.Args().Get(0)
 	props := make(nvpairList, 0, len(st.Proxy.Tracker))
 	for k, v := range st.Proxy.Tracker {
-		props = appendStatToProps(props, k, v.Value, "proxy.", filter, human)
+		props = appendStatToProps(props, k, v.Value, "proxy.", regex, human)
 	}
 	tgtStats := make(map[string]int64)
 	for _, tgt := range st.Target {
@@ -1076,7 +1099,7 @@ func showClusterTotalStats(c *cli.Context, averageOver time.Duration) (err error
 	}
 
 	for k, v := range tgtStats {
-		props = appendStatToProps(props, k, v, "target.", filter, human)
+		props = appendStatToProps(props, k, v, "target.", regex, human)
 	}
 
 	sort.Slice(props, func(i, j int) bool {
@@ -1104,6 +1127,7 @@ func clusterBps(st stats.ClusterStats, averageOver time.Duration) {
 	}
 }
 
+// throughput (Bps)
 func daemonBps(node *cluster.Snode, ds *stats.DaemonStats, averageOver time.Duration) {
 	time.Sleep(averageOver)
 	ds2, _ := api.GetDaemonStats(apiBP, node)

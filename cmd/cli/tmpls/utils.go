@@ -80,15 +80,17 @@ func FmtEC(gen int64, data, parity int, isCopy bool) string {
 	return info
 }
 
-func fmtDaemonID(id string, smap cluster.Smap) string {
+func fmtDaemonID(id string, smap *cluster.Smap) string {
 	si := smap.GetNode(id)
+	sname := si.StringEx()
 	if id == smap.Primary.ID() {
-		return id + primarySuffix
+		sname += primarySuffix
 	}
 	if smap.NonElectable(si) {
-		return id + nonElectableSuffix
+		debug.Assert(si.IsProxy())
+		sname += nonElectableSuffix
 	}
-	return id
+	return sname
 }
 
 func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }

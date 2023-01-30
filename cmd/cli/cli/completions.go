@@ -250,7 +250,7 @@ func suggestNode(c *cli.Context, ty int) {
 func showClusterCompletions(c *cli.Context) {
 	switch c.NArg() {
 	case 0:
-		fmt.Println(apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
+		fmt.Println(apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowStats)
 	case 1:
 		switch c.Args().Get(0) {
 		case apc.Proxy:

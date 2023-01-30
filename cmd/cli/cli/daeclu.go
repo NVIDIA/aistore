@@ -77,7 +77,11 @@ func getBMD(c *cli.Context) error {
 }
 
 // Displays the status of the cluster or a node
-func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, sid string, usejs, hideHeader bool) error {
+func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, sid string) error {
+	var (
+		usejs      = flagIsSet(c, jsonFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
+	)
 	body := tmpls.StatusTemplateHelper{
 		Smap:      smap,
 		CluConfig: cfg,
@@ -87,22 +91,25 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, si
 		},
 	}
 	if res, proxyOK := curPrxStatus[sid]; proxyOK {
-		return tmpls.Print(res, c.App.Writer, tmpls.NewProxyTable(res, smap).Template(hideHeader), nil, usejs)
+		out := tmpls.NewDaeStatus(res, smap, apc.Proxy).Template(hideHeader)
+		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
 	} else if res, targetOK := curTgtStatus[sid]; targetOK {
-		return tmpls.Print(res, c.App.Writer, tmpls.NewTargetTable(res).Template(hideHeader), nil, usejs)
+		out := tmpls.NewDaeStatus(res, smap, apc.Target).Template(hideHeader)
+		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
 	} else if sid == apc.Proxy {
-		template := tmpls.NewProxiesTable(&body.Status, smap).Template(hideHeader)
-		return tmpls.Print(body, c.App.Writer, template, nil, usejs)
+		out := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy).Template(hideHeader)
+		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
 	} else if sid == apc.Target {
-		return tmpls.Print(body, c.App.Writer,
-			tmpls.NewTargetsTable(&body.Status).Template(hideHeader), nil, usejs)
+		out := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target).Template(hideHeader)
+		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
 	} else if sid == "" {
-		template := tmpls.NewProxiesTable(&body.Status, smap).Template(false) + "\n" +
-			tmpls.NewTargetsTable(&body.Status).Template(false) + "\n" +
-			tmpls.ClusterSummary
-		return tmpls.Print(body, c.App.Writer, template, nil, usejs)
+		out := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy).Template(false) + "\n"
+		out += tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target).Template(false) + "\n"
+		out += tmpls.ClusterSummary
+		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
 	}
-	return fmt.Errorf("%s is not a valid NODE_ID nor NODE_TYPE", sid)
+
+	return fmt.Errorf("expecting a valid NODE_ID or node type (\"proxy\" or \"target\"), got %q", sid)
 }
 
 func daemonDiskStats(c *cli.Context, sid string) error {

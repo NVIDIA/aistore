@@ -124,10 +124,10 @@ const (
 	subcmdNodeDecommission    = "decommission"
 	subcmdClusterDecommission = "decommission"
 
-	subcmdShowRemoteAIS    = "remote-cluster"
-	subcmdShowClusterStats = "stats"
-	subcmdShowDisk         = subcmdMpath
-	subcmdStgValidate      = "validate"
+	subcmdShowRemoteAIS = "remote-cluster"
+	subcmdShowStats     = "stats"
+	subcmdShowDisk      = subcmdMpath
+	subcmdStgValidate   = "validate"
 
 	// Bucket properties subcommands
 	subcmdSetProps   = "set"
@@ -245,7 +245,8 @@ const (
 	nodeMountpathPairArgument = "NODE_ID=MOUNTPATH [NODE_ID=MOUNTPATH...]"
 
 	// cluster
-	showClusterArgument = "[ NODE_ID | NODE_TYPE | smap | bmd | config | stats ]"
+	showClusterArgument = "[NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | " +
+		"[smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]"
 
 	// config
 	showConfigArgument = "cli | cluster [CONFIG SECTION OR PREFIX] |\n" +
@@ -258,7 +259,7 @@ const (
 	detachRemoteAISArgument = aliasArgument
 
 	startDownloadArgument = "SOURCE DESTINATION"
-	showStatsArgument     = "[NODE_ID] [STATS_FILTER]"
+	showStatsArgument     = "[NODE_ID]"
 
 	// List command
 	listAnyCommandArgument = "[PROVIDER://][BUCKET_NAME]"

@@ -34,8 +34,8 @@ const rebalanceExpirationTime = 5 * time.Minute
 // Templates for output
 // ** Changing the structure of the objects server side needs to make sure that this will still work **
 const (
-	primarySuffix      = "[P]"
-	nonElectableSuffix = "[-]"
+	primarySuffix      = "(primary)"
+	nonElectableSuffix = "(non-electable)"
 
 	xactStateFinished = "Finished"
 	xactStateRunning  = "Running"
@@ -43,17 +43,17 @@ const (
 	xactStateAborted  = "Aborted"
 
 	// Smap
-	SmapHdr = "NODE\t TYPE\t PUBLIC URL" +
+	smapHdr = "NODE\t TYPE\t PUBLIC URL" +
 		"{{ if (eq $.ExtendedURLs true) }}\t INTRA CONTROL URL\t INTRA DATA URL{{end}}" +
 		"\n"
-	SmapBody = "{{FormatDaemonID $value.ID $.Smap}}\t {{$value.DaeType}}\t {{$value.PubNet.URL}}" +
+	smapBody = "{{FormatDaemonID $value.ID $.Smap}}\t {{$value.DaeType}}\t {{$value.PubNet.URL}}" +
 		"{{ if (eq $.ExtendedURLs true) }}\t {{$value.ControlNet.URL}}\t {{$value.DataNet.URL}}{{end}}" +
 		"\n"
 
-	SmapTmpl = SmapHdr +
-		"{{ range $key, $value := .Smap.Pmap }}" + SmapBody + "{{end}}\n" +
-		SmapHdr +
-		"{{ range $key, $value := .Smap.Tmap }}" + SmapBody + "{{end}}\n" +
+	SmapTmpl = smapHdr +
+		"{{ range $key, $value := .Smap.Pmap }}" + smapBody + "{{end}}\n" +
+		smapHdr +
+		"{{ range $key, $value := .Smap.Tmap }}" + smapBody + "{{end}}\n" +
 		"Non-Electable:\n" +
 		"{{ range $key, $si := .Smap.Pmap }} " +
 		"{{ $nonElect := $.Smap.NonElectable $si }}" +
