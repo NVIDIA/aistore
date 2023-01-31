@@ -8,26 +8,19 @@ package cli
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
-	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
 // In this file:
 // utility functions, wrappers, and helpers to work with cluster map (Smap) and clustered nodes.
 
-var (
-	curSmap      *cluster.Smap
-	curPrxStatus stats.DaemonStatusMap
-	curTgtStatus stats.DaemonStatusMap
-)
+var curSmap *cluster.Smap
 
 // the implementation may look simplified, even naive, but in fact
 // within-a-single-command lifecycle and singlethreaded-ness eliminate
@@ -49,6 +42,22 @@ func getClusterMap(c *cli.Context) (*cluster.Smap, error) {
 	return curSmap, nil
 }
 
+// returns apc.Target, apc.Proxy
+// returns "" on error of any kind
+func getNodeType(c *cli.Context, sid string) (daeType string) {
+	smap, err := getClusterMap(c)
+	if err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+	node := smap.GetNode(sid)
+	if node != nil {
+		daeType = node.Type()
+	}
+	return
+}
+
+// compare with `argNode()` that makes the arg optional
 func getNodeIDName(c *cli.Context, arg string) (sid, sname string, err error) {
 	if arg == "" {
 		err = missingArgumentsError(c, c.Command.ArgsUsage)
@@ -103,48 +112,4 @@ func smapFromNode(c *cli.Context, primarySmap *cluster.Smap, sid string, usejs b
 		ExtendedURLs: extendedURLs,
 	}
 	return tmpls.Print(body, c.App.Writer, tmpls.SmapTmpl, nil, usejs)
-}
-
-// Get cluster map and use it to retrieve node status for each clustered node
-func fillNodeStatusMap(c *cli.Context) (*cluster.Smap, error) {
-	smap, err := getClusterMap(c)
-	if err != nil {
-		return nil, err
-	}
-	proxyCount := smap.CountProxies()
-	targetCount := smap.CountTargets()
-
-	curPrxStatus = make(stats.DaemonStatusMap, proxyCount)
-	curTgtStatus = make(stats.DaemonStatusMap, targetCount)
-
-	wg := cos.NewLimitedWaitGroup(sys.NumCPU(), proxyCount+targetCount)
-	mu := &sync.Mutex{}
-	daeStatus(smap.Pmap, curPrxStatus, wg, mu)
-	daeStatus(smap.Tmap, curTgtStatus, wg, mu)
-	wg.Wait()
-	return smap, nil
-}
-
-func daeStatus(nodeMap cluster.NodeMap, daeMap stats.DaemonStatusMap, wg cos.WG, mu *sync.Mutex) {
-	for _, si := range nodeMap {
-		wg.Add(1)
-		go func(si *cluster.Snode) {
-			_status(si, mu, daeMap)
-			wg.Done()
-		}(si)
-	}
-}
-
-func _status(node *cluster.Snode, mu *sync.Mutex, daeMap stats.DaemonStatusMap) {
-	daeInfo, err := api.GetDaemonStatus(apiBP, node)
-	if err != nil {
-		daeInfo = &stats.DaemonStatus{Snode: node, Status: "Error: " + err.Error()}
-	} else if node.Flags.IsSet(cluster.NodeFlagMaint) {
-		daeInfo.Status = "maintenance"
-	} else if node.Flags.IsSet(cluster.NodeFlagDecomm) {
-		daeInfo.Status = "decommission"
-	}
-	mu.Lock()
-	daeMap[node.ID()] = daeInfo
-	mu.Unlock()
 }

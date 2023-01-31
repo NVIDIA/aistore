@@ -52,7 +52,7 @@ var (
 		waitFlag,
 	}
 	startSpecialFlags = map[string][]cli.Flag{
-		subcmdDownload: {
+		cmdDownload: {
 			timeoutFlag,
 			descJobFlag,
 			limitConnectionsFlag,
@@ -63,14 +63,14 @@ var (
 			limitBytesPerHourFlag,
 			syncFlag,
 		},
-		subcmdDsort: {
+		cmdDsort: {
 			specFileFlag,
 		},
 		commandPrefetch: append(
 			baseLstRngFlags,
 			dryRunFlag,
 		),
-		subcmdLRU: {
+		cmdLRU: {
 			listBucketsFlag,
 			forceFlag,
 		},
@@ -99,31 +99,31 @@ var (
 				BashComplete: bucketCompletions(bcmplop{multiple: true}),
 			},
 			{
-				Name:      subcmdDownload,
+				Name:      cmdDownload,
 				Usage:     "download files and objects from remote sources",
 				ArgsUsage: startDownloadArgument,
-				Flags:     startSpecialFlags[subcmdDownload],
+				Flags:     startSpecialFlags[cmdDownload],
 				Action:    startDownloadHandler,
 			},
 			{
-				Name:      subcmdDsort,
+				Name:      cmdDsort,
 				Usage:     "start " + dsort.DSortName + " job",
 				ArgsUsage: jsonSpecArgument,
-				Flags:     startSpecialFlags[subcmdDsort],
+				Flags:     startSpecialFlags[cmdDsort],
 				Action:    startDsortHandler,
 			},
 			{
-				Name:         subcmdLRU,
+				Name:         cmdLRU,
 				Usage:        "run LRU eviction",
-				Flags:        startSpecialFlags[subcmdLRU],
+				Flags:        startSpecialFlags[cmdLRU],
 				Action:       startLRUHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			{
-				Name:         subcmdStgCleanup,
+				Name:         cmdStgCleanup,
 				Usage:        "cleanup storage: remove migrated and deleted objects, old/obsolete workfiles",
 				ArgsUsage:    listAnyCommandArgument,
-				Flags:        storageCmdFlags[subcmdStgCleanup],
+				Flags:        storageCmdFlags[cmdStgCleanup],
 				Action:       cleanupStorageHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
@@ -191,7 +191,7 @@ var (
 		Usage: "cleanup finished jobs",
 		Subcommands: []cli.Command{
 			{
-				Name:         subcmdDownload,
+				Name:         cmdDownload,
 				Usage:        "remove finished download job(s)",
 				ArgsUsage:    optionalJobIDArgument,
 				Flags:        removeCmdsFlags,
@@ -199,7 +199,7 @@ var (
 				BashComplete: downloadIDFinishedCompletions,
 			},
 			{
-				Name:         subcmdDsort,
+				Name:         cmdDsort,
 				Usage:        "remove finished dsort job(s)",
 				ArgsUsage:    optionalJobIDArgument,
 				Flags:        removeCmdsFlags,
@@ -747,7 +747,7 @@ func stopJobHandler(c *cli.Context) error {
 		actionWarn(c, warn)
 	} else if xid == "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
 		switch name {
-		case subcmdDownload, subcmdDsort:
+		case cmdDownload, cmdDsort:
 			// regex supported
 		case commandRebalance:
 			warn := fmt.Sprintf("global rebalance is global (ignoring %s and %s flags)",
@@ -768,7 +768,7 @@ func stopJobHandler(c *cli.Context) error {
 
 	// specialized stop
 	switch name {
-	case subcmdDownload:
+	case cmdDownload:
 		if xid == "" {
 			if flagIsSet(c, allRunningJobsFlag) || regex != "" {
 				return stopDownloadRegex(c, regex)
@@ -776,7 +776,7 @@ func stopJobHandler(c *cli.Context) error {
 			return missingArgumentsError(c, jobIDArgument)
 		}
 		return stopDownloadHandler(c, xid)
-	case subcmdDsort:
+	case cmdDsort:
 		if xid == "" {
 			if flagIsSet(c, allRunningJobsFlag) || regex != "" {
 				return stopDsortRegex(c, regex)
@@ -996,12 +996,12 @@ func waitJobHandler(c *cli.Context) error {
 
 	// special wait
 	switch name {
-	case subcmdDownload:
+	case cmdDownload:
 		if xid == "" {
 			return missingArgumentsError(c, jobIDArgument)
 		}
 		return waitDownloadHandler(c, xid /*job ID*/)
-	case subcmdDsort:
+	case cmdDsort:
 		if xid == "" {
 			return missingArgumentsError(c, jobIDArgument)
 		}
@@ -1073,7 +1073,7 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 	// poll at a refresh rate
 	var (
 		total time.Duration
-		qn    = fmt.Sprintf("%s[%s]", subcmdDownload, id)
+		qn    = fmt.Sprintf("%s[%s]", cmdDownload, id)
 	)
 	for {
 		resp, err := api.DownloadStatus(apiBP, id, true /*onlyActive*/)
@@ -1108,7 +1108,7 @@ func waitDsortHandler(c *cli.Context, id string) error {
 
 	// poll at refresh rate
 	var (
-		qn    = fmt.Sprintf("%s[%s]", subcmdDsort, id)
+		qn    = fmt.Sprintf("%s[%s]", cmdDsort, id)
 		total time.Duration
 	)
 	for {
@@ -1291,11 +1291,11 @@ func xid2Name(xid string) (name, otherID string) {
 	switch {
 	case strings.HasPrefix(xid, dload.PrefixJobID):
 		if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
-			name = subcmdDownload
+			name = cmdDownload
 		}
 	case strings.HasPrefix(xid, dsort.PrefixJobID):
 		if _, err := api.MetricsDSort(apiBP, xid); err == nil {
-			name = subcmdDsort
+			name = cmdDsort
 		}
 	// NOTE: not to confuse ETL xaction ID with its name (`etl-name`)
 	case strings.HasPrefix(xid, etl.PrefixXactID):

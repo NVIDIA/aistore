@@ -318,7 +318,7 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) (int, error) {
 		return 0, err
 	}
 	if caption {
-		jobCptn(c, subcmdDownload, onlyActive, "", false)
+		jobCptn(c, cmdDownload, onlyActive, "", false)
 	}
 	l := len(list)
 	if l == 0 {

@@ -14,24 +14,24 @@ import (
 
 var (
 	k8sCmdsFlags = map[string][]cli.Flag{
-		subcmdK8sSvc:     {},
-		subcmdK8sCluster: {},
+		cmdK8sSvc:     {},
+		cmdK8sCluster: {},
 	}
 
 	k8sCmd = cli.Command{
-		Name:  subcmdK8s,
+		Name:  cmdK8s,
 		Usage: "show kubernetes pods and services",
 		Subcommands: []cli.Command{
 			{
-				Name:   subcmdK8sSvc,
+				Name:   cmdK8sSvc,
 				Usage:  "show kubernetes services",
-				Flags:  k8sCmdsFlags[subcmdK8sSvc],
+				Flags:  k8sCmdsFlags[cmdK8sSvc],
 				Action: k8sShowSvcHandler,
 			},
 			{
-				Name:      subcmdK8sCluster,
+				Name:      cmdK8sCluster,
 				Usage:     "show AIS cluster",
-				Flags:     k8sCmdsFlags[subcmdK8sCluster],
+				Flags:     k8sCmdsFlags[cmdK8sCluster],
 				ArgsUsage: optionalNodeIDArgument,
 				Action:    k8sShowClusterHandler,
 				BashComplete: func(c *cli.Context) {
@@ -67,7 +67,7 @@ func k8sShowClusterHandler(c *cli.Context) error {
 }
 
 func k8sShowEntireCluster(c *cli.Context) (err error) {
-	output, err := exec.Command(subcmdK8s, cmdPodList...).CombinedOutput()
+	output, err := exec.Command(cmdK8s, cmdPodList...).CombinedOutput()
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func k8sShowSingleDaemon(c *cli.Context) error {
 	cmdLine := make([]string, 0, len(cmdNodeInfo)+1)
 	cmdLine = append(cmdLine, cmdNodeInfo...)
 	cmdLine = append(cmdLine, "--selector=ais-daemon-id="+sid)
-	output, err := exec.Command(subcmdK8s, cmdLine...).CombinedOutput()
+	output, err := exec.Command(cmdK8s, cmdLine...).CombinedOutput()
 	if err != nil {
 		return err
 	}

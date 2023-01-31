@@ -46,7 +46,7 @@ var (
 	authFlags = map[string][]cli.Flag{
 		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag, expireFlag, clusterTokenFlag},
 		flagsAuthUserLogout:  {tokenFileFlag},
-		subcmdAuthUser:       {passwordFlag},
+		cmdAuthUser:          {passwordFlag},
 		flagsAuthRoleAddSet:  {descRoleFlag, clusterRoleFlag, bucketRoleFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
 		flagsAuthUserShow:    {nonverboseFlag, verboseFlag},
@@ -56,17 +56,17 @@ var (
 
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	authCmdShow = cli.Command{
-		Name:  subcmdAuthShow,
+		Name:  cmdAuthShow,
 		Usage: "show entity in authn",
 		Subcommands: []cli.Command{
 			{
-				Name:      subcmdAuthCluster,
+				Name:      cmdAuthCluster,
 				Usage:     "show AIS clusters managed by this AuthN instance",
 				ArgsUsage: showAuthClusterArgument,
 				Action:    wrapAuthN(showAuthClusterHandler),
 			},
 			{
-				Name:         subcmdAuthRole,
+				Name:         cmdAuthRole,
 				Usage:        "show existing AuthN roles",
 				ArgsUsage:    showAuthRoleArgument,
 				Flags:        authFlags[flagsAuthRoleShow],
@@ -74,14 +74,14 @@ var (
 				BashComplete: oneRoleCompletions,
 			},
 			{
-				Name:      subcmdAuthUser,
+				Name:      cmdAuthUser,
 				Usage:     "show user list and details",
 				Flags:     authFlags[flagsAuthUserShow],
 				ArgsUsage: showAuthUserListArgument,
 				Action:    wrapAuthN(showAuthUserHandler),
 			},
 			{
-				Name:   subcmdAuthConfig,
+				Name:   cmdAuthConfig,
 				Usage:  "show AuthN server configuration",
 				Flags:  authFlags[flagsAuthConfShow],
 				Action: wrapAuthN(showAuthConfigHandler),
@@ -97,25 +97,25 @@ var (
 			authCmdShow,
 			// add
 			{
-				Name:  subcmdAuthAdd,
+				Name:  cmdAuthAdd,
 				Usage: "add AuthN entity: user, role, AIS cluster",
 				Subcommands: []cli.Command{
 					{
-						Name:         subcmdAuthUser,
+						Name:         cmdAuthUser,
 						Usage:        "add a new user",
 						ArgsUsage:    addAuthUserArgument,
-						Flags:        authFlags[subcmdAuthUser],
+						Flags:        authFlags[cmdAuthUser],
 						Action:       wrapAuthN(addAuthUserHandler),
 						BashComplete: oneRoleCompletions,
 					},
 					{
-						Name:      subcmdAuthCluster,
+						Name:      cmdAuthCluster,
 						Usage:     "add AIS cluster (to authenticate access to buckets and to the cluster)",
 						ArgsUsage: addAuthClusterArgument,
 						Action:    wrapAuthN(addAuthClusterHandler),
 					},
 					{
-						Name:         subcmdAuthRole,
+						Name:         cmdAuthRole,
 						Usage:        "create a new role",
 						ArgsUsage:    addSetAuthRoleArgument,
 						Flags:        authFlags[flagsAuthRoleAddSet],
@@ -126,32 +126,32 @@ var (
 			},
 			// rm
 			{
-				Name:  subcmdAuthRemove,
+				Name:  cmdAuthRemove,
 				Usage: "remove an entity from AuthN",
 				Subcommands: []cli.Command{
 					{
-						Name:         subcmdAuthUser,
+						Name:         cmdAuthUser,
 						Usage:        "remove an existing user",
 						ArgsUsage:    deleteAuthUserArgument,
 						Action:       wrapAuthN(deleteUserHandler),
 						BashComplete: oneUserCompletions,
 					},
 					{
-						Name:         subcmdAuthCluster,
+						Name:         cmdAuthCluster,
 						Usage:        "remove AIS cluster",
 						ArgsUsage:    deleteAuthClusterArgument,
 						Action:       wrapAuthN(deleteAuthClusterHandler),
 						BashComplete: oneClusterCompletions,
 					},
 					{
-						Name:         subcmdAuthRole,
+						Name:         cmdAuthRole,
 						Usage:        "remove an existing role",
 						ArgsUsage:    deleteAuthRoleArgument,
 						Action:       wrapAuthN(deleteRoleHandler),
 						BashComplete: oneRoleCompletions,
 					},
 					{
-						Name:      subcmdAuthToken,
+						Name:      cmdAuthToken,
 						Usage:     "revoke AuthN token",
 						Flags:     authFlags[flagsAuthRevokeToken],
 						ArgsUsage: deleteAuthTokenArgument,
@@ -161,32 +161,32 @@ var (
 			},
 			// set
 			{
-				Name:  subcmdAuthSet,
+				Name:  cmdAuthSet,
 				Usage: "update AuthN configuration and its entities: users, roles, and AIS clusters",
 				Subcommands: []cli.Command{
 					{
-						Name:         subcmdAuthConfig,
+						Name:         cmdAuthConfig,
 						Usage:        "update AuthN server configuration",
 						Action:       wrapAuthN(setAuthConfigHandler),
 						BashComplete: suggestUpdatableAuthNConfig,
 					},
 					{
-						Name:         subcmdAuthCluster,
+						Name:         cmdAuthCluster,
 						Usage:        "update AIS cluster configuration (the cluster must be previously added to AuthN)",
 						ArgsUsage:    addAuthClusterArgument,
 						Action:       wrapAuthN(updateAuthClusterHandler),
 						BashComplete: oneClusterCompletions,
 					},
 					{
-						Name:         subcmdAuthUser,
+						Name:         cmdAuthUser,
 						Usage:        "update an existing user",
 						ArgsUsage:    addAuthUserArgument,
-						Flags:        authFlags[subcmdAuthUser],
+						Flags:        authFlags[cmdAuthUser],
 						Action:       wrapAuthN(updateAuthUserHandler),
 						BashComplete: oneUserCompletionsWithRoles,
 					},
 					{
-						Name:         subcmdAuthRole,
+						Name:         cmdAuthRole,
 						Usage:        "update an existing role for all users that have it",
 						ArgsUsage:    addSetAuthRoleArgument,
 						Flags:        authFlags[flagsAuthRoleAddSet],
@@ -197,14 +197,14 @@ var (
 			},
 			// login, logout
 			{
-				Name:      subcmdAuthLogin,
+				Name:      cmdAuthLogin,
 				Usage:     "log in with existing user ID and password",
 				Flags:     authFlags[flagsAuthUserLogin],
 				ArgsUsage: userLoginArgument,
 				Action:    wrapAuthN(loginUserHandler),
 			},
 			{
-				Name:   subcmdAuthLogout,
+				Name:   cmdAuthLogout,
 				Usage:  "log out",
 				Flags:  authFlags[flagsAuthUserLogout],
 				Action: wrapAuthN(logoutUserHandler),

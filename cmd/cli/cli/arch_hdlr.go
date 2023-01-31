@@ -25,10 +25,10 @@ var (
 			allowAppendToExistingFlag,
 			continueOnErrorFlag,
 		},
-		subcmdAppend: {
+		cmdAppend: {
 			archpathRequiredFlag,
 		},
-		subcmdList: {
+		cmdList: {
 			objPropsFlag,
 			allPropsFlag,
 		},
@@ -47,19 +47,19 @@ var (
 				BashComplete: putPromoteObjectCompletions,
 			},
 			{
-				Name: subcmdAppend,
+				Name: cmdAppend,
 				Usage: "append file to an existing .tar archive, e.g.: " +
 					"'append src-filename bucket/shard.tar --archpath dst-name'",
 				ArgsUsage:    appendToArchArgument,
-				Flags:        archCmdsFlags[subcmdAppend],
+				Flags:        archCmdsFlags[cmdAppend],
 				Action:       appendArchHandler,
 				BashComplete: putPromoteObjectCompletions,
 			},
 			{
-				Name:         subcmdList,
+				Name:         cmdList,
 				Usage:        "list archived content",
 				ArgsUsage:    objectArgument,
-				Flags:        archCmdsFlags[subcmdList],
+				Flags:        archCmdsFlags[cmdList],
 				Action:       listArchHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},

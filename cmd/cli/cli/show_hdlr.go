@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -47,12 +46,12 @@ var (
 			longRunFlags,
 			jsonFlag,
 		),
-		subcmdShowDisk: append(
+		cmdShowDisk: append(
 			longRunFlags,
 			jsonFlag,
 			noHeaderFlag,
 		),
-		subcmdMountpath: append(
+		cmdMountpath: append(
 			longRunFlags,
 			jsonFlag,
 		),
@@ -67,43 +66,43 @@ var (
 			progressBarFlag,
 			logFlag,
 		),
-		subcmdObject: {
+		cmdObject: {
 			objPropsFlag,
 			allPropsFlag,
 			objNotCachedFlag,
 			noHeaderFlag,
 			jsonFlag,
 		},
-		subcmdCluster: append(
+		cmdCluster: append(
 			longRunFlags,
 			jsonFlag,
 			noHeaderFlag,
 		),
-		subcmdSmap: append(
+		cmdSmap: append(
 			longRunFlags,
 			jsonFlag,
 		),
-		subcmdBMD: {
+		cmdBMD: {
 			jsonFlag,
 		},
-		subcmdBucket: {
+		cmdBucket: {
 			jsonFlag,
 			compactPropFlag,
 		},
-		subcmdConfig: {
+		cmdConfig: {
 			jsonFlag,
 		},
-		subcmdShowRemoteAIS: {
+		cmdShowRemoteAIS: {
 			noHeaderFlag,
 			verboseFlag,
 			jsonFlag,
 		},
-		subcmdLog: append(
+		cmdLog: append(
 			longRunFlags,
 			logSevFlag,
 			logFlushFlag,
 		),
-		subcmdShowStats: {
+		cmdShowStats: {
 			jsonFlag,
 			rawFlag,
 			refreshFlag,
@@ -117,12 +116,13 @@ var (
 		Subcommands: []cli.Command{
 			makeAlias(authCmdShow, "", true, commandAuth), // alias for `ais auth show`
 			showCmdObject,
-			showCmdCluster,
-			showCmdRebalance,
 			showCmdBucket,
+			showCmdCluster,
+			showCmdPeformance,
+			showCmdStorage,
+			showCmdRebalance,
 			showCmdConfig,
 			showCmdRemoteAIS,
-			showCmdStorage,
 			showCmdJob,
 			showCmdLog,
 		},
@@ -141,85 +141,85 @@ var (
 		},
 	}
 	showCmdObject = cli.Command{
-		Name:         subcmdObject,
+		Name:         cmdObject,
 		Usage:        "show object details",
 		ArgsUsage:    objectArgument,
-		Flags:        showCmdsFlags[subcmdObject],
+		Flags:        showCmdsFlags[cmdObject],
 		Action:       showObjectHandler,
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
 	showCmdStats = cli.Command{ // TODO -- FIXME: provide via `ais show stats` as well, and include jobs somehow ============
-		Name:         subcmdShowStats,
+		Name:         cmdShowStats,
 		Usage:        "show cluster and node statistics",
 		ArgsUsage:    showStatsArgument,
-		Flags:        showCmdsFlags[subcmdShowStats],
+		Flags:        showCmdsFlags[cmdShowStats],
 		Action:       showStatsHandler,
 		BashComplete: suggestAllNodes,
 	}
 	showCmdCluster = cli.Command{
-		Name:         subcmdCluster,
+		Name:         cmdCluster,
 		Usage:        "show cluster nodes and utilization",
 		ArgsUsage:    showClusterArgument,
-		Flags:        showCmdsFlags[subcmdCluster],
+		Flags:        showCmdsFlags[cmdCluster],
 		Action:       showClusterHandler,
 		BashComplete: showClusterCompletions, // NOTE: level 0 hardcoded
 		Subcommands: []cli.Command{
 			{
-				Name:         subcmdSmap,
+				Name:         cmdSmap,
 				Usage:        "show Smap (cluster map)",
 				ArgsUsage:    optionalNodeIDArgument,
-				Flags:        showCmdsFlags[subcmdSmap],
+				Flags:        showCmdsFlags[cmdSmap],
 				Action:       showSmapHandler,
 				BashComplete: suggestAllNodes,
 			},
 			{
-				Name:         subcmdBMD,
+				Name:         cmdBMD,
 				Usage:        "show BMD (bucket metadata)",
 				ArgsUsage:    optionalNodeIDArgument,
-				Flags:        showCmdsFlags[subcmdBMD],
+				Flags:        showCmdsFlags[cmdBMD],
 				Action:       showBMDHandler,
 				BashComplete: suggestAllNodes,
 			},
 			{
-				Name:      subcmdConfig,
+				Name:      cmdConfig,
 				Usage:     "show cluster and node configuration",
 				ArgsUsage: showClusterConfigArgument,
-				Flags:     showCmdsFlags[subcmdConfig],
+				Flags:     showCmdsFlags[cmdConfig],
 				Action:    showClusterConfigHandler,
 			},
 			showCmdStats,
 		},
 	}
 	showCmdBucket = cli.Command{
-		Name:         subcmdBucket,
+		Name:         cmdBucket,
 		Usage:        "show bucket properties",
 		ArgsUsage:    bucketAndPropsArgument,
-		Flags:        showCmdsFlags[subcmdBucket],
+		Flags:        showCmdsFlags[cmdBucket],
 		Action:       showBckPropsHandler,
 		BashComplete: bucketAndPropsCompletions, // bucketCompletions(),
 	}
 	showCmdConfig = cli.Command{
-		Name:         subcmdConfig,
+		Name:         cmdConfig,
 		Usage:        "show CLI, cluster, or node configurations (nodes inherit cluster and have local)",
 		ArgsUsage:    showConfigArgument,
-		Flags:        showCmdsFlags[subcmdConfig],
+		Flags:        showCmdsFlags[cmdConfig],
 		Action:       showConfigHandler,
 		BashComplete: showConfigCompletions,
 	}
 	showCmdRemoteAIS = cli.Command{
-		Name:         subcmdShowRemoteAIS,
+		Name:         cmdShowRemoteAIS,
 		Usage:        "show attached AIS clusters",
 		ArgsUsage:    "",
-		Flags:        showCmdsFlags[subcmdShowRemoteAIS],
+		Flags:        showCmdsFlags[cmdShowRemoteAIS],
 		Action:       showRemoteAISHandler,
 		BashComplete: suggestTargetNodes, // NOTE: not using remais.smap yet
 	}
 
 	showCmdLog = cli.Command{
-		Name:         subcmdLog,
+		Name:         cmdLog,
 		Usage:        "show log",
 		ArgsUsage:    nodeIDArgument,
-		Flags:        showCmdsFlags[subcmdLog],
+		Flags:        showCmdsFlags[cmdLog],
 		Action:       showNodeLogHandler,
 		BashComplete: suggestAllNodes,
 	}
@@ -235,38 +235,38 @@ var (
 
 	// `show storage` sub-commands
 	showCmdDisk = cli.Command{
-		Name:         subcmdShowDisk,
+		Name:         cmdShowDisk,
 		Usage:        "show disk utilization and read/write statistics",
 		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showCmdsFlags[subcmdShowDisk],
+		Flags:        showCmdsFlags[cmdShowDisk],
 		Action:       showDisksHandler,
 		BashComplete: suggestTargetNodes,
 	}
 	showCmdStgSummary = cli.Command{
-		Name:         subcmdSummary,
+		Name:         cmdSummary,
 		Usage:        "show bucket sizes and %% of used capacity on a per-bucket basis",
 		ArgsUsage:    listAnyCommandArgument,
-		Flags:        storageCmdFlags[subcmdSummary],
+		Flags:        storageCmdFlags[cmdSummary],
 		Action:       showBucketSummary,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
 	showCmdMpath = cli.Command{
-		Name:         subcmdMountpath,
+		Name:         cmdMountpath,
 		Usage:        "show target mountpaths",
 		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showCmdsFlags[subcmdMountpath],
+		Flags:        showCmdsFlags[cmdMountpath],
 		Action:       showMpathHandler,
 		BashComplete: suggestTargetNodes,
 	}
 )
 
-func showDisksHandler(c *cli.Context) (err error) {
-	var sid string
-	if c.NArg() > 0 {
-		sid, _, err = getNodeIDName(c, c.Args().First())
-		if err != nil {
-			return
-		}
+func showDisksHandler(c *cli.Context) error {
+	sid, sname, err := argNode(c)
+	if err != nil {
+		return err
+	}
+	if getNodeType(c, sid) == apc.Proxy {
+		return fmt.Errorf("%s is a proxy (AIS gateways do not store user data and do not have any data drives)", sname)
 	}
 	return daemonDiskStats(c, sid)
 }
@@ -280,7 +280,7 @@ func showJobsHandler(c *cli.Context) error {
 		return err
 	}
 
-	if name == subcmdRebalance {
+	if name == cmdRebalance {
 		return showRebalanceHandler(c)
 	}
 
@@ -305,10 +305,10 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 		var otherID string
 		name, otherID = xid2Name(xid)
 		switch name {
-		case subcmdDownload:
-			return _showJobs(c, subcmdDownload, xid, daemonID, bck, false)
-		case subcmdDsort:
-			return _showJobs(c, subcmdDsort, xid, daemonID, bck, false)
+		case cmdDownload:
+			return _showJobs(c, cmdDownload, xid, daemonID, bck, false)
+		case cmdDsort:
+			return _showJobs(c, cmdDsort, xid, daemonID, bck, false)
 		case commandETL:
 			return _showJobs(c, commandETL, otherID /*etl name*/, daemonID, bck, false)
 		}
@@ -351,9 +351,9 @@ func jobCptn(c *cli.Context, name string, onlyActive bool, xid string, byTarget 
 
 func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption bool) (int, error) {
 	switch name {
-	case subcmdDownload:
+	case cmdDownload:
 		return showDownloads(c, xid, caption)
-	case subcmdDsort:
+	case cmdDsort:
 		return showDsorts(c, xid, caption)
 	case commandETL:
 		return showETLs(c, xid, caption)
@@ -394,7 +394,7 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 			return l, err
 		}
 		if caption {
-			jobCptn(c, subcmdDsort, onlyActive, id, false)
+			jobCptn(c, cmdDsort, onlyActive, id, false)
 		}
 		return l, dsortJobsList(c, list, usejs)
 	}
@@ -403,8 +403,33 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 	return 1, dsortJobStatus(c, id)
 }
 
-func showClusterHandler(c *cli.Context) error {
-	smap, err := fillNodeStatusMap(c)
+func showClusterHandler(c *cli.Context) (err error) {
+	var (
+		what, sid  string
+		targetOnly bool
+	)
+	if c.NArg() > 0 {
+		what = c.Args().Get(0)
+		if id, _, errV := getNodeIDName(c, what); errV == nil {
+			sid, what = id, ""
+		}
+	}
+	if c.NArg() > 1 {
+		arg := c.Args().Get(1)
+		if sid != "" {
+			return incorrectUsageMsg(c, "", arg)
+		}
+		if sid, _, err = getNodeIDName(c, arg); err != nil {
+			return err
+		}
+	}
+	if sid != "" && getNodeType(c, sid) == apc.Target {
+		targetOnly = true
+	}
+
+	setLongRunParams(c)
+
+	smap, err := fillNodeStatusMap(c, targetOnly)
 	if err != nil {
 		return err
 	}
@@ -412,25 +437,14 @@ func showClusterHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	setLongRunParams(c)
-
-	if arg := c.Args().Get(1); arg != "" {
-		if sid, _, err := getNodeIDName(c, arg); err == nil {
-			return cluDaeStatus(c, smap, cluConfig, sid)
-		}
-	}
-
-	what := c.Args().Get(0)
-	if c.NArg() > 0 {
-		if sid, _, err := getNodeIDName(c, what); err == nil {
-			what = sid
-		}
+	if sid != "" {
+		return cluDaeStatus(c, smap, cluConfig, sid)
 	}
 	return cluDaeStatus(c, smap, cluConfig, what)
 }
 
 func showStorageHandler(c *cli.Context) (err error) {
-	return daemonDiskStats(c, "")
+	return daemonDiskStats(c, "") // all targets, all disks
 }
 
 func xactList(c *cli.Context, xargs xact.ArgsMsg, caption bool) (int, error) {
@@ -590,23 +604,25 @@ func showBckPropsHandler(c *cli.Context) (err error) {
 	return showBucketProps(c)
 }
 
-func showSmapHandler(c *cli.Context) (err error) {
+func showSmapHandler(c *cli.Context) error {
 	var (
-		sid, sname string
-		smap       *cluster.Smap
+		smap            *cluster.Smap
+		sid, sname, err = argNode(c)
+		targetOnly      bool
 	)
-	if arg := c.Args().First(); arg != "" {
-		sid, sname, err = getNodeIDName(c, arg)
-		if err != nil {
-			return
-		}
-	}
-	smap, err = fillNodeStatusMap(c)
 	if err != nil {
-		return
+		return err
+	}
+	if sid != "" {
+		targetOnly = getNodeType(c, sid) == apc.Target
 	}
 
 	setLongRunParams(c)
+
+	smap, err = fillNodeStatusMap(c, targetOnly)
+	if err != nil {
+		return err
+	}
 	if sid != "" {
 		actionCptn(c, "Cluster map from: ", sname)
 	}
@@ -625,10 +641,10 @@ func showConfigHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing arguments (hint: press <TAB-TAB>)")
 	}
-	if c.Args().First() == subcmdCLI {
+	if c.Args().First() == cmdCLI {
 		return showCLIConfigHandler(c)
 	}
-	if c.Args().First() == subcmdCluster {
+	if c.Args().First() == cmdCluster {
 		return showClusterConfig(c, c.Args().Get(1))
 	}
 	return showNodeConfig(c)
@@ -672,7 +688,7 @@ func showNodeConfig(c *cli.Context) error {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
-	sid, sname, err := getNodeIDName(c, c.Args().First())
+	sid, sname, err := argNode(c)
 	if err == nil {
 		return err
 	}
@@ -776,7 +792,7 @@ func showNodeLogHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	sid, sname, err := getNodeIDName(c, c.Args().First())
+	sid, sname, err := argNode(c)
 	if err != nil {
 		return err
 	}
@@ -877,17 +893,14 @@ func showRemoteAISHandler(c *cli.Context) error {
 
 func showMpathHandler(c *cli.Context) error {
 	var (
-		nodes      []*cluster.Snode
-		sid, sname string
+		smap            *cluster.Smap
+		nodes           []*cluster.Snode
+		sid, sname, err = argNode(c)
 	)
-	if c.NArg() > 0 {
-		var err error
-		sid, sname, err = getNodeIDName(c, c.Args().First())
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return err
 	}
-	smap, err := getClusterMap(c)
+	smap, err = getClusterMap(c)
 	if err != nil {
 		return err
 	}
@@ -968,7 +981,7 @@ func showStatsHandler(c *cli.Context) (err error) {
 		smap *cluster.Smap
 	)
 	if c.NArg() > 0 {
-		sid, _, err = getNodeIDName(c, c.Args().First())
+		sid, _, err = argNode(c)
 		if err != nil {
 			return err
 		}
@@ -1107,38 +1120,4 @@ func showAggregatedStats(c *cli.Context, averageOver time.Duration, regex *regex
 	})
 
 	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
-}
-
-func clusterBps(st stats.ClusterStats, averageOver time.Duration) {
-	time.Sleep(averageOver)
-	st2, _ := api.GetClusterStats(apiBP)
-	for tid, tgt := range st.Target {
-		for k, v := range tgt.Tracker {
-			if !stats.IsKindThroughput(k) {
-				continue
-			}
-			tgt2 := st2.Target[tid]
-			v2 := tgt2.Tracker[k]
-			throughput := (v2.Value - v.Value) / cos.MaxI64(int64(averageOver.Seconds()), 1)
-
-			v.Value = throughput
-			tgt.Tracker[k] = v
-		}
-	}
-}
-
-// throughput (Bps)
-func daemonBps(node *cluster.Snode, ds *stats.DaemonStats, averageOver time.Duration) {
-	time.Sleep(averageOver)
-	ds2, _ := api.GetDaemonStats(apiBP, node)
-	for k, v := range ds.Tracker {
-		if !stats.IsKindThroughput(k) {
-			continue
-		}
-		v2 := ds2.Tracker[k]
-		throughput := (v2.Value - v.Value) / cos.MaxI64(int64(averageOver.Seconds()), 1)
-
-		v.Value = throughput
-		ds.Tracker[k] = v
-	}
 }

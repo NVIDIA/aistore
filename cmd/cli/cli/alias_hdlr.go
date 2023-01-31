@@ -27,23 +27,23 @@ func (a *acli) getAliasCmd() cli.Command {
 		Action: showAliasHandler,
 		Subcommands: []cli.Command{
 			{
-				Name:   subcmdAliasShow,
+				Name:   cmdAliasShow,
 				Usage:  "display list of aliases",
 				Action: showAliasHandler,
 			},
 			{
-				Name:      subcmdAliasRm,
+				Name:      cmdAliasRm,
 				Usage:     "remove existing alias",
 				ArgsUsage: aliasCmdArgument,
 				Action:    rmAliasHandler,
 			},
 			{
-				Name:   subcmdAliasReset,
+				Name:   cmdAliasReset,
 				Usage:  "reset aliases to default",
 				Action: resetAliasHandler,
 			},
 			{
-				Name:      subcmdAliasSet,
+				Name:      cmdAliasSet,
 				Usage:     "add new or update existing alias",
 				ArgsUsage: aliasSetCmdArgument,
 				Action:    a.setAliasHandler,
@@ -116,7 +116,7 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 		cmd.Usage = fmt.Sprintf("(alias for %q) %s", aliasFor, cmd.Usage)
 	}
 
-	// help is already added to the original, remove from cmd and all subcmds
+	// help is already added to the original, remove from cmd and all cmds
 	cmd.HideHelp = true
 	if len(cmd.Subcommands) != 0 {
 		aliasSub := make([]cli.Command, len(cmd.Subcommands))

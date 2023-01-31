@@ -76,17 +76,17 @@ const (
 		"Build:\t{{ ( BuildTimes .Status) }}\n"
 
 	// Disk Stats
-	DiskStatsHdr = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
+	diskStatsHdr = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
 
-	DiskStatsBody = "{{ $value.TargetID }}\t " +
+	diskStatsBody = "{{ $value.TargetID }}\t " +
 		"{{ $value.DiskName }}\t " +
 		"{{ $stat := $value.Stat }}" +
 		"{{ FormatBytesSig $stat.RBps 2 }}/s\t " +
 		"{{ FormatBytesSig $stat.WBps 2 }}/s\t " +
 		"{{ $stat.Util }}%\n"
 
-	DiskStatTmpl      = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
-	DiskStatsFullTmpl = DiskStatsHdr + DiskStatTmpl
+	DiskStatNoHdrTmpl = "{{ range $key, $value := . }}" + diskStatsBody + "{{ end }}"
+	DiskStatsTmpl     = diskStatsHdr + DiskStatNoHdrTmpl
 
 	// Config
 	ConfigTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +

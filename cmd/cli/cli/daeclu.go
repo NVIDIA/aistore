@@ -6,9 +6,7 @@
 package cli
 
 import (
-	"context"
 	"fmt"
-	"sort"
 	"strconv"
 	"text/tabwriter"
 
@@ -21,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
-	"golang.org/x/sync/errgroup"
 )
 
 type (
@@ -117,18 +114,11 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 		usejs      = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
 	)
-	if _, err := fillNodeStatusMap(c); err != nil {
+	setLongRunParams(c)
+
+	if _, err := fillNodeStatusMap(c, true /* target-only*/); err != nil {
 		return err
 	}
-	if _, ok := curPrxStatus[sid]; ok {
-		return fmt.Errorf("node %q is a proxy (hint: \"%s %s %s\" works only for targets)",
-			sid, cliName, commandShow, subcmdShowDisk)
-	}
-	if _, ok := curTgtStatus[sid]; sid != "" && !ok {
-		return fmt.Errorf("target ID=%q does not exist", sid)
-	}
-
-	setLongRunParams(c)
 
 	targets := stats.DaemonStatusMap{sid: {}}
 	if sid == "" {
@@ -141,60 +131,9 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 	}
 
 	if hideHeader {
-		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatTmpl, nil, usejs)
+		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatNoHdrTmpl, nil, usejs)
 	} else {
-		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatsFullTmpl, nil, usejs)
+		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatsTmpl, nil, usejs)
 	}
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getDiskStats(targets stats.DaemonStatusMap) ([]tmpls.DiskStatsTemplateHelper, error) {
-	var (
-		allStats = make([]tmpls.DiskStatsTemplateHelper, 0, len(targets))
-		wg, _    = errgroup.WithContext(context.Background())
-		statsCh  = make(chan targetDiskStats, len(targets))
-	)
-
-	for targetID := range targets {
-		wg.Go(func(targetID string) func() error {
-			return func() (err error) {
-				diskStats, err := api.GetTargetDiskStats(apiBP, targetID)
-				if err != nil {
-					return err
-				}
-
-				statsCh <- targetDiskStats{stats: diskStats, targetID: targetID}
-				return nil
-			}
-		}(targetID))
-	}
-
-	err := wg.Wait()
-	close(statsCh)
-	if err != nil {
-		return nil, err
-	}
-	for diskStats := range statsCh {
-		targetID := diskStats.targetID
-		for diskName, diskStat := range diskStats.stats {
-			allStats = append(allStats,
-				tmpls.DiskStatsTemplateHelper{TargetID: targetID, DiskName: diskName, Stat: diskStat})
-		}
-	}
-
-	sort.Slice(allStats, func(i, j int) bool {
-		if allStats[i].TargetID != allStats[j].TargetID {
-			return allStats[i].TargetID < allStats[j].TargetID
-		}
-		if allStats[i].DiskName != allStats[j].DiskName {
-			return allStats[i].DiskName < allStats[j].DiskName
-		}
-		return allStats[i].Stat.Util > allStats[j].Stat.Util
-	})
-
-	return allStats, nil
+	return err
 }

@@ -18,53 +18,53 @@ import (
 
 var (
 	mpathCmdsFlags = map[string][]cli.Flag{
-		subcmdMpathAttach: {
+		cmdMpathAttach: {
 			forceFlag,
 		},
-		subcmdMpathEnable: {},
-		subcmdMpathDetach: {
+		cmdMpathEnable: {},
+		cmdMpathDetach: {
 			noResilverFlag,
 		},
-		subcmdMpathDisable: {
+		cmdMpathDisable: {
 			noResilverFlag,
 		},
 	}
 
 	mpathCmd = cli.Command{
-		Name:   commandMountpath,
+		Name:   cmdMountpath,
 		Usage:  "show and attach/detach target mountpaths",
 		Action: showMpathHandler,
 		Subcommands: []cli.Command{
 			makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
 			{
-				Name:         subcmdMpathAttach,
+				Name:         cmdMpathAttach,
 				Usage:        "attach mountpath (i.e., formatted disk or RAID) to a target node",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags[subcmdMpathAttach],
+				Flags:        mpathCmdsFlags[cmdMpathAttach],
 				Action:       mpathAttachHandler,
 				BashComplete: suggestTargetNodes,
 			},
 			{
-				Name:         subcmdMpathEnable,
+				Name:         cmdMpathEnable,
 				Usage:        "(re)enable target's mountpath",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags[subcmdMpathEnable],
+				Flags:        mpathCmdsFlags[cmdMpathEnable],
 				Action:       mpathEnableHandler,
 				BashComplete: suggestTargetNodes,
 			},
 			{
-				Name:         subcmdMpathDetach,
+				Name:         cmdMpathDetach,
 				Usage:        "detach mountpath (i.e., formatted disk or RAID) from a target node",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags[subcmdMpathDetach],
+				Flags:        mpathCmdsFlags[cmdMpathDetach],
 				Action:       mpathDetachHandler,
 				BashComplete: suggestTargetNodes,
 			},
 			{
-				Name:         subcmdMpathDisable,
+				Name:         cmdMpathDisable,
 				Usage:        "disable mountpath (deactivate but keep in a target's volume)",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags[subcmdMpathDisable],
+				Flags:        mpathCmdsFlags[cmdMpathDisable],
 				Action:       mpathDisableHandler,
 				BashComplete: suggestTargetNodes,
 			},
@@ -81,7 +81,7 @@ func mpathAction(c *cli.Context, action string) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	smap, errMap := fillNodeStatusMap(c)
+	smap, errMap := fillNodeStatusMap(c, true /*targetOnly*/)
 	if errMap != nil {
 		return errMap
 	}

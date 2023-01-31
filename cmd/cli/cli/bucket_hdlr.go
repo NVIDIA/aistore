@@ -62,10 +62,10 @@ var (
 			keepMDFlag,
 			verboseFlag,
 		),
-		subcmdSetProps: {
+		cmdSetProps: {
 			forceFlag,
 		},
-		subcmdResetProps: {},
+		cmdResetProps: {},
 
 		commandList: {
 			regexFlag,
@@ -89,14 +89,14 @@ var (
 			bckSummaryFlag,
 		},
 
-		subcmdSummary: {
+		cmdSummary: {
 			listObjCachedFlag,
 			allObjsOrBcksFlag,
 			sizeInBytesFlag,
 			validateSummaryFlag,
 			verboseFlag,
 		},
-		subcmdLRU: {
+		cmdLRU: {
 			enableFlag,
 			disableFlag,
 		},
@@ -113,19 +113,19 @@ var (
 	}
 
 	bucketCmdSummary = cli.Command{
-		Name:         subcmdSummary,
+		Name:         cmdSummary,
 		Usage:        "generate and display bucket summary",
 		ArgsUsage:    optionalBucketArgument,
-		Flags:        bucketCmdsFlags[subcmdSummary],
+		Flags:        bucketCmdsFlags[cmdSummary],
 		Action:       summaryBucketHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
 
 	bucketCmdLRU = cli.Command{
-		Name:         subcmdLRU,
+		Name:         cmdLRU,
 		Usage:        "show bucket's LRU configuration; enable or disable LRU eviction",
 		ArgsUsage:    optionalBucketArgument,
-		Flags:        bucketCmdsFlags[subcmdLRU],
+		Flags:        bucketCmdsFlags[cmdLRU],
 		Action:       lruBucketHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
@@ -183,25 +183,25 @@ var (
 				}),
 			},
 			{
-				Name:   subcmdProps,
+				Name:   cmdProps,
 				Usage:  "show, update or reset bucket properties",
 				Action: showBckPropsHandler,
 				Subcommands: []cli.Command{
 					{
-						Name:      subcmdSetProps,
+						Name:      cmdSetProps,
 						Usage:     "update bucket properties",
 						ArgsUsage: bucketPropsArgument,
-						Flags:     bucketCmdsFlags[subcmdSetProps],
+						Flags:     bucketCmdsFlags[cmdSetProps],
 						Action:    setPropsHandler,
 						BashComplete: bucketCompletions(
 							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 						),
 					},
 					{
-						Name:      subcmdResetProps,
+						Name:      cmdResetProps,
 						Usage:     "reset bucket properties",
 						ArgsUsage: bucketPropsArgument,
-						Flags:     bucketCmdsFlags[subcmdResetProps],
+						Flags:     bucketCmdsFlags[cmdResetProps],
 						Action:    resetPropsHandler,
 						BashComplete: bucketCompletions(
 							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
@@ -605,7 +605,7 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, upd
 			return herr
 		}
 		helpMsg := fmt.Sprintf("To show bucket properties, run '%s %s %s %s'",
-			cliName, commandShow, subcmdBucket, bck.DisplayName())
+			cliName, commandShow, cmdBucket, bck.DisplayName())
 		return newAdditionalInfoError(err, helpMsg)
 	}
 	showDiff(c, currProps, allNewProps)

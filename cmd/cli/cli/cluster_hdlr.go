@@ -27,31 +27,31 @@ const (
 
 var (
 	clusterCmdsFlags = map[string][]cli.Flag{
-		subcmdCluAttach: {},
-		subcmdCluDetach: {},
-		subcmdCluConfig: {
+		cmdCluAttach: {},
+		cmdCluDetach: {},
+		cmdCluConfig: {
 			transientFlag,
 		},
-		subcmdShutdown: {},
-		subcmdPrimary:  {},
-		subcmdJoin: {
+		cmdShutdown: {},
+		cmdPrimary:  {},
+		cmdJoin: {
 			roleFlag,
 		},
-		subcmdStartMaint: {
+		cmdStartMaint: {
 			noRebalanceFlag,
 		},
-		subcmdShutdown + ".node": {
+		cmdShutdown + ".node": {
 			noRebalanceFlag,
 			noShutdownFlag,
 			rmUserDataFlag,
 		},
-		subcmdNodeDecommission + ".node": {
+		cmdNodeDecommission + ".node": {
 			noRebalanceFlag,
 			noShutdownFlag,
 			rmUserDataFlag,
 			yesFlag,
 		},
-		subcmdClusterDecommission: {
+		cmdClusterDecommission: {
 			rmUserDataFlag,
 			yesFlag,
 		},
@@ -82,22 +82,22 @@ var (
 		Subcommands: []cli.Command{
 			makeAlias(showCmdCluster, "", true, commandShow), // alias for `ais show`
 			{
-				Name:      subcmdCluAttach,
+				Name:      cmdCluAttach,
 				Usage:     "attach remote ais cluster",
 				ArgsUsage: attachRemoteAISArgument,
-				Flags:     clusterCmdsFlags[subcmdAttach],
+				Flags:     clusterCmdsFlags[cmdAttach],
 				Action:    attachRemoteAISHandler,
 			},
 			{
-				Name:         subcmdCluDetach,
+				Name:         cmdCluDetach,
 				Usage:        "detach remote ais cluster",
 				ArgsUsage:    detachRemoteAISArgument,
-				Flags:        clusterCmdsFlags[subcmdDetach],
+				Flags:        clusterCmdsFlags[cmdDetach],
 				Action:       detachRemoteAISHandler,
 				BashComplete: suggestRemote,
 			},
 			{
-				Name: subcmdRebalance,
+				Name: cmdRebalance,
 				Subcommands: []cli.Command{
 					startRebalance,
 					stopRebalance,
@@ -111,64 +111,64 @@ var (
 				},
 			},
 			{
-				Name:         subcmdPrimary,
+				Name:         cmdPrimary,
 				Usage:        "select a new primary proxy/gateway",
 				ArgsUsage:    nodeIDArgument,
-				Flags:        clusterCmdsFlags[subcmdPrimary],
+				Flags:        clusterCmdsFlags[cmdPrimary],
 				Action:       setPrimaryHandler,
 				BashComplete: suggestProxyNodes,
 			},
 			{
-				Name:   subcmdShutdown,
+				Name:   cmdShutdown,
 				Usage:  "shutdown cluster",
-				Flags:  clusterCmdsFlags[subcmdShutdown],
+				Flags:  clusterCmdsFlags[cmdShutdown],
 				Action: clusterShutdownHandler,
 			},
 			{
-				Name:   subcmdClusterDecommission,
+				Name:   cmdClusterDecommission,
 				Usage:  "decommission entire cluster",
-				Flags:  clusterCmdsFlags[subcmdClusterDecommission],
+				Flags:  clusterCmdsFlags[cmdClusterDecommission],
 				Action: clusterDecommissionHandler,
 			},
 			{
-				Name:  subcmdMembership,
+				Name:  cmdMembership,
 				Usage: "manage cluster membership (scale up or down)",
 				Subcommands: []cli.Command{
 					{
-						Name:      subcmdJoin,
+						Name:      cmdJoin,
 						Usage:     "add a node to the cluster",
 						ArgsUsage: joinNodeArgument,
-						Flags:     clusterCmdsFlags[subcmdJoin],
+						Flags:     clusterCmdsFlags[cmdJoin],
 						Action:    joinNodeHandler,
 					},
 					{
-						Name:         subcmdStartMaint,
+						Name:         cmdStartMaint,
 						Usage:        "put node in maintenance mode, temporarily suspend its operation",
 						ArgsUsage:    nodeIDArgument,
-						Flags:        clusterCmdsFlags[subcmdStartMaint],
+						Flags:        clusterCmdsFlags[cmdStartMaint],
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestAllNodes,
 					},
 					{
-						Name:         subcmdStopMaint,
+						Name:         cmdStopMaint,
 						Usage:        "activate node by taking it back from \"maintenance\"",
 						ArgsUsage:    nodeIDArgument,
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestAllNodes,
 					},
 					{
-						Name:         subcmdNodeDecommission,
+						Name:         cmdNodeDecommission,
 						Usage:        "safely and permanently remove node from the cluster",
 						ArgsUsage:    nodeIDArgument,
-						Flags:        clusterCmdsFlags[subcmdNodeDecommission+".node"],
+						Flags:        clusterCmdsFlags[cmdNodeDecommission+".node"],
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestAllNodes,
 					},
 					{
-						Name:         subcmdShutdown,
+						Name:         cmdShutdown,
 						Usage:        "shutdown a node",
 						ArgsUsage:    nodeIDArgument,
-						Flags:        clusterCmdsFlags[subcmdShutdown+".node"],
+						Flags:        clusterCmdsFlags[cmdShutdown+".node"],
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestAllNodes,
 					},
@@ -320,7 +320,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		fmt.Fprintln(c.App.Writer,
 			"To rebalance the cluster manually at a later time, please run: `ais job start rebalance`")
 	}
-	if action == subcmdNodeDecommission {
+	if action == cmdNodeDecommission {
 		if !flagIsSet(c, yesFlag) {
 			warn := fmt.Sprintf("about to permanently decommission node %s. The operation cannot be undone!", sname)
 			if ok := confirm(c, "Proceed?", warn); !ok {
@@ -339,13 +339,13 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		}
 	}
 	switch action {
-	case subcmdStartMaint:
+	case cmdStartMaint:
 		xid, err = api.StartMaintenance(apiBP, actValue)
-	case subcmdStopMaint:
+	case cmdStopMaint:
 		xid, err = api.StopMaintenance(apiBP, actValue)
-	case subcmdNodeDecommission:
+	case cmdNodeDecommission:
 		xid, err = api.DecommissionNode(apiBP, actValue)
-	case subcmdShutdown:
+	case cmdShutdown:
 		xid, err = api.ShutdownNode(apiBP, actValue)
 	}
 	if err != nil {
@@ -355,23 +355,23 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xid, xid)
 	}
 	switch action {
-	case subcmdStopMaint:
+	case cmdStopMaint:
 		fmt.Fprintf(c.App.Writer, "%s is now active (maintenance done)\n", sname)
-	case subcmdNodeDecommission:
+	case cmdNodeDecommission:
 		if skipRebalance || node.IsProxy() {
 			fmt.Fprintf(c.App.Writer, "%s has been decommissioned (permanently removed from the cluster)\n", sname)
 		} else {
 			fmt.Fprintf(c.App.Writer,
 				"%s is being decommissioned, please wait for cluster rebalancing to finish...\n", sname)
 		}
-	case subcmdShutdown:
+	case cmdShutdown:
 		if skipRebalance || node.IsProxy() {
 			fmt.Fprintf(c.App.Writer, "%s has been shutdown\n", sname)
 		} else {
 			fmt.Fprintf(c.App.Writer,
 				"%s is shutting down, please wait for cluster rebalancing to finish...\n", sname)
 		}
-	case subcmdStartMaint:
+	case cmdStartMaint:
 		fmt.Fprintf(c.App.Writer, "%s is now in maintenance\n", sname)
 	}
 	return nil

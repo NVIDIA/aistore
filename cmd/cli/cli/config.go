@@ -26,22 +26,22 @@ import (
 
 var (
 	configCmdsFlags = map[string][]cli.Flag{
-		subcmdCluster: {
+		cmdCluster: {
 			transientFlag,
 			jsonFlag, // to show
 		},
-		subcmdNode: {
+		cmdNode: {
 			transientFlag,
 			jsonFlag, // to show
 		},
 	}
 
 	clicfgCmdFlags = map[string][]cli.Flag{
-		subcmdCLIShow: {
+		cmdCLIShow: {
 			cliConfigPathFlag,
 			jsonFlag,
 		},
-		subcmdCLISet: {},
+		cmdCLISet: {},
 	}
 )
 
@@ -75,23 +75,23 @@ var (
 		Subcommands: []cli.Command{
 			makeAlias(showCmdConfig, "", true, commandShow), // alias for `ais show`
 			{
-				Name:         subcmdCluster,
+				Name:         cmdCluster,
 				Usage:        "configure AIS cluster",
 				ArgsUsage:    keyValuePairsArgument,
-				Flags:        configCmdsFlags[subcmdCluster],
+				Flags:        configCmdsFlags[cmdCluster],
 				Action:       setCluConfigHandler,
 				BashComplete: setCluConfigCompletions,
 			},
 			{
-				Name:         subcmdNode,
+				Name:         cmdNode,
 				Usage:        "configure AIS node",
 				ArgsUsage:    nodeConfigArgument,
-				Flags:        configCmdsFlags[subcmdNode],
+				Flags:        configCmdsFlags[cmdNode],
 				Action:       setNodeConfigHandler,
 				BashComplete: setNodeConfigCompletions,
 			},
 			{
-				Name:         subcmdReset,
+				Name:         cmdReset,
 				Usage:        "reset (cluster | node | CLI) configuration to system defaults",
 				ArgsUsage:    optionalNodeIDArgument,
 				Action:       resetConfigHandler,
@@ -105,25 +105,25 @@ var (
 
 	// cli
 	clicfgCmd = cli.Command{
-		Name:  subcmdCLI,
+		Name:  cmdCLI,
 		Usage: "display and change AIS CLI configuration",
 		Subcommands: []cli.Command{
 			{
-				Name:   subcmdCLIShow,
+				Name:   cmdCLIShow,
 				Usage:  "display CLI configuration",
-				Flags:  clicfgCmdFlags[subcmdCLIShow],
+				Flags:  clicfgCmdFlags[cmdCLIShow],
 				Action: showCLIConfigHandler,
 			},
 			{
-				Name:         subcmdCLISet,
+				Name:         cmdCLISet,
 				Usage:        "change CLI configuration",
 				ArgsUsage:    keyValuePairsArgument,
-				Flags:        clicfgCmdFlags[subcmdCLISet],
+				Flags:        clicfgCmdFlags[cmdCLISet],
 				Action:       setCLIConfigHandler,
 				BashComplete: cliPropCompletions,
 			},
 			{
-				Name:   subcmdCLIReset,
+				Name:   cmdCLIReset,
 				Usage:  "reset CLI configurations to system defaults",
 				Action: resetCLIConfigHandler,
 			},
@@ -291,7 +291,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 	if kvs[0] == cfgScopeLocal || kvs[0] == cfgScopeInherited {
 		kvs = kvs[1:]
 	}
-	if kvs[0] == subcmdReset {
+	if kvs[0] == cmdReset {
 		return resetNodeConfigHandler(c)
 	}
 
@@ -341,13 +341,13 @@ func setNodeConfigHandler(c *cli.Context) error {
 
 func resetConfigHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return cli.ShowCommandHelp(c, subcmdReset)
+		return cli.ShowCommandHelp(c, cmdReset)
 	}
 	switch c.Args().First() {
-	case subcmdCLI:
+	case cmdCLI:
 		err = resetCLIConfigHandler(c)
 		return
-	case subcmdCluster:
+	case cmdCluster:
 		err = api.ResetClusterConfig(apiBP)
 		if err == nil {
 			actionDone(c, "Config globally reset: all nodes reverted to cluster-wide defaults")

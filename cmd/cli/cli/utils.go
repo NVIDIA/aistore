@@ -94,6 +94,18 @@ func argLast(c *cli.Context) (last string) {
 	return
 }
 
+// used together with `optionalTargetIDArgument` & `optionalNodeIDArgument`
+func argNode(c *cli.Context, shift ...int) (sid, sname string, err error) {
+	var idx int
+	if len(shift) > 0 {
+		idx = shift[0]
+	}
+	if c.NArg() > idx {
+		sid, sname, err = getNodeIDName(c, c.Args().Get(idx))
+	}
+	return
+}
+
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
 
 func jsonMarshalIndent(v any) ([]byte, error) { return jsoniter.MarshalIndent(v, "", "    ") }

@@ -29,7 +29,7 @@ import (
 var (
 	// flags
 	etlSubFlags = map[string][]cli.Flag{
-		subcmdCode: {
+		cmdCode: {
 			fromFileFlag,
 			depsFileFlag,
 			runtimeFlag,
@@ -39,16 +39,16 @@ var (
 			waitTimeoutFlag,
 			etlNameFlag,
 		},
-		subcmdSpec: {
+		cmdSpec: {
 			fromFileFlag,
 			commTypeFlag,
 			etlNameFlag,
 			waitTimeoutFlag,
 		},
-		subcmdStop: {
+		cmdStop: {
 			allRunningJobsFlag,
 		},
-		subcmdBucket: {
+		cmdBucket: {
 			etlExtFlag,
 			cpBckPrefixFlag,
 			cpBckDryRunFlag,
@@ -58,7 +58,7 @@ var (
 			listFlag,
 			continueOnErrorFlag,
 		},
-		subcmdStart: {},
+		cmdStart: {},
 	}
 	showCmdETL = cli.Command{
 		Name:   commandShow,
@@ -66,7 +66,7 @@ var (
 		Action: etlListHandler,
 		Subcommands: []cli.Command{
 			{
-				Name:      commandSource,
+				Name:      cmdSrc,
 				Usage:     "show ETL code/spec",
 				ArgsUsage: etlNameArgument,
 				Action:    etlShowInitMsgHandler,
@@ -74,55 +74,55 @@ var (
 		},
 	}
 	stopCmdETL = cli.Command{
-		Name:         subcmdStop,
+		Name:         cmdStop,
 		Usage:        "stop ETL",
 		ArgsUsage:    etlNameListArgument,
 		Action:       etlStopHandler,
 		BashComplete: etlIDCompletions,
-		Flags:        etlSubFlags[subcmdStop],
+		Flags:        etlSubFlags[cmdStop],
 	}
 	startCmdETL = cli.Command{
-		Name:         subcmdStart,
+		Name:         cmdStart,
 		Usage:        "start ETL",
 		ArgsUsage:    etlNameArgument,
 		Action:       etlStartHandler,
 		BashComplete: etlIDCompletions,
-		Flags:        etlSubFlags[subcmdStart],
+		Flags:        etlSubFlags[cmdStart],
 	}
 	initCmdETL = cli.Command{
-		Name: subcmdInit,
+		Name: cmdInit,
 		Subcommands: []cli.Command{
 			{
-				Name:   subcmdSpec,
+				Name:   cmdSpec,
 				Usage:  "start ETL job with YAML Pod specification",
-				Flags:  etlSubFlags[subcmdSpec],
+				Flags:  etlSubFlags[cmdSpec],
 				Action: etlInitSpecHandler,
 			},
 			{
-				Name:   subcmdCode,
+				Name:   cmdCode,
 				Usage:  "start ETL job using the specified transforming function or script",
-				Flags:  etlSubFlags[subcmdCode],
+				Flags:  etlSubFlags[cmdCode],
 				Action: etlInitCodeHandler,
 			},
 		},
 	}
 	objCmdETL = cli.Command{
-		Name:         subcmdObject,
+		Name:         cmdObject,
 		Usage:        "transform object",
 		ArgsUsage:    etlNameArgument + " " + objectArgument + " OUTPUT",
 		Action:       etlObjectHandler,
 		BashComplete: etlIDCompletions,
 	}
 	bckCmdETL = cli.Command{
-		Name:         subcmdBucket,
+		Name:         cmdBucket,
 		Usage:        "perform bucket-to-bucket transform (\"offline transformation\")",
 		ArgsUsage:    etlNameArgument + " " + bucketSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
-		Flags:        etlSubFlags[subcmdBucket],
+		Flags:        etlSubFlags[cmdBucket],
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
 	}
 	logsCmdETL = cli.Command{
-		Name:         subcmdLogs,
+		Name:         cmdLogs,
 		Usage:        "retrieve ETL logs",
 		ArgsUsage:    etlNameArgument + " " + optionalTargetIDArgument,
 		Action:       etlLogsHandler,
@@ -553,7 +553,7 @@ func handleETLHTTPError(err error, etlName string) error {
 		// TODO: How to find out if it's transformation not found, and not object not found?
 		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlName) {
 			return fmt.Errorf("ETL[%s] not found; try starting new ETL with:\nais %s %s <spec>",
-				etlName, commandETL, subcmdInit)
+				etlName, commandETL, cmdInit)
 		}
 	}
 	return err

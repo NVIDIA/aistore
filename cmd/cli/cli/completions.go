@@ -137,17 +137,17 @@ func propValueCompletion(c *cli.Context) bool {
 
 func showConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
-		fmt.Println(subcmdCluster)
-		fmt.Println(subcmdCLI)
+		fmt.Println(cmdCluster)
+		fmt.Println(cmdCLI)
 		suggestAllNodes(c)
 		return
 	}
-	if c.Args().First() == subcmdCLI {
+	if c.Args().First() == cmdCLI {
 		return
 	}
-	if c.Args().First() == subcmdCluster {
+	if c.Args().First() == cmdCluster {
 		if c.NArg() == 1 {
-			configSectionCompletions(c, subcmdCluster)
+			configSectionCompletions(c, cmdCluster)
 		}
 		return
 	}
@@ -199,7 +199,7 @@ func setNodeConfigCompletions(c *cli.Context) {
 		if argLast(c) == cfgScopeLocal {
 			v = &config.LocalConfig
 		} else if argLast(c) == cfgScopeInherited {
-			fmt.Println(subcmdReset)
+			fmt.Println(cmdReset)
 		}
 		err := cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 			props.Set(uniqueTag)
@@ -250,7 +250,7 @@ func suggestNode(c *cli.Context, ty int) {
 func showClusterCompletions(c *cli.Context) {
 	switch c.NArg() {
 	case 0:
-		fmt.Println(apc.Proxy, apc.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowStats)
+		fmt.Println(apc.Proxy, apc.Target, cmdSmap, cmdBMD, cmdConfig, cmdShowStats)
 	case 1:
 		switch c.Args().Get(0) {
 		case apc.Proxy:
@@ -509,16 +509,16 @@ func runningJobCompletions(c *cli.Context) {
 			return
 		}
 		if len(list) > 0 {
-			fmt.Println(subcmdDsort)
+			fmt.Println(cmdDsort)
 		}
 		return
 	case 1: // ID
 		name := c.Args().Get(0)
 		switch name {
-		case subcmdDownload:
+		case cmdDownload:
 			suggestDownloadID(c, (*dload.Job).JobRunning, 1 /*shift*/)
 			return
-		case subcmdDsort:
+		case cmdDsort:
 			suggestDsortID(c, (*dsort.JobInfo).IsRunning, 1 /*shift*/)
 			return
 		case commandETL:

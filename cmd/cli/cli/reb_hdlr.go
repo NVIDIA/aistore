@@ -30,7 +30,7 @@ var (
 	showRebFlags = append(longRunFlags, allJobsFlag, noHeaderFlag)
 
 	showCmdRebalance = cli.Command{
-		Name:      subcmdRebalance,
+		Name:      cmdRebalance,
 		Usage:     "show rebalance status and stats",
 		ArgsUsage: jobShowRebalanceArgument,
 		Flags:     showRebFlags,

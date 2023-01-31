@@ -17,7 +17,7 @@ import (
 
 var (
 	storageCmdFlags = map[string][]cli.Flag{
-		subcmdStgCleanup: {
+		cmdStgCleanup: {
 			waitFlag,
 			waitTimeoutFlag,
 		},
@@ -30,20 +30,20 @@ var (
 			makeAlias(showCmdStorage, "", true, commandShow), // alias for `ais show`
 			showCmdStgSummary,
 			{
-				Name:         subcmdStgValidate,
+				Name:         cmdStgValidate,
 				Usage:        "check buckets for misplaced objects and objects that have insufficient numbers of copies or EC slices",
 				ArgsUsage:    listAnyCommandArgument,
-				Flags:        storageCmdFlags[subcmdStgValidate],
+				Flags:        storageCmdFlags[cmdStgValidate],
 				Action:       showMisplacedAndMore,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			mpathCmd,
 			showCmdDisk,
 			{
-				Name:         subcmdStgCleanup,
+				Name:         cmdStgCleanup,
 				Usage:        "perform storage cleanup: remove deleted objects and old/obsolete workfiles",
 				ArgsUsage:    listAnyCommandArgument,
-				Flags:        storageCmdFlags[subcmdStgCleanup],
+				Flags:        storageCmdFlags[cmdStgCleanup],
 				Action:       cleanupStorageHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},

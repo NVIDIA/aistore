@@ -18,19 +18,21 @@ import (
 
 // top-level commands (categories - nouns)
 const (
-	commandAuth      = "auth"
-	commandBucket    = "bucket"
-	commandObject    = "object"
-	commandCluster   = "cluster"
-	commandConfig    = "config"
-	commandMountpath = "mountpath"
-	commandJob       = "job"
-	commandSearch    = "search"
-	commandETL       = apc.ETL
-	commandSource    = "source"
-	commandAlias     = "alias"
-	commandStorage   = "storage"
-	commandArch      = "archive"
+	commandAuth     = "auth"
+	commandAdvanced = "advanced"
+	commandBucket   = "bucket"
+	commandObject   = "object"
+	commandCluster  = "cluster"
+	commandConfig   = "config"
+	commandJob      = "job"
+	commandLog      = "log"
+	commandPerf     = "performance"
+	commandStorage  = "storage"
+	commandETL      = apc.ETL   // TODO: add `ais show etl`
+	commandAlias    = "alias"   // TODO: ditto alias
+	commandArch     = "archive" // TODO: ditto archive
+
+	commandSearch = "search"
 )
 
 // top-level `show`
@@ -40,10 +42,9 @@ const (
 
 // advanced command and subcommands
 const (
-	commandAdvanced  = "advanced"
-	commandGenShards = "gen-shards"
-	subcmdPreload    = "preload"
-	subcmdRmSmap     = "remove-from-smap"
+	cmdGenShards = "gen-shards"
+	cmdPreload   = "preload"
+	cmdRmSmap    = "remove-from-smap"
 )
 
 // - 2nd level subcommands (mostly, verbs)
@@ -64,110 +65,115 @@ const (
 	commandStart     = apc.ActXactStart
 	commandStop      = apc.ActXactStop
 
-	commandLog = "log"
-
-	subcmdSmap   = apc.GetWhatSmap
-	subcmdBMD    = apc.GetWhatBMD
-	subcmdMpath  = apc.GetWhatDiskStats
-	subcmdConfig = apc.GetWhatConfig
-	subcmdLog    = apc.GetWhatLog
-	subcmdBucket = "bucket"
-	subcmdObject = "object"
-	subcmdProps  = "props"
+	cmdSmap   = apc.GetWhatSmap
+	cmdBMD    = apc.GetWhatBMD
+	cmdConfig = apc.GetWhatConfig
+	cmdLog    = apc.GetWhatLog
+	cmdBucket = "bucket"
+	cmdObject = "object"
+	cmdProps  = "props"
 
 	// NOTE implicit assumption: AIS xaction kind _eq_ the command name (e.g. "download")
 	commandRebalance = apc.ActRebalance
 	commandResilver  = apc.ActResilver
 
-	commandPromote   = apc.ActPromote
-	commandECEncode  = apc.ActECEncode
-	commandMirror    = "mirror"   // display name for apc.ActMakeNCopies
-	commandEvict     = "evict"    // apc.ActEvictRemoteBck or apc.ActEvictObjects
-	commandPrefetch  = "prefetch" // apc.ActPrefetchObjects
-	subcmdDownload   = apc.ActDownload
-	subcmdRebalance  = apc.ActRebalance
-	subcmdLRU        = apc.ActLRU
-	subcmdStgCleanup = "cleanup" // display name for apc.ActStoreCleanup
-	subcmdSummary    = "summary" // ditto apc.ActSummaryBck
+	commandPromote  = apc.ActPromote
+	commandECEncode = apc.ActECEncode
+	commandMirror   = "mirror"   // display name for apc.ActMakeNCopies
+	commandEvict    = "evict"    // apc.ActEvictRemoteBck or apc.ActEvictObjects
+	commandPrefetch = "prefetch" // apc.ActPrefetchObjects
 
-	subcmdDsort = dsort.DSortName
+	cmdDownload    = apc.ActDownload
+	cmdRebalance   = apc.ActRebalance
+	cmdLRU         = apc.ActLRU
+	cmdStgCleanup  = "cleanup" // display name for apc.ActStoreCleanup
+	cmdStgValidate = "validate"
+	cmdSummary     = "summary" // ditto apc.ActSummaryBck
 
-	subcmdMountpath  = "mountpath"
-	subcmdCluster    = commandCluster
-	subcmdNode       = "node"
-	subcmdPrimary    = "set-primary"
-	subcmdList       = commandList
-	subcmdLogs       = "logs"
-	subcmdStop       = "stop"
-	subcmdStart      = "start"
-	subcmdMembership = "add-remove-nodes"
-	subcmdShutdown   = "shutdown"
-	subcmdAttach     = "attach"
-	subcmdDetach     = "detach"
+	cmdDsort = dsort.DSortName
+
+	cmdCluster    = commandCluster
+	cmdNode       = "node"
+	cmdPrimary    = "set-primary"
+	cmdList       = commandList
+	cmdLogs       = "logs"
+	cmdStop       = "stop"
+	cmdStart      = "start"
+	cmdMembership = "add-remove-nodes"
+	cmdShutdown   = "shutdown"
+	cmdAttach     = "attach"
+	cmdDetach     = "detach"
 
 	// Cluster subcommands
-	subcmdCluAttach = "remote-" + subcmdAttach
-	subcmdCluDetach = "remote-" + subcmdDetach
-	subcmdCluConfig = "configure"
-	subcmdReset     = "reset"
+	cmdCluAttach = "remote-" + cmdAttach
+	cmdCluDetach = "remote-" + cmdDetach
+	cmdCluConfig = "configure"
+	cmdReset     = "reset"
 
 	// Mountpath (disk) actions
-	subcmdMpathAttach  = subcmdAttach
-	subcmdMpathEnable  = "enable"
-	subcmdMpathDetach  = subcmdDetach
-	subcmdMpathDisable = "disable"
+	cmdMpathAttach  = cmdAttach
+	cmdMpathEnable  = "enable"
+	cmdMpathDetach  = cmdDetach
+	cmdMpathDisable = "disable"
 
 	// Node subcommands
-	subcmdJoin                = "join"
-	subcmdStartMaint          = "start-maintenance"
-	subcmdStopMaint           = "stop-maintenance"
-	subcmdNodeDecommission    = "decommission"
-	subcmdClusterDecommission = "decommission"
+	cmdJoin                = "join"
+	cmdStartMaint          = "start-maintenance"
+	cmdStopMaint           = "stop-maintenance"
+	cmdNodeDecommission    = "decommission"
+	cmdClusterDecommission = "decommission"
 
-	subcmdShowRemoteAIS = "remote-cluster"
-	subcmdShowStats     = "stats"
-	subcmdShowDisk      = subcmdMpath
-	subcmdStgValidate   = "validate"
+	// Show subcommands (not all)
+	cmdShowRemoteAIS  = "remote-cluster"
+	cmdShowStats      = "stats"
+	cmdMountpath      = "mountpath"
+	cmdShowDisk       = apc.GetWhatDiskStats
+	cmdShowCounters   = "counters"
+	cmdShowThroughput = "throughput"
+	cmdShowLatency    = "latency"
+	cmdShowGET        = "GET"
+	cmdShowSysCap     = "CPU-MEM-CAP"
 
 	// Bucket properties subcommands
-	subcmdSetProps   = "set"
-	subcmdResetProps = "reset"
+	cmdSetProps   = "set"
+	cmdResetProps = "reset"
 
 	// Archive subcommands
-	subcmdAppend = "append"
+	cmdAppend = "append"
 
 	// AuthN subcommands
-	subcmdAuthAdd     = "add"
-	subcmdAuthShow    = "show"
-	subcmdAuthSet     = commandSet
-	subcmdAuthRemove  = commandRemove
-	subcmdAuthLogin   = "login"
-	subcmdAuthLogout  = "logout"
-	subcmdAuthUser    = "user"
-	subcmdAuthRole    = "role"
-	subcmdAuthCluster = subcmdCluster
-	subcmdAuthToken   = "token"
-	subcmdAuthConfig  = subcmdConfig
+	cmdAuthAdd     = "add"
+	cmdAuthShow    = "show"
+	cmdAuthSet     = commandSet
+	cmdAuthRemove  = commandRemove
+	cmdAuthLogin   = "login"
+	cmdAuthLogout  = "logout"
+	cmdAuthUser    = "user"
+	cmdAuthRole    = "role"
+	cmdAuthCluster = cmdCluster
+	cmdAuthToken   = "token"
+	cmdAuthConfig  = cmdConfig
 
 	// K8s subcommans
-	subcmdK8s        = "kubectl"
-	subcmdK8sSvc     = "svc"
-	subcmdK8sCluster = commandCluster
+	cmdK8s        = "kubectl"
+	cmdK8sSvc     = "svc"
+	cmdK8sCluster = commandCluster
 
 	// ETL subcommands
-	subcmdInit = "init"
-	subcmdSpec = "spec"
-	subcmdCode = "code"
+	cmdInit = "init"
+	cmdSpec = "spec"
+	cmdCode = "code"
+	cmdSrc  = "source"
 
 	// config subcommands
-	subcmdCLI        = "cli"
-	subcmdCLIShow    = commandShow
-	subcmdCLISet     = subcmdSetProps
-	subcmdCLIReset   = subcmdResetProps
-	subcmdAliasShow  = commandShow
-	subcmdAliasRm    = commandRemove
-	subcmdAliasSet   = subcmdCLISet
-	subcmdAliasReset = subcmdResetProps
+	cmdCLI        = "cli"
+	cmdCLIShow    = commandShow
+	cmdCLISet     = cmdSetProps
+	cmdCLIReset   = cmdResetProps
+	cmdAliasShow  = commandShow
+	cmdAliasRm    = commandRemove
+	cmdAliasSet   = cmdCLISet
+	cmdAliasReset = cmdResetProps
 )
 
 //
@@ -204,6 +210,9 @@ const (
 
 	jobShowStopWaitArgument  = "[NAME] [JOB_ID] [NODE_ID] [BUCKET]"
 	jobShowRebalanceArgument = "[REB_ID] [NODE_ID]"
+
+	// Perf
+	showPerfArgument = "show performance counters, latency, throughput, utilization, and more"
 
 	// ETL
 	etlNameArgument     = "ETL_NAME"
@@ -303,10 +312,11 @@ const (
 
 var (
 	// scope 'all'
-	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "all object properties"}
-	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
-	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
-	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
+	allPropsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all object properties"}
+	allJobsFlag          = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
+	allRunningJobsFlag   = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
+	allFinishedJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
+	allPerformanceTables = cli.BoolFlag{Name: scopeAll, Usage: "all performance tables"}
 
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,

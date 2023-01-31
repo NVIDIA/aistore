@@ -24,7 +24,7 @@ import (
 
 var (
 	advancedCmdsFlags = map[string][]cli.Flag{
-		commandGenShards: {
+		cmdGenShards: {
 			fileSizeFlag,
 			fileCountFlag,
 			cleanupFlag,
@@ -37,23 +37,23 @@ var (
 		Usage: "special commands intended for development and advanced usage",
 		Subcommands: []cli.Command{
 			{
-				Name: commandGenShards,
+				Name: cmdGenShards,
 				Usage: "generate and write random shards " +
 					"(e.g.: \"ais://dsort-testing/shard-{001..999}.tar\" - generate 999 shards)",
 				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
-				Flags:     advancedCmdsFlags[commandGenShards],
+				Flags:     advancedCmdsFlags[cmdGenShards],
 				Action:    genShardsHandler,
 			},
 			jobStartResilver,
 			{
-				Name:         subcmdPreload,
+				Name:         cmdPreload,
 				Usage:        "preload object metadata into in-memory cache",
 				ArgsUsage:    bucketArgument,
 				Action:       loadLomCacheHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			{
-				Name:         subcmdRmSmap,
+				Name:         cmdRmSmap,
 				Usage:        "immediately remove node from cluster map (advanced usage - potential data loss)",
 				ArgsUsage:    nodeIDArgument,
 				Action:       removeNodeFromSmap,
