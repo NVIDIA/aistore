@@ -4,6 +4,7 @@ Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 
 import unittest
+import torchdata.datapipes.iter as torch_pipes
 
 from aistore.sdk import Client
 from aistore.sdk.errors import AISError, ErrBckNotFound
@@ -73,6 +74,15 @@ class TestPytorchPlugin(unittest.TestCase):
                 s3_loader_dp = AISFileLoader(url=CLUSTER_ENDPOINT, source_datapipe=url)
                 for _ in s3_loader_dp:
                     pass
+
+    def test_torch_library(self):
+        # Tests the torch library imports of aistore
+        torch_pipes.AISFileLister(
+            url=CLUSTER_ENDPOINT, source_datapipe=["ais://" + self.bck_name]
+        )
+        torch_pipes.AISFileLoader(
+            url=CLUSTER_ENDPOINT, source_datapipe=["ais://" + self.bck_name]
+        )
 
 
 if __name__ == "__main__":
