@@ -71,8 +71,8 @@ func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh 
 	if !silent {
 		fmt.Printf("DEL: %s\n", object)
 	}
-	baseParams := BaseAPIParams(proxyURL)
-	err := api.DeleteObject(baseParams, bck, object)
+	bp := BaseAPIParams(proxyURL)
+	err := api.DeleteObject(bp, bck, object)
 	if err != nil && errCh != nil {
 		errCh <- err
 	}
@@ -80,16 +80,16 @@ func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh 
 }
 
 func CheckObjIsPresent(proxyURL string, bck cmn.Bck, objName string) bool {
-	baseParams := BaseAPIParams(proxyURL)
-	_, err := api.HeadObject(baseParams, bck, objName, apc.FltPresent)
+	bp := BaseAPIParams(proxyURL)
+	_, err := api.HeadObject(bp, bck, objName, apc.FltPresent)
 	return err == nil
 }
 
 // Put sends a PUT request to the given URL
 func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, errCh chan error) {
-	baseParams := BaseAPIParams(proxyURL)
+	bp := BaseAPIParams(proxyURL)
 	putArgs := api.PutArgs{
-		BaseParams: baseParams,
+		BaseParams: bp,
 		Bck:        bck,
 		ObjName:    object,
 		Cksum:      reader.Cksum(),
@@ -119,13 +119,13 @@ func PutObject(t *testing.T, bck cmn.Bck, objName string, reader readers.Reader)
 // ListObjectNames returns a slice of object names of all objects that match the prefix in a bucket
 func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint, cached bool) ([]string, error) {
 	var (
-		baseParams = BaseAPIParams(proxyURL)
-		msg        = &apc.LsoMsg{Prefix: prefix}
+		bp  = BaseAPIParams(proxyURL)
+		msg = &apc.LsoMsg{Prefix: prefix}
 	)
 	if cached {
 		msg.Flags = apc.LsObjCached
 	}
-	data, err := api.ListObjects(baseParams, bck, msg, objectCountLimit)
+	data, err := api.ListObjects(bp, bck, msg, objectCountLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -163,8 +163,8 @@ func GetPrimaryURL() string {
 
 // GetPrimaryProxy returns the primary proxy
 func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
-	baseParams := BaseAPIParams(proxyURL)
-	smap, err := api.GetClusterMap(baseParams)
+	bp := BaseAPIParams(proxyURL)
+	smap, err := api.GetClusterMap(bp)
 	if err != nil {
 		return nil, err
 	}
@@ -181,8 +181,8 @@ func GetProxyReadiness(proxyURL string) error {
 // CreateBucketWithCleanup, destroys bucket if exists and creates new. The bucket is destroyed on test completion.
 func CreateBucketWithCleanup(tb testing.TB, proxyURL string, bck cmn.Bck, props *cmn.BucketPropsToUpdate) {
 	DestroyBucket(tb, proxyURL, bck)
-	baseParams := BaseAPIParams(proxyURL)
-	err := api.CreateBucket(baseParams, bck, props)
+	bp := BaseAPIParams(proxyURL)
+	err := api.CreateBucket(bp, bck, props)
 	tassert.CheckFatal(tb, err)
 	tb.Cleanup(func() {
 		DestroyBucket(tb, proxyURL, bck)
@@ -190,11 +190,11 @@ func CreateBucketWithCleanup(tb testing.TB, proxyURL string, bck cmn.Bck, props 
 }
 
 func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
-	baseParams := BaseAPIParams(proxyURL)
-	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bck), apc.FltExists)
+	bp := BaseAPIParams(proxyURL)
+	exists, err := api.QueryBuckets(bp, cmn.QueryBcks(bck), apc.FltExists)
 	tassert.CheckFatal(tb, err)
 	if exists {
-		err = api.DestroyBucket(baseParams, bck)
+		err = api.DestroyBucket(bp, bck)
 		tassert.CheckFatal(tb, err)
 	}
 }
@@ -220,20 +220,20 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 		return
 	}
 
-	baseParams := BaseAPIParams(proxyURL)
-	xid, err := api.DeleteList(baseParams, bck, toDelete)
+	bp := BaseAPIParams(proxyURL)
+	xid, err := api.DeleteList(bp, bck, toDelete)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: time.Minute}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(bp, args)
 	tassert.CheckFatal(t, err)
 }
 
-func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.Bck) {
+func SetBackendBck(t *testing.T, bp api.BaseParams, srcBck, dstBck cmn.Bck) {
 	// find out real provider of the bucket
-	p, err := api.HeadBucket(baseParams, dstBck, false /* don't add to cluster MD */)
+	p, err := api.HeadBucket(bp, dstBck, false /* don't add to cluster MD */)
 	tassert.CheckFatal(t, err)
 
-	_, err = api.SetBucketProps(baseParams, srcBck, &cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(bp, srcBck, &cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BackendBckToUpdate{
 			Name:     api.String(dstBck.Name),
 			Provider: api.String(p.Provider),
@@ -271,13 +271,13 @@ func RemoveNodeFromSmap(proxyURL, sid string) error {
 	return _removeNodeFromSmap(gctx, proxyURL, sid, time.Minute)
 }
 
-func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName string, timeout time.Duration) error {
+func WaitForObjectToBeDowloaded(bp api.BaseParams, bck cmn.Bck, objName string, timeout time.Duration) error {
 	maxTime := time.Now().Add(timeout)
 	for {
 		if time.Now().After(maxTime) {
 			return fmt.Errorf("timed out (%v) waiting for %s/%s downloaded", timeout, bck, objName)
 		}
-		reslist, err := api.ListObjects(baseParams, bck, &apc.LsoMsg{}, 0)
+		reslist, err := api.ListObjects(bp, bck, &apc.LsoMsg{}, 0)
 		if err != nil {
 			return err
 		}
@@ -304,10 +304,10 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 		errCnt = atomic.NewInt32(0)
 		putCnt = atomic.NewInt32(0)
 
-		workerCnt  = 40 // Default worker count.
-		group      = &errgroup.Group{}
-		objNames   = make([]string, 0, args.ObjCnt)
-		baseParams = BaseAPIParams(args.ProxyURL)
+		workerCnt = 40 // Default worker count.
+		group     = &errgroup.Group{}
+		objNames  = make([]string, 0, args.ObjCnt)
+		bp        = BaseAPIParams(args.ProxyURL)
 	)
 
 	if args.WorkerCnt > 0 {
@@ -345,7 +345,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 					// begin all the puts immediately (because creating random files is fast
 					// compared to the list objects call that getRandomFiles does)
 					err = api.PutObject(api.PutArgs{
-						BaseParams: baseParams,
+						BaseParams: bp,
 						Bck:        args.Bck,
 						ObjName:    objName,
 						Cksum:      reader.Cksum(),
@@ -374,23 +374,23 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET
 func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, object string, objContent cos.ReadOpenCloser) {
-	baseParams := BaseAPIParams()
+	bp := BaseAPIParams()
 
 	err := api.PutObject(api.PutArgs{
-		BaseParams: baseParams,
+		BaseParams: bp,
 		Bck:        bck,
 		ObjName:    object,
 		Reader:     objContent,
 	})
 	tassert.CheckFatal(t, err)
 
-	err = api.EvictObject(baseParams, bck, object)
+	err = api.EvictObject(bp, bck, object)
 	tassert.CheckFatal(t, err)
 }
 
-func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object, timeFormat string) (time.Time, string) {
+func GetObjectAtime(t *testing.T, bp api.BaseParams, bck cmn.Bck, object, timeFormat string) (time.Time, string) {
 	msg := &apc.LsoMsg{Props: apc.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
-	bucketList, err := api.ListObjects(baseParams, bck, msg, 0)
+	bucketList, err := api.ListObjects(bp, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	for _, entry := range bucketList.Entries {
@@ -410,10 +410,10 @@ func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object
 func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err error) {
 	tlog.Logln("Waiting for distributed sort to finish...")
 
-	baseParams := BaseAPIParams(proxyURL)
+	bp := BaseAPIParams(proxyURL)
 	deadline := time.Now().Add(dsortFinishTimeout)
 	for time.Now().Before(deadline) {
-		allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
+		allMetrics, err := api.MetricsDSort(bp, managerUUID)
 		if err != nil {
 			return false, err
 		}
@@ -451,16 +451,16 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 
 // waitForBucket waits until all targets ack having ais bucket created or deleted
 func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
-	baseParams := BaseAPIParams(proxyURL)
-	smap, err := api.GetClusterMap(baseParams)
+	bp := BaseAPIParams(proxyURL)
+	smap, err := api.GetClusterMap(bp)
 	if err != nil {
 		return err
 	}
 	to := time.Now().Add(bucketTimeout)
 	for _, s := range smap.Tmap {
 		for {
-			baseParams := BaseAPIParams(s.URL(cmn.NetPublic))
-			bucketExists, err := api.QueryBuckets(baseParams, query, apc.FltExists)
+			bp := BaseAPIParams(s.URL(cmn.NetPublic))
+			bucketExists, err := api.QueryBuckets(bp, query, apc.FltExists)
 			if err != nil {
 				return err
 			}
@@ -468,7 +468,7 @@ func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
 				break
 			}
 			if time.Now().After(to) {
-				return fmt.Errorf("wait for ais bucket timed out, target = %s", baseParams.URL)
+				return fmt.Errorf("wait for ais bucket timed out, target = %s", bp.URL)
 			}
 			time.Sleep(time.Second)
 		}
@@ -477,14 +477,14 @@ func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
 }
 
 func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) {
-	baseParams := BaseAPIParams(proxyURL)
-	xid, err := api.EvictList(baseParams, bck, objList)
+	bp := BaseAPIParams(proxyURL)
+	xid, err := api.EvictList(bp, bck, objList)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: evictPrefetchTimeout}
-	if _, err := api.WaitForXactionIC(baseParams, args); err != nil {
+	if _, err := api.WaitForXactionIC(bp, args); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}
 }
@@ -495,19 +495,26 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 // If they were not started, this function treats them as completed
 // and returns. If timeout set, if any of rebalances doesn't complete before timeout
 // the function ends with fatal.
-func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...time.Duration) {
+func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Duration) {
 	var (
 		timeout = 2 * time.Minute
 		wg      = &sync.WaitGroup{}
 		errCh   = make(chan error, 2)
 	)
-	smap, err := api.GetClusterMap(baseParams)
+	smap, err := api.GetClusterMap(bp)
 	tassert.CheckFatal(t, err)
-	if smap.CountActiveTs() < 2 {
+
+	if nat := smap.CountActiveTs(); nat < 2 {
+		s := "No targets"
+		if nat == 1 {
+			s = "Single target in the cluster"
+		}
+		tlog.Logf("%s, %s - cannot rebalance\n", s, smap)
+		_waitResil(t, bp, 2*time.Second)
 		return
 	}
 
-	_waitReToStart(baseParams)
+	_waitReToStart(bp)
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
@@ -516,7 +523,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 	go func() {
 		defer wg.Done()
 		xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
-		if _, err := api.WaitForXactionIC(baseParams, xargs); err != nil {
+		if _, err := api.WaitForXactionIC(bp, xargs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
 			}
@@ -527,7 +534,7 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 	go func() {
 		defer wg.Done()
 		xargs := xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
-		if _, err := api.WaitForXactionIC(baseParams, xargs); err != nil {
+		if _, err := api.WaitForXactionIC(bp, xargs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
 			}
@@ -543,30 +550,31 @@ func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...t
 	}
 }
 
-func WaitForResilver(t *testing.T, baseParams api.BaseParams, timeouts ...time.Duration) {
-	timeout := cos.MaxDuration(10*xactPollSleep, 10*time.Second)
-	if len(timeouts) > 0 {
-		timeout = timeouts[0]
-	}
+// compare w/ `tools.WaitForResilvering`
+func _waitResil(t testing.TB, bp api.BaseParams, timeout time.Duration) {
 	xargs := xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
-	for i := 0; i < 10; i++ {
-		_, err := api.WaitForXactionIC(baseParams, xargs)
-		if err == nil {
-			return
-		}
-		if herr, ok := err.(*cmn.ErrHTTP); ok {
-			if herr.Status == http.StatusNotFound { // keep waiting for timeout
-				time.Sleep(xactPollSleep)
-				continue
-			}
-			tassert.CheckFatal(t, herr)
-		} else {
-			tassert.CheckFatal(t, err)
+	_, err := api.WaitForXactionIC(bp, xargs)
+	if err == nil {
+		return
+	}
+	if herr, ok := err.(*cmn.ErrHTTP); ok {
+		if herr.Status == http.StatusNotFound { // double check iff not found
+			time.Sleep(xactPollSleep)
+			_, err = api.WaitForXactionIC(bp, xargs)
 		}
 	}
+	if err == nil {
+		return
+	}
+	if herr, ok := err.(*cmn.ErrHTTP); ok {
+		if herr.Status == http.StatusNotFound {
+			err = nil
+		}
+	}
+	tassert.CheckError(t, err)
 }
 
-func WaitForRebalanceByID(t *testing.T, origTargetCnt int, baseParams api.BaseParams, rebID string, timeouts ...time.Duration) {
+func WaitForRebalanceByID(t *testing.T, origTargetCnt int, bp api.BaseParams, rebID string, timeouts ...time.Duration) {
 	if origTargetCnt >= 0 && origTargetCnt < 2 {
 		return
 	}
@@ -575,11 +583,11 @@ func WaitForRebalanceByID(t *testing.T, origTargetCnt int, baseParams api.BasePa
 		timeout = timeouts[0]
 	}
 	xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
-	_, err := api.WaitForXactionIC(baseParams, xargs)
+	_, err := api.WaitForXactionIC(bp, xargs)
 	tassert.CheckFatal(t, err)
 }
 
-func _waitReToStart(baseParams api.BaseParams) {
+func _waitReToStart(bp api.BaseParams) {
 	var (
 		kinds   = []string{apc.ActRebalance, apc.ActResilver}
 		timeout = cos.MaxDuration(10*xactPollSleep, 10*time.Second)
@@ -589,7 +597,7 @@ func _waitReToStart(baseParams api.BaseParams) {
 	for i := 0; i < retries; i++ {
 		for _, kind := range kinds {
 			args.Kind = kind
-			status, err := api.GetOneXactionStatus(baseParams, args)
+			status, err := api.GetOneXactionStatus(bp, args)
 			if err == nil {
 				if !status.Finished() {
 					return
@@ -602,8 +610,8 @@ func _waitReToStart(baseParams api.BaseParams) {
 }
 
 func GetClusterStats(t *testing.T, proxyURL string) stats.ClusterStats {
-	baseParams := BaseAPIParams(proxyURL)
-	scs, err := api.GetClusterStats(baseParams)
+	bp := BaseAPIParams(proxyURL)
+	scs, err := api.GetClusterStats(bp)
 	tassert.CheckFatal(t, err)
 	return scs
 }
@@ -618,10 +626,10 @@ func GetNamedStatsVal(ds *stats.DaemonStats, name string) int64 {
 
 // FIXME: obsolete - remove and reimpl. the test that calls it
 func GetDaemonStats(t *testing.T, u string) (stats map[string]any) {
-	baseParams := BaseAPIParams(u)
-	baseParams.Method = http.MethodGet
+	bp := BaseAPIParams(u)
+	bp.Method = http.MethodGet
 	reqParams := &api.ReqParams{
-		BaseParams: baseParams,
+		BaseParams: bp,
 		Path:       apc.URLPathDae.S,
 		Query:      url.Values{apc.QparamWhat: {apc.GetWhatStats}},
 	}
@@ -632,8 +640,8 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]any) {
 }
 
 func GetDaemonConfig(t *testing.T, node *cluster.Snode) *cmn.Config {
-	baseParams := BaseAPIParams()
-	config, err := api.GetDaemonConfig(baseParams, node)
+	bp := BaseAPIParams()
+	config, err := api.GetDaemonConfig(bp, node)
 	tassert.CheckFatal(t, err)
 	return config
 }
@@ -663,15 +671,15 @@ func GetClusterConfig(t *testing.T) (config *cmn.Config) {
 
 func SetClusterConfig(t *testing.T, nvs cos.StrKVs) {
 	proxyURL := GetPrimaryURL()
-	baseParams := BaseAPIParams(proxyURL)
-	err := api.SetClusterConfig(baseParams, nvs, false /*transient*/)
+	bp := BaseAPIParams(proxyURL)
+	err := api.SetClusterConfig(bp, nvs, false /*transient*/)
 	tassert.CheckError(t, err)
 }
 
 func SetClusterConfigUsingMsg(t *testing.T, toUpdate *cmn.ConfigToUpdate) {
 	proxyURL := GetPrimaryURL()
-	baseParams := BaseAPIParams(proxyURL)
-	err := api.SetClusterConfigUsingMsg(baseParams, toUpdate, false /*transient*/)
+	bp := BaseAPIParams(proxyURL)
+	err := api.SetClusterConfigUsingMsg(bp, toUpdate, false /*transient*/)
 	tassert.CheckFatal(t, err)
 }
 
@@ -688,9 +696,9 @@ func CheckErrIsNotFound(t *testing.T, err error) {
 	)
 }
 
-func waitForStartup(baseParams api.BaseParams, ts ...testing.TB) (*cluster.Smap, error) {
+func waitForStartup(bp api.BaseParams, ts ...testing.TB) (*cluster.Smap, error) {
 	for {
-		smap, err := api.GetClusterMap(baseParams)
+		smap, err := api.GetClusterMap(bp)
 		if err != nil {
 			if api.HTTPStatus(err) == http.StatusServiceUnavailable {
 				tlog.Logln("Waiting for the cluster to start up...")

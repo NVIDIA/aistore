@@ -44,13 +44,13 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bc
 	return newName
 }
 
-func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (string, error) {
+func GenerateNonexistentBucketName(prefix string, bp api.BaseParams) (string, error) {
 	for i := 0; i < 100; i++ {
 		bck := cmn.Bck{
 			Name:     prefix + trand.String(8),
 			Provider: apc.AIS,
 		}
-		_, err := api.HeadBucket(baseParams, bck, true /* don't add to cluster MD */)
+		_, err := api.HeadBucket(bp, bck, true /* don't add to cluster MD */)
 		if err == nil {
 			continue
 		}
@@ -85,8 +85,8 @@ func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 		}
 		tassert.CheckFatal(tb, fmt.Errorf("expecting a named bucket, got %q", bck))
 	}
-	baseParams := api.BaseParams{Client: gctx.Client, URL: proxyURL, Token: LoggedUserToken}
-	_, err := api.HeadBucket(baseParams, bck, true /*dontAddRemote*/)
+	bp := api.BaseParams{Client: gctx.Client, URL: proxyURL, Token: LoggedUserToken}
+	_, err := api.HeadBucket(bp, bck, true /*dontAddRemote*/)
 	if err == nil {
 		return true, nil
 	}
@@ -127,13 +127,13 @@ func isCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 	return exists
 }
 
-func PutObjRR(baseParams api.BaseParams, bck cmn.Bck, objName string, objSize int64, cksumType string) error {
+func PutObjRR(bp api.BaseParams, bck cmn.Bck, objName string, objSize int64, cksumType string) error {
 	reader, err := readers.NewRandReader(objSize, cksumType)
 	if err != nil {
 		return err
 	}
 	putArgs := api.PutArgs{
-		BaseParams: baseParams,
+		BaseParams: bp,
 		Bck:        bck,
 		ObjName:    objName,
 		Cksum:      reader.Cksum(),
@@ -142,7 +142,7 @@ func PutObjRR(baseParams api.BaseParams, bck cmn.Bck, objName string, objSize in
 	return api.PutObject(putArgs)
 }
 
-func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType string,
+func PutRR(tb testing.TB, bp api.BaseParams, objSize int64, cksumType string,
 	bck cmn.Bck, dir string, objCount int) []string {
 	objNames := make([]string, objCount)
 	for i := 0; i < objCount; i++ {
@@ -151,7 +151,7 @@ func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType st
 		objNames[i] = objName
 		// FIXME: Separate RandReader per object created inside PutObjRR to workaround
 		// https://github.com/golang/go/issues/30597
-		err := PutObjRR(baseParams, bck, objName, objSize, cksumType)
+		err := PutObjRR(bp, bck, objName, objSize, cksumType)
 		tassert.CheckFatal(tb, err)
 	}
 
@@ -183,14 +183,14 @@ func isClusterLocal() (isLocal bool, err error) {
 	var (
 		primaryURL = GetPrimaryURL()
 		smap       *cluster.Smap
-		baseParams = BaseAPIParams(primaryURL)
+		bp         = BaseAPIParams(primaryURL)
 		config     *cmn.Config
 		fileData   []byte
 	)
-	if smap, err = api.GetClusterMap(baseParams); err != nil {
+	if smap, err = api.GetClusterMap(bp); err != nil {
 		return
 	}
-	if config, err = api.GetDaemonConfig(baseParams, smap.Primary); err != nil {
+	if config, err = api.GetDaemonConfig(bp, smap.Primary); err != nil {
 		return
 	}
 	fileData, err = os.ReadFile(filepath.Join(config.ConfigDir, fname.ProxyID))

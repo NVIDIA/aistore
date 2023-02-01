@@ -202,8 +202,8 @@ func initProxyURL() (err error) {
 }
 
 func initPmap() {
-	baseParams := BaseAPIParams(proxyURLReadOnly)
-	smap, err := waitForStartup(baseParams)
+	bp := BaseAPIParams(proxyURLReadOnly)
+	smap, err := waitForStartup(bp)
 	cos.AssertNoErr(err)
 	pmapReadOnly = smap.Pmap
 }
@@ -226,8 +226,8 @@ func initRemAis() {
 }
 
 func initNodeCmd() {
-	baseParams := BaseAPIParams(proxyURLReadOnly)
-	smap, err := waitForStartup(baseParams)
+	bp := BaseAPIParams(proxyURLReadOnly)
+	smap, err := waitForStartup(bp)
 	cos.AssertNoErr(err)
 	restoreNodes = make(map[string]RestoreCmd, smap.CountProxies()+smap.CountTargets())
 	for _, node := range smap.Pmap {

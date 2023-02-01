@@ -124,10 +124,10 @@ func GetTransformYaml(etlName string) ([]byte, error) {
 	return []byte(specStr), nil
 }
 
-func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlName string) {
+func StopAndDeleteETL(t *testing.T, bp api.BaseParams, etlName string) {
 	if t.Failed() {
 		tlog.Logln("Fetching logs from ETL containers")
-		if logsByTarget, err := api.ETLLogs(baseParams, etlName); err == nil {
+		if logsByTarget, err := api.ETLLogs(bp, etlName); err == nil {
 			for _, etlLogs := range logsByTarget {
 				tlog.Logln(headETLLogs(etlLogs, 10*cos.KiB))
 			}
@@ -137,12 +137,12 @@ func StopAndDeleteETL(t *testing.T, baseParams api.BaseParams, etlName string) {
 	}
 	tlog.Logf("Stopping ETL[%s]\n", etlName)
 
-	if err := api.ETLStop(baseParams, etlName); err != nil {
+	if err := api.ETLStop(bp, etlName); err != nil {
 		tlog.Logf("Stopping ETL[%s] failed; err %v\n", etlName, err)
 	} else {
 		tlog.Logf("ETL[%s] stopped\n", etlName)
 	}
-	err := api.ETLDelete(baseParams, etlName)
+	err := api.ETLDelete(bp, etlName)
 	tassert.CheckFatal(t, err)
 }
 
@@ -158,7 +158,7 @@ func headETLLogs(etlLogs etl.Logs, maxLen int) string {
 	return str
 }
 
-func WaitForContainersStopped(t *testing.T, baseParams api.BaseParams) {
+func WaitForContainersStopped(t *testing.T, bp api.BaseParams) {
 	tlog.Logln("Waiting for ETL containers to stop...")
 	var (
 		etls         etl.InfoList
@@ -168,7 +168,7 @@ func WaitForContainersStopped(t *testing.T, baseParams api.BaseParams) {
 	)
 
 	for {
-		etls, err = api.ETLList(baseParams)
+		etls, err = api.ETLList(bp)
 		tassert.CheckFatal(t, err)
 		if len(etls) == 0 {
 			tlog.Logln("ETL containers stopped successfully")
@@ -185,15 +185,15 @@ func WaitForContainersStopped(t *testing.T, baseParams api.BaseParams) {
 	tassert.CheckFatal(t, err)
 }
 
-func WaitForAborted(baseParams api.BaseParams, xid string, timeout time.Duration) error {
-	return waitForXactDone(baseParams, xid, timeout, true)
+func WaitForAborted(bp api.BaseParams, xid string, timeout time.Duration) error {
+	return waitForXactDone(bp, xid, timeout, true)
 }
 
-func WaitForFinished(baseParams api.BaseParams, xid string, timeout time.Duration) error {
-	return waitForXactDone(baseParams, xid, timeout, false)
+func WaitForFinished(bp api.BaseParams, xid string, timeout time.Duration) error {
+	return waitForXactDone(bp, xid, timeout, false)
 }
 
-func waitForXactDone(baseParams api.BaseParams, xid string, timeout time.Duration, waitForAbort bool) error {
+func waitForXactDone(bp api.BaseParams, xid string, timeout time.Duration, waitForAbort bool) error {
 	action := "finished"
 	if waitForAbort {
 		action = "aborted"
@@ -201,7 +201,7 @@ func waitForXactDone(baseParams api.BaseParams, xid string, timeout time.Duratio
 
 	tlog.Logf("Waiting for ETL xaction to be %s...\n", action)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: timeout /* total timeout */}
-	status, err := api.WaitForXactionIC(baseParams, args)
+	status, err := api.WaitForXactionIC(bp, args)
 	if err == nil {
 		if waitForAbort && !status.Aborted() {
 			return fmt.Errorf("expected ETL xaction to be aborted")
@@ -209,13 +209,13 @@ func waitForXactDone(baseParams api.BaseParams, xid string, timeout time.Duratio
 		tlog.Logf("ETL xaction %s successfully\n", action)
 		return nil
 	}
-	if abortErr := api.AbortXaction(baseParams, args); abortErr != nil {
+	if abortErr := api.AbortXaction(bp, args); abortErr != nil {
 		tlog.Logf("Nested error: failed to abort ETL xaction upon wait failue; err %v\n", abortErr)
 	}
 	return err
 }
 
-func ReportXactionStatus(baseParams api.BaseParams, xid string, stopCh *cos.StopCh, interval time.Duration, totalObj int) {
+func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, interval time.Duration, totalObj int) {
 	go func() {
 		var (
 			xactStart = time.Now()
@@ -226,7 +226,7 @@ func ReportXactionStatus(baseParams api.BaseParams, xid string, stopCh *cos.Stop
 			select {
 			case <-etlTicker.C:
 				// Check number of objects transformed.
-				xs, err := api.QueryXactionSnaps(baseParams, xact.ArgsMsg{ID: xid})
+				xs, err := api.QueryXactionSnaps(bp, xact.ArgsMsg{ID: xid})
 				if err != nil {
 					tlog.Logf("Failed to get x-etl[%s] stats: %v\n", xid, err)
 					continue
@@ -246,7 +246,7 @@ func ReportXactionStatus(baseParams api.BaseParams, xid string, stopCh *cos.Stop
 	}()
 }
 
-func InitSpec(t *testing.T, baseParams api.BaseParams, etlName, comm string) (xid string) {
+func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string) {
 	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, comm)
 
 	msg := &etl.InitSpecMsg{}
@@ -257,14 +257,14 @@ func InitSpec(t *testing.T, baseParams api.BaseParams, etlName, comm string) (xi
 	msg.Spec = spec
 	tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName) // assert
 
-	xid, err = api.ETLInit(baseParams, msg)
+	xid, err = api.ETLInit(bp, msg)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, cos.IsValidUUID(xid), "expected valid xaction ID, got %q", xid)
 
 	tlog.Logf("ETL[%s]: running xaction %q\n", etlName, xid)
 
 	// reread `InitMsg` and compare with the specified
-	etlMsg, err := api.ETLGetInitMsg(baseParams, etlName)
+	etlMsg, err := api.ETLGetInitMsg(bp, etlName)
 	tassert.CheckFatal(t, err)
 
 	initSpec := etlMsg.(*etl.InitSpecMsg)
@@ -275,14 +275,14 @@ func InitSpec(t *testing.T, baseParams api.BaseParams, etlName, comm string) (xi
 	return
 }
 
-func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) (xid string) {
-	id, err := api.ETLInit(baseParams, &msg)
+func InitCode(t *testing.T, bp api.BaseParams, msg etl.InitCodeMsg) (xid string) {
+	id, err := api.ETLInit(bp, &msg)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, cos.IsValidUUID(id), "expected valid xaction ID, got %q", xid)
 	xid = id
 
 	// reread `InitMsg` and compare with the specified
-	etlMsg, err := api.ETLGetInitMsg(baseParams, msg.Name())
+	etlMsg, err := api.ETLGetInitMsg(bp, msg.Name())
 	tassert.CheckFatal(t, err)
 
 	initCode := etlMsg.(*etl.InitCodeMsg)
@@ -296,12 +296,12 @@ func InitCode(t *testing.T, baseParams api.BaseParams, msg etl.InitCodeMsg) (xid
 	return
 }
 
-func ETLBucketWithCleanup(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, msg *apc.TCBMsg) string {
-	xid, err := api.ETLBucket(baseParams, fromBck, toBck, msg)
+func ETLBucketWithCleanup(t *testing.T, bp api.BaseParams, fromBck, toBck cmn.Bck, msg *apc.TCBMsg) string {
+	xid, err := api.ETLBucket(bp, fromBck, toBck, msg)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		tools.DestroyBucket(t, baseParams.URL, toBck)
+		tools.DestroyBucket(t, bp.URL, toBck)
 	})
 
 	tlog.Logf("ETL[%s]: running %s => %s xaction %q\n",

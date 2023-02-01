@@ -28,6 +28,8 @@ func TestMaintenanceOnOff(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
 
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+
 	// Invalid target case
 	msg := &apc.ActValRmNode{DaemonID: "fakeID", SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, msg)
@@ -139,6 +141,8 @@ func TestMaintenanceMD(t *testing.T) {
 		allTgtsMpaths = tools.GetTargetsMountpaths(t, smap, baseParams)
 	)
 
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+
 	t.Cleanup(func() {
 		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
 		api.WaitForXactionIC(baseParams, args)
@@ -187,6 +191,8 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		origActiveProxyCount  = smap.CountActivePs()
 		bck                   = cmn.Bck{Name: t.Name(), Provider: apc.AIS}
 	)
+	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	for i := 0; i < objCount; i++ {
 		objName := fmt.Sprintf("%sobj%04d", objPath, i)
@@ -445,7 +451,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		pdc = 1
 	} else {
 		if origTargetCount == 0 {
-			t.Skipf("%s requires at least %d targets (have %d)", t.Name(), 1, origTargetCount)
+			t.Skipf("%s requires at least %d target%s (have %d)", t.Name(), 1, cos.Plural(1), origTargetCount)
 		}
 		node, err = smap.GetRandTarget()
 		tdc = 1

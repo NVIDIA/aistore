@@ -24,7 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
-var baseParams api.BaseParams
+var bp api.BaseParams
 
 func TestPutFile(t *testing.T) {
 	err := putFile(1024, cos.ChecksumXXHash)
@@ -53,7 +53,7 @@ func putFile(size int64, cksumType string) error {
 		return err
 	}
 	putArgs := api.PutArgs{
-		BaseParams: baseParams,
+		BaseParams: bp,
 		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
 		ObjName:    "key",
 		Cksum:      r.Cksum(),
@@ -70,7 +70,7 @@ func putRand(size int64, cksumType string) error {
 		return err
 	}
 	putArgs := api.PutArgs{
-		BaseParams: baseParams,
+		BaseParams: bp,
 		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
 		ObjName:    "key",
 		Cksum:      r.Cksum(),
@@ -86,7 +86,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 		return err
 	}
 	putArgs := api.PutArgs{
-		BaseParams: baseParams,
+		BaseParams: bp,
 		Bck:        cmn.Bck{Name: "bucket", Provider: apc.AIS},
 		ObjName:    "key",
 		Cksum:      r.Cksum(),
@@ -222,7 +222,7 @@ func TestMain(m *testing.M) {
 			errCb(http.StatusNotAcceptable, "cksum mismatch got: %q, expected: %q", cksum.Value(), cksumValue)
 		}
 	}))
-	baseParams = tools.BaseAPIParams(srv.URL)
+	bp = tools.BaseAPIParams(srv.URL)
 
 	m.Run()
 	srv.Close()
