@@ -11,7 +11,7 @@ REQUIRED_MINOR = 6
 
 ROOT_DIR = Path(__file__).parent.resolve()
 
-VERSION = "1.0.7"
+VERSION = "1.0.8"
 
 
 def _get_version() -> str:
