@@ -5,7 +5,11 @@
  */
 package cli
 
-import "github.com/urfave/cli"
+import (
+	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/urfave/cli"
+)
 
 var perfCmd = cli.Command{
 	Name:  commandPerf,
@@ -84,8 +88,16 @@ func showPerfHandler(c *cli.Context) error {
 }
 
 func showCountersHandler(c *cli.Context) error {
-	_, _, err := argNode(c)
-	return err
+	var (
+		usejs      = flagIsSet(c, jsonFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
+	)
+	smap, err := fillNodeStatusMap(c, apc.Target)
+	if err != nil {
+		return err
+	}
+	out := tmpls.NewCountersTab(curTgtStatus, smap).Template(hideHeader)
+	return tmpls.Print(curTgtStatus, c.App.Writer, out, nil, usejs)
 }
 
 func showThroughputHandler(c *cli.Context) error {

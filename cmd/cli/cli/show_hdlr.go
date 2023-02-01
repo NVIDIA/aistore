@@ -405,8 +405,8 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 
 func showClusterHandler(c *cli.Context) (err error) {
 	var (
-		what, sid  string
-		targetOnly bool
+		what, sid string
+		daeType   string
 	)
 	if c.NArg() > 0 {
 		what = c.Args().Get(0)
@@ -423,13 +423,13 @@ func showClusterHandler(c *cli.Context) (err error) {
 			return err
 		}
 	}
-	if sid != "" && getNodeType(c, sid) == apc.Target {
-		targetOnly = true
+	if sid != "" {
+		daeType = getNodeType(c, sid)
 	}
 
 	setLongRunParams(c)
 
-	smap, err := fillNodeStatusMap(c, targetOnly)
+	smap, err := fillNodeStatusMap(c, daeType)
 	if err != nil {
 		return err
 	}
@@ -608,18 +608,18 @@ func showSmapHandler(c *cli.Context) error {
 	var (
 		smap            *cluster.Smap
 		sid, sname, err = argNode(c)
-		targetOnly      bool
+		daeType         string
 	)
 	if err != nil {
 		return err
 	}
 	if sid != "" {
-		targetOnly = getNodeType(c, sid) == apc.Target
+		daeType = getNodeType(c, sid)
 	}
 
 	setLongRunParams(c)
 
-	smap, err = fillNodeStatusMap(c, targetOnly)
+	smap, err = fillNodeStatusMap(c, daeType)
 	if err != nil {
 		return err
 	}

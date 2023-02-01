@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -30,25 +31,34 @@ var (
 // stats.DaemonStatusMap
 //
 
-func fillNodeStatusMap(c *cli.Context, targetOnly bool) (*cluster.Smap, error) {
+func fillNodeStatusMap(c *cli.Context, daeType string) (*cluster.Smap, error) {
 	smap, err := getClusterMap(c)
 	if err != nil {
 		return nil, err
 	}
 
-	pcnt, tcnt := 0, smap.CountTargets()
-	if !targetOnly {
-		pcnt = smap.CountProxies()
+	var (
+		wg         cos.WG
+		mu         = &sync.Mutex{}
+		pcnt, tcnt = smap.CountProxies(), smap.CountTargets()
+	)
+	switch daeType {
+	case apc.Target:
+		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), tcnt)
+		curTgtStatus = make(stats.DaemonStatusMap, tcnt)
+		daeStatus(smap.Tmap, curTgtStatus, wg, mu)
+	case apc.Proxy:
+		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt)
 		curPrxStatus = make(stats.DaemonStatusMap, pcnt)
-	}
-	curTgtStatus = make(stats.DaemonStatusMap, tcnt)
-
-	wg := cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt+tcnt)
-	mu := &sync.Mutex{}
-	if !targetOnly {
 		daeStatus(smap.Pmap, curPrxStatus, wg, mu)
+	default:
+		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt+tcnt)
+		curTgtStatus = make(stats.DaemonStatusMap, tcnt)
+		curPrxStatus = make(stats.DaemonStatusMap, pcnt)
+		daeStatus(smap.Pmap, curPrxStatus, wg, mu)
+		daeStatus(smap.Tmap, curTgtStatus, wg, mu)
 	}
-	daeStatus(smap.Tmap, curTgtStatus, wg, mu)
+
 	wg.Wait()
 	return smap, nil
 }

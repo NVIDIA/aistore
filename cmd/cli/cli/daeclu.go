@@ -116,7 +116,7 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 	)
 	setLongRunParams(c)
 
-	if _, err := fillNodeStatusMap(c, true /* target-only*/); err != nil {
+	if _, err := fillNodeStatusMap(c, apc.Target); err != nil {
 		return err
 	}
 

@@ -81,7 +81,7 @@ func mpathAction(c *cli.Context, action string) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	smap, errMap := fillNodeStatusMap(c, true /*targetOnly*/)
+	smap, errMap := fillNodeStatusMap(c, apc.Target)
 	if errMap != nil {
 		return errMap
 	}

@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -47,6 +47,7 @@ const (
 	numGorHighCheckTime  = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
 )
 
+// enum: `statsValue` kinds
 const (
 	KindCounter = "counter"
 	KindGauge   = "gauge"
@@ -71,9 +72,6 @@ const (
 	numGorHigh    = 100
 	numGorExtreme = 1000
 )
-
-// NOTE: all supported metrics
-var kinds = []string{KindCounter, KindGauge, KindLatency, KindThroughput, KindComputedThroughput, KindSpecial}
 
 // sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
 var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
@@ -210,7 +208,7 @@ type (
 	// There are two main types of stats: counter and latency declared
 	// using the the kind field. Only latency stats have numSamples used to compute latency.
 	statsValue struct {
-		kind  string
+		kind  string // enum { KindCounter, ..., KindSpecial }
 		label struct {
 			comm string // common part of the metric label (as in: <prefix> . comm . <suffix>)
 			stsd string // StatsD label
@@ -551,6 +549,7 @@ func (v *statsValue) MarshalJSON() (b []byte, err error) {
 	v.RUnlock()
 	return
 }
+
 func (v *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &v.Value) }
 
 ///////////////
@@ -576,7 +575,9 @@ func (tracker statsTracker) register(node *cluster.Snode, name, kind string, isC
 	if len(isCommon) > 0 {
 		v.isCommon = isCommon[0]
 	}
-	debug.Assertf(cos.StringInSlice(kind, kinds), "invalid metric kind %q", kind)
+	debug.Assertf(kind == KindCounter || kind == KindGauge || kind == KindLatency ||
+		kind == KindThroughput || kind == KindComputedThroughput || kind == KindSpecial,
+		"invalid metric kind %q", kind)
 	// in StatsD metrics ":" delineates the name and the value - replace with underscore
 	switch kind {
 	case KindCounter:
