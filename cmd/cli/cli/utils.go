@@ -142,11 +142,11 @@ func getRandTargetConfig(c *cli.Context) (*cmn.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	si, err := smap.GetRandTarget()
+	tsi, err := smap.GetRandTarget()
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := api.GetDaemonConfig(apiBP, si)
+	cfg, err := api.GetDaemonConfig(apiBP, tsi)
 	if err != nil {
 		return nil, err
 	}

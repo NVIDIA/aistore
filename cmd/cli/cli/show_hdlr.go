@@ -1024,7 +1024,9 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, averageOver time.Duratio
 	}
 
 	// throughput (Bps)
-	daemonBps(node, stats, averageOver)
+	if err := daemonBps(c, node, stats, averageOver); err != nil {
+		return err
+	}
 
 	// TODO: extract regex-matching, if defined
 	if flagIsSet(c, jsonFlag) {
@@ -1079,7 +1081,10 @@ func showAggregatedStats(c *cli.Context, averageOver time.Duration, regex *regex
 		return err
 	}
 
-	clusterBps(st, averageOver)
+	// throughput (Bps)
+	if err := clusterBps(c, st, averageOver); err != nil {
+		return err
+	}
 
 	usejs := flagIsSet(c, jsonFlag)
 	if usejs {

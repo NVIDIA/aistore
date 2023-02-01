@@ -1019,6 +1019,8 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		return
 	case apc.GetWhatStats:
 		body = h.statsT.GetWhatStats()
+	case apc.GetWhatMetricNames:
+		body = h.statsT.GetMetricNames()
 	default:
 		h.writeErrf(w, r, "invalid GET /daemon request: unrecognized what=%s", what)
 		return

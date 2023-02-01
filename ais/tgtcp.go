@@ -241,7 +241,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	)
 	switch getWhat {
 	case apc.GetWhatConfig, apc.GetWhatSmap, apc.GetWhatBMD, apc.GetWhatSmapVote,
-		apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats:
+		apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats, apc.GetWhatMetricNames:
 		t.htrun.httpdaeget(w, r, query)
 	case apc.GetWhatSysInfo:
 		tsysinfo := apc.TSysInfo{MemCPUInfo: sys.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}

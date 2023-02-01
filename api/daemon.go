@@ -156,6 +156,33 @@ func GetDaemonConfig(bp BaseParams, node *cluster.Snode) (config *cmn.Config, er
 	return config, nil
 }
 
+// names _and_ kinds, i.e. (name, kind) pairs
+func GetMetricNames(bp BaseParams, node *cluster.Snode) (kvs cos.StrKVs, err error) {
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathReverseDae.S
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatMetricNames}}
+		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
+	}
+	_, err = reqParams.DoReqAny(&kvs)
+	FreeRp(reqParams)
+	return
+}
+
+// How to compute throughputs:
+//
+// - AIS supports several enumerated metric "kinds", including `KindThroughput`
+// (for complete enumeration, see stats/api.go)
+// - By convention, metrics that have `KindThroughput` kind are named with ".bps"
+// ("bytes per second") suffix.
+// - ".bps" metrics reported by the API are, in fact, cumulative byte numbers.
+// - It is the client's responsibility to compute the actual throughputs
+// as only the client knows _when_ exactly the same ".bps" metric was queried
+// the previous time.
+//
+// - See also: `api.GetClusterStats`, stats/api.go
 func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()

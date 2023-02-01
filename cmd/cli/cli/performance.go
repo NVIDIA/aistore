@@ -88,15 +88,19 @@ func showPerfHandler(c *cli.Context) error {
 }
 
 func showCountersHandler(c *cli.Context) error {
-	var (
-		usejs      = flagIsSet(c, jsonFlag)
-		hideHeader = flagIsSet(c, noHeaderFlag)
-	)
 	smap, err := fillNodeStatusMap(c, apc.Target)
 	if err != nil {
 		return err
 	}
-	out := tmpls.NewCountersTab(curTgtStatus, smap).Template(hideHeader)
+	metrics, err := getMetricNames(c)
+	if err != nil {
+		return err
+	}
+	var (
+		usejs      = flagIsSet(c, jsonFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
+	)
+	out := tmpls.NewCountersTab(curTgtStatus, smap, metrics).Template(hideHeader)
 	return tmpls.Print(curTgtStatus, c.App.Writer, out, nil, usejs)
 }
 

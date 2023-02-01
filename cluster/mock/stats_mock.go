@@ -27,6 +27,7 @@ func (*StatsTracker) Get(string) int64                 { return 0 }
 func (*StatsTracker) AddErrorHTTP(string, int64)       {}
 func (*StatsTracker) AddMany(...cos.NamedVal64)        {}
 func (*StatsTracker) RegMetrics(*cluster.Snode)        {}
+func (*StatsTracker) GetMetricNames() cos.StrKVs       { return nil }
 func (*StatsTracker) CoreStats() *stats.CoreStats      { return nil }
 func (*StatsTracker) GetWhatStats() *stats.DaemonStats { return nil }
 func (*StatsTracker) IsPrometheus() bool               { return false }

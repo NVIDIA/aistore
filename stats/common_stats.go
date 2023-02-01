@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
@@ -46,26 +45,6 @@ const (
 	startupSleep         = 300 * time.Millisecond // periodically poll ClusterStarted()
 	numGorHighCheckTime  = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
 )
-
-// enum: `statsValue` kinds
-const (
-	KindCounter = "counter"
-	KindGauge   = "gauge"
-	// + semantics
-	KindLatency            = "latency"
-	KindThroughput         = "bw"     // currently, only GetThroughput - see NOTE below
-	KindComputedThroughput = "compbw" // disk(s) read/write throughputs
-	KindSpecial            = "special"
-)
-
-// NOTE:
-//
-// What's reported by api.GetClusterStats and api.GetDaemonStats is the cumulative byte number.
-// It is the client's own responsibility to compute the actual throughput as only the client
-// knows when exactly it was querying the previous time.
-//
-// Also, compare with copyT() below that runs periodically and is used to log statistics.
-func IsKindThroughput(name string) bool { return name == GetThroughput }
 
 // number-of-goroutines watermarks expressed as multipliers over the number of available logical CPUs (GOMAXPROCS)
 const (
@@ -102,60 +81,6 @@ const (
 
 	// KindSpecial
 	Uptime = "up.ns.time"
-)
-
-//
-// public types
-//
-
-type (
-	Tracker interface {
-		cos.StatsTracker
-
-		StartedUp() bool
-		AddErrorHTTP(method string, val int64)
-		CoreStats() *CoreStats
-		GetWhatStats() *DaemonStats
-		RegMetrics(node *cluster.Snode)
-		IsPrometheus() bool
-	}
-	CoreStats struct {
-		Tracker   statsTracker
-		promDesc  promDesc
-		statsdC   *statsd.Client
-		sgl       *memsys.SGL
-		statsTime time.Duration
-		cmu       sync.RWMutex // ctracker vs Prometheus Collect()
-	}
-
-	// REST API
-	DaemonStatus struct {
-		Snode          *cluster.Snode `json:"snode"`
-		Stats          *CoreStats     `json:"daemon_stats"`
-		Capacity       fs.MPCap       `json:"capacity"`
-		RebSnap        *cluster.Snap  `json:"rebalance_snap,omitempty"`
-		Status         string         `json:"status"`
-		DeploymentType string         `json:"deployment"`
-		Version        string         `json:"ais_version"`  // major.minor.build
-		BuildTime      string         `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
-		K8sPodName     string         `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
-		MemCPUInfo     cos.MemCPUInfo `json:"sys_info"`
-		SmapVersion    int64          `json:"smap_version,string"`
-	}
-	DaemonStatusMap map[string]*DaemonStatus // by SID (aka DaemonID)
-
-	DaemonStats struct {
-		Tracker copyTracker `json:"tracker"`
-		MPCap   fs.MPCap    `json:"capacity"`
-	}
-	ClusterStats struct {
-		Proxy  *DaemonStats            `json:"proxy"`
-		Target map[string]*DaemonStats `json:"target"`
-	}
-	ClusterStatsRaw struct {
-		Proxy  *DaemonStats    `json:"proxy"`
-		Target cos.JSONRawMsgs `json:"target"`
-	}
 )
 
 // interface guard
@@ -652,6 +577,14 @@ func (r *statsRunner) GetWhatStats() *DaemonStats {
 	ctracker := make(copyTracker, 48)
 	r.Core.copyCumulative(ctracker)
 	return &DaemonStats{Tracker: ctracker}
+}
+
+func (r *statsRunner) GetMetricNames() cos.StrKVs {
+	out := make(cos.StrKVs, 32)
+	for name, v := range r.Core.Tracker {
+		out[name] = v.kind
+	}
+	return out
 }
 
 func (r *statsRunner) IsPrometheus() bool { return r.Core.isPrometheus() }

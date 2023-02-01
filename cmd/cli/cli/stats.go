@@ -27,6 +27,22 @@ var (
 	curTgtStatus stats.DaemonStatusMap
 )
 
+// NOTE: target's metric names & kinds
+func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return nil, err
+	}
+	if smap.CountActiveTs() == 0 {
+		return nil, nil
+	}
+	tsi, err := smap.GetRandTarget()
+	if err != nil {
+		return nil, err
+	}
+	return api.GetMetricNames(apiBP, tsi)
+}
+
 //
 // stats.DaemonStatusMap
 //
@@ -140,14 +156,23 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]tmpls.DiskStatsTemplateHelpe
 
 // throughput (Bps)
 // TODO: s/inner loop/daemonBps (below)/
-func clusterBps(st stats.ClusterStats, averageOver time.Duration) {
+func clusterBps(c *cli.Context, st stats.ClusterStats, averageOver time.Duration) error {
+	metrics, err := getMetricNames(c)
+	if err != nil {
+		return err
+	}
+
 	time.Sleep(averageOver)
-	st2, _ := api.GetClusterStats(apiBP)
+
+	st2, err := api.GetClusterStats(apiBP)
+	if err != nil {
+		return err
+	}
 	for tid, tgt := range st.Target {
 		tgt2 := st2.Target[tid]
 		for k, v := range tgt.Tracker {
 			v2 := tgt2.Tracker[k]
-			if stats.IsKindThroughput(k) {
+			if metrics != nil && metrics[k] == stats.KindThroughput {
 				throughput := (v2.Value - v.Value) / cos.MaxI64(int64(averageOver.Seconds()), 1)
 				v.Value = throughput
 			} else {
@@ -156,14 +181,24 @@ func clusterBps(st stats.ClusterStats, averageOver time.Duration) {
 			tgt.Tracker[k] = v
 		}
 	}
+	return nil
 }
 
-func daemonBps(node *cluster.Snode, ds *stats.DaemonStats, averageOver time.Duration) {
+func daemonBps(c *cli.Context, node *cluster.Snode, ds *stats.DaemonStats, averageOver time.Duration) error {
+	metrics, err := getMetricNames(c)
+	if err != nil {
+		return err
+	}
+
 	time.Sleep(averageOver)
-	ds2, _ := api.GetDaemonStats(apiBP, node)
+
+	ds2, err := api.GetDaemonStats(apiBP, node)
+	if err != nil {
+		return err
+	}
 	for k, v := range ds.Tracker {
 		v2 := ds2.Tracker[k]
-		if stats.IsKindThroughput(k) {
+		if metrics != nil && metrics[k] == stats.KindThroughput {
 			throughput := (v2.Value - v.Value) / cos.MaxI64(int64(averageOver.Seconds()), 1)
 			v.Value = throughput
 		} else {
@@ -171,4 +206,5 @@ func daemonBps(node *cluster.Snode, ds *stats.DaemonStats, averageOver time.Dura
 		}
 		ds.Tracker[k] = v
 	}
+	return nil
 }

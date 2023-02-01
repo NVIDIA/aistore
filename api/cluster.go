@@ -109,7 +109,19 @@ func GetClusterSysInfo(bp BaseParams) (info apc.ClusterSysInfo, err error) {
 	return
 }
 
-// GetClusterStats retrieves AIStore cluster stats (all targets and current proxy).
+// How to compute throughputs:
+//
+// - AIS supports several enumerated metric "kinds", including `KindThroughput`
+// (for complete enumeration, see stats/api.go)
+// - By convention, metrics that have `KindThroughput` kind are named with ".bps"
+// ("bytes per second") suffix.
+// - ".bps" metrics reported by api.GetClusterStats and api.GetDaemonStats are,
+// in fact, cumulative byte numbers.
+// - It is the client's responsibility to compute the actual throughputs
+// as only the client knows _when_ exactly the same ".bps" metric was queried
+// the previous time.
+//
+// - See also: `api.GetDaemonStats`, stats/api.go
 func GetClusterStats(bp BaseParams) (res stats.ClusterStats, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()

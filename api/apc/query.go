@@ -165,6 +165,7 @@ const (
 	GetWhatSmapVote      = "smapvote"
 	GetWhatSnode         = "snode"
 	GetWhatStats         = "stats"
+	GetWhatMetricNames   = "metrics"
 	GetWhatSysInfo       = "sysinfo"
 	GetWhatTargetIPs     = "target_ips" // comma-separated list of all target IPs (compare w/ GetWhatSnode)
 	GetWhatLog           = "log"

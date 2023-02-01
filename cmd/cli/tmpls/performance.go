@@ -6,9 +6,9 @@ package tmpls
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -50,17 +50,15 @@ const (
 )
 
 // TODO -- FIXME: add helper to omit a column that contains only zero values
-// TODO -- FIXME: statsValue.Kind not getting marshaled
 
-func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap) *Table {
+func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, metrics cos.StrKVs) *Table {
 	headers := make([]*header, 0, 32)
 
 	// counters' names, dynamically
 	for _, ds := range st {
 		headers = append(headers, &header{name: colTarget, hide: false})
 		for name := range ds.Stats.Tracker {
-			// v.Kind stats.KindCounter // TODO -- FIXME
-			if strings.HasSuffix(name, ".n") {
+			if metrics[name] == stats.KindCounter {
 				headers = append(headers, &header{name: name, hide: false})
 			}
 		}
