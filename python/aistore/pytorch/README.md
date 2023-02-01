@@ -7,6 +7,17 @@ AIS plugin is a PyTorch dataset library to access datasets stored on AIStore.
 
 PyTorch comes with powerful data loading capabilities, but loading data in PyTorch is fairly complex. One of the best ways to handle it is to start small and then add complexities as and when you need them. Below are some of the ways one can import data stored on AIS in PyTorch.
 
+### Compatibility Issue
+
+There is currently a discrepancy in the structure of the AIStore SDK and the torchdata integration for AIStore SDK versions > 1.04. 
+Until this is resolved, to run an AIStore SDK version above this you must manually edit the torchdata library to import the client correctly.
+
+Change the following line in `/torchdata/datapipes/iter/load/aisio.py`:
+
+    - from aistore.sdk import Client
+    + from aistore import Client
+
+
 ### PyTorch DataLoader
 
 The PyTorch DataLoader class gives you an iterable over a Dataset. It can be used to shuffle, batch and parallelize operations over your data.
