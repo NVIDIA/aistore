@@ -27,7 +27,7 @@ const (
 	Counter
 	// Gauge is StatsD's gauge type
 	Gauge
-	// PersistentCounter is StatsD's gauge type which is increased every time by the value
+	// PersistentCounter is StatsD's gauge type which is increased every time by its value
 	PersistentCounter
 )
 

@@ -22,7 +22,7 @@ var perfCmd = cli.Command{
 var (
 	showPerfFlags = append(
 		longRunFlags,
-		jsonFlag,
+		showZeroColumnsFlag,
 	)
 	showCmdPeformance = cli.Command{
 		Name:      commandPerf,
@@ -80,13 +80,6 @@ var (
 	}
 )
 
-// TODO -- FIXME: work in progress
-
-func showPerfHandler(c *cli.Context) error {
-	_, _, err := argNode(c, 0)
-	return err
-}
-
 func showCountersHandler(c *cli.Context) error {
 	smap, err := fillNodeStatusMap(c, apc.Target)
 	if err != nil {
@@ -97,11 +90,22 @@ func showCountersHandler(c *cli.Context) error {
 		return err
 	}
 	var (
-		usejs      = flagIsSet(c, jsonFlag)
+		usejs      bool
 		hideHeader = flagIsSet(c, noHeaderFlag)
+		zeroCols   = flagIsSet(c, showZeroColumnsFlag)
 	)
-	out := tmpls.NewCountersTab(curTgtStatus, smap, metrics).Template(hideHeader)
+
+	setLongRunParams(c, 72)
+
+	out := tmpls.NewCountersTab(curTgtStatus, smap, metrics, zeroCols).Template(hideHeader)
 	return tmpls.Print(curTgtStatus, c.App.Writer, out, nil, usejs)
+}
+
+// TODO -- FIXME: work in progress from here on ---------------
+
+func showPerfHandler(c *cli.Context) error {
+	_, _, err := argNode(c, 0)
+	return err
 }
 
 func showThroughputHandler(c *cli.Context) error {

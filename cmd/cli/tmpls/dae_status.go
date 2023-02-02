@@ -62,7 +62,7 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 		pods     = h.pods()
 		status   = h.onlineStatus()
 		versions = h.versions()
-		headers  = []*header{
+		cols     = []*header{
 			{name: colProxy},
 			{name: colMemUsed},
 			{name: colMemAvail},
@@ -72,7 +72,7 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 			{name: colVersion, hide: len(versions) == 1 && len(ps) > 1},
 			{name: colBuildTime, hide: len(versions) == 1 && len(ps) > 1}, // intended
 		}
-		table = newTable(headers...)
+		table = newTable(cols...)
 	)
 	for _, status := range ps {
 		memUsed := fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctMemUsed)
@@ -110,7 +110,7 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 		pods     = h.pods()
 		status   = h.onlineStatus()
 		versions = h.versions()
-		headers  = []*header{
+		cols     = []*header{
 			{name: colTarget},
 			{name: colMemUsed},
 			{name: colMemAvail},
@@ -124,7 +124,7 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 			{name: colVersion, hide: len(versions) == 1 && len(ts) > 1},
 			{name: colBuildTime, hide: len(versions) == 1 && len(ts) > 1}, // intended
 		}
-		table = newTable(headers...)
+		table = newTable(cols...)
 	)
 	for _, status := range ts {
 		row := []string{

@@ -675,4 +675,9 @@ var (
 		Name:  "path",
 		Usage: "display path to the AIS CLI configuration",
 	}
+
+	showZeroColumnsFlag = cli.BoolFlag{
+		Name:  "show-all-columns",
+		Usage: "when printing tables, show all columns including those that have only zero values",
+	}
 )

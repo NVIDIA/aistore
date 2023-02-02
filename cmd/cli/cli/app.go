@@ -26,7 +26,7 @@ const (
 	cliName  = "ais"
 	ua       = "ais/cli"
 	metadata = "md"
-	cliDescr = `If [Tab] completion doesn't work:
+	cliDescr = `If <TAB-TAB> completion doesn't work:
    * download ` + cmn.GitHubHome + `/tree/master/cmd/cli/autocomplete
    * and run 'install.sh'.
    To install CLI directly from GitHub, use ` + cmn.GitHubHome + `/blob/master/deploy/scripts/install_from_binaries.sh`
@@ -58,25 +58,27 @@ var (
 	fred, fcyan func(a ...any) string
 )
 
-// `ais help`
+// `ais help [COMMAND]`
 var helpCommand = cli.Command{
 	Name:      "help",
 	Usage:     "show a list of commands; show help for a given command",
 	ArgsUsage: "[COMMAND]",
-	Action: func(c *cli.Context) error {
-		args := c.Args()
-		if args.Present() {
-			return cli.ShowCommandHelp(c, args.First())
-		}
-
-		cli.ShowAppHelp(c)
-		return nil
-	},
+	Action:    helpCmdHandler,
 	BashComplete: func(c *cli.Context) {
 		for _, cmd := range c.App.Commands {
 			fmt.Println(cmd.Name)
 		}
 	},
+}
+
+func helpCmdHandler(c *cli.Context) error {
+	args := c.Args()
+	if args.Present() {
+		return cli.ShowCommandHelp(c, args.First())
+	}
+
+	cli.ShowAppHelp(c)
+	return nil
 }
 
 // main method
