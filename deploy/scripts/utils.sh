@@ -64,7 +64,7 @@ function check_deps {
 
 function check_python_formatting {
   i=0
-  for f in $(find . -type f -name "*.py" ! -regex ".*__init__.py" ! -regex $EXTERNAL_SRC_REGEX ! -path '*/docs/examples/*'); do
+  for f in $(find . -type f -name "*.py" ! -regex ".*__init__.py" ! -regex $EXTERNAL_SRC_REGEX ! -path '*/docs/examples/*' ! -path '*/python/aistore/version.py'); do
     pylint --rcfile=$PYLINT_STYLE $f --msg-template="{path} ({C}):{line:3d},{column:2d}: {msg} ({msg_id}:{symbol})" 2>/dev/null
     if [[ $? -gt 0 ]]; then i=$((i+1)); fi
   done

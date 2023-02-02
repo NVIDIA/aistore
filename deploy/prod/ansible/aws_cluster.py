@@ -346,7 +346,6 @@ def cleanup_ais_cluster():
 
 
 if __name__ == "__main__":
-
     setupLogger()
 
     parser = argparse.ArgumentParser(description="", add_help=False)
