@@ -291,6 +291,7 @@ class Bucket:
         }
         action = ActionMsg(action=ACT_LIST, value=value).dict()
 
+
         return self.client.request_deserialize(
             HTTP_METHOD_GET,
             path=f"buckets/{ self.name }",

@@ -53,7 +53,6 @@ class TestETLOps(unittest.TestCase):
             self.client.etl().delete(etl_name=etl.id)
 
     def test_etl_apis(self):
-
         # code
         def transform(input_bytes):
             md5 = hashlib.md5()

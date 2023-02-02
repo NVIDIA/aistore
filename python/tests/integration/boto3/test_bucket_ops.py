@@ -37,7 +37,7 @@ class BotoTest(TestCase):
     def test_update_read_bucket(self):
         bucket_name = self.create_bucket()
         objects = [(str(i), random_string(OBJECT_LENGTH)) for i in range(NUM_OBJECTS)]
-        for (key, body) in objects:
+        for key, body in objects:
             self.client.put_object(Bucket=bucket_name, Key=key, Body=body)
         existing_objects = [
             self.client.get_object(Bucket=bucket_name, Key=key)

@@ -105,7 +105,7 @@ def ec2_connect_to_region(region=None):
         )
     except Exception as e:
         logger.error("EC2 connection failed - {}".format(repr(e)))
-        raise Exception("EC2 connection failed")
+        raise ConnectionError("EC2 connection failed") from e
     return conn
 
 

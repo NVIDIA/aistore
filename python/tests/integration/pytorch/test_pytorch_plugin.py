@@ -28,7 +28,6 @@ class TestPytorchPlugin(unittest.TestCase):
             pass
 
     def test_filelister_with_prefix_variations(self):
-
         num_objs = 10
 
         # create 10 objects in the /temp dir

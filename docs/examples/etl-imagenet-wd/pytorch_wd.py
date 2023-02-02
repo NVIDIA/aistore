@@ -21,7 +21,11 @@ import torch.utils.data.distributed
 import torchvision.models as models
 import torchvision.transforms as transforms
 
-model_names = sorted(name for name in models.__dict__ if name.islower() and not name.startswith("__") and callable(models.__dict__[name]))
+model_names = sorted(
+    name
+    for name in models.__dict__
+    if name.islower() and not name.startswith("__") and callable(models.__dict__[name])
+)
 
 parser = argparse.ArgumentParser(description="PyTorch ImageNet Training")
 parser.add_argument(
@@ -111,7 +115,9 @@ parser.add_argument(
     action="store_true",
     help="use pre-trained model",
 )
-parser.add_argument("--seed", default=None, type=int, help="seed for initializing training")
+parser.add_argument(
+    "--seed", default=None, type=int, help="seed for initializing training"
+)
 parser.add_argument("--gpu", default=None, type=int, help="GPU id to use.")
 parser.add_argument(
     "--train-shards",
@@ -131,7 +137,9 @@ parser.add_argument(
     type=str,
     help="AIStore proxy endpoint",
 )
-parser.add_argument("--bucket-name", default="imagenet", type=str, help="dataset bucket name")
+parser.add_argument(
+    "--bucket-name", default="imagenet", type=str, help="dataset bucket name"
+)
 parser.add_argument(
     "--bucket-provider",
     default="ais",
@@ -158,8 +166,10 @@ def main():
         )
 
     if args.gpu is not None:
-        warnings.warn("You have chosen a specific GPU. This will completely "
-                      "disable data parallelism.")
+        warnings.warn(
+            "You have chosen a specific GPU. This will completely "
+            "disable data parallelism."
+        )
 
     ngpus_per_node = torch.cuda.device_count()
     main_worker(args.gpu, ngpus_per_node, args)
@@ -167,7 +177,12 @@ def main():
 
 def wd_transform(client, pytorch_transform, name):
     def transform(sample):
-        sample["npy"] = (pytorch_transform(sample.pop("jpg")).permute(1, 2, 0).numpy().astype("float32"))
+        sample["npy"] = (
+            pytorch_transform(sample.pop("jpg"))
+            .permute(1, 2, 0)
+            .numpy()
+            .astype("float32")
+        )
         return sample
 
     return WDTransform(client, transform, transform_name=name, verbose=True)
@@ -176,8 +191,10 @@ def wd_transform(client, pytorch_transform, name):
 def loader(urls, batch_size, workers):
     to_tensor = transforms.Compose([transforms.ToTensor()])
     etl_dataset = (
-        wds.WebDataset(urls, handler=wds.handlers.warn_and_continue).decode("rgb").to_tuple("npy cls", handler=wds.handlers.warn_and_continue
-                                                                                           ).map_tuple(to_tensor, lambda x: x)
+        wds.WebDataset(urls, handler=wds.handlers.warn_and_continue)
+        .decode("rgb")
+        .to_tuple("npy cls", handler=wds.handlers.warn_and_continue)
+        .map_tuple(to_tensor, lambda x: x)
     )
     ds_size = (500 * len(urls)) // batch_size
     etl_dataset = etl_dataset.with_length(ds_size)
@@ -244,36 +261,50 @@ def main_worker(gpu, ngpus_per_node, args):
                 best_acc1 = best_acc1.to(args.gpu)
             model.load_state_dict(checkpoint["state_dict"])
             optimizer.load_state_dict(checkpoint["optimizer"])
-            print("=> loaded checkpoint '{}' (epoch {})".format(args.resume, checkpoint["epoch"]))
+            print(
+                "=> loaded checkpoint '{}' (epoch {})".format(
+                    args.resume, checkpoint["epoch"]
+                )
+            )
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     cudnn.benchmark = True
 
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    normalize = transforms.Normalize(
+        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+    )
 
     client = Client(args.ais_endpoint)
     bck = Bck(args.bucket_name, provider=args.bucket_provider)
 
-    train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        normalize,
-    ])
+    train_transform = transforms.Compose(
+        [
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ]
+    )
 
     train_etl = wd_transform(client, train_transform, "img-train")
-    train_urls = client.expand_object_urls(bck, transform_id=train_etl.uuid, template=args.train_shards)
+    train_urls = client.expand_object_urls(
+        bck, transform_id=train_etl.uuid, template=args.train_shards
+    )
     train_loader = loader(train_urls, args.batch_size, args.workers)
 
-    val_transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        normalize,
-    ])
+    val_transform = transforms.Compose(
+        [
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            normalize,
+        ]
+    )
     val_etl = wd_transform(client, val_transform, "img-val")
-    val_urls = client.expand_object_urls(bck, transform_id=val_etl.uuid, template=args.val_shards)
+    val_urls = client.expand_object_urls(
+        bck, transform_id=val_etl.uuid, template=args.val_shards
+    )
     val_loader = loader(val_urls, args.batch_size, args.workers)
 
     if args.evaluate:
@@ -358,7 +389,9 @@ def validate(val_loader, model, criterion, args):
     losses = AverageMeter("Loss", ":.4e")
     top1 = AverageMeter("Acc@1", ":6.2f")
     top5 = AverageMeter("Acc@5", ":6.2f")
-    progress = ProgressMeter(len(val_loader), [batch_time, losses, top1, top5], prefix="Test: ")
+    progress = ProgressMeter(
+        len(val_loader), [batch_time, losses, top1, top5], prefix="Test: "
+    )
 
     # switch to evaluate mode
     model.eval()
@@ -389,7 +422,9 @@ def validate(val_loader, model, criterion, args):
                 progress.display(i)
 
         # TODO: this should also be done with the ProgressMeter
-        print(" * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}".format(top1=top1, top5=top5))
+        print(
+            " * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}".format(top1=top1, top5=top5)
+        )
 
     return top1.avg
 
@@ -402,6 +437,7 @@ def save_checkpoint(state, is_best, filename="checkpoint.pth.tar"):
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self, name, fmt=":f"):
         self.name = name
         self.fmt = fmt
@@ -443,7 +479,7 @@ class ProgressMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1**(epoch // 30))
+    lr = args.lr * (0.1 ** (epoch // 30))
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
 
